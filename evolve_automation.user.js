@@ -5748,6 +5748,42 @@
     ],
     [
       () =>
+        settings.autoFleet &&
+        game.global.tech["piracy"] &&
+        !galaxyAssaultPending(),
+      (building) => {
+        if (
+          building === buildings.ScoutShip ||
+          building === buildings.CorvetteShip ||
+          building === buildings.FrigateShip ||
+          building === buildings.CruiserShip ||
+          building === buildings.Dreadnought
+        ) {
+          let totalNeed = getGalaxyRegions().reduce(
+            (sum, region) =>
+              sum +
+              (region.useful ? Math.max(0, region.piracy - region.armada) : 0),
+            0
+          );
+          let fleetPower =
+            buildings.ScoutShip.count *
+              game.actions.galaxy.gxy_gateway.scout_ship.ship.rating() +
+            buildings.CorvetteShip.count *
+              game.actions.galaxy.gxy_gateway.corvette_ship.ship.rating() +
+            buildings.FrigateShip.count *
+              game.actions.galaxy.gxy_gateway.frigate_ship.ship.rating() +
+            buildings.CruiserShip.count *
+              game.actions.galaxy.gxy_gateway.cruiser_ship.ship.rating() +
+            buildings.Dreadnought.count *
+              game.actions.galaxy.gxy_gateway.dreadnought.ship.rating();
+          return fleetPower >= totalNeed;
+        }
+      },
+      () => "Piracy fully covered by fleet",
+      () => 0,
+    ],
+    [
+      () =>
         settings.autoMech &&
         settings.mechBuild !== "none" &&
         settings.buildingMechsFirst &&
@@ -9275,6 +9311,7 @@
   var FleetManager = {
     _fleetVueBinding: "fleet",
     _fleetVue: undefined,
+    neededShips: null, // Per-ship on-counts needed for full piracy coverage, set by autoFleet when crew reclaim is active
 
     initFleet() {
       if (!game.global.tech.piracy) {
@@ -11726,7 +11763,7 @@
       generalMinimumTaxRate: 20,
       generalMinimumMorale: 105,
       generalMaximumMorale: 500,
-      generalMinimumAuthority: 100, // Evil universe: keep Authority at or above this (0 to disable management)
+      generalMinimumAuthority: 100, // Evil universe: keep Authority at or above this (0 to disable, -1 to target the current Authority max)
       govInterim: GovernmentManager.Types.democracy.id,
       govFinal: GovernmentManager.Types.technocracy.id,
       govSpace: GovernmentManager.Types.corpocracy.id,
@@ -12352,6 +12389,7 @@
       fleetOuterShips: "custom",
       fleetExploreTau: true,
       fleetMaxCover: true,
+      fleetCrewReclaim: true,
       fleetEmbassyKnowledge: 6000000,
       fleetAlienGiftKnowledge: 6500000,
       fleetAlien2Knowledge: 8000000,
@@ -14110,6 +14148,61 @@
         targetHellPatrolSize = m.hellPatrolSize;
       }
 
+      // Evil universe (Authority v2): station just enough surplus soldiers in the fortress
+      // garrison to hold Authority at the target, leaving the rest on patrol. Stationed defenders
+      // count toward Authority (the game adds garrison - patrols*patrol_size); patrol soldiers do
+      // not. Authority is linear in stationed soldiers, so this is a proportional controller run
+      // *every* tick (not gated on "below target"): desiredStationed = currentStationed +
+      // (target - currentAuthority)/perSoldier. Its fixed point is independent of the current
+      // stationed count, so it settles at the target — adding soldiers when short and releasing
+      // them to patrol when over — instead of the earlier bang-bang that slammed to max and back.
+      // Clamped to [defence-need garrison, one-patrol-reserve], so when Authority is comfortably
+      // met it collapses to normal defence-only behaviour, and it always keeps a patrol running.
+      if (
+        settings.generalMinimumAuthority !== 0 &&
+        resources.Authority.isUnlocked() &&
+        targetHellPatrolSize > 0
+      ) {
+        // Marginal Authority per stationed soldier (game portal.js): (0.7 + 0.1*evil), then
+        // grenadier x1.75, autocracy x1.08 / dictator x1.12. The high_pop scaling (<1) is
+        // omitted, which only over-estimates perSoldier -> undershoots -> still converges.
+        let perSoldier = 0.7 + 0.1 * (game.global.tech["evil"] ?? 0);
+        if (game.global.race["grenadier"]) perSoldier *= 1.75;
+        if (game.global.civic.govern.type === "autocracy") perSoldier *= 1.08;
+        else if (game.global.civic.govern.type === "dictator")
+          perSoldier *= 1.12;
+
+        // A negative target (e.g. -1) pins Authority at its current max (station everything but
+        // one patrol); a positive target holds Authority at that literal value.
+        let authorityTarget =
+          settings.generalMinimumAuthority < 0
+            ? resources.Authority.maxQuantity
+            : settings.generalMinimumAuthority;
+        let deficit = authorityTarget - resources.Authority.currentQuantity;
+        let neededStationed = m.hellGarrison + Math.ceil(deficit / perSoldier); // m.hellGarrison = current stationed defenders
+        let maxStationed = Math.max(
+          0,
+          availableHellSoldiers - targetHellPatrolSize
+        ); // always leave one patrol
+        let authGarrison = Math.max(
+          hellGarrison,
+          Math.min(neededStationed, maxStationed)
+        );
+
+        if (window.authorityDebug && authGarrison !== hellGarrison) {
+          console.log(
+            `[authority] amount=${resources.Authority.currentQuantity.toFixed(
+              1
+            )}/${authorityTarget.toFixed(0)}, perSoldier=${perSoldier.toFixed(
+              2
+            )}, stationed=${
+              m.hellGarrison
+            }→need=${neededStationed}, garrison ${hellGarrison}→${authGarrison} (cap=${maxStationed}, avail=${availableHellSoldiers})`
+          );
+        }
+        hellGarrison = authGarrison;
+      }
+
       // Determine patrol count
       targetHellPatrols = Math.max(
         1,
@@ -15239,9 +15332,12 @@
     // Authority instead. Applied regardless of money storage: Authority below 100 is a global
     // production penalty (0.35% per point), which outweighs the morale production bonus.
     if (
-      settings.generalMinimumAuthority > 0 &&
+      settings.generalMinimumAuthority !== 0 &&
       resources.Authority.isUnlocked() &&
-      resources.Authority.currentQuantity < settings.generalMinimumAuthority
+      resources.Authority.currentQuantity <
+        (settings.generalMinimumAuthority < 0
+          ? resources.Authority.maxQuantity
+          : settings.generalMinimumAuthority)
     ) {
       minMorale = Math.min(minMorale, 100);
       maxMorale = Math.min(maxMorale, 100);
@@ -18161,10 +18257,13 @@
           ) {
             maxStateOn = 0;
           } else {
+            // Count only static defenses (mine layers, raiders), ignoring patrolling ships: mine layers
+            // should take over protection duty from the fleet, so ship crews can be reclaimed
+            let chthonian = getGalaxyRegions().find(
+              (region) => region.name === "gxy_chthonian"
+            );
             let mineAdjust =
-              ((game.global.race["instinct"] ? 7000 : 7500) *
-                getPiracyMultiplier() -
-                poly.piracy("gxy_chthonian")) /
+              (chthonian.piracy - chthonian.armada) /
               game.actions.galaxy.gxy_chthonian.minelayer.ship.rating();
             maxStateOn = Math.min(
               maxStateOn,
@@ -18221,6 +18320,16 @@
           buildings.GorddonEmbassy.isUnlocked()
         ) {
           maxStateOn = 0;
+        }
+        // Power down surplus combat ships (counted by autoFleet) to release their crews back to the workforce
+        if (
+          settings.autoFleet &&
+          FleetManager.neededShips?.hasOwnProperty(building.id)
+        ) {
+          maxStateOn = Math.min(
+            maxStateOn,
+            FleetManager.neededShips[building.id]
+          );
         }
         // Production buildings with capped resources
         if (
@@ -19735,13 +19844,17 @@
     );
   }
 
-  function autoFleet() {
-    if (!FleetManager.initFleet()) {
-      return;
-    }
-    let def = game.global.galaxy.defense;
+  // While a fleet is being accumulated for an assault mission we neither cap ship purchases nor reclaim crews
+  function galaxyAssaultPending() {
+    return (
+      (buildings.ChthonianMission.isUnlocked() &&
+        settings.fleetChthonianLoses !== "ignore") ||
+      buildings.Alien2Mission.isUnlocked()
+    );
+  }
 
-    // Init our current state
+  // Andromeda regions with piracy (already multiplied) and their static, ship-independent defenses
+  function getGalaxyRegions() {
     let allRegions = [
       {
         name: "gxy_stargate",
@@ -19796,41 +19909,56 @@
           buildings.ChthonianRaider.stateOnCount > 0,
       },
     ];
-    let allFleets = [
-      {
-        name: "scout_ship",
-        count: 0,
-        power: game.actions.galaxy.gxy_gateway.scout_ship.ship.rating(),
-      },
-      {
-        name: "corvette_ship",
-        count: 0,
-        power: game.actions.galaxy.gxy_gateway.corvette_ship.ship.rating(),
-      },
-      {
-        name: "frigate_ship",
-        count: 0,
-        power: game.actions.galaxy.gxy_gateway.frigate_ship.ship.rating(),
-      },
-      {
-        name: "cruiser_ship",
-        count: 0,
-        power: game.actions.galaxy.gxy_gateway.cruiser_ship.ship.rating(),
-      },
-      {
-        name: "dreadnought",
-        count: 0,
-        power: game.actions.galaxy.gxy_gateway.dreadnought.ship.rating(),
-      },
-    ];
-    let minPower = allFleets[0].power;
-
     const piracyMultiplier = getPiracyMultiplier();
     if (piracyMultiplier !== 1) {
       allRegions.forEach((region) => {
         region.piracy *= piracyMultiplier;
       });
     }
+    return allRegions;
+  }
+
+  function autoFleet() {
+    if (!FleetManager.initFleet()) {
+      return;
+    }
+    let def = game.global.galaxy.defense;
+
+    // Init our current state
+    let allRegions = getGalaxyRegions();
+    let allFleets = [
+      {
+        name: "scout_ship",
+        building: buildings.ScoutShip,
+        count: 0,
+        power: game.actions.galaxy.gxy_gateway.scout_ship.ship.rating(),
+      },
+      {
+        name: "corvette_ship",
+        building: buildings.CorvetteShip,
+        count: 0,
+        power: game.actions.galaxy.gxy_gateway.corvette_ship.ship.rating(),
+      },
+      {
+        name: "frigate_ship",
+        building: buildings.FrigateShip,
+        count: 0,
+        power: game.actions.galaxy.gxy_gateway.frigate_ship.ship.rating(),
+      },
+      {
+        name: "cruiser_ship",
+        building: buildings.CruiserShip,
+        count: 0,
+        power: game.actions.galaxy.gxy_gateway.cruiser_ship.ship.rating(),
+      },
+      {
+        name: "dreadnought",
+        building: buildings.Dreadnought,
+        count: 0,
+        power: game.actions.galaxy.gxy_gateway.dreadnought.ship.rating(),
+      },
+    ];
+    let minPower = allFleets[0].power;
 
     // We can't rely on stateOnCount - it won't give us correct number of ships of some of them missing crew
     let fleetIndex = Object.fromEntries(
@@ -19969,6 +20097,14 @@
       return; // We're done for now; lot of data was invalidated during attack, we'll manage remaining ships in next tick
     }
 
+    // With crew reclaim we distribute all built ships, including powered-down ones: ships needed for
+    // coverage will be powered back up, surplus powered down by autoPower, releasing crews to the workforce
+    let reclaimCrew = settings.fleetCrewReclaim && !galaxyAssaultPending();
+    FleetManager.neededShips = null;
+    if (reclaimCrew) {
+      allFleets.forEach((ship) => (ship.count = ship.building.count));
+    }
+
     let regionsToProtect = allRegions.filter(
       (region) => region.useful && region.piracy - region.armada > 0
     );
@@ -20086,8 +20222,13 @@
       }
     }
 
-    // Assign remaining ships to gorddon, to utilize Symposium
-    if (buildings.GorddonSymposium.stateOnCount > 0) {
+    if (reclaimCrew) {
+      // Surplus ships stay unassigned, autoPower will shut them down to return their crews to the workforce
+      FleetManager.neededShips = Object.fromEntries(
+        allFleets.map((ship) => [ship.name, ship.building.count - ship.count])
+      );
+    } else if (buildings.GorddonSymposium.stateOnCount > 0) {
+      // Assign remaining ships to gorddon, to utilize Symposium
       allFleets.forEach(
         (ship) => (allRegions[2].assigned[ship.name] += ship.count)
       );
@@ -25138,7 +25279,7 @@
       currentNode,
       "generalMinimumAuthority",
       "Minimum Authority (Evil universe)",
-      "Evil universe only. While Authority is below this value the tax rate will be raised to keep morale at 100 (morale above 100 drains Authority 1:1), and buildings raising the Authority cap get a weighting boost. Set to 0 to disable Authority management. Authority below 100 causes a global production penalty of 0.35% per point"
+      "Evil universe only. While Authority is below this value the tax rate will be raised to keep morale at 100 (morale above 100 drains Authority 1:1), and buildings raising the Authority cap get a weighting boost. Set to -1 to target the current Authority maximum (pin it at the cap), or 0 to disable Authority management. Authority below 100 causes a global production penalty of 0.35% per point"
     );
 
     let governmentOptions = [
@@ -26676,6 +26817,12 @@
       "fleetMaxCover",
       "Maximize protection of prioritized systems",
       "Adjusts ships distribution to fully supress piracy in prioritized regions. Some potential defense will be wasted, as it will use big ships to cover small holes, when it doesn't have anything fitting better. This option is not required: all your dreadnoughts still will be used even without this option."
+    );
+    addSettingsToggle(
+      currentNode,
+      "fleetCrewReclaim",
+      "Reclaim crews of surplus ships",
+      "Power down combat ships which are not needed to fully supress piracy, releasing their crews back to the workforce. Ships are powered back up when coverage requires them. Inactive while fleet is being accumulated for an assault mission. Surplus ships won't be parked at Gorddon for the Symposium bonus while this is enabled."
     );
     addSettingsNumber(
       currentNode,
@@ -32847,9 +32994,6 @@
       Number(
         getVueById("createHead")?.buildContainerDesc().match(/(\d+)/g)[1] ?? 0
       ),
-    // export function piracy(region, true, true) from space.js
-    piracy: (region) =>
-      Number(getVueById(region)?.$options.filters.defense(region) ?? 0),
 
     // Firefox compatibility:
     adjustCosts: (c_action, wiki) =>
