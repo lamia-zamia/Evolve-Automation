@@ -6230,6 +6230,20 @@
       () => settings.buildingWeightingAuthority,
     ],
     [
+      () => settings.achievementGuards,
+      (building) =>
+        building === buildings.Dreadnought && guardActive("guardDreaded")
+          ? "Dreaded"
+          : building === buildings.SiriusThermalCollector &&
+            guardActive("guardEnergetic")
+          ? "Energetic"
+          : building === buildings.RedSpaceport && guardActive("guardRedDead")
+          ? "Red Dead"
+          : false,
+      (name) => `${name} achievement guard`,
+      () => 0,
+    ],
+    [
       () => true,
       (building) =>
         building._tab === "city" &&
@@ -8387,6 +8401,7 @@
 
           if (
             !settings.foreignPacifist &&
+            !guardActive("guardPacifist") &&
             !foreign.gov.anx &&
             !foreign.gov.buy &&
             rank === "Inferior"
@@ -8396,7 +8411,11 @@
         }
 
         // Adjust for fight
-        if (activeForeigns.length > 0 && !settings.foreignPacifist) {
+        if (
+          activeForeigns.length > 0 &&
+          !settings.foreignPacifist &&
+          !guardActive("guardPacifist")
+        ) {
           // Try to attacks last uncontrolled inferior, or first occupied, or just first, in this order.
           currentTarget =
             currentTarget ??
@@ -8462,7 +8481,7 @@
         // Request money for unify, make sure we have autoFight and autoResearch
         if (
           game.global.tech["unify"] === 1 &&
-          settings.foreignUnification &&
+          (settings.foreignUnification || guardActive("guardPacifist")) &&
           settings.autoFight
         ) {
           for (let foreign of activeForeigns) {
@@ -11728,6 +11747,14 @@
       displayTotalDaysTypeInTopBar: false,
       scriptSettingsExportFilename: "evolve-script-settings.json",
       performanceHackAvoidDrawTech: false,
+      achievementGuards: false,
+      guardPacifist: true,
+      guardDreaded: true,
+      guardCultOfPersonality: true,
+      guardAnarchist: true,
+      guardEnergetic: true,
+      guardRedDead: true,
+      guardSecondEvolution: true,
     };
 
     applySettings(def, reset);
@@ -12931,6 +12958,61 @@
     return getAchievementStar(id, universe) >= level;
   }
 
+  // Achievement guards: each guard constrains automation so the current run stays eligible for its
+  // achievement. A guard arms only while the achievement is unearned at the current star level in
+  // the current universe (feats are universe-wide), and releases as soon as it's earned, already
+  // lost this run, or out of scope for the current prestige type.
+  const achievementGuardDefs = {
+    guardPacifist: {
+      id: "pacifist",
+      when: () => game.global.stats.attacks === 0,
+    },
+    guardDreaded: {
+      id: "dreaded",
+      when: () =>
+        settings.prestigeType === "ascension" &&
+        buildings.Dreadnought.count === 0,
+    },
+    // Pacifist requires unification, Cult of Personality forbids it - Pacifist wins while armed
+    guardCultOfPersonality: {
+      id: "cult_of_personality",
+      when: () => !guardActive("guardPacifist"),
+    },
+    guardAnarchist: {
+      id: "anarchist",
+      when: () =>
+        settings.prestigeType === "mad" &&
+        game.global.civic.govern.type === "anarchy",
+    },
+    guardEnergetic: {
+      id: "energetic",
+      feat: true,
+      when: () =>
+        settings.prestigeType === "ascension" &&
+        buildings.SiriusThermalCollector.count === 0,
+    },
+    guardRedDead: {
+      id: "red_dead",
+      when: () =>
+        settings.prestigeType === "mad" && buildings.RedSpaceport.count === 0,
+    },
+    guardSecondEvolution: {
+      id: "second_evolution",
+      when: () => game.global.race.gods === game.global.race.species,
+    },
+  };
+
+  function guardActive(setting) {
+    if (!settings.achievementGuards || !settings[setting]) {
+      return false;
+    }
+    let guard = achievementGuardDefs[setting];
+    let star = guard.feat
+      ? game.global.stats.feat?.[guard.id] ?? 0
+      : getAchievementStar(guard.id);
+    return star < game.alevel() && guard.when();
+  }
+
   function loadQueuedSettings() {
     if (
       settings.evolutionQueueEnabled &&
@@ -13571,7 +13653,7 @@
 
   function autoGovernment() {
     // Change government
-    if (GovernmentManager.isEnabled()) {
+    if (GovernmentManager.isEnabled() && !guardActive("guardAnarchist")) {
       if (
         settings.govSpace !== "none" &&
         haveTech("q_factory") &&
@@ -13799,7 +13881,8 @@
       !sm._foreignVue ||
       m.maxCityGarrison <= 0 ||
       state.goal === "Reset" ||
-      settings.foreignPacifist
+      settings.foreignPacifist ||
+      guardActive("guardPacifist")
     ) {
       return;
     }
@@ -17684,11 +17767,13 @@
     }
 
     // Unification
-    if (
-      (itemId === "tech-unification2" || itemId === "tech-unite") &&
-      !settings.foreignUnification
-    ) {
-      return "Unification disabled";
+    if (itemId === "tech-unification2" || itemId === "tech-unite") {
+      if (guardActive("guardCultOfPersonality")) {
+        return "Cult of Personality achievement guard";
+      }
+      if (!settings.foreignUnification && !guardActive("guardPacifist")) {
+        return "Unification disabled";
+      }
     }
 
     // If user wants to stabilize blackhole then do it, unless we're on blackhole run
@@ -17712,37 +17797,40 @@
       }
     }
 
-    if (
-      itemId !== settings.userResearchTheology_1 &&
-      (itemId === "tech-anthropology" || itemId === "tech-fanaticism")
-    ) {
-      const isFanatRace = () =>
-        Object.values(fanatAchievements).reduce(
-          (result, combo) =>
-            result ||
-            (game.global.race.species === combo.race &&
-              game.global.race.gods === combo.god &&
-              !isAchievementUnlocked(combo.achieve, game.alevel())),
-          false
-        );
-      if (
-        itemId === "tech-anthropology" &&
-        !(
-          settings.userResearchTheology_1 === "auto" &&
-          settings.prestigeType === "mad" &&
-          !isFanatRace()
-        )
-      ) {
-        return "Undesirable theology path";
-      }
-      if (
-        itemId === "tech-fanaticism" &&
-        !(
-          settings.userResearchTheology_1 === "auto" &&
-          (settings.prestigeType !== "mad" || isFanatRace())
-        )
-      ) {
-        return "Undesirable theology path";
+    if (itemId === "tech-anthropology" || itemId === "tech-fanaticism") {
+      if (guardActive("guardSecondEvolution")) {
+        if (itemId === "tech-anthropology") {
+          return "Second Evolution achievement guard";
+        }
+      } else if (itemId !== settings.userResearchTheology_1) {
+        const isFanatRace = () =>
+          Object.values(fanatAchievements).reduce(
+            (result, combo) =>
+              result ||
+              (game.global.race.species === combo.race &&
+                game.global.race.gods === combo.god &&
+                !isAchievementUnlocked(combo.achieve, game.alevel())),
+            false
+          );
+        if (
+          itemId === "tech-anthropology" &&
+          !(
+            settings.userResearchTheology_1 === "auto" &&
+            settings.prestigeType === "mad" &&
+            !isFanatRace()
+          )
+        ) {
+          return "Undesirable theology path";
+        }
+        if (
+          itemId === "tech-fanaticism" &&
+          !(
+            settings.userResearchTheology_1 === "auto" &&
+            (settings.prestigeType !== "mad" || isFanatRace())
+          )
+        ) {
+          return "Undesirable theology path";
+        }
       }
     }
 
@@ -19977,17 +20065,22 @@
       buildings.ChthonianMission.isUnlocked() &&
       settings.fleetChthonianLoses !== "ignore"
     ) {
+      // Dreaded guard: never sacrifice a dreadnought while the achievement is on the line
+      let chthonianLoses =
+        settings.fleetChthonianLoses === "dread" && guardActive("guardDreaded")
+          ? "high"
+          : settings.fleetChthonianLoses;
       let fleetReq, fleetWreck;
-      if (settings.fleetChthonianLoses === "low") {
+      if (chthonianLoses === "low") {
         fleetReq = 4500;
         fleetWreck = 80;
-      } else if (settings.fleetChthonianLoses === "avg") {
+      } else if (chthonianLoses === "avg") {
         fleetReq = 2500;
         fleetWreck = 160;
-      } else if (settings.fleetChthonianLoses === "high") {
+      } else if (chthonianLoses === "high") {
         fleetReq = 1250;
         fleetWreck = 500;
-      } else if (settings.fleetChthonianLoses === "dread") {
+      } else if (chthonianLoses === "dread") {
         if (allFleets[4].count > 0) {
           assault = {
             ships: [0, 0, 0, 0, 1],
@@ -19995,7 +20088,7 @@
             mission: buildings.ChthonianMission,
           };
         }
-      } else if (settings.fleetChthonianLoses === "frigate") {
+      } else if (chthonianLoses === "frigate") {
         let totalPower = allFleets.reduce(
           (sum, ship) =>
             sum +
@@ -24786,7 +24879,15 @@
         "showSettings",
         "autoPrestige",
         "displayPrestigeTypeInTopBar",
-        "displayTotalDaysTypeInTopBar"
+        "displayTotalDaysTypeInTopBar",
+        "achievementGuards",
+        "guardPacifist",
+        "guardDreaded",
+        "guardCultOfPersonality",
+        "guardAnarchist",
+        "guardEnergetic",
+        "guardRedDead",
+        "guardSecondEvolution"
       );
       // No need to call showSettings callback, it enabled if button was pressed, and will be still enabled on default settings
     };
@@ -24931,6 +25032,56 @@
       "Show the total days next to this year's days",
       updateTotalDaysInTopBar,
       updateTotalDaysInTopBar
+    );
+
+    addSettingsHeader1(currentNode, "Achievement guards");
+    addSettingsToggle(
+      currentNode,
+      "achievementGuards",
+      "Enable achievement guards",
+      "Constrain automation so the current run stays eligible for the guarded achievements below. Each guard arms only while its achievement is still unearned at the current star level in the current universe, and releases as soon as it's earned, already lost this run, or out of scope for the current prestige type."
+    );
+    addSettingsToggle(
+      currentNode,
+      "guardPacifist",
+      "Pacifist",
+      "Never attack foreign powers. Also allows unification researches regardless of the 'Perform unification' toggle. Foreign policies must be set to Annex/Purchase for unification to actually happen without attacking."
+    );
+    addSettingsToggle(
+      currentNode,
+      "guardDreaded",
+      "Dreaded",
+      "Never build a Dreadnought during ascension runs. If the Chthonian Mission outcome is set to Dreadnought, it will be executed as High losses instead."
+    );
+    addSettingsToggle(
+      currentNode,
+      "guardCultOfPersonality",
+      "Cult of Personality",
+      "Never unify - blocks unification researches. Yields to the Pacifist guard while both are armed, since Pacifist requires unification."
+    );
+    addSettingsToggle(
+      currentNode,
+      "guardAnarchist",
+      "Anarchist",
+      "Never set a government during MAD runs, staying in Anarchy until reset."
+    );
+    addSettingsToggle(
+      currentNode,
+      "guardEnergetic",
+      "Energetic",
+      "Never build a Thermal Collector during ascension runs."
+    );
+    addSettingsToggle(
+      currentNode,
+      "guardRedDead",
+      "Red Dead",
+      "Never build a Spaceport during MAD runs (Cataclysm scenario)."
+    );
+    addSettingsToggle(
+      currentNode,
+      "guardSecondEvolution",
+      "Second Evolution",
+      "Research Fanaticism instead of Anthropology while worshipping own species as gods."
     );
 
     addSettingsHeader1(currentNode, "Misc");
