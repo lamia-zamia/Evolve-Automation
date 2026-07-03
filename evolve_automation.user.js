@@ -6171,6 +6171,29 @@
       () => settings.buildingWeightingOverlord,
     ],
     [
+      // Evil universe: Authority amount is capped by Authority max. When max is below target no
+      // amount of tax/soldier management can fix the production penalty, so prioritize the
+      // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
+      () =>
+        settings.generalMinimumAuthority > 0 &&
+        resources.Authority.isUnlocked() &&
+        resources.Authority.maxQuantity < settings.generalMinimumAuthority,
+      (building) =>
+        [
+          buildings.Barracks,
+          buildings.Temple,
+          buildings.RedSpaceBarracks,
+          buildings.ProximaCruiser,
+          buildings.BeltSpaceStation,
+          buildings.WastelandBrute,
+          buildings.BadlandsMinions,
+          buildings.WastelandThrone,
+          buildings.AsphodelBunker,
+        ].includes(building),
+      () => "Raises Authority cap, currently below target",
+      () => settings.buildingWeightingAuthority,
+    ],
+    [
       () => true,
       (building) =>
         building._tab === "city" &&
@@ -8165,6 +8188,8 @@
     containerValue: 0,
     _storageVueBinding: "createHead",
     _storageVue: undefined,
+    _crateDebounce: {}, // { resourceId: { dir, ticks, prev, locked } }
+    _containerDebounce: {}, // same
 
     initStorage() {
       if (!this.isUnlocked) {
@@ -11701,6 +11726,7 @@
       generalMinimumTaxRate: 20,
       generalMinimumMorale: 105,
       generalMaximumMorale: 500,
+      generalMinimumAuthority: 100, // Evil universe: keep Authority at or above this (0 to disable management)
       govInterim: GovernmentManager.Types.democracy.id,
       govFinal: GovernmentManager.Types.technocracy.id,
       govSpace: GovernmentManager.Types.corpocracy.id,
@@ -11993,6 +12019,7 @@
       buildingWeightingMissingFuel: 10,
       buildingWeightingNonOperatingCity: 0.2,
       buildingWeightingNonOperating: 0,
+      buildingWeightingAuthority: 10,
       buildingWeightingMissingSupply: 0,
       buildingWeightingMissingSupport: 0,
       buildingWeightingUselessSupport: 0.01,
@@ -15207,6 +15234,19 @@
       maxMorale = Math.min(maxMorale, settings.generalMaximumMorale);
     }
 
+    // Evil universe: Authority is recalculated every tick, and morale above 100 drains it 1:1.
+    // While Authority sits below target, cap morale at 100 so taxes convert the excess into
+    // Authority instead. Applied regardless of money storage: Authority below 100 is a global
+    // production penalty (0.35% per point), which outweighs the morale production bonus.
+    if (
+      settings.generalMinimumAuthority > 0 &&
+      resources.Authority.isUnlocked() &&
+      resources.Authority.currentQuantity < settings.generalMinimumAuthority
+    ) {
+      minMorale = Math.min(minMorale, 100);
+      maxMorale = Math.min(maxMorale, 100);
+    }
+
     if (
       currentTaxRate < maxTaxRate &&
       currentMorale >= minMorale + 1 &&
@@ -17677,11 +17717,69 @@
     );
   }
 
+  var powerOscLock = {}; // { vueBinding: { prev, locked } } — anti-flicker for consumption-limited buildings
   function autoPower() {
     // Only start doing this once power becomes available. Isn't useful before then
     if (!resources.Power.isUnlocked()) {
       return;
     }
+
+    const pdbg = window.powerDebug ?? false;
+
+    // Anti-flicker lock for TIGHT ±1 powered-count flip-flops (e.g. mill 22<->23,
+    // xfer_station 9<->10). These come from a building's own draw nudging its limiting resource
+    // across an integer boundary at equilibrium, so the count bounces between two adjacent values.
+    //
+    // Detection is immediate (no delay, so unaffected buildings stay responsive): when the new
+    // target would REVERT the change we just applied AND the two values are adjacent, pin the HIGHER
+    // value (never starve a building to a lower count) and remember the pair {a,b}. Hold until the
+    // target leaves {a,b} — a genuine new requirement — then release and adapt.
+    //
+    // Pinning is limited to amplitude-1 cycles. Wide-amplitude oscillations (e.g. Belt ships
+    // contending over Belt_Support, swinging 0<->12) must NOT be pinned: pinning can freeze a
+    // building at a starving count, which feeds back through dependent jobs/support (Space Miner cap
+    // is derived from Belt ship powered counts) and can deadlock. Instead those are rate-limited:
+    // when a change would exactly revert the previous one, the current value is held for
+    // WIDE_OSC_HOLD_TICKS ticks before one change is let through. The flap survives but runs
+    // an order of magnitude slower, and the hold is time-boxed so it can never deadlock.
+    // A target outside the oscillating pair releases the hold immediately.
+    const WIDE_OSC_HOLD_TICKS = 10;
+    const debouncePower = (id, desired, current) => {
+      let d = powerOscLock[id] ?? (powerOscLock[id] = {});
+      if (d.locked !== undefined) {
+        if (desired === d.a || desired === d.b) {
+          return d.locked;
+        } // still bouncing -> hold
+        delete d.locked; // new target -> release
+      }
+      if (d.holdTicks) {
+        if (desired === d.a || desired === d.b) {
+          if (--d.holdTicks > 0) {
+            return current;
+          } // still bouncing -> keep holding
+          d.prev = current; // hold expired: let one change through, stay armed so the
+          return desired; // next revert re-enters the hold (slow flap, no freeze)
+        }
+        d.holdTicks = 0; // target left the pair -> genuine change, evaluate normally
+      }
+      if (desired === current) {
+        return desired;
+      }
+      if (d.prev === desired) {
+        // this change would revert the one we just applied
+        d.a = current;
+        d.b = desired;
+        if (Math.abs(desired - current) === 1) {
+          // ±1 flip-flop: pin high until target moves
+          d.locked = Math.max(current, desired); // hold the higher value, never starve
+          return d.locked;
+        }
+        d.holdTicks = WIDE_OSC_HOLD_TICKS; // wide flip-flop: rate-limit instead of pinning
+        return current;
+      }
+      d.prev = current; // remember the value we're leaving
+      return desired; // apply immediately
+    };
 
     let buildingList = BuildingManager.managedStatePriorityList();
 
@@ -18442,13 +18540,21 @@
               continue;
             }
           } else if (
+            currentStateOn > 0 &&
             !(resourceType.resource instanceof Support) &&
+            (building.powered < 0 ||
+              resourceType.resource.storageRatio >= 0.95) &&
             resourceType.resource.currentQuantity >=
               maxStateOn * CONSUMPTION_BALANCE_MIN * resourceType.rate
           ) {
             // If we have more than 60 seconds of max consumption worth then its ok to lose some resources.
             // This check is mainly so that power producing buildings don't turn off when rate of change goes negative.
             // That can cause massive loss of life if turning off space habitats :-)
+            // Gated on (power producer OR resource near cap): otherwise a consumer whose own draw makes the
+            // resource net-negative would greedily power up to max off a mid-level stockpile, deplete it back
+            // below the 60s reserve, drop to the income-sustainable count, recover, and flap forever. When the
+            // resource is only sustainable at a lower count and isn't actually capped, fall through to the
+            // income-based limit below, which settles at that stable count instead of oscillating.
             continue;
           } else if (resourceType.resource === resources.Tau_Belt_Support) {
             // Tau Belt support can be overused
@@ -18483,6 +18589,50 @@
       }
 
       maxStateOn = Math.max(0, Math.floor(maxStateOn));
+
+      // Suppress per-building power flicker (see debouncePower definition above).
+      maxStateOn = debouncePower(
+        building._vueBinding,
+        maxStateOn,
+        currentStateOn
+      );
+
+      // Debug logging — enable with: window.powerDebug = true
+      // Logs every building switched on/off this tick, with the fuel/support state that
+      // drove the decision (income is BEFORE this building's consumption is deducted).
+      // A building that toggles every tick will have a limiting resource whose income
+      // hovers right around its per-unit consumption boundary.
+      if (pdbg && maxStateOn !== currentStateOn) {
+        let cons = building.consumption
+          .map((c, k) => {
+            let rate = building.getFuelRate(k);
+            return rate > 0
+              ? `${c.resource.id}: income=${c.resource.rateOfChange.toFixed(
+                  2
+                )}, qty=${c.resource.currentQuantity.toFixed(
+                  0
+                )}, perUnit=${rate.toFixed(2)}, reserveTo=${(
+                  maxStateOn *
+                  CONSUMPTION_BALANCE_MIN *
+                  c.rate
+                ).toFixed(0)}`
+              : null;
+          })
+          .filter(Boolean)
+          .join(" | ");
+        let d = maxStateOn - currentStateOn;
+        console.log(
+          `[power] ${
+            building._vueBinding
+          }: on ${currentStateOn}→${maxStateOn} (Δ${
+            d >= 0 ? "+" : ""
+          }${d}), powered=${
+            building.powered
+          }, availPower≈${availablePower.toFixed(1)}${
+            cons ? " || " + cons : ""
+          }`
+        );
+      }
 
       // Now when we know how many buildings we need - let's take resources
       for (let k = 0; k < building.consumption.length; k++) {
@@ -18776,6 +18926,7 @@
   // TODO: Implement preserving of old layout, to reduce flickering
   function autoStorage() {
     let m = StorageManager;
+    const dbg = window.storageDebug ?? false;
     if (!m.initStorage()) {
       return;
     }
@@ -18851,10 +19002,22 @@
 
     // TODO: Configurable priority?
     if (settings.storageSafeReassign) {
-      addList([{ cost: resCurrent, isList: true }]);
+      addList([
+        {
+          cost: resCurrent,
+          isList: true,
+          _dbgLabel: "safeReassign(currentQty)",
+        },
+      ]);
     }
-    addList([{ cost: resMin, isList: true }]);
-    addList([{ cost: resOverflow, isList: true }]);
+    addList([{ cost: resMin, isList: true, _dbgLabel: "minStorage" }]);
+    addList([
+      {
+        cost: resOverflow,
+        isList: true,
+        _dbgLabel: "overflow(currentQty*1.03)",
+      },
+    ]);
     addList(state.queuedTargetsAll);
     addList(state.triggerTargets);
     if (
@@ -18876,10 +19039,14 @@
       )
     );
     if (settings.storageAssignPart) {
-      addList([{ cost: resRequired, isList: true }]);
+      addList([
+        { cost: resRequired, isList: true, _dbgLabel: "storageRequired" },
+      ]);
     }
 
     let storageToBuild = 0;
+    // Track which item drove each resource's allocation (for debug logging)
+    let dbgAllocDriver = {};
     // Calculate required storages
     nextBuilding: for (let item of buildingsList) {
       let currentAssign = {};
@@ -18954,6 +19121,22 @@
       }
       // Building as affordable, record used storage
       for (let id in currentAssign) {
+        if (
+          dbg &&
+          (currentAssign[id].crate > 0 || currentAssign[id].container > 0)
+        ) {
+          let label =
+            item._dbgLabel ??
+            item._originalName ??
+            item.name ??
+            item.actionId ??
+            "?";
+          dbgAllocDriver[id] = `${label} (qty=${
+            item.cost[id]?.toFixed?.(1) ?? item.cost[id]
+          }, missing≈${(item.cost[id] - storageAdjustments[id].amount).toFixed(
+            1
+          )})`;
+        }
         storageAdjustments[id].crate += currentAssign[id].crate;
         storageAdjustments[id].container += currentAssign[id].container;
         storageAdjustments[id].amount +=
@@ -18968,6 +19151,116 @@
     if (storageToBuild > 0 && expandStorage(storageToBuild)) {
       // Stop if we bought something, we'll continue in next tick, after re-calculation of required storage
       return;
+    }
+
+    // Anti-flicker debounce on the final crate/container counts.
+    //
+    // The desired count is recomputed from scratch every tick from `missing = requirement - base`,
+    // and `base` (building-provided storage) jitters tick-to-tick, so Math.ceil(missing/value)
+    // chatters between two adjacent values N and N+1. We suppress that without blocking real change:
+    //
+    //   - A change only applies once `desired` has stayed on the SAME side of the current
+    //     allocation for STORAGE_DEBOUNCE_TICKS consecutive ticks.
+    //   - When `desired === current`, the counter RESETS. In an A<->B oscillation, every other
+    //     tick `desired` equals the held value, so the counter never reaches the threshold ->
+    //     the allocation freezes at a safe value. A persistent (genuine) need is never
+    //     interrupted by a reset, so it still applies after a few ticks.
+    const STORAGE_DEBOUNCE_TICKS = 3;
+    const debounceField = (map, id, desired, current) => {
+      let d = map[id] ?? (map[id] = {});
+
+      // Oscillation lock. The residual flicker is a feedback loop: the building-provided
+      // `base` storage itself depends on the current crate count (a crate adds slightly
+      // MORE capacity than the script's crateValue accounts for), so being at N crates
+      // makes the algorithm want N-1, and being at N-1 makes it want N — a self-sustaining
+      // ±1 chatter a plain debounce can only slow, never stop. Once we see a change that
+      // reverts the previous one, we pin the HIGHER (requirement-meeting) value and only
+      // release on a genuine change: the need grew to >= locked, or dropped to <= locked-2
+      // (beyond the 1-unit chatter band).
+      if (d.locked !== undefined) {
+        if (desired >= d.locked || desired <= d.locked - 2) {
+          delete d.locked; // genuine change -> stop holding
+        } else {
+          return d.locked; // within chatter band -> hold the safe value
+        }
+      }
+
+      if (desired === current) {
+        d.dir = 0;
+        d.ticks = 0;
+        return desired;
+      }
+
+      let dir = desired > current ? 1 : -1;
+      if (d.dir === dir) {
+        d.ticks++;
+      } else {
+        d.dir = dir;
+        d.ticks = 1;
+      }
+      if (d.ticks < STORAGE_DEBOUNCE_TICKS) {
+        return current;
+      } // not sustained yet
+      d.dir = 0;
+      d.ticks = 0;
+
+      if (d.prev === desired) {
+        // This change would undo the previous one -> it's the chatter loop. Lock high.
+        d.locked = Math.max(current, desired);
+        return d.locked;
+      }
+      d.prev = current; // remember the value we're leaving
+      return desired;
+    };
+    for (let id in storageAdjustments) {
+      let resource = resources[id];
+      let adj = storageAdjustments[id];
+      adj.crate = debounceField(
+        m._crateDebounce,
+        id,
+        adj.crate,
+        resource.currentCrates
+      );
+      adj.container = debounceField(
+        m._containerDebounce,
+        id,
+        adj.container,
+        resource.currentContainers
+      );
+    }
+
+    // Debug logging — enable with: window.storageDebug = true
+    // Runs AFTER debounce, so it reports only changes actually being applied this tick.
+    // If the flicker is fixed, this stays quiet.
+    if (dbg) {
+      for (let id in storageAdjustments) {
+        let resource = resources[id];
+        let adj = storageAdjustments[id];
+        let dCrate = adj.crate - resource.currentCrates;
+        let dCon = adj.container - resource.currentContainers;
+        if (dCrate !== 0 || dCon !== 0) {
+          let baseStorage =
+            resource.maxQuantity -
+            (resource.currentCrates * m.crateValue +
+              resource.currentContainers * m.containerValue);
+          console.log(
+            `[storage] ${id}: crates ${resource.currentCrates}→${adj.crate} (Δ${
+              dCrate >= 0 ? "+" : ""
+            }${dCrate}), ` +
+              `containers ${resource.currentContainers}→${adj.container} (Δ${
+                dCon >= 0 ? "+" : ""
+              }${dCon}) | ` +
+              `currentQty=${resource.currentQuantity.toFixed(
+                1
+              )}, base=${baseStorage.toFixed(1)}, ` +
+              `storageRequired=${
+                resource.storageRequired?.toFixed?.(1) ??
+                resource.storageRequired
+              }, ` +
+              `driver=${dbgAllocDriver[id] ?? "none"}`
+          );
+        }
+      }
     }
 
     // Go to clicking, unassign first
@@ -24841,6 +25134,12 @@
       "Maximum allowed morale",
       "Use this to set a maximum allowed morale. The tax rate will be raised to lower morale to this maximum"
     );
+    addSettingsNumber(
+      currentNode,
+      "generalMinimumAuthority",
+      "Minimum Authority (Evil universe)",
+      "Evil universe only. While Authority is below this value the tax rate will be raised to keep morale at 100 (morale above 100 drains Authority 1:1), and buildings raising the Authority cap get a weighting boost. Set to 0 to disable Authority management. Authority below 100 causes a global production penalty of 0.35% per point"
+    );
 
     let governmentOptions = [
       { val: "none", label: "None", hint: "Do not select government" },
@@ -28850,6 +29149,12 @@
       "Womlings Missions",
       "Womlings unlock actions conflicting with Overlord",
       "buildingWeightingOverlord"
+    );
+    addWeightingRule(
+      tableBodyNode,
+      "Authority cap buildings (Evil universe)",
+      "Authority cap below configured minimum",
+      "buildingWeightingAuthority"
     );
 
     document.documentElement.scrollTop = document.body.scrollTop =
