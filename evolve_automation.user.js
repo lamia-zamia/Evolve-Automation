@@ -5663,6 +5663,38 @@
   const wrIndividualCondition = 1; // Individual condition, checks every building, and return any value; if value casts to true - rule aplies
   const wrDescription = 2; // Description displayed in tooltip when rule applied, takes return value of individual condition, and building
   const wrMultiplier = 3; // Weighting mulptiplier. Called first without any context; rules returning x1 also won't be checked
+  const authorityCapBuildings = [
+    buildings.Barracks,
+    buildings.Temple,
+    buildings.RedSpaceBarracks,
+    buildings.ProximaCruiser,
+    buildings.BeltSpaceStation,
+    buildings.WastelandBrute,
+    buildings.BadlandsMinions,
+    buildings.WastelandThrone,
+    buildings.AsphodelBunker,
+  ];
+  const galaxyCombatShips = [
+    buildings.ScoutShip,
+    buildings.CorvetteShip,
+    buildings.FrigateShip,
+    buildings.CruiserShip,
+    buildings.Dreadnought,
+  ];
+  function getGalaxyCombatShipPower() {
+    return (
+      buildings.ScoutShip.count *
+        game.actions.galaxy.gxy_gateway.scout_ship.ship.rating() +
+      buildings.CorvetteShip.count *
+        game.actions.galaxy.gxy_gateway.corvette_ship.ship.rating() +
+      buildings.FrigateShip.count *
+        game.actions.galaxy.gxy_gateway.frigate_ship.ship.rating() +
+      buildings.CruiserShip.count *
+        game.actions.galaxy.gxy_gateway.cruiser_ship.ship.rating() +
+      buildings.Dreadnought.count *
+        game.actions.galaxy.gxy_gateway.dreadnought.ship.rating()
+    );
+  }
   var weightingRules = [
     [
       () => !settings.autoBuild,
@@ -5752,31 +5784,14 @@
         game.global.tech["piracy"] &&
         !galaxyAssaultPending(),
       (building) => {
-        if (
-          building === buildings.ScoutShip ||
-          building === buildings.CorvetteShip ||
-          building === buildings.FrigateShip ||
-          building === buildings.CruiserShip ||
-          building === buildings.Dreadnought
-        ) {
+        if (galaxyCombatShips.includes(building)) {
           let totalNeed = getGalaxyRegions().reduce(
             (sum, region) =>
               sum +
               (region.useful ? Math.max(0, region.piracy - region.armada) : 0),
             0
           );
-          let fleetPower =
-            buildings.ScoutShip.count *
-              game.actions.galaxy.gxy_gateway.scout_ship.ship.rating() +
-            buildings.CorvetteShip.count *
-              game.actions.galaxy.gxy_gateway.corvette_ship.ship.rating() +
-            buildings.FrigateShip.count *
-              game.actions.galaxy.gxy_gateway.frigate_ship.ship.rating() +
-            buildings.CruiserShip.count *
-              game.actions.galaxy.gxy_gateway.cruiser_ship.ship.rating() +
-            buildings.Dreadnought.count *
-              game.actions.galaxy.gxy_gateway.dreadnought.ship.rating();
-          return fleetPower >= totalNeed;
+          return getGalaxyCombatShipPower() >= totalNeed;
         }
       },
       () => "Piracy fully covered by fleet",
@@ -6214,18 +6229,7 @@
         settings.generalMinimumAuthority > 0 &&
         resources.Authority.isUnlocked() &&
         resources.Authority.maxQuantity < settings.generalMinimumAuthority,
-      (building) =>
-        [
-          buildings.Barracks,
-          buildings.Temple,
-          buildings.RedSpaceBarracks,
-          buildings.ProximaCruiser,
-          buildings.BeltSpaceStation,
-          buildings.WastelandBrute,
-          buildings.BadlandsMinions,
-          buildings.WastelandThrone,
-          buildings.AsphodelBunker,
-        ].includes(building),
+      (building) => authorityCapBuildings.includes(building),
       () => "Raises Authority cap, currently below target",
       () => settings.buildingWeightingAuthority,
     ],
@@ -13007,6 +13011,9 @@
       return false;
     }
     let guard = achievementGuardDefs[setting];
+    if (!guard) {
+      return false;
+    }
     let star = guard.feat
       ? game.global.stats.feat?.[guard.id] ?? 0
       : getAchievementStar(guard.id);
