@@ -3025,6 +3025,7 @@
     soulGemLast: Number.MAX_SAFE_INTEGER,
 
     knowledgeRequiredByTechs: 0,
+    cheapestTechKnowledge: 0,
 
     goal: "Standard",
 
@@ -6471,7 +6472,7 @@
       () => settings.buildingWeightingUselessKnowledge,
     ],
     [
-      () => state.knowledgeRequiredByTechs > resources.Knowledge.maxQuantity,
+      () => state.cheapestTechKnowledge > resources.Knowledge.maxQuantity,
       (building) => building.is.knowledge,
       () => "Need more knowledge",
       () => settings.buildingWeightingNeedfulKnowledge,
@@ -20757,17 +20758,17 @@
     // by buildings - wardenclyffe, labs, etc. This way we can determine what's our real demand is.
     // Otherwise they might start build up knowledge cap just to afford themselves, increasing required
     // cap further, so we'll need more labs, and they'll demand even more knowledge for next level and so on.
-    state.knowledgeRequiredByTechs = Math.max(
-      0,
-      ...state.unlockedTechs.map((tech) => tech.cost["Knowledge"] ?? 0)
+    let techKnowledgeCosts = state.unlockedTechs.map(
+      (tech) => tech.cost["Knowledge"] ?? 0
     );
-
     if (buildings.GorddonEmbassy.isAutoBuildable()) {
-      state.knowledgeRequiredByTechs = Math.max(
-        state.knowledgeRequiredByTechs,
-        settings.fleetEmbassyKnowledge
-      );
+      techKnowledgeCosts.push(settings.fleetEmbassyKnowledge);
     }
+    state.knowledgeRequiredByTechs = Math.max(0, ...techKnowledgeCosts);
+    // Cheapest tech on the frontier: while it fits under the knowledge cap,
+    // research can proceed by accumulation alone, so cap buildings get no boost.
+    state.cheapestTechKnowledge =
+      techKnowledgeCosts.length > 0 ? Math.min(...techKnowledgeCosts) : 0;
 
     // Get list of all objects and techs, and find biggest numbers for each resource
     if (
