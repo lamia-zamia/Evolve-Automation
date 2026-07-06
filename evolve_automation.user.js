@@ -11747,6 +11747,8 @@
       buildingAlwaysClick: false,
       buildingClickPerTick: 50,
       activeTargetsUI: false,
+      buildPlannerUI: true,
+      buildPlannerCollapsed: false,
       displayPrestigeTypeInTopBar: true,
       displayTotalDaysTypeInTopBar: false,
       scriptSettingsExportFilename: "evolve-script-settings.json",
@@ -21534,6 +21536,164 @@
     );
   }
 
+  function plannerLimitingResource(target) {
+    if (target.isAffordable()) {
+      return null;
+    }
+    let worst = null;
+    for (let res in target.cost) {
+      let resource = resources[res];
+      let quantity = target.cost[res];
+      if (!resource.isUnlocked() || resource.currentQuantity >= quantity) {
+        continue;
+      }
+      let time, blocker;
+      if (resource.maxQuantity < quantity) {
+        time = Number.MAX_SAFE_INTEGER;
+        blocker = "storage";
+      } else if (resource.income > 0) {
+        time = (quantity - resource.currentQuantity) / resource.income;
+        blocker = "income";
+      } else {
+        time = Number.MAX_SAFE_INTEGER / 2;
+        blocker = "stalled";
+      }
+      if (!worst || time > worst.time) {
+        worst = { resource: resource, time: time, blocker: blocker };
+      }
+    }
+    return worst;
+  }
+
+  function makePlannerStats() {
+    return {
+      startDay: game.global.stats.days,
+      day: game.global.stats.days,
+      reset: game.global.stats.reset,
+      samples: {},
+      total: 0,
+    };
+  }
+
+  function loadPlannerStats() {
+    try {
+      let saved = JSON.parse(localStorage.getItem("ea_planner_stats"));
+      if (
+        saved &&
+        saved.reset === game.global.stats.reset &&
+        saved.day <= game.global.stats.days
+      ) {
+        return saved;
+      }
+    } catch (e) {}
+    return makePlannerStats();
+  }
+
+  function savePlannerStats() {
+    if (state.plannerStats) {
+      localStorage.setItem(
+        "ea_planner_stats",
+        JSON.stringify(state.plannerStats)
+      );
+    }
+  }
+
+  function updateBuildPlanner() {
+    if (!settings.buildPlannerUI) {
+      return;
+    }
+    let buildRan = state.plannerFreshTick === state.scriptTick;
+    let targets = state.unlockedBuildings ?? [];
+
+    // Bottleneck sampling runs even when the tab is hidden
+    if (buildRan && targets.length > 0) {
+      state.plannerStats ??= loadPlannerStats();
+      let stats = state.plannerStats;
+      let limit = plannerLimitingResource(targets[0]);
+      let bucket = limit ? limit.resource.title : "not blocked";
+      stats.samples[bucket] = (stats.samples[bucket] ?? 0) + 1;
+      stats.total++;
+      stats.day = game.global.stats.days;
+      if (stats.total % 25 === 0) {
+        savePlannerStats();
+      }
+    }
+
+    if (document.hidden || settingsRaw.buildPlannerCollapsed) {
+      return;
+    }
+    let list = $("#script_planner-list");
+    if (list.length === 0) {
+      return;
+    }
+
+    if (!settings.autoBuild && !settings.autoARPA) {
+      list.html('<li class="planner-note">autoBuild / autoARPA disabled</li>');
+    } else {
+      let rows = targets.slice(0, 8).map((target) => {
+        let limit = plannerLimitingResource(target);
+        let status, statusClass;
+        if (!limit) {
+          status = "ready";
+          statusClass = "has-text-success";
+        } else if (limit.blocker === "storage") {
+          status = `${limit.resource.title} (storage)`;
+          statusClass = "has-text-danger";
+        } else if (limit.blocker === "stalled") {
+          status = `${limit.resource.title} (no income)`;
+          statusClass = "has-text-danger";
+        } else {
+          status = `${poly.timeFormat(limit.time)} (${limit.resource.title})`;
+          statusClass = "has-text-warning";
+        }
+        let name = target.title;
+        if (target.count && !target.is?.multiSegmented) {
+          name += ` #${target.count + 1}`;
+        }
+        if (state.queuedTargets.includes(target)) {
+          name += ' <span class="has-text-special">(queued)</span>';
+        } else if (state.triggerTargets.includes(target)) {
+          name += ' <span class="has-text-special">(trigger)</span>';
+        }
+        let note = target.extraDescription
+          .replace(/^Auto(Build|ARPA) weighting:[^<]*<br>/, "")
+          .split("<br>")
+          .filter(Boolean)
+          .join(" · ");
+        return `<li>
+            <div class="planner-row">
+                <span class="planner-name">${name}</span>
+                <span class="planner-weight has-text-advanced">${getNiceNumber(
+                  target.weighting
+                )}</span>
+                <span class="planner-time ${statusClass}">${status}</span>
+            </div>
+            ${note ? `<div class="planner-note">${note}</div>` : ""}
+        </li>`;
+      });
+      if (!buildRan) {
+        rows.unshift(
+          '<li class="planner-note">autoBuild idle (triggers or queue processing) — list from last update</li>'
+        );
+      } else if (rows.length === 0) {
+        rows.push('<li class="planner-note">Nothing to build</li>');
+      }
+      list.html(rows.join(""));
+    }
+
+    let stats = state.plannerStats;
+    if (stats?.total > 0) {
+      let shares = Object.entries(stats.samples)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([res, n]) => `${res} ${Math.round((n / stats.total) * 100)}%`)
+        .join(" · ");
+      $("#script_planner-stats-text").html(
+        `${shares}<div class="planner-note">Top target blocked by, since day ${stats.startDay} (${stats.total} samples)</div>`
+      );
+    }
+  }
+
   function updateState() {
     if (game.global.race.species === "protoplasm") {
       state.goal = "Evolution";
@@ -22394,6 +22554,7 @@
       }
       if (settings.autoBuild || settings.autoARPA) {
         autoBuild(); // Called after autoStorage to compensate fluctuations of quantum(caused by previous tick's adjustments) levels before weightings
+        state.plannerFreshTick = state.scriptTick;
       }
     }
     if (settings.autoFactory) {
@@ -22459,6 +22620,8 @@
     if (settings.autoMutateTraits) {
       autoMutateTrait();
     }
+
+    updateBuildPlanner();
 
     KeyManager.finish();
     state.soulGemLast = resources.Soul_Gem.currentQuantity;
@@ -22962,6 +23125,69 @@
                 width: 35%;
                 height: 9px;
                 overflow: hidden;
+            }
+
+            /* Styles for script planner UI */
+            #script_planner-wrapper {
+                padding: 1rem;
+                max-height: 40vh;
+            }
+            #script_planner-header {
+                cursor: pointer;
+            }
+            #script_planner {
+                font-size: 0.9em;
+                max-width: 500px;
+            }
+            #script_planner ul {
+                list-style-type: none;
+            }
+            #script_planner li {
+                display: block;
+                width: 100%;
+                height: auto !important;
+                max-height: none !important;
+                line-height: normal;
+                overflow: visible;
+                margin-top: 6px;
+            }
+            #script_planner .planner-row,
+            #script_planner .planner-note {
+                height: auto !important;
+                line-height: normal;
+            }
+            #script_planner .planner-row {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto auto;
+                column-gap: 8px;
+                align-items: baseline;
+            }
+            #script_planner .planner-row > span {
+                position: static;
+                float: none;
+                width: auto;
+                display: block;
+            }
+            #script_planner .planner-name {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            #script_planner .planner-weight,
+            #script_planner .planner-time {
+                white-space: nowrap;
+                text-align: right;
+            }
+            #script_planner .planner-note {
+                font-size: 0.85em;
+                opacity: 0.7;
+            }
+            #script_planner-stats {
+                margin-top: 12px;
+            }
+            #script_planner-reset {
+                font-size: 0.75em;
+                margin-left: 8px;
             }
 
             .percentage-full-progress-bar-wrapper.is-replicating {
@@ -25026,6 +25252,14 @@
     );
     addSettingsToggle(
       currentNode,
+      "buildPlannerUI",
+      "Display script planner",
+      "Add UI below the message log showing the top buildings/projects autoBuild wants next, their weights, what's blocking them, and cumulative bottleneck statistics for the current run.",
+      buildBuildPlannerUI,
+      removeBuildPlannerUI
+    );
+    addSettingsToggle(
+      currentNode,
       "displayPrestigeTypeInTopBar",
       "Display prestige type in top bar",
       "Show the currently selected prestige type in the top bar",
@@ -26360,6 +26594,39 @@
 
   function removeActiveTargetsUI() {
     $("#active_targets-wrapper").remove();
+  }
+
+  function buildBuildPlannerUI() {
+    if ($("#msgQueue").length === 0) {
+      return;
+    }
+    $("#msgQueue").after(`
+            <div id="script_planner-wrapper" class="bldQueue vscroll right">
+                <h2 id="script_planner-header" class="has-text-success">Script Planner</h2>
+                <div id="script_planner">
+                    <ul id="script_planner-list"></ul>
+                    <div id="script_planner-stats">
+                        <h2>Bottlenecks <a id="script_planner-reset">reset</a></h2>
+                        <div id="script_planner-stats-text"></div>
+                    </div>
+                </div>
+            </div>`);
+
+    $("#script_planner").toggle(!settingsRaw.buildPlannerCollapsed);
+    $("#script_planner-header").on("click", function () {
+      settingsRaw.buildPlannerCollapsed = !settingsRaw.buildPlannerCollapsed;
+      $("#script_planner").toggle(!settingsRaw.buildPlannerCollapsed);
+      updateSettingsFromState();
+    });
+    $("#script_planner-reset").on("click", function () {
+      state.plannerStats = makePlannerStats();
+      savePlannerStats();
+      $("#script_planner-stats-text").html("");
+    });
+  }
+
+  function removeBuildPlannerUI() {
+    $("#script_planner-wrapper").remove();
   }
 
   function buildResearchSettings() {
@@ -30596,6 +30863,12 @@
       $("#active_targets-wrapper").length === 0
     ) {
       buildActiveTargetsUI();
+    }
+    if (
+      settingsRaw.buildPlannerUI &&
+      $("#script_planner-wrapper").length === 0
+    ) {
+      buildBuildPlannerUI();
     }
     if (settingsRaw.showSettings && $("#script_settings").length === 0) {
       buildScriptSettings();
