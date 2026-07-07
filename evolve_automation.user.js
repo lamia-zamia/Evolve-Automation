@@ -11798,6 +11798,7 @@
       generalMinimumMorale: 105,
       generalMaximumMorale: 500,
       generalMinimumAuthority: 100, // Evil universe: keep Authority at or above this (0 to disable, -1 to target the current Authority max)
+      generalAuthorityMinPatrolPercent: 40, // -1 (pin-at-max) mode only: reserve at least this % of available Hell soldiers for patrols (soul gem income) instead of stationing everyone
       govInterim: GovernmentManager.Types.democracy.id,
       govFinal: GovernmentManager.Types.technocracy.id,
       govSpace: GovernmentManager.Types.corpocracy.id,
@@ -14273,10 +14274,23 @@
             : settings.generalMinimumAuthority;
         let deficit = authorityTarget - resources.Authority.currentQuantity;
         let neededStationed = m.hellGarrison + Math.ceil(deficit / perSoldier); // m.hellGarrison = current stationed defenders
-        let maxStationed = Math.max(
-          0,
-          availableHellSoldiers - targetHellPatrolSize
-        ); // always leave one patrol
+        // Always leave one patrol; in -1 (pin-at-max) mode also reserve a % of soldiers for
+        // patrols so pinning Authority at its cap doesn't starve soul gem income.
+        let patrolReserve = targetHellPatrolSize;
+        if (
+          settings.generalMinimumAuthority < 0 &&
+          settings.generalAuthorityMinPatrolPercent > 0
+        ) {
+          patrolReserve = Math.max(
+            patrolReserve,
+            Math.ceil(
+              (availableHellSoldiers *
+                settings.generalAuthorityMinPatrolPercent) /
+                100
+            )
+          );
+        }
+        let maxStationed = Math.max(0, availableHellSoldiers - patrolReserve);
         let authGarrison = Math.max(
           hellGarrison,
           Math.min(neededStationed, maxStationed)
@@ -25673,6 +25687,12 @@
       "generalMinimumAuthority",
       "Minimum Authority (Evil universe)",
       "Evil universe only. While Authority is below this value the tax rate will be raised to keep morale at 100 (morale above 100 drains Authority 1:1), and buildings raising the Authority cap get a weighting boost. Set to -1 to target the current Authority maximum (pin it at the cap), or 0 to disable Authority management. Authority below 100 causes a global production penalty of 0.35% per point"
+    );
+    addSettingsNumber(
+      currentNode,
+      "generalAuthorityMinPatrolPercent",
+      "Authority: min % soldiers on patrol",
+      "Only applies when Minimum Authority is -1 (pin at max). Reserves at least this percentage of available Hell soldiers for patrols (soul gem income) before stationing the rest for Authority, so pinning at max won't kill soul gem income. Set to 0 to station everyone but one patrol (old behaviour)"
     );
 
     let governmentOptions = [
