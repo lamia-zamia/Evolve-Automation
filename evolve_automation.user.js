@@ -26598,10 +26598,15 @@
   }
 
   function buildBuildPlannerUI() {
-    if ($("#msgQueue").length === 0) {
+    // Anchor above the queues, not after #msgQueue: the game auto-sizes
+    // #msgQueue (vscroll) to fill the column, so anything placed after it is
+    // pushed below the fold and only becomes visible when the game's resize
+    // relayout (xs) reshuffles the queues. Inserting before #buildQueue keeps
+    // it visible immediately, same as the Detailed Queue UI.
+    if ($("#buildQueue").length === 0) {
       return;
     }
-    $("#msgQueue").after(`
+    $("#buildQueue").before(`
             <div id="script_planner-wrapper" class="bldQueue vscroll right">
                 <h2 id="script_planner-header" class="has-text-success">Script Planner</h2>
                 <div id="script_planner">
