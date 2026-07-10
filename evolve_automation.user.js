@@ -11750,6 +11750,9 @@
       activeTargetsUI: false,
       buildPlannerUI: true,
       buildPlannerCollapsed: false,
+      stateLogEnabled: false,
+      stateLogAutoDownload: false,
+      stateLogInterval: 20,
       displayPrestigeTypeInTopBar: true,
       displayTotalDaysTypeInTopBar: false,
       scriptSettingsExportFilename: "evolve-script-settings.json",
@@ -16564,6 +16567,17 @@
       formatLogString(settings.log_prestige_format, placeholders),
       ["achievements"]
     );
+
+    if (settings.stateLogEnabled && state.stateLog?.samples.length) {
+      saveStateLog();
+      if (settings.stateLogAutoDownload) {
+        let s = state.stateLog;
+        triggerFileDownload(
+          JSON.stringify(s),
+          `evolve-statelog-${s.species}-r${s.reset}-d${game.global.stats.days}.json`
+        );
+      }
+    }
   }
 
   function autoPrestige() {
@@ -21613,6 +21627,117 @@
     }
   }
 
+  // Safety ceiling for the sample array (drop oldest). A full run at the default
+  // interval stays well under this; it only bounds pathologically long sessions.
+  const STATE_LOG_CAP = 20000;
+
+  function makeStateLog() {
+    return {
+      v: 2,
+      reset: game.global.stats.reset,
+      startDay: game.global.stats.days,
+      species: game.global.race.species,
+      cap: [], // running capped set — delta baseline, survives reloads
+      stall: [], // running stalled set
+      samples: [],
+    };
+  }
+
+  function loadStateLog() {
+    try {
+      let saved = JSON.parse(localStorage.getItem("ea_state_log"));
+      if (saved && saved.v === 2 && saved.reset === game.global.stats.reset) {
+        return saved;
+      }
+    } catch (e) {}
+    return makeStateLog();
+  }
+
+  function saveStateLog() {
+    if (state.stateLog) {
+      localStorage.setItem("ea_state_log", JSON.stringify(state.stateLog));
+    }
+  }
+
+  // [added, removed] between a previous and current set (as arrays).
+  function stateLogDiff(prev, cur) {
+    let prevSet = new Set(prev);
+    let curSet = new Set(cur);
+    return [
+      cur.filter((x) => !prevSet.has(x)),
+      prev.filter((x) => !curSet.has(x)),
+    ];
+  }
+
+  // Compact [name, res, blocker, eta] for the top target, or 0 when there's none.
+  function stateLogBlocker(target) {
+    if (!target) {
+      return 0;
+    }
+    let limit = plannerLimitingResource(target);
+    if (!limit) {
+      return [target.title, null, "ready", 0];
+    }
+    return [
+      target.title,
+      limit.resource.title,
+      limit.blocker,
+      Math.round(limit.time),
+    ];
+  }
+
+  function recordStateSnapshot() {
+    state.stateLog ??= loadStateLog();
+    let log = state.stateLog;
+
+    // "capped" uses a stable storage ratio rather than the one-tick isCapped()
+    // projection, so resources hovering at the cap don't flicker every sample.
+    let capped = [];
+    let stalled = [];
+    for (let id in resources) {
+      let r = resources[id];
+      if (!r.isUnlocked()) {
+        continue;
+      }
+      if (r.storageRatio > 0.98) {
+        capped.push(r.title);
+      }
+      if (r.isDemanded() && r.income <= 0) {
+        stalled.push(r.title);
+      }
+    }
+
+    // Delta-encode the slow-changing sets against the running baseline.
+    let [ci, co] = stateLogDiff(log.cap, capped);
+    let [si, so] = stateLogDiff(log.stall, stalled);
+    log.cap = capped;
+    log.stall = stalled;
+
+    let sample = {
+      d: game.global.stats.days,
+      t: state.scriptTick,
+      g: state.goal,
+      mr: Math.round(resources.Money.rateOfChange),
+      mm: Math.round(state.moneyMedian),
+      k: Math.round(resources.Knowledge.currentQuantity),
+      kr: Math.round(resources.Knowledge.rateOfChange),
+      b: stateLogBlocker(state.unlockedBuildings[0]),
+      tc: stateLogBlocker(state.unlockedTechs[0]),
+    };
+    if (ci.length) sample.ci = ci;
+    if (co.length) sample.co = co;
+    if (si.length) sample.si = si;
+    if (so.length) sample.so = so;
+    log.samples.push(sample);
+
+    if (log.samples.length > STATE_LOG_CAP) {
+      log.samples.shift();
+    }
+    if (log.samples.length % 25 === 0) {
+      saveStateLog();
+    }
+  }
+
   function updateBuildPlanner() {
     if (!settings.buildPlannerUI) {
       return;
@@ -22638,6 +22763,15 @@
 
     updateBuildPlanner();
 
+    if (settings.stateLogEnabled) {
+      // Count processed ticks (this runs once per working automate() cycle), so
+      // the interval is predictable regardless of tickRate.
+      state.stateLogTick = (state.stateLogTick ?? 0) + 1;
+      if (state.stateLogTick % settings.stateLogInterval === 0) {
+        recordStateSnapshot();
+      }
+    }
+
     KeyManager.finish();
     state.soulGemLast = resources.Soul_Gem.currentQuantity;
   }
@@ -22761,6 +22895,11 @@
     // Expose saving/loading functions so that they can be called by other scripts
     win.importAutomationSettings = importSettings;
     win.exportAutomationSettings = exportSettings;
+    win.eaExportStateLog = () =>
+      triggerFileDownload(
+        JSON.stringify(state.stateLog ?? loadStateLog()),
+        `evolve-statelog-manual-d${game.global.stats.days}.json`
+      );
 
     // Safe mode warning, if active. Hope users can't miss it
     if (safeMode) {
@@ -25288,6 +25427,26 @@
       "Show the total days next to this year's days",
       updateTotalDaysInTopBar,
       updateTotalDaysInTopBar
+    );
+
+    addSettingsHeader1(currentNode, "State logging");
+    addSettingsToggle(
+      currentNode,
+      "stateLogEnabled",
+      "Record state log",
+      "Record compact bottleneck-focused snapshots of game state over the run into localStorage (key ea_state_log), for offline analysis. Retrieve via window.eaExportStateLog() in the console."
+    );
+    addSettingsToggle(
+      currentNode,
+      "stateLogAutoDownload",
+      "Auto-download log on reset",
+      "When a reset (prestige) commits, automatically download the recorded state log as a JSON file."
+    );
+    addSettingsNumber(
+      currentNode,
+      "stateLogInterval",
+      "Sample every N ticks",
+      "How often to record a state snapshot, counted in processed script ticks. A full run stays well under the 20000-sample cap at the default."
     );
 
     addSettingsHeader1(currentNode, "Achievement guards");
