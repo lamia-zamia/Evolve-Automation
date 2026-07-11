@@ -3025,6 +3025,7 @@
     soulGemLast: Number.MAX_SAFE_INTEGER,
 
     knowledgeRequiredByTechs: 0,
+    knowledgeRequiredByBuildTargets: 0,
     cheapestTechKnowledge: 0,
 
     goal: "Standard",
@@ -6463,7 +6464,11 @@
       () => settings.buildingWeightingUnderpowered,
     ],
     [
-      () => state.knowledgeRequiredByTechs <= resources.Knowledge.maxQuantity,
+      () =>
+        Math.max(
+          state.knowledgeRequiredByTechs,
+          state.knowledgeRequiredByBuildTargets
+        ) <= resources.Knowledge.maxQuantity,
       (building) =>
         building.is.knowledge &&
         building !== buildings.Wardenclyffe &&
@@ -6472,7 +6477,9 @@
       () => settings.buildingWeightingUselessKnowledge,
     ],
     [
-      () => state.cheapestTechKnowledge > resources.Knowledge.maxQuantity,
+      () =>
+        state.cheapestTechKnowledge > resources.Knowledge.maxQuantity ||
+        state.knowledgeRequiredByBuildTargets > resources.Knowledge.maxQuantity,
       (building) => building.is.knowledge,
       () => "Need more knowledge",
       () => settings.buildingWeightingNeedfulKnowledge,
@@ -20798,6 +20805,31 @@
     state.cheapestTechKnowledge =
       techKnowledgeCosts.length > 0 ? Math.min(...techKnowledgeCosts) : 0;
 
+    let buildKnowledgeCosts = [];
+    const addBuildKnowledgeCosts = (targets) => {
+      for (let target of targets) {
+        if (target instanceof Technology || target.is?.knowledge) {
+          continue;
+        }
+        let knowledgeCost = target.cost?.Knowledge ?? 0;
+        if (knowledgeCost > 0) {
+          buildKnowledgeCosts.push(knowledgeCost);
+        }
+      }
+    };
+    addBuildKnowledgeCosts(state.queuedTargetsAll);
+    addBuildKnowledgeCosts(state.triggerTargets);
+    addBuildKnowledgeCosts(
+      BuildingManager.priorityList.filter((b) => b.isAutoBuildable())
+    );
+    addBuildKnowledgeCosts(
+      ProjectManager.priorityList.filter((p) => p.isAutoBuildable())
+    );
+    state.knowledgeRequiredByBuildTargets = Math.max(
+      0,
+      ...buildKnowledgeCosts
+    );
+
     // Get list of all objects and techs, and find biggest numbers for each resource
     if (
       settings.autoFleet &&
@@ -29796,13 +29828,13 @@
     addWeightingRule(
       tableBodyNode,
       "Knowledge storage",
-      "Have unlocked unafforable researches",
+      "Have unaffordable researches or build targets",
       "buildingWeightingNeedfulKnowledge"
     );
     addWeightingRule(
       tableBodyNode,
       "Knowledge storage",
-      "All unlocked researches already affordable",
+      "All researches and build targets already affordable",
       "buildingWeightingUselessKnowledge"
     );
     addWeightingRule(
