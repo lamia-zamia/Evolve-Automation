@@ -1206,21 +1206,29 @@
         logPrestige();
       }
 
+      let popper = $("#popper");
+
       // Try skipping game's laggy postBuild hook by invoking the action() directly, instead of going through the
       // vue action() => game runAction() => game shed.action() => game postBuild() hook.
       // This will greatly reduce the amount of page redraws.
       // refresh is really only needed for first building as there are no buildings where building a second unlocks more stuff.
+      // Keep this narrowly guarded: postBuild also handles grants, post hooks, queues, poppers, and Inflation.
       if (
         settings.performanceHackAvoidDrawTech &&
         this.definition.refresh &&
-        this.count > 0
+        this.count > 0 &&
+        !this.definition.grant &&
+        !this.definition.post &&
+        !this.definition.queue_complete &&
+        !this.is.prestige &&
+        !game.global.race.inflation &&
+        (popper.length === 0 || !popper.is(":visible"))
       ) {
         this.definition.action();
         return true;
       }
 
       // Hide active popper from action, so it won't rewrite it
-      let popper = $("#popper");
       if (
         popper.length > 0 &&
         popper.data("id").indexOf(this._vueBinding) === -1
@@ -1695,10 +1703,18 @@
         this.count >= 10 &&
         !(this.id === "syphon" && this.count >= 79)
       ) {
-        let mainVue = win.$("#mainColumn > div:first-child")[0].__vue__;
-        mainVue.s.tabLoad = false;
-        getVueById(this._vueBinding).build(this.id, this.currentStep);
-        mainVue.s.tabLoad = true;
+        let mainVue = win.$("#mainColumn > div:first-child")[0]?.__vue__;
+        if (mainVue) {
+          let oldTabLoad = mainVue.s.tabLoad;
+          try {
+            mainVue.s.tabLoad = false;
+            getVueById(this._vueBinding).build(this.id, this.currentStep);
+          } finally {
+            mainVue.s.tabLoad = oldTabLoad;
+          }
+        } else {
+          getVueById(this._vueBinding).build(this.id, this.currentStep);
+        }
 
         return true;
       }
@@ -11840,7 +11856,6 @@
       buildingAlwaysClick: false,
       buildingClickPerTick: 50,
       scriptSettingsExportFilename: "evolve-script-settings.json",
-      performanceHackAvoidDrawTech: false,
     };
 
     applySettings(def, reset);
@@ -11853,6 +11868,7 @@
       buildPlannerCollapsed: false,
       displayPrestigeTypeInTopBar: true,
       displayTotalDaysTypeInTopBar: false,
+      performanceHackAvoidDrawTech: false,
     };
 
     applySettings(def, reset);
@@ -22043,11 +22059,12 @@
     if (!settings.buildPlannerUI) {
       return;
     }
+    let shouldSample = !document.hidden || settings.stateLogEnabled;
+    let shouldDraw = !document.hidden;
     let buildRan = state.plannerFreshTick === state.scriptTick;
     let targets = state.unlockedBuildings ?? [];
 
-    // Bottleneck sampling runs even when the tab is hidden
-    if (buildRan && targets.length > 0) {
+    if (shouldSample && buildRan && targets.length > 0) {
       state.plannerStats ??= loadPlannerStats();
       let stats = state.plannerStats;
       let limit = plannerLimitingResource(targets[0]);
@@ -22060,7 +22077,7 @@
       }
     }
 
-    if (document.hidden || settingsRaw.buildPlannerCollapsed) {
+    if (!shouldDraw || settingsRaw.buildPlannerCollapsed) {
       return;
     }
     let list = $("#script_planner-list");
@@ -22666,7 +22683,7 @@
   }
 
   function tooltipObserverCallback(mutations) {
-    if (!settings.masterScriptToggle) {
+    if (!settings.masterScriptToggle || document.hidden) {
       return;
     }
     mutations.forEach((mutation) =>
@@ -25693,14 +25710,6 @@
       "Configures the filename used when using the 'Script Settings as File' button. This is useful if you keep multiple different profiles around.",
     );
 
-    addSettingsHeader1(currentNode, "Experimental");
-    addSettingsToggle(
-      currentNode,
-      "performanceHackAvoidDrawTech",
-      "Enable performance hack: drawTech avoidance",
-      "Enables very experimental and potentially buggy performance hacks designed to avoid excessive redraws of the research tab, which appears to be very CPU-intensive to redraw. This improves game performance when buying lots of buildings, but also causes potentially limitless amounts of bugs as important game code may be skipped.",
-    );
-
     document.documentElement.scrollTop = document.body.scrollTop =
       currentScrollPosition;
   }
@@ -25776,6 +25785,13 @@
       "Show the total days next to this year's days",
       updateTotalDaysInTopBar,
       updateTotalDaysInTopBar,
+    );
+    addSettingsHeader1(currentNode, "Experimental");
+    addSettingsToggle(
+      currentNode,
+      "performanceHackAvoidDrawTech",
+      "Enable performance hack: drawTech avoidance",
+      "Enables experimental performance hacks designed to avoid excessive redraws of expensive game tabs. The ARPA path preserves game behaviour; the repeat-building path is narrowly guarded but may still be risky if game internals change.",
     );
 
     document.documentElement.scrollTop = document.body.scrollTop =
