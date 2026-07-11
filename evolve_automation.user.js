@@ -11772,6 +11772,7 @@
       guardEnergetic: true,
       guardRedDead: true,
       guardSecondEvolution: true,
+      guardBananaRepublic: true,
     };
 
     applySettings(def, reset);
@@ -12235,6 +12236,7 @@
     let def = {
       autoAlchemy: false,
       autoPylon: false,
+      magicFullmetalHelper: true,
       magicAlchemyManaUse: 0.5,
       productionRitualManaUse: 0.5,
       productionRitualSafe: true,
@@ -13032,6 +13034,49 @@
       ? game.global.stats.feat?.[guard.id] ?? 0
       : getAchievementStar(guard.id);
     return star < game.alevel() && guard.when();
+  }
+
+  function bananaRepublicObjectiveComplete(id) {
+    let bananaStats = game.global.stats.banana;
+    let universe = poly.universeAffix();
+    return Boolean(bananaStats?.[id]?.[universe]);
+  }
+
+  function bananaRepublicSmoothieComplete() {
+    if ((game.global.stats.feat?.banana ?? 0) > 0) {
+      return true;
+    }
+
+    let exportRoutes = 0;
+    let hasBigImport = false;
+    Object.values(game.global.resource).forEach((res) => {
+      if (!res.hasOwnProperty("trade")) {
+        return;
+      }
+      if (res.trade > 0) {
+        exportRoutes += res.trade;
+      } else if (res.trade <= -500) {
+        hasBigImport = true;
+      }
+    });
+    return hasBigImport && exportRoutes >= 500;
+  }
+
+  function bananaRepublicReadyForUnification() {
+    return (
+      ["b1", "b2", "b3", "b4", "b5"].every(
+        bananaRepublicObjectiveComplete
+      ) && bananaRepublicSmoothieComplete()
+    );
+  }
+
+  function guardBananaRepublicActive() {
+    return (
+      settings.achievementGuards &&
+      settings.guardBananaRepublic &&
+      game.global.race["banana"] &&
+      !bananaRepublicReadyForUnification()
+    );
   }
 
   function loadQueuedSettings() {
@@ -15525,6 +15570,25 @@
       );
     }
 
+    if (
+      settings.magicFullmetalHelper &&
+      game.global.race.universe === "magic" &&
+      game.global.tech.alchemy >= 2 &&
+      getAchievementStar("fullmetal") < game.alevel() &&
+      resources.Mana.currentQuantity >= 1 &&
+      resources.Crystal.currentQuantity >= 0.15
+    ) {
+      let fullmetalResource = fullList.find(
+        (res) => m.transmuteTier(res) > 1 && !res.instance?.basic
+      );
+      if (fullmetalResource) {
+        adjustAlchemy[fullmetalResource.id] = Math.max(
+          adjustAlchemy[fullmetalResource.id],
+          1 - m.currentCount(fullmetalResource.id)
+        );
+      }
+    }
+
     // Apply adjustment
     Object.entries(adjustAlchemy).forEach(
       ([id, delta]) => delta < 0 && m.transmuteLess(id, delta * -1)
@@ -17813,6 +17877,9 @@
 
     // Unification
     if (itemId === "tech-unification2" || itemId === "tech-unite") {
+      if (guardBananaRepublicActive()) {
+        return "Banana Republic guard";
+      }
       if (guardActive("guardCultOfPersonality")) {
         return "Cult of Personality achievement guard";
       }
@@ -25306,7 +25373,8 @@
         "guardAnarchist",
         "guardEnergetic",
         "guardRedDead",
-        "guardSecondEvolution"
+        "guardSecondEvolution",
+        "guardBananaRepublic"
       );
       // No need to call showSettings callback, it enabled if button was pressed, and will be still enabled on default settings
     };
@@ -25529,6 +25597,12 @@
       "guardSecondEvolution",
       "Second Evolution",
       "Research Fanaticism instead of Anthropology while worshipping own species as gods."
+    );
+    addSettingsToggle(
+      currentNode,
+      "guardBananaRepublic",
+      "Banana Republic",
+      "Block unification while the Banana Republic scenario still has unfinished objectives in the current universe, or while the 500 import and 500 export feat condition is still unmet."
     );
 
     addSettingsHeader1(currentNode, "Misc");
@@ -28969,7 +29043,7 @@
       updateSettingsFromState();
       updateMagicSettingsContent();
 
-      resetCheckbox("autoAlchemy", "autoPylon");
+      resetCheckbox("autoAlchemy", "autoPylon", "magicFullmetalHelper");
     };
 
     buildSettingsSection(
@@ -29001,6 +29075,12 @@
       "magicAlchemyManaUse",
       "Mana income used",
       "Income portion to use on alchemy. Setting to 1 is not recommended, leftover mana will be used for rituals."
+    );
+    addSettingsToggle(
+      currentNode,
+      "magicFullmetalHelper",
+      "Fullmetal helper",
+      "In Magic universe with Alchemy II, keep one non-basic alchemy transmutation active long enough to claim Fullmetal if the achievement is still below the current star level. Requires autoAlchemy."
     );
 
     currentNode.append(`
