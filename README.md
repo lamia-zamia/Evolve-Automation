@@ -1,7 +1,12 @@
-Differences from Volch
+# Evolve Automation fork notes
 
-- Authority management
-- Less energy/storage bouncing
-- Achievement guard (pacifist, etc)
-- Script planner (shows what's on it's mind)
-- Don't go for research cap if there is available research
+Short factual differences from Vollch's script:
+
+- Evil/Authority support: morale-aware tax handling, Hell garrison stationing, and Authority-cap building weighting.
+- Reduced autoPower and autoStorage bouncing.
+- Achievement guards for Pacifist, Dreaded, Cult of Personality, Anarchist, Energetic, Red Dead, Second Evolution, and Banana Republic.
+- Script Planner panel, active-target details, state logging/export.
+- Challenge/scenario helpers for Inflation Wheelbarrow, Banana Republic objectives, and Magic Fullmetal.
+- Expanded weighting rules for Authority, Banana objectives, Inflation Money helpers.
+- Settings UI is split into focused sections for interface, state log, achievement guards, and challenge helpers.
+- Improved stability for performance hack
