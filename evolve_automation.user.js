@@ -5676,6 +5676,27 @@
     buildings.WastelandThrone,
     buildings.AsphodelBunker,
   ];
+  const INFLATION_CHALLENGE_MONEY = 25e10;
+  const inflationMoneyStorageBuildings = [
+    buildings.Bank,
+    buildings.Casino,
+    buildings.HellSpaceCasino,
+    buildings.TitanBank,
+    buildings.TauCasino,
+    buildings.AlphaExchange,
+    buildings.RuinsVault,
+    buildings.RuinsWarVault,
+    buildings.WastelandHellCasino,
+    buildings.ElysiumEternalBank,
+  ];
+  const inflationMoneyIncomeBuildings = [
+    buildings.TouristCenter,
+    buildings.Casino,
+    buildings.HellSpaceCasino,
+    buildings.TauCasino,
+    buildings.AlphaLuxuryCondo,
+    buildings.WastelandHellCasino,
+  ];
   const galaxyCombatShips = [
     buildings.ScoutShip,
     buildings.CorvetteShip,
@@ -6234,6 +6255,40 @@
       (building) => authorityCapBuildings.includes(building),
       () => "Raises Authority cap, currently below target",
       () => settings.buildingWeightingAuthority,
+    ],
+    [
+      () =>
+        settings.achievementGuards &&
+        settings.guardBananaRepublic &&
+        game.global.race["banana"],
+      (building) =>
+        building === buildings.DwarfWorldCollider &&
+        !bananaRepublicObjectiveComplete("b2"),
+      () => "Banana Republic objective",
+      () => settings.buildingWeightingBananaObjective,
+    ],
+    [
+      () => inflationChallengeAssistActive(),
+      (building) => {
+        if (
+          !inflationChallengeMoneyReachable() &&
+          inflationMoneyStorageBuildings.includes(building)
+        ) {
+          return "storage";
+        }
+        if (
+          inflationChallengeMoneyReachable() &&
+          inflationMoneyIncomeBuildings.includes(building)
+        ) {
+          return "income";
+        }
+        return false;
+      },
+      (kind) =>
+        kind === "storage"
+          ? "Inflation challenge needs Money storage"
+          : "Inflation challenge needs Money income",
+      () => settings.buildingWeightingInflationMoney,
     ],
     [
       () => settings.achievementGuards,
@@ -10199,6 +10254,25 @@
           project.weighting = 0;
           project.extraDescription = "Not needed for current prestige<br>";
         }
+        if (
+          project.weighting > 0 &&
+          settings.achievementGuards &&
+          settings.guardBananaRepublic &&
+          game.global.race["banana"] &&
+          project === projects.Monument &&
+          !bananaRepublicObjectiveComplete("b5")
+        ) {
+          project.weighting *= settings.buildingWeightingBananaObjective;
+          project.extraDescription += "Banana Republic objective<br>";
+        }
+        if (
+          project.weighting > 0 &&
+          inflationChallengeAssistActive() &&
+          project === projects.StockExchange
+        ) {
+          project.weighting *= settings.buildingWeightingInflationMoney;
+          project.extraDescription += "Inflation challenge Money helper<br>";
+        }
 
         if (settings.arpaScaleWeighting) {
           project.weighting /= 1 - 0.01 * project.progress;
@@ -11773,6 +11847,8 @@
       guardRedDead: true,
       guardSecondEvolution: true,
       guardBananaRepublic: true,
+      inflationChallengeAssist: true,
+      inflationChallengeSaveMinutes: 30,
     };
 
     applySettings(def, reset);
@@ -12117,6 +12193,8 @@
       buildingWeightingTemporal: 0.2,
       buildingWeightingSolar: 0.2,
       buildingWeightingOverlord: 0,
+      buildingWeightingBananaObjective: 10,
+      buildingWeightingInflationMoney: 10,
     };
 
     applySettings(def, reset);
@@ -13079,6 +13157,42 @@
     );
   }
 
+  function inflationChallengeAssistActive() {
+    return (
+      settings.inflationChallengeAssist &&
+      game.global.race.hasOwnProperty("inflation") &&
+      game.global.race.inflation !== false &&
+      getAchievementStar("wheelbarrow") < game.alevel()
+    );
+  }
+
+  function inflationChallengeMoneyReachable() {
+    return resources.Money.maxQuantity >= INFLATION_CHALLENGE_MONEY;
+  }
+
+  function inflationChallengeSecondsToFinish() {
+    if (!inflationChallengeMoneyReachable()) {
+      return Number.POSITIVE_INFINITY;
+    }
+    let remaining =
+      INFLATION_CHALLENGE_MONEY - resources.Money.currentQuantity;
+    if (remaining <= 0) {
+      return 0;
+    }
+    return resources.Money.rateOfChange > 0
+      ? remaining / resources.Money.rateOfChange
+      : Number.POSITIVE_INFINITY;
+  }
+
+  function inflationChallengeShouldSaveMoney() {
+    return (
+      inflationChallengeAssistActive() &&
+      settings.inflationChallengeSaveMinutes >= 0 &&
+      inflationChallengeSecondsToFinish() <=
+        settings.inflationChallengeSaveMinutes * 60
+    );
+  }
+
   function loadQueuedSettings() {
     if (
       settings.evolutionQueueEnabled &&
@@ -13760,6 +13874,9 @@
     if (!m._garrisonVue || !m.isMercenaryUnlocked() || m.maxCityGarrison <= 0) {
       return;
     }
+    if (inflationChallengeShouldSaveMoney() && state.goal !== "Reset") {
+      return;
+    }
 
     let mercenaryCost = m.mercenaryCost;
     let mercenariesHired = 0;
@@ -13818,6 +13935,9 @@
       haveTask("spyop") ||
       !haveTech("spy")
     ) {
+      return;
+    }
+    if (inflationChallengeShouldSaveMoney()) {
       return;
     }
 
@@ -17979,6 +18099,12 @@
   function autoTrigger() {
     let triggerActive = false;
     for (let trigger of state.triggerTargets) {
+      if (
+        inflationChallengeShouldSaveMoney() &&
+        (trigger.cost?.Money ?? 0) > 0
+      ) {
+        continue;
+      }
       if (trigger.click()) {
         triggerActive = true;
       }
@@ -19701,6 +19827,7 @@
     let exportRouteCap = MarketManager.getExportRouteCap();
     let [maxTradeRoutes, unmanagedTradeRoutes] =
       MarketManager.getMaxTradeRoutes();
+    let saveInflationMoney = inflationChallengeShouldSaveMoney();
 
     // Fill trade routes with selling
     for (let i = 0; i < tradableResources.length; i++) {
@@ -19731,6 +19858,16 @@
         currentMoneyPerSecond += resource.tradeSellPrice * routesToAssign;
       }
     }
+
+    if (saveInflationMoney) {
+      for (let i = 0; i < tradableResources.length; i++) {
+        let resource = tradableResources[i];
+        if (resource.autoTradeBuyEnabled) {
+          requiredTradeRoutes[resource.id] =
+            requiredTradeRoutes[resource.id] ?? 0;
+        }
+      }
+    }
     let minimumAllowedMoneyPerSecond = Math.min(
       resources.Money.maxQuantity - resources.Money.currentQuantity,
       Math.max(
@@ -19748,6 +19885,9 @@
         continue;
       }
       requiredTradeRoutes[resource.id] = requiredTradeRoutes[resource.id] ?? 0;
+      if (saveInflationMoney) {
+        continue;
+      }
 
       if (
         resource.autoTradeWeighting <= 0 ||
@@ -20917,6 +21057,16 @@
         (p) => p.isUnlocked() && p.autoBuildEnabled
       )
     );
+    if (inflationChallengeAssistActive()) {
+      resources.Money.maxCost = Math.max(
+        resources.Money.maxCost,
+        INFLATION_CHALLENGE_MONEY
+      );
+      resources.Money.storageRequired = Math.max(
+        resources.Money.storageRequired,
+        INFLATION_CHALLENGE_MONEY
+      );
+    }
 
     // Increase storage for sellable resources, to make sure we'll have required amount before they'll be sold
     if (
@@ -20934,6 +21084,9 @@
 
   function prioritizeDemandedResources() {
     let prioritizedTasks = [];
+    if (inflationChallengeAssistActive()) {
+      resources.Money.requestQuantity(INFLATION_CHALLENGE_MONEY);
+    }
     // Building and research queues
     if (settings.prioritizeQueue.includes("req")) {
       prioritizedTasks.push(...state.queuedTargets);
@@ -21164,6 +21317,14 @@
         name: techIds["tech-unification"].title,
         cause: "Purchase",
         cost: { Money: SpyManager.purchaseMoney },
+      });
+    }
+
+    if (inflationChallengeShouldSaveMoney()) {
+      state.conflictTargets.push({
+        name: "Inflation challenge",
+        cause: "Wheelbarrow",
+        cost: { Money: INFLATION_CHALLENGE_MONEY },
       });
     }
 
@@ -25374,7 +25535,8 @@
         "guardEnergetic",
         "guardRedDead",
         "guardSecondEvolution",
-        "guardBananaRepublic"
+        "guardBananaRepublic",
+        "inflationChallengeAssist"
       );
       // No need to call showSettings callback, it enabled if button was pressed, and will be still enabled on default settings
     };
@@ -25602,7 +25764,21 @@
       currentNode,
       "guardBananaRepublic",
       "Banana Republic",
-      "Block unification while the Banana Republic scenario still has unfinished objectives in the current universe, or while the 500 import and 500 export feat condition is still unmet."
+      "Block unification while the Banana Republic scenario still has unfinished objectives in the current universe, or while the 500 import and 500 export feat condition is still unmet. Also boosts World Collider and Monument weighting for unfinished Banana objectives."
+    );
+
+    addSettingsHeader1(currentNode, "Challenge helpers");
+    addSettingsToggle(
+      currentNode,
+      "inflationChallengeAssist",
+      "Inflation challenge",
+      "During Inflation, demand the $250B Wheelbarrow target, boost Money storage or income buildings as appropriate, and stop optional Money spending once the target can be reached soon."
+    );
+    addSettingsNumber(
+      currentNode,
+      "inflationChallengeSaveMinutes",
+      "Inflation save-up minutes",
+      "When the $250B target is reachable within this many real-time minutes at current Money income, stop optional Money spending and imports until Wheelbarrow is earned. Set negative to disable the final save-up freeze while keeping the helper's weighting and demand."
     );
 
     addSettingsHeader1(currentNode, "Misc");
@@ -30018,6 +30194,18 @@
       "Womlings Missions",
       "Womlings unlock actions conflicting with Overlord",
       "buildingWeightingOverlord"
+    );
+    addWeightingRule(
+      tableBodyNode,
+      "Banana Republic objectives",
+      "World Collider and Monuments while their objectives are unfinished",
+      "buildingWeightingBananaObjective"
+    );
+    addWeightingRule(
+      tableBodyNode,
+      "Inflation Money helpers",
+      "Money storage until $250B cap is reachable, then Money income",
+      "buildingWeightingInflationMoney"
     );
     addWeightingRule(
       tableBodyNode,
