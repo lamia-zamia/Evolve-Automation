@@ -45,6 +45,7 @@
 //     Auto Power have two toggles, first one enables basic management for building: based on priority, available power, support, and fuel. Logic behind second toggle is individual per building, but generally it tries to behave smart and save resources when it's enabled.
 //   Evolution Queue can change any script settings, not only those which you have after adding new task, you can append any variables and their values manually, if you're capable to read code, and can find internal names and acceptable values of those variables. Settings applied at the moment when new evolution starts. (Or right before reset in case of Cataclysm)
 //     Unavailable tasks in evolution queue will be ignored, so you can queue something like salamander and balorg, one after another, and configure script to pick either volcano or hellscape after bioseed. And, assuming you'll get either of these planets, it'll go for one of those two races. (You can configure more options to pick from, if you want)
+//   Prestige > Ascension has custom-race handling and named presets with a full GUI editor. It can reuse the saved race, always pause in the lab for challenge-specific edits, or validate/import the selected preset and continue automatically.
 //   Auto Smelter does adjust rate of Inferno fuel and Oil for best cost and efficiency, but only when Inferno directly above oil.
 //   All settings can be reset to default at once by importing {} as script settings.
 //   Autoclicker can trivialize many aspects of the game, and ruin experience. Spoil your game at your own risk!
@@ -5693,6 +5694,12 @@
     buildings.AsphodelBunker,
   ];
   const INFLATION_CHALLENGE_MONEY = 25e10;
+  const RETIREMENT_PREP = {
+    fusionGenerators: 20,
+    factories: 18,
+    scienceLabs: 11,
+    graphene: 200e6,
+  };
   const inflationMoneyStorageBuildings = [
     buildings.Bank,
     buildings.Casino,
@@ -6305,6 +6312,35 @@
           ? "Inflation challenge needs Money storage"
           : "Inflation challenge needs Money income",
       () => settings.buildingWeightingInflationMoney,
+    ],
+    [
+      () =>
+        retirementChallengeAssistActive() &&
+        retirementPreparationMissing().length > 0,
+      (building) => {
+        if (
+          building === buildings.TauFusionGenerator &&
+          building.count < RETIREMENT_PREP.fusionGenerators
+        ) {
+          return RETIREMENT_PREP.fusionGenerators;
+        }
+        if (
+          building === buildings.TauFactory &&
+          building.count < RETIREMENT_PREP.factories
+        ) {
+          return RETIREMENT_PREP.factories;
+        }
+        if (
+          building === buildings.TauDiseaseLab &&
+          building.count < RETIREMENT_PREP.scienceLabs
+        ) {
+          return RETIREMENT_PREP.scienceLabs;
+        }
+        return false;
+      },
+      (target, building) =>
+        `Retirement preparation: build ${target} ${building.name}`,
+      () => settings.buildingWeightingRetirementPrep,
     ],
     [
       () => settings.achievementGuards,
@@ -11916,6 +11952,7 @@
     let def = {
       inflationChallengeAssist: true,
       inflationChallengeSaveMinutes: 30,
+      retirementChallengeAssist: true,
     };
 
     applySettings(def, reset);
@@ -11934,6 +11971,13 @@
       prestigeWhiteholeSaveGems: true,
       prestigeWhiteholeMinMass: 8,
       prestigeAscensionPillar: true,
+      prestigeCustomRaceMode: "reuse",
+      prestigeCustomRacePreset: "0",
+      prestigeCustomRacePresets: [
+        { name: "General", json: "" },
+        { name: "Banana + EMF", json: "" },
+        { name: "Cataclysm", json: "" },
+      ],
       prestigeDemonicFloor: 100,
       prestigeDemonicPotential: 0.6,
       prestigeDemonicBomb: false,
@@ -12262,6 +12306,7 @@
       buildingWeightingOverlord: 0,
       buildingWeightingBananaObjective: 2,
       buildingWeightingInflationMoney: 2,
+      buildingWeightingRetirementPrep: 10,
     };
 
     applySettings(def, reset);
@@ -13260,6 +13305,50 @@
       inflationChallengeSecondsToFinish() <=
         settings.inflationChallengeSaveMinutes * 60
     );
+  }
+
+  function retirementChallengeAssistActive() {
+    return (
+      settings.retirementChallengeAssist &&
+      game.global.race["truepath"] &&
+      settings.prestigeType === "retire" &&
+      !haveTech("isolation")
+    );
+  }
+
+  function retirementPreparationMissing() {
+    if (!retirementChallengeAssistActive()) {
+      return [];
+    }
+
+    let missing = [];
+    if (buildings.TauFusionGenerator.count < RETIREMENT_PREP.fusionGenerators) {
+      missing.push(
+        `${buildings.TauFusionGenerator.name} ${buildings.TauFusionGenerator.count}/${RETIREMENT_PREP.fusionGenerators}`,
+      );
+    }
+    if (buildings.TauFactory.count < RETIREMENT_PREP.factories) {
+      missing.push(
+        `${buildings.TauFactory.name} ${buildings.TauFactory.count}/${RETIREMENT_PREP.factories}`,
+      );
+    }
+    if (buildings.TauDiseaseLab.count < RETIREMENT_PREP.scienceLabs) {
+      missing.push(
+        `${buildings.TauDiseaseLab.name} ${buildings.TauDiseaseLab.count}/${RETIREMENT_PREP.scienceLabs}`,
+      );
+    }
+    if (resources.Graphene.maxQuantity < RETIREMENT_PREP.graphene) {
+      missing.push(
+        `${resources.Graphene.name} storage ${getNumberString(resources.Graphene.maxQuantity)}/${getNumberString(RETIREMENT_PREP.graphene)}`,
+      );
+    } else if (
+      resources.Graphene.currentQuantity < RETIREMENT_PREP.graphene
+    ) {
+      missing.push(
+        `${resources.Graphene.name} stockpile ${getNumberString(resources.Graphene.currentQuantity)}/${getNumberString(RETIREMENT_PREP.graphene)}`,
+      );
+    }
+    return missing;
   }
 
   function loadQueuedSettings() {
@@ -14804,33 +14893,51 @@
         );
       }
 
-      // Near-tied candidates make the winner flip every tick as each craft nudges
-      // its key above the other's. Keep the previous target until its key
-      // overshoots the best one by 10%; long-run ratios stay within that band.
-      if (availableJobs.length > 1) {
-        const keyOf = (job) =>
-          job.resource.currentQuantity /
-          (scaledWeightings
-            ? scaledWeightings[job.id]
-            : job.resource.craftWeighting);
-        let focus = availableJobs.find((job) => job.id === state.craftFocus);
-        if (
-          focus &&
-          focus !== availableJobs[0] &&
-          keyOf(focus) <= keyOf(availableJobs[0]) * 1.1
-        ) {
-          availableJobs.splice(availableJobs.indexOf(focus), 1);
-          availableJobs.unshift(focus);
+      // Near-tied candidates used to flip-flop the whole crew every tick, as each
+      // craft nudged the winner's key just above the runner-up's. Instead split
+      // the crafters among all jobs within 10% of the best key, proportional to
+      // their weightings — counts stay stable and the ratio holds exactly.
+      const keyOf = (job) =>
+        job.resource.currentQuantity /
+        (scaledWeightings
+          ? scaledWeightings[job.id]
+          : job.resource.craftWeighting);
+      const weightOf = (job) =>
+        scaledWeightings
+          ? scaledWeightings[job.id]
+          : job.resource.craftWeighting;
+      let shareWorkers = {};
+      let shareServants = {};
+      if (availableJobs.length > 0) {
+        let winnerKey = keyOf(availableJobs[0]);
+        let group = isFinite(winnerKey)
+          ? availableJobs.filter((job) => keyOf(job) <= winnerKey * 1.1)
+          : [availableJobs[0]];
+        let remWorkers = availableCraftsmen;
+        let remServants = availableSkilledServants;
+        let remWeight = group.reduce((sum, job) => sum + weightOf(job), 0);
+        for (let job of group) {
+          // Last job of the group always gets the full remainder, so the pools sum up exactly
+          let share = remWeight > 0 ? weightOf(job) / remWeight : 1;
+          shareWorkers[job.id] = Math.round(remWorkers * share);
+          shareServants[job.id] = Math.round(remServants * share);
+          remWorkers -= shareWorkers[job.id];
+          remServants -= shareServants[job.id];
+          remWeight -= weightOf(job);
         }
       }
-      state.craftFocus = availableJobs[0]?.id;
 
       if (cdbg) {
-        let winnerId = availableJobs[0]?.id ?? "none";
-        if (state.lastCraftWinner !== winnerId) {
+        let focusIds = Object.keys(shareWorkers).join("+") || "none";
+        if (state.lastCraftWinner !== focusIds) {
           let detail = availableJobs
             .map((job) => {
               let q = job.resource.currentQuantity;
+              let assigned =
+                `→${shareWorkers[job.id] ?? 0}` +
+                (availableSkilledServants > 0
+                  ? `+${shareServants[job.id] ?? 0}s`
+                  : "");
               if (scaledWeightings) {
                 let driver = state.unlockedBuildings.find(
                   (b) => b.cost[job.resource.id] > q,
@@ -14841,22 +14948,22 @@
                   driver
                     ? `${driver._vueBinding}@${driver.weighting.toFixed(1)}`
                     : "no building"
-                }×${job.resource.craftWeighting})`;
+                }×${job.resource.craftWeighting})${assigned}`;
               }
               return `${job.id} q=${q.toFixed(0)} key=${(
                 q / job.resource.craftWeighting
-              ).toFixed(1)}`;
+              ).toFixed(1)}${assigned}`;
             })
             .join("; ");
           console.log(
-            `[craft] winner ${state.lastCraftWinner ?? "none"}→${winnerId}` +
+            `[craft] focus ${state.lastCraftWinner ?? "none"}⇒${focusIds}` +
               (craftFilter ? ` filter=${craftFilter}` : "") +
               ` | ${detail}` +
               (craftExcluded.length > 0
                 ? ` | excluded: ${craftExcluded.join(", ")}`
                 : ""),
           );
-          state.lastCraftWinner = winnerId;
+          state.lastCraftWinner = focusIds;
         }
       }
 
@@ -14872,14 +14979,9 @@
           continue;
         }
 
-        // Having empty array and undefined availableJobs[0] is fine - we still need to remove other crafters.
-        if (job === availableJobs[0]) {
-          requiredWorkers[jobIndex] = availableCraftsmen;
-          requiredServants[jobIndex] = availableSkilledServants;
-        } else {
-          requiredWorkers[jobIndex] = 0;
-          requiredServants[jobIndex] = 0;
-        }
+        // Jobs outside the focus group get zero, so crafters are removed from them.
+        requiredWorkers[jobIndex] = shareWorkers[job.id] ?? 0;
+        requiredServants[jobIndex] = shareServants[job.id] ?? 0;
       }
 
       // We didn't assigned crafter for some reason, return employees so we can use them somewhere else
@@ -18080,6 +18182,15 @@
       settings.prestigeType !== "retire"
     ) {
       return "Progression fork to Retirement reset";
+    }
+    if (
+      itemId === "tech-isolation_protocol" &&
+      retirementChallengeAssistActive()
+    ) {
+      let missing = retirementPreparationMissing();
+      if (missing.length > 0) {
+        return `Retirement preparation incomplete: ${missing.join(", ")}`;
+      }
     }
 
     if (
@@ -21283,6 +21394,16 @@
         INFLATION_CHALLENGE_MONEY,
       );
     }
+    if (retirementChallengeAssistActive()) {
+      resources.Graphene.maxCost = Math.max(
+        resources.Graphene.maxCost,
+        RETIREMENT_PREP.graphene,
+      );
+      resources.Graphene.storageRequired = Math.max(
+        resources.Graphene.storageRequired,
+        RETIREMENT_PREP.graphene,
+      );
+    }
 
     // Increase storage for sellable resources, to make sure we'll have required amount before they'll be sold
     if (
@@ -21302,6 +21423,9 @@
     let prioritizedTasks = [];
     if (inflationChallengeAssistActive()) {
       resources.Money.requestQuantity(INFLATION_CHALLENGE_MONEY);
+    }
+    if (retirementChallengeAssistActive()) {
+      resources.Graphene.requestQuantity(RETIREMENT_PREP.graphene);
     }
     // Building and research queues
     if (settings.prioritizeQueue.includes("req")) {
@@ -23054,6 +23178,645 @@
     }
   }
 
+  function showCustomRaceImportStatus(message, danger = false) {
+    let status = $("#scriptCustomRaceImportStatus");
+    if (status.length === 0) {
+      status = $('<p id="scriptCustomRaceImportStatus"></p>');
+      $("#celestialLab .create").before(status);
+    }
+    status
+      .toggleClass("has-text-danger", danger)
+      .toggleClass("has-text-warning", !danger)
+      .text(message);
+  }
+
+  function getCustomRacePreset(raw = false) {
+    let source = raw ? settingsRaw : settings;
+    let presets = source.prestigeCustomRacePresets;
+    if (!Array.isArray(presets) || presets.length === 0) {
+      return { name: "General", json: "" };
+    }
+    let index = Number.parseInt(source.prestigeCustomRacePreset, 10);
+    if (!Number.isInteger(index) || index < 0 || index >= presets.length) {
+      index = 0;
+    }
+    let preset = presets[index];
+    return {
+      name:
+        typeof preset?.name === "string" && preset.name.trim()
+          ? preset.name.trim()
+          : `Preset ${index + 1}`,
+      json: typeof preset?.json === "string" ? preset.json.trim() : "",
+    };
+  }
+
+  const customRaceGenusOpposition = {
+    humanoid: ["fungi"],
+    carnivore: ["herbivore"],
+    herbivore: ["carnivore"],
+    small: ["giant"],
+    giant: ["small"],
+    reptilian: ["avian"],
+    avian: ["reptilian"],
+    insectoid: ["plant"],
+    plant: ["insectoid"],
+    fungi: ["humanoid"],
+    aquatic: ["sand"],
+    fey: ["eldritch", "synthetic"],
+    heat: ["polar"],
+    polar: ["heat"],
+    sand: ["aquatic"],
+    demonic: ["angelic"],
+    angelic: ["demonic"],
+    synthetic: ["eldritch", "fey"],
+    eldritch: ["synthetic", "fey"],
+  };
+
+  function customRaceRankCost(value, rank, positive) {
+    if (rank === 0.1) value -= 3;
+    else if (rank === 0.25) value -= 2;
+    else if (rank === 0.5) value--;
+    else if (rank === 2) {
+      value = positive
+        ? Math.max(Math.round(value * 1.5), value + 1)
+        : value + 1;
+    } else if (rank === 3) {
+      value = positive
+        ? Math.max(Math.round(value * 2), value + 2)
+        : value + 2;
+    } else if (rank === 4) {
+      value = positive
+        ? Math.max(Math.round(value * 2.5), value + 3)
+        : value + 3;
+    }
+    return positive ? Math.max(1, value) : value;
+  }
+
+  function customRaceGeneBalance(draft) {
+    let ascended = game.global.stats.achieve.ascended ?? {};
+    let genes = ["l", "h", "a", "e", "m", "mg"].reduce(
+      (sum, universe) => sum + (ascended[universe] ?? 0),
+      0,
+    );
+    genes += (game.global.stats.achieve.technophobe?.l ?? 0) * 4;
+
+    let genusTraits = { ...(poly.genus_traits[draft.genus] ?? {}) };
+    // The userscript's general race table adds Spores for production modelling;
+    // the game's Custom Lab genus-cost table does not include it.
+    if (draft.genus === "fungi") delete genusTraits.spores;
+    Object.keys(genusTraits).forEach(
+      (trait) => (genes -= game.traits[trait]?.val ?? 0),
+    );
+
+    let categoryPositive = {};
+    let categoryNegative = {};
+    let opposed = customRaceGenusOpposition[draft.genus] ?? [];
+    for (let id of draft.traitlist) {
+      let trait = game.traits[id];
+      if (!trait) continue;
+      let positive = trait.val >= 0;
+      let categoryCounts = positive ? categoryPositive : categoryNegative;
+      let previous = categoryCounts[trait.taxonomy] ?? 0;
+      let cost = trait.val;
+      if (positive && previous > 1) cost += previous - 1;
+      if (!positive && previous >= 1) cost += previous;
+      categoryCounts[trait.taxonomy] = previous + 1;
+      cost = customRaceRankCost(
+        cost,
+        draft.ranks[id] ?? 1,
+        positive,
+      );
+
+      let originRace = game.races[trait.origin];
+      let originGenera = originRace?.hybrid ?? [originRace?.type];
+      if (originGenera.includes(draft.genus)) cost--;
+      if (originGenera.some((genus) => opposed.includes(genus))) cost++;
+      genes -= cost;
+    }
+    return genes;
+  }
+
+  function customRaceRankOptions(traitId) {
+    let level =
+      game.global.stats.achieve[`extinct_${game.traits[traitId]?.origin}`]?.l ??
+      0;
+    if (level >= 5) return [0.1, 0.25, 0.5, 1, 2, 3, 4];
+    if (level >= 4) return [0.25, 0.5, 1, 2, 3];
+    if (level >= 3) return [0.5, 1, 2];
+    return [1];
+  }
+
+  function customRaceEditorTraits(draft) {
+    let unlocked = new Set(draft.traitlist);
+    Object.entries(game.races).forEach(([id, race]) => {
+      let genus = race.type;
+      if (
+        game.global.stats.achieve[`extinct_${id}`]?.l ||
+        game.global.stats.achieve[`genus_${genus}`]?.l
+      ) {
+        Object.keys(race.traits ?? {}).forEach((trait) => unlocked.add(trait));
+      }
+    });
+    return Object.entries(game.traits)
+      .filter(([id, trait]) => trait.type === "major" && unlocked.has(id))
+      .sort(([, a], [, b]) =>
+        (a.taxonomy ?? "").localeCompare(b.taxonomy ?? "") ||
+        a.name.localeCompare(b.name),
+      );
+  }
+
+  function customRaceDraftFromPreset(preset) {
+    let parsed = null;
+    try {
+      parsed = JSON.parse(preset.json);
+    } catch {}
+    let saved = game.global.custom?.race0;
+    let fallbackGenus =
+      saved?.genus ??
+      races[game.global.race.species]?.genus ??
+      Object.keys(poly.genus_traits).find(
+        (genus) => game.global.stats.achieve[`genus_${genus}`]?.l,
+      ) ??
+      "humanoid";
+    let draft = parsed && typeof parsed === "object" ? parsed : {};
+    let traits = draft.traitlist ?? draft.traits ?? [];
+    return {
+      name: draft.name ?? saved?.name ?? "Zombie",
+      desc: draft.desc ?? saved?.desc ?? "A custom race.",
+      entity: draft.entity ?? saved?.entity ?? "custom beings",
+      home: draft.home ?? saved?.home ?? "Home",
+      red: draft.red ?? saved?.red ?? "Red World",
+      hell: draft.hell ?? saved?.hell ?? "Hell",
+      gas: draft.gas ?? saved?.gas ?? "Gas Giant",
+      gas_moon: draft.gas_moon ?? saved?.gas_moon ?? "Gas Moon",
+      dwarf: draft.dwarf ?? saved?.dwarf ?? "Dwarf Planet",
+      titan: draft.titan ?? saved?.titan ?? "Titan",
+      enceladus: draft.enceladus ?? saved?.enceladus ?? "Enceladus",
+      triton: draft.triton ?? saved?.triton ?? "Triton",
+      eris: draft.eris ?? saved?.eris ?? "Eris",
+      genes: 0,
+      genus: draft.genus ?? fallbackGenus,
+      traitlist: Array.isArray(traits) ? [...new Set(traits)] : [],
+      ranks:
+        draft.ranks && typeof draft.ranks === "object"
+          ? { ...draft.ranks }
+          : {},
+      fanaticism: draft.fanaticism || false,
+    };
+  }
+
+  function buildCustomRacePresetEditor(modal) {
+    modal.empty().off("*");
+    if (
+      !Array.isArray(settingsRaw.prestigeCustomRacePresets) ||
+      settingsRaw.prestigeCustomRacePresets.length === 0
+    ) {
+      settingsRaw.prestigeCustomRacePresets = [{ name: "General", json: "" }];
+      settingsRaw.prestigeCustomRacePreset = "0";
+    }
+    let presetIndex = Number.parseInt(settingsRaw.prestigeCustomRacePreset, 10);
+    if (
+      !Number.isInteger(presetIndex) ||
+      presetIndex < 0 ||
+      presetIndex >= settingsRaw.prestigeCustomRacePresets.length
+    ) {
+      presetIndex = 0;
+      settingsRaw.prestigeCustomRacePreset = "0";
+    }
+    let preset = settingsRaw.prestigeCustomRacePresets[presetIndex];
+    let draft = customRaceDraftFromPreset(preset);
+
+    let controls = $('<div style="margin-bottom: 10px;"></div>').appendTo(modal);
+    let presetSelect = $('<select style="width: 220px;"></select>').appendTo(
+      controls,
+    );
+    settingsRaw.prestigeCustomRacePresets.forEach((item, index) => {
+      $("<option></option>")
+        .val(String(index))
+        .text(item.name || `Preset ${index + 1}`)
+        .appendTo(presetSelect);
+    });
+    presetSelect.val(String(presetIndex));
+    let presetName = $('<input type="text" maxlength="60" style="width:180px;" />')
+      .val(preset.name || `Preset ${presetIndex + 1}`)
+      .appendTo(controls);
+    let addButton = $('<button class="button" type="button">Add</button>').appendTo(
+      controls,
+    );
+    let deleteButton = $(
+      '<button class="button" type="button">Delete</button>',
+    ).appendTo(controls);
+    let captureButton = $(
+      '<button class="button" type="button">Capture saved custom</button>',
+    ).appendTo(controls);
+
+    let summary = $(
+      '<div style="margin: 8px 0; font-weight: bold;"></div>',
+    ).appendTo(modal);
+    let form = $(
+      '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px 14px;"></div>',
+    ).appendTo(modal);
+    const addTextField = (key, label, max) => {
+      let row = $('<label style="display:flex; gap:8px;"></label>').appendTo(
+        form,
+      );
+      $("<span></span>").text(label).appendTo(row);
+      let input = $(`<input type="text" maxlength="${max}" style="flex:1;" />`)
+        .val(draft[key])
+        .appendTo(row);
+      input.on("change", function () {
+        draft[key] = this.value.trim();
+        saveDraft();
+      });
+    };
+    addTextField("name", "Name", 20);
+    addTextField("entity", "Entity", 40);
+    addTextField("home", "Homeworld", 20);
+    addTextField("red", "Red planet", 20);
+    addTextField("hell", "Hell", 20);
+    addTextField("gas", "Gas giant", 20);
+    addTextField("gas_moon", "Gas moon", 20);
+    addTextField("dwarf", "Dwarf planet", 20);
+
+    let descRow = $('<label style="display:block; margin-top:6px;"></label>').appendTo(
+      modal,
+    );
+    $("<span>Description</span>").appendTo(descRow);
+    $('<textarea class="textarea" maxlength="255" style="width:100%; min-height:55px;"></textarea>')
+      .val(draft.desc)
+      .on("change", function () {
+        draft.desc = this.value.trim();
+        saveDraft();
+      })
+      .appendTo(descRow);
+    let outerNames = $(
+      '<details style="margin-top:6px;"><summary>Outer-system names</summary><div style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;"></div></details>',
+    ).appendTo(modal);
+    let outerForm = outerNames.find("div");
+    const addOuterField = (key, label) => {
+      let row = $('<label style="display:flex; gap:8px;"></label>').appendTo(
+        outerForm,
+      );
+      $("<span></span>").text(label).appendTo(row);
+      $('<input type="text" maxlength="20" style="flex:1;" />')
+        .val(draft[key])
+        .on("change", function () {
+          draft[key] = this.value.trim();
+          saveDraft();
+        })
+        .appendTo(row);
+    };
+    addOuterField("titan", "Titan");
+    addOuterField("enceladus", "Enceladus");
+    addOuterField("triton", "Triton");
+    addOuterField("eris", "Eris");
+
+    let raceControls = $(
+      '<div style="display:flex; gap:18px; margin:8px 0;"></div>',
+    ).appendTo(modal);
+    let genusLabel = $("<label><span>Genus </span></label>").appendTo(
+      raceControls,
+    );
+    let genusSelect = $("<select></select>").appendTo(genusLabel);
+    Object.keys(poly.genus_traits)
+      .filter(
+        (genus) =>
+          genus !== "hybrid" &&
+          (genus === draft.genus ||
+            game.global.stats.achieve[`genus_${genus}`]?.l),
+      )
+      .forEach((genus) =>
+        $("<option></option>")
+          .val(genus)
+          .text(game.loc(`genelab_genus_${genus}`))
+          .appendTo(genusSelect),
+      );
+    genusSelect.val(draft.genus).on("change", function () {
+      draft.genus = this.value;
+      saveDraft();
+      updateSummary();
+    });
+    let fanaticLabel = $("<label><span>Fanaticism </span></label>").appendTo(
+      raceControls,
+    );
+    let fanaticSelect = $("<select></select>").appendTo(fanaticLabel);
+
+    let filter = $(
+      '<input type="search" placeholder="Filter traits..." style="width:100%; margin:4px 0 8px;" />',
+    ).appendTo(modal);
+    let traitsArea = $(
+      '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; max-height:50vh; overflow:auto;"></div>',
+    ).appendTo(modal);
+    let positiveArea = $(
+      '<div><h4 class="has-text-success">Positive traits</h4></div>',
+    ).appendTo(traitsArea);
+    let negativeArea = $(
+      '<div><h4 class="has-text-danger">Negative traits</h4></div>',
+    ).appendTo(traitsArea);
+    let traitRows = [];
+    for (let [id, trait] of customRaceEditorTraits(draft)) {
+      let row = $(
+        '<div class="script-custom-trait" style="display:flex; align-items:center; gap:5px; padding:2px 0;"></div>',
+      ).appendTo(trait.val >= 0 ? positiveArea : negativeArea);
+      row.attr("data-search", `${trait.name} ${id} ${trait.taxonomy}`.toLowerCase());
+      let checkbox = $('<input type="checkbox" />')
+        .prop("checked", draft.traitlist.includes(id))
+        .appendTo(row);
+      $('<span style="flex:1;"></span>')
+        .text(`${trait.name} [${trait.val >= 0 ? "+" : ""}${trait.val}]`)
+        .attr("title", typeof trait.desc === "function" ? trait.desc() : trait.desc)
+        .appendTo(row);
+      let rankSelect = $('<select style="width:65px;"></select>').appendTo(row);
+      let ranks = customRaceRankOptions(id);
+      let currentRank = draft.ranks[id] ?? 1;
+      if (!ranks.includes(currentRank)) ranks.push(currentRank);
+      ranks.sort((a, b) => a - b).forEach((rank) =>
+        $("<option></option>").val(String(rank)).text(`r${rank}`).appendTo(rankSelect),
+      );
+      rankSelect.val(String(currentRank)).prop("disabled", !checkbox.prop("checked"));
+      checkbox.on("change", function () {
+        if (this.checked) {
+          if (!draft.traitlist.includes(id)) draft.traitlist.push(id);
+          draft.ranks[id] = Number.parseFloat(rankSelect.val()) || 1;
+        } else {
+          draft.traitlist = draft.traitlist.filter((traitId) => traitId !== id);
+          delete draft.ranks[id];
+          if (draft.fanaticism === id) draft.fanaticism = false;
+        }
+        rankSelect.prop("disabled", !this.checked);
+        saveDraft();
+        updateSummary();
+      });
+      rankSelect.on("change", function () {
+        draft.ranks[id] = Number.parseFloat(this.value) || 1;
+        saveDraft();
+        updateSummary();
+      });
+      traitRows.push(row);
+    }
+    filter.on("input", function () {
+      let query = this.value.trim().toLowerCase();
+      traitRows.forEach((row) =>
+        row.toggle(!query || row.attr("data-search").includes(query)),
+      );
+    });
+
+    let advanced = $(
+      '<details style="margin-top:10px;"><summary>Advanced JSON import/export</summary></details>',
+    ).appendTo(modal);
+    let rawJson = $(
+      '<textarea class="textarea" style="width:100%; min-height:160px;"></textarea>',
+    ).appendTo(advanced);
+    let loadRaw = $(
+      '<button class="button" type="button">Load JSON into editor</button>',
+    ).appendTo(advanced);
+    let rawStatus = $('<span style="margin-left:8px;"></span>').appendTo(
+      advanced,
+    );
+
+    function saveDraft() {
+      draft.genes = 0;
+      preset.json = JSON.stringify(draft, null, 2);
+      rawJson.val(preset.json);
+      state.customRaceImportAttempt = null;
+      updateSettingsFromState();
+    }
+    function updateSummary() {
+      let balance = customRaceGeneBalance(draft);
+      summary
+        .toggleClass("has-text-success", balance >= 0)
+        .toggleClass("has-text-danger", balance < 0)
+        .text(
+          `Genes remaining: ${balance} · ${draft.traitlist.length} selected traits · live lab validation still applies`,
+        );
+      fanaticSelect.empty();
+      $("<option></option>").val("").text("Automatic / none").appendTo(fanaticSelect);
+      draft.traitlist.forEach((id) =>
+        $("<option></option>")
+          .val(id)
+          .text(game.traits[id]?.name ?? id)
+          .appendTo(fanaticSelect),
+      );
+      fanaticSelect.val(draft.fanaticism || "");
+    }
+    fanaticSelect.on("change", function () {
+      draft.fanaticism = this.value || false;
+      saveDraft();
+    });
+    presetSelect.on("change", function () {
+      settingsRaw.prestigeCustomRacePreset = this.value;
+      updateSettingsFromState();
+      buildCustomRacePresetEditor(modal);
+    });
+    presetName.on("change", function () {
+      preset.name = this.value.trim() || `Preset ${presetIndex + 1}`;
+      updateSettingsFromState();
+      presetSelect.find(`option[value="${presetIndex}"]`).text(preset.name);
+    });
+    addButton.on("click", function () {
+      settingsRaw.prestigeCustomRacePresets.push({
+        name: `Preset ${settingsRaw.prestigeCustomRacePresets.length + 1}`,
+        json: "",
+      });
+      settingsRaw.prestigeCustomRacePreset = String(
+        settingsRaw.prestigeCustomRacePresets.length - 1,
+      );
+      updateSettingsFromState();
+      buildCustomRacePresetEditor(modal);
+    });
+    deleteButton.on("click", function () {
+      if (settingsRaw.prestigeCustomRacePresets.length > 1) {
+        settingsRaw.prestigeCustomRacePresets.splice(presetIndex, 1);
+      } else {
+        settingsRaw.prestigeCustomRacePresets[0] = { name: "General", json: "" };
+      }
+      settingsRaw.prestigeCustomRacePreset = "0";
+      updateSettingsFromState();
+      buildCustomRacePresetEditor(modal);
+    });
+    captureButton.on("click", function () {
+      let savedRace = game.global.custom?.race0;
+      if (!savedRace) {
+        alert("There is no saved custom race to capture yet.");
+        return;
+      }
+      preset.json = JSON.stringify(
+        {
+          ...savedRace,
+          genes: 0,
+          traitlist: (savedRace.traits ?? []).slice(),
+          traits: undefined,
+        },
+        (key, value) => (value === undefined ? undefined : value),
+        2,
+      );
+      buildCustomRacePresetEditor(modal);
+    });
+    loadRaw.on("click", function () {
+      try {
+        let parsed = JSON.parse(rawJson.val());
+        if (!parsed || typeof parsed !== "object") throw new Error("not an object");
+        preset.json = JSON.stringify(parsed, null, 2);
+        rawStatus.removeClass("has-text-danger").text("");
+        updateSettingsFromState();
+        buildCustomRacePresetEditor(modal);
+      } catch (error) {
+        rawStatus.addClass("has-text-danger").text(`Invalid JSON: ${error.message}`);
+      }
+    });
+    saveDraft();
+    updateSummary();
+  }
+
+  function importCustomRaceIntoLab() {
+    let preset = getCustomRacePreset();
+    let attemptKey = `${settings.prestigeCustomRacePreset}:${preset.json}`;
+    if (state.customRaceImportAttempt === attemptKey) {
+      return false;
+    }
+    state.customRaceImportAttempt = attemptKey;
+
+    let template;
+    try {
+      template = JSON.parse(preset.json);
+    } catch (error) {
+      showCustomRaceImportStatus(
+        `Automatic custom-race import of “${preset.name}” paused: invalid JSON (${error.message}).`,
+        true,
+      );
+      return false;
+    }
+
+    let lab = getVueById("celestialLab");
+    let traits = template.traitlist ?? template.traits;
+    if (!lab?.g || !Array.isArray(traits) || typeof template.genus !== "string") {
+      showCustomRaceImportStatus(
+        "Automatic custom-race import paused: expected a game custom-race export with genus and traitlist.",
+        true,
+      );
+      return false;
+    }
+    if (new Set(traits).size !== traits.length) {
+      showCustomRaceImportStatus(
+        "Automatic custom-race import paused: traitlist contains duplicates.",
+        true,
+      );
+      return false;
+    }
+
+    let requiredText = [
+      "name",
+      "desc",
+      "entity",
+      "home",
+      "red",
+      "hell",
+      "gas",
+      "gas_moon",
+      "dwarf",
+    ];
+    let missingText = requiredText.filter(
+      (key) => typeof template[key] !== "string" || template[key].length === 0,
+    );
+    if (missingText.length > 0) {
+      showCustomRaceImportStatus(
+        `Automatic custom-race import paused: missing ${missingText.join(", ")}.`,
+        true,
+      );
+      return false;
+    }
+
+    if (
+      !game.global.stats.achieve[`genus_${template.genus}`]?.l &&
+      template.genus !== lab.g.genus
+    ) {
+      showCustomRaceImportStatus(
+        `Automatic custom-race import paused: ${template.genus} genus is not unlocked.`,
+        true,
+      );
+      return false;
+    }
+
+    let unavailableTraits = traits.filter(
+      (trait) =>
+        typeof trait !== "string" ||
+        !/^[a-z0-9_]+$/.test(trait) ||
+        document.querySelector(`#celestialLab .t${trait}`) === null,
+    );
+    if (unavailableTraits.length > 0) {
+      showCustomRaceImportStatus(
+        `Automatic custom-race import paused: unavailable traits ${unavailableTraits.join(", ")}.`,
+        true,
+      );
+      return false;
+    }
+
+    let ranks = template.ranks ?? {};
+    if (
+      typeof ranks !== "object" ||
+      Array.isArray(ranks) ||
+      Object.entries(ranks).some(
+        ([trait, rank]) =>
+          !traits.includes(trait) ||
+          typeof rank !== "number" ||
+          !Number.isFinite(rank) ||
+          rank <= 0 ||
+          !customRaceRankOptions(trait).includes(rank),
+      )
+    ) {
+      showCustomRaceImportStatus(
+        "Automatic custom-race import paused: ranks must contain positive numeric values for selected traits only.",
+        true,
+      );
+      return false;
+    }
+
+    let fanaticism = template.fanaticism || false;
+    if (fanaticism && !traits.includes(fanaticism)) {
+      showCustomRaceImportStatus(
+        `Automatic custom-race import paused: Fanaticism trait ${fanaticism} is not selected.`,
+        true,
+      );
+      return false;
+    }
+
+    let textLimits = {
+      name: 20,
+      desc: 255,
+      entity: 40,
+      home: 20,
+      red: 20,
+      hell: 20,
+      gas: 20,
+      gas_moon: 20,
+      dwarf: 20,
+    };
+    requiredText.forEach(
+      (key) => (lab.g[key] = template[key].substring(0, textLimits[key])),
+    );
+    ["titan", "enceladus", "triton", "eris"].forEach((key) => {
+      if (typeof template[key] === "string" && template[key].length > 0) {
+        lab.g[key] = template[key];
+      }
+    });
+    lab.g.genus = template.genus;
+    lab.g.traitlist = traits.slice();
+    lab.g.fanaticism = fanaticism;
+    lab.g.ranks ??= {};
+    Object.keys(lab.g.ranks).forEach((trait) => delete lab.g.ranks[trait]);
+    Object.assign(lab.g.ranks, ranks);
+    lab.geneEdit();
+
+    if (lab.g.genes < 0) {
+      showCustomRaceImportStatus(
+        `Automatic custom-race import paused: template exceeds the live gene budget by ${Math.abs(lab.g.genes)}. Edit the lab or paste a cheaper export.`,
+        true,
+      );
+      return false;
+    }
+    return true;
+  }
+
   function automateLab() {
     let createCustom = document.querySelector("#celestialLab .create button");
     if (createCustom) {
@@ -23063,6 +23826,31 @@
         settings.autoPrestige &&
         ["ascension", "terraform", "apotheosis"].includes(settings.prestigeType)
       ) {
+        let customMode = ["reuse", "pause", "import"].includes(
+          settings.prestigeCustomRaceMode,
+        )
+          ? settings.prestigeCustomRaceMode
+          : "reuse";
+        if (customMode !== "import") {
+          state.customRaceImportAttempt = null;
+        }
+        if (customMode === "pause") {
+          showCustomRaceImportStatus(
+            "Auto Prestige paused by Custom race handling: Pause in lab.",
+          );
+          return;
+        }
+        if (customMode === "import" && !importCustomRaceIntoLab()) {
+          return;
+        }
+        // The first lab opens with the game's empty/default Zombie design. Never submit that
+        // implicitly in reuse mode; wait for a saved race or an explicit import instead.
+        if (customMode === "reuse" && !game.global.custom?.race0) {
+          showCustomRaceImportStatus(
+            "Auto Prestige paused: no saved custom race. Design one here or select Import selected preset in Prestige settings.",
+          );
+          return;
+        }
         state.goal = "GameOverMan";
         createCustom.click();
         return;
@@ -24241,7 +25029,7 @@
     {
       val: "ascension",
       label: "Ascension",
-      hint: "Allows research of Incorporeal Existence and Ascension. Ascension Machine is managed by autoPower. Disable autoPrestige if you want to change custom race. Otherwise current one will be used , or default one if there's no current.",
+      hint: "Allows research of Incorporeal Existence and Ascension. Ascension Machine is managed by autoPower. Use Custom race handling in Prestige settings to reuse, pause for editing, or automatically import a race at the post-reset lab.",
     },
     {
       val: "demonic",
@@ -26126,6 +26914,12 @@
       "Inflation save-up minutes",
       "When the $250B target is reachable within this many real-time minutes at current Money income, stop optional Money spending and imports until Wheelbarrow is earned. Set negative to disable the final save-up freeze while keeping the helper's weighting and demand.",
     );
+    addSettingsToggle(
+      currentNode,
+      "retirementChallengeAssist",
+      "Retirement preparation",
+      "When the selected prestige is Retirement, boost the recommended pre-Isolation Tau buildings, reserve and stockpile 200M Graphene, and block Isolation Protocol until there are 20 Fusion Generators, 18 Factories, 11 Disease Labs, and the Graphene stockpile. Disable this to manage the irreversible transition manually.",
+    );
 
     document.documentElement.scrollTop = document.body.scrollTop =
       currentScrollPosition;
@@ -26343,6 +27137,48 @@
       "Wait for Pillar",
       "Wait for Pillar before ascending, unless it was done earlier",
     );
+    addSettingsSelect(
+      currentNode,
+      "prestigeCustomRaceMode",
+      "Custom race handling",
+      "Controls every custom-race lab reached after Ascension, Terraform, or Apotheosis. Pause lets you edit challenge-specific races even when one is already saved. Import replaces the live design with the selected preset and continues only when the game accepts it.",
+      [
+        {
+          val: "reuse",
+          label: "Reuse saved",
+          hint: "Automatically reuse the saved custom; pause if none exists.",
+        },
+        {
+          val: "pause",
+          label: "Pause in lab",
+          hint: "Always stop in the lab so the custom can be edited or imported manually.",
+        },
+        {
+          val: "import",
+          label: "Import selected preset",
+          hint: "Apply the selected structured preset and continue automatically.",
+        },
+      ],
+    );
+    let presetOptions = (settingsRaw.prestigeCustomRacePresets ?? []).map(
+      (preset, index) => ({
+        val: String(index),
+        label: preset.name || `Preset ${index + 1}`,
+        hint: "Custom race preset used by Import selected preset.",
+      }),
+    );
+    addSettingsSelect(
+      currentNode,
+      "prestigeCustomRacePreset",
+      "Selected custom preset",
+      "Preset used when Custom race handling is Import selected preset. The selection can also be changed by Evolution Queue.",
+      presetOptions,
+    );
+    $('<button class="button" type="button" style="margin:6px 0;">Edit custom race presets…</button>')
+      .on("click", function () {
+        openOptionsModal("Custom Race Presets", buildCustomRacePresetEditor);
+      })
+      .appendTo(currentNode);
 
     addSettingsHeader1(currentNode, "Demonic Infusion");
     addSettingsNumber(
@@ -30537,6 +31373,12 @@
       "Inflation Money helpers",
       "Money storage until $250B cap is reachable, then Money income",
       "buildingWeightingInflationMoney",
+    );
+    addWeightingRule(
+      tableBodyNode,
+      "Retirement preparation",
+      "Tau Fusion Generators, Factories, and Disease Labs below the pre-Isolation targets",
+      "buildingWeightingRetirementPrep",
     );
     addWeightingRule(
       tableBodyNode,
