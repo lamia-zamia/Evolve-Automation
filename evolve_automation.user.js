@@ -23210,6 +23210,19 @@
     };
   }
 
+  function refreshCustomRacePresetSelectors() {
+    $(".script_prestigeCustomRacePreset").each(function () {
+      let select = $(this).empty();
+      (settingsRaw.prestigeCustomRacePresets ?? []).forEach((preset, index) =>
+        $("<option></option>")
+          .val(String(index))
+          .text(preset.name || `Preset ${index + 1}`)
+          .appendTo(select),
+      );
+      select.val(settingsRaw.prestigeCustomRacePreset);
+    });
+  }
+
   const customRaceGenusOpposition = {
     humanoid: ["fungi"],
     carnivore: ["herbivore"],
@@ -23306,6 +23319,97 @@
     return [1];
   }
 
+  function customRaceTraitEffect(id, rank) {
+    let trait = game.traits[id];
+    if (!trait) return "";
+    let vars = trait.vars ? trait.vars(rank) : [];
+    let noVariableEffects = new Set([
+      "promiscuous",
+      "revive",
+      "fast_growth",
+      "spores",
+      "terrifying",
+      "unfathomable",
+      "darkness",
+      "living_tool",
+    ]);
+    if (noVariableEffects.has(id)) vars = [];
+    else if (id === "fibroblast") vars = [vars[0] * 5];
+    else if (id === "hivemind" && game.global.race.high_pop) {
+      vars = [vars[0] * game.traits.high_pop.vars()[0]];
+    } else if (id === "imitation") {
+      vars.push(game.races[game.global.race.srace || "protoplasm"]?.name ?? "");
+    } else if (id === "elusive") {
+      vars = [Math.round((1 / 30 / (1 / (30 + vars[0])) - 1) * 100)];
+    } else if (id === "chameleon") {
+      vars = [
+        vars[0],
+        Math.round((1 / 30 / (1 / (30 + vars[1])) - 1) * 100),
+      ];
+    } else if (id === "blood_thirst") vars = [Math.ceil(Math.log2(vars[0]))];
+    else if (id === "selenophobia") vars = [14 - vars[0], vars[0]];
+    else if (id === "anthropophagite") vars = [vars[0] * 1e4];
+    else if (id === "living_materials") {
+      vars = [
+        resources.Lumber.name,
+        resources.Plywood.name,
+        resources.Furs.name,
+        game.loc("resource_Amber_name"),
+      ];
+    } else if (id === "environmentalist") {
+      let coal = -game.actions.city.coal_power.powered(true);
+      let oil = -game.actions.city.oil_power.powered(true);
+      vars = [
+        coal + vars[0],
+        oil + vars[0] - 1,
+        oil + vars[0] + 1,
+        coal,
+        oil,
+        vars[1],
+      ];
+    } else if (id === "blurry" && game.global.race.warlord) {
+      vars = [+((100 / (100 - vars[0]) - 1) * 100).toFixed(1)];
+    } else if (id === "playful" && game.global.race.warlord) {
+      vars = [vars[0] * 100, resources.Furs.name];
+    } else if (id === "ghostly" && game.global.race.warlord) {
+      vars = [
+        vars[0],
+        +((vars[1] - 1) * 100).toFixed(0),
+        resources.Soul_Gem.name,
+      ];
+    }
+
+    try {
+      if (id === "elemental") {
+        return poly.loc(`wiki_trait_effect_${id}_${vars[0]}`, vars);
+      }
+      if (["catnip", "anise"].includes(id)) {
+        let specialVars = rank <= 2 ? [] : rank === 3 ? [vars[0]] : vars;
+        return poly.loc(`wiki_trait_effect_${id}${rank}`, specialVars);
+      }
+      if (
+        game.global.race.universe === "evil" &&
+        game.global.civic.govern.type !== "theocracy" &&
+        ["spiritual", "blasphemous"].includes(id)
+      ) {
+        return poly.loc(
+          `wiki_trait_effect_${
+            id === "spiritual" ? "manipulator" : "blasphemous_evil"
+          }`,
+          vars,
+        );
+      }
+      let effectType =
+        ["befuddle", "blurry", "ghostly", "playful"].includes(id) &&
+        game.global.race[id]
+          ? "warlord"
+          : "effect";
+      return poly.loc(`wiki_trait_${effectType}_${id}`, vars);
+    } catch {
+      return typeof trait.desc === "function" ? trait.desc() : trait.desc;
+    }
+  }
+
   function customRaceEditorTraits(draft) {
     let unlocked = new Set(draft.traitlist);
     Object.entries(game.races).forEach(([id, race]) => {
@@ -23366,7 +23470,26 @@
   }
 
   function buildCustomRacePresetEditor(modal) {
-    modal.empty().off("*");
+    modal.empty().off("*").addClass("celestialLab");
+    modal.closest(".script-modal-content").addClass("custom-race-modal");
+    modal.append(`
+      <style>
+        .script-modal-content.custom-race-modal { width: min(96vw, 1400px); margin-top: 2vh; margin-bottom: 2vh; }
+        .script-modal-content.custom-race-modal .script-modal-body { max-height: calc(96vh - 70px); overflow-y: auto; }
+        #scriptModalBody.celestialLab { font-size: .92rem; }
+        #scriptModalBody.celestialLab .button,
+        #scriptModalBody.celestialLab input.input,
+        #scriptModalBody.celestialLab select { height: 2em; min-height: 2em; font-size: .92rem; padding-top: 0; padding-bottom: 0; }
+        #scriptModalBody.celestialLab .fields { margin-bottom: .35rem; }
+        #scriptModalBody.celestialLab .trait_selection .field { margin-bottom: .1rem; }
+        #scriptModalBody.celestialLab .script-custom-trait .rc { min-width: 4.8rem; text-align: center; }
+        #scriptModalBody.celestialLab .script-custom-effect,
+        #scriptModalBody.celestialLab .script-custom-traits { scrollbar-color: #777 transparent; scrollbar-width: auto; }
+        #scriptModalBody.celestialLab .script-custom-effect::-webkit-scrollbar,
+        #scriptModalBody.celestialLab .script-custom-traits::-webkit-scrollbar { width: 10px; }
+        #scriptModalBody.celestialLab .script-custom-effect::-webkit-scrollbar-thumb,
+        #scriptModalBody.celestialLab .script-custom-traits::-webkit-scrollbar-thumb { background: #777; border-radius: 5px; }
+      </style>`);
     if (
       !Array.isArray(settingsRaw.prestigeCustomRacePresets) ||
       settingsRaw.prestigeCustomRacePresets.length === 0
@@ -23386,8 +23509,11 @@
     let preset = settingsRaw.prestigeCustomRacePresets[presetIndex];
     let draft = customRaceDraftFromPreset(preset);
 
-    let controls = $('<div style="margin-bottom: 10px;"></div>').appendTo(modal);
-    let presetSelect = $('<select style="width: 220px;"></select>').appendTo(
+    modal.append(
+      '<div><h3 class="has-text-danger">Custom Race Presets</h3> - <span class="has-text-warning">Automation Custom Lab</span></div>',
+    );
+    let controls = $('<div class="fields" style="margin-bottom:10px;"></div>').appendTo(modal);
+    let presetSelect = $('<select class="select" style="width:220px;"></select>').appendTo(
       controls,
     );
     settingsRaw.prestigeCustomRacePresets.forEach((item, index) => {
@@ -23397,12 +23523,15 @@
         .appendTo(presetSelect);
     });
     presetSelect.val(String(presetIndex));
-    let presetName = $('<input type="text" maxlength="60" style="width:180px;" />')
+    let presetName = $('<input class="input" type="text" maxlength="60" style="width:180px;" />')
       .val(preset.name || `Preset ${presetIndex + 1}`)
       .appendTo(controls);
     let addButton = $('<button class="button" type="button">Add</button>').appendTo(
       controls,
     );
+    let cloneButton = $(
+      '<button class="button" type="button">Clone</button>',
+    ).appendTo(controls);
     let deleteButton = $(
       '<button class="button" type="button">Delete</button>',
     ).appendTo(controls);
@@ -23410,18 +23539,19 @@
       '<button class="button" type="button">Capture saved custom</button>',
     ).appendTo(controls);
 
-    let summary = $(
-      '<div style="margin: 8px 0; font-weight: bold;"></div>',
+    let summary = $('<div class="has-text-warning" style="margin:8px 0; font-weight:bold;"></div>').appendTo(modal);
+    let identity = $(
+      '<details style="margin:4px 0;"><summary class="has-text-caution">Race names and description</summary></details>',
     ).appendTo(modal);
     let form = $(
-      '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px 14px;"></div>',
-    ).appendTo(modal);
+      '<div class="fields" style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;"></div>',
+    ).appendTo(identity);
     const addTextField = (key, label, max) => {
       let row = $('<label style="display:flex; gap:8px;"></label>').appendTo(
         form,
       );
       $("<span></span>").text(label).appendTo(row);
-      let input = $(`<input type="text" maxlength="${max}" style="flex:1;" />`)
+      let input = $(`<input class="input" type="text" maxlength="${max}" style="flex:1;" />`)
         .val(draft[key])
         .appendTo(row);
       input.on("change", function () {
@@ -23439,7 +23569,7 @@
     addTextField("dwarf", "Dwarf planet", 20);
 
     let descRow = $('<label style="display:block; margin-top:6px;"></label>').appendTo(
-      modal,
+      identity,
     );
     $("<span>Description</span>").appendTo(descRow);
     $('<textarea class="textarea" maxlength="255" style="width:100%; min-height:55px;"></textarea>')
@@ -23450,15 +23580,15 @@
       })
       .appendTo(descRow);
     let outerNames = $(
-      '<details style="margin-top:6px;"><summary>Outer-system names</summary><div style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;"></div></details>',
-    ).appendTo(modal);
+      '<details style="margin-top:6px;"><summary class="has-text-caution">Outer-system names</summary><div class="fields" style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;"></div></details>',
+    ).appendTo(identity);
     let outerForm = outerNames.find("div");
     const addOuterField = (key, label) => {
       let row = $('<label style="display:flex; gap:8px;"></label>').appendTo(
         outerForm,
       );
       $("<span></span>").text(label).appendTo(row);
-      $('<input type="text" maxlength="20" style="flex:1;" />')
+      $('<input class="input" type="text" maxlength="20" style="flex:1;" />')
         .val(draft[key])
         .on("change", function () {
           draft[key] = this.value.trim();
@@ -23471,10 +23601,8 @@
     addOuterField("triton", "Triton");
     addOuterField("eris", "Eris");
 
-    let raceControls = $(
-      '<div style="display:flex; gap:18px; margin:8px 0;"></div>',
-    ).appendTo(modal);
-    let genusLabel = $("<label><span>Genus </span></label>").appendTo(
+    let raceControls = $('<div class="genus_selection" style="display:flex; gap:18px; margin:8px 0;"></div>').appendTo(modal);
+    let genusLabel = $('<label class="genus"><span class="has-text-caution header">Genus </span></label>').appendTo(
       raceControls,
     );
     let genusSelect = $("<select></select>").appendTo(genusLabel);
@@ -23496,62 +23624,117 @@
       saveDraft();
       updateSummary();
     });
-    let fanaticLabel = $("<label><span>Fanaticism </span></label>").appendTo(
+    let fanaticLabel = $('<label class="fanatic"><span class="has-text-caution header">Fanaticism </span></label>').appendTo(
       raceControls,
     );
     let fanaticSelect = $("<select></select>").appendTo(fanaticLabel);
+    let genusInfo = $('<div class="has-text-info" style="margin-bottom:6px;"></div>').appendTo(modal);
+    let effectPanel = $(
+      '<div class="script-custom-effect" style="height:112px; overflow-y:scroll; overflow-x:hidden; overflow-wrap:anywhere; white-space:normal; scrollbar-gutter:stable; overscroll-behavior:contain; pointer-events:auto; position:relative; z-index:2; padding:5px 9px; margin-bottom:5px; border-top:1px solid #777; border-bottom:1px solid #777; text-align:left;"></div>',
+    ).appendTo(modal);
+    let activeTrait = null;
+    const showTraitEffect = (id) => {
+      activeTrait = id;
+      let trait = game.traits[id];
+      let rank = draft.ranks[id] ?? 1;
+      effectPanel.empty();
+      $("<strong class='has-text-warning'></strong>")
+        .text(`${trait.name} · r${rank}`)
+        .appendTo(effectPanel);
+      $("<div class='desc'></div>")
+        .html(typeof trait.desc === "function" ? trait.desc() : trait.desc)
+        .appendTo(effectPanel);
+      $(
+        `<div class="effect ${
+          trait.val >= 0 ? "has-text-success" : "has-text-danger"
+        }"></div>`,
+      )
+        .html(customRaceTraitEffect(id, rank))
+        .appendTo(effectPanel);
+    };
+    effectPanel.text("Hover or select a trait to see its current-rank effect.");
 
     let filter = $(
-      '<input type="search" placeholder="Filter traits..." style="width:100%; margin:4px 0 8px;" />',
-    ).appendTo(modal);
+      '<input class="input" type="search" placeholder="Filter traits..." style="width:100%; margin:4px 0 8px;" />',
+    ).appendTo(identity);
     let traitsArea = $(
-      '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; max-height:50vh; overflow:auto;"></div>',
+      '<div class="script-custom-traits" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; max-height:52vh; overflow-y:scroll; overflow-x:hidden; scrollbar-gutter:stable;"></div>',
     ).appendTo(modal);
     let positiveArea = $(
-      '<div><h4 class="has-text-success">Positive traits</h4></div>',
+      '<div class="cool trait_selection"><h4 class="has-text-success">Positive traits</h4></div>',
     ).appendTo(traitsArea);
     let negativeArea = $(
-      '<div><h4 class="has-text-danger">Negative traits</h4></div>',
+      '<div class="lame trait_selection"><h4 class="has-text-danger">Negative traits</h4></div>',
     ).appendTo(traitsArea);
     let traitRows = [];
+    let lastCategory = { positive: null, negative: null };
     for (let [id, trait] of customRaceEditorTraits(draft)) {
+      let side = trait.val >= 0 ? "positive" : "negative";
+      let targetArea = trait.val >= 0 ? positiveArea : negativeArea;
+      if (lastCategory[side] !== trait.taxonomy) {
+        lastCategory[side] = trait.taxonomy;
+        $("<h5 class='has-text-caution'></h5>")
+          .text(
+            game.loc(`genelab_traits_${trait.taxonomy}`) ?? trait.taxonomy,
+          )
+          .appendTo(targetArea);
+      }
       let row = $(
-        '<div class="script-custom-trait" style="display:flex; align-items:center; gap:5px; padding:2px 0;"></div>',
-      ).appendTo(trait.val >= 0 ? positiveArea : negativeArea);
+        `<div class="script-custom-trait field t${id}" style="display:flex; align-items:center; gap:5px; padding:2px 0;"></div>`,
+      ).appendTo(targetArea);
       row.attr("data-search", `${trait.name} ${id} ${trait.taxonomy}`.toLowerCase());
+      row.on("mouseenter click", () => showTraitEffect(id));
       let checkbox = $('<input type="checkbox" />')
         .prop("checked", draft.traitlist.includes(id))
         .appendTo(row);
-      $('<span style="flex:1;"></span>')
+      $(`<span class="${trait.val >= 0 ? "has-text-success" : "has-text-danger"}" style="flex:1;"></span>`)
         .text(`${trait.name} [${trait.val >= 0 ? "+" : ""}${trait.val}]`)
         .attr("title", typeof trait.desc === "function" ? trait.desc() : trait.desc)
         .appendTo(row);
-      let rankSelect = $('<select style="width:65px;"></select>').appendTo(row);
       let ranks = customRaceRankOptions(id);
       let currentRank = draft.ranks[id] ?? 1;
       if (!ranks.includes(currentRank)) ranks.push(currentRank);
-      ranks.sort((a, b) => a - b).forEach((rank) =>
-        $("<option></option>").val(String(rank)).text(`r${rank}`).appendTo(rankSelect),
-      );
-      rankSelect.val(String(currentRank)).prop("disabled", !checkbox.prop("checked"));
+      ranks.sort((a, b) => a - b);
+      let rankWrap = $('<span class="rc" style="white-space:nowrap;"></span>').appendTo(row);
+      let rankDown = $('<span class="sub has-text-danger" role="button">−</span>').appendTo(rankWrap);
+      let rankValue = $('<span class="has-text-warning" style="padding:0 4px;"></span>').appendTo(rankWrap);
+      let rankUp = $('<span class="add has-text-success" role="button">+</span>').appendTo(rankWrap);
+      const updateRank = () => {
+        currentRank = draft.ranks[id] ?? 1;
+        rankValue.text(`r${currentRank}`);
+        rankWrap.toggleClass("inactive-row", !checkbox.prop("checked"));
+        if (activeTrait === id) showTraitEffect(id);
+      };
       checkbox.on("change", function () {
         if (this.checked) {
           if (!draft.traitlist.includes(id)) draft.traitlist.push(id);
-          draft.ranks[id] = Number.parseFloat(rankSelect.val()) || 1;
+          draft.ranks[id] = currentRank;
         } else {
           draft.traitlist = draft.traitlist.filter((traitId) => traitId !== id);
           delete draft.ranks[id];
           if (draft.fanaticism === id) draft.fanaticism = false;
         }
-        rankSelect.prop("disabled", !this.checked);
+        updateRank();
         saveDraft();
         updateSummary();
       });
-      rankSelect.on("change", function () {
-        draft.ranks[id] = Number.parseFloat(this.value) || 1;
+      rankDown.on("click", function () {
+        if (!checkbox.prop("checked")) return;
+        let index = ranks.indexOf(currentRank);
+        if (index > 0) draft.ranks[id] = ranks[index - 1];
+        updateRank();
         saveDraft();
         updateSummary();
       });
+      rankUp.on("click", function () {
+        if (!checkbox.prop("checked")) return;
+        let index = ranks.indexOf(currentRank);
+        if (index < ranks.length - 1) draft.ranks[id] = ranks[index + 1];
+        updateRank();
+        saveDraft();
+        updateSummary();
+      });
+      updateRank();
       traitRows.push(row);
     }
     filter.on("input", function () {
@@ -23589,6 +23772,10 @@
         .text(
           `Genes remaining: ${balance} · ${draft.traitlist.length} selected traits · live lab validation still applies`,
         );
+      let builtIns = Object.keys(poly.genus_traits[draft.genus] ?? {})
+        .filter((id) => !(draft.genus === "fungi" && id === "spores"))
+        .map((id) => game.traits[id]?.name ?? id);
+      genusInfo.text(`Genus traits: ${builtIns.join(", ") || "none"}`);
       fanaticSelect.empty();
       $("<option></option>").val("").text("Automatic / none").appendTo(fanaticSelect);
       draft.traitlist.forEach((id) =>
@@ -23606,12 +23793,14 @@
     presetSelect.on("change", function () {
       settingsRaw.prestigeCustomRacePreset = this.value;
       updateSettingsFromState();
+      refreshCustomRacePresetSelectors();
       buildCustomRacePresetEditor(modal);
     });
     presetName.on("change", function () {
       preset.name = this.value.trim() || `Preset ${presetIndex + 1}`;
       updateSettingsFromState();
       presetSelect.find(`option[value="${presetIndex}"]`).text(preset.name);
+      refreshCustomRacePresetSelectors();
     });
     addButton.on("click", function () {
       settingsRaw.prestigeCustomRacePresets.push({
@@ -23622,6 +23811,20 @@
         settingsRaw.prestigeCustomRacePresets.length - 1,
       );
       updateSettingsFromState();
+      refreshCustomRacePresetSelectors();
+      buildCustomRacePresetEditor(modal);
+    });
+    cloneButton.on("click", function () {
+      let clone = {
+        name: `${preset.name || `Preset ${presetIndex + 1}`} copy`,
+        json: preset.json,
+      };
+      settingsRaw.prestigeCustomRacePresets.push(clone);
+      settingsRaw.prestigeCustomRacePreset = String(
+        settingsRaw.prestigeCustomRacePresets.length - 1,
+      );
+      updateSettingsFromState();
+      refreshCustomRacePresetSelectors();
       buildCustomRacePresetEditor(modal);
     });
     deleteButton.on("click", function () {
@@ -23632,6 +23835,7 @@
       }
       settingsRaw.prestigeCustomRacePreset = "0";
       updateSettingsFromState();
+      refreshCustomRacePresetSelectors();
       buildCustomRacePresetEditor(modal);
     });
     captureButton.on("click", function () {
@@ -32080,8 +32284,9 @@
     modalHeader.empty().off("*");
     modalHeader.append(`<span style="user-select: text">${modalTitle}</span>`);
 
+    $(".script-modal-content").removeClass("custom-race-modal");
     let modalBody = $("#scriptModalBody");
-    modalBody.empty().off("*");
+    modalBody.empty().off("*").removeClass("celestialLab");
     buildOptionsFunction(modalBody, "c_");
 
     // Show modal
@@ -32112,7 +32317,9 @@
     // Add the script modal close button action
     $("#scriptModalClose").on("click", function () {
       $("#scriptModal").css("display", "none");
-      $(".script-modal-content").removeClass("override-modal");
+      $(".script-modal-content").removeClass(
+        "override-modal custom-race-modal",
+      );
       $("html").css("overflow-y", "scroll");
     });
 
@@ -32120,7 +32327,9 @@
     $(window).on("click", function (event) {
       if (event.target.id === "scriptModal") {
         $("#scriptModal").css("display", "none");
-        $(".script-modal-content").removeClass("override-modal");
+        $(".script-modal-content").removeClass(
+          "override-modal custom-race-modal",
+        );
         $("html").css("overflow-y", "scroll");
       }
     });
