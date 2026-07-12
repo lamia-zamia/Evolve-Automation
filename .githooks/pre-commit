@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+build_inputs="src build.mjs package.json package-lock.json"
+
+if ! git diff --quiet -- $build_inputs; then
+  echo "Build inputs contain unstaged changes. Stage them before committing." >&2
+  exit 1
+fi
+
+untracked=$(git ls-files --others --exclude-standard -- $build_inputs)
+if [ -n "$untracked" ]; then
+  echo "Build inputs contain untracked files. Stage them before committing:" >&2
+  echo "$untracked" >&2
+  exit 1
+fi
+
+npm run build
+npm run check
+git add -- evolve_automation.user.js evolve_automation.meta.js
