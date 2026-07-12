@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "check": "node --check evolve_automation.user.js && node scripts/smoke-test.mjs",
+    "check": "node scripts/test.mjs",
     "dev": "node build.mjs --watch",
     "prepare": "node scripts/setup-hooks.mjs",
     "verify": "npm run build && npm run check && git diff --exit-code -- evolve_automation.user.js evolve_automation.meta.js"

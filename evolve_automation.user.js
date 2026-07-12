@@ -76,6 +76,650 @@
     return values.reduce((sum, value) => sum + value) / values.length;
   }
 
+  // src/subsystems/hell.js
+  function createAutoHell({
+    WarManager: WarManager2,
+    getGame,
+    getSettings,
+    getBuildings,
+    getResources,
+    getWindow
+  }) {
+    return function autoHell2() {
+      const game2 = getGame();
+      const settings2 = getSettings();
+      const buildings2 = getBuildings();
+      const resources2 = getResources();
+      const debugWindow = getWindow();
+      let m = WarManager2;
+      if (!m._garrisonVue || !m._hellVue) {
+        return;
+      }
+      if (game2.global.race["warlord"]) {
+        let enemies = m.enemies;
+        if (enemies > 0 && settings2.warlordHandleFortress) {
+          let targetMinions = settings2.warlordMinimumMinions;
+          let minionCount = m.minions;
+          if (minionCount > targetMinions) {
+            m.attackEnemyFortress(0);
+          }
+        }
+        return;
+      }
+      let targetHellSoldiers = 0;
+      let targetHellPatrols = 0;
+      let targetHellPatrolSize = 0;
+      let homeSoldiers = settings2.hellHomeGarrison;
+      if ((buildings2.ElysiumFortress.isUnlocked() || buildings2.ElysiumScout.isUnlocked()) && homeSoldiers < 100) {
+        homeSoldiers = 100;
+      }
+      if (m.maxSoldiers > homeSoldiers + settings2.hellMinSoldiers && (m.hellSoldiers > settings2.hellMinSoldiers || m.currentSoldiers >= m.maxSoldiers * settings2.hellMinSoldiersPercent / 100)) {
+        targetHellSoldiers = Math.min(m.currentSoldiers, m.maxSoldiers) - homeSoldiers;
+        let availableHellSoldiers = targetHellSoldiers - m.hellReservedSoldiers;
+        let hellWallsMulti = settings2.hellLowWallsMulti * (1 - game2.global.portal.fortress.walls / 100);
+        let hellTargetFortressDamage = game2.global.portal.fortress.threat * 35 / settings2.hellTargetFortressDamage;
+        let hellTurretPower = buildings2.PortalTurret.stateOnCount * (game2.global.tech["turret"] ? game2.global.tech["turret"] >= 2 ? 70 : 50 : 35);
+        let hellGarrison = m.getSoldiersForAttackRating(
+          Math.max(
+            0,
+            hellWallsMulti * hellTargetFortressDamage - hellTurretPower
+          )
+        );
+        if (availableHellSoldiers < hellGarrison) {
+          hellGarrison = 0;
+        } else if (availableHellSoldiers < hellGarrison * 2) {
+          hellGarrison = Math.floor(availableHellSoldiers / 2);
+        }
+        if (settings2.hellHandlePatrolSize) {
+          let patrolRating = game2.global.portal.fortress.threat * settings2.hellPatrolThreatPercent / 100;
+          if (game2.global.portal.war_drone) {
+            patrolRating -= settings2.hellPatrolDroneMod * game2.global.portal.war_drone.on * (game2.global.tech["portal"] >= 7 ? 1.5 : 1);
+          }
+          if (game2.global.portal.war_droid) {
+            patrolRating -= settings2.hellPatrolDroidMod * game2.global.portal.war_droid.on * (game2.global.tech["hdroid"] ? 2 : 1);
+          }
+          if (game2.global.city.boot_camp) {
+            patrolRating -= settings2.hellPatrolBootcampMod * game2.global.city.boot_camp.count;
+          }
+          patrolRating = Math.max(patrolRating, settings2.hellPatrolMinRating);
+          if (settings2.hellBolsterPatrolRating > 0 && settings2.hellBolsterPatrolPercentTop > 0) {
+            const homeGarrisonFillRatio = m.currentCityGarrison / m.maxCityGarrison;
+            if (homeGarrisonFillRatio <= settings2.hellBolsterPatrolPercentTop / 100) {
+              if (homeGarrisonFillRatio <= settings2.hellBolsterPatrolPercentBottom / 100) {
+                patrolRating += settings2.hellBolsterPatrolRating;
+              } else if (settings2.hellBolsterPatrolPercentBottom < settings2.hellBolsterPatrolPercentTop) {
+                patrolRating += settings2.hellBolsterPatrolRating * (settings2.hellBolsterPatrolPercentTop / 100 - homeGarrisonFillRatio) / // add rating proportional to where in the range we are
+                (settings2.hellBolsterPatrolPercentTop - settings2.hellBolsterPatrolPercentBottom) * 100;
+              }
+            }
+          }
+          targetHellPatrolSize = m.getSoldiersForAttackRating(patrolRating);
+          targetHellPatrolSize = Math.min(
+            targetHellPatrolSize,
+            availableHellSoldiers - hellGarrison
+          );
+        } else {
+          targetHellPatrolSize = m.hellPatrolSize;
+        }
+        if (settings2.generalMinimumAuthority !== 0 && resources2.Authority.isUnlocked() && targetHellPatrolSize > 0) {
+          let perSoldier = 0.7 + 0.1 * (game2.global.tech["evil"] ?? 0);
+          if (game2.global.race["grenadier"]) perSoldier *= 1.75;
+          if (game2.global.civic.govern.type === "autocracy") perSoldier *= 1.08;
+          else if (game2.global.civic.govern.type === "dictator")
+            perSoldier *= 1.12;
+          let authorityTarget = settings2.generalMinimumAuthority < 0 ? resources2.Authority.maxQuantity : settings2.generalMinimumAuthority;
+          let deficit = authorityTarget - resources2.Authority.currentQuantity;
+          let neededStationed = m.hellGarrison + Math.ceil(deficit / perSoldier);
+          let patrolReserve = 1;
+          if (settings2.generalMinimumAuthority < 0 && settings2.generalAuthorityMinPatrolPercent > 0) {
+            patrolReserve = Math.min(
+              availableHellSoldiers,
+              Math.ceil(
+                availableHellSoldiers * settings2.generalAuthorityMinPatrolPercent / 100
+              )
+            );
+          }
+          let maxStationed = Math.max(0, availableHellSoldiers - patrolReserve);
+          let authGarrison = Math.max(
+            hellGarrison,
+            Math.min(neededStationed, maxStationed)
+          );
+          let availableForPatrol = Math.max(
+            1,
+            availableHellSoldiers - authGarrison
+          );
+          targetHellPatrolSize = Math.min(
+            targetHellPatrolSize,
+            availableForPatrol
+          );
+          if (debugWindow.authorityDebug && authGarrison !== hellGarrison) {
+            console.log(
+              `[authority] amount=${resources2.Authority.currentQuantity.toFixed(
+                1
+              )}/${authorityTarget.toFixed(0)}, perSoldier=${perSoldier.toFixed(
+                2
+              )}, stationed=${m.hellGarrison}→need=${neededStationed}, garrison ${hellGarrison}→${authGarrison} (cap=${maxStationed}, patrolReserve=${patrolReserve}, patrolSize=${targetHellPatrolSize}, avail=${availableHellSoldiers})`
+            );
+          }
+          hellGarrison = authGarrison;
+        }
+        targetHellPatrols = Math.max(
+          1,
+          Math.floor(
+            (availableHellSoldiers - hellGarrison) / targetHellPatrolSize
+          )
+        );
+        if (settings2.hellHandlePatrolSize && targetHellPatrols === 1) {
+          if (availableHellSoldiers - hellGarrison >= 1.5 * targetHellPatrolSize) {
+            targetHellPatrolSize = Math.floor(
+              (availableHellSoldiers - hellGarrison) / 3
+            );
+            targetHellPatrols = Math.floor(
+              (availableHellSoldiers - hellGarrison) / targetHellPatrolSize
+            );
+          }
+        }
+      } else {
+        if (m.hellAssigned > 0) {
+          m.removeHellPatrolSize(m.hellPatrolSize);
+          m.removeHellPatrol(m.hellPatrols);
+          m.removeHellGarrison(m.hellSoldiers);
+          return;
+        }
+      }
+      if (settings2.hellHandlePatrolSize && m.hellPatrolSize > targetHellPatrolSize)
+        m.removeHellPatrolSize(m.hellPatrolSize - targetHellPatrolSize);
+      if (m.hellPatrols > targetHellPatrols)
+        m.removeHellPatrol(m.hellPatrols - targetHellPatrols);
+      if (m.hellSoldiers > targetHellSoldiers)
+        m.removeHellGarrison(m.hellSoldiers - targetHellSoldiers);
+      if (m.hellSoldiers < targetHellSoldiers)
+        m.addHellGarrison(targetHellSoldiers - m.hellSoldiers);
+      if (settings2.hellHandlePatrolSize && m.hellPatrolSize < targetHellPatrolSize)
+        m.addHellPatrolSize(targetHellPatrolSize - m.hellPatrolSize);
+      if (m.hellPatrols < targetHellPatrols)
+        m.addHellPatrol(targetHellPatrols - m.hellPatrols);
+    };
+  }
+
+  // src/subsystems/government.js
+  function createAutoGovernment({
+    GovernmentManager: GovernmentManager2,
+    getSettings,
+    getGame,
+    guardActive: guardActive2,
+    haveTech: haveTech2,
+    getGovernor: getGovernor2,
+    getVueById: getVueById2
+  }) {
+    return function autoGovernment2() {
+      const settings2 = getSettings();
+      const game2 = getGame();
+      if (GovernmentManager2.isEnabled() && !guardActive2("guardAnarchist")) {
+        if (settings2.govSpace !== "none" && haveTech2("q_factory") && GovernmentManager2.Types[settings2.govSpace].isUnlocked()) {
+          GovernmentManager2.setGovernment(settings2.govSpace);
+        } else if (settings2.govFinal !== "none" && GovernmentManager2.Types[settings2.govFinal].isUnlocked()) {
+          GovernmentManager2.setGovernment(settings2.govFinal);
+        } else if (settings2.govInterim !== "none" && GovernmentManager2.Types[settings2.govInterim].isUnlocked()) {
+          GovernmentManager2.setGovernment(settings2.govInterim);
+        }
+      }
+      if (haveTech2("governor") && settings2.govGovernor !== "none" && getGovernor2() === "none") {
+        let candidates = game2.global.race.governor?.candidates ?? [];
+        for (let i = 0; i < candidates.length; i++) {
+          if (candidates[i].bg === settings2.govGovernor) {
+            getVueById2("candidates")?.appoint(i);
+            break;
+          }
+        }
+      }
+    };
+  }
+
+  // src/subsystems/battle.js
+  function createAutoBattle({
+    SpyManager: SpyManager2,
+    WarManager: WarManager2,
+    GameLog: GameLog2,
+    getState,
+    getSettings,
+    getGame,
+    guardActive: guardActive2,
+    getHealingRate: getHealingRate2,
+    traitVal: traitVal2,
+    getOccCosts: getOccCosts2,
+    getGovName: getGovName2
+  }) {
+    return function autoBattle2() {
+      const state2 = getState();
+      const settings2 = getSettings();
+      const game2 = getGame();
+      let sm = SpyManager2;
+      let m = WarManager2;
+      if (!m._garrisonVue || !sm._foreignVue || m.maxCityGarrison <= 0 || state2.goal === "Reset" || settings2.foreignPacifist || guardActive2("guardPacifist")) {
+        return;
+      }
+      let healthyMin = settings2.foreignAttackHealthySoldiersPercent / 100;
+      let livingMin = settings2.foreignProtect === "auto" && m.wounded <= 0 ? 0 : settings2.foreignAttackLivingSoldiersPercent / 100;
+      if (m.wounded > (1 - healthyMin) * m.maxCityGarrison || m.currentCityGarrison < livingMin * m.maxCityGarrison) {
+        return;
+      }
+      let minAdv = settings2.foreignMinAdvantage;
+      let maxAdv = settings2.foreignMaxAdvantage;
+      let protectSoldiers = settings2.foreignProtect === "always" ? true : false;
+      if (settings2.foreignProtect === "auto") {
+        let garrison = game2.global.civic.garrison;
+        let timeToRecruit = (m.deadSoldiers * 100 - garrison.progress) / (garrison.rate * 4);
+        let timeToHeal = m.wounded / getHealingRate2() * 5;
+        protectSoldiers = timeToRecruit > timeToHeal;
+      }
+      if (protectSoldiers) {
+        minAdv = Math.max(minAdv, 80);
+        maxAdv = Math.max(maxAdv, minAdv);
+      }
+      let maxBattalion = new Array(5).fill(m.availableGarrison);
+      let requiredBattalion = m.maxCityGarrison;
+      if (protectSoldiers) {
+        let armor = (traitVal2("scales", 0) + (game2.global.tech.armor ?? 0)) / traitVal2("armored", 0, "-") - traitVal2("frail", 0);
+        let protectedBattalion = [5, 10, 25, 50, 999].map(
+          (cap, tactic) => armor >= cap * traitVal2("high_pop", 0, 1) ? Number.MAX_SAFE_INTEGER : (5 - tactic) * (armor + (game2.global.city.ptrait.includes("rage") ? 1 : 2)) - 1
+        );
+        maxBattalion = protectedBattalion.map(
+          (soldiers) => Math.min(soldiers, m.availableGarrison)
+        );
+        requiredBattalion = 0;
+      }
+      maxBattalion[4] = Math.min(
+        maxBattalion[4],
+        settings2.foreignMaxSiegeBattalion
+      );
+      let requiredTactic = 0;
+      let currentTarget = sm.foreignTarget;
+      for (let foreign of sm.foreignActive) {
+        if (foreign.policy === "Occupy" && !foreign.gov.occ) {
+          let soldiersMin = m.getSoldiersForAdvantage(
+            settings2.foreignMinAdvantage,
+            4,
+            foreign.id
+          );
+          if (soldiersMin <= (settings2.autoHell && m._hellVue ? m.maxSoldiers - m.hellReservedSoldiers : m.maxCityGarrison)) {
+            currentTarget = foreign;
+            requiredBattalion = Math.max(
+              soldiersMin,
+              Math.min(
+                m.availableGarrison,
+                m.getSoldiersForAdvantage(
+                  settings2.foreignMaxAdvantage,
+                  4,
+                  foreign.id
+                ) - 1
+              )
+            );
+            requiredTactic = 4;
+            if (m.availableGarrison < requiredBattalion / 2 + getOccCosts2() && m.availableGarrison < m.maxCityGarrison) {
+              return;
+            } else {
+              break;
+            }
+          }
+        }
+      }
+      if (!currentTarget) {
+        return;
+      }
+      if (requiredTactic !== 4) {
+        for (let i = !settings2.foreignUnification || settings2.foreignOccupyLast ? 4 : 3; i >= 0; i--) {
+          let soldiersMin = m.getSoldiersForAdvantage(
+            minAdv,
+            i,
+            currentTarget.id
+          );
+          if (soldiersMin <= maxBattalion[i]) {
+            requiredBattalion = Math.max(
+              soldiersMin,
+              Math.min(
+                maxBattalion[i],
+                m.availableGarrison,
+                m.getSoldiersForAdvantage(maxAdv, i, currentTarget.id) - 1
+              )
+            );
+            requiredTactic = i;
+            break;
+          }
+        }
+        if (!requiredBattalion || requiredBattalion > m.availableGarrison) {
+          return;
+        }
+      }
+      if (!currentTarget.released && (currentTarget.gov.anx || currentTarget.gov.buy || currentTarget.gov.occ)) {
+        m.release(currentTarget.id);
+      } else if (requiredTactic === 4 && game2.global.settings.showPortal) {
+        let missingSoldiers = getOccCosts2() - (m.currentCityGarrison - requiredBattalion);
+        if (missingSoldiers > 0) {
+          if (!settings2.autoHell || !m._hellVue || m.hellSoldiers - m.hellReservedSoldiers < missingSoldiers) {
+            return;
+          }
+          let patrolsToRemove = Math.ceil(
+            (missingSoldiers - m.hellGarrison) / m.hellPatrolSize
+          );
+          if (patrolsToRemove > 0) {
+            m.removeHellPatrol(patrolsToRemove);
+          }
+          m.removeHellGarrison(missingSoldiers);
+        }
+      }
+      m.setTactic(requiredTactic);
+      let deltaBattalion = requiredBattalion - m.raid;
+      if (deltaBattalion > 0) {
+        m.addBattalion(deltaBattalion);
+      }
+      if (deltaBattalion < 0) {
+        m.removeBattalion(deltaBattalion * -1);
+      }
+      let campaignTitle = m.getCampaignTitle(requiredTactic);
+      let battalionRating = game2.armyRating(m.raid, "army");
+      let advantagePercent = m.getAdvantage(battalionRating, requiredTactic, currentTarget.id).toFixed(1);
+      GameLog2.logSuccess(
+        "attack",
+        `Launching ${campaignTitle} campaign against ${getGovName2(
+          currentTarget.id
+        )} with ${currentTarget.gov.spy < 1 ? "~" : ""}${advantagePercent}% advantage.`,
+        ["combat"]
+      );
+      m.launchCampaign(currentTarget.id);
+    };
+  }
+
+  // src/subsystems/tax.js
+  function createAutoTax({
+    KeyManager: KeyManager2,
+    poly: poly2,
+    getResources,
+    getSettings,
+    getGame,
+    getVueById: getVueById2
+  }) {
+    return function autoTax2() {
+      const resources2 = getResources();
+      const settings2 = getSettings();
+      const game2 = getGame();
+      if (resources2.Morale.incomeAdusted) {
+        return;
+      }
+      let taxVue = getVueById2("tax_rates");
+      if (taxVue === void 0 || !game2.global.civic.taxes.display) {
+        return;
+      }
+      let currentTaxRate = game2.global.civic.taxes.tax_rate;
+      let currentMorale = resources2.Morale.currentQuantity;
+      let realMorale = resources2.Morale.rateOfChange;
+      let maxMorale = resources2.Morale.maxQuantity;
+      let minMorale = settings2.generalMinimumMorale;
+      let maxTaxRate = poly2.taxCap(false);
+      let minTaxRate = poly2.taxCap(true);
+      if (settings2.generalRequestedTaxRate != -1) {
+        var requestedTaxRateCappedToLimits = Math.min(
+          Math.max(settings2.generalRequestedTaxRate, minTaxRate),
+          maxTaxRate
+        );
+        KeyManager2.set(false, false, false);
+        while (currentTaxRate > requestedTaxRateCappedToLimits) {
+          taxVue.sub();
+          currentTaxRate--;
+        }
+        while (currentTaxRate < requestedTaxRateCappedToLimits) {
+          taxVue.add();
+          currentTaxRate++;
+        }
+        resources2.Morale.incomeAdusted = true;
+        return;
+      }
+      if (resources2.Money.storageRatio < 0.9 && !game2.global.race["banana"]) {
+        minTaxRate = Math.max(minTaxRate, settings2.generalMinimumTaxRate);
+      }
+      let optimalTax = game2.global.race["banana"] ? minTaxRate : resources2.Money.isDemanded() ? maxTaxRate : Math.round(
+        (maxTaxRate - minTaxRate) * Math.max(0, 0.9 - resources2.Money.storageRatio)
+      ) + minTaxRate;
+      if (!game2.global.race["banana"]) {
+        if (currentTaxRate < 20) {
+          maxMorale -= 10 - Math.floor(currentTaxRate / 2);
+        }
+        if (optimalTax < 20) {
+          maxMorale += 10 - Math.floor(minTaxRate / 2);
+        }
+      }
+      if (resources2.Money.storageRatio < 0.9) {
+        maxMorale = Math.min(maxMorale, settings2.generalMaximumMorale);
+      }
+      if (settings2.generalMinimumAuthority !== 0 && resources2.Authority.isUnlocked() && resources2.Authority.currentQuantity < (settings2.generalMinimumAuthority < 0 ? resources2.Authority.maxQuantity : settings2.generalMinimumAuthority)) {
+        minMorale = Math.min(minMorale, 100);
+        maxMorale = Math.min(maxMorale, 100);
+      }
+      if (currentTaxRate < maxTaxRate && currentMorale >= minMorale + 1 && (currentTaxRate < optimalTax || currentMorale >= maxMorale + 1 || realMorale >= currentMorale + 1 && optimalTax >= 20)) {
+        KeyManager2.set(false, false, false);
+        taxVue.add();
+        resources2.Morale.incomeAdusted = true;
+      }
+      if (currentTaxRate > minTaxRate && currentMorale < maxMorale && (currentTaxRate > optimalTax || currentMorale < minMorale)) {
+        KeyManager2.set(false, false, false);
+        taxVue.sub();
+        resources2.Morale.incomeAdusted = true;
+      }
+    };
+  }
+
+  // src/subsystems/smelter.js
+  function createAutoSmelter({
+    SmelterManager: SmelterManager2,
+    getGame,
+    getState,
+    getSettings,
+    getResources,
+    getJobs,
+    getBuildings,
+    haveTech: haveTech2
+  }) {
+    return function autoSmelter2() {
+      const game2 = getGame();
+      const state2 = getState();
+      const settings2 = getSettings();
+      const resources2 = getResources();
+      const jobs2 = getJobs();
+      const buildings2 = getBuildings();
+      let m = SmelterManager2;
+      if (!m.initIndustry()) {
+        return;
+      }
+      let totalSmelters = m.maxOperating();
+      let fuelRemoved = 0;
+      if (!game2.global.race["forge"]) {
+        let remainingSmelters = totalSmelters;
+        let fuels = m.managedFuelPriorityList();
+        let fuelAdjust = {};
+        for (let i = 0; i < fuels.length; i++) {
+          let fuel = fuels[i];
+          if (!fuel.unlocked) {
+            continue;
+          }
+          let maxAllowedUnits = remainingSmelters;
+          if (fuel === m.Fuels.Inferno && fuels[i + 1] === m.Fuels.Oil && remainingSmelters > 75) {
+            maxAllowedUnits = Math.floor(0.5 * remainingSmelters + 37.5);
+          }
+          for (let productionCost of fuel.cost) {
+            let resource = productionCost.resource;
+            if (resource.currentQuantity < maxAllowedUnits * productionCost.quantity * CONSUMPTION_BALANCE_MIN + productionCost.minRateOfChange || resource.isDemanded()) {
+              let remainingRateOfChange = resource.rateOfChange + m.fueledCount(fuel) * productionCost.quantity - productionCost.minRateOfChange;
+              let affordableAmount = Math.max(
+                0,
+                Math.floor(remainingRateOfChange / productionCost.quantity)
+              );
+              if (affordableAmount < maxAllowedUnits) {
+                state2.tooltips["smelterFuels" + fuel.id.toLowerCase()] = `Too low ${resource.name} income<br>`;
+              }
+              maxAllowedUnits = Math.min(maxAllowedUnits, affordableAmount);
+            }
+          }
+          remainingSmelters -= maxAllowedUnits;
+          fuelAdjust[fuel.id] = maxAllowedUnits - m.fueledCount(fuel);
+        }
+        for (let fuel of fuels) {
+          if (fuelAdjust[fuel.id] < 0) {
+            fuelRemoved += fuelAdjust[fuel.id] * -1;
+            m.decreaseFuel(fuel, fuelAdjust[fuel.id] * -1);
+          }
+        }
+        for (let fuel of fuels) {
+          if (fuelAdjust[fuel.id] > 0) {
+            m.increaseFuel(fuel, fuelAdjust[fuel.id]);
+          }
+        }
+        totalSmelters -= remainingSmelters;
+      }
+      totalSmelters += m.extraOperating();
+      let smelterIronCount = m.smeltingCount(m.Productions.Iron);
+      let smelterSteelCount = m.smeltingCount(m.Productions.Steel);
+      let smelterIridiumCount = m.smeltingCount(m.Productions.Iridium);
+      let maxAllowedIridium = m.Productions.Iridium.unlocked && !resources2.Iridium.isCapped() ? Math.floor(settings2.productionSmeltingIridium * totalSmelters) : 0;
+      let maxAllowedSteel = totalSmelters - smelterIridiumCount;
+      let smeltAdjust = {
+        Iridium: maxAllowedIridium - smelterIridiumCount,
+        Steel: smelterIridiumCount - maxAllowedIridium
+      };
+      if (fuelRemoved > smelterIronCount) {
+        let steelRemoved = fuelRemoved - smelterIronCount;
+        if (steelRemoved <= smelterSteelCount) {
+          smeltAdjust.Steel += steelRemoved;
+        } else {
+          smeltAdjust.Steel += smelterSteelCount;
+          smeltAdjust.Iridium += steelRemoved - smelterSteelCount;
+        }
+      }
+      let steelSmeltingConsumption = m.Productions.Steel.cost;
+      for (let productionCost of steelSmeltingConsumption) {
+        let resource = productionCost.resource;
+        if (resource.currentQuantity < smelterSteelCount * productionCost.quantity * CONSUMPTION_BALANCE_MIN + productionCost.minRateOfChange || resource.isDemanded()) {
+          let remainingRateOfChange = resource.rateOfChange + smelterSteelCount * productionCost.quantity - productionCost.minRateOfChange;
+          let affordableAmount = Math.max(
+            0,
+            Math.floor(remainingRateOfChange / productionCost.quantity)
+          );
+          if (affordableAmount < maxAllowedSteel) {
+            state2.tooltips["smelterMatssteel"] = `Too low ${resource.name} income<br>`;
+          }
+          maxAllowedSteel = Math.min(maxAllowedSteel, affordableAmount);
+        }
+      }
+      let ironWeighting = 0;
+      let steelWeighting = 0;
+      switch (settings2.productionSmelting) {
+        case "iron":
+          ironWeighting = resources2.Iron.timeToFull;
+          if (!ironWeighting) {
+            steelWeighting = resources2.Steel.timeToFull;
+          }
+          break;
+        case "steel":
+          steelWeighting = resources2.Steel.timeToFull;
+          if (!steelWeighting) {
+            ironWeighting = resources2.Iron.timeToFull;
+          }
+          break;
+        case "storage":
+          ironWeighting = resources2.Iron.timeToFull;
+          steelWeighting = resources2.Steel.timeToFull;
+          break;
+        case "required":
+          ironWeighting = resources2.Iron.timeToRequired;
+          steelWeighting = resources2.Steel.timeToRequired;
+          break;
+      }
+      if (resources2.Iron.isDemanded()) {
+        ironWeighting = Number.MAX_SAFE_INTEGER;
+      }
+      if (resources2.Steel.isDemanded()) {
+        steelWeighting = Number.MAX_SAFE_INTEGER;
+      }
+      if (jobs2.Miner.count === 0 && buildings2.BeltIronShip.stateOnCount === 0) {
+        ironWeighting = 0;
+        steelWeighting = 1;
+        maxAllowedSteel = totalSmelters - smelterIridiumCount;
+      }
+      if (smelterSteelCount > maxAllowedSteel || smelterSteelCount > 0 && ironWeighting > steelWeighting) {
+        smeltAdjust.Steel--;
+      }
+      if (smelterSteelCount < maxAllowedSteel && smelterIronCount > 0 && (steelWeighting > ironWeighting || steelWeighting <= 0 && ironWeighting <= 0 && resources2.Titanium.storageRatio < 0.99 && haveTech2("titanium"))) {
+        smeltAdjust.Steel++;
+      }
+      smeltAdjust.Iron = totalSmelters - (smelterIronCount + smelterSteelCount + smeltAdjust.Steel + smelterIridiumCount + smeltAdjust.Iridium);
+      Object.entries(smeltAdjust).forEach(
+        ([id, delta]) => delta < 0 && m.decreaseSmelting(id, delta * -1)
+      );
+      Object.entries(smeltAdjust).forEach(
+        ([id, delta]) => delta > 0 && m.increaseSmelting(id, delta)
+      );
+    };
+  }
+
+  // src/subsystems/alchemy.js
+  function createAutoAlchemy({
+    AlchemyManager: AlchemyManager2,
+    getResources,
+    getSettings,
+    getGame,
+    getAchievementStar: getAchievementStar2
+  }) {
+    return function autoAlchemy2() {
+      const resources2 = getResources();
+      const settings2 = getSettings();
+      const game2 = getGame();
+      let m = AlchemyManager2;
+      if (!m.isUnlocked()) {
+        return;
+      }
+      let fullList = m.managedPriorityList();
+      let adjustAlchemy = Object.fromEntries(
+        fullList.map((res) => [res.id, m.currentCount(res.id) * -1])
+      );
+      if (!resources2.Crystal.isDemanded()) {
+        let activeList = fullList.filter(
+          (res) => m.resWeighting(res.id) > 0 && res.isUseful()
+        );
+        let totalWeigthing = 0, currentTransmute = 0;
+        for (let res of activeList) {
+          totalWeigthing += m.resWeighting(res.id);
+          currentTransmute += m.currentCount(res.id);
+        }
+        let manaAvailable = (currentTransmute + resources2.Mana.rateOfChange) * (!settings2.autoPylon && resources2.Mana.storageRatio > 0.99 ? 1 : settings2.magicAlchemyManaUse);
+        let crystalAvailable = currentTransmute * 0.15 + resources2.Crystal.currentQuantity + resources2.Crystal.rateOfChange;
+        let maxTransmute = Math.floor(
+          Math.min(manaAvailable, crystalAvailable * (1 / 0.15))
+        );
+        activeList.forEach(
+          (res) => adjustAlchemy[res.id] += Math.floor(
+            maxTransmute * (m.resWeighting(res.id) / totalWeigthing)
+          )
+        );
+      }
+      if (settings2.magicFullmetalHelper && game2.global.race.universe === "magic" && game2.global.tech.alchemy >= 2 && getAchievementStar2("fullmetal") < game2.alevel() && resources2.Mana.currentQuantity >= 1 && resources2.Crystal.currentQuantity >= 0.15) {
+        let fullmetalResource = fullList.find(
+          (res) => m.transmuteTier(res) > 1 && !res.instance?.basic
+        );
+        if (fullmetalResource) {
+          adjustAlchemy[fullmetalResource.id] = Math.max(
+            adjustAlchemy[fullmetalResource.id],
+            1 - m.currentCount(fullmetalResource.id)
+          );
+        }
+      }
+      Object.entries(adjustAlchemy).forEach(
+        ([id, delta]) => delta < 0 && m.transmuteLess(id, delta * -1)
+      );
+      Object.entries(adjustAlchemy).forEach(
+        ([id, delta]) => delta > 0 && m.transmuteMore(id, delta)
+      );
+    };
+  }
+
   // src/main.js
   (function($) {
     "use strict";
@@ -11235,26 +11879,15 @@
         }
       }
     }
-    function autoGovernment() {
-      if (GovernmentManager.isEnabled() && !guardActive("guardAnarchist")) {
-        if (settings.govSpace !== "none" && haveTech("q_factory") && GovernmentManager.Types[settings.govSpace].isUnlocked()) {
-          GovernmentManager.setGovernment(settings.govSpace);
-        } else if (settings.govFinal !== "none" && GovernmentManager.Types[settings.govFinal].isUnlocked()) {
-          GovernmentManager.setGovernment(settings.govFinal);
-        } else if (settings.govInterim !== "none" && GovernmentManager.Types[settings.govInterim].isUnlocked()) {
-          GovernmentManager.setGovernment(settings.govInterim);
-        }
-      }
-      if (haveTech("governor") && settings.govGovernor !== "none" && getGovernor() === "none") {
-        let candidates = game.global.race.governor?.candidates ?? [];
-        for (let i = 0; i < candidates.length; i++) {
-          if (candidates[i].bg === settings.govGovernor) {
-            getVueById("candidates")?.appoint(i);
-            break;
-          }
-        }
-      }
-    }
+    const autoGovernment = createAutoGovernment({
+      GovernmentManager,
+      getSettings: () => settings,
+      getGame: () => game,
+      guardActive,
+      haveTech,
+      getGovernor,
+      getVueById
+    });
     function autoMerc() {
       let m = WarManager;
       if (!m._garrisonVue || !m.isMercenaryUnlocked() || m.maxCityGarrison <= 0) {
@@ -11368,283 +12001,27 @@
         }
       }
     }
-    function autoBattle() {
-      let sm = SpyManager;
-      let m = WarManager;
-      if (!m._garrisonVue || !sm._foreignVue || m.maxCityGarrison <= 0 || state.goal === "Reset" || settings.foreignPacifist || guardActive("guardPacifist")) {
-        return;
-      }
-      let healthyMin = settings.foreignAttackHealthySoldiersPercent / 100;
-      let livingMin = settings.foreignProtect === "auto" && m.wounded <= 0 ? 0 : settings.foreignAttackLivingSoldiersPercent / 100;
-      if (m.wounded > (1 - healthyMin) * m.maxCityGarrison || m.currentCityGarrison < livingMin * m.maxCityGarrison) {
-        return;
-      }
-      let minAdv = settings.foreignMinAdvantage;
-      let maxAdv = settings.foreignMaxAdvantage;
-      let protectSoldiers = settings.foreignProtect === "always" ? true : false;
-      if (settings.foreignProtect === "auto") {
-        let garrison = game.global.civic.garrison;
-        let timeToRecruit = (m.deadSoldiers * 100 - garrison.progress) / (garrison.rate * 4);
-        let timeToHeal = m.wounded / getHealingRate() * 5;
-        protectSoldiers = timeToRecruit > timeToHeal;
-      }
-      if (protectSoldiers) {
-        minAdv = Math.max(minAdv, 80);
-        maxAdv = Math.max(maxAdv, minAdv);
-      }
-      let maxBattalion = new Array(5).fill(m.availableGarrison);
-      let requiredBattalion = m.maxCityGarrison;
-      if (protectSoldiers) {
-        let armor = (traitVal("scales", 0) + (game.global.tech.armor ?? 0)) / traitVal("armored", 0, "-") - traitVal("frail", 0);
-        let protectedBattalion = [5, 10, 25, 50, 999].map(
-          (cap, tactic) => armor >= cap * traitVal("high_pop", 0, 1) ? Number.MAX_SAFE_INTEGER : (5 - tactic) * (armor + (game.global.city.ptrait.includes("rage") ? 1 : 2)) - 1
-        );
-        maxBattalion = protectedBattalion.map(
-          (soldiers) => Math.min(soldiers, m.availableGarrison)
-        );
-        requiredBattalion = 0;
-      }
-      maxBattalion[4] = Math.min(
-        maxBattalion[4],
-        settings.foreignMaxSiegeBattalion
-      );
-      let requiredTactic = 0;
-      let currentTarget = sm.foreignTarget;
-      for (let foreign of sm.foreignActive) {
-        if (foreign.policy === "Occupy" && !foreign.gov.occ) {
-          let soldiersMin = m.getSoldiersForAdvantage(
-            settings.foreignMinAdvantage,
-            4,
-            foreign.id
-          );
-          if (soldiersMin <= (settings.autoHell && m._hellVue ? m.maxSoldiers - m.hellReservedSoldiers : m.maxCityGarrison)) {
-            currentTarget = foreign;
-            requiredBattalion = Math.max(
-              soldiersMin,
-              Math.min(
-                m.availableGarrison,
-                m.getSoldiersForAdvantage(
-                  settings.foreignMaxAdvantage,
-                  4,
-                  foreign.id
-                ) - 1
-              )
-            );
-            requiredTactic = 4;
-            if (m.availableGarrison < requiredBattalion / 2 + getOccCosts() && m.availableGarrison < m.maxCityGarrison) {
-              return;
-            } else {
-              break;
-            }
-          }
-        }
-      }
-      if (!currentTarget) {
-        return;
-      }
-      if (requiredTactic !== 4) {
-        for (let i = !settings.foreignUnification || settings.foreignOccupyLast ? 4 : 3; i >= 0; i--) {
-          let soldiersMin = m.getSoldiersForAdvantage(
-            minAdv,
-            i,
-            currentTarget.id
-          );
-          if (soldiersMin <= maxBattalion[i]) {
-            requiredBattalion = Math.max(
-              soldiersMin,
-              Math.min(
-                maxBattalion[i],
-                m.availableGarrison,
-                m.getSoldiersForAdvantage(maxAdv, i, currentTarget.id) - 1
-              )
-            );
-            requiredTactic = i;
-            break;
-          }
-        }
-        if (!requiredBattalion || requiredBattalion > m.availableGarrison) {
-          return;
-        }
-      }
-      if (!currentTarget.released && (currentTarget.gov.anx || currentTarget.gov.buy || currentTarget.gov.occ)) {
-        m.release(currentTarget.id);
-      } else if (requiredTactic === 4 && game.global.settings.showPortal) {
-        let missingSoldiers = getOccCosts() - (m.currentCityGarrison - requiredBattalion);
-        if (missingSoldiers > 0) {
-          if (!settings.autoHell || !m._hellVue || m.hellSoldiers - m.hellReservedSoldiers < missingSoldiers) {
-            return;
-          }
-          let patrolsToRemove = Math.ceil(
-            (missingSoldiers - m.hellGarrison) / m.hellPatrolSize
-          );
-          if (patrolsToRemove > 0) {
-            m.removeHellPatrol(patrolsToRemove);
-          }
-          m.removeHellGarrison(missingSoldiers);
-        }
-      }
-      m.setTactic(requiredTactic);
-      let deltaBattalion = requiredBattalion - m.raid;
-      if (deltaBattalion > 0) {
-        m.addBattalion(deltaBattalion);
-      }
-      if (deltaBattalion < 0) {
-        m.removeBattalion(deltaBattalion * -1);
-      }
-      let campaignTitle = m.getCampaignTitle(requiredTactic);
-      let battalionRating = game.armyRating(m.raid, "army");
-      let advantagePercent = m.getAdvantage(battalionRating, requiredTactic, currentTarget.id).toFixed(1);
-      GameLog.logSuccess(
-        "attack",
-        `Launching ${campaignTitle} campaign against ${getGovName(
-          currentTarget.id
-        )} with ${currentTarget.gov.spy < 1 ? "~" : ""}${advantagePercent}% advantage.`,
-        ["combat"]
-      );
-      m.launchCampaign(currentTarget.id);
-    }
-    function autoHell() {
-      let m = WarManager;
-      if (!m._garrisonVue || !m._hellVue) {
-        return;
-      }
-      if (game.global.race["warlord"]) {
-        let enemies = m.enemies;
-        if (enemies > 0 && settings.warlordHandleFortress) {
-          let targetMinions = settings.warlordMinimumMinions;
-          let minionCount = m.minions;
-          if (minionCount > targetMinions) {
-            m.attackEnemyFortress(0);
-          }
-        }
-        return;
-      }
-      let targetHellSoldiers = 0;
-      let targetHellPatrols = 0;
-      let targetHellPatrolSize = 0;
-      let homeSoldiers = settings.hellHomeGarrison;
-      if ((buildings.ElysiumFortress.isUnlocked() || buildings.ElysiumScout.isUnlocked()) && homeSoldiers < 100) {
-        homeSoldiers = 100;
-      }
-      if (m.maxSoldiers > homeSoldiers + settings.hellMinSoldiers && (m.hellSoldiers > settings.hellMinSoldiers || m.currentSoldiers >= m.maxSoldiers * settings.hellMinSoldiersPercent / 100)) {
-        targetHellSoldiers = Math.min(m.currentSoldiers, m.maxSoldiers) - homeSoldiers;
-        let availableHellSoldiers = targetHellSoldiers - m.hellReservedSoldiers;
-        let hellWallsMulti = settings.hellLowWallsMulti * (1 - game.global.portal.fortress.walls / 100);
-        let hellTargetFortressDamage = game.global.portal.fortress.threat * 35 / settings.hellTargetFortressDamage;
-        let hellTurretPower = buildings.PortalTurret.stateOnCount * (game.global.tech["turret"] ? game.global.tech["turret"] >= 2 ? 70 : 50 : 35);
-        let hellGarrison = m.getSoldiersForAttackRating(
-          Math.max(
-            0,
-            hellWallsMulti * hellTargetFortressDamage - hellTurretPower
-          )
-        );
-        if (availableHellSoldiers < hellGarrison) {
-          hellGarrison = 0;
-        } else if (availableHellSoldiers < hellGarrison * 2) {
-          hellGarrison = Math.floor(availableHellSoldiers / 2);
-        }
-        if (settings.hellHandlePatrolSize) {
-          let patrolRating = game.global.portal.fortress.threat * settings.hellPatrolThreatPercent / 100;
-          if (game.global.portal.war_drone) {
-            patrolRating -= settings.hellPatrolDroneMod * game.global.portal.war_drone.on * (game.global.tech["portal"] >= 7 ? 1.5 : 1);
-          }
-          if (game.global.portal.war_droid) {
-            patrolRating -= settings.hellPatrolDroidMod * game.global.portal.war_droid.on * (game.global.tech["hdroid"] ? 2 : 1);
-          }
-          if (game.global.city.boot_camp) {
-            patrolRating -= settings.hellPatrolBootcampMod * game.global.city.boot_camp.count;
-          }
-          patrolRating = Math.max(patrolRating, settings.hellPatrolMinRating);
-          if (settings.hellBolsterPatrolRating > 0 && settings.hellBolsterPatrolPercentTop > 0) {
-            const homeGarrisonFillRatio = m.currentCityGarrison / m.maxCityGarrison;
-            if (homeGarrisonFillRatio <= settings.hellBolsterPatrolPercentTop / 100) {
-              if (homeGarrisonFillRatio <= settings.hellBolsterPatrolPercentBottom / 100) {
-                patrolRating += settings.hellBolsterPatrolRating;
-              } else if (settings.hellBolsterPatrolPercentBottom < settings.hellBolsterPatrolPercentTop) {
-                patrolRating += settings.hellBolsterPatrolRating * (settings.hellBolsterPatrolPercentTop / 100 - homeGarrisonFillRatio) / // add rating proportional to where in the range we are
-                (settings.hellBolsterPatrolPercentTop - settings.hellBolsterPatrolPercentBottom) * 100;
-              }
-            }
-          }
-          targetHellPatrolSize = m.getSoldiersForAttackRating(patrolRating);
-          targetHellPatrolSize = Math.min(
-            targetHellPatrolSize,
-            availableHellSoldiers - hellGarrison
-          );
-        } else {
-          targetHellPatrolSize = m.hellPatrolSize;
-        }
-        if (settings.generalMinimumAuthority !== 0 && resources.Authority.isUnlocked() && targetHellPatrolSize > 0) {
-          let perSoldier = 0.7 + 0.1 * (game.global.tech["evil"] ?? 0);
-          if (game.global.race["grenadier"]) perSoldier *= 1.75;
-          if (game.global.civic.govern.type === "autocracy") perSoldier *= 1.08;
-          else if (game.global.civic.govern.type === "dictator")
-            perSoldier *= 1.12;
-          let authorityTarget = settings.generalMinimumAuthority < 0 ? resources.Authority.maxQuantity : settings.generalMinimumAuthority;
-          let deficit = authorityTarget - resources.Authority.currentQuantity;
-          let neededStationed = m.hellGarrison + Math.ceil(deficit / perSoldier);
-          let patrolReserve = targetHellPatrolSize;
-          if (settings.generalMinimumAuthority < 0 && settings.generalAuthorityMinPatrolPercent > 0) {
-            patrolReserve = Math.max(
-              patrolReserve,
-              Math.ceil(
-                availableHellSoldiers * settings.generalAuthorityMinPatrolPercent / 100
-              )
-            );
-          }
-          let maxStationed = Math.max(0, availableHellSoldiers - patrolReserve);
-          let authGarrison = Math.max(
-            hellGarrison,
-            Math.min(neededStationed, maxStationed)
-          );
-          if (window.authorityDebug && authGarrison !== hellGarrison) {
-            console.log(
-              `[authority] amount=${resources.Authority.currentQuantity.toFixed(
-                1
-              )}/${authorityTarget.toFixed(0)}, perSoldier=${perSoldier.toFixed(
-                2
-              )}, stationed=${m.hellGarrison}→need=${neededStationed}, garrison ${hellGarrison}→${authGarrison} (cap=${maxStationed}, avail=${availableHellSoldiers})`
-            );
-          }
-          hellGarrison = authGarrison;
-        }
-        targetHellPatrols = Math.max(
-          1,
-          Math.floor(
-            (availableHellSoldiers - hellGarrison) / targetHellPatrolSize
-          )
-        );
-        if (settings.hellHandlePatrolSize && targetHellPatrols === 1) {
-          if (availableHellSoldiers - hellGarrison >= 1.5 * targetHellPatrolSize) {
-            targetHellPatrolSize = Math.floor(
-              (availableHellSoldiers - hellGarrison) / 3
-            );
-            targetHellPatrols = Math.floor(
-              (availableHellSoldiers - hellGarrison) / targetHellPatrolSize
-            );
-          }
-        }
-      } else {
-        if (m.hellAssigned > 0) {
-          m.removeHellPatrolSize(m.hellPatrolSize);
-          m.removeHellPatrol(m.hellPatrols);
-          m.removeHellGarrison(m.hellSoldiers);
-          return;
-        }
-      }
-      if (settings.hellHandlePatrolSize && m.hellPatrolSize > targetHellPatrolSize)
-        m.removeHellPatrolSize(m.hellPatrolSize - targetHellPatrolSize);
-      if (m.hellPatrols > targetHellPatrols)
-        m.removeHellPatrol(m.hellPatrols - targetHellPatrols);
-      if (m.hellSoldiers > targetHellSoldiers)
-        m.removeHellGarrison(m.hellSoldiers - targetHellSoldiers);
-      if (m.hellSoldiers < targetHellSoldiers)
-        m.addHellGarrison(targetHellSoldiers - m.hellSoldiers);
-      if (settings.hellHandlePatrolSize && m.hellPatrolSize < targetHellPatrolSize)
-        m.addHellPatrolSize(targetHellPatrolSize - m.hellPatrolSize);
-      if (m.hellPatrols < targetHellPatrols)
-        m.addHellPatrol(targetHellPatrols - m.hellPatrols);
-    }
+    const autoBattle = createAutoBattle({
+      SpyManager,
+      WarManager,
+      GameLog,
+      getState: () => state,
+      getSettings: () => settings,
+      getGame: () => game,
+      guardActive,
+      getHealingRate,
+      traitVal,
+      getOccCosts,
+      getGovName
+    });
+    const autoHell = createAutoHell({
+      WarManager,
+      getGame: () => game,
+      getSettings: () => settings,
+      getBuildings: () => buildings,
+      getResources: () => resources,
+      getWindow: () => window
+    });
     function autoJobs(craftOnly) {
       let jobList = JobManager.managedPriorityList();
       if (jobList.length === 0) {
@@ -12378,117 +12755,21 @@
         }
       }
     }
-    function autoTax() {
-      if (resources.Morale.incomeAdusted) {
-        return;
-      }
-      let taxVue = getVueById("tax_rates");
-      if (taxVue === void 0 || !game.global.civic.taxes.display) {
-        return;
-      }
-      let currentTaxRate = game.global.civic.taxes.tax_rate;
-      let currentMorale = resources.Morale.currentQuantity;
-      let realMorale = resources.Morale.rateOfChange;
-      let maxMorale = resources.Morale.maxQuantity;
-      let minMorale = settings.generalMinimumMorale;
-      let maxTaxRate = poly.taxCap(false);
-      let minTaxRate = poly.taxCap(true);
-      if (settings.generalRequestedTaxRate != -1) {
-        var requestedTaxRateCappedToLimits = Math.min(
-          Math.max(settings.generalRequestedTaxRate, minTaxRate),
-          maxTaxRate
-        );
-        KeyManager.set(false, false, false);
-        while (currentTaxRate > requestedTaxRateCappedToLimits) {
-          taxVue.sub();
-          currentTaxRate--;
-        }
-        while (currentTaxRate < requestedTaxRateCappedToLimits) {
-          taxVue.add();
-          currentTaxRate++;
-        }
-        resources.Morale.incomeAdusted = true;
-        return;
-      }
-      if (resources.Money.storageRatio < 0.9 && !game.global.race["banana"]) {
-        minTaxRate = Math.max(minTaxRate, settings.generalMinimumTaxRate);
-      }
-      let optimalTax = game.global.race["banana"] ? minTaxRate : resources.Money.isDemanded() ? maxTaxRate : Math.round(
-        (maxTaxRate - minTaxRate) * Math.max(0, 0.9 - resources.Money.storageRatio)
-      ) + minTaxRate;
-      if (!game.global.race["banana"]) {
-        if (currentTaxRate < 20) {
-          maxMorale -= 10 - Math.floor(currentTaxRate / 2);
-        }
-        if (optimalTax < 20) {
-          maxMorale += 10 - Math.floor(minTaxRate / 2);
-        }
-      }
-      if (resources.Money.storageRatio < 0.9) {
-        maxMorale = Math.min(maxMorale, settings.generalMaximumMorale);
-      }
-      if (settings.generalMinimumAuthority !== 0 && resources.Authority.isUnlocked() && resources.Authority.currentQuantity < (settings.generalMinimumAuthority < 0 ? resources.Authority.maxQuantity : settings.generalMinimumAuthority)) {
-        minMorale = Math.min(minMorale, 100);
-        maxMorale = Math.min(maxMorale, 100);
-      }
-      if (currentTaxRate < maxTaxRate && currentMorale >= minMorale + 1 && (currentTaxRate < optimalTax || currentMorale >= maxMorale + 1 || realMorale >= currentMorale + 1 && optimalTax >= 20)) {
-        KeyManager.set(false, false, false);
-        taxVue.add();
-        resources.Morale.incomeAdusted = true;
-      }
-      if (currentTaxRate > minTaxRate && currentMorale < maxMorale && (currentTaxRate > optimalTax || currentMorale < minMorale)) {
-        KeyManager.set(false, false, false);
-        taxVue.sub();
-        resources.Morale.incomeAdusted = true;
-      }
-    }
-    function autoAlchemy() {
-      let m = AlchemyManager;
-      if (!m.isUnlocked()) {
-        return;
-      }
-      let fullList = m.managedPriorityList();
-      let adjustAlchemy = Object.fromEntries(
-        fullList.map((res) => [res.id, m.currentCount(res.id) * -1])
-      );
-      if (!resources.Crystal.isDemanded()) {
-        let activeList = fullList.filter(
-          (res) => m.resWeighting(res.id) > 0 && res.isUseful()
-        );
-        let totalWeigthing = 0, currentTransmute = 0;
-        for (let res of activeList) {
-          totalWeigthing += m.resWeighting(res.id);
-          currentTransmute += m.currentCount(res.id);
-        }
-        let manaAvailable = (currentTransmute + resources.Mana.rateOfChange) * (!settings.autoPylon && resources.Mana.storageRatio > 0.99 ? 1 : settings.magicAlchemyManaUse);
-        let crystalAvailable = currentTransmute * 0.15 + resources.Crystal.currentQuantity + resources.Crystal.rateOfChange;
-        let maxTransmute = Math.floor(
-          Math.min(manaAvailable, crystalAvailable * (1 / 0.15))
-        );
-        activeList.forEach(
-          (res) => adjustAlchemy[res.id] += Math.floor(
-            maxTransmute * (m.resWeighting(res.id) / totalWeigthing)
-          )
-        );
-      }
-      if (settings.magicFullmetalHelper && game.global.race.universe === "magic" && game.global.tech.alchemy >= 2 && getAchievementStar("fullmetal") < game.alevel() && resources.Mana.currentQuantity >= 1 && resources.Crystal.currentQuantity >= 0.15) {
-        let fullmetalResource = fullList.find(
-          (res) => m.transmuteTier(res) > 1 && !res.instance?.basic
-        );
-        if (fullmetalResource) {
-          adjustAlchemy[fullmetalResource.id] = Math.max(
-            adjustAlchemy[fullmetalResource.id],
-            1 - m.currentCount(fullmetalResource.id)
-          );
-        }
-      }
-      Object.entries(adjustAlchemy).forEach(
-        ([id, delta]) => delta < 0 && m.transmuteLess(id, delta * -1)
-      );
-      Object.entries(adjustAlchemy).forEach(
-        ([id, delta]) => delta > 0 && m.transmuteMore(id, delta)
-      );
-    }
+    const autoTax = createAutoTax({
+      KeyManager,
+      poly,
+      getResources: () => resources,
+      getSettings: () => settings,
+      getGame: () => game,
+      getVueById
+    });
+    const autoAlchemy = createAutoAlchemy({
+      AlchemyManager,
+      getResources: () => resources,
+      getSettings: () => settings,
+      getGame: () => game,
+      getAchievementStar
+    });
     function autoPylon() {
       let m = RitualManager;
       if (!m.initIndustry()) {
@@ -12587,139 +12868,16 @@
         ExtractorManager.increaseProduction(prod.id, newRatio - currentRatio);
       }
     }
-    function autoSmelter() {
-      let m = SmelterManager;
-      if (!m.initIndustry()) {
-        return;
-      }
-      let totalSmelters = m.maxOperating();
-      let fuelRemoved = 0;
-      if (!game.global.race["forge"]) {
-        let remainingSmelters = totalSmelters;
-        let fuels = m.managedFuelPriorityList();
-        let fuelAdjust = {};
-        for (let i = 0; i < fuels.length; i++) {
-          let fuel = fuels[i];
-          if (!fuel.unlocked) {
-            continue;
-          }
-          let maxAllowedUnits = remainingSmelters;
-          if (fuel === m.Fuels.Inferno && fuels[i + 1] === m.Fuels.Oil && remainingSmelters > 75) {
-            maxAllowedUnits = Math.floor(0.5 * remainingSmelters + 37.5);
-          }
-          for (let productionCost of fuel.cost) {
-            let resource = productionCost.resource;
-            if (resource.currentQuantity < maxAllowedUnits * productionCost.quantity * CONSUMPTION_BALANCE_MIN + productionCost.minRateOfChange || resource.isDemanded()) {
-              let remainingRateOfChange = resource.rateOfChange + m.fueledCount(fuel) * productionCost.quantity - productionCost.minRateOfChange;
-              let affordableAmount = Math.max(
-                0,
-                Math.floor(remainingRateOfChange / productionCost.quantity)
-              );
-              if (affordableAmount < maxAllowedUnits) {
-                state.tooltips["smelterFuels" + fuel.id.toLowerCase()] = `Too low ${resource.name} income<br>`;
-              }
-              maxAllowedUnits = Math.min(maxAllowedUnits, affordableAmount);
-            }
-          }
-          remainingSmelters -= maxAllowedUnits;
-          fuelAdjust[fuel.id] = maxAllowedUnits - m.fueledCount(fuel);
-        }
-        for (let fuel of fuels) {
-          if (fuelAdjust[fuel.id] < 0) {
-            fuelRemoved += fuelAdjust[fuel.id] * -1;
-            m.decreaseFuel(fuel, fuelAdjust[fuel.id] * -1);
-          }
-        }
-        for (let fuel of fuels) {
-          if (fuelAdjust[fuel.id] > 0) {
-            m.increaseFuel(fuel, fuelAdjust[fuel.id]);
-          }
-        }
-        totalSmelters -= remainingSmelters;
-      }
-      totalSmelters += m.extraOperating();
-      let smelterIronCount = m.smeltingCount(m.Productions.Iron);
-      let smelterSteelCount = m.smeltingCount(m.Productions.Steel);
-      let smelterIridiumCount = m.smeltingCount(m.Productions.Iridium);
-      let maxAllowedIridium = m.Productions.Iridium.unlocked && !resources.Iridium.isCapped() ? Math.floor(settings.productionSmeltingIridium * totalSmelters) : 0;
-      let maxAllowedSteel = totalSmelters - smelterIridiumCount;
-      let smeltAdjust = {
-        Iridium: maxAllowedIridium - smelterIridiumCount,
-        Steel: smelterIridiumCount - maxAllowedIridium
-      };
-      if (fuelRemoved > smelterIronCount) {
-        let steelRemoved = fuelRemoved - smelterIronCount;
-        if (steelRemoved <= smelterSteelCount) {
-          smeltAdjust.Steel += steelRemoved;
-        } else {
-          smeltAdjust.Steel += smelterSteelCount;
-          smeltAdjust.Iridium += steelRemoved - smelterSteelCount;
-        }
-      }
-      let steelSmeltingConsumption = m.Productions.Steel.cost;
-      for (let productionCost of steelSmeltingConsumption) {
-        let resource = productionCost.resource;
-        if (resource.currentQuantity < smelterSteelCount * productionCost.quantity * CONSUMPTION_BALANCE_MIN + productionCost.minRateOfChange || resource.isDemanded()) {
-          let remainingRateOfChange = resource.rateOfChange + smelterSteelCount * productionCost.quantity - productionCost.minRateOfChange;
-          let affordableAmount = Math.max(
-            0,
-            Math.floor(remainingRateOfChange / productionCost.quantity)
-          );
-          if (affordableAmount < maxAllowedSteel) {
-            state.tooltips["smelterMatssteel"] = `Too low ${resource.name} income<br>`;
-          }
-          maxAllowedSteel = Math.min(maxAllowedSteel, affordableAmount);
-        }
-      }
-      let ironWeighting = 0;
-      let steelWeighting = 0;
-      switch (settings.productionSmelting) {
-        case "iron":
-          ironWeighting = resources.Iron.timeToFull;
-          if (!ironWeighting) {
-            steelWeighting = resources.Steel.timeToFull;
-          }
-          break;
-        case "steel":
-          steelWeighting = resources.Steel.timeToFull;
-          if (!steelWeighting) {
-            ironWeighting = resources.Iron.timeToFull;
-          }
-          break;
-        case "storage":
-          ironWeighting = resources.Iron.timeToFull;
-          steelWeighting = resources.Steel.timeToFull;
-          break;
-        case "required":
-          ironWeighting = resources.Iron.timeToRequired;
-          steelWeighting = resources.Steel.timeToRequired;
-          break;
-      }
-      if (resources.Iron.isDemanded()) {
-        ironWeighting = Number.MAX_SAFE_INTEGER;
-      }
-      if (resources.Steel.isDemanded()) {
-        steelWeighting = Number.MAX_SAFE_INTEGER;
-      }
-      if (jobs.Miner.count === 0 && buildings.BeltIronShip.stateOnCount === 0) {
-        ironWeighting = 0;
-        steelWeighting = 1;
-        maxAllowedSteel = totalSmelters - smelterIridiumCount;
-      }
-      if (smelterSteelCount > maxAllowedSteel || smelterSteelCount > 0 && ironWeighting > steelWeighting) {
-        smeltAdjust.Steel--;
-      }
-      if (smelterSteelCount < maxAllowedSteel && smelterIronCount > 0 && (steelWeighting > ironWeighting || steelWeighting <= 0 && ironWeighting <= 0 && resources.Titanium.storageRatio < 0.99 && haveTech("titanium"))) {
-        smeltAdjust.Steel++;
-      }
-      smeltAdjust.Iron = totalSmelters - (smelterIronCount + smelterSteelCount + smeltAdjust.Steel + smelterIridiumCount + smeltAdjust.Iridium);
-      Object.entries(smeltAdjust).forEach(
-        ([id, delta]) => delta < 0 && m.decreaseSmelting(id, delta * -1)
-      );
-      Object.entries(smeltAdjust).forEach(
-        ([id, delta]) => delta > 0 && m.increaseSmelting(id, delta)
-      );
-    }
+    const autoSmelter = createAutoSmelter({
+      SmelterManager,
+      getGame: () => game,
+      getState: () => state,
+      getSettings: () => settings,
+      getResources: () => resources,
+      getJobs: () => jobs,
+      getBuildings: () => buildings,
+      haveTech
+    });
     function autoFactory() {
       if (!FactoryManager.initIndustry()) {
         return;
