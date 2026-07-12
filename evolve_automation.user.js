@@ -14670,6 +14670,12 @@
 
     // Now assign crafters
     if (settings.autoCraftsmen) {
+      // Debug logging — enable with: window.craftDebug = true
+      // Logs whenever the crafter target (all crafters go to one resource) changes,
+      // with each candidate's sort key and the building driving its weighting.
+      const cdbg = window.craftDebug ?? false;
+      let craftExcluded = cdbg ? [] : null;
+      let craftFilter = "";
       // Taken from game source, no idea what this "140" means.
       let speed = game.global.genes["crafty"] ? 2 : 1;
       let costMod = (speed * traitVal("resourceful", 0, "-")) / 140;
@@ -14718,6 +14724,9 @@
             ((!settings.useDemanded && reqResource.isDemanded()) ||
               reqResource.storageRatio < resource.craftPreserve)
           ) {
+            if (cdbg) {
+              craftExcluded.push(`${job.id}(hold:${res})`);
+            }
             affordableAmount = 0;
             break;
           } else {
@@ -14747,6 +14756,10 @@
           }
         } else if (affordableAmount >= totalCraftsmen) {
           availableJobs.push(job);
+        } else if (cdbg && affordableAmount > 0) {
+          craftExcluded.push(
+            `${job.id}(inputs:${affordableAmount.toFixed(1)}<${totalCraftsmen})`,
+          );
         }
       }
 
@@ -14755,20 +14768,23 @@
       );
       if (requestedJobs.length > 0) {
         availableJobs = requestedJobs;
+        craftFilter = "demanded";
       } else if (settings.productionFoundryWeighting === "demanded") {
         let usefulJobs = availableJobs.filter(
           (job) => job.resource.currentQuantity < job.resource.storageRequired,
         );
         if (usefulJobs.length > 0) {
           availableJobs = usefulJobs;
+          craftFilter = "useful";
         }
       }
 
+      let scaledWeightings = null;
       if (
         settings.productionFoundryWeighting === "buildings" &&
         state.unlockedBuildings.length > 0
       ) {
-        let scaledWeightings = Object.fromEntries(
+        scaledWeightings = Object.fromEntries(
           availableJobs.map((job) => [
             job.id,
             (findRequiredResourceWeight(job.resource) ?? 0) *
@@ -14786,6 +14802,62 @@
             a.resource.currentQuantity / a.resource.craftWeighting -
             b.resource.currentQuantity / b.resource.craftWeighting,
         );
+      }
+
+      // Near-tied candidates make the winner flip every tick as each craft nudges
+      // its key above the other's. Keep the previous target until its key
+      // overshoots the best one by 10%; long-run ratios stay within that band.
+      if (availableJobs.length > 1) {
+        const keyOf = (job) =>
+          job.resource.currentQuantity /
+          (scaledWeightings
+            ? scaledWeightings[job.id]
+            : job.resource.craftWeighting);
+        let focus = availableJobs.find((job) => job.id === state.craftFocus);
+        if (
+          focus &&
+          focus !== availableJobs[0] &&
+          keyOf(focus) <= keyOf(availableJobs[0]) * 1.1
+        ) {
+          availableJobs.splice(availableJobs.indexOf(focus), 1);
+          availableJobs.unshift(focus);
+        }
+      }
+      state.craftFocus = availableJobs[0]?.id;
+
+      if (cdbg) {
+        let winnerId = availableJobs[0]?.id ?? "none";
+        if (state.lastCraftWinner !== winnerId) {
+          let detail = availableJobs
+            .map((job) => {
+              let q = job.resource.currentQuantity;
+              if (scaledWeightings) {
+                let driver = state.unlockedBuildings.find(
+                  (b) => b.cost[job.resource.id] > q,
+                );
+                return `${job.id} q=${q.toFixed(0)} key=${(
+                  q / scaledWeightings[job.id]
+                ).toFixed(1)} (${
+                  driver
+                    ? `${driver._vueBinding}@${driver.weighting.toFixed(1)}`
+                    : "no building"
+                }×${job.resource.craftWeighting})`;
+              }
+              return `${job.id} q=${q.toFixed(0)} key=${(
+                q / job.resource.craftWeighting
+              ).toFixed(1)}`;
+            })
+            .join("; ");
+          console.log(
+            `[craft] winner ${state.lastCraftWinner ?? "none"}→${winnerId}` +
+              (craftFilter ? ` filter=${craftFilter}` : "") +
+              ` | ${detail}` +
+              (craftExcluded.length > 0
+                ? ` | excluded: ${craftExcluded.join(", ")}`
+                : ""),
+          );
+          state.lastCraftWinner = winnerId;
+        }
       }
 
       for (let job of JobManager.craftingJobs) {
