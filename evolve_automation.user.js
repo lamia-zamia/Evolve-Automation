@@ -12,6 +12,7 @@
 // @author       davezatch
 // @author       Kewne
 // @author       SkyeAmphi
+// @author       lamia_zamia
 // @match        https://pmotschmann.github.io/Evolve/
 // @grant        none
 // @require      https://code.jquery.com/jquery-3.7.1.min.js
@@ -13341,9 +13342,7 @@
       missing.push(
         `${resources.Graphene.name} storage ${getNumberString(resources.Graphene.maxQuantity)}/${getNumberString(RETIREMENT_PREP.graphene)}`,
       );
-    } else if (
-      resources.Graphene.currentQuantity < RETIREMENT_PREP.graphene
-    ) {
+    } else if (resources.Graphene.currentQuantity < RETIREMENT_PREP.graphene) {
       missing.push(
         `${resources.Graphene.name} stockpile ${getNumberString(resources.Graphene.currentQuantity)}/${getNumberString(RETIREMENT_PREP.graphene)}`,
       );
@@ -18523,8 +18522,7 @@
           : building.count;
         let growth = building.produces.some((res) => res.isUseful()) ? 1 : 0;
         let reserve =
-          building.powered *
-          Math.min(cap, building.stateOnCount + growth);
+          building.powered * Math.min(cap, building.stateOnCount + growth);
         producerReserve[building._vueBinding] = reserve;
         reservedPower += reserve;
       }
@@ -19371,9 +19369,7 @@
           }${d}), powered=${
             building.powered
           }, availPower≈${availablePower.toFixed(1)}${
-            reservedPower > 0
-              ? `, reserved≈${reservedPower.toFixed(1)}`
-              : ""
+            reservedPower > 0 ? `, reserved≈${reservedPower.toFixed(1)}` : ""
           }${cons ? " || " + cons : ""}`,
         );
       }
@@ -23254,9 +23250,7 @@
         ? Math.max(Math.round(value * 1.5), value + 1)
         : value + 1;
     } else if (rank === 3) {
-      value = positive
-        ? Math.max(Math.round(value * 2), value + 2)
-        : value + 2;
+      value = positive ? Math.max(Math.round(value * 2), value + 2) : value + 2;
     } else if (rank === 4) {
       value = positive
         ? Math.max(Math.round(value * 2.5), value + 3)
@@ -23294,11 +23288,7 @@
       if (positive && previous > 1) cost += previous - 1;
       if (!positive && previous >= 1) cost += previous;
       categoryCounts[trait.taxonomy] = previous + 1;
-      cost = customRaceRankCost(
-        cost,
-        draft.ranks[id] ?? 1,
-        positive,
-      );
+      cost = customRaceRankCost(cost, draft.ranks[id] ?? 1, positive);
 
       let originRace = game.races[trait.origin];
       let originGenera = originRace?.hybrid ?? [originRace?.type];
@@ -23342,10 +23332,7 @@
     } else if (id === "elusive") {
       vars = [Math.round((1 / 30 / (1 / (30 + vars[0])) - 1) * 100)];
     } else if (id === "chameleon") {
-      vars = [
-        vars[0],
-        Math.round((1 / 30 / (1 / (30 + vars[1])) - 1) * 100),
-      ];
+      vars = [vars[0], Math.round((1 / 30 / (1 / (30 + vars[1])) - 1) * 100)];
     } else if (id === "blood_thirst") vars = [Math.ceil(Math.log2(vars[0]))];
     else if (id === "selenophobia") vars = [14 - vars[0], vars[0]];
     else if (id === "anthropophagite") vars = [vars[0] * 1e4];
@@ -23423,9 +23410,10 @@
     });
     return Object.entries(game.traits)
       .filter(([id, trait]) => trait.type === "major" && unlocked.has(id))
-      .sort(([, a], [, b]) =>
-        (a.taxonomy ?? "").localeCompare(b.taxonomy ?? "") ||
-        a.name.localeCompare(b.name),
+      .sort(
+        ([, a], [, b]) =>
+          (a.taxonomy ?? "").localeCompare(b.taxonomy ?? "") ||
+          a.name.localeCompare(b.name),
       );
   }
 
@@ -23512,10 +23500,12 @@
     modal.append(
       '<div><h3 class="has-text-danger">Custom Race Presets</h3> - <span class="has-text-warning">Automation Custom Lab</span></div>',
     );
-    let controls = $('<div class="fields" style="margin-bottom:10px;"></div>').appendTo(modal);
-    let presetSelect = $('<select class="select" style="width:220px;"></select>').appendTo(
-      controls,
-    );
+    let controls = $(
+      '<div class="fields" style="margin-bottom:10px;"></div>',
+    ).appendTo(modal);
+    let presetSelect = $(
+      '<select class="select" style="width:220px;"></select>',
+    ).appendTo(controls);
     settingsRaw.prestigeCustomRacePresets.forEach((item, index) => {
       $("<option></option>")
         .val(String(index))
@@ -23523,12 +23513,14 @@
         .appendTo(presetSelect);
     });
     presetSelect.val(String(presetIndex));
-    let presetName = $('<input class="input" type="text" maxlength="60" style="width:180px;" />')
+    let presetName = $(
+      '<input class="input" type="text" maxlength="60" style="width:180px;" />',
+    )
       .val(preset.name || `Preset ${presetIndex + 1}`)
       .appendTo(controls);
-    let addButton = $('<button class="button" type="button">Add</button>').appendTo(
-      controls,
-    );
+    let addButton = $(
+      '<button class="button" type="button">Add</button>',
+    ).appendTo(controls);
     let cloneButton = $(
       '<button class="button" type="button">Clone</button>',
     ).appendTo(controls);
@@ -23539,7 +23531,9 @@
       '<button class="button" type="button">Capture saved custom</button>',
     ).appendTo(controls);
 
-    let summary = $('<div class="has-text-warning" style="margin:8px 0; font-weight:bold;"></div>').appendTo(modal);
+    let summary = $(
+      '<div class="has-text-warning" style="margin:8px 0; font-weight:bold;"></div>',
+    ).appendTo(modal);
     let identity = $(
       '<details style="margin:4px 0;"><summary class="has-text-caution">Race names and description</summary></details>',
     ).appendTo(modal);
@@ -23551,7 +23545,9 @@
         form,
       );
       $("<span></span>").text(label).appendTo(row);
-      let input = $(`<input class="input" type="text" maxlength="${max}" style="flex:1;" />`)
+      let input = $(
+        `<input class="input" type="text" maxlength="${max}" style="flex:1;" />`,
+      )
         .val(draft[key])
         .appendTo(row);
       input.on("change", function () {
@@ -23568,11 +23564,13 @@
     addTextField("gas_moon", "Gas moon", 20);
     addTextField("dwarf", "Dwarf planet", 20);
 
-    let descRow = $('<label style="display:block; margin-top:6px;"></label>').appendTo(
-      identity,
-    );
+    let descRow = $(
+      '<label style="display:block; margin-top:6px;"></label>',
+    ).appendTo(identity);
     $("<span>Description</span>").appendTo(descRow);
-    $('<textarea class="textarea" maxlength="255" style="width:100%; min-height:55px;"></textarea>')
+    $(
+      '<textarea class="textarea" maxlength="255" style="width:100%; min-height:55px;"></textarea>',
+    )
       .val(draft.desc)
       .on("change", function () {
         draft.desc = this.value.trim();
@@ -23601,10 +23599,12 @@
     addOuterField("triton", "Triton");
     addOuterField("eris", "Eris");
 
-    let raceControls = $('<div class="genus_selection" style="display:flex; gap:18px; margin:8px 0;"></div>').appendTo(modal);
-    let genusLabel = $('<label class="genus"><span class="has-text-caution header">Genus </span></label>').appendTo(
-      raceControls,
-    );
+    let raceControls = $(
+      '<div class="genus_selection" style="display:flex; gap:18px; margin:8px 0;"></div>',
+    ).appendTo(modal);
+    let genusLabel = $(
+      '<label class="genus"><span class="has-text-caution header">Genus </span></label>',
+    ).appendTo(raceControls);
     let genusSelect = $("<select></select>").appendTo(genusLabel);
     Object.keys(poly.genus_traits)
       .filter(
@@ -23624,11 +23624,13 @@
       saveDraft();
       updateSummary();
     });
-    let fanaticLabel = $('<label class="fanatic"><span class="has-text-caution header">Fanaticism </span></label>').appendTo(
-      raceControls,
-    );
+    let fanaticLabel = $(
+      '<label class="fanatic"><span class="has-text-caution header">Fanaticism </span></label>',
+    ).appendTo(raceControls);
     let fanaticSelect = $("<select></select>").appendTo(fanaticLabel);
-    let genusInfo = $('<div class="has-text-info" style="margin-bottom:6px;"></div>').appendTo(modal);
+    let genusInfo = $(
+      '<div class="has-text-info" style="margin-bottom:6px;"></div>',
+    ).appendTo(modal);
     let effectPanel = $(
       '<div class="script-custom-effect" style="height:112px; overflow-y:scroll; overflow-x:hidden; overflow-wrap:anywhere; white-space:normal; scrollbar-gutter:stable; overscroll-behavior:contain; pointer-events:auto; position:relative; z-index:2; padding:5px 9px; margin-bottom:5px; border-top:1px solid #777; border-bottom:1px solid #777; text-align:left;"></div>',
     ).appendTo(modal);
@@ -23674,31 +23676,45 @@
       if (lastCategory[side] !== trait.taxonomy) {
         lastCategory[side] = trait.taxonomy;
         $("<h5 class='has-text-caution'></h5>")
-          .text(
-            game.loc(`genelab_traits_${trait.taxonomy}`) ?? trait.taxonomy,
-          )
+          .text(game.loc(`genelab_traits_${trait.taxonomy}`) ?? trait.taxonomy)
           .appendTo(targetArea);
       }
       let row = $(
         `<div class="script-custom-trait field t${id}" style="display:flex; align-items:center; gap:5px; padding:2px 0;"></div>`,
       ).appendTo(targetArea);
-      row.attr("data-search", `${trait.name} ${id} ${trait.taxonomy}`.toLowerCase());
+      row.attr(
+        "data-search",
+        `${trait.name} ${id} ${trait.taxonomy}`.toLowerCase(),
+      );
       row.on("mouseenter click", () => showTraitEffect(id));
       let checkbox = $('<input type="checkbox" />')
         .prop("checked", draft.traitlist.includes(id))
         .appendTo(row);
-      $(`<span class="${trait.val >= 0 ? "has-text-success" : "has-text-danger"}" style="flex:1;"></span>`)
+      $(
+        `<span class="${trait.val >= 0 ? "has-text-success" : "has-text-danger"}" style="flex:1;"></span>`,
+      )
         .text(`${trait.name} [${trait.val >= 0 ? "+" : ""}${trait.val}]`)
-        .attr("title", typeof trait.desc === "function" ? trait.desc() : trait.desc)
+        .attr(
+          "title",
+          typeof trait.desc === "function" ? trait.desc() : trait.desc,
+        )
         .appendTo(row);
       let ranks = customRaceRankOptions(id);
       let currentRank = draft.ranks[id] ?? 1;
       if (!ranks.includes(currentRank)) ranks.push(currentRank);
       ranks.sort((a, b) => a - b);
-      let rankWrap = $('<span class="rc" style="white-space:nowrap;"></span>').appendTo(row);
-      let rankDown = $('<span class="sub has-text-danger" role="button">−</span>').appendTo(rankWrap);
-      let rankValue = $('<span class="has-text-warning" style="padding:0 4px;"></span>').appendTo(rankWrap);
-      let rankUp = $('<span class="add has-text-success" role="button">+</span>').appendTo(rankWrap);
+      let rankWrap = $(
+        '<span class="rc" style="white-space:nowrap;"></span>',
+      ).appendTo(row);
+      let rankDown = $(
+        '<span class="sub has-text-danger" role="button">−</span>',
+      ).appendTo(rankWrap);
+      let rankValue = $(
+        '<span class="has-text-warning" style="padding:0 4px;"></span>',
+      ).appendTo(rankWrap);
+      let rankUp = $(
+        '<span class="add has-text-success" role="button">+</span>',
+      ).appendTo(rankWrap);
       const updateRank = () => {
         currentRank = draft.ranks[id] ?? 1;
         rankValue.text(`r${currentRank}`);
@@ -23777,7 +23793,10 @@
         .map((id) => game.traits[id]?.name ?? id);
       genusInfo.text(`Genus traits: ${builtIns.join(", ") || "none"}`);
       fanaticSelect.empty();
-      $("<option></option>").val("").text("Automatic / none").appendTo(fanaticSelect);
+      $("<option></option>")
+        .val("")
+        .text("Automatic / none")
+        .appendTo(fanaticSelect);
       draft.traitlist.forEach((id) =>
         $("<option></option>")
           .val(id)
@@ -23831,7 +23850,10 @@
       if (settingsRaw.prestigeCustomRacePresets.length > 1) {
         settingsRaw.prestigeCustomRacePresets.splice(presetIndex, 1);
       } else {
-        settingsRaw.prestigeCustomRacePresets[0] = { name: "General", json: "" };
+        settingsRaw.prestigeCustomRacePresets[0] = {
+          name: "General",
+          json: "",
+        };
       }
       settingsRaw.prestigeCustomRacePreset = "0";
       updateSettingsFromState();
@@ -23859,13 +23881,16 @@
     loadRaw.on("click", function () {
       try {
         let parsed = JSON.parse(rawJson.val());
-        if (!parsed || typeof parsed !== "object") throw new Error("not an object");
+        if (!parsed || typeof parsed !== "object")
+          throw new Error("not an object");
         preset.json = JSON.stringify(parsed, null, 2);
         rawStatus.removeClass("has-text-danger").text("");
         updateSettingsFromState();
         buildCustomRacePresetEditor(modal);
       } catch (error) {
-        rawStatus.addClass("has-text-danger").text(`Invalid JSON: ${error.message}`);
+        rawStatus
+          .addClass("has-text-danger")
+          .text(`Invalid JSON: ${error.message}`);
       }
     });
     saveDraft();
@@ -23893,7 +23918,11 @@
 
     let lab = getVueById("celestialLab");
     let traits = template.traitlist ?? template.traits;
-    if (!lab?.g || !Array.isArray(traits) || typeof template.genus !== "string") {
+    if (
+      !lab?.g ||
+      !Array.isArray(traits) ||
+      typeof template.genus !== "string"
+    ) {
       showCustomRaceImportStatus(
         "Automatic custom-race import paused: expected a game custom-race export with genus and traitlist.",
         true,
@@ -27378,7 +27407,9 @@
       "Preset used when Custom race handling is Import selected preset. The selection can also be changed by Evolution Queue.",
       presetOptions,
     );
-    $('<button class="button" type="button" style="margin:6px 0;">Edit custom race presets…</button>')
+    $(
+      '<button class="button" type="button" style="margin:6px 0;">Edit custom race presets…</button>',
+    )
       .on("click", function () {
         openOptionsModal("Custom Race Presets", buildCustomRacePresetEditor);
       })
