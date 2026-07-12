@@ -11014,6 +11014,18 @@
     buildings.AsphodelRectory.addSupport(resources.Asphodel_Support);
     buildings.AsphodelCorruptor.addSupport(resources.Asphodel_Support);
 
+    // Powered buildings whose output other managed buildings burn as fuel.
+    // autoPower reserves power for these so consumers can't starve their own fuel source.
+    buildings.GasMining.produces = [resources.Helium_3];
+    buildings.GasMoonOilExtractor.produces = [resources.Oil];
+    buildings.CoalMine.produces = [resources.Coal];
+    buildings.NebulaHarvester.produces = [
+      resources.Helium_3,
+      resources.Deuterium,
+    ];
+    buildings.KuiperElerium.produces = [resources.Elerium];
+    buildings.EnceladusWaterFreighter.produces = [resources.Water];
+
     // Init consumptions
     buildings.MoonBase.addResourceConsumption(resources.Oil, 2);
     buildings.RedSpaceport.addResourceConsumption(resources.Helium_3, 1.25);
@@ -18198,6 +18210,7 @@
   }
 
   var powerOscLock = {}; // { vueBinding: { prev, locked } } — anti-flicker for consumption-limited buildings
+  var powerWarnCap = {}; // { vueBinding: { cap, ticks } } — game-imposed cap after a warn-badge shutdown
   function autoPower() {
     // Only start doing this once power becomes available. Isn't useful before then
     if (!resources.Power.isUnlocked()) {
@@ -18303,6 +18316,37 @@
       }
     }
 
+    // Reserve power for fuel producers (building.produces) so higher-priority consumers can't
+    // shed the producer of their own fuel (cataclysm: spaceport+moon_base drained the grid,
+    // gas_mining/oil_extractor got shed, fuel income went negative, whole colony flapped ~1/min).
+    // Reserve follows stateOnCount+1 — an idle producer (no jobs, product at cap) can't hold
+    // power hostage, and a starting one ramps up within a few ticks. Each producer's share is
+    // released when the main loop reaches it.
+    let reservedPower = 0;
+    let producerReserve = {};
+    for (let i = 0; i < buildingList.length; i++) {
+      let building = buildingList[i];
+      if (!building.produces || building.powered <= 0) {
+        continue;
+      }
+      let consumed = building.produces.some((res) =>
+        buildingList.some((b) =>
+          b.consumption.some((c) => c.resource === res && c.rate > 0),
+        ),
+      );
+      if (consumed) {
+        let cap = settings.buildingsLimitPowered
+          ? Math.min(building.count, building.autoMax)
+          : building.count;
+        let growth = building.produces.some((res) => res.isUseful()) ? 1 : 0;
+        let reserve =
+          building.powered *
+          Math.min(cap, building.stateOnCount + growth);
+        producerReserve[building._vueBinding] = reserve;
+        reservedPower += reserve;
+      }
+    }
+
     let manageTransport =
       buildings.LakeTransport.isSmartManaged() &&
       buildings.LakeBireme.isSmartManaged();
@@ -18328,10 +18372,15 @@
         maxStateOn = Math.min(maxStateOn, 1);
       }
 
-      // Max powered amount
+      // Max powered amount. Producers get their own reservation back before capping;
+      // everyone else can't touch power still reserved for unprocessed producers.
+      reservedPower -= producerReserve[building._vueBinding] ?? 0;
       if (building === buildings.NeutronCitadel) {
         while (maxStateOn > 0) {
-          if (availablePower >= getCitadelConsumption(maxStateOn)) {
+          if (
+            availablePower - reservedPower >=
+            getCitadelConsumption(maxStateOn)
+          ) {
             break;
           } else {
             maxStateOn--;
@@ -18341,7 +18390,10 @@
         building.powered > 0 &&
         building !== buildings.RuinsHellForge
       ) {
-        maxStateOn = Math.min(maxStateOn, availablePower / building.powered);
+        maxStateOn = Math.min(
+          maxStateOn,
+          (availablePower - reservedPower) / building.powered,
+        );
       }
 
       // Ascension Machine and Terraformer missing energy
@@ -19090,6 +19142,20 @@
         currentStateOn,
       );
 
+      // Respect game-imposed caps from the warn-badge pass below. When that pass turned this
+      // building down, our power/support model was proven too optimistic for it — re-raising it
+      // from the model alone would just get it warn-disabled again next tick (an endless 1-per-tick
+      // fight the debounce can't see, because the revert happens outside this loop). Hold the
+      // game-accepted count for a few ticks, then allow one retry in case capacity really grew.
+      let warnCap = powerWarnCap[building._vueBinding];
+      if (warnCap) {
+        if (--warnCap.ticks <= 0) {
+          delete powerWarnCap[building._vueBinding];
+        } else {
+          maxStateOn = Math.min(maxStateOn, warnCap.cap);
+        }
+      }
+
       // Debug logging — enable with: window.powerDebug = true
       // Logs every building switched on/off this tick, with the fuel/support state that
       // drove the decision (income is BEFORE this building's consumption is deducted).
@@ -19122,8 +19188,10 @@
           }${d}), powered=${
             building.powered
           }, availPower≈${availablePower.toFixed(1)}${
-            cons ? " || " + cons : ""
-          }`,
+            reservedPower > 0
+              ? `, reserved≈${reservedPower.toFixed(1)}`
+              : ""
+          }${cons ? " || " + cons : ""}`,
         );
       }
 
@@ -19313,6 +19381,14 @@
           continue;
         }
         building.tryAdjustState(-1);
+        // Remember the game-accepted count so the main loop above doesn't immediately re-raise it
+        // (its model just proved too optimistic for this building). Clear any osc-lock pin so it
+        // can't force the count back above the cap.
+        powerWarnCap[building._vueBinding] = {
+          cap: building.stateOnCount,
+          ticks: WIDE_OSC_HOLD_TICKS,
+        };
+        delete powerOscLock[building._vueBinding];
         break;
       }
     }
@@ -21086,12 +21162,23 @@
     };
     addBuildKnowledgeCosts(state.queuedTargetsAll);
     addBuildKnowledgeCosts(state.triggerTargets);
-    addBuildKnowledgeCosts(
-      BuildingManager.priorityList.filter((b) => b.isAutoBuildable()),
-    );
-    addBuildKnowledgeCosts(
-      ProjectManager.priorityList.filter((p) => p.isAutoBuildable()),
-    );
+    // Of the weighted priority list only the current top target justifies raising the
+    // knowledge cap; any enabled knowledge-costing building further down the list would
+    // otherwise keep cap buildings boosted permanently. An affordable top target fits
+    // under the cap by definition, so this only fires when it's knowledge-blocked.
+    // Weightings are from the previous autoBuild pass.
+    let topTarget = [
+      ...BuildingManager.priorityList,
+      ...ProjectManager.priorityList,
+    ]
+      .filter((obj) => obj.isAutoBuildable() && !obj.is?.knowledge)
+      .reduce(
+        (top, obj) => (!top || obj.weighting > top.weighting ? obj : top),
+        null,
+      );
+    if (topTarget) {
+      addBuildKnowledgeCosts([topTarget]);
+    }
     state.knowledgeRequiredByBuildTargets = Math.max(0, ...buildKnowledgeCosts);
 
     // Get list of all objects and techs, and find biggest numbers for each resource
