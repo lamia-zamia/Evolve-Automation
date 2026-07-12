@@ -45,7 +45,8 @@ npm run check
 npm run verify
 ```
 
-`check` performs a syntax check and an initialization smoke test. `verify` also
-rebuilds and fails if the committed generated artifacts are stale. GitHub Actions
-runs `verify` on pushes to `master`/`split` and on pull requests; it has read-only
-repository permission and never creates commits.
+`check` runs `scripts/test.mjs`, which checks generated-bundle syntax and automatically
+discovers every `scripts/*-test.mjs` file. New tests do not need to be added to
+`package.json`. `verify` also rebuilds and fails if the committed generated artifacts
+are stale. GitHub Actions runs `verify` on pushes to `master`/`split` and on pull
+requests; it has read-only repository permission and never creates commits.
