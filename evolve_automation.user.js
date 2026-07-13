@@ -1732,6 +1732,118 @@
     return { updatePriorityTargets: updatePriorityTargets2 };
   }
 
+  // src/policies/evolution-result.ts
+  var INTENTIONAL_SPECIES = ["junker", "sludge", "ultra_sludge", "hellspawn"];
+  function createEvolutionResult({
+    getSettings,
+    getSettingsRaw,
+    getState,
+    getGame,
+    getRaces,
+    getMutableTraitManager,
+    getGameLog,
+    getDocument,
+    getAddEvolutionSetting,
+    getUpdateSettingsFromState
+  }) {
+    function checkEvolutionResult2() {
+      const settings2 = getSettings();
+      const state2 = getState();
+      if (!settings2.masterScriptToggle || !state2.evoCheckNeeded) {
+        return true;
+      }
+      state2.evoCheckNeeded = false;
+      const game2 = getGame();
+      const races2 = getRaces();
+      const GameLog2 = getGameLog();
+      let needReset = false;
+      if (settings2.autoEvolution && settings2.evolutionBackup) {
+        if (!INTENTIONAL_SPECIES.includes(game2.global.race.species)) {
+          if (settings2.userEvolutionTarget === "auto") {
+            const newRace = races2[game2.global.race.species];
+            if (newRace.getWeighting() <= 0) {
+              const bestWeighting = Math.max(
+                ...Object.values(races2).map((r) => r.getWeighting())
+              );
+              if (bestWeighting > 0) {
+                GameLog2.logDanger(
+                  "special",
+                  `${newRace.name} have no unearned achievements for current prestige, soft resetting and trying again.`,
+                  ["progress", "achievements"]
+                );
+                needReset = true;
+              } else {
+                GameLog2.logWarning(
+                  "special",
+                  `Can't pick a race with unearned achievements for current prestige. Continuing with ${newRace.name}.`,
+                  ["progress", "achievements"]
+                );
+              }
+            }
+          } else if (settings2.userEvolutionTarget !== game2.global.race.species && races2[settings2.userEvolutionTarget].getHabitability() > 0) {
+            GameLog2.logDanger(
+              "special",
+              `Wrong race, soft resetting and trying again.`,
+              ["progress"]
+            );
+            needReset = true;
+          }
+        }
+      }
+      if (settings2.autoMutateTraits) {
+        const baseRace = game2.races[game2.global.race.species];
+        for (const trait of getMutableTraitManager().priorityList) {
+          if (trait.resetEnabled && game2.global.race[trait.traitName] && !baseRace.traits[trait.traitName]) {
+            GameLog2.logDanger(
+              "special",
+              `Gained ${trait.name} trait, soft resetting and trying again.`,
+              ["progress"]
+            );
+            needReset = true;
+            break;
+          }
+        }
+      }
+      if (!needReset && settings2.autoEvolution && settings2.userEvolutionTarget === "auto") {
+        const goals = races2[game2.global.race.species].getWeighting(true);
+        if (goals.length > 0) {
+          GameLog2.logInfo(
+            "special",
+            `Auto Achievement goes for: ${goals.map((s2) => game2.loc(s2)).join(", ")}.`,
+            ["progress", "achievements"]
+          );
+        } else {
+          GameLog2.logInfo(
+            "special",
+            `Auto Achievement can't pick a goal for this run.`,
+            ["progress", "achievements"]
+          );
+        }
+      }
+      if (needReset) {
+        const resetButton = getDocument().querySelector(
+          ".reset .button:not(.right)"
+        );
+        if (resetButton.innerText === game2.loc("reset_soft")) {
+          const settingsRaw2 = getSettingsRaw();
+          if (settings2.evolutionQueueEnabled && settingsRaw2.evolutionQueue.length > 0) {
+            if (!settings2.evolutionQueueRepeat) {
+              getAddEvolutionSetting()();
+            }
+            settingsRaw2.evolutionQueue.unshift(settingsRaw2.evolutionQueue.pop());
+          }
+          getUpdateSettingsFromState()();
+          state2.goal = "GameOverMan";
+          resetButton.disabled = false;
+          resetButton.click();
+          return false;
+        }
+      }
+      return true;
+    }
+    return { checkEvolutionResult: checkEvolutionResult2 };
+  }
+
   // src/planning/queue-items.ts
   function createQueueItems({
     getResources,
@@ -2242,6 +2354,384 @@
       return cloneNode;
     }
     return { sorterHelper: sorterHelper2 };
+  }
+
+  // src/ui/tab-refresh.ts
+  function createTabRefresh({
+    getState,
+    getGame,
+    getBuildings,
+    getResources,
+    getHaveTech,
+    getMainVue
+  }) {
+    function updateTabs2(update) {
+      const state2 = getState();
+      const game2 = getGame();
+      const buildings2 = getBuildings();
+      const resources2 = getResources();
+      const haveTech2 = getHaveTech();
+      const oldHash = state2.tabHash;
+      state2.tabHash = 0 + // Not really a hash, but it should never go down, that's enough to track unlocks. (Except market after mutation in terrifying, 1000 weight should prevent all possible issues)
+      (game2.global.race["smoldering"] && buildings2.RockQuarry.count ? 1 : 0) + // Chrysotile production
+      (game2.global.race["shapeshifter"] ? 1 : 0) + // Shifter UI
+      (game2.global.race["servants"] ? 1 : 0) + // Servants UI
+      (game2.global.settings.showMarket ? 1e3 : 0) + // Market tab unlocked
+      (game2.global.galaxy.trade ? 1 : 0) + // Galaxy trades unlocked
+      (game2.global.settings.showEjector ? 1 : 0) + // Ejector tab unlocked
+      (game2.global.settings.showCargo ? 1 : 0) + // Supply tab unlocked
+      (game2.global.tech.alchemy ?? 0) + // Basic & advanced transmutations
+      (game2.global.tech.queue ? 1 : 0) + // Queue unlocked
+      (game2.global.tech.r_queue ? 1 : 0) + // Research queue unlocked
+      (game2.global.tech.govern ? 1 : 0) + // Government unlocked
+      (game2.global.tech.spy >= 2 ? 1 : 0) + // SpyOp governor task
+      (game2.global.tech.trade ? 1 : 0) + // Trade Routes unlocked
+      (resources2.Crates.isUnlocked() ? 1 : 0) + // Crates in storage tab
+      (resources2.Containers.isUnlocked() ? 1 : 0) + // Containers in storage tab
+      (game2.global.tech.m_smelting >= 2 ? 1 : 0) + // TP Iridium smelting
+      (game2.global.tech.irid_smelting ? 1 : 0) + // Iridium smelting
+      (buildings2.TitanQuarters.count > 0 ? 1 : 0) + // Titan Mine unlocked
+      (game2.global.race["orbit_decayed"] ? 1 : 0) + // City tab gone
+      (game2.global.tech.womling_tech ?? 0) + // Womling techs
+      (game2.global.tech.focus_cure ?? 0) + // Cure techs
+      (game2.global.tech.isolation ? 1 : 0) + // Solar tabs gone
+      (game2.global.tech.m_ignite ? 1 : 0) + // Ignition Device built
+      (buildings2.TauStarRingworld.count >= 1e3 ? 1 : 0) + // Ringworld built
+      (game2.global.tech.tau_gas2 >= 5 ? 1 : 0) + // Alien Space Station built
+      (game2.global.tech.replicator ? 1 : 0) + // Matter Replicator unlocked
+      (game2.global.tauceti.tau_factory?.count > 0 ? 1 : 0) + // Factory built in lone survivor
+      (game2.global.space.g_factory?.count > 0 ? 1 : 0) + // Graphene plant built in lone survivor
+      (game2.global.tauceti.mining_ship?.count > 0 ? 1 : 0) + // Extractor ship built
+      (game2.global.tech.psychicthrall ?? 0) + // Psychic powers
+      (game2.global.tech.psychic ?? 0) + // Psychic powers
+      (game2.global.tech.edenic >= 1 ? 1 : 0) + // Spire floor 50 Eden access
+      (game2.global.tech.isle >= 3 ? 1 : 0) + // Edenic north/south piers -> spirit syphon tech
+      (game2.global.tech.palace >= 4 ? 1 : 0);
+      if (game2.global.settings.showShipYard) {
+        state2.tabHash += 1 + (game2.global.tech.syard_class ?? 0) + // Tiers of unlocked components
+        (game2.global.tech.syard_power ?? 0) + (game2.global.tech.syard_weapon ?? 0) + (game2.global.tech.syard_armor ?? 0) + (game2.global.tech.syard_engine ?? 0) + (game2.global.tech.syard_sensor ?? 0) + (haveTech2("titan", 3) && haveTech2("enceladus", 2) ? 1 : 0) + // Enceladus syndicate
+        (haveTech2("triton", 2) ? 1 : 0) + // Triton syndicate
+        (haveTech2("kuiper") ? 1 : 0) + // Kuiper syndicate
+        (haveTech2("eris") ? 1 : 0) + // Eris syndicate
+        (haveTech2("eris", 2) ? 1 : 0) + // Eris scanning
+        (haveTech2("titan_ai_core") ? 1 : 0) + // AI core built, drones unlocked
+        (haveTech2("tauceti") ? 1 : 0);
+      }
+      if (game2.global.race["shapeshifter"]) {
+        state2.tabHash += (game2.global.race.ss_genus ?? "none").split("").reduce((a, b) => {
+          a = (a << 5) - a + b.charCodeAt(0);
+          return a & a;
+        }, 0);
+      }
+      if (update && state2.tabHash !== oldHash) {
+        const mainVue = getMainVue();
+        mainVue.s.civTabs = 7;
+        mainVue.s.tabLoad = false;
+        mainVue.toggleTabLoad();
+        mainVue.s.tabLoad = true;
+        mainVue.toggleTabLoad();
+        mainVue.s.civTabs = game2.global.settings.civTabs;
+        return true;
+      } else {
+        return false;
+      }
+    }
+    return { updateTabs: updateTabs2 };
+  }
+
+  // src/automation/tick.ts
+  function createTickOrchestration({
+    getSettings,
+    getState,
+    getGame,
+    getResources,
+    getKeyManager,
+    getNaniteManager,
+    getSupplyManager,
+    getEjectManager,
+    getControllers
+  }) {
+    function automate2() {
+      const state2 = getState();
+      const settings2 = getSettings();
+      const game2 = getGame();
+      if (state2.goal === "GameOverMan" || state2.forcedUpdate || !state2.gameTicked) {
+        return;
+      }
+      state2.gameTicked = false;
+      if (state2.scriptTick < Number.MAX_SAFE_INTEGER) {
+        state2.scriptTick++;
+      } else {
+        state2.scriptTick = 1;
+      }
+      if (state2.scriptTick % (game2.global.settings.at ? settings2.tickRate * 2 : settings2.tickRate) !== 0) {
+        return;
+      }
+      const c = getControllers();
+      const KeyManager2 = getKeyManager();
+      c.updateScriptData();
+      c.updateOverrides();
+      c.finalizeScriptData();
+      if (c.updateTabs(true)) {
+        return;
+      }
+      c.updateState();
+      c.updateUI();
+      KeyManager2.reset();
+      if (!settings2.masterScriptToggle) {
+        return;
+      }
+      if (state2.goal === "Evolution") {
+        if (settings2.autoEvolution) {
+          c.autoEvolution();
+        }
+        return;
+      }
+      if (settings2.buildingAlwaysClick || settings2.autoBuild) {
+        c.autoGatherResources();
+      }
+      if (settings2.autoMarket) {
+        c.autoMarket();
+      }
+      if (settings2.autoHell) {
+        c.autoHell();
+      }
+      if (settings2.autoGalaxyMarket) {
+        c.autoGalaxyMarket();
+      }
+      if (settings2.autoMiningDroid) {
+        c.autoMiningDroid();
+      }
+      if (settings2.autoGraphenePlant) {
+        c.autoGraphenePlant();
+      }
+      if (settings2.autoAlchemy) {
+        c.autoAlchemy();
+      }
+      if (settings2.autoPylon) {
+        c.autoPylon();
+      }
+      if (settings2.autoQuarry) {
+        c.autoQuarry();
+      }
+      if (settings2.autoMine) {
+        c.autoMine();
+      }
+      if (settings2.autoExtractor) {
+        c.autoExtractor();
+      }
+      if (settings2.autoSmelter) {
+        c.autoSmelter();
+      }
+      if (settings2.autoStorage) {
+        c.autoStorage();
+      }
+      if (settings2.autoReplicator) {
+        c.autoReplicator();
+      }
+      if (!settings2.autoTrigger || !c.autoTrigger()) {
+        if (settings2.autoResearch) {
+          c.autoResearch();
+        }
+        if (settings2.autoBuild || settings2.autoARPA) {
+          c.autoBuild();
+          state2.plannerFreshTick = state2.scriptTick;
+        }
+      }
+      if (settings2.autoFactory) {
+        c.autoFactory();
+      }
+      if (settings2.autoJobs) {
+        c.autoJobs();
+      } else if (settings2.autoCraftsmen) {
+        c.autoJobs(true);
+      }
+      if (settings2.autoFleet) {
+        if (game2.global.race["truepath"]) {
+          c.autoFleetOuter();
+        } else {
+          c.autoFleet();
+        }
+      }
+      if (settings2.autoMech) {
+        c.autoMech();
+      }
+      if (settings2.autoGenetics) {
+        c.autoGenetics();
+      }
+      if (settings2.autoMinorTrait) {
+        c.autoMinorTrait();
+      }
+      if (settings2.autoCraft) {
+        c.autoCraft();
+      }
+      if (settings2.autoFight) {
+        c.autoMerc();
+        c.autoSpy();
+        c.autoBattle();
+      }
+      if (settings2.autoTax) {
+        c.autoTax();
+      }
+      if (settings2.autoGovernment) {
+        c.autoGovernment();
+      }
+      if (settings2.autoNanite) {
+        c.autoConsume(getNaniteManager());
+      }
+      if (settings2.autoSupply) {
+        c.autoConsume(getSupplyManager());
+      }
+      if (settings2.autoEject) {
+        c.autoConsume(getEjectManager());
+      }
+      if (settings2.autoPower) {
+        c.autoPower();
+      }
+      if (c.isPrestigeAllowed()) {
+        c.autoPrestige();
+      }
+      if (settings2.autoMinorTrait) {
+        c.autoShapeshift();
+        c.autoPsychic();
+        c.autoOcularPowers();
+        c.autoWish();
+      }
+      if (settings2.autoMutateTraits) {
+        c.autoMutateTrait();
+      }
+      c.updateBuildPlanner();
+      if (settings2.stateLogEnabled) {
+        state2.stateLogTick = (state2.stateLogTick ?? 0) + 1;
+        if (state2.stateLogTick % settings2.stateLogInterval === 0) {
+          c.recordStateSnapshot();
+        }
+      }
+      KeyManager2.finish();
+      state2.soulGemLast = getResources().Soul_Gem.currentQuantity;
+    }
+    return { automate: automate2 };
+  }
+
+  // src/automation/state-update.ts
+  function createStateUpdate({
+    getSettings,
+    getSettingsRaw,
+    getState,
+    getGame,
+    getResources,
+    getBuildings,
+    getStorageManager,
+    getProjectManager,
+    getTriggerManager,
+    getPoly,
+    getJQuery,
+    getHelpers,
+    isTechnology,
+    isProject
+  }) {
+    function updateState2() {
+      const h = getHelpers();
+      const settings2 = getSettings();
+      const settingsRaw2 = getSettingsRaw();
+      const state2 = getState();
+      const game2 = getGame();
+      const resources2 = getResources();
+      const buildings2 = getBuildings();
+      const poly2 = getPoly();
+      const $2 = getJQuery();
+      if (game2.global.race.species === "protoplasm") {
+        state2.goal = "Evolution";
+      } else if (state2.goal === "Evolution") {
+        if (!h.checkEvolutionResult()) {
+          return;
+        }
+        state2.goal = "Standard";
+        if (settingsRaw2.triggers.length > 0) {
+          h.updateTriggerSettingsContent();
+        }
+      } else if (game2.global.stats.days === 1 && (game2.global.race.slow || game2.global.race.hyper || game2.global.race.species === "junker")) {
+        if (!h.checkEvolutionResult()) {
+          return;
+        }
+      }
+      for (const id in resources2) {
+        resources2[id].maxCost = 0;
+        resources2[id].storageRequired = 1;
+        resources2[id].requestedQuantity = 0;
+      }
+      const StorageManager2 = getStorageManager();
+      StorageManager2.crateValue = poly2.crateValue();
+      StorageManager2.containerValue = poly2.containerValue();
+      h.updatePriorityTargets();
+      getProjectManager().updateProjects();
+      h.calculateRequiredStorages();
+      h.prioritizeDemandedResources();
+      state2.tooltips = {};
+      state2.moneyIncomes.shift();
+      for (let i = state2.moneyIncomes.length; i < 11; i++) {
+        state2.moneyIncomes.push(resources2.Money.rateOfChange);
+      }
+      state2.moneyMedian = [...state2.moneyIncomes].sort((a, b) => a - b)[5];
+      let towerSize = 1e3;
+      if (Object.prototype.hasOwnProperty.call(game2.global, "pillars")) {
+        for (const pillar in game2.global.pillars) {
+          if (game2.global.pillars[pillar]) {
+            towerSize -= game2.global.pillars[pillar] * 2 + 2;
+          }
+        }
+      }
+      if (towerSize < 250) {
+        towerSize = 250;
+      }
+      state2.astroSign = poly2.astrologySign();
+      buildings2.GateEastTower.gameMax = towerSize;
+      buildings2.GateWestTower.gameMax = towerSize;
+      if ((game2.global.interstellar?.stellar_engine?.exotic ?? 0) < state2.whiteholeLastExoticMass) {
+        state2.whiteholeLastStabilise = Date.now();
+      }
+      state2.whiteholeLastExoticMass = game2.global.interstellar?.stellar_engine?.exotic ?? 0;
+      if (!buildings2.GasSpaceDock.isOptionsCached()) {
+        buildings2.GasSpaceDock.cacheOptions();
+      }
+      if (settings2.activeTargetsUI) {
+        const queuedTargets = state2.queuedTargetsAll;
+        const triggersList = state2.triggerTargets, buildingsList = [], researchList = [], arpaList = [];
+        queuedTargets.forEach((target) => {
+          if (isTechnology(target)) {
+            researchList.push(target);
+          } else if (isProject(target)) {
+            arpaList.push(target);
+          } else {
+            buildingsList.push(target);
+          }
+        });
+        h.updateActiveTargetsUI(triggersList, "triggers");
+        h.updateActiveTargetsUI(buildingsList, "buildings");
+        h.updateActiveTargetsUI(researchList, "research");
+        h.updateActiveTargetsUI(arpaList, "arpa");
+        $2(".active-target-remove-x").click(function() {
+          const queueId = $2(this).data("queueid"), type = $2(this).data("type");
+          const $queuedItem = $2(".queued").filter((id, el) => {
+            return el.id.indexOf(queueId) > -1;
+          });
+          if (type === "triggers") {
+            const clickedTrigger = getTriggerManager().targetTriggers.find(
+              (trigger) => trigger.actionId.includes(queueId)
+            );
+            if (clickedTrigger !== void 0 && clickedTrigger !== null) {
+              clickedTrigger.complete = true;
+            }
+          } else if ($queuedItem?.length) {
+            $queuedItem[0].click();
+          }
+          $2("#active_targets-wrapper").css("height", "auto");
+        });
+      } else {
+        $2(".active-target-remove-x").off("click");
+      }
+    }
+    return { updateState: updateState2 };
   }
 
   // src/policies/run-guards.ts
@@ -19616,160 +20106,54 @@
         }
       });
     }
-    function checkEvolutionResult() {
-      if (!settings.masterScriptToggle || !state.evoCheckNeeded) {
-        return true;
-      }
-      state.evoCheckNeeded = false;
-      let needReset = false;
-      if (settings.autoEvolution && settings.evolutionBackup) {
-        if (!["junker", "sludge", "ultra_sludge", "hellspawn"].includes(
-          game.global.race.species
-        )) {
-          if (settings.userEvolutionTarget === "auto") {
-            let newRace = races[game.global.race.species];
-            if (newRace.getWeighting() <= 0) {
-              let bestWeighting = Math.max(
-                ...Object.values(races).map((r) => r.getWeighting())
-              );
-              if (bestWeighting > 0) {
-                GameLog.logDanger(
-                  "special",
-                  `${newRace.name} have no unearned achievements for current prestige, soft resetting and trying again.`,
-                  ["progress", "achievements"]
-                );
-                needReset = true;
-              } else {
-                GameLog.logWarning(
-                  "special",
-                  `Can't pick a race with unearned achievements for current prestige. Continuing with ${newRace.name}.`,
-                  ["progress", "achievements"]
-                );
-              }
-            }
-          } else if (settings.userEvolutionTarget !== game.global.race.species && races[settings.userEvolutionTarget].getHabitability() > 0) {
-            GameLog.logDanger(
-              "special",
-              `Wrong race, soft resetting and trying again.`,
-              ["progress"]
-            );
-            needReset = true;
-          }
+    let evolutionResultTestActions;
+    const { checkEvolutionResult } = createEvolutionResult({
+      getSettings: () => settings,
+      getSettingsRaw: () => settingsRaw,
+      getState: () => state,
+      getGame: () => game,
+      getRaces: () => races,
+      getMutableTraitManager: () => MutableTraitManager,
+      getGameLog: () => GameLog,
+      getDocument: () => document,
+      getAddEvolutionSetting: () => evolutionResultTestActions?.addEvolutionSetting ?? addEvolutionSetting,
+      getUpdateSettingsFromState: () => evolutionResultTestActions?.updateSettingsFromState ?? updateSettingsFromState
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        checkEvolutionResult: () => checkEvolutionResult(),
+        setEvolutionResultTestContext(context) {
+          settings = context.settings;
+          settingsRaw = context.settingsRaw;
+          state = context.state;
+          game = context.game;
+          races = context.races;
+          MutableTraitManager = context.MutableTraitManager;
+          GameLog = context.GameLog;
+          evolutionResultTestActions = context.actions;
         }
-      }
-      if (settings.autoMutateTraits) {
-        let baseRace = game.races[game.global.race.species];
-        for (let trait of MutableTraitManager.priorityList) {
-          if (trait.resetEnabled && game.global.race[trait.traitName] && !baseRace.traits[trait.traitName]) {
-            GameLog.logDanger(
-              "special",
-              `Gained ${trait.name} trait, soft resetting and trying again.`,
-              ["progress"]
-            );
-            needReset = true;
-            break;
-          }
-        }
-      }
-      if (!needReset && settings.autoEvolution && settings.userEvolutionTarget === "auto") {
-        let goals = races[game.global.race.species].getWeighting(true);
-        if (goals.length > 0) {
-          GameLog.logInfo(
-            "special",
-            `Auto Achievement goes for: ${goals.map((s2) => game.loc(s2)).join(", ")}.`,
-            ["progress", "achievements"]
-          );
-        } else {
-          GameLog.logInfo(
-            "special",
-            `Auto Achievement can't pick a goal for this run.`,
-            ["progress", "achievements"]
-          );
-        }
-      }
-      if (needReset) {
-        let resetButton = document.querySelector(".reset .button:not(.right)");
-        if (resetButton.innerText === game.loc("reset_soft")) {
-          if (settings.evolutionQueueEnabled && settingsRaw.evolutionQueue.length > 0) {
-            if (!settings.evolutionQueueRepeat) {
-              addEvolutionSetting();
-            }
-            settingsRaw.evolutionQueue.unshift(settingsRaw.evolutionQueue.pop());
-          }
-          updateSettingsFromState();
-          state.goal = "GameOverMan";
-          resetButton.disabled = false;
-          resetButton.click();
-          return false;
-        }
-      }
-      return true;
+      });
     }
-    function updateTabs(update) {
-      let oldHash = state.tabHash;
-      state.tabHash = 0 + // Not really a hash, but it should never go down, that's enough to track unlocks. (Except market after mutation in terrifying, 1000 weight should prevent all possible issues)
-      (game.global.race["smoldering"] && buildings.RockQuarry.count ? 1 : 0) + // Chrysotile production
-      (game.global.race["shapeshifter"] ? 1 : 0) + // Shifter UI
-      (game.global.race["servants"] ? 1 : 0) + // Servants UI
-      (game.global.settings.showMarket ? 1e3 : 0) + // Market tab unlocked
-      (game.global.galaxy.trade ? 1 : 0) + // Galaxy trades unlocked
-      (game.global.settings.showEjector ? 1 : 0) + // Ejector tab unlocked
-      (game.global.settings.showCargo ? 1 : 0) + // Supply tab unlocked
-      (game.global.tech.alchemy ?? 0) + // Basic & advanced transmutations
-      (game.global.tech.queue ? 1 : 0) + // Queue unlocked
-      (game.global.tech.r_queue ? 1 : 0) + // Research queue unlocked
-      (game.global.tech.govern ? 1 : 0) + // Government unlocked
-      (game.global.tech.spy >= 2 ? 1 : 0) + // SpyOp governor task
-      (game.global.tech.trade ? 1 : 0) + // Trade Routes unlocked
-      (resources.Crates.isUnlocked() ? 1 : 0) + // Crates in storage tab
-      (resources.Containers.isUnlocked() ? 1 : 0) + // Containers in storage tab
-      (game.global.tech.m_smelting >= 2 ? 1 : 0) + // TP Iridium smelting
-      (game.global.tech.irid_smelting ? 1 : 0) + // Iridium smelting
-      (buildings.TitanQuarters.count > 0 ? 1 : 0) + // Titan Mine unlocked
-      (game.global.race["orbit_decayed"] ? 1 : 0) + // City tab gone
-      (game.global.tech.womling_tech ?? 0) + // Womling techs
-      (game.global.tech.focus_cure ?? 0) + // Cure techs
-      (game.global.tech.isolation ? 1 : 0) + // Solar tabs gone
-      (game.global.tech.m_ignite ? 1 : 0) + // Ignition Device built
-      (buildings.TauStarRingworld.count >= 1e3 ? 1 : 0) + // Ringworld built
-      (game.global.tech.tau_gas2 >= 5 ? 1 : 0) + // Alien Space Station built
-      (game.global.tech.replicator ? 1 : 0) + // Matter Replicator unlocked
-      (game.global.tauceti.tau_factory?.count > 0 ? 1 : 0) + // Factory built in lone survivor
-      (game.global.space.g_factory?.count > 0 ? 1 : 0) + // Graphene plant built in lone survivor
-      (game.global.tauceti.mining_ship?.count > 0 ? 1 : 0) + // Extractor ship built
-      (game.global.tech.psychicthrall ?? 0) + // Psychic powers
-      (game.global.tech.psychic ?? 0) + // Psychic powers
-      (game.global.tech.edenic >= 1 ? 1 : 0) + // Spire floor 50 Eden access
-      (game.global.tech.isle >= 3 ? 1 : 0) + // Edenic north/south piers -> spirit syphon tech
-      (game.global.tech.palace >= 4 ? 1 : 0);
-      if (game.global.settings.showShipYard) {
-        state.tabHash += 1 + (game.global.tech.syard_class ?? 0) + // Tiers of unlocked components
-        (game.global.tech.syard_power ?? 0) + (game.global.tech.syard_weapon ?? 0) + (game.global.tech.syard_armor ?? 0) + (game.global.tech.syard_engine ?? 0) + (game.global.tech.syard_sensor ?? 0) + (haveTech("titan", 3) && haveTech("enceladus", 2) ? 1 : 0) + // Enceladus syndicate
-        (haveTech("triton", 2) ? 1 : 0) + // Triton syndicate
-        (haveTech("kuiper") ? 1 : 0) + // Kuiper syndicate
-        (haveTech("eris") ? 1 : 0) + // Eris syndicate
-        (haveTech("eris", 2) ? 1 : 0) + // Eris scanning
-        (haveTech("titan_ai_core") ? 1 : 0) + // AI core built, drones unlocked
-        (haveTech("tauceti") ? 1 : 0);
-      }
-      if (game.global.race["shapeshifter"]) {
-        state.tabHash += (game.global.race.ss_genus ?? "none").split("").reduce((a, b) => {
-          a = (a << 5) - a + b.charCodeAt(0);
-          return a & a;
-        }, 0);
-      }
-      if (update && state.tabHash !== oldHash) {
-        let mainVue = win.$("#mainColumn > div:first-child")[0].__vue__;
-        mainVue.s.civTabs = 7;
-        mainVue.s.tabLoad = false;
-        mainVue.toggleTabLoad();
-        mainVue.s.tabLoad = true;
-        mainVue.toggleTabLoad();
-        mainVue.s.civTabs = game.global.settings.civTabs;
-        return true;
-      } else {
-        return false;
-      }
+    const { updateTabs } = createTabRefresh({
+      getState: () => state,
+      getGame: () => game,
+      getBuildings: () => buildings,
+      getResources: () => resources,
+      getHaveTech: () => haveTech,
+      getMainVue: () => win.$("#mainColumn > div:first-child")[0].__vue__
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        updateTabs: (update) => updateTabs(update),
+        setTabRefreshTestContext(context) {
+          state = context.state;
+          game = context.game;
+          buildings = context.buildings;
+          resources = context.resources;
+          haveTech = context.haveTech;
+          win = context.win;
+        }
+      });
     }
     const { getMultiSegmentedTimeLeft } = createTargetTiming({
       getGame: () => game,
@@ -20008,96 +20392,56 @@
         );
       }
     }
-    function updateState() {
-      if (game.global.race.species === "protoplasm") {
-        state.goal = "Evolution";
-      } else if (state.goal === "Evolution") {
-        if (!checkEvolutionResult()) {
-          return;
+    let stateUpdateTestHelpers;
+    const stateUpdateHelpers = {
+      checkEvolutionResult,
+      updateTriggerSettingsContent,
+      updatePriorityTargets,
+      calculateRequiredStorages,
+      prioritizeDemandedResources,
+      updateActiveTargetsUI
+    };
+    const { updateState } = createStateUpdate({
+      getSettings: () => settings,
+      getSettingsRaw: () => settingsRaw,
+      getState: () => state,
+      getGame: () => game,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getStorageManager: () => StorageManager,
+      getProjectManager: () => ProjectManager,
+      getTriggerManager: () => TriggerManager,
+      getPoly: () => poly,
+      getJQuery: () => $,
+      getHelpers: () => stateUpdateTestHelpers ?? stateUpdateHelpers,
+      isTechnology: (target) => target instanceof Technology,
+      isProject: (target) => target instanceof Project
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        updateState: () => updateState(),
+        // Real prototypes, so the instanceof classification of queued targets is exercised for real.
+        makeStateUpdateTargets() {
+          return {
+            technology: Object.create(Technology.prototype),
+            project: Object.create(Project.prototype),
+            building: {}
+          };
+        },
+        setStateUpdateTestContext(context) {
+          settings = context.settings;
+          settingsRaw = context.settingsRaw;
+          state = context.state;
+          game = context.game;
+          resources = context.resources;
+          buildings = context.buildings;
+          StorageManager = context.StorageManager;
+          ProjectManager = context.ProjectManager;
+          TriggerManager = context.TriggerManager;
+          poly = context.poly;
+          stateUpdateTestHelpers = context.helpers;
         }
-        state.goal = "Standard";
-        if (settingsRaw.triggers.length > 0) {
-          updateTriggerSettingsContent();
-        }
-      } else if (game.global.stats.days === 1 && (game.global.race.slow || game.global.race.hyper || game.global.race.species === "junker")) {
-        if (!checkEvolutionResult()) {
-          return;
-        }
-      }
-      for (let id in resources) {
-        resources[id].maxCost = 0;
-        resources[id].storageRequired = 1;
-        resources[id].requestedQuantity = 0;
-      }
-      StorageManager.crateValue = poly.crateValue();
-      StorageManager.containerValue = poly.containerValue();
-      updatePriorityTargets();
-      ProjectManager.updateProjects();
-      calculateRequiredStorages();
-      prioritizeDemandedResources();
-      state.tooltips = {};
-      state.moneyIncomes.shift();
-      for (let i = state.moneyIncomes.length; i < 11; i++) {
-        state.moneyIncomes.push(resources.Money.rateOfChange);
-      }
-      state.moneyMedian = [...state.moneyIncomes].sort((a, b) => a - b)[5];
-      let towerSize = 1e3;
-      if (game.global.hasOwnProperty("pillars")) {
-        for (let pillar in game.global.pillars) {
-          if (game.global.pillars[pillar]) {
-            towerSize -= game.global.pillars[pillar] * 2 + 2;
-          }
-        }
-      }
-      if (towerSize < 250) {
-        towerSize = 250;
-      }
-      state.astroSign = poly.astrologySign();
-      buildings.GateEastTower.gameMax = towerSize;
-      buildings.GateWestTower.gameMax = towerSize;
-      if ((game.global.interstellar?.stellar_engine?.exotic ?? 0) < state.whiteholeLastExoticMass) {
-        state.whiteholeLastStabilise = Date.now();
-      }
-      state.whiteholeLastExoticMass = game.global.interstellar?.stellar_engine?.exotic ?? 0;
-      if (!buildings.GasSpaceDock.isOptionsCached()) {
-        buildings.GasSpaceDock.cacheOptions();
-      }
-      if (settings.activeTargetsUI) {
-        const queuedTargets = state.queuedTargetsAll;
-        const triggersList = state.triggerTargets, buildingsList = [], researchList = [], arpaList = [];
-        queuedTargets.forEach((target) => {
-          if (target instanceof Technology) {
-            researchList.push(target);
-          } else if (target instanceof Project) {
-            arpaList.push(target);
-          } else {
-            buildingsList.push(target);
-          }
-        });
-        updateActiveTargetsUI(triggersList, "triggers");
-        updateActiveTargetsUI(buildingsList, "buildings");
-        updateActiveTargetsUI(researchList, "research");
-        updateActiveTargetsUI(arpaList, "arpa");
-        $(".active-target-remove-x").click(function() {
-          const queueId = $(this).data("queueid"), type = $(this).data("type");
-          const $queuedItem = $(".queued").filter((id, el) => {
-            return el.id.indexOf(queueId) > -1;
-          });
-          if (type === "triggers") {
-            const clickedTrigger = TriggerManager.targetTriggers.find(
-              (trigger) => trigger.actionId.includes(queueId)
-            );
-            if (clickedTrigger !== void 0 && clickedTrigger !== null) {
-              clickedTrigger.complete = true;
-            }
-          } else if ($queuedItem?.length) {
-            $queuedItem[0].click();
-          }
-          $("#active_targets-wrapper").css("height", "auto");
-        });
-      } else {
-        $(".active-target-remove-x").off("click");
-      }
+      });
     }
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
@@ -21131,159 +21475,83 @@
         }
       }
     }
-    function automate() {
-      if (state.goal === "GameOverMan" || state.forcedUpdate || !state.gameTicked) {
-        return;
-      }
-      state.gameTicked = false;
-      if (state.scriptTick < Number.MAX_SAFE_INTEGER) {
-        state.scriptTick++;
-      } else {
-        state.scriptTick = 1;
-      }
-      if (state.scriptTick % (game.global.settings.at ? settings.tickRate * 2 : settings.tickRate) !== 0) {
-        return;
-      }
-      updateScriptData();
-      updateOverrides();
-      finalizeScriptData();
-      if (updateTabs(true)) {
-        return;
-      }
-      updateState();
-      updateUI();
-      KeyManager.reset();
-      if (!settings.masterScriptToggle) {
-        return;
-      }
-      if (state.goal === "Evolution") {
-        if (settings.autoEvolution) {
-          autoEvolution();
+    let tickTestControllers;
+    const tickControllers = {
+      updateScriptData,
+      updateOverrides,
+      finalizeScriptData,
+      updateTabs,
+      updateState,
+      updateUI,
+      autoEvolution,
+      autoGatherResources,
+      autoMarket,
+      autoHell,
+      autoGalaxyMarket,
+      autoMiningDroid,
+      autoGraphenePlant,
+      autoAlchemy,
+      autoPylon,
+      autoQuarry,
+      autoMine,
+      autoExtractor,
+      autoSmelter,
+      autoStorage,
+      autoReplicator,
+      autoTrigger,
+      autoResearch,
+      autoBuild,
+      autoFactory,
+      autoJobs,
+      autoFleetOuter,
+      autoFleet,
+      autoMech,
+      autoGenetics,
+      autoMinorTrait,
+      autoCraft,
+      autoMerc,
+      autoSpy,
+      autoBattle,
+      autoTax,
+      autoGovernment,
+      autoConsume,
+      autoPower,
+      isPrestigeAllowed,
+      autoPrestige,
+      autoShapeshift,
+      autoPsychic,
+      autoOcularPowers,
+      autoWish,
+      autoMutateTrait,
+      updateBuildPlanner,
+      recordStateSnapshot
+    };
+    const { automate } = createTickOrchestration({
+      getSettings: () => settings,
+      getState: () => state,
+      getGame: () => game,
+      getResources: () => resources,
+      getKeyManager: () => KeyManager,
+      getNaniteManager: () => NaniteManager,
+      getSupplyManager: () => SupplyManager,
+      getEjectManager: () => EjectManager,
+      getControllers: () => tickTestControllers ?? tickControllers
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        automate: () => automate(),
+        setTickTestContext(context) {
+          settings = context.settings;
+          state = context.state;
+          game = context.game;
+          resources = context.resources;
+          KeyManager = context.KeyManager;
+          NaniteManager = context.NaniteManager;
+          SupplyManager = context.SupplyManager;
+          EjectManager = context.EjectManager;
+          tickTestControllers = context.controllers;
         }
-        return;
-      }
-      if (settings.buildingAlwaysClick || settings.autoBuild) {
-        autoGatherResources();
-      }
-      if (settings.autoMarket) {
-        autoMarket();
-      }
-      if (settings.autoHell) {
-        autoHell();
-      }
-      if (settings.autoGalaxyMarket) {
-        autoGalaxyMarket();
-      }
-      if (settings.autoMiningDroid) {
-        autoMiningDroid();
-      }
-      if (settings.autoGraphenePlant) {
-        autoGraphenePlant();
-      }
-      if (settings.autoAlchemy) {
-        autoAlchemy();
-      }
-      if (settings.autoPylon) {
-        autoPylon();
-      }
-      if (settings.autoQuarry) {
-        autoQuarry();
-      }
-      if (settings.autoMine) {
-        autoMine();
-      }
-      if (settings.autoExtractor) {
-        autoExtractor();
-      }
-      if (settings.autoSmelter) {
-        autoSmelter();
-      }
-      if (settings.autoStorage) {
-        autoStorage();
-      }
-      if (settings.autoReplicator) {
-        autoReplicator();
-      }
-      if (!settings.autoTrigger || !autoTrigger()) {
-        if (settings.autoResearch) {
-          autoResearch();
-        }
-        if (settings.autoBuild || settings.autoARPA) {
-          autoBuild();
-          state.plannerFreshTick = state.scriptTick;
-        }
-      }
-      if (settings.autoFactory) {
-        autoFactory();
-      }
-      if (settings.autoJobs) {
-        autoJobs();
-      } else if (settings.autoCraftsmen) {
-        autoJobs(true);
-      }
-      if (settings.autoFleet) {
-        if (game.global.race["truepath"]) {
-          autoFleetOuter();
-        } else {
-          autoFleet();
-        }
-      }
-      if (settings.autoMech) {
-        autoMech();
-      }
-      if (settings.autoGenetics) {
-        autoGenetics();
-      }
-      if (settings.autoMinorTrait) {
-        autoMinorTrait();
-      }
-      if (settings.autoCraft) {
-        autoCraft();
-      }
-      if (settings.autoFight) {
-        autoMerc();
-        autoSpy();
-        autoBattle();
-      }
-      if (settings.autoTax) {
-        autoTax();
-      }
-      if (settings.autoGovernment) {
-        autoGovernment();
-      }
-      if (settings.autoNanite) {
-        autoConsume(NaniteManager);
-      }
-      if (settings.autoSupply) {
-        autoConsume(SupplyManager);
-      }
-      if (settings.autoEject) {
-        autoConsume(EjectManager);
-      }
-      if (settings.autoPower) {
-        autoPower();
-      }
-      if (isPrestigeAllowed()) {
-        autoPrestige();
-      }
-      if (settings.autoMinorTrait) {
-        autoShapeshift();
-        autoPsychic();
-        autoOcularPowers();
-        autoWish();
-      }
-      if (settings.autoMutateTraits) {
-        autoMutateTrait();
-      }
-      updateBuildPlanner();
-      if (settings.stateLogEnabled) {
-        state.stateLogTick = (state.stateLogTick ?? 0) + 1;
-        if (state.stateLogTick % settings.stateLogInterval === 0) {
-          recordStateSnapshot();
-        }
-      }
-      KeyManager.finish();
-      state.soulGemLast = resources.Soul_Gem.currentQuantity;
+      });
     }
     function mainAutoEvolveScript() {
       if (document.getElementById("queueColumn") === null) {

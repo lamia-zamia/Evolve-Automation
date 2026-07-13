@@ -61,6 +61,7 @@ import { createStorageExpansion } from "./planning/storage-expansion.ts";
 import { createStorageRequirements } from "./planning/storage-requirements.ts";
 import { createDemandPrioritization } from "./planning/demand-prioritization.ts";
 import { createPriorityTargets } from "./planning/priority-targets.ts";
+import { createEvolutionResult } from "./policies/evolution-result.ts";
 import { createQueueItems } from "./planning/queue-items.ts";
 import { createTargetTiming } from "./planning/target-timing.ts";
 import { createResourceWeighting } from "./planning/resource-weighting.ts";
@@ -71,6 +72,9 @@ import { createLogFilter } from "./observability/log-filter.ts";
 import { createBrowserRuntime } from "./browser/runtime.ts";
 import { createMechStats } from "./ui/mech-stats.ts";
 import { createSortHelper } from "./ui/sort-helper.ts";
+import { createTabRefresh } from "./ui/tab-refresh.ts";
+import { createTickOrchestration } from "./automation/tick.ts";
+import { createStateUpdate } from "./automation/state-update.ts";
 import { createRunGuards } from "./policies/run-guards.ts";
 import { createPrestigeEligibility } from "./policies/prestige-eligibility.ts";
 import { createTechConflicts } from "./policies/tech-conflicts.ts";
@@ -14287,200 +14291,60 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     });
   }
 
-  function checkEvolutionResult() {
-    if (!settings.masterScriptToggle || !state.evoCheckNeeded) {
-      return true;
-    }
-    state.evoCheckNeeded = false;
+  let evolutionResultTestActions;
+  const { checkEvolutionResult } = createEvolutionResult({
+    getSettings: () => settings,
+    getSettingsRaw: () => settingsRaw,
+    getState: () => state,
+    getGame: () => game,
+    getRaces: () => races,
+    getMutableTraitManager: () => MutableTraitManager,
+    getGameLog: () => GameLog,
+    getDocument: () => document,
+    getAddEvolutionSetting: () =>
+      evolutionResultTestActions?.addEvolutionSetting ?? addEvolutionSetting,
+    getUpdateSettingsFromState: () =>
+      evolutionResultTestActions?.updateSettingsFromState ??
+      updateSettingsFromState,
+  });
 
-    let needReset = false;
-    if (settings.autoEvolution && settings.evolutionBackup) {
-      // Sludge and Valdi can't be evolved at random, only intentionally
-      if (
-        !["junker", "sludge", "ultra_sludge", "hellspawn"].includes(
-          game.global.race.species,
-        )
-      ) {
-        if (settings.userEvolutionTarget === "auto") {
-          let newRace = races[game.global.race.species];
-          if (newRace.getWeighting() <= 0) {
-            let bestWeighting = Math.max(
-              ...Object.values(races).map((r) => r.getWeighting()),
-            );
-            if (bestWeighting > 0) {
-              GameLog.logDanger(
-                "special",
-                `${newRace.name} have no unearned achievements for current prestige, soft resetting and trying again.`,
-                ["progress", "achievements"],
-              );
-              needReset = true;
-            } else {
-              GameLog.logWarning(
-                "special",
-                `Can't pick a race with unearned achievements for current prestige. Continuing with ${newRace.name}.`,
-                ["progress", "achievements"],
-              );
-            }
-          }
-        } else if (
-          settings.userEvolutionTarget !== game.global.race.species &&
-          races[settings.userEvolutionTarget].getHabitability() > 0
-        ) {
-          GameLog.logDanger(
-            "special",
-            `Wrong race, soft resetting and trying again.`,
-            ["progress"],
-          );
-          needReset = true;
-        }
-      }
-    }
-    if (settings.autoMutateTraits) {
-      let baseRace = game.races[game.global.race.species];
-      for (let trait of MutableTraitManager.priorityList) {
-        if (
-          trait.resetEnabled &&
-          game.global.race[trait.traitName] &&
-          !baseRace.traits[trait.traitName]
-        ) {
-          GameLog.logDanger(
-            "special",
-            `Gained ${trait.name} trait, soft resetting and trying again.`,
-            ["progress"],
-          );
-          needReset = true;
-          break;
-        }
-      }
-    }
-
-    if (
-      !needReset &&
-      settings.autoEvolution &&
-      settings.userEvolutionTarget === "auto"
-    ) {
-      let goals = races[game.global.race.species].getWeighting(true);
-      if (goals.length > 0) {
-        GameLog.logInfo(
-          "special",
-          `Auto Achievement goes for: ${goals
-            .map((s) => game.loc(s))
-            .join(", ")}.`,
-          ["progress", "achievements"],
-        );
-      } else {
-        GameLog.logInfo(
-          "special",
-          `Auto Achievement can't pick a goal for this run.`,
-          ["progress", "achievements"],
-        );
-      }
-    }
-
-    if (needReset) {
-      // Let's double check it's actually *soft* reset
-      let resetButton = document.querySelector(".reset .button:not(.right)");
-      if (resetButton.innerText === game.loc("reset_soft")) {
-        if (
-          settings.evolutionQueueEnabled &&
-          settingsRaw.evolutionQueue.length > 0
-        ) {
-          if (!settings.evolutionQueueRepeat) {
-            addEvolutionSetting();
-          }
-          settingsRaw.evolutionQueue.unshift(settingsRaw.evolutionQueue.pop());
-        }
-        updateSettingsFromState();
-
-        state.goal = "GameOverMan";
-        resetButton.disabled = false;
-        resetButton.click();
-        return false;
-      }
-    }
-    return true;
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      checkEvolutionResult: () => checkEvolutionResult(),
+      setEvolutionResultTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        game = context.game;
+        races = context.races;
+        MutableTraitManager = context.MutableTraitManager;
+        GameLog = context.GameLog;
+        evolutionResultTestActions = context.actions;
+      },
+    });
   }
 
-  // TODO: quantium lab
-  function updateTabs(update) {
-    let oldHash = state.tabHash;
-    state.tabHash =
-      0 + // Not really a hash, but it should never go down, that's enough to track unlocks. (Except market after mutation in terrifying, 1000 weight should prevent all possible issues)
-      (game.global.race["smoldering"] && buildings.RockQuarry.count ? 1 : 0) + // Chrysotile production
-      (game.global.race["shapeshifter"] ? 1 : 0) + // Shifter UI
-      (game.global.race["servants"] ? 1 : 0) + // Servants UI
-      (game.global.settings.showMarket ? 1000 : 0) + // Market tab unlocked
-      (game.global.galaxy.trade ? 1 : 0) + // Galaxy trades unlocked
-      (game.global.settings.showEjector ? 1 : 0) + // Ejector tab unlocked
-      (game.global.settings.showCargo ? 1 : 0) + // Supply tab unlocked
-      (game.global.tech.alchemy ?? 0) + // Basic & advanced transmutations
-      (game.global.tech.queue ? 1 : 0) + // Queue unlocked
-      (game.global.tech.r_queue ? 1 : 0) + // Research queue unlocked
-      (game.global.tech.govern ? 1 : 0) + // Government unlocked
-      (game.global.tech.spy >= 2 ? 1 : 0) + // SpyOp governor task
-      (game.global.tech.trade ? 1 : 0) + // Trade Routes unlocked
-      (resources.Crates.isUnlocked() ? 1 : 0) + // Crates in storage tab
-      (resources.Containers.isUnlocked() ? 1 : 0) + // Containers in storage tab
-      (game.global.tech.m_smelting >= 2 ? 1 : 0) + // TP Iridium smelting
-      (game.global.tech.irid_smelting ? 1 : 0) + // Iridium smelting
-      (buildings.TitanQuarters.count > 0 ? 1 : 0) + // Titan Mine unlocked
-      (game.global.race["orbit_decayed"] ? 1 : 0) + // City tab gone
-      (game.global.tech.womling_tech ?? 0) + // Womling techs
-      (game.global.tech.focus_cure ?? 0) + // Cure techs
-      (game.global.tech.isolation ? 1 : 0) + // Solar tabs gone
-      (game.global.tech.m_ignite ? 1 : 0) + // Ignition Device built
-      (buildings.TauStarRingworld.count >= 1000 ? 1 : 0) + // Ringworld built
-      (game.global.tech.tau_gas2 >= 5 ? 1 : 0) + // Alien Space Station built
-      (game.global.tech.replicator ? 1 : 0) + // Matter Replicator unlocked
-      (game.global.tauceti.tau_factory?.count > 0 ? 1 : 0) + // Factory built in lone survivor
-      (game.global.space.g_factory?.count > 0 ? 1 : 0) + // Graphene plant built in lone survivor
-      (game.global.tauceti.mining_ship?.count > 0 ? 1 : 0) + // Extractor ship built
-      (game.global.tech.psychicthrall ?? 0) + // Psychic powers
-      (game.global.tech.psychic ?? 0) + // Psychic powers
-      (game.global.tech.edenic >= 1 ? 1 : 0) + // Spire floor 50 Eden access
-      (game.global.tech.isle >= 3 ? 1 : 0) + // Edenic north/south piers -> spirit syphon tech
-      (game.global.tech.palace >= 4 ? 1 : 0); // Edenic sealed tomb -> energy drain tech
+  const { updateTabs } = createTabRefresh({
+    getState: () => state,
+    getGame: () => game,
+    getBuildings: () => buildings,
+    getResources: () => resources,
+    getHaveTech: () => haveTech,
+    getMainVue: () => win.$("#mainColumn > div:first-child")[0].__vue__,
+  });
 
-    if (game.global.settings.showShipYard) {
-      // TP Ship Yard
-      state.tabHash +=
-        1 +
-        (game.global.tech.syard_class ?? 0) + // Tiers of unlocked components
-        (game.global.tech.syard_power ?? 0) +
-        (game.global.tech.syard_weapon ?? 0) +
-        (game.global.tech.syard_armor ?? 0) +
-        (game.global.tech.syard_engine ?? 0) +
-        (game.global.tech.syard_sensor ?? 0) +
-        (haveTech("titan", 3) && haveTech("enceladus", 2) ? 1 : 0) + // Enceladus syndicate
-        (haveTech("triton", 2) ? 1 : 0) + // Triton syndicate
-        (haveTech("kuiper") ? 1 : 0) + // Kuiper syndicate
-        (haveTech("eris") ? 1 : 0) + // Eris syndicate
-        (haveTech("eris", 2) ? 1 : 0) + // Eris scanning
-        (haveTech("titan_ai_core") ? 1 : 0) + // AI core built, drones unlocked
-        (haveTech("tauceti") ? 1 : 0); // Interstellar drive researched, explorer inlocked
-    }
-
-    if (game.global.race["shapeshifter"]) {
-      state.tabHash += (game.global.race.ss_genus ?? "none")
-        .split("")
-        .reduce((a, b) => {
-          a = (a << 5) - a + b.charCodeAt(0);
-          return a & a;
-        }, 0);
-    }
-
-    if (update && state.tabHash !== oldHash) {
-      let mainVue = win.$("#mainColumn > div:first-child")[0].__vue__;
-      mainVue.s.civTabs = 7;
-      mainVue.s.tabLoad = false;
-      mainVue.toggleTabLoad();
-      mainVue.s.tabLoad = true;
-      mainVue.toggleTabLoad();
-      mainVue.s.civTabs = game.global.settings.civTabs;
-      return true;
-    } else {
-      return false;
-    }
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      updateTabs: (update) => updateTabs(update),
+      setTabRefreshTestContext(context) {
+        state = context.state;
+        game = context.game;
+        buildings = context.buildings;
+        resources = context.resources;
+        haveTech = context.haveTech;
+        win = context.win;
+      },
+    });
   }
 
   const { getMultiSegmentedTimeLeft } = createTargetTiming({
@@ -14789,133 +14653,58 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     }
   }
 
-  function updateState() {
-    if (game.global.race.species === "protoplasm") {
-      state.goal = "Evolution";
-    } else if (state.goal === "Evolution") {
-      // Check what we got after evolution
-      if (!checkEvolutionResult()) {
-        return;
-      }
-      state.goal = "Standard";
-      if (settingsRaw.triggers.length > 0) {
-        // We've moved from evolution to standard play. There are technology descriptions that we couldn't update until now.
-        updateTriggerSettingsContent();
-      }
-    } else if (
-      game.global.stats.days === 1 &&
-      (game.global.race.slow ||
-        game.global.race.hyper ||
-        game.global.race.species === "junker")
-    ) {
-      // Fallback check, in case if game reloaded page after evolution
-      if (!checkEvolutionResult()) {
-        return;
-      }
-    }
+  let stateUpdateTestHelpers;
+  const stateUpdateHelpers = {
+    checkEvolutionResult,
+    updateTriggerSettingsContent,
+    updatePriorityTargets,
+    calculateRequiredStorages,
+    prioritizeDemandedResources,
+    updateActiveTargetsUI,
+  };
 
-    // Reset required storage and prioritized resources
-    for (let id in resources) {
-      resources[id].maxCost = 0;
-      resources[id].storageRequired = 1;
-      resources[id].requestedQuantity = 0;
-    }
-    StorageManager.crateValue = poly.crateValue();
-    StorageManager.containerValue = poly.containerValue();
-    updatePriorityTargets(); // Set queuedTargets and triggerTargets
-    ProjectManager.updateProjects(); // Set obj.cost, uses triggerTargets
-    calculateRequiredStorages(); // Uses obj.cost
-    prioritizeDemandedResources(); // Set res.requestedQuantity, uses queuedTargets and triggerTargets
+  const { updateState } = createStateUpdate({
+    getSettings: () => settings,
+    getSettingsRaw: () => settingsRaw,
+    getState: () => state,
+    getGame: () => game,
+    getResources: () => resources,
+    getBuildings: () => buildings,
+    getStorageManager: () => StorageManager,
+    getProjectManager: () => ProjectManager,
+    getTriggerManager: () => TriggerManager,
+    getPoly: () => poly,
+    getJQuery: () => $,
+    getHelpers: () => stateUpdateTestHelpers ?? stateUpdateHelpers,
+    isTechnology: (target) => target instanceof Technology,
+    isProject: (target) => target instanceof Project,
+  });
 
-    state.tooltips = {};
-    state.moneyIncomes.shift();
-    for (let i = state.moneyIncomes.length; i < 11; i++) {
-      state.moneyIncomes.push(resources.Money.rateOfChange);
-    }
-    state.moneyMedian = [...state.moneyIncomes].sort((a, b) => a - b)[5];
-
-    // This comes from the "const towerSize = (function(){" in portal.js in the game code
-    let towerSize = 1000;
-    if (game.global.hasOwnProperty("pillars")) {
-      for (let pillar in game.global.pillars) {
-        if (game.global.pillars[pillar]) {
-          towerSize -= game.global.pillars[pillar] * 2 + 2;
-        }
-      }
-    }
-    if (towerSize < 250) {
-      towerSize = 250;
-    }
-
-    state.astroSign = poly.astrologySign();
-
-    buildings.GateEastTower.gameMax = towerSize;
-    buildings.GateWestTower.gameMax = towerSize;
-
-    // Check to see if user stabilized by detecting exotic mass going down
-    if (
-      (game.global.interstellar?.stellar_engine?.exotic ?? 0) <
-      state.whiteholeLastExoticMass
-    ) {
-      state.whiteholeLastStabilise = Date.now();
-    }
-    state.whiteholeLastExoticMass =
-      game.global.interstellar?.stellar_engine?.exotic ?? 0;
-
-    // Space dock is special and has a modal window with more buildings!
-    if (!buildings.GasSpaceDock.isOptionsCached()) {
-      buildings.GasSpaceDock.cacheOptions();
-    }
-
-    if (settings.activeTargetsUI) {
-      const queuedTargets = state.queuedTargetsAll;
-
-      const triggersList = state.triggerTargets,
-        buildingsList = [],
-        researchList = [],
-        arpaList = [];
-
-      queuedTargets.forEach((target) => {
-        if (target instanceof Technology) {
-          researchList.push(target);
-        } else if (target instanceof Project) {
-          arpaList.push(target);
-        } else {
-          buildingsList.push(target);
-        }
-      });
-
-      updateActiveTargetsUI(triggersList, "triggers");
-      updateActiveTargetsUI(buildingsList, "buildings");
-      updateActiveTargetsUI(researchList, "research");
-      updateActiveTargetsUI(arpaList, "arpa");
-
-      // remove from queue by clicking
-      $(".active-target-remove-x").click(function () {
-        const queueId = $(this).data("queueid"),
-          type = $(this).data("type");
-
-        const $queuedItem = $(".queued").filter((id, el) => {
-          return el.id.indexOf(queueId) > -1;
-        });
-
-        if (type === "triggers") {
-          const clickedTrigger = TriggerManager.targetTriggers.find((trigger) =>
-            trigger.actionId.includes(queueId),
-          );
-
-          if (clickedTrigger !== undefined && clickedTrigger !== null) {
-            clickedTrigger.complete = true;
-          }
-        } else if ($queuedItem?.length) {
-          $queuedItem[0].click();
-        }
-
-        $("#active_targets-wrapper").css("height", "auto");
-      });
-    } else {
-      $(".active-target-remove-x").off("click");
-    }
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      updateState: () => updateState(),
+      // Real prototypes, so the instanceof classification of queued targets is exercised for real.
+      makeStateUpdateTargets() {
+        return {
+          technology: Object.create(Technology.prototype),
+          project: Object.create(Project.prototype),
+          building: {},
+        };
+      },
+      setStateUpdateTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        buildings = context.buildings;
+        StorageManager = context.StorageManager;
+        ProjectManager = context.ProjectManager;
+        TriggerManager = context.TriggerManager;
+        poly = context.poly;
+        stateUpdateTestHelpers = context.helpers;
+      },
+    });
   }
 
   if (window.__EA_TEST_HOOKS__) {
@@ -16183,187 +15972,85 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     }
   }
 
-  function automate() {
-    if (
-      state.goal === "GameOverMan" ||
-      state.forcedUpdate ||
-      !state.gameTicked
-    ) {
-      return;
-    }
-    state.gameTicked = false;
-    if (state.scriptTick < Number.MAX_SAFE_INTEGER) {
-      state.scriptTick++;
-    } else {
-      state.scriptTick = 1;
-    }
-    if (
-      state.scriptTick %
-        (game.global.settings.at
-          ? settings.tickRate * 2
-          : settings.tickRate) !==
-      0
-    ) {
-      return;
-    }
+  let tickTestControllers;
+  const tickControllers = {
+    updateScriptData,
+    updateOverrides,
+    finalizeScriptData,
+    updateTabs,
+    updateState,
+    updateUI,
+    autoEvolution,
+    autoGatherResources,
+    autoMarket,
+    autoHell,
+    autoGalaxyMarket,
+    autoMiningDroid,
+    autoGraphenePlant,
+    autoAlchemy,
+    autoPylon,
+    autoQuarry,
+    autoMine,
+    autoExtractor,
+    autoSmelter,
+    autoStorage,
+    autoReplicator,
+    autoTrigger,
+    autoResearch,
+    autoBuild,
+    autoFactory,
+    autoJobs,
+    autoFleetOuter,
+    autoFleet,
+    autoMech,
+    autoGenetics,
+    autoMinorTrait,
+    autoCraft,
+    autoMerc,
+    autoSpy,
+    autoBattle,
+    autoTax,
+    autoGovernment,
+    autoConsume,
+    autoPower,
+    isPrestigeAllowed,
+    autoPrestige,
+    autoShapeshift,
+    autoPsychic,
+    autoOcularPowers,
+    autoWish,
+    autoMutateTrait,
+    updateBuildPlanner,
+    recordStateSnapshot,
+  };
 
-    updateScriptData(); // Sync exposed data with script variables
-    updateOverrides(); // Apply settings overrides as soon as possible
-    finalizeScriptData(); // Second part of updating data, applying settings
+  const { automate } = createTickOrchestration({
+    getSettings: () => settings,
+    getState: () => state,
+    getGame: () => game,
+    getResources: () => resources,
+    getKeyManager: () => KeyManager,
+    getNaniteManager: () => NaniteManager,
+    getSupplyManager: () => SupplyManager,
+    getEjectManager: () => EjectManager,
+    getControllers: () => tickTestControllers ?? tickControllers,
+  });
 
-    // Redraw tabs once they unlocked
-    if (updateTabs(true)) {
-      return;
-    }
-
-    // TODO: Properly sepparate updateState between updateScriptData and finalizeScriptData
-    updateState();
-    updateUI();
-    KeyManager.reset();
-
-    // The user has turned off the master toggle. Stop taking any actions on behalf of the player.
-    // We've still updated the UI etc. above; just not performing any actions.
-    if (!settings.masterScriptToggle) {
-      return;
-    }
-
-    if (state.goal === "Evolution") {
-      if (settings.autoEvolution) {
-        autoEvolution();
-      }
-      return;
-    }
-
-    if (settings.buildingAlwaysClick || settings.autoBuild) {
-      autoGatherResources();
-    }
-    if (settings.autoMarket) {
-      autoMarket(); // Invalidates values of resources, changes are random and can't be predicted, but we won't need values anywhere else
-    }
-    if (settings.autoHell) {
-      autoHell();
-    }
-    if (settings.autoGalaxyMarket) {
-      autoGalaxyMarket();
-    }
-    if (settings.autoMiningDroid) {
-      autoMiningDroid();
-    }
-    if (settings.autoGraphenePlant) {
-      autoGraphenePlant();
-    }
-    if (settings.autoAlchemy) {
-      autoAlchemy();
-    }
-    if (settings.autoPylon) {
-      autoPylon();
-    }
-    if (settings.autoQuarry) {
-      autoQuarry();
-    }
-    if (settings.autoMine) {
-      autoMine();
-    }
-    if (settings.autoExtractor) {
-      autoExtractor();
-    }
-    if (settings.autoSmelter) {
-      autoSmelter();
-    }
-    if (settings.autoStorage) {
-      // Called before autoJobs, autoFleet and autoPower - so they wont mess with quantum
-      autoStorage();
-    }
-    if (settings.autoReplicator) {
-      autoReplicator();
-    }
-    if (!settings.autoTrigger || !autoTrigger()) {
-      // Only go to autoResearch and autoBuild if triggers not building anything at this very moment, to ensure they won't steal reasources from triggers
-      if (settings.autoResearch) {
-        autoResearch(); // Called before autoBuild and autoGenetics - knowledge goes to techs first
-      }
-      if (settings.autoBuild || settings.autoARPA) {
-        autoBuild(); // Called after autoStorage to compensate fluctuations of quantum(caused by previous tick's adjustments) levels before weightings
-        state.plannerFreshTick = state.scriptTick;
-      }
-    }
-    if (settings.autoFactory) {
-      autoFactory();
-    }
-    if (settings.autoJobs) {
-      autoJobs();
-    } else if (settings.autoCraftsmen) {
-      autoJobs(true);
-    }
-    if (settings.autoFleet) {
-      if (game.global.race["truepath"]) {
-        autoFleetOuter();
-      } else {
-        autoFleet(); // Need to know Mine Layers stateOnCount, called before autoPower while it's still valid
-      }
-    }
-    if (settings.autoMech) {
-      autoMech(); // Called after autoBuild, to prevent stealing supplies from mechs
-    }
-    if (settings.autoGenetics) {
-      autoGenetics(); // Called after autoBuild and autoResearch to prevent stealing knowledge from them
-    }
-    if (settings.autoMinorTrait) {
-      autoMinorTrait(); // Called after auto assemble to utilize new genes right asap
-    }
-    if (settings.autoCraft) {
-      autoCraft(); // Invalidates quantities of craftables, missing exposed craftingRatio to calculate craft result on script side
-    }
-    if (settings.autoFight) {
-      autoMerc();
-      autoSpy(); // Can unoccupy foreign power in rare occasions, without caching back new status, but such desync should not cause any harm
-      autoBattle(); // Invalidates garrison, and adds unaccounted amount of resources after attack
-    }
-    if (settings.autoTax) {
-      autoTax();
-    }
-    if (settings.autoGovernment) {
-      autoGovernment();
-    }
-    if (settings.autoNanite) {
-      autoConsume(NaniteManager); // Purge remaining rateOfChange, should be called when it won't be needed anymore
-    }
-    if (settings.autoSupply) {
-      autoConsume(SupplyManager);
-    }
-    if (settings.autoEject) {
-      autoConsume(EjectManager);
-    }
-    if (settings.autoPower) {
-      // Called after purging of rateOfChange, to know useless resources
-      autoPower();
-    }
-    if (isPrestigeAllowed()) {
-      autoPrestige(); // Called after autoBattle to not launch attacks right before reset, killing soldiers
-    }
-    if (settings.autoMinorTrait) {
-      autoShapeshift(); // Shifting genus can remove techs, buildings, resources, etc. Leaving broken preloaded buttons behind. This thing need to be at the very end, to prevent clicking anything before redrawing tabs
-      autoPsychic();
-      autoOcularPowers();
-      autoWish();
-    }
-    if (settings.autoMutateTraits) {
-      autoMutateTrait();
-    }
-
-    updateBuildPlanner();
-
-    if (settings.stateLogEnabled) {
-      // Count processed ticks (this runs once per working automate() cycle), so
-      // the interval is predictable regardless of tickRate.
-      state.stateLogTick = (state.stateLogTick ?? 0) + 1;
-      if (state.stateLogTick % settings.stateLogInterval === 0) {
-        recordStateSnapshot();
-      }
-    }
-
-    KeyManager.finish();
-    state.soulGemLast = resources.Soul_Gem.currentQuantity;
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      automate: () => automate(),
+      setTickTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        KeyManager = context.KeyManager;
+        NaniteManager = context.NaniteManager;
+        SupplyManager = context.SupplyManager;
+        EjectManager = context.EjectManager;
+        tickTestControllers = context.controllers;
+      },
+    });
   }
 
   function mainAutoEvolveScript() {
