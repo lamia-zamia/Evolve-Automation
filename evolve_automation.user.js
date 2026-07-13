@@ -148,6 +148,121 @@
     return { getRealNumber: getRealNumber2, getNumberString: getNumberString2, getNiceNumber: getNiceNumber2 };
   }
 
+  // src/settings/state.ts
+  function createSettingsState({
+    getSettingsRaw,
+    getTriggerManager,
+    storage
+  }) {
+    function updateStateFromSettings2() {
+      const settingsRaw2 = getSettingsRaw();
+      const TriggerManager2 = getTriggerManager();
+      TriggerManager2.priorityList = [];
+      settingsRaw2.triggers.forEach(
+        (trigger) => TriggerManager2.AddTriggerFromSetting(trigger)
+      );
+    }
+    function updateSettingsFromState2() {
+      const settingsRaw2 = getSettingsRaw();
+      settingsRaw2.triggers = JSON.parse(
+        JSON.stringify(getTriggerManager().priorityList)
+      );
+      storage.setItem("settings", JSON.stringify(settingsRaw2));
+    }
+    function applySettings2(def, reset) {
+      const settingsRaw2 = getSettingsRaw();
+      if (reset) {
+        for (const key in def) {
+          delete settingsRaw2.overrides[key];
+        }
+        Object.assign(settingsRaw2, def);
+      } else {
+        for (const key in def) {
+          if (!Object.prototype.hasOwnProperty.call(settingsRaw2, key)) {
+            settingsRaw2[key] = def[key];
+          } else {
+            if (typeof settingsRaw2[key] === "string" && typeof def[key] === "number") {
+              settingsRaw2[key] = Number(settingsRaw2[key]);
+            }
+            if (typeof settingsRaw2[key] === "number" && typeof def[key] === "string") {
+              settingsRaw2[key] = String(settingsRaw2[key]);
+            }
+          }
+        }
+      }
+    }
+    function migrateSetting2(oldSetting, newSetting, mapCb, keepOldValue) {
+      const settingsRaw2 = getSettingsRaw();
+      if (Object.prototype.hasOwnProperty.call(settingsRaw2, oldSetting)) {
+        if (!keepOldValue) {
+          settingsRaw2[newSetting] = mapCb(settingsRaw2[oldSetting]);
+        }
+        delete settingsRaw2[oldSetting];
+      }
+      if (Object.prototype.hasOwnProperty.call(settingsRaw2.overrides, oldSetting)) {
+        settingsRaw2.overrides[oldSetting].forEach(
+          (override) => override.ret = mapCb(override.ret)
+        );
+        settingsRaw2.overrides[newSetting] = (settingsRaw2.overrides[newSetting] ?? []).concat(settingsRaw2.overrides[oldSetting]);
+        delete settingsRaw2.overrides[oldSetting];
+      }
+    }
+    return {
+      updateStateFromSettings: updateStateFromSettings2,
+      updateSettingsFromState: updateSettingsFromState2,
+      applySettings: applySettings2,
+      migrateSetting: migrateSetting2
+    };
+  }
+
+  // src/settings/queued-settings.ts
+  function createQueuedSettings({
+    getSettings,
+    getSettingsRaw,
+    getState,
+    getGameLog,
+    getUpdateOverrides,
+    getUpdateStandAloneSettings,
+    getUpdateStateFromSettings,
+    getUpdateSettingsFromState,
+    getRemoveScriptSettings,
+    getBuildScriptSettings
+  }) {
+    function loadQueuedSettings2() {
+      const settings2 = getSettings();
+      const settingsRaw2 = getSettingsRaw();
+      if (settings2.evolutionQueueEnabled && settingsRaw2.evolutionQueue.length > 0) {
+        getState().evolutionAttempts++;
+        const queuedEvolution = settingsRaw2.evolutionQueue.shift();
+        for (const [settingName, settingValue] of Object.entries(
+          queuedEvolution
+        )) {
+          if (typeof settingsRaw2[settingName] === typeof settingValue) {
+            settingsRaw2[settingName] = settingValue;
+          } else {
+            getGameLog().logDanger(
+              "special",
+              `Type mismatch during loading queued settings: settingsRaw.${settingName} type: ${typeof settingsRaw2[settingName]}, value: ${settingsRaw2[settingName]}; queuedEvolution.${settingName} type: ${typeof settingValue}, value: ${settingValue};`,
+              ["events", "major_events"]
+            );
+          }
+        }
+        getUpdateOverrides()();
+        if (settings2.evolutionQueueRepeat) {
+          settingsRaw2.evolutionQueue.push(queuedEvolution);
+        }
+        getUpdateStandAloneSettings()();
+        getUpdateStateFromSettings()();
+        getUpdateSettingsFromState()();
+        if (settings2.showSettings) {
+          getRemoveScriptSettings()();
+          getBuildScriptSettings()();
+        }
+      }
+    }
+    return { loadQueuedSettings: loadQueuedSettings2 };
+  }
+
   // src/game/runtime-queries.ts
   function createRuntimeQueries({ getGame }) {
     function getGovernor2() {
@@ -496,6 +611,528 @@
       getGrowthRate: getGrowthRate2,
       getResourcesPerClick: getResourcesPerClick2
     };
+  }
+
+  // src/game/planet-generation.ts
+  function createPlanetGeneration({
+    getGame,
+    getPoly,
+    getIsAchievementUnlocked,
+    universes: universes2
+  }) {
+    function generatePlanets2() {
+      const game2 = getGame();
+      const poly2 = getPoly();
+      const isAchievementUnlocked2 = getIsAchievementUnlocked();
+      let seed = game2.global.race.seed;
+      const seededRandom = (min = 0, max = 1) => {
+        seed = (seed * 9301 + 49297) % 233280;
+        const rnd = seed / 233280;
+        return min + rnd * (max - min);
+      };
+      const avail = [];
+      if ((game2.global.stats.achieve.lamentis?.l ?? 0) >= 4) {
+        for (const universe of universes2) {
+          const affix = poly2.universeAffix(universe);
+          if (game2.global.custom.planet[affix]?.s) {
+            avail.push(`${affix}:s`);
+          }
+        }
+      }
+      const biomes = [
+        "grassland",
+        "oceanic",
+        "forest",
+        "desert",
+        "volcanic",
+        "tundra",
+        game2.global.race.universe === "evil" ? "eden" : "hellscape"
+      ];
+      const subbiomes = [
+        "savanna",
+        "swamp",
+        ["taiga", "swamp"],
+        "ashland",
+        "ashland",
+        "taiga"
+      ];
+      const traits = [
+        "toxic",
+        "mellow",
+        "rage",
+        "stormy",
+        "ozone",
+        "magnetic",
+        "trashed",
+        "elliptical",
+        "flare",
+        "dense",
+        "unstable",
+        "permafrost",
+        "retrograde",
+        "kamikaze"
+      ];
+      const geologys = [
+        "Copper",
+        "Iron",
+        "Aluminium",
+        "Coal",
+        "Oil",
+        "Titanium",
+        "Uranium"
+      ];
+      if (game2.global.stats.achieve.whitehole) {
+        geologys.push("Iridium");
+      }
+      const planets = [];
+      let hell = false;
+      const maxPlanets = Math.max(1, game2.global.race.probes);
+      for (let i = 0; i < maxPlanets; i++) {
+        const planet = {
+          biome: "grassland",
+          traits: [],
+          orbit: 365,
+          geology: {}
+        };
+        if (avail.length > 0 && Math.floor(seededRandom(0, 10)) === 0) {
+          const custom = avail[Math.floor(seededRandom(0, avail.length))];
+          avail.splice(avail.indexOf(custom), 1);
+          const target = custom.split(":");
+          const customPlanet = game2.global.custom.planet[target[0]][target[1]];
+          planet.biome = customPlanet.biome;
+          planet.traits = customPlanet.traitlist;
+          planet.orbit = customPlanet.orbit;
+          planet.geology = customPlanet.geology;
+        } else {
+          const maxBound = !hell && game2.global.stats.portals >= 1 ? 7 : 6;
+          const subbiome = Math.floor(seededRandom(0, 3)) === 0;
+          const biomeIndex = Math.floor(seededRandom(0, maxBound));
+          if (subbiome && isAchievementUnlocked2(`biome_${biomes[biomeIndex]}`, 1) && biomeIndex < subbiomes.length) {
+            const sub = subbiomes[biomeIndex];
+            planet.biome = sub instanceof Array ? sub[Math.floor(seededRandom(0, sub.length))] : sub;
+          } else {
+            planet.biome = biomes[biomeIndex];
+          }
+          for (let traitIndex = 0; traitIndex < 2; traitIndex++) {
+            const index = Math.floor(seededRandom(0, 18 + 9 * traitIndex));
+            if (traits[index] === "permafrost" && ["volcanic", "ashland", "hellscape"].includes(planet.biome)) {
+              continue;
+            }
+            if (index < traits.length && !planet.traits.includes(traits[index])) {
+              planet.traits.push(traits[index]);
+            }
+          }
+          planet.traits.sort();
+          if (planet.traits.length === 0) {
+            planet.traits.push("none");
+          }
+          let max = Math.floor(seededRandom(0, 3));
+          let top = planet.biome === "eden" ? 35 : 30;
+          if (game2.global.stats.achieve.whitehole) {
+            max += game2.global.stats.achieve.whitehole.l;
+            top += game2.global.stats.achieve.whitehole.l * 5;
+          }
+          for (let geologyIndex = 0; geologyIndex < max; geologyIndex++) {
+            const index = Math.floor(seededRandom(0, 10));
+            if (geologys[index]) {
+              planet.geology[geologys[index]] = (Math.floor(seededRandom(0, top)) - 10) / 100;
+            }
+          }
+          if (planet.biome === "hellscape") {
+            planet.orbit = 666;
+            hell = true;
+          } else if (planet.biome === "eden") {
+            planet.orbit = 777;
+            hell = true;
+          } else {
+            let maxOrbit = 600;
+            if (planet.traits.includes("elliptical")) maxOrbit += 200;
+            if (planet.traits.includes("kamikaze")) maxOrbit += 100;
+            planet.orbit = Math.floor(seededRandom(200, maxOrbit));
+          }
+        }
+        const id = planet.biome + Math.floor(seededRandom(0, 1e4));
+        planet.id = id.charAt(0).toUpperCase() + id.slice(1);
+        planets.push(planet);
+      }
+      return planets;
+    }
+    return { generatePlanets: generatePlanets2 };
+  }
+
+  // src/game/script-data.ts
+  function createScriptDataLifecycle({
+    getSettings,
+    getState,
+    getGame,
+    getResources,
+    getBuildings,
+    getWarManager,
+    getMarketManager,
+    getBuildingManager,
+    getSpyManager,
+    getEjectManager,
+    getSupplyManager,
+    getNaniteManager,
+    getRitualManager,
+    getUpdateCraftCost,
+    getResourcesPerClick: getResourcesPerClick2,
+    getTicksPerSecond,
+    getHaveTech
+  }) {
+    function updateScriptData2() {
+      const WarManager2 = getWarManager();
+      const resources2 = getResources();
+      WarManager2.updateGarrison();
+      WarManager2.updateHell();
+      for (const id in resources2) {
+        resources2[id].updateData();
+      }
+      getUpdateCraftCost()();
+      getMarketManager().updateData();
+      getBuildingManager().updateBuildings();
+      const state2 = getState();
+      state2.globalProductionModifier = 1;
+      for (const mod of Object.values(getGame().breakdown.p.Global ?? {})) {
+        state2.globalProductionModifier *= 1 + (parseFloat(mod) || 0) / 100;
+      }
+    }
+    function finalizeScriptData2() {
+      const settings2 = getSettings();
+      const game2 = getGame();
+      const resources2 = getResources();
+      const buildings2 = getBuildings();
+      getSpyManager().updateForeigns();
+      for (const id in resources2) {
+        resources2[id].finalizeData();
+      }
+      getEjectManager().updateResources();
+      getSupplyManager().updateResources();
+      getNaniteManager().updateResources();
+      if (settings2.autoMarket) {
+        const tradeDiff = game2.breakdown.p.consume.Money?.Trade || 0;
+        if (tradeDiff > 0) {
+          resources2.Money.rateMods.buy = tradeDiff * -1;
+        } else if (tradeDiff < 0) {
+          resources2.Money.rateMods.sell = tradeDiff * -1;
+          resources2.Money.rateOfChange += resources2.Money.rateMods.sell;
+        }
+      }
+      const RitualManager2 = getRitualManager();
+      if (settings2.autoPylon && RitualManager2.initIndustry()) {
+        Object.values(RitualManager2.Productions).filter((spell) => spell.isUnlocked()).forEach(
+          (spell) => resources2.Mana.rateOfChange += RitualManager2.spellCost(spell)
+        );
+      }
+      if (settings2.buildingAlwaysClick || settings2.autoBuild && (resources2.Population.currentQuantity <= 15 || buildings2.RockQuarry.count < 1 && !game2.global.race.sappy)) {
+        const resourcesPerClick = getResourcesPerClick2()() * getTicksPerSecond()();
+        const haveTech2 = getHaveTech();
+        const conjureMod = haveTech2("conjuring", 2) ? 10 : 1;
+        if (buildings2.Food.isClickable() && !game2.global.race.fasting) {
+          resources2.Food.rateOfChange += resourcesPerClick * settings2.buildingClickPerTick * conjureMod;
+        }
+        if (buildings2.Lumber.isClickable()) {
+          resources2.Lumber.rateOfChange += resourcesPerClick * settings2.buildingClickPerTick * conjureMod;
+        }
+        if (buildings2.Stone.isClickable()) {
+          resources2.Stone.rateOfChange += resourcesPerClick * settings2.buildingClickPerTick * conjureMod;
+        }
+        if (buildings2.Chrysotile.isClickable()) {
+          resources2.Chrysotile.rateOfChange += resourcesPerClick * settings2.buildingClickPerTick * conjureMod;
+        }
+        if (buildings2.Slaughter.isClickable()) {
+          resources2.Lumber.rateOfChange += resourcesPerClick * settings2.buildingClickPerTick;
+          if (game2.global.race.soul_eater && haveTech2("primitive", 2)) {
+            resources2.Food.rateOfChange += resourcesPerClick * settings2.buildingClickPerTick;
+          }
+          if (resources2.Furs.isUnlocked()) {
+            resources2.Furs.rateOfChange += resourcesPerClick * settings2.buildingClickPerTick;
+          }
+        }
+      }
+    }
+    return { updateScriptData: updateScriptData2, finalizeScriptData: finalizeScriptData2 };
+  }
+
+  // src/game/custom-race-model.ts
+  function createCustomRaceModel({
+    getGame,
+    getPoly,
+    getResources,
+    getRaces,
+    genusOpposition
+  }) {
+    function customRaceRankCost2(value, rank, positive) {
+      if (rank === 0.1) value -= 3;
+      else if (rank === 0.25) value -= 2;
+      else if (rank === 0.5) value--;
+      else if (rank === 2) {
+        value = positive ? Math.max(Math.round(value * 1.5), value + 1) : value + 1;
+      } else if (rank === 3) {
+        value = positive ? Math.max(Math.round(value * 2), value + 2) : value + 2;
+      } else if (rank === 4) {
+        value = positive ? Math.max(Math.round(value * 2.5), value + 3) : value + 3;
+      }
+      return positive ? Math.max(1, value) : value;
+    }
+    function customRaceGeneBalance2(draft) {
+      const game2 = getGame();
+      const poly2 = getPoly();
+      const ascended = game2.global.stats.achieve.ascended ?? {};
+      let genes = ["l", "h", "a", "e", "m", "mg"].reduce(
+        (sum, universe) => sum + (ascended[universe] ?? 0),
+        0
+      );
+      genes += (game2.global.stats.achieve.technophobe?.l ?? 0) * 4;
+      const genusTraits = { ...poly2.genus_traits[draft.genus] ?? {} };
+      if (draft.genus === "fungi") delete genusTraits.spores;
+      Object.keys(genusTraits).forEach(
+        (trait) => genes -= game2.traits[trait]?.val ?? 0
+      );
+      const categoryPositive = {};
+      const categoryNegative = {};
+      const opposed = genusOpposition[draft.genus] ?? [];
+      for (const id of draft.traitlist) {
+        const trait = game2.traits[id];
+        if (!trait) continue;
+        const positive = trait.val >= 0;
+        const categoryCounts = positive ? categoryPositive : categoryNegative;
+        const taxonomy = trait.taxonomy ?? "";
+        const previous = categoryCounts[taxonomy] ?? 0;
+        let cost = trait.val;
+        if (positive && previous > 1) cost += previous - 1;
+        if (!positive && previous >= 1) cost += previous;
+        categoryCounts[taxonomy] = previous + 1;
+        cost = customRaceRankCost2(cost, draft.ranks[id] ?? 1, positive);
+        const originRace = game2.races[trait.origin];
+        const originGenera = originRace?.hybrid ?? [originRace?.type];
+        if (originGenera.includes(draft.genus)) cost--;
+        if (originGenera.some((genus) => genus && opposed.includes(genus)))
+          cost++;
+        genes -= cost;
+      }
+      return genes;
+    }
+    function customRaceRankOptions2(traitId) {
+      const game2 = getGame();
+      const level = game2.global.stats.achieve[`extinct_${game2.traits[traitId]?.origin}`]?.l ?? 0;
+      if (level >= 5) return [0.1, 0.25, 0.5, 1, 2, 3, 4];
+      if (level >= 4) return [0.25, 0.5, 1, 2, 3];
+      if (level >= 3) return [0.5, 1, 2];
+      return [1];
+    }
+    function customRaceTraitEffect2(id, rank) {
+      const game2 = getGame();
+      const poly2 = getPoly();
+      const resources2 = getResources();
+      const trait = game2.traits[id];
+      if (!trait) return "";
+      let vars = trait.vars ? trait.vars(rank) : [];
+      const noVariableEffects = /* @__PURE__ */ new Set([
+        "promiscuous",
+        "revive",
+        "fast_growth",
+        "spores",
+        "terrifying",
+        "unfathomable",
+        "darkness",
+        "living_tool"
+      ]);
+      if (noVariableEffects.has(id)) vars = [];
+      else if (id === "fibroblast") vars = [vars[0] * 5];
+      else if (id === "hivemind" && game2.global.race.high_pop) {
+        vars = [vars[0] * game2.traits.high_pop.vars()[0]];
+      } else if (id === "imitation") {
+        vars.push(
+          game2.races[game2.global.race.srace || "protoplasm"]?.name ?? ""
+        );
+      } else if (id === "elusive") {
+        vars = [
+          Math.round((1 / 30 / (1 / (30 + vars[0])) - 1) * 100)
+        ];
+      } else if (id === "chameleon") {
+        vars = [
+          vars[0],
+          Math.round((1 / 30 / (1 / (30 + vars[1])) - 1) * 100)
+        ];
+      } else if (id === "blood_thirst") {
+        vars = [Math.ceil(Math.log2(vars[0]))];
+      } else if (id === "selenophobia") {
+        vars = [14 - vars[0], vars[0]];
+      } else if (id === "anthropophagite") {
+        vars = [vars[0] * 1e4];
+      } else if (id === "living_materials") {
+        vars = [
+          resources2.Lumber.name,
+          resources2.Plywood.name,
+          resources2.Furs.name,
+          game2.loc("resource_Amber_name")
+        ];
+      } else if (id === "environmentalist") {
+        const coal = -game2.actions.city.coal_power.powered(true);
+        const oil = -game2.actions.city.oil_power.powered(true);
+        vars = [
+          coal + vars[0],
+          oil + vars[0] - 1,
+          oil + vars[0] + 1,
+          coal,
+          oil,
+          vars[1]
+        ];
+      } else if (id === "blurry" && game2.global.race.warlord) {
+        vars = [+((100 / (100 - vars[0]) - 1) * 100).toFixed(1)];
+      } else if (id === "playful" && game2.global.race.warlord) {
+        vars = [vars[0] * 100, resources2.Furs.name];
+      } else if (id === "ghostly" && game2.global.race.warlord) {
+        vars = [
+          vars[0],
+          +((vars[1] - 1) * 100).toFixed(0),
+          resources2.Soul_Gem.name
+        ];
+      }
+      try {
+        if (id === "elemental") {
+          return poly2.loc(`wiki_trait_effect_${id}_${vars[0]}`, vars);
+        }
+        if (["catnip", "anise"].includes(id)) {
+          const specialVars = rank <= 2 ? [] : rank === 3 ? [vars[0]] : vars;
+          return poly2.loc(`wiki_trait_effect_${id}${rank}`, specialVars);
+        }
+        if (game2.global.race.universe === "evil" && game2.global.civic.govern.type !== "theocracy" && ["spiritual", "blasphemous"].includes(id)) {
+          return poly2.loc(
+            `wiki_trait_effect_${id === "spiritual" ? "manipulator" : "blasphemous_evil"}`,
+            vars
+          );
+        }
+        const effectType = ["befuddle", "blurry", "ghostly", "playful"].includes(id) && game2.global.race[id] ? "warlord" : "effect";
+        return poly2.loc(`wiki_trait_${effectType}_${id}`, vars);
+      } catch {
+        return typeof trait.desc === "function" ? trait.desc() : trait.desc;
+      }
+    }
+    function customRaceEditorTraits2(draft) {
+      const game2 = getGame();
+      const unlocked = new Set(draft.traitlist);
+      Object.entries(game2.races).forEach(([id, race]) => {
+        const genus = race.type;
+        if (game2.global.stats.achieve[`extinct_${id}`]?.l || game2.global.stats.achieve[`genus_${genus}`]?.l) {
+          Object.keys(race.traits ?? {}).forEach((trait) => unlocked.add(trait));
+        }
+      });
+      return Object.entries(game2.traits).filter(
+        (entry) => entry[1]?.type === "major" && unlocked.has(entry[0])
+      ).sort(
+        ([, a], [, b]) => (a.taxonomy ?? "").localeCompare(b.taxonomy ?? "") || a.name.localeCompare(b.name)
+      );
+    }
+    function customRaceDraftFromPreset2(preset) {
+      const parsed = (() => {
+        try {
+          return JSON.parse(preset.json);
+        } catch {
+          return null;
+        }
+      })();
+      const game2 = getGame();
+      const poly2 = getPoly();
+      const saved = game2.global.custom?.race0;
+      const fallbackGenus = saved?.genus ?? getRaces()[game2.global.race.species]?.genus ?? Object.keys(poly2.genus_traits).find(
+        (genus) => game2.global.stats.achieve[`genus_${genus}`]?.l
+      ) ?? "humanoid";
+      const draft = parsed && typeof parsed === "object" ? parsed : {};
+      const traits = draft.traitlist ?? draft.traits ?? [];
+      return {
+        name: draft.name ?? saved?.name ?? "Zombie",
+        desc: draft.desc ?? saved?.desc ?? "A custom race.",
+        entity: draft.entity ?? saved?.entity ?? "custom beings",
+        home: draft.home ?? saved?.home ?? "Home",
+        red: draft.red ?? saved?.red ?? "Red World",
+        hell: draft.hell ?? saved?.hell ?? "Hell",
+        gas: draft.gas ?? saved?.gas ?? "Gas Giant",
+        gas_moon: draft.gas_moon ?? saved?.gas_moon ?? "Gas Moon",
+        dwarf: draft.dwarf ?? saved?.dwarf ?? "Dwarf Planet",
+        titan: draft.titan ?? saved?.titan ?? "Titan",
+        enceladus: draft.enceladus ?? saved?.enceladus ?? "Enceladus",
+        triton: draft.triton ?? saved?.triton ?? "Triton",
+        eris: draft.eris ?? saved?.eris ?? "Eris",
+        genes: 0,
+        genus: draft.genus ?? fallbackGenus,
+        traitlist: Array.isArray(traits) ? [...new Set(traits)] : [],
+        ranks: draft.ranks && typeof draft.ranks === "object" ? { ...draft.ranks } : {},
+        fanaticism: draft.fanaticism || false
+      };
+    }
+    return {
+      customRaceRankCost: customRaceRankCost2,
+      customRaceGeneBalance: customRaceGeneBalance2,
+      customRaceRankOptions: customRaceRankOptions2,
+      customRaceTraitEffect: customRaceTraitEffect2,
+      customRaceEditorTraits: customRaceEditorTraits2,
+      customRaceDraftFromPreset: customRaceDraftFromPreset2
+    };
+  }
+
+  // src/game/trait-value.ts
+  function createTraitValue({ getGame }) {
+    function traitVal2(trait, index, operation) {
+      const game2 = getGame();
+      if (game2.global.race[trait]) {
+        const value = game2.traits[trait].vars()[index];
+        if (operation === "-") {
+          return 1 - value / 100;
+        } else if (operation === "+") {
+          return 1 + value / 100;
+        } else if (operation === "=") {
+          return value / 100;
+        } else {
+          return value;
+        }
+      } else if (operation === "+" || operation === "-" || operation === "=") {
+        return 1;
+      } else {
+        return operation ?? 0;
+      }
+    }
+    return { traitVal: traitVal2 };
+  }
+
+  // src/game/crafting-costs.ts
+  function createCraftingCosts({
+    getGame,
+    getState,
+    getResources,
+    setCraftablesList,
+    setFoundryList
+  }) {
+    function updateCraftCost2() {
+      const game2 = getGame();
+      const state2 = getState();
+      if (state2.lastWasteful === game2.global.race.wasteful && state2.lastHighPop === game2.global.race.high_pop && state2.lastFlier === game2.global.race.flier) {
+        return;
+      }
+      const resources2 = getResources();
+      const craftablesList2 = [];
+      const foundryList2 = [];
+      for (const [name, costs] of Object.entries(game2.craftCost)) {
+        const resource = resources2[name];
+        if (resource) {
+          resource.cost = {};
+          for (const cost of costs) {
+            resource.cost[cost.r] = cost.a;
+          }
+          craftablesList2.push(resource);
+          if (name !== "Scarletite" && name !== "Quantium") {
+            foundryList2.push(resource);
+          }
+        }
+      }
+      setCraftablesList(craftablesList2);
+      setFoundryList(foundryList2);
+      state2.lastWasteful = game2.global.race.wasteful;
+      state2.lastHighPop = game2.global.race.high_pop;
+      state2.lastFlier = game2.global.race.flier;
+    }
+    return { updateCraftCost: updateCraftCost2 };
   }
 
   // src/planning/cost-conflicts.ts
@@ -930,6 +1567,90 @@
     return { prioritizeDemandedResources: prioritizeDemandedResources2 };
   }
 
+  // src/planning/queue-items.ts
+  function createQueueItems({
+    getResources,
+    getPoly,
+    getMechManager,
+    getBuildingIds,
+    getArpaIds
+  }) {
+    function checkAffordableCustom2(cost, max = false) {
+      const resources2 = getResources();
+      const check = max ? "maxQuantity" : "currentQuantity";
+      for (const resourceId in cost) {
+        if (!resources2[resourceId] || resources2[resourceId][check] < cost[resourceId]) {
+          return false;
+        }
+      }
+      return true;
+    }
+    function makeTarget(queueItem, cost) {
+      return {
+        id: queueItem.id,
+        name: queueItem.label,
+        title: queueItem.label,
+        cost,
+        isAffordable(max) {
+          return checkAffordableCustom2(this.cost, max);
+        }
+      };
+    }
+    function getQueuedItemObj2(queueItem) {
+      if (queueItem.action === "tp-ship") {
+        return makeTarget(queueItem, getPoly().shipCosts(queueItem.type));
+      } else if (queueItem.action === "hell-mech") {
+        const [gems, supply] = getMechManager().getMechCost(queueItem.type);
+        return makeTarget(queueItem, { Soul_Gem: gems, Supply: supply });
+      } else {
+        return getBuildingIds()[queueItem.id] || getArpaIds()[queueItem.id];
+      }
+    }
+    return { checkAffordableCustom: checkAffordableCustom2, getQueuedItemObj: getQueuedItemObj2 };
+  }
+
+  // src/planning/target-timing.ts
+  function createTargetTiming({
+    getGame,
+    getPoly,
+    isProject
+  }) {
+    function getMultiSegmentedTimeLeft2(target) {
+      let remainingSegments = target.gameMax - target.count;
+      if (isProject(target)) {
+        remainingSegments = (100 - target.progress) / target.currentStep;
+      }
+      let longestResource = "";
+      let longestTimeLeft = 0;
+      const game2 = getGame();
+      Object.keys(target.cost).forEach((resource) => {
+        const resourceCostTotal = target.cost[resource] * remainingSegments;
+        const resourceTimeLeftRaw = (resourceCostTotal - game2.global.resource[resource].amount) / game2.global.resource[resource].diff;
+        if (resourceTimeLeftRaw > longestTimeLeft && resourceCostTotal > game2.global.resource[resource].amount) {
+          longestResource = resource;
+          longestTimeLeft = resourceTimeLeftRaw;
+        }
+      });
+      return {
+        resource: longestResource,
+        timeLeft: longestTimeLeft === Infinity ? "Never" : getPoly().timeFormat(longestTimeLeft)
+      };
+    }
+    return { getMultiSegmentedTimeLeft: getMultiSegmentedTimeLeft2 };
+  }
+
+  // src/planning/resource-weighting.ts
+  function createResourceWeighting({
+    getState
+  }) {
+    function findRequiredResourceWeight2(resource) {
+      return getState().unlockedBuildings.find(
+        (building) => building.cost[resource.id] > resource.currentQuantity
+      )?.weighting;
+    }
+    return { findRequiredResourceWeight: findRequiredResourceWeight2 };
+  }
+
   // src/validation/game-actions.ts
   function createGameActionVerification({
     getGame,
@@ -1116,6 +1837,246 @@
       stateLogBlocker: stateLogBlocker2,
       recordStateSnapshot: recordStateSnapshot2
     };
+  }
+
+  // src/observability/prestige-log.ts
+  function createPrestigeLog({
+    getSettings,
+    getGame,
+    getState,
+    getPrestigeTypes,
+    getGameLog,
+    getFastEval,
+    getSaveStateLog,
+    getTriggerFileDownload
+  }) {
+    function formatLogString2(logString, replacements) {
+      const fastEval2 = getFastEval();
+      logString = logString.replace(
+        /\{eval:([^}]+)\}/g,
+        (match, evalString) => {
+          try {
+            return fastEval2(evalString);
+          } catch {
+            return match;
+          }
+        }
+      );
+      return logString.replace(
+        /{(\w+)}/g,
+        (placeholderWithDelimiters, placeholderWithoutDelimiters) => Object.prototype.hasOwnProperty.call(
+          replacements,
+          placeholderWithoutDelimiters
+        ) ? replacements[placeholderWithoutDelimiters] : placeholderWithDelimiters
+      );
+    }
+    function logPrestige2() {
+      const settings2 = getSettings();
+      const game2 = getGame();
+      const state2 = getState();
+      const placeholders = {};
+      placeholders.resetType = getPrestigeTypes().find(
+        (prestige) => prestige.val === settings2.prestigeType
+      ).label;
+      placeholders.timeStamp = game2.global.stats.days;
+      placeholders.species = game2.global.race.species.charAt(0).toUpperCase() + game2.global.race.species.slice(1);
+      getGameLog().logInfo(
+        "prestige",
+        formatLogString2(settings2.log_prestige_format, placeholders),
+        ["achievements"]
+      );
+      if (settings2.stateLogEnabled && state2.stateLog?.samples.length) {
+        getSaveStateLog()();
+        if (settings2.stateLogAutoDownload) {
+          const stateLog = state2.stateLog;
+          getTriggerFileDownload()(
+            JSON.stringify(stateLog),
+            `evolve-statelog-${stateLog.species}-r${stateLog.reset}-d${game2.global.stats.days}.json`
+          );
+        }
+      }
+    }
+    return { formatLogString: formatLogString2, logPrestige: logPrestige2 };
+  }
+
+  // src/observability/log-filter.ts
+  function createLogFilter({
+    getSettingsRaw,
+    getSettings,
+    getState,
+    getPoly
+  }) {
+    function buildFilterRegExp2() {
+      const settingsRaw2 = getSettingsRaw();
+      const state2 = getState();
+      const poly2 = getPoly();
+      const regexps = [];
+      const validIds = [];
+      const strings = settingsRaw2.logFilter.split(/[^0-9a-z_%]/g).filter(Boolean);
+      for (const string of strings) {
+        const [id, ...rawParams] = string.split("%");
+        const params = rawParams.map(poly2.loc);
+        const message = poly2.loc(id, params.length ? params : void 0) + (id === "civics_garrison_gained" ? "%0" : "");
+        if (message === id) continue;
+        regexps.push(
+          message.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%\d/g, ".*")
+        );
+        validIds.push(string);
+      }
+      if (regexps.length > 0) {
+        state2.filterRegExp = new RegExp(`^(${regexps.join("|")})$`);
+        settingsRaw2.logFilter = validIds.join(", ");
+      } else {
+        state2.filterRegExp = null;
+        settingsRaw2.logFilter = "";
+      }
+    }
+    function filterLog2(mutations) {
+      const settings2 = getSettings();
+      const state2 = getState();
+      if (!settings2.masterScriptToggle || !state2.filterRegExp) return;
+      mutations.forEach(
+        (mutation) => mutation.addedNodes.forEach((node) => {
+          if (state2.filterRegExp.test(node.innerText)) node.remove();
+        })
+      );
+    }
+    return { buildFilterRegExp: buildFilterRegExp2, filterLog: filterLog2 };
+  }
+
+  // src/browser/runtime.ts
+  function createBrowserRuntime({
+    getWin,
+    getDocument,
+    getUrlApi,
+    getBlobConstructor,
+    schedule
+  }) {
+    function getVueById2(elementId) {
+      const element = getWin().document.getElementById(elementId);
+      if (element === null || !element.__vue__) {
+        return void 0;
+      }
+      return element.__vue__;
+    }
+    function triggerFileDownload2(contents, filename) {
+      const UrlApi = getUrlApi();
+      const BlobConstructor = getBlobConstructor();
+      const url = UrlApi.createObjectURL(new BlobConstructor([contents]));
+      const anchor = getDocument().createElement("a");
+      anchor.download = filename;
+      anchor.href = url;
+      anchor.click();
+      schedule(() => {
+        UrlApi.revokeObjectURL(url);
+      }, 60 * 1e3);
+    }
+    return { getVueById: getVueById2, triggerFileDownload: triggerFileDownload2 };
+  }
+
+  // src/ui/mech-stats.ts
+  function createMechStats({
+    getDocument,
+    getJQuery,
+    getMechManager,
+    getPoly,
+    getGame,
+    average: average2
+  }) {
+    function calculateMechStats2() {
+      const cellInfo = '<td><span class="has-text-info">';
+      const cellWarn = '<td><span class="has-text-warning">';
+      const cellAdv = '<td><span class="has-text-advanced">';
+      const cellEnd = "</span></td>";
+      let content = "";
+      const document2 = getDocument();
+      const MechManager2 = getMechManager();
+      const poly2 = getPoly();
+      const game2 = getGame();
+      const special = document2.getElementById("script_mechStatsSpecial").checked;
+      const gravity = document2.getElementById("script_mechStatsGravity").checked;
+      const efficient = document2.getElementById(
+        "script_mechStatsEfficient"
+      ).checked;
+      const scouts = parseInt(document2.getElementById("script_mechStatsScouts").value) || 0;
+      const prepared = document2.getElementById("script_mechStatsCompact").checked ? 2 : 0;
+      const smallFactor = efficient ? 1 : average2(
+        Object.values(MechManager2.SmallChassisMod).reduce(
+          (list, mod) => list.concat(Object.values(mod)),
+          []
+        )
+      );
+      const largeFactor = efficient ? 1 : average2(
+        Object.values(MechManager2.LargeChassisMod).reduce(
+          (list, mod) => list.concat(Object.values(mod)),
+          []
+        )
+      );
+      const weaponFactor = efficient ? 1 : average2(
+        Object.values(poly2.monsters).reduce(
+          (list, mod) => list.concat(Object.values(mod.weapon)),
+          []
+        )
+      );
+      const rows = [
+        [""],
+        ["Damage Per Size"],
+        ["Damage Per Supply (New)"],
+        ["Damage Per Gems (New)"],
+        ["Damage Per Supply (Rebuild)"],
+        ["Damage Per Gems (Rebuild)"]
+      ];
+      for (let i = 0; i < MechManager2.Size.length - 1; i++) {
+        const mech = {
+          size: MechManager2.Size[i],
+          equip: special ? ["special"] : []
+        };
+        const basePower = MechManager2.getSizeMod(mech, false);
+        const statusMod = gravity ? MechManager2.StatusMod.gravity(mech) : 1;
+        const terrainMod = poly2.terrainRating(
+          mech,
+          i < 2 ? smallFactor : largeFactor,
+          gravity ? ["gravity"] : [],
+          scouts
+        );
+        const weaponMod = poly2.weaponPower(mech, weaponFactor) * MechManager2.SizeWeapons[mech.size];
+        const power = basePower * statusMod * terrainMod * weaponMod;
+        const [gems, cost, space] = MechManager2.getMechCost(mech, prepared);
+        const [gemsRef, costRef] = MechManager2.getMechRefund(mech, prepared);
+        rows[0].push(game2.loc(`portal_mech_size_${mech.size}`));
+        rows[1].push((power / space * 100).toFixed(4));
+        rows[2].push((power / (cost / 1e5) * 100).toFixed(4));
+        rows[3].push((power / gems * 100).toFixed(4));
+        rows[4].push((power / ((cost - costRef) / 1e5) * 100).toFixed(4));
+        rows[5].push((power / (gems - gemsRef) * 100).toFixed(4));
+      }
+      rows.forEach(
+        (line, index) => content += "<tr>" + (index === 0 ? cellWarn : cellAdv) + line.join("&nbsp;" + cellEnd + (index === 0 ? cellAdv : cellInfo)) + cellEnd + "</tr>"
+      );
+      getJQuery()("#script_mechStatsTable").html(content);
+    }
+    return { calculateMechStats: calculateMechStats2 };
+  }
+
+  // src/ui/sort-helper.ts
+  function createSortHelper({
+    getJQuery,
+    isHTMLElement
+  }) {
+    function sorterHelper2(_event, input) {
+      const clone = getJQuery()(input).clone();
+      clone.css("position", "absolute");
+      const source = isHTMLElement(input) ? input : input[0];
+      const cloneNode = clone[0];
+      source.childNodes.forEach((element, index) => {
+        if (element.offsetWidth && element.offsetHeight) {
+          cloneNode.childNodes[index].style.width = `${element.offsetWidth}px`;
+          cloneNode.childNodes[index].style.height = `${element.offsetHeight}px`;
+        }
+      });
+      return cloneNode;
+    }
+    return { sorterHelper: sorterHelper2 };
   }
 
   // src/policies/run-guards.ts
@@ -6601,6 +7562,7 @@
     var settingsRaw = JSON.parse(localStorage.getItem("settings")) ?? {};
     var settings = {};
     var game = null;
+    let { traitVal } = createTraitValue({ getGame: () => game });
     const { normalizeProperties, addProps } = createPropertyHelpers({
       getSettings: () => settings
     });
@@ -6732,6 +7694,13 @@
       getDate: () => /* @__PURE__ */ new Date()
     });
     var win = null;
+    const { getVueById, triggerFileDownload } = createBrowserRuntime({
+      getWin: () => win,
+      getDocument: () => document,
+      getUrlApi: () => URL,
+      getBlobConstructor: () => Blob,
+      schedule: (callback, delay) => setTimeout(callback, delay)
+    });
     var needSandboxBypass = false;
     var overrideKey = "ctrlKey";
     var overrideKeyLabel = "Ctrl";
@@ -15284,27 +16253,25 @@
         poly.messageQueue(text, "danger", false, tags);
       }
     };
-    function updateCraftCost() {
-      if (state.lastWasteful === game.global.race.wasteful && state.lastHighPop === game.global.race.high_pop && state.lastFlier === game.global.race.flier) {
-        return;
-      }
-      craftablesList = [];
-      foundryList = [];
-      for (let [name, costs] of Object.entries(game.craftCost)) {
-        if (resources[name]) {
-          resources[name].cost = {};
-          for (let i = 0; i < costs.length; i++) {
-            resources[name].cost[costs[i].r] = costs[i].a;
-          }
-          craftablesList.push(resources[name]);
-          if (name !== "Scarletite" && name !== "Quantium") {
-            foundryList.push(resources[name]);
-          }
+    const { updateCraftCost } = createCraftingCosts({
+      getGame: () => game,
+      getState: () => state,
+      getResources: () => resources,
+      setCraftablesList: (list) => craftablesList = list,
+      setFoundryList: (list) => foundryList = list
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        updateCraftCost,
+        getCraftCostTestLists: () => ({ craftablesList, foundryList }),
+        setCraftCostTestContext(context) {
+          game = context.game;
+          state = context.state;
+          resources = context.resources;
+          craftablesList = context.craftablesList ?? [];
+          foundryList = context.foundryList ?? [];
         }
-      }
-      state.lastWasteful = game.global.race.wasteful;
-      state.lastHighPop = game.global.race.high_pop;
-      state.lastFlier = game.global.race.flier;
+      });
     }
     function initialiseState() {
       updateCraftCost();
@@ -16940,39 +17907,16 @@
       def["res_eject" + resources.Infernite.id] = true;
       applySettings(def, reset);
     }
-    function updateStateFromSettings() {
-      TriggerManager.priorityList = [];
-      settingsRaw.triggers.forEach(
-        (trigger) => TriggerManager.AddTriggerFromSetting(trigger)
-      );
-    }
-    function updateSettingsFromState() {
-      settingsRaw.triggers = JSON.parse(
-        JSON.stringify(TriggerManager.priorityList)
-      );
-      localStorage.setItem("settings", JSON.stringify(settingsRaw));
-    }
-    function applySettings(def, reset) {
-      if (reset) {
-        for (let key in def) {
-          delete settingsRaw.overrides[key];
-        }
-        Object.assign(settingsRaw, def);
-      } else {
-        for (let key in def) {
-          if (!settingsRaw.hasOwnProperty(key)) {
-            settingsRaw[key] = def[key];
-          } else {
-            if (typeof settingsRaw[key] === "string" && typeof def[key] === "number") {
-              settingsRaw[key] = Number(settingsRaw[key]);
-            }
-            if (typeof settingsRaw[key] === "number" && typeof def[key] === "string") {
-              settingsRaw[key] = String(settingsRaw[key]);
-            }
-          }
-        }
-      }
-    }
+    const {
+      updateStateFromSettings,
+      updateSettingsFromState,
+      applySettings,
+      migrateSetting
+    } = createSettingsState({
+      getSettingsRaw: () => settingsRaw,
+      getTriggerManager: () => TriggerManager,
+      storage: localStorage
+    });
     function updateStandAloneSettings() {
       let def = {
         scriptName: "TMVictor",
@@ -17256,18 +18200,19 @@
         delete settingsRaw[id], delete settingsRaw.overrides[id];
       });
     }
-    function migrateSetting(oldSetting, newSetting, mapCb, keepOldValue) {
-      if (settingsRaw.hasOwnProperty(oldSetting)) {
-        if (!keepOldValue) {
-          settingsRaw[newSetting] = mapCb(settingsRaw[oldSetting]);
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        settingsState: {
+          updateStateFromSettings,
+          updateSettingsFromState,
+          applySettings,
+          migrateSetting
+        },
+        setSettingsStateTestContext(context) {
+          settingsRaw = context.settingsRaw;
+          TriggerManager = context.triggerManager;
         }
-        delete settingsRaw[oldSetting];
-      }
-      if (settingsRaw.overrides.hasOwnProperty(oldSetting)) {
-        settingsRaw.overrides[oldSetting].forEach((o) => o.ret = mapCb(o.ret));
-        settingsRaw.overrides[newSetting] = (settingsRaw.overrides[newSetting] ?? []).concat(settingsRaw.overrides[oldSetting]);
-        delete settingsRaw.overrides[oldSetting];
-      }
+      });
     }
     let {
       getStarLevel,
@@ -17322,38 +18267,41 @@
         }
       });
     }
-    function loadQueuedSettings() {
-      if (settings.evolutionQueueEnabled && settingsRaw.evolutionQueue.length > 0) {
-        state.evolutionAttempts++;
-        let queuedEvolution = settingsRaw.evolutionQueue.shift();
-        for (let [settingName, settingValue] of Object.entries(queuedEvolution)) {
-          if (typeof settingsRaw[settingName] === typeof settingValue) {
-            settingsRaw[settingName] = settingValue;
-          } else {
-            GameLog.logDanger(
-              "special",
-              `Type mismatch during loading queued settings: settingsRaw.${settingName} type: ${typeof settingsRaw[settingName]}, value: ${settingsRaw[settingName]}; queuedEvolution.${settingName} type: ${typeof settingValue}, value: ${settingValue};`,
-              ["events", "major_events"]
-            );
-          }
+    let queuedSettingsTestActions;
+    const { loadQueuedSettings } = createQueuedSettings({
+      getSettings: () => settings,
+      getSettingsRaw: () => settingsRaw,
+      getState: () => state,
+      getGameLog: () => GameLog,
+      getUpdateOverrides: () => queuedSettingsTestActions?.updateOverrides ?? updateOverrides,
+      getUpdateStandAloneSettings: () => queuedSettingsTestActions?.updateStandAloneSettings ?? updateStandAloneSettings,
+      getUpdateStateFromSettings: () => queuedSettingsTestActions?.updateStateFromSettings ?? updateStateFromSettings,
+      getUpdateSettingsFromState: () => queuedSettingsTestActions?.updateSettingsFromState ?? updateSettingsFromState,
+      getRemoveScriptSettings: () => queuedSettingsTestActions?.removeScriptSettings ?? removeScriptSettings,
+      getBuildScriptSettings: () => queuedSettingsTestActions?.buildScriptSettings ?? buildScriptSettings
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        loadQueuedSettings,
+        setQueuedSettingsTestContext(context) {
+          settings = context.settings;
+          settingsRaw = context.settingsRaw;
+          state = context.state;
+          GameLog = context.GameLog;
+          queuedSettingsTestActions = context.actions;
         }
-        updateOverrides();
-        if (settings.evolutionQueueRepeat) {
-          settingsRaw.evolutionQueue.push(queuedEvolution);
-        }
-        updateStandAloneSettings();
-        updateStateFromSettings();
-        updateSettingsFromState();
-        if (settings.showSettings) {
-          removeScriptSettings();
-          buildScriptSettings();
-        }
-      }
+      });
     }
-    function findRequiredResourceWeight(resource) {
-      return state.unlockedBuildings.find(
-        (building) => building.cost[resource.id] > resource.currentQuantity
-      )?.weighting;
+    const { findRequiredResourceWeight } = createResourceWeighting({
+      getState: () => state
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        findRequiredResourceWeight,
+        setResourceWeightTestContext(context) {
+          state = context.state;
+        }
+      });
     }
     const autoEvolution = createAutoEvolution({
       getGame: () => game,
@@ -17376,143 +18324,21 @@
       getSettings: () => settings,
       getDocument: () => document
     });
-    function generatePlanets() {
-      let seed = game.global.race.seed;
-      let seededRandom = function(min = 0, max = 1) {
-        seed = (seed * 9301 + 49297) % 233280;
-        let rnd = seed / 233280;
-        return min + rnd * (max - min);
-      };
-      let avail = [];
-      if (game.global.stats.achieve.lamentis?.l >= 4) {
-        for (let u of universes) {
-          let uafx = poly.universeAffix(u);
-          if (game.global.custom.planet[uafx]?.s) {
-            avail.push(`${uafx}:s`);
-          }
+    let { generatePlanets } = createPlanetGeneration({
+      getGame: () => game,
+      getPoly: () => poly,
+      getIsAchievementUnlocked: () => isAchievementUnlocked,
+      universes
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        generatePlanets,
+        setPlanetGenerationTestContext(context) {
+          game = context.game;
+          poly = context.poly;
+          isAchievementUnlocked = context.isAchievementUnlocked;
         }
-      }
-      let biomes = [
-        "grassland",
-        "oceanic",
-        "forest",
-        "desert",
-        "volcanic",
-        "tundra",
-        game.global.race.universe === "evil" ? "eden" : "hellscape"
-      ];
-      let subbiomes = [
-        "savanna",
-        "swamp",
-        ["taiga", "swamp"],
-        "ashland",
-        "ashland",
-        "taiga"
-      ];
-      let traits = [
-        "toxic",
-        "mellow",
-        "rage",
-        "stormy",
-        "ozone",
-        "magnetic",
-        "trashed",
-        "elliptical",
-        "flare",
-        "dense",
-        "unstable",
-        "permafrost",
-        "retrograde",
-        "kamikaze"
-      ];
-      let geologys = [
-        "Copper",
-        "Iron",
-        "Aluminium",
-        "Coal",
-        "Oil",
-        "Titanium",
-        "Uranium"
-      ];
-      if (game.global.stats.achieve["whitehole"]) {
-        geologys.push("Iridium");
-      }
-      let planets = [];
-      let hell = false;
-      let maxPlanets = Math.max(1, game.global.race.probes);
-      for (let i = 0; i < maxPlanets; i++) {
-        let planet = { biome: "grassland", traits: [], orbit: 365, geology: {} };
-        if (avail.length > 0 && Math.floor(seededRandom(0, 10)) === 0) {
-          let custom = avail[Math.floor(seededRandom(0, avail.length))];
-          avail.splice(avail.indexOf(custom), 1);
-          let target = custom.split(":");
-          let p = game.global.custom.planet[target[0]][target[1]];
-          planet.biome = p.biome;
-          planet.traits = p.traitlist;
-          planet.orbit = p.orbit;
-          planet.geology = p.geology;
-        } else {
-          let max_bound = !hell && game.global.stats.portals >= 1 ? 7 : 6;
-          let subbiome = Math.floor(seededRandom(0, 3)) === 0 ? true : false;
-          let idx = Math.floor(seededRandom(0, max_bound));
-          if (subbiome && isAchievementUnlocked("biome_" + biomes[idx], 1) && idx < subbiomes.length) {
-            let sub = subbiomes[idx];
-            if (sub instanceof Array) {
-              planet.biome = sub[Math.floor(seededRandom(0, sub.length))];
-            } else {
-              planet.biome = sub;
-            }
-          } else {
-            planet.biome = biomes[idx];
-          }
-          planet.traits = [];
-          for (let i2 = 0; i2 < 2; i2++) {
-            let idx2 = Math.floor(seededRandom(0, 18 + 9 * i2));
-            if (traits[idx2] === "permafrost" && ["volcanic", "ashland", "hellscape"].includes(planet.biome)) {
-              continue;
-            }
-            if (idx2 < traits.length && !planet.traits.includes(traits[idx2])) {
-              planet.traits.push(traits[idx2]);
-            }
-          }
-          planet.traits.sort();
-          if (planet.traits.length === 0) {
-            planet.traits.push("none");
-          }
-          let max = Math.floor(seededRandom(0, 3));
-          let top = planet.biome === "eden" ? 35 : 30;
-          if (game.global.stats.achieve["whitehole"]) {
-            max += game.global.stats.achieve["whitehole"].l;
-            top += game.global.stats.achieve["whitehole"].l * 5;
-          }
-          for (let i2 = 0; i2 < max; i2++) {
-            let index = Math.floor(seededRandom(0, 10));
-            if (geologys[index]) {
-              planet.geology[geologys[index]] = (Math.floor(seededRandom(0, top)) - 10) / 100;
-            }
-          }
-          if (planet.biome === "hellscape") {
-            planet.orbit = 666;
-            hell = true;
-          } else if (planet.biome === "eden") {
-            planet.orbit = 777;
-            hell = true;
-          } else {
-            let maxOrbit = 600;
-            if (planet.traits.includes("elliptical")) {
-              maxOrbit += 200;
-            }
-            if (planet.traits.includes("kamikaze")) {
-              maxOrbit += 100;
-            }
-            planet.orbit = Math.floor(seededRandom(200, maxOrbit));
-          }
-        }
-        let id = planet.biome + Math.floor(seededRandom(0, 1e4));
-        planet.id = id.charAt(0).toUpperCase() + id.slice(1);
-        planets.push(planet);
-      }
-      return planets;
+      });
     }
     const autoPlanetSelection = createAutoPlanetSelection({
       getGame: () => game,
@@ -17681,41 +18507,28 @@
       haveTech,
       getVueById
     });
-    function formatLogString(logString, replacements) {
-      logString = logString.replace(/\{eval:([^}]+)\}/g, (match, evalString) => {
-        try {
-          return fastEval(evalString);
-        } catch (e) {
-          return match;
+    let prestigeLogTestActions;
+    const { formatLogString, logPrestige } = createPrestigeLog({
+      getSettings: () => settings,
+      getGame: () => game,
+      getState: () => state,
+      getPrestigeTypes: () => prestigeTypes,
+      getGameLog: () => GameLog,
+      getFastEval: () => fastEval,
+      getSaveStateLog: () => prestigeLogTestActions?.saveStateLog ?? saveStateLog,
+      getTriggerFileDownload: () => prestigeLogTestActions?.triggerFileDownload ?? triggerFileDownload
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        prestigeLog: { formatLogString, logPrestige },
+        setPrestigeLogTestContext(context) {
+          settings = context.settings;
+          game = context.game;
+          state = context.state;
+          GameLog = context.GameLog;
+          prestigeLogTestActions = context.actions;
         }
       });
-      return logString.replace(
-        /{(\w+)}/g,
-        (placeholderWithDelimiters, placeholderWithoutDelimiters) => replacements.hasOwnProperty(placeholderWithoutDelimiters) ? replacements[placeholderWithoutDelimiters] : placeholderWithDelimiters
-      );
-    }
-    function logPrestige() {
-      var placeholders = {};
-      placeholders.resetType = prestigeTypes.find(
-        (prest) => prest.val === settings.prestigeType
-      ).label;
-      placeholders.timeStamp = game.global.stats.days;
-      placeholders.species = game.global.race.species.charAt(0).toUpperCase() + game.global.race.species.slice(1);
-      GameLog.logInfo(
-        "prestige",
-        formatLogString(settings.log_prestige_format, placeholders),
-        ["achievements"]
-      );
-      if (settings.stateLogEnabled && state.stateLog?.samples.length) {
-        saveStateLog();
-        if (settings.stateLogAutoDownload) {
-          let s2 = state.stateLog;
-          triggerFileDownload(
-            JSON.stringify(s2),
-            `evolve-statelog-${s2.species}-r${s2.reset}-d${game.global.stats.days}.json`
-          );
-        }
-      }
     }
     let {
       isPrestigeAllowed,
@@ -18398,67 +19211,46 @@
       GameLog,
       getJQuery: () => $
     });
-    function updateScriptData() {
-      WarManager.updateGarrison();
-      WarManager.updateHell();
-      for (let id in resources) {
-        resources[id].updateData();
-      }
-      updateCraftCost();
-      MarketManager.updateData();
-      BuildingManager.updateBuildings();
-      state.globalProductionModifier = 1;
-      for (let mod of Object.values(game.breakdown.p.Global ?? {})) {
-        state.globalProductionModifier *= 1 + (parseFloat(mod) || 0) / 100;
-      }
-    }
-    function finalizeScriptData() {
-      SpyManager.updateForeigns();
-      for (let id in resources) {
-        resources[id].finalizeData();
-      }
-      EjectManager.updateResources();
-      SupplyManager.updateResources();
-      NaniteManager.updateResources();
-      if (settings.autoMarket) {
-        let tradeDiff = game.breakdown.p.consume["Money"]?.Trade || 0;
-        if (tradeDiff > 0) {
-          resources.Money.rateMods["buy"] = tradeDiff * -1;
-        } else if (tradeDiff < 0) {
-          resources.Money.rateMods["sell"] = tradeDiff * -1;
-          resources.Money.rateOfChange += resources.Money.rateMods["sell"];
+    let scriptDataTestActions;
+    const { updateScriptData, finalizeScriptData } = createScriptDataLifecycle({
+      getSettings: () => settings,
+      getState: () => state,
+      getGame: () => game,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getWarManager: () => WarManager,
+      getMarketManager: () => MarketManager,
+      getBuildingManager: () => BuildingManager,
+      getSpyManager: () => SpyManager,
+      getEjectManager: () => EjectManager,
+      getSupplyManager: () => SupplyManager,
+      getNaniteManager: () => NaniteManager,
+      getRitualManager: () => RitualManager,
+      getUpdateCraftCost: () => scriptDataTestActions?.updateCraftCost ?? updateCraftCost,
+      getResourcesPerClick: () => scriptDataTestActions?.getResourcesPerClick ?? getResourcesPerClick,
+      getTicksPerSecond: () => scriptDataTestActions?.ticksPerSecond ?? ticksPerSecond,
+      getHaveTech: () => scriptDataTestActions?.haveTech ?? haveTech
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        scriptDataLifecycle: { updateScriptData, finalizeScriptData },
+        setScriptDataTestContext(context) {
+          settings = context.settings;
+          state = context.state;
+          game = context.game;
+          resources = context.resources;
+          buildings = context.buildings;
+          WarManager = context.WarManager;
+          MarketManager = context.MarketManager;
+          BuildingManager = context.BuildingManager;
+          SpyManager = context.SpyManager;
+          EjectManager = context.EjectManager;
+          SupplyManager = context.SupplyManager;
+          NaniteManager = context.NaniteManager;
+          RitualManager = context.RitualManager;
+          scriptDataTestActions = context.actions;
         }
-      }
-      if (settings.autoPylon && RitualManager.initIndustry()) {
-        Object.values(RitualManager.Productions).filter((spell) => spell.isUnlocked()).forEach(
-          (spell) => resources.Mana.rateOfChange += RitualManager.spellCost(spell)
-        );
-      }
-      if (settings.buildingAlwaysClick || settings.autoBuild && (resources.Population.currentQuantity <= 15 || buildings.RockQuarry.count < 1 && !game.global.race["sappy"])) {
-        let resPerClick = getResourcesPerClick() * ticksPerSecond();
-        let conjureMod = haveTech("conjuring", 2) ? 10 : 1;
-        if (buildings.Food.isClickable() && !game.global.race["fasting"]) {
-          resources.Food.rateOfChange += resPerClick * settings.buildingClickPerTick * conjureMod;
-        }
-        if (buildings.Lumber.isClickable()) {
-          resources.Lumber.rateOfChange += resPerClick * settings.buildingClickPerTick * conjureMod;
-        }
-        if (buildings.Stone.isClickable()) {
-          resources.Stone.rateOfChange += resPerClick * settings.buildingClickPerTick * conjureMod;
-        }
-        if (buildings.Chrysotile.isClickable()) {
-          resources.Chrysotile.rateOfChange += resPerClick * settings.buildingClickPerTick * conjureMod;
-        }
-        if (buildings.Slaughter.isClickable()) {
-          resources.Lumber.rateOfChange += resPerClick * settings.buildingClickPerTick;
-          if (game.global.race["soul_eater"] && haveTech("primitive", 2)) {
-            resources.Food.rateOfChange += resPerClick * settings.buildingClickPerTick;
-          }
-          if (resources.Furs.isUnlocked()) {
-            resources.Furs.rateOfChange += resPerClick * settings.buildingClickPerTick;
-          }
-        }
-      }
+      });
     }
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
@@ -18517,43 +19309,24 @@
         }
       });
     }
-    function checkAffordableCustom(cost, max = false) {
-      let check = max ? "maxQuantity" : "currentQuantity";
-      for (let res in cost) {
-        if (!resources[res] || resources[res][check] < cost[res]) {
-          return false;
+    const { checkAffordableCustom, getQueuedItemObj } = createQueueItems({
+      getResources: () => resources,
+      getPoly: () => poly,
+      getMechManager: () => MechManager,
+      getBuildingIds: () => buildingIds,
+      getArpaIds: () => arpaIds
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        queueItems: { checkAffordableCustom, getQueuedItemObj },
+        setQueueItemTestContext(context) {
+          resources = context.resources;
+          poly = context.poly;
+          MechManager = context.MechManager;
+          buildingIds = context.buildingIds;
+          arpaIds = context.arpaIds;
         }
-      }
-      return true;
-    }
-    function getQueuedItemObj(queueItem) {
-      if (queueItem.action === "tp-ship") {
-        return {
-          id: queueItem.id,
-          name: queueItem.label,
-          title: queueItem.label,
-          cost: poly.shipCosts(queueItem.type),
-          isAffordable: function(max) {
-            return checkAffordableCustom(this.cost, max);
-          }
-        };
-      } else if (queueItem.action === "hell-mech") {
-        let [gems, supply] = MechManager.getMechCost(queueItem.type);
-        return {
-          id: queueItem.id,
-          name: queueItem.label,
-          title: queueItem.label,
-          cost: {
-            Soul_Gem: gems,
-            Supply: supply
-          },
-          isAffordable: function(max) {
-            return checkAffordableCustom(this.cost, max);
-          }
-        };
-      } else {
-        return buildingIds[queueItem.id] || arpaIds[queueItem.id];
-      }
+      });
     }
     function updatePriorityTargets() {
       state.conflictTargets = [];
@@ -18835,25 +19608,28 @@
         return false;
       }
     }
-    function getMultiSegmentedTimeLeft(target) {
-      let remainingSegments = target.gameMax - target.count;
-      if (target instanceof Project) {
-        remainingSegments = (100 - target.progress) / target.currentStep;
-      }
-      let longestResource = "", longestTimeLeft = 0;
-      Object.keys(target.cost).forEach((resource) => {
-        const resourceCostTotal = target.cost[resource] * remainingSegments;
-        const resourceTimeLeftRaw = (resourceCostTotal - game.global.resource[resource].amount) / game.global.resource[resource].diff;
-        if (resourceTimeLeftRaw > longestTimeLeft && resourceCostTotal > game.global.resource[resource].amount) {
-          longestResource = resource;
-          longestTimeLeft = resourceTimeLeftRaw;
+    const { getMultiSegmentedTimeLeft } = createTargetTiming({
+      getGame: () => game,
+      getPoly: () => poly,
+      isProject: (target) => target instanceof Project
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        getMultiSegmentedTimeLeft,
+        makeTargetTimingProject(progress, currentStep, cost) {
+          return Object.defineProperties(Object.create(Project.prototype), {
+            gameMax: { value: 0, enumerable: true },
+            count: { value: 0, enumerable: true },
+            progress: { value: progress, enumerable: true },
+            currentStep: { value: currentStep, enumerable: true },
+            cost: { value: cost, enumerable: true }
+          });
+        },
+        setTargetTimingTestContext(context) {
+          game = context.game;
+          poly = context.poly;
         }
       });
-      const timeLeft = longestTimeLeft === Infinity ? "Never" : poly.timeFormat(longestTimeLeft);
-      return {
-        resource: longestResource,
-        timeLeft
-      };
     }
     function updateActiveTargetsUI(queuedTargets, type) {
       if (queuedTargets.length) {
@@ -19230,41 +20006,22 @@
         { childList: true }
       );
     }
-    function buildFilterRegExp() {
-      let regexps = [];
-      let validIds = [];
-      let strings = settingsRaw.logFilter.split(/[^0-9a-z_%]/g).filter(Boolean);
-      for (let i = 0; i < strings.length; i++) {
-        let [id, ...params] = strings[i].split("%");
-        params = params.map(poly.loc);
-        let message = poly.loc(id, params.length ? params : void 0) + (id === "civics_garrison_gained" ? "%0" : "");
-        if (message === id) {
-          continue;
+    const { buildFilterRegExp, filterLog } = createLogFilter({
+      getSettingsRaw: () => settingsRaw,
+      getSettings: () => settings,
+      getState: () => state,
+      getPoly: () => poly
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        logFilter: { buildFilterRegExp, filterLog },
+        setLogFilterTestContext(context) {
+          settingsRaw = context.settingsRaw;
+          settings = context.settings;
+          state = context.state;
+          poly = context.poly;
         }
-        regexps.push(
-          message.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%\d/g, ".*")
-        );
-        validIds.push(strings[i]);
-      }
-      if (regexps.length > 0) {
-        state.filterRegExp = new RegExp("^(" + regexps.join("|") + ")$");
-        settingsRaw.logFilter = validIds.join(", ");
-      } else {
-        state.filterRegExp = null;
-        settingsRaw.logFilter = "";
-      }
-    }
-    function filterLog(mutations) {
-      if (!settings.masterScriptToggle || !state.filterRegExp) {
-        return;
-      }
-      mutations.forEach(
-        (mutation) => mutation.addedNodes.forEach((node) => {
-          if (state.filterRegExp.test(node.innerText)) {
-            node.remove();
-          }
-        })
-      );
+      });
     }
     function getTooltipInfo(obj) {
       let notes = [];
@@ -19647,180 +20404,37 @@
       synthetic: ["eldritch", "fey"],
       eldritch: ["synthetic", "fey"]
     };
-    function customRaceRankCost(value, rank, positive) {
-      if (rank === 0.1) value -= 3;
-      else if (rank === 0.25) value -= 2;
-      else if (rank === 0.5) value--;
-      else if (rank === 2) {
-        value = positive ? Math.max(Math.round(value * 1.5), value + 1) : value + 1;
-      } else if (rank === 3) {
-        value = positive ? Math.max(Math.round(value * 2), value + 2) : value + 2;
-      } else if (rank === 4) {
-        value = positive ? Math.max(Math.round(value * 2.5), value + 3) : value + 3;
-      }
-      return positive ? Math.max(1, value) : value;
-    }
-    function customRaceGeneBalance(draft) {
-      let ascended = game.global.stats.achieve.ascended ?? {};
-      let genes = ["l", "h", "a", "e", "m", "mg"].reduce(
-        (sum, universe) => sum + (ascended[universe] ?? 0),
-        0
-      );
-      genes += (game.global.stats.achieve.technophobe?.l ?? 0) * 4;
-      let genusTraits = { ...poly.genus_traits[draft.genus] ?? {} };
-      if (draft.genus === "fungi") delete genusTraits.spores;
-      Object.keys(genusTraits).forEach(
-        (trait) => genes -= game.traits[trait]?.val ?? 0
-      );
-      let categoryPositive = {};
-      let categoryNegative = {};
-      let opposed = customRaceGenusOpposition[draft.genus] ?? [];
-      for (let id of draft.traitlist) {
-        let trait = game.traits[id];
-        if (!trait) continue;
-        let positive = trait.val >= 0;
-        let categoryCounts = positive ? categoryPositive : categoryNegative;
-        let previous = categoryCounts[trait.taxonomy] ?? 0;
-        let cost = trait.val;
-        if (positive && previous > 1) cost += previous - 1;
-        if (!positive && previous >= 1) cost += previous;
-        categoryCounts[trait.taxonomy] = previous + 1;
-        cost = customRaceRankCost(cost, draft.ranks[id] ?? 1, positive);
-        let originRace = game.races[trait.origin];
-        let originGenera = originRace?.hybrid ?? [originRace?.type];
-        if (originGenera.includes(draft.genus)) cost--;
-        if (originGenera.some((genus) => opposed.includes(genus))) cost++;
-        genes -= cost;
-      }
-      return genes;
-    }
-    function customRaceRankOptions(traitId) {
-      let level = game.global.stats.achieve[`extinct_${game.traits[traitId]?.origin}`]?.l ?? 0;
-      if (level >= 5) return [0.1, 0.25, 0.5, 1, 2, 3, 4];
-      if (level >= 4) return [0.25, 0.5, 1, 2, 3];
-      if (level >= 3) return [0.5, 1, 2];
-      return [1];
-    }
-    function customRaceTraitEffect(id, rank) {
-      let trait = game.traits[id];
-      if (!trait) return "";
-      let vars = trait.vars ? trait.vars(rank) : [];
-      let noVariableEffects = /* @__PURE__ */ new Set([
-        "promiscuous",
-        "revive",
-        "fast_growth",
-        "spores",
-        "terrifying",
-        "unfathomable",
-        "darkness",
-        "living_tool"
-      ]);
-      if (noVariableEffects.has(id)) vars = [];
-      else if (id === "fibroblast") vars = [vars[0] * 5];
-      else if (id === "hivemind" && game.global.race.high_pop) {
-        vars = [vars[0] * game.traits.high_pop.vars()[0]];
-      } else if (id === "imitation") {
-        vars.push(game.races[game.global.race.srace || "protoplasm"]?.name ?? "");
-      } else if (id === "elusive") {
-        vars = [Math.round((1 / 30 / (1 / (30 + vars[0])) - 1) * 100)];
-      } else if (id === "chameleon") {
-        vars = [vars[0], Math.round((1 / 30 / (1 / (30 + vars[1])) - 1) * 100)];
-      } else if (id === "blood_thirst") vars = [Math.ceil(Math.log2(vars[0]))];
-      else if (id === "selenophobia") vars = [14 - vars[0], vars[0]];
-      else if (id === "anthropophagite") vars = [vars[0] * 1e4];
-      else if (id === "living_materials") {
-        vars = [
-          resources.Lumber.name,
-          resources.Plywood.name,
-          resources.Furs.name,
-          game.loc("resource_Amber_name")
-        ];
-      } else if (id === "environmentalist") {
-        let coal = -game.actions.city.coal_power.powered(true);
-        let oil = -game.actions.city.oil_power.powered(true);
-        vars = [
-          coal + vars[0],
-          oil + vars[0] - 1,
-          oil + vars[0] + 1,
-          coal,
-          oil,
-          vars[1]
-        ];
-      } else if (id === "blurry" && game.global.race.warlord) {
-        vars = [+((100 / (100 - vars[0]) - 1) * 100).toFixed(1)];
-      } else if (id === "playful" && game.global.race.warlord) {
-        vars = [vars[0] * 100, resources.Furs.name];
-      } else if (id === "ghostly" && game.global.race.warlord) {
-        vars = [
-          vars[0],
-          +((vars[1] - 1) * 100).toFixed(0),
-          resources.Soul_Gem.name
-        ];
-      }
-      try {
-        if (id === "elemental") {
-          return poly.loc(`wiki_trait_effect_${id}_${vars[0]}`, vars);
-        }
-        if (["catnip", "anise"].includes(id)) {
-          let specialVars = rank <= 2 ? [] : rank === 3 ? [vars[0]] : vars;
-          return poly.loc(`wiki_trait_effect_${id}${rank}`, specialVars);
-        }
-        if (game.global.race.universe === "evil" && game.global.civic.govern.type !== "theocracy" && ["spiritual", "blasphemous"].includes(id)) {
-          return poly.loc(
-            `wiki_trait_effect_${id === "spiritual" ? "manipulator" : "blasphemous_evil"}`,
-            vars
-          );
-        }
-        let effectType = ["befuddle", "blurry", "ghostly", "playful"].includes(id) && game.global.race[id] ? "warlord" : "effect";
-        return poly.loc(`wiki_trait_${effectType}_${id}`, vars);
-      } catch {
-        return typeof trait.desc === "function" ? trait.desc() : trait.desc;
-      }
-    }
-    function customRaceEditorTraits(draft) {
-      let unlocked = new Set(draft.traitlist);
-      Object.entries(game.races).forEach(([id, race]) => {
-        let genus = race.type;
-        if (game.global.stats.achieve[`extinct_${id}`]?.l || game.global.stats.achieve[`genus_${genus}`]?.l) {
-          Object.keys(race.traits ?? {}).forEach((trait) => unlocked.add(trait));
+    const {
+      customRaceRankCost,
+      customRaceGeneBalance,
+      customRaceRankOptions,
+      customRaceTraitEffect,
+      customRaceEditorTraits,
+      customRaceDraftFromPreset
+    } = createCustomRaceModel({
+      getGame: () => game,
+      getPoly: () => poly,
+      getResources: () => resources,
+      getRaces: () => races,
+      genusOpposition: customRaceGenusOpposition
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        customRaceModel: {
+          customRaceRankCost,
+          customRaceGeneBalance,
+          customRaceRankOptions,
+          customRaceTraitEffect,
+          customRaceEditorTraits,
+          customRaceDraftFromPreset
+        },
+        setCustomRaceModelTestContext(context) {
+          game = context.game;
+          poly = context.poly;
+          resources = context.resources;
+          races = context.races;
         }
       });
-      return Object.entries(game.traits).filter(([id, trait]) => trait.type === "major" && unlocked.has(id)).sort(
-        ([, a], [, b]) => (a.taxonomy ?? "").localeCompare(b.taxonomy ?? "") || a.name.localeCompare(b.name)
-      );
-    }
-    function customRaceDraftFromPreset(preset) {
-      let parsed = null;
-      try {
-        parsed = JSON.parse(preset.json);
-      } catch {
-      }
-      let saved = game.global.custom?.race0;
-      let fallbackGenus = saved?.genus ?? races[game.global.race.species]?.genus ?? Object.keys(poly.genus_traits).find(
-        (genus) => game.global.stats.achieve[`genus_${genus}`]?.l
-      ) ?? "humanoid";
-      let draft = parsed && typeof parsed === "object" ? parsed : {};
-      let traits = draft.traitlist ?? draft.traits ?? [];
-      return {
-        name: draft.name ?? saved?.name ?? "Zombie",
-        desc: draft.desc ?? saved?.desc ?? "A custom race.",
-        entity: draft.entity ?? saved?.entity ?? "custom beings",
-        home: draft.home ?? saved?.home ?? "Home",
-        red: draft.red ?? saved?.red ?? "Red World",
-        hell: draft.hell ?? saved?.hell ?? "Hell",
-        gas: draft.gas ?? saved?.gas ?? "Gas Giant",
-        gas_moon: draft.gas_moon ?? saved?.gas_moon ?? "Gas Moon",
-        dwarf: draft.dwarf ?? saved?.dwarf ?? "Dwarf Planet",
-        titan: draft.titan ?? saved?.titan ?? "Titan",
-        enceladus: draft.enceladus ?? saved?.enceladus ?? "Enceladus",
-        triton: draft.triton ?? saved?.triton ?? "Triton",
-        eris: draft.eris ?? saved?.eris ?? "Eris",
-        genes: 0,
-        genus: draft.genus ?? fallbackGenus,
-        traitlist: Array.isArray(traits) ? [...new Set(traits)] : [],
-        ranks: draft.ranks && typeof draft.ranks === "object" ? { ...draft.ranks } : {},
-        fanaticism: draft.fanaticism || false
-      };
     }
     function buildCustomRacePresetEditor(modal) {
       modal.empty().off("*").addClass("celestialLab");
@@ -24926,73 +25540,23 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
       calculateMechStats();
       document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
-    function calculateMechStats() {
-      let cellInfo = '<td><span class="has-text-info">';
-      let cellWarn = '<td><span class="has-text-warning">';
-      let cellAdv = '<td><span class="has-text-advanced">';
-      let cellEnd = "</span></td>";
-      let content = "";
-      let special = document.getElementById("script_mechStatsSpecial").checked;
-      let gravity = document.getElementById("script_mechStatsGravity").checked;
-      let efficient = document.getElementById(
-        "script_mechStatsEfficient"
-      ).checked;
-      let scouts = parseInt(document.getElementById("script_mechStatsScouts").value) || 0;
-      let prepared = document.getElementById("script_mechStatsCompact").checked ? 2 : 0;
-      let smallFactor = efficient ? 1 : average(
-        Object.values(MechManager.SmallChassisMod).reduce(
-          (list, mod) => list.concat(Object.values(mod)),
-          []
-        )
-      );
-      let largeFactor = efficient ? 1 : average(
-        Object.values(MechManager.LargeChassisMod).reduce(
-          (list, mod) => list.concat(Object.values(mod)),
-          []
-        )
-      );
-      let weaponFactor = efficient ? 1 : average(
-        Object.values(poly.monsters).reduce(
-          (list, mod) => list.concat(Object.values(mod.weapon)),
-          []
-        )
-      );
-      let rows = [
-        [""],
-        ["Damage Per Size"],
-        ["Damage Per Supply (New)"],
-        ["Damage Per Gems (New)"],
-        ["Damage Per Supply (Rebuild)"],
-        ["Damage Per Gems (Rebuild)"]
-      ];
-      for (let i = 0; i < MechManager.Size.length - 1; i++) {
-        let mech = {
-          size: MechManager.Size[i],
-          equip: special ? ["special"] : []
-        };
-        let basePower = MechManager.getSizeMod(mech, false);
-        let statusMod = gravity ? MechManager.StatusMod.gravity(mech) : 1;
-        let terrainMod = poly.terrainRating(
-          mech,
-          i < 2 ? smallFactor : largeFactor,
-          gravity ? ["gravity"] : [],
-          scouts
-        );
-        let weaponMod = poly.weaponPower(mech, weaponFactor) * MechManager.SizeWeapons[mech.size];
-        let power = basePower * statusMod * terrainMod * weaponMod;
-        let [gems, cost, space] = MechManager.getMechCost(mech, prepared);
-        let [gemsRef, costRef] = MechManager.getMechRefund(mech, prepared);
-        rows[0].push(game.loc("portal_mech_size_" + mech.size));
-        rows[1].push((power / space * 100).toFixed(4));
-        rows[2].push((power / (cost / 1e5) * 100).toFixed(4));
-        rows[3].push((power / gems * 100).toFixed(4));
-        rows[4].push((power / ((cost - costRef) / 1e5) * 100).toFixed(4));
-        rows[5].push((power / (gems - gemsRef) * 100).toFixed(4));
-      }
-      rows.forEach(
-        (line, index) => content += "<tr>" + (index === 0 ? cellWarn : cellAdv) + line.join("&nbsp;" + cellEnd + (index === 0 ? cellAdv : cellInfo)) + cellEnd + "</tr>"
-      );
-      $("#script_mechStatsTable").html(content);
+    const { calculateMechStats } = createMechStats({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getMechManager: () => MechManager,
+      getPoly: () => poly,
+      getGame: () => game,
+      average
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        calculateMechStats,
+        setMechStatsTestContext(context) {
+          game = context.game;
+          poly = context.poly;
+          MechManager = context.MechManager;
+        }
+      });
     }
     function buildEjectorSettings() {
       let sectionId = "ejector";
@@ -28000,20 +28564,12 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
       $("#resStorage .ea-storage-toggle").remove();
       $("#script_storage_top_row").remove();
     }
-    function sorterHelper(event, ui) {
-      let clone = $(ui).clone();
-      clone.css("position", "absolute");
-      if (!(ui instanceof HTMLElement)) {
-        ui = ui[0];
-      }
-      let cloneNode = clone[0];
-      ui.childNodes.forEach((el, i) => {
-        if (el.offsetWidth && el.offsetHeight) {
-          cloneNode.childNodes[i].style.width = `${el.offsetWidth}px`;
-          cloneNode.childNodes[i].style.height = `${el.offsetHeight}px`;
-        }
-      });
-      return cloneNode;
+    const { sorterHelper } = createSortHelper({
+      getJQuery: () => $,
+      isHTMLElement: (value) => value instanceof HTMLElement
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, { sorterHelper });
     }
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
@@ -28084,13 +28640,6 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
       }
       return evalCache[s]();
     }
-    function getVueById(elementId) {
-      let element = win.document.getElementById(elementId);
-      if (element === null || !element.__vue__) {
-        return void 0;
-      }
-      return element.__vue__;
-    }
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         propertyHelpers: { normalizeProperties, addProps },
@@ -28099,33 +28648,21 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
         }
       });
     }
-    function triggerFileDownload(contents, filename) {
-      let url = URL.createObjectURL(new Blob([contents]));
-      let a = document.createElement("a");
-      a.download = filename;
-      a.href = url;
-      a.click();
-      setTimeout(() => {
-        URL.revokeObjectURL(url);
-      }, 60 * 1e3);
-    }
-    function traitVal(trait, idx, opt) {
-      if (game.global.race[trait]) {
-        let val = game.traits[trait].vars()[idx];
-        if (opt === "-") {
-          return 1 - val / 100;
-        } else if (opt === "+") {
-          return 1 + val / 100;
-        } else if (opt === "=") {
-          return val / 100;
-        } else {
-          return val;
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        browserRuntime: { getVueById, triggerFileDownload },
+        setBrowserRuntimeTestContext(context) {
+          win = context.win;
         }
-      } else if (opt === "+" || opt === "-" || opt === "=") {
-        return 1;
-      } else {
-        return opt ?? 0;
-      }
+      });
+    }
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        traitVal,
+        setTraitValueTestContext(context) {
+          game = context.game;
+        }
+      });
     }
     function importSettings(str) {
       let saveState = JSON.parse(str);

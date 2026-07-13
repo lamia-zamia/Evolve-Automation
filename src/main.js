@@ -42,19 +42,34 @@ import { cartesian, k_combinations } from "./utils/collections.js";
 import { Fibonacci, average } from "./utils/math.js";
 import { createPropertyHelpers } from "./utils/properties.ts";
 import { createNumberFormatting } from "./formatting/numbers.ts";
+import { createSettingsState } from "./settings/state.ts";
+import { createQueuedSettings } from "./settings/queued-settings.ts";
 import { createRuntimeQueries } from "./game/runtime-queries.ts";
 import { createRaceProfile } from "./game/race-profile.ts";
 import { createForeignGovernment } from "./game/foreign-government.ts";
 import { createGalaxyIntelligence } from "./game/galaxy-intelligence.ts";
 import { createPowerSupport } from "./game/power-support.ts";
 import { createGameRates } from "./game/rates.ts";
+import { createPlanetGeneration } from "./game/planet-generation.ts";
+import { createScriptDataLifecycle } from "./game/script-data.ts";
+import { createCustomRaceModel } from "./game/custom-race-model.ts";
+import { createTraitValue } from "./game/trait-value.ts";
+import { createCraftingCosts } from "./game/crafting-costs.ts";
 import { createCostConflicts } from "./planning/cost-conflicts.ts";
 import { createPlannerAnalysis } from "./planning/planner-analysis.ts";
 import { createStorageExpansion } from "./planning/storage-expansion.ts";
 import { createStorageRequirements } from "./planning/storage-requirements.ts";
 import { createDemandPrioritization } from "./planning/demand-prioritization.ts";
+import { createQueueItems } from "./planning/queue-items.ts";
+import { createTargetTiming } from "./planning/target-timing.ts";
+import { createResourceWeighting } from "./planning/resource-weighting.ts";
 import { createGameActionVerification } from "./validation/game-actions.ts";
 import { createStateLogLifecycle } from "./observability/state-log.ts";
+import { createPrestigeLog } from "./observability/prestige-log.ts";
+import { createLogFilter } from "./observability/log-filter.ts";
+import { createBrowserRuntime } from "./browser/runtime.ts";
+import { createMechStats } from "./ui/mech-stats.ts";
+import { createSortHelper } from "./ui/sort-helper.ts";
 import { createRunGuards } from "./policies/run-guards.ts";
 import { createPrestigeEligibility } from "./policies/prestige-eligibility.ts";
 import { createAutoHell } from "./automation/combat/hell.ts";
@@ -104,6 +119,7 @@ import { createAutoMech } from "./automation/combat/mech.ts";
   var settingsRaw = JSON.parse(localStorage.getItem("settings")) ?? {};
   var settings = {};
   var game = null;
+  let { traitVal } = createTraitValue({ getGame: () => game });
   const { normalizeProperties, addProps } = createPropertyHelpers({
     getSettings: () => settings,
   });
@@ -238,6 +254,13 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     getDate: () => new Date(),
   });
   var win = null;
+  const { getVueById, triggerFileDownload } = createBrowserRuntime({
+    getWin: () => win,
+    getDocument: () => document,
+    getUrlApi: () => URL,
+    getBlobConstructor: () => Blob,
+    schedule: (callback, delay) => setTimeout(callback, delay),
+  });
   var needSandboxBypass = false;
 
   var overrideKey = "ctrlKey";
@@ -10911,33 +10934,26 @@ import { createAutoMech } from "./automation/combat/mech.ts";
   };
 
   // Gui & Init functions
-  function updateCraftCost() {
-    if (
-      state.lastWasteful === game.global.race.wasteful &&
-      state.lastHighPop === game.global.race.high_pop &&
-      state.lastFlier === game.global.race.flier
-    ) {
-      return;
-    }
-    // Construct craftable resource list
-    craftablesList = [];
-    foundryList = [];
-    for (let [name, costs] of Object.entries(game.craftCost)) {
-      if (resources[name]) {
-        // Ignore resources missed in script, such as Thermite
-        resources[name].cost = {};
-        for (let i = 0; i < costs.length; i++) {
-          resources[name].cost[costs[i].r] = costs[i].a;
-        }
-        craftablesList.push(resources[name]);
-        if (name !== "Scarletite" && name !== "Quantium") {
-          foundryList.push(resources[name]);
-        }
-      }
-    }
-    state.lastWasteful = game.global.race.wasteful;
-    state.lastHighPop = game.global.race.high_pop;
-    state.lastFlier = game.global.race.flier;
+  const { updateCraftCost } = createCraftingCosts({
+    getGame: () => game,
+    getState: () => state,
+    getResources: () => resources,
+    setCraftablesList: (list) => (craftablesList = list),
+    setFoundryList: (list) => (foundryList = list),
+  });
+
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      updateCraftCost,
+      getCraftCostTestLists: () => ({ craftablesList, foundryList }),
+      setCraftCostTestContext(context) {
+        game = context.game;
+        state = context.state;
+        resources = context.resources;
+        craftablesList = context.craftablesList ?? [];
+        foundryList = context.foundryList ?? [];
+      },
+    });
   }
 
   function initialiseState() {
@@ -12892,50 +12908,16 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     applySettings(def, reset);
   }
 
-  function updateStateFromSettings() {
-    TriggerManager.priorityList = [];
-    settingsRaw.triggers.forEach((trigger) =>
-      TriggerManager.AddTriggerFromSetting(trigger),
-    );
-  }
-
-  function updateSettingsFromState() {
-    settingsRaw.triggers = JSON.parse(
-      JSON.stringify(TriggerManager.priorityList),
-    );
-
-    localStorage.setItem("settings", JSON.stringify(settingsRaw));
-  }
-
-  function applySettings(def, reset) {
-    if (reset) {
-      // There's no default overrides, just wipe them all on reset
-      for (let key in def) {
-        delete settingsRaw.overrides[key];
-      }
-      Object.assign(settingsRaw, def);
-    } else {
-      for (let key in def) {
-        if (!settingsRaw.hasOwnProperty(key)) {
-          settingsRaw[key] = def[key];
-        } else {
-          // Validate settings types, and fix if needed
-          if (
-            typeof settingsRaw[key] === "string" &&
-            typeof def[key] === "number"
-          ) {
-            settingsRaw[key] = Number(settingsRaw[key]);
-          }
-          if (
-            typeof settingsRaw[key] === "number" &&
-            typeof def[key] === "string"
-          ) {
-            settingsRaw[key] = String(settingsRaw[key]);
-          }
-        }
-      }
-    }
-  }
+  const {
+    updateStateFromSettings,
+    updateSettingsFromState,
+    applySettings,
+    migrateSetting,
+  } = createSettingsState({
+    getSettingsRaw: () => settingsRaw,
+    getTriggerManager: () => TriggerManager,
+    storage: localStorage,
+  });
 
   function updateStandAloneSettings() {
     let def = {
@@ -13266,20 +13248,19 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     });
   }
 
-  function migrateSetting(oldSetting, newSetting, mapCb, keepOldValue) {
-    if (settingsRaw.hasOwnProperty(oldSetting)) {
-      if (!keepOldValue) {
-        settingsRaw[newSetting] = mapCb(settingsRaw[oldSetting]);
-      }
-      delete settingsRaw[oldSetting];
-    }
-    if (settingsRaw.overrides.hasOwnProperty(oldSetting)) {
-      settingsRaw.overrides[oldSetting].forEach((o) => (o.ret = mapCb(o.ret)));
-      settingsRaw.overrides[newSetting] = (
-        settingsRaw.overrides[newSetting] ?? []
-      ).concat(settingsRaw.overrides[oldSetting]);
-      delete settingsRaw.overrides[oldSetting];
-    }
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      settingsState: {
+        updateStateFromSettings,
+        updateSettingsFromState,
+        applySettings,
+        migrateSetting,
+      },
+      setSettingsStateTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        TriggerManager = context.triggerManager;
+      },
+    });
   }
 
   let {
@@ -13337,46 +13318,53 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     });
   }
 
-  function loadQueuedSettings() {
-    if (
-      settings.evolutionQueueEnabled &&
-      settingsRaw.evolutionQueue.length > 0
-    ) {
-      state.evolutionAttempts++;
-      let queuedEvolution = settingsRaw.evolutionQueue.shift();
-      for (let [settingName, settingValue] of Object.entries(queuedEvolution)) {
-        if (typeof settingsRaw[settingName] === typeof settingValue) {
-          settingsRaw[settingName] = settingValue;
-        } else {
-          GameLog.logDanger(
-            "special",
-            `Type mismatch during loading queued settings: settingsRaw.${settingName} type: ${typeof settingsRaw[
-              settingName
-            ]}, value: ${
-              settingsRaw[settingName]
-            }; queuedEvolution.${settingName} type: ${typeof settingValue}, value: ${settingValue};`,
-            ["events", "major_events"],
-          );
-        }
-      }
-      updateOverrides();
-      if (settings.evolutionQueueRepeat) {
-        settingsRaw.evolutionQueue.push(queuedEvolution);
-      }
-      updateStandAloneSettings();
-      updateStateFromSettings();
-      updateSettingsFromState();
-      if (settings.showSettings) {
-        removeScriptSettings();
-        buildScriptSettings();
-      }
-    }
+  let queuedSettingsTestActions;
+  const { loadQueuedSettings } = createQueuedSettings({
+    getSettings: () => settings,
+    getSettingsRaw: () => settingsRaw,
+    getState: () => state,
+    getGameLog: () => GameLog,
+    getUpdateOverrides: () =>
+      queuedSettingsTestActions?.updateOverrides ?? updateOverrides,
+    getUpdateStandAloneSettings: () =>
+      queuedSettingsTestActions?.updateStandAloneSettings ??
+      updateStandAloneSettings,
+    getUpdateStateFromSettings: () =>
+      queuedSettingsTestActions?.updateStateFromSettings ??
+      updateStateFromSettings,
+    getUpdateSettingsFromState: () =>
+      queuedSettingsTestActions?.updateSettingsFromState ??
+      updateSettingsFromState,
+    getRemoveScriptSettings: () =>
+      queuedSettingsTestActions?.removeScriptSettings ?? removeScriptSettings,
+    getBuildScriptSettings: () =>
+      queuedSettingsTestActions?.buildScriptSettings ?? buildScriptSettings,
+  });
+
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      loadQueuedSettings,
+      setQueuedSettingsTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        GameLog = context.GameLog;
+        queuedSettingsTestActions = context.actions;
+      },
+    });
   }
 
-  function findRequiredResourceWeight(resource) {
-    return state.unlockedBuildings.find(
-      (building) => building.cost[resource.id] > resource.currentQuantity,
-    )?.weighting;
+  const { findRequiredResourceWeight } = createResourceWeighting({
+    getState: () => state,
+  });
+
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      findRequiredResourceWeight,
+      setResourceWeightTestContext(context) {
+        state = context.state;
+      },
+    });
   }
 
   const autoEvolution = createAutoEvolution({
@@ -13404,164 +13392,22 @@ import { createAutoMech } from "./automation/combat/mech.ts";
 
   // function setPlanet from actions.js
   // Produces same set of planets, accurate for v1.0.29
-  function generatePlanets() {
-    let seed = game.global.race.seed;
-    let seededRandom = function (min = 0, max = 1) {
-      seed = (seed * 9301 + 49297) % 233280;
-      let rnd = seed / 233280;
-      return min + rnd * (max - min);
-    };
+  let { generatePlanets } = createPlanetGeneration({
+    getGame: () => game,
+    getPoly: () => poly,
+    getIsAchievementUnlocked: () => isAchievementUnlocked,
+    universes,
+  });
 
-    let avail = [];
-    if (game.global.stats.achieve.lamentis?.l >= 4) {
-      for (let u of universes) {
-        let uafx = poly.universeAffix(u);
-        if (game.global.custom.planet[uafx]?.s) {
-          avail.push(`${uafx}:s`);
-        }
-      }
-    }
-
-    let biomes = [
-      "grassland",
-      "oceanic",
-      "forest",
-      "desert",
-      "volcanic",
-      "tundra",
-      game.global.race.universe === "evil" ? "eden" : "hellscape",
-    ];
-    let subbiomes = [
-      "savanna",
-      "swamp",
-      ["taiga", "swamp"],
-      "ashland",
-      "ashland",
-      "taiga",
-    ];
-    let traits = [
-      "toxic",
-      "mellow",
-      "rage",
-      "stormy",
-      "ozone",
-      "magnetic",
-      "trashed",
-      "elliptical",
-      "flare",
-      "dense",
-      "unstable",
-      "permafrost",
-      "retrograde",
-      "kamikaze",
-    ];
-    let geologys = [
-      "Copper",
-      "Iron",
-      "Aluminium",
-      "Coal",
-      "Oil",
-      "Titanium",
-      "Uranium",
-    ];
-    if (game.global.stats.achieve["whitehole"]) {
-      geologys.push("Iridium");
-    }
-
-    let planets = [];
-    let hell = false;
-    let maxPlanets = Math.max(1, game.global.race.probes);
-    for (let i = 0; i < maxPlanets; i++) {
-      let planet = { biome: "grassland", traits: [], orbit: 365, geology: {} };
-
-      if (avail.length > 0 && Math.floor(seededRandom(0, 10)) === 0) {
-        let custom = avail[Math.floor(seededRandom(0, avail.length))];
-        avail.splice(avail.indexOf(custom), 1);
-        let target = custom.split(":");
-        let p = game.global.custom.planet[target[0]][target[1]];
-
-        planet.biome = p.biome;
-        planet.traits = p.traitlist;
-        planet.orbit = p.orbit;
-        planet.geology = p.geology;
-      } else {
-        let max_bound = !hell && game.global.stats.portals >= 1 ? 7 : 6;
-
-        let subbiome = Math.floor(seededRandom(0, 3)) === 0 ? true : false;
-        let idx = Math.floor(seededRandom(0, max_bound));
-
-        if (
-          subbiome &&
-          isAchievementUnlocked("biome_" + biomes[idx], 1) &&
-          idx < subbiomes.length
-        ) {
-          let sub = subbiomes[idx];
-          if (sub instanceof Array) {
-            planet.biome = sub[Math.floor(seededRandom(0, sub.length))];
-          } else {
-            planet.biome = sub;
-          }
-        } else {
-          planet.biome = biomes[idx];
-        }
-
-        planet.traits = [];
-        for (let i = 0; i < 2; i++) {
-          let idx = Math.floor(seededRandom(0, 18 + 9 * i));
-          if (
-            traits[idx] === "permafrost" &&
-            ["volcanic", "ashland", "hellscape"].includes(planet.biome)
-          ) {
-            continue;
-          }
-          if (idx < traits.length && !planet.traits.includes(traits[idx])) {
-            planet.traits.push(traits[idx]);
-          }
-        }
-        planet.traits.sort();
-        if (planet.traits.length === 0) {
-          planet.traits.push("none");
-        }
-
-        let max = Math.floor(seededRandom(0, 3));
-        let top = planet.biome === "eden" ? 35 : 30;
-        if (game.global.stats.achieve["whitehole"]) {
-          max += game.global.stats.achieve["whitehole"].l;
-          top += game.global.stats.achieve["whitehole"].l * 5;
-        }
-
-        for (let i = 0; i < max; i++) {
-          let index = Math.floor(seededRandom(0, 10));
-          if (geologys[index]) {
-            planet.geology[geologys[index]] =
-              (Math.floor(seededRandom(0, top)) - 10) / 100;
-          }
-        }
-
-        if (planet.biome === "hellscape") {
-          planet.orbit = 666;
-          hell = true;
-        } else if (planet.biome === "eden") {
-          planet.orbit = 777;
-          hell = true;
-        } else {
-          let maxOrbit = 600;
-          if (planet.traits.includes("elliptical")) {
-            maxOrbit += 200;
-          }
-          if (planet.traits.includes("kamikaze")) {
-            maxOrbit += 100;
-          }
-          planet.orbit = Math.floor(seededRandom(200, maxOrbit));
-        }
-      }
-
-      let id = planet.biome + Math.floor(seededRandom(0, 10000));
-      planet.id = id.charAt(0).toUpperCase() + id.slice(1);
-
-      planets.push(planet);
-    }
-    return planets;
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      generatePlanets,
+      setPlanetGenerationTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+        isAchievementUnlocked = context.isAchievementUnlocked;
+      },
+    });
   }
 
   const autoPlanetSelection = createAutoPlanetSelection({
@@ -13752,50 +13598,30 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     getVueById,
   });
 
-  function formatLogString(logString, replacements) {
-    logString = logString.replace(/\{eval:([^}]+)\}/g, (match, evalString) => {
-      try {
-        return fastEval(evalString);
-      } catch (e) {
-        return match;
-      }
+  let prestigeLogTestActions;
+  const { formatLogString, logPrestige } = createPrestigeLog({
+    getSettings: () => settings,
+    getGame: () => game,
+    getState: () => state,
+    getPrestigeTypes: () => prestigeTypes,
+    getGameLog: () => GameLog,
+    getFastEval: () => fastEval,
+    getSaveStateLog: () => prestigeLogTestActions?.saveStateLog ?? saveStateLog,
+    getTriggerFileDownload: () =>
+      prestigeLogTestActions?.triggerFileDownload ?? triggerFileDownload,
+  });
+
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      prestigeLog: { formatLogString, logPrestige },
+      setPrestigeLogTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        state = context.state;
+        GameLog = context.GameLog;
+        prestigeLogTestActions = context.actions;
+      },
     });
-
-    return logString.replace(
-      /{(\w+)}/g,
-      (placeholderWithDelimiters, placeholderWithoutDelimiters) =>
-        replacements.hasOwnProperty(placeholderWithoutDelimiters)
-          ? replacements[placeholderWithoutDelimiters]
-          : placeholderWithDelimiters,
-    );
-  }
-
-  function logPrestige() {
-    var placeholders = {};
-    placeholders.resetType = prestigeTypes.find(
-      (prest) => prest.val === settings.prestigeType,
-    ).label;
-    placeholders.timeStamp = game.global.stats.days;
-    placeholders.species =
-      game.global.race.species.charAt(0).toUpperCase() +
-      game.global.race.species.slice(1);
-
-    GameLog.logInfo(
-      "prestige",
-      formatLogString(settings.log_prestige_format, placeholders),
-      ["achievements"],
-    );
-
-    if (settings.stateLogEnabled && state.stateLog?.samples.length) {
-      saveStateLog();
-      if (settings.stateLogAutoDownload) {
-        let s = state.stateLog;
-        triggerFileDownload(
-          JSON.stringify(s),
-          `evolve-statelog-${s.species}-r${s.reset}-d${game.global.stats.days}.json`,
-        );
-      }
-    }
   }
 
   let {
@@ -14694,89 +14520,50 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     getJQuery: () => $,
   });
 
-  function updateScriptData() {
-    WarManager.updateGarrison();
-    WarManager.updateHell();
-    for (let id in resources) {
-      resources[id].updateData();
-    }
-    updateCraftCost();
-    MarketManager.updateData();
-    BuildingManager.updateBuildings();
+  let scriptDataTestActions;
+  const { updateScriptData, finalizeScriptData } = createScriptDataLifecycle({
+    getSettings: () => settings,
+    getState: () => state,
+    getGame: () => game,
+    getResources: () => resources,
+    getBuildings: () => buildings,
+    getWarManager: () => WarManager,
+    getMarketManager: () => MarketManager,
+    getBuildingManager: () => BuildingManager,
+    getSpyManager: () => SpyManager,
+    getEjectManager: () => EjectManager,
+    getSupplyManager: () => SupplyManager,
+    getNaniteManager: () => NaniteManager,
+    getRitualManager: () => RitualManager,
+    getUpdateCraftCost: () =>
+      scriptDataTestActions?.updateCraftCost ?? updateCraftCost,
+    getResourcesPerClick: () =>
+      scriptDataTestActions?.getResourcesPerClick ?? getResourcesPerClick,
+    getTicksPerSecond: () =>
+      scriptDataTestActions?.ticksPerSecond ?? ticksPerSecond,
+    getHaveTech: () => scriptDataTestActions?.haveTech ?? haveTech,
+  });
 
-    // Parse global production modifiers
-    state.globalProductionModifier = 1;
-    for (let mod of Object.values(game.breakdown.p.Global ?? {})) {
-      state.globalProductionModifier *= 1 + (parseFloat(mod) || 0) / 100;
-    }
-  }
-
-  function finalizeScriptData() {
-    SpyManager.updateForeigns();
-    for (let id in resources) {
-      resources[id].finalizeData();
-    }
-    EjectManager.updateResources();
-    SupplyManager.updateResources();
-    NaniteManager.updateResources();
-
-    // Money is special. They aren't defined as tradable, but still affected by trades
-    if (settings.autoMarket) {
-      let tradeDiff = game.breakdown.p.consume["Money"]?.Trade || 0;
-      if (tradeDiff > 0) {
-        resources.Money.rateMods["buy"] = tradeDiff * -1;
-      } else if (tradeDiff < 0) {
-        resources.Money.rateMods["sell"] = tradeDiff * -1;
-        resources.Money.rateOfChange += resources.Money.rateMods["sell"];
-      }
-    }
-    if (settings.autoPylon && RitualManager.initIndustry()) {
-      Object.values(RitualManager.Productions)
-        .filter((spell) => spell.isUnlocked())
-        .forEach(
-          (spell) =>
-            (resources.Mana.rateOfChange += RitualManager.spellCost(spell)),
-        );
-    }
-
-    // Add clicking to rate of change, so we can sell or eject it.
-    if (
-      settings.buildingAlwaysClick ||
-      (settings.autoBuild &&
-        (resources.Population.currentQuantity <= 15 ||
-          (buildings.RockQuarry.count < 1 && !game.global.race["sappy"])))
-    ) {
-      let resPerClick = getResourcesPerClick() * ticksPerSecond();
-      let conjureMod = haveTech("conjuring", 2) ? 10 : 1;
-      if (buildings.Food.isClickable() && !game.global.race["fasting"]) {
-        resources.Food.rateOfChange +=
-          resPerClick * settings.buildingClickPerTick * conjureMod;
-      }
-      if (buildings.Lumber.isClickable()) {
-        resources.Lumber.rateOfChange +=
-          resPerClick * settings.buildingClickPerTick * conjureMod;
-      }
-      if (buildings.Stone.isClickable()) {
-        resources.Stone.rateOfChange +=
-          resPerClick * settings.buildingClickPerTick * conjureMod;
-      }
-      if (buildings.Chrysotile.isClickable()) {
-        resources.Chrysotile.rateOfChange +=
-          resPerClick * settings.buildingClickPerTick * conjureMod;
-      }
-      if (buildings.Slaughter.isClickable()) {
-        resources.Lumber.rateOfChange +=
-          resPerClick * settings.buildingClickPerTick;
-        if (game.global.race["soul_eater"] && haveTech("primitive", 2)) {
-          resources.Food.rateOfChange +=
-            resPerClick * settings.buildingClickPerTick;
-        }
-        if (resources.Furs.isUnlocked()) {
-          resources.Furs.rateOfChange +=
-            resPerClick * settings.buildingClickPerTick;
-        }
-      }
-    }
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      scriptDataLifecycle: { updateScriptData, finalizeScriptData },
+      setScriptDataTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        buildings = context.buildings;
+        WarManager = context.WarManager;
+        MarketManager = context.MarketManager;
+        BuildingManager = context.BuildingManager;
+        SpyManager = context.SpyManager;
+        EjectManager = context.EjectManager;
+        SupplyManager = context.SupplyManager;
+        NaniteManager = context.NaniteManager;
+        RitualManager = context.RitualManager;
+        scriptDataTestActions = context.actions;
+      },
+    });
   }
 
   if (window.__EA_TEST_HOOKS__) {
@@ -14841,47 +14628,25 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     });
   }
 
-  function checkAffordableCustom(cost, max = false) {
-    let check = max ? "maxQuantity" : "currentQuantity";
-    for (let res in cost) {
-      if (!resources[res] || resources[res][check] < cost[res]) {
-        return false;
-      }
-    }
-    return true;
-  }
+  const { checkAffordableCustom, getQueuedItemObj } = createQueueItems({
+    getResources: () => resources,
+    getPoly: () => poly,
+    getMechManager: () => MechManager,
+    getBuildingIds: () => buildingIds,
+    getArpaIds: () => arpaIds,
+  });
 
-  function getQueuedItemObj(queueItem) {
-    // id, name: used by active targets UI
-    // title: used in conflict targets
-    // cost, isAffordable: used by priority targets check below
-    if (queueItem.action === "tp-ship") {
-      return {
-        id: queueItem.id,
-        name: queueItem.label,
-        title: queueItem.label,
-        cost: poly.shipCosts(queueItem.type),
-        isAffordable: function (max) {
-          return checkAffordableCustom(this.cost, max);
-        },
-      };
-    } else if (queueItem.action === "hell-mech") {
-      let [gems, supply] = MechManager.getMechCost(queueItem.type);
-      return {
-        id: queueItem.id,
-        name: queueItem.label,
-        title: queueItem.label,
-        cost: {
-          Soul_Gem: gems,
-          Supply: supply,
-        },
-        isAffordable: function (max) {
-          return checkAffordableCustom(this.cost, max);
-        },
-      };
-    } else {
-      return buildingIds[queueItem.id] || arpaIds[queueItem.id];
-    }
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      queueItems: { checkAffordableCustom, getQueuedItemObj },
+      setQueueItemTestContext(context) {
+        resources = context.resources;
+        poly = context.poly;
+        MechManager = context.MechManager;
+        buildingIds = context.buildingIds;
+        arpaIds = context.arpaIds;
+      },
+    });
   }
 
   function updatePriorityTargets() {
@@ -15250,38 +15015,29 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     }
   }
 
-  function getMultiSegmentedTimeLeft(target) {
-    let remainingSegments = target.gameMax - target.count;
+  const { getMultiSegmentedTimeLeft } = createTargetTiming({
+    getGame: () => game,
+    getPoly: () => poly,
+    isProject: (target) => target instanceof Project,
+  });
 
-    if (target instanceof Project) {
-      remainingSegments = (100 - target.progress) / target.currentStep;
-    }
-
-    let longestResource = "",
-      longestTimeLeft = 0;
-
-    Object.keys(target.cost).forEach((resource) => {
-      const resourceCostTotal = target.cost[resource] * remainingSegments;
-      const resourceTimeLeftRaw =
-        (resourceCostTotal - game.global.resource[resource].amount) /
-        game.global.resource[resource].diff;
-
-      if (
-        resourceTimeLeftRaw > longestTimeLeft &&
-        resourceCostTotal > game.global.resource[resource].amount
-      ) {
-        longestResource = resource;
-        longestTimeLeft = resourceTimeLeftRaw;
-      }
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      getMultiSegmentedTimeLeft,
+      makeTargetTimingProject(progress, currentStep, cost) {
+        return Object.defineProperties(Object.create(Project.prototype), {
+          gameMax: { value: 0, enumerable: true },
+          count: { value: 0, enumerable: true },
+          progress: { value: progress, enumerable: true },
+          currentStep: { value: currentStep, enumerable: true },
+          cost: { value: cost, enumerable: true },
+        });
+      },
+      setTargetTimingTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+      },
     });
-
-    const timeLeft =
-      longestTimeLeft === Infinity ? "Never" : poly.timeFormat(longestTimeLeft);
-
-    return {
-      resource: longestResource,
-      timeLeft,
-    };
   }
 
   function updateActiveTargetsUI(queuedTargets, type) {
@@ -15785,45 +15541,23 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     );
   }
 
-  function buildFilterRegExp() {
-    let regexps = [];
-    let validIds = [];
-    let strings = settingsRaw.logFilter.split(/[^0-9a-z_%]/g).filter(Boolean);
-    for (let i = 0; i < strings.length; i++) {
-      let [id, ...params] = strings[i].split("%");
-      params = params.map(poly.loc);
-      // Loot message built from multiple strings without tokens, let's fake one for regexp below
-      let message =
-        poly.loc(id, params.length ? params : undefined) +
-        (id === "civics_garrison_gained" ? "%0" : "");
-      if (message === id) {
-        continue;
-      }
-      regexps.push(
-        message.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%\d/g, ".*"),
-      );
-      validIds.push(strings[i]);
-    }
-    if (regexps.length > 0) {
-      state.filterRegExp = new RegExp("^(" + regexps.join("|") + ")$");
-      settingsRaw.logFilter = validIds.join(", ");
-    } else {
-      state.filterRegExp = null;
-      settingsRaw.logFilter = "";
-    }
-  }
+  const { buildFilterRegExp, filterLog } = createLogFilter({
+    getSettingsRaw: () => settingsRaw,
+    getSettings: () => settings,
+    getState: () => state,
+    getPoly: () => poly,
+  });
 
-  function filterLog(mutations) {
-    if (!settings.masterScriptToggle || !state.filterRegExp) {
-      return;
-    }
-    mutations.forEach((mutation) =>
-      mutation.addedNodes.forEach((node) => {
-        if (state.filterRegExp.test(node.innerText)) {
-          node.remove();
-        }
-      }),
-    );
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      logFilter: { buildFilterRegExp, filterLog },
+      setLogFilterTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        settings = context.settings;
+        state = context.state;
+        poly = context.poly;
+      },
+    });
   }
 
   function getTooltipInfo(obj) {
@@ -16313,220 +16047,38 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     eldritch: ["synthetic", "fey"],
   };
 
-  function customRaceRankCost(value, rank, positive) {
-    if (rank === 0.1) value -= 3;
-    else if (rank === 0.25) value -= 2;
-    else if (rank === 0.5) value--;
-    else if (rank === 2) {
-      value = positive
-        ? Math.max(Math.round(value * 1.5), value + 1)
-        : value + 1;
-    } else if (rank === 3) {
-      value = positive ? Math.max(Math.round(value * 2), value + 2) : value + 2;
-    } else if (rank === 4) {
-      value = positive
-        ? Math.max(Math.round(value * 2.5), value + 3)
-        : value + 3;
-    }
-    return positive ? Math.max(1, value) : value;
-  }
+  const {
+    customRaceRankCost,
+    customRaceGeneBalance,
+    customRaceRankOptions,
+    customRaceTraitEffect,
+    customRaceEditorTraits,
+    customRaceDraftFromPreset,
+  } = createCustomRaceModel({
+    getGame: () => game,
+    getPoly: () => poly,
+    getResources: () => resources,
+    getRaces: () => races,
+    genusOpposition: customRaceGenusOpposition,
+  });
 
-  function customRaceGeneBalance(draft) {
-    let ascended = game.global.stats.achieve.ascended ?? {};
-    let genes = ["l", "h", "a", "e", "m", "mg"].reduce(
-      (sum, universe) => sum + (ascended[universe] ?? 0),
-      0,
-    );
-    genes += (game.global.stats.achieve.technophobe?.l ?? 0) * 4;
-
-    let genusTraits = { ...(poly.genus_traits[draft.genus] ?? {}) };
-    // The userscript's general race table adds Spores for production modelling;
-    // the game's Custom Lab genus-cost table does not include it.
-    if (draft.genus === "fungi") delete genusTraits.spores;
-    Object.keys(genusTraits).forEach(
-      (trait) => (genes -= game.traits[trait]?.val ?? 0),
-    );
-
-    let categoryPositive = {};
-    let categoryNegative = {};
-    let opposed = customRaceGenusOpposition[draft.genus] ?? [];
-    for (let id of draft.traitlist) {
-      let trait = game.traits[id];
-      if (!trait) continue;
-      let positive = trait.val >= 0;
-      let categoryCounts = positive ? categoryPositive : categoryNegative;
-      let previous = categoryCounts[trait.taxonomy] ?? 0;
-      let cost = trait.val;
-      if (positive && previous > 1) cost += previous - 1;
-      if (!positive && previous >= 1) cost += previous;
-      categoryCounts[trait.taxonomy] = previous + 1;
-      cost = customRaceRankCost(cost, draft.ranks[id] ?? 1, positive);
-
-      let originRace = game.races[trait.origin];
-      let originGenera = originRace?.hybrid ?? [originRace?.type];
-      if (originGenera.includes(draft.genus)) cost--;
-      if (originGenera.some((genus) => opposed.includes(genus))) cost++;
-      genes -= cost;
-    }
-    return genes;
-  }
-
-  function customRaceRankOptions(traitId) {
-    let level =
-      game.global.stats.achieve[`extinct_${game.traits[traitId]?.origin}`]?.l ??
-      0;
-    if (level >= 5) return [0.1, 0.25, 0.5, 1, 2, 3, 4];
-    if (level >= 4) return [0.25, 0.5, 1, 2, 3];
-    if (level >= 3) return [0.5, 1, 2];
-    return [1];
-  }
-
-  function customRaceTraitEffect(id, rank) {
-    let trait = game.traits[id];
-    if (!trait) return "";
-    let vars = trait.vars ? trait.vars(rank) : [];
-    let noVariableEffects = new Set([
-      "promiscuous",
-      "revive",
-      "fast_growth",
-      "spores",
-      "terrifying",
-      "unfathomable",
-      "darkness",
-      "living_tool",
-    ]);
-    if (noVariableEffects.has(id)) vars = [];
-    else if (id === "fibroblast") vars = [vars[0] * 5];
-    else if (id === "hivemind" && game.global.race.high_pop) {
-      vars = [vars[0] * game.traits.high_pop.vars()[0]];
-    } else if (id === "imitation") {
-      vars.push(game.races[game.global.race.srace || "protoplasm"]?.name ?? "");
-    } else if (id === "elusive") {
-      vars = [Math.round((1 / 30 / (1 / (30 + vars[0])) - 1) * 100)];
-    } else if (id === "chameleon") {
-      vars = [vars[0], Math.round((1 / 30 / (1 / (30 + vars[1])) - 1) * 100)];
-    } else if (id === "blood_thirst") vars = [Math.ceil(Math.log2(vars[0]))];
-    else if (id === "selenophobia") vars = [14 - vars[0], vars[0]];
-    else if (id === "anthropophagite") vars = [vars[0] * 1e4];
-    else if (id === "living_materials") {
-      vars = [
-        resources.Lumber.name,
-        resources.Plywood.name,
-        resources.Furs.name,
-        game.loc("resource_Amber_name"),
-      ];
-    } else if (id === "environmentalist") {
-      let coal = -game.actions.city.coal_power.powered(true);
-      let oil = -game.actions.city.oil_power.powered(true);
-      vars = [
-        coal + vars[0],
-        oil + vars[0] - 1,
-        oil + vars[0] + 1,
-        coal,
-        oil,
-        vars[1],
-      ];
-    } else if (id === "blurry" && game.global.race.warlord) {
-      vars = [+((100 / (100 - vars[0]) - 1) * 100).toFixed(1)];
-    } else if (id === "playful" && game.global.race.warlord) {
-      vars = [vars[0] * 100, resources.Furs.name];
-    } else if (id === "ghostly" && game.global.race.warlord) {
-      vars = [
-        vars[0],
-        +((vars[1] - 1) * 100).toFixed(0),
-        resources.Soul_Gem.name,
-      ];
-    }
-
-    try {
-      if (id === "elemental") {
-        return poly.loc(`wiki_trait_effect_${id}_${vars[0]}`, vars);
-      }
-      if (["catnip", "anise"].includes(id)) {
-        let specialVars = rank <= 2 ? [] : rank === 3 ? [vars[0]] : vars;
-        return poly.loc(`wiki_trait_effect_${id}${rank}`, specialVars);
-      }
-      if (
-        game.global.race.universe === "evil" &&
-        game.global.civic.govern.type !== "theocracy" &&
-        ["spiritual", "blasphemous"].includes(id)
-      ) {
-        return poly.loc(
-          `wiki_trait_effect_${
-            id === "spiritual" ? "manipulator" : "blasphemous_evil"
-          }`,
-          vars,
-        );
-      }
-      let effectType =
-        ["befuddle", "blurry", "ghostly", "playful"].includes(id) &&
-        game.global.race[id]
-          ? "warlord"
-          : "effect";
-      return poly.loc(`wiki_trait_${effectType}_${id}`, vars);
-    } catch {
-      return typeof trait.desc === "function" ? trait.desc() : trait.desc;
-    }
-  }
-
-  function customRaceEditorTraits(draft) {
-    let unlocked = new Set(draft.traitlist);
-    Object.entries(game.races).forEach(([id, race]) => {
-      let genus = race.type;
-      if (
-        game.global.stats.achieve[`extinct_${id}`]?.l ||
-        game.global.stats.achieve[`genus_${genus}`]?.l
-      ) {
-        Object.keys(race.traits ?? {}).forEach((trait) => unlocked.add(trait));
-      }
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      customRaceModel: {
+        customRaceRankCost,
+        customRaceGeneBalance,
+        customRaceRankOptions,
+        customRaceTraitEffect,
+        customRaceEditorTraits,
+        customRaceDraftFromPreset,
+      },
+      setCustomRaceModelTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+        resources = context.resources;
+        races = context.races;
+      },
     });
-    return Object.entries(game.traits)
-      .filter(([id, trait]) => trait.type === "major" && unlocked.has(id))
-      .sort(
-        ([, a], [, b]) =>
-          (a.taxonomy ?? "").localeCompare(b.taxonomy ?? "") ||
-          a.name.localeCompare(b.name),
-      );
-  }
-
-  function customRaceDraftFromPreset(preset) {
-    let parsed = null;
-    try {
-      parsed = JSON.parse(preset.json);
-    } catch {}
-    let saved = game.global.custom?.race0;
-    let fallbackGenus =
-      saved?.genus ??
-      races[game.global.race.species]?.genus ??
-      Object.keys(poly.genus_traits).find(
-        (genus) => game.global.stats.achieve[`genus_${genus}`]?.l,
-      ) ??
-      "humanoid";
-    let draft = parsed && typeof parsed === "object" ? parsed : {};
-    let traits = draft.traitlist ?? draft.traits ?? [];
-    return {
-      name: draft.name ?? saved?.name ?? "Zombie",
-      desc: draft.desc ?? saved?.desc ?? "A custom race.",
-      entity: draft.entity ?? saved?.entity ?? "custom beings",
-      home: draft.home ?? saved?.home ?? "Home",
-      red: draft.red ?? saved?.red ?? "Red World",
-      hell: draft.hell ?? saved?.hell ?? "Hell",
-      gas: draft.gas ?? saved?.gas ?? "Gas Giant",
-      gas_moon: draft.gas_moon ?? saved?.gas_moon ?? "Gas Moon",
-      dwarf: draft.dwarf ?? saved?.dwarf ?? "Dwarf Planet",
-      titan: draft.titan ?? saved?.titan ?? "Titan",
-      enceladus: draft.enceladus ?? saved?.enceladus ?? "Enceladus",
-      triton: draft.triton ?? saved?.triton ?? "Triton",
-      eris: draft.eris ?? saved?.eris ?? "Eris",
-      genes: 0,
-      genus: draft.genus ?? fallbackGenus,
-      traitlist: Array.isArray(traits) ? [...new Set(traits)] : [],
-      ranks:
-        draft.ranks && typeof draft.ranks === "object"
-          ? { ...draft.ranks }
-          : {},
-      fanaticism: draft.fanaticism || false,
-    };
   }
 
   function buildCustomRacePresetEditor(modal) {
@@ -22603,97 +22155,24 @@ import { createAutoMech } from "./automation/combat/mech.ts";
       currentScrollPosition;
   }
 
-  function calculateMechStats() {
-    let cellInfo = '<td><span class="has-text-info">';
-    let cellWarn = '<td><span class="has-text-warning">';
-    let cellAdv = '<td><span class="has-text-advanced">';
-    let cellEnd = "</span></td>";
-    let content = "";
+  const { calculateMechStats } = createMechStats({
+    getDocument: () => document,
+    getJQuery: () => $,
+    getMechManager: () => MechManager,
+    getPoly: () => poly,
+    getGame: () => game,
+    average,
+  });
 
-    let special = document.getElementById("script_mechStatsSpecial").checked;
-    let gravity = document.getElementById("script_mechStatsGravity").checked;
-    let efficient = document.getElementById(
-      "script_mechStatsEfficient",
-    ).checked;
-    let scouts =
-      parseInt(document.getElementById("script_mechStatsScouts").value) || 0;
-    let prepared = document.getElementById("script_mechStatsCompact").checked
-      ? 2
-      : 0;
-
-    let smallFactor = efficient
-      ? 1
-      : average(
-          Object.values(MechManager.SmallChassisMod).reduce(
-            (list, mod) => list.concat(Object.values(mod)),
-            [],
-          ),
-        );
-    let largeFactor = efficient
-      ? 1
-      : average(
-          Object.values(MechManager.LargeChassisMod).reduce(
-            (list, mod) => list.concat(Object.values(mod)),
-            [],
-          ),
-        );
-    let weaponFactor = efficient
-      ? 1
-      : average(
-          Object.values(poly.monsters).reduce(
-            (list, mod) => list.concat(Object.values(mod.weapon)),
-            [],
-          ),
-        );
-
-    let rows = [
-      [""],
-      ["Damage Per Size"],
-      ["Damage Per Supply (New)"],
-      ["Damage Per Gems (New)"],
-      ["Damage Per Supply (Rebuild)"],
-      ["Damage Per Gems (Rebuild)"],
-    ];
-    for (let i = 0; i < MechManager.Size.length - 1; i++) {
-      // Exclude collectors
-      let mech = {
-        size: MechManager.Size[i],
-        equip: special ? ["special"] : [],
-      };
-
-      let basePower = MechManager.getSizeMod(mech, false);
-      let statusMod = gravity ? MechManager.StatusMod.gravity(mech) : 1;
-      let terrainMod = poly.terrainRating(
-        mech,
-        i < 2 ? smallFactor : largeFactor,
-        gravity ? ["gravity"] : [],
-        scouts,
-      );
-      let weaponMod =
-        poly.weaponPower(mech, weaponFactor) *
-        MechManager.SizeWeapons[mech.size];
-      let power = basePower * statusMod * terrainMod * weaponMod;
-
-      let [gems, cost, space] = MechManager.getMechCost(mech, prepared);
-      let [gemsRef, costRef] = MechManager.getMechRefund(mech, prepared);
-
-      rows[0].push(game.loc("portal_mech_size_" + mech.size));
-      rows[1].push(((power / space) * 100).toFixed(4));
-      rows[2].push(((power / (cost / 100000)) * 100).toFixed(4));
-      rows[3].push(((power / gems) * 100).toFixed(4));
-      rows[4].push(((power / ((cost - costRef) / 100000)) * 100).toFixed(4));
-      rows[5].push(((power / (gems - gemsRef)) * 100).toFixed(4));
-    }
-    rows.forEach(
-      (line, index) =>
-        (content +=
-          "<tr>" +
-          (index === 0 ? cellWarn : cellAdv) +
-          line.join("&nbsp;" + cellEnd + (index === 0 ? cellAdv : cellInfo)) +
-          cellEnd +
-          "</tr>"),
-    );
-    $("#script_mechStatsTable").html(content);
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      calculateMechStats,
+      setMechStatsTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+        MechManager = context.MechManager;
+      },
+    });
   }
 
   function buildEjectorSettings() {
@@ -26345,20 +25824,13 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     $("#script_storage_top_row").remove();
   }
 
-  function sorterHelper(event, ui) {
-    let clone = $(ui).clone();
-    clone.css("position", "absolute");
-    if (!(ui instanceof HTMLElement)) {
-      ui = ui[0];
-    }
-    let cloneNode = clone[0];
-    ui.childNodes.forEach((el, i) => {
-      if (el.offsetWidth && el.offsetHeight) {
-        cloneNode.childNodes[i].style.width = `${el.offsetWidth}px`;
-        cloneNode.childNodes[i].style.height = `${el.offsetHeight}px`;
-      }
-    });
-    return cloneNode;
+  const { sorterHelper } = createSortHelper({
+    getJQuery: () => $,
+    isHTMLElement: (value) => value instanceof HTMLElement,
+  });
+
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, { sorterHelper });
   }
 
   if (window.__EA_TEST_HOOKS__) {
@@ -26437,15 +25909,6 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     return evalCache[s]();
   }
 
-  function getVueById(elementId) {
-    let element = win.document.getElementById(elementId);
-    if (element === null || !element.__vue__) {
-      return undefined;
-    }
-
-    return element.__vue__;
-  }
-
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
       propertyHelpers: { normalizeProperties, addProps },
@@ -26455,35 +25918,22 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     });
   }
 
-  function triggerFileDownload(contents, filename) {
-    let url = URL.createObjectURL(new Blob([contents]));
-    let a = document.createElement("a");
-    a.download = filename;
-    a.href = url;
-    a.click();
-    // Doesn't seem like there is any good way to do this, a minute should be fine.
-    setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 60 * 1000);
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      browserRuntime: { getVueById, triggerFileDownload },
+      setBrowserRuntimeTestContext(context) {
+        win = context.win;
+      },
+    });
   }
 
-  function traitVal(trait, idx, opt) {
-    if (game.global.race[trait]) {
-      let val = game.traits[trait].vars()[idx];
-      if (opt === "-") {
-        return 1 - val / 100;
-      } else if (opt === "+") {
-        return 1 + val / 100;
-      } else if (opt === "=") {
-        return val / 100;
-      } else {
-        return val;
-      }
-    } else if (opt === "+" || opt === "-" || opt === "=") {
-      return 1;
-    } else {
-      return opt ?? 0;
-    }
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      traitVal,
+      setTraitValueTestContext(context) {
+        game = context.game;
+      },
+    });
   }
 
   function importSettings(str) {

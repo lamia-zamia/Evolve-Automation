@@ -28,9 +28,11 @@ Controller sources are grouped by responsibility under `src/automation/`: `civic
 `progression`, `combat`, and `traits`. Cross-controller policy modules live separately under
 `src/policies/`; filenames stay concise because the containing folders already provide context.
 Shared compact-number parsing and display formatting lives under `src/formatting/`.
+Settings migration, trigger synchronization, and persistence primitives live under `src/settings/`.
 Small game-state query boundaries that are shared across controllers live under `src/game/`.
 Cross-controller resource and target planning boundaries live under `src/planning/`.
 Runtime diagnostics and compact state sampling live under `src/observability/` and `src/validation/`.
+Browser integration and reusable settings-interface calculations live under `src/browser/` and `src/ui/`.
 These shared boundaries are independently characterized against the generated bundle and have focused
 TypeScript module regressions.
 
