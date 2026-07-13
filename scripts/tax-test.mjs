@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoTax } from "../src/subsystems/tax.js";
+import { createAutoTax } from "../src/subsystems/tax.ts";
 
 function runTaxCase({
   taxRate = 10,
@@ -45,9 +45,10 @@ function runTaxCase({
       race: {},
     },
   };
+  let poly;
   const autoTax = createAutoTax({
     KeyManager: { set: (...args) => actions.push(["keys", ...args]) },
-    poly: { taxCap: (minimum) => (minimum ? 0 : 50) },
+    getPoly: () => poly,
     getResources: () => resources,
     getSettings: () => settings,
     getGame: () => game,
@@ -57,6 +58,8 @@ function runTaxCase({
     }),
   });
 
+  // Main initializes poly after wiring the controller, so it must be resolved lazily.
+  poly = { taxCap: (minimum) => (minimum ? 0 : 50) };
   autoTax();
   return { actions, resources };
 }

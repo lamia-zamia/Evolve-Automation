@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoAlchemy } from "../src/subsystems/alchemy.js";
+import { createAutoAlchemy } from "../src/subsystems/alchemy.ts";
 
 function runAlchemyCase({ unlocked = true } = {}) {
   const actions = [];

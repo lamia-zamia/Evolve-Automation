@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoBattle } from "../src/subsystems/battle.js";
+import { createAutoBattle } from "../src/subsystems/battle.ts";
 
 function runBattleCase({ guarded = false } = {}) {
   const actions = [];

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoGovernment } from "../src/subsystems/government.js";
+import { createAutoGovernment } from "../src/subsystems/government.ts";
 
 function runGovernmentCase({
   guard = false,

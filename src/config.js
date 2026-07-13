@@ -1,5 +1,5 @@
 // Displayed in the error handler. Change this when publishing a distinct fork.
-export const SCRIPT_VERSION_EXTRA = "[Vollch]";
+export const SCRIPT_VERSION_EXTRA = "[Vollch/Lamia]";
 
 // Seconds of consumed resources to reserve and target.
 export const CONSUMPTION_BALANCE_MIN = 60;

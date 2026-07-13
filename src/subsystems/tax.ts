@@ -1,15 +1,26 @@
+import type { SubsystemDependencies } from "./types.ts";
+
+type Dependencies = SubsystemDependencies<
+  | "KeyManager"
+  | "getPoly"
+  | "getResources"
+  | "getSettings"
+  | "getGame"
+  | "getVueById"
+>;
 export function createAutoTax({
   KeyManager,
-  poly,
+  getPoly,
   getResources,
   getSettings,
   getGame,
   getVueById,
-}) {
+}: Dependencies) {
   return function autoTax() {
     const resources = getResources();
     const settings = getSettings();
     const game = getGame();
+    const poly = getPoly();
 
     if (resources.Morale.incomeAdusted) {
       return;

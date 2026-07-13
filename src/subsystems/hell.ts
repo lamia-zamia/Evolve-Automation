@@ -1,3 +1,13 @@
+import type { SubsystemDependencies } from "./types.ts";
+
+type Dependencies = SubsystemDependencies<
+  | "WarManager"
+  | "getGame"
+  | "getSettings"
+  | "getBuildings"
+  | "getResources"
+  | "getWindow"
+>;
 export function createAutoHell({
   WarManager,
   getGame,
@@ -5,7 +15,7 @@ export function createAutoHell({
   getBuildings,
   getResources,
   getWindow,
-}) {
+}: Dependencies) {
   return function autoHell() {
     const game = getGame();
     const settings = getSettings();

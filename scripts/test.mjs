@@ -26,7 +26,7 @@ function runNode(args, label) {
 runNode(["--check", "evolve_automation.user.js"], "userscript syntax");
 
 for (const testFile of testFiles) {
-  runNode([join("scripts", testFile)], testFile);
+  runNode(["--import", "tsx", join("scripts", testFile)], testFile);
 }
 
 console.log(`All checks passed (${testFiles.length} test files plus bundle syntax)`);

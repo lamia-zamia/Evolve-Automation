@@ -40,7 +40,7 @@ if (watch) {
   await writeFile(metadataOutputPath, `${metadata}\n`, "utf8");
   const context = await esbuild.context(buildOptions);
   await context.watch();
-  console.log("Watching src/**/*.js; press Ctrl+C to stop.");
+  console.log("Watching src/**/*.{js,ts}; press Ctrl+C to stop.");
 } else {
   await esbuild.build(buildOptions);
   await writeFile(metadataOutputPath, `${metadata}\n`, "utf8");

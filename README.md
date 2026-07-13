@@ -11,6 +11,17 @@ Short factual differences from Vollch's script:
 - Settings UI is split into focused sections for interface, state log, achievement guards, and challenge helpers.
 - Improved stability for performance hack
 
+The userscript is organized into tested TypeScript subsystem factories. Extracted
+controllers currently cover Hell, government, battle, tax, smelter, alchemy, pylon, quarry, mine,
+extractor, factory, mining-droid, Graphene-plant, shapeshift, wish, and genetics automation.
+Mercenary, psychic, ocular-power, minor-trait, and trigger controllers are also extracted.
+Consumption, replicator, market, galaxy-market, and manual resource-gathering controllers are
+extracted as well.
+Evolution, universe selection, crafting, spying, and prestige controllers are also modularized.
+Planet selection, jobs, building purchases, research, and mutable-trait automation are modularized.
+Power, storage, outer/galaxy fleets, and mech automation complete the controller extraction: no
+`auto*` implementation remains in `src/main.js`; it only wires the TypeScript subsystem factories.
+
 ## Development
 
 `evolve_automation.user.js` and `evolve_automation.meta.js` are generated files.
@@ -22,7 +33,7 @@ Run the one-time project setup after cloning or switching to the modular source:
 npm install
 ```
 
-This installs the pinned, repository-local esbuild dependency and configures Git
+This installs the pinned, repository-local esbuild, TypeScript, and tsx dependencies and configures Git
 to use `.githooks`. Nothing is installed globally.
 
 The pre-commit hook automatically builds, checks, and stages both generated files
@@ -42,10 +53,11 @@ Useful checks:
 
 ```powershell
 npm run check
+npm run typecheck
 npm run verify
 ```
 
-`check` runs `scripts/test.mjs`, which checks generated-bundle syntax and automatically
+`check` type-checks every extracted subsystem, then runs `scripts/test.mjs`, which checks generated-bundle syntax and automatically
 discovers every `scripts/*-test.mjs` file. New tests do not need to be added to
 `package.json`. `verify` also rebuilds and fails if the committed generated artifacts
 are stale. GitHub Actions runs `verify` on pushes to `master`/`split` and on pull

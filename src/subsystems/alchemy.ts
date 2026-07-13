@@ -1,10 +1,19 @@
+import type { SubsystemDependencies } from "./types.ts";
+
+type Dependencies = SubsystemDependencies<
+  | "AlchemyManager"
+  | "getResources"
+  | "getSettings"
+  | "getGame"
+  | "getAchievementStar"
+>;
 export function createAutoAlchemy({
   AlchemyManager,
   getResources,
   getSettings,
   getGame,
   getAchievementStar,
-}) {
+}: Dependencies) {
   return function autoAlchemy() {
     const resources = getResources();
     const settings = getSettings();

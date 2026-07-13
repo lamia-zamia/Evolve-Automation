@@ -1,3 +1,14 @@
+import type { SubsystemDependencies } from "./types.ts";
+
+type Dependencies = SubsystemDependencies<
+  | "GovernmentManager"
+  | "getSettings"
+  | "getGame"
+  | "guardActive"
+  | "haveTech"
+  | "getGovernor"
+  | "getVueById"
+>;
 export function createAutoGovernment({
   GovernmentManager,
   getSettings,
@@ -6,7 +17,7 @@ export function createAutoGovernment({
   haveTech,
   getGovernor,
   getVueById,
-}) {
+}: Dependencies) {
   return function autoGovernment() {
     const settings = getSettings();
     const game = getGame();

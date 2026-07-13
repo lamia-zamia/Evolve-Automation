@@ -1,3 +1,15 @@
+import type { SubsystemDependencies } from "./types.ts";
+
+type Dependencies = SubsystemDependencies<
+  | "SmelterManager"
+  | "getGame"
+  | "getState"
+  | "getSettings"
+  | "getResources"
+  | "getJobs"
+  | "getBuildings"
+  | "haveTech"
+>;
 import { CONSUMPTION_BALANCE_MIN } from "../config.js";
 
 export function createAutoSmelter({
@@ -9,7 +21,7 @@ export function createAutoSmelter({
   getJobs,
   getBuildings,
   haveTech,
-}) {
+}: Dependencies) {
   return function autoSmelter() {
     const game = getGame();
     const state = getState();
@@ -108,7 +120,7 @@ export function createAutoSmelter({
         : 0;
     let maxAllowedSteel = totalSmelters - smelterIridiumCount;
 
-    let smeltAdjust = {
+    let smeltAdjust: Record<string, number> = {
       Iridium: maxAllowedIridium - smelterIridiumCount,
       Steel: smelterIridiumCount - maxAllowedIridium,
     };

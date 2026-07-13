@@ -8,13 +8,16 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "check": "node scripts/test.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "check": "npm run typecheck && node scripts/test.mjs",
     "dev": "node build.mjs --watch",
     "prepare": "node scripts/setup-hooks.mjs",
     "verify": "npm run build && npm run check && git diff --exit-code -- evolve_automation.user.js evolve_automation.meta.js"
   },
   "devDependencies": {
-    "esbuild": "0.28.1"
+    "esbuild": "0.28.1",
+    "tsx": "4.23.1",
+    "typescript": "7.0.2"
   },
   "allowScripts": {
     "esbuild@0.28.1": true

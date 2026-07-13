@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoHell } from "../src/subsystems/hell.js";
+import { createAutoHell } from "../src/subsystems/hell.ts";
 
 function zeroAuthorityManager() {
   return {

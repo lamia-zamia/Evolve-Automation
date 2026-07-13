@@ -1,3 +1,18 @@
+import type { SubsystemDependencies } from "./types.ts";
+
+type Dependencies = SubsystemDependencies<
+  | "SpyManager"
+  | "WarManager"
+  | "GameLog"
+  | "getState"
+  | "getSettings"
+  | "getGame"
+  | "guardActive"
+  | "getHealingRate"
+  | "traitVal"
+  | "getOccCosts"
+  | "getGovName"
+>;
 export function createAutoBattle({
   SpyManager,
   WarManager,
@@ -10,7 +25,7 @@ export function createAutoBattle({
   traitVal,
   getOccCosts,
   getGovName,
-}) {
+}: Dependencies) {
   return function autoBattle() {
     const state = getState();
     const settings = getSettings();

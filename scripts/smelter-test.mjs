@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoSmelter } from "../src/subsystems/smelter.js";
+import { createAutoSmelter } from "../src/subsystems/smelter.ts";
 
 function makeResource(name, overrides = {}) {
   return {
