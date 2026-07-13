@@ -1567,6 +1567,171 @@
     return { prioritizeDemandedResources: prioritizeDemandedResources2 };
   }
 
+  // src/planning/priority-targets.ts
+  function createPriorityTargets({
+    getSettings,
+    getState,
+    getGame,
+    getResources,
+    getBuildings,
+    getTechIds,
+    getBuildingIds,
+    getArpaIds,
+    getSpyManager,
+    getFleetManagerOuter,
+    getMechManager,
+    getTriggerManager,
+    getJQuery,
+    getQueuedItemObj: getQueuedItemObj2,
+    getTechConflict: getTechConflict2,
+    isPrestigeAllowed: isPrestigeAllowed2,
+    haveTask: haveTask2,
+    inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2,
+    inflationChallengeMoney
+  }) {
+    function updatePriorityTargets2() {
+      const settings2 = getSettings();
+      const state2 = getState();
+      const game2 = getGame();
+      const resources2 = getResources();
+      const buildings2 = getBuildings();
+      const techIds2 = getTechIds();
+      state2.conflictTargets = [];
+      state2.queuedTargets = [];
+      state2.queuedTargetsAll = [];
+      state2.triggerTargets = [];
+      state2.unlockedTechs = [];
+      state2.unlockedBuildings = [];
+      const queueSave = settings2.prioritizeQueue.includes("save");
+      [
+        { type: "queue", noorder: "qAny", map: getQueuedItemObj2 },
+        {
+          type: "r_queue",
+          noorder: "qAny_res",
+          map: (item) => techIds2[item.id]
+        }
+      ].forEach((queue) => {
+        const queueState = game2.global[queue.type];
+        if (queueState.display) {
+          for (const item of queueState.queue) {
+            const obj = queue.map(item);
+            if (obj) {
+              state2.queuedTargetsAll.push(obj);
+              if (obj.isAffordable(true)) {
+                state2.queuedTargets.push(obj);
+                if (queueSave) {
+                  state2.conflictTargets.push({
+                    name: obj.title,
+                    cause: "Queue",
+                    cost: obj.cost
+                  });
+                }
+              }
+            }
+            if (!game2.global.settings[queue.noorder]) {
+              break;
+            }
+          }
+        }
+      });
+      const SpyManager2 = getSpyManager();
+      if (SpyManager2.purchaseMoney && settings2.prioritizeUnify.includes("save")) {
+        state2.conflictTargets.push({
+          name: techIds2["tech-unification"].title,
+          cause: "Purchase",
+          cost: { Money: SpyManager2.purchaseMoney }
+        });
+      }
+      if (inflationChallengeShouldSaveMoney2()) {
+        state2.conflictTargets.push({
+          name: "Inflation challenge",
+          cause: "Wheelbarrow",
+          cost: { Money: inflationChallengeMoney }
+        });
+      }
+      const FleetManagerOuter2 = getFleetManagerOuter();
+      if (settings2.autoFleet && FleetManagerOuter2.nextShipAffordable && settings2.prioritizeOuterFleet.includes("save")) {
+        state2.conflictTargets.push({
+          name: FleetManagerOuter2.nextShipName,
+          cause: "Ship",
+          cost: FleetManagerOuter2.nextShipCost
+        });
+      }
+      const MechManager2 = getMechManager();
+      if (settings2.autoMech && MechManager2.initLab() && buildings2.AsphodelEncampment.count === 0) {
+        const mechBay = game2.global.portal.mechbay;
+        const baySpace = mechBay.max - mechBay.bay;
+        if (baySpace > 0) {
+          const newSize = !haveTask2("mech") ? settings2.mechBuild === "random" ? MechManager2.getPreferredSize()[0] : mechBay.blueprint.size : "titan";
+          const [newGems] = MechManager2.getMechCost({ size: newSize });
+          if (newGems > 0) {
+            state2.conflictTargets.push({
+              name: `Next mech (${newSize})`,
+              cause: "Mech",
+              cost: { Soul_Gem: newGems }
+            });
+          }
+        }
+      }
+      if (settings2.autoTrigger) {
+        const TriggerManager2 = getTriggerManager();
+        const buildingIds2 = getBuildingIds();
+        const arpaIds2 = getArpaIds();
+        TriggerManager2.resetTargetTriggers();
+        const triggerSave = settings2.prioritizeTriggers.includes("save");
+        for (const trigger of TriggerManager2.targetTriggers) {
+          const id = trigger.actionId;
+          const obj = arpaIds2[id] || buildingIds2[id] || techIds2[id];
+          if (obj) {
+            state2.triggerTargets.push(obj);
+            if (triggerSave) {
+              state2.conflictTargets.push({
+                name: obj.title,
+                cause: "Trigger",
+                cost: obj.cost
+              });
+            }
+          }
+        }
+        if (buildings2.GorddonEmbassy.isAutoBuildable() && resources2.Knowledge.maxQuantity >= settings2.fleetEmbassyKnowledge) {
+          const obj = buildings2.GorddonEmbassy;
+          state2.triggerTargets.push(obj);
+          state2.conflictTargets.push({
+            name: obj.title,
+            cause: "Knowledge",
+            cost: obj.cost
+          });
+        }
+        if (buildings2.TauStarEden.isAutoBuildable() && isPrestigeAllowed2("eden")) {
+          const obj = buildings2.TauStarEden;
+          state2.triggerTargets.push(obj);
+          state2.conflictTargets.push({
+            name: obj.title,
+            cause: "Prestige",
+            cost: obj.cost
+          });
+        }
+        if (buildings2.TauGas2MatrioshkaBrain.count >= 1e3 && buildings2.TauGas2IgniteGasGiant.isAutoBuildable() && isPrestigeAllowed2("retire")) {
+          const obj = buildings2.TauGas2IgniteGasGiant;
+          state2.triggerTargets.push(obj);
+          state2.conflictTargets.push({
+            name: obj.title,
+            cause: "Prestige",
+            cost: obj.cost
+          });
+        }
+      }
+      getJQuery()("#tech .action").each(function() {
+        const tech = techIds2[this.id];
+        tech.updateResourceRequirements();
+        if (!getTechConflict2(tech) || state2.triggerTargets.includes(tech) || state2.queuedTargetsAll.includes(tech)) {
+          state2.unlockedTechs.push(tech);
+        }
+      });
+    }
+    return { updatePriorityTargets: updatePriorityTargets2 };
+  }
+
   // src/planning/queue-items.ts
   function createQueueItems({
     getResources,
@@ -2358,6 +2523,318 @@
       isGECKNeeded: isGECKNeeded2,
       getBlackholeMass: getBlackholeMass2
     };
+  }
+
+  // src/policies/tech-conflicts.ts
+  function createTechConflicts({
+    getSettings,
+    getResources,
+    getState,
+    getGame,
+    getIsAchievementUnlocked,
+    getNumberString: getNumberString2,
+    guardActive: guardActive2,
+    guardBananaRepublicActive: guardBananaRepublicActive2,
+    retirementChallengeAssistActive: retirementChallengeAssistActive2,
+    retirementPreparationMissing: retirementPreparationMissing2,
+    fanatAchievements: fanatAchievements2
+  }) {
+    function getTechConflict2(tech) {
+      const settings2 = getSettings();
+      const resources2 = getResources();
+      const state2 = getState();
+      const game2 = getGame();
+      const isAchievementUnlocked2 = getIsAchievementUnlocked();
+      let itemId = tech._vueBinding;
+      if (settings2.researchIgnore.includes(itemId)) {
+        return "Ignored research";
+      }
+      if (itemId === "tech-exotic_infusion" || itemId === "tech-infusion_check" || itemId === "tech-infusion_confirm" || itemId === "tech-dial_it_to_11" || itemId === "tech-limit_collider" || itemId === "tech-demonic_infusion" || itemId === "tech-protocol66" || itemId === "tech-protocol66a" || itemId === "tech-final_ingredient") {
+        return "Reset research";
+      }
+      if (settings2.prestigeType === "whitehole" && settings2.prestigeWhiteholeSaveGems && itemId !== "tech-virtual_reality" && tech.cost["Soul_Gem"] > resources2.Soul_Gem.currentQuantity - 10) {
+        return "Saving up Soul Gems for prestige";
+      }
+      if (itemId === "tech-isolation_protocol" && settings2.prestigeType !== "retire") {
+        return "Progression fork to Retirement reset";
+      }
+      if (itemId === "tech-isolation_protocol" && retirementChallengeAssistActive2()) {
+        let missing = retirementPreparationMissing2();
+        if (missing.length > 0) {
+          return `Retirement preparation incomplete: ${missing.join(", ")}`;
+        }
+      }
+      if (itemId === "tech-outerplane_summon" && settings2.prestigeType !== "demonic") {
+        return "Progression fork to Witch Hunter's Demonic Infusion";
+      }
+      if (itemId === "tech-focus_cure" && settings2.prestigeType !== "matrix") {
+        return "Progression fork to Matrix reset";
+      }
+      if (itemId === "tech-purify_essence" && settings2.prestigeType !== "apotheosis") {
+        return "Progression fork to Apotheosis";
+      }
+      if ((itemId === "tech-vax_strat1" || itemId === "tech-vax_strat2" || itemId === "tech-vax_strat3" || itemId === "tech-vax_strat4") && !itemId.includes(settings2.prestigeVaxStrat)) {
+        return "Undesirable Vaccination Strategy";
+      }
+      if (itemId === "tech-dark_bomb" && (!settings2.prestigeDemonicBomb || settings2.prestigeType !== "demonic")) {
+        return "Dark Bomb disabled";
+      }
+      if ((itemId === "tech-incorporeal" || itemId === "tech-tech_ascension") && settings2.prestigeType !== "ascension" && settings2.prestigeType !== "apotheosis") {
+        return "Not needed for current prestige";
+      }
+      if (itemId === "tech-xeno_gift" && resources2.Knowledge.maxQuantity < settings2.fleetAlienGiftKnowledge) {
+        return `${getNumberString2(
+          settings2.fleetAlienGiftKnowledge
+        )} Max Knowledge required`;
+      }
+      if (itemId === "tech-unification2" || itemId === "tech-unite") {
+        if (guardBananaRepublicActive2()) {
+          return "Banana Republic guard";
+        }
+        if (guardActive2("guardCultOfPersonality")) {
+          return "Cult of Personality achievement guard";
+        }
+        if (!settings2.foreignUnification && !guardActive2("guardPacifist")) {
+          return "Unification disabled";
+        }
+      }
+      if (itemId === "tech-stabilize_blackhole") {
+        if (!settings2.prestigeWhiteholeStabiliseMass) {
+          return "Blackhole stabilization disabled";
+        }
+        if (settings2.prestigeType === "whitehole") {
+          return "Disabled during whilehole reset";
+        }
+        if (settings2.prestigeWhiteholeStabiliseCooldown > 0 && state2.whiteholeLastStabilise) {
+          let diff = (Date.now() - state2.whiteholeLastStabilise) / 1e3;
+          if (diff < settings2.prestigeWhiteholeStabiliseCooldown) {
+            return `On cooldown for ${Math.ceil(
+              settings2.prestigeWhiteholeStabiliseCooldown - diff
+            )} more seconds`;
+          }
+        }
+      }
+      if (itemId === "tech-anthropology" || itemId === "tech-fanaticism") {
+        if (guardActive2("guardSecondEvolution")) {
+          if (itemId === "tech-anthropology") {
+            return "Second Evolution achievement guard";
+          }
+        } else if (itemId !== settings2.userResearchTheology_1) {
+          const isFanatRace = () => Object.values(fanatAchievements2).reduce(
+            (result, combo) => result || game2.global.race.species === combo.race && game2.global.race.gods === combo.god && !isAchievementUnlocked2(combo.achieve, game2.alevel()),
+            false
+          );
+          if (itemId === "tech-anthropology" && !(settings2.userResearchTheology_1 === "auto" && settings2.prestigeType === "mad" && !isFanatRace())) {
+            return "Undesirable theology path";
+          }
+          if (itemId === "tech-fanaticism" && !(settings2.userResearchTheology_1 === "auto" && (settings2.prestigeType !== "mad" || isFanatRace()))) {
+            return "Undesirable theology path";
+          }
+        }
+      }
+      if (itemId !== settings2.userResearchTheology_2 && (itemId === "tech-deify" || itemId === "tech-study")) {
+        let longRun = [
+          "ascension",
+          "demonic",
+          "apotheosis",
+          "apocalypse",
+          "terraform",
+          "matrix",
+          "retire",
+          "eden"
+        ].includes(settings2.prestigeType);
+        if (itemId === "tech-deify" && !(settings2.userResearchTheology_2 === "auto" && longRun)) {
+          return "Undesirable theology path";
+        }
+        if (itemId === "tech-study" && !(settings2.userResearchTheology_2 === "auto" && !longRun)) {
+          return "Undesirable theology path";
+        }
+      }
+      return false;
+    }
+    return { getTechConflict: getTechConflict2 };
+  }
+
+  // src/planning/trade-routes.ts
+  function createTradeRoutes({
+    getSettings,
+    getGame,
+    getResources,
+    getMarketManager,
+    getGovernor: getGovernor2,
+    inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2
+  }) {
+    function adjustTradeRoutes2() {
+      const settings2 = getSettings();
+      const game2 = getGame();
+      const resources2 = getResources();
+      const MarketManager2 = getMarketManager();
+      let sellWeight = settings2.tradeRouteSellExcess ? (resource) => resource.usefulRatio >= 1 ? resource.tradeSellPrice * 1e3 : resource.usefulRatio : (resource) => resource.storageRatio >= 0.99 ? resource.tradeSellPrice * 1e3 : resource.usefulRatio;
+      let tradableResources = MarketManager2.priorityList.filter(
+        (r) => r.isRoutesUnlocked() && (r.autoTradeBuyEnabled || r.autoTradeSellEnabled)
+      ).sort((a, b) => sellWeight(b) - sellWeight(a));
+      let requiredTradeRoutes = {};
+      let currentMoneyPerSecond = resources2.Money.rateOfChange;
+      let tradeRoutesUsed = 0;
+      let importRouteCap = MarketManager2.getImportRouteCap();
+      let exportRouteCap = MarketManager2.getExportRouteCap();
+      let [maxTradeRoutes, unmanagedTradeRoutes] = MarketManager2.getMaxTradeRoutes();
+      let saveInflationMoney = inflationChallengeShouldSaveMoney2();
+      for (let i = 0; i < tradableResources.length; i++) {
+        let resource = tradableResources[i];
+        if (!resource.autoTradeSellEnabled) {
+          continue;
+        }
+        requiredTradeRoutes[resource.id] = 0;
+        if (tradeRoutesUsed >= maxTradeRoutes || game2.global.race["banana"] && tradeRoutesUsed > 0 || (settings2.tradeRouteSellExcess ? resource.usefulRatio < 1 : resource.storageRatio < 0.99)) {
+          continue;
+        }
+        let routesToAssign = Math.min(
+          exportRouteCap,
+          maxTradeRoutes - tradeRoutesUsed,
+          Math.floor(resource.rateOfChange / resource.tradeRouteQuantity)
+        );
+        if (routesToAssign > 0) {
+          tradeRoutesUsed += routesToAssign;
+          requiredTradeRoutes[resource.id] -= routesToAssign;
+          currentMoneyPerSecond += resource.tradeSellPrice * routesToAssign;
+        }
+      }
+      if (saveInflationMoney) {
+        for (let i = 0; i < tradableResources.length; i++) {
+          let resource = tradableResources[i];
+          if (resource.autoTradeBuyEnabled) {
+            requiredTradeRoutes[resource.id] = requiredTradeRoutes[resource.id] ?? 0;
+          }
+        }
+      }
+      let minimumAllowedMoneyPerSecond = Math.min(
+        resources2.Money.maxQuantity - resources2.Money.currentQuantity,
+        Math.max(
+          settings2.tradeRouteMinimumMoneyPerSecond,
+          settings2.tradeRouteMinimumMoneyPercentage / 100 * currentMoneyPerSecond
+        )
+      );
+      let priorityGroups = {};
+      for (let i = 0; i < tradableResources.length; i++) {
+        let resource = tradableResources[i];
+        if (!resource.autoTradeBuyEnabled) {
+          continue;
+        }
+        requiredTradeRoutes[resource.id] = requiredTradeRoutes[resource.id] ?? 0;
+        if (saveInflationMoney) {
+          continue;
+        }
+        if (resource.autoTradeWeighting <= 0 || (settings2.tradeRouteSellExcess ? resource.usefulRatio > 0.99 : resource.storageRatio > 0.98)) {
+          continue;
+        }
+        let priority = resource.autoTradePriority;
+        if (resource.isDemanded()) {
+          priority = Math.max(priority, 100);
+          if (!resources2.Money.isDemanded()) {
+            minimumAllowedMoneyPerSecond = 0;
+          }
+        } else if (priority < 100 && priority !== -1 && resources2.Money.isDemanded()) {
+          continue;
+        }
+        if (priority !== 0) {
+          priorityGroups[priority] = priorityGroups[priority] ?? [];
+          priorityGroups[priority].push(resource);
+        }
+      }
+      let priorityList = Object.keys(priorityGroups).sort((a, b) => Number(b) - Number(a)).map((key) => priorityGroups[key]);
+      if (priorityGroups["-1"] && priorityList.length > 1) {
+        priorityList.splice(priorityList.indexOf(priorityGroups["-1"], 1));
+        priorityList[0].push(...priorityGroups["-1"]);
+      }
+      let resSorter = (a, b) => requiredTradeRoutes[a.id] / a.autoTradeWeighting - requiredTradeRoutes[b.id] / b.autoTradeWeighting || b.autoTradeWeighting - a.autoTradeWeighting;
+      let remainingRoutes, unassignStep;
+      if (getGovernor2() === "entrepreneur") {
+        remainingRoutes = tradeRoutesUsed - unmanagedTradeRoutes;
+        unassignStep = 2;
+      } else {
+        remainingRoutes = maxTradeRoutes;
+        unassignStep = 1;
+      }
+      outerLoop: for (let i = 0; i < priorityList.length && remainingRoutes > 0; i++) {
+        let trades = priorityList[i].sort(
+          (a, b) => a.autoTradeWeighting - b.autoTradeWeighting
+        );
+        assignLoop: while (trades.length > 0 && remainingRoutes > 0) {
+          let resource = trades.sort(resSorter)[0];
+          if (requiredTradeRoutes[resource.id] >= importRouteCap) {
+            trades.shift();
+            continue;
+          }
+          if (currentMoneyPerSecond - resource.tradeBuyPrice < minimumAllowedMoneyPerSecond) {
+            break outerLoop;
+          }
+          if (tradeRoutesUsed < maxTradeRoutes) {
+            currentMoneyPerSecond -= resource.tradeBuyPrice;
+            tradeRoutesUsed++;
+            remainingRoutes--;
+            requiredTradeRoutes[resource.id]++;
+          } else {
+            for (let otherId in requiredTradeRoutes) {
+              if (requiredTradeRoutes[otherId] === void 0) {
+                continue;
+              }
+              let otherResource = resources2[otherId];
+              let currentRequired = requiredTradeRoutes[otherId];
+              if (currentRequired >= 0 || resource === otherResource) {
+                continue;
+              }
+              if (currentMoneyPerSecond - otherResource.tradeSellPrice - resource.tradeBuyPrice > minimumAllowedMoneyPerSecond && remainingRoutes >= unassignStep) {
+                currentMoneyPerSecond -= otherResource.tradeSellPrice;
+                currentMoneyPerSecond -= resource.tradeBuyPrice;
+                requiredTradeRoutes[otherId]++;
+                requiredTradeRoutes[resource.id]++;
+                remainingRoutes -= unassignStep;
+                continue assignLoop;
+              }
+            }
+            break outerLoop;
+          }
+        }
+      }
+      let adjustmentTradeRoutes = [];
+      for (let i = 0; i < tradableResources.length; i++) {
+        let resource = tradableResources[i];
+        if (requiredTradeRoutes[resource.id] === void 0) {
+          continue;
+        }
+        adjustmentTradeRoutes[i] = requiredTradeRoutes[resource.id] - resource.tradeRoutes;
+        if (requiredTradeRoutes[resource.id] === 0 && resource.tradeRoutes !== 0) {
+          MarketManager2.zeroTradeRoutes(resource);
+          adjustmentTradeRoutes[i] = 0;
+        } else if (adjustmentTradeRoutes[i] > 0 && resource.tradeRoutes < 0) {
+          MarketManager2.addTradeRoutes(resource, adjustmentTradeRoutes[i]);
+          adjustmentTradeRoutes[i] = 0;
+        } else if (adjustmentTradeRoutes[i] < 0 && resource.tradeRoutes > 0) {
+          MarketManager2.removeTradeRoutes(
+            resource,
+            -1 * adjustmentTradeRoutes[i]
+          );
+          adjustmentTradeRoutes[i] = 0;
+        }
+      }
+      for (let i = 0; i < tradableResources.length; i++) {
+        let resource = tradableResources[i];
+        if (requiredTradeRoutes[resource.id] === void 0) {
+          continue;
+        }
+        if (adjustmentTradeRoutes[i] > 0) {
+          MarketManager2.addTradeRoutes(resource, adjustmentTradeRoutes[i]);
+        } else if (adjustmentTradeRoutes[i] < 0) {
+          MarketManager2.removeTradeRoutes(
+            resource,
+            -1 * adjustmentTradeRoutes[i]
+          );
+        }
+      }
+      resources2.Money.rateOfChange = currentMoneyPerSecond;
+    }
+    return { adjustTradeRoutes: adjustTradeRoutes2 };
   }
 
   // src/automation/combat/hell.ts
@@ -18756,113 +19233,31 @@
       getResources: () => resources,
       getGetCostConflict: () => getCostConflict
     });
-    function getTechConflict(tech) {
-      let itemId = tech._vueBinding;
-      if (settings.researchIgnore.includes(itemId)) {
-        return "Ignored research";
-      }
-      if (itemId === "tech-exotic_infusion" || itemId === "tech-infusion_check" || itemId === "tech-infusion_confirm" || itemId === "tech-dial_it_to_11" || itemId === "tech-limit_collider" || itemId === "tech-demonic_infusion" || itemId === "tech-protocol66" || itemId === "tech-protocol66a" || itemId === "tech-final_ingredient") {
-        return "Reset research";
-      }
-      if (settings.prestigeType === "whitehole" && settings.prestigeWhiteholeSaveGems && itemId !== "tech-virtual_reality" && tech.cost["Soul_Gem"] > resources.Soul_Gem.currentQuantity - 10) {
-        return "Saving up Soul Gems for prestige";
-      }
-      if (itemId === "tech-isolation_protocol" && settings.prestigeType !== "retire") {
-        return "Progression fork to Retirement reset";
-      }
-      if (itemId === "tech-isolation_protocol" && retirementChallengeAssistActive()) {
-        let missing = retirementPreparationMissing();
-        if (missing.length > 0) {
-          return `Retirement preparation incomplete: ${missing.join(", ")}`;
+    const { getTechConflict } = createTechConflicts({
+      getSettings: () => settings,
+      getResources: () => resources,
+      getState: () => state,
+      getGame: () => game,
+      getIsAchievementUnlocked: () => isAchievementUnlocked,
+      getNumberString,
+      guardActive,
+      guardBananaRepublicActive,
+      retirementChallengeAssistActive,
+      retirementPreparationMissing,
+      fanatAchievements
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        getTechConflict,
+        setTechConflictTestContext(context) {
+          settings = context.settings;
+          game = context.game;
+          state = context.state;
+          resources = context.resources;
+          buildings = context.buildings;
+          isAchievementUnlocked = context.isAchievementUnlocked;
         }
-      }
-      if (itemId === "tech-outerplane_summon" && settings.prestigeType !== "demonic") {
-        return "Progression fork to Witch Hunter's Demonic Infusion";
-      }
-      if (itemId === "tech-focus_cure" && settings.prestigeType !== "matrix") {
-        return "Progression fork to Matrix reset";
-      }
-      if (itemId === "tech-purify_essence" && settings.prestigeType !== "apotheosis") {
-        return "Progression fork to Apotheosis";
-      }
-      if ((itemId === "tech-vax_strat1" || itemId === "tech-vax_strat2" || itemId === "tech-vax_strat3" || itemId === "tech-vax_strat4") && !itemId.includes(settings.prestigeVaxStrat)) {
-        return "Undesirable Vaccination Strategy";
-      }
-      if (itemId === "tech-dark_bomb" && (!settings.prestigeDemonicBomb || settings.prestigeType !== "demonic")) {
-        return "Dark Bomb disabled";
-      }
-      if ((itemId === "tech-incorporeal" || itemId === "tech-tech_ascension") && settings.prestigeType !== "ascension" && settings.prestigeType !== "apotheosis") {
-        return "Not needed for current prestige";
-      }
-      if (itemId === "tech-xeno_gift" && resources.Knowledge.maxQuantity < settings.fleetAlienGiftKnowledge) {
-        return `${getNumberString(
-          settings.fleetAlienGiftKnowledge
-        )} Max Knowledge required`;
-      }
-      if (itemId === "tech-unification2" || itemId === "tech-unite") {
-        if (guardBananaRepublicActive()) {
-          return "Banana Republic guard";
-        }
-        if (guardActive("guardCultOfPersonality")) {
-          return "Cult of Personality achievement guard";
-        }
-        if (!settings.foreignUnification && !guardActive("guardPacifist")) {
-          return "Unification disabled";
-        }
-      }
-      if (itemId === "tech-stabilize_blackhole") {
-        if (!settings.prestigeWhiteholeStabiliseMass) {
-          return "Blackhole stabilization disabled";
-        }
-        if (settings.prestigeType === "whitehole") {
-          return "Disabled during whilehole reset";
-        }
-        if (settings.prestigeWhiteholeStabiliseCooldown > 0 && state.whiteholeLastStabilise) {
-          let diff = (Date.now() - state.whiteholeLastStabilise) / 1e3;
-          if (diff < settings.prestigeWhiteholeStabiliseCooldown) {
-            return `On cooldown for ${Math.ceil(
-              settings.prestigeWhiteholeStabiliseCooldown - diff
-            )} more seconds`;
-          }
-        }
-      }
-      if (itemId === "tech-anthropology" || itemId === "tech-fanaticism") {
-        if (guardActive("guardSecondEvolution")) {
-          if (itemId === "tech-anthropology") {
-            return "Second Evolution achievement guard";
-          }
-        } else if (itemId !== settings.userResearchTheology_1) {
-          const isFanatRace = () => Object.values(fanatAchievements).reduce(
-            (result, combo) => result || game.global.race.species === combo.race && game.global.race.gods === combo.god && !isAchievementUnlocked(combo.achieve, game.alevel()),
-            false
-          );
-          if (itemId === "tech-anthropology" && !(settings.userResearchTheology_1 === "auto" && settings.prestigeType === "mad" && !isFanatRace())) {
-            return "Undesirable theology path";
-          }
-          if (itemId === "tech-fanaticism" && !(settings.userResearchTheology_1 === "auto" && (settings.prestigeType !== "mad" || isFanatRace()))) {
-            return "Undesirable theology path";
-          }
-        }
-      }
-      if (itemId !== settings.userResearchTheology_2 && (itemId === "tech-deify" || itemId === "tech-study")) {
-        let longRun = [
-          "ascension",
-          "demonic",
-          "apotheosis",
-          "apocalypse",
-          "terraform",
-          "matrix",
-          "retire",
-          "eden"
-        ].includes(settings.prestigeType);
-        if (itemId === "tech-deify" && !(settings.userResearchTheology_2 === "auto" && longRun)) {
-          return "Undesirable theology path";
-        }
-        if (itemId === "tech-study" && !(settings.userResearchTheology_2 === "auto" && !longRun)) {
-          return "Undesirable theology path";
-        }
-      }
-      return false;
+      });
     }
     const autoTrigger = createAutoTrigger({
       getState: () => state,
@@ -18997,171 +19392,24 @@
         }
       });
     }
-    function adjustTradeRoutes() {
-      let sellWeight = settings.tradeRouteSellExcess ? (resource) => resource.usefulRatio >= 1 ? resource.tradeSellPrice * 1e3 : resource.usefulRatio : (resource) => resource.storageRatio >= 0.99 ? resource.tradeSellPrice * 1e3 : resource.usefulRatio;
-      let tradableResources = MarketManager.priorityList.filter(
-        (r) => r.isRoutesUnlocked() && (r.autoTradeBuyEnabled || r.autoTradeSellEnabled)
-      ).sort((a, b) => sellWeight(b) - sellWeight(a));
-      let requiredTradeRoutes = {};
-      let currentMoneyPerSecond = resources.Money.rateOfChange;
-      let tradeRoutesUsed = 0;
-      let importRouteCap = MarketManager.getImportRouteCap();
-      let exportRouteCap = MarketManager.getExportRouteCap();
-      let [maxTradeRoutes, unmanagedTradeRoutes] = MarketManager.getMaxTradeRoutes();
-      let saveInflationMoney = inflationChallengeShouldSaveMoney();
-      for (let i = 0; i < tradableResources.length; i++) {
-        let resource = tradableResources[i];
-        if (!resource.autoTradeSellEnabled) {
-          continue;
+    let { adjustTradeRoutes } = createTradeRoutes({
+      getSettings: () => settings,
+      getGame: () => game,
+      getResources: () => resources,
+      getMarketManager: () => MarketManager,
+      getGovernor,
+      inflationChallengeShouldSaveMoney
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        adjustTradeRoutes,
+        setTradeRoutesTestContext(context) {
+          settings = context.settings;
+          game = context.game;
+          resources = context.resources;
+          MarketManager = context.MarketManager;
         }
-        requiredTradeRoutes[resource.id] = 0;
-        if (tradeRoutesUsed >= maxTradeRoutes || game.global.race["banana"] && tradeRoutesUsed > 0 || (settings.tradeRouteSellExcess ? resource.usefulRatio < 1 : resource.storageRatio < 0.99)) {
-          continue;
-        }
-        let routesToAssign = Math.min(
-          exportRouteCap,
-          maxTradeRoutes - tradeRoutesUsed,
-          Math.floor(resource.rateOfChange / resource.tradeRouteQuantity)
-        );
-        if (routesToAssign > 0) {
-          tradeRoutesUsed += routesToAssign;
-          requiredTradeRoutes[resource.id] -= routesToAssign;
-          currentMoneyPerSecond += resource.tradeSellPrice * routesToAssign;
-        }
-      }
-      if (saveInflationMoney) {
-        for (let i = 0; i < tradableResources.length; i++) {
-          let resource = tradableResources[i];
-          if (resource.autoTradeBuyEnabled) {
-            requiredTradeRoutes[resource.id] = requiredTradeRoutes[resource.id] ?? 0;
-          }
-        }
-      }
-      let minimumAllowedMoneyPerSecond = Math.min(
-        resources.Money.maxQuantity - resources.Money.currentQuantity,
-        Math.max(
-          settings.tradeRouteMinimumMoneyPerSecond,
-          settings.tradeRouteMinimumMoneyPercentage / 100 * currentMoneyPerSecond
-        )
-      );
-      let priorityGroups = {};
-      for (let i = 0; i < tradableResources.length; i++) {
-        let resource = tradableResources[i];
-        if (!resource.autoTradeBuyEnabled) {
-          continue;
-        }
-        requiredTradeRoutes[resource.id] = requiredTradeRoutes[resource.id] ?? 0;
-        if (saveInflationMoney) {
-          continue;
-        }
-        if (resource.autoTradeWeighting <= 0 || (settings.tradeRouteSellExcess ? resource.usefulRatio > 0.99 : resource.storageRatio > 0.98)) {
-          continue;
-        }
-        let priority = resource.autoTradePriority;
-        if (resource.isDemanded()) {
-          priority = Math.max(priority, 100);
-          if (!resources.Money.isDemanded()) {
-            minimumAllowedMoneyPerSecond = 0;
-          }
-        } else if (priority < 100 && priority !== -1 && resources.Money.isDemanded()) {
-          continue;
-        }
-        if (priority !== 0) {
-          priorityGroups[priority] = priorityGroups[priority] ?? [];
-          priorityGroups[priority].push(resource);
-        }
-      }
-      let priorityList = Object.keys(priorityGroups).sort((a, b) => b - a).map((key) => priorityGroups[key]);
-      if (priorityGroups["-1"] && priorityList.length > 1) {
-        priorityList.splice(priorityList.indexOf(priorityGroups["-1"], 1));
-        priorityList[0].push(...priorityGroups["-1"]);
-      }
-      let resSorter = (a, b) => requiredTradeRoutes[a.id] / a.autoTradeWeighting - requiredTradeRoutes[b.id] / b.autoTradeWeighting || b.autoTradeWeighting - a.autoTradeWeighting;
-      let remainingRoutes, unassignStep;
-      if (getGovernor() === "entrepreneur") {
-        remainingRoutes = tradeRoutesUsed - unmanagedTradeRoutes;
-        unassignStep = 2;
-      } else {
-        remainingRoutes = maxTradeRoutes;
-        unassignStep = 1;
-      }
-      outerLoop: for (let i = 0; i < priorityList.length && remainingRoutes > 0; i++) {
-        let trades = priorityList[i].sort(
-          (a, b) => a.autoTradeWeighting - b.autoTradeWeighting
-        );
-        assignLoop: while (trades.length > 0 && remainingRoutes > 0) {
-          let resource = trades.sort(resSorter)[0];
-          if (requiredTradeRoutes[resource.id] >= importRouteCap) {
-            trades.shift();
-            continue;
-          }
-          if (currentMoneyPerSecond - resource.tradeBuyPrice < minimumAllowedMoneyPerSecond) {
-            break outerLoop;
-          }
-          if (tradeRoutesUsed < maxTradeRoutes) {
-            currentMoneyPerSecond -= resource.tradeBuyPrice;
-            tradeRoutesUsed++;
-            remainingRoutes--;
-            requiredTradeRoutes[resource.id]++;
-          } else {
-            for (let otherId in requiredTradeRoutes) {
-              if (requiredTradeRoutes[otherId] === void 0) {
-                continue;
-              }
-              let otherResource = resources[otherId];
-              let currentRequired = requiredTradeRoutes[otherId];
-              if (currentRequired >= 0 || resource === otherResource) {
-                continue;
-              }
-              if (currentMoneyPerSecond - otherResource.tradeSellPrice - resource.tradeBuyPrice > minimumAllowedMoneyPerSecond && remainingRoutes >= unassignStep) {
-                currentMoneyPerSecond -= otherResource.tradeSellPrice;
-                currentMoneyPerSecond -= resource.tradeBuyPrice;
-                requiredTradeRoutes[otherId]++;
-                requiredTradeRoutes[resource.id]++;
-                remainingRoutes -= unassignStep;
-                continue assignLoop;
-              }
-            }
-            break outerLoop;
-          }
-        }
-      }
-      let adjustmentTradeRoutes = [];
-      for (let i = 0; i < tradableResources.length; i++) {
-        let resource = tradableResources[i];
-        if (requiredTradeRoutes[resource.id] === void 0) {
-          continue;
-        }
-        adjustmentTradeRoutes[i] = requiredTradeRoutes[resource.id] - resource.tradeRoutes;
-        if (requiredTradeRoutes[resource.id] === 0 && resource.tradeRoutes !== 0) {
-          MarketManager.zeroTradeRoutes(resource);
-          adjustmentTradeRoutes[i] = 0;
-        } else if (adjustmentTradeRoutes[i] > 0 && resource.tradeRoutes < 0) {
-          MarketManager.addTradeRoutes(resource, adjustmentTradeRoutes[i]);
-          adjustmentTradeRoutes[i] = 0;
-        } else if (adjustmentTradeRoutes[i] < 0 && resource.tradeRoutes > 0) {
-          MarketManager.removeTradeRoutes(
-            resource,
-            -1 * adjustmentTradeRoutes[i]
-          );
-          adjustmentTradeRoutes[i] = 0;
-        }
-      }
-      for (let i = 0; i < tradableResources.length; i++) {
-        let resource = tradableResources[i];
-        if (requiredTradeRoutes[resource.id] === void 0) {
-          continue;
-        }
-        if (adjustmentTradeRoutes[i] > 0) {
-          MarketManager.addTradeRoutes(resource, adjustmentTradeRoutes[i]);
-        } else if (adjustmentTradeRoutes[i] < 0) {
-          MarketManager.removeTradeRoutes(
-            resource,
-            -1 * adjustmentTradeRoutes[i]
-          );
-        }
-      }
-      resources.Money.rateOfChange = currentMoneyPerSecond;
+      });
     }
     const autoFleetOuter = createAutoFleetOuter({
       getFleetManagerOuter: () => FleetManagerOuter,
@@ -19328,128 +19576,43 @@
         }
       });
     }
-    function updatePriorityTargets() {
-      state.conflictTargets = [];
-      state.queuedTargets = [];
-      state.queuedTargetsAll = [];
-      state.triggerTargets = [];
-      state.unlockedTechs = [];
-      state.unlockedBuildings = [];
-      let queueSave = settings.prioritizeQueue.includes("save");
-      [
-        { type: "queue", noorder: "qAny", map: getQueuedItemObj },
-        { type: "r_queue", noorder: "qAny_res", map: (item) => techIds[item.id] }
-      ].forEach((queue) => {
-        if (game.global[queue.type].display) {
-          for (let item of game.global[queue.type].queue) {
-            let obj = queue.map(item);
-            if (obj) {
-              state.queuedTargetsAll.push(obj);
-              if (obj.isAffordable(true)) {
-                state.queuedTargets.push(obj);
-                if (queueSave) {
-                  state.conflictTargets.push({
-                    name: obj.title,
-                    cause: "Queue",
-                    cost: obj.cost
-                  });
-                }
-              }
-            }
-            if (!game.global.settings[queue.noorder]) {
-              break;
-            }
-          }
-        }
-      });
-      if (SpyManager.purchaseMoney && settings.prioritizeUnify.includes("save")) {
-        state.conflictTargets.push({
-          name: techIds["tech-unification"].title,
-          cause: "Purchase",
-          cost: { Money: SpyManager.purchaseMoney }
-        });
-      }
-      if (inflationChallengeShouldSaveMoney()) {
-        state.conflictTargets.push({
-          name: "Inflation challenge",
-          cause: "Wheelbarrow",
-          cost: { Money: INFLATION_CHALLENGE_MONEY }
-        });
-      }
-      if (settings.autoFleet && FleetManagerOuter.nextShipAffordable && settings.prioritizeOuterFleet.includes("save")) {
-        state.conflictTargets.push({
-          name: FleetManagerOuter.nextShipName,
-          cause: "Ship",
-          cost: FleetManagerOuter.nextShipCost
-        });
-      }
-      if (settings.autoMech && MechManager.initLab() && buildings.AsphodelEncampment.count === 0) {
-        let mechBay = game.global.portal.mechbay;
-        let baySpace = mechBay.max - mechBay.bay;
-        if (baySpace > 0) {
-          let newSize = !haveTask("mech") ? settings.mechBuild === "random" ? MechManager.getPreferredSize()[0] : mechBay.blueprint.size : "titan";
-          let [newGems, newSupply, newSpace] = MechManager.getMechCost({
-            size: newSize
-          });
-          if (newGems > 0) {
-            state.conflictTargets.push({
-              name: `Next mech (${newSize})`,
-              cause: "Mech",
-              cost: { Soul_Gem: newGems }
-            });
-          }
-        }
-      }
-      if (settings.autoTrigger) {
-        TriggerManager.resetTargetTriggers();
-        let triggerSave = settings.prioritizeTriggers.includes("save");
-        for (let trigger of TriggerManager.targetTriggers) {
-          let id = trigger.actionId;
-          let obj = arpaIds[id] || buildingIds[id] || techIds[id];
-          if (obj) {
-            state.triggerTargets.push(obj);
-            if (triggerSave) {
-              state.conflictTargets.push({
-                name: obj.title,
-                cause: "Trigger",
-                cost: obj.cost
-              });
-            }
-          }
-        }
-        if (buildings.GorddonEmbassy.isAutoBuildable() && resources.Knowledge.maxQuantity >= settings.fleetEmbassyKnowledge) {
-          let obj = buildings.GorddonEmbassy;
-          state.triggerTargets.push(obj);
-          state.conflictTargets.push({
-            name: obj.title,
-            cause: "Knowledge",
-            cost: obj.cost
-          });
-        }
-        if (buildings.TauStarEden.isAutoBuildable() && isPrestigeAllowed("eden")) {
-          let obj = buildings.TauStarEden;
-          state.triggerTargets.push(obj);
-          state.conflictTargets.push({
-            name: obj.title,
-            cause: "Prestige",
-            cost: obj.cost
-          });
-        }
-        if (buildings.TauGas2MatrioshkaBrain.count >= 1e3 && buildings.TauGas2IgniteGasGiant.isAutoBuildable() && isPrestigeAllowed("retire")) {
-          let obj = buildings.TauGas2IgniteGasGiant;
-          state.triggerTargets.push(obj);
-          state.conflictTargets.push({
-            name: obj.title,
-            cause: "Prestige",
-            cost: obj.cost
-          });
-        }
-      }
-      $("#tech .action").each(function() {
-        let tech = techIds[this.id];
-        tech.updateResourceRequirements();
-        if (!getTechConflict(tech) || state.triggerTargets.includes(tech) || state.queuedTargetsAll.includes(tech)) {
-          state.unlockedTechs.push(tech);
+    const { updatePriorityTargets } = createPriorityTargets({
+      getSettings: () => settings,
+      getState: () => state,
+      getGame: () => game,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getTechIds: () => techIds,
+      getBuildingIds: () => buildingIds,
+      getArpaIds: () => arpaIds,
+      getSpyManager: () => SpyManager,
+      getFleetManagerOuter: () => FleetManagerOuter,
+      getMechManager: () => MechManager,
+      getTriggerManager: () => TriggerManager,
+      getJQuery: () => $,
+      getQueuedItemObj,
+      getTechConflict,
+      isPrestigeAllowed,
+      haveTask,
+      inflationChallengeShouldSaveMoney,
+      inflationChallengeMoney: INFLATION_CHALLENGE_MONEY
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        updatePriorityTargets: () => updatePriorityTargets(),
+        setPriorityTargetsTestContext(context) {
+          settings = context.settings;
+          state = context.state;
+          game = context.game;
+          resources = context.resources;
+          buildings = context.buildings;
+          techIds = context.techIds;
+          buildingIds = context.buildingIds;
+          arpaIds = context.arpaIds;
+          SpyManager = context.SpyManager;
+          FleetManagerOuter = context.FleetManagerOuter;
+          MechManager = context.MechManager;
+          TriggerManager = context.TriggerManager;
         }
       });
     }
