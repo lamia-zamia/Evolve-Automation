@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoGovernment } from "../src/subsystems/government.ts";
+import { createAutoGovernment } from "../src/automation/civic/government.ts";
 
 function runGovernmentCase({
   guard = false,

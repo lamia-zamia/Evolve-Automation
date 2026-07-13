@@ -29,4 +29,6 @@ for (const testFile of testFiles) {
   runNode(["--import", "tsx", join("scripts", testFile)], testFile);
 }
 
-console.log(`All checks passed (${testFiles.length} test files plus bundle syntax)`);
+console.log(
+  `All checks passed (${testFiles.length} test files plus bundle syntax)`,
+);

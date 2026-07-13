@@ -13,5 +13,5 @@
     "strictNullChecks": false,
     "skipLibCheck": true
   },
-  "include": ["src/subsystems/**/*.ts"]
+  "include": ["src/**/*.ts"]
 }

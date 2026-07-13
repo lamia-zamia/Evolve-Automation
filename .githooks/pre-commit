@@ -4,16 +4,16 @@ set -eu
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
-build_inputs="src build.mjs package.json package-lock.json"
+build_inputs="src scripts .github build.mjs eslint.config.js package.json package-lock.json README.md tsconfig.json .prettierrc.json .prettierignore"
 
 if ! git diff --quiet -- $build_inputs; then
-  echo "Build inputs contain unstaged changes. Stage them before committing." >&2
+  echo "Build/check inputs contain unstaged changes. Stage them before committing." >&2
   exit 1
 fi
 
 untracked=$(git ls-files --others --exclude-standard -- $build_inputs)
 if [ -n "$untracked" ]; then
-  echo "Build inputs contain untracked files. Stage them before committing:" >&2
+  echo "Build/check inputs contain untracked files. Stage them before committing:" >&2
   echo "$untracked" >&2
   exit 1
 fi

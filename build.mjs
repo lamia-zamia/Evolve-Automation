@@ -16,7 +16,9 @@ if (
   !metadata.startsWith("// ==UserScript==") ||
   !metadata.endsWith("// ==/UserScript==")
 ) {
-  throw new Error(`${metadataPath} is not a complete userscript metadata block`);
+  throw new Error(
+    `${metadataPath} is not a complete userscript metadata block`,
+  );
 }
 
 const buildOptions = {

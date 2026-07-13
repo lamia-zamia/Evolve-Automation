@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoSmelter } from "../src/subsystems/smelter.ts";
+import { createAutoSmelter } from "../src/automation/economy/smelter.ts";
 
 function makeResource(name, overrides = {}) {
   return {
@@ -45,11 +45,15 @@ function runSmelterCase({ initialized = true } = {}) {
     extraOperating: () => 0,
     managedFuelPriorityList: () => [coalFuel],
     fueledCount: () => 0,
-    increaseFuel: (fuel, count) => actions.push(["increaseFuel", fuel.id, count]),
-    decreaseFuel: (fuel, count) => actions.push(["decreaseFuel", fuel.id, count]),
+    increaseFuel: (fuel, count) =>
+      actions.push(["increaseFuel", fuel.id, count]),
+    decreaseFuel: (fuel, count) =>
+      actions.push(["decreaseFuel", fuel.id, count]),
     smeltingCount: (production) => counts[production.id],
-    increaseSmelting: (id, count) => actions.push(["increaseSmelting", id, count]),
-    decreaseSmelting: (id, count) => actions.push(["decreaseSmelting", id, count]),
+    increaseSmelting: (id, count) =>
+      actions.push(["increaseSmelting", id, count]),
+    decreaseSmelting: (id, count) =>
+      actions.push(["decreaseSmelting", id, count]),
   };
   const state = { tooltips: {} };
   const autoSmelter = createAutoSmelter({

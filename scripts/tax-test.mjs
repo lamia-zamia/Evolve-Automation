@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoTax } from "../src/subsystems/tax.ts";
+import { createAutoTax } from "../src/automation/civic/tax.ts";
 
 function runTaxCase({
   taxRate = 10,
@@ -81,10 +81,7 @@ const authority = runTaxCase({
   authorityMax: 120,
   authorityTarget: 100,
 });
-assert.deepEqual(authority.actions, [
-  ["keys", false, false, false],
-  ["add"],
-]);
+assert.deepEqual(authority.actions, [["keys", false, false, false], ["add"]]);
 assert.equal(authority.resources.Morale.incomeAdusted, true);
 
 const alreadyAdjusted = runTaxCase({

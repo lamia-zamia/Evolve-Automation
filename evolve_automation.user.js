@@ -77,7 +77,204 @@
     return values.reduce((sum, value) => sum + value) / values.length;
   }
 
-  // src/subsystems/hell.ts
+  // src/policies/run-guards.ts
+  function createRunGuards({
+    getSettings,
+    getGame,
+    getPoly,
+    getResources,
+    getBuildings,
+    haveTech: haveTech2,
+    getNumberString: getNumberString2,
+    inflationChallengeMoney,
+    retirementPreparation
+  }) {
+    function getStarLevel2(context) {
+      let aLevel = 1;
+      if (context.challenge_plasmid) {
+        aLevel++;
+      }
+      if (context.challenge_trade) {
+        aLevel++;
+      }
+      if (context.challenge_craft) {
+        aLevel++;
+      }
+      if (context.challenge_crispr) {
+        aLevel++;
+      }
+      return aLevel;
+    }
+    function getAchievementStar2(id, universe) {
+      const game2 = getGame();
+      const poly2 = getPoly();
+      return game2.global.stats.achieve[id]?.[poly2.universeAffix(universe)] ?? 0;
+    }
+    function isAchievementUnlocked2(id, level, universe) {
+      return getAchievementStar2(id, universe) >= level;
+    }
+    const achievementGuardDefs = {
+      guardPacifist: {
+        id: "pacifist",
+        when: () => getGame().global.stats.attacks === 0
+      },
+      guardDreaded: {
+        id: "dreaded",
+        when: () => getSettings().prestigeType === "ascension" && getBuildings().Dreadnought.count === 0
+      },
+      // Pacifist requires unification, Cult of Personality forbids it - Pacifist wins while armed.
+      guardCultOfPersonality: {
+        id: "cult_of_personality",
+        when: () => !guardActive2("guardPacifist")
+      },
+      guardAnarchist: {
+        id: "anarchist",
+        when: () => {
+          const game2 = getGame();
+          return getSettings().prestigeType === "mad" && game2.global.civic.govern.type === "anarchy";
+        }
+      },
+      guardEnergetic: {
+        id: "energetic",
+        feat: true,
+        when: () => getSettings().prestigeType === "ascension" && getBuildings().SiriusThermalCollector.count === 0
+      },
+      guardRedDead: {
+        id: "red_dead",
+        when: () => getSettings().prestigeType === "mad" && getBuildings().RedSpaceport.count === 0
+      },
+      guardSecondEvolution: {
+        id: "second_evolution",
+        when: () => {
+          const race = getGame().global.race;
+          return race.gods === race.species;
+        }
+      }
+    };
+    function guardActive2(setting) {
+      const settings2 = getSettings();
+      if (!settings2.achievementGuards || !settings2[setting]) {
+        return false;
+      }
+      const guard = achievementGuardDefs[setting];
+      if (!guard) {
+        return false;
+      }
+      const game2 = getGame();
+      const star = guard.feat ? game2.global.stats.feat?.[guard.id] ?? 0 : getAchievementStar2(guard.id);
+      return star < game2.alevel() && guard.when();
+    }
+    function bananaRepublicObjectiveComplete2(id) {
+      const game2 = getGame();
+      const bananaStats = game2.global.stats.banana;
+      const universe = getPoly().universeAffix();
+      return Boolean(bananaStats?.[id]?.[universe]);
+    }
+    function bananaRepublicSmoothieComplete2() {
+      const game2 = getGame();
+      if ((game2.global.stats.feat?.banana ?? 0) > 0) {
+        return true;
+      }
+      let exportRoutes = 0;
+      let hasBigImport = false;
+      Object.values(game2.global.resource).forEach((resource) => {
+        if (!resource.hasOwnProperty("trade")) {
+          return;
+        }
+        if (resource.trade > 0) {
+          exportRoutes += resource.trade;
+        } else if (resource.trade <= -500) {
+          hasBigImport = true;
+        }
+      });
+      return hasBigImport && exportRoutes >= 500;
+    }
+    function bananaRepublicReadyForUnification2() {
+      return ["b1", "b2", "b3", "b4", "b5"].every(bananaRepublicObjectiveComplete2) && bananaRepublicSmoothieComplete2();
+    }
+    function guardBananaRepublicActive2() {
+      const settings2 = getSettings();
+      return settings2.achievementGuards && settings2.guardBananaRepublic && getGame().global.race["banana"] && !bananaRepublicReadyForUnification2();
+    }
+    function inflationChallengeAssistActive2() {
+      const settings2 = getSettings();
+      const game2 = getGame();
+      return settings2.inflationChallengeAssist && game2.global.race.hasOwnProperty("inflation") && game2.global.race.inflation !== false && getAchievementStar2("wheelbarrow") < game2.alevel();
+    }
+    function inflationChallengeMoneyReachable2() {
+      return getResources().Money.maxQuantity >= inflationChallengeMoney;
+    }
+    function inflationChallengeSecondsToFinish2() {
+      if (!inflationChallengeMoneyReachable2()) {
+        return Number.POSITIVE_INFINITY;
+      }
+      const money = getResources().Money;
+      const remaining = inflationChallengeMoney - money.currentQuantity;
+      if (remaining <= 0) {
+        return 0;
+      }
+      return money.rateOfChange > 0 ? remaining / money.rateOfChange : Number.POSITIVE_INFINITY;
+    }
+    function inflationChallengeShouldSaveMoney2() {
+      const settings2 = getSettings();
+      return inflationChallengeAssistActive2() && settings2.inflationChallengeSaveMinutes >= 0 && inflationChallengeSecondsToFinish2() <= settings2.inflationChallengeSaveMinutes * 60;
+    }
+    function retirementChallengeAssistActive2() {
+      const settings2 = getSettings();
+      return settings2.retirementChallengeAssist && getGame().global.race["truepath"] && settings2.prestigeType === "retire" && !haveTech2("isolation");
+    }
+    function retirementPreparationMissing2() {
+      if (!retirementChallengeAssistActive2()) {
+        return [];
+      }
+      const buildings2 = getBuildings();
+      const resources2 = getResources();
+      const missing = [];
+      if (buildings2.TauFusionGenerator.count < retirementPreparation.fusionGenerators) {
+        missing.push(
+          `${buildings2.TauFusionGenerator.name} ${buildings2.TauFusionGenerator.count}/${retirementPreparation.fusionGenerators}`
+        );
+      }
+      if (buildings2.TauFactory.count < retirementPreparation.factories) {
+        missing.push(
+          `${buildings2.TauFactory.name} ${buildings2.TauFactory.count}/${retirementPreparation.factories}`
+        );
+      }
+      if (buildings2.TauDiseaseLab.count < retirementPreparation.scienceLabs) {
+        missing.push(
+          `${buildings2.TauDiseaseLab.name} ${buildings2.TauDiseaseLab.count}/${retirementPreparation.scienceLabs}`
+        );
+      }
+      if (resources2.Graphene.maxQuantity < retirementPreparation.graphene) {
+        missing.push(
+          `${resources2.Graphene.name} storage ${getNumberString2(resources2.Graphene.maxQuantity)}/${getNumberString2(retirementPreparation.graphene)}`
+        );
+      } else if (resources2.Graphene.currentQuantity < retirementPreparation.graphene) {
+        missing.push(
+          `${resources2.Graphene.name} stockpile ${getNumberString2(resources2.Graphene.currentQuantity)}/${getNumberString2(retirementPreparation.graphene)}`
+        );
+      }
+      return missing;
+    }
+    return {
+      getStarLevel: getStarLevel2,
+      getAchievementStar: getAchievementStar2,
+      isAchievementUnlocked: isAchievementUnlocked2,
+      guardActive: guardActive2,
+      bananaRepublicObjectiveComplete: bananaRepublicObjectiveComplete2,
+      bananaRepublicSmoothieComplete: bananaRepublicSmoothieComplete2,
+      bananaRepublicReadyForUnification: bananaRepublicReadyForUnification2,
+      guardBananaRepublicActive: guardBananaRepublicActive2,
+      inflationChallengeAssistActive: inflationChallengeAssistActive2,
+      inflationChallengeMoneyReachable: inflationChallengeMoneyReachable2,
+      inflationChallengeSecondsToFinish: inflationChallengeSecondsToFinish2,
+      inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2,
+      retirementChallengeAssistActive: retirementChallengeAssistActive2,
+      retirementPreparationMissing: retirementPreparationMissing2
+    };
+  }
+
+  // src/automation/combat/hell.ts
   function createAutoHell({
     WarManager: WarManager2,
     getGame,
@@ -243,7 +440,7 @@
     };
   }
 
-  // src/subsystems/government.ts
+  // src/automation/civic/government.ts
   function createAutoGovernment({
     GovernmentManager: GovernmentManager2,
     getSettings,
@@ -277,7 +474,7 @@
     };
   }
 
-  // src/subsystems/battle.ts
+  // src/automation/combat/battle.ts
   function createAutoBattle({
     SpyManager: SpyManager2,
     WarManager: WarManager2,
@@ -431,7 +628,7 @@
     };
   }
 
-  // src/subsystems/tax.ts
+  // src/automation/civic/tax.ts
   function createAutoTax({
     KeyManager: KeyManager2,
     getPoly,
@@ -510,7 +707,7 @@
     };
   }
 
-  // src/subsystems/smelter.ts
+  // src/automation/economy/smelter.ts
   function createAutoSmelter({
     SmelterManager: SmelterManager2,
     getGame,
@@ -662,7 +859,7 @@
     };
   }
 
-  // src/subsystems/alchemy.ts
+  // src/automation/economy/alchemy.ts
   function createAutoAlchemy({
     AlchemyManager: AlchemyManager2,
     getResources,
@@ -722,7 +919,7 @@
     };
   }
 
-  // src/subsystems/pylon.ts
+  // src/automation/economy/pylon.ts
   function createAutoPylon({
     RitualManager: RitualManager2,
     getResources,
@@ -783,7 +980,7 @@
     };
   }
 
-  // src/subsystems/resource-ratios.ts
+  // src/automation/economy/resource-ratios.ts
   function createAutoResourceRatios({
     QuarryManager: QuarryManager2,
     MineManager: MineManager2,
@@ -855,7 +1052,7 @@
     return { autoQuarry: autoQuarry2, autoMine: autoMine2, autoExtractor: autoExtractor2 };
   }
 
-  // src/subsystems/factory.ts
+  // src/automation/economy/factory.ts
   function createAutoFactory({
     FactoryManager: FactoryManager2,
     getState,
@@ -1012,7 +1209,7 @@
     };
   }
 
-  // src/subsystems/mining-droid.ts
+  // src/automation/economy/mining-droid.ts
   function createAutoMiningDroid({ DroidManager: DroidManager2 }) {
     return function autoMiningDroid2() {
       if (!DroidManager2.initIndustry()) {
@@ -1096,8 +1293,11 @@
     };
   }
 
-  // src/subsystems/graphene.ts
-  function createAutoGraphenePlant({ GrapheneManager: GrapheneManager2, getResources }) {
+  // src/automation/economy/graphene.ts
+  function createAutoGraphenePlant({
+    GrapheneManager: GrapheneManager2,
+    getResources
+  }) {
     return function autoGraphenePlant2() {
       const resources2 = getResources();
       if (!GrapheneManager2.initIndustry()) {
@@ -1143,8 +1343,12 @@
     };
   }
 
-  // src/subsystems/shapeshift.ts
-  function createAutoShapeshift({ getGame, getSettings, getVueById: getVueById2 }) {
+  // src/automation/traits/shapeshift.ts
+  function createAutoShapeshift({
+    getGame,
+    getSettings,
+    getVueById: getVueById2
+  }) {
     return function autoShapeshift2() {
       const game2 = getGame();
       const settings2 = getSettings();
@@ -1155,7 +1359,7 @@
     };
   }
 
-  // src/subsystems/wish.ts
+  // src/automation/traits/wish.ts
   function createAutoWish({
     getGame,
     getSettings,
@@ -1181,7 +1385,7 @@
     };
   }
 
-  // src/subsystems/genetics.ts
+  // src/automation/traits/genetics.ts
   function createAutoGenetics({
     KeyManager: KeyManager2,
     getGame,
@@ -1236,8 +1440,15 @@
     };
   }
 
-  // src/subsystems/mercenary.ts
-  function createAutoMerc({ getWarManager, GameLog: GameLog2, getState, getSettings, getResources, inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2 }) {
+  // src/automation/combat/mercenary.ts
+  function createAutoMerc({
+    getWarManager,
+    GameLog: GameLog2,
+    getState,
+    getSettings,
+    getResources,
+    inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2
+  }) {
     return function autoMerc2() {
       const WarManager2 = getWarManager();
       const state2 = getState();
@@ -1286,8 +1497,15 @@
     };
   }
 
-  // src/subsystems/psychic.ts
-  function createAutoPsychic({ getGame, getSettings, getResources, getVueById: getVueById2, clickSelector, psychicPowerCost: psychicPowerCost2 }) {
+  // src/automation/traits/psychic.ts
+  function createAutoPsychic({
+    getGame,
+    getSettings,
+    getResources,
+    getVueById: getVueById2,
+    clickSelector,
+    psychicPowerCost: psychicPowerCost2
+  }) {
     return function autoPsychic2() {
       const game2 = getGame();
       const settings2 = getSettings();
@@ -1356,8 +1574,15 @@
     };
   }
 
-  // src/subsystems/ocular.ts
-  function createAutoOcularPowers({ getGame, getSettings, getVueById: getVueById2, traitVal: traitVal2, getOcularPowerData, getDocument }) {
+  // src/automation/traits/ocular.ts
+  function createAutoOcularPowers({
+    getGame,
+    getSettings,
+    getVueById: getVueById2,
+    traitVal: traitVal2,
+    getOcularPowerData,
+    getDocument
+  }) {
     return function autoOcularPowers2() {
       const game2 = getGame();
       const settings2 = getSettings();
@@ -1389,8 +1614,11 @@
     };
   }
 
-  // src/subsystems/minor-trait.ts
-  function createAutoMinorTrait({ getMinorTraitManager, getResources }) {
+  // src/automation/traits/minor-trait.ts
+  function createAutoMinorTrait({
+    getMinorTraitManager,
+    getResources
+  }) {
     return function autoMinorTrait2() {
       const MinorTraitManager2 = getMinorTraitManager();
       const resources2 = getResources();
@@ -1418,8 +1646,11 @@
     };
   }
 
-  // src/subsystems/trigger.ts
-  function createAutoTrigger({ getState, inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2 }) {
+  // src/automation/progression/trigger.ts
+  function createAutoTrigger({
+    getState,
+    inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2
+  }) {
     return function autoTrigger2() {
       const state2 = getState();
       let triggerActive = false;
@@ -1435,8 +1666,11 @@
     };
   }
 
-  // src/subsystems/consume.ts
-  function createAutoConsume({ getResources, isHungryRace: isHungryRace2 }) {
+  // src/automation/economy/consume.ts
+  function createAutoConsume({
+    getResources,
+    isHungryRace: isHungryRace2
+  }) {
     return function autoConsume2(m) {
       const resources2 = getResources();
       if (!m.initIndustry()) {
@@ -1515,8 +1749,16 @@
     };
   }
 
-  // src/subsystems/replicator.ts
-  function createAutoReplicator({ getReplicatorManager, getSettings, getResources, getGame, getGovernor: getGovernor2, haveTech: haveTech2, getVueById: getVueById2 }) {
+  // src/automation/economy/replicator.ts
+  function createAutoReplicator({
+    getReplicatorManager,
+    getSettings,
+    getResources,
+    getGame,
+    getGovernor: getGovernor2,
+    haveTech: haveTech2,
+    getVueById: getVueById2
+  }) {
     return function autoReplicator2() {
       const ReplicatorManager2 = getReplicatorManager();
       const settings2 = getSettings();
@@ -1618,8 +1860,15 @@
     };
   }
 
-  // src/subsystems/market.ts
-  function createAutoMarket({ getMarketManager, getGame, getResources, getSettings, getAdjustTradeRoutes, ticksPerSecond: ticksPerSecond2 }) {
+  // src/automation/economy/market.ts
+  function createAutoMarket({
+    getMarketManager,
+    getGame,
+    getResources,
+    getSettings,
+    getAdjustTradeRoutes,
+    ticksPerSecond: ticksPerSecond2
+  }) {
     return function autoMarket2(bulkSell, ignoreSellRatio) {
       const MarketManager2 = getMarketManager();
       const game2 = getGame();
@@ -1709,8 +1958,13 @@
     };
   }
 
-  // src/subsystems/galaxy-market.ts
-  function createAutoGalaxyMarket({ getGalaxyTradeManager, getPoly, getResources, getSettings }) {
+  // src/automation/economy/galaxy-market.ts
+  function createAutoGalaxyMarket({
+    getGalaxyTradeManager,
+    getPoly,
+    getResources,
+    getSettings
+  }) {
     return function autoGalaxyMarket2() {
       const GalaxyTradeManager2 = getGalaxyTradeManager();
       const poly2 = getPoly();
@@ -1791,8 +2045,15 @@
     };
   }
 
-  // src/subsystems/gather-resources.ts
-  function createAutoGatherResources({ getGame, getSettings, getResources, getBuildings, getResourcesPerClick: getResourcesPerClick2, haveTech: haveTech2 }) {
+  // src/automation/economy/gather-resources.ts
+  function createAutoGatherResources({
+    getGame,
+    getSettings,
+    getResources,
+    getBuildings,
+    getResourcesPerClick: getResourcesPerClick2,
+    haveTech: haveTech2
+  }) {
     return function autoGatherResources2() {
       const game2 = getGame();
       const settings2 = getSettings();
@@ -1948,8 +2209,23 @@
     };
   }
 
-  // src/subsystems/evolution.ts
-  function createAutoEvolution({ getGame, getState, getSettings, getSettingsRaw, getRaces, loadQueuedSettings: loadQueuedSettings2, GameLog: GameLog2, getChallenges, getEvolutions, getPoly, getResources, getImitations, getAutoUniverseSelection, getAutoPlanetSelection }) {
+  // src/automation/progression/evolution.ts
+  function createAutoEvolution({
+    getGame,
+    getState,
+    getSettings,
+    getSettingsRaw,
+    getRaces,
+    loadQueuedSettings: loadQueuedSettings2,
+    GameLog: GameLog2,
+    getChallenges,
+    getEvolutions,
+    getPoly,
+    getResources,
+    getImitations,
+    getAutoUniverseSelection,
+    getAutoPlanetSelection
+  }) {
     return function autoEvolution2() {
       const game2 = getGame();
       const state2 = getState();
@@ -2084,9 +2360,11 @@
       if (evolutions2.organelles.count < 10) {
         evolutions2.organelles.click();
       }
-      const userImitateRace = Object.values(imitations2).find((race) => {
-        return race.id === `s-${settings2.imitateRace}`;
-      });
+      const userImitateRace = Object.values(imitations2).find(
+        (race) => {
+          return race.id === `s-${settings2.imitateRace}`;
+        }
+      );
       if (game2.global.race.evoFinalMenu) {
         if (userImitateRace) {
           const selectImitateRace = userImitateRace.click();
@@ -2108,8 +2386,12 @@
     };
   }
 
-  // src/subsystems/universe-selection.ts
-  function createAutoUniverseSelection({ getGame, getSettings, getDocument }) {
+  // src/automation/progression/universe-selection.ts
+  function createAutoUniverseSelection({
+    getGame,
+    getSettings,
+    getDocument
+  }) {
     return function autoUniverseSelection2() {
       const game2 = getGame();
       const settings2 = getSettings();
@@ -2132,8 +2414,13 @@
     };
   }
 
-  // src/subsystems/craft.ts
-  function createAutoCraft({ getResources, getGame, getFoundryList, ticksPerSecond: ticksPerSecond2 }) {
+  // src/automation/economy/craft.ts
+  function createAutoCraft({
+    getResources,
+    getGame,
+    getFoundryList,
+    ticksPerSecond: ticksPerSecond2
+  }) {
     return function autoCraft2() {
       const resources2 = getResources();
       const game2 = getGame();
@@ -2189,8 +2476,20 @@
     };
   }
 
-  // src/subsystems/spy.ts
-  function createAutoSpy({ getSpyManager, getWarManager, getHaveTask, getHaveTech, inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2, getResources, getSettings, getPoly, GameLog: GameLog2, getGovName: getGovName2, getGame }) {
+  // src/automation/combat/spy.ts
+  function createAutoSpy({
+    getSpyManager,
+    getWarManager,
+    getHaveTask,
+    getHaveTech,
+    inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2,
+    getResources,
+    getSettings,
+    getPoly,
+    GameLog: GameLog2,
+    getGovName: getGovName2,
+    getGame
+  }) {
     return function autoSpy2() {
       const SpyManager2 = getSpyManager();
       const WarManager2 = getWarManager();
@@ -2272,8 +2571,28 @@
     };
   }
 
-  // src/subsystems/prestige.ts
-  function createAutoPrestige({ getState, getSettings, getGame, getResources, getBuildings, getWarManager, getHaveTech, getVueById: getVueById2, logPrestige: logPrestige2, getIsBioseederPrestigeAvailable, isCataclysmPrestigeAvailable: isCataclysmPrestigeAvailable2, loadQueuedSettings: loadQueuedSettings2, getTechIds, isWhiteholePrestigeAvailable: isWhiteholePrestigeAvailable2, isApocalypsePrestigeAvailable: isApocalypsePrestigeAvailable2, isWitchAscensionPrestigeAvailable: isWitchAscensionPrestigeAvailable2, isAscensionPrestigeAvailable: isAscensionPrestigeAvailable2, KeyManager: KeyManager2, isDemonicPrestigeAvailable: isDemonicPrestigeAvailable2 }) {
+  // src/automation/progression/prestige.ts
+  function createAutoPrestige({
+    getState,
+    getSettings,
+    getGame,
+    getResources,
+    getBuildings,
+    getWarManager,
+    getHaveTech,
+    getVueById: getVueById2,
+    logPrestige: logPrestige2,
+    getIsBioseederPrestigeAvailable,
+    isCataclysmPrestigeAvailable: isCataclysmPrestigeAvailable2,
+    loadQueuedSettings: loadQueuedSettings2,
+    getTechIds,
+    isWhiteholePrestigeAvailable: isWhiteholePrestigeAvailable2,
+    isApocalypsePrestigeAvailable: isApocalypsePrestigeAvailable2,
+    isWitchAscensionPrestigeAvailable: isWitchAscensionPrestigeAvailable2,
+    isAscensionPrestigeAvailable: isAscensionPrestigeAvailable2,
+    KeyManager: KeyManager2,
+    isDemonicPrestigeAvailable: isDemonicPrestigeAvailable2
+  }) {
     return function autoPrestige2() {
       const state2 = getState();
       const settings2 = getSettings();
@@ -2401,8 +2720,20 @@
     };
   }
 
-  // src/subsystems/planet-selection.ts
-  function createAutoPlanetSelection({ getGame, getSettings, getGeneratePlanets, getStarLevel: getStarLevel2, getIsAchievementUnlocked, getPlanetBiomeGenus, getRaces, getPlanetBiomes, getPlanetTraits, getDocument, getMouseEvent }) {
+  // src/automation/progression/planet-selection.ts
+  function createAutoPlanetSelection({
+    getGame,
+    getSettings,
+    getGeneratePlanets,
+    getStarLevel: getStarLevel2,
+    getIsAchievementUnlocked,
+    getPlanetBiomeGenus,
+    getRaces,
+    getPlanetBiomes,
+    getPlanetTraits,
+    getDocument,
+    getMouseEvent
+  }) {
     return function autoPlanetSelection2() {
       const game2 = getGame();
       const settings2 = getSettings();
@@ -2498,8 +2829,28 @@
     };
   }
 
-  // src/subsystems/jobs.ts
-  function createAutoJobs({ getJobManager, getGame, getJobs, isDemonRace: isDemonRace2, isLumberRace: isLumberRace2, getSettings, traitVal: traitVal2, getCrafter, getWindow, getBuildings, getHaveTech, getResources, ticksPerSecond: ticksPerSecond2, getState, findRequiredResourceWeight: findRequiredResourceWeight2, getPoly, isCraftingJob, getHaveTask, getFoodConsume: getFoodConsume2 }) {
+  // src/automation/civic/jobs.ts
+  function createAutoJobs({
+    getJobManager,
+    getGame,
+    getJobs,
+    isDemonRace: isDemonRace2,
+    isLumberRace: isLumberRace2,
+    getSettings,
+    traitVal: traitVal2,
+    getCrafter,
+    getWindow,
+    getBuildings,
+    getHaveTech,
+    getResources,
+    ticksPerSecond: ticksPerSecond2,
+    getState,
+    findRequiredResourceWeight: findRequiredResourceWeight2,
+    getPoly,
+    isCraftingJob,
+    getHaveTask,
+    getFoodConsume: getFoodConsume2
+  }) {
     return function autoJobs2(craftOnly) {
       const JobManager2 = getJobManager();
       const game2 = getGame();
@@ -3247,8 +3598,15 @@
     };
   }
 
-  // src/subsystems/build.ts
-  function createAutoBuild({ getBuildingManager, getProjectManager, getState, getSettings, getResources, getGetCostConflict }) {
+  // src/automation/progression/build.ts
+  function createAutoBuild({
+    getBuildingManager,
+    getProjectManager,
+    getState,
+    getSettings,
+    getResources,
+    getGetCostConflict
+  }) {
     return function autoBuild2() {
       const BuildingManager2 = getBuildingManager();
       const ProjectManager2 = getProjectManager();
@@ -3371,8 +3729,13 @@
     };
   }
 
-  // src/subsystems/research.ts
-  function createAutoResearch({ getState, getGetCostConflict, getBuildingManager, getProjectManager }) {
+  // src/automation/progression/research.ts
+  function createAutoResearch({
+    getState,
+    getGetCostConflict,
+    getBuildingManager,
+    getProjectManager
+  }) {
     return function autoResearch2() {
       const state2 = getState();
       const getCostConflict2 = getGetCostConflict();
@@ -3388,8 +3751,13 @@
     };
   }
 
-  // src/subsystems/mutation.ts
-  function createAutoMutateTrait({ getMutableTraitManager, getGame, getResources, GameLog: GameLog2 }) {
+  // src/automation/traits/mutation.ts
+  function createAutoMutateTrait({
+    getMutableTraitManager,
+    getGame,
+    getResources,
+    GameLog: GameLog2
+  }) {
     return function autoMutateTrait2() {
       const MutableTraitManager2 = getMutableTraitManager();
       const game2 = getGame();
@@ -3426,8 +3794,37 @@
     };
   }
 
-  // src/subsystems/power.ts
-  function createAutoPower({ getGame, getSettings, getState, getResources, getBuildings, getJobs, getWindow, getPoly, getBuildingManager, getFleetManager, getMechManager, getWarManager, consumptionBalanceMin, Support: Support2, getPowerOscLock, getPowerWarnCap, getCitadelConsumption: getCitadelConsumption2, isHellSupressUseful: isHellSupressUseful2, getGalaxyRegions: getGalaxyRegions2, traitVal: traitVal2, getHaveTech, adjustSpire: adjustSpire2, getBestSupplyRatio: getBestSupplyRatio2, getHealingRate: getHealingRate2, isHungryRace: isHungryRace2, isPillarFinished: isPillarFinished2, getJQuery, getBuildingIds }) {
+  // src/automation/economy/power.ts
+  function createAutoPower({
+    getGame,
+    getSettings,
+    getState,
+    getResources,
+    getBuildings,
+    getJobs,
+    getWindow,
+    getPoly,
+    getBuildingManager,
+    getFleetManager,
+    getMechManager,
+    getWarManager,
+    consumptionBalanceMin,
+    Support: Support2,
+    getPowerOscLock,
+    getPowerWarnCap,
+    getCitadelConsumption: getCitadelConsumption2,
+    isHellSupressUseful: isHellSupressUseful2,
+    getGalaxyRegions: getGalaxyRegions2,
+    traitVal: traitVal2,
+    getHaveTech,
+    adjustSpire: adjustSpire2,
+    getBestSupplyRatio: getBestSupplyRatio2,
+    getHealingRate: getHealingRate2,
+    isHungryRace: isHungryRace2,
+    isPillarFinished: isPillarFinished2,
+    getJQuery,
+    getBuildingIds
+  }) {
     return function autoPower2() {
       const game2 = getGame();
       const settings2 = getSettings();
@@ -4190,8 +4587,19 @@
     };
   }
 
-  // src/subsystems/storage.ts
-  function createAutoStorage({ getStorageManager, getGame, getSettings, getState, getResources, getWindow, getBuildingManager, getProjectManager, getFleetManagerOuter, expandStorage: expandStorage2 }) {
+  // src/automation/economy/storage.ts
+  function createAutoStorage({
+    getStorageManager,
+    getGame,
+    getSettings,
+    getState,
+    getResources,
+    getWindow,
+    getBuildingManager,
+    getProjectManager,
+    getFleetManagerOuter,
+    expandStorage: expandStorage2
+  }) {
     return function autoStorage2() {
       const StorageManager2 = getStorageManager();
       const game2 = getGame();
@@ -4467,8 +4875,15 @@
     };
   }
 
-  // src/subsystems/fleet-outer.ts
-  function createAutoFleetOuter({ getFleetManagerOuter, getWarManager, getGame, getSettings, getResources, GameLog: GameLog2 }) {
+  // src/automation/combat/fleet-outer.ts
+  function createAutoFleetOuter({
+    getFleetManagerOuter,
+    getWarManager,
+    getGame,
+    getSettings,
+    getResources,
+    GameLog: GameLog2
+  }) {
     return function autoFleetOuter2() {
       const FleetManagerOuter2 = getFleetManagerOuter();
       const WarManager2 = getWarManager();
@@ -4567,8 +4982,19 @@
     };
   }
 
-  // src/subsystems/fleet.ts
-  function createAutoFleet({ getFleetManager, getGame, getSettings, getState, getResources, getBuildings, getGalaxyRegions: getGalaxyRegions2, guardActive: guardActive2, cartesian: cartesian2, galaxyAssaultPending: galaxyAssaultPending2 }) {
+  // src/automation/combat/fleet.ts
+  function createAutoFleet({
+    getFleetManager,
+    getGame,
+    getSettings,
+    getState,
+    getResources,
+    getBuildings,
+    getGalaxyRegions: getGalaxyRegions2,
+    guardActive: guardActive2,
+    cartesian: cartesian2,
+    galaxyAssaultPending: galaxyAssaultPending2
+  }) {
     return function autoFleet2() {
       const FleetManager2 = getFleetManager();
       const game2 = getGame();
@@ -4843,10 +5269,9 @@
         );
       }
       let shipDeltas = allRegions.map(
-        (region) => Object.entries(region.assigned).map(([ship, count]) => [
-          ship,
-          count - def[region.name][ship]
-        ])
+        (region) => Object.entries(region.assigned).map(
+          ([ship, count]) => [ship, count - def[region.name][ship]]
+        )
       );
       shipDeltas.forEach(
         (ships, region) => ships.forEach(
@@ -4861,8 +5286,19 @@
     };
   }
 
-  // src/subsystems/mech.ts
-  function createAutoMech({ getMechManager, getGame, getSettings, getResources, getBuildings, getHaveTech, getHaveTask, average: average2, GameLog: GameLog2, getJQuery }) {
+  // src/automation/combat/mech.ts
+  function createAutoMech({
+    getMechManager,
+    getGame,
+    getSettings,
+    getResources,
+    getBuildings,
+    getHaveTech,
+    getHaveTask,
+    average: average2,
+    GameLog: GameLog2,
+    getJQuery
+  }) {
     return function autoMech2() {
       const MechManager2 = getMechManager();
       const game2 = getGame();
@@ -15580,152 +16016,58 @@
         delete settingsRaw.overrides[oldSetting];
       }
     }
-    function getStarLevel(context) {
-      let a_level = 1;
-      if (context.challenge_plasmid) {
-        a_level++;
-      }
-      if (context.challenge_trade) {
-        a_level++;
-      }
-      if (context.challenge_craft) {
-        a_level++;
-      }
-      if (context.challenge_crispr) {
-        a_level++;
-      }
-      return a_level;
-    }
-    function getAchievementStar(id, universe) {
-      return game.global.stats.achieve[id]?.[poly.universeAffix(universe)] ?? 0;
-    }
-    function isAchievementUnlocked(id, level, universe) {
-      return getAchievementStar(id, universe) >= level;
-    }
-    const achievementGuardDefs = {
-      guardPacifist: {
-        id: "pacifist",
-        when: () => game.global.stats.attacks === 0
-      },
-      guardDreaded: {
-        id: "dreaded",
-        when: () => settings.prestigeType === "ascension" && buildings.Dreadnought.count === 0
-      },
-      // Pacifist requires unification, Cult of Personality forbids it - Pacifist wins while armed
-      guardCultOfPersonality: {
-        id: "cult_of_personality",
-        when: () => !guardActive("guardPacifist")
-      },
-      guardAnarchist: {
-        id: "anarchist",
-        when: () => settings.prestigeType === "mad" && game.global.civic.govern.type === "anarchy"
-      },
-      guardEnergetic: {
-        id: "energetic",
-        feat: true,
-        when: () => settings.prestigeType === "ascension" && buildings.SiriusThermalCollector.count === 0
-      },
-      guardRedDead: {
-        id: "red_dead",
-        when: () => settings.prestigeType === "mad" && buildings.RedSpaceport.count === 0
-      },
-      guardSecondEvolution: {
-        id: "second_evolution",
-        when: () => game.global.race.gods === game.global.race.species
-      }
-    };
-    function guardActive(setting) {
-      if (!settings.achievementGuards || !settings[setting]) {
-        return false;
-      }
-      let guard = achievementGuardDefs[setting];
-      if (!guard) {
-        return false;
-      }
-      let star = guard.feat ? game.global.stats.feat?.[guard.id] ?? 0 : getAchievementStar(guard.id);
-      return star < game.alevel() && guard.when();
-    }
-    function bananaRepublicObjectiveComplete(id) {
-      let bananaStats = game.global.stats.banana;
-      let universe = poly.universeAffix();
-      return Boolean(bananaStats?.[id]?.[universe]);
-    }
-    function bananaRepublicSmoothieComplete() {
-      if ((game.global.stats.feat?.banana ?? 0) > 0) {
-        return true;
-      }
-      let exportRoutes = 0;
-      let hasBigImport = false;
-      Object.values(game.global.resource).forEach((res) => {
-        if (!res.hasOwnProperty("trade")) {
-          return;
-        }
-        if (res.trade > 0) {
-          exportRoutes += res.trade;
-        } else if (res.trade <= -500) {
-          hasBigImport = true;
+    let {
+      getStarLevel,
+      getAchievementStar,
+      isAchievementUnlocked,
+      guardActive,
+      bananaRepublicObjectiveComplete,
+      bananaRepublicSmoothieComplete,
+      bananaRepublicReadyForUnification,
+      guardBananaRepublicActive,
+      inflationChallengeAssistActive,
+      inflationChallengeMoneyReachable,
+      inflationChallengeSecondsToFinish,
+      inflationChallengeShouldSaveMoney,
+      retirementChallengeAssistActive,
+      retirementPreparationMissing
+    } = createRunGuards({
+      getSettings: () => settings,
+      getGame: () => game,
+      getPoly: () => poly,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      haveTech,
+      getNumberString,
+      inflationChallengeMoney: INFLATION_CHALLENGE_MONEY,
+      retirementPreparation: RETIREMENT_PREP
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        runGuards: {
+          getStarLevel,
+          getAchievementStar,
+          isAchievementUnlocked,
+          guardActive,
+          bananaRepublicObjectiveComplete,
+          bananaRepublicSmoothieComplete,
+          bananaRepublicReadyForUnification,
+          guardBananaRepublicActive,
+          inflationChallengeAssistActive,
+          inflationChallengeMoneyReachable,
+          inflationChallengeSecondsToFinish,
+          inflationChallengeShouldSaveMoney,
+          retirementChallengeAssistActive,
+          retirementPreparationMissing
+        },
+        setRunGuardTestContext(context) {
+          settings = context.settings;
+          game = context.game;
+          poly = context.poly;
+          resources = context.resources;
+          buildings = context.buildings;
         }
       });
-      return hasBigImport && exportRoutes >= 500;
-    }
-    function bananaRepublicReadyForUnification() {
-      return ["b1", "b2", "b3", "b4", "b5"].every(bananaRepublicObjectiveComplete) && bananaRepublicSmoothieComplete();
-    }
-    function guardBananaRepublicActive() {
-      return settings.achievementGuards && settings.guardBananaRepublic && game.global.race["banana"] && !bananaRepublicReadyForUnification();
-    }
-    function inflationChallengeAssistActive() {
-      return settings.inflationChallengeAssist && game.global.race.hasOwnProperty("inflation") && game.global.race.inflation !== false && getAchievementStar("wheelbarrow") < game.alevel();
-    }
-    function inflationChallengeMoneyReachable() {
-      return resources.Money.maxQuantity >= INFLATION_CHALLENGE_MONEY;
-    }
-    function inflationChallengeSecondsToFinish() {
-      if (!inflationChallengeMoneyReachable()) {
-        return Number.POSITIVE_INFINITY;
-      }
-      let remaining = INFLATION_CHALLENGE_MONEY - resources.Money.currentQuantity;
-      if (remaining <= 0) {
-        return 0;
-      }
-      return resources.Money.rateOfChange > 0 ? remaining / resources.Money.rateOfChange : Number.POSITIVE_INFINITY;
-    }
-    function inflationChallengeShouldSaveMoney() {
-      return inflationChallengeAssistActive() && settings.inflationChallengeSaveMinutes >= 0 && inflationChallengeSecondsToFinish() <= settings.inflationChallengeSaveMinutes * 60;
-    }
-    function retirementChallengeAssistActive() {
-      return settings.retirementChallengeAssist && game.global.race["truepath"] && settings.prestigeType === "retire" && !haveTech("isolation");
-    }
-    function retirementPreparationMissing() {
-      if (!retirementChallengeAssistActive()) {
-        return [];
-      }
-      let missing = [];
-      if (buildings.TauFusionGenerator.count < RETIREMENT_PREP.fusionGenerators) {
-        missing.push(
-          `${buildings.TauFusionGenerator.name} ${buildings.TauFusionGenerator.count}/${RETIREMENT_PREP.fusionGenerators}`
-        );
-      }
-      if (buildings.TauFactory.count < RETIREMENT_PREP.factories) {
-        missing.push(
-          `${buildings.TauFactory.name} ${buildings.TauFactory.count}/${RETIREMENT_PREP.factories}`
-        );
-      }
-      if (buildings.TauDiseaseLab.count < RETIREMENT_PREP.scienceLabs) {
-        missing.push(
-          `${buildings.TauDiseaseLab.name} ${buildings.TauDiseaseLab.count}/${RETIREMENT_PREP.scienceLabs}`
-        );
-      }
-      if (resources.Graphene.maxQuantity < RETIREMENT_PREP.graphene) {
-        missing.push(
-          `${resources.Graphene.name} storage ${getNumberString(resources.Graphene.maxQuantity)}/${getNumberString(RETIREMENT_PREP.graphene)}`
-        );
-      } else if (resources.Graphene.currentQuantity < RETIREMENT_PREP.graphene) {
-        missing.push(
-          `${resources.Graphene.name} stockpile ${getNumberString(resources.Graphene.currentQuantity)}/${getNumberString(RETIREMENT_PREP.graphene)}`
-        );
-      }
-      return missing;
     }
     function loadQueuedSettings() {
       if (settings.evolutionQueueEnabled && settingsRaw.evolutionQueue.length > 0) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoHell } from "../src/subsystems/hell.ts";
+import { createAutoHell } from "../src/automation/combat/hell.ts";
 
 function zeroAuthorityManager() {
   return {
@@ -107,9 +107,21 @@ const autoHell = createAutoHell({
 
 autoHell();
 
-assert.equal(manager.hellSoldiers, 100, "all available soldiers remain in Hell");
+assert.equal(
+  manager.hellSoldiers,
+  100,
+  "all available soldiers remain in Hell",
+);
 assert.equal(manager.hellPatrols, 1, "one patrol remains active");
-assert.equal(manager.hellPatrolSize, 40, "the configured 40% remains on patrol");
-assert.equal(manager.hellGarrison, 60, "the other 60% is stationed for Authority");
+assert.equal(
+  manager.hellPatrolSize,
+  40,
+  "the configured 40% remains on patrol",
+);
+assert.equal(
+  manager.hellGarrison,
+  60,
+  "the other 60% is stationed for Authority",
+);
 
 console.log("Hell Authority bootstrap regression test passed");

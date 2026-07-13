@@ -105,8 +105,7 @@ function characterizeGraphene() {
     initIndustry: () => true,
     maxOperating: () => 2,
     fueledCount: () => 0,
-    decreaseFuel: (fuel, count) =>
-      actions.push(["decrease", fuel.id, count]),
+    decreaseFuel: (fuel, count) => actions.push(["decrease", fuel.id, count]),
     increaseFuel: (fuel, count) => actions.push(["increase", fuel.id, count]),
   });
   hooks.autoGraphenePlant();
@@ -177,7 +176,7 @@ assert.deepEqual(clickActions, [
   ["click", "#wishPower"],
 ]);
 
-console.log("Five-subsystem bundled characterization tests passed");
+console.log("Five-controller bundled characterization tests passed");
 
 for (const name of [
   "autoMerc",
@@ -219,7 +218,10 @@ const waveGame = {
   },
   traits: { ocular_power: { vars: () => [1] } },
 };
-hooks.setAutomationTestContext({ game: waveGame, win: { document: testDocument } });
+hooks.setAutomationTestContext({
+  game: waveGame,
+  win: { document: testDocument },
+});
 Object.assign(hooks.automationSettings, {
   inflationChallengeAssist: false,
   foreignHireMercDeadSoldiers: 0,
@@ -262,7 +264,8 @@ const testWarManager = {
     return true;
   },
 };
-hooks.GameLog.logSuccess = (id, message) => waveActions.push(["log", id, message]);
+hooks.GameLog.logSuccess = (id, message) =>
+  waveActions.push(["log", id, message]);
 hooks.automationResources.Genes = { currentQuantity: 10 };
 const testMinorTraitManager = {
   isUnlocked: () => true,
@@ -340,7 +343,13 @@ const replicatedA = {
   enabled: true,
   weighting: 1,
   priority: 1,
-  resource: { id: "A", currentQuantity: 10, atomicMass: 1, isDemanded: () => false, isUseful: () => true },
+  resource: {
+    id: "A",
+    currentQuantity: 10,
+    atomicMass: 1,
+    isDemanded: () => false,
+    isUseful: () => true,
+  },
 };
 const replicatedB = {
   id: "B",
@@ -348,7 +357,13 @@ const replicatedB = {
   enabled: true,
   weighting: 2,
   priority: 1,
-  resource: { id: "B", currentQuantity: 10, atomicMass: 1, isDemanded: () => false, isUseful: () => true },
+  resource: {
+    id: "B",
+    currentQuantity: 10,
+    atomicMass: 1,
+    isDemanded: () => false,
+    isUseful: () => true,
+  },
 };
 const testReplicatorManager = {
   Productions: { A: replicatedA, B: replicatedB },
@@ -388,8 +403,10 @@ const testGalaxyTradeManager = {
   initIndustry: () => true,
   maxOperating: () => 2,
   currentProduction: () => 0,
-  decreaseProduction: (index, count) => wave2Actions.push(["galaxyLess", index, count]),
-  increaseProduction: (index, count) => wave2Actions.push(["galaxyMore", index, count]),
+  decreaseProduction: (index, count) =>
+    wave2Actions.push(["galaxyLess", index, count]),
+  increaseProduction: (index, count) =>
+    wave2Actions.push(["galaxyMore", index, count]),
 };
 const gatherBuildings = Object.fromEntries(
   ["Food", "Lumber", "Stone", "Chrysotile", "Slaughter"].map((id) => [
@@ -417,9 +434,14 @@ Object.assign(hooks.automationSettings, {
 });
 const wave2Game = {
   global: { race: {}, tech: {}, settings: { at: false } },
-  actions: { city: { food: { action: () => wave2Actions.push(["gatherFood"]) } } },
+  actions: {
+    city: { food: { action: () => wave2Actions.push(["gatherFood"]) } },
+  },
 };
-hooks.setAutomationTestContext({ game: wave2Game, win: { document: testDocument } });
+hooks.setAutomationTestContext({
+  game: wave2Game,
+  win: { document: testDocument },
+});
 hooks.automationResources.Money = {
   maxQuantity: 1_000,
   currentQuantity: 0,
@@ -432,9 +454,15 @@ hooks.automationResources.Food = { currentQuantity: 0, maxQuantity: 10 };
 hooks.automationResources.Lumber = { currentQuantity: 0, maxQuantity: 10 };
 hooks.automationResources.Stone = { currentQuantity: 0, maxQuantity: 10 };
 hooks.automationResources.Chrysotile = { currentQuantity: 0, maxQuantity: 10 };
-hooks.automationResources.Furs = { currentQuantity: 0, maxQuantity: 10, isUnlocked: () => false };
+hooks.automationResources.Furs = {
+  currentQuantity: 0,
+  maxQuantity: 10,
+  isUnlocked: () => false,
+};
 hooks.automationResources.Mana = { currentQuantity: 0 };
-hooks.getAutomationPoly().galaxyOffers = [{ buy: { res: "Buy" }, sell: { res: "Sell" } }];
+hooks.getAutomationPoly().galaxyOffers = [
+  { buy: { res: "Buy" }, sell: { res: "Sell" } },
+];
 
 hooks.autoConsume(consumeManager);
 hooks.autoReplicator();
@@ -544,8 +572,12 @@ const wave3Game = {
     settings: { at: false },
   },
 };
-hooks.setAutomationTestContext({ game: wave3Game, win: { document: testDocument } });
-hooks.GameLog.logSuccess = (id, message) => wave3Actions.push(["log", id, message]);
+hooks.setAutomationTestContext({
+  game: wave3Game,
+  win: { document: testDocument },
+});
+hooks.GameLog.logSuccess = (id, message) =>
+  wave3Actions.push(["log", id, message]);
 
 hooks.autoCraft();
 hooks.autoSpy();
@@ -658,8 +690,12 @@ const wave4Game = {
     settings: { at: false },
   },
 };
-hooks.setAutomationTestContext({ game: wave4Game, win: { document: testDocument } });
-hooks.GameLog.logSuccess = (id, message) => wave4Actions.push(["log", id, message]);
+hooks.setAutomationTestContext({
+  game: wave4Game,
+  win: { document: testDocument },
+});
+hooks.GameLog.logSuccess = (id, message) =>
+  wave4Actions.push(["log", id, message]);
 
 hooks.autoPlanetSelection();
 hooks.autoJobs(false);
@@ -709,7 +745,10 @@ hooks.automationResources.Power = { isUnlocked: () => false };
 const wave5Game = {
   global: { race: { warlord: true }, settings: { at: false } },
 };
-hooks.setAutomationTestContext({ game: wave5Game, win: { document: testDocument } });
+hooks.setAutomationTestContext({
+  game: wave5Game,
+  win: { document: testDocument },
+});
 
 hooks.autoPower();
 hooks.autoStorage();

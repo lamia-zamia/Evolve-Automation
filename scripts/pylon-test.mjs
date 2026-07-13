@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoPylon } from "../src/subsystems/pylon.ts";
+import { createAutoPylon } from "../src/automation/economy/pylon.ts";
 
 function runPylonCase({ initialized = true } = {}) {
   const actions = [];

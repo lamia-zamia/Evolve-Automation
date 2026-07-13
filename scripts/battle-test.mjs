@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoBattle } from "../src/subsystems/battle.ts";
+import { createAutoBattle } from "../src/automation/combat/battle.ts";
 
 function runBattleCase({ guarded = false } = {}) {
   const actions = [];
@@ -92,6 +92,10 @@ assert.match(attack.logs[0][1], /Siege campaign against Test Nation/);
 
 const guarded = runBattleCase({ guarded: true });
 assert.deepEqual(guarded.actions, [], "the Pacifist guard must block attacks");
-assert.deepEqual(guarded.logs, [], "blocked attacks must not be logged as launched");
+assert.deepEqual(
+  guarded.logs,
+  [],
+  "blocked attacks must not be logged as launched",
+);
 
 console.log("Battle automation regression tests passed");

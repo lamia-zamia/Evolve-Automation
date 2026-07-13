@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoJobs } from "../src/subsystems/jobs.ts";
+import { createAutoJobs } from "../src/automation/civic/jobs.ts";
 
 const craftingJob = {
   workers: 0,

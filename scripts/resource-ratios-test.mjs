@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoResourceRatios } from "../src/subsystems/resource-ratios.ts";
+import { createAutoResourceRatios } from "../src/automation/economy/resource-ratios.ts";
 
 function resource(storageRatio) {
   return { storageRatio, isDemanded: () => false };
