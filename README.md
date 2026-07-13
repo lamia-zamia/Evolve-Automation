@@ -21,11 +21,18 @@ Evolution, universe selection, crafting, spying, and prestige controllers are al
 Planet selection, jobs, building purchases, research, and mutable-trait automation are modularized.
 Power, storage, outer/galaxy fleets, and mech automation complete the controller extraction: no
 `auto*` implementation remains in `src/main.js`. Shared achievement and challenge run-eligibility
-evaluation is also extracted into the typed `createRunGuards` factory.
+evaluation is extracted into the typed `createRunGuards` factory; prestige permission and
+reset-readiness evaluation is extracted into `createPrestigeEligibility`.
 
 Controller sources are grouped by responsibility under `src/automation/`: `civic`, `economy`,
 `progression`, `combat`, and `traits`. Cross-controller policy modules live separately under
 `src/policies/`; filenames stay concise because the containing folders already provide context.
+Shared compact-number parsing and display formatting lives under `src/formatting/`.
+Small game-state query boundaries that are shared across controllers live under `src/game/`.
+Cross-controller resource and target planning boundaries live under `src/planning/`.
+Runtime diagnostics and compact state sampling live under `src/observability/` and `src/validation/`.
+These shared boundaries are independently characterized against the generated bundle and have focused
+TypeScript module regressions.
 
 ## Development
 

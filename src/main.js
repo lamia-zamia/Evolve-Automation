@@ -40,7 +40,23 @@ import {
 } from "./config.js";
 import { cartesian, k_combinations } from "./utils/collections.js";
 import { Fibonacci, average } from "./utils/math.js";
+import { createPropertyHelpers } from "./utils/properties.ts";
+import { createNumberFormatting } from "./formatting/numbers.ts";
+import { createRuntimeQueries } from "./game/runtime-queries.ts";
+import { createRaceProfile } from "./game/race-profile.ts";
+import { createForeignGovernment } from "./game/foreign-government.ts";
+import { createGalaxyIntelligence } from "./game/galaxy-intelligence.ts";
+import { createPowerSupport } from "./game/power-support.ts";
+import { createGameRates } from "./game/rates.ts";
+import { createCostConflicts } from "./planning/cost-conflicts.ts";
+import { createPlannerAnalysis } from "./planning/planner-analysis.ts";
+import { createStorageExpansion } from "./planning/storage-expansion.ts";
+import { createStorageRequirements } from "./planning/storage-requirements.ts";
+import { createDemandPrioritization } from "./planning/demand-prioritization.ts";
+import { createGameActionVerification } from "./validation/game-actions.ts";
+import { createStateLogLifecycle } from "./observability/state-log.ts";
 import { createRunGuards } from "./policies/run-guards.ts";
+import { createPrestigeEligibility } from "./policies/prestige-eligibility.ts";
 import { createAutoHell } from "./automation/combat/hell.ts";
 import { createAutoGovernment } from "./automation/civic/government.ts";
 import { createAutoBattle } from "./automation/combat/battle.ts";
@@ -83,9 +99,144 @@ import { createAutoMech } from "./automation/combat/mech.ts";
 
 (function ($) {
   "use strict";
+  const { getRealNumber, getNumberString, getNiceNumber } =
+    createNumberFormatting({ numberSuffix });
   var settingsRaw = JSON.parse(localStorage.getItem("settings")) ?? {};
   var settings = {};
   var game = null;
+  const { normalizeProperties, addProps } = createPropertyHelpers({
+    getSettings: () => settings,
+  });
+  let { getCostConflict } = createCostConflicts({
+    getState: () => state,
+    getResources: () => resources,
+    isEmptyObject: (object) => $.isEmptyObject(object),
+  });
+  const {
+    plannerLimitingResource,
+    makePlannerStats,
+    loadPlannerStats,
+    savePlannerStats,
+  } = createPlannerAnalysis({
+    getGame: () => game,
+    getResources: () => resources,
+    getState: () => state,
+    storage: localStorage,
+  });
+  const { expandStorage } = createStorageExpansion({
+    getSettings: () => settings,
+    getResources: () => resources,
+    getBuildings: () => buildings,
+    getStorageManager: () => StorageManager,
+    getIsEarlyGame: () => isEarlyGame,
+    getIsLumberRace: () => isLumberRace,
+  });
+  const { requestStorageFor, calculateRequiredStorages } =
+    createStorageRequirements({
+      getSettings: () => settings,
+      getState: () => state,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getGame: () => game,
+      getBuildingManager: () => BuildingManager,
+      getProjectManager: () => ProjectManager,
+      getFleetManagerOuter: () => FleetManagerOuter,
+      isTechnology: (target) => target instanceof Technology,
+      getInflationChallengeAssistActive: () => inflationChallengeAssistActive,
+      getRetirementChallengeAssistActive: () => retirementChallengeAssistActive,
+      getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
+      getRetirementGraphene: () => RETIREMENT_PREP.graphene,
+    });
+  const { prioritizeDemandedResources } = createDemandPrioritization({
+    getSettings: () => settings,
+    getState: () => state,
+    getResources: () => resources,
+    getBuildings: () => buildings,
+    getCrafter: () => crafter,
+    getSpyManager: () => SpyManager,
+    getFleetManagerOuter: () => FleetManagerOuter,
+    getJobManager: () => JobManager,
+    getFactoryManager: () => FactoryManager,
+    getIsEarlyGame: () => isEarlyGame,
+    isProject: (object) => object instanceof Project,
+    getInflationChallengeAssistActive: () => inflationChallengeAssistActive,
+    getRetirementChallengeAssistActive: () => retirementChallengeAssistActive,
+    getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
+    getRetirementGraphene: () => RETIREMENT_PREP.graphene,
+    consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
+  });
+  const {
+    makeStateLog,
+    loadStateLog,
+    saveStateLog,
+    stateLogDiff,
+    stateLogBlocker,
+    recordStateSnapshot,
+  } = createStateLogLifecycle({
+    getGame: () => game,
+    getResources: () => resources,
+    getState: () => state,
+    plannerLimitingResource,
+    storage: localStorage,
+  });
+  const { verifyGameActions, verifyGameActionsExist, verifyGameActionExists } =
+    createGameActionVerification({
+      getGame: () => game,
+      getBuildings: () => buildings,
+      log: (...values) => console.log(...values),
+    });
+  let { getGovernor, haveTask, haveTech, isEarlyGame } = createRuntimeQueries({
+    getGame: () => game,
+  });
+  const { isHungryRace, isDemonRace, isLumberRace, getOccCosts } =
+    createRaceProfile({
+      getGame: () => game,
+      getTraitVal: () => traitVal,
+    });
+  const { getGovName, getGovPower } = createForeignGovernment({
+    getGame: () => game,
+    getPoly: () => poly,
+  });
+  const {
+    getGalaxyCombatShipPower,
+    getPiracyMultiplier,
+    galaxyAssaultPending,
+    getGalaxyRegions,
+  } = createGalaxyIntelligence({
+    getGame: () => game,
+    getBuildings: () => buildings,
+    getSettings: () => settings,
+    getTraitVal: () => traitVal,
+  });
+  const {
+    getCitadelConsumption,
+    isHellSupressUseful,
+    adjustSpire,
+    getBestSupplyRatio,
+  } = createPowerSupport({
+    getGame: () => game,
+    getJobs: () => jobs,
+    getCrafter: () => crafter,
+    getBuildings: () => buildings,
+  });
+  let {
+    ticksPerSecond,
+    getHealingRate,
+    getFoodConsume,
+    getGrowthRate,
+    getResourcesPerClick,
+  } = createGameRates({
+    getSettings: () => settings,
+    getGame: () => game,
+    getBuildings: () => buildings,
+    getState: () => state,
+    getResources: () => resources,
+    getJobs: () => jobs,
+    getTraitVal: () => traitVal,
+    getGovernor: () => getGovernor(),
+    getHaveTech: () => haveTech,
+    getDate: () => new Date(),
+  });
   var win = null;
   var needSandboxBypass = false;
 
@@ -5725,20 +5876,6 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     buildings.CruiserShip,
     buildings.Dreadnought,
   ];
-  function getGalaxyCombatShipPower() {
-    return (
-      buildings.ScoutShip.count *
-        game.actions.galaxy.gxy_gateway.scout_ship.ship.rating() +
-      buildings.CorvetteShip.count *
-        game.actions.galaxy.gxy_gateway.corvette_ship.ship.rating() +
-      buildings.FrigateShip.count *
-        game.actions.galaxy.gxy_gateway.frigate_ship.ship.rating() +
-      buildings.CruiserShip.count *
-        game.actions.galaxy.gxy_gateway.cruiser_ship.ship.rating() +
-      buildings.Dreadnought.count *
-        game.actions.galaxy.gxy_gateway.dreadnought.ship.rating()
-    );
-  }
   var weightingRules = [
     [
       () => !settings.autoBuild,
@@ -13661,6 +13798,29 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     }
   }
 
+  let {
+    isPrestigeAllowed,
+    isCataclysmPrestigeAvailable,
+    isBioseederPrestigeAvailable,
+    isWhiteholePrestigeAvailable,
+    isApocalypsePrestigeAvailable,
+    isAscensionPrestigeAvailable,
+    isWitchAscensionPrestigeAvailable,
+    isDemonicPrestigeAvailable,
+    isPillarFinished,
+    isGECKNeeded,
+    getBlackholeMass,
+  } = createPrestigeEligibility({
+    getSettings: () => settings,
+    getGame: () => game,
+    getResources: () => resources,
+    getBuildings: () => buildings,
+    getTechIds: () => techIds,
+    getMechManager: () => MechManager,
+    getHaveTech: () => haveTech,
+    getIsAchievementUnlocked: () => isAchievementUnlocked,
+  });
+
   const autoPrestige = createAutoPrestige({
     getState: () => state,
     getSettings: () => settings,
@@ -13701,107 +13861,32 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     });
   }
 
-  function isPrestigeAllowed(type) {
-    return (
-      settings.autoPrestige &&
-      !(settings.prestigeWaitAT && game.global.settings.at > 0) &&
-      (!type || settings.prestigeType === type)
-    );
-  }
-
-  function isCataclysmPrestigeAvailable() {
-    return techIds["tech-dial_it_to_11"].isUnlocked();
-  }
-
-  function isBioseederPrestigeAvailable() {
-    return (
-      !isGECKNeeded() &&
-      buildings.GasSpaceDock.count >= 1 &&
-      buildings.GasSpaceDockShipSegment.count >= 100 &&
-      buildings.GasSpaceDockProbe.count >= settings.prestigeBioseedProbes
-    );
-  }
-
-  function isWhiteholePrestigeAvailable() {
-    return (
-      getBlackholeMass() >= settings.prestigeWhiteholeMinMass &&
-      (techIds["tech-exotic_infusion"].isUnlocked() ||
-        techIds["tech-infusion_check"].isUnlocked() ||
-        techIds["tech-infusion_confirm"].isUnlocked())
-    );
-  }
-
-  function isApocalypsePrestigeAvailable() {
-    return (
-      techIds["tech-protocol66"].isUnlocked() ||
-      techIds["tech-protocol66a"].isUnlocked()
-    );
-  }
-
-  function isAscensionPrestigeAvailable() {
-    return buildings.SiriusAscend.isUnlocked() && isPillarFinished();
-  }
-
-  function isWitchAscensionPrestigeAvailable(demonic) {
-    if (
-      demonic &&
-      (!haveTech("forbidden", 5) ||
-        (game.global.race["fasting"] && !haveTech("dish", 2)))
-    ) {
-      return false;
-    }
-    return (
-      buildings.PitAbsorptionChamber.count >= 100 &&
-      buildings.PitSoulCapacitor.instance.energy >= 100000000 &&
-      isPillarFinished()
-    );
-  }
-
-  function isDemonicPrestigeAvailable() {
-    if (
-      settings.autoMech &&
-      ((MechManager.isActive && settings.prestigeDemonicPotential < 1) ||
-        MechManager.mechsPotential > settings.prestigeDemonicPotential)
-    ) {
-      return false;
-    }
-    let resetTech =
-      techIds[
-        game.global.race["fasting"]
-          ? "tech-final_ingredient"
-          : "tech-demonic_infusion"
-      ];
-    return (
-      buildings.SpireTower.count > settings.prestigeDemonicFloor &&
-      resetTech.isUnlocked() &&
-      resetTech.isAffordable()
-    );
-  }
-
-  function isPillarFinished() {
-    let speciesPillarLevel = game.global.pillars[game.global.race.species];
-    let canPillar =
-      !speciesPillarLevel &&
-      resources.Harmony.currentQuantity >= 1 &&
-      game.global.race.universe !== "micro";
-    let canUpgrade =
-      speciesPillarLevel &&
-      speciesPillarLevel < game.alevel() &&
-      game.global.race.universe !== "micro";
-    // Always consider pillared if user doesn't want to wait for pillar, OR can't pillar + can't upgrade existing pillar
-    return !settings.prestigeAscensionPillar || (!canPillar && !canUpgrade);
-  }
-
-  function isGECKNeeded() {
-    return (
-      isAchievementUnlocked("lamentis", 5, "standard") &&
-      buildings.GasSpaceDockGECK.count < settings.prestigeGECK
-    );
-  }
-
-  function getBlackholeMass() {
-    let engine = game.global.interstellar.stellar_engine;
-    return engine ? engine.mass + engine.exotic : 0;
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      prestigeEligibility: {
+        isPrestigeAllowed,
+        isCataclysmPrestigeAvailable,
+        isBioseederPrestigeAvailable,
+        isWhiteholePrestigeAvailable,
+        isApocalypsePrestigeAvailable,
+        isAscensionPrestigeAvailable,
+        isWitchAscensionPrestigeAvailable,
+        isDemonicPrestigeAvailable,
+        isPillarFinished,
+        isGECKNeeded,
+        getBlackholeMass,
+      },
+      setPrestigeEligibilityTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        resources = context.resources;
+        buildings = context.buildings;
+        techIds = context.techIds;
+        MechManager = context.MechManager;
+        haveTech = context.haveTech;
+        isAchievementUnlocked = context.isAchievementUnlocked;
+      },
+    });
   }
 
   const autoShapeshift = createAutoShapeshift({
@@ -14189,23 +14274,6 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     getProjectManager: () => ProjectManager,
   });
 
-  function getCitadelConsumption(amount) {
-    return (
-      (30 + (amount - 1) * 2.5) *
-      amount *
-      (game.global.race["emfield"] ? 1.5 : 1)
-    );
-  }
-
-  function isHellSupressUseful() {
-    return (
-      jobs.Archaeologist.count > 0 ||
-      crafter.Scarletite.count > 0 ||
-      buildings.RuinsArcology.stateOnCount > 0 ||
-      buildings.GateInferniteMine.stateOnCount > 0
-    );
-  }
-
   var powerOscLock = {}; // { vueBinding: { prev, locked } } — anti-flicker for consumption-limited buildings
   var powerWarnCap = {}; // { vueBinding: { cap, ticks } } — game-imposed cap after a warn-badge shutdown
   const autoPower = createAutoPower({
@@ -14239,102 +14307,34 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     getBuildingIds: () => buildingIds,
   });
 
-  function adjustSpire(mech, port, camp) {
-    buildings.SpireMechBay.tryAdjustState(
-      mech - buildings.SpireMechBay.stateOnCount,
-    );
-    buildings.SpirePort.tryAdjustState(port - buildings.SpirePort.stateOnCount);
-    buildings.SpireBaseCamp.tryAdjustState(
-      camp - buildings.SpireBaseCamp.stateOnCount,
-    );
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      powerSupport: {
+        getCitadelConsumption,
+        isHellSupressUseful,
+        adjustSpire,
+        getBestSupplyRatio,
+      },
+      setPowerSupportTestContext(context) {
+        game = context.game;
+        jobs = context.jobs;
+        crafter = context.crafter;
+        buildings = context.buildings;
+      },
+    });
   }
 
-  function getBestSupplyRatio(support, maxPorts, maxCamps) {
-    let bestPort = 0;
-    let bestCamp = 0;
-
-    let optPort = Math.ceil(support / 2 + 1);
-    let optCamp = Math.floor(support / 2 - 1);
-    if (support <= 3 || optPort > maxPorts) {
-      bestPort = Math.min(maxPorts, support);
-      bestCamp = Math.min(maxCamps, support - bestPort);
-    } else if (optCamp > maxCamps) {
-      bestCamp = Math.min(maxCamps, support);
-      bestPort = Math.min(maxPorts, support - bestCamp);
-    } else if (optPort <= maxPorts && optCamp <= maxCamps) {
-      bestPort = optPort;
-      bestCamp = optCamp;
-    }
-    let supplies = Math.round(bestPort * (1 + bestCamp * 0.4) * 10000 + 100);
-    return [supplies, bestPort, bestCamp];
-  }
-
-  function expandStorage(storageToBuild) {
-    let missingStorage = storageToBuild;
-    let numberOfCratesWeCanBuild =
-      resources.Crates.maxQuantity - resources.Crates.currentQuantity;
-    let numberOfContainersWeCanBuild =
-      resources.Containers.maxQuantity - resources.Containers.currentQuantity;
-
-    for (let res in resources.Crates.cost) {
-      numberOfCratesWeCanBuild = Math.min(
-        numberOfCratesWeCanBuild,
-        resources[res].currentQuantity / resources.Crates.cost[res],
-      );
-    }
-    for (let res in resources.Containers.cost) {
-      numberOfContainersWeCanBuild = Math.min(
-        numberOfContainersWeCanBuild,
-        resources[res].currentQuantity / resources.Containers.cost[res],
-      );
-    }
-
-    if (settings.storageLimitPreMad && isEarlyGame()) {
-      // Only build pre-mad containers when steel is excessing
-      if (resources.Steel.storageRatio < 0.8) {
-        numberOfContainersWeCanBuild = 0;
-      }
-      // Only build pre-mad crates when already have Plywood for next level of library
-      if (
-        isLumberRace() &&
-        buildings.Library.count < 20 &&
-        buildings.Library.cost["Plywood"] > resources.Plywood.currentQuantity &&
-        resources.Steel.maxQuantity >= resources.Steel.storageRequired
-      ) {
-        numberOfCratesWeCanBuild = 0;
-      }
-    }
-
-    // Build crates
-    let cratesToBuild = Math.min(
-      Math.floor(numberOfCratesWeCanBuild),
-      Math.ceil(missingStorage / StorageManager.crateValue),
-    );
-    StorageManager.constructCrate(cratesToBuild);
-
-    resources.Crates.currentQuantity += cratesToBuild;
-    for (let res in resources.Crates.cost) {
-      resources[res].currentQuantity -=
-        resources.Crates.cost[res] * cratesToBuild;
-    }
-    missingStorage -= cratesToBuild * StorageManager.crateValue;
-
-    // And containers, if still needed
-    if (missingStorage > 0) {
-      let containersToBuild = Math.min(
-        Math.floor(numberOfContainersWeCanBuild),
-        Math.ceil(missingStorage / StorageManager.containerValue),
-      );
-      StorageManager.constructContainer(containersToBuild);
-
-      resources.Containers.currentQuantity += containersToBuild;
-      for (let res in resources.Containers.cost) {
-        resources[res].currentQuantity -=
-          resources.Containers.cost[res] * containersToBuild;
-      }
-      missingStorage -= containersToBuild * StorageManager.containerValue;
-    }
-    return missingStorage < storageToBuild;
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      expandStorage,
+      setStorageExpansionTestContext(context) {
+        game = context.game;
+        settings = context.settings;
+        resources = context.resources;
+        buildings = context.buildings;
+        StorageManager = context.StorageManager;
+      },
+    });
   }
 
   // TODO: Implement preserving of old layout, to reduce flickering
@@ -14651,89 +14651,21 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     GameLog,
   });
 
-  function getPiracyMultiplier() {
-    return (
-      1 *
-      (game.global.race.chicken ? traitVal("chicken", 1, "+") : 1) *
-      (game.global.race["ocular_power"] &&
-      game.global.race?.ocularPowerConfig?.f
-        ? 1 - traitVal("ocular_power", 1) / 500
-        : 1)
-    );
-  }
-
-  // While a fleet is being accumulated for an assault mission we neither cap ship purchases nor reclaim crews
-  function galaxyAssaultPending() {
-    return (
-      (buildings.ChthonianMission.isUnlocked() &&
-        settings.fleetChthonianLoses !== "ignore") ||
-      buildings.Alien2Mission.isUnlocked()
-    );
-  }
-
-  // Andromeda regions with piracy (already multiplied) and their static, ship-independent defenses
-  function getGalaxyRegions() {
-    let allRegions = [
-      {
-        name: "gxy_stargate",
-        piracy:
-          (game.global.race["instinct"] ? 0.09 : 0.1) * game.global.tech.piracy,
-        armada: buildings.StargateDefensePlatform.stateOnCount * 20,
-        useful: true,
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      galaxyIntelligence: {
+        getGalaxyCombatShipPower,
+        getPiracyMultiplier,
+        galaxyAssaultPending,
+        getGalaxyRegions,
       },
-      {
-        name: "gxy_gateway",
-        piracy:
-          (game.global.race["instinct"] ? 0.09 : 0.1) * game.global.tech.piracy,
-        armada: buildings.GatewayStarbase.stateOnCount * 25,
-        useful: buildings.BologniumShip.stateOnCount > 0,
+      setGalaxyIntelligenceTestContext(context) {
+        game = context.game;
+        buildings = context.buildings;
+        settings = context.settings;
+        traitVal = context.traitVal;
       },
-      {
-        name: "gxy_gorddon",
-        piracy: game.global.race["instinct"] ? 720 : 800,
-        armada: 0,
-        useful:
-          buildings.GorddonFreighter.stateOnCount > 0 ||
-          buildings.Alien1SuperFreighter.stateOnCount > 0 ||
-          buildings.GorddonSymposium.stateOnCount > 0,
-      },
-      {
-        name: "gxy_alien1",
-        piracy: game.global.race["instinct"] ? 900 : 1000,
-        armada: 0,
-        useful: buildings.Alien1VitreloyPlant.stateOnCount > 0,
-      },
-      {
-        name: "gxy_alien2",
-        piracy: game.global.race["instinct"] ? 2250 : 2500,
-        armada:
-          buildings.Alien2Foothold.stateOnCount * 50 +
-          buildings.Alien2ArmedMiner.stateOnCount *
-            game.actions.galaxy.gxy_alien2.armed_miner.ship.rating(),
-        useful:
-          buildings.Alien2Scavenger.stateOnCount > 0 ||
-          buildings.Alien2ArmedMiner.stateOnCount > 0,
-      },
-      {
-        name: "gxy_chthonian",
-        piracy: game.global.race["instinct"] ? 7000 : 7500,
-        armada:
-          buildings.ChthonianMineLayer.stateOnCount *
-            game.actions.galaxy.gxy_chthonian.minelayer.ship.rating() +
-          buildings.ChthonianRaider.stateOnCount *
-            game.actions.galaxy.gxy_chthonian.raider.ship.rating(),
-        useful:
-          buildings.ChthonianExcavator.stateOnCount > 0 ||
-          buildings.ChthonianRaider.stateOnCount > 0,
-      },
-    ];
-    const piracyMultiplier = getPiracyMultiplier();
-    if (piracyMultiplier !== 1) {
-      allRegions.forEach((region) => {
-        region.piracy *= piracyMultiplier;
-      });
-    }
-    return allRegions;
+    });
   }
 
   const autoFleet = createAutoFleet({
@@ -14863,299 +14795,50 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     });
   }
 
-  function requestStorageFor(list) {
-    // Required amount increased by 3% from actual numbers, as other logic of script can and will try to prevent overflowing by selling\ejecting\building projects, and that might cause an issues if we'd need 100% of storage
-    let bufferMult = settings.storageAssignExtra ? 1.03 : 1;
-    listLoop: for (let i = 0; i < list.length; i++) {
-      let obj = list[i];
-      let storageSuffient = true;
-      for (let res in obj.cost) {
-        resources[res].maxCost = Math.max(
-          obj.cost[res],
-          resources[res].maxCost,
-        );
-        if (
-          resources[res].maxQuantity < obj.cost[res] &&
-          !resources[res].hasStorage()
-        ) {
-          storageSuffient = false;
-        }
-      }
-      if (!storageSuffient) {
-        continue listLoop;
-      }
-      for (let res in obj.cost) {
-        let assumeCost = obj.cost[res] * bufferMult;
-        if (
-          resources[res].maxQuantity < assumeCost &&
-          !resources[res].hasStorage()
-        ) {
-          assumeCost = (obj.cost[res] + resources[res].maxQuantity) / 2;
-        }
-        resources[res].storageRequired = Math.max(
-          assumeCost,
-          resources[res].storageRequired,
-        );
-      }
-    }
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      storageRequirements: { requestStorageFor, calculateRequiredStorages },
+      setStorageRequirementTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        resources = context.resources;
+        buildings = context.buildings;
+        game = context.game;
+        BuildingManager = context.BuildingManager;
+        ProjectManager = context.ProjectManager;
+        FleetManagerOuter = context.FleetManagerOuter;
+        inflationChallengeAssistActive = context.inflationChallengeAssistActive;
+        retirementChallengeAssistActive =
+          context.retirementChallengeAssistActive;
+      },
+    });
   }
 
-  function calculateRequiredStorages() {
-    // We need to preserve amount of knowledge required by techs only, while amount still not polluted
-    // by buildings - wardenclyffe, labs, etc. This way we can determine what's our real demand is.
-    // Otherwise they might start build up knowledge cap just to afford themselves, increasing required
-    // cap further, so we'll need more labs, and they'll demand even more knowledge for next level and so on.
-    let techKnowledgeCosts = state.unlockedTechs.map(
-      (tech) => tech.cost["Knowledge"] ?? 0,
-    );
-    if (buildings.GorddonEmbassy.isAutoBuildable()) {
-      techKnowledgeCosts.push(settings.fleetEmbassyKnowledge);
-    }
-    state.knowledgeRequiredByTechs = Math.max(0, ...techKnowledgeCosts);
-    // Cheapest tech on the frontier: while it fits under the knowledge cap,
-    // research can proceed by accumulation alone, so cap buildings get no boost.
-    state.cheapestTechKnowledge =
-      techKnowledgeCosts.length > 0 ? Math.min(...techKnowledgeCosts) : 0;
-
-    let buildKnowledgeCosts = [];
-    const addBuildKnowledgeCosts = (targets) => {
-      for (let target of targets) {
-        if (target instanceof Technology || target.is?.knowledge) {
-          continue;
-        }
-        let knowledgeCost = target.cost?.Knowledge ?? 0;
-        if (knowledgeCost > 0) {
-          buildKnowledgeCosts.push(knowledgeCost);
-        }
-      }
-    };
-    addBuildKnowledgeCosts(state.queuedTargetsAll);
-    addBuildKnowledgeCosts(state.triggerTargets);
-    // Of the weighted priority list only the current top target justifies raising the
-    // knowledge cap; any enabled knowledge-costing building further down the list would
-    // otherwise keep cap buildings boosted permanently. An affordable top target fits
-    // under the cap by definition, so this only fires when it's knowledge-blocked.
-    // Weightings are from the previous autoBuild pass.
-    let topTarget = [
-      ...BuildingManager.priorityList,
-      ...ProjectManager.priorityList,
-    ]
-      .filter((obj) => obj.isAutoBuildable() && !obj.is?.knowledge)
-      .reduce(
-        (top, obj) => (!top || obj.weighting > top.weighting ? obj : top),
-        null,
-      );
-    if (topTarget) {
-      addBuildKnowledgeCosts([topTarget]);
-    }
-    state.knowledgeRequiredByBuildTargets = Math.max(0, ...buildKnowledgeCosts);
-
-    // Get list of all objects and techs, and find biggest numbers for each resource
-    if (
-      settings.autoFleet &&
-      FleetManagerOuter.nextShipExpandable &&
-      settings.prioritizeOuterFleet !== "ignore"
-    ) {
-      requestStorageFor([{ cost: FleetManagerOuter.nextShipCost }]);
-    }
-    requestStorageFor(state.unlockedTechs);
-    requestStorageFor(state.queuedTargetsAll);
-    requestStorageFor(
-      BuildingManager.priorityList.filter(
-        (b) => b.isUnlocked() && b.autoBuildEnabled,
-      ),
-    );
-    requestStorageFor(
-      ProjectManager.priorityList.filter(
-        (p) => p.isUnlocked() && p.autoBuildEnabled,
-      ),
-    );
-    if (inflationChallengeAssistActive()) {
-      resources.Money.maxCost = Math.max(
-        resources.Money.maxCost,
-        INFLATION_CHALLENGE_MONEY,
-      );
-      resources.Money.storageRequired = Math.max(
-        resources.Money.storageRequired,
-        INFLATION_CHALLENGE_MONEY,
-      );
-    }
-    if (retirementChallengeAssistActive()) {
-      resources.Graphene.maxCost = Math.max(
-        resources.Graphene.maxCost,
-        RETIREMENT_PREP.graphene,
-      );
-      resources.Graphene.storageRequired = Math.max(
-        resources.Graphene.storageRequired,
-        RETIREMENT_PREP.graphene,
-      );
-    }
-
-    // Increase storage for sellable resources, to make sure we'll have required amount before they'll be sold
-    if (
-      settings.storageAssignExtra &&
-      !game.global.race["no_trade"] &&
-      settings.autoMarket
-    ) {
-      for (let id in resources) {
-        if (resources[id].autoSellEnabled && resources[id].autoSellRatio > 0) {
-          resources[id].storageRequired /= resources[id].autoSellRatio;
-        }
-      }
-    }
-  }
-
-  function prioritizeDemandedResources() {
-    let prioritizedTasks = [];
-    if (inflationChallengeAssistActive()) {
-      resources.Money.requestQuantity(INFLATION_CHALLENGE_MONEY);
-    }
-    if (retirementChallengeAssistActive()) {
-      resources.Graphene.requestQuantity(RETIREMENT_PREP.graphene);
-    }
-    // Building and research queues
-    if (settings.prioritizeQueue.includes("req")) {
-      prioritizedTasks.push(...state.queuedTargets);
-    }
-    // Active triggers
-    if (settings.prioritizeTriggers.includes("req")) {
-      prioritizedTasks.push(...state.triggerTargets);
-    }
-    // Unlocked missions
-    if (settings.missionRequest) {
-      for (let i = state.missionBuildingList.length - 1; i >= 0; i--) {
-        let mission = state.missionBuildingList[i];
-        if (
-          mission.isUnlocked() &&
-          mission.autoBuildEnabled &&
-          (mission !== buildings.BlackholeJumpShip ||
-            !settings.prestigeBioseedConstruct ||
-            settings.prestigeType !== "whitehole")
-        ) {
-          prioritizedTasks.push(mission);
-        } else if (mission.isComplete()) {
-          // Mission finished, remove it from list
-          state.missionBuildingList.splice(i, 1);
-        }
-      }
-    }
-
-    // Unlocked and affordable techs, but only if we don't have anything more important
-    if (
-      prioritizedTasks.length === 0 &&
-      (isEarlyGame() ? settings.researchRequest : settings.researchRequestSpace)
-    ) {
-      prioritizedTasks = state.unlockedTechs.filter((t) =>
-        t.isAffordable(true),
-      );
-    }
-
-    if (prioritizedTasks.length > 0) {
-      for (let i = 0; i < prioritizedTasks.length; i++) {
-        let demandedObject = prioritizedTasks[i];
-        for (let res in demandedObject.cost) {
-          let resource = resources[res];
-          let quantity = demandedObject.cost[res];
-          // Double request for project, to make it smoother
-          if (
-            demandedObject instanceof Project &&
-            demandedObject.progress < 99
-          ) {
-            quantity *= 2;
-          }
-          resource.requestQuantity(quantity);
-        }
-      }
-    }
-
-    // Request money for unification
-    if (SpyManager.purchaseMoney && settings.prioritizeUnify.includes("req")) {
-      resources.Money.requestQuantity(SpyManager.purchaseMoney);
-    }
-
-    if (
-      settings.autoFleet &&
-      FleetManagerOuter.nextShipAffordable &&
-      settings.prioritizeOuterFleet.includes("req")
-    ) {
-      for (let res in FleetManagerOuter.nextShipCost) {
-        let resource = resources[res];
-        resource.requestQuantity(FleetManagerOuter.nextShipCost[res]);
-      }
-    }
-
-    // Prioritize material for craftables (doesn't use ResourceProductionCost)
-    let availableCrafters =
-      JobManager.craftingMax() + JobManager.skilledServantsMax();
-    for (let id in crafter) {
-      let resource = crafter[id].resource;
-      if (
-        (settings.productionFactoryFocusMaterials || resource.isDemanded()) &&
-        resource.isUnlocked()
-      ) {
-        // Only craftables stores their cost, no need for additional checks
-        for (let res in resource.cost) {
-          let material = resources[res];
-          // Add craftPreserve, plus minimum consumption:
-          // Craftsmen use 1/140 of game's given cost base per tick, before Crafty
-          // Demand 120s worth of production if we were to put all crafters on this resource (effectively 60s with Crafty)
-          let minExpected =
-            material.maxQuantity * resource.craftPreserve +
-            availableCrafters *
-              (1 / 140) *
-              CONSUMPTION_BALANCE_TARGET *
-              resource.cost[res];
-          material.requestQuantity(minExpected);
-        }
-      }
-    }
-
-    // Prioritize an array of materials. Multiplier should include CONSUMPTION_BALANCE_TARGET
-    /** @param {ResourceProductionCost|ResourceProductionCost[]} costs */
-    const prioritizeCosts = (costs, multiplier = 1, storageThreshold = 0) => {
-      if (!Array.isArray(costs)) {
-        costs = [costs];
-      }
-      costs.forEach((cost) => {
-        let req =
-          cost.quantity * multiplier +
-          (cost?.minRateOfChange ?? 0) +
-          storageThreshold * cost.resource.maxQuantity;
-        cost.resource.requestQuantity(req);
-      });
-    };
-
-    // For every Vit plant we'd like to power, prioritize 120s of Stanene (100/s)
-    let vitPlantCount =
-      settings.autoPower && buildings.Alien1VitreloyPlant.autoStateEnabled
-        ? buildings.Alien1VitreloyPlant.count
-        : buildings.Alien1VitreloyPlant.stateOnCount;
-    if (vitPlantCount > 0) {
-      resources.Stanene.requestQuantity(
-        vitPlantCount * CONSUMPTION_BALANCE_TARGET * 100,
-      );
-    }
-
-    // For every enabled and unlocked Factory product, if the product is demanded, demand 120s of its materials,
-    // assuming every factory is producing it.
-    const factoryCount = FactoryManager.maxOperating();
-    if (factoryCount > 0) {
-      Object.values(FactoryManager.Productions).forEach((prod) => {
-        if (
-          (settings.productionFactoryFocusMaterials ||
-            prod.resource.isDemanded()) &&
-          prod.unlocked &&
-          prod.enabled &&
-          prod.weighting
-        ) {
-          prioritizeCosts(
-            prod.cost,
-            factoryCount * CONSUMPTION_BALANCE_TARGET,
-            settings.productionFactoryMinIngredients,
-          );
-        }
-      });
-    }
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      prioritizeDemandedResources,
+      makeDemandProject(cost, progress) {
+        return Object.defineProperties(Object.create(Project.prototype), {
+          cost: { value: cost, writable: true, enumerable: true },
+          progress: { value: progress, writable: true, enumerable: true },
+        });
+      },
+      setDemandPrioritizationTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        resources = context.resources;
+        buildings = context.buildings;
+        game = context.game;
+        crafter = context.crafter;
+        SpyManager = context.SpyManager;
+        FleetManagerOuter = context.FleetManagerOuter;
+        JobManager = context.JobManager;
+        FactoryManager = context.FactoryManager;
+        inflationChallengeAssistActive = context.inflationChallengeAssistActive;
+        retirementChallengeAssistActive =
+          context.retirementChallengeAssistActive;
+      },
+    });
   }
 
   function checkAffordableCustom(cost, max = false) {
@@ -15751,177 +15434,38 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     );
   }
 
-  function plannerLimitingResource(target) {
-    if (target.isAffordable()) {
-      return null;
-    }
-    let worst = null;
-    for (let res in target.cost) {
-      let resource = resources[res];
-      let quantity = target.cost[res];
-      if (!resource.isUnlocked() || resource.currentQuantity >= quantity) {
-        continue;
-      }
-      let time, blocker;
-      if (resource.maxQuantity < quantity) {
-        time = Number.MAX_SAFE_INTEGER;
-        blocker = "storage";
-      } else if (resource.income > 0) {
-        time = (quantity - resource.currentQuantity) / resource.income;
-        blocker = "income";
-      } else {
-        time = Number.MAX_SAFE_INTEGER / 2;
-        blocker = "stalled";
-      }
-      if (!worst || time > worst.time) {
-        worst = { resource: resource, time: time, blocker: blocker };
-      }
-    }
-    return worst;
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      plannerAnalysis: {
+        plannerLimitingResource,
+        makePlannerStats,
+        loadPlannerStats,
+        savePlannerStats,
+      },
+      setPlannerAnalysisTestContext(context) {
+        game = context.game;
+        resources = context.resources;
+        state = context.state;
+      },
+    });
   }
 
-  function makePlannerStats() {
-    return {
-      startDay: game.global.stats.days,
-      day: game.global.stats.days,
-      reset: game.global.stats.reset,
-      samples: {},
-      total: 0,
-    };
-  }
-
-  function loadPlannerStats() {
-    try {
-      let saved = JSON.parse(localStorage.getItem("ea_planner_stats"));
-      if (
-        saved &&
-        saved.reset === game.global.stats.reset &&
-        saved.day <= game.global.stats.days
-      ) {
-        return saved;
-      }
-    } catch (e) {}
-    return makePlannerStats();
-  }
-
-  function savePlannerStats() {
-    if (state.plannerStats) {
-      localStorage.setItem(
-        "ea_planner_stats",
-        JSON.stringify(state.plannerStats),
-      );
-    }
-  }
-
-  // Safety ceiling for the sample array (drop oldest). A full run at the default
-  // interval stays well under this; it only bounds pathologically long sessions.
-  const STATE_LOG_CAP = 20000;
-
-  function makeStateLog() {
-    return {
-      v: 2,
-      reset: game.global.stats.reset,
-      startDay: game.global.stats.days,
-      species: game.global.race.species,
-      cap: [], // running capped set — delta baseline, survives reloads
-      stall: [], // running stalled set
-      samples: [],
-    };
-  }
-
-  function loadStateLog() {
-    try {
-      let saved = JSON.parse(localStorage.getItem("ea_state_log"));
-      if (saved && saved.v === 2 && saved.reset === game.global.stats.reset) {
-        return saved;
-      }
-    } catch (e) {}
-    return makeStateLog();
-  }
-
-  function saveStateLog() {
-    if (state.stateLog) {
-      localStorage.setItem("ea_state_log", JSON.stringify(state.stateLog));
-    }
-  }
-
-  // [added, removed] between a previous and current set (as arrays).
-  function stateLogDiff(prev, cur) {
-    let prevSet = new Set(prev);
-    let curSet = new Set(cur);
-    return [
-      cur.filter((x) => !prevSet.has(x)),
-      prev.filter((x) => !curSet.has(x)),
-    ];
-  }
-
-  // Compact [name, res, blocker, eta] for the top target, or 0 when there's none.
-  function stateLogBlocker(target) {
-    if (!target) {
-      return 0;
-    }
-    let limit = plannerLimitingResource(target);
-    if (!limit) {
-      return [target.title, null, "ready", 0];
-    }
-    return [
-      target.title,
-      limit.resource.title,
-      limit.blocker,
-      Math.round(limit.time),
-    ];
-  }
-
-  function recordStateSnapshot() {
-    state.stateLog ??= loadStateLog();
-    let log = state.stateLog;
-
-    // "capped" uses a stable storage ratio rather than the one-tick isCapped()
-    // projection, so resources hovering at the cap don't flicker every sample.
-    let capped = [];
-    let stalled = [];
-    for (let id in resources) {
-      let r = resources[id];
-      if (!r.isUnlocked()) {
-        continue;
-      }
-      if (r.storageRatio > 0.98) {
-        capped.push(r.title);
-      }
-      if (r.isDemanded() && r.income <= 0) {
-        stalled.push(r.title);
-      }
-    }
-
-    // Delta-encode the slow-changing sets against the running baseline.
-    let [ci, co] = stateLogDiff(log.cap, capped);
-    let [si, so] = stateLogDiff(log.stall, stalled);
-    log.cap = capped;
-    log.stall = stalled;
-
-    let sample = {
-      d: game.global.stats.days,
-      t: state.scriptTick,
-      g: state.goal,
-      mr: Math.round(resources.Money.rateOfChange),
-      mm: Math.round(state.moneyMedian),
-      k: Math.round(resources.Knowledge.currentQuantity),
-      kr: Math.round(resources.Knowledge.rateOfChange),
-      b: stateLogBlocker(state.unlockedBuildings[0]),
-      tc: stateLogBlocker(state.unlockedTechs[0]),
-    };
-    if (ci.length) sample.ci = ci;
-    if (co.length) sample.co = co;
-    if (si.length) sample.si = si;
-    if (so.length) sample.so = so;
-    log.samples.push(sample);
-
-    if (log.samples.length > STATE_LOG_CAP) {
-      log.samples.shift();
-    }
-    if (log.samples.length % 25 === 0) {
-      saveStateLog();
-    }
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      stateLogLifecycle: {
+        makeStateLog,
+        loadStateLog,
+        saveStateLog,
+        stateLogDiff,
+        stateLogBlocker,
+        recordStateSnapshot,
+      },
+      setStateLogTestContext(context) {
+        game = context.game;
+        resources = context.resources;
+        state = context.state;
+      },
+    });
   }
 
   function updateBuildPlanner() {
@@ -16150,80 +15694,18 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     }
   }
 
-  function verifyGameActions() {
-    // Check that actions that exist in game also exist in our script
-    verifyGameActionsExist(game.actions.city, buildings, false);
-    verifyGameActionsExist(game.actions.space, buildings, true);
-    verifyGameActionsExist(game.actions.interstellar, buildings, true);
-    verifyGameActionsExist(game.actions.portal, buildings, true);
-    verifyGameActionsExist(game.actions.galaxy, buildings, true);
-    verifyGameActionsExist(game.actions.tauceti, buildings, true);
-    verifyGameActionsExist(game.actions.eden, buildings, true);
-  }
-
-  function verifyGameActionsExist(gameObject, scriptObject, hasSubLevels) {
-    let scriptKeys = Object.keys(scriptObject);
-    for (let gameActionKey in gameObject) {
-      if (!hasSubLevels) {
-        verifyGameActionExists(
-          scriptKeys,
-          scriptObject,
-          gameActionKey,
-          gameObject,
-        );
-      } else {
-        // This object has sub levels - iterate through them
-        let gameSubObject = gameObject[gameActionKey];
-        for (let gameSubActionKey in gameSubObject) {
-          verifyGameActionExists(
-            scriptKeys,
-            scriptObject,
-            gameSubActionKey,
-            gameSubObject,
-          );
-        }
-      }
-    }
-  }
-
-  function verifyGameActionExists(
-    scriptKeys,
-    scriptObject,
-    gameActionKey,
-    gameObject,
-  ) {
-    // We know that we don't have the info objects defined in our script
-    // gift is a special santa gift. Leave it to the player.
-    // bonfire and firework belongs to seasonal events
-    // replicator is a fake building
-    if (
-      ["info", "gift", "bonfire", "firework", "replicator"].includes(
-        gameActionKey,
-      )
-    ) {
-      return;
-    }
-
-    let scriptActionFound = false;
-
-    for (let i = 0; i < scriptKeys.length; i++) {
-      const scriptAction = scriptObject[scriptKeys[i]];
-      if (scriptAction.id === gameActionKey) {
-        scriptActionFound = true;
-        break;
-      }
-    }
-
-    if (!scriptActionFound) {
-      console.log(
-        "Game action key not found in script: " +
-          gameActionKey +
-          " (" +
-          gameObject[gameActionKey].id +
-          ")",
-      );
-      console.log(gameObject[gameActionKey]);
-    }
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      gameActionVerification: {
+        verifyGameActions,
+        verifyGameActionsExist,
+        verifyGameActionExists,
+      },
+      setGameActionVerificationTestContext(context) {
+        game = context.game;
+        buildings = context.buildings;
+      },
+    });
   }
 
   function initialiseScript() {
@@ -26879,330 +26361,72 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     return cloneNode;
   }
 
-  // Script hooked to fastTick fired 4 times per second
-  function ticksPerSecond() {
-    return 4 / settings.tickRate / (game.global.settings.at ? 2 : 1);
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      gameRates: {
+        ticksPerSecond,
+        getHealingRate,
+        getFoodConsume,
+        getGrowthRate,
+        getResourcesPerClick,
+      },
+      setGameRateTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        buildings = context.buildings;
+        state = context.state;
+        resources = context.resources;
+        jobs = context.jobs;
+        traitVal = context.traitVal;
+      },
+    });
   }
 
-  // main.js -> Soldier Healing
-  function getHealingRate() {
-    let hc =
-      game.global.race["orbit_decayed"] && game.global.race["truepath"]
-        ? buildings.EnceladusBase.stateOnCount
-        : game.global.race["artifical"]
-          ? buildings.BootCamp.count
-          : buildings.Hospital.count;
-    if (
-      game.global.race["rejuvenated"] &&
-      game.global.stats.achieve["lamentis"]
-    ) {
-      hc += Math.min(game.global.stats.achieve.lamentis.l, 5);
-    }
-    hc *= state.astroSign === "cancer" ? 1.05 : 1;
-    hc *= game.global.tech["medic"] || 1;
-    hc += game.global.race["fibroblast"] * 2 || 0;
-    if (game.global.city.s_alter?.regen > 0) {
-      if (hc >= 20) {
-        hc *= traitVal("cannibalize", 0, "+");
-      } else {
-        hc += Math.floor(traitVal("cannibalize", 0) / 5);
-      }
-    }
-    hc *= traitVal("high_pop", 2, 1);
-    if (getGovernor() === "sports") {
-      hc *= 1.5;
-    }
-    if (buildings.Banquet.stateOnCount > 0 && buildings.Banquet.count >= 2) {
-      hc *= 1 + game.global.city.banquet.strength ** 0.65 / 100;
-    }
-    //TODO: troll fathom
-    let max_bound = 20 * traitVal("slow_regen", 0, "+");
-    hc = Math.round(hc);
-
-    // Guaranteed healing
-    let healed = traitVal("regenerative", 0, 1) + Math.floor(hc / max_bound);
-
-    // Probability to heal extra soldier
-    let leftover = hc % max_bound;
-    if (leftover > 0) {
-      let chances = leftover * max_bound;
-      let success = 0;
-      for (let i = 0; i < leftover; i++) {
-        for (let j = 0; j < max_bound; j++) {
-          success += i > j;
-        }
-      }
-      healed += success / chances;
-    }
-
-    return healed;
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      getCostConflict,
+      setCostConflictTestContext(context) {
+        state = context.state;
+        resources = context.resources;
+      },
+    });
   }
 
-  // main.js -> food_consume_mod
-  function getFoodConsume() {
-    let fcm = 1;
-    fcm *= traitVal("gluttony", 0, "+");
-    fcm *= traitVal("high_metabolism", 0, "+");
-    fcm *= traitVal("sticky", 0, "-");
-    // TODO: pinguicula fathom
-    if (game.global.race["photosynth"]) {
-      switch (game.global.city.calendar.weather) {
-        case 0:
-          fcm *=
-            game.global.city.calendar.temp === 0
-              ? 1
-              : traitVal("photosynth", 2, "-");
-          break;
-        case 1:
-          fcm *= traitVal("photosynth", 1, "-");
-          break;
-        case 2:
-          fcm *= traitVal("photosynth", 0, "-");
-          break;
-      }
-    }
-    fcm *= traitVal("ravenous", 0, "+");
-    // Prematurely increase amount of meditators if hibernation bonus is about to end
-    let hibernationEnds =
-      game.global.city.calendar.day + Math.ceil(settings.tickRate / 4) >=
-      game.global.city.calendar.orbit;
-    fcm *=
-      game.global.city.calendar.season === 3 && !hibernationEnds
-        ? traitVal("hibernator", 0, "-")
-        : 1;
-    fcm /= traitVal("high_pop", 0, 1);
-    return fcm;
+  if (window.__EA_TEST_HOOKS__) {
+    window.__EA_TEST_HOOKS__.numberFormatting = {
+      getRealNumber,
+      getNumberString,
+      getNiceNumber,
+    };
   }
 
-  // main.js -> Citizen Growth
-  function getGrowthRate() {
-    if (
-      game.global.race["artifical"] ||
-      (game.global.race["spongy"] && game.global.city.calendar.weather === 0) ||
-      (game.global.race["parasite"] &&
-        game.global.city.calendar.wind === 0 &&
-        !game.global.race["cataclysm"])
-    ) {
-      return 0;
-    }
-    let date = new Date();
-    let lb = game.global.tech["reproduction"] ?? 0;
-    if (
-      haveTech("reproduction") &&
-      date.getMonth() === 1 &&
-      date.getDate() === 14
-    ) {
-      lb += 5;
-    }
-    lb *= traitVal("fast_growth", 0, 1);
-    lb += traitVal("fast_growth", 1, 0);
-    if (game.global.race["spores"] && game.global.city.calendar.wind === 1) {
-      if (game.global.race["parasite"]) {
-        lb += traitVal("spores", 2);
-      } else {
-        lb += traitVal("spores", 0);
-        lb *= traitVal("spores", 1);
-      }
-    }
-    lb += buildings.Hospital.count * (haveTech("reproduction", 2) ? 1 : 0);
-    lb += game.global.genes["birth"] ?? 0;
-    lb += game.global.race["promiscuous"] ?? 0;
-    lb += game.global.race["fasting"]
-      ? jobs.Meditator.count * traitVal("high_pop", 1, "=") * 0.15
-      : 0;
-    lb *=
-      buildings.Banquet.stateOnCount > 0 && buildings.Banquet.count >= 1
-        ? 1 + game.global.city.banquet.strength ** 0.75 / 100
-        : 1;
-    lb *= state.astroSign === "libra" ? 1.25 : 1;
-    lb *= traitVal("high_pop", 2, 1);
-    lb *= game.global.city.biome === "taiga" ? 1.5 : 1;
-    let base =
-      resources.Population.currentQuantity *
-      (game.global.city.ptrait.includes("toxic") ? 1.25 : 1);
-    if (game.global.race["parasite"] && game.global.race["cataclysm"]) {
-      lb = Math.round(lb / 5);
-      base *= 3;
-    }
-    return lb / ((base * 1.810792884997279) / 2);
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      runtimeQueries: { getGovernor, haveTask, haveTech, isEarlyGame },
+      setRuntimeQueryTestContext(context) {
+        game = context.game;
+      },
+    });
   }
 
-  function getResourcesPerClick() {
-    return traitVal("strong", 0, 1) * (game.global.genes["enhance"] ? 2 : 1);
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      raceProfile: { isHungryRace, isDemonRace, isLumberRace, getOccCosts },
+      setRaceProfileTestContext(context) {
+        game = context.game;
+        traitVal = context.traitVal;
+      },
+    });
   }
 
-  function getCostConflict(action) {
-    let conflict = {};
-
-    for (let priorityTarget of state.conflictTargets) {
-      let blockKnowledge = true;
-      for (let res in priorityTarget.cost) {
-        if (
-          res !== "Knowledge" &&
-          resources[res].currentQuantity < priorityTarget.cost[res]
-        ) {
-          blockKnowledge = false;
-          break;
-        }
-      }
-      for (let res in priorityTarget.cost) {
-        if (
-          (res !== "Knowledge" || blockKnowledge) &&
-          priorityTarget.cost[res] >
-            resources[res].currentQuantity - action.cost[res]
-        ) {
-          const resList = conflict.resList || [];
-          const actionList = conflict.actionList || [];
-          conflict = {
-            res: resources[res],
-            obj: priorityTarget,
-            resList: [...new Set([...resList, resources[res].name])],
-            actionList: [...new Set([...actionList, priorityTarget.name])],
-          };
-        }
-      }
-    }
-    return $.isEmptyObject(conflict) ? null : conflict;
-  }
-
-  function getRealNumber(amountText) {
-    if (amountText === "") {
-      return 0;
-    }
-
-    let numericPortion = parseFloat(amountText);
-    let lastChar = amountText[amountText.length - 1];
-
-    if (numberSuffix[lastChar] !== undefined) {
-      numericPortion *= numberSuffix[lastChar];
-    }
-
-    return numericPortion;
-  }
-
-  function getNumberString(amountValue) {
-    let suffixes = Object.keys(numberSuffix);
-    for (let i = suffixes.length - 1; i >= 0; i--) {
-      if (amountValue > numberSuffix[suffixes[i]]) {
-        return (
-          (amountValue / numberSuffix[suffixes[i]]).toFixed(1) + suffixes[i]
-        );
-      }
-    }
-    return Math.ceil(amountValue);
-  }
-
-  function getNiceNumber(amountValue) {
-    return parseFloat(
-      amountValue < 1 ? amountValue.toPrecision(2) : amountValue.toFixed(2),
-    );
-  }
-
-  function getGovernor() {
-    return game.global.race.governor?.g?.bg ?? "none";
-  }
-
-  function haveTask(task) {
-    return Object.values(game.global.race.governor?.tasks ?? {}).includes(task);
-  }
-
-  function haveTech(research, level = 1) {
-    return game.global.tech[research] && game.global.tech[research] >= level;
-  }
-
-  function isEarlyGame() {
-    if (
-      game.global.race["cataclysm"] ||
-      game.global.race["orbit_decayed"] ||
-      game.global.race["lone_survivor"] ||
-      game.global.race["warlord"]
-    ) {
-      return false;
-    } else if (
-      game.global.race["truepath"] ||
-      game.global.race["sludge"] ||
-      game.global.race["ultra_sludge"]
-    ) {
-      return !haveTech("high_tech", 7);
-    } else {
-      return !haveTech("mad");
-    }
-  }
-
-  function isHungryRace() {
-    return (
-      (game.global.race["carnivore"] &&
-        !game.global.race["herbivore"] &&
-        !game.global.race["artifical"]) ||
-      game.global.race["ravenous"]
-    );
-  }
-
-  function isDemonRace() {
-    return (
-      game.global.race["soul_eater"] &&
-      game.global.race["evil"] &&
-      game.global.race.species !== "wendigo"
-    );
-  }
-
-  function isLumberRace() {
-    return (
-      !game.global.race["kindling_kindred"] && !game.global.race["smoldering"]
-    );
-  }
-
-  function getOccCosts() {
-    return (
-      traitVal("high_pop", 0, 1) *
-      (game.global.civic.govern.type === "federation" ? 15 : 20)
-    );
-  }
-
-  function getGovName(govIndex) {
-    let foreign = game.global.civic.foreign["gov" + govIndex];
-    if (!foreign.name) {
-      return "foreign power " + (govIndex + 1);
-    }
-
-    return (
-      poly.loc("civics_gov" + foreign.name.s0, [foreign.name.s1]) +
-      ` (${govIndex + 1})`
-    );
-  }
-
-  function getGovPower(govIndex) {
-    // This function is full of hacks. But all that can be accomplished by wise player without peeking inside game variables
-    // We really need to know power as accurate as possible, otherwise script becomes wonky when spies dies on mission
-    let gov = game.global.civic.foreign["gov" + govIndex];
-    if (gov.spy > 0) {
-      // With 2+ spies we know exact number, for 1 we're assuming trick with advantage
-      // We can see ambush advantage with a single spy, and knowing advantage we can calculate power
-      // Proof of concept: military_power = army_offence / (5 / (1-advantage))
-      // I'm not going to waste time parsing tooltips, and take that from internal variable instead
-      return gov.mil;
-    } else {
-      // We're going to use another trick here. We know minimum and maximum power for gov
-      // If current power is below minimum, that means we sabotaged it already, but spy died since that
-      // We know we seen it for sure, so let's just peek inside, imitating memory
-      // We could cache those values, but making it persistent in between of page reloads would be a pain
-      // Especially considering that player can not only reset, but also import different save at any moment
-      let minPower = [75, 125, 200, 650, 300];
-      let maxPower = [125, 175, 300, 750, 300];
-      if (game.global.race["truepath"]) {
-        [1.5, 1.4, 1.25].forEach((mod, idx) => {
-          minPower[idx] *= mod;
-          maxPower[idx] *= mod;
-        });
-      }
-
-      if (gov.mil < minPower[govIndex]) {
-        return gov.mil;
-      } else {
-        // Above minimum. Even if we ever sabotaged it, unfortunately we can't prove it. Not peeking inside, and assuming worst.
-        return maxPower[govIndex];
-      }
-    }
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      foreignGovernment: { getGovName, getGovPower },
+      setForeignGovernmentTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+      },
+    });
   }
 
   var evalCache = {};
@@ -27222,43 +26446,13 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     return element.__vue__;
   }
 
-  // Recursively traverse through object, wrapping all functions in getters
-  function normalizeProperties(object, proto = []) {
-    for (let key in object) {
-      if (
-        typeof object[key] === "object" &&
-        (object[key].constructor === Object ||
-          object[key].constructor === Array ||
-          proto.indexOf(object[key].constructor) !== -1)
-      ) {
-        object[key] = normalizeProperties(object[key], proto);
-      }
-      if (typeof object[key] === "function") {
-        let fn = object[key].bind(object);
-        Object.defineProperty(object, key, {
-          configurable: true,
-          enumerable: true,
-          get: () => fn(),
-        });
-      }
-    }
-    return object;
-  }
-
-  // Add getters for setting properties
-  function addProps(list, id, props) {
-    for (let item of Object.values(list)) {
-      for (let i = 0; i < props.length; i++) {
-        let settingKey = props[i].s + id(item);
-        let propertyKey = props[i].p;
-        Object.defineProperty(item, propertyKey, {
-          configurable: true,
-          enumerable: true,
-          get: () => settings[settingKey],
-        });
-      }
-    }
-    return list;
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      propertyHelpers: { normalizeProperties, addProps },
+      setPropertyHelperTestContext(context) {
+        settings = context.settings;
+      },
+    });
   }
 
   function triggerFileDownload(contents, filename) {

@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const automationDirectory = path.join(root, "src", "automation");
+const sourceDirectory = path.join(root, "src");
 const mainPath = path.join(root, "src", "main.js");
 
 function findTypeScriptFiles(directory) {
@@ -17,9 +17,9 @@ function findTypeScriptFiles(directory) {
   });
 }
 
-const factoryFiles = findTypeScriptFiles(automationDirectory)
-  .filter((file) => path.basename(file) !== "dependencies.ts")
-  .concat(path.join(root, "src", "policies", "run-guards.ts"));
+const factoryFiles = findTypeScriptFiles(sourceDirectory).filter(
+  (file) => path.basename(file) !== "dependencies.ts",
+);
 
 const main = fs.readFileSync(mainPath, "utf8");
 
