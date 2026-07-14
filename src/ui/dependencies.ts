@@ -40,7 +40,12 @@ export function liveFunction(getValue: () => Loose): Loose {
       Reflect.apply(getValue(), thisArg, argumentsList),
     construct: (_target, argumentsList, newTarget) =>
       Reflect.construct(getValue(), argumentsList, newTarget),
-    get: (_target, property) => Reflect.get(getValue(), property),
+    get: (_target, property) => {
+      if (property === Symbol.hasInstance) {
+        return (value: Loose) => value instanceof getValue();
+      }
+      return Reflect.get(getValue(), property);
+    },
     set: (_target, property, value) => Reflect.set(getValue(), property, value),
     has: (_target, property) => Reflect.has(getValue(), property),
     ownKeys: () => Reflect.ownKeys(getValue()),

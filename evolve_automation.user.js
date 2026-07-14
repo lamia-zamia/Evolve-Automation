@@ -10313,7 +10313,12 @@
     }, {
       apply: (_target, thisArg, argumentsList) => Reflect.apply(getValue(), thisArg, argumentsList),
       construct: (_target, argumentsList, newTarget) => Reflect.construct(getValue(), argumentsList, newTarget),
-      get: (_target, property) => Reflect.get(getValue(), property),
+      get: (_target, property) => {
+        if (property === Symbol.hasInstance) {
+          return (value) => value instanceof getValue();
+        }
+        return Reflect.get(getValue(), property);
+      },
       set: (_target, property, value) => Reflect.set(getValue(), property, value),
       has: (_target, property) => Reflect.has(getValue(), property),
       ownKeys: () => Reflect.ownKeys(getValue()),
@@ -13489,6 +13494,1936 @@
     return { buildMarketSettings: buildMarketSettings2, updateMarketSettingsContent: updateMarketSettingsContent2 };
   }
 
+  // src/ui/storage-settings.ts
+  function createStorageSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const StorageManager2 = liveObject(() => getDependency("StorageManager"));
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
+    const addTableToggle2 = liveFunction(() => getDependency("addTableToggle"));
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
+    const document2 = liveObject(() => getDependency("document"));
+    const removeStorageToggles2 = liveFunction(
+      () => getDependency("removeStorageToggles")
+    );
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetStorageSettings2 = liveFunction(
+      () => getDependency("resetStorageSettings")
+    );
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildStorageSettingsImpl() {
+      let sectionId = "storage";
+      let sectionName = "Storage";
+      let resetFunction = function() {
+        resetStorageSettings2(true);
+        updateSettingsFromState2();
+        updateStorageSettingsContent2();
+        resetCheckbox2("autoStorage");
+        removeStorageToggles2();
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateStorageSettingsContent2
+      );
+    }
+    function updateStorageSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_storageContent");
+      currentNode.empty().off("*");
+      addSettingsToggle2(
+        currentNode,
+        "storageLimitPreMad",
+        "Limit Pre-MAD Storage",
+        "Saves resources and shortens run time by limiting storage pre-MAD"
+      );
+      addSettingsToggle2(
+        currentNode,
+        "storageSafeReassign",
+        "Reassign only empty storages",
+        "Wait until storage is empty before reassigning containers to another resource, to prevent overflowing and wasting resources"
+      );
+      addSettingsToggle2(
+        currentNode,
+        "storageAssignExtra",
+        "Assign buffer storage",
+        "Assigns 3% extra strorage above required amounts, ensuring that required quantity will be actually reached, even if other part of script trying to sell\\eject\\switch production, etc. When manual trades enabled applies additional adjust derieved from selling threshold."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "storageAssignPart",
+        "Assign partial storage",
+        "When enabled script will be allowed to assign some crates and containers even if resulting storage space won't be enough to build new building. It allows to pre-build stock of resources for further use, but can be potentially dungerous.\nIf script not allowed to reassign non-empty storage it can lock storage in position when stored resources can't be used.\nIf script is allowed to reassign non-empty storage it might waste time producing materials which might need to be disposed."
+      );
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:35%">Resource</th>
+              <th class="has-text-warning" style="width:15%">Enabled</th>
+              <th class="has-text-warning" style="width:15%">Store Overflow</th>
+              <th class="has-text-warning" style="width:15%">Min Storage</th>
+              <th class="has-text-warning" style="width:15%">Max Storage</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_storageTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = $2("#script_storageTableBody");
+      let newTableBodyText = "";
+      for (let i = 0; i < StorageManager2.priorityList.length; i++) {
+        const resource = StorageManager2.priorityList[i];
+        newTableBodyText += `<tr value="${resource.id}" class="script-draggable"><td id="script_storage_${resource.id}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < StorageManager2.priorityList.length; i++) {
+        const resource = StorageManager2.priorityList[i];
+        let storageElement = $2("#script_storage_" + resource.id);
+        storageElement.append(buildTableLabel2(resource.name));
+        storageElement = storageElement.next();
+        addTableToggle2(storageElement, "res_storage" + resource.id);
+        storageElement = storageElement.next();
+        addTableToggle2(storageElement, "res_storage_o_" + resource.id);
+        storageElement = storageElement.next();
+        addTableInput2(storageElement, "res_min_store" + resource.id);
+        storageElement = storageElement.next();
+        addTableInput2(storageElement, "res_max_store" + resource.id);
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: sorterHelper2,
+        update: function() {
+          let storageIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          for (let i = 0; i < storageIds.length; i++) {
+            settingsRaw2["res_storage_p_" + storageIds[i]] = i;
+          }
+          StorageManager2.sortByPriority();
+          updateSettingsFromState2();
+        }
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildStorageSettings2(...args) {
+      const implementation = getOverride("buildStorageSettings") ?? buildStorageSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateStorageSettingsContent2(...args) {
+      const implementation = getOverride("updateStorageSettingsContent") ?? updateStorageSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildStorageSettings: buildStorageSettings2, updateStorageSettingsContent: updateStorageSettingsContent2 };
+  }
+
+  // src/ui/magic-settings.ts
+  function createMagicSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const AlchemyManager2 = liveObject(() => getDependency("AlchemyManager"));
+    const RitualManager2 = liveObject(() => getDependency("RitualManager"));
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const addStandardHeading2 = liveFunction(
+      () => getDependency("addStandardHeading")
+    );
+    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
+    const addTableToggle2 = liveFunction(() => getDependency("addTableToggle"));
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
+    const document2 = liveObject(() => getDependency("document"));
+    const game2 = liveObject(() => getDependency("game"));
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetMagicSettings2 = liveFunction(
+      () => getDependency("resetMagicSettings")
+    );
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildMagicSettingsImpl() {
+      let sectionId = "magic";
+      let sectionName = "Magic";
+      let resetFunction = function() {
+        resetMagicSettings2(true);
+        updateSettingsFromState2();
+        updateMagicSettingsContent2();
+        resetCheckbox2("autoAlchemy", "autoPylon", "magicFullmetalHelper");
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateMagicSettingsContent2
+      );
+    }
+    function updateMagicSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_magicContent");
+      currentNode.empty().off("*");
+      updateMagicAlchemy2(currentNode);
+      updateMagicPylon2(currentNode);
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function updateMagicAlchemyImpl(currentNode) {
+      addStandardHeading2(currentNode, "Alchemy");
+      addSettingsNumber2(
+        currentNode,
+        "magicAlchemyManaUse",
+        "Mana income used",
+        "Income portion to use on alchemy. Setting to 1 is not recommended, leftover mana will be used for rituals."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "magicFullmetalHelper",
+        "Fullmetal helper",
+        "In Magic universe with Alchemy II, keep one non-basic alchemy transmutation active long enough to claim Fullmetal if the achievement is still below the current star level. Requires autoAlchemy."
+      );
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:20%">Resource</th>
+              <th class="has-text-warning" style="width:20%">Enabled</th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th class="has-text-warning" style="width:40%"></th>
+            </tr>
+            <tbody id="script_alchemyTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = $2("#script_alchemyTableBody");
+      let newTableBodyText = "";
+      for (let resource of AlchemyManager2.priorityList) {
+        newTableBodyText += `<tr><td id="script_alchemy_${resource.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let resource of AlchemyManager2.priorityList) {
+        let node = $2("#script_alchemy_" + resource.id);
+        let color = AlchemyManager2.transmuteTier(resource) > 1 ? "has-text-advanced" : "has-text-info";
+        node.append(buildTableLabel2(resource.name, "", color));
+        node = node.next();
+        addTableToggle2(node, "res_alchemy_" + resource.id);
+        node = node.next();
+        addTableInput2(node, "res_alchemy_w_" + resource.id);
+      }
+    }
+    function updateMagicPylonImpl(currentNode) {
+      addStandardHeading2(currentNode, "Pylon");
+      addSettingsNumber2(
+        currentNode,
+        "productionRitualManaUse",
+        "Mana income used",
+        "Income portion to use on rituals. Setting to 1 is not recommended, as it will halt mana regeneration. Applied only when mana not capped - with capped mana script will always use all income."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "productionRitualSafe",
+        "Safe rituals",
+        "Limit max rituals to safe, unsuspicious amount. Have no effect out of Witch Hunter scenario."
+      );
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:55%">Ritual</th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th style="width:25%"></th>
+            </tr>
+            <tbody id="script_magicTableBodyPylon"></tbody>
+          </table>`);
+      let tableBodyNode = $2("#script_magicTableBodyPylon");
+      let newTableBodyText = "";
+      let pylonProducts = Object.values(RitualManager2.Productions);
+      for (let i = 0; i < pylonProducts.length; i++) {
+        let production = pylonProducts[i];
+        newTableBodyText += `<tr><td id="script_pylon_${production.id}" style="width:55%"></td><td style="width:20%"></td><td style="width:25%"></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < pylonProducts.length; i++) {
+        let production = pylonProducts[i];
+        let productionElement = $2("#script_pylon_" + production.id);
+        productionElement.append(
+          buildTableLabel2(game2.loc(`modal_pylon_spell_${production.id}`))
+        );
+        productionElement = productionElement.next();
+        addTableInput2(productionElement, "spell_w_" + production.id);
+      }
+    }
+    function buildMagicSettings2(...args) {
+      const implementation = getOverride("buildMagicSettings") ?? buildMagicSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateMagicSettingsContent2(...args) {
+      const implementation = getOverride("updateMagicSettingsContent") ?? updateMagicSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    function updateMagicAlchemy2(...args) {
+      const implementation = getOverride("updateMagicAlchemy") ?? updateMagicAlchemyImpl;
+      return implementation.apply(this, args);
+    }
+    function updateMagicPylon2(...args) {
+      const implementation = getOverride("updateMagicPylon") ?? updateMagicPylonImpl;
+      return implementation.apply(this, args);
+    }
+    return {
+      buildMagicSettings: buildMagicSettings2,
+      updateMagicSettingsContent: updateMagicSettingsContent2,
+      updateMagicAlchemy: updateMagicAlchemy2,
+      updateMagicPylon: updateMagicPylon2
+    };
+  }
+
+  // src/ui/job-settings.ts
+  function createJobSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const BasicJob2 = liveFunction(() => getDependency("BasicJob"));
+    const CraftingJob2 = liveFunction(() => getDependency("CraftingJob"));
+    const JobManager2 = liveObject(() => getDependency("JobManager"));
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
+    const addTableToggle2 = liveFunction(() => getDependency("addTableToggle"));
+    const addToggleCallbacks2 = liveFunction(
+      () => getDependency("addToggleCallbacks")
+    );
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const confirm2 = liveFunction(() => getDependency("confirm"));
+    const document2 = liveObject(() => getDependency("document"));
+    const jobs2 = liveObject(() => getDependency("jobs"));
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetJobSettings2 = liveFunction(
+      () => getDependency("resetJobSettings")
+    );
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildJobSettingsImpl() {
+      let sectionId = "job";
+      let sectionName = "Job";
+      let resetFunction = function() {
+        resetJobSettings2(true);
+        updateSettingsFromState2();
+        updateJobSettingsContent2();
+        resetCheckbox2("autoJobs", "autoCraftsmen");
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateJobSettingsContent2
+      );
+    }
+    function updateJobSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_jobContent");
+      currentNode.empty().off("*");
+      addSettingsToggle2(
+        currentNode,
+        "jobSetDefault",
+        "Set default job",
+        "Automatically sets the default job in order of Quarry Worker -> Lumberjack -> Crystal Miner -> Scavenger -> Hunter -> Farmer -> Unemployed"
+      );
+      addSettingsToggle2(
+        currentNode,
+        "jobManageServants",
+        "Manage Servants",
+        "Automatically manage servants, they will be used as substitute of regular workers, sharing same breakpoints and priorities, i.e. for breakpoint 10 script might assign 8 workers and 2 servants, and such."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "jobLumberWeighting",
+        "Final Lumberjack Weighting",
+        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "jobQuarryWeighting",
+        "Final Quarry Worker Weighting",
+        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "jobCrystalWeighting",
+        "Final Crystal Miner Weighting",
+        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "jobScavengerWeighting",
+        "Final Scavenger Weighting",
+        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "jobRaiderWeighting",
+        "Final Raider Weighting",
+        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "jobForagerWeighting",
+        "Final Forager Weighting",
+        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+      );
+      addSettingsToggle2(
+        currentNode,
+        "jobDisableMiners",
+        "Disable miners in Andromeda",
+        "Disable Miners and Coal Miners after reaching Andromeda"
+      );
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:35%">Job</th>
+              <th class="has-text-warning" style="width:17%">1st Pass</th>
+              <th class="has-text-warning" style="width:17%">2nd Pass</th>
+              <th class="has-text-warning" style="width:17%">3rd Pass</th>
+              <th class="has-text-warning" style="width:9%" title="When enabled script will limit amount of assigned workers down to maximum useful quantity, moving idling workers to other jobs">Smart</th>
+              <td style="width:5%"><span id="script_resetJobsPriority" class="script-refresh"></span></td>
+            </tr>
+            <tbody id="script_jobTableBody"></tbody>
+          </table>`);
+      $2("#script_resetJobsPriority").on("click", function() {
+        if (confirm2("Are you sure you wish to reset jobs priority?")) {
+          JobManager2.priorityList = Object.values(jobs2);
+          for (let i = 0; i < JobManager2.priorityList.length; i++) {
+            let id = JobManager2.priorityList[i]._originalId;
+            settingsRaw2["job_p_" + id] = i;
+          }
+          updateSettingsFromState2();
+          updateJobSettingsContent2();
+        }
+      });
+      let tableBodyNode = $2("#script_jobTableBody");
+      let newTableBodyText = "";
+      for (let i = 0; i < JobManager2.priorityList.length; i++) {
+        const job = JobManager2.priorityList[i];
+        newTableBodyText += `<tr value="${job._originalId}" class="script-draggable"><td id="script_${job._originalId}" style="width:35%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:9%"></td><td style="width:5%"></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < JobManager2.priorityList.length; i++) {
+        const job = JobManager2.priorityList[i];
+        let jobElement = $2("#script_" + job._originalId);
+        buildJobSettingsToggle2(jobElement, job);
+        jobElement = jobElement.next();
+        buildJobSettingsInput2(jobElement, job, 1);
+        jobElement = jobElement.next();
+        buildJobSettingsInput2(jobElement, job, 2);
+        jobElement = jobElement.next();
+        buildJobSettingsInput2(jobElement, job, 3);
+        jobElement = jobElement.next();
+        if (job.is.smart) {
+          addTableToggle2(jobElement, "job_s_" + job._originalId);
+        }
+        jobElement = jobElement.next();
+        jobElement.append($2('<span class="script-lastcolumn"></span>'));
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: sorterHelper2,
+        update: function() {
+          let sortedIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          for (let i = 0; i < sortedIds.length; i++) {
+            settingsRaw2["job_p_" + sortedIds[i]] = i;
+          }
+          JobManager2.sortByPriority();
+          updateSettingsFromState2();
+        }
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildJobSettingsToggleImpl(node, job) {
+      let settingKey = "job_" + job._originalId;
+      let color = job === jobs2.Unemployed ? "warning" : job instanceof CraftingJob2 ? "danger" : job instanceof BasicJob2 ? "info" : "advanced";
+      node.addClass(
+        "script_bg_" + settingKey + (settingsRaw2.overrides[settingKey] ? " inactive-row" : "")
+      ).append(
+        addToggleCallbacks2(
+          $2(`
+          <label tabindex="0" class="switch" style="margin-top:4px; margin-left:10px;">
+            <input class="script_${settingKey}" type="checkbox"${settingsRaw2[settingKey] ? " checked" : ""}>
+            <span class="check" style="height:5px; max-width:15px"></span>
+            <span class="has-text-${color}" style="margin-left: 20px;">${job._originalName}</span>
+          </label>`),
+          settingKey
+        )
+      );
+    }
+    function buildJobSettingsInputImpl(node, job, breakpoint) {
+      if (job instanceof CraftingJob2) {
+        node.append(`<span>Managed</span>`);
+      } else if (breakpoint === 3 && job.is.split) {
+        node.append(`<span>Weighted</span>`);
+      } else {
+        addTableInput2(node, `job_b${breakpoint}_${job._originalId}`);
+      }
+    }
+    function buildJobSettings2(...args) {
+      const implementation = getOverride("buildJobSettings") ?? buildJobSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateJobSettingsContent2(...args) {
+      const implementation = getOverride("updateJobSettingsContent") ?? updateJobSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    function buildJobSettingsToggle2(...args) {
+      const implementation = getOverride("buildJobSettingsToggle") ?? buildJobSettingsToggleImpl;
+      return implementation.apply(this, args);
+    }
+    function buildJobSettingsInput2(...args) {
+      const implementation = getOverride("buildJobSettingsInput") ?? buildJobSettingsInputImpl;
+      return implementation.apply(this, args);
+    }
+    return {
+      buildJobSettings: buildJobSettings2,
+      updateJobSettingsContent: updateJobSettingsContent2,
+      buildJobSettingsToggle: buildJobSettingsToggle2,
+      buildJobSettingsInput: buildJobSettingsInput2
+    };
+  }
+
+  // src/ui/weighting-settings.ts
+  function createWeightingSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const document2 = liveObject(() => getDependency("document"));
+    const resetWeightingSettings2 = liveFunction(
+      () => getDependency("resetWeightingSettings")
+    );
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildWeightingSettingsImpl() {
+      let sectionId = "weighting";
+      let sectionName = "AutoBuild Weighting";
+      let resetFunction = function() {
+        resetWeightingSettings2(true);
+        updateSettingsFromState2();
+        updateWeightingSettingsContent2();
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateWeightingSettingsContent2
+      );
+    }
+    function updateWeightingSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_weightingContent");
+      currentNode.empty().off("*");
+      addSettingsToggle2(
+        currentNode,
+        "buildingBuildIfStorageFull",
+        "Ignore weighting and build if any storage is full",
+        "Ignore weighting and immediately construct building if it uses any capped resource, preventing wasting them by overflowing. Weight still need to be positive(above zero) for this to happen."
+      );
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:30%">Target</th>
+              <th class="has-text-warning" style="width:60%">Condition</th>
+              <th class="has-text-warning" style="width:10%">Multiplier</th>
+            </tr>
+            <tbody id="script_weightingTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = $2("#script_weightingTableBody");
+      addWeightingRule2(
+        tableBodyNode,
+        "Any",
+        "New building",
+        "buildingWeightingNew"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Powered building",
+        "Low available energy",
+        "buildingWeightingUnderpowered"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Power plant",
+        "Low available energy",
+        "buildingWeightingNeedfulPowerPlant"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Power plant",
+        "Producing more energy than required",
+        "buildingWeightingUselessPowerPlant"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Knowledge storage",
+        "Have unaffordable researches or build targets",
+        "buildingWeightingNeedfulKnowledge"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Knowledge storage",
+        "All researches and build targets already affordable",
+        "buildingWeightingUselessKnowledge"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Building with state (city)",
+        "Some instances of this building are not working",
+        "buildingWeightingNonOperatingCity"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Building with state (space)",
+        "Some instances of this building are not working",
+        "buildingWeightingNonOperating"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Building with consumption",
+        "Missing consumables to operate",
+        "buildingWeightingMissingSupply"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Support consumer",
+        "Missing support to operate",
+        "buildingWeightingMissingSupport"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Support provider",
+        "Provided support not currently needed",
+        "buildingWeightingUselessSupport"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "All fuel depots",
+        "Missing Oil or Helium for techs and missions",
+        "buildingWeightingMissingFuel"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Not housing, barrack, oil derrick, or knowledge building",
+        "MAD prestige enabled, and affordable",
+        "buildingWeightingMADUseless"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Mass Ejector",
+        "Existed ejectors not fully utilized",
+        "buildingWeightingUnusedEjectors"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Freight Yard, Container Port, Munitions Depot",
+        "Have unused crates or containers",
+        "buildingWeightingCrateUseless"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Horseshoes",
+        "No more Horseshoes needed",
+        "buildingWeightingHorseshoeUseless"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Meditation Chamber",
+        "No more Meditation Space needed",
+        "buildingWeightingZenUseless"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Gate Turret",
+        "Gate demons fully supressed",
+        "buildingWeightingGateTurret"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Warehouses, Garage, Cargo Yard, Storehouse",
+        "Need more storage",
+        "buildingWeightingNeedStorage"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Housing",
+        "Less than 90% of houses are used",
+        "buildingWeightingUselessHousing"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Orbital Decay",
+        "City and Moon buildings",
+        "buildingWeightingTemporal"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "The True Path",
+        "Solar buildings after reaching Tau Ceti",
+        "buildingWeightingSolar"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Womlings Missions",
+        "Womlings unlock actions conflicting with Overlord",
+        "buildingWeightingOverlord"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Banana Republic objectives",
+        "World Collider and Monuments while their objectives are unfinished",
+        "buildingWeightingBananaObjective"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Inflation Money helpers",
+        "Money storage until $250B cap is reachable, then Money income",
+        "buildingWeightingInflationMoney"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Retirement preparation",
+        "Tau Fusion Generators, Factories, and Disease Labs below the pre-Isolation targets",
+        "buildingWeightingRetirementPrep"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Authority cap buildings (Evil universe)",
+        "Authority cap below configured minimum",
+        "buildingWeightingAuthority"
+      );
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function addWeightingRuleImpl(table, targetName, conditionDesc, settingKey) {
+      let ruleNode = $2(`
+          <tr>
+            <td style="width:30%"><span class="has-text-info">${targetName}</span></td>
+            <td style="width:60%"><span class="has-text-info">${conditionDesc}</span></td>
+            <td style="width:10%"></td>
+          </tr>`);
+      addTableInput2(ruleNode.find("td:eq(2)"), settingKey);
+      table.append(ruleNode);
+    }
+    function buildWeightingSettings2(...args) {
+      const implementation = getOverride("buildWeightingSettings") ?? buildWeightingSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateWeightingSettingsContent2(...args) {
+      const implementation = getOverride("updateWeightingSettingsContent") ?? updateWeightingSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    function addWeightingRule2(...args) {
+      const implementation = getOverride("addWeightingRule") ?? addWeightingRuleImpl;
+      return implementation.apply(this, args);
+    }
+    return {
+      buildWeightingSettings: buildWeightingSettings2,
+      updateWeightingSettingsContent: updateWeightingSettingsContent2,
+      addWeightingRule: addWeightingRule2
+    };
+  }
+
+  // src/ui/building-settings.ts
+  function createBuildingSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const BuildingManager2 = liveObject(() => getDependency("BuildingManager"));
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsSelect2 = liveFunction(
+      () => getDependency("addSettingsSelect")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
+    const addTableToggle2 = liveFunction(() => getDependency("addTableToggle"));
+    const addToggleCallbacks2 = liveFunction(
+      () => getDependency("addToggleCallbacks")
+    );
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
+    const buildingIds2 = liveObject(() => getDependency("buildingIds"));
+    const checkCompare2 = liveObject(() => getDependency("checkCompare"));
+    const confirm2 = liveFunction(() => getDependency("confirm"));
+    const document2 = liveObject(() => getDependency("document"));
+    const getRealNumber2 = liveFunction(() => getDependency("getRealNumber"));
+    const initBuildingState2 = liveFunction(
+      () => getDependency("initBuildingState")
+    );
+    const linkedBuildings2 = liveObject(() => getDependency("linkedBuildings"));
+    const overrideKey2 = liveObject(() => getDependency("overrideKey"));
+    const removeBuildingToggles2 = liveFunction(
+      () => getDependency("removeBuildingToggles")
+    );
+    const resetBuildingSettings2 = liveFunction(
+      () => getDependency("resetBuildingSettings")
+    );
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resources2 = liveObject(() => getDependency("resources"));
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildBuildingSettingsImpl() {
+      let sectionId = "building";
+      let sectionName = "Building";
+      let resetFunction = function() {
+        resetBuildingSettings2(true);
+        updateSettingsFromState2();
+        updateBuildingSettingsContent2();
+        resetCheckbox2("autoBuild", "autoPower");
+        removeBuildingToggles2();
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateBuildingSettingsContent2
+      );
+    }
+    function updateBuildingSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_buildingContent");
+      currentNode.empty().off("*");
+      addSettingsToggle2(
+        currentNode,
+        "buildingsIgnoreZeroRate",
+        "Do not wait for resources without income",
+        "Weighting checks will ignore resources without positive income(craftables, inactive factory goods, etc), buildings with such resources will not delay other buildings."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "buildingsLimitPowered",
+        "Limit amount of powered buildings",
+        "With this option enabled Max Build will prevent powering extra building. Can be useful to disable buildings with overrided settings."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "buildingsTransportGem",
+        "Build cheapest Supplies transport",
+        "By default script chooses between Lake Transport and Lake Bireme Warship comparing their 'Supplies Per Support', with this option enabled it will compare 'Supplies Per Soulgems' instead."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "buildingsBestFreighter",
+        "Build most efficient freighters",
+        "With this option enabled script will compare 'Money Storage per Crew' of Freighter and Super Freighter, and only build the best one. Without this option no restrictions will be applied. Works only when both ships are buildable."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "buildingsUseMultiClick",
+        "Bulk build multi-segmented buildings",
+        "With this option enabled, the script will build as many segments as are affordable at once, instead of one per tick."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "buildingTowerSuppression",
+        "Minimum suppression for Towers",
+        "East Tower and West Tower won't be built until minimum suppression is reached"
+      );
+      const consumptionOptions = [
+        {
+          val: "onePerTick",
+          label: "Default",
+          hint: "Script will stop building buildings for one tick after buying building with support/upkeep. (Example: 1 Living Quarters stops processing of all buildings until next script tick.)"
+        },
+        {
+          val: "perResource",
+          label: "Non-conflicting only",
+          hint: "During a tick, the script will only buy at most one building using a given support/upkeep type, but non-conflicting ones are allowed. Should be safe in most cases. (Example: 1 Living Quarters stops building the other buildings using Red Planet support for that tick, but it can still build on other planets.)"
+        },
+        {
+          val: "unlimited",
+          label: "Unlimited",
+          hint: "Do not pay attention to support/upkeep requirements. This will cause bugs and undesirable behavior as it can easily exceed the maximum support. But, at extremely high prestige levels, this may be required. (Example: Can buy 1 Living Quarters + 1 Mine + 1 Fabrication + 1 Biodome in a single tick even if there is only 2 support left.)"
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "buildingConsumptionCheck",
+        "Behavior when building support/upkeep-using building",
+        "By default, the script only buys one building with support or upkeep requirement per tick, to allow automatic weightings to work optimally.",
+        consumptionOptions
+      );
+      currentNode.append(`
+          <div><input id="script_buildingSearch" class="script-searchsettings" type="text" placeholder="Search for buildings..."></div>
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:35%">Building</th>
+              <th class="has-text-warning" style="width:15%" title="Enables auto building. Triggers ignores this option, allowing to build disabled things.">Auto Build</th>
+              <th class="has-text-warning" style="width:15%" title="Maximum amount of buildings to build. Triggers ignores this option, allowing to build above limit. Can be also used to limit amount of enabled buildings, with respective option above.">Max Build</th>
+              <th class="has-text-warning" style="width:15%" title="Script will try to spend 2x amount of resources on building having 2x weighting, and such.">Weighting</th>
+              <th class="has-text-warning" style="width:20%" title="First toggle enables basic automation based on priority, power, support, and consumption. Second enables logic made specially for particlular building, their effects are different, but generally it tries to behave smarter than just staying enabled all the time.">Auto Power</th>
+            </tr>
+            <tbody id="script_buildingTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = $2("#script_buildingTableBody");
+      $2("#script_buildingSearch").on("keyup", filterBuildingSettingsTable2);
+      let newTableBodyText = '<tr value="All" class="unsortable"><td id="script_bldallToggle" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:20%"><span id="script_resetBuildingsPriority" class="script-refresh"></span></td></tr>';
+      for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
+        let building = BuildingManager2.priorityList[i];
+        newTableBodyText += `<tr value="${building._vueBinding}" class="script-draggable"><td id="script_${building._vueBinding}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:20%"></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      let buildingElement = $2("#script_bldallToggle");
+      buildingElement.append(
+        '<span class="has-text-warning" style="margin-left: 20px;">All Buildings</span>'
+      );
+      buildingElement = buildingElement.next();
+      buildingElement.append(buildAllBuildingEnabledSettingsToggle2());
+      buildingElement = buildingElement.next().next().next();
+      buildingElement.append(buildAllBuildingStateSettingsToggle2());
+      $2("#script_resetBuildingsPriority").on("click", function() {
+        if (confirm2("Are you sure you wish to reset buildings priority?")) {
+          initBuildingState2();
+          for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
+            let id = BuildingManager2.priorityList[i]._vueBinding;
+            settingsRaw2["bld_p_" + id] = i;
+          }
+          updateSettingsFromState2();
+          updateBuildingSettingsContent2();
+        }
+      });
+      for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
+        let building = BuildingManager2.priorityList[i];
+        let buildingElement2 = $2("#script_" + building._vueBinding);
+        let color = building._tab === "space" || building._tab === "starDock" ? "has-text-danger" : building._tab === "galaxy" || building._tab === "eden" ? "has-text-advanced" : building._tab === "interstellar" ? "has-text-special" : building._tab === "portal" || building._tab === "tauceti" ? "has-text-warning" : "has-text-info";
+        buildingElement2.append(buildTableLabel2(building.name, "", color));
+        buildingElement2 = buildingElement2.next();
+        addTableToggle2(buildingElement2, "bat" + building._vueBinding);
+        buildingElement2 = buildingElement2.next();
+        addTableInput2(buildingElement2, "bld_m_" + building._vueBinding);
+        buildingElement2 = buildingElement2.next();
+        addTableInput2(buildingElement2, "bld_w_" + building._vueBinding);
+        buildingElement2 = buildingElement2.next();
+        buildBuildingStateSettingsToggle2(buildingElement2, building);
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: sorterHelper2,
+        update: function() {
+          let buildingElements = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          for (let i = 0; i < buildingElements.length; i++) {
+            settingsRaw2["bld_p_" + buildingElements[i]] = i;
+          }
+          BuildingManager2.sortByPriority();
+          updateSettingsFromState2();
+        }
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function filterBuildingSettingsTableImpl() {
+      let filter = document2.getElementById("script_buildingSearch").value.toUpperCase();
+      let trs = document2.getElementById("script_buildingTableBody").getElementsByTagName("tr");
+      let filterChecker = null;
+      let reg = filter.match(/^(.+)(<=|>=|===|==|<|>|!==|!=)(.+)$/);
+      if (reg?.length === 4) {
+        let buildingValue = null;
+        switch (reg[1].trim()) {
+          case "BUILD":
+          case "AUTOBUILD":
+            buildingValue = (b) => b.autoBuildEnabled;
+            break;
+          case "POWER":
+          case "AUTOPOWER":
+            buildingValue = (b) => b.autoStateEnabled;
+            break;
+          case "WEIGHT":
+          case "WEIGHTING":
+            buildingValue = (b) => b._weighting;
+            break;
+          case "MAX":
+          case "MAXBUILD":
+            buildingValue = (b) => b._autoMax;
+            break;
+          case "POWERED":
+            buildingValue = (b) => b.powered;
+            break;
+          case "KNOW":
+          case "KNOWLEDGE":
+            buildingValue = (b) => b.is.knowledge;
+            break;
+          default:
+            buildingValue = (b) => Object.entries(b.cost).find(
+              ([res, qnt]) => resources2[res].title.toUpperCase().indexOf(reg[1].trim()) > -1
+            )?.[1] ?? 0;
+        }
+        let testValue = null;
+        switch (reg[3].trim()) {
+          case "ON":
+          case "TRUE":
+            testValue = true;
+            break;
+          case "OFF":
+          case "FALSE":
+            testValue = false;
+            break;
+          default:
+            testValue = getRealNumber2(reg[3].trim());
+            break;
+        }
+        filterChecker = (building) => checkCompare2[reg[2]](buildingValue(building), testValue);
+      }
+      for (let i = 0; i < trs.length; i++) {
+        let td = trs[i].getElementsByTagName("td")[0];
+        if (td) {
+          if (filterChecker) {
+            let building = buildingIds2[td.id.match(/^script_(.*)$/)[1]];
+            if (building && filterChecker(building)) {
+              trs[i].style.display = "";
+            } else {
+              trs[i].style.display = "none";
+            }
+          } else if (td.textContent.toUpperCase().indexOf(filter) > -1) {
+            trs[i].style.display = "";
+          } else {
+            trs[i].style.display = "none";
+          }
+        }
+      }
+    }
+    function buildAllBuildingEnabledSettingsToggleImpl() {
+      return $2(`
+          <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
+            <input class="script_buildingEnabledAll" type="checkbox"${settingsRaw2.buildingEnabledAll ? " checked" : ""}>
+            <span class="check" style="height:5px; max-width:15px"></span>
+            <span style="margin-left: 20px;"></span>
+          </label>`).on("change", "input", function() {
+        settingsRaw2.buildingEnabledAll = this.checked;
+        for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
+          let id = BuildingManager2.priorityList[i]._vueBinding;
+          settingsRaw2["bat" + id] = this.checked;
+        }
+        $2('[class^="script_bat"]').prop("checked", this.checked);
+        updateSettingsFromState2();
+      }).on("click", function(event) {
+        if (event[overrideKey2]) {
+          event.preventDefault();
+        }
+        if (event.target.nodeName === "INPUT" && !confirm2(
+          "Are you sure you wish to change the Auto Build state of ALL buildings?"
+        )) {
+          event.preventDefault();
+        }
+      });
+    }
+    function buildBuildingStateSettingsToggleImpl(node, building) {
+      let stateKey = "bld_s_" + building._vueBinding;
+      let smartKey = "bld_s2_" + building._vueBinding;
+      if (building.isSwitchable()) {
+        addToggleCallbacks2(
+          $2(`
+              <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
+                <input class="script_${stateKey}" type="checkbox"${settingsRaw2[stateKey] ? " checked" : ""}>
+                <span class="check" style="height:5px; max-width:15px"></span>
+                <span style="margin-left: 20px;"></span>
+              </label>`),
+          stateKey
+        ).appendTo(node);
+        node.addClass("script_bg_" + stateKey);
+      }
+      if (building.is.smart) {
+        let smartNode = $2(`
+              <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 35px;">
+                <input class="script_${smartKey}" type="checkbox"${settingsRaw2[smartKey] ? " checked" : ""}>
+                <span class="check" style="height:5px; max-width:15px"></span>
+                <span style="margin-left: 20px;"></span>
+              </label>`);
+        let set = linkedBuildings2.find((set2) => set2.includes(building));
+        if (set) {
+          smartNode.on("change", "input", function() {
+            set.forEach((building2) => {
+              let linkedId = "bld_s2_" + building2._vueBinding;
+              settingsRaw2[linkedId] = this.checked;
+              $2(".script_" + linkedId).prop("checked", this.checked);
+            });
+            updateSettingsFromState2();
+          });
+        } else {
+          addToggleCallbacks2(smartNode, smartKey);
+        }
+        node.append(smartNode);
+        node.addClass("script_bg_" + smartKey);
+      }
+      node.append(`<span class="script-lastcolumn"></span>`);
+      node.toggleClass(
+        "inactive-row",
+        Boolean(
+          settingsRaw2.overrides[stateKey] || settingsRaw2.overrides[smartKey]
+        )
+      );
+    }
+    function buildAllBuildingStateSettingsToggleImpl() {
+      return $2(`
+          <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
+            <input class="script_buildingStateAll" type="checkbox"${settingsRaw2.buildingStateAll ? " checked" : ""}>
+            <span class="check" style="height:5px; max-width:15px"></span>
+            <span style="margin-left: 20px;"></span>
+          </label>`).on("change", "input", function(e) {
+        settingsRaw2.buildingStateAll = this.checked;
+        for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
+          let id = BuildingManager2.priorityList[i]._vueBinding;
+          settingsRaw2["bld_s_" + id] = this.checked;
+        }
+        $2('[class^="script_bld_s_"]').prop("checked", this.checked);
+        updateSettingsFromState2();
+      }).on("click", function(event) {
+        if (event[overrideKey2]) {
+          event.preventDefault();
+        }
+        if (event.target.nodeName === "INPUT" && !confirm2(
+          "Are you sure you wish to change the Auto Power state of ALL buildings?"
+        )) {
+          event.preventDefault();
+        }
+      });
+    }
+    function buildBuildingSettings2(...args) {
+      const implementation = getOverride("buildBuildingSettings") ?? buildBuildingSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateBuildingSettingsContent2(...args) {
+      const implementation = getOverride("updateBuildingSettingsContent") ?? updateBuildingSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    function filterBuildingSettingsTable2(...args) {
+      const implementation = getOverride("filterBuildingSettingsTable") ?? filterBuildingSettingsTableImpl;
+      return implementation.apply(this, args);
+    }
+    function buildAllBuildingEnabledSettingsToggle2(...args) {
+      const implementation = getOverride("buildAllBuildingEnabledSettingsToggle") ?? buildAllBuildingEnabledSettingsToggleImpl;
+      return implementation.apply(this, args);
+    }
+    function buildBuildingStateSettingsToggle2(...args) {
+      const implementation = getOverride("buildBuildingStateSettingsToggle") ?? buildBuildingStateSettingsToggleImpl;
+      return implementation.apply(this, args);
+    }
+    function buildAllBuildingStateSettingsToggle2(...args) {
+      const implementation = getOverride("buildAllBuildingStateSettingsToggle") ?? buildAllBuildingStateSettingsToggleImpl;
+      return implementation.apply(this, args);
+    }
+    return {
+      buildBuildingSettings: buildBuildingSettings2,
+      updateBuildingSettingsContent: updateBuildingSettingsContent2,
+      filterBuildingSettingsTable: filterBuildingSettingsTable2,
+      buildAllBuildingEnabledSettingsToggle: buildAllBuildingEnabledSettingsToggle2,
+      buildBuildingStateSettingsToggle: buildBuildingStateSettingsToggle2,
+      buildAllBuildingStateSettingsToggle: buildAllBuildingStateSettingsToggle2
+    };
+  }
+
+  // src/ui/project-settings.ts
+  function createProjectSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const ProjectManager2 = liveObject(() => getDependency("ProjectManager"));
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
+    const addTableToggle2 = liveFunction(() => getDependency("addTableToggle"));
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
+    const document2 = liveObject(() => getDependency("document"));
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetProjectSettings2 = liveFunction(
+      () => getDependency("resetProjectSettings")
+    );
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildProjectSettingsImpl() {
+      let sectionId = "project";
+      let sectionName = "A.R.P.A.";
+      let resetFunction = function() {
+        resetProjectSettings2(true);
+        updateSettingsFromState2();
+        updateProjectSettingsContent2();
+        resetCheckbox2("autoARPA");
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateProjectSettingsContent2
+      );
+    }
+    function updateProjectSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_projectContent");
+      currentNode.empty().off("*");
+      addSettingsToggle2(
+        currentNode,
+        "arpaScaleWeighting",
+        "Scale weighting with progress",
+        "Projects weighting scales  with current progress, making script more eager to spend resources on finishing nearly constructed projects."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "arpaStep",
+        "Preferred progress step",
+        "Projects will be weighted and build in this steps. Increasing number can speed up constructing. Step will be adjusted down when preferred step above remaining amount, or surpass storage caps. Weightings below will be multiplied by current step. Projects builded by triggers will always have maximum possible step."
+      );
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:25%">Project</th>
+              <th class="has-text-warning" style="width:25%">Auto Build</th>
+              <th class="has-text-warning" style="width:25%">Max Build</th>
+              <th class="has-text-warning" style="width:25%">Weighting</th>
+            </tr>
+            <tbody id="script_projectTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = $2("#script_projectTableBody");
+      let newTableBodyText = "";
+      for (let i = 0; i < ProjectManager2.priorityList.length; i++) {
+        const project = ProjectManager2.priorityList[i];
+        newTableBodyText += `<tr value="${project.id}" class="script-draggable"><td id="script_${project.id}" style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < ProjectManager2.priorityList.length; i++) {
+        const project = ProjectManager2.priorityList[i];
+        let projectElement = $2("#script_" + project.id);
+        projectElement.append(buildTableLabel2(project.name));
+        projectElement = projectElement.next();
+        addTableToggle2(projectElement, "arpa_" + project.id);
+        projectElement = projectElement.next();
+        addTableInput2(projectElement, "arpa_m_" + project.id);
+        projectElement = projectElement.next();
+        addTableInput2(projectElement, "arpa_w_" + project.id);
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: sorterHelper2,
+        update: function() {
+          let projectIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          for (let i = 0; i < projectIds.length; i++) {
+            settingsRaw2["arpa_p_" + projectIds[i]] = i;
+          }
+          ProjectManager2.sortByPriority();
+          updateSettingsFromState2();
+        }
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildProjectSettings2(...args) {
+      const implementation = getOverride("buildProjectSettings") ?? buildProjectSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateProjectSettingsContent2(...args) {
+      const implementation = getOverride("updateProjectSettingsContent") ?? updateProjectSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildProjectSettings: buildProjectSettings2, updateProjectSettingsContent: updateProjectSettingsContent2 };
+  }
+
+  // src/ui/logging-settings.ts
+  function createLoggingSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const GameLog2 = liveFunction(() => getDependency("GameLog"));
+    const addSettingsHeader12 = liveFunction(
+      () => getDependency("addSettingsHeader1")
+    );
+    const addSettingsString2 = liveFunction(
+      () => getDependency("addSettingsString")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const buildFilterRegExp2 = liveFunction(
+      () => getDependency("buildFilterRegExp")
+    );
+    const buildSettingsSection22 = liveFunction(
+      () => getDependency("buildSettingsSection2")
+    );
+    const document2 = liveObject(() => getDependency("document"));
+    const game2 = liveObject(() => getDependency("game"));
+    const resetLoggingSettings2 = liveFunction(
+      () => getDependency("resetLoggingSettings")
+    );
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildLoggingSettingsImpl(parentNode, secondaryPrefix) {
+      let sectionId = "logging";
+      let sectionName = "Logging";
+      let resetFunction = function() {
+        resetLoggingSettings2(true);
+        updateSettingsFromState2();
+        updateLoggingSettingsContent2(secondaryPrefix);
+        buildFilterRegExp2();
+      };
+      buildSettingsSection22(
+        parentNode,
+        secondaryPrefix,
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateLoggingSettingsContent2
+      );
+    }
+    function updateLoggingSettingsContentImpl(secondaryPrefix) {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2(`#script_${secondaryPrefix}loggingContent`);
+      currentNode.empty().off("*");
+      addSettingsHeader12(currentNode, "Script Messages");
+      addSettingsToggle2(
+        currentNode,
+        "logEnabled",
+        "Enable logging",
+        "Master switch to enable logging of script actions in the game message queue"
+      );
+      Object.entries(GameLog2.Types).forEach(
+        ([id, label]) => addSettingsToggle2(
+          currentNode,
+          "log_" + id,
+          label,
+          `If logging is enabled then logs ${label} actions`
+        )
+      );
+      addSettingsString2(
+        currentNode,
+        "log_prestige_format",
+        "Prestige Log Format",
+        "Available placeholders: {resetType}, {species}, {timestamp} (in game days). Use {eval: XXX } to log custom information"
+      );
+      addSettingsHeader12(currentNode, "Game Messages");
+      addSettingsToggle2(
+        currentNode,
+        "hellTurnOffLogMessages",
+        "Turn off patrol and surveyor log messages",
+        "Automatically turns off the hell patrol and surveyor log messages"
+      );
+      let stringsUrl = `strings/strings${game2.global.settings.locale === "en-US" ? "" : "." + game2.global.settings.locale}.json`;
+      currentNode.append(`
+          <div>
+            <span>List of message IDs to filter, all game messages can be found <a href="${stringsUrl}" target="_blank">here</a>.</span><br>
+            <textarea id="script_logFilter" class="textarea" style="margin-top: 4px;">${settingsRaw2.logFilter}</textarea>
+          </div>`);
+      $2("#script_logFilter").on("change", function() {
+        settingsRaw2.logFilter = this.value;
+        buildFilterRegExp2();
+        this.value = settingsRaw2.logFilter;
+        updateSettingsFromState2();
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildLoggingSettings2(...args) {
+      const implementation = getOverride("buildLoggingSettings") ?? buildLoggingSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateLoggingSettingsContent2(...args) {
+      const implementation = getOverride("updateLoggingSettingsContent") ?? updateLoggingSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildLoggingSettings: buildLoggingSettings2, updateLoggingSettingsContent: updateLoggingSettingsContent2 };
+  }
+
+  // src/ui/options-modal.ts
+  function createOptionsModalUI({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const buildFleetSettings2 = liveFunction(
+      () => getDependency("buildFleetSettings")
+    );
+    const buildGovernmentSettings2 = liveFunction(
+      () => getDependency("buildGovernmentSettings")
+    );
+    const buildHellSettings2 = liveFunction(
+      () => getDependency("buildHellSettings")
+    );
+    const buildWarSettings2 = liveFunction(
+      () => getDependency("buildWarSettings")
+    );
+    const document2 = liveObject(() => getDependency("document"));
+    const openOverrideModal2 = liveFunction(
+      () => getDependency("openOverrideModal")
+    );
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    const window2 = liveObject(() => getDependency("window"));
+    function createSettingToggleImpl(node, settingKey, title, enabledCallBack, disabledCallBack) {
+      let toggle = $2(`
+          <label class="switch script_bg_${settingKey}" tabindex="0" title="${title}">
+            <input class="script_${settingKey}" type="checkbox"${settingsRaw2[settingKey] ? " checked" : ""}/>
+            <span class="check"></span><span>${settingKey}</span>
+          </label><br>`).toggleClass(
+        "inactive-row",
+        Boolean(settingsRaw2.overrides[settingKey])
+      );
+      if (settingsRaw2[settingKey] && enabledCallBack) {
+        enabledCallBack();
+      }
+      toggle.on("change", "input", function() {
+        settingsRaw2[settingKey] = this.checked;
+        updateSettingsFromState2();
+        if (settingsRaw2[settingKey] && enabledCallBack) {
+          enabledCallBack();
+        }
+        if (!settingsRaw2[settingKey] && disabledCallBack) {
+          disabledCallBack();
+        }
+      });
+      toggle.on(
+        "click",
+        { label: `Toggle (${settingKey})`, name: settingKey, type: "boolean" },
+        openOverrideModal2
+      );
+      node.append(toggle);
+    }
+    function updateOptionsUIImpl() {
+      addOptionUI2(
+        "s-government-options",
+        "#government .tabs ul",
+        "Government",
+        buildGovernmentSettings2
+      );
+      addOptionUI2(
+        "s-foreign-options",
+        "#garrison div h2",
+        "Foreign Affairs",
+        buildWarSettings2
+      );
+      addOptionUI2(
+        "s-foreign-options2",
+        "#c_garrison div h2",
+        "Foreign Affairs",
+        buildWarSettings2
+      );
+      addOptionUI2("s-hell-options", "#gFort div h3", "Hell", buildHellSettings2);
+      addOptionUI2(
+        "s-hell-options2",
+        "#prtl_fortress div h3",
+        "Hell",
+        buildHellSettings2
+      );
+      addOptionUI2("s-fleet-options", "#hfleet h3", "Fleet", buildFleetSettings2);
+    }
+    function addOptionUIImpl(optionsId, querySelectorText, modalTitle, buildOptionsFunction) {
+      if (document2.getElementById(optionsId) !== null) {
+        return;
+      }
+      let sectionNode = $2(querySelectorText);
+      if (sectionNode.length === 0) {
+        return;
+      }
+      let newOptionNode = $2(
+        `<span id="${optionsId}" class="s-options-button has-text-success" style="margin-right:0px">+</span>`
+      );
+      sectionNode.prepend(newOptionNode);
+      newOptionNode.on("click", function() {
+        openOptionsModal2(modalTitle, buildOptionsFunction);
+      });
+    }
+    function openOptionsModalImpl(modalTitle, buildOptionsFunction) {
+      let modalHeader = $2("#scriptModalHeader");
+      modalHeader.empty().off("*");
+      modalHeader.append(`<span style="user-select: text">${modalTitle}</span>`);
+      $2(".script-modal-content").removeClass("custom-race-modal");
+      let modalBody = $2("#scriptModalBody");
+      modalBody.empty().off("*").removeClass("celestialLab");
+      buildOptionsFunction(modalBody, "c_");
+      let modal = document2.getElementById("scriptModal");
+      $2("html").css("overflow", "hidden");
+      modal.style.display = "block";
+    }
+    function createOptionsModalImpl() {
+      if (document2.getElementById("scriptModal") !== null) {
+        return;
+      }
+      $2(document2.body).append(`
+          <div id="scriptModal" class="script-modal content">
+            <span id="scriptModalClose" class="script-modal-close">&times;</span>
+            <div class="script-modal-content">
+              <div id="scriptModalHeader" class="script-modal-header has-text-warning">
+                <p>You should never see this modal header...</p>
+              </div>
+              <div id="scriptModalBody" class="script-modal-body">
+                <p>You should never see this modal body...</p>
+              </div>
+            </div>
+          </div>`);
+      $2("#scriptModalClose").on("click", function() {
+        $2("#scriptModal").css("display", "none");
+        $2(".script-modal-content").removeClass(
+          "override-modal custom-race-modal"
+        );
+        $2("html").css("overflow-y", "scroll");
+      });
+      $2(window2).on("click", function(event) {
+        if (event.target.id === "scriptModal") {
+          $2("#scriptModal").css("display", "none");
+          $2(".script-modal-content").removeClass(
+            "override-modal custom-race-modal"
+          );
+          $2("html").css("overflow-y", "scroll");
+        }
+      });
+    }
+    function createSettingToggle2(...args) {
+      const implementation = getOverride("createSettingToggle") ?? createSettingToggleImpl;
+      return implementation.apply(this, args);
+    }
+    function updateOptionsUI2(...args) {
+      const implementation = getOverride("updateOptionsUI") ?? updateOptionsUIImpl;
+      return implementation.apply(this, args);
+    }
+    function addOptionUI2(...args) {
+      const implementation = getOverride("addOptionUI") ?? addOptionUIImpl;
+      return implementation.apply(this, args);
+    }
+    function openOptionsModal2(...args) {
+      const implementation = getOverride("openOptionsModal") ?? openOptionsModalImpl;
+      return implementation.apply(this, args);
+    }
+    function createOptionsModal2(...args) {
+      const implementation = getOverride("createOptionsModal") ?? createOptionsModalImpl;
+      return implementation.apply(this, args);
+    }
+    return {
+      createSettingToggle: createSettingToggle2,
+      updateOptionsUI: updateOptionsUI2,
+      addOptionUI: addOptionUI2,
+      openOptionsModal: openOptionsModal2,
+      createOptionsModal: createOptionsModal2
+    };
+  }
+
+  // src/ui/prestige-top-bar.ts
+  function createPrestigeTopBar({
+    getDependency,
+    getOverride
+  }) {
+    const addOptionUI2 = liveFunction(() => getDependency("addOptionUI"));
+    const buildPrestigeSettings2 = liveFunction(
+      () => getDependency("buildPrestigeSettings")
+    );
+    const document2 = liveObject(() => getDependency("document"));
+    const prestigeTypes2 = liveObject(() => getDependency("prestigeTypes"));
+    const settings2 = liveObject(() => getDependency("settings"));
+    function updatePrestigeInTopBarImpl() {
+      const parentId = "s-prestige-type";
+      let parentNode = document2.getElementById(parentId);
+      if (settings2.displayPrestigeTypeInTopBar) {
+        if (parentNode === null) {
+          const planetWrap = document2.querySelector(".planetWrap");
+          if (planetWrap === null) return;
+          parentNode = document2.createElement("span");
+          parentNode.setAttribute("id", parentId);
+          parentNode.setAttribute(
+            "style",
+            "border-left: 1px solid; margin-left: 0.75rem; padding-left: 0.75rem;"
+          );
+          planetWrap.append(parentNode);
+          addOptionUI2(
+            "s-prestige-type-helper-btn",
+            `#${parentId}`,
+            "Prestige",
+            buildPrestigeSettings2
+          );
+        }
+      } else {
+        removePrestigeFromTopBar2();
+        return;
+      }
+      if (parentNode.getAttribute("data-prestige") !== settings2.prestigeType) {
+        let infoNode = parentNode.querySelector(".info");
+        if (infoNode === null) {
+          infoNode = document2.createElement("span");
+          infoNode.setAttribute("class", "info");
+          parentNode.append(infoNode);
+        }
+        let prestige = prestigeTypes2.find(
+          (entry) => entry.val === settings2.prestigeType
+        );
+        if (prestige === void 0) {
+          prestige = { label: settings2.prestigeType, hint: "" };
+        }
+        infoNode.title = prestige.hint;
+        infoNode.textContent = prestige.label;
+        parentNode.setAttribute("data-prestige", settings2.prestigeType);
+      }
+    }
+    function removePrestigeFromTopBarImpl() {
+      let prestigeNode = document2.getElementById("s-prestige-type");
+      if (prestigeNode == null) {
+        return;
+      }
+      prestigeNode.remove();
+    }
+    function updatePrestigeInTopBar2(...args) {
+      const implementation = getOverride("updatePrestigeInTopBar") ?? updatePrestigeInTopBarImpl;
+      return implementation.apply(this, args);
+    }
+    function removePrestigeFromTopBar2(...args) {
+      const implementation = getOverride("removePrestigeFromTopBar") ?? removePrestigeFromTopBarImpl;
+      return implementation.apply(this, args);
+    }
+    return { updatePrestigeInTopBar: updatePrestigeInTopBar2, removePrestigeFromTopBar: removePrestigeFromTopBar2 };
+  }
+
+  // src/ui/total-days-top-bar.ts
+  function createTotalDaysTopBar({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const document2 = liveObject(() => getDependency("document"));
+    const game2 = liveObject(() => getDependency("game"));
+    const settings2 = liveObject(() => getDependency("settings"));
+    function updateTotalDaysInTopBarImpl() {
+      if (settings2.displayTotalDaysTypeInTopBar) {
+        addTotalDaysToTopBar2();
+      } else {
+        removeTotalDaysFromTopBar2();
+      }
+      const totalDaysNode = document2.getElementById("s-total-days-count");
+      if (totalDaysNode == null) {
+        return;
+      }
+      totalDaysNode.textContent = game2.global.stats.days;
+    }
+    function addTotalDaysToTopBarImpl() {
+      const nodeId = "s-total-days";
+      if (document2.getElementById(nodeId) !== null) {
+        return;
+      }
+      const calendarNode = $2("#topBar .calendar");
+      if (calendarNode.length === 0) {
+        return;
+      }
+      calendarNode.find(".day").after(
+        $2(
+          `<span id="s-total-days" class="has-text-warning" style="padding-left: 3px;">(<span id="s-total-days-count"></span>)</span>`
+        )
+      );
+    }
+    function removeTotalDaysFromTopBarImpl() {
+      let totalDaysNode = document2.getElementById("s-total-days");
+      if (totalDaysNode == null) {
+        return;
+      }
+      totalDaysNode.remove();
+    }
+    function updateTotalDaysInTopBar2(...args) {
+      const implementation = getOverride("updateTotalDaysInTopBar") ?? updateTotalDaysInTopBarImpl;
+      return implementation.apply(this, args);
+    }
+    function addTotalDaysToTopBar2(...args) {
+      const implementation = getOverride("addTotalDaysToTopBar") ?? addTotalDaysToTopBarImpl;
+      return implementation.apply(this, args);
+    }
+    function removeTotalDaysFromTopBar2(...args) {
+      const implementation = getOverride("removeTotalDaysFromTopBar") ?? removeTotalDaysFromTopBarImpl;
+      return implementation.apply(this, args);
+    }
+    return {
+      updateTotalDaysInTopBar: updateTotalDaysInTopBar2,
+      addTotalDaysToTopBar: addTotalDaysToTopBar2,
+      removeTotalDaysFromTopBar: removeTotalDaysFromTopBar2
+    };
+  }
+
+  // src/ui/arpa-toggles.ts
+  function createArpaToggleUI({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const ProjectManager2 = liveObject(() => getDependency("ProjectManager"));
+    const addToggleCallbacks2 = liveFunction(
+      () => getDependency("addToggleCallbacks")
+    );
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    function createArpaTogglesImpl() {
+      removeArpaToggles2();
+      for (let i = 0; i < ProjectManager2.priorityList.length; i++) {
+        let project = ProjectManager2.priorityList[i];
+        let projectElement = $2("#arpa" + project.id + " .head");
+        if (projectElement.length) {
+          let settingKey = "arpa_" + project.id;
+          projectElement.append(
+            addToggleCallbacks2(
+              $2(`
+                  <label tabindex="0" class="switch ea-arpa-toggle" style="position:relative; max-width:75px; margin-top:-36px; left:59%; float:left;">
+                    <input class="script_${settingKey}" type="checkbox"${settingsRaw2[settingKey] ? " checked" : ""}>
+                    <span class="check" style="height:5px;"></span>
+                  </label>`),
+              settingKey
+            )
+          );
+        }
+      }
+    }
+    function removeArpaTogglesImpl() {
+      $2("#arpaPhysics .ea-arpa-toggle").remove();
+    }
+    function createArpaToggles2(...args) {
+      const implementation = getOverride("createArpaToggles") ?? createArpaTogglesImpl;
+      return implementation.apply(this, args);
+    }
+    function removeArpaToggles2(...args) {
+      const implementation = getOverride("removeArpaToggles") ?? removeArpaTogglesImpl;
+      return implementation.apply(this, args);
+    }
+    return { createArpaToggles: createArpaToggles2, removeArpaToggles: removeArpaToggles2 };
+  }
+
+  // src/ui/craft-toggles.ts
+  function createCraftToggleUI({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const addToggleCallbacks2 = liveFunction(
+      () => getDependency("addToggleCallbacks")
+    );
+    const craftablesList2 = liveObject(() => getDependency("craftablesList"));
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    function createCraftTogglesImpl() {
+      removeCraftToggles2();
+      for (let i = 0; i < craftablesList2.length; i++) {
+        let craftable = craftablesList2[i];
+        let craftableElement = $2("#res" + craftable.id + " h3");
+        if (craftableElement.length) {
+          let settingKey = "craft" + craftable.id;
+          craftableElement.parent().css("position", "relative");
+          addToggleCallbacks2(
+            $2(`
+                  <label tabindex="0" class="switch ea-craft-toggle">
+                    <input class="script_${settingKey}" type="checkbox"${settingsRaw2[settingKey] ? " checked" : ""}/>
+                    <span class="check" style="height:5px;"></span>
+                  </label>`),
+            settingKey
+          ).insertAfter(craftableElement);
+        }
+      }
+    }
+    function removeCraftTogglesImpl() {
+      $2("#resources .ea-craft-toggle").remove();
+    }
+    function createCraftToggles2(...args) {
+      const implementation = getOverride("createCraftToggles") ?? createCraftTogglesImpl;
+      return implementation.apply(this, args);
+    }
+    function removeCraftToggles2(...args) {
+      const implementation = getOverride("removeCraftToggles") ?? removeCraftTogglesImpl;
+      return implementation.apply(this, args);
+    }
+    return { createCraftToggles: createCraftToggles2, removeCraftToggles: removeCraftToggles2 };
+  }
+
+  // src/ui/building-toggles.ts
+  function createBuildingToggleUI({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const BuildingManager2 = liveObject(() => getDependency("BuildingManager"));
+    const addToggleCallbacks2 = liveFunction(
+      () => getDependency("addToggleCallbacks")
+    );
+    const settings2 = liveObject(() => getDependency("settings"));
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const state2 = liveObject(() => getDependency("state"));
+    function createBuildingTogglesImpl() {
+      removeBuildingToggles2();
+      if (!settings2.showSettings) return;
+      for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
+        let building = BuildingManager2.priorityList[i];
+        let buildingElement = $2("#" + building._vueBinding);
+        if (buildingElement.length) {
+          let settingKey = "bat" + building._vueBinding;
+          buildingElement.append(
+            addToggleCallbacks2(
+              $2(`
+                  <label tabindex="0" class="switch ea-building-toggle" style="position:absolute; margin-top: 24px; left:10%;">
+                    <input class="script_${settingKey}" type="checkbox"${settingsRaw2[settingKey] ? " checked" : ""}/>
+                    <span class="check" style="height:5px; max-width:15px"></span>
+                  </label>`),
+              settingKey
+            )
+          );
+          state2.buildingToggles++;
+        }
+      }
+    }
+    function removeBuildingTogglesImpl() {
+      $2("#mTabCivil .ea-building-toggle").remove();
+      state2.buildingToggles = 0;
+    }
+    function createBuildingToggles2(...args) {
+      const implementation = getOverride("createBuildingToggles") ?? createBuildingTogglesImpl;
+      return implementation.apply(this, args);
+    }
+    function removeBuildingToggles2(...args) {
+      const implementation = getOverride("removeBuildingToggles") ?? removeBuildingTogglesImpl;
+      return implementation.apply(this, args);
+    }
+    return { createBuildingToggles: createBuildingToggles2, removeBuildingToggles: removeBuildingToggles2 };
+  }
+
+  // src/ui/eject-toggles.ts
+  function createEjectToggleUI({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const EjectManager2 = liveObject(() => getDependency("EjectManager"));
+    const addToggleCallbacks2 = liveFunction(
+      () => getDependency("addToggleCallbacks")
+    );
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    function createEjectTogglesImpl() {
+      removeEjectToggles2();
+      $2("#eject").append(
+        '<span id="script_eject_top_row" style="margin-left: auto; margin-right: 0.2rem; float: right;" class="has-text-danger">Auto Eject</span>'
+      );
+      for (let resource of EjectManager2.priorityList) {
+        let ejectElement = $2("#eject" + resource.id);
+        if (ejectElement.length) {
+          let settingKey = "res_eject" + resource.id;
+          ejectElement.append(
+            addToggleCallbacks2(
+              $2(`
+                  <label tabindex="0" title="Enable ejecting of this resource. When to eject is set in the Prestige Settings tab." class="switch ea-eject-toggle" style="margin-left:auto; margin-right:0.2rem;">
+                    <input class="script_${settingKey}" type="checkbox"${settingsRaw2[settingKey] ? " checked" : ""}>
+                    <span class="check" style="height:5px;"></span>
+                    <span class="state"></span>
+                  </label>`),
+              settingKey
+            )
+          );
+        }
+      }
+    }
+    function removeEjectTogglesImpl() {
+      $2("#resEjector .ea-eject-toggle").remove();
+      $2("#script_eject_top_row").remove();
+    }
+    function createEjectToggles2(...args) {
+      const implementation = getOverride("createEjectToggles") ?? createEjectTogglesImpl;
+      return implementation.apply(this, args);
+    }
+    function removeEjectToggles2(...args) {
+      const implementation = getOverride("removeEjectToggles") ?? removeEjectTogglesImpl;
+      return implementation.apply(this, args);
+    }
+    return { createEjectToggles: createEjectToggles2, removeEjectToggles: removeEjectToggles2 };
+  }
+
+  // src/ui/supply-toggles.ts
+  function createSupplyToggleUI({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const SupplyManager2 = liveObject(() => getDependency("SupplyManager"));
+    const addToggleCallbacks2 = liveFunction(
+      () => getDependency("addToggleCallbacks")
+    );
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    function createSupplyTogglesImpl() {
+      removeSupplyToggles2();
+      $2("#spireSupply").append(
+        '<span id="script_supply_top_row" style="margin-left: auto; margin-right: 0.2rem; float: right;" class="has-text-danger">Auto Supply</span>'
+      );
+      for (let resource of SupplyManager2.priorityList) {
+        let supplyElement = $2("#supply" + resource.id);
+        if (supplyElement.length) {
+          let settingKey = "res_supply" + resource.id;
+          supplyElement.append(
+            addToggleCallbacks2(
+              $2(`
+                  <label tabindex="0" title="Enable supply of this resource."  class="switch ea-supply-toggle" style="margin-left:auto; margin-right:0.2rem;">
+                    <input class="script_${settingKey}" type="checkbox"${settingsRaw2[settingKey] ? " checked" : ""}>
+                    <span class="check" style="height:5px;"></span>
+                    <span class="state"></span>
+                  </label>`),
+              settingKey
+            )
+          );
+        }
+      }
+    }
+    function removeSupplyTogglesImpl() {
+      $2("#resCargo .ea-supply-toggle").remove();
+      $2("#script_supply_top_row").remove();
+    }
+    function createSupplyToggles2(...args) {
+      const implementation = getOverride("createSupplyToggles") ?? createSupplyTogglesImpl;
+      return implementation.apply(this, args);
+    }
+    function removeSupplyToggles2(...args) {
+      const implementation = getOverride("removeSupplyToggles") ?? removeSupplyTogglesImpl;
+      return implementation.apply(this, args);
+    }
+    return { createSupplyToggles: createSupplyToggles2, removeSupplyToggles: removeSupplyToggles2 };
+  }
+
   // src/main.js
   (function($) {
     "use strict";
@@ -13496,6 +15431,618 @@
     var settingsRaw = JSON.parse(localStorage.getItem("settings")) ?? {};
     var settings = {};
     var game = null;
+    const {
+      buildProductionSettings,
+      updateProductionSettingsContent,
+      updateProductionTableSmelter,
+      updateProductionTableFoundry,
+      updateProductionTableFactory,
+      updateProductionTableMiningDrone,
+      updateProductionTableReplicator
+    } = createProductionSettings({
+      getSettingsRaw: () => settingsRaw,
+      getDocument: () => document,
+      getJQuery: () => $,
+      getResources: () => resources,
+      getCraftablesList: () => craftablesList,
+      getSmelterManager: () => SmelterManager,
+      getFactoryManager: () => FactoryManager,
+      getDroidManager: () => DroidManager,
+      getReplicatorManager: () => ReplicatorManager,
+      consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
+      resetProductionSettings,
+      updateSettingsFromState: (...args) => updateSettingsFromState(...args),
+      resetCheckbox,
+      removeCraftToggles: (...args) => removeCraftToggles(...args),
+      buildSettingsSection,
+      addSettingsNumber,
+      addSettingsToggle,
+      addSettingsSelect,
+      addStandardHeading,
+      addTableToggle,
+      addTableInput,
+      buildTableLabel,
+      getSorterHelper: () => sorterHelper
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        productionSettings: {
+          buildProductionSettings,
+          updateProductionSettingsContent,
+          updateProductionTableSmelter,
+          updateProductionTableFoundry,
+          updateProductionTableFactory,
+          updateProductionTableMiningDrone,
+          updateProductionTableReplicator
+        },
+        setProductionSettingsTestContext(context) {
+          settingsRaw = context.settingsRaw;
+          resources = context.resources;
+          craftablesList = context.craftablesList;
+          SmelterManager = context.SmelterManager;
+          FactoryManager = context.FactoryManager;
+          DroidManager = context.DroidManager;
+          ReplicatorManager = context.ReplicatorManager;
+        }
+      });
+    }
+    const storageBoundaryOverrides = {};
+    function getStorageBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(storageBoundaryOverrides, name)) {
+        return storageBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "StorageManager":
+          return StorageManager;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "addTableInput":
+          return addTableInput;
+        case "addTableToggle":
+          return addTableToggle;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "buildTableLabel":
+          return buildTableLabel;
+        case "document":
+          return document;
+        case "removeStorageToggles":
+          return removeStorageToggles;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetStorageSettings":
+          return resetStorageSettings;
+        case "settingsRaw":
+          return settingsRaw;
+        case "sorterHelper":
+          return sorterHelper;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const storageBoundary = createStorageSettings({
+      getDependency: getStorageBoundaryDependency,
+      getOverride: (name) => storageBoundaryOverrides[name]
+    });
+    const { buildStorageSettings, updateStorageSettingsContent } = storageBoundary;
+    const magicBoundaryOverrides = {};
+    function getMagicBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(magicBoundaryOverrides, name)) {
+        return magicBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "AlchemyManager":
+          return AlchemyManager;
+        case "RitualManager":
+          return RitualManager;
+        case "addSettingsNumber":
+          return addSettingsNumber;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "addStandardHeading":
+          return addStandardHeading;
+        case "addTableInput":
+          return addTableInput;
+        case "addTableToggle":
+          return addTableToggle;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "buildTableLabel":
+          return buildTableLabel;
+        case "document":
+          return document;
+        case "game":
+          return game;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetMagicSettings":
+          return resetMagicSettings;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const magicBoundary = createMagicSettings({
+      getDependency: getMagicBoundaryDependency,
+      getOverride: (name) => magicBoundaryOverrides[name]
+    });
+    const {
+      buildMagicSettings,
+      updateMagicSettingsContent,
+      updateMagicAlchemy,
+      updateMagicPylon
+    } = magicBoundary;
+    const jobsBoundaryOverrides = {};
+    function getJobsBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(jobsBoundaryOverrides, name)) {
+        return jobsBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "BasicJob":
+          return BasicJob;
+        case "CraftingJob":
+          return CraftingJob;
+        case "JobManager":
+          return JobManager;
+        case "addSettingsNumber":
+          return addSettingsNumber;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "addTableInput":
+          return addTableInput;
+        case "addTableToggle":
+          return addTableToggle;
+        case "addToggleCallbacks":
+          return addToggleCallbacks;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "confirm":
+          return confirm;
+        case "document":
+          return document;
+        case "jobs":
+          return jobs;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetJobSettings":
+          return resetJobSettings;
+        case "settingsRaw":
+          return settingsRaw;
+        case "sorterHelper":
+          return sorterHelper;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const jobsBoundary = createJobSettings({
+      getDependency: getJobsBoundaryDependency,
+      getOverride: (name) => jobsBoundaryOverrides[name]
+    });
+    const {
+      buildJobSettings,
+      updateJobSettingsContent,
+      buildJobSettingsToggle,
+      buildJobSettingsInput
+    } = jobsBoundary;
+    const weightingBoundaryOverrides = {};
+    function getWeightingBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(weightingBoundaryOverrides, name)) {
+        return weightingBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "addTableInput":
+          return addTableInput;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "document":
+          return document;
+        case "resetWeightingSettings":
+          return resetWeightingSettings;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const weightingBoundary = createWeightingSettings({
+      getDependency: getWeightingBoundaryDependency,
+      getOverride: (name) => weightingBoundaryOverrides[name]
+    });
+    const {
+      buildWeightingSettings,
+      updateWeightingSettingsContent,
+      addWeightingRule
+    } = weightingBoundary;
+    const buildingBoundaryOverrides = {};
+    function getBuildingBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(buildingBoundaryOverrides, name)) {
+        return buildingBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "BuildingManager":
+          return BuildingManager;
+        case "addSettingsNumber":
+          return addSettingsNumber;
+        case "addSettingsSelect":
+          return addSettingsSelect;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "addTableInput":
+          return addTableInput;
+        case "addTableToggle":
+          return addTableToggle;
+        case "addToggleCallbacks":
+          return addToggleCallbacks;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "buildTableLabel":
+          return buildTableLabel;
+        case "buildingIds":
+          return buildingIds;
+        case "checkCompare":
+          return checkCompare;
+        case "confirm":
+          return confirm;
+        case "document":
+          return document;
+        case "getRealNumber":
+          return getRealNumber;
+        case "initBuildingState":
+          return initBuildingState;
+        case "linkedBuildings":
+          return linkedBuildings;
+        case "overrideKey":
+          return overrideKey;
+        case "removeBuildingToggles":
+          return removeBuildingToggles;
+        case "resetBuildingSettings":
+          return resetBuildingSettings;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resources":
+          return resources;
+        case "settingsRaw":
+          return settingsRaw;
+        case "sorterHelper":
+          return sorterHelper;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const buildingBoundary = createBuildingSettings({
+      getDependency: getBuildingBoundaryDependency,
+      getOverride: (name) => buildingBoundaryOverrides[name]
+    });
+    const {
+      buildBuildingSettings,
+      updateBuildingSettingsContent,
+      filterBuildingSettingsTable,
+      buildAllBuildingEnabledSettingsToggle,
+      buildBuildingStateSettingsToggle,
+      buildAllBuildingStateSettingsToggle
+    } = buildingBoundary;
+    const projectBoundaryOverrides = {};
+    function getProjectBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(projectBoundaryOverrides, name)) {
+        return projectBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "ProjectManager":
+          return ProjectManager;
+        case "addSettingsNumber":
+          return addSettingsNumber;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "addTableInput":
+          return addTableInput;
+        case "addTableToggle":
+          return addTableToggle;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "buildTableLabel":
+          return buildTableLabel;
+        case "document":
+          return document;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetProjectSettings":
+          return resetProjectSettings;
+        case "settingsRaw":
+          return settingsRaw;
+        case "sorterHelper":
+          return sorterHelper;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const projectBoundary = createProjectSettings({
+      getDependency: getProjectBoundaryDependency,
+      getOverride: (name) => projectBoundaryOverrides[name]
+    });
+    const { buildProjectSettings, updateProjectSettingsContent } = projectBoundary;
+    const loggingBoundaryOverrides = {};
+    function getLoggingBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(loggingBoundaryOverrides, name)) {
+        return loggingBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "GameLog":
+          return GameLog;
+        case "addSettingsHeader1":
+          return addSettingsHeader1;
+        case "addSettingsString":
+          return addSettingsString;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "buildFilterRegExp":
+          return buildFilterRegExp;
+        case "buildSettingsSection2":
+          return buildSettingsSection2;
+        case "document":
+          return document;
+        case "game":
+          return game;
+        case "resetLoggingSettings":
+          return resetLoggingSettings;
+        case "settingsRaw":
+          return settingsRaw;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const loggingBoundary = createLoggingSettings({
+      getDependency: getLoggingBoundaryDependency,
+      getOverride: (name) => loggingBoundaryOverrides[name]
+    });
+    const { buildLoggingSettings, updateLoggingSettingsContent } = loggingBoundary;
+    const optionsBoundaryOverrides = {};
+    function getOptionsBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(optionsBoundaryOverrides, name)) {
+        return optionsBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "buildFleetSettings":
+          return buildFleetSettings;
+        case "buildGovernmentSettings":
+          return buildGovernmentSettings;
+        case "buildHellSettings":
+          return buildHellSettings;
+        case "buildWarSettings":
+          return buildWarSettings;
+        case "document":
+          return document;
+        case "openOverrideModal":
+          return openOverrideModal;
+        case "settingsRaw":
+          return settingsRaw;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        case "window":
+          return window;
+        default:
+          return void 0;
+      }
+    }
+    const optionsBoundary = createOptionsModalUI({
+      getDependency: getOptionsBoundaryDependency,
+      getOverride: (name) => optionsBoundaryOverrides[name]
+    });
+    const {
+      createSettingToggle,
+      updateOptionsUI,
+      addOptionUI,
+      openOptionsModal,
+      createOptionsModal
+    } = optionsBoundary;
+    const prestigeTopBarBoundaryOverrides = {};
+    function getPrestigeTopBarBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(
+        prestigeTopBarBoundaryOverrides,
+        name
+      )) {
+        return prestigeTopBarBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "addOptionUI":
+          return addOptionUI;
+        case "buildPrestigeSettings":
+          return buildPrestigeSettings;
+        case "document":
+          return document;
+        case "prestigeTypes":
+          return prestigeTypes;
+        case "settings":
+          return settings;
+        default:
+          return void 0;
+      }
+    }
+    const prestigeTopBarBoundary = createPrestigeTopBar({
+      getDependency: getPrestigeTopBarBoundaryDependency,
+      getOverride: (name) => prestigeTopBarBoundaryOverrides[name]
+    });
+    const { updatePrestigeInTopBar, removePrestigeFromTopBar } = prestigeTopBarBoundary;
+    const totalDaysTopBarBoundaryOverrides = {};
+    function getTotalDaysTopBarBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(
+        totalDaysTopBarBoundaryOverrides,
+        name
+      )) {
+        return totalDaysTopBarBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "document":
+          return document;
+        case "game":
+          return game;
+        case "settings":
+          return settings;
+        default:
+          return void 0;
+      }
+    }
+    const totalDaysTopBarBoundary = createTotalDaysTopBar({
+      getDependency: getTotalDaysTopBarBoundaryDependency,
+      getOverride: (name) => totalDaysTopBarBoundaryOverrides[name]
+    });
+    const {
+      updateTotalDaysInTopBar,
+      addTotalDaysToTopBar,
+      removeTotalDaysFromTopBar
+    } = totalDaysTopBarBoundary;
+    const arpaTogglesBoundaryOverrides = {};
+    function getArpaTogglesBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(arpaTogglesBoundaryOverrides, name)) {
+        return arpaTogglesBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "ProjectManager":
+          return ProjectManager;
+        case "addToggleCallbacks":
+          return addToggleCallbacks;
+        case "settingsRaw":
+          return settingsRaw;
+        default:
+          return void 0;
+      }
+    }
+    const arpaTogglesBoundary = createArpaToggleUI({
+      getDependency: getArpaTogglesBoundaryDependency,
+      getOverride: (name) => arpaTogglesBoundaryOverrides[name]
+    });
+    const { createArpaToggles, removeArpaToggles } = arpaTogglesBoundary;
+    const craftTogglesBoundaryOverrides = {};
+    function getCraftTogglesBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(craftTogglesBoundaryOverrides, name)) {
+        return craftTogglesBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "addToggleCallbacks":
+          return addToggleCallbacks;
+        case "craftablesList":
+          return craftablesList;
+        case "settingsRaw":
+          return settingsRaw;
+        default:
+          return void 0;
+      }
+    }
+    const craftTogglesBoundary = createCraftToggleUI({
+      getDependency: getCraftTogglesBoundaryDependency,
+      getOverride: (name) => craftTogglesBoundaryOverrides[name]
+    });
+    const { createCraftToggles, removeCraftToggles } = craftTogglesBoundary;
+    const buildingTogglesBoundaryOverrides = {};
+    function getBuildingTogglesBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(
+        buildingTogglesBoundaryOverrides,
+        name
+      )) {
+        return buildingTogglesBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "BuildingManager":
+          return BuildingManager;
+        case "addToggleCallbacks":
+          return addToggleCallbacks;
+        case "settings":
+          return settings;
+        case "settingsRaw":
+          return settingsRaw;
+        case "state":
+          return state;
+        default:
+          return void 0;
+      }
+    }
+    const buildingTogglesBoundary = createBuildingToggleUI({
+      getDependency: getBuildingTogglesBoundaryDependency,
+      getOverride: (name) => buildingTogglesBoundaryOverrides[name]
+    });
+    const { createBuildingToggles, removeBuildingToggles } = buildingTogglesBoundary;
+    const ejectTogglesBoundaryOverrides = {};
+    function getEjectTogglesBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(ejectTogglesBoundaryOverrides, name)) {
+        return ejectTogglesBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "EjectManager":
+          return EjectManager;
+        case "addToggleCallbacks":
+          return addToggleCallbacks;
+        case "settingsRaw":
+          return settingsRaw;
+        default:
+          return void 0;
+      }
+    }
+    const ejectTogglesBoundary = createEjectToggleUI({
+      getDependency: getEjectTogglesBoundaryDependency,
+      getOverride: (name) => ejectTogglesBoundaryOverrides[name]
+    });
+    const { createEjectToggles, removeEjectToggles } = ejectTogglesBoundary;
+    const supplyTogglesBoundaryOverrides = {};
+    function getSupplyTogglesBoundaryDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(supplyTogglesBoundaryOverrides, name)) {
+        return supplyTogglesBoundaryOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "SupplyManager":
+          return SupplyManager;
+        case "addToggleCallbacks":
+          return addToggleCallbacks;
+        case "settingsRaw":
+          return settingsRaw;
+        default:
+          return void 0;
+      }
+    }
+    const supplyTogglesBoundary = createSupplyToggleUI({
+      getDependency: getSupplyTogglesBoundaryDependency,
+      getOverride: (name) => supplyTogglesBoundaryOverrides[name]
+    });
+    const { createSupplyToggles, removeSupplyToggles } = supplyTogglesBoundary;
     const generalSettingsOverrides = {};
     function getGeneralSettingsDependency(name) {
       if (Object.prototype.hasOwnProperty.call(generalSettingsOverrides, name)) {
@@ -29409,99 +31956,6 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
         }
       });
     }
-    function buildStorageSettings() {
-      let sectionId = "storage";
-      let sectionName = "Storage";
-      let resetFunction = function() {
-        resetStorageSettings(true);
-        updateSettingsFromState();
-        updateStorageSettingsContent();
-        resetCheckbox("autoStorage");
-        removeStorageToggles();
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateStorageSettingsContent
-      );
-    }
-    function updateStorageSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_storageContent");
-      currentNode.empty().off("*");
-      addSettingsToggle(
-        currentNode,
-        "storageLimitPreMad",
-        "Limit Pre-MAD Storage",
-        "Saves resources and shortens run time by limiting storage pre-MAD"
-      );
-      addSettingsToggle(
-        currentNode,
-        "storageSafeReassign",
-        "Reassign only empty storages",
-        "Wait until storage is empty before reassigning containers to another resource, to prevent overflowing and wasting resources"
-      );
-      addSettingsToggle(
-        currentNode,
-        "storageAssignExtra",
-        "Assign buffer storage",
-        "Assigns 3% extra strorage above required amounts, ensuring that required quantity will be actually reached, even if other part of script trying to sell\\eject\\switch production, etc. When manual trades enabled applies additional adjust derieved from selling threshold."
-      );
-      addSettingsToggle(
-        currentNode,
-        "storageAssignPart",
-        "Assign partial storage",
-        "When enabled script will be allowed to assign some crates and containers even if resulting storage space won't be enough to build new building. It allows to pre-build stock of resources for further use, but can be potentially dungerous.\nIf script not allowed to reassign non-empty storage it can lock storage in position when stored resources can't be used.\nIf script is allowed to reassign non-empty storage it might waste time producing materials which might need to be disposed."
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:35%">Resource</th>
-              <th class="has-text-warning" style="width:15%">Enabled</th>
-              <th class="has-text-warning" style="width:15%">Store Overflow</th>
-              <th class="has-text-warning" style="width:15%">Min Storage</th>
-              <th class="has-text-warning" style="width:15%">Max Storage</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_storageTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_storageTableBody");
-      let newTableBodyText = "";
-      for (let i = 0; i < StorageManager.priorityList.length; i++) {
-        const resource = StorageManager.priorityList[i];
-        newTableBodyText += `<tr value="${resource.id}" class="script-draggable"><td id="script_storage_${resource.id}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < StorageManager.priorityList.length; i++) {
-        const resource = StorageManager.priorityList[i];
-        let storageElement = $("#script_storage_" + resource.id);
-        storageElement.append(buildTableLabel(resource.name));
-        storageElement = storageElement.next();
-        addTableToggle(storageElement, "res_storage" + resource.id);
-        storageElement = storageElement.next();
-        addTableToggle(storageElement, "res_storage_o_" + resource.id);
-        storageElement = storageElement.next();
-        addTableInput(storageElement, "res_min_store" + resource.id);
-        storageElement = storageElement.next();
-        addTableInput(storageElement, "res_max_store" + resource.id);
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper,
-        update: function() {
-          let storageIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < storageIds.length; i++) {
-            settingsRaw["res_storage_p_" + storageIds[i]] = i;
-          }
-          StorageManager.sortByPriority();
-          updateSettingsFromState();
-        }
-      });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
     const {
       buildTraitSettings,
       updateImitateWarning,
@@ -29554,1196 +32008,6 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
           MutableTraitManager = context.MutableTraitManager;
         }
       });
-    }
-    function buildMagicSettings() {
-      let sectionId = "magic";
-      let sectionName = "Magic";
-      let resetFunction = function() {
-        resetMagicSettings(true);
-        updateSettingsFromState();
-        updateMagicSettingsContent();
-        resetCheckbox("autoAlchemy", "autoPylon", "magicFullmetalHelper");
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateMagicSettingsContent
-      );
-    }
-    function updateMagicSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_magicContent");
-      currentNode.empty().off("*");
-      updateMagicAlchemy(currentNode);
-      updateMagicPylon(currentNode);
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function updateMagicAlchemy(currentNode) {
-      addStandardHeading(currentNode, "Alchemy");
-      addSettingsNumber(
-        currentNode,
-        "magicAlchemyManaUse",
-        "Mana income used",
-        "Income portion to use on alchemy. Setting to 1 is not recommended, leftover mana will be used for rituals."
-      );
-      addSettingsToggle(
-        currentNode,
-        "magicFullmetalHelper",
-        "Fullmetal helper",
-        "In Magic universe with Alchemy II, keep one non-basic alchemy transmutation active long enough to claim Fullmetal if the achievement is still below the current star level. Requires autoAlchemy."
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:20%">Resource</th>
-              <th class="has-text-warning" style="width:20%">Enabled</th>
-              <th class="has-text-warning" style="width:20%">Weighting</th>
-              <th class="has-text-warning" style="width:40%"></th>
-            </tr>
-            <tbody id="script_alchemyTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_alchemyTableBody");
-      let newTableBodyText = "";
-      for (let resource of AlchemyManager.priorityList) {
-        newTableBodyText += `<tr><td id="script_alchemy_${resource.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let resource of AlchemyManager.priorityList) {
-        let node = $("#script_alchemy_" + resource.id);
-        let color = AlchemyManager.transmuteTier(resource) > 1 ? "has-text-advanced" : "has-text-info";
-        node.append(buildTableLabel(resource.name, "", color));
-        node = node.next();
-        addTableToggle(node, "res_alchemy_" + resource.id);
-        node = node.next();
-        addTableInput(node, "res_alchemy_w_" + resource.id);
-      }
-    }
-    const {
-      buildProductionSettings,
-      updateProductionSettingsContent,
-      updateProductionTableSmelter,
-      updateProductionTableFoundry,
-      updateProductionTableFactory,
-      updateProductionTableMiningDrone,
-      updateProductionTableReplicator
-    } = createProductionSettings({
-      getSettingsRaw: () => settingsRaw,
-      getDocument: () => document,
-      getJQuery: () => $,
-      getResources: () => resources,
-      getCraftablesList: () => craftablesList,
-      getSmelterManager: () => SmelterManager,
-      getFactoryManager: () => FactoryManager,
-      getDroidManager: () => DroidManager,
-      getReplicatorManager: () => ReplicatorManager,
-      consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
-      resetProductionSettings,
-      updateSettingsFromState,
-      resetCheckbox,
-      removeCraftToggles,
-      buildSettingsSection,
-      addSettingsNumber,
-      addSettingsToggle,
-      addSettingsSelect,
-      addStandardHeading,
-      addTableToggle,
-      addTableInput,
-      buildTableLabel,
-      getSorterHelper: () => sorterHelper
-    });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
-        productionSettings: {
-          buildProductionSettings,
-          updateProductionSettingsContent,
-          updateProductionTableSmelter,
-          updateProductionTableFoundry,
-          updateProductionTableFactory,
-          updateProductionTableMiningDrone,
-          updateProductionTableReplicator
-        },
-        setProductionSettingsTestContext(context) {
-          settingsRaw = context.settingsRaw;
-          resources = context.resources;
-          craftablesList = context.craftablesList;
-          SmelterManager = context.SmelterManager;
-          FactoryManager = context.FactoryManager;
-          DroidManager = context.DroidManager;
-          ReplicatorManager = context.ReplicatorManager;
-        }
-      });
-    }
-    function updateMagicPylon(currentNode) {
-      addStandardHeading(currentNode, "Pylon");
-      addSettingsNumber(
-        currentNode,
-        "productionRitualManaUse",
-        "Mana income used",
-        "Income portion to use on rituals. Setting to 1 is not recommended, as it will halt mana regeneration. Applied only when mana not capped - with capped mana script will always use all income."
-      );
-      addSettingsToggle(
-        currentNode,
-        "productionRitualSafe",
-        "Safe rituals",
-        "Limit max rituals to safe, unsuspicious amount. Have no effect out of Witch Hunter scenario."
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:55%">Ritual</th>
-              <th class="has-text-warning" style="width:20%">Weighting</th>
-              <th style="width:25%"></th>
-            </tr>
-            <tbody id="script_magicTableBodyPylon"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_magicTableBodyPylon");
-      let newTableBodyText = "";
-      let pylonProducts = Object.values(RitualManager.Productions);
-      for (let i = 0; i < pylonProducts.length; i++) {
-        let production = pylonProducts[i];
-        newTableBodyText += `<tr><td id="script_pylon_${production.id}" style="width:55%"></td><td style="width:20%"></td><td style="width:25%"></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < pylonProducts.length; i++) {
-        let production = pylonProducts[i];
-        let productionElement = $("#script_pylon_" + production.id);
-        productionElement.append(
-          buildTableLabel(game.loc(`modal_pylon_spell_${production.id}`))
-        );
-        productionElement = productionElement.next();
-        addTableInput(productionElement, "spell_w_" + production.id);
-      }
-    }
-    function buildJobSettings() {
-      let sectionId = "job";
-      let sectionName = "Job";
-      let resetFunction = function() {
-        resetJobSettings(true);
-        updateSettingsFromState();
-        updateJobSettingsContent();
-        resetCheckbox("autoJobs", "autoCraftsmen");
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateJobSettingsContent
-      );
-    }
-    function updateJobSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_jobContent");
-      currentNode.empty().off("*");
-      addSettingsToggle(
-        currentNode,
-        "jobSetDefault",
-        "Set default job",
-        "Automatically sets the default job in order of Quarry Worker -> Lumberjack -> Crystal Miner -> Scavenger -> Hunter -> Farmer -> Unemployed"
-      );
-      addSettingsToggle(
-        currentNode,
-        "jobManageServants",
-        "Manage Servants",
-        "Automatically manage servants, they will be used as substitute of regular workers, sharing same breakpoints and priorities, i.e. for breakpoint 10 script might assign 8 workers and 2 servants, and such."
-      );
-      addSettingsNumber(
-        currentNode,
-        "jobLumberWeighting",
-        "Final Lumberjack Weighting",
-        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-      );
-      addSettingsNumber(
-        currentNode,
-        "jobQuarryWeighting",
-        "Final Quarry Worker Weighting",
-        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-      );
-      addSettingsNumber(
-        currentNode,
-        "jobCrystalWeighting",
-        "Final Crystal Miner Weighting",
-        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-      );
-      addSettingsNumber(
-        currentNode,
-        "jobScavengerWeighting",
-        "Final Scavenger Weighting",
-        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-      );
-      addSettingsNumber(
-        currentNode,
-        "jobRaiderWeighting",
-        "Final Raider Weighting",
-        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-      );
-      addSettingsNumber(
-        currentNode,
-        "jobForagerWeighting",
-        "Final Forager Weighting",
-        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-      );
-      addSettingsToggle(
-        currentNode,
-        "jobDisableMiners",
-        "Disable miners in Andromeda",
-        "Disable Miners and Coal Miners after reaching Andromeda"
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:35%">Job</th>
-              <th class="has-text-warning" style="width:17%">1st Pass</th>
-              <th class="has-text-warning" style="width:17%">2nd Pass</th>
-              <th class="has-text-warning" style="width:17%">3rd Pass</th>
-              <th class="has-text-warning" style="width:9%" title="When enabled script will limit amount of assigned workers down to maximum useful quantity, moving idling workers to other jobs">Smart</th>
-              <td style="width:5%"><span id="script_resetJobsPriority" class="script-refresh"></span></td>
-            </tr>
-            <tbody id="script_jobTableBody"></tbody>
-          </table>`);
-      $("#script_resetJobsPriority").on("click", function() {
-        if (confirm("Are you sure you wish to reset jobs priority?")) {
-          JobManager.priorityList = Object.values(jobs);
-          for (let i = 0; i < JobManager.priorityList.length; i++) {
-            let id = JobManager.priorityList[i]._originalId;
-            settingsRaw["job_p_" + id] = i;
-          }
-          updateSettingsFromState();
-          updateJobSettingsContent();
-        }
-      });
-      let tableBodyNode = $("#script_jobTableBody");
-      let newTableBodyText = "";
-      for (let i = 0; i < JobManager.priorityList.length; i++) {
-        const job = JobManager.priorityList[i];
-        newTableBodyText += `<tr value="${job._originalId}" class="script-draggable"><td id="script_${job._originalId}" style="width:35%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:9%"></td><td style="width:5%"></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < JobManager.priorityList.length; i++) {
-        const job = JobManager.priorityList[i];
-        let jobElement = $("#script_" + job._originalId);
-        buildJobSettingsToggle(jobElement, job);
-        jobElement = jobElement.next();
-        buildJobSettingsInput(jobElement, job, 1);
-        jobElement = jobElement.next();
-        buildJobSettingsInput(jobElement, job, 2);
-        jobElement = jobElement.next();
-        buildJobSettingsInput(jobElement, job, 3);
-        jobElement = jobElement.next();
-        if (job.is.smart) {
-          addTableToggle(jobElement, "job_s_" + job._originalId);
-        }
-        jobElement = jobElement.next();
-        jobElement.append($('<span class="script-lastcolumn"></span>'));
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper,
-        update: function() {
-          let sortedIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < sortedIds.length; i++) {
-            settingsRaw["job_p_" + sortedIds[i]] = i;
-          }
-          JobManager.sortByPriority();
-          updateSettingsFromState();
-        }
-      });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function buildJobSettingsToggle(node, job) {
-      let settingKey = "job_" + job._originalId;
-      let color = job === jobs.Unemployed ? "warning" : job instanceof CraftingJob ? "danger" : job instanceof BasicJob ? "info" : "advanced";
-      node.addClass(
-        "script_bg_" + settingKey + (settingsRaw.overrides[settingKey] ? " inactive-row" : "")
-      ).append(
-        addToggleCallbacks(
-          $(`
-          <label tabindex="0" class="switch" style="margin-top:4px; margin-left:10px;">
-            <input class="script_${settingKey}" type="checkbox"${settingsRaw[settingKey] ? " checked" : ""}>
-            <span class="check" style="height:5px; max-width:15px"></span>
-            <span class="has-text-${color}" style="margin-left: 20px;">${job._originalName}</span>
-          </label>`),
-          settingKey
-        )
-      );
-    }
-    function buildJobSettingsInput(node, job, breakpoint) {
-      if (job instanceof CraftingJob) {
-        node.append(`<span>Managed</span>`);
-      } else if (breakpoint === 3 && job.is.split) {
-        node.append(`<span>Weighted</span>`);
-      } else {
-        addTableInput(node, `job_b${breakpoint}_${job._originalId}`);
-      }
-    }
-    function buildWeightingSettings() {
-      let sectionId = "weighting";
-      let sectionName = "AutoBuild Weighting";
-      let resetFunction = function() {
-        resetWeightingSettings(true);
-        updateSettingsFromState();
-        updateWeightingSettingsContent();
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateWeightingSettingsContent
-      );
-    }
-    function updateWeightingSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_weightingContent");
-      currentNode.empty().off("*");
-      addSettingsToggle(
-        currentNode,
-        "buildingBuildIfStorageFull",
-        "Ignore weighting and build if any storage is full",
-        "Ignore weighting and immediately construct building if it uses any capped resource, preventing wasting them by overflowing. Weight still need to be positive(above zero) for this to happen."
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:30%">Target</th>
-              <th class="has-text-warning" style="width:60%">Condition</th>
-              <th class="has-text-warning" style="width:10%">Multiplier</th>
-            </tr>
-            <tbody id="script_weightingTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_weightingTableBody");
-      addWeightingRule(
-        tableBodyNode,
-        "Any",
-        "New building",
-        "buildingWeightingNew"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Powered building",
-        "Low available energy",
-        "buildingWeightingUnderpowered"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Power plant",
-        "Low available energy",
-        "buildingWeightingNeedfulPowerPlant"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Power plant",
-        "Producing more energy than required",
-        "buildingWeightingUselessPowerPlant"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Knowledge storage",
-        "Have unaffordable researches or build targets",
-        "buildingWeightingNeedfulKnowledge"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Knowledge storage",
-        "All researches and build targets already affordable",
-        "buildingWeightingUselessKnowledge"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Building with state (city)",
-        "Some instances of this building are not working",
-        "buildingWeightingNonOperatingCity"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Building with state (space)",
-        "Some instances of this building are not working",
-        "buildingWeightingNonOperating"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Building with consumption",
-        "Missing consumables to operate",
-        "buildingWeightingMissingSupply"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Support consumer",
-        "Missing support to operate",
-        "buildingWeightingMissingSupport"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Support provider",
-        "Provided support not currently needed",
-        "buildingWeightingUselessSupport"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "All fuel depots",
-        "Missing Oil or Helium for techs and missions",
-        "buildingWeightingMissingFuel"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Not housing, barrack, oil derrick, or knowledge building",
-        "MAD prestige enabled, and affordable",
-        "buildingWeightingMADUseless"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Mass Ejector",
-        "Existed ejectors not fully utilized",
-        "buildingWeightingUnusedEjectors"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Freight Yard, Container Port, Munitions Depot",
-        "Have unused crates or containers",
-        "buildingWeightingCrateUseless"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Horseshoes",
-        "No more Horseshoes needed",
-        "buildingWeightingHorseshoeUseless"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Meditation Chamber",
-        "No more Meditation Space needed",
-        "buildingWeightingZenUseless"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Gate Turret",
-        "Gate demons fully supressed",
-        "buildingWeightingGateTurret"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Warehouses, Garage, Cargo Yard, Storehouse",
-        "Need more storage",
-        "buildingWeightingNeedStorage"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Housing",
-        "Less than 90% of houses are used",
-        "buildingWeightingUselessHousing"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Orbital Decay",
-        "City and Moon buildings",
-        "buildingWeightingTemporal"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "The True Path",
-        "Solar buildings after reaching Tau Ceti",
-        "buildingWeightingSolar"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Womlings Missions",
-        "Womlings unlock actions conflicting with Overlord",
-        "buildingWeightingOverlord"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Banana Republic objectives",
-        "World Collider and Monuments while their objectives are unfinished",
-        "buildingWeightingBananaObjective"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Inflation Money helpers",
-        "Money storage until $250B cap is reachable, then Money income",
-        "buildingWeightingInflationMoney"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Retirement preparation",
-        "Tau Fusion Generators, Factories, and Disease Labs below the pre-Isolation targets",
-        "buildingWeightingRetirementPrep"
-      );
-      addWeightingRule(
-        tableBodyNode,
-        "Authority cap buildings (Evil universe)",
-        "Authority cap below configured minimum",
-        "buildingWeightingAuthority"
-      );
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function addWeightingRule(table, targetName, conditionDesc, settingKey) {
-      let ruleNode = $(`
-          <tr>
-            <td style="width:30%"><span class="has-text-info">${targetName}</span></td>
-            <td style="width:60%"><span class="has-text-info">${conditionDesc}</span></td>
-            <td style="width:10%"></td>
-          </tr>`);
-      addTableInput(ruleNode.find("td:eq(2)"), settingKey);
-      table.append(ruleNode);
-    }
-    function buildBuildingSettings() {
-      let sectionId = "building";
-      let sectionName = "Building";
-      let resetFunction = function() {
-        resetBuildingSettings(true);
-        updateSettingsFromState();
-        updateBuildingSettingsContent();
-        resetCheckbox("autoBuild", "autoPower");
-        removeBuildingToggles();
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateBuildingSettingsContent
-      );
-    }
-    function updateBuildingSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_buildingContent");
-      currentNode.empty().off("*");
-      addSettingsToggle(
-        currentNode,
-        "buildingsIgnoreZeroRate",
-        "Do not wait for resources without income",
-        "Weighting checks will ignore resources without positive income(craftables, inactive factory goods, etc), buildings with such resources will not delay other buildings."
-      );
-      addSettingsToggle(
-        currentNode,
-        "buildingsLimitPowered",
-        "Limit amount of powered buildings",
-        "With this option enabled Max Build will prevent powering extra building. Can be useful to disable buildings with overrided settings."
-      );
-      addSettingsToggle(
-        currentNode,
-        "buildingsTransportGem",
-        "Build cheapest Supplies transport",
-        "By default script chooses between Lake Transport and Lake Bireme Warship comparing their 'Supplies Per Support', with this option enabled it will compare 'Supplies Per Soulgems' instead."
-      );
-      addSettingsToggle(
-        currentNode,
-        "buildingsBestFreighter",
-        "Build most efficient freighters",
-        "With this option enabled script will compare 'Money Storage per Crew' of Freighter and Super Freighter, and only build the best one. Without this option no restrictions will be applied. Works only when both ships are buildable."
-      );
-      addSettingsToggle(
-        currentNode,
-        "buildingsUseMultiClick",
-        "Bulk build multi-segmented buildings",
-        "With this option enabled, the script will build as many segments as are affordable at once, instead of one per tick."
-      );
-      addSettingsNumber(
-        currentNode,
-        "buildingTowerSuppression",
-        "Minimum suppression for Towers",
-        "East Tower and West Tower won't be built until minimum suppression is reached"
-      );
-      const consumptionOptions = [
-        {
-          val: "onePerTick",
-          label: "Default",
-          hint: "Script will stop building buildings for one tick after buying building with support/upkeep. (Example: 1 Living Quarters stops processing of all buildings until next script tick.)"
-        },
-        {
-          val: "perResource",
-          label: "Non-conflicting only",
-          hint: "During a tick, the script will only buy at most one building using a given support/upkeep type, but non-conflicting ones are allowed. Should be safe in most cases. (Example: 1 Living Quarters stops building the other buildings using Red Planet support for that tick, but it can still build on other planets.)"
-        },
-        {
-          val: "unlimited",
-          label: "Unlimited",
-          hint: "Do not pay attention to support/upkeep requirements. This will cause bugs and undesirable behavior as it can easily exceed the maximum support. But, at extremely high prestige levels, this may be required. (Example: Can buy 1 Living Quarters + 1 Mine + 1 Fabrication + 1 Biodome in a single tick even if there is only 2 support left.)"
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "buildingConsumptionCheck",
-        "Behavior when building support/upkeep-using building",
-        "By default, the script only buys one building with support or upkeep requirement per tick, to allow automatic weightings to work optimally.",
-        consumptionOptions
-      );
-      currentNode.append(`
-          <div><input id="script_buildingSearch" class="script-searchsettings" type="text" placeholder="Search for buildings..."></div>
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:35%">Building</th>
-              <th class="has-text-warning" style="width:15%" title="Enables auto building. Triggers ignores this option, allowing to build disabled things.">Auto Build</th>
-              <th class="has-text-warning" style="width:15%" title="Maximum amount of buildings to build. Triggers ignores this option, allowing to build above limit. Can be also used to limit amount of enabled buildings, with respective option above.">Max Build</th>
-              <th class="has-text-warning" style="width:15%" title="Script will try to spend 2x amount of resources on building having 2x weighting, and such.">Weighting</th>
-              <th class="has-text-warning" style="width:20%" title="First toggle enables basic automation based on priority, power, support, and consumption. Second enables logic made specially for particlular building, their effects are different, but generally it tries to behave smarter than just staying enabled all the time.">Auto Power</th>
-            </tr>
-            <tbody id="script_buildingTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_buildingTableBody");
-      $("#script_buildingSearch").on("keyup", filterBuildingSettingsTable);
-      let newTableBodyText = '<tr value="All" class="unsortable"><td id="script_bldallToggle" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:20%"><span id="script_resetBuildingsPriority" class="script-refresh"></span></td></tr>';
-      for (let i = 0; i < BuildingManager.priorityList.length; i++) {
-        let building = BuildingManager.priorityList[i];
-        newTableBodyText += `<tr value="${building._vueBinding}" class="script-draggable"><td id="script_${building._vueBinding}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:20%"></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      let buildingElement = $("#script_bldallToggle");
-      buildingElement.append(
-        '<span class="has-text-warning" style="margin-left: 20px;">All Buildings</span>'
-      );
-      buildingElement = buildingElement.next();
-      buildingElement.append(buildAllBuildingEnabledSettingsToggle());
-      buildingElement = buildingElement.next().next().next();
-      buildingElement.append(buildAllBuildingStateSettingsToggle());
-      $("#script_resetBuildingsPriority").on("click", function() {
-        if (confirm("Are you sure you wish to reset buildings priority?")) {
-          initBuildingState();
-          for (let i = 0; i < BuildingManager.priorityList.length; i++) {
-            let id = BuildingManager.priorityList[i]._vueBinding;
-            settingsRaw["bld_p_" + id] = i;
-          }
-          updateSettingsFromState();
-          updateBuildingSettingsContent();
-        }
-      });
-      for (let i = 0; i < BuildingManager.priorityList.length; i++) {
-        let building = BuildingManager.priorityList[i];
-        let buildingElement2 = $("#script_" + building._vueBinding);
-        let color = building._tab === "space" || building._tab === "starDock" ? "has-text-danger" : building._tab === "galaxy" || building._tab === "eden" ? "has-text-advanced" : building._tab === "interstellar" ? "has-text-special" : building._tab === "portal" || building._tab === "tauceti" ? "has-text-warning" : "has-text-info";
-        buildingElement2.append(buildTableLabel(building.name, "", color));
-        buildingElement2 = buildingElement2.next();
-        addTableToggle(buildingElement2, "bat" + building._vueBinding);
-        buildingElement2 = buildingElement2.next();
-        addTableInput(buildingElement2, "bld_m_" + building._vueBinding);
-        buildingElement2 = buildingElement2.next();
-        addTableInput(buildingElement2, "bld_w_" + building._vueBinding);
-        buildingElement2 = buildingElement2.next();
-        buildBuildingStateSettingsToggle(buildingElement2, building);
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper,
-        update: function() {
-          let buildingElements = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < buildingElements.length; i++) {
-            settingsRaw["bld_p_" + buildingElements[i]] = i;
-          }
-          BuildingManager.sortByPriority();
-          updateSettingsFromState();
-        }
-      });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function filterBuildingSettingsTable() {
-      let filter = document.getElementById("script_buildingSearch").value.toUpperCase();
-      let trs = document.getElementById("script_buildingTableBody").getElementsByTagName("tr");
-      let filterChecker = null;
-      let reg = filter.match(/^(.+)(<=|>=|===|==|<|>|!==|!=)(.+)$/);
-      if (reg?.length === 4) {
-        let buildingValue = null;
-        switch (reg[1].trim()) {
-          case "BUILD":
-          case "AUTOBUILD":
-            buildingValue = (b) => b.autoBuildEnabled;
-            break;
-          case "POWER":
-          case "AUTOPOWER":
-            buildingValue = (b) => b.autoStateEnabled;
-            break;
-          case "WEIGHT":
-          case "WEIGHTING":
-            buildingValue = (b) => b._weighting;
-            break;
-          case "MAX":
-          case "MAXBUILD":
-            buildingValue = (b) => b._autoMax;
-            break;
-          case "POWERED":
-            buildingValue = (b) => b.powered;
-            break;
-          case "KNOW":
-          case "KNOWLEDGE":
-            buildingValue = (b) => b.is.knowledge;
-            break;
-          default:
-            buildingValue = (b) => Object.entries(b.cost).find(
-              ([res, qnt]) => resources[res].title.toUpperCase().indexOf(reg[1].trim()) > -1
-            )?.[1] ?? 0;
-        }
-        let testValue = null;
-        switch (reg[3].trim()) {
-          case "ON":
-          case "TRUE":
-            testValue = true;
-            break;
-          case "OFF":
-          case "FALSE":
-            testValue = false;
-            break;
-          default:
-            testValue = getRealNumber(reg[3].trim());
-            break;
-        }
-        filterChecker = (building) => checkCompare[reg[2]](buildingValue(building), testValue);
-      }
-      for (let i = 0; i < trs.length; i++) {
-        let td = trs[i].getElementsByTagName("td")[0];
-        if (td) {
-          if (filterChecker) {
-            let building = buildingIds[td.id.match(/^script_(.*)$/)[1]];
-            if (building && filterChecker(building)) {
-              trs[i].style.display = "";
-            } else {
-              trs[i].style.display = "none";
-            }
-          } else if (td.textContent.toUpperCase().indexOf(filter) > -1) {
-            trs[i].style.display = "";
-          } else {
-            trs[i].style.display = "none";
-          }
-        }
-      }
-    }
-    function buildAllBuildingEnabledSettingsToggle() {
-      return $(`
-          <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
-            <input class="script_buildingEnabledAll" type="checkbox"${settingsRaw.buildingEnabledAll ? " checked" : ""}>
-            <span class="check" style="height:5px; max-width:15px"></span>
-            <span style="margin-left: 20px;"></span>
-          </label>`).on("change", "input", function() {
-        settingsRaw.buildingEnabledAll = this.checked;
-        for (let i = 0; i < BuildingManager.priorityList.length; i++) {
-          let id = BuildingManager.priorityList[i]._vueBinding;
-          settingsRaw["bat" + id] = this.checked;
-        }
-        $('[class^="script_bat"]').prop("checked", this.checked);
-        updateSettingsFromState();
-      }).on("click", function(event) {
-        if (event[overrideKey]) {
-          event.preventDefault();
-        }
-        if (event.target.nodeName === "INPUT" && !confirm(
-          "Are you sure you wish to change the Auto Build state of ALL buildings?"
-        )) {
-          event.preventDefault();
-        }
-      });
-    }
-    function buildBuildingStateSettingsToggle(node, building) {
-      let stateKey = "bld_s_" + building._vueBinding;
-      let smartKey = "bld_s2_" + building._vueBinding;
-      if (building.isSwitchable()) {
-        addToggleCallbacks(
-          $(`
-              <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
-                <input class="script_${stateKey}" type="checkbox"${settingsRaw[stateKey] ? " checked" : ""}>
-                <span class="check" style="height:5px; max-width:15px"></span>
-                <span style="margin-left: 20px;"></span>
-              </label>`),
-          stateKey
-        ).appendTo(node);
-        node.addClass("script_bg_" + stateKey);
-      }
-      if (building.is.smart) {
-        let smartNode = $(`
-              <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 35px;">
-                <input class="script_${smartKey}" type="checkbox"${settingsRaw[smartKey] ? " checked" : ""}>
-                <span class="check" style="height:5px; max-width:15px"></span>
-                <span style="margin-left: 20px;"></span>
-              </label>`);
-        let set = linkedBuildings.find((set2) => set2.includes(building));
-        if (set) {
-          smartNode.on("change", "input", function() {
-            set.forEach((building2) => {
-              let linkedId = "bld_s2_" + building2._vueBinding;
-              settingsRaw[linkedId] = this.checked;
-              $(".script_" + linkedId).prop("checked", this.checked);
-            });
-            updateSettingsFromState();
-          });
-        } else {
-          addToggleCallbacks(smartNode, smartKey);
-        }
-        node.append(smartNode);
-        node.addClass("script_bg_" + smartKey);
-      }
-      node.append(`<span class="script-lastcolumn"></span>`);
-      node.toggleClass(
-        "inactive-row",
-        Boolean(
-          settingsRaw.overrides[stateKey] || settingsRaw.overrides[smartKey]
-        )
-      );
-    }
-    function buildAllBuildingStateSettingsToggle() {
-      return $(`
-          <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
-            <input class="script_buildingStateAll" type="checkbox"${settingsRaw.buildingStateAll ? " checked" : ""}>
-            <span class="check" style="height:5px; max-width:15px"></span>
-            <span style="margin-left: 20px;"></span>
-          </label>`).on("change", "input", function(e) {
-        settingsRaw.buildingStateAll = this.checked;
-        for (let i = 0; i < BuildingManager.priorityList.length; i++) {
-          let id = BuildingManager.priorityList[i]._vueBinding;
-          settingsRaw["bld_s_" + id] = this.checked;
-        }
-        $('[class^="script_bld_s_"]').prop("checked", this.checked);
-        updateSettingsFromState();
-      }).on("click", function(event) {
-        if (event[overrideKey]) {
-          event.preventDefault();
-        }
-        if (event.target.nodeName === "INPUT" && !confirm(
-          "Are you sure you wish to change the Auto Power state of ALL buildings?"
-        )) {
-          event.preventDefault();
-        }
-      });
-    }
-    function buildProjectSettings() {
-      let sectionId = "project";
-      let sectionName = "A.R.P.A.";
-      let resetFunction = function() {
-        resetProjectSettings(true);
-        updateSettingsFromState();
-        updateProjectSettingsContent();
-        resetCheckbox("autoARPA");
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateProjectSettingsContent
-      );
-    }
-    function updateProjectSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_projectContent");
-      currentNode.empty().off("*");
-      addSettingsToggle(
-        currentNode,
-        "arpaScaleWeighting",
-        "Scale weighting with progress",
-        "Projects weighting scales  with current progress, making script more eager to spend resources on finishing nearly constructed projects."
-      );
-      addSettingsNumber(
-        currentNode,
-        "arpaStep",
-        "Preferred progress step",
-        "Projects will be weighted and build in this steps. Increasing number can speed up constructing. Step will be adjusted down when preferred step above remaining amount, or surpass storage caps. Weightings below will be multiplied by current step. Projects builded by triggers will always have maximum possible step."
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:25%">Project</th>
-              <th class="has-text-warning" style="width:25%">Auto Build</th>
-              <th class="has-text-warning" style="width:25%">Max Build</th>
-              <th class="has-text-warning" style="width:25%">Weighting</th>
-            </tr>
-            <tbody id="script_projectTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_projectTableBody");
-      let newTableBodyText = "";
-      for (let i = 0; i < ProjectManager.priorityList.length; i++) {
-        const project = ProjectManager.priorityList[i];
-        newTableBodyText += `<tr value="${project.id}" class="script-draggable"><td id="script_${project.id}" style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < ProjectManager.priorityList.length; i++) {
-        const project = ProjectManager.priorityList[i];
-        let projectElement = $("#script_" + project.id);
-        projectElement.append(buildTableLabel(project.name));
-        projectElement = projectElement.next();
-        addTableToggle(projectElement, "arpa_" + project.id);
-        projectElement = projectElement.next();
-        addTableInput(projectElement, "arpa_m_" + project.id);
-        projectElement = projectElement.next();
-        addTableInput(projectElement, "arpa_w_" + project.id);
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper,
-        update: function() {
-          let projectIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < projectIds.length; i++) {
-            settingsRaw["arpa_p_" + projectIds[i]] = i;
-          }
-          ProjectManager.sortByPriority();
-          updateSettingsFromState();
-        }
-      });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function buildLoggingSettings(parentNode, secondaryPrefix) {
-      let sectionId = "logging";
-      let sectionName = "Logging";
-      let resetFunction = function() {
-        resetLoggingSettings(true);
-        updateSettingsFromState();
-        updateLoggingSettingsContent(secondaryPrefix);
-        buildFilterRegExp();
-      };
-      buildSettingsSection2(
-        parentNode,
-        secondaryPrefix,
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateLoggingSettingsContent
-      );
-    }
-    function updateLoggingSettingsContent(secondaryPrefix) {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $(`#script_${secondaryPrefix}loggingContent`);
-      currentNode.empty().off("*");
-      addSettingsHeader1(currentNode, "Script Messages");
-      addSettingsToggle(
-        currentNode,
-        "logEnabled",
-        "Enable logging",
-        "Master switch to enable logging of script actions in the game message queue"
-      );
-      Object.entries(GameLog.Types).forEach(
-        ([id, label]) => addSettingsToggle(
-          currentNode,
-          "log_" + id,
-          label,
-          `If logging is enabled then logs ${label} actions`
-        )
-      );
-      addSettingsString(
-        currentNode,
-        "log_prestige_format",
-        "Prestige Log Format",
-        "Available placeholders: {resetType}, {species}, {timestamp} (in game days). Use {eval: XXX } to log custom information"
-      );
-      addSettingsHeader1(currentNode, "Game Messages");
-      addSettingsToggle(
-        currentNode,
-        "hellTurnOffLogMessages",
-        "Turn off patrol and surveyor log messages",
-        "Automatically turns off the hell patrol and surveyor log messages"
-      );
-      let stringsUrl = `strings/strings${game.global.settings.locale === "en-US" ? "" : "." + game.global.settings.locale}.json`;
-      currentNode.append(`
-          <div>
-            <span>List of message IDs to filter, all game messages can be found <a href="${stringsUrl}" target="_blank">here</a>.</span><br>
-            <textarea id="script_logFilter" class="textarea" style="margin-top: 4px;">${settingsRaw.logFilter}</textarea>
-          </div>`);
-      $("#script_logFilter").on("change", function() {
-        settingsRaw.logFilter = this.value;
-        buildFilterRegExp();
-        this.value = settingsRaw.logFilter;
-        updateSettingsFromState();
-      });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function createSettingToggle(node, settingKey, title, enabledCallBack, disabledCallBack) {
-      let toggle = $(`
-          <label class="switch script_bg_${settingKey}" tabindex="0" title="${title}">
-            <input class="script_${settingKey}" type="checkbox"${settingsRaw[settingKey] ? " checked" : ""}/>
-            <span class="check"></span><span>${settingKey}</span>
-          </label><br>`).toggleClass(
-        "inactive-row",
-        Boolean(settingsRaw.overrides[settingKey])
-      );
-      if (settingsRaw[settingKey] && enabledCallBack) {
-        enabledCallBack();
-      }
-      toggle.on("change", "input", function() {
-        settingsRaw[settingKey] = this.checked;
-        updateSettingsFromState();
-        if (settingsRaw[settingKey] && enabledCallBack) {
-          enabledCallBack();
-        }
-        if (!settingsRaw[settingKey] && disabledCallBack) {
-          disabledCallBack();
-        }
-      });
-      toggle.on(
-        "click",
-        { label: `Toggle (${settingKey})`, name: settingKey, type: "boolean" },
-        openOverrideModal
-      );
-      node.append(toggle);
-    }
-    function updateOptionsUI() {
-      addOptionUI(
-        "s-government-options",
-        "#government .tabs ul",
-        "Government",
-        buildGovernmentSettings
-      );
-      addOptionUI(
-        "s-foreign-options",
-        "#garrison div h2",
-        "Foreign Affairs",
-        buildWarSettings
-      );
-      addOptionUI(
-        "s-foreign-options2",
-        "#c_garrison div h2",
-        "Foreign Affairs",
-        buildWarSettings
-      );
-      addOptionUI("s-hell-options", "#gFort div h3", "Hell", buildHellSettings);
-      addOptionUI(
-        "s-hell-options2",
-        "#prtl_fortress div h3",
-        "Hell",
-        buildHellSettings
-      );
-      addOptionUI("s-fleet-options", "#hfleet h3", "Fleet", buildFleetSettings);
-    }
-    function addOptionUI(optionsId, querySelectorText, modalTitle, buildOptionsFunction) {
-      if (document.getElementById(optionsId) !== null) {
-        return;
-      }
-      let sectionNode = $(querySelectorText);
-      if (sectionNode.length === 0) {
-        return;
-      }
-      let newOptionNode = $(
-        `<span id="${optionsId}" class="s-options-button has-text-success" style="margin-right:0px">+</span>`
-      );
-      sectionNode.prepend(newOptionNode);
-      newOptionNode.on("click", function() {
-        openOptionsModal(modalTitle, buildOptionsFunction);
-      });
-    }
-    function openOptionsModal(modalTitle, buildOptionsFunction) {
-      let modalHeader = $("#scriptModalHeader");
-      modalHeader.empty().off("*");
-      modalHeader.append(`<span style="user-select: text">${modalTitle}</span>`);
-      $(".script-modal-content").removeClass("custom-race-modal");
-      let modalBody = $("#scriptModalBody");
-      modalBody.empty().off("*").removeClass("celestialLab");
-      buildOptionsFunction(modalBody, "c_");
-      let modal = document.getElementById("scriptModal");
-      $("html").css("overflow", "hidden");
-      modal.style.display = "block";
-    }
-    function createOptionsModal() {
-      if (document.getElementById("scriptModal") !== null) {
-        return;
-      }
-      $(document.body).append(`
-          <div id="scriptModal" class="script-modal content">
-            <span id="scriptModalClose" class="script-modal-close">&times;</span>
-            <div class="script-modal-content">
-              <div id="scriptModalHeader" class="script-modal-header has-text-warning">
-                <p>You should never see this modal header...</p>
-              </div>
-              <div id="scriptModalBody" class="script-modal-body">
-                <p>You should never see this modal body...</p>
-              </div>
-            </div>
-          </div>`);
-      $("#scriptModalClose").on("click", function() {
-        $("#scriptModal").css("display", "none");
-        $(".script-modal-content").removeClass(
-          "override-modal custom-race-modal"
-        );
-        $("html").css("overflow-y", "scroll");
-      });
-      $(window).on("click", function(event) {
-        if (event.target.id === "scriptModal") {
-          $("#scriptModal").css("display", "none");
-          $(".script-modal-content").removeClass(
-            "override-modal custom-race-modal"
-          );
-          $("html").css("overflow-y", "scroll");
-        }
-      });
-    }
-    function updatePrestigeInTopBar() {
-      const parentId = "s-prestige-type";
-      let parentNode = document.getElementById(parentId);
-      if (settings.displayPrestigeTypeInTopBar) {
-        if (parentNode === null) {
-          const planetWrap = document.querySelector(".planetWrap");
-          if (planetWrap === null) return;
-          parentNode = document.createElement("span");
-          parentNode.setAttribute("id", parentId);
-          parentNode.setAttribute(
-            "style",
-            "border-left: 1px solid; margin-left: 0.75rem; padding-left: 0.75rem;"
-          );
-          planetWrap.append(parentNode);
-          addOptionUI(
-            "s-prestige-type-helper-btn",
-            `#${parentId}`,
-            "Prestige",
-            buildPrestigeSettings
-          );
-        }
-      } else {
-        removePrestigeFromTopBar();
-        return;
-      }
-      if (parentNode.getAttribute("data-prestige") !== settings.prestigeType) {
-        let infoNode = parentNode.querySelector(".info");
-        if (infoNode === null) {
-          infoNode = document.createElement("span");
-          infoNode.setAttribute("class", "info");
-          parentNode.append(infoNode);
-        }
-        let prestige = prestigeTypes.find(
-          (entry) => entry.val === settings.prestigeType
-        );
-        if (prestige === void 0) {
-          prestige = { label: settings.prestigeType, hint: "" };
-        }
-        infoNode.title = prestige.hint;
-        infoNode.textContent = prestige.label;
-        parentNode.setAttribute("data-prestige", settings.prestigeType);
-      }
-    }
-    function removePrestigeFromTopBar() {
-      let prestigeNode = document.getElementById("s-prestige-type");
-      if (prestigeNode == null) {
-        return;
-      }
-      prestigeNode.remove();
-    }
-    function updateTotalDaysInTopBar() {
-      if (settings.displayTotalDaysTypeInTopBar) {
-        addTotalDaysToTopBar();
-      } else {
-        removeTotalDaysFromTopBar();
-      }
-      const totalDaysNode = document.getElementById("s-total-days-count");
-      if (totalDaysNode == null) {
-        return;
-      }
-      totalDaysNode.textContent = game.global.stats.days;
-    }
-    function addTotalDaysToTopBar() {
-      const nodeId = "s-total-days";
-      if (document.getElementById(nodeId) !== null) {
-        return;
-      }
-      const calendarNode = $("#topBar .calendar");
-      if (calendarNode.length === 0) {
-        return;
-      }
-      calendarNode.find(".day").after(
-        $(
-          `<span id="s-total-days" class="has-text-warning" style="padding-left: 3px;">(<span id="s-total-days-count"></span>)</span>`
-        )
-      );
-    }
-    function removeTotalDaysFromTopBar() {
-      let totalDaysNode = document.getElementById("s-total-days");
-      if (totalDaysNode == null) {
-        return;
-      }
-      totalDaysNode.remove();
     }
     let uiRefreshTestActions;
     const uiRefreshActions = {
@@ -30868,130 +32132,63 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
       MechManager.mechObserver.disconnect();
       $("#mechList .ea-mech-info").remove();
     }
-    function createArpaToggles() {
-      removeArpaToggles();
-      for (let i = 0; i < ProjectManager.priorityList.length; i++) {
-        let project = ProjectManager.priorityList[i];
-        let projectElement = $("#arpa" + project.id + " .head");
-        if (projectElement.length) {
-          let settingKey = "arpa_" + project.id;
-          projectElement.append(
-            addToggleCallbacks(
-              $(`
-                  <label tabindex="0" class="switch ea-arpa-toggle" style="position:relative; max-width:75px; margin-top:-36px; left:59%; float:left;">
-                    <input class="script_${settingKey}" type="checkbox"${settingsRaw[settingKey] ? " checked" : ""}>
-                    <span class="check" style="height:5px;"></span>
-                  </label>`),
-              settingKey
-            )
-          );
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        remainingUiBoundaries: {
+          storage: storageBoundary,
+          magic: magicBoundary,
+          jobs: jobsBoundary,
+          weighting: weightingBoundary,
+          building: buildingBoundary,
+          project: projectBoundary,
+          logging: loggingBoundary,
+          options: optionsBoundary,
+          prestigeTopBar: prestigeTopBarBoundary,
+          totalDaysTopBar: totalDaysTopBarBoundary,
+          arpaToggles: arpaTogglesBoundary,
+          craftToggles: craftTogglesBoundary,
+          buildingToggles: buildingTogglesBoundary,
+          ejectToggles: ejectTogglesBoundary,
+          supplyToggles: supplyTogglesBoundary
+        },
+        setRemainingUiBoundariesTestContext(context) {
+          if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
+          if ("settings" in context) settings = context.settings;
+          if ("game" in context) game = context.game;
+          if ("state" in context) state = context.state;
+          if ("resources" in context) resources = context.resources;
+          if ("jobs" in context) jobs = context.jobs;
+          if ("craftablesList" in context)
+            craftablesList = context.craftablesList;
+          if ("StorageManager" in context)
+            StorageManager = context.StorageManager;
+          if ("AlchemyManager" in context)
+            AlchemyManager = context.AlchemyManager;
+          if ("RitualManager" in context) RitualManager = context.RitualManager;
+          if ("JobManager" in context) JobManager = context.JobManager;
+          if ("BuildingManager" in context)
+            BuildingManager = context.BuildingManager;
+          if ("ProjectManager" in context)
+            ProjectManager = context.ProjectManager;
+          if ("EjectManager" in context) EjectManager = context.EjectManager;
+          if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
+          Object.assign(storageBoundaryOverrides, context);
+          Object.assign(magicBoundaryOverrides, context);
+          Object.assign(jobsBoundaryOverrides, context);
+          Object.assign(weightingBoundaryOverrides, context);
+          Object.assign(buildingBoundaryOverrides, context);
+          Object.assign(projectBoundaryOverrides, context);
+          Object.assign(loggingBoundaryOverrides, context);
+          Object.assign(optionsBoundaryOverrides, context);
+          Object.assign(prestigeTopBarBoundaryOverrides, context);
+          Object.assign(totalDaysTopBarBoundaryOverrides, context);
+          Object.assign(arpaTogglesBoundaryOverrides, context);
+          Object.assign(craftTogglesBoundaryOverrides, context);
+          Object.assign(buildingTogglesBoundaryOverrides, context);
+          Object.assign(ejectTogglesBoundaryOverrides, context);
+          Object.assign(supplyTogglesBoundaryOverrides, context);
         }
-      }
-    }
-    function removeArpaToggles() {
-      $("#arpaPhysics .ea-arpa-toggle").remove();
-    }
-    function createCraftToggles() {
-      removeCraftToggles();
-      for (let i = 0; i < craftablesList.length; i++) {
-        let craftable = craftablesList[i];
-        let craftableElement = $("#res" + craftable.id + " h3");
-        if (craftableElement.length) {
-          let settingKey = "craft" + craftable.id;
-          craftableElement.parent().css("position", "relative");
-          addToggleCallbacks(
-            $(`
-                  <label tabindex="0" class="switch ea-craft-toggle">
-                    <input class="script_${settingKey}" type="checkbox"${settingsRaw[settingKey] ? " checked" : ""}/>
-                    <span class="check" style="height:5px;"></span>
-                  </label>`),
-            settingKey
-          ).insertAfter(craftableElement);
-        }
-      }
-    }
-    function removeCraftToggles() {
-      $("#resources .ea-craft-toggle").remove();
-    }
-    function createBuildingToggles() {
-      removeBuildingToggles();
-      if (!settings.showSettings) return;
-      for (let i = 0; i < BuildingManager.priorityList.length; i++) {
-        let building = BuildingManager.priorityList[i];
-        let buildingElement = $("#" + building._vueBinding);
-        if (buildingElement.length) {
-          let settingKey = "bat" + building._vueBinding;
-          buildingElement.append(
-            addToggleCallbacks(
-              $(`
-                  <label tabindex="0" class="switch ea-building-toggle" style="position:absolute; margin-top: 24px; left:10%;">
-                    <input class="script_${settingKey}" type="checkbox"${settingsRaw[settingKey] ? " checked" : ""}/>
-                    <span class="check" style="height:5px; max-width:15px"></span>
-                  </label>`),
-              settingKey
-            )
-          );
-          state.buildingToggles++;
-        }
-      }
-    }
-    function removeBuildingToggles() {
-      $("#mTabCivil .ea-building-toggle").remove();
-      state.buildingToggles = 0;
-    }
-    function createEjectToggles() {
-      removeEjectToggles();
-      $("#eject").append(
-        '<span id="script_eject_top_row" style="margin-left: auto; margin-right: 0.2rem; float: right;" class="has-text-danger">Auto Eject</span>'
-      );
-      for (let resource of EjectManager.priorityList) {
-        let ejectElement = $("#eject" + resource.id);
-        if (ejectElement.length) {
-          let settingKey = "res_eject" + resource.id;
-          ejectElement.append(
-            addToggleCallbacks(
-              $(`
-                  <label tabindex="0" title="Enable ejecting of this resource. When to eject is set in the Prestige Settings tab." class="switch ea-eject-toggle" style="margin-left:auto; margin-right:0.2rem;">
-                    <input class="script_${settingKey}" type="checkbox"${settingsRaw[settingKey] ? " checked" : ""}>
-                    <span class="check" style="height:5px;"></span>
-                    <span class="state"></span>
-                  </label>`),
-              settingKey
-            )
-          );
-        }
-      }
-    }
-    function removeEjectToggles() {
-      $("#resEjector .ea-eject-toggle").remove();
-      $("#script_eject_top_row").remove();
-    }
-    function createSupplyToggles() {
-      removeSupplyToggles();
-      $("#spireSupply").append(
-        '<span id="script_supply_top_row" style="margin-left: auto; margin-right: 0.2rem; float: right;" class="has-text-danger">Auto Supply</span>'
-      );
-      for (let resource of SupplyManager.priorityList) {
-        let supplyElement = $("#supply" + resource.id);
-        if (supplyElement.length) {
-          let settingKey = "res_supply" + resource.id;
-          supplyElement.append(
-            addToggleCallbacks(
-              $(`
-                  <label tabindex="0" title="Enable supply of this resource."  class="switch ea-supply-toggle" style="margin-left:auto; margin-right:0.2rem;">
-                    <input class="script_${settingKey}" type="checkbox"${settingsRaw[settingKey] ? " checked" : ""}>
-                    <span class="check" style="height:5px;"></span>
-                    <span class="state"></span>
-                  </label>`),
-              settingKey
-            )
-          );
-        }
-      }
-    }
-    function removeSupplyToggles() {
-      $("#resCargo .ea-supply-toggle").remove();
-      $("#script_supply_top_row").remove();
+      });
     }
     function createMarketToggles() {
       removeMarketToggles();
