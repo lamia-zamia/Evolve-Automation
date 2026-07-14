@@ -80,6 +80,8 @@ import { createPreviousGameStats } from "./ui/previous-game-stats.ts";
 import { createRuntimeAdapters } from "./ui/runtime-adapters.ts";
 import { createAutomationContainer } from "./ui/automation-container.ts";
 import { createUIRefresh } from "./ui/ui-refresh.ts";
+import { createStateLogSettings } from "./ui/state-log-settings.ts";
+import { createInterfaceSettings } from "./ui/interface-settings.ts";
 import { createTickOrchestration } from "./automation/tick.ts";
 import { createStateUpdate } from "./automation/state-update.ts";
 import { createRunGuards } from "./policies/run-guards.ts";
@@ -18611,136 +18613,64 @@ import { createAutoMech } from "./automation/combat/mech.ts";
       currentScrollPosition;
   }
 
-  function buildInterfaceSettings() {
-    let sectionId = "interface";
-    let sectionName = "Interface";
+  let interfaceSettingsTestActions;
+  const interfaceSettingsActions = {
+    resetInterfaceSettings,
+    updateSettingsFromState,
+    buildSettingsSection,
+    addSettingsToggle,
+    addSettingsHeader1,
+    buildActiveTargetsUI,
+    removeActiveTargetsUI,
+    buildBuildPlannerUI,
+    removeBuildPlannerUI,
+    updatePrestigeInTopBar,
+    updateTotalDaysInTopBar,
+  };
 
-    let resetFunction = function () {
-      resetInterfaceSettings(true);
-      updateSettingsFromState();
-      updateInterfaceSettingsContent();
+  const { buildInterfaceSettings, updateInterfaceSettingsContent } =
+    createInterfaceSettings({
+      getSettingsRaw: () => settingsRaw,
+      getDocument: () => document,
+      getJQuery: () => $,
+      getActions: () =>
+        interfaceSettingsTestActions ?? interfaceSettingsActions,
+    });
 
-      if (settingsRaw.activeTargetsUI) {
-        buildActiveTargetsUI();
-      } else {
-        removeActiveTargetsUI();
-      }
-
-      if (settingsRaw.buildPlannerUI) {
-        buildBuildPlannerUI();
-      } else {
-        removeBuildPlannerUI();
-      }
-
-      updatePrestigeInTopBar();
-      updateTotalDaysInTopBar();
-    };
-
-    buildSettingsSection(
-      sectionId,
-      sectionName,
-      resetFunction,
-      updateInterfaceSettingsContent,
-    );
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      interfaceSettings: {
+        buildInterfaceSettings,
+        updateInterfaceSettingsContent,
+      },
+      setInterfaceSettingsTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        interfaceSettingsTestActions = context.actions;
+      },
+    });
   }
 
-  function updateInterfaceSettingsContent() {
-    let currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
+  const { buildStateLogSettings, updateStateLogSettingsContent } =
+    createStateLogSettings({
+      getDocument: () => document,
+      getJQuery: () => $,
+      resetStateLogSettings,
+      updateSettingsFromState,
+      buildSettingsSection,
+      addSettingsToggle,
+      addSettingsNumber,
+    });
 
-    let currentNode = $("#script_interfaceContent");
-    currentNode.empty().off("*");
-
-    addSettingsToggle(
-      currentNode,
-      "activeTargetsUI",
-      "Display detailed queue",
-      "Add UI in right column to display currently active queued buildings, technologies, and triggers and their resources.",
-      buildActiveTargetsUI,
-      removeActiveTargetsUI,
-    );
-    addSettingsToggle(
-      currentNode,
-      "buildPlannerUI",
-      "Display script planner",
-      "Add UI below the message log showing the top buildings/projects autoBuild wants next, their weights, what's blocking them, and cumulative bottleneck statistics for the current run.",
-      buildBuildPlannerUI,
-      removeBuildPlannerUI,
-    );
-    addSettingsToggle(
-      currentNode,
-      "displayPrestigeTypeInTopBar",
-      "Display prestige type in top bar",
-      "Show the currently selected prestige type in the top bar",
-      updatePrestigeInTopBar,
-      updatePrestigeInTopBar,
-    );
-    addSettingsToggle(
-      currentNode,
-      "displayTotalDaysTypeInTopBar",
-      "Display total days in top bar",
-      "Show the total days next to this year's days",
-      updateTotalDaysInTopBar,
-      updateTotalDaysInTopBar,
-    );
-    addSettingsHeader1(currentNode, "Experimental");
-    addSettingsToggle(
-      currentNode,
-      "performanceHackAvoidDrawTech",
-      "Enable performance hack: drawTech avoidance",
-      "Enables experimental performance hacks designed to avoid excessive redraws of expensive game tabs. The ARPA path preserves game behaviour; the repeat-building path is narrowly guarded but may still be risky if game internals change.",
-    );
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
-  }
-
-  function buildStateLogSettings() {
-    let sectionId = "stateLog";
-    let sectionName = "State Log";
-
-    let resetFunction = function () {
-      resetStateLogSettings(true);
-      updateSettingsFromState();
-      updateStateLogSettingsContent();
-    };
-
-    buildSettingsSection(
-      sectionId,
-      sectionName,
-      resetFunction,
-      updateStateLogSettingsContent,
-    );
-  }
-
-  function updateStateLogSettingsContent() {
-    let currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
-
-    let currentNode = $("#script_stateLogContent");
-    currentNode.empty().off("*");
-
-    addSettingsToggle(
-      currentNode,
-      "stateLogEnabled",
-      "Record state log",
-      "Record compact bottleneck-focused snapshots of game state over the run into localStorage (key ea_state_log), for offline analysis. Retrieve via window.eaExportStateLog() in the console.",
-    );
-    addSettingsToggle(
-      currentNode,
-      "stateLogAutoDownload",
-      "Auto-download log on reset",
-      "When a reset (prestige) commits, automatically download the recorded state log as a JSON file.",
-    );
-    addSettingsNumber(
-      currentNode,
-      "stateLogInterval",
-      "Sample every N ticks",
-      "How often to record a state snapshot, counted in processed script ticks. A full run stays well under the 20000-sample cap at the default.",
-    );
-
-    document.documentElement.scrollTop = document.body.scrollTop =
-      currentScrollPosition;
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      stateLogSettings: {
+        buildStateLogSettings,
+        updateStateLogSettingsContent,
+      },
+      setStateLogSettingsTestContext(context) {
+        settingsRaw = context.settingsRaw;
+      },
+    });
   }
 
   function buildAchievementGuardSettings() {
