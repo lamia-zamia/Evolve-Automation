@@ -9342,6 +9342,4153 @@
     };
   }
 
+  // src/ui/production-settings.ts
+  function createProductionSettings({
+    getSettingsRaw,
+    getDocument,
+    getJQuery,
+    getResources,
+    getCraftablesList,
+    getSmelterManager,
+    getFactoryManager,
+    getDroidManager,
+    getReplicatorManager,
+    consumptionBalanceTarget,
+    resetProductionSettings: resetProductionSettings2,
+    updateSettingsFromState: updateSettingsFromState2,
+    resetCheckbox: resetCheckbox2,
+    removeCraftToggles: removeCraftToggles2,
+    buildSettingsSection: buildSettingsSection3,
+    addSettingsNumber: addSettingsNumber2,
+    addSettingsToggle: addSettingsToggle2,
+    addSettingsSelect: addSettingsSelect2,
+    addStandardHeading: addStandardHeading2,
+    addTableToggle: addTableToggle2,
+    addTableInput: addTableInput2,
+    buildTableLabel: buildTableLabel2,
+    getSorterHelper
+  }) {
+    function buildProductionSettings2() {
+      const sectionId = "production";
+      const sectionName = "Production";
+      const resetFunction = function() {
+        resetProductionSettings2(true);
+        updateSettingsFromState2();
+        updateProductionSettingsContent2();
+        resetCheckbox2(
+          "autoQuarry",
+          "autoMine",
+          "autoExtractor",
+          "autoGraphenePlant",
+          "autoSmelter",
+          "autoCraft",
+          "autoFactory",
+          "autoMiningDroid",
+          "autoReplicator"
+        );
+        removeCraftToggles2();
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateProductionSettingsContent2
+      );
+    }
+    function updateProductionSettingsContent2() {
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentNode = getJQuery()("#script_productionContent");
+      currentNode.empty().off("*");
+      addSettingsNumber2(
+        currentNode,
+        "productionChrysotileWeight",
+        "Chrysotile weighting (Quarry, Smoldering)",
+        "Chrysotile weighting for autoQuarry, applies after adjusting to difference between current amounts of Stone and Chrysotile"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "productionAdamantiteWeight",
+        "Adamantite weighting (Mine, The True Path)",
+        "Adamantite weighting for autoMine, applies after adjusting to difference between current amounts of Aluminium and Adamantite"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "productionExtWeight_common",
+        "Aluminium weighting (Extractor Ship, The True Path)",
+        "Aluminium weighting for autoExtractor, applies after adjusting to difference between current amounts of Iron and Aluminium"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "productionExtWeight_uncommon",
+        "Neutronium weighting (Extractor Ship, The True Path)",
+        "Neutronium weighting for autoExtractor, applies after adjusting to difference between current amounts of Iridium and Neutronium"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "productionExtWeight_rare",
+        "Elerium weighting (Extractor Ship, The True Path)",
+        "Elerium weighting for autoExtractor, applies after adjusting to difference between current amounts of Orichalcum and Elerium"
+      );
+      addSettingsToggle2(
+        currentNode,
+        "productionFactoryFocusMaterials",
+        "Prioritize keeping materials stockpiled",
+        `Aggressively request stockpiling ${consumptionBalanceTarget}s + min materials worth of materials to ensure factory and craftsmen can always produce`
+      );
+      updateProductionTableSmelter2(currentNode);
+      updateProductionTableFoundry2(currentNode);
+      updateProductionTableFactory2(currentNode);
+      updateProductionTableMiningDrone2(currentNode);
+      updateProductionTableReplicator2(currentNode);
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function updateProductionTableSmelter2(currentNode) {
+      addStandardHeading2(currentNode, "Smelter");
+      const smelterOptions = [
+        {
+          val: "iron",
+          label: "Prioritize Iron",
+          hint: "Produce only Iron, untill storage capped, and switch to Steel after that"
+        },
+        {
+          val: "steel",
+          label: "Prioritize Steel",
+          hint: "Produce as much Steel as possible, untill storage capped, and switch to Iron after that"
+        },
+        {
+          val: "storage",
+          label: "Up to full storages",
+          hint: "Produce both Iron and Steel at ratio which will fill both storages at same time for both"
+        },
+        {
+          val: "required",
+          label: "Up to required amounts",
+          hint: "Produce both Iron and Steel at ratio which will produce maximum amount of resources required for buildings at same time for both"
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "productionSmelting",
+        "Smelters production",
+        "Distribution of smelters between iron and steel",
+        smelterOptions
+      );
+      addSettingsNumber2(
+        currentNode,
+        "productionSmeltingIridium",
+        "Iridium ratio",
+        "Share of smelters dedicated to Iridium"
+      );
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:95%">Fuel</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_productionTableBodySmelter"></tbody>
+          </table>`);
+      const $2 = getJQuery();
+      const tableBodyNode = $2("#script_productionTableBodySmelter");
+      let newTableBodyText = "";
+      const smelterFuels = getSmelterManager().managedFuelPriorityList();
+      for (let i = 0; i < smelterFuels.length; i++) {
+        const fuel = smelterFuels[i];
+        newTableBodyText += `<tr value="${fuel.id}" class="script-draggable"><td id="script_smelter_${fuel.id}" style="width:95%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < smelterFuels.length; i++) {
+        const fuel = smelterFuels[i];
+        const productionElement = $2("#script_smelter_" + fuel.id);
+        productionElement.append(buildTableLabel2(fuel.id));
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: getSorterHelper(),
+        update: function() {
+          const fuelIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          const settingsRaw2 = getSettingsRaw();
+          for (let i = 0; i < fuelIds.length; i++) {
+            settingsRaw2["smelter_fuel_p_" + fuelIds[i]] = i;
+          }
+          updateSettingsFromState2();
+        }
+      });
+    }
+    function updateProductionTableFactory2(currentNode) {
+      addStandardHeading2(currentNode, "Factory");
+      const weightingOptions = [
+        {
+          val: "none",
+          label: "None",
+          hint: "Use configured weightings with no additional adjustments, resources with x2 weighting will be produced two times more intense than with x1, etc."
+        },
+        {
+          val: "demanded",
+          label: "Prioritize demanded",
+          hint: "Ignore resources once stored amount surpass cost of most expensive building, until all missing resources will be crafted. After that works as with 'none' adjustments."
+        },
+        {
+          val: "buildings",
+          label: "Buildings weightings",
+          hint: "Uses weightings of buildings which are waiting for resources, as multipliers to production weighting. This option requires autoBuild."
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "productionFactoryWeighting",
+        "Weightings adjustments",
+        "Configures how exactly the resources will be weighted against each other",
+        weightingOptions
+      );
+      addSettingsNumber2(
+        currentNode,
+        "productionFactoryMinIngredients",
+        "Minimum materials to preserve",
+        "Factory will craft resources only when all required materials above given ratio"
+      );
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:35%">Resource</th>
+              <th class="has-text-warning" style="width:20%">Enabled</th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th class="has-text-warning" style="width:20%">Priority</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_productionTableBodyFactory"></tbody>
+          </table>`);
+      const $2 = getJQuery();
+      const tableBodyNode = $2("#script_productionTableBodyFactory");
+      let newTableBodyText = "";
+      const productionSettings = Object.values(getFactoryManager().Productions);
+      for (let i = 0; i < productionSettings.length; i++) {
+        const production = productionSettings[i];
+        newTableBodyText += `<tr><td id="script_factory_${production.resource.id}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < productionSettings.length; i++) {
+        const production = productionSettings[i];
+        let productionElement = $2("#script_factory_" + production.resource.id);
+        productionElement.append(buildTableLabel2(production.resource.name));
+        productionElement = productionElement.next();
+        addTableToggle2(productionElement, "production_" + production.resource.id);
+        productionElement = productionElement.next();
+        addTableInput2(
+          productionElement,
+          "production_w_" + production.resource.id
+        );
+        productionElement = productionElement.next();
+        addTableInput2(
+          productionElement,
+          "production_p_" + production.resource.id
+        );
+      }
+    }
+    function updateProductionTableFoundry2(currentNode) {
+      addStandardHeading2(currentNode, "Foundry");
+      const weightingOptions = [
+        {
+          val: "none",
+          label: "None",
+          hint: "Use configured weightings with no additional adjustments, craftables with x2 weighting will be crafted two times more intense than with x1, etc."
+        },
+        {
+          val: "demanded",
+          label: "Prioritize demanded",
+          hint: "Ignore craftables once stored amount surpass cost of most expensive building, until all missing resources will be crafted. After that works as with 'none' adjustments."
+        },
+        {
+          val: "buildings",
+          label: "Buildings weightings",
+          hint: "Uses weightings of buildings which are waiting for craftables, as multipliers to craftables weighting. This option requires autoBuild."
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "productionFoundryWeighting",
+        "Weightings adjustments",
+        "Configures how exactly craftables will be weighted against each other",
+        weightingOptions
+      );
+      const assignOptions = [
+        { val: "always", label: "Always", hint: "Always assign all craftsmens" },
+        {
+          val: "nocraft",
+          label: "No Manual Crafting",
+          hint: "Assign workers only manual crafting is not possible, servants still always will be assigned"
+        },
+        {
+          val: "advanced",
+          label: "Advanced",
+          hint: "Assign workers only to advanced craftables(Scarletite, Quantium), basic craftables will be crafted by servants"
+        },
+        { val: "servants", label: "Servants", hint: "Assign only servants" }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "productionCraftsmen",
+        "Assign craftsmen",
+        "Configures when workers should be assigned to crafting jobs",
+        assignOptions
+      );
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:21%" title="Resource name">Resource</th>
+              <th class="has-text-warning" style="width:17%" title="Resource won't ever be crafted with this option disabled">Enabled</th>
+              <th class="has-text-warning" style="width:17%" title="Resource won't use foundry workers for craft with this option disabled">Craftsmen</th>
+              <th class="has-text-warning" style="width:20%" title="Ratio between resources. Script assign craftsmans to resource with lowest 'amount / weighting'. Ignored by manual crafting.">Weighting</th>
+              <th class="has-text-warning" style="width:20%" title="Only craft resource when storage ratio of all required materials above given number. E.g. bricks with 0.1 min materials will be crafted only when cement storage at least 10% filled.">Min Materials</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_productionTableBodyFoundry"></tbody>
+          </table>`);
+      const $2 = getJQuery();
+      const tableBodyNode = $2("#script_productionTableBodyFoundry");
+      let newTableBodyText = "";
+      const craftablesList2 = getCraftablesList();
+      const resources2 = getResources();
+      for (let i = 0; i < craftablesList2.length; i++) {
+        const resource = craftablesList2[i];
+        newTableBodyText += `<tr><td id="script_foundry_${resource.id}" style="width:21%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < craftablesList2.length; i++) {
+        const resource = craftablesList2[i];
+        let productionElement = $2("#script_foundry_" + resource.id);
+        productionElement.append(buildTableLabel2(resource.name));
+        productionElement = productionElement.next();
+        addTableToggle2(productionElement, "craft" + resource.id);
+        productionElement = productionElement.next();
+        addTableToggle2(productionElement, "job_" + resource.id);
+        productionElement = productionElement.next();
+        if (resource === resources2.Scarletite || resource === resources2.Quantium) {
+          productionElement.append("<span>Managed</span>");
+        } else {
+          addTableInput2(productionElement, "foundry_w_" + resource.id);
+        }
+        productionElement = productionElement.next();
+        addTableInput2(productionElement, "foundry_p_" + resource.id);
+      }
+    }
+    function updateProductionTableMiningDrone2(currentNode) {
+      addStandardHeading2(currentNode, "Mining Droid");
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:35%">Resource</th>
+              <th class="has-text-warning" style="width:20%"></th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th class="has-text-warning" style="width:20%">Priority</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_productionTableBodyMiningDrone"></tbody>
+          </table>`);
+      const $2 = getJQuery();
+      const tableBodyNode = $2("#script_productionTableBodyMiningDrone");
+      let newTableBodyText = "";
+      const droidProducts = Object.values(getDroidManager().Productions);
+      for (let i = 0; i < droidProducts.length; i++) {
+        const production = droidProducts[i];
+        newTableBodyText += `<tr><td id="script_droid_${production.resource.id}" style="width:35%"><td style="width:20%"></td><td style="width:20%"></td></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < droidProducts.length; i++) {
+        const production = droidProducts[i];
+        let productionElement = $2("#script_droid_" + production.resource.id);
+        productionElement.append(buildTableLabel2(production.resource.name));
+        productionElement = productionElement.next().next();
+        addTableInput2(productionElement, "droid_w_" + production.resource.id);
+        productionElement = productionElement.next();
+        addTableInput2(productionElement, "droid_pr_" + production.resource.id);
+      }
+    }
+    function updateProductionTableReplicator2(currentNode) {
+      addStandardHeading2(currentNode, "Replicator");
+      addSettingsToggle2(
+        currentNode,
+        "replicatorAssignGovernorTask",
+        "Assign governor task",
+        "If active, the replicator scheduler governor task will be set, the power adjustment will be enabled."
+      );
+      addSettingsSelect2(
+        currentNode,
+        "replicatorWeightingMode",
+        "Weighting mode",
+        "Replicator only picks from enabled resources with the current highest valid priority (or -1 priority). After that, replicator use is split between resources of identical weighting. Setting configures how that split happens.",
+        [
+          {
+            val: "mass",
+            hint: "Spends more time on resources that are easy to replicate. A resource with 2x the weighting will have roughly 2x the time spent. Based on differences in atomic mass, resources at similar weightings may have very different quantities.",
+            label: "By atomic mass"
+          },
+          {
+            val: "quantity",
+            hint: "Spends more time on resources that are hard to replicate. A resource with 2x the weighting will be focused until you have roughly 2x the amount. Resources at similar weightings will have similar quantities.",
+            label: "By resource quantity"
+          },
+          {
+            val: "legacy",
+            hint: "Legacy mode, similar to previous script behavior. Only the resource with the highest weighting is picked. If multiple resources have the same weighting then it will focus exclusively on one of those resources. This mode exists only to give you time to migrate your config to using the priority field.",
+            label: "Legacy (deprecated)"
+          }
+        ]
+      );
+      currentNode.append(`
+        <table style="width:100%">
+          <tr>
+            <th class="has-text-warning" style="width:35%">Resource</th>
+            <th class="has-text-warning" style="width:20%">Enabled</th>
+            <th class="has-text-warning" style="width:20%">Weighting</th>
+            <th class="has-text-warning" style="width:20%">Priority</th>
+            <th style="width:5%"></th>
+          </tr>
+          <tbody id="script_productionTableBodyReplicator"></tbody>
+        </table>`);
+      const $2 = getJQuery();
+      const tableBodyNode = $2("#script_productionTableBodyReplicator");
+      let newTableBodyText = "";
+      const replicatorProducts = Object.values(
+        getReplicatorManager().Productions
+      );
+      for (let i = 0; i < replicatorProducts.length; i++) {
+        const production = replicatorProducts[i];
+        newTableBodyText += `<tr><td id="script_replicator_${production.resource.id}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < replicatorProducts.length; i++) {
+        const production = replicatorProducts[i];
+        let productionElement = $2("#script_replicator_" + production.resource.id);
+        productionElement.append(buildTableLabel2(production.resource.name));
+        productionElement = productionElement.next();
+        addTableToggle2(productionElement, "replicator_" + production.resource.id);
+        productionElement = productionElement.next();
+        addTableInput2(
+          productionElement,
+          "replicator_w_" + production.resource.id
+        );
+        productionElement = productionElement.next();
+        addTableInput2(
+          productionElement,
+          "replicator_p_" + production.resource.id
+        );
+      }
+    }
+    return {
+      buildProductionSettings: buildProductionSettings2,
+      updateProductionSettingsContent: updateProductionSettingsContent2,
+      updateProductionTableSmelter: updateProductionTableSmelter2,
+      updateProductionTableFoundry: updateProductionTableFoundry2,
+      updateProductionTableFactory: updateProductionTableFactory2,
+      updateProductionTableMiningDrone: updateProductionTableMiningDrone2,
+      updateProductionTableReplicator: updateProductionTableReplicator2
+    };
+  }
+
+  // src/ui/trait-settings.ts
+  function createTraitSettings({
+    getSettingsRaw,
+    getState,
+    getGame,
+    getRaces,
+    getResources,
+    getPoly,
+    getMinorTraitManager,
+    getMutableTraitManager,
+    getOcularPowerData,
+    getWishData,
+    getMutationCostMultipliers,
+    getDocument,
+    getJQuery,
+    getSorterHelper,
+    resetMinorTraitSettings: resetMinorTraitSettings2,
+    resetMutableTraitSettings: resetMutableTraitSettings2,
+    updateSettingsFromState: updateSettingsFromState2,
+    resetCheckbox: resetCheckbox2,
+    buildSettingsSection: buildSettingsSection3,
+    addStandardHeading: addStandardHeading2,
+    addSettingsSelect: addSettingsSelect2,
+    addSettingsNumber: addSettingsNumber2,
+    addSettingsToggle: addSettingsToggle2,
+    addTableToggle: addTableToggle2,
+    addTableInput: addTableInput2,
+    buildTableLabel: buildTableLabel2
+  }) {
+    function buildTraitSettings2() {
+      let sectionId = "trait";
+      let sectionName = "Traits";
+      let resetFunction = function() {
+        resetMinorTraitSettings2(true);
+        resetMutableTraitSettings2(true);
+        updateSettingsFromState2();
+        updateTraitSettingsContent2();
+        resetCheckbox2("autoMinorTrait", "autoMutateTraits", "autoGenetics");
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateTraitSettingsContent2
+      );
+    }
+    function updateImitateWarning2() {
+      const settingsRaw2 = getSettingsRaw();
+      const races2 = getRaces();
+      const game2 = getGame();
+      const $2 = getJQuery();
+      let race = races2[settingsRaw2.imitateRace];
+      if (race) {
+        const raceAvaialableForImitate = race && game2.global.stats.synth[race.id];
+        if (raceAvaialableForImitate) {
+          $2("#script_imitate_warning").html(
+            `<span class="has-text-success">You have completed an AI Apocalypse with this race and can imitate it.</span>`
+          );
+        } else {
+          $2("#script_imitate_warning").html(
+            `<span class="has-text-danger">Warning! You have NOT completed an AI Apocalypse with this race, and cannot imitate it.</span>`
+          );
+        }
+      } else {
+        $2("#script_imitate_warning").empty();
+      }
+    }
+    function updateTraitSettingsContent2() {
+      const document2 = getDocument();
+      const $2 = getJQuery();
+      const game2 = getGame();
+      const races2 = getRaces();
+      const resources2 = getResources();
+      const poly2 = getPoly();
+      const ocularPowerData2 = getOcularPowerData();
+      const wishData2 = getWishData();
+      const mutationCostMultipliers2 = getMutationCostMultipliers();
+      const MinorTraitManager2 = getMinorTraitManager();
+      const MutableTraitManager2 = getMutableTraitManager();
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_traitContent");
+      currentNode.empty().off("*");
+      addStandardHeading2(currentNode, "Major Traits");
+      let genusOptions = [
+        { val: "ignore", label: "Ignore", hint: "Do not shift genus" },
+        { val: "none", label: game2.loc(`genelab_genus_none`) },
+        ...Object.values(game2.races).map((r) => r.type).filter(
+          (g, i, a) => g && g !== "organism" && g !== "synthetic" && a.indexOf(g) === i
+        ).map((g) => ({ val: g, label: game2.loc(`genelab_genus_${g}`) }))
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "shifterGenus",
+        "Mimic genus",
+        "Mimic selected genus, if avaialble. If you want to add some conditional overrides to this setting, keep in mind changing genus redraws game page, frequent changes can drastically harm game performance.",
+        genusOptions
+      );
+      const imitateOptions = [
+        {
+          val: "ignore",
+          label: "Ignore",
+          hint: "Do not imitate race. IMPORTANT: script will stall at evolution if none selected"
+        },
+        ...Object.values(races2).map((race) => {
+          const label = game2.global.stats.synth[race.id] ? race.name : `--${race.name}--`;
+          return {
+            val: race.id,
+            label,
+            hint: race.desc
+          };
+        })
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "imitateRace",
+        "Imitate race",
+        "Imitate selected race, if available.",
+        imitateOptions
+      ).on("change", "select", function() {
+        getState().evolutionTarget = null;
+        updateImitateWarning2();
+      });
+      currentNode.append(`<div><span id="script_imitate_warning"></span></div>`);
+      updateImitateWarning2();
+      let shrineOptions = [
+        {
+          val: "any",
+          label: "Any",
+          hint: "Build any Shrines, whenever have resources for it"
+        },
+        { val: "equally", label: "Equally", hint: "Build all Shrines equally" },
+        { val: "morale", label: "Morale", hint: "Build only Morale Shrines" },
+        { val: "metal", label: "Metal", hint: "Build only Metal Shrines" },
+        { val: "know", label: "Knowledge", hint: "Build only Knowledge Shrines" },
+        { val: "tax", label: "Tax", hint: "Build only Tax Shrines" },
+        {
+          val: "rotating",
+          label: "Rotating",
+          hint: "Build Shrines during quarter/full phases for rotating effect shrines"
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "buildingShrineType",
+        "Magnificent shrine",
+        "Auto Build shrines only at moons of chosen shrine",
+        shrineOptions
+      );
+      addSettingsNumber2(
+        currentNode,
+        "slaveIncome",
+        "Minimum income to buy slave",
+        "Script will use Slave Market only when money is capped, or have income above given number"
+      );
+      let psychicOptions = [
+        {
+          val: "none",
+          label: "Ignore",
+          hint: "Psychic Powers ignored by script"
+        },
+        {
+          val: "auto",
+          label: "Script Managed",
+          hint: "Performs one of available actions in this order: Capture, Mind Break, Boost Profits, Boost Resource, Boost Attack Power."
+        },
+        ...["boost", "murder", "assault", "profit", "stun", "mind_break"].map(
+          (p) => ({
+            val: p,
+            label: game2.loc(`psychic_${p}_title`),
+            hint: game2.loc(`psychic_${p}_desc`)
+          })
+        )
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "psychicPower",
+        "Psychic Powers",
+        "Activates selected power with full energy. 10 murders required to research advanced powers will be performed automatically, if needed.",
+        psychicOptions
+      );
+      let psychicBoost = [
+        {
+          val: "auto",
+          label: "Script Managed",
+          hint: "Resource selected by looking for highest income among ones having enough free storage room."
+        },
+        ...Object.values(resources2).filter((r) => r.atomicMass > 0).map((r) => ({ val: r.id, label: r.title }))
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "psychicBoostRes",
+        "Boosted Resource",
+        "Resource for Boost Resource Production psychic power.",
+        psychicBoost
+      );
+      let wishMinor = [
+        { val: "none", label: "None", hint: "Disable using minor wishes." },
+        ...wishData2.minor.map((w) => ({
+          val: w.id,
+          label: poly2.loc("wish_for", [poly2.loc(w.loc)])
+        }))
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "wishMinor",
+        "Minor Wish",
+        "Uses this minor wish when available.",
+        wishMinor
+      );
+      let wishMajor = [
+        { val: "none", label: "None", hint: "Disable using major wishes." },
+        ...wishData2.major.map((w) => ({
+          val: w.id,
+          label: poly2.loc("wish_for", [poly2.loc(w.loc)])
+        }))
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "wishMajor",
+        "Major Wish",
+        "Uses this major wish when available.",
+        wishMajor
+      );
+      addSettingsToggle2(
+        currentNode,
+        "jobScalePop",
+        "High Pop job scale",
+        "Auto Job will automatically scaly breakpoints to match population increase"
+      );
+      addStandardHeading2(currentNode, "Ocular Powers");
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:50%">Name</th>
+              <th class="has-text-warning" style="width:25%">Enabled</th>
+              <th class="has-text-warning" style="width:25%">Priority</th>
+            </tr>
+            <tbody id="script_ocularPowersTableBody"></tbody>
+          </table>
+        `);
+      const ocularTableBodyNode = $2("#script_ocularPowersTableBody");
+      ocularPowerData2.forEach((p) => {
+        let tr = $2(`<tr><td></td><td></td><td></td></tr>`);
+        tr.appendTo(ocularTableBodyNode);
+        let ocularPowerElement = tr.find("td").first();
+        ocularPowerElement.append(
+          buildTableLabel2(
+            game2.loc(`ocular_${p.id}`),
+            game2.loc(`ocular_${p.id}_desc`, p.locParam)
+          )
+        );
+        ocularPowerElement = ocularPowerElement.next();
+        addTableToggle2(ocularPowerElement, `ocularPower_${p.id}`);
+        ocularPowerElement = ocularPowerElement.next();
+        addTableInput2(ocularPowerElement, `ocularPower_p_${p.id}`);
+      });
+      addStandardHeading2(currentNode, "Minor Traits");
+      let sequenceOptions = [
+        {
+          val: "none",
+          label: "Ignore",
+          hint: "Ignored by script, managed by game and player"
+        },
+        { val: "enabled", label: "Enable", hint: "Sequencer enabled" },
+        { val: "disabled", label: "Disable", hint: "Sequencer disabled" },
+        {
+          val: "decode",
+          label: "Decode",
+          hint: "Decode genome only, with no further mutations"
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "geneticsSequence",
+        "Sequencer",
+        "Manages genome decoding, and mutations",
+        sequenceOptions
+      );
+      let boostOptions = [
+        {
+          val: "none",
+          label: "Ignore",
+          hint: "Ignored by script, managed by game and player"
+        },
+        { val: "enabled", label: "Enable", hint: "Booster enabled" },
+        { val: "disabled", label: "Disable", hint: "Booster disabled" }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "geneticsBoost",
+        "Sequence Booster",
+        "Manages sequencer booster",
+        boostOptions
+      );
+      let assembleOptions = [
+        {
+          val: "none",
+          label: "Ignore",
+          hint: "Ignored by script, managed by game and player"
+        },
+        { val: "enabled", label: "Enable", hint: "Auto Sequencer enable" },
+        { val: "disabled", label: "Disable", hint: "Auto Sequencer disable" },
+        {
+          val: "auto",
+          label: "Script Managed",
+          hint: "Gene assembling managed by script, allowing to dump excess knowledge at faster rate, matching income"
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "geneticsAssemble",
+        "Auto Sequence",
+        "Manages genome decoding, and mutations",
+        assembleOptions
+      );
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:20%">Minor Trait</th>
+              <th class="has-text-warning" style="width:20%">Enabled</th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th class="has-text-warning" style="width:40%"></th>
+            </tr>
+            <tbody id="script_minorTraitTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = $2("#script_minorTraitTableBody");
+      let newTableBodyText = "";
+      for (let i = 0; i < MinorTraitManager2.priorityList.length; i++) {
+        const trait = MinorTraitManager2.priorityList[i];
+        newTableBodyText += `<tr value="${trait.traitName}" class="script-draggable"><td id="script_minorTrait_${trait.traitName}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"><span class="script-lastcolumn"></span></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < MinorTraitManager2.priorityList.length; i++) {
+        const trait = MinorTraitManager2.priorityList[i];
+        let minorTraitElement = $2("#script_minorTrait_" + trait.traitName);
+        minorTraitElement.append(
+          buildTableLabel2(
+            game2.loc("trait_" + trait.traitName + "_name"),
+            game2.loc("trait_" + trait.traitName)
+          )
+        );
+        minorTraitElement = minorTraitElement.next();
+        addTableToggle2(minorTraitElement, "mTrait_" + trait.traitName);
+        minorTraitElement = minorTraitElement.next();
+        addTableInput2(minorTraitElement, "mTrait_w_" + trait.traitName);
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: getSorterHelper(),
+        update: function() {
+          let minorTraitNames = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          const settingsRaw2 = getSettingsRaw();
+          for (let i = 0; i < minorTraitNames.length; i++) {
+            settingsRaw2["mTrait_p_" + minorTraitNames[i]] = i;
+          }
+          getMinorTraitManager().sortByPriority();
+          updateSettingsFromState2();
+        }
+      });
+      addStandardHeading2(currentNode, "Trait Mutation");
+      addSettingsToggle2(
+        currentNode,
+        "doNotGoBelowPlasmidSoftcap",
+        "Do not go below Plasmid softcap",
+        "Script will not mutate if the number of remaining plasmids or anti plamids would be lower than the softcap (250 + Phage)"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "minimumPlasmidsToPreserve",
+        "Minimum Plasmids / Anti-Plasmids to preserve",
+        "Script will not mutate if the number of remaining plasmids or anti plamids would be lower than this value"
+      );
+      currentNode.append(`
+        <table style="width:100%">
+        <tr>
+            <th class="has-text-warning" style="width:30%">Species / Genus</th>
+            <th class="has-text-warning" style="width:25%">Trait</th>
+            <th class="has-text-warning" style="width:10%">Cost</th>
+            <th class="has-text-warning" style="width:10%">Add</th>
+            <th class="has-text-warning" style="width:10%">Remove</th>
+            <th class="has-text-warning" style="width:10%">Reset</th>
+            <th class="has-text-warning" style="width:5%"></th>
+        </tr>
+        <tbody id="script_mutateTraitTableBody"></tbody>
+        </table>`);
+      let mutateTraitTableBodyNode = $2("#script_mutateTraitTableBody");
+      newTableBodyText = "";
+      for (let i = 0; i < MutableTraitManager2.priorityList.length; i++) {
+        const trait = MutableTraitManager2.priorityList[i];
+        newTableBodyText += `<tr value="${trait.traitName}" class="script-draggable"><td id="script_mutableTrait_${trait.traitName}" style="width:30%"></td><td style="width:25%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+      }
+      mutateTraitTableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < MutableTraitManager2.priorityList.length; i++) {
+        const trait = MutableTraitManager2.priorityList[i];
+        let mutableTraitElement = $2("#script_mutableTrait_" + trait.traitName);
+        mutableTraitElement.append(
+          buildTableLabel2(
+            trait.source === "" ? "-" : game2.loc(
+              (trait.type === "major" ? "race_" : "genelab_genus_") + trait.source
+            ),
+            trait.type === "major" ? "Major" : "Genus",
+            trait.type === "genus" ? "has-text-special" : "has-text"
+          )
+        );
+        mutableTraitElement = mutableTraitElement.next();
+        mutableTraitElement.append(
+          buildTableLabel2(
+            trait.name,
+            game2.loc("trait_" + trait.traitName),
+            trait.isPositive ? "has-text-success" : "has-text-danger"
+          )
+        );
+        mutableTraitElement = mutableTraitElement.next();
+        mutableTraitElement.append(
+          buildTableLabel2(
+            `${trait.baseCost * 5}`,
+            `${trait.baseCost * 5 * mutationCostMultipliers2["custom"]["gain"]} for Custom${trait.traitName !== "ooze" ? " and Sludge" : ""}`
+          )
+        );
+        mutableTraitElement = mutableTraitElement.next();
+        if (trait.isGainable()) {
+          addTableToggle2(
+            mutableTraitElement,
+            "mutableTrait_gain_" + trait.traitName
+          );
+        }
+        mutableTraitElement = mutableTraitElement.next();
+        addTableToggle2(
+          mutableTraitElement,
+          "mutableTrait_purge_" + trait.traitName
+        );
+        if (trait.isGainable()) {
+          makeToggleSwitchesMutuallyExclusive2(
+            $2(".script_mutableTrait_gain_" + trait.traitName),
+            "mutableTrait_gain_" + trait.traitName,
+            $2(".script_mutableTrait_purge_" + trait.traitName),
+            "mutableTrait_purge_" + trait.traitName
+          );
+        }
+        mutableTraitElement = mutableTraitElement.next();
+        if (poly2.neg_roll_traits.includes(trait.traitName)) {
+          addTableToggle2(
+            mutableTraitElement,
+            "mutableTrait_reset_" + trait.traitName
+          );
+        }
+      }
+      mutateTraitTableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: getSorterHelper(),
+        update: function() {
+          let mutableTraitNames = mutateTraitTableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          const settingsRaw2 = getSettingsRaw();
+          for (let i = 0; i < mutableTraitNames.length; i++) {
+            settingsRaw2["mutableTrait_p_" + mutableTraitNames[i]] = i;
+          }
+          getMutableTraitManager().sortByPriority();
+          updateSettingsFromState2();
+        }
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function makeToggleSwitchesMutuallyExclusive2(switch1, settingsKey1, switch2, settingsKey2) {
+      switch1.on("change", function() {
+        if (switch1.prop("checked") && switch2.prop("checked")) {
+          switch2.prop("checked", false);
+          getSettingsRaw()[settingsKey2] = false;
+          updateSettingsFromState2();
+        }
+      });
+      switch2.on("change", function() {
+        if (switch1.prop("checked") && switch2.prop("checked")) {
+          switch1.prop("checked", false);
+          getSettingsRaw()[settingsKey1] = false;
+          updateSettingsFromState2();
+        }
+      });
+    }
+    return {
+      buildTraitSettings: buildTraitSettings2,
+      updateImitateWarning: updateImitateWarning2,
+      updateTraitSettingsContent: updateTraitSettingsContent2,
+      makeToggleSwitchesMutuallyExclusive: makeToggleSwitchesMutuallyExclusive2
+    };
+  }
+
+  // src/ui/dependencies.ts
+  function propertyDescriptor(value, property) {
+    const object = Object(value);
+    const descriptor = Object.getOwnPropertyDescriptor(object, property);
+    return {
+      configurable: true,
+      enumerable: descriptor?.enumerable ?? true,
+      writable: true,
+      value: Reflect.get(object, property)
+    };
+  }
+  function liveObject(getValue) {
+    return new Proxy(
+      {},
+      {
+        get: (_target, property) => {
+          const value = getValue();
+          if (property === Symbol.toPrimitive) return () => value;
+          const result = Reflect.get(Object(value), property);
+          return typeof result === "function" ? result.bind(value) : result;
+        },
+        set: (_target, property, value) => Reflect.set(Object(getValue()), property, value),
+        deleteProperty: (_target, property) => Reflect.deleteProperty(Object(getValue()), property),
+        has: (_target, property) => Reflect.has(Object(getValue()), property),
+        ownKeys: () => Reflect.ownKeys(Object(getValue())),
+        getOwnPropertyDescriptor: (_target, property) => propertyDescriptor(getValue(), property),
+        getPrototypeOf: () => Reflect.getPrototypeOf(Object(getValue()))
+      }
+    );
+  }
+  function liveFunction(getValue) {
+    return new Proxy(function() {
+    }, {
+      apply: (_target, thisArg, argumentsList) => Reflect.apply(getValue(), thisArg, argumentsList),
+      construct: (_target, argumentsList, newTarget) => Reflect.construct(getValue(), argumentsList, newTarget),
+      get: (_target, property) => Reflect.get(getValue(), property),
+      set: (_target, property, value) => Reflect.set(getValue(), property, value),
+      has: (_target, property) => Reflect.has(getValue(), property),
+      ownKeys: () => Reflect.ownKeys(getValue()),
+      getOwnPropertyDescriptor: (_target, property) => propertyDescriptor(getValue(), property),
+      getPrototypeOf: () => Reflect.getPrototypeOf(getValue())
+    });
+  }
+
+  // src/ui/general-settings.ts
+  function createGeneralSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const addSettingsHeader12 = liveFunction(
+      () => getDependency("addSettingsHeader1")
+    );
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsSelect2 = liveFunction(
+      () => getDependency("addSettingsSelect")
+    );
+    const addSettingsString2 = liveFunction(
+      () => getDependency("addSettingsString")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const document2 = liveObject(() => getDependency("document"));
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetGeneralSettings2 = liveFunction(
+      () => getDependency("resetGeneralSettings")
+    );
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildGeneralSettingsImpl() {
+      let sectionId = "general";
+      let sectionName = "General";
+      let resetFunction = function() {
+        resetGeneralSettings2(true);
+        updateSettingsFromState2();
+        updateGeneralSettingsContent2();
+        resetCheckbox2("masterScriptToggle", "showSettings", "autoPrestige");
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateGeneralSettingsContent2
+      );
+    }
+    function updateGeneralSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_generalContent");
+      currentNode.empty().off("*");
+      addSettingsNumber2(
+        currentNode,
+        "tickRate",
+        "Script tick rate",
+        "Script runs once per this amount of game ticks. Game tick every 250ms, thus with rate 4 script will run once per second. You can set it lower to make script act faster, or increase it if you have performance issues. Tick rate should be a positive integer."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "tickSchedule",
+        "Schedule script ticks",
+        "When enabled script will schedule its ticks to run after game ticks, instead of executing both at once. Splitting of long task allows browser to update UI in between of game and script ticks, making game run smoother, but less throttling-proof - that can make tick rate float inconsistently."
+      );
+      addSettingsHeader12(currentNode, "Prioritization");
+      let priority = [
+        { val: "ignore", label: "Ignore", hint: "Does nothing" },
+        {
+          val: "save",
+          label: "Save",
+          hint: "Missing resources preserved from using."
+        },
+        {
+          val: "req",
+          label: "Request",
+          hint: "Production and buying of missing resources will be prioritized."
+        },
+        {
+          val: "savereq",
+          label: "Request & Save",
+          hint: "Missing resources will be prioritized, and preserved from using."
+        }
+      ];
+      addSettingsToggle2(
+        currentNode,
+        "useDemanded",
+        "Allow using prioritized resources for crafting",
+        "When disabled script won't make craftables out of prioritized resources in foundry and factory."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "researchRequest",
+        "Prioritize resources for Pre-MAD researches",
+        "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "researchRequestSpace",
+        "Prioritize resources for Space+ researches",
+        "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "missionRequest",
+        "Prioritize resources for missions",
+        "Readjust trade routes and production to resources required for unlocked and affordable missions. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      );
+      addSettingsSelect2(
+        currentNode,
+        "prioritizeQueue",
+        "Queue",
+        "Alter script behaviour to speed up queued items, prioritizing missing resources.",
+        priority
+      );
+      addSettingsSelect2(
+        currentNode,
+        "prioritizeTriggers",
+        "Triggers",
+        "Alter script behaviour to speed up triggers, prioritizing missing resources.",
+        priority
+      );
+      addSettingsSelect2(
+        currentNode,
+        "prioritizeUnify",
+        "Unification",
+        "Alter script behaviour to speed up unification, prioritizing money required to purchase foreign cities.",
+        priority
+      );
+      addSettingsSelect2(
+        currentNode,
+        "prioritizeOuterFleet",
+        "Ship Yard Blueprint (The True Path)",
+        "Alter script behaviour to assist fleet building, prioritizing resources required for current design of ship.",
+        priority
+      );
+      addSettingsHeader12(currentNode, "Auto clicker");
+      addSettingsToggle2(
+        currentNode,
+        "buildingAlwaysClick",
+        "Always autoclick resources",
+        "By default script will click only during early stage of autoBuild, to bootstrap production. With this toggled on it will continue clicking forever"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "buildingClickPerTick",
+        "Maximum clicks per tick",
+        "Number of clicks performed at once, each script tick. Will not ever click more than needed to fill storage."
+      );
+      addSettingsHeader12(currentNode, "Misc");
+      addSettingsString2(
+        currentNode,
+        "scriptSettingsExportFilename",
+        "Export Filename",
+        "Configures the filename used when using the 'Script Settings as File' button. This is useful if you keep multiple different profiles around."
+      );
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildGeneralSettings2(...args) {
+      const implementation = getOverride("buildGeneralSettings") ?? buildGeneralSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateGeneralSettingsContent2(...args) {
+      const implementation = getOverride("updateGeneralSettingsContent") ?? updateGeneralSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildGeneralSettings: buildGeneralSettings2, updateGeneralSettingsContent: updateGeneralSettingsContent2 };
+  }
+
+  // src/ui/achievement-guard-settings.ts
+  function createAchievementGuardSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const document2 = liveObject(() => getDependency("document"));
+    const resetAchievementGuardSettings2 = liveFunction(
+      () => getDependency("resetAchievementGuardSettings")
+    );
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildAchievementGuardSettingsImpl() {
+      let sectionId = "achievementGuard";
+      let sectionName = "Achievement Guard";
+      let resetFunction = function() {
+        resetAchievementGuardSettings2(true);
+        updateSettingsFromState2();
+        updateAchievementGuardSettingsContent2();
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateAchievementGuardSettingsContent2
+      );
+    }
+    function updateAchievementGuardSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_achievementGuardContent");
+      currentNode.empty().off("*");
+      addSettingsToggle2(
+        currentNode,
+        "achievementGuards",
+        "Enable achievement guards",
+        "Constrain automation so the current run stays eligible for the guarded achievements below. Each guard arms only while its achievement is still unearned at the current star level in the current universe, and releases as soon as it's earned, already lost this run, or out of scope for the current prestige type."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "guardPacifist",
+        "Pacifist",
+        "Never attack foreign powers. Also allows unification researches regardless of the 'Perform unification' toggle. Foreign policies must be set to Annex/Purchase for unification to actually happen without attacking."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "guardDreaded",
+        "Dreaded",
+        "Never build a Dreadnought during ascension runs. If the Chthonian Mission outcome is set to Dreadnought, it will be executed as High losses instead."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "guardCultOfPersonality",
+        "Cult of Personality",
+        "Never unify - blocks unification researches. Yields to the Pacifist guard while both are armed, since Pacifist requires unification."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "guardAnarchist",
+        "Anarchist",
+        "Never set a government during MAD runs, staying in Anarchy until reset."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "guardEnergetic",
+        "Energetic",
+        "Never build a Thermal Collector during ascension runs."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "guardRedDead",
+        "Red Dead",
+        "Never build a Spaceport during MAD runs (Cataclysm scenario)."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "guardSecondEvolution",
+        "Second Evolution",
+        "Research Fanaticism instead of Anthropology while worshipping own species as gods."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "guardBananaRepublic",
+        "Banana Republic",
+        "Block unification while the Banana Republic scenario still has unfinished objectives in the current universe, or while the 500 import and 500 export feat condition is still unmet. Also boosts World Collider and Monument weighting for unfinished Banana objectives."
+      );
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildAchievementGuardSettings2(...args) {
+      const implementation = getOverride("buildAchievementGuardSettings") ?? buildAchievementGuardSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateAchievementGuardSettingsContent2(...args) {
+      const implementation = getOverride("updateAchievementGuardSettingsContent") ?? updateAchievementGuardSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return {
+      buildAchievementGuardSettings: buildAchievementGuardSettings2,
+      updateAchievementGuardSettingsContent: updateAchievementGuardSettingsContent2
+    };
+  }
+
+  // src/ui/challenge-helper-settings.ts
+  function createChallengeHelperSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const document2 = liveObject(() => getDependency("document"));
+    const resetChallengeHelperSettings2 = liveFunction(
+      () => getDependency("resetChallengeHelperSettings")
+    );
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildChallengeHelperSettingsImpl() {
+      let sectionId = "challengeHelper";
+      let sectionName = "Challenge Helper";
+      let resetFunction = function() {
+        resetChallengeHelperSettings2(true);
+        updateSettingsFromState2();
+        updateChallengeHelperSettingsContent2();
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateChallengeHelperSettingsContent2
+      );
+    }
+    function updateChallengeHelperSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_challengeHelperContent");
+      currentNode.empty().off("*");
+      addSettingsToggle2(
+        currentNode,
+        "inflationChallengeAssist",
+        "Inflation challenge",
+        "During Inflation, demand the $250B Wheelbarrow target, boost Money storage or income buildings as appropriate, and stop optional Money spending once the target can be reached soon."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "inflationChallengeSaveMinutes",
+        "Inflation save-up minutes",
+        "When the $250B target is reachable within this many real-time minutes at current Money income, stop optional Money spending and imports until Wheelbarrow is earned. Set negative to disable the final save-up freeze while keeping the helper's weighting and demand."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "retirementChallengeAssist",
+        "Retirement preparation",
+        "When the selected prestige is Retirement, boost the recommended pre-Isolation Tau buildings, reserve and stockpile 200M Graphene, and block Isolation Protocol until there are 20 Fusion Generators, 18 Factories, 11 Disease Labs, and the Graphene stockpile. Disable this to manage the irreversible transition manually."
+      );
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildChallengeHelperSettings2(...args) {
+      const implementation = getOverride("buildChallengeHelperSettings") ?? buildChallengeHelperSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateChallengeHelperSettingsContent2(...args) {
+      const implementation = getOverride("updateChallengeHelperSettingsContent") ?? updateChallengeHelperSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildChallengeHelperSettings: buildChallengeHelperSettings2, updateChallengeHelperSettingsContent: updateChallengeHelperSettingsContent2 };
+  }
+
+  // src/ui/prestige-settings.ts
+  function createPrestigeSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const addSettingsHeader12 = liveFunction(
+      () => getDependency("addSettingsHeader1")
+    );
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsSelect2 = liveFunction(
+      () => getDependency("addSettingsSelect")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const buildCustomRacePresetEditor2 = liveFunction(
+      () => getDependency("buildCustomRacePresetEditor")
+    );
+    const buildSettingsSection22 = liveFunction(
+      () => getDependency("buildSettingsSection2")
+    );
+    const buildings2 = liveObject(() => getDependency("buildings"));
+    const confirm2 = liveFunction(() => getDependency("confirm"));
+    const document2 = liveObject(() => getDependency("document"));
+    const game2 = liveObject(() => getDependency("game"));
+    const haveTech2 = liveFunction(() => getDependency("haveTech"));
+    const isApocalypsePrestigeAvailable2 = liveFunction(
+      () => getDependency("isApocalypsePrestigeAvailable")
+    );
+    const isAscensionPrestigeAvailable2 = liveFunction(
+      () => getDependency("isAscensionPrestigeAvailable")
+    );
+    const isBioseederPrestigeAvailable2 = liveFunction(
+      () => getDependency("isBioseederPrestigeAvailable")
+    );
+    const isCataclysmPrestigeAvailable2 = liveFunction(
+      () => getDependency("isCataclysmPrestigeAvailable")
+    );
+    const isDemonicPrestigeAvailable2 = liveFunction(
+      () => getDependency("isDemonicPrestigeAvailable")
+    );
+    const isPrestigeAllowed2 = liveFunction(
+      () => getDependency("isPrestigeAllowed")
+    );
+    const isWhiteholePrestigeAvailable2 = liveFunction(
+      () => getDependency("isWhiteholePrestigeAvailable")
+    );
+    const isWitchAscensionPrestigeAvailable2 = liveFunction(
+      () => getDependency("isWitchAscensionPrestigeAvailable")
+    );
+    const openOptionsModal2 = liveFunction(
+      () => getDependency("openOptionsModal")
+    );
+    const openOverrideModal2 = liveFunction(
+      () => getDependency("openOverrideModal")
+    );
+    const prestigeOptions2 = liveObject(() => getDependency("prestigeOptions"));
+    const resetPrestigeSettings2 = liveFunction(
+      () => getDependency("resetPrestigeSettings")
+    );
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const state2 = liveObject(() => getDependency("state"));
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildPrestigeSettingsImpl(parentNode, secondaryPrefix) {
+      let sectionId = "prestige";
+      let sectionName = "Prestige";
+      let resetFunction = function() {
+        resetPrestigeSettings2(true);
+        updateSettingsFromState2();
+        updatePrestigeSettingsContent2(secondaryPrefix);
+      };
+      buildSettingsSection22(
+        parentNode,
+        secondaryPrefix,
+        sectionId,
+        sectionName,
+        resetFunction,
+        updatePrestigeSettingsContent2
+      );
+    }
+    function updatePrestigeSettingsContentImpl(secondaryPrefix) {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2(`#script_${secondaryPrefix}prestigeContent`);
+      currentNode.empty().off("*");
+      currentNode.append(`
+          <div class="script_bg_prestigeType" style="display: inline-block; width: 90%; text-align: left; margin-bottom: 10px;">
+            <label>
+              <span>Prestige Type</span>
+              <select class="script_prestigeType" style="height: 18px; width: 150px; float: right;">
+                ${prestigeOptions2}
+              </select>
+            </label>
+          </div>`);
+      currentNode.find(".script_prestigeType").val(settingsRaw2.prestigeType).on("change", function() {
+        if (isPrestigeAllowed2()) {
+          let confirmationText = "";
+          if (this.value === "mad" && haveTech2("mad")) {
+            confirmationText = "MAD has already been researched.";
+          } else if (this.value === "bioseed" && isBioseederPrestigeAvailable2()) {
+            confirmationText = "Required probes are built, and bioseeder ship is ready to launch.";
+          } else if (this.value === "cataclysm" && isCataclysmPrestigeAvailable2()) {
+            confirmationText = "Dial It To 11 is unlocked. You may prestige immediately.";
+          } else if (this.value === "whitehole" && isWhiteholePrestigeAvailable2()) {
+            confirmationText = "Required mass is reached, and exotic infusion is unlocked.";
+          } else if (this.value === "apocalypse" && isApocalypsePrestigeAvailable2()) {
+            confirmationText = "Protocol 66 is unlocked.";
+          } else if (this.value === "ascension" && (game2.global.race["witch_hunter"] ? isWitchAscensionPrestigeAvailable2() : isAscensionPrestigeAvailable2())) {
+            confirmationText = game2.global.race["witch_hunter"] ? "Absorption Chamber is built and ready." : "Ascension machine is built and powered.";
+          } else if (this.value === "demonic" && (game2.global.race["witch_hunter"] ? isWitchAscensionPrestigeAvailable2(true) : isDemonicPrestigeAvailable2())) {
+            confirmationText = game2.global.race["witch_hunter"] ? "Absorption Chamber is built and ready." : "Required floor is reached, and demon lord is already dead.";
+          } else if (this.value === "terraform" && buildings2.RedTerraform.isUnlocked()) {
+            confirmationText = "Terraformer is built and powered.";
+          } else if (this.value === "matrix" && buildings2.TauStarBluePill.isUnlocked()) {
+            confirmationText = "Matrix is built and powered.";
+          } else if (this.value === "retire" && buildings2.TauGas2MatrioshkaBrain.count >= 1e3 && buildings2.TauGas2IgniteGasGiant.isUnlocked() && buildings2.TauGas2IgniteGasGiant.isAffordable()) {
+            confirmationText = "Ignition Device is built and ready.";
+          } else if (this.value === "eden" && buildings2.TauStarEden.isUnlocked() && buildings2.TauStarEden.isAffordable()) {
+            confirmationText = "Garden Of Eden is ready to build.";
+          } else if (this.value === "apotheosis" && buildings2.PalaceApotheosis.isUnlocked()) {
+            confirmationText = "Apotheosis is ready to build.";
+          }
+          if (confirmationText !== "") {
+            confirmationText += " You may prestige immediately. Are you sure you want to toggle this prestige?";
+            if (!confirm2(confirmationText)) {
+              this.value = "none";
+            }
+          }
+        }
+        settingsRaw2.prestigeType = this.value;
+        $2(".script_prestigeType").val(settingsRaw2.prestigeType);
+        state2.goal = "Standard";
+        updateSettingsFromState2();
+      });
+      currentNode.find(".script_bg_prestigeType").toggleClass("inactive-row", Boolean(settingsRaw2.overrides.prestigeType)).on(
+        "click",
+        {
+          label: "Prestige Type (prestigeType)",
+          name: "prestigeType",
+          type: "select",
+          options: prestigeOptions2
+        },
+        openOverrideModal2
+      );
+      addSettingsToggle2(
+        currentNode,
+        "prestigeWaitAT",
+        "Disable prestiging under Accelerated Time",
+        "Delay reset until all accelerated time will be used, to avoid wasting it"
+      );
+      addSettingsToggle2(
+        currentNode,
+        "prestigeMADIgnoreArpa",
+        "Ignore early game A.R.P.A.",
+        "Disables building any A.R.P.A. projects until MAD is researched, or rival have appeared"
+      );
+      addSettingsToggle2(
+        currentNode,
+        "prestigeBioseedConstruct",
+        "Ignore useless buildings",
+        "Space Dock, Bioseeder Ship and Probes will be constructed only when Bioseed prestige enabled. World Collider won't be constructed during Bioseed. Jump Ship won't be constructed during Whitehole. Stellar Engine won't be constucted during Vacuum Collapse. Mana Syphon won't be constructed during Witch Hunter's Ascension and Demonic Infusion."
+      );
+      addSettingsHeader12(currentNode, "Mutual Assured Destruction");
+      addSettingsToggle2(
+        currentNode,
+        "prestigeMADWait",
+        "Wait for maximum population",
+        "Wait for maximum population and soldiers to maximize plasmids gain"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "prestigeMADPopulation",
+        "Required population",
+        "Required number of workers and soldiers before performing MAD reset"
+      );
+      addSettingsHeader12(currentNode, "Bioseed");
+      addSettingsNumber2(
+        currentNode,
+        "prestigeBioseedProbes",
+        "Required probes",
+        "Required number of probes before launching bioseeder ship"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "prestigeGECK",
+        "Required G.E.C.K",
+        "Required number of G.E.C.K. for Bioseed. Unlike any other buildings G.E.C.K. won't ever be constructed during inappropriate runs, or above this number. To prevent losing plasmids. It can, however, be built with triggers - you should not build G.E.C.K with triggers, unless you absolutely sure you know what you're doing."
+      );
+      addSettingsHeader12(currentNode, "Whitehole");
+      addSettingsToggle2(
+        currentNode,
+        "prestigeWhiteholeSaveGems",
+        "Save up Soul Gems for reset",
+        "Save up enough Soul Gems for reset, only excess gems will be used. This option does not affect triggers."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "prestigeWhiteholeMinMass",
+        "Minimum solar mass for reset",
+        "Required minimum solar mass of blackhole before prestiging. Script do not stabilize on blackhole run, this number will need to be reached naturally"
+      );
+      addSettingsHeader12(currentNode, "Ascension");
+      addSettingsToggle2(
+        currentNode,
+        "prestigeAscensionPillar",
+        "Wait for Pillar",
+        "Wait for Pillar before ascending, unless it was done earlier"
+      );
+      addSettingsSelect2(
+        currentNode,
+        "prestigeCustomRaceMode",
+        "Custom race handling",
+        "Controls every custom-race lab reached after Ascension, Terraform, or Apotheosis. Pause lets you edit challenge-specific races even when one is already saved. Import replaces the live design with the selected preset and continues only when the game accepts it.",
+        [
+          {
+            val: "reuse",
+            label: "Reuse saved",
+            hint: "Automatically reuse the saved custom; pause if none exists."
+          },
+          {
+            val: "pause",
+            label: "Pause in lab",
+            hint: "Always stop in the lab so the custom can be edited or imported manually."
+          },
+          {
+            val: "import",
+            label: "Import selected preset",
+            hint: "Apply the selected structured preset and continue automatically."
+          }
+        ]
+      );
+      let presetOptions = (settingsRaw2.prestigeCustomRacePresets ?? []).map(
+        (preset, index) => ({
+          val: String(index),
+          label: preset.name || `Preset ${index + 1}`,
+          hint: "Custom race preset used by Import selected preset."
+        })
+      );
+      addSettingsSelect2(
+        currentNode,
+        "prestigeCustomRacePreset",
+        "Selected custom preset",
+        "Preset used when Custom race handling is Import selected preset. The selection can also be changed by Evolution Queue.",
+        presetOptions
+      );
+      $2(
+        '<button class="button" type="button" style="margin:6px 0;">Edit custom race presets…</button>'
+      ).on("click", function() {
+        openOptionsModal2("Custom Race Presets", buildCustomRacePresetEditor2);
+      }).appendTo(currentNode);
+      addSettingsHeader12(currentNode, "Demonic Infusion");
+      addSettingsNumber2(
+        currentNode,
+        "prestigeDemonicFloor",
+        "Minimum spire floor for reset",
+        "Perform reset after climbing up to this spire floor"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "prestigeDemonicPotential",
+        "Maximum mech potential for reset",
+        "Perform reset only if current mech team potential below given amount. Full bay of best mechs will have `1` potential. This allows to postpone reset if your team is still good after reaching target floor, and can quickly clear another floor"
+      );
+      addSettingsToggle2(
+        currentNode,
+        "prestigeDemonicBomb",
+        "Use Dark Energy Bomb",
+        "Kill Demon Lord with Dark Energy Bomb"
+      );
+      addSettingsHeader12(currentNode, "Matrix");
+      let cureStrat = [
+        { val: "none", label: "None", hint: "Do not select strategy" },
+        {
+          val: "strat1",
+          label: game2.loc(`tech_vax_strat1`),
+          hint: game2.loc(`tech_vax_strat1_effect`)
+        },
+        {
+          val: "strat2",
+          label: game2.loc(`tech_vax_strat2`),
+          hint: game2.loc(`tech_vax_strat2_effect`)
+        },
+        {
+          val: "strat3",
+          label: game2.loc(`tech_vax_strat3`),
+          hint: game2.loc(`tech_vax_strat3_effect`)
+        },
+        {
+          val: "strat4",
+          label: game2.loc(`tech_vax_strat4`),
+          hint: game2.loc(`tech_vax_strat4_effect`)
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "prestigeVaxStrat",
+        "Vaccination Strategy",
+        "Alter script behaviour to speed up queued items, prioritizing missing resources.",
+        cureStrat
+      );
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildPrestigeSettings2(...args) {
+      const implementation = getOverride("buildPrestigeSettings") ?? buildPrestigeSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updatePrestigeSettingsContent2(...args) {
+      const implementation = getOverride("updatePrestigeSettingsContent") ?? updatePrestigeSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildPrestigeSettings: buildPrestigeSettings2, updatePrestigeSettingsContent: updatePrestigeSettingsContent2 };
+  }
+
+  // src/ui/government-settings.ts
+  function createGovernmentSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const GovernmentManager2 = liveObject(
+      () => getDependency("GovernmentManager")
+    );
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsSelect2 = liveFunction(
+      () => getDependency("addSettingsSelect")
+    );
+    const buildSettingsSection22 = liveFunction(
+      () => getDependency("buildSettingsSection2")
+    );
+    const document2 = liveObject(() => getDependency("document"));
+    const game2 = liveObject(() => getDependency("game"));
+    const governors2 = liveObject(() => getDependency("governors"));
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetGovernmentSettings2 = liveFunction(
+      () => getDependency("resetGovernmentSettings")
+    );
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildGovernmentSettingsImpl(parentNode, secondaryPrefix) {
+      let sectionId = "government";
+      let sectionName = "Government";
+      let resetFunction = function() {
+        resetGovernmentSettings2(true);
+        updateSettingsFromState2();
+        updateGovernmentSettingsContent2(secondaryPrefix);
+        resetCheckbox2("autoTax", "autoGovernment");
+      };
+      buildSettingsSection22(
+        parentNode,
+        secondaryPrefix,
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateGovernmentSettingsContent2
+      );
+    }
+    function updateGovernmentSettingsContentImpl(secondaryPrefix) {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2(`#script_${secondaryPrefix}governmentContent`);
+      currentNode.empty().off("*");
+      addSettingsNumber2(
+        currentNode,
+        "generalRequestedTaxRate",
+        "Forced tax rate",
+        "Set tax rate as close to this value as possible, ignores morale. Set to -1 to disable this option"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "generalMinimumTaxRate",
+        "Minimum allowed tax rate",
+        "Minimum tax rate for autoTax. Will still go below this amount if money storage is full"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "generalMinimumMorale",
+        "Minimum allowed morale",
+        "Use this to set a minimum allowed morale. Remember that less than 100% can cause riots and weather can cause sudden swings"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "generalMaximumMorale",
+        "Maximum allowed morale",
+        "Use this to set a maximum allowed morale. The tax rate will be raised to lower morale to this maximum"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "generalMinimumAuthority",
+        "Minimum Authority (Evil universe)",
+        "Evil universe only. While Authority is below this value the tax rate will be raised to keep morale at 100 (morale above 100 drains Authority 1:1), and buildings raising the Authority cap get a weighting boost. Set to -1 to target the current Authority maximum (pin it at the cap), or 0 to disable Authority management. Authority below 100 causes a global production penalty of 0.35% per point"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "generalAuthorityMinPatrolPercent",
+        "Authority: min % soldiers on patrol",
+        "Only applies when Minimum Authority is -1 (pin at max). Reserves at least this percentage of available Hell soldiers for patrols (soul gem income) before stationing the rest for Authority, so pinning at max won't kill soul gem income. Set to 0 to station everyone but one patrol (old behaviour)"
+      );
+      let governmentOptions = [
+        { val: "none", label: "None", hint: "Do not select government" },
+        ...Object.values(GovernmentManager2.Types).filter((g) => g.selectable !== false).map((g) => ({
+          val: g.id,
+          label: game2.loc(`govern_${g.id}`),
+          hint: game2.loc(`govern_${g.id}_desc`)
+        }))
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "govInterim",
+        "Interim Government",
+        "Temporary low tier government until you research other governments",
+        governmentOptions
+      );
+      addSettingsSelect2(
+        currentNode,
+        "govFinal",
+        "Second Government",
+        "Second government choice, chosen once becomes available. Can be the same as above",
+        governmentOptions
+      );
+      addSettingsSelect2(
+        currentNode,
+        "govSpace",
+        "Space Government",
+        "Government for bioseed+. Chosen once you researched Quantum Manufacturing. Can be the same as above",
+        governmentOptions
+      );
+      let governorsOptions = [
+        { val: "none", label: "None", hint: "Do not select governor" },
+        ...governors2.map((id) => ({
+          val: id,
+          label: game2.loc(`governor_${id}`),
+          hint: game2.loc(`governor_${id}_desc`)
+        }))
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "govGovernor",
+        "Governor",
+        "Chosen governor will be appointed.",
+        governorsOptions
+      );
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildGovernmentSettings2(...args) {
+      const implementation = getOverride("buildGovernmentSettings") ?? buildGovernmentSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateGovernmentSettingsContent2(...args) {
+      const implementation = getOverride("updateGovernmentSettingsContent") ?? updateGovernmentSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildGovernmentSettings: buildGovernmentSettings2, updateGovernmentSettingsContent: updateGovernmentSettingsContent2 };
+  }
+
+  // src/ui/evolution-settings.ts
+  function createEvolutionSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const addSettingsSelect2 = liveFunction(
+      () => getDependency("addSettingsSelect")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const addStandardHeading2 = liveFunction(
+      () => getDependency("addStandardHeading")
+    );
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const challenges2 = liveObject(() => getDependency("challenges"));
+    const document2 = liveObject(() => getDependency("document"));
+    const evolutionSettingsToStore2 = liveObject(
+      () => getDependency("evolutionSettingsToStore")
+    );
+    const game2 = liveObject(() => getDependency("game"));
+    const getStarLevel2 = liveFunction(() => getDependency("getStarLevel"));
+    const prestigeOptions2 = liveObject(() => getDependency("prestigeOptions"));
+    const prestigeTypes2 = liveObject(() => getDependency("prestigeTypes"));
+    const races2 = liveObject(() => getDependency("races"));
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetEvolutionSettings2 = liveFunction(
+      () => getDependency("resetEvolutionSettings")
+    );
+    const settings2 = liveObject(() => getDependency("settings"));
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
+    const state2 = liveObject(() => getDependency("state"));
+    const universes2 = liveObject(() => getDependency("universes"));
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildEvolutionSettingsImpl() {
+      let sectionId = "evolution";
+      let sectionName = "Evolution";
+      let resetFunction = function() {
+        resetEvolutionSettings2(true);
+        updateSettingsFromState2();
+        updateEvolutionSettingsContent2();
+        resetCheckbox2("autoEvolution");
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateEvolutionSettingsContent2
+      );
+    }
+    function updateRaceWarningImpl() {
+      let race = races2[settingsRaw2.userEvolutionTarget];
+      if (race && race.getCondition() !== "") {
+        let suited = race.getHabitability();
+        if (suited === 1) {
+          $2("#script_race_warning").html(
+            `<span class="has-text-success">This race have special requirements: ${race.getCondition()} This condition is met.</span>`
+          );
+        } else if (suited === 0) {
+          $2("#script_race_warning").html(
+            `<span class="has-text-danger">Warning! This race have special requirements: ${race.getCondition()} This condition is not met.</span>`
+          );
+        } else {
+          $2("#script_race_warning").html(
+            `<span class="has-text-warning">Warning! This race have special requirements: ${race.getCondition()} This condition is bypassed. Race will have ${100 - suited * 100}% penalty.</span>`
+          );
+        }
+      } else {
+        $2("#script_race_warning").empty();
+      }
+    }
+    function updateEvolutionSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_evolutionContent");
+      currentNode.empty().off("*");
+      let universeOptions = [
+        { val: "none", label: "None", hint: "Wait for user selection" },
+        ...universes2.map((id) => ({
+          val: id,
+          label: game2.loc(`universe_${id}`),
+          hint: game2.loc(`universe_${id}_desc`)
+        }))
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "userUniverseTargetName",
+        "Target Universe",
+        "Chosen universe will be automatically selected after appropriate reset",
+        universeOptions
+      );
+      let planetOptions = [
+        { val: "none", label: "None", hint: "Wait for user selection" },
+        {
+          val: "habitable",
+          label: "Most habitable",
+          hint: "Picks most habitable planet, based on biome and trait"
+        },
+        {
+          val: "achieve",
+          label: "Most achievements",
+          hint: "Picks planet with most unearned achievements. Takes in account extinction achievements for planet exclusive races, and greatness achievements for planet biome, trait, and exclusive genus."
+        },
+        {
+          val: "weighting",
+          label: "Highest weighting",
+          hint: "Picks planet with highest weighting. Should be configured in Planet Weighting Settings section."
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "userPlanetTargetName",
+        "Target Planet",
+        "Chosen planet will be automatically selected after appropriate reset. Warning! Script ignores changes made by G.E.C.K., you need to select planet manually after using it.",
+        planetOptions
+      );
+      let raceOptions = [
+        {
+          val: "auto",
+          label: "Auto Achievements",
+          hint: "Picks race giving most achievements upon completing run. Tracks all achievements limited to specific races and resets. Races unique to current planet biome are prioritized, when available."
+        },
+        ...Object.values(races2).map((race) => ({
+          val: race.id,
+          label: race.name,
+          hint: race.desc
+        }))
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "userEvolutionTarget",
+        "Target Race",
+        "Chosen race will be automatically selected during next evolution",
+        raceOptions
+      ).on("change", "select", function() {
+        state2.evolutionTarget = null;
+        updateRaceWarning2();
+      });
+      let genusOptions = [
+        ...Object.values(game2.races).map((r) => r.type).filter((g, i, a) => g && g !== "organism" && a.indexOf(g) === i).map((g) => ({ val: g, label: game2.loc(`genelab_genus_${g}`) }))
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "userEvolutionGenus",
+        "Preferred genus",
+        "Chosen genus will be picked if target race have such option. Works only with challenge races, and hybrids. If chosen genus is not allowed, then first valid option will be picked instead.",
+        genusOptions
+      );
+      currentNode.append(`<div><span id="script_race_warning"></span></div>`);
+      updateRaceWarning2();
+      addSettingsToggle2(
+        currentNode,
+        "evolutionAutoUnbound",
+        "Allow unbound races",
+        "Allow Auto Achievement to pick biome restricted races on unsuited biomes, after getting unbound."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "evolutionBackup",
+        "Soft Reset",
+        "Perform soft resets until you'll get chosen race. Has no effect after getting mass extinction perk."
+      );
+      for (let i = 0; i < challenges2.length; i++) {
+        let set = challenges2[i];
+        addSettingsToggle2(
+          currentNode,
+          `challenge_${set[0].id}`,
+          set.map((c) => game2.loc(`evo_challenge_${c.id}`)).join(" | "),
+          set.map((c) => game2.loc(`evo_challenge_${c.id}_effect`)).join("&#xA;")
+        );
+      }
+      addStandardHeading2(currentNode, "Evolution Queue");
+      addSettingsToggle2(
+        currentNode,
+        "evolutionQueueEnabled",
+        "Queue Enabled",
+        "When enabled script with evolve with queued settings, from top to bottom. During that script settings will be overriden with settings stored in queue. Queued target will be removed from list after evolution."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "evolutionQueueRepeat",
+        "Repeat Queue",
+        "When enabled applied evolution targets will be moved to the end of queue, instead of being removed"
+      );
+      currentNode.append(`
+          <div style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
+            <label for="script_evolution_prestige">Prestige for new evolutions:</label>
+            <select id="script_evolution_prestige" style="height: 18px; width: 150px; float: right;">
+              <option value = "auto" title = "Inherited from current Prestige Settings">Current Prestige</option>
+              ${prestigeOptions2}
+            </select>
+          </div>
+          <div style="margin-top: 10px;">
+            <button id="script_evlution_add" class="button">Add New Evolution</button>
+          </div>`);
+      $2("#script_evlution_add").on("click", addEvolutionSetting2);
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:25%">Race</th>
+              <th class="has-text-warning" style="width:70%" title="Settings applied before evolution. Changed settings not limited to initial template, you can manually add any script options to JSON.">Settings</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_evolutionQueueTable"></tbody>
+          </table>`);
+      let tableBodyNode = $2("#script_evolutionQueueTable");
+      for (let i = 0; i < settingsRaw2.evolutionQueue.length; i++) {
+        tableBodyNode.append(buildEvolutionQueueItem2(i));
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: sorterHelper2,
+        update: function() {
+          let newOrder = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          settingsRaw2.evolutionQueue = newOrder.map(
+            (i) => settingsRaw2.evolutionQueue[i]
+          );
+          updateSettingsFromState2();
+          updateEvolutionSettingsContent2();
+        }
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildEvolutionQueueItemImpl(id) {
+      let queuedEvolution = settingsRaw2.evolutionQueue[id];
+      for (let settingName of evolutionSettingsToStore2) {
+        queuedEvolution[settingName] = queuedEvolution[settingName] ?? settings2[settingName];
+      }
+      let raceName = "";
+      let raceClass = "";
+      let prestigeName = "";
+      let prestigeClass = "";
+      let race = races2[queuedEvolution.userEvolutionTarget];
+      let isValdi = queuedEvolution.challenge_junker || race === races2.junker;
+      let isSludge = queuedEvolution.challenge_sludge || race === races2.sludge;
+      let isUltraSludge = queuedEvolution.challenge_ultra_sludge || race === races2.ultra_sludge;
+      let isHellspawn = queuedEvolution.challenge_warlord || race === races2.hellspawn;
+      const getRaceColor = (race2) => {
+        let suited = race2.getHabitability();
+        if (suited === 1) {
+          return "has-text-info";
+        } else if (suited === 0) {
+          return "has-text-danger";
+        } else {
+          return "has-text-warning";
+        }
+      };
+      let uniqPicked = isValdi + isSludge + isUltraSludge + isHellspawn;
+      if (uniqPicked > 1) {
+        raceName = "Valdi, Sludge and Hellspawn can not be combined!";
+        raceClass = "has-text-danger";
+      } else if (uniqPicked === 1) {
+        let name = isValdi ? races2.junker.name : isSludge ? races2.sludge.name : isUltraSludge ? races2.ultra_sludge.name : isHellspawn ? races2.hellspawn.name : "???";
+        if (race && race !== races2.junker && race !== races2.sludge && race !== races2.ultra_sludge) {
+          raceName = name + ", " + game2.loc(`genelab_genus_${race.genus}`);
+          raceClass = getRaceColor(race);
+        } else {
+          raceName = name + ", " + game2.loc(`genelab_genus_${queuedEvolution.userEvolutionGenus}`);
+          raceClass = getRaceColor(
+            Object.values(races2).find(
+              (r) => r.genus === queuedEvolution.userEvolutionGenus
+            )
+          );
+        }
+      } else if (queuedEvolution.userEvolutionTarget === "auto") {
+        raceName = "Auto Achievements";
+        raceClass = "has-text-advanced";
+      } else if (race) {
+        raceName = race.name;
+        raceClass = getRaceColor(race);
+        if (race.genus == "hybrid") {
+          if (game2.races[race.id].hybrid.includes(
+            queuedEvolution.userEvolutionGenus
+          )) {
+            raceName += ", " + game2.loc(`genelab_genus_${queuedEvolution.userEvolutionGenus}`);
+          } else {
+            raceName += ", " + game2.loc(`genelab_genus_${game2.races[race.id].hybrid[0]}`);
+          }
+        }
+      } else {
+        raceName = "Unrecognized race!";
+        raceClass = "has-text-danger";
+      }
+      let star = $2(
+        `#settings a.dropdown-item:contains("${game2.loc(
+          game2.global.settings.icon
+        )}") svg`
+      ).clone();
+      star.removeClass();
+      star.addClass("star" + getStarLevel2(queuedEvolution));
+      if (queuedEvolution.prestigeType !== "none") {
+        let prestige = prestigeTypes2.find(
+          (prest) => prest.val === queuedEvolution.prestigeType
+        );
+        if (prestige) {
+          prestigeName = `(${prestige.short_label ?? prestige.label})`;
+          prestigeClass = "has-text-info";
+        } else {
+          prestigeName = "Unrecognized prestige!";
+          prestigeClass = "has-text-danger";
+        }
+      }
+      let queueNode = $2(`
+          <tr id="script_evolution_${id}" value="${id}" class="script-draggable">
+            <td style="width:25%"><span class="${raceClass}">${raceName}</span> <span class="${prestigeClass}">${prestigeName}</span> ${star.prop("outerHTML") ?? getStarLevel2(queuedEvolution) - 1 + "*"}</td>
+            <td style="width:70%"><textarea class="textarea">${JSON.stringify(
+        queuedEvolution,
+        null,
+        4
+      )}</textarea></td>
+            <td style="width:5%"><a class="button is-dark is-small" style="width: 26px; height: 26px"><span>X</span></a></td>
+          </tr>`);
+      queueNode.find(".button").on("click", function() {
+        settingsRaw2.evolutionQueue.splice(id, 1);
+        updateSettingsFromState2();
+        updateEvolutionSettingsContent2();
+      });
+      queueNode.find(".textarea").on("change", function() {
+        try {
+          let queuedEvolution2 = JSON.parse(this.value);
+          settingsRaw2.evolutionQueue[id] = queuedEvolution2;
+          updateSettingsFromState2();
+          updateEvolutionSettingsContent2();
+        } catch (error) {
+          queueNode.find("td:eq(0)").html(`<span class="has-text-danger">${error}</span>`);
+        }
+      });
+      return queueNode;
+    }
+    function addEvolutionSettingImpl() {
+      let queuedEvolution = {};
+      for (let settingName of evolutionSettingsToStore2) {
+        let settingValue = settingsRaw2[settingName];
+        queuedEvolution[settingName] = settingValue;
+      }
+      let overridePrestige = $2("#script_evolution_prestige").first().val();
+      if (overridePrestige && overridePrestige !== "auto") {
+        queuedEvolution.prestigeType = overridePrestige;
+      }
+      let queueLength = settingsRaw2.evolutionQueue.push(queuedEvolution);
+      updateSettingsFromState2();
+      let tableBodyNode = $2("#script_evolutionQueueTable");
+      tableBodyNode.append(buildEvolutionQueueItem2(queueLength - 1));
+    }
+    function buildEvolutionSettings2(...args) {
+      const implementation = getOverride("buildEvolutionSettings") ?? buildEvolutionSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateRaceWarning2(...args) {
+      const implementation = getOverride("updateRaceWarning") ?? updateRaceWarningImpl;
+      return implementation.apply(this, args);
+    }
+    function updateEvolutionSettingsContent2(...args) {
+      const implementation = getOverride("updateEvolutionSettingsContent") ?? updateEvolutionSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    function buildEvolutionQueueItem2(...args) {
+      const implementation = getOverride("buildEvolutionQueueItem") ?? buildEvolutionQueueItemImpl;
+      return implementation.apply(this, args);
+    }
+    function addEvolutionSetting2(...args) {
+      const implementation = getOverride("addEvolutionSetting") ?? addEvolutionSettingImpl;
+      return implementation.apply(this, args);
+    }
+    return {
+      buildEvolutionSettings: buildEvolutionSettings2,
+      updateRaceWarning: updateRaceWarning2,
+      updateEvolutionSettingsContent: updateEvolutionSettingsContent2,
+      buildEvolutionQueueItem: buildEvolutionQueueItem2,
+      addEvolutionSetting: addEvolutionSetting2
+    };
+  }
+
+  // src/ui/planet-settings.ts
+  function createPlanetSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
+    const biomeList2 = liveObject(() => getDependency("biomeList"));
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
+    const document2 = liveObject(() => getDependency("document"));
+    const extraList2 = liveObject(() => getDependency("extraList"));
+    const game2 = liveObject(() => getDependency("game"));
+    const resetPlanetSettings2 = liveFunction(
+      () => getDependency("resetPlanetSettings")
+    );
+    const traitList2 = liveObject(() => getDependency("traitList"));
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildPlanetSettingsImpl() {
+      let sectionId = "planet";
+      let sectionName = "Planet Weighting";
+      let resetFunction = function() {
+        resetPlanetSettings2(true);
+        updateSettingsFromState2();
+        updatePlanetSettingsContent2();
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updatePlanetSettingsContent2
+      );
+    }
+    function updatePlanetSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_planetContent");
+      currentNode.empty().off("*");
+      currentNode.append(`
+          <span>Planet Weighting = Biome Weighting + Trait Weighting + (Extras Intensity * Extras Weightings)</span>
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:20%">Biome</th>
+              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
+              <th class="has-text-warning" style="width:20%">Trait</th>
+              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
+              <th class="has-text-warning" style="width:20%">Extra</th>
+              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
+            </tr>
+            <tbody id="script_planetTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = $2("#script_planetTableBody");
+      let newTableBodyText = "";
+      let tableSize = Math.max(
+        biomeList2.length,
+        traitList2.length,
+        extraList2.length
+      );
+      for (let i = 0; i < tableSize; i++) {
+        newTableBodyText += `<tr><td id="script_planet_${i}" style="width:20%"></td><td style="width:calc(40% / 3);border-right-width:1px"></td><td style="width:20%"></td><td style="width:calc(40% / 3);border-right-width:1px"></td><td style="width:20%"></td><td style="width:calc(40% / 3)"></td>/tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < tableSize; i++) {
+        let tableElement = $2("#script_planet_" + i);
+        if (i < biomeList2.length) {
+          tableElement.append(
+            buildTableLabel2(game2.loc("biome_" + biomeList2[i] + "_name"))
+          );
+          tableElement = tableElement.next();
+          addTableInput2(tableElement, "biome_w_" + biomeList2[i]);
+        } else {
+          tableElement = tableElement.next();
+        }
+        tableElement = tableElement.next();
+        if (i < traitList2.length) {
+          tableElement.append(
+            buildTableLabel2(i == 0 ? "None" : game2.loc("planet_" + traitList2[i]))
+          );
+          tableElement = tableElement.next();
+          addTableInput2(tableElement, "trait_w_" + traitList2[i]);
+        } else {
+          tableElement = tableElement.next();
+        }
+        tableElement = tableElement.next();
+        if (i < extraList2.length) {
+          tableElement.append(buildTableLabel2(extraList2[i]));
+          tableElement = tableElement.next();
+          addTableInput2(tableElement, "extra_w_" + extraList2[i]);
+        }
+      }
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildPlanetSettings2(...args) {
+      const implementation = getOverride("buildPlanetSettings") ?? buildPlanetSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updatePlanetSettingsContent2(...args) {
+      const implementation = getOverride("updatePlanetSettingsContent") ?? updatePlanetSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildPlanetSettings: buildPlanetSettings2, updatePlanetSettingsContent: updatePlanetSettingsContent2 };
+  }
+
+  // src/ui/trigger-settings.ts
+  function createTriggerSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const TriggerManager2 = liveObject(() => getDependency("TriggerManager"));
+    const argType2 = liveObject(() => getDependency("argType"));
+    const buildInputNode2 = liveFunction(() => getDependency("buildInputNode"));
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const checkTypes2 = liveObject(() => getDependency("checkTypes"));
+    const document2 = liveObject(() => getDependency("document"));
+    const overrideOnlyChecks2 = liveObject(
+      () => getDependency("overrideOnlyChecks")
+    );
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetTriggerSettings2 = liveFunction(
+      () => getDependency("resetTriggerSettings")
+    );
+    const retBools2 = liveObject(() => getDependency("retBools"));
+    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildTriggerSettingsImpl() {
+      let sectionId = "trigger";
+      let sectionName = "Trigger";
+      let resetFunction = function() {
+        resetTriggerSettings2(true);
+        updateSettingsFromState2();
+        updateTriggerSettingsContent2();
+        resetCheckbox2("autoTrigger");
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateTriggerSettingsContent2
+      );
+    }
+    function updateTriggerSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_triggerContent");
+      currentNode.empty().off("*");
+      currentNode.append(
+        '<div style="margin-top: 10px;"><button id="script_trigger_add" class="button">Add New Trigger</button></div>'
+      );
+      $2("#script_trigger_add").on("click", addTriggerSetting2);
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" colspan="3">Requirement</th>
+              <th class="has-text-warning" colspan="5">Action</th>
+            </tr>
+            <tr>
+              <th class="has-text-warning" style="width:16%">Type</th>
+              <th class="has-text-warning" style="width:18%">Value</th>
+              <th class="has-text-warning" style="width:6%" title="Numerical variables compared to this value using '>=', boolean variables - using '=='. String variables not currently supported by triggers.">Result</th>
+              <th class="has-text-warning" style="width:16%">Type</th>
+              <th class="has-text-warning" style="width:18%">Id</th>
+              <th class="has-text-warning" style="width:6%">Count</th>
+              <th style="width:20%"></th>
+            </tr>
+            <tbody id="script_triggerTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = $2("#script_triggerTableBody");
+      let newTableBodyText = "";
+      for (let i = 0; i < TriggerManager2.priorityList.length; i++) {
+        const trigger = TriggerManager2.priorityList[i];
+        newTableBodyText += `
+            <tr id="script_trigger_${trigger.seq}" value="${trigger.seq}" class="script-draggable">
+              <td style="width:16%"></td>
+              <td style="width:18%"></td>
+              <td style="width:6%"></td>
+              <td style="width:16%"></td>
+              <td style="width:18%"></td>
+              <td style="width:6%"></td>
+              <td style="width:20%"></td>
+            </tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < TriggerManager2.priorityList.length; i++) {
+        const trigger = TriggerManager2.priorityList[i];
+        buildTriggerRequirementType2(trigger);
+        buildTriggerRequirementId2(trigger);
+        buildTriggerRequirementCount2(trigger);
+        buildTriggerActionType2(trigger);
+        buildTriggerActionId2(trigger);
+        buildTriggerActionCount2(trigger);
+        buildTriggerSettingsColumn2(trigger);
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: sorterHelper2,
+        update: function() {
+          let triggerIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          for (let i = 0; i < triggerIds.length; i++) {
+            TriggerManager2.getTrigger(parseInt(triggerIds[i])).priority = i;
+          }
+          TriggerManager2.sortByPriority();
+          updateSettingsFromState2();
+        }
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function addTriggerSettingImpl() {
+      let trigger = TriggerManager2.AddTrigger(
+        "Boolean",
+        false,
+        1,
+        "research",
+        "tech-club",
+        0
+      );
+      updateSettingsFromState2();
+      let tableBodyNode = $2("#script_triggerTableBody");
+      let newTableBodyText = "";
+      newTableBodyText += `
+        <tr id="script_trigger_${trigger.seq}" value="${trigger.seq}" class="script-draggable">
+          <td style="width:16%"></td>
+          <td style="width:18%"></td>
+          <td style="width:6%"></td>
+          <td style="width:16%"></td>
+          <td style="width:18%"></td>
+          <td style="width:6%"></td>
+          <td style="width:20%"></td>
+        </tr>`;
+      tableBodyNode.append($2(newTableBodyText));
+      buildTriggerRequirementType2(trigger);
+      buildTriggerRequirementId2(trigger);
+      buildTriggerRequirementCount2(trigger);
+      buildTriggerActionType2(trigger);
+      buildTriggerActionId2(trigger);
+      buildTriggerActionCount2(trigger);
+      buildTriggerSettingsColumn2(trigger);
+    }
+    function buildTriggerRequirementTypeImpl(trigger) {
+      let triggerElement = $2("#script_trigger_" + trigger.seq).children().eq(0);
+      triggerElement.empty().off("*");
+      let types = Object.entries(checkTypes2).filter(
+        (c) => !overrideOnlyChecks2.includes(c[0]) || trigger.requirementType === c[0]
+      ).map(
+        ([id, type]) => `<option value="${id}" title="${type.desc}">${id.replace(/([A-Z])/g, " $1").trim()}</option>`
+      ).join();
+      let typeSelectNode = $2(`
+          <select style="width: 100%">
+            <option value = "chain" title = "This condition is met when above trigger is complete, always true for first trigger in list">Chain</option>
+            ${types}
+          </select>`);
+      typeSelectNode.val(trigger.requirementType);
+      triggerElement.append(typeSelectNode);
+      typeSelectNode.on("change", function() {
+        trigger.updateRequirementType(this.value);
+        buildTriggerRequirementId2(trigger);
+        buildTriggerRequirementCount2(trigger);
+        updateSettingsFromState2();
+      });
+      return;
+    }
+    function buildTriggerRequirementIdImpl(trigger) {
+      let triggerElement = $2("#script_trigger_" + trigger.seq).children().eq(1);
+      triggerElement.empty().off("*");
+      let check = checkTypes2[trigger.requirementType];
+      if (check) {
+        triggerElement.append(
+          buildInputNode2(
+            check.arg,
+            check.options,
+            trigger.requirementId,
+            function(result) {
+              trigger.requirementId = result;
+              trigger.complete = false;
+              updateSettingsFromState2();
+            }
+          )
+        );
+      }
+    }
+    function buildTriggerRequirementCountImpl(trigger) {
+      let triggerElement = $2("#script_trigger_" + trigger.seq).children().eq(2);
+      triggerElement.empty().off("*");
+      if (trigger.requirementType !== "Boolean" && checkTypes2[trigger.requirementType]) {
+        let retType = retBools2.includes(trigger.requirementType) ? "boolean" : "number";
+        triggerElement.append(
+          buildInputNode2(
+            retType,
+            null,
+            trigger.requirementCount,
+            function(result) {
+              trigger.requirementCount = Number(result);
+              trigger.complete = false;
+              updateSettingsFromState2();
+            }
+          )
+        );
+      }
+    }
+    function buildTriggerActionTypeImpl(trigger) {
+      let triggerElement = $2("#script_trigger_" + trigger.seq).children().eq(3);
+      triggerElement.empty().off("*");
+      let typeSelectNode = $2(`
+          <select style="width: 100%">
+            <option value = "research" title = "Research technology">Research</option>
+            <option value = "build" title = "Build buildings up to 'count' amount">Build</option>
+            <option value = "arpa" title = "Build projects up to 'count' amount">A.R.P.A.</option>
+          </select>`);
+      typeSelectNode.val(trigger.actionType);
+      triggerElement.append(typeSelectNode);
+      typeSelectNode.on("change", function() {
+        trigger.updateActionType(this.value);
+        buildTriggerActionId2(trigger);
+        buildTriggerActionCount2(trigger);
+        updateSettingsFromState2();
+      });
+      return;
+    }
+    function buildTriggerActionIdImpl(trigger) {
+      let triggerElement = $2("#script_trigger_" + trigger.seq).children().eq(4);
+      triggerElement.empty().off("*");
+      let argDef = trigger.actionType === "research" ? argType2.research : trigger.actionType === "build" ? argType2.building : trigger.actionType === "arpa" ? argType2.project : null;
+      if (argDef) {
+        triggerElement.append(
+          buildInputNode2(
+            argDef.arg,
+            argDef.options,
+            trigger.actionId,
+            function(result) {
+              trigger.actionId = result;
+              trigger.complete = false;
+              updateSettingsFromState2();
+            }
+          )
+        );
+      }
+    }
+    function buildTriggerActionCountImpl(trigger) {
+      let triggerElement = $2("#script_trigger_" + trigger.seq).children().eq(5);
+      triggerElement.empty().off("*");
+      if (trigger.actionType === "build" || trigger.actionType === "arpa") {
+        triggerElement.append(
+          buildInputNode2("number", null, trigger.actionCount, function(result) {
+            trigger.actionCount = Number(result);
+            trigger.complete = false;
+            updateSettingsFromState2();
+          })
+        );
+      }
+    }
+    function buildTriggerSettingsColumnImpl(trigger) {
+      let triggerElement = $2("#script_trigger_" + trigger.seq).children().eq(6);
+      triggerElement.empty().off("*");
+      let deleteTriggerButton = $2(
+        '<a class="button is-small" style="width: 26px; height: 26px"><span>X</span></a>'
+      );
+      triggerElement.append(deleteTriggerButton);
+      deleteTriggerButton.on("click", function() {
+        TriggerManager2.RemoveTrigger(trigger.seq);
+        updateSettingsFromState2();
+        updateTriggerSettingsContent2();
+      });
+      let duplicateTriggerButton = $2(
+        '<a class="button is-small" style="width: 26px; height: 26px"><span>&#9282;</span></a>'
+      );
+      triggerElement.append(duplicateTriggerButton);
+      duplicateTriggerButton.on("click", function() {
+        TriggerManager2.DuplicateTrigger(trigger.seq);
+        updateSettingsFromState2();
+        updateTriggerSettingsContent2();
+      });
+      let evalizeTriggerButton = $2(
+        '<a class="button is-small" style="width: 26px; height: 26px"><span>E</span></a>'
+      );
+      triggerElement.append(evalizeTriggerButton);
+      evalizeTriggerButton.on("click", function() {
+        TriggerManager2.EvalizeTrigger(trigger.seq);
+      });
+    }
+    function buildTriggerSettings2(...args) {
+      const implementation = getOverride("buildTriggerSettings") ?? buildTriggerSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateTriggerSettingsContent2(...args) {
+      const implementation = getOverride("updateTriggerSettingsContent") ?? updateTriggerSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    function addTriggerSetting2(...args) {
+      const implementation = getOverride("addTriggerSetting") ?? addTriggerSettingImpl;
+      return implementation.apply(this, args);
+    }
+    function buildTriggerRequirementType2(...args) {
+      const implementation = getOverride("buildTriggerRequirementType") ?? buildTriggerRequirementTypeImpl;
+      return implementation.apply(this, args);
+    }
+    function buildTriggerRequirementId2(...args) {
+      const implementation = getOverride("buildTriggerRequirementId") ?? buildTriggerRequirementIdImpl;
+      return implementation.apply(this, args);
+    }
+    function buildTriggerRequirementCount2(...args) {
+      const implementation = getOverride("buildTriggerRequirementCount") ?? buildTriggerRequirementCountImpl;
+      return implementation.apply(this, args);
+    }
+    function buildTriggerActionType2(...args) {
+      const implementation = getOverride("buildTriggerActionType") ?? buildTriggerActionTypeImpl;
+      return implementation.apply(this, args);
+    }
+    function buildTriggerActionId2(...args) {
+      const implementation = getOverride("buildTriggerActionId") ?? buildTriggerActionIdImpl;
+      return implementation.apply(this, args);
+    }
+    function buildTriggerActionCount2(...args) {
+      const implementation = getOverride("buildTriggerActionCount") ?? buildTriggerActionCountImpl;
+      return implementation.apply(this, args);
+    }
+    function buildTriggerSettingsColumn2(...args) {
+      const implementation = getOverride("buildTriggerSettingsColumn") ?? buildTriggerSettingsColumnImpl;
+      return implementation.apply(this, args);
+    }
+    return {
+      buildTriggerSettings: buildTriggerSettings2,
+      updateTriggerSettingsContent: updateTriggerSettingsContent2,
+      addTriggerSetting: addTriggerSetting2,
+      buildTriggerRequirementType: buildTriggerRequirementType2,
+      buildTriggerRequirementId: buildTriggerRequirementId2,
+      buildTriggerRequirementCount: buildTriggerRequirementCount2,
+      buildTriggerActionType: buildTriggerActionType2,
+      buildTriggerActionId: buildTriggerActionId2,
+      buildTriggerActionCount: buildTriggerActionCount2,
+      buildTriggerSettingsColumn: buildTriggerSettingsColumn2
+    };
+  }
+
+  // src/ui/research-settings.ts
+  function createResearchSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const addSettingsList2 = liveFunction(() => getDependency("addSettingsList"));
+    const addSettingsSelect2 = liveFunction(
+      () => getDependency("addSettingsSelect")
+    );
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const document2 = liveObject(() => getDependency("document"));
+    const game2 = liveObject(() => getDependency("game"));
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetResearchSettings2 = liveFunction(
+      () => getDependency("resetResearchSettings")
+    );
+    const techIds2 = liveObject(() => getDependency("techIds"));
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildResearchSettingsImpl() {
+      let sectionId = "research";
+      let sectionName = "Research";
+      let resetFunction = function() {
+        resetResearchSettings2(true);
+        updateSettingsFromState2();
+        updateResearchSettingsContent2();
+        resetCheckbox2("autoResearch");
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateResearchSettingsContent2
+      );
+    }
+    function updateResearchSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_researchContent");
+      currentNode.empty().off("*");
+      let theology1Options = [
+        {
+          val: "auto",
+          label: "Script Managed",
+          hint: "Picks Anthropology for MAD prestige, and Fanaticism for others. Achieve-worthy combos are exception, on such runs Fanaticism will be always picked."
+        },
+        {
+          val: "tech-anthropology",
+          label: game2.loc("tech_anthropology"),
+          hint: game2.loc("tech_anthropology_effect")
+        },
+        {
+          val: "tech-fanaticism",
+          label: game2.loc("tech_fanaticism"),
+          hint: game2.loc("tech_fanaticism_effect")
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "userResearchTheology_1",
+        "Target Theology 1",
+        "Theology 1 technology to research, have no effect after getting Transcendence perk",
+        theology1Options
+      );
+      let theology2Options = [
+        {
+          val: "auto",
+          label: "Script Managed",
+          hint: "Picks Deify for Ascension, Demonic Infusion, Apotheosis, AI Apocalypse, Terraform, Matrix, Retirement and Eden prestiges, or Study for others prestiges"
+        },
+        {
+          val: "tech-study",
+          label: game2.loc("tech_study"),
+          hint: game2.loc("tech_study_desc")
+        },
+        {
+          val: "tech-deify",
+          label: game2.loc("tech_deify"),
+          hint: game2.loc("tech_deify_desc")
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "userResearchTheology_2",
+        "Target Theology 2",
+        "Theology 2 technology to research",
+        theology2Options
+      );
+      addSettingsList2(
+        currentNode,
+        "researchIgnore",
+        "Ignored researches",
+        "Listed researches won't be purchased without manual input, or user defined trigger. On top of this list script will also ignore some other special techs, such as Limit Collider, Dark Energy Bomb, Exotic Infusion, etc.",
+        techIds2
+      );
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildResearchSettings2(...args) {
+      const implementation = getOverride("buildResearchSettings") ?? buildResearchSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateResearchSettingsContent2(...args) {
+      const implementation = getOverride("updateResearchSettingsContent") ?? updateResearchSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildResearchSettings: buildResearchSettings2, updateResearchSettingsContent: updateResearchSettingsContent2 };
+  }
+
+  // src/ui/war-settings.ts
+  function createWarSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const SpyManager2 = liveObject(() => getDependency("SpyManager"));
+    const addSettingsHeader12 = liveFunction(
+      () => getDependency("addSettingsHeader1")
+    );
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsSelect2 = liveFunction(
+      () => getDependency("addSettingsSelect")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const buildSettingsSection22 = liveFunction(
+      () => getDependency("buildSettingsSection2")
+    );
+    const document2 = liveObject(() => getDependency("document"));
+    const game2 = liveObject(() => getDependency("game"));
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetWarSettings2 = liveFunction(
+      () => getDependency("resetWarSettings")
+    );
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildWarSettingsImpl(parentNode, secondaryPrefix) {
+      let sectionId = "war";
+      let sectionName = "Foreign Affairs";
+      let resetFunction = function() {
+        resetWarSettings2(true);
+        updateSettingsFromState2();
+        updateWarSettingsContent2(secondaryPrefix);
+        resetCheckbox2("autoFight");
+      };
+      buildSettingsSection22(
+        parentNode,
+        secondaryPrefix,
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateWarSettingsContent2
+      );
+    }
+    function updateWarSettingsContentImpl(secondaryPrefix) {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2(`#script_${secondaryPrefix}warContent`);
+      currentNode.empty().off("*");
+      addSettingsHeader12(currentNode, "Foreign Powers");
+      addSettingsToggle2(
+        currentNode,
+        "foreignPacifist",
+        "Pacifist",
+        "Turns attacks off and on"
+      );
+      addSettingsToggle2(
+        currentNode,
+        "foreignUnification",
+        "Perform unification",
+        "Perform unification once all three powers are controlled. autoResearch should be enabled for this to work."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "foreignOccupyLast",
+        "Occupy last foreign power",
+        "Occupy last foreign power once other two are controlled, and unification is researched to speed up unification. Disable if you want annex\\purchase achievements."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "foreignForceSabotage",
+        "Sabotage foreign power when useful",
+        "Perform sabotage against current target if it's useful(power above 50), regardless of required power, and default action defined above"
+      );
+      addSettingsToggle2(
+        currentNode,
+        "foreignTrainSpy",
+        "Train spies",
+        "Train spies to use against foreign powers"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "foreignSpyMax",
+        "Maximum spies",
+        "Maximum spies per foreign power"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "foreignPowerRequired",
+        "Military Power to switch target",
+        "Switches to attack next foreign power once its power lowered down to this number. When exact numbers not know script tries to approximate it."
+      );
+      let policyOptions = [
+        { val: "Ignore", label: "Ignore", hint: "" },
+        ...Object.entries(SpyManager2.Types).map(
+          ([name, task]) => ({
+            val: name,
+            label: game2.loc("civics_spy_" + task.id),
+            hint: ""
+          })
+        ),
+        { val: "Occupy", label: "Occupy", hint: "" }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "foreignPolicyInferior",
+        "Inferior Power",
+        "Perform this against inferior foreign power, with military power equal or below given threshold. Complex actions includes required preparation - Annex and Purchase will incite and influence, Occupy will sabotage, until said options will be available.",
+        policyOptions
+      );
+      addSettingsSelect2(
+        currentNode,
+        "foreignPolicySuperior",
+        "Superior Power",
+        "Perform this against superior foreign power, with military power above given threshold. Complex actions includes required preparation - Annex and Purchase will incite and influence, Occupy will sabotage, until said options will be available.",
+        policyOptions
+      );
+      let rivalOptions = [
+        { val: "Ignore", label: "Ignore", hint: "Does nothing" },
+        {
+          val: "Influence",
+          label: "Alliance",
+          hint: "Influence rival up to best relations"
+        },
+        { val: "Sabotage", label: "War", hint: "Sabotage and plunder rival" },
+        {
+          val: "Betrayal",
+          label: "Betrayal",
+          hint: "Influence rival up to best relations, and start sabotaging. Once military power reached minimum - start plundering it"
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "foreignPolicyRival",
+        "Rival Power (The True Path)",
+        "Perform this against rival foreign power.",
+        rivalOptions
+      );
+      addSettingsHeader12(currentNode, "Campaigns");
+      addSettingsNumber2(
+        currentNode,
+        "foreignAttackLivingSoldiersPercent",
+        "Minimum percentage of alive soldiers for attack",
+        "Only attacks if you ALSO have the target battalion size of healthy soldiers available, so this setting will only take effect if your battalion does not include all of your soldiers"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "foreignAttackHealthySoldiersPercent",
+        "Minimum percentage of healthy soldiers for attack",
+        "Set to less than 100 to take advantage of being able to heal more soldiers in a game day than get wounded in a typical attack"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "foreignHireMercMoneyStoragePercent",
+        "Hire mercenary if money storage greater than percent",
+        "Hire a mercenary if remaining money after purchase will be greater than this percent"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "foreignHireMercCostLowerThanIncome",
+        "OR if cost lower than money earned in X seconds",
+        "Combines with the money storage percent setting to determine when to hire mercenaries"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "foreignHireMercDeadSoldiers",
+        "AND amount of dead soldiers above this number",
+        "Hire a mercenary only when current amount of dead soldiers above given number"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "foreignMinAdvantage",
+        "Minimum advantage",
+        "Minimum advantage to launch campaign, ignored during ambushes. 100% chance to win will be reached at approximately(influenced by traits and selected campaign) 75% advantage."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "foreignMaxAdvantage",
+        "Maximum advantage",
+        "Once campaign is selected, your battalion will be limited in size down to this advantage, reducing potential loses"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "foreignMaxSiegeBattalion",
+        "Maximum siege battalion",
+        "Maximum battalion for siege campaign. Only try to siege if it's possible with up to given amount of soldiers. Siege is expensive, if you'll be doing it with too big battalion it might be less profitable than other combat campaigns. This option does not applied to unifying sieges, it affect only looting."
+      );
+      let protectOptions = [
+        {
+          val: "never",
+          label: "Never",
+          hint: "No additional limits to battalion size. Always send maximum soldiers allowed with current Max Advantage."
+        },
+        {
+          val: "always",
+          label: "Always",
+          hint: "Limit battalions to sizes which will neven suffer any casualties in successful fights. You still will lose soldiers after failures, increasing minimum advantage can improve winning odds. This option designed to use with armored races favoring frequent attacks, with no approppriate build it may prevent any attacks from happening."
+        },
+        {
+          val: "auto",
+          label: "Auto",
+          hint: "Tries to maximize total number of attacks, alternating between full and safe attacks based on soldiers condition, to get most from both healing and recruiting."
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "foreignProtect",
+        "Protect soldiers",
+        "Configures safety of attacks. This option does not applies to unifying sieges, it affect only looting.",
+        protectOptions
+      );
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildWarSettings2(...args) {
+      const implementation = getOverride("buildWarSettings") ?? buildWarSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateWarSettingsContent2(...args) {
+      const implementation = getOverride("updateWarSettingsContent") ?? updateWarSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildWarSettings: buildWarSettings2, updateWarSettingsContent: updateWarSettingsContent2 };
+  }
+
+  // src/ui/hell-settings.ts
+  function createHellSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const addSettingsHeader12 = liveFunction(
+      () => getDependency("addSettingsHeader1")
+    );
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const buildSettingsSection22 = liveFunction(
+      () => getDependency("buildSettingsSection2")
+    );
+    const document2 = liveObject(() => getDependency("document"));
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetHellSettings2 = liveFunction(
+      () => getDependency("resetHellSettings")
+    );
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildHellSettingsImpl(parentNode, secondaryPrefix) {
+      let sectionId = "hell";
+      let sectionName = "Hell";
+      let resetFunction = function() {
+        resetHellSettings2(true);
+        updateSettingsFromState2();
+        updateHellSettingsContent2(secondaryPrefix);
+        resetCheckbox2("autoHell");
+      };
+      buildSettingsSection22(
+        parentNode,
+        secondaryPrefix,
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateHellSettingsContent2
+      );
+    }
+    function updateHellSettingsContentImpl(secondaryPrefix) {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2(`#script_${secondaryPrefix}hellContent`);
+      currentNode.empty().off("*");
+      addSettingsHeader12(currentNode, "Entering Hell");
+      addSettingsNumber2(
+        currentNode,
+        "hellHomeGarrison",
+        "Soldiers to stay out of hell",
+        "Home garrison maximum"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "hellMinSoldiers",
+        "Minimum soldiers to be available for hell (pull out if below)",
+        "Don't enter hell if not enough soldiers, or get out if already in"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "hellMinSoldiersPercent",
+        "Alive soldier percentage for entering hell",
+        "Don't enter hell if too many soldiers are dead, but don't get out"
+      );
+      addSettingsHeader12(currentNode, "Hell Garrison");
+      addSettingsToggle2(
+        currentNode,
+        "hellAssaultReserve",
+        "Always reserve hell troops to Secure the Pit",
+        "With this option enabled hell soldiers will be put to fortress once Secure the Pit is unlocked, to fulfil its costs. It makes saving resources and setting triggers for it easier, at cost of less efficient use of manpower."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "hellTargetFortressDamage",
+        "Target wall damage per siege (overestimates threat)",
+        "Actual damage will usually be lower due to patrols and drones"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "hellLowWallsMulti",
+        "Garrison bolster factor for damaged walls",
+        "Multiplies target defense rating by this when close to 0 wall integrity, half as much increase at half integrity"
+      );
+      addSettingsHeader12(currentNode, "Patrol Size");
+      addSettingsToggle2(
+        currentNode,
+        "hellHandlePatrolSize",
+        "Automatically adjust patrol size",
+        "Sets patrol attack rating based on current threat, lowers it depending on buildings, increases it to the minimum rating, and finally increases it based on dead soldiers. Handling patrol count has to be turned on."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "hellPatrolMinRating",
+        "Minimum patrol attack rating",
+        "Will never go below this"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "hellPatrolThreatPercent",
+        "Percent of current threat as base patrol rating",
+        "Demon encounters have a rating of 2 to 10 percent of current threat"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "hellPatrolDroneMod",
+        "&emsp;Lower Rating for each active Predator Drone by",
+        "Predators reduce threat before patrols fight"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "hellPatrolDroidMod",
+        "&emsp;Lower Rating for each active War Droid by",
+        "War Droids boost patrol attack rating by 1 or 2 soldiers depending on tech"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "hellPatrolBootcampMod",
+        "&emsp;Lower Rating for each Bootcamp by",
+        "Bootcamps help regenerate soldiers faster"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "hellBolsterPatrolRating",
+        "Increase patrol rating by up to this when soldiers die",
+        "Larger patrols are less effective, but also have fewer deaths"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "hellBolsterPatrolPercentTop",
+        "&emsp;Start increasing patrol rating at this home garrison fill percent",
+        "This is the higher number"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "hellBolsterPatrolPercentBottom",
+        "&emsp;Full patrol rating increase below this home garrison fill percent",
+        "This is the lower number"
+      );
+      addSettingsHeader12(currentNode, "Attractors");
+      addSettingsNumber2(
+        currentNode,
+        "hellAttractorBottomThreat",
+        "&emsp;All Attractors on below this threat",
+        "Turn more and more attractors off when getting nearer to the top threat. Auto Power needs to be on for this to work."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "hellAttractorTopThreat",
+        "&emsp;All Attractors off above this threat",
+        "Turn more and more attractors off when getting nearer to the top threat. Auto Power needs to be on for this to work."
+      );
+      addSettingsHeader12(currentNode, "Warlord Specific Settings");
+      addSettingsToggle2(
+        currentNode,
+        "warlordHandleFortress",
+        "Automatically attack enemy fortresses during Warlord",
+        "Attacks an enemy fortress when minions are above the specified threshold"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "warlordMinimumMinions",
+        "&emsp;Minimum minions required to attack an enemy fortress",
+        "Will not attack if there are fewer than this many minions"
+      );
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildHellSettings2(...args) {
+      const implementation = getOverride("buildHellSettings") ?? buildHellSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateHellSettingsContent2(...args) {
+      const implementation = getOverride("updateHellSettingsContent") ?? updateHellSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildHellSettings: buildHellSettings2, updateHellSettingsContent: updateHellSettingsContent2 };
+  }
+
+  // src/ui/fleet-settings.ts
+  function createFleetSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const FleetManagerOuter2 = liveObject(
+      () => getDependency("FleetManagerOuter")
+    );
+    const addSettingsHeader12 = liveFunction(
+      () => getDependency("addSettingsHeader1")
+    );
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsSelect2 = liveFunction(
+      () => getDependency("addSettingsSelect")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const addStandardHeading2 = liveFunction(
+      () => getDependency("addStandardHeading")
+    );
+    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
+    const buildSettingsSection22 = liveFunction(
+      () => getDependency("buildSettingsSection2")
+    );
+    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
+    const document2 = liveObject(() => getDependency("document"));
+    const galaxyRegions2 = liveObject(() => getDependency("galaxyRegions"));
+    const game2 = liveObject(() => getDependency("game"));
+    const openOverrideModal2 = liveFunction(
+      () => getDependency("openOverrideModal")
+    );
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetFleetSettings2 = liveFunction(
+      () => getDependency("resetFleetSettings")
+    );
+    const settings2 = liveObject(() => getDependency("settings"));
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildFleetSettingsImpl(parentNode, secondaryPrefix) {
+      let sectionId = "fleet";
+      let sectionName = "Fleet";
+      let resetFunction = function() {
+        resetFleetSettings2(true);
+        updateSettingsFromState2();
+        updateFleetSettingsContent2(secondaryPrefix);
+        resetCheckbox2("autoFleet");
+      };
+      buildSettingsSection22(
+        parentNode,
+        secondaryPrefix,
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateFleetSettingsContent2
+      );
+    }
+    function updateFleetSettingsContentImpl(secondaryPrefix) {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2(`#script_${secondaryPrefix}fleetContent`);
+      currentNode.empty().off("*");
+      updateFleetAndromeda2(currentNode, secondaryPrefix);
+      updateFleetOuter2(currentNode, secondaryPrefix);
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function updateFleetOuterImpl(currentNode, secondaryPrefix) {
+      addStandardHeading2(currentNode, "Outer Solar");
+      let shipOptions = [
+        { val: "none", label: "None", hint: "Ship building disabled" },
+        {
+          val: "user",
+          label: "Current design",
+          hint: "Build whatever currently set in Ship Yard"
+        },
+        {
+          val: "manual",
+          label: "Manual mode",
+          hint: "Assists accumulating resources needed for current blueprint, without building or deploying anything. It also might need tweaking prioritization settings to work."
+        },
+        {
+          val: "custom",
+          label: "Presets",
+          hint: "Build ships with components configured below. All components need to be unlocked, and resulting design should have enough power"
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "fleetOuterShips",
+        "Ships to build",
+        "Once avalable and affordable script will build ship of selected design, and send it to region with most piracy * weighting",
+        shipOptions
+      );
+      addSettingsNumber2(
+        currentNode,
+        "fleetOuterCrew",
+        "Minimum idle soldiers",
+        "Only build ships when amount of idle soldiers above give number"
+      );
+      addSettingsToggle2(
+        currentNode,
+        "fleetExploreTau",
+        "Explore Tau Ceti",
+        "Send explorer to Tau Ceti"
+      );
+      addSettingsHeader12(currentNode, "Fighter");
+      for (let [type, parts] of Object.entries(
+        FleetManagerOuter2.ShipConfig
+      )) {
+        let partOptions = parts.map((id) => ({
+          val: id,
+          label: game2.loc(`outer_shipyard_${type}_${id}`)
+        }));
+        addSettingsSelect2(
+          currentNode,
+          `fleet_outer_${type}`,
+          game2.loc(`outer_shipyard_${type}`),
+          "Preset ship component",
+          partOptions
+        );
+      }
+      addSettingsHeader12(currentNode, "Scout");
+      for (let [type, parts] of Object.entries(
+        FleetManagerOuter2.ShipConfig
+      )) {
+        let partOptions = parts.map((id) => ({
+          val: id,
+          label: game2.loc(`outer_shipyard_${type}_${id}`)
+        }));
+        addSettingsSelect2(
+          currentNode,
+          `fleet_scout_${type}`,
+          game2.loc(`outer_shipyard_${type}`),
+          "Preset ship component",
+          partOptions
+        );
+      }
+      currentNode.append(`
+          <table style="width:100%; text-align: left">
+            <tr>
+              <th class="has-text-warning" style="width:35%">Region</th>
+              <th class="has-text-warning" style="width:20%" title="Weighting determines order of ships dispatching, regions with higher weighting will be get ships sooner">Weighting</th>
+              <th class="has-text-warning" style="width:20%" title="Desired protection from syndicate, trying to reach 100%(1.0) defense with full uptime might be wasteful due to excesses and fluctuations">Defend</th>
+              <th class="has-text-warning" style="width:20%" title="Amounts of scouts to dispatch">Scouts</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_${secondaryPrefix}fleetOuterTable"></tbody>
+          </table>`);
+      let tableBodyNode = $2(`#script_${secondaryPrefix}fleetOuterTable`);
+      let newTableBodyText = "";
+      for (let reg of FleetManagerOuter2.Regions) {
+        newTableBodyText += `<tr><td id="script_${secondaryPrefix}fleet_${reg}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let reg of FleetManagerOuter2.Regions) {
+        let fleetElement = $2(`#script_${secondaryPrefix}fleet_${reg}`);
+        let nameRef = game2.actions.space[reg].info.name;
+        let gameName = typeof nameRef === "function" ? nameRef() : nameRef;
+        let label = reg.split("_").slice(1).map((n) => n.charAt(0).toUpperCase() + n.slice(1)).join(" ");
+        if (label !== gameName) {
+          label += ` (${gameName})`;
+        }
+        fleetElement.append(buildTableLabel2(label));
+        fleetElement = fleetElement.next();
+        addTableInput2(fleetElement, "fleet_outer_pr_" + reg);
+        fleetElement = fleetElement.next();
+        addTableInput2(fleetElement, "fleet_outer_def_" + reg);
+        fleetElement = fleetElement.next();
+        addTableInput2(fleetElement, "fleet_outer_sc_" + reg);
+      }
+    }
+    function updateFleetAndromedaImpl(currentNode, secondaryPrefix) {
+      addStandardHeading2(currentNode, "Andromeda");
+      addSettingsToggle2(
+        currentNode,
+        "fleetMaxCover",
+        "Maximize protection of prioritized systems",
+        "Adjusts ships distribution to fully supress piracy in prioritized regions. Some potential defense will be wasted, as it will use big ships to cover small holes, when it doesn't have anything fitting better. This option is not required: all your dreadnoughts still will be used even without this option."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "fleetCrewReclaim",
+        "Reclaim crews of surplus ships",
+        "Power down combat ships which are not needed to fully supress piracy, releasing their crews back to the workforce. Ships are powered back up when coverage requires them. Inactive while fleet is being accumulated for an assault mission. Surplus ships won't be parked at Gorddon for the Symposium bonus while this is enabled."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "fleetEmbassyKnowledge",
+        "Minimum knowledge for Embassy",
+        "Building Embassy increases maximum piracy up to 100, script won't Auto Build it until this knowledge cap is reached."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "fleetAlienGiftKnowledge",
+        "Minimum knowledge for Alien Gift",
+        "Researching Alien Gift increases maximum piracy up to 250, script won't Auto Research it until this knowledge cap is reached."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "fleetAlien2Knowledge",
+        "Minimum knowledge for Alien 2 Assault",
+        "Assaulting Alien 2 increases maximum piracy up to 500, script won't do it until this knowledge cap is reached. Regardless of set value it won't ever try to assault until you have big enough fleet to do it without loses."
+      );
+      let alien2AssaultOptions = [
+        {
+          val: "none",
+          label: "No Losses",
+          hint: "Min fleet strength 650. No losses."
+        },
+        {
+          val: "suicide",
+          label: "Suicide Mission",
+          hint: "Attack as soon as we hit 400 fleet rating. There will be losses."
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "fleetAlien2Loses",
+        "Alien 2 Mission",
+        "Assault Alien 2 when chosen outcome is achievable. You should really keep the default, unless you're speed running and want to take it out ASAP with losses.",
+        alien2AssaultOptions
+      );
+      let assaultOptions = [
+        {
+          val: "ignore",
+          label: "Manual assault",
+          hint: "Won't ever launch assault mission on Chthonian"
+        },
+        {
+          val: "high",
+          label: "High casualties",
+          hint: "Unlock Chthonian using mixed fleet, high casualties (1250+ total fleet power, 500 will be lost)"
+        },
+        {
+          val: "avg",
+          label: "Average casualties",
+          hint: "Unlock Chthonian using mixed fleet, average casualties (2500+ total fleet power, 160 will be lost)"
+        },
+        {
+          val: "low",
+          label: "Low casualties",
+          hint: "Unlock Chthonian using mixed fleet, low casualties (4500+ total fleet power, 80 will be lost)"
+        },
+        {
+          val: "frigate",
+          label: "Frigate",
+          hint: "Unlock Chthonian loosing Frigate ship(s) (4500+ total fleet power, suboptimal for banana\\instinct runs)"
+        },
+        {
+          val: "dread",
+          label: "Dreadnought",
+          hint: "Unlock Chthonian with Dreadnought suicide mission"
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "fleetChthonianLoses",
+        "Chthonian Mission",
+        "Assault Chthonian when chosen outcome is achievable. Mixed fleet formed to clear mission with minimum possible wasted ships, e.g. for low causlities it can sacriface 8 scouts, or 2 corvettes and 2 scouts, or frigate, and such. Whatever will be first available. It also takes in account perks and challenges, adjusting fleet accordingly.",
+        assaultOptions
+      );
+      currentNode.append(`
+          <table style="width:100%; text-align: left">
+            <tr>
+              <th class="has-text-warning" style="width:95%">Region</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_${secondaryPrefix}fleetTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = $2(`#script_${secondaryPrefix}fleetTableBody`);
+      let priorityRegions = galaxyRegions2.slice().sort(
+        (a, b) => settingsRaw2["fleet_pr_" + a] - settingsRaw2["fleet_pr_" + b]
+      );
+      for (let i = 0; i < priorityRegions.length; i++) {
+        const settingName = `fleet_pr_${priorityRegions[i]}`;
+        const rowNode = $2(`
+              <tr value="${priorityRegions[i]}" class="script-draggable script_bg_${settingName}">
+                <td id="script_${secondaryPrefix}fleet_${priorityRegions[i]}" style="width:95%"></td>
+                <td style="width:5%">
+                  <span class="script-lastcolumn"></span>
+                </td>
+              </tr>`);
+        rowNode.toggleClass(
+          "inactive-row",
+          Boolean(settingsRaw2.overrides[settingName])
+        ).on(
+          "click",
+          {
+            label: `Andromeda region priority (${settingName})`,
+            name: settingName,
+            type: "number"
+          },
+          openOverrideModal2
+        );
+        tableBodyNode.append(rowNode);
+      }
+      for (let i = 0; i < galaxyRegions2.length; i++) {
+        let fleetElement = $2(
+          `#script_${secondaryPrefix}fleet_${galaxyRegions2[i]}`
+        );
+        let nameRef = galaxyRegions2[i] === "gxy_alien1" ? "Alien 1 System" : galaxyRegions2[i] === "gxy_alien2" ? "Alien 2 System" : game2.actions.galaxy[galaxyRegions2[i]].info.name;
+        fleetElement.append(
+          buildTableLabel2(typeof nameRef === "function" ? nameRef() : nameRef)
+        );
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: sorterHelper2,
+        update: function() {
+          let regionIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          for (let i = 0; i < regionIds.length; i++) {
+            settingsRaw2["fleet_pr_" + regionIds[i]] = i;
+          }
+          updateSettingsFromState2();
+          if (settings2.showSettings && secondaryPrefix) {
+            updateFleetSettingsContent2("");
+          }
+        }
+      });
+    }
+    function buildFleetSettings2(...args) {
+      const implementation = getOverride("buildFleetSettings") ?? buildFleetSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateFleetSettingsContent2(...args) {
+      const implementation = getOverride("updateFleetSettingsContent") ?? updateFleetSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    function updateFleetOuter2(...args) {
+      const implementation = getOverride("updateFleetOuter") ?? updateFleetOuterImpl;
+      return implementation.apply(this, args);
+    }
+    function updateFleetAndromeda2(...args) {
+      const implementation = getOverride("updateFleetAndromeda") ?? updateFleetAndromedaImpl;
+      return implementation.apply(this, args);
+    }
+    return {
+      buildFleetSettings: buildFleetSettings2,
+      updateFleetSettingsContent: updateFleetSettingsContent2,
+      updateFleetOuter: updateFleetOuter2,
+      updateFleetAndromeda: updateFleetAndromeda2
+    };
+  }
+
+  // src/ui/mech-settings.ts
+  function createMechSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const MechManager2 = liveObject(() => getDependency("MechManager"));
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsSelect2 = liveFunction(
+      () => getDependency("addSettingsSelect")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const addStandardHeading2 = liveFunction(
+      () => getDependency("addStandardHeading")
+    );
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const calculateMechStats2 = liveFunction(
+      () => getDependency("calculateMechStats")
+    );
+    const document2 = liveObject(() => getDependency("document"));
+    const game2 = liveObject(() => getDependency("game"));
+    const removeMechInfo2 = liveFunction(() => getDependency("removeMechInfo"));
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetMechSettings2 = liveFunction(
+      () => getDependency("resetMechSettings")
+    );
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildMechSettingsImpl() {
+      let sectionId = "mech";
+      let sectionName = "Mech & Spire";
+      let resetFunction = function() {
+        resetMechSettings2(true);
+        updateSettingsFromState2();
+        updateMechSettingsContent2();
+        resetCheckbox2("autoMech");
+        removeMechInfo2();
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateMechSettingsContent2
+      );
+    }
+    function updateMechSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_mechContent");
+      currentNode.empty().off("*");
+      let scrapOptions = [
+        {
+          val: "none",
+          label: "None",
+          hint: "Nothing will be scrapped automatically"
+        },
+        {
+          val: "single",
+          label: "Full bay",
+          hint: "Scrap mechs only when mech bay is full, and script need more room to build mechs"
+        },
+        {
+          val: "all",
+          label: "All inefficient",
+          hint: "Scrap all inefficient mechs immediately, using refounded resources to build better ones"
+        },
+        {
+          val: "mixed",
+          label: "Excess inefficient",
+          hint: "Scrap as much inefficient mechs as possible, trying to preserve just enough of old mechs to fill bay to max by the time when next floor will be reached, calculating threshold based on progress speed and resources incomes"
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "mechScrap",
+        "Scrap mechs",
+        "Configures what will be scrapped. Infernal mechs won't ever be scrapped.",
+        scrapOptions
+      );
+      addSettingsNumber2(
+        currentNode,
+        "mechScrapEfficiency",
+        "Scrap efficiency",
+        "Scrap mechs only when '((OldMechRefund / NewMechCost) / (OldMechDamage / NewMechDamage))' more than given number.&#xA;For the cases when exchanged mechs have same size(1/3 refund) it means that with 1 eff. script allowed to scrap mechs under 33.3%. 1.5 eff. - under 22.2%, 2 eff. - under 16.6%, 0.5 eff. - under 66.6%, 0 eff. - under 100%, etc.&#xA;Efficiency below '1' is not recommended, unless scrap set to 'Full bay', as it's a breakpoint when refunded resources can immidiately compensate lost damage, resulting with best damage growth rate.&#xA;Efficiency above '1' is useful to save resources for more desperate times, or to compensate low soul gems income."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "mechCollectorValue",
+        "Collector value",
+        "Collectors can't be directly compared with combat mechs, having no firepower. Script will assume that one collector/size is equal to this amount of scout/size. If you feel that script is too reluctant to scrap old collectors - you can decrease this value. Or increase, to make them more persistant. 1 value - 50% collector equial to 50% scout, 0.5 value - 50% collector equial to 25% scout, 2 value - 50% collector equial to 100% scout, etc."
+      );
+      let buildOptions = [
+        {
+          val: "none",
+          label: "None",
+          hint: "Nothing will be build automatically"
+        },
+        {
+          val: "random",
+          label: "Random good",
+          hint: "Build random mech with size chosen below, and best possible efficiency"
+        },
+        {
+          val: "user",
+          label: "Current design",
+          hint: "Build whatever currently set in Mech Lab"
+        }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "mechBuild",
+        "Build mechs",
+        "Configures what will be built. Infernal mechs won't ever be built.",
+        buildOptions
+      );
+      let sizeOptions = [
+        {
+          val: "auto",
+          label: "Damage Per Size",
+          hint: "Select affordable mech with most damage per size on current floor"
+        },
+        {
+          val: "gems",
+          label: "Damage Per Gems",
+          hint: "Select affordable mech with most damage per gems on current floor"
+        },
+        {
+          val: "supply",
+          label: "Damage Per Supply",
+          hint: "Select affordable mech with most damage per supply on current floor"
+        },
+        ...MechManager2.Size.map((id) => ({
+          val: id,
+          label: game2.loc(`portal_mech_size_${id}`),
+          hint: game2.loc(`portal_mech_size_${id}_desc`)
+        }))
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "mechSize",
+        "Preferred mech size",
+        "Size of random mechs",
+        sizeOptions
+      );
+      addSettingsSelect2(
+        currentNode,
+        "mechSizeGravity",
+        "Gravity mech size",
+        "Override preferred size with this on floors with high gravity",
+        sizeOptions
+      );
+      let specialOptions = [
+        {
+          val: "always",
+          label: "Always",
+          hint: "Add special equipment to all mechs"
+        },
+        {
+          val: "prefered",
+          label: "Preferred",
+          hint: "Add special equipment when it doesn't reduce efficiency for current floor"
+        },
+        {
+          val: "random",
+          label: "Random",
+          hint: "Special equipment will have same chance to be added as all others"
+        },
+        { val: "never", label: "Never", hint: "Never add special equipment" }
+      ];
+      addSettingsSelect2(
+        currentNode,
+        "mechSpecial",
+        "Special mechs",
+        "Configures special equip",
+        specialOptions
+      );
+      addSettingsNumber2(
+        currentNode,
+        "mechWaygatePotential",
+        "Maximum mech potential for Waygate",
+        "Fight Demon Lord only when current mech team potential below given amount. Full bay of best mechs will have `1` potential. Damage against Demon Lord does not affected by floor modifiers, all mechs always does 100% damage to him. Thus it's most time-efficient to fight him at times when mechs can't make good progress against regular monsters, and waiting for rebuilding. Auto Power needs to be on for this to work."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "mechMinSupply",
+        "Minimum supply income",
+        "Build collectors if current supply income below given number"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "mechMaxCollectors",
+        "Maximum collectors ratio",
+        "Limiter for above option, maximum space used by collectors. 0.5 means up to 50% of total bay capacity will be dedicated to collectors, and such."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "mechSaveSupplyRatio",
+        "Save up supplies for next floor",
+        "Ratio of supplies to save up for next floor. Script will stop spending supplies on new mechs when it estimates that by the time when floor will be cleared you'll be under this supply ratio. That allows build bunch of new mechs suited for next enemy right after entering new floor. With 1 value script will try to start new floors with full supplies, 0.5 - with half, 0 - any, effectively disabling this option, etc."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "mechScouts",
+        "Minimum scouts ratio",
+        "Scouts compensate terrain penalty of suboptimal mechs. Build them up to this ratio."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "mechInfernalCollector",
+        "Build infernal collectors",
+        "Infernal collectors have incresed supply cost, and payback time, but becomes more profitable after ~30 minutes of uptime."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "mechScoutsRebuild",
+        "Rebuild scouts",
+        "Scouts provides full bonus to other mechs even being infficient, this option prevent rebuilding them saving resources."
+      );
+      addSettingsToggle2(
+        currentNode,
+        "mechFillBay",
+        "Build smaller mechs when preferred not available",
+        "Build smaller mechs when preferred size can't be used due to low remaining bay space, or supplies cap"
+      );
+      addSettingsToggle2(
+        currentNode,
+        "buildingMechsFirst",
+        "Build spire buildings only with full bay",
+        "Fill mech bays up to current limit before spending resources on additional spire buildings"
+      );
+      addSettingsToggle2(
+        currentNode,
+        "mechBaysFirst",
+        "Scrap mechs only after building maximum bays",
+        "Scrap old mechs only when no new bays and purifiers can be builded"
+      );
+      addStandardHeading2(currentNode, "Mech Stats");
+      let statsControls = $2(
+        `<div style="margin-top: 5px; display: inline-flex;"></div>`
+      );
+      Object.entries({
+        Compact: true,
+        Efficient: true,
+        Special: true,
+        Gravity: false
+      }).forEach(([option, value]) => {
+        statsControls.append(`
+              <label class="switch" title="This switch have no ingame effect, and used to configure calculator below">
+                <input id="script_mechStats${option}" type="checkbox"${value ? " checked" : ""}>
+                <span class="check"></span><span style="margin-left: 10px;">${option}</span>
+              </label>`);
+      });
+      statsControls.append(`
+          <label class="switch" title="This input have no ingame effect, and used to configure calculator below">
+            <input id="script_mechStatsScouts" class="input is-small" style="height: 25px; width: 50px" type="text" value="0">
+            <span style="margin-left: 10px;">Scouts</span>
+          </label>`);
+      statsControls.on("input", calculateMechStats2);
+      currentNode.append(statsControls);
+      currentNode.append(
+        `<table class="selectable"><tbody id="script_mechStatsTable"><tbody></table>`
+      );
+      calculateMechStats2();
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildMechSettings2(...args) {
+      const implementation = getOverride("buildMechSettings") ?? buildMechSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateMechSettingsContent2(...args) {
+      const implementation = getOverride("updateMechSettingsContent") ?? updateMechSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildMechSettings: buildMechSettings2, updateMechSettingsContent: updateMechSettingsContent2 };
+  }
+
+  // src/ui/ejector-settings.ts
+  function createEjectorSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const EjectManager2 = liveObject(() => getDependency("EjectManager"));
+    const NaniteManager2 = liveObject(() => getDependency("NaniteManager"));
+    const SupplyManager2 = liveObject(() => getDependency("SupplyManager"));
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsSelect2 = liveFunction(
+      () => getDependency("addSettingsSelect")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const addTableToggle2 = liveFunction(() => getDependency("addTableToggle"));
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
+    const document2 = liveObject(() => getDependency("document"));
+    const removeEjectToggles2 = liveFunction(
+      () => getDependency("removeEjectToggles")
+    );
+    const removeSupplyToggles2 = liveFunction(
+      () => getDependency("removeSupplyToggles")
+    );
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetEjectorSettings2 = liveFunction(
+      () => getDependency("resetEjectorSettings")
+    );
+    const resources2 = liveObject(() => getDependency("resources"));
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildEjectorSettingsImpl() {
+      let sectionId = "ejector";
+      let sectionName = "Ejector, Supply & Nanite";
+      let resetFunction = function() {
+        resetEjectorSettings2(true);
+        updateSettingsFromState2();
+        updateEjectorSettingsContent2();
+        resetCheckbox2("autoEject", "autoSupply", "autoNanite");
+        removeEjectToggles2();
+        removeSupplyToggles2();
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateEjectorSettingsContent2
+      );
+    }
+    function updateEjectorSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_ejectorContent");
+      currentNode.empty().off("*");
+      let spendOptions = [
+        { val: "cap", label: "Capped", hint: "Use capped resources" },
+        { val: "excess", label: "Excess", hint: "Use excess resources" },
+        {
+          val: "all",
+          label: "All",
+          hint: "Use all resources. This option can prevent script from progressing, and intended to use with additional conditions."
+        },
+        {
+          val: "mixed",
+          label: "Capped > Excess",
+          hint: "Use capped resources first, switching to excess resources when capped alone is not enough."
+        },
+        {
+          val: "full",
+          label: "Capped > Excess > All",
+          hint: "Use capped first, then excess, then everything else. Same as 'All' option can be potentialy dungerous."
+        }
+      ];
+      let spendDesc = "Configures threshold when script will be allowed to use resources. With any option script will try to use most expensive of allowed resources within selected group. Craftables, when enabled, always use excess amount as threshold, having no cap.";
+      addSettingsSelect2(
+        currentNode,
+        "ejectMode",
+        "Eject mode",
+        spendDesc,
+        spendOptions
+      );
+      addSettingsSelect2(
+        currentNode,
+        "supplyMode",
+        "Supply mode",
+        spendDesc,
+        spendOptions
+      );
+      addSettingsSelect2(
+        currentNode,
+        "naniteMode",
+        "Nanite mode",
+        spendDesc,
+        spendOptions
+      );
+      addSettingsToggle2(
+        currentNode,
+        "prestigeWhiteholeStabiliseMass",
+        "Stabilize blackhole",
+        "Stabilizes the blackhole with exotic materials, disabled on whitehole runs"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "prestigeWhiteholeStabiliseCooldown",
+        "Cooldown between stabilizes",
+        "Waits this many seconds between stabilizes. Stabilizing too frequently may cause significant lag in late game due to frequent full page redraws. Set to 0 to disable cooldown."
+      );
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:20%">Resource</th>
+              <th class="has-text-warning" style="width:20%">Atomic Mass</th>
+              <th class="has-text-warning" style="width:10%">Eject</th>
+              <th class="has-text-warning" style="width:10%">Nanite</th>
+              <th class="has-text-warning" style="width:30%">Supply Value</th>
+              <th class="has-text-warning" style="width:10%">Supply</th>
+            </tr>
+            <tbody id="script_ejectorTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = $2("#script_ejectorTableBody");
+      let newTableBodyText = "";
+      let tabResources = [];
+      for (let id in resources2) {
+        let resource = resources2[id];
+        if (EjectManager2.isConsumable(resource) || SupplyManager2.isConsumable(resource) || NaniteManager2.isConsumable(resource)) {
+          tabResources.push(resource);
+          newTableBodyText += `<tr><td id="script_eject_${resource.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:30%"></td><td style="width:10%"></td></tr>`;
+        }
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < tabResources.length; i++) {
+        let resource = tabResources[i];
+        let ejectElement = $2("#script_eject_" + resource.id);
+        let color = resource === resources2.Elerium || resource === resources2.Infernite ? "has-text-caution" : resource.isCraftable() ? "has-text-danger" : !resource.is.tradable ? "has-text-advanced" : "has-text-info";
+        ejectElement.append(buildTableLabel2(resource.name, "", color));
+        ejectElement = ejectElement.next();
+        if (resource.atomicMass > 0) {
+          ejectElement.append(
+            `<span class="mass"><span class="has-text-warning">${resource.atomicMass}</span> kt</span>`
+          );
+        }
+        ejectElement = ejectElement.next();
+        if (EjectManager2.isConsumable(resource)) {
+          addTableToggle2(ejectElement, "res_eject" + resource.id);
+        }
+        ejectElement = ejectElement.next();
+        if (NaniteManager2.isConsumable(resource)) {
+          addTableToggle2(ejectElement, "res_nanite" + resource.id);
+        }
+        if (SupplyManager2.isConsumable(resource)) {
+          ejectElement = ejectElement.next();
+          ejectElement.append(
+            `<span class="mass">Export <span class="has-text-caution">${SupplyManager2.supplyOut(
+              resource.id
+            )}</span>, Gain <span class="has-text-success">${SupplyManager2.supplyIn(
+              resource.id
+            )}</span></span>`
+          );
+          ejectElement = ejectElement.next();
+          addTableToggle2(ejectElement, "res_supply" + resource.id);
+        }
+      }
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildEjectorSettings2(...args) {
+      const implementation = getOverride("buildEjectorSettings") ?? buildEjectorSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateEjectorSettingsContent2(...args) {
+      const implementation = getOverride("updateEjectorSettingsContent") ?? updateEjectorSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildEjectorSettings: buildEjectorSettings2, updateEjectorSettingsContent: updateEjectorSettingsContent2 };
+  }
+
+  // src/ui/market-settings.ts
+  function createMarketSettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const MarketManager2 = liveObject(() => getDependency("MarketManager"));
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const addStandardHeading2 = liveFunction(
+      () => getDependency("addStandardHeading")
+    );
+    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
+    const addTableToggle2 = liveFunction(() => getDependency("addTableToggle"));
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
+    const document2 = liveObject(() => getDependency("document"));
+    const poly2 = liveObject(() => getDependency("poly"));
+    const removeMarketToggles2 = liveFunction(
+      () => getDependency("removeMarketToggles")
+    );
+    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
+    const resetMarketSettings2 = liveFunction(
+      () => getDependency("resetMarketSettings")
+    );
+    const resources2 = liveObject(() => getDependency("resources"));
+    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildMarketSettingsImpl() {
+      let sectionId = "market";
+      let sectionName = "Market";
+      let resetFunction = function() {
+        resetMarketSettings2(true);
+        updateSettingsFromState2();
+        updateMarketSettingsContent2();
+        resetCheckbox2("autoMarket", "autoGalaxyMarket");
+        removeMarketToggles2();
+      };
+      buildSettingsSection3(
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateMarketSettingsContent2
+      );
+    }
+    function updateMarketSettingsContentImpl() {
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentNode = $2("#script_marketContent");
+      currentNode.empty().off("*");
+      addSettingsNumber2(
+        currentNode,
+        "minimumMoney",
+        "Manual trade minimum money",
+        "Minimum money to keep after bulk buying"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "minimumMoneyPercentage",
+        "Manual trade minimum money percentage",
+        "Minimum percentage of money to keep after bulk buying"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "tradeRouteMinimumMoneyPerSecond",
+        "Trade minimum money /s",
+        "Uses the highest per second amount of these two values. Will trade for resources until this minimum money per second amount is hit"
+      );
+      addSettingsNumber2(
+        currentNode,
+        "tradeRouteMinimumMoneyPercentage",
+        "Trade minimum money percentage /s",
+        "Uses the highest per second amount of these two values. Will trade for resources until this percentage of your money per second amount is hit"
+      );
+      addSettingsToggle2(
+        currentNode,
+        "tradeRouteSellExcess",
+        "Sell excess resources",
+        "With this option enabled script will be allowed to sell resources above amounts needed for constructions or researches, without it script sell only capped resources. As side effect boughts will also be limited to that amounts, to avoid 'buy up to cap -> sell excess' loops."
+      );
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" colspan="1"></th>
+              <th class="has-text-warning" colspan="4">Manual Trades</th>
+              <th class="has-text-warning" colspan="4">Trade Routes</th>
+              <th class="has-text-warning" colspan="1"></th>
+            </tr>
+            <tr>
+              <th class="has-text-warning" style="width:15%">Resource</th>
+              <th class="has-text-warning" style="width:10%">Buy</th>
+              <th class="has-text-warning" style="width:10%">Ratio</th>
+              <th class="has-text-warning" style="width:10%">Sell</th>
+              <th class="has-text-warning" style="width:10%">Ratio</th>
+              <th class="has-text-warning" style="width:10%">In</th>
+              <th class="has-text-warning" style="width:10%">Away</th>
+              <th class="has-text-warning" style="width:10%">Weighting</th>
+              <th class="has-text-warning" style="width:10%">Priority</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_marketTableBody"></tbody>
+          </table>`);
+      let tableBodyNode = $2("#script_marketTableBody");
+      let newTableBodyText = "";
+      for (let i = 0; i < MarketManager2.priorityList.length; i++) {
+        const resource = MarketManager2.priorityList[i];
+        newTableBodyText += `<tr value="${resource.id}" class="script-draggable"><td id="script_market_${resource.id}" style="width:15%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%;border-right-width:1px"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < MarketManager2.priorityList.length; i++) {
+        const resource = MarketManager2.priorityList[i];
+        let marketElement = $2("#script_market_" + resource.id);
+        marketElement.append(buildTableLabel2(resource.name));
+        marketElement = marketElement.next();
+        addTableToggle2(marketElement, "buy" + resource.id);
+        marketElement = marketElement.next();
+        addTableInput2(marketElement, "res_buy_r_" + resource.id);
+        marketElement = marketElement.next();
+        addTableToggle2(marketElement, "sell" + resource.id);
+        marketElement = marketElement.next();
+        addTableInput2(marketElement, "res_sell_r_" + resource.id);
+        marketElement = marketElement.next();
+        addTableToggle2(marketElement, "res_trade_buy_" + resource.id);
+        marketElement = marketElement.next();
+        addTableToggle2(marketElement, "res_trade_sell_" + resource.id);
+        marketElement = marketElement.next();
+        addTableInput2(marketElement, "res_trade_w_" + resource.id);
+        marketElement = marketElement.next();
+        addTableInput2(marketElement, "res_trade_p_" + resource.id);
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: sorterHelper2,
+        update: function() {
+          let marketIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          for (let i = 0; i < marketIds.length; i++) {
+            settingsRaw2["res_buy_p_" + marketIds[i]] = i;
+          }
+          MarketManager2.sortByPriority();
+          updateSettingsFromState2();
+        }
+      });
+      addStandardHeading2(currentNode, "Galaxy Trades");
+      addSettingsNumber2(
+        currentNode,
+        "marketMinIngredients",
+        "Minimum materials to preserve",
+        "Galaxy Market will buy resources only when all selling materials above given ratio"
+      );
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:30%">Buy</th>
+              <th class="has-text-warning" style="width:30%">Sell</th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th class="has-text-warning" style="width:20%">Priority</th>
+            </tr>
+            <tbody id="script_marketGalaxyTableBody"></tbody>
+          </table>`);
+      tableBodyNode = $2("#script_marketGalaxyTableBody");
+      newTableBodyText = "";
+      for (let i = 0; i < poly2.galaxyOffers.length; i++) {
+        newTableBodyText += `<tr><td id="script_market_galaxy_${i}" style="width:30%"><td style="width:30%"></td></td><td style="width:20%"></td><td style="width:20%"></td></tr>`;
+      }
+      tableBodyNode.append($2(newTableBodyText));
+      for (let i = 0; i < poly2.galaxyOffers.length; i++) {
+        let trade = poly2.galaxyOffers[i];
+        let buyResource = resources2[trade.buy.res];
+        let sellResource = resources2[trade.sell.res];
+        let marketElement = $2("#script_market_galaxy_" + i);
+        marketElement.append(
+          buildTableLabel2(buyResource.name, "has-text-success")
+        );
+        marketElement = marketElement.next();
+        marketElement.append(
+          buildTableLabel2(sellResource.name, "has-text-danger")
+        );
+        marketElement = marketElement.next();
+        addTableInput2(marketElement, "res_galaxy_w_" + buyResource.id);
+        marketElement = marketElement.next();
+        addTableInput2(marketElement, "res_galaxy_p_" + buyResource.id);
+      }
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildMarketSettings2(...args) {
+      const implementation = getOverride("buildMarketSettings") ?? buildMarketSettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateMarketSettingsContent2(...args) {
+      const implementation = getOverride("updateMarketSettingsContent") ?? updateMarketSettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildMarketSettings: buildMarketSettings2, updateMarketSettingsContent: updateMarketSettingsContent2 };
+  }
+
   // src/main.js
   (function($) {
     "use strict";
@@ -9349,6 +13496,676 @@
     var settingsRaw = JSON.parse(localStorage.getItem("settings")) ?? {};
     var settings = {};
     var game = null;
+    const generalSettingsOverrides = {};
+    function getGeneralSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(generalSettingsOverrides, name)) {
+        return generalSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "addSettingsHeader1":
+          return addSettingsHeader1;
+        case "addSettingsNumber":
+          return addSettingsNumber;
+        case "addSettingsSelect":
+          return addSettingsSelect;
+        case "addSettingsString":
+          return addSettingsString;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "document":
+          return document;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetGeneralSettings":
+          return resetGeneralSettings;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const generalSettings = createGeneralSettings({
+      getDependency: getGeneralSettingsDependency,
+      getOverride: (name) => generalSettingsOverrides[name]
+    });
+    const { buildGeneralSettings, updateGeneralSettingsContent } = generalSettings;
+    const achievementGuardSettingsOverrides = {};
+    function getAchievementGuardSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(
+        achievementGuardSettingsOverrides,
+        name
+      )) {
+        return achievementGuardSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "document":
+          return document;
+        case "resetAchievementGuardSettings":
+          return resetAchievementGuardSettings;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const achievementGuardSettings = createAchievementGuardSettings({
+      getDependency: getAchievementGuardSettingsDependency,
+      getOverride: (name) => achievementGuardSettingsOverrides[name]
+    });
+    const {
+      buildAchievementGuardSettings,
+      updateAchievementGuardSettingsContent
+    } = achievementGuardSettings;
+    const challengeHelperSettingsOverrides = {};
+    function getChallengeHelperSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(
+        challengeHelperSettingsOverrides,
+        name
+      )) {
+        return challengeHelperSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "addSettingsNumber":
+          return addSettingsNumber;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "document":
+          return document;
+        case "resetChallengeHelperSettings":
+          return resetChallengeHelperSettings;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const challengeHelperSettings = createChallengeHelperSettings({
+      getDependency: getChallengeHelperSettingsDependency,
+      getOverride: (name) => challengeHelperSettingsOverrides[name]
+    });
+    const { buildChallengeHelperSettings, updateChallengeHelperSettingsContent } = challengeHelperSettings;
+    const prestigeSettingsOverrides = {};
+    function getPrestigeSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(prestigeSettingsOverrides, name)) {
+        return prestigeSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "addSettingsHeader1":
+          return addSettingsHeader1;
+        case "addSettingsNumber":
+          return addSettingsNumber;
+        case "addSettingsSelect":
+          return addSettingsSelect;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "buildCustomRacePresetEditor":
+          return buildCustomRacePresetEditor;
+        case "buildSettingsSection2":
+          return buildSettingsSection2;
+        case "buildings":
+          return buildings;
+        case "confirm":
+          return confirm;
+        case "document":
+          return document;
+        case "game":
+          return game;
+        case "haveTech":
+          return haveTech;
+        case "isApocalypsePrestigeAvailable":
+          return isApocalypsePrestigeAvailable;
+        case "isAscensionPrestigeAvailable":
+          return isAscensionPrestigeAvailable;
+        case "isBioseederPrestigeAvailable":
+          return isBioseederPrestigeAvailable;
+        case "isCataclysmPrestigeAvailable":
+          return isCataclysmPrestigeAvailable;
+        case "isDemonicPrestigeAvailable":
+          return isDemonicPrestigeAvailable;
+        case "isPrestigeAllowed":
+          return isPrestigeAllowed;
+        case "isWhiteholePrestigeAvailable":
+          return isWhiteholePrestigeAvailable;
+        case "isWitchAscensionPrestigeAvailable":
+          return isWitchAscensionPrestigeAvailable;
+        case "openOptionsModal":
+          return openOptionsModal;
+        case "openOverrideModal":
+          return openOverrideModal;
+        case "prestigeOptions":
+          return prestigeOptions;
+        case "resetPrestigeSettings":
+          return resetPrestigeSettings;
+        case "settingsRaw":
+          return settingsRaw;
+        case "state":
+          return state;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const prestigeSettings = createPrestigeSettings({
+      getDependency: getPrestigeSettingsDependency,
+      getOverride: (name) => prestigeSettingsOverrides[name]
+    });
+    const { buildPrestigeSettings, updatePrestigeSettingsContent } = prestigeSettings;
+    const governmentSettingsOverrides = {};
+    function getGovernmentSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(governmentSettingsOverrides, name)) {
+        return governmentSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "GovernmentManager":
+          return GovernmentManager;
+        case "addSettingsNumber":
+          return addSettingsNumber;
+        case "addSettingsSelect":
+          return addSettingsSelect;
+        case "buildSettingsSection2":
+          return buildSettingsSection2;
+        case "document":
+          return document;
+        case "game":
+          return game;
+        case "governors":
+          return governors;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetGovernmentSettings":
+          return resetGovernmentSettings;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const governmentSettings = createGovernmentSettings({
+      getDependency: getGovernmentSettingsDependency,
+      getOverride: (name) => governmentSettingsOverrides[name]
+    });
+    const { buildGovernmentSettings, updateGovernmentSettingsContent } = governmentSettings;
+    const evolutionSettingsOverrides = {};
+    function getEvolutionSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(evolutionSettingsOverrides, name)) {
+        return evolutionSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "addSettingsSelect":
+          return addSettingsSelect;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "addStandardHeading":
+          return addStandardHeading;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "challenges":
+          return challenges;
+        case "document":
+          return document;
+        case "evolutionSettingsToStore":
+          return evolutionSettingsToStore;
+        case "game":
+          return game;
+        case "getStarLevel":
+          return getStarLevel;
+        case "prestigeOptions":
+          return prestigeOptions;
+        case "prestigeTypes":
+          return prestigeTypes;
+        case "races":
+          return races;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetEvolutionSettings":
+          return resetEvolutionSettings;
+        case "settings":
+          return settings;
+        case "settingsRaw":
+          return settingsRaw;
+        case "sorterHelper":
+          return sorterHelper;
+        case "state":
+          return state;
+        case "universes":
+          return universes;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const evolutionSettings = createEvolutionSettings({
+      getDependency: getEvolutionSettingsDependency,
+      getOverride: (name) => evolutionSettingsOverrides[name]
+    });
+    const {
+      buildEvolutionSettings,
+      updateRaceWarning,
+      updateEvolutionSettingsContent,
+      buildEvolutionQueueItem,
+      addEvolutionSetting
+    } = evolutionSettings;
+    const planetSettingsOverrides = {};
+    function getPlanetSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(planetSettingsOverrides, name)) {
+        return planetSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "addTableInput":
+          return addTableInput;
+        case "biomeList":
+          return biomeList;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "buildTableLabel":
+          return buildTableLabel;
+        case "document":
+          return document;
+        case "extraList":
+          return extraList;
+        case "game":
+          return game;
+        case "resetPlanetSettings":
+          return resetPlanetSettings;
+        case "traitList":
+          return traitList;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const planetSettings = createPlanetSettings({
+      getDependency: getPlanetSettingsDependency,
+      getOverride: (name) => planetSettingsOverrides[name]
+    });
+    const { buildPlanetSettings, updatePlanetSettingsContent } = planetSettings;
+    const triggerSettingsOverrides = {};
+    function getTriggerSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(triggerSettingsOverrides, name)) {
+        return triggerSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "TriggerManager":
+          return TriggerManager;
+        case "argType":
+          return argType;
+        case "buildInputNode":
+          return buildInputNode;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "checkTypes":
+          return checkTypes;
+        case "document":
+          return document;
+        case "overrideOnlyChecks":
+          return overrideOnlyChecks;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetTriggerSettings":
+          return resetTriggerSettings;
+        case "retBools":
+          return retBools;
+        case "sorterHelper":
+          return sorterHelper;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const triggerSettings = createTriggerSettings({
+      getDependency: getTriggerSettingsDependency,
+      getOverride: (name) => triggerSettingsOverrides[name]
+    });
+    const {
+      buildTriggerSettings,
+      updateTriggerSettingsContent,
+      addTriggerSetting,
+      buildTriggerRequirementType,
+      buildTriggerRequirementId,
+      buildTriggerRequirementCount,
+      buildTriggerActionType,
+      buildTriggerActionId,
+      buildTriggerActionCount,
+      buildTriggerSettingsColumn
+    } = triggerSettings;
+    const researchSettingsOverrides = {};
+    function getResearchSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(researchSettingsOverrides, name)) {
+        return researchSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "addSettingsList":
+          return addSettingsList;
+        case "addSettingsSelect":
+          return addSettingsSelect;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "document":
+          return document;
+        case "game":
+          return game;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetResearchSettings":
+          return resetResearchSettings;
+        case "techIds":
+          return techIds;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const researchSettings = createResearchSettings({
+      getDependency: getResearchSettingsDependency,
+      getOverride: (name) => researchSettingsOverrides[name]
+    });
+    const { buildResearchSettings, updateResearchSettingsContent } = researchSettings;
+    const warSettingsOverrides = {};
+    function getWarSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(warSettingsOverrides, name)) {
+        return warSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "SpyManager":
+          return SpyManager;
+        case "addSettingsHeader1":
+          return addSettingsHeader1;
+        case "addSettingsNumber":
+          return addSettingsNumber;
+        case "addSettingsSelect":
+          return addSettingsSelect;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "buildSettingsSection2":
+          return buildSettingsSection2;
+        case "document":
+          return document;
+        case "game":
+          return game;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetWarSettings":
+          return resetWarSettings;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const warSettings = createWarSettings({
+      getDependency: getWarSettingsDependency,
+      getOverride: (name) => warSettingsOverrides[name]
+    });
+    const { buildWarSettings, updateWarSettingsContent } = warSettings;
+    const hellSettingsOverrides = {};
+    function getHellSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(hellSettingsOverrides, name)) {
+        return hellSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "addSettingsHeader1":
+          return addSettingsHeader1;
+        case "addSettingsNumber":
+          return addSettingsNumber;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "buildSettingsSection2":
+          return buildSettingsSection2;
+        case "document":
+          return document;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetHellSettings":
+          return resetHellSettings;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const hellSettings = createHellSettings({
+      getDependency: getHellSettingsDependency,
+      getOverride: (name) => hellSettingsOverrides[name]
+    });
+    const { buildHellSettings, updateHellSettingsContent } = hellSettings;
+    const fleetSettingsOverrides = {};
+    function getFleetSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(fleetSettingsOverrides, name)) {
+        return fleetSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "FleetManagerOuter":
+          return FleetManagerOuter;
+        case "addSettingsHeader1":
+          return addSettingsHeader1;
+        case "addSettingsNumber":
+          return addSettingsNumber;
+        case "addSettingsSelect":
+          return addSettingsSelect;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "addStandardHeading":
+          return addStandardHeading;
+        case "addTableInput":
+          return addTableInput;
+        case "buildSettingsSection2":
+          return buildSettingsSection2;
+        case "buildTableLabel":
+          return buildTableLabel;
+        case "document":
+          return document;
+        case "galaxyRegions":
+          return galaxyRegions;
+        case "game":
+          return game;
+        case "openOverrideModal":
+          return openOverrideModal;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetFleetSettings":
+          return resetFleetSettings;
+        case "settings":
+          return settings;
+        case "settingsRaw":
+          return settingsRaw;
+        case "sorterHelper":
+          return sorterHelper;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const fleetSettings = createFleetSettings({
+      getDependency: getFleetSettingsDependency,
+      getOverride: (name) => fleetSettingsOverrides[name]
+    });
+    const {
+      buildFleetSettings,
+      updateFleetSettingsContent,
+      updateFleetOuter,
+      updateFleetAndromeda
+    } = fleetSettings;
+    const mechSettingsOverrides = {};
+    function getMechSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(mechSettingsOverrides, name)) {
+        return mechSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "MechManager":
+          return MechManager;
+        case "addSettingsNumber":
+          return addSettingsNumber;
+        case "addSettingsSelect":
+          return addSettingsSelect;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "addStandardHeading":
+          return addStandardHeading;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "calculateMechStats":
+          return calculateMechStats;
+        case "document":
+          return document;
+        case "game":
+          return game;
+        case "removeMechInfo":
+          return removeMechInfo;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetMechSettings":
+          return resetMechSettings;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const mechSettings = createMechSettings({
+      getDependency: getMechSettingsDependency,
+      getOverride: (name) => mechSettingsOverrides[name]
+    });
+    const { buildMechSettings, updateMechSettingsContent } = mechSettings;
+    const ejectorSettingsOverrides = {};
+    function getEjectorSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(ejectorSettingsOverrides, name)) {
+        return ejectorSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "EjectManager":
+          return EjectManager;
+        case "NaniteManager":
+          return NaniteManager;
+        case "SupplyManager":
+          return SupplyManager;
+        case "addSettingsNumber":
+          return addSettingsNumber;
+        case "addSettingsSelect":
+          return addSettingsSelect;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "addTableToggle":
+          return addTableToggle;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "buildTableLabel":
+          return buildTableLabel;
+        case "document":
+          return document;
+        case "removeEjectToggles":
+          return removeEjectToggles;
+        case "removeSupplyToggles":
+          return removeSupplyToggles;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetEjectorSettings":
+          return resetEjectorSettings;
+        case "resources":
+          return resources;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const ejectorSettings = createEjectorSettings({
+      getDependency: getEjectorSettingsDependency,
+      getOverride: (name) => ejectorSettingsOverrides[name]
+    });
+    const { buildEjectorSettings, updateEjectorSettingsContent } = ejectorSettings;
+    const marketSettingsOverrides = {};
+    function getMarketSettingsDependency(name) {
+      if (Object.prototype.hasOwnProperty.call(marketSettingsOverrides, name)) {
+        return marketSettingsOverrides[name];
+      }
+      switch (name) {
+        case "$":
+          return $;
+        case "MarketManager":
+          return MarketManager;
+        case "addSettingsNumber":
+          return addSettingsNumber;
+        case "addSettingsToggle":
+          return addSettingsToggle;
+        case "addStandardHeading":
+          return addStandardHeading;
+        case "addTableInput":
+          return addTableInput;
+        case "addTableToggle":
+          return addTableToggle;
+        case "buildSettingsSection":
+          return buildSettingsSection;
+        case "buildTableLabel":
+          return buildTableLabel;
+        case "document":
+          return document;
+        case "poly":
+          return poly;
+        case "removeMarketToggles":
+          return removeMarketToggles;
+        case "resetCheckbox":
+          return resetCheckbox;
+        case "resetMarketSettings":
+          return resetMarketSettings;
+        case "resources":
+          return resources;
+        case "settingsRaw":
+          return settingsRaw;
+        case "sorterHelper":
+          return sorterHelper;
+        case "updateSettingsFromState":
+          return updateSettingsFromState;
+        default:
+          return void 0;
+      }
+    }
+    const marketSettings = createMarketSettings({
+      getDependency: getMarketSettingsDependency,
+      getOverride: (name) => marketSettingsOverrides[name]
+    });
+    const { buildMarketSettings, updateMarketSettingsContent } = marketSettings;
     let { traitVal } = createTraitValue({ getGame: () => game });
     const { normalizeProperties, addProps } = createPropertyHelpers({
       getSettings: () => settings
@@ -24412,131 +29229,6 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
         (item) => $(".script_" + item).prop("checked", settingsRaw[item])
       );
     }
-    function buildGeneralSettings() {
-      let sectionId = "general";
-      let sectionName = "General";
-      let resetFunction = function() {
-        resetGeneralSettings(true);
-        updateSettingsFromState();
-        updateGeneralSettingsContent();
-        resetCheckbox("masterScriptToggle", "showSettings", "autoPrestige");
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateGeneralSettingsContent
-      );
-    }
-    function updateGeneralSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_generalContent");
-      currentNode.empty().off("*");
-      addSettingsNumber(
-        currentNode,
-        "tickRate",
-        "Script tick rate",
-        "Script runs once per this amount of game ticks. Game tick every 250ms, thus with rate 4 script will run once per second. You can set it lower to make script act faster, or increase it if you have performance issues. Tick rate should be a positive integer."
-      );
-      addSettingsToggle(
-        currentNode,
-        "tickSchedule",
-        "Schedule script ticks",
-        "When enabled script will schedule its ticks to run after game ticks, instead of executing both at once. Splitting of long task allows browser to update UI in between of game and script ticks, making game run smoother, but less throttling-proof - that can make tick rate float inconsistently."
-      );
-      addSettingsHeader1(currentNode, "Prioritization");
-      let priority = [
-        { val: "ignore", label: "Ignore", hint: "Does nothing" },
-        {
-          val: "save",
-          label: "Save",
-          hint: "Missing resources preserved from using."
-        },
-        {
-          val: "req",
-          label: "Request",
-          hint: "Production and buying of missing resources will be prioritized."
-        },
-        {
-          val: "savereq",
-          label: "Request & Save",
-          hint: "Missing resources will be prioritized, and preserved from using."
-        }
-      ];
-      addSettingsToggle(
-        currentNode,
-        "useDemanded",
-        "Allow using prioritized resources for crafting",
-        "When disabled script won't make craftables out of prioritized resources in foundry and factory."
-      );
-      addSettingsToggle(
-        currentNode,
-        "researchRequest",
-        "Prioritize resources for Pre-MAD researches",
-        "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
-      );
-      addSettingsToggle(
-        currentNode,
-        "researchRequestSpace",
-        "Prioritize resources for Space+ researches",
-        "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
-      );
-      addSettingsToggle(
-        currentNode,
-        "missionRequest",
-        "Prioritize resources for missions",
-        "Readjust trade routes and production to resources required for unlocked and affordable missions. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
-      );
-      addSettingsSelect(
-        currentNode,
-        "prioritizeQueue",
-        "Queue",
-        "Alter script behaviour to speed up queued items, prioritizing missing resources.",
-        priority
-      );
-      addSettingsSelect(
-        currentNode,
-        "prioritizeTriggers",
-        "Triggers",
-        "Alter script behaviour to speed up triggers, prioritizing missing resources.",
-        priority
-      );
-      addSettingsSelect(
-        currentNode,
-        "prioritizeUnify",
-        "Unification",
-        "Alter script behaviour to speed up unification, prioritizing money required to purchase foreign cities.",
-        priority
-      );
-      addSettingsSelect(
-        currentNode,
-        "prioritizeOuterFleet",
-        "Ship Yard Blueprint (The True Path)",
-        "Alter script behaviour to assist fleet building, prioritizing resources required for current design of ship.",
-        priority
-      );
-      addSettingsHeader1(currentNode, "Auto clicker");
-      addSettingsToggle(
-        currentNode,
-        "buildingAlwaysClick",
-        "Always autoclick resources",
-        "By default script will click only during early stage of autoBuild, to bootstrap production. With this toggled on it will continue clicking forever"
-      );
-      addSettingsNumber(
-        currentNode,
-        "buildingClickPerTick",
-        "Maximum clicks per tick",
-        "Number of clicks performed at once, each script tick. Will not ever click more than needed to fill storage."
-      );
-      addSettingsHeader1(currentNode, "Misc");
-      addSettingsString(
-        currentNode,
-        "scriptSettingsExportFilename",
-        "Export Filename",
-        "Configures the filename used when using the 'Script Settings as File' button. This is useful if you keep multiple different profiles around."
-      );
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
     let interfaceSettingsTestActions;
     const interfaceSettingsActions = {
       resetInterfaceSettings,
@@ -24587,1101 +29279,6 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
         setStateLogSettingsTestContext(context) {
           settingsRaw = context.settingsRaw;
         }
-      });
-    }
-    function buildAchievementGuardSettings() {
-      let sectionId = "achievementGuard";
-      let sectionName = "Achievement Guard";
-      let resetFunction = function() {
-        resetAchievementGuardSettings(true);
-        updateSettingsFromState();
-        updateAchievementGuardSettingsContent();
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateAchievementGuardSettingsContent
-      );
-    }
-    function updateAchievementGuardSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_achievementGuardContent");
-      currentNode.empty().off("*");
-      addSettingsToggle(
-        currentNode,
-        "achievementGuards",
-        "Enable achievement guards",
-        "Constrain automation so the current run stays eligible for the guarded achievements below. Each guard arms only while its achievement is still unearned at the current star level in the current universe, and releases as soon as it's earned, already lost this run, or out of scope for the current prestige type."
-      );
-      addSettingsToggle(
-        currentNode,
-        "guardPacifist",
-        "Pacifist",
-        "Never attack foreign powers. Also allows unification researches regardless of the 'Perform unification' toggle. Foreign policies must be set to Annex/Purchase for unification to actually happen without attacking."
-      );
-      addSettingsToggle(
-        currentNode,
-        "guardDreaded",
-        "Dreaded",
-        "Never build a Dreadnought during ascension runs. If the Chthonian Mission outcome is set to Dreadnought, it will be executed as High losses instead."
-      );
-      addSettingsToggle(
-        currentNode,
-        "guardCultOfPersonality",
-        "Cult of Personality",
-        "Never unify - blocks unification researches. Yields to the Pacifist guard while both are armed, since Pacifist requires unification."
-      );
-      addSettingsToggle(
-        currentNode,
-        "guardAnarchist",
-        "Anarchist",
-        "Never set a government during MAD runs, staying in Anarchy until reset."
-      );
-      addSettingsToggle(
-        currentNode,
-        "guardEnergetic",
-        "Energetic",
-        "Never build a Thermal Collector during ascension runs."
-      );
-      addSettingsToggle(
-        currentNode,
-        "guardRedDead",
-        "Red Dead",
-        "Never build a Spaceport during MAD runs (Cataclysm scenario)."
-      );
-      addSettingsToggle(
-        currentNode,
-        "guardSecondEvolution",
-        "Second Evolution",
-        "Research Fanaticism instead of Anthropology while worshipping own species as gods."
-      );
-      addSettingsToggle(
-        currentNode,
-        "guardBananaRepublic",
-        "Banana Republic",
-        "Block unification while the Banana Republic scenario still has unfinished objectives in the current universe, or while the 500 import and 500 export feat condition is still unmet. Also boosts World Collider and Monument weighting for unfinished Banana objectives."
-      );
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function buildChallengeHelperSettings() {
-      let sectionId = "challengeHelper";
-      let sectionName = "Challenge Helper";
-      let resetFunction = function() {
-        resetChallengeHelperSettings(true);
-        updateSettingsFromState();
-        updateChallengeHelperSettingsContent();
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateChallengeHelperSettingsContent
-      );
-    }
-    function updateChallengeHelperSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_challengeHelperContent");
-      currentNode.empty().off("*");
-      addSettingsToggle(
-        currentNode,
-        "inflationChallengeAssist",
-        "Inflation challenge",
-        "During Inflation, demand the $250B Wheelbarrow target, boost Money storage or income buildings as appropriate, and stop optional Money spending once the target can be reached soon."
-      );
-      addSettingsNumber(
-        currentNode,
-        "inflationChallengeSaveMinutes",
-        "Inflation save-up minutes",
-        "When the $250B target is reachable within this many real-time minutes at current Money income, stop optional Money spending and imports until Wheelbarrow is earned. Set negative to disable the final save-up freeze while keeping the helper's weighting and demand."
-      );
-      addSettingsToggle(
-        currentNode,
-        "retirementChallengeAssist",
-        "Retirement preparation",
-        "When the selected prestige is Retirement, boost the recommended pre-Isolation Tau buildings, reserve and stockpile 200M Graphene, and block Isolation Protocol until there are 20 Fusion Generators, 18 Factories, 11 Disease Labs, and the Graphene stockpile. Disable this to manage the irreversible transition manually."
-      );
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function buildPrestigeSettings(parentNode, secondaryPrefix) {
-      let sectionId = "prestige";
-      let sectionName = "Prestige";
-      let resetFunction = function() {
-        resetPrestigeSettings(true);
-        updateSettingsFromState();
-        updatePrestigeSettingsContent(secondaryPrefix);
-      };
-      buildSettingsSection2(
-        parentNode,
-        secondaryPrefix,
-        sectionId,
-        sectionName,
-        resetFunction,
-        updatePrestigeSettingsContent
-      );
-    }
-    function updatePrestigeSettingsContent(secondaryPrefix) {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $(`#script_${secondaryPrefix}prestigeContent`);
-      currentNode.empty().off("*");
-      currentNode.append(`
-          <div class="script_bg_prestigeType" style="display: inline-block; width: 90%; text-align: left; margin-bottom: 10px;">
-            <label>
-              <span>Prestige Type</span>
-              <select class="script_prestigeType" style="height: 18px; width: 150px; float: right;">
-                ${prestigeOptions}
-              </select>
-            </label>
-          </div>`);
-      currentNode.find(".script_prestigeType").val(settingsRaw.prestigeType).on("change", function() {
-        if (isPrestigeAllowed()) {
-          let confirmationText = "";
-          if (this.value === "mad" && haveTech("mad")) {
-            confirmationText = "MAD has already been researched.";
-          } else if (this.value === "bioseed" && isBioseederPrestigeAvailable()) {
-            confirmationText = "Required probes are built, and bioseeder ship is ready to launch.";
-          } else if (this.value === "cataclysm" && isCataclysmPrestigeAvailable()) {
-            confirmationText = "Dial It To 11 is unlocked. You may prestige immediately.";
-          } else if (this.value === "whitehole" && isWhiteholePrestigeAvailable()) {
-            confirmationText = "Required mass is reached, and exotic infusion is unlocked.";
-          } else if (this.value === "apocalypse" && isApocalypsePrestigeAvailable()) {
-            confirmationText = "Protocol 66 is unlocked.";
-          } else if (this.value === "ascension" && (game.global.race["witch_hunter"] ? isWitchAscensionPrestigeAvailable() : isAscensionPrestigeAvailable())) {
-            confirmationText = game.global.race["witch_hunter"] ? "Absorption Chamber is built and ready." : "Ascension machine is built and powered.";
-          } else if (this.value === "demonic" && (game.global.race["witch_hunter"] ? isWitchAscensionPrestigeAvailable(true) : isDemonicPrestigeAvailable())) {
-            confirmationText = game.global.race["witch_hunter"] ? "Absorption Chamber is built and ready." : "Required floor is reached, and demon lord is already dead.";
-          } else if (this.value === "terraform" && buildings.RedTerraform.isUnlocked()) {
-            confirmationText = "Terraformer is built and powered.";
-          } else if (this.value === "matrix" && buildings.TauStarBluePill.isUnlocked()) {
-            confirmationText = "Matrix is built and powered.";
-          } else if (this.value === "retire" && buildings.TauGas2MatrioshkaBrain.count >= 1e3 && buildings.TauGas2IgniteGasGiant.isUnlocked() && buildings.TauGas2IgniteGasGiant.isAffordable()) {
-            confirmationText = "Ignition Device is built and ready.";
-          } else if (this.value === "eden" && buildings.TauStarEden.isUnlocked() && buildings.TauStarEden.isAffordable()) {
-            confirmationText = "Garden Of Eden is ready to build.";
-          } else if (this.value === "apotheosis" && buildings.PalaceApotheosis.isUnlocked()) {
-            confirmationText = "Apotheosis is ready to build.";
-          }
-          if (confirmationText !== "") {
-            confirmationText += " You may prestige immediately. Are you sure you want to toggle this prestige?";
-            if (!confirm(confirmationText)) {
-              this.value = "none";
-            }
-          }
-        }
-        settingsRaw.prestigeType = this.value;
-        $(".script_prestigeType").val(settingsRaw.prestigeType);
-        state.goal = "Standard";
-        updateSettingsFromState();
-      });
-      currentNode.find(".script_bg_prestigeType").toggleClass("inactive-row", Boolean(settingsRaw.overrides.prestigeType)).on(
-        "click",
-        {
-          label: "Prestige Type (prestigeType)",
-          name: "prestigeType",
-          type: "select",
-          options: prestigeOptions
-        },
-        openOverrideModal
-      );
-      addSettingsToggle(
-        currentNode,
-        "prestigeWaitAT",
-        "Disable prestiging under Accelerated Time",
-        "Delay reset until all accelerated time will be used, to avoid wasting it"
-      );
-      addSettingsToggle(
-        currentNode,
-        "prestigeMADIgnoreArpa",
-        "Ignore early game A.R.P.A.",
-        "Disables building any A.R.P.A. projects until MAD is researched, or rival have appeared"
-      );
-      addSettingsToggle(
-        currentNode,
-        "prestigeBioseedConstruct",
-        "Ignore useless buildings",
-        "Space Dock, Bioseeder Ship and Probes will be constructed only when Bioseed prestige enabled. World Collider won't be constructed during Bioseed. Jump Ship won't be constructed during Whitehole. Stellar Engine won't be constucted during Vacuum Collapse. Mana Syphon won't be constructed during Witch Hunter's Ascension and Demonic Infusion."
-      );
-      addSettingsHeader1(currentNode, "Mutual Assured Destruction");
-      addSettingsToggle(
-        currentNode,
-        "prestigeMADWait",
-        "Wait for maximum population",
-        "Wait for maximum population and soldiers to maximize plasmids gain"
-      );
-      addSettingsNumber(
-        currentNode,
-        "prestigeMADPopulation",
-        "Required population",
-        "Required number of workers and soldiers before performing MAD reset"
-      );
-      addSettingsHeader1(currentNode, "Bioseed");
-      addSettingsNumber(
-        currentNode,
-        "prestigeBioseedProbes",
-        "Required probes",
-        "Required number of probes before launching bioseeder ship"
-      );
-      addSettingsNumber(
-        currentNode,
-        "prestigeGECK",
-        "Required G.E.C.K",
-        "Required number of G.E.C.K. for Bioseed. Unlike any other buildings G.E.C.K. won't ever be constructed during inappropriate runs, or above this number. To prevent losing plasmids. It can, however, be built with triggers - you should not build G.E.C.K with triggers, unless you absolutely sure you know what you're doing."
-      );
-      addSettingsHeader1(currentNode, "Whitehole");
-      addSettingsToggle(
-        currentNode,
-        "prestigeWhiteholeSaveGems",
-        "Save up Soul Gems for reset",
-        "Save up enough Soul Gems for reset, only excess gems will be used. This option does not affect triggers."
-      );
-      addSettingsNumber(
-        currentNode,
-        "prestigeWhiteholeMinMass",
-        "Minimum solar mass for reset",
-        "Required minimum solar mass of blackhole before prestiging. Script do not stabilize on blackhole run, this number will need to be reached naturally"
-      );
-      addSettingsHeader1(currentNode, "Ascension");
-      addSettingsToggle(
-        currentNode,
-        "prestigeAscensionPillar",
-        "Wait for Pillar",
-        "Wait for Pillar before ascending, unless it was done earlier"
-      );
-      addSettingsSelect(
-        currentNode,
-        "prestigeCustomRaceMode",
-        "Custom race handling",
-        "Controls every custom-race lab reached after Ascension, Terraform, or Apotheosis. Pause lets you edit challenge-specific races even when one is already saved. Import replaces the live design with the selected preset and continues only when the game accepts it.",
-        [
-          {
-            val: "reuse",
-            label: "Reuse saved",
-            hint: "Automatically reuse the saved custom; pause if none exists."
-          },
-          {
-            val: "pause",
-            label: "Pause in lab",
-            hint: "Always stop in the lab so the custom can be edited or imported manually."
-          },
-          {
-            val: "import",
-            label: "Import selected preset",
-            hint: "Apply the selected structured preset and continue automatically."
-          }
-        ]
-      );
-      let presetOptions = (settingsRaw.prestigeCustomRacePresets ?? []).map(
-        (preset, index) => ({
-          val: String(index),
-          label: preset.name || `Preset ${index + 1}`,
-          hint: "Custom race preset used by Import selected preset."
-        })
-      );
-      addSettingsSelect(
-        currentNode,
-        "prestigeCustomRacePreset",
-        "Selected custom preset",
-        "Preset used when Custom race handling is Import selected preset. The selection can also be changed by Evolution Queue.",
-        presetOptions
-      );
-      $(
-        '<button class="button" type="button" style="margin:6px 0;">Edit custom race presets…</button>'
-      ).on("click", function() {
-        openOptionsModal("Custom Race Presets", buildCustomRacePresetEditor);
-      }).appendTo(currentNode);
-      addSettingsHeader1(currentNode, "Demonic Infusion");
-      addSettingsNumber(
-        currentNode,
-        "prestigeDemonicFloor",
-        "Minimum spire floor for reset",
-        "Perform reset after climbing up to this spire floor"
-      );
-      addSettingsNumber(
-        currentNode,
-        "prestigeDemonicPotential",
-        "Maximum mech potential for reset",
-        "Perform reset only if current mech team potential below given amount. Full bay of best mechs will have `1` potential. This allows to postpone reset if your team is still good after reaching target floor, and can quickly clear another floor"
-      );
-      addSettingsToggle(
-        currentNode,
-        "prestigeDemonicBomb",
-        "Use Dark Energy Bomb",
-        "Kill Demon Lord with Dark Energy Bomb"
-      );
-      addSettingsHeader1(currentNode, "Matrix");
-      let cureStrat = [
-        { val: "none", label: "None", hint: "Do not select strategy" },
-        {
-          val: "strat1",
-          label: game.loc(`tech_vax_strat1`),
-          hint: game.loc(`tech_vax_strat1_effect`)
-        },
-        {
-          val: "strat2",
-          label: game.loc(`tech_vax_strat2`),
-          hint: game.loc(`tech_vax_strat2_effect`)
-        },
-        {
-          val: "strat3",
-          label: game.loc(`tech_vax_strat3`),
-          hint: game.loc(`tech_vax_strat3_effect`)
-        },
-        {
-          val: "strat4",
-          label: game.loc(`tech_vax_strat4`),
-          hint: game.loc(`tech_vax_strat4_effect`)
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "prestigeVaxStrat",
-        "Vaccination Strategy",
-        "Alter script behaviour to speed up queued items, prioritizing missing resources.",
-        cureStrat
-      );
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function buildGovernmentSettings(parentNode, secondaryPrefix) {
-      let sectionId = "government";
-      let sectionName = "Government";
-      let resetFunction = function() {
-        resetGovernmentSettings(true);
-        updateSettingsFromState();
-        updateGovernmentSettingsContent(secondaryPrefix);
-        resetCheckbox("autoTax", "autoGovernment");
-      };
-      buildSettingsSection2(
-        parentNode,
-        secondaryPrefix,
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateGovernmentSettingsContent
-      );
-    }
-    function updateGovernmentSettingsContent(secondaryPrefix) {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $(`#script_${secondaryPrefix}governmentContent`);
-      currentNode.empty().off("*");
-      addSettingsNumber(
-        currentNode,
-        "generalRequestedTaxRate",
-        "Forced tax rate",
-        "Set tax rate as close to this value as possible, ignores morale. Set to -1 to disable this option"
-      );
-      addSettingsNumber(
-        currentNode,
-        "generalMinimumTaxRate",
-        "Minimum allowed tax rate",
-        "Minimum tax rate for autoTax. Will still go below this amount if money storage is full"
-      );
-      addSettingsNumber(
-        currentNode,
-        "generalMinimumMorale",
-        "Minimum allowed morale",
-        "Use this to set a minimum allowed morale. Remember that less than 100% can cause riots and weather can cause sudden swings"
-      );
-      addSettingsNumber(
-        currentNode,
-        "generalMaximumMorale",
-        "Maximum allowed morale",
-        "Use this to set a maximum allowed morale. The tax rate will be raised to lower morale to this maximum"
-      );
-      addSettingsNumber(
-        currentNode,
-        "generalMinimumAuthority",
-        "Minimum Authority (Evil universe)",
-        "Evil universe only. While Authority is below this value the tax rate will be raised to keep morale at 100 (morale above 100 drains Authority 1:1), and buildings raising the Authority cap get a weighting boost. Set to -1 to target the current Authority maximum (pin it at the cap), or 0 to disable Authority management. Authority below 100 causes a global production penalty of 0.35% per point"
-      );
-      addSettingsNumber(
-        currentNode,
-        "generalAuthorityMinPatrolPercent",
-        "Authority: min % soldiers on patrol",
-        "Only applies when Minimum Authority is -1 (pin at max). Reserves at least this percentage of available Hell soldiers for patrols (soul gem income) before stationing the rest for Authority, so pinning at max won't kill soul gem income. Set to 0 to station everyone but one patrol (old behaviour)"
-      );
-      let governmentOptions = [
-        { val: "none", label: "None", hint: "Do not select government" },
-        ...Object.values(GovernmentManager.Types).filter((g) => g.selectable !== false).map((g) => ({
-          val: g.id,
-          label: game.loc(`govern_${g.id}`),
-          hint: game.loc(`govern_${g.id}_desc`)
-        }))
-      ];
-      addSettingsSelect(
-        currentNode,
-        "govInterim",
-        "Interim Government",
-        "Temporary low tier government until you research other governments",
-        governmentOptions
-      );
-      addSettingsSelect(
-        currentNode,
-        "govFinal",
-        "Second Government",
-        "Second government choice, chosen once becomes available. Can be the same as above",
-        governmentOptions
-      );
-      addSettingsSelect(
-        currentNode,
-        "govSpace",
-        "Space Government",
-        "Government for bioseed+. Chosen once you researched Quantum Manufacturing. Can be the same as above",
-        governmentOptions
-      );
-      let governorsOptions = [
-        { val: "none", label: "None", hint: "Do not select governor" },
-        ...governors.map((id) => ({
-          val: id,
-          label: game.loc(`governor_${id}`),
-          hint: game.loc(`governor_${id}_desc`)
-        }))
-      ];
-      addSettingsSelect(
-        currentNode,
-        "govGovernor",
-        "Governor",
-        "Chosen governor will be appointed.",
-        governorsOptions
-      );
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function buildEvolutionSettings() {
-      let sectionId = "evolution";
-      let sectionName = "Evolution";
-      let resetFunction = function() {
-        resetEvolutionSettings(true);
-        updateSettingsFromState();
-        updateEvolutionSettingsContent();
-        resetCheckbox("autoEvolution");
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateEvolutionSettingsContent
-      );
-    }
-    function updateRaceWarning() {
-      let race = races[settingsRaw.userEvolutionTarget];
-      if (race && race.getCondition() !== "") {
-        let suited = race.getHabitability();
-        if (suited === 1) {
-          $("#script_race_warning").html(
-            `<span class="has-text-success">This race have special requirements: ${race.getCondition()} This condition is met.</span>`
-          );
-        } else if (suited === 0) {
-          $("#script_race_warning").html(
-            `<span class="has-text-danger">Warning! This race have special requirements: ${race.getCondition()} This condition is not met.</span>`
-          );
-        } else {
-          $("#script_race_warning").html(
-            `<span class="has-text-warning">Warning! This race have special requirements: ${race.getCondition()} This condition is bypassed. Race will have ${100 - suited * 100}% penalty.</span>`
-          );
-        }
-      } else {
-        $("#script_race_warning").empty();
-      }
-    }
-    function updateEvolutionSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_evolutionContent");
-      currentNode.empty().off("*");
-      let universeOptions = [
-        { val: "none", label: "None", hint: "Wait for user selection" },
-        ...universes.map((id) => ({
-          val: id,
-          label: game.loc(`universe_${id}`),
-          hint: game.loc(`universe_${id}_desc`)
-        }))
-      ];
-      addSettingsSelect(
-        currentNode,
-        "userUniverseTargetName",
-        "Target Universe",
-        "Chosen universe will be automatically selected after appropriate reset",
-        universeOptions
-      );
-      let planetOptions = [
-        { val: "none", label: "None", hint: "Wait for user selection" },
-        {
-          val: "habitable",
-          label: "Most habitable",
-          hint: "Picks most habitable planet, based on biome and trait"
-        },
-        {
-          val: "achieve",
-          label: "Most achievements",
-          hint: "Picks planet with most unearned achievements. Takes in account extinction achievements for planet exclusive races, and greatness achievements for planet biome, trait, and exclusive genus."
-        },
-        {
-          val: "weighting",
-          label: "Highest weighting",
-          hint: "Picks planet with highest weighting. Should be configured in Planet Weighting Settings section."
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "userPlanetTargetName",
-        "Target Planet",
-        "Chosen planet will be automatically selected after appropriate reset. Warning! Script ignores changes made by G.E.C.K., you need to select planet manually after using it.",
-        planetOptions
-      );
-      let raceOptions = [
-        {
-          val: "auto",
-          label: "Auto Achievements",
-          hint: "Picks race giving most achievements upon completing run. Tracks all achievements limited to specific races and resets. Races unique to current planet biome are prioritized, when available."
-        },
-        ...Object.values(races).map((race) => ({
-          val: race.id,
-          label: race.name,
-          hint: race.desc
-        }))
-      ];
-      addSettingsSelect(
-        currentNode,
-        "userEvolutionTarget",
-        "Target Race",
-        "Chosen race will be automatically selected during next evolution",
-        raceOptions
-      ).on("change", "select", function() {
-        state.evolutionTarget = null;
-        updateRaceWarning();
-      });
-      let genusOptions = [
-        ...Object.values(game.races).map((r) => r.type).filter((g, i, a) => g && g !== "organism" && a.indexOf(g) === i).map((g) => ({ val: g, label: game.loc(`genelab_genus_${g}`) }))
-      ];
-      addSettingsSelect(
-        currentNode,
-        "userEvolutionGenus",
-        "Preferred genus",
-        "Chosen genus will be picked if target race have such option. Works only with challenge races, and hybrids. If chosen genus is not allowed, then first valid option will be picked instead.",
-        genusOptions
-      );
-      currentNode.append(`<div><span id="script_race_warning"></span></div>`);
-      updateRaceWarning();
-      addSettingsToggle(
-        currentNode,
-        "evolutionAutoUnbound",
-        "Allow unbound races",
-        "Allow Auto Achievement to pick biome restricted races on unsuited biomes, after getting unbound."
-      );
-      addSettingsToggle(
-        currentNode,
-        "evolutionBackup",
-        "Soft Reset",
-        "Perform soft resets until you'll get chosen race. Has no effect after getting mass extinction perk."
-      );
-      for (let i = 0; i < challenges.length; i++) {
-        let set = challenges[i];
-        addSettingsToggle(
-          currentNode,
-          `challenge_${set[0].id}`,
-          set.map((c) => game.loc(`evo_challenge_${c.id}`)).join(" | "),
-          set.map((c) => game.loc(`evo_challenge_${c.id}_effect`)).join("&#xA;")
-        );
-      }
-      addStandardHeading(currentNode, "Evolution Queue");
-      addSettingsToggle(
-        currentNode,
-        "evolutionQueueEnabled",
-        "Queue Enabled",
-        "When enabled script with evolve with queued settings, from top to bottom. During that script settings will be overriden with settings stored in queue. Queued target will be removed from list after evolution."
-      );
-      addSettingsToggle(
-        currentNode,
-        "evolutionQueueRepeat",
-        "Repeat Queue",
-        "When enabled applied evolution targets will be moved to the end of queue, instead of being removed"
-      );
-      currentNode.append(`
-          <div style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
-            <label for="script_evolution_prestige">Prestige for new evolutions:</label>
-            <select id="script_evolution_prestige" style="height: 18px; width: 150px; float: right;">
-              <option value = "auto" title = "Inherited from current Prestige Settings">Current Prestige</option>
-              ${prestigeOptions}
-            </select>
-          </div>
-          <div style="margin-top: 10px;">
-            <button id="script_evlution_add" class="button">Add New Evolution</button>
-          </div>`);
-      $("#script_evlution_add").on("click", addEvolutionSetting);
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:25%">Race</th>
-              <th class="has-text-warning" style="width:70%" title="Settings applied before evolution. Changed settings not limited to initial template, you can manually add any script options to JSON.">Settings</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_evolutionQueueTable"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_evolutionQueueTable");
-      for (let i = 0; i < settingsRaw.evolutionQueue.length; i++) {
-        tableBodyNode.append(buildEvolutionQueueItem(i));
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper,
-        update: function() {
-          let newOrder = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          settingsRaw.evolutionQueue = newOrder.map(
-            (i) => settingsRaw.evolutionQueue[i]
-          );
-          updateSettingsFromState();
-          updateEvolutionSettingsContent();
-        }
-      });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function buildEvolutionQueueItem(id) {
-      let queuedEvolution = settingsRaw.evolutionQueue[id];
-      for (let settingName of evolutionSettingsToStore) {
-        queuedEvolution[settingName] = queuedEvolution[settingName] ?? settings[settingName];
-      }
-      let raceName = "";
-      let raceClass = "";
-      let prestigeName = "";
-      let prestigeClass = "";
-      let race = races[queuedEvolution.userEvolutionTarget];
-      let isValdi = queuedEvolution.challenge_junker || race === races.junker;
-      let isSludge = queuedEvolution.challenge_sludge || race === races.sludge;
-      let isUltraSludge = queuedEvolution.challenge_ultra_sludge || race === races.ultra_sludge;
-      let isHellspawn = queuedEvolution.challenge_warlord || race === races.hellspawn;
-      const getRaceColor = (race2) => {
-        let suited = race2.getHabitability();
-        if (suited === 1) {
-          return "has-text-info";
-        } else if (suited === 0) {
-          return "has-text-danger";
-        } else {
-          return "has-text-warning";
-        }
-      };
-      let uniqPicked = isValdi + isSludge + isUltraSludge + isHellspawn;
-      if (uniqPicked > 1) {
-        raceName = "Valdi, Sludge and Hellspawn can not be combined!";
-        raceClass = "has-text-danger";
-      } else if (uniqPicked === 1) {
-        let name = isValdi ? races.junker.name : isSludge ? races.sludge.name : isUltraSludge ? races.ultra_sludge.name : isHellspawn ? races.hellspawn.name : "???";
-        if (race && race !== races.junker && race !== races.sludge && race !== races.ultra_sludge) {
-          raceName = name + ", " + game.loc(`genelab_genus_${race.genus}`);
-          raceClass = getRaceColor(race);
-        } else {
-          raceName = name + ", " + game.loc(`genelab_genus_${queuedEvolution.userEvolutionGenus}`);
-          raceClass = getRaceColor(
-            Object.values(races).find(
-              (r) => r.genus === queuedEvolution.userEvolutionGenus
-            )
-          );
-        }
-      } else if (queuedEvolution.userEvolutionTarget === "auto") {
-        raceName = "Auto Achievements";
-        raceClass = "has-text-advanced";
-      } else if (race) {
-        raceName = race.name;
-        raceClass = getRaceColor(race);
-        if (race.genus == "hybrid") {
-          if (game.races[race.id].hybrid.includes(
-            queuedEvolution.userEvolutionGenus
-          )) {
-            raceName += ", " + game.loc(`genelab_genus_${queuedEvolution.userEvolutionGenus}`);
-          } else {
-            raceName += ", " + game.loc(`genelab_genus_${game.races[race.id].hybrid[0]}`);
-          }
-        }
-      } else {
-        raceName = "Unrecognized race!";
-        raceClass = "has-text-danger";
-      }
-      let star = $(
-        `#settings a.dropdown-item:contains("${game.loc(
-          game.global.settings.icon
-        )}") svg`
-      ).clone();
-      star.removeClass();
-      star.addClass("star" + getStarLevel(queuedEvolution));
-      if (queuedEvolution.prestigeType !== "none") {
-        let prestige = prestigeTypes.find(
-          (prest) => prest.val === queuedEvolution.prestigeType
-        );
-        if (prestige) {
-          prestigeName = `(${prestige.short_label ?? prestige.label})`;
-          prestigeClass = "has-text-info";
-        } else {
-          prestigeName = "Unrecognized prestige!";
-          prestigeClass = "has-text-danger";
-        }
-      }
-      let queueNode = $(`
-          <tr id="script_evolution_${id}" value="${id}" class="script-draggable">
-            <td style="width:25%"><span class="${raceClass}">${raceName}</span> <span class="${prestigeClass}">${prestigeName}</span> ${star.prop("outerHTML") ?? getStarLevel(queuedEvolution) - 1 + "*"}</td>
-            <td style="width:70%"><textarea class="textarea">${JSON.stringify(
-        queuedEvolution,
-        null,
-        4
-      )}</textarea></td>
-            <td style="width:5%"><a class="button is-dark is-small" style="width: 26px; height: 26px"><span>X</span></a></td>
-          </tr>`);
-      queueNode.find(".button").on("click", function() {
-        settingsRaw.evolutionQueue.splice(id, 1);
-        updateSettingsFromState();
-        updateEvolutionSettingsContent();
-      });
-      queueNode.find(".textarea").on("change", function() {
-        try {
-          let queuedEvolution2 = JSON.parse(this.value);
-          settingsRaw.evolutionQueue[id] = queuedEvolution2;
-          updateSettingsFromState();
-          updateEvolutionSettingsContent();
-        } catch (error) {
-          queueNode.find("td:eq(0)").html(`<span class="has-text-danger">${error}</span>`);
-        }
-      });
-      return queueNode;
-    }
-    function addEvolutionSetting() {
-      let queuedEvolution = {};
-      for (let settingName of evolutionSettingsToStore) {
-        let settingValue = settingsRaw[settingName];
-        queuedEvolution[settingName] = settingValue;
-      }
-      let overridePrestige = $("#script_evolution_prestige").first().val();
-      if (overridePrestige && overridePrestige !== "auto") {
-        queuedEvolution.prestigeType = overridePrestige;
-      }
-      let queueLength = settingsRaw.evolutionQueue.push(queuedEvolution);
-      updateSettingsFromState();
-      let tableBodyNode = $("#script_evolutionQueueTable");
-      tableBodyNode.append(buildEvolutionQueueItem(queueLength - 1));
-    }
-    function buildPlanetSettings() {
-      let sectionId = "planet";
-      let sectionName = "Planet Weighting";
-      let resetFunction = function() {
-        resetPlanetSettings(true);
-        updateSettingsFromState();
-        updatePlanetSettingsContent();
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updatePlanetSettingsContent
-      );
-    }
-    function updatePlanetSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_planetContent");
-      currentNode.empty().off("*");
-      currentNode.append(`
-          <span>Planet Weighting = Biome Weighting + Trait Weighting + (Extras Intensity * Extras Weightings)</span>
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:20%">Biome</th>
-              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
-              <th class="has-text-warning" style="width:20%">Trait</th>
-              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
-              <th class="has-text-warning" style="width:20%">Extra</th>
-              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
-            </tr>
-            <tbody id="script_planetTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_planetTableBody");
-      let newTableBodyText = "";
-      let tableSize = Math.max(
-        biomeList.length,
-        traitList.length,
-        extraList.length
-      );
-      for (let i = 0; i < tableSize; i++) {
-        newTableBodyText += `<tr><td id="script_planet_${i}" style="width:20%"></td><td style="width:calc(40% / 3);border-right-width:1px"></td><td style="width:20%"></td><td style="width:calc(40% / 3);border-right-width:1px"></td><td style="width:20%"></td><td style="width:calc(40% / 3)"></td>/tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < tableSize; i++) {
-        let tableElement = $("#script_planet_" + i);
-        if (i < biomeList.length) {
-          tableElement.append(
-            buildTableLabel(game.loc("biome_" + biomeList[i] + "_name"))
-          );
-          tableElement = tableElement.next();
-          addTableInput(tableElement, "biome_w_" + biomeList[i]);
-        } else {
-          tableElement = tableElement.next();
-        }
-        tableElement = tableElement.next();
-        if (i < traitList.length) {
-          tableElement.append(
-            buildTableLabel(i == 0 ? "None" : game.loc("planet_" + traitList[i]))
-          );
-          tableElement = tableElement.next();
-          addTableInput(tableElement, "trait_w_" + traitList[i]);
-        } else {
-          tableElement = tableElement.next();
-        }
-        tableElement = tableElement.next();
-        if (i < extraList.length) {
-          tableElement.append(buildTableLabel(extraList[i]));
-          tableElement = tableElement.next();
-          addTableInput(tableElement, "extra_w_" + extraList[i]);
-        }
-      }
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function buildTriggerSettings() {
-      let sectionId = "trigger";
-      let sectionName = "Trigger";
-      let resetFunction = function() {
-        resetTriggerSettings(true);
-        updateSettingsFromState();
-        updateTriggerSettingsContent();
-        resetCheckbox("autoTrigger");
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateTriggerSettingsContent
-      );
-    }
-    function updateTriggerSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_triggerContent");
-      currentNode.empty().off("*");
-      currentNode.append(
-        '<div style="margin-top: 10px;"><button id="script_trigger_add" class="button">Add New Trigger</button></div>'
-      );
-      $("#script_trigger_add").on("click", addTriggerSetting);
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" colspan="3">Requirement</th>
-              <th class="has-text-warning" colspan="5">Action</th>
-            </tr>
-            <tr>
-              <th class="has-text-warning" style="width:16%">Type</th>
-              <th class="has-text-warning" style="width:18%">Value</th>
-              <th class="has-text-warning" style="width:6%" title="Numerical variables compared to this value using '>=', boolean variables - using '=='. String variables not currently supported by triggers.">Result</th>
-              <th class="has-text-warning" style="width:16%">Type</th>
-              <th class="has-text-warning" style="width:18%">Id</th>
-              <th class="has-text-warning" style="width:6%">Count</th>
-              <th style="width:20%"></th>
-            </tr>
-            <tbody id="script_triggerTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_triggerTableBody");
-      let newTableBodyText = "";
-      for (let i = 0; i < TriggerManager.priorityList.length; i++) {
-        const trigger = TriggerManager.priorityList[i];
-        newTableBodyText += `
-            <tr id="script_trigger_${trigger.seq}" value="${trigger.seq}" class="script-draggable">
-              <td style="width:16%"></td>
-              <td style="width:18%"></td>
-              <td style="width:6%"></td>
-              <td style="width:16%"></td>
-              <td style="width:18%"></td>
-              <td style="width:6%"></td>
-              <td style="width:20%"></td>
-            </tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < TriggerManager.priorityList.length; i++) {
-        const trigger = TriggerManager.priorityList[i];
-        buildTriggerRequirementType(trigger);
-        buildTriggerRequirementId(trigger);
-        buildTriggerRequirementCount(trigger);
-        buildTriggerActionType(trigger);
-        buildTriggerActionId(trigger);
-        buildTriggerActionCount(trigger);
-        buildTriggerSettingsColumn(trigger);
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper,
-        update: function() {
-          let triggerIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < triggerIds.length; i++) {
-            TriggerManager.getTrigger(parseInt(triggerIds[i])).priority = i;
-          }
-          TriggerManager.sortByPriority();
-          updateSettingsFromState();
-        }
-      });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function addTriggerSetting() {
-      let trigger = TriggerManager.AddTrigger(
-        "Boolean",
-        false,
-        1,
-        "research",
-        "tech-club",
-        0
-      );
-      updateSettingsFromState();
-      let tableBodyNode = $("#script_triggerTableBody");
-      let newTableBodyText = "";
-      newTableBodyText += `
-        <tr id="script_trigger_${trigger.seq}" value="${trigger.seq}" class="script-draggable">
-          <td style="width:16%"></td>
-          <td style="width:18%"></td>
-          <td style="width:6%"></td>
-          <td style="width:16%"></td>
-          <td style="width:18%"></td>
-          <td style="width:6%"></td>
-          <td style="width:20%"></td>
-        </tr>`;
-      tableBodyNode.append($(newTableBodyText));
-      buildTriggerRequirementType(trigger);
-      buildTriggerRequirementId(trigger);
-      buildTriggerRequirementCount(trigger);
-      buildTriggerActionType(trigger);
-      buildTriggerActionId(trigger);
-      buildTriggerActionCount(trigger);
-      buildTriggerSettingsColumn(trigger);
-    }
-    function buildTriggerRequirementType(trigger) {
-      let triggerElement = $("#script_trigger_" + trigger.seq).children().eq(0);
-      triggerElement.empty().off("*");
-      let types = Object.entries(checkTypes).filter(
-        (c) => !overrideOnlyChecks.includes(c[0]) || trigger.requirementType === c[0]
-      ).map(
-        ([id, type]) => `<option value="${id}" title="${type.desc}">${id.replace(/([A-Z])/g, " $1").trim()}</option>`
-      ).join();
-      let typeSelectNode = $(`
-          <select style="width: 100%">
-            <option value = "chain" title = "This condition is met when above trigger is complete, always true for first trigger in list">Chain</option>
-            ${types}
-          </select>`);
-      typeSelectNode.val(trigger.requirementType);
-      triggerElement.append(typeSelectNode);
-      typeSelectNode.on("change", function() {
-        trigger.updateRequirementType(this.value);
-        buildTriggerRequirementId(trigger);
-        buildTriggerRequirementCount(trigger);
-        updateSettingsFromState();
-      });
-      return;
-    }
-    function buildTriggerRequirementId(trigger) {
-      let triggerElement = $("#script_trigger_" + trigger.seq).children().eq(1);
-      triggerElement.empty().off("*");
-      let check = checkTypes[trigger.requirementType];
-      if (check) {
-        triggerElement.append(
-          buildInputNode(
-            check.arg,
-            check.options,
-            trigger.requirementId,
-            function(result) {
-              trigger.requirementId = result;
-              trigger.complete = false;
-              updateSettingsFromState();
-            }
-          )
-        );
-      }
-    }
-    function buildTriggerRequirementCount(trigger) {
-      let triggerElement = $("#script_trigger_" + trigger.seq).children().eq(2);
-      triggerElement.empty().off("*");
-      if (trigger.requirementType !== "Boolean" && checkTypes[trigger.requirementType]) {
-        let retType = retBools.includes(trigger.requirementType) ? "boolean" : "number";
-        triggerElement.append(
-          buildInputNode(
-            retType,
-            null,
-            trigger.requirementCount,
-            function(result) {
-              trigger.requirementCount = Number(result);
-              trigger.complete = false;
-              updateSettingsFromState();
-            }
-          )
-        );
-      }
-    }
-    function buildTriggerActionType(trigger) {
-      let triggerElement = $("#script_trigger_" + trigger.seq).children().eq(3);
-      triggerElement.empty().off("*");
-      let typeSelectNode = $(`
-          <select style="width: 100%">
-            <option value = "research" title = "Research technology">Research</option>
-            <option value = "build" title = "Build buildings up to 'count' amount">Build</option>
-            <option value = "arpa" title = "Build projects up to 'count' amount">A.R.P.A.</option>
-          </select>`);
-      typeSelectNode.val(trigger.actionType);
-      triggerElement.append(typeSelectNode);
-      typeSelectNode.on("change", function() {
-        trigger.updateActionType(this.value);
-        buildTriggerActionId(trigger);
-        buildTriggerActionCount(trigger);
-        updateSettingsFromState();
-      });
-      return;
-    }
-    function buildTriggerActionId(trigger) {
-      let triggerElement = $("#script_trigger_" + trigger.seq).children().eq(4);
-      triggerElement.empty().off("*");
-      let argDef = trigger.actionType === "research" ? argType.research : trigger.actionType === "build" ? argType.building : trigger.actionType === "arpa" ? argType.project : null;
-      if (argDef) {
-        triggerElement.append(
-          buildInputNode(
-            argDef.arg,
-            argDef.options,
-            trigger.actionId,
-            function(result) {
-              trigger.actionId = result;
-              trigger.complete = false;
-              updateSettingsFromState();
-            }
-          )
-        );
-      }
-    }
-    function buildTriggerActionCount(trigger) {
-      let triggerElement = $("#script_trigger_" + trigger.seq).children().eq(5);
-      triggerElement.empty().off("*");
-      if (trigger.actionType === "build" || trigger.actionType === "arpa") {
-        triggerElement.append(
-          buildInputNode("number", null, trigger.actionCount, function(result) {
-            trigger.actionCount = Number(result);
-            trigger.complete = false;
-            updateSettingsFromState();
-          })
-        );
-      }
-    }
-    function buildTriggerSettingsColumn(trigger) {
-      let triggerElement = $("#script_trigger_" + trigger.seq).children().eq(6);
-      triggerElement.empty().off("*");
-      let deleteTriggerButton = $(
-        '<a class="button is-small" style="width: 26px; height: 26px"><span>X</span></a>'
-      );
-      triggerElement.append(deleteTriggerButton);
-      deleteTriggerButton.on("click", function() {
-        TriggerManager.RemoveTrigger(trigger.seq);
-        updateSettingsFromState();
-        updateTriggerSettingsContent();
-      });
-      let duplicateTriggerButton = $(
-        '<a class="button is-small" style="width: 26px; height: 26px"><span>&#9282;</span></a>'
-      );
-      triggerElement.append(duplicateTriggerButton);
-      duplicateTriggerButton.on("click", function() {
-        TriggerManager.DuplicateTrigger(trigger.seq);
-        updateSettingsFromState();
-        updateTriggerSettingsContent();
-      });
-      let evalizeTriggerButton = $(
-        '<a class="button is-small" style="width: 26px; height: 26px"><span>E</span></a>'
-      );
-      triggerElement.append(evalizeTriggerButton);
-      evalizeTriggerButton.on("click", function() {
-        TriggerManager.EvalizeTrigger(trigger.seq);
       });
     }
     function buildActiveTargetsUI() {
@@ -25756,924 +29353,6 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
     function removeBuildPlannerUI() {
       $("#script_planner-wrapper").remove();
     }
-    function buildResearchSettings() {
-      let sectionId = "research";
-      let sectionName = "Research";
-      let resetFunction = function() {
-        resetResearchSettings(true);
-        updateSettingsFromState();
-        updateResearchSettingsContent();
-        resetCheckbox("autoResearch");
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateResearchSettingsContent
-      );
-    }
-    function updateResearchSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_researchContent");
-      currentNode.empty().off("*");
-      let theology1Options = [
-        {
-          val: "auto",
-          label: "Script Managed",
-          hint: "Picks Anthropology for MAD prestige, and Fanaticism for others. Achieve-worthy combos are exception, on such runs Fanaticism will be always picked."
-        },
-        {
-          val: "tech-anthropology",
-          label: game.loc("tech_anthropology"),
-          hint: game.loc("tech_anthropology_effect")
-        },
-        {
-          val: "tech-fanaticism",
-          label: game.loc("tech_fanaticism"),
-          hint: game.loc("tech_fanaticism_effect")
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "userResearchTheology_1",
-        "Target Theology 1",
-        "Theology 1 technology to research, have no effect after getting Transcendence perk",
-        theology1Options
-      );
-      let theology2Options = [
-        {
-          val: "auto",
-          label: "Script Managed",
-          hint: "Picks Deify for Ascension, Demonic Infusion, Apotheosis, AI Apocalypse, Terraform, Matrix, Retirement and Eden prestiges, or Study for others prestiges"
-        },
-        {
-          val: "tech-study",
-          label: game.loc("tech_study"),
-          hint: game.loc("tech_study_desc")
-        },
-        {
-          val: "tech-deify",
-          label: game.loc("tech_deify"),
-          hint: game.loc("tech_deify_desc")
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "userResearchTheology_2",
-        "Target Theology 2",
-        "Theology 2 technology to research",
-        theology2Options
-      );
-      addSettingsList(
-        currentNode,
-        "researchIgnore",
-        "Ignored researches",
-        "Listed researches won't be purchased without manual input, or user defined trigger. On top of this list script will also ignore some other special techs, such as Limit Collider, Dark Energy Bomb, Exotic Infusion, etc.",
-        techIds
-      );
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function buildWarSettings(parentNode, secondaryPrefix) {
-      let sectionId = "war";
-      let sectionName = "Foreign Affairs";
-      let resetFunction = function() {
-        resetWarSettings(true);
-        updateSettingsFromState();
-        updateWarSettingsContent(secondaryPrefix);
-        resetCheckbox("autoFight");
-      };
-      buildSettingsSection2(
-        parentNode,
-        secondaryPrefix,
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateWarSettingsContent
-      );
-    }
-    function updateWarSettingsContent(secondaryPrefix) {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $(`#script_${secondaryPrefix}warContent`);
-      currentNode.empty().off("*");
-      addSettingsHeader1(currentNode, "Foreign Powers");
-      addSettingsToggle(
-        currentNode,
-        "foreignPacifist",
-        "Pacifist",
-        "Turns attacks off and on"
-      );
-      addSettingsToggle(
-        currentNode,
-        "foreignUnification",
-        "Perform unification",
-        "Perform unification once all three powers are controlled. autoResearch should be enabled for this to work."
-      );
-      addSettingsToggle(
-        currentNode,
-        "foreignOccupyLast",
-        "Occupy last foreign power",
-        "Occupy last foreign power once other two are controlled, and unification is researched to speed up unification. Disable if you want annex\\purchase achievements."
-      );
-      addSettingsToggle(
-        currentNode,
-        "foreignForceSabotage",
-        "Sabotage foreign power when useful",
-        "Perform sabotage against current target if it's useful(power above 50), regardless of required power, and default action defined above"
-      );
-      addSettingsToggle(
-        currentNode,
-        "foreignTrainSpy",
-        "Train spies",
-        "Train spies to use against foreign powers"
-      );
-      addSettingsNumber(
-        currentNode,
-        "foreignSpyMax",
-        "Maximum spies",
-        "Maximum spies per foreign power"
-      );
-      addSettingsNumber(
-        currentNode,
-        "foreignPowerRequired",
-        "Military Power to switch target",
-        "Switches to attack next foreign power once its power lowered down to this number. When exact numbers not know script tries to approximate it."
-      );
-      let policyOptions = [
-        { val: "Ignore", label: "Ignore", hint: "" },
-        ...Object.entries(SpyManager.Types).map(([name, task]) => ({
-          val: name,
-          label: game.loc("civics_spy_" + task.id),
-          hint: ""
-        })),
-        { val: "Occupy", label: "Occupy", hint: "" }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "foreignPolicyInferior",
-        "Inferior Power",
-        "Perform this against inferior foreign power, with military power equal or below given threshold. Complex actions includes required preparation - Annex and Purchase will incite and influence, Occupy will sabotage, until said options will be available.",
-        policyOptions
-      );
-      addSettingsSelect(
-        currentNode,
-        "foreignPolicySuperior",
-        "Superior Power",
-        "Perform this against superior foreign power, with military power above given threshold. Complex actions includes required preparation - Annex and Purchase will incite and influence, Occupy will sabotage, until said options will be available.",
-        policyOptions
-      );
-      let rivalOptions = [
-        { val: "Ignore", label: "Ignore", hint: "Does nothing" },
-        {
-          val: "Influence",
-          label: "Alliance",
-          hint: "Influence rival up to best relations"
-        },
-        { val: "Sabotage", label: "War", hint: "Sabotage and plunder rival" },
-        {
-          val: "Betrayal",
-          label: "Betrayal",
-          hint: "Influence rival up to best relations, and start sabotaging. Once military power reached minimum - start plundering it"
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "foreignPolicyRival",
-        "Rival Power (The True Path)",
-        "Perform this against rival foreign power.",
-        rivalOptions
-      );
-      addSettingsHeader1(currentNode, "Campaigns");
-      addSettingsNumber(
-        currentNode,
-        "foreignAttackLivingSoldiersPercent",
-        "Minimum percentage of alive soldiers for attack",
-        "Only attacks if you ALSO have the target battalion size of healthy soldiers available, so this setting will only take effect if your battalion does not include all of your soldiers"
-      );
-      addSettingsNumber(
-        currentNode,
-        "foreignAttackHealthySoldiersPercent",
-        "Minimum percentage of healthy soldiers for attack",
-        "Set to less than 100 to take advantage of being able to heal more soldiers in a game day than get wounded in a typical attack"
-      );
-      addSettingsNumber(
-        currentNode,
-        "foreignHireMercMoneyStoragePercent",
-        "Hire mercenary if money storage greater than percent",
-        "Hire a mercenary if remaining money after purchase will be greater than this percent"
-      );
-      addSettingsNumber(
-        currentNode,
-        "foreignHireMercCostLowerThanIncome",
-        "OR if cost lower than money earned in X seconds",
-        "Combines with the money storage percent setting to determine when to hire mercenaries"
-      );
-      addSettingsNumber(
-        currentNode,
-        "foreignHireMercDeadSoldiers",
-        "AND amount of dead soldiers above this number",
-        "Hire a mercenary only when current amount of dead soldiers above given number"
-      );
-      addSettingsNumber(
-        currentNode,
-        "foreignMinAdvantage",
-        "Minimum advantage",
-        "Minimum advantage to launch campaign, ignored during ambushes. 100% chance to win will be reached at approximately(influenced by traits and selected campaign) 75% advantage."
-      );
-      addSettingsNumber(
-        currentNode,
-        "foreignMaxAdvantage",
-        "Maximum advantage",
-        "Once campaign is selected, your battalion will be limited in size down to this advantage, reducing potential loses"
-      );
-      addSettingsNumber(
-        currentNode,
-        "foreignMaxSiegeBattalion",
-        "Maximum siege battalion",
-        "Maximum battalion for siege campaign. Only try to siege if it's possible with up to given amount of soldiers. Siege is expensive, if you'll be doing it with too big battalion it might be less profitable than other combat campaigns. This option does not applied to unifying sieges, it affect only looting."
-      );
-      let protectOptions = [
-        {
-          val: "never",
-          label: "Never",
-          hint: "No additional limits to battalion size. Always send maximum soldiers allowed with current Max Advantage."
-        },
-        {
-          val: "always",
-          label: "Always",
-          hint: "Limit battalions to sizes which will neven suffer any casualties in successful fights. You still will lose soldiers after failures, increasing minimum advantage can improve winning odds. This option designed to use with armored races favoring frequent attacks, with no approppriate build it may prevent any attacks from happening."
-        },
-        {
-          val: "auto",
-          label: "Auto",
-          hint: "Tries to maximize total number of attacks, alternating between full and safe attacks based on soldiers condition, to get most from both healing and recruiting."
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "foreignProtect",
-        "Protect soldiers",
-        "Configures safety of attacks. This option does not applies to unifying sieges, it affect only looting.",
-        protectOptions
-      );
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function buildHellSettings(parentNode, secondaryPrefix) {
-      let sectionId = "hell";
-      let sectionName = "Hell";
-      let resetFunction = function() {
-        resetHellSettings(true);
-        updateSettingsFromState();
-        updateHellSettingsContent(secondaryPrefix);
-        resetCheckbox("autoHell");
-      };
-      buildSettingsSection2(
-        parentNode,
-        secondaryPrefix,
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateHellSettingsContent
-      );
-    }
-    function updateHellSettingsContent(secondaryPrefix) {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $(`#script_${secondaryPrefix}hellContent`);
-      currentNode.empty().off("*");
-      addSettingsHeader1(currentNode, "Entering Hell");
-      addSettingsNumber(
-        currentNode,
-        "hellHomeGarrison",
-        "Soldiers to stay out of hell",
-        "Home garrison maximum"
-      );
-      addSettingsNumber(
-        currentNode,
-        "hellMinSoldiers",
-        "Minimum soldiers to be available for hell (pull out if below)",
-        "Don't enter hell if not enough soldiers, or get out if already in"
-      );
-      addSettingsNumber(
-        currentNode,
-        "hellMinSoldiersPercent",
-        "Alive soldier percentage for entering hell",
-        "Don't enter hell if too many soldiers are dead, but don't get out"
-      );
-      addSettingsHeader1(currentNode, "Hell Garrison");
-      addSettingsToggle(
-        currentNode,
-        "hellAssaultReserve",
-        "Always reserve hell troops to Secure the Pit",
-        "With this option enabled hell soldiers will be put to fortress once Secure the Pit is unlocked, to fulfil its costs. It makes saving resources and setting triggers for it easier, at cost of less efficient use of manpower."
-      );
-      addSettingsNumber(
-        currentNode,
-        "hellTargetFortressDamage",
-        "Target wall damage per siege (overestimates threat)",
-        "Actual damage will usually be lower due to patrols and drones"
-      );
-      addSettingsNumber(
-        currentNode,
-        "hellLowWallsMulti",
-        "Garrison bolster factor for damaged walls",
-        "Multiplies target defense rating by this when close to 0 wall integrity, half as much increase at half integrity"
-      );
-      addSettingsHeader1(currentNode, "Patrol Size");
-      addSettingsToggle(
-        currentNode,
-        "hellHandlePatrolSize",
-        "Automatically adjust patrol size",
-        "Sets patrol attack rating based on current threat, lowers it depending on buildings, increases it to the minimum rating, and finally increases it based on dead soldiers. Handling patrol count has to be turned on."
-      );
-      addSettingsNumber(
-        currentNode,
-        "hellPatrolMinRating",
-        "Minimum patrol attack rating",
-        "Will never go below this"
-      );
-      addSettingsNumber(
-        currentNode,
-        "hellPatrolThreatPercent",
-        "Percent of current threat as base patrol rating",
-        "Demon encounters have a rating of 2 to 10 percent of current threat"
-      );
-      addSettingsNumber(
-        currentNode,
-        "hellPatrolDroneMod",
-        "&emsp;Lower Rating for each active Predator Drone by",
-        "Predators reduce threat before patrols fight"
-      );
-      addSettingsNumber(
-        currentNode,
-        "hellPatrolDroidMod",
-        "&emsp;Lower Rating for each active War Droid by",
-        "War Droids boost patrol attack rating by 1 or 2 soldiers depending on tech"
-      );
-      addSettingsNumber(
-        currentNode,
-        "hellPatrolBootcampMod",
-        "&emsp;Lower Rating for each Bootcamp by",
-        "Bootcamps help regenerate soldiers faster"
-      );
-      addSettingsNumber(
-        currentNode,
-        "hellBolsterPatrolRating",
-        "Increase patrol rating by up to this when soldiers die",
-        "Larger patrols are less effective, but also have fewer deaths"
-      );
-      addSettingsNumber(
-        currentNode,
-        "hellBolsterPatrolPercentTop",
-        "&emsp;Start increasing patrol rating at this home garrison fill percent",
-        "This is the higher number"
-      );
-      addSettingsNumber(
-        currentNode,
-        "hellBolsterPatrolPercentBottom",
-        "&emsp;Full patrol rating increase below this home garrison fill percent",
-        "This is the lower number"
-      );
-      addSettingsHeader1(currentNode, "Attractors");
-      addSettingsNumber(
-        currentNode,
-        "hellAttractorBottomThreat",
-        "&emsp;All Attractors on below this threat",
-        "Turn more and more attractors off when getting nearer to the top threat. Auto Power needs to be on for this to work."
-      );
-      addSettingsNumber(
-        currentNode,
-        "hellAttractorTopThreat",
-        "&emsp;All Attractors off above this threat",
-        "Turn more and more attractors off when getting nearer to the top threat. Auto Power needs to be on for this to work."
-      );
-      addSettingsHeader1(currentNode, "Warlord Specific Settings");
-      addSettingsToggle(
-        currentNode,
-        "warlordHandleFortress",
-        "Automatically attack enemy fortresses during Warlord",
-        "Attacks an enemy fortress when minions are above the specified threshold"
-      );
-      addSettingsNumber(
-        currentNode,
-        "warlordMinimumMinions",
-        "&emsp;Minimum minions required to attack an enemy fortress",
-        "Will not attack if there are fewer than this many minions"
-      );
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function buildFleetSettings(parentNode, secondaryPrefix) {
-      let sectionId = "fleet";
-      let sectionName = "Fleet";
-      let resetFunction = function() {
-        resetFleetSettings(true);
-        updateSettingsFromState();
-        updateFleetSettingsContent(secondaryPrefix);
-        resetCheckbox("autoFleet");
-      };
-      buildSettingsSection2(
-        parentNode,
-        secondaryPrefix,
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateFleetSettingsContent
-      );
-    }
-    function updateFleetSettingsContent(secondaryPrefix) {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $(`#script_${secondaryPrefix}fleetContent`);
-      currentNode.empty().off("*");
-      updateFleetAndromeda(currentNode, secondaryPrefix);
-      updateFleetOuter(currentNode, secondaryPrefix);
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function updateFleetOuter(currentNode, secondaryPrefix) {
-      addStandardHeading(currentNode, "Outer Solar");
-      let shipOptions = [
-        { val: "none", label: "None", hint: "Ship building disabled" },
-        {
-          val: "user",
-          label: "Current design",
-          hint: "Build whatever currently set in Ship Yard"
-        },
-        {
-          val: "manual",
-          label: "Manual mode",
-          hint: "Assists accumulating resources needed for current blueprint, without building or deploying anything. It also might need tweaking prioritization settings to work."
-        },
-        {
-          val: "custom",
-          label: "Presets",
-          hint: "Build ships with components configured below. All components need to be unlocked, and resulting design should have enough power"
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "fleetOuterShips",
-        "Ships to build",
-        "Once avalable and affordable script will build ship of selected design, and send it to region with most piracy * weighting",
-        shipOptions
-      );
-      addSettingsNumber(
-        currentNode,
-        "fleetOuterCrew",
-        "Minimum idle soldiers",
-        "Only build ships when amount of idle soldiers above give number"
-      );
-      addSettingsToggle(
-        currentNode,
-        "fleetExploreTau",
-        "Explore Tau Ceti",
-        "Send explorer to Tau Ceti"
-      );
-      addSettingsHeader1(currentNode, "Fighter");
-      for (let [type, parts] of Object.entries(FleetManagerOuter.ShipConfig)) {
-        let partOptions = parts.map((id) => ({
-          val: id,
-          label: game.loc(`outer_shipyard_${type}_${id}`)
-        }));
-        addSettingsSelect(
-          currentNode,
-          `fleet_outer_${type}`,
-          game.loc(`outer_shipyard_${type}`),
-          "Preset ship component",
-          partOptions
-        );
-      }
-      addSettingsHeader1(currentNode, "Scout");
-      for (let [type, parts] of Object.entries(FleetManagerOuter.ShipConfig)) {
-        let partOptions = parts.map((id) => ({
-          val: id,
-          label: game.loc(`outer_shipyard_${type}_${id}`)
-        }));
-        addSettingsSelect(
-          currentNode,
-          `fleet_scout_${type}`,
-          game.loc(`outer_shipyard_${type}`),
-          "Preset ship component",
-          partOptions
-        );
-      }
-      currentNode.append(`
-          <table style="width:100%; text-align: left">
-            <tr>
-              <th class="has-text-warning" style="width:35%">Region</th>
-              <th class="has-text-warning" style="width:20%" title="Weighting determines order of ships dispatching, regions with higher weighting will be get ships sooner">Weighting</th>
-              <th class="has-text-warning" style="width:20%" title="Desired protection from syndicate, trying to reach 100%(1.0) defense with full uptime might be wasteful due to excesses and fluctuations">Defend</th>
-              <th class="has-text-warning" style="width:20%" title="Amounts of scouts to dispatch">Scouts</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_${secondaryPrefix}fleetOuterTable"></tbody>
-          </table>`);
-      let tableBodyNode = $(`#script_${secondaryPrefix}fleetOuterTable`);
-      let newTableBodyText = "";
-      for (let reg of FleetManagerOuter.Regions) {
-        newTableBodyText += `<tr><td id="script_${secondaryPrefix}fleet_${reg}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let reg of FleetManagerOuter.Regions) {
-        let fleetElement = $(`#script_${secondaryPrefix}fleet_${reg}`);
-        let nameRef = game.actions.space[reg].info.name;
-        let gameName = typeof nameRef === "function" ? nameRef() : nameRef;
-        let label = reg.split("_").slice(1).map((n) => n.charAt(0).toUpperCase() + n.slice(1)).join(" ");
-        if (label !== gameName) {
-          label += ` (${gameName})`;
-        }
-        fleetElement.append(buildTableLabel(label));
-        fleetElement = fleetElement.next();
-        addTableInput(fleetElement, "fleet_outer_pr_" + reg);
-        fleetElement = fleetElement.next();
-        addTableInput(fleetElement, "fleet_outer_def_" + reg);
-        fleetElement = fleetElement.next();
-        addTableInput(fleetElement, "fleet_outer_sc_" + reg);
-      }
-    }
-    function updateFleetAndromeda(currentNode, secondaryPrefix) {
-      addStandardHeading(currentNode, "Andromeda");
-      addSettingsToggle(
-        currentNode,
-        "fleetMaxCover",
-        "Maximize protection of prioritized systems",
-        "Adjusts ships distribution to fully supress piracy in prioritized regions. Some potential defense will be wasted, as it will use big ships to cover small holes, when it doesn't have anything fitting better. This option is not required: all your dreadnoughts still will be used even without this option."
-      );
-      addSettingsToggle(
-        currentNode,
-        "fleetCrewReclaim",
-        "Reclaim crews of surplus ships",
-        "Power down combat ships which are not needed to fully supress piracy, releasing their crews back to the workforce. Ships are powered back up when coverage requires them. Inactive while fleet is being accumulated for an assault mission. Surplus ships won't be parked at Gorddon for the Symposium bonus while this is enabled."
-      );
-      addSettingsNumber(
-        currentNode,
-        "fleetEmbassyKnowledge",
-        "Minimum knowledge for Embassy",
-        "Building Embassy increases maximum piracy up to 100, script won't Auto Build it until this knowledge cap is reached."
-      );
-      addSettingsNumber(
-        currentNode,
-        "fleetAlienGiftKnowledge",
-        "Minimum knowledge for Alien Gift",
-        "Researching Alien Gift increases maximum piracy up to 250, script won't Auto Research it until this knowledge cap is reached."
-      );
-      addSettingsNumber(
-        currentNode,
-        "fleetAlien2Knowledge",
-        "Minimum knowledge for Alien 2 Assault",
-        "Assaulting Alien 2 increases maximum piracy up to 500, script won't do it until this knowledge cap is reached. Regardless of set value it won't ever try to assault until you have big enough fleet to do it without loses."
-      );
-      let alien2AssaultOptions = [
-        {
-          val: "none",
-          label: "No Losses",
-          hint: "Min fleet strength 650. No losses."
-        },
-        {
-          val: "suicide",
-          label: "Suicide Mission",
-          hint: "Attack as soon as we hit 400 fleet rating. There will be losses."
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "fleetAlien2Loses",
-        "Alien 2 Mission",
-        "Assault Alien 2 when chosen outcome is achievable. You should really keep the default, unless you're speed running and want to take it out ASAP with losses.",
-        alien2AssaultOptions
-      );
-      let assaultOptions = [
-        {
-          val: "ignore",
-          label: "Manual assault",
-          hint: "Won't ever launch assault mission on Chthonian"
-        },
-        {
-          val: "high",
-          label: "High casualties",
-          hint: "Unlock Chthonian using mixed fleet, high casualties (1250+ total fleet power, 500 will be lost)"
-        },
-        {
-          val: "avg",
-          label: "Average casualties",
-          hint: "Unlock Chthonian using mixed fleet, average casualties (2500+ total fleet power, 160 will be lost)"
-        },
-        {
-          val: "low",
-          label: "Low casualties",
-          hint: "Unlock Chthonian using mixed fleet, low casualties (4500+ total fleet power, 80 will be lost)"
-        },
-        {
-          val: "frigate",
-          label: "Frigate",
-          hint: "Unlock Chthonian loosing Frigate ship(s) (4500+ total fleet power, suboptimal for banana\\instinct runs)"
-        },
-        {
-          val: "dread",
-          label: "Dreadnought",
-          hint: "Unlock Chthonian with Dreadnought suicide mission"
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "fleetChthonianLoses",
-        "Chthonian Mission",
-        "Assault Chthonian when chosen outcome is achievable. Mixed fleet formed to clear mission with minimum possible wasted ships, e.g. for low causlities it can sacriface 8 scouts, or 2 corvettes and 2 scouts, or frigate, and such. Whatever will be first available. It also takes in account perks and challenges, adjusting fleet accordingly.",
-        assaultOptions
-      );
-      currentNode.append(`
-          <table style="width:100%; text-align: left">
-            <tr>
-              <th class="has-text-warning" style="width:95%">Region</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_${secondaryPrefix}fleetTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $(`#script_${secondaryPrefix}fleetTableBody`);
-      let priorityRegions = galaxyRegions.slice().sort(
-        (a, b) => settingsRaw["fleet_pr_" + a] - settingsRaw["fleet_pr_" + b]
-      );
-      for (let i = 0; i < priorityRegions.length; i++) {
-        const settingName = `fleet_pr_${priorityRegions[i]}`;
-        const rowNode = $(`
-              <tr value="${priorityRegions[i]}" class="script-draggable script_bg_${settingName}">
-                <td id="script_${secondaryPrefix}fleet_${priorityRegions[i]}" style="width:95%"></td>
-                <td style="width:5%">
-                  <span class="script-lastcolumn"></span>
-                </td>
-              </tr>`);
-        rowNode.toggleClass(
-          "inactive-row",
-          Boolean(settingsRaw.overrides[settingName])
-        ).on(
-          "click",
-          {
-            label: `Andromeda region priority (${settingName})`,
-            name: settingName,
-            type: "number"
-          },
-          openOverrideModal
-        );
-        tableBodyNode.append(rowNode);
-      }
-      for (let i = 0; i < galaxyRegions.length; i++) {
-        let fleetElement = $(
-          `#script_${secondaryPrefix}fleet_${galaxyRegions[i]}`
-        );
-        let nameRef = galaxyRegions[i] === "gxy_alien1" ? "Alien 1 System" : galaxyRegions[i] === "gxy_alien2" ? "Alien 2 System" : game.actions.galaxy[galaxyRegions[i]].info.name;
-        fleetElement.append(
-          buildTableLabel(typeof nameRef === "function" ? nameRef() : nameRef)
-        );
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper,
-        update: function() {
-          let regionIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < regionIds.length; i++) {
-            settingsRaw["fleet_pr_" + regionIds[i]] = i;
-          }
-          updateSettingsFromState();
-          if (settings.showSettings && secondaryPrefix) {
-            updateFleetSettingsContent("");
-          }
-        }
-      });
-    }
-    function buildMechSettings() {
-      let sectionId = "mech";
-      let sectionName = "Mech & Spire";
-      let resetFunction = function() {
-        resetMechSettings(true);
-        updateSettingsFromState();
-        updateMechSettingsContent();
-        resetCheckbox("autoMech");
-        removeMechInfo();
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateMechSettingsContent
-      );
-    }
-    function updateMechSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_mechContent");
-      currentNode.empty().off("*");
-      let scrapOptions = [
-        {
-          val: "none",
-          label: "None",
-          hint: "Nothing will be scrapped automatically"
-        },
-        {
-          val: "single",
-          label: "Full bay",
-          hint: "Scrap mechs only when mech bay is full, and script need more room to build mechs"
-        },
-        {
-          val: "all",
-          label: "All inefficient",
-          hint: "Scrap all inefficient mechs immediately, using refounded resources to build better ones"
-        },
-        {
-          val: "mixed",
-          label: "Excess inefficient",
-          hint: "Scrap as much inefficient mechs as possible, trying to preserve just enough of old mechs to fill bay to max by the time when next floor will be reached, calculating threshold based on progress speed and resources incomes"
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "mechScrap",
-        "Scrap mechs",
-        "Configures what will be scrapped. Infernal mechs won't ever be scrapped.",
-        scrapOptions
-      );
-      addSettingsNumber(
-        currentNode,
-        "mechScrapEfficiency",
-        "Scrap efficiency",
-        "Scrap mechs only when '((OldMechRefund / NewMechCost) / (OldMechDamage / NewMechDamage))' more than given number.&#xA;For the cases when exchanged mechs have same size(1/3 refund) it means that with 1 eff. script allowed to scrap mechs under 33.3%. 1.5 eff. - under 22.2%, 2 eff. - under 16.6%, 0.5 eff. - under 66.6%, 0 eff. - under 100%, etc.&#xA;Efficiency below '1' is not recommended, unless scrap set to 'Full bay', as it's a breakpoint when refunded resources can immidiately compensate lost damage, resulting with best damage growth rate.&#xA;Efficiency above '1' is useful to save resources for more desperate times, or to compensate low soul gems income."
-      );
-      addSettingsNumber(
-        currentNode,
-        "mechCollectorValue",
-        "Collector value",
-        "Collectors can't be directly compared with combat mechs, having no firepower. Script will assume that one collector/size is equal to this amount of scout/size. If you feel that script is too reluctant to scrap old collectors - you can decrease this value. Or increase, to make them more persistant. 1 value - 50% collector equial to 50% scout, 0.5 value - 50% collector equial to 25% scout, 2 value - 50% collector equial to 100% scout, etc."
-      );
-      let buildOptions = [
-        {
-          val: "none",
-          label: "None",
-          hint: "Nothing will be build automatically"
-        },
-        {
-          val: "random",
-          label: "Random good",
-          hint: "Build random mech with size chosen below, and best possible efficiency"
-        },
-        {
-          val: "user",
-          label: "Current design",
-          hint: "Build whatever currently set in Mech Lab"
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "mechBuild",
-        "Build mechs",
-        "Configures what will be built. Infernal mechs won't ever be built.",
-        buildOptions
-      );
-      let sizeOptions = [
-        {
-          val: "auto",
-          label: "Damage Per Size",
-          hint: "Select affordable mech with most damage per size on current floor"
-        },
-        {
-          val: "gems",
-          label: "Damage Per Gems",
-          hint: "Select affordable mech with most damage per gems on current floor"
-        },
-        {
-          val: "supply",
-          label: "Damage Per Supply",
-          hint: "Select affordable mech with most damage per supply on current floor"
-        },
-        ...MechManager.Size.map((id) => ({
-          val: id,
-          label: game.loc(`portal_mech_size_${id}`),
-          hint: game.loc(`portal_mech_size_${id}_desc`)
-        }))
-      ];
-      addSettingsSelect(
-        currentNode,
-        "mechSize",
-        "Preferred mech size",
-        "Size of random mechs",
-        sizeOptions
-      );
-      addSettingsSelect(
-        currentNode,
-        "mechSizeGravity",
-        "Gravity mech size",
-        "Override preferred size with this on floors with high gravity",
-        sizeOptions
-      );
-      let specialOptions = [
-        {
-          val: "always",
-          label: "Always",
-          hint: "Add special equipment to all mechs"
-        },
-        {
-          val: "prefered",
-          label: "Preferred",
-          hint: "Add special equipment when it doesn't reduce efficiency for current floor"
-        },
-        {
-          val: "random",
-          label: "Random",
-          hint: "Special equipment will have same chance to be added as all others"
-        },
-        { val: "never", label: "Never", hint: "Never add special equipment" }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "mechSpecial",
-        "Special mechs",
-        "Configures special equip",
-        specialOptions
-      );
-      addSettingsNumber(
-        currentNode,
-        "mechWaygatePotential",
-        "Maximum mech potential for Waygate",
-        "Fight Demon Lord only when current mech team potential below given amount. Full bay of best mechs will have `1` potential. Damage against Demon Lord does not affected by floor modifiers, all mechs always does 100% damage to him. Thus it's most time-efficient to fight him at times when mechs can't make good progress against regular monsters, and waiting for rebuilding. Auto Power needs to be on for this to work."
-      );
-      addSettingsNumber(
-        currentNode,
-        "mechMinSupply",
-        "Minimum supply income",
-        "Build collectors if current supply income below given number"
-      );
-      addSettingsNumber(
-        currentNode,
-        "mechMaxCollectors",
-        "Maximum collectors ratio",
-        "Limiter for above option, maximum space used by collectors. 0.5 means up to 50% of total bay capacity will be dedicated to collectors, and such."
-      );
-      addSettingsNumber(
-        currentNode,
-        "mechSaveSupplyRatio",
-        "Save up supplies for next floor",
-        "Ratio of supplies to save up for next floor. Script will stop spending supplies on new mechs when it estimates that by the time when floor will be cleared you'll be under this supply ratio. That allows build bunch of new mechs suited for next enemy right after entering new floor. With 1 value script will try to start new floors with full supplies, 0.5 - with half, 0 - any, effectively disabling this option, etc."
-      );
-      addSettingsNumber(
-        currentNode,
-        "mechScouts",
-        "Minimum scouts ratio",
-        "Scouts compensate terrain penalty of suboptimal mechs. Build them up to this ratio."
-      );
-      addSettingsToggle(
-        currentNode,
-        "mechInfernalCollector",
-        "Build infernal collectors",
-        "Infernal collectors have incresed supply cost, and payback time, but becomes more profitable after ~30 minutes of uptime."
-      );
-      addSettingsToggle(
-        currentNode,
-        "mechScoutsRebuild",
-        "Rebuild scouts",
-        "Scouts provides full bonus to other mechs even being infficient, this option prevent rebuilding them saving resources."
-      );
-      addSettingsToggle(
-        currentNode,
-        "mechFillBay",
-        "Build smaller mechs when preferred not available",
-        "Build smaller mechs when preferred size can't be used due to low remaining bay space, or supplies cap"
-      );
-      addSettingsToggle(
-        currentNode,
-        "buildingMechsFirst",
-        "Build spire buildings only with full bay",
-        "Fill mech bays up to current limit before spending resources on additional spire buildings"
-      );
-      addSettingsToggle(
-        currentNode,
-        "mechBaysFirst",
-        "Scrap mechs only after building maximum bays",
-        "Scrap old mechs only when no new bays and purifiers can be builded"
-      );
-      addStandardHeading(currentNode, "Mech Stats");
-      let statsControls = $(
-        `<div style="margin-top: 5px; display: inline-flex;"></div>`
-      );
-      Object.entries({
-        Compact: true,
-        Efficient: true,
-        Special: true,
-        Gravity: false
-      }).forEach(([option, value]) => {
-        statsControls.append(`
-              <label class="switch" title="This switch have no ingame effect, and used to configure calculator below">
-                <input id="script_mechStats${option}" type="checkbox"${value ? " checked" : ""}>
-                <span class="check"></span><span style="margin-left: 10px;">${option}</span>
-              </label>`);
-      });
-      statsControls.append(`
-          <label class="switch" title="This input have no ingame effect, and used to configure calculator below">
-            <input id="script_mechStatsScouts" class="input is-small" style="height: 25px; width: 50px" type="text" value="0">
-            <span style="margin-left: 10px;">Scouts</span>
-          </label>`);
-      statsControls.on("input", calculateMechStats);
-      currentNode.append(statsControls);
-      currentNode.append(
-        `<table class="selectable"><tbody id="script_mechStatsTable"><tbody></table>`
-      );
-      calculateMechStats();
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
     const { calculateMechStats } = createMechStats({
       getDocument: () => document,
       getJQuery: () => $,
@@ -26692,294 +29371,43 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
         }
       });
     }
-    function buildEjectorSettings() {
-      let sectionId = "ejector";
-      let sectionName = "Ejector, Supply & Nanite";
-      let resetFunction = function() {
-        resetEjectorSettings(true);
-        updateSettingsFromState();
-        updateEjectorSettingsContent();
-        resetCheckbox("autoEject", "autoSupply", "autoNanite");
-        removeEjectToggles();
-        removeSupplyToggles();
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateEjectorSettingsContent
-      );
-    }
-    function updateEjectorSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_ejectorContent");
-      currentNode.empty().off("*");
-      let spendOptions = [
-        { val: "cap", label: "Capped", hint: "Use capped resources" },
-        { val: "excess", label: "Excess", hint: "Use excess resources" },
-        {
-          val: "all",
-          label: "All",
-          hint: "Use all resources. This option can prevent script from progressing, and intended to use with additional conditions."
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        settingsBoundaries: {
+          general: generalSettings,
+          achievementGuard: achievementGuardSettings,
+          challengeHelper: challengeHelperSettings,
+          prestige: prestigeSettings,
+          government: governmentSettings,
+          evolution: evolutionSettings,
+          planet: planetSettings,
+          trigger: triggerSettings,
+          research: researchSettings,
+          war: warSettings,
+          hell: hellSettings,
+          fleet: fleetSettings,
+          mech: mechSettings,
+          ejector: ejectorSettings,
+          market: marketSettings
         },
-        {
-          val: "mixed",
-          label: "Capped > Excess",
-          hint: "Use capped resources first, switching to excess resources when capped alone is not enough."
-        },
-        {
-          val: "full",
-          label: "Capped > Excess > All",
-          hint: "Use capped first, then excess, then everything else. Same as 'All' option can be potentialy dungerous."
-        }
-      ];
-      let spendDesc = "Configures threshold when script will be allowed to use resources. With any option script will try to use most expensive of allowed resources within selected group. Craftables, when enabled, always use excess amount as threshold, having no cap.";
-      addSettingsSelect(
-        currentNode,
-        "ejectMode",
-        "Eject mode",
-        spendDesc,
-        spendOptions
-      );
-      addSettingsSelect(
-        currentNode,
-        "supplyMode",
-        "Supply mode",
-        spendDesc,
-        spendOptions
-      );
-      addSettingsSelect(
-        currentNode,
-        "naniteMode",
-        "Nanite mode",
-        spendDesc,
-        spendOptions
-      );
-      addSettingsToggle(
-        currentNode,
-        "prestigeWhiteholeStabiliseMass",
-        "Stabilize blackhole",
-        "Stabilizes the blackhole with exotic materials, disabled on whitehole runs"
-      );
-      addSettingsNumber(
-        currentNode,
-        "prestigeWhiteholeStabiliseCooldown",
-        "Cooldown between stabilizes",
-        "Waits this many seconds between stabilizes. Stabilizing too frequently may cause significant lag in late game due to frequent full page redraws. Set to 0 to disable cooldown."
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:20%">Resource</th>
-              <th class="has-text-warning" style="width:20%">Atomic Mass</th>
-              <th class="has-text-warning" style="width:10%">Eject</th>
-              <th class="has-text-warning" style="width:10%">Nanite</th>
-              <th class="has-text-warning" style="width:30%">Supply Value</th>
-              <th class="has-text-warning" style="width:10%">Supply</th>
-            </tr>
-            <tbody id="script_ejectorTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_ejectorTableBody");
-      let newTableBodyText = "";
-      let tabResources = [];
-      for (let id in resources) {
-        let resource = resources[id];
-        if (EjectManager.isConsumable(resource) || SupplyManager.isConsumable(resource) || NaniteManager.isConsumable(resource)) {
-          tabResources.push(resource);
-          newTableBodyText += `<tr><td id="script_eject_${resource.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:30%"></td><td style="width:10%"></td></tr>`;
-        }
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < tabResources.length; i++) {
-        let resource = tabResources[i];
-        let ejectElement = $("#script_eject_" + resource.id);
-        let color = resource === resources.Elerium || resource === resources.Infernite ? "has-text-caution" : resource.isCraftable() ? "has-text-danger" : !resource.is.tradable ? "has-text-advanced" : "has-text-info";
-        ejectElement.append(buildTableLabel(resource.name, "", color));
-        ejectElement = ejectElement.next();
-        if (resource.atomicMass > 0) {
-          ejectElement.append(
-            `<span class="mass"><span class="has-text-warning">${resource.atomicMass}</span> kt</span>`
-          );
-        }
-        ejectElement = ejectElement.next();
-        if (EjectManager.isConsumable(resource)) {
-          addTableToggle(ejectElement, "res_eject" + resource.id);
-        }
-        ejectElement = ejectElement.next();
-        if (NaniteManager.isConsumable(resource)) {
-          addTableToggle(ejectElement, "res_nanite" + resource.id);
-        }
-        if (SupplyManager.isConsumable(resource)) {
-          ejectElement = ejectElement.next();
-          ejectElement.append(
-            `<span class="mass">Export <span class="has-text-caution">${SupplyManager.supplyOut(
-              resource.id
-            )}</span>, Gain <span class="has-text-success">${SupplyManager.supplyIn(
-              resource.id
-            )}</span></span>`
-          );
-          ejectElement = ejectElement.next();
-          addTableToggle(ejectElement, "res_supply" + resource.id);
-        }
-      }
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function buildMarketSettings() {
-      let sectionId = "market";
-      let sectionName = "Market";
-      let resetFunction = function() {
-        resetMarketSettings(true);
-        updateSettingsFromState();
-        updateMarketSettingsContent();
-        resetCheckbox("autoMarket", "autoGalaxyMarket");
-        removeMarketToggles();
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateMarketSettingsContent
-      );
-    }
-    function updateMarketSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_marketContent");
-      currentNode.empty().off("*");
-      addSettingsNumber(
-        currentNode,
-        "minimumMoney",
-        "Manual trade minimum money",
-        "Minimum money to keep after bulk buying"
-      );
-      addSettingsNumber(
-        currentNode,
-        "minimumMoneyPercentage",
-        "Manual trade minimum money percentage",
-        "Minimum percentage of money to keep after bulk buying"
-      );
-      addSettingsNumber(
-        currentNode,
-        "tradeRouteMinimumMoneyPerSecond",
-        "Trade minimum money /s",
-        "Uses the highest per second amount of these two values. Will trade for resources until this minimum money per second amount is hit"
-      );
-      addSettingsNumber(
-        currentNode,
-        "tradeRouteMinimumMoneyPercentage",
-        "Trade minimum money percentage /s",
-        "Uses the highest per second amount of these two values. Will trade for resources until this percentage of your money per second amount is hit"
-      );
-      addSettingsToggle(
-        currentNode,
-        "tradeRouteSellExcess",
-        "Sell excess resources",
-        "With this option enabled script will be allowed to sell resources above amounts needed for constructions or researches, without it script sell only capped resources. As side effect boughts will also be limited to that amounts, to avoid 'buy up to cap -> sell excess' loops."
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" colspan="1"></th>
-              <th class="has-text-warning" colspan="4">Manual Trades</th>
-              <th class="has-text-warning" colspan="4">Trade Routes</th>
-              <th class="has-text-warning" colspan="1"></th>
-            </tr>
-            <tr>
-              <th class="has-text-warning" style="width:15%">Resource</th>
-              <th class="has-text-warning" style="width:10%">Buy</th>
-              <th class="has-text-warning" style="width:10%">Ratio</th>
-              <th class="has-text-warning" style="width:10%">Sell</th>
-              <th class="has-text-warning" style="width:10%">Ratio</th>
-              <th class="has-text-warning" style="width:10%">In</th>
-              <th class="has-text-warning" style="width:10%">Away</th>
-              <th class="has-text-warning" style="width:10%">Weighting</th>
-              <th class="has-text-warning" style="width:10%">Priority</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_marketTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_marketTableBody");
-      let newTableBodyText = "";
-      for (let i = 0; i < MarketManager.priorityList.length; i++) {
-        const resource = MarketManager.priorityList[i];
-        newTableBodyText += `<tr value="${resource.id}" class="script-draggable"><td id="script_market_${resource.id}" style="width:15%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%;border-right-width:1px"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < MarketManager.priorityList.length; i++) {
-        const resource = MarketManager.priorityList[i];
-        let marketElement = $("#script_market_" + resource.id);
-        marketElement.append(buildTableLabel(resource.name));
-        marketElement = marketElement.next();
-        addTableToggle(marketElement, "buy" + resource.id);
-        marketElement = marketElement.next();
-        addTableInput(marketElement, "res_buy_r_" + resource.id);
-        marketElement = marketElement.next();
-        addTableToggle(marketElement, "sell" + resource.id);
-        marketElement = marketElement.next();
-        addTableInput(marketElement, "res_sell_r_" + resource.id);
-        marketElement = marketElement.next();
-        addTableToggle(marketElement, "res_trade_buy_" + resource.id);
-        marketElement = marketElement.next();
-        addTableToggle(marketElement, "res_trade_sell_" + resource.id);
-        marketElement = marketElement.next();
-        addTableInput(marketElement, "res_trade_w_" + resource.id);
-        marketElement = marketElement.next();
-        addTableInput(marketElement, "res_trade_p_" + resource.id);
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper,
-        update: function() {
-          let marketIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < marketIds.length; i++) {
-            settingsRaw["res_buy_p_" + marketIds[i]] = i;
-          }
-          MarketManager.sortByPriority();
-          updateSettingsFromState();
+        setSettingsBoundariesTestContext(context) {
+          Object.assign(generalSettingsOverrides, context);
+          Object.assign(achievementGuardSettingsOverrides, context);
+          Object.assign(challengeHelperSettingsOverrides, context);
+          Object.assign(prestigeSettingsOverrides, context);
+          Object.assign(governmentSettingsOverrides, context);
+          Object.assign(evolutionSettingsOverrides, context);
+          Object.assign(planetSettingsOverrides, context);
+          Object.assign(triggerSettingsOverrides, context);
+          Object.assign(researchSettingsOverrides, context);
+          Object.assign(warSettingsOverrides, context);
+          Object.assign(hellSettingsOverrides, context);
+          Object.assign(fleetSettingsOverrides, context);
+          Object.assign(mechSettingsOverrides, context);
+          Object.assign(ejectorSettingsOverrides, context);
+          Object.assign(marketSettingsOverrides, context);
         }
       });
-      addStandardHeading(currentNode, "Galaxy Trades");
-      addSettingsNumber(
-        currentNode,
-        "marketMinIngredients",
-        "Minimum materials to preserve",
-        "Galaxy Market will buy resources only when all selling materials above given ratio"
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:30%">Buy</th>
-              <th class="has-text-warning" style="width:30%">Sell</th>
-              <th class="has-text-warning" style="width:20%">Weighting</th>
-              <th class="has-text-warning" style="width:20%">Priority</th>
-            </tr>
-            <tbody id="script_marketGalaxyTableBody"></tbody>
-          </table>`);
-      tableBodyNode = $("#script_marketGalaxyTableBody");
-      newTableBodyText = "";
-      for (let i = 0; i < poly.galaxyOffers.length; i++) {
-        newTableBodyText += `<tr><td id="script_market_galaxy_${i}" style="width:30%"><td style="width:30%"></td></td><td style="width:20%"></td><td style="width:20%"></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < poly.galaxyOffers.length; i++) {
-        let trade = poly.galaxyOffers[i];
-        let buyResource = resources[trade.buy.res];
-        let sellResource = resources[trade.sell.res];
-        let marketElement = $("#script_market_galaxy_" + i);
-        marketElement.append(
-          buildTableLabel(buyResource.name, "has-text-success")
-        );
-        marketElement = marketElement.next();
-        marketElement.append(
-          buildTableLabel(sellResource.name, "has-text-danger")
-        );
-        marketElement = marketElement.next();
-        addTableInput(marketElement, "res_galaxy_w_" + buyResource.id);
-        marketElement = marketElement.next();
-        addTableInput(marketElement, "res_galaxy_p_" + buyResource.id);
-      }
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function buildStorageSettings() {
       let sectionId = "storage";
@@ -27074,439 +29502,56 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
       });
       document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
-    function buildTraitSettings() {
-      let sectionId = "trait";
-      let sectionName = "Traits";
-      let resetFunction = function() {
-        resetMinorTraitSettings(true);
-        resetMutableTraitSettings(true);
-        updateSettingsFromState();
-        updateTraitSettingsContent();
-        resetCheckbox("autoMinorTrait", "autoMutateTraits", "autoGenetics");
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateTraitSettingsContent
-      );
-    }
-    function updateImitateWarning() {
-      let race = races[settingsRaw.imitateRace];
-      if (race) {
-        const raceAvaialableForImitate = race && game.global.stats.synth[race.id];
-        if (raceAvaialableForImitate) {
-          $("#script_imitate_warning").html(
-            `<span class="has-text-success">You have completed an AI Apocalypse with this race and can imitate it.</span>`
-          );
-        } else {
-          $("#script_imitate_warning").html(
-            `<span class="has-text-danger">Warning! You have NOT completed an AI Apocalypse with this race, and cannot imitate it.</span>`
-          );
-        }
-      } else {
-        $("#script_imitate_warning").empty();
-      }
-    }
-    function updateTraitSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_traitContent");
-      currentNode.empty().off("*");
-      addStandardHeading(currentNode, "Major Traits");
-      let genusOptions = [
-        { val: "ignore", label: "Ignore", hint: "Do not shift genus" },
-        { val: "none", label: game.loc(`genelab_genus_none`) },
-        ...Object.values(game.races).map((r) => r.type).filter(
-          (g, i, a) => g && g !== "organism" && g !== "synthetic" && a.indexOf(g) === i
-        ).map((g) => ({ val: g, label: game.loc(`genelab_genus_${g}`) }))
-      ];
-      addSettingsSelect(
-        currentNode,
-        "shifterGenus",
-        "Mimic genus",
-        "Mimic selected genus, if avaialble. If you want to add some conditional overrides to this setting, keep in mind changing genus redraws game page, frequent changes can drastically harm game performance.",
-        genusOptions
-      );
-      const imitateOptions = [
-        {
-          val: "ignore",
-          label: "Ignore",
-          hint: "Do not imitate race. IMPORTANT: script will stall at evolution if none selected"
+    const {
+      buildTraitSettings,
+      updateImitateWarning,
+      updateTraitSettingsContent,
+      makeToggleSwitchesMutuallyExclusive
+    } = createTraitSettings({
+      getSettingsRaw: () => settingsRaw,
+      getState: () => state,
+      getGame: () => game,
+      getRaces: () => races,
+      getResources: () => resources,
+      getPoly: () => poly,
+      getMinorTraitManager: () => MinorTraitManager,
+      getMutableTraitManager: () => MutableTraitManager,
+      getOcularPowerData: () => ocularPowerData,
+      getWishData: () => wishData,
+      getMutationCostMultipliers: () => mutationCostMultipliers,
+      getDocument: () => document,
+      getJQuery: () => $,
+      getSorterHelper: () => sorterHelper,
+      resetMinorTraitSettings,
+      resetMutableTraitSettings,
+      updateSettingsFromState,
+      resetCheckbox,
+      buildSettingsSection,
+      addStandardHeading,
+      addSettingsSelect,
+      addSettingsNumber,
+      addSettingsToggle,
+      addTableToggle,
+      addTableInput,
+      buildTableLabel
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        traitSettings: {
+          buildTraitSettings,
+          updateImitateWarning,
+          updateTraitSettingsContent,
+          makeToggleSwitchesMutuallyExclusive
         },
-        ...Object.values(races).map((race) => {
-          const label = game.global.stats.synth[race.id] ? race.name : `--${race.name}--`;
-          return {
-            val: race.id,
-            label,
-            hint: race.desc
-          };
-        })
-      ];
-      addSettingsSelect(
-        currentNode,
-        "imitateRace",
-        "Imitate race",
-        "Imitate selected race, if available.",
-        imitateOptions
-      ).on("change", "select", function() {
-        state.evolutionTarget = null;
-        updateImitateWarning();
-      });
-      currentNode.append(`<div><span id="script_imitate_warning"></span></div>`);
-      updateImitateWarning();
-      let shrineOptions = [
-        {
-          val: "any",
-          label: "Any",
-          hint: "Build any Shrines, whenever have resources for it"
-        },
-        { val: "equally", label: "Equally", hint: "Build all Shrines equally" },
-        { val: "morale", label: "Morale", hint: "Build only Morale Shrines" },
-        { val: "metal", label: "Metal", hint: "Build only Metal Shrines" },
-        { val: "know", label: "Knowledge", hint: "Build only Knowledge Shrines" },
-        { val: "tax", label: "Tax", hint: "Build only Tax Shrines" },
-        {
-          val: "rotating",
-          label: "Rotating",
-          hint: "Build Shrines during quarter/full phases for rotating effect shrines"
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "buildingShrineType",
-        "Magnificent shrine",
-        "Auto Build shrines only at moons of chosen shrine",
-        shrineOptions
-      );
-      addSettingsNumber(
-        currentNode,
-        "slaveIncome",
-        "Minimum income to buy slave",
-        "Script will use Slave Market only when money is capped, or have income above given number"
-      );
-      let psychicOptions = [
-        {
-          val: "none",
-          label: "Ignore",
-          hint: "Psychic Powers ignored by script"
-        },
-        {
-          val: "auto",
-          label: "Script Managed",
-          hint: "Performs one of available actions in this order: Capture, Mind Break, Boost Profits, Boost Resource, Boost Attack Power."
-        },
-        ...["boost", "murder", "assault", "profit", "stun", "mind_break"].map(
-          (p) => ({
-            val: p,
-            label: game.loc(`psychic_${p}_title`),
-            hint: game.loc(`psychic_${p}_desc`)
-          })
-        )
-      ];
-      addSettingsSelect(
-        currentNode,
-        "psychicPower",
-        "Psychic Powers",
-        "Activates selected power with full energy. 10 murders required to research advanced powers will be performed automatically, if needed.",
-        psychicOptions
-      );
-      let psychicBoost = [
-        {
-          val: "auto",
-          label: "Script Managed",
-          hint: "Resource selected by looking for highest income among ones having enough free storage room."
-        },
-        ...Object.values(resources).filter((r) => r.atomicMass > 0).map((r) => ({ val: r.id, label: r.title }))
-      ];
-      addSettingsSelect(
-        currentNode,
-        "psychicBoostRes",
-        "Boosted Resource",
-        "Resource for Boost Resource Production psychic power.",
-        psychicBoost
-      );
-      let wishMinor = [
-        { val: "none", label: "None", hint: "Disable using minor wishes." },
-        ...wishData.minor.map((w) => ({
-          val: w.id,
-          label: poly.loc("wish_for", [poly.loc(w.loc)])
-        }))
-      ];
-      addSettingsSelect(
-        currentNode,
-        "wishMinor",
-        "Minor Wish",
-        "Uses this minor wish when available.",
-        wishMinor
-      );
-      let wishMajor = [
-        { val: "none", label: "None", hint: "Disable using major wishes." },
-        ...wishData.major.map((w) => ({
-          val: w.id,
-          label: poly.loc("wish_for", [poly.loc(w.loc)])
-        }))
-      ];
-      addSettingsSelect(
-        currentNode,
-        "wishMajor",
-        "Major Wish",
-        "Uses this major wish when available.",
-        wishMajor
-      );
-      addSettingsToggle(
-        currentNode,
-        "jobScalePop",
-        "High Pop job scale",
-        "Auto Job will automatically scaly breakpoints to match population increase"
-      );
-      addStandardHeading(currentNode, "Ocular Powers");
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:50%">Name</th>
-              <th class="has-text-warning" style="width:25%">Enabled</th>
-              <th class="has-text-warning" style="width:25%">Priority</th>
-            </tr>
-            <tbody id="script_ocularPowersTableBody"></tbody>
-          </table>
-        `);
-      const ocularTableBodyNode = $("#script_ocularPowersTableBody");
-      ocularPowerData.forEach((p) => {
-        let tr = $(`<tr><td></td><td></td><td></td></tr>`);
-        tr.appendTo(ocularTableBodyNode);
-        let ocularPowerElement = tr.find("td").first();
-        ocularPowerElement.append(
-          buildTableLabel(
-            game.loc(`ocular_${p.id}`),
-            game.loc(`ocular_${p.id}_desc`, p.locParam)
-          )
-        );
-        ocularPowerElement = ocularPowerElement.next();
-        addTableToggle(ocularPowerElement, `ocularPower_${p.id}`);
-        ocularPowerElement = ocularPowerElement.next();
-        addTableInput(ocularPowerElement, `ocularPower_p_${p.id}`);
-      });
-      addStandardHeading(currentNode, "Minor Traits");
-      let sequenceOptions = [
-        {
-          val: "none",
-          label: "Ignore",
-          hint: "Ignored by script, managed by game and player"
-        },
-        { val: "enabled", label: "Enable", hint: "Sequencer enabled" },
-        { val: "disabled", label: "Disable", hint: "Sequencer disabled" },
-        {
-          val: "decode",
-          label: "Decode",
-          hint: "Decode genome only, with no further mutations"
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "geneticsSequence",
-        "Sequencer",
-        "Manages genome decoding, and mutations",
-        sequenceOptions
-      );
-      let boostOptions = [
-        {
-          val: "none",
-          label: "Ignore",
-          hint: "Ignored by script, managed by game and player"
-        },
-        { val: "enabled", label: "Enable", hint: "Booster enabled" },
-        { val: "disabled", label: "Disable", hint: "Booster disabled" }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "geneticsBoost",
-        "Sequence Booster",
-        "Manages sequencer booster",
-        boostOptions
-      );
-      let assembleOptions = [
-        {
-          val: "none",
-          label: "Ignore",
-          hint: "Ignored by script, managed by game and player"
-        },
-        { val: "enabled", label: "Enable", hint: "Auto Sequencer enable" },
-        { val: "disabled", label: "Disable", hint: "Auto Sequencer disable" },
-        {
-          val: "auto",
-          label: "Script Managed",
-          hint: "Gene assembling managed by script, allowing to dump excess knowledge at faster rate, matching income"
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "geneticsAssemble",
-        "Auto Sequence",
-        "Manages genome decoding, and mutations",
-        assembleOptions
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:20%">Minor Trait</th>
-              <th class="has-text-warning" style="width:20%">Enabled</th>
-              <th class="has-text-warning" style="width:20%">Weighting</th>
-              <th class="has-text-warning" style="width:40%"></th>
-            </tr>
-            <tbody id="script_minorTraitTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_minorTraitTableBody");
-      let newTableBodyText = "";
-      for (let i = 0; i < MinorTraitManager.priorityList.length; i++) {
-        const trait = MinorTraitManager.priorityList[i];
-        newTableBodyText += `<tr value="${trait.traitName}" class="script-draggable"><td id="script_minorTrait_${trait.traitName}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"><span class="script-lastcolumn"></span></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < MinorTraitManager.priorityList.length; i++) {
-        const trait = MinorTraitManager.priorityList[i];
-        let minorTraitElement = $("#script_minorTrait_" + trait.traitName);
-        minorTraitElement.append(
-          buildTableLabel(
-            game.loc("trait_" + trait.traitName + "_name"),
-            game.loc("trait_" + trait.traitName)
-          )
-        );
-        minorTraitElement = minorTraitElement.next();
-        addTableToggle(minorTraitElement, "mTrait_" + trait.traitName);
-        minorTraitElement = minorTraitElement.next();
-        addTableInput(minorTraitElement, "mTrait_w_" + trait.traitName);
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper,
-        update: function() {
-          let minorTraitNames = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < minorTraitNames.length; i++) {
-            settingsRaw["mTrait_p_" + minorTraitNames[i]] = i;
-          }
-          MinorTraitManager.sortByPriority();
-          updateSettingsFromState();
-        }
-      });
-      addStandardHeading(currentNode, "Trait Mutation");
-      addSettingsToggle(
-        currentNode,
-        "doNotGoBelowPlasmidSoftcap",
-        "Do not go below Plasmid softcap",
-        "Script will not mutate if the number of remaining plasmids or anti plamids would be lower than the softcap (250 + Phage)"
-      );
-      addSettingsNumber(
-        currentNode,
-        "minimumPlasmidsToPreserve",
-        "Minimum Plasmids / Anti-Plasmids to preserve",
-        "Script will not mutate if the number of remaining plasmids or anti plamids would be lower than this value"
-      );
-      currentNode.append(`
-        <table style="width:100%">
-        <tr>
-            <th class="has-text-warning" style="width:30%">Species / Genus</th>
-            <th class="has-text-warning" style="width:25%">Trait</th>
-            <th class="has-text-warning" style="width:10%">Cost</th>
-            <th class="has-text-warning" style="width:10%">Add</th>
-            <th class="has-text-warning" style="width:10%">Remove</th>
-            <th class="has-text-warning" style="width:10%">Reset</th>
-            <th class="has-text-warning" style="width:5%"></th>
-        </tr>
-        <tbody id="script_mutateTraitTableBody"></tbody>
-        </table>`);
-      let mutateTraitTableBodyNode = $("#script_mutateTraitTableBody");
-      newTableBodyText = "";
-      for (let i = 0; i < MutableTraitManager.priorityList.length; i++) {
-        const trait = MutableTraitManager.priorityList[i];
-        newTableBodyText += `<tr value="${trait.traitName}" class="script-draggable"><td id="script_mutableTrait_${trait.traitName}" style="width:30%"></td><td style="width:25%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
-      }
-      mutateTraitTableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < MutableTraitManager.priorityList.length; i++) {
-        const trait = MutableTraitManager.priorityList[i];
-        let mutableTraitElement = $("#script_mutableTrait_" + trait.traitName);
-        mutableTraitElement.append(
-          buildTableLabel(
-            trait.source === "" ? "-" : game.loc(
-              (trait.type === "major" ? "race_" : "genelab_genus_") + trait.source
-            ),
-            trait.type === "major" ? "Major" : "Genus",
-            trait.type === "genus" ? "has-text-special" : "has-text"
-          )
-        );
-        mutableTraitElement = mutableTraitElement.next();
-        mutableTraitElement.append(
-          buildTableLabel(
-            trait.name,
-            game.loc("trait_" + trait.traitName),
-            trait.isPositive ? "has-text-success" : "has-text-danger"
-          )
-        );
-        mutableTraitElement = mutableTraitElement.next();
-        mutableTraitElement.append(
-          buildTableLabel(
-            `${trait.baseCost * 5}`,
-            `${trait.baseCost * 5 * mutationCostMultipliers["custom"]["gain"]} for Custom${trait.traitName !== "ooze" ? " and Sludge" : ""}`
-          )
-        );
-        mutableTraitElement = mutableTraitElement.next();
-        if (trait.isGainable()) {
-          addTableToggle(
-            mutableTraitElement,
-            "mutableTrait_gain_" + trait.traitName
-          );
-        }
-        mutableTraitElement = mutableTraitElement.next();
-        addTableToggle(
-          mutableTraitElement,
-          "mutableTrait_purge_" + trait.traitName
-        );
-        if (trait.isGainable()) {
-          makeToggleSwitchesMutuallyExclusive(
-            $(".script_mutableTrait_gain_" + trait.traitName),
-            "mutableTrait_gain_" + trait.traitName,
-            $(".script_mutableTrait_purge_" + trait.traitName),
-            "mutableTrait_purge_" + trait.traitName
-          );
-        }
-        mutableTraitElement = mutableTraitElement.next();
-        if (poly.neg_roll_traits.includes(trait.traitName)) {
-          addTableToggle(
-            mutableTraitElement,
-            "mutableTrait_reset_" + trait.traitName
-          );
-        }
-      }
-      mutateTraitTableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper,
-        update: function() {
-          let mutableTraitNames = mutateTraitTableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < mutableTraitNames.length; i++) {
-            settingsRaw["mutableTrait_p_" + mutableTraitNames[i]] = i;
-          }
-          MutableTraitManager.sortByPriority();
-          updateSettingsFromState();
-        }
-      });
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function makeToggleSwitchesMutuallyExclusive(switch1, settingsKey1, switch2, settingsKey2) {
-      switch1.on("change", function() {
-        if (switch1.prop("checked") && switch2.prop("checked")) {
-          switch2.prop("checked", false);
-          settingsRaw[settingsKey2] = false;
-          updateSettingsFromState();
-        }
-      });
-      switch2.on("change", function() {
-        if (switch1.prop("checked") && switch2.prop("checked")) {
-          switch1.prop("checked", false);
-          settingsRaw[settingsKey1] = false;
-          updateSettingsFromState();
+        setTraitSettingsTestContext(context) {
+          settingsRaw = context.settingsRaw;
+          state = context.state;
+          game = context.game;
+          races = context.races;
+          resources = context.resources;
+          poly = context.poly;
+          MinorTraitManager = context.MinorTraitManager;
+          MutableTraitManager = context.MutableTraitManager;
         }
       });
     }
@@ -27574,401 +29619,60 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
         addTableInput(node, "res_alchemy_w_" + resource.id);
       }
     }
-    function buildProductionSettings() {
-      let sectionId = "production";
-      let sectionName = "Production";
-      let resetFunction = function() {
-        resetProductionSettings(true);
-        updateSettingsFromState();
-        updateProductionSettingsContent();
-        resetCheckbox(
-          "autoQuarry",
-          "autoMine",
-          "autoExtractor",
-          "autoGraphenePlant",
-          "autoSmelter",
-          "autoCraft",
-          "autoFactory",
-          "autoMiningDroid",
-          "autoReplicator"
-        );
-        removeCraftToggles();
-      };
-      buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateProductionSettingsContent
-      );
-    }
-    function updateProductionSettingsContent() {
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let currentNode = $("#script_productionContent");
-      currentNode.empty().off("*");
-      addSettingsNumber(
-        currentNode,
-        "productionChrysotileWeight",
-        "Chrysotile weighting (Quarry, Smoldering)",
-        "Chrysotile weighting for autoQuarry, applies after adjusting to difference between current amounts of Stone and Chrysotile"
-      );
-      addSettingsNumber(
-        currentNode,
-        "productionAdamantiteWeight",
-        "Adamantite weighting (Mine, The True Path)",
-        "Adamantite weighting for autoMine, applies after adjusting to difference between current amounts of Aluminium and Adamantite"
-      );
-      addSettingsNumber(
-        currentNode,
-        "productionExtWeight_common",
-        "Aluminium weighting (Extractor Ship, The True Path)",
-        "Aluminium weighting for autoExtractor, applies after adjusting to difference between current amounts of Iron and Aluminium"
-      );
-      addSettingsNumber(
-        currentNode,
-        "productionExtWeight_uncommon",
-        "Neutronium weighting (Extractor Ship, The True Path)",
-        "Neutronium weighting for autoExtractor, applies after adjusting to difference between current amounts of Iridium and Neutronium"
-      );
-      addSettingsNumber(
-        currentNode,
-        "productionExtWeight_rare",
-        "Elerium weighting (Extractor Ship, The True Path)",
-        "Elerium weighting for autoExtractor, applies after adjusting to difference between current amounts of Orichalcum and Elerium"
-      );
-      addSettingsToggle(
-        currentNode,
-        "productionFactoryFocusMaterials",
-        "Prioritize keeping materials stockpiled",
-        `Aggressively request stockpiling ${CONSUMPTION_BALANCE_TARGET}s + min materials worth of materials to ensure factory and craftsmen can always produce`
-      );
-      updateProductionTableSmelter(currentNode);
-      updateProductionTableFoundry(currentNode);
-      updateProductionTableFactory(currentNode);
-      updateProductionTableMiningDrone(currentNode);
-      updateProductionTableReplicator(currentNode);
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function updateProductionTableSmelter(currentNode) {
-      addStandardHeading(currentNode, "Smelter");
-      let smelterOptions = [
-        {
-          val: "iron",
-          label: "Prioritize Iron",
-          hint: "Produce only Iron, untill storage capped, and switch to Steel after that"
+    const {
+      buildProductionSettings,
+      updateProductionSettingsContent,
+      updateProductionTableSmelter,
+      updateProductionTableFoundry,
+      updateProductionTableFactory,
+      updateProductionTableMiningDrone,
+      updateProductionTableReplicator
+    } = createProductionSettings({
+      getSettingsRaw: () => settingsRaw,
+      getDocument: () => document,
+      getJQuery: () => $,
+      getResources: () => resources,
+      getCraftablesList: () => craftablesList,
+      getSmelterManager: () => SmelterManager,
+      getFactoryManager: () => FactoryManager,
+      getDroidManager: () => DroidManager,
+      getReplicatorManager: () => ReplicatorManager,
+      consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
+      resetProductionSettings,
+      updateSettingsFromState,
+      resetCheckbox,
+      removeCraftToggles,
+      buildSettingsSection,
+      addSettingsNumber,
+      addSettingsToggle,
+      addSettingsSelect,
+      addStandardHeading,
+      addTableToggle,
+      addTableInput,
+      buildTableLabel,
+      getSorterHelper: () => sorterHelper
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        productionSettings: {
+          buildProductionSettings,
+          updateProductionSettingsContent,
+          updateProductionTableSmelter,
+          updateProductionTableFoundry,
+          updateProductionTableFactory,
+          updateProductionTableMiningDrone,
+          updateProductionTableReplicator
         },
-        {
-          val: "steel",
-          label: "Prioritize Steel",
-          hint: "Produce as much Steel as possible, untill storage capped, and switch to Iron after that"
-        },
-        {
-          val: "storage",
-          label: "Up to full storages",
-          hint: "Produce both Iron and Steel at ratio which will fill both storages at same time for both"
-        },
-        {
-          val: "required",
-          label: "Up to required amounts",
-          hint: "Produce both Iron and Steel at ratio which will produce maximum amount of resources required for buildings at same time for both"
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "productionSmelting",
-        "Smelters production",
-        "Distribution of smelters between iron and steel",
-        smelterOptions
-      );
-      addSettingsNumber(
-        currentNode,
-        "productionSmeltingIridium",
-        "Iridium ratio",
-        "Share of smelters dedicated to Iridium"
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:95%">Fuel</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_productionTableBodySmelter"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_productionTableBodySmelter");
-      let newTableBodyText = "";
-      let smelterFuels = SmelterManager.managedFuelPriorityList();
-      for (let i = 0; i < smelterFuels.length; i++) {
-        let fuel = smelterFuels[i];
-        newTableBodyText += `<tr value="${fuel.id}" class="script-draggable"><td id="script_smelter_${fuel.id}" style="width:95%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < smelterFuels.length; i++) {
-        let fuel = smelterFuels[i];
-        let productionElement = $("#script_smelter_" + fuel.id);
-        productionElement.append(buildTableLabel(fuel.id));
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper,
-        update: function() {
-          let fuelIds = tableBodyNode.sortable("toArray", { attribute: "value" });
-          for (let i = 0; i < fuelIds.length; i++) {
-            settingsRaw["smelter_fuel_p_" + fuelIds[i]] = i;
-          }
-          updateSettingsFromState();
+        setProductionSettingsTestContext(context) {
+          settingsRaw = context.settingsRaw;
+          resources = context.resources;
+          craftablesList = context.craftablesList;
+          SmelterManager = context.SmelterManager;
+          FactoryManager = context.FactoryManager;
+          DroidManager = context.DroidManager;
+          ReplicatorManager = context.ReplicatorManager;
         }
       });
-    }
-    function updateProductionTableFactory(currentNode) {
-      addStandardHeading(currentNode, "Factory");
-      let weightingOptions = [
-        {
-          val: "none",
-          label: "None",
-          hint: "Use configured weightings with no additional adjustments, resources with x2 weighting will be produced two times more intense than with x1, etc."
-        },
-        {
-          val: "demanded",
-          label: "Prioritize demanded",
-          hint: "Ignore resources once stored amount surpass cost of most expensive building, until all missing resources will be crafted. After that works as with 'none' adjustments."
-        },
-        {
-          val: "buildings",
-          label: "Buildings weightings",
-          hint: "Uses weightings of buildings which are waiting for resources, as multipliers to production weighting. This option requires autoBuild."
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "productionFactoryWeighting",
-        "Weightings adjustments",
-        "Configures how exactly the resources will be weighted against each other",
-        weightingOptions
-      );
-      addSettingsNumber(
-        currentNode,
-        "productionFactoryMinIngredients",
-        "Minimum materials to preserve",
-        "Factory will craft resources only when all required materials above given ratio"
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:35%">Resource</th>
-              <th class="has-text-warning" style="width:20%">Enabled</th>
-              <th class="has-text-warning" style="width:20%">Weighting</th>
-              <th class="has-text-warning" style="width:20%">Priority</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_productionTableBodyFactory"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_productionTableBodyFactory");
-      let newTableBodyText = "";
-      let productionSettings = Object.values(FactoryManager.Productions);
-      for (let i = 0; i < productionSettings.length; i++) {
-        let production = productionSettings[i];
-        newTableBodyText += `<tr><td id="script_factory_${production.resource.id}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < productionSettings.length; i++) {
-        let production = productionSettings[i];
-        let productionElement = $("#script_factory_" + production.resource.id);
-        productionElement.append(buildTableLabel(production.resource.name));
-        productionElement = productionElement.next();
-        addTableToggle(productionElement, "production_" + production.resource.id);
-        productionElement = productionElement.next();
-        addTableInput(
-          productionElement,
-          "production_w_" + production.resource.id
-        );
-        productionElement = productionElement.next();
-        addTableInput(
-          productionElement,
-          "production_p_" + production.resource.id
-        );
-      }
-    }
-    function updateProductionTableFoundry(currentNode) {
-      addStandardHeading(currentNode, "Foundry");
-      let weightingOptions = [
-        {
-          val: "none",
-          label: "None",
-          hint: "Use configured weightings with no additional adjustments, craftables with x2 weighting will be crafted two times more intense than with x1, etc."
-        },
-        {
-          val: "demanded",
-          label: "Prioritize demanded",
-          hint: "Ignore craftables once stored amount surpass cost of most expensive building, until all missing resources will be crafted. After that works as with 'none' adjustments."
-        },
-        {
-          val: "buildings",
-          label: "Buildings weightings",
-          hint: "Uses weightings of buildings which are waiting for craftables, as multipliers to craftables weighting. This option requires autoBuild."
-        }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "productionFoundryWeighting",
-        "Weightings adjustments",
-        "Configures how exactly craftables will be weighted against each other",
-        weightingOptions
-      );
-      let assignOptions = [
-        { val: "always", label: "Always", hint: "Always assign all craftsmens" },
-        {
-          val: "nocraft",
-          label: "No Manual Crafting",
-          hint: "Assign workers only manual crafting is not possible, servants still always will be assigned"
-        },
-        {
-          val: "advanced",
-          label: "Advanced",
-          hint: "Assign workers only to advanced craftables(Scarletite, Quantium), basic craftables will be crafted by servants"
-        },
-        { val: "servants", label: "Servants", hint: "Assign only servants" }
-      ];
-      addSettingsSelect(
-        currentNode,
-        "productionCraftsmen",
-        "Assign craftsmen",
-        "Configures when workers should be assigned to crafting jobs",
-        assignOptions
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:21%" title="Resource name">Resource</th>
-              <th class="has-text-warning" style="width:17%" title="Resource won't ever be crafted with this option disabled">Enabled</th>
-              <th class="has-text-warning" style="width:17%" title="Resource won't use foundry workers for craft with this option disabled">Craftsmen</th>
-              <th class="has-text-warning" style="width:20%" title="Ratio between resources. Script assign craftsmans to resource with lowest 'amount / weighting'. Ignored by manual crafting.">Weighting</th>
-              <th class="has-text-warning" style="width:20%" title="Only craft resource when storage ratio of all required materials above given number. E.g. bricks with 0.1 min materials will be crafted only when cement storage at least 10% filled.">Min Materials</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_productionTableBodyFoundry"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_productionTableBodyFoundry");
-      let newTableBodyText = "";
-      for (let i = 0; i < craftablesList.length; i++) {
-        let resource = craftablesList[i];
-        newTableBodyText += `<tr><td id="script_foundry_${resource.id}" style="width:21%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < craftablesList.length; i++) {
-        let resource = craftablesList[i];
-        let productionElement = $("#script_foundry_" + resource.id);
-        productionElement.append(buildTableLabel(resource.name));
-        productionElement = productionElement.next();
-        addTableToggle(productionElement, "craft" + resource.id);
-        productionElement = productionElement.next();
-        addTableToggle(productionElement, "job_" + resource.id);
-        productionElement = productionElement.next();
-        if (resource === resources.Scarletite || resource === resources.Quantium) {
-          productionElement.append("<span>Managed</span>");
-        } else {
-          addTableInput(productionElement, "foundry_w_" + resource.id);
-        }
-        productionElement = productionElement.next();
-        addTableInput(productionElement, "foundry_p_" + resource.id);
-      }
-    }
-    function updateProductionTableMiningDrone(currentNode) {
-      addStandardHeading(currentNode, "Mining Droid");
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:35%">Resource</th>
-              <th class="has-text-warning" style="width:20%"></th>
-              <th class="has-text-warning" style="width:20%">Weighting</th>
-              <th class="has-text-warning" style="width:20%">Priority</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_productionTableBodyMiningDrone"></tbody>
-          </table>`);
-      let tableBodyNode = $("#script_productionTableBodyMiningDrone");
-      let newTableBodyText = "";
-      let droidProducts = Object.values(DroidManager.Productions);
-      for (let i = 0; i < droidProducts.length; i++) {
-        let production = droidProducts[i];
-        newTableBodyText += `<tr><td id="script_droid_${production.resource.id}" style="width:35%"><td style="width:20%"></td><td style="width:20%"></td></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < droidProducts.length; i++) {
-        let production = droidProducts[i];
-        let productionElement = $("#script_droid_" + production.resource.id);
-        productionElement.append(buildTableLabel(production.resource.name));
-        productionElement = productionElement.next().next();
-        addTableInput(productionElement, "droid_w_" + production.resource.id);
-        productionElement = productionElement.next();
-        addTableInput(productionElement, "droid_pr_" + production.resource.id);
-      }
-    }
-    function updateProductionTableReplicator(currentNode) {
-      addStandardHeading(currentNode, "Replicator");
-      addSettingsToggle(
-        currentNode,
-        "replicatorAssignGovernorTask",
-        "Assign governor task",
-        "If active, the replicator scheduler governor task will be set, the power adjustment will be enabled."
-      );
-      addSettingsSelect(
-        currentNode,
-        "replicatorWeightingMode",
-        "Weighting mode",
-        "Replicator only picks from enabled resources with the current highest valid priority (or -1 priority). After that, replicator use is split between resources of identical weighting. Setting configures how that split happens.",
-        [
-          {
-            val: "mass",
-            hint: "Spends more time on resources that are easy to replicate. A resource with 2x the weighting will have roughly 2x the time spent. Based on differences in atomic mass, resources at similar weightings may have very different quantities.",
-            label: "By atomic mass"
-          },
-          {
-            val: "quantity",
-            hint: "Spends more time on resources that are hard to replicate. A resource with 2x the weighting will be focused until you have roughly 2x the amount. Resources at similar weightings will have similar quantities.",
-            label: "By resource quantity"
-          },
-          {
-            val: "legacy",
-            hint: "Legacy mode, similar to previous script behavior. Only the resource with the highest weighting is picked. If multiple resources have the same weighting then it will focus exclusively on one of those resources. This mode exists only to give you time to migrate your config to using the priority field.",
-            label: "Legacy (deprecated)"
-          }
-        ]
-      );
-      currentNode.append(`
-        <table style="width:100%">
-          <tr>
-            <th class="has-text-warning" style="width:35%">Resource</th>
-            <th class="has-text-warning" style="width:20%">Enabled</th>
-            <th class="has-text-warning" style="width:20%">Weighting</th>
-            <th class="has-text-warning" style="width:20%">Priority</th>
-            <th style="width:5%"></th>
-          </tr>
-          <tbody id="script_productionTableBodyReplicator"></tbody>
-        </table>`);
-      let tableBodyNode = $("#script_productionTableBodyReplicator");
-      let newTableBodyText = "";
-      let replicatorProducts = Object.values(ReplicatorManager.Productions);
-      for (let i = 0; i < replicatorProducts.length; i++) {
-        let production = replicatorProducts[i];
-        newTableBodyText += `<tr><td id="script_replicator_${production.resource.id}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
-      }
-      tableBodyNode.append($(newTableBodyText));
-      for (let i = 0; i < replicatorProducts.length; i++) {
-        let production = replicatorProducts[i];
-        let productionElement = $("#script_replicator_" + production.resource.id);
-        productionElement.append(buildTableLabel(production.resource.name));
-        productionElement = productionElement.next();
-        addTableToggle(productionElement, "replicator_" + production.resource.id);
-        productionElement = productionElement.next();
-        addTableInput(
-          productionElement,
-          "replicator_w_" + production.resource.id
-        );
-        productionElement = productionElement.next();
-        addTableInput(
-          productionElement,
-          "replicator_p_" + production.resource.id
-        );
-      }
     }
     function updateMagicPylon(currentNode) {
       addStandardHeading(currentNode, "Pylon");
