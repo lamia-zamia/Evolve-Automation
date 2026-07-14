@@ -44,6 +44,7 @@ import { createPropertyHelpers } from "./utils/properties.ts";
 import { createNumberFormatting } from "./formatting/numbers.ts";
 import { createSettingsState } from "./settings/state.ts";
 import { createQueuedSettings } from "./settings/queued-settings.ts";
+import { createSettingsTransfer } from "./settings/transfer.ts";
 import { createRuntimeQueries } from "./game/runtime-queries.ts";
 import { createRaceProfile } from "./game/race-profile.ts";
 import { createForeignGovernment } from "./game/foreign-government.ts";
@@ -57,6 +58,7 @@ import { createTraitValue } from "./game/trait-value.ts";
 import { createCraftingCosts } from "./game/crafting-costs.ts";
 import { createCostConflicts } from "./planning/cost-conflicts.ts";
 import { createPlannerAnalysis } from "./planning/planner-analysis.ts";
+import { createBuildPlanner } from "./planning/build-planner.ts";
 import { createStorageExpansion } from "./planning/storage-expansion.ts";
 import { createStorageRequirements } from "./planning/storage-requirements.ts";
 import { createDemandPrioritization } from "./planning/demand-prioritization.ts";
@@ -73,6 +75,11 @@ import { createBrowserRuntime } from "./browser/runtime.ts";
 import { createMechStats } from "./ui/mech-stats.ts";
 import { createSortHelper } from "./ui/sort-helper.ts";
 import { createTabRefresh } from "./ui/tab-refresh.ts";
+import { createSoulGemRateDisplay } from "./ui/soul-gem-rate.ts";
+import { createPreviousGameStats } from "./ui/previous-game-stats.ts";
+import { createRuntimeAdapters } from "./ui/runtime-adapters.ts";
+import { createAutomationContainer } from "./ui/automation-container.ts";
+import { createUIRefresh } from "./ui/ui-refresh.ts";
 import { createTickOrchestration } from "./automation/tick.ts";
 import { createStateUpdate } from "./automation/state-update.ts";
 import { createRunGuards } from "./policies/run-guards.ts";
@@ -14556,101 +14563,32 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     });
   }
 
-  function updateBuildPlanner() {
-    if (!settings.buildPlannerUI) {
-      return;
-    }
-    let shouldSample = !document.hidden || settings.stateLogEnabled;
-    let shouldDraw = !document.hidden;
-    let buildRan = state.plannerFreshTick === state.scriptTick;
-    let targets = state.unlockedBuildings ?? [];
+  const { updateBuildPlanner } = createBuildPlanner({
+    getSettings: () => settings,
+    getSettingsRaw: () => settingsRaw,
+    getState: () => state,
+    getGame: () => game,
+    getDocument: () => document,
+    getJQuery: () => $,
+    getPoly: () => poly,
+    getNiceNumber,
+    plannerLimitingResource,
+    loadPlannerStats,
+    savePlannerStats,
+  });
 
-    if (shouldSample && buildRan && targets.length > 0) {
-      state.plannerStats ??= loadPlannerStats();
-      let stats = state.plannerStats;
-      let limit = plannerLimitingResource(targets[0]);
-      let bucket = limit ? limit.resource.title : "not blocked";
-      stats.samples[bucket] = (stats.samples[bucket] ?? 0) + 1;
-      stats.total++;
-      stats.day = game.global.stats.days;
-      if (stats.total % 25 === 0) {
-        savePlannerStats();
-      }
-    }
-
-    if (!shouldDraw || settingsRaw.buildPlannerCollapsed) {
-      return;
-    }
-    let list = $("#script_planner-list");
-    if (list.length === 0) {
-      return;
-    }
-
-    if (!settings.autoBuild && !settings.autoARPA) {
-      list.html('<li class="planner-note">autoBuild / autoARPA disabled</li>');
-    } else {
-      let rows = targets.slice(0, 8).map((target) => {
-        let limit = plannerLimitingResource(target);
-        let status, statusClass;
-        if (!limit) {
-          status = "ready";
-          statusClass = "has-text-success";
-        } else if (limit.blocker === "storage") {
-          status = `${limit.resource.title} (storage)`;
-          statusClass = "has-text-danger";
-        } else if (limit.blocker === "stalled") {
-          status = `${limit.resource.title} (no income)`;
-          statusClass = "has-text-danger";
-        } else {
-          status = `${poly.timeFormat(limit.time)} (${limit.resource.title})`;
-          statusClass = "has-text-warning";
-        }
-        let name = target.title;
-        if (target.count && !target.is?.multiSegmented) {
-          name += ` #${target.count + 1}`;
-        }
-        if (state.queuedTargets.includes(target)) {
-          name += ' <span class="has-text-special">(queued)</span>';
-        } else if (state.triggerTargets.includes(target)) {
-          name += ' <span class="has-text-special">(trigger)</span>';
-        }
-        let note = target.extraDescription
-          .replace(/^Auto(Build|ARPA) weighting:[^<]*<br>/, "")
-          .split("<br>")
-          .filter(Boolean)
-          .join(" · ");
-        return `<li>
-            <div class="planner-row">
-                <span class="planner-name">${name}</span>
-                <span class="planner-weight has-text-advanced">${getNiceNumber(
-                  target.weighting,
-                )}</span>
-                <span class="planner-time ${statusClass}">${status}</span>
-            </div>
-            ${note ? `<div class="planner-note">${note}</div>` : ""}
-        </li>`;
-      });
-      if (!buildRan) {
-        rows.unshift(
-          '<li class="planner-note">autoBuild idle (triggers or queue processing) — list from last update</li>',
-        );
-      } else if (rows.length === 0) {
-        rows.push('<li class="planner-note">Nothing to build</li>');
-      }
-      list.html(rows.join(""));
-    }
-
-    let stats = state.plannerStats;
-    if (stats?.total > 0) {
-      let shares = Object.entries(stats.samples)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([res, n]) => `${res} ${Math.round((n / stats.total) * 100)}%`)
-        .join(" · ");
-      $("#script_planner-stats-text").html(
-        `${shares}<div class="planner-note">Top target blocked by, since day ${stats.startDay} (${stats.total} samples)</div>`,
-      );
-    }
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      updateBuildPlanner: () => updateBuildPlanner(),
+      setBuildPlannerTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        poly = context.poly;
+      },
+    });
   }
 
   let stateUpdateTestHelpers;
@@ -15979,7 +15917,7 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     finalizeScriptData,
     updateTabs,
     updateState,
-    updateUI,
+    updateUI: () => updateUI(),
     autoEvolution,
     autoGatherResources,
     autoMarket,
@@ -24185,447 +24123,99 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     totalDaysNode.remove();
   }
 
-  function updateUI() {
-    // Don't touch DOM when the tab is in the background
-    if (document.hidden) {
-      return;
-    }
+  let uiRefreshTestActions;
+  const uiRefreshActions = {
+    createOptionsModal,
+    updateOptionsUI,
+    updatePrestigeInTopBar,
+    createSettingToggle,
+    updateSettingsFromState,
+    buildScriptSettings,
+    removeScriptSettings,
+    createMechInfo,
+    removeMechInfo,
+    createCraftToggles,
+    removeCraftToggles,
+    createBuildingToggles,
+    removeBuildingToggles,
+    createArpaToggles,
+    removeArpaToggles,
+    createStorageToggles,
+    removeStorageToggles,
+    createMarketToggles,
+    removeMarketToggles,
+    createEjectToggles,
+    removeEjectToggles,
+    createSupplyToggles,
+    removeSupplyToggles,
+    buildActiveTargetsUI,
+    buildBuildPlannerUI,
+    updateDebugData,
+    updateScriptData,
+    finalizeScriptData,
+    autoMarket,
+    getNiceNumber,
+    updateTotalDaysInTopBar,
+  };
 
-    let resetScrollPositionRequired = false;
-    let currentScrollPosition =
-      document.documentElement.scrollTop || document.body.scrollTop;
+  const { updateSoulGemRate } = createSoulGemRateDisplay({
+    getState: () => state,
+    getResources: () => resources,
+    getJQuery: () => $,
+    getNiceNumber: (value) =>
+      (uiRefreshTestActions ?? uiRefreshActions).getNiceNumber(value),
+  });
 
-    createOptionsModal();
-    updateOptionsUI();
-    updatePrestigeInTopBar();
+  const { renderPreviousGameStats } = createPreviousGameStats({
+    getGame: () => game,
+    getWin: () => win,
+    getJQuery: () => $,
+    storage: localStorage,
+  });
 
-    let scriptNode = $("#autoScriptContainer");
-    if (scriptNode.length === 0) {
-      resetScrollPositionRequired = true;
-      $("#resources").append(`
-              <div id="autoScriptContainer" style="margin-top: 10px;">
-                <h3 id="toggleSettingsCollapsed" class="script-collapsible text-center has-text-success">Automation</h3>
-                <div id="scriptToggles">
-                  <label>More script options available in Settings tab<br>${overrideKeyLabel}+click options to open <span class="inactive-row">advanced configuration</span></label><br>
-                </div>
-              </div>`);
+  const { repairRuntimeAdapters } = createRuntimeAdapters({
+    getSettings: () => settings,
+    getSettingsRaw: () => settingsRaw,
+    getState: () => state,
+    getGame: () => game,
+    getJQuery: () => $,
+    getActions: () => uiRefreshTestActions ?? uiRefreshActions,
+  });
 
-      if (safeMode) {
-        $("#resources").append(
-          `<p>⚠️ Safe mode active, masterScriptToggle is disabled</p>`,
-        );
-      }
+  const { ensureAutomationContainer } = createAutomationContainer({
+    getSettingsRaw: () => settingsRaw,
+    getJQuery: () => $,
+    getSafeMode: () => safeMode,
+    getOverrideKeyLabel: () => overrideKeyLabel,
+    getActions: () => uiRefreshTestActions ?? uiRefreshActions,
+  });
 
-      let collapsibleNode = $("#toggleSettingsCollapsed");
-      let togglesNode = $("#scriptToggles");
+  const { updateUI } = createUIRefresh({
+    getDocument: () => document,
+    getActions: () => uiRefreshTestActions ?? uiRefreshActions,
+    getPhases: () => ({
+      ensureAutomationContainer,
+      repairRuntimeAdapters,
+      updateSoulGemRate,
+      renderPreviousGameStats,
+    }),
+  });
 
-      collapsibleNode.toggleClass(
-        "script-contentactive",
-        !settingsRaw["toggleSettingsCollapsed"],
-      );
-      togglesNode.css(
-        "display",
-        settingsRaw["toggleSettingsCollapsed"] ? "none" : "block",
-      );
-
-      collapsibleNode.on("click", function () {
-        settingsRaw["toggleSettingsCollapsed"] =
-          !settingsRaw["toggleSettingsCollapsed"];
-        collapsibleNode.toggleClass(
-          "script-contentactive",
-          !settingsRaw["toggleSettingsCollapsed"],
-        );
-        togglesNode.css(
-          "display",
-          settingsRaw["toggleSettingsCollapsed"] ? "none" : "block",
-        );
-        updateSettingsFromState();
-      });
-
-      createSettingToggle(
-        togglesNode,
-        "masterScriptToggle",
-        "Stop taking any actions on behalf of the player.",
-      );
-
-      // Dirty performance patch. Settings have a lot of elements, and they stress JQuery selectors way too much. This toggle allow to remove them from DOM completely, when they aren't needed.
-      // It doesn't have huge impact anymore, after all script and game changes, but still won't hurt to have an option to increase performance a tiny bit more
-      createSettingToggle(
-        togglesNode,
-        "showSettings",
-        "You can disable rendering of settings UI once you've done with configuring script, if you experiencing performance issues. It can help a little.",
-        buildScriptSettings,
-        removeScriptSettings,
-      );
-
-      createSettingToggle(
-        togglesNode,
-        "autoPrestige",
-        "Allows script to finish current run after reaching configured goal. Prestige Type is recommended to be set even with manual resetting, as script uses that to make various decisions such as picking theology techs, or skipping buildings leading in wrong direction.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoEvolution",
-        "Runs through the evolution part of the game through to founding a settlement. In Auto Achievements mode will target races that you don't have extinction\\greatness achievements for yet.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoFight",
-        "Manage spies, and sends troops to battle whenever Soldiers are full and there are no wounded. Adds to your offensive battalion and switches attack type when offensive rating is greater than the rating cutoff for that attack type. Will not manage spies when Spy Operator governor task is active.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoHell",
-        "Sends soldiers to hell and sends them out on patrols. Adjusts maximum number of powered attractors based on threat.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoMech",
-        "Builds most effective large mechs for current spire floor. Least effective will be scrapped to make room for new ones. Will not build or scrap anything when Mech Constructor governor task is active.",
-        createMechInfo,
-        removeMechInfo,
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoFleet",
-        "Manages Andromeda fleet to supress piracy",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoTax",
-        "Adjusts tax rates if your current morale is greater than your maximum allowed morale. Will always keep morale above 100%. Disabled when Tax-Morale Balance governor task is active.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoGovernment",
-        "Manage changes of government and governor when they becomes available. Governor will be selected once, and won't be reassigned, unless manually fired.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoCraft",
-        "Automatically produce craftable resources, thresholds when it happens depends on current demands and stocks.",
-        createCraftToggles,
-        removeCraftToggles,
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoTrigger",
-        "Purchase triggered buildings, projects, and researches once conditions met",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoBuild",
-        "Construct buildings based on their weightings(user configured), and various rules(e.g. it won't build building which have no support to run)",
-        createBuildingToggles,
-        removeBuildingToggles,
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoARPA",
-        "Builds ARPA projects if user enables them to be built.",
-        createArpaToggles,
-        removeArpaToggles,
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoPower",
-        "Manages power based on a priority order of buildings. Also disables currently useless buildings to save up resources.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoStorage",
-        "Assigns crates and containers to resources needed for buildings enabled for Auto Build, queued buildings, researches, and enabled projects. Disabled when Crate/Container Manager governor task is active.",
-        createStorageToggles,
-        removeStorageToggles,
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoMarket",
-        "Allows for automatic buying and selling of resources once specific ratios are met. Also allows setting up trade routes until a minimum specified money per second is reached. The will trade in and out in an attempt to maximize your trade routes.",
-        createMarketToggles,
-        removeMarketToggles,
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoGalaxyMarket",
-        "Manages galaxy trade routes",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoResearch",
-        "Performs research when minimum requirements are met.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoJobs",
-        "Assigns jobs in a priority order with multiple breakpoints. Starts with a few jobs each and works up from there. Will try to put a minimum number on lumber / stone then fill up capped jobs first.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoCraftsmen",
-        "Manage foundry workers, switching between resources at given ratio.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoAlchemy",
-        "Manages alchemic transmutations",
-      );
-      createSettingToggle(togglesNode, "autoPylon", "Manages pylon rituals");
-      createSettingToggle(
-        togglesNode,
-        "autoQuarry",
-        "Manages rock quarry stone to chrysotile ratio for smoldering races",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoMine",
-        "Manages titan mine aluminium to adamantite ratio in true path",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoExtractor",
-        "Manages extractor ship mining ratios in true path",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoSmelter",
-        "Manages smelter fuel and production.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoFactory",
-        "Manages factory production.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoMiningDroid",
-        "Manages mining droid production.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoGraphenePlant",
-        "Manages graphene plant. Not user configurable - just uses least demanded resource for fuel.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoGenetics",
-        "Managed genetics settings, and automatically assembles genes more optimally than ingame sequencer",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoMinorTrait",
-        "Purchase minor traits using genes according to their weighting settings. Also manages Mimic genus, Psychic powers, Ocular powers and wishes.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoMutateTraits",
-        "Mutate in or out major and genus traits. WARNING: This will spend Plasmids and Anti-Plasmids.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoEject",
-        "Eject excess resources to black hole. Normal resources ejected when they close to storage cap, craftables - when above requirements. Disabled when Mass Ejector Optimizer governor task is active.",
-        createEjectToggles,
-        removeEjectToggles,
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoSupply",
-        "Send excess resources to Spire. Normal resources sent when they close to storage cap, craftables - when above requirements. Takes priority over ejector.",
-        createSupplyToggles,
-        removeSupplyToggles,
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoNanite",
-        "Consume resources to produce Nanite. Normal resources sent when they close to storage cap, craftables - when above requirements. Takes priority over supplies and ejector.",
-      );
-      createSettingToggle(
-        togglesNode,
-        "autoReplicator",
-        "Use excess power to replicate resources.",
-      );
-
-      togglesNode.append(
-        '<a class="button is-dark is-small" id="bulk-sell"><span>Bulk Sell</span></a>',
-      );
-      $("#bulk-sell").on("mouseup", function () {
-        updateDebugData();
-        updateScriptData();
-        finalizeScriptData();
-        autoMarket(true, true);
-      });
-    }
-
-    if (scriptNode.next().length) {
-      resetScrollPositionRequired = true;
-      scriptNode.parent().append(scriptNode);
-    }
-
-    if (
-      settingsRaw.activeTargetsUI &&
-      $("#active_targets-wrapper").length === 0
-    ) {
-      buildActiveTargetsUI();
-    }
-    if (
-      settingsRaw.buildPlannerUI &&
-      $("#script_planner-wrapper").length === 0
-    ) {
-      buildBuildPlannerUI();
-    }
-    if (settingsRaw.showSettings && $("#script_settings").length === 0) {
-      buildScriptSettings();
-    }
-    if (
-      settingsRaw.autoCraft &&
-      $("#resources .ea-craft-toggle").length === 0
-    ) {
-      createCraftToggles();
-    }
-    // Building toggles added to different tabs, game can redraw just one tab, destroying toggles there, and we still have total number of toggles above zero; we'll remember amount of toggle, and redraw it when number differ from what we have in game
-    if (settingsRaw.autoBuild) {
-      let currentBuildingToggles = $("#mTabCivil .ea-building-toggle").length;
-      if (
-        currentBuildingToggles === 0 ||
-        currentBuildingToggles !== state.buildingToggles
-      ) {
-        createBuildingToggles();
-      }
-    }
-    if (
-      settingsRaw.autoStorage &&
-      game.global.settings.showStorage &&
-      $("#resStorage .ea-storage-toggle").length === 0
-    ) {
-      createStorageToggles();
-    }
-    if (
-      settingsRaw.autoMarket &&
-      game.global.settings.showMarket &&
-      $("#market .ea-market-toggle").length === 0
-    ) {
-      createMarketToggles();
-    }
-    if (
-      settingsRaw.autoEject &&
-      game.global.settings.showEjector &&
-      $("#resEjector .ea-eject-toggle").length === 0
-    ) {
-      createEjectToggles();
-    }
-    if (
-      settingsRaw.autoSupply &&
-      game.global.settings.showCargo &&
-      $("#resCargo .ea-supply-toggle").length === 0
-    ) {
-      createSupplyToggles();
-    }
-    if (
-      settingsRaw.autoARPA &&
-      game.global.settings.showGenetics &&
-      $("#arpaPhysics .ea-arpa-toggle").length === 0
-    ) {
-      createArpaToggles();
-    }
-
-    if (
-      settingsRaw.autoMech &&
-      game.global.settings.showMechLab &&
-      $("#mechList .ea-mech-info").length < $("#mechList .mechRow").length
-    ) {
-      createMechInfo();
-    }
-
-    // Hell messages
-    if (settings.hellTurnOffLogMessages) {
-      if (game.global.portal.fortress?.notify === "Yes") {
-        $("#fort .b-checkbox").eq(0).click();
-      }
-      if (game.global.portal.fortress?.s_ntfy === "Yes") {
-        $("#fort .b-checkbox").eq(1).click();
-      }
-    }
-
-    // Soul Gems income rate
-    if (resources.Soul_Gem.isUnlocked()) {
-      let currentSec = Math.floor(state.scriptTick / 4);
-      if (resources.Soul_Gem.currentQuantity > state.soulGemLast) {
-        state.soulGemIncomes.push({
-          sec: currentSec,
-          gems: resources.Soul_Gem.currentQuantity - state.soulGemLast,
-        });
-        state.soulGemLast = resources.Soul_Gem.currentQuantity;
-      }
-      let gems = 0;
-      let i = state.soulGemIncomes.length;
-      while (--i >= 0) {
-        let income = state.soulGemIncomes[i];
-        // Get all gems gained in last hour, or at least 10 last gems in any time frame, if rate is low
-        if (currentSec - income.sec > 3600 && gems > 10) {
-          break;
-        } else {
-          gems += income.gems;
-        }
-      }
-      // If loop was broken prematurely - clean up old records which we don't need anymore
-      if (i >= 0) {
-        state.soulGemIncomes = state.soulGemIncomes.splice(i + 1);
-      }
-      let timePassed = currentSec - state.soulGemIncomes[0].sec;
-      let gph = (gems / timePassed) * 3600;
-      state.soulGemPerHour = gph;
-      if (gph >= 1000) {
-        gph = Math.round(gph);
-      }
-      $("#resSoul_Gem span:eq(2)").text(
-        `${gems > 0 && currentSec <= 3600 ? "~" : ""}${getNiceNumber(gph)} /h`,
-      );
-    }
-
-    // Previous game stats
-    if ($("#statsPanel .cstat").length === 1) {
-      let backupString = win.LZString.decompressFromUTF16(
-        localStorage.getItem("evolveBak"),
-      );
-      if (backupString) {
-        let oldStats = JSON.parse(backupString).stats;
-        let statsData = {
-          knowledge_spent: oldStats.know,
-          starved_to_death: oldStats.starved,
-          died_in_combat: oldStats.died,
-          attacks_made: oldStats.attacks,
-          game_days_played: oldStats.days,
-        };
-        if (oldStats.dkills > 0) {
-          statsData.demons_kills = oldStats.dkills;
-        }
-        if (oldStats.sac > 0) {
-          statsData.sacrificed = oldStats.sac;
-        }
-        if (oldStats.murders > 0) {
-          statsData.murders = oldStats.murders;
-        }
-        if (oldStats.psykill > 0) {
-          statsData.psymurders = oldStats.psykill;
-        }
-        let statsString = `<div class="cstat"><span class="has-text-success">Previous Game</span></div>`;
-        for (let [label, value] of Object.entries(statsData)) {
-          statsString += `<div><span class="has-text-warning">${game.loc(
-            "achieve_stats_" + label,
-          )}</span> ${value.toLocaleString()}</div>`;
-        }
-        $("#statsPanel").append(statsString);
-      }
-    }
-
-    if (resetScrollPositionRequired) {
-      // Leave the scroll position where it was before all our updates to the UI above
-      document.documentElement.scrollTop = document.body.scrollTop =
-        currentScrollPosition;
-    }
-
-    updateTotalDaysInTopBar();
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      updateUI: () => updateUI(),
+      setUIRefreshTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        win = context.win;
+        safeMode = context.safeMode;
+        overrideKeyLabel = context.overrideKeyLabel;
+        uiRefreshTestActions = context.actions;
+      },
+    });
   }
 
   function createMechInfo() {
@@ -25091,80 +24681,45 @@ import { createAutoMech } from "./automation/combat/mech.ts";
     });
   }
 
-  function importSettings(str) {
-    //let saveState = JSON.parse(LZString.decompressFromBase64(str));
-    let saveState = JSON.parse(str);
-    if (
-      !saveState &&
-      typeof saveState === "object" &&
-      (saveState.scriptName === "TMVictor" || $.isEmptyObject(saveState))
-    ) {
-      return false;
-    }
-    let evals = [];
-    Object.values(saveState.overrides ?? []).forEach((list) =>
-      list.forEach((override) => {
-        if (override.type1 === "Eval") {
-          evals.push(override.arg1);
-        }
-        if (override.type2 === "Eval") {
-          evals.push(override.arg2);
-        }
-      }),
-    );
-    saveState.triggers?.forEach((trigger) => {
-      if (trigger.requirementType === "Eval") {
-        evals.push(trigger.requirementId);
-      }
-    });
-    Object.values(saveState.overrides?.log_prestige_format ?? []).forEach(
-      (prestige_log_format_override) => {
-        if (prestige_log_format_override.ret.includes("{eval:")) {
-          evals.push(prestige_log_format_override.ret);
-        }
+  let settingsTransferTestActions;
+  const settingsTransferActions = {
+    updateStandAloneSettings,
+    updateStateFromSettings,
+    updateSettingsFromState,
+    removeScriptSettings,
+    removeMechInfo,
+    removeStorageToggles,
+    removeMarketToggles,
+    removeArpaToggles,
+    removeCraftToggles,
+    removeBuildingToggles,
+    removeEjectToggles,
+    removeSupplyToggles,
+    updateUI,
+    buildFilterRegExp,
+  };
+
+  const { importSettings, exportSettings } = createSettingsTransfer({
+    getSettingsRaw: () => settingsRaw,
+    setSettingsRaw: (value) => {
+      settingsRaw = value;
+    },
+    getJQuery: () => $,
+    getGameLog: () => GameLog,
+    getActions: () => settingsTransferTestActions ?? settingsTransferActions,
+    confirmImport: (message) => confirm(message),
+    logToConsole: (message) => console.log(message),
+  });
+
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      settingsTransfer: { importSettings, exportSettings },
+      setSettingsTransferTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        GameLog = context.GameLog;
+        settingsTransferTestActions = context.actions;
       },
-    );
-
-    if (saveState.log_prestige_format?.includes("{eval:")) {
-      evals.push(saveState.log_prestige_format);
-    }
-
-    if (
-      evals.length > 0 &&
-      !confirm(
-        "Warning! Imported settings includes evaluated code, which will have full access to browser page, and can be potentially dangerous.\nOnly continue if you trust the source. Injected code:\n" +
-          evals.join("\n"),
-      )
-    ) {
-      return false;
-    }
-    console.log("Importing script settings");
-    settingsRaw = saveState;
-    updateStandAloneSettings();
-    updateStateFromSettings();
-    updateSettingsFromState();
-    removeScriptSettings();
-    removeMechInfo();
-    removeStorageToggles();
-    removeMarketToggles();
-    removeArpaToggles();
-    removeCraftToggles();
-    removeBuildingToggles();
-    removeEjectToggles();
-    removeSupplyToggles();
-    $("#autoScriptContainer").remove();
-    updateUI();
-    buildFilterRegExp();
-
-    GameLog.logInfo("special", "Settings successfully imported");
-
-    return true;
-  }
-
-  function exportSettings() {
-    console.log("Exporting script settings");
-    // return LZString.compressToBase64(JSON.stringify(global));
-    return JSON.stringify(settingsRaw);
+    });
   }
 
   var poly = {

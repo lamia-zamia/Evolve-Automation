@@ -1,0 +1,116 @@
+import assert from "node:assert/strict";
+
+import { createBuildPlanner } from "../src/planning/build-planner.ts";
+
+function target(title = "Target") {
+  return {
+    title,
+    weighting: 10,
+    count: 0,
+    is: {},
+    extraDescription: "",
+  };
+}
+
+function makeContext(overrides = {}) {
+  const html = [];
+  return {
+    settings: {
+      buildPlannerUI: true,
+      stateLogEnabled: false,
+      autoBuild: true,
+      autoARPA: false,
+    },
+    settingsRaw: { buildPlannerCollapsed: false },
+    state: {
+      plannerFreshTick: 1,
+      scriptTick: 1,
+      unlockedBuildings: [],
+      queuedTargets: [],
+      triggerTargets: [],
+      plannerStats: null,
+    },
+    game: { global: { stats: { days: 12 } } },
+    document: { hidden: false },
+    poly: { timeFormat: (seconds) => `${seconds}s` },
+    jquery: (selector) => ({
+      length: selector === "#script_planner-list" ? 1 : 0,
+      html: (value) => html.push([selector, value]),
+    }),
+    html,
+    ...overrides,
+  };
+}
+
+let context = makeContext();
+let loadCalls = 0;
+let saveCalls = 0;
+let limitCalls = [];
+const { updateBuildPlanner } = createBuildPlanner({
+  getSettings: () => context.settings,
+  getSettingsRaw: () => context.settingsRaw,
+  getState: () => context.state,
+  getGame: () => context.game,
+  getDocument: () => context.document,
+  getJQuery: () => context.jquery,
+  getPoly: () => context.poly,
+  getNiceNumber: (value) => value / 2,
+  plannerLimitingResource: (item) => {
+    limitCalls.push(item.title);
+    return item.limit ?? null;
+  },
+  loadPlannerStats: () => {
+    loadCalls++;
+    return {
+      startDay: 10,
+      day: 10,
+      samples: { Iron: 24 },
+      total: 24,
+    };
+  },
+  savePlannerStats: () => saveCalls++,
+});
+
+// All mutable objects are resolved per call. Replacing the whole context leaves the stale one
+// untouched and drives sampling/rendering through the new one.
+const stale = context;
+stale.settings.buildPlannerUI = false;
+updateBuildPlanner();
+assert.deepEqual(stale.html, []);
+
+const first = target("First");
+first.limit = {
+  resource: { title: "Iron" },
+  time: 30,
+  blocker: "income",
+};
+first.weighting = 8;
+context = makeContext();
+context.state.unlockedBuildings = [first];
+updateBuildPlanner();
+assert.equal(stale.state.plannerStats, null);
+assert.equal(loadCalls, 1);
+assert.equal(saveCalls, 1);
+assert.deepEqual(limitCalls, ["First", "First"]);
+assert.deepEqual(context.state.plannerStats, {
+  startDay: 10,
+  day: 12,
+  samples: { Iron: 25 },
+  total: 25,
+});
+assert.equal(context.html.length, 2);
+assert.match(context.html[0][1], />4<\/span>/);
+assert.match(context.html[0][1], />30s \(Iron\)<\/span>/);
+
+// A replacement document and collapsed setting are also consulted at call time. Sampling still
+// happens under state logging while rendering stays suppressed.
+context = makeContext();
+context.document.hidden = true;
+context.settings.stateLogEnabled = true;
+context.state.unlockedBuildings = [target("Hidden")];
+updateBuildPlanner();
+assert.deepEqual(context.html, []);
+assert.equal(context.state.plannerStats.total, 25);
+assert.equal(context.state.plannerStats.samples["not blocked"], 1);
+
+console.log("Build planner module tests passed");
