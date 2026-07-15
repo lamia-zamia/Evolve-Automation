@@ -120,7 +120,7 @@ export function createFleetSettings({
       currentNode,
       "fleetOuterCrew",
       "Minimum idle soldiers",
-      "Only build ships when amount of idle soldiers above give number",
+      "Only build ships when the remaining idle soldiers exceed this number. In Evil, the configured Authority target can reserve more soldiers automatically.",
     );
     addSettingsToggle(
       currentNode,

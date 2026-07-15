@@ -21,6 +21,7 @@ type Dependencies = AutomationDependencies<
   | "isHellSupressUseful"
   | "getGalaxyRegions"
   | "traitVal"
+  | "getRequiredAuthorityGarrison"
   | "getHaveTech"
   | "adjustSpire"
   | "getBestSupplyRatio"
@@ -51,6 +52,7 @@ export function createAutoPower({
   isHellSupressUseful,
   getGalaxyRegions,
   traitVal,
+  getRequiredAuthorityGarrison,
   getHaveTech,
   adjustSpire,
   getBestSupplyRatio,
@@ -465,8 +467,19 @@ export function createAutoPower({
             //let protectedSoldiers = (game.global.race['armored'] ? 1 : 0) + (game.global.race['scales'] ? 1 : 0) + (game.global.tech['armor'] ?? 0);
             //let woundCap = Math.ceil((game.global.space.fob.enemy + (game.global.tech.outer >= 4 ? 75 : 62.5)) / 5) - protectedSoldiers;
             //let maxLanders = getHealingRate() < woundCap ? Math.floor((getHealingRate() + protectedSoldiers) / 1.5) : Number.MAX_SAFE_INTEGER;
+            let authorityReserve = 0;
+            if (
+              game.global.race.universe === "evil" &&
+              resources.Authority.isUnlocked()
+            ) {
+              authorityReserve = Math.min(
+                WarManager.currentSoldiers,
+                getRequiredAuthorityGarrison(WarManager.currentCityGarrison),
+              );
+            }
             let dispatchSoldiers =
               WarManager.currentSoldiers -
+              authorityReserve -
               Math.max(0, WarManager.wounded - Math.floor(getHealingRate()));
             let healthySquads = Math.floor(
               dispatchSoldiers / (3 * traitVal("high_pop", 0, 1)),

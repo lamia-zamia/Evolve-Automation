@@ -6,6 +6,9 @@ type Dependencies = AutomationDependencies<
   | "getGame"
   | "getSettings"
   | "getResources"
+  | "traitVal"
+  | "getAuthorityTarget"
+  | "getPredictedAuthorityAfterRemovingSoldiers"
   | "GameLog"
 >;
 export function createAutoFleetOuter({
@@ -14,6 +17,9 @@ export function createAutoFleetOuter({
   getGame,
   getSettings,
   getResources,
+  traitVal,
+  getAuthorityTarget,
+  getPredictedAuthorityAfterRemovingSoldiers,
   GameLog,
 }: Dependencies) {
   return function autoFleetOuter() {
@@ -114,13 +120,44 @@ export function createAutoFleetOuter({
       targetRegion,
     )}`;
 
+    const baseCrew = game.global.race["grenadier"]
+      ? {
+          corvette: 1,
+          frigate: 2,
+          destroyer: 3,
+          cruiser: 4,
+          battlecruiser: 5,
+          dreadnought: 6,
+          explorer: 6,
+        }[newShip.class]
+      : m.ClassCrew[newShip.class];
+    const shipCrew = baseCrew * traitVal("high_pop", 0, 1);
+
+    // In Evil, outer ships permanently remove their crew from the home garrison. Before Hell is
+    // available those idle home soldiers are the only controllable source of Authority, so a fleet
+    // expansion can otherwise lock the run into a production/army penalty while every region is
+    // already over-defended.
+    if (
+      settings.generalMinimumAuthority !== 0 &&
+      game.global.race.universe === "evil" &&
+      resources.Authority.isUnlocked()
+    ) {
+      const authorityTarget = getAuthorityTarget();
+      const predictedAuthority =
+        getPredictedAuthorityAfterRemovingSoldiers(shipCrew);
+      if (authorityTarget !== null && predictedAuthority < authorityTarget) {
+        m.nextShipMsg = `Next ship(${m.nextShipName}) would lower Authority to ${predictedAuthority}, below the ${authorityTarget} target`;
+        return;
+      }
+    }
+
     let missing = m.getMissingResource(newShip);
     if (missing) {
       m.nextShipMsg = `Next ship(${m.nextShipName}) is missing ${resources[missing].name}`;
       return;
     }
 
-    if (WarManager.currentCityGarrison - m.ClassCrew[newShip.class] < minCrew) {
+    if (WarManager.currentCityGarrison - shipCrew < minCrew) {
       m.nextShipMsg = `Next ship(${m.nextShipName}) is missing crew`;
       return;
     }

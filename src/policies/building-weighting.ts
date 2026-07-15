@@ -241,6 +241,18 @@ export function createBuildingWeightingPolicy({
       (chance) => (chance < 0.5 ? chance : 0),
     ],
     [
+      () =>
+        game.global.race["truepath"] &&
+        buildings.ErisDigsite.isUnlocked() &&
+        buildings.ErisDigsite.count < 100,
+      (building) =>
+        building === buildings.ErisDrone ||
+        building === buildings.ErisTank ||
+        building === buildings.ErisTrooper,
+      () => "Eris Digsite is not yet secured",
+      () => settings.buildingWeightingTruepathDigsite,
+    ],
+    [
       () => settings.jobDisableMiners && buildings.GatewayStarbase.count > 0,
       (building) =>
         building === buildings.CoalMine ||

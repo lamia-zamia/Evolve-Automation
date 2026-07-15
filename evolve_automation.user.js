@@ -724,7 +724,8 @@
         buildingWeightingOverlord: 0,
         buildingWeightingBananaObjective: 2,
         buildingWeightingInflationMoney: 2,
-        buildingWeightingRetirementPrep: 10
+        buildingWeightingRetirementPrep: 10,
+        buildingWeightingTruepathDigsite: 10
       };
       applySettings2(def, reset);
     }
@@ -9903,6 +9904,62 @@
     return { checkEvolutionResult: checkEvolutionResult2 };
   }
 
+  // src/policies/authority.ts
+  function createAuthorityPolicy({
+    getGame,
+    getSettings,
+    getResources,
+    traitVal: traitVal2
+  }) {
+    function getAuthorityTarget2() {
+      const settings2 = getSettings();
+      if (settings2.generalMinimumAuthority === 0) {
+        return null;
+      }
+      return settings2.generalMinimumAuthority < 0 ? getResources().Authority.maxQuantity : settings2.generalMinimumAuthority;
+    }
+    function getAuthorityPerSoldier() {
+      const game2 = getGame();
+      let authorityPerSoldier = (0.7 + 0.1 * (game2.global.tech["evil"] ?? 0)) * (traitVal2("high_pop", 1, 100) / 100);
+      if (game2.global.race["grenadier"]) authorityPerSoldier *= 1.75;
+      if (game2.global.civic.govern.type === "autocracy") {
+        authorityPerSoldier *= 1.08;
+      } else if (game2.global.civic.govern.type === "dictator") {
+        authorityPerSoldier *= 1.12;
+      }
+      return authorityPerSoldier;
+    }
+    function getRequiredAuthorityGarrison2(currentGarrison) {
+      const authorityTarget = getAuthorityTarget2();
+      if (authorityTarget === null) {
+        return 0;
+      }
+      const authorityPerSoldier = getAuthorityPerSoldier();
+      if (authorityPerSoldier <= 0) {
+        return currentGarrison;
+      }
+      const currentAuthority = getResources().Authority.currentQuantity;
+      const nonGarrisonAuthority = currentAuthority - currentGarrison * authorityPerSoldier;
+      return Math.max(
+        0,
+        Math.ceil(
+          (authorityTarget - nonGarrisonAuthority) / authorityPerSoldier - 1e-9
+        )
+      );
+    }
+    function getPredictedAuthorityAfterRemovingSoldiers2(removedSoldiers) {
+      return Math.floor(
+        getResources().Authority.currentQuantity - removedSoldiers * getAuthorityPerSoldier()
+      );
+    }
+    return {
+      getAuthorityTarget: getAuthorityTarget2,
+      getAuthorityPerSoldier,
+      getRequiredAuthorityGarrison: getRequiredAuthorityGarrison2,
+      getPredictedAuthorityAfterRemovingSoldiers: getPredictedAuthorityAfterRemovingSoldiers2
+    };
+  }
+
   // src/planning/queue-items.ts
   function createQueueItems({
     getResources,
@@ -12029,6 +12086,12 @@
         },
         (chance) => `${Math.round(chance * 100)}% chance of successful launch`,
         (chance) => chance < 0.5 ? chance : 0
+      ],
+      [
+        () => game2.global.race["truepath"] && buildings2.ErisDigsite.isUnlocked() && buildings2.ErisDigsite.count < 100,
+        (building) => building === buildings2.ErisDrone || building === buildings2.ErisTank || building === buildings2.ErisTrooper,
+        () => "Eris Digsite is not yet secured",
+        () => settings2.buildingWeightingTruepathDigsite
       ],
       [
         () => settings2.jobDisableMiners && buildings2.GatewayStarbase.count > 0,
@@ -16379,6 +16442,7 @@
     isHellSupressUseful: isHellSupressUseful2,
     getGalaxyRegions: getGalaxyRegions2,
     traitVal: traitVal2,
+    getRequiredAuthorityGarrison: getRequiredAuthorityGarrison2,
     getHaveTech,
     adjustSpire: adjustSpire2,
     getBestSupplyRatio: getBestSupplyRatio2,
@@ -16644,7 +16708,14 @@
             if (buildings2.TritonFOB.stateOnCount < 1) {
               maxStateOn = 0;
             } else {
-              let dispatchSoldiers = WarManager2.currentSoldiers - Math.max(0, WarManager2.wounded - Math.floor(getHealingRate2()));
+              let authorityReserve = 0;
+              if (game2.global.race.universe === "evil" && resources2.Authority.isUnlocked()) {
+                authorityReserve = Math.min(
+                  WarManager2.currentSoldiers,
+                  getRequiredAuthorityGarrison2(WarManager2.currentCityGarrison)
+                );
+              }
+              let dispatchSoldiers = WarManager2.currentSoldiers - authorityReserve - Math.max(0, WarManager2.wounded - Math.floor(getHealingRate2()));
               let healthySquads = Math.floor(
                 dispatchSoldiers / (3 * traitVal2("high_pop", 0, 1))
               );
@@ -17445,6 +17516,9 @@
     getGame,
     getSettings,
     getResources,
+    traitVal: traitVal2,
+    getAuthorityTarget: getAuthorityTarget2,
+    getPredictedAuthorityAfterRemovingSoldiers: getPredictedAuthorityAfterRemovingSoldiers2,
     GameLog: GameLog2
   }) {
     return function autoFleetOuter2() {
@@ -17519,12 +17593,30 @@
       m.nextShipName = `${m.getShipName(newShip)} to ${m.getLocName(
         targetRegion
       )}`;
+      const baseCrew = game2.global.race["grenadier"] ? {
+        corvette: 1,
+        frigate: 2,
+        destroyer: 3,
+        cruiser: 4,
+        battlecruiser: 5,
+        dreadnought: 6,
+        explorer: 6
+      }[newShip.class] : m.ClassCrew[newShip.class];
+      const shipCrew = baseCrew * traitVal2("high_pop", 0, 1);
+      if (settings2.generalMinimumAuthority !== 0 && game2.global.race.universe === "evil" && resources2.Authority.isUnlocked()) {
+        const authorityTarget = getAuthorityTarget2();
+        const predictedAuthority = getPredictedAuthorityAfterRemovingSoldiers2(shipCrew);
+        if (authorityTarget !== null && predictedAuthority < authorityTarget) {
+          m.nextShipMsg = `Next ship(${m.nextShipName}) would lower Authority to ${predictedAuthority}, below the ${authorityTarget} target`;
+          return;
+        }
+      }
       let missing = m.getMissingResource(newShip);
       if (missing) {
         m.nextShipMsg = `Next ship(${m.nextShipName}) is missing ${resources2[missing].name}`;
         return;
       }
-      if (WarManager2.currentCityGarrison - m.ClassCrew[newShip.class] < minCrew) {
+      if (WarManager2.currentCityGarrison - shipCrew < minCrew) {
         m.nextShipMsg = `Next ship(${m.nextShipName}) is missing crew`;
         return;
       }
@@ -21275,7 +21367,7 @@
         currentNode,
         "fleetOuterCrew",
         "Minimum idle soldiers",
-        "Only build ships when amount of idle soldiers above give number"
+        "Only build ships when the remaining idle soldiers exceed this number. In Evil, the configured Authority target can reserve more soldiers automatically."
       );
       addSettingsToggle2(
         currentNode,
@@ -22894,6 +22986,12 @@
         "The True Path",
         "Solar buildings after reaching Tau Ceti",
         "buildingWeightingSolar"
+      );
+      addWeightingRule2(
+        tableBodyNode,
+        "Eris Control Relays, Tanks, and Android Troopers",
+        "The True Path Digsite is not yet secured",
+        "buildingWeightingTruepathDigsite"
       );
       addWeightingRule2(
         tableBodyNode,
@@ -28722,6 +28820,16 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     });
     const { buildMarketSettings, updateMarketSettingsContent } = marketSettings;
     let { traitVal } = createTraitValue({ getGame: () => game });
+    const {
+      getAuthorityTarget,
+      getRequiredAuthorityGarrison,
+      getPredictedAuthorityAfterRemovingSoldiers
+    } = createAuthorityPolicy({
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+      traitVal
+    });
     const { normalizeProperties, addProps } = createPropertyHelpers({
       getSettings: () => settings
     });
@@ -33531,6 +33639,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       isHellSupressUseful,
       getGalaxyRegions,
       traitVal,
+      getRequiredAuthorityGarrison,
       getHaveTech: () => haveTech,
       adjustSpire,
       getBestSupplyRatio,
@@ -33641,6 +33750,9 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getGame: () => game,
       getSettings: () => settings,
       getResources: () => resources,
+      traitVal,
+      getAuthorityTarget,
+      getPredictedAuthorityAfterRemovingSoldiers,
       GameLog
     });
     if (window.__EA_TEST_HOOKS__) {

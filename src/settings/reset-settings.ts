@@ -637,6 +637,7 @@ export function createResetSettings({
       buildingWeightingBananaObjective: 2,
       buildingWeightingInflationMoney: 2,
       buildingWeightingRetirementPrep: 10,
+      buildingWeightingTruepathDigsite: 10,
     };
 
     applySettings(def, reset);

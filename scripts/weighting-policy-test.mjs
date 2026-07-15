@@ -70,7 +70,7 @@ const policy = createBuildingWeightingPolicy({
   ResourceAction,
 });
 
-assert.equal(policy.weightingRules.length, 70);
+assert.equal(policy.weightingRules.length, 71);
 assert.deepEqual(
   [
     policy.wrGlobalCondition,
@@ -108,7 +108,48 @@ context = {
 };
 assert.equal(queuedRule[policy.wrIndividualCondition](candidate), false);
 
-const piracyRule = policy.weightingRules[9];
+const digsiteRule = policy.weightingRules[8];
+context = {
+  ...context,
+  game: {
+    ...context.game,
+    global: {
+      ...context.game.global,
+      race: { truepath: true },
+    },
+  },
+  settings: {
+    ...context.settings,
+    buildingWeightingTruepathDigsite: 10,
+  },
+};
+buildings.ErisDigsite.count = 42;
+assert.equal(digsiteRule[policy.wrGlobalCondition](), true);
+assert.equal(
+  digsiteRule[policy.wrIndividualCondition](buildings.ErisDrone),
+  true,
+);
+assert.equal(
+  digsiteRule[policy.wrIndividualCondition](buildings.ErisTank),
+  true,
+);
+assert.equal(
+  digsiteRule[policy.wrIndividualCondition](buildings.ErisTrooper),
+  true,
+);
+assert.equal(
+  digsiteRule[policy.wrIndividualCondition](buildings.ErisMission),
+  false,
+);
+assert.equal(
+  digsiteRule[policy.wrDescription](),
+  "Eris Digsite is not yet secured",
+);
+assert.equal(digsiteRule[policy.wrMultiplier](), 10);
+buildings.ErisDigsite.count = 100;
+assert.equal(digsiteRule[policy.wrGlobalCondition](), false);
+
+const piracyRule = policy.weightingRules[10];
 haveTech = (id) => id === "piracy";
 assert.equal(piracyRule[policy.wrGlobalCondition](), true);
 haveTech = () => false;

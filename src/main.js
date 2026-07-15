@@ -71,6 +71,7 @@ import { createStorageRequirements } from "./planning/storage-requirements.ts";
 import { createDemandPrioritization } from "./planning/demand-prioritization.ts";
 import { createPriorityTargets } from "./planning/priority-targets.ts";
 import { createEvolutionResult } from "./policies/evolution-result.ts";
+import { createAuthorityPolicy } from "./policies/authority.ts";
 import { createQueueItems } from "./planning/queue-items.ts";
 import { createTargetTiming } from "./planning/target-timing.ts";
 import { createResourceWeighting } from "./planning/resource-weighting.ts";
@@ -1213,6 +1214,16 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildMarketSettings, updateMarketSettingsContent } = marketSettings;
 
   let { traitVal } = createTraitValue({ getGame: () => game });
+  const {
+    getAuthorityTarget,
+    getRequiredAuthorityGarrison,
+    getPredictedAuthorityAfterRemovingSoldiers,
+  } = createAuthorityPolicy({
+    getGame: () => game,
+    getSettings: () => settings,
+    getResources: () => resources,
+    traitVal,
+  });
   const { normalizeProperties, addProps } = createPropertyHelpers({
     getSettings: () => settings,
   });
@@ -7134,6 +7145,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     isHellSupressUseful,
     getGalaxyRegions,
     traitVal,
+    getRequiredAuthorityGarrison,
     getHaveTech: () => haveTech,
     adjustSpire,
     getBestSupplyRatio,
@@ -7255,6 +7267,9 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getGame: () => game,
     getSettings: () => settings,
     getResources: () => resources,
+    traitVal,
+    getAuthorityTarget,
+    getPredictedAuthorityAfterRemovingSoldiers,
     GameLog,
   });
 

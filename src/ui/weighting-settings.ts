@@ -205,6 +205,12 @@ export function createWeightingSettings({
     );
     addWeightingRule(
       tableBodyNode,
+      "Eris Control Relays, Tanks, and Android Troopers",
+      "The True Path Digsite is not yet secured",
+      "buildingWeightingTruepathDigsite",
+    );
+    addWeightingRule(
+      tableBodyNode,
       "Womlings Missions",
       "Womlings unlock actions conflicting with Overlord",
       "buildingWeightingOverlord",
