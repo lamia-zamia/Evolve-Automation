@@ -369,6 +369,114 @@ export function createAutoJobs({
 
     let jobMax = {};
     let minFarmers = 0;
+    let manageAuthorityEntertainers =
+      settings.authorityManage &&
+      settings.generalMinimumAuthority !== 0 &&
+      resources.Authority.isUnlocked();
+    let authorityMoraleCeiling = null;
+    if (!manageAuthorityEntertainers) {
+      delete state.authorityEntertainerCap;
+    } else {
+      let authorityPriorityTarget = Math.max(
+        100,
+        settings.generalMinimumAuthority < 0
+          ? resources.Authority.maxQuantity
+          : settings.generalMinimumAuthority,
+      );
+      let authorityTaxLimit = poly.taxCap(false);
+      let requestedTaxRate = Number(settings.generalRequestedTaxRate);
+      if (
+        settings.autoTax &&
+        Number.isFinite(requestedTaxRate) &&
+        requestedTaxRate >= 0
+      ) {
+        authorityTaxLimit = Math.min(
+          Math.max(requestedTaxRate, poly.taxCap(true)),
+          authorityTaxLimit,
+        );
+      }
+      let canIncreaseAuthorityWithTax =
+        game.global.civic.taxes.display !== false &&
+        (settings.autoTax || haveTask("tax")) &&
+        game.global.civic.taxes.tax_rate < authorityTaxLimit &&
+        resources.Authority.currentQuantity < authorityPriorityTarget;
+      let soldiersAdjustedThisTick =
+        state.scriptTick !== undefined &&
+        state.authoritySoldiersAdjustedTick === state.scriptTick;
+      if (!canIncreaseAuthorityWithTax && !soldiersAdjustedThisTick) {
+        // Authority starts from its no-morale-penalty value, then loses one point per point of
+        // morale above 100 (0.9 under Democracy). Derive the highest stable morale that still
+        // floors to at least 100 Authority. As soldiers raise the base value this ceiling rises,
+        // allowing entertainers back without oscillating below 100 on the following tick.
+        let moraleAuthorityFactor =
+          game.global.civic.govern.type === "democracy" ? 0.9 : 1;
+        let authorityAtHundredMorale =
+          resources.Authority.currentQuantity +
+          Math.max(0, resources.Morale.currentQuantity - 100) *
+            moraleAuthorityFactor;
+        authorityMoraleCeiling =
+          100 +
+          Math.max(0, authorityAtHundredMorale - 100) / moraleAuthorityFactor;
+      }
+    }
+    let entertainerMorale =
+      ((game.global.tech?.["theatre"] ?? 0) + traitVal("musical", 0)) *
+      traitVal("emotionless", 0, "-") *
+      traitVal("high_pop", 1, "=") *
+      (state.astroSign === "sagittarius" ? 1.05 : 1) *
+      (game.global.race["lone_survivor"] ? 25 : 1);
+    let superstarMoraleCap = haveTech("superstar")
+      ? traitVal("high_pop", 1, "=")
+      : 0;
+
+    function getAuthorityEntertainerMaximum(job) {
+      if (authorityMoraleCeiling !== null) {
+        let limits = [];
+        if (entertainerMorale > 0) {
+          let potentialWithoutEntertainers =
+            resources.Morale.rateOfChange - job.count * entertainerMorale;
+          limits.push(
+            Math.floor(
+              (authorityMoraleCeiling - potentialWithoutEntertainers + 1e-9) /
+                entertainerMorale,
+            ),
+          );
+        }
+        if (superstarMoraleCap > 0) {
+          let capWithoutEntertainers =
+            resources.Morale.maxQuantity - job.count * superstarMoraleCap;
+          limits.push(
+            Math.floor(
+              (authorityMoraleCeiling - capWithoutEntertainers + 1e-9) /
+                superstarMoraleCap,
+            ),
+          );
+        }
+        let calculatedCap =
+          limits.length === 0 ? job.count : Math.max(0, ...limits);
+        let previousCap = state.authorityEntertainerCap;
+        state.authorityEntertainerCap =
+          resources.Authority.currentQuantity < 100 && previousCap !== undefined
+            ? Math.min(previousCap, calculatedCap)
+            : calculatedCap;
+        if (
+          window.authorityDebug &&
+          state.authorityEntertainerCap !== previousCap
+        ) {
+          console.log(
+            `[authority] entertainers cap ${previousCap ?? job.count}→${
+              state.authorityEntertainerCap
+            } (amount=${resources.Authority.currentQuantity.toFixed(
+              1,
+            )}, morale=${resources.Morale.currentQuantity.toFixed(
+              1,
+            )}→max=${authorityMoraleCeiling.toFixed(1)})`,
+          );
+        }
+      }
+      return state.authorityEntertainerCap ?? Number.MAX_SAFE_INTEGER;
+    }
+
     state.maxSpaceMiners = 0;
     // And deal with the rest now
     for (let i = 0; i < 3; i++) {
@@ -735,12 +843,6 @@ export function createAutoJobs({
                 game.global.civic.taxes.tax_rate < poly.taxCap(false)
                   ? 1
                   : 0;
-              let entertainerMorale =
-                (game.global.tech["theatre"] + traitVal("musical", 0)) *
-                traitVal("emotionless", 0, "-") *
-                traitVal("high_pop", 1, "=") *
-                (state.astroSign === "sagittarius" ? 1.05 : 1) *
-                (game.global.race["lone_survivor"] ? 25 : 1);
               let moraleExtra =
                 resources.Morale.rateOfChange -
                 resources.Morale.maxQuantity -
@@ -869,6 +971,13 @@ export function createAutoJobs({
             }
             jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
           }
+        }
+
+        if (job === jobs.Entertainer) {
+          jobsToAssign = Math.min(
+            jobsToAssign,
+            getAuthorityEntertainerMaximum(job),
+          );
         }
 
         if (j === defaultIndex && minDefault > 0) {

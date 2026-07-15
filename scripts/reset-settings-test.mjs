@@ -105,6 +105,13 @@ assert.equal(applied.at(-1).reset, true);
 assert.equal(applied.at(-1).defaults.tickRate, 4);
 assert.equal(applied.at(-1).defaults.masterScriptToggle, true);
 
+resets.resetAuthoritySettings(true);
+assert.equal(applied.at(-1).reset, true);
+assert.equal(applied.at(-1).defaults.authorityManage, true);
+assert.equal(applied.at(-1).defaults.generalMinimumAuthority, 100);
+assert.equal(applied.at(-1).defaults.generalAuthorityMinPatrolPercent, 40);
+assert.equal(applied.at(-1).defaults.buildingWeightingAuthority, 10);
+
 context.applySettings = (defaults, reset) =>
   trace.push(`live:${reset}:${defaults.activeTargetsUI}`);
 resets.resetInterfaceSettings(false);

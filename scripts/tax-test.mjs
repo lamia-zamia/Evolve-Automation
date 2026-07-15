@@ -13,6 +13,7 @@ function runTaxCase({
   authority = 100,
   authorityMax = 100,
   authorityTarget = 0,
+  authorityManage = true,
 } = {}) {
   const actions = [];
   const resources = {
@@ -38,6 +39,7 @@ function runTaxCase({
     generalMinimumMorale: 100,
     generalMaximumMorale: 200,
     generalMinimumAuthority: authorityTarget,
+    authorityManage,
   };
   const game = {
     global: {
@@ -83,6 +85,23 @@ const authority = runTaxCase({
 });
 assert.deepEqual(authority.actions, [["keys", false, false, false], ["add"]]);
 assert.equal(authority.resources.Morale.incomeAdusted, true);
+
+const unmanagedAuthority = runTaxCase({
+  taxRate: 20,
+  morale: 101,
+  moraleMax: 140,
+  authority: 80,
+  authorityTarget: 100,
+  authorityManage: false,
+});
+const noAuthorityTarget = runTaxCase({
+  taxRate: 20,
+  morale: 101,
+  moraleMax: 140,
+  authority: 80,
+  authorityTarget: 0,
+});
+assert.deepEqual(unmanagedAuthority.actions, noAuthorityTarget.actions);
 
 const alreadyAdjusted = runTaxCase({
   requestedTaxRate: 20,

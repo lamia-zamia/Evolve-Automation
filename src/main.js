@@ -143,6 +143,7 @@ import { createAchievementGuardSettings } from "./ui/achievement-guard-settings.
 import { createChallengeHelperSettings } from "./ui/challenge-helper-settings.ts";
 import { createPrestigeSettings } from "./ui/prestige-settings.ts";
 import { createGovernmentSettings } from "./ui/government-settings.ts";
+import { createAuthoritySettings } from "./ui/authority-settings.ts";
 import { createEvolutionSettings } from "./ui/evolution-settings.ts";
 import { createPlanetSettings } from "./ui/planet-settings.ts";
 import { createTriggerSettings } from "./ui/trigger-settings.ts";
@@ -196,6 +197,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     resetChallengeHelperSettings,
     resetPrestigeSettings,
     resetGovernmentSettings,
+    resetAuthoritySettings,
     resetEvolutionSettings,
     resetResearchSettings,
     resetMarketSettings,
@@ -281,6 +283,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       buildAchievementGuardSettings,
       buildChallengeHelperSettings,
       buildGovernmentSettings,
+      buildAuthoritySettings,
       buildEvolutionSettings,
       buildPlanetSettings,
       buildTraitSettings,
@@ -923,6 +926,26 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   });
   const { buildGovernmentSettings, updateGovernmentSettingsContent } =
     governmentSettings;
+
+  const authoritySettingsOverrides = {};
+  const getAuthoritySettingsDependency = createDependencyResolver(
+    authoritySettingsOverrides,
+    {
+      $: () => $,
+      addSettingsNumber: () => addSettingsNumber,
+      addSettingsToggle: () => addSettingsToggle,
+      buildSettingsSection: () => buildSettingsSection,
+      document: () => document,
+      resetAuthoritySettings: () => resetAuthoritySettings,
+      updateSettingsFromState: () => updateSettingsFromState,
+    },
+  );
+  const authoritySettings = createAuthoritySettings({
+    getDependency: getAuthoritySettingsDependency,
+    getOverride: (name) => authoritySettingsOverrides[name],
+  });
+  const { buildAuthoritySettings, updateAuthoritySettingsContent } =
+    authoritySettings;
 
   const evolutionSettingsOverrides = {};
   const getEvolutionSettingsDependency = createDependencyResolver(
@@ -1681,6 +1704,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     "building",
     "project",
     "government",
+    "authority",
     "logging",
     "trait",
     "weighting",
@@ -6139,6 +6163,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     resetMechSettings(false);
     resetFleetSettings(false);
     resetGovernmentSettings(false);
+    resetAuthoritySettings(false);
     resetBuildingSettings(false);
     resetWeightingSettings(false);
     resetMarketSettings(false);
@@ -6436,6 +6461,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         resetChallengeHelperSettings,
         resetPrestigeSettings,
         resetGovernmentSettings,
+        resetAuthoritySettings,
         resetEvolutionSettings,
         resetResearchSettings,
         resetMarketSettings,
@@ -6683,6 +6709,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getSettings: () => settings,
     getBuildings: () => buildings,
     getResources: () => resources,
+    getState: () => state,
     getWindow: () => window,
   });
 
@@ -8503,6 +8530,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         challengeHelper: challengeHelperSettings,
         prestige: prestigeSettings,
         government: governmentSettings,
+        authority: authoritySettings,
         evolution: evolutionSettings,
         planet: planetSettings,
         trigger: triggerSettings,
@@ -8520,6 +8548,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         Object.assign(challengeHelperSettingsOverrides, context);
         Object.assign(prestigeSettingsOverrides, context);
         Object.assign(governmentSettingsOverrides, context);
+        Object.assign(authoritySettingsOverrides, context);
         Object.assign(evolutionSettingsOverrides, context);
         Object.assign(planetSettingsOverrides, context);
         Object.assign(triggerSettingsOverrides, context);

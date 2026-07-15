@@ -90,6 +90,7 @@ export function createAutoTax({
     // Authority instead. Applied regardless of money storage: Authority below 100 is a global
     // production penalty (0.35% per point), which outweighs the morale production bonus.
     if (
+      settings.authorityManage &&
       settings.generalMinimumAuthority !== 0 &&
       resources.Authority.isUnlocked() &&
       resources.Authority.currentQuantity <

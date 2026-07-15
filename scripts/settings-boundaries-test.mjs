@@ -5,6 +5,7 @@ import { createAchievementGuardSettings } from "../src/ui/achievement-guard-sett
 import { createChallengeHelperSettings } from "../src/ui/challenge-helper-settings.ts";
 import { createPrestigeSettings } from "../src/ui/prestige-settings.ts";
 import { createGovernmentSettings } from "../src/ui/government-settings.ts";
+import { createAuthoritySettings } from "../src/ui/authority-settings.ts";
 import { createEvolutionSettings } from "../src/ui/evolution-settings.ts";
 import { createPlanetSettings } from "../src/ui/planet-settings.ts";
 import { createTriggerSettings } from "../src/ui/trigger-settings.ts";
@@ -66,6 +67,16 @@ const specs = [
     "Government",
     true,
     ["checkbox:autoTax|autoGovernment"],
+  ],
+  [
+    "authority",
+    createAuthoritySettings,
+    "buildAuthoritySettings",
+    "updateAuthoritySettingsContent",
+    "authority",
+    "Authority",
+    false,
+    [],
   ],
   [
     "evolution",
@@ -299,4 +310,4 @@ generalFixture.boundary.updateGeneralSettingsContent();
 assert.ok(renderTrace.every((entry) => entry.startsWith("second:")));
 assert.equal(generalFixture.context.document.body.scrollTop, 27);
 
-console.log("15 settings-boundary module tests passed");
+console.log("16 settings-boundary module tests passed");

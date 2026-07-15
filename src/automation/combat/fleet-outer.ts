@@ -53,6 +53,42 @@ export function createAutoFleetOuter({
     let newShip = null;
     let minCrew = settings.fleetOuterCrew; // Ignored by Tau Explorer and Eris Scout
 
+    const getDefenseTarget = (region: string) => {
+      let target = m.getMaxDefense(region);
+      if (
+        region !== "spc_eris" ||
+        game.global.space.digsite?.count === undefined ||
+        game.global.space.digsite.count >= 100
+      ) {
+        return target;
+      }
+
+      // Digsite damage is multiplied by Eris fleet defense. The historical 0.01 default was only
+      // enough to scan Eris; once syndicate pressure reaches its cap it leaves even a huge ground
+      // force doing exactly zero damage. Estimate the active force conservatively (one attack per
+      // supported Trooper, 100 per supported Tank) and maintain enough fleet defense for its random
+      // damage roll to comfortably beat the Digsite's average 137.5-point regeneration.
+      const requestedTroopers = game.global.space.shock_trooper?.on ?? 0;
+      const requestedTanks = game.global.space.tank?.on ?? 0;
+      const requestedUnits = requestedTroopers + requestedTanks;
+      const reportedSupport = resources.Eris_Support?.currentQuantity;
+      const supportedUnits = Number.isFinite(reportedSupport)
+        ? Math.min(requestedUnits, reportedSupport)
+        : requestedUnits;
+      const activeTroopers = Math.min(requestedTroopers, supportedUnits);
+      const activeTanks = Math.min(
+        requestedTanks,
+        Math.max(0, supportedUnits - activeTroopers),
+      );
+      const conservativeGroundPower = activeTroopers + activeTanks * 100;
+      const digsiteDefense =
+        conservativeGroundPower > 0
+          ? Math.min(0.9, 350 / conservativeGroundPower)
+          : 0.5;
+
+      return Math.max(target, digsiteDefense);
+    };
+
     if (
       settings.fleetExploreTau &&
       game.global.tech["tauceti"] === 1 &&
@@ -75,7 +111,7 @@ export function createAutoFleetOuter({
           (reg) =>
             m.isUnlocked(reg) &&
             m.getWeighting(reg) > 0 &&
-            m.syndicate(reg, false, true) < m.getMaxDefense(reg),
+            m.syndicate(reg, false, true) < getDefenseTarget(reg),
         ).sort(
           (a, b) =>
             (1 - m.syndicate(b, false, true)) * m.getWeighting(b) -
@@ -138,6 +174,7 @@ export function createAutoFleetOuter({
     // expansion can otherwise lock the run into a production/army penalty while every region is
     // already over-defended.
     if (
+      settings.authorityManage &&
       settings.generalMinimumAuthority !== 0 &&
       game.global.race.universe === "evil" &&
       resources.Authority.isUnlocked()

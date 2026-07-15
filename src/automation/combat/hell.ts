@@ -6,6 +6,7 @@ type Dependencies = AutomationDependencies<
   | "getSettings"
   | "getBuildings"
   | "getResources"
+  | "getState"
   | "getWindow"
 >;
 export function createAutoHell({
@@ -14,6 +15,7 @@ export function createAutoHell({
   getSettings,
   getBuildings,
   getResources,
+  getState,
   getWindow,
 }: Dependencies) {
   return function autoHell() {
@@ -21,6 +23,7 @@ export function createAutoHell({
     const settings = getSettings();
     const buildings = getBuildings();
     const resources = getResources();
+    const state = getState();
     const debugWindow = getWindow();
     let m = WarManager;
     if (!m._garrisonVue || !m._hellVue) {
@@ -185,6 +188,7 @@ export function createAutoHell({
       // Clamped to [defence-need garrison, one-patrol-reserve], so when Authority is comfortably
       // met it collapses to normal defence-only behaviour, and it always keeps a patrol running.
       if (
+        settings.authorityManage &&
         settings.generalMinimumAuthority !== 0 &&
         resources.Authority.isUnlocked() &&
         targetHellPatrolSize > 0
@@ -254,6 +258,9 @@ export function createAutoHell({
               m.hellGarrison
             }→need=${neededStationed}, garrison ${hellGarrison}→${authGarrison} (cap=${maxStationed}, patrolReserve=${patrolReserve}, patrolSize=${targetHellPatrolSize}, avail=${availableHellSoldiers})`,
           );
+        }
+        if (authGarrison !== m.hellGarrison) {
+          state.authoritySoldiersAdjustedTick = state.scriptTick;
         }
         hellGarrison = authGarrison;
       }

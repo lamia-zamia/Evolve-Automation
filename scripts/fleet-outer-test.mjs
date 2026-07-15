@@ -6,8 +6,17 @@ function runFleetCase({
   authority = 100,
   authorityTarget = 100,
   authorityMax = 100,
+  authorityManage = true,
   race = {},
   trait = () => undefined,
+  regions = ["spc_red"],
+  maxDefense = 0.9,
+  syndicateRatio = 0.5,
+  erisTech = 2,
+  digsite,
+  troopers = 0,
+  tanks = 0,
+  erisSupport = troopers + tanks,
 } = {}) {
   const actions = [];
   const fighter = {
@@ -19,14 +28,14 @@ function runFleetCase({
     sensor: "quantum",
   };
   const manager = {
-    Regions: ["spc_red"],
+    Regions: regions,
     ClassCrew: { corvette: 2 },
     initFleet: () => true,
     getWeighting: () => 1,
-    getMaxDefense: () => 0.9,
+    getMaxDefense: () => maxDefense,
     getMaxScouts: () => 0,
     isUnlocked: () => true,
-    syndicate: (_region, extra) => (extra ? { s: 100 } : 0.5),
+    syndicate: (_region, extra) => (extra ? { s: 100 } : syndicateRatio),
     getScoutBlueprint: () => fighter,
     getFighterBlueprint: () => fighter,
     shipCount: () => 0,
@@ -35,17 +44,26 @@ function runFleetCase({
     getShipName: () => "Corvette",
     getLocName: () => "Red Planet",
     getMissingResource: () => null,
-    build: () => {
-      actions.push(["build"]);
+    build: (_ship, region) => {
+      actions.push(["build", region]);
       return true;
     },
   };
   const game = {
     global: {
       race: { universe: "evil", truepath: true, ...race },
-      tech: { evil: 0, eris: 2 },
+      tech: { evil: 0, eris: erisTech },
       civic: { govern: { type: "federation" } },
-      space: { shipyard: { blueprint: fighter } },
+      space: {
+        shipyard: { blueprint: fighter },
+        ...(digsite === undefined
+          ? {}
+          : {
+              digsite: { count: digsite },
+              shock_trooper: { on: troopers },
+              tank: { on: tanks },
+            }),
+      },
     },
   };
   const settings = {
@@ -53,6 +71,7 @@ function runFleetCase({
     fleetOuterCrew: 30,
     fleetExploreTau: false,
     generalMinimumAuthority: authorityTarget,
+    authorityManage,
   };
   const resources = {
     Authority: {
@@ -60,6 +79,7 @@ function runFleetCase({
       maxQuantity: authorityMax,
       isUnlocked: () => true,
     },
+    Eris_Support: { currentQuantity: erisSupport },
   };
   const autoFleetOuter = createAutoFleetOuter({
     getFleetManagerOuter: () => manager,
@@ -107,6 +127,15 @@ assert.equal(
   true,
 );
 
+const globallyDisabled = runFleetCase({
+  authority: 20,
+  authorityManage: false,
+});
+assert.equal(
+  globallyDisabled.actions.some(([action]) => action === "build"),
+  true,
+);
+
 const pinAtMax = runFleetCase({
   authority: 102,
   authorityTarget: -1,
@@ -132,4 +161,51 @@ assert.equal(
   true,
 );
 
-console.log("Outer fleet Authority guard regression tests passed");
+const incompleteDigsite = runFleetCase({
+  authority: 103,
+  regions: ["spc_eris"],
+  maxDefense: 0.01,
+  syndicateRatio: 0.47,
+  erisTech: 4,
+  digsite: 0,
+  troopers: 23,
+  tanks: 7,
+});
+assert.deepEqual(
+  incompleteDigsite.actions.find(([action]) => action === "build"),
+  ["build", "spc_eris"],
+  "the scan-only Eris defense target must be raised while Digsite is incomplete",
+);
+
+const adequatelyDefendedDigsite = runFleetCase({
+  authority: 103,
+  regions: ["spc_eris"],
+  maxDefense: 0.01,
+  syndicateRatio: 0.49,
+  erisTech: 4,
+  digsite: 0,
+  troopers: 23,
+  tanks: 7,
+});
+assert.equal(
+  adequatelyDefendedDigsite.actions.some(([action]) => action === "build"),
+  false,
+);
+
+const completedDigsite = runFleetCase({
+  authority: 103,
+  regions: ["spc_eris"],
+  maxDefense: 0.01,
+  syndicateRatio: 0.02,
+  erisTech: 4,
+  digsite: 100,
+  troopers: 23,
+  tanks: 7,
+});
+assert.equal(
+  completedDigsite.actions.some(([action]) => action === "build"),
+  false,
+  "the progression floor must stop after Digsite completion",
+);
+
+console.log("Outer fleet progression and Authority regression tests passed");

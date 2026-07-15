@@ -149,6 +149,39 @@ assert.equal(digsiteRule[policy.wrMultiplier](), 10);
 buildings.ErisDigsite.count = 100;
 assert.equal(digsiteRule[policy.wrGlobalCondition](), false);
 
+const authorityRule = policy.weightingRules.find((rule) => {
+  try {
+    return (
+      rule[policy.wrDescription]() ===
+      "Raises Authority cap, currently below target"
+    );
+  } catch {
+    return false;
+  }
+});
+context = {
+  ...context,
+  settings: {
+    ...context.settings,
+    authorityManage: true,
+    generalMinimumAuthority: 100,
+    buildingWeightingAuthority: 10,
+  },
+  resources: {
+    Authority: {
+      maxQuantity: 80,
+      isUnlocked: () => true,
+    },
+  },
+};
+assert.equal(authorityRule[policy.wrGlobalCondition](), true);
+assert.equal(
+  authorityRule[policy.wrIndividualCondition](buildings.Barracks),
+  true,
+);
+context.settings.authorityManage = false;
+assert.equal(authorityRule[policy.wrGlobalCondition](), false);
+
 const piracyRule = policy.weightingRules[10];
 haveTech = (id) => id === "piracy";
 assert.equal(piracyRule[policy.wrGlobalCondition](), true);

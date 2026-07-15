@@ -720,6 +720,7 @@ export function createBuildingWeightingPolicy({
       // amount of tax/soldier management can fix the production penalty, so prioritize the
       // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
       () =>
+        settings.authorityManage &&
         settings.generalMinimumAuthority > 0 &&
         resources.Authority.isUnlocked() &&
         resources.Authority.maxQuantity < settings.generalMinimumAuthority,

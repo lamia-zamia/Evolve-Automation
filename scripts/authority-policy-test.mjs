@@ -9,7 +9,7 @@ let game = {
     civic: { govern: { type: "federation" } },
   },
 };
-let settings = { generalMinimumAuthority: 0 };
+let settings = { authorityManage: true, generalMinimumAuthority: 0 };
 let resources = { Authority: { currentQuantity: 100, maxQuantity: 137 } };
 let traitVal = (_trait, _index, fallback) => fallback;
 
@@ -26,9 +26,11 @@ const {
 });
 
 assert.equal(getAuthorityTarget(), null);
-settings = { generalMinimumAuthority: -1 };
+settings = { authorityManage: false, generalMinimumAuthority: -1 };
+assert.equal(getAuthorityTarget(), null);
+settings = { authorityManage: true, generalMinimumAuthority: -1 };
 assert.equal(getAuthorityTarget(), 137);
-settings = { generalMinimumAuthority: 100 };
+settings = { authorityManage: true, generalMinimumAuthority: 100 };
 assert.equal(getAuthorityTarget(), 100);
 
 assert.ok(Math.abs(getAuthorityPerSoldier() - 0.8) < 1e-12);

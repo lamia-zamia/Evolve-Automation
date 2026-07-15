@@ -233,13 +233,6 @@ export function createWeightingSettings({
       "Tau Fusion Generators, Factories, and Disease Labs below the pre-Isolation targets",
       "buildingWeightingRetirementPrep",
     );
-    addWeightingRule(
-      tableBodyNode,
-      "Authority cap buildings (Evil universe)",
-      "Authority cap below configured minimum",
-      "buildingWeightingAuthority",
-    );
-
     document.documentElement.scrollTop = document.body.scrollTop =
       currentScrollPosition;
   }

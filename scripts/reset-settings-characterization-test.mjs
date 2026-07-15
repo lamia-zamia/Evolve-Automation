@@ -28,7 +28,7 @@ vm.runInNewContext(source, sandbox, {
 });
 
 const resets = hooks.resetSettings;
-assert.equal(Object.keys(resets).length, 27);
+assert.equal(Object.keys(resets).length, 28);
 
 for (const reset of Object.values(resets)) {
   assert.equal(typeof reset, "function");
@@ -49,6 +49,7 @@ for (const name of [
   "resetAchievementGuardSettings",
   "resetChallengeHelperSettings",
   "resetPrestigeSettings",
+  "resetAuthoritySettings",
   "resetResearchSettings",
   "resetLoggingSettings",
 ]) {
@@ -65,8 +66,8 @@ const stateDigest = createHash("sha256")
 
 assert.equal(
   stateDigest,
-  "a151ac31f93c46d74b3669d0402b7561bb97cff74cd603285d09aeb52d93afb4",
+  "77c918d44b77b2d81d349c0f748d6b62cd12ab661b7a7d6d84563dec05f776d9",
 );
-assert.equal(Object.keys(settingsRaw).length, 118);
+assert.equal(Object.keys(settingsRaw).length, 122);
 
 console.log("Reset settings bundled characterization tests passed");

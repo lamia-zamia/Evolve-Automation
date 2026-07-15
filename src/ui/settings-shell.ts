@@ -14,6 +14,7 @@ interface SettingsShellContext {
   buildAchievementGuardSettings: AnyFunction;
   buildChallengeHelperSettings: AnyFunction;
   buildGovernmentSettings: AnyFunction;
+  buildAuthoritySettings: AnyFunction;
   buildEvolutionSettings: AnyFunction;
   buildPlanetSettings: AnyFunction;
   buildTraitSettings: AnyFunction;
@@ -98,6 +99,8 @@ export function createSettingsShell({ getContext }: SettingsShellDependencies) {
     getContext().buildChallengeHelperSettings(...args);
   const buildGovernmentSettings: AnyFunction = (...args) =>
     getContext().buildGovernmentSettings(...args);
+  const buildAuthoritySettings: AnyFunction = (...args) =>
+    getContext().buildAuthoritySettings(...args);
   const buildEvolutionSettings: AnyFunction = (...args) =>
     getContext().buildEvolutionSettings(...args);
   const buildPlanetSettings: AnyFunction = (...args) =>
@@ -178,6 +181,7 @@ export function createSettingsShell({ getContext }: SettingsShellDependencies) {
     buildAchievementGuardSettings();
     buildChallengeHelperSettings();
     buildGovernmentSettings(scriptContentNode, "");
+    buildAuthoritySettings();
     buildEvolutionSettings();
     buildPlanetSettings();
     buildTraitSettings();

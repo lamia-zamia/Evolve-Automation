@@ -320,12 +320,21 @@ export function createResetSettings({
       generalMinimumTaxRate: 20,
       generalMinimumMorale: 105,
       generalMaximumMorale: 500,
-      generalMinimumAuthority: 100, // Evil universe: keep Authority at or above this (0 to disable, -1 to target the current Authority max)
-      generalAuthorityMinPatrolPercent: 40, // -1 (pin-at-max) mode only: reserve at least this % of available Hell soldiers for patrols (soul gem income) instead of stationing everyone
       govInterim: GovernmentManager.Types.democracy.id,
       govFinal: GovernmentManager.Types.technocracy.id,
       govSpace: GovernmentManager.Types.corpocracy.id,
       govGovernor: "none",
+    };
+
+    applySettings(def, reset);
+  }
+
+  function resetAuthoritySettings(reset) {
+    const def = {
+      authorityManage: true,
+      generalMinimumAuthority: 100,
+      generalAuthorityMinPatrolPercent: 40,
+      buildingWeightingAuthority: 10,
     };
 
     applySettings(def, reset);
@@ -619,7 +628,6 @@ export function createResetSettings({
       buildingWeightingMissingFuel: 10,
       buildingWeightingNonOperatingCity: 0.2,
       buildingWeightingNonOperating: 0,
-      buildingWeightingAuthority: 10,
       buildingWeightingMissingSupply: 0,
       buildingWeightingMissingSupport: 0,
       buildingWeightingUselessSupport: 0.01,
@@ -1098,6 +1106,7 @@ export function createResetSettings({
     resetChallengeHelperSettings,
     resetPrestigeSettings,
     resetGovernmentSettings,
+    resetAuthoritySettings,
     resetEvolutionSettings,
     resetResearchSettings,
     resetMarketSettings,

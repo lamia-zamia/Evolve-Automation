@@ -128,6 +128,9 @@ export function createFleetSettings({
       "Explore Tau Ceti",
       "Send explorer to Tau Ceti",
     );
+    currentNode.append(
+      '<div class="has-text-info">While the Eris Digsite is incomplete, its effective defense target is raised automatically from the configured scan/post-capture value so active Troopers and Tanks can overcome Digsite regeneration.</div>',
+    );
 
     addSettingsHeader1(currentNode, "Fighter");
     for (let [type, parts] of Object.entries(
@@ -167,7 +170,7 @@ export function createFleetSettings({
             <tr>
               <th class="has-text-warning" style="width:35%">Region</th>
               <th class="has-text-warning" style="width:20%" title="Weighting determines order of ships dispatching, regions with higher weighting will be get ships sooner">Weighting</th>
-              <th class="has-text-warning" style="width:20%" title="Desired protection from syndicate, trying to reach 100%(1.0) defense with full uptime might be wasteful due to excesses and fluctuations">Defend</th>
+              <th class="has-text-warning" style="width:20%" title="Desired protection from syndicate. While the Eris Digsite is incomplete, the script automatically raises its effective target enough for the supported Troopers and Tanks to overcome Digsite regeneration.">Defend</th>
               <th class="has-text-warning" style="width:20%" title="Amounts of scouts to dispatch">Scouts</th>
               <th style="width:5%"></th>
             </tr>

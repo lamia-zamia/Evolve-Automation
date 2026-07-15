@@ -16,7 +16,7 @@ export function createAuthorityPolicy({
 }: AuthorityPolicyDependencies) {
   function getAuthorityTarget(): number | null {
     const settings = getSettings();
-    if (settings.generalMinimumAuthority === 0) {
+    if (!settings.authorityManage || settings.generalMinimumAuthority === 0) {
       return null;
     }
     return settings.generalMinimumAuthority < 0

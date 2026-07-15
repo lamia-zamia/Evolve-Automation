@@ -64,6 +64,7 @@ const game = {
   },
 };
 const settings = {
+  authorityManage: true,
   warlordHandleFortress: false,
   warlordMinimumMinions: 0,
   hellHomeGarrison: 100,
@@ -95,6 +96,7 @@ const resources = {
     isUnlocked: () => true,
   },
 };
+const state = { scriptTick: 7 };
 
 const autoHell = createAutoHell({
   WarManager: manager,
@@ -102,6 +104,7 @@ const autoHell = createAutoHell({
   getSettings: () => settings,
   getBuildings: () => buildings,
   getResources: () => resources,
+  getState: () => state,
   getWindow: () => ({ authorityDebug: false }),
 });
 
@@ -122,6 +125,11 @@ assert.equal(
   manager.hellGarrison,
   60,
   "the other 60% is stationed for Authority",
+);
+assert.equal(
+  state.authoritySoldiersAdjustedTick,
+  7,
+  "later controllers can defer while the Authority garrison change is pending",
 );
 
 console.log("Hell Authority bootstrap regression test passed");

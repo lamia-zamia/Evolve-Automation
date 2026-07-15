@@ -88,19 +88,6 @@ export function createGovernmentSettings({
       "Maximum allowed morale",
       "Use this to set a maximum allowed morale. The tax rate will be raised to lower morale to this maximum",
     );
-    addSettingsNumber(
-      currentNode,
-      "generalMinimumAuthority",
-      "Minimum Authority (Evil universe)",
-      "Evil universe only. While Authority is below this value the tax rate will be raised to keep morale at 100 (morale above 100 drains Authority 1:1), and buildings raising the Authority cap get a weighting boost. Set to -1 to target the current Authority maximum (pin it at the cap), or 0 to disable Authority management. Authority below 100 causes a global production penalty of 0.35% per point",
-    );
-    addSettingsNumber(
-      currentNode,
-      "generalAuthorityMinPatrolPercent",
-      "Authority: min % soldiers on patrol",
-      "Only applies when Minimum Authority is -1 (pin at max). Reserves at least this percentage of available Hell soldiers for patrols (soul gem income) before stationing the rest for Authority, so pinning at max won't kill soul gem income. Set to 0 to station everyone but one patrol (old behaviour)",
-    );
-
     let governmentOptions = [
       { val: "none", label: "None", hint: "Do not select government" },
       ...(Object.values(GovernmentManager.Types) as Loose[])

@@ -125,6 +125,7 @@ const buildNames = [
   "buildAchievementGuardSettings",
   "buildChallengeHelperSettings",
   "buildGovernmentSettings",
+  "buildAuthoritySettings",
   "buildEvolutionSettings",
   "buildPlanetSettings",
   "buildTraitSettings",

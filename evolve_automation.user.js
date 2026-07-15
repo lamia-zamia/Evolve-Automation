@@ -467,14 +467,19 @@
         generalMinimumTaxRate: 20,
         generalMinimumMorale: 105,
         generalMaximumMorale: 500,
-        generalMinimumAuthority: 100,
-        // Evil universe: keep Authority at or above this (0 to disable, -1 to target the current Authority max)
-        generalAuthorityMinPatrolPercent: 40,
-        // -1 (pin-at-max) mode only: reserve at least this % of available Hell soldiers for patrols (soul gem income) instead of stationing everyone
         govInterim: GovernmentManager2.Types.democracy.id,
         govFinal: GovernmentManager2.Types.technocracy.id,
         govSpace: GovernmentManager2.Types.corpocracy.id,
         govGovernor: "none"
+      };
+      applySettings2(def, reset);
+    }
+    function resetAuthoritySettings2(reset) {
+      const def = {
+        authorityManage: true,
+        generalMinimumAuthority: 100,
+        generalAuthorityMinPatrolPercent: 40,
+        buildingWeightingAuthority: 10
       };
       applySettings2(def, reset);
     }
@@ -707,7 +712,6 @@
         buildingWeightingMissingFuel: 10,
         buildingWeightingNonOperatingCity: 0.2,
         buildingWeightingNonOperating: 0,
-        buildingWeightingAuthority: 10,
         buildingWeightingMissingSupply: 0,
         buildingWeightingMissingSupport: 0,
         buildingWeightingUselessSupport: 0.01,
@@ -1107,6 +1111,7 @@
       resetChallengeHelperSettings: resetChallengeHelperSettings2,
       resetPrestigeSettings: resetPrestigeSettings2,
       resetGovernmentSettings: resetGovernmentSettings2,
+      resetAuthoritySettings: resetAuthoritySettings2,
       resetEvolutionSettings: resetEvolutionSettings2,
       resetResearchSettings: resetResearchSettings2,
       resetMarketSettings: resetMarketSettings2,
@@ -9913,7 +9918,7 @@
   }) {
     function getAuthorityTarget2() {
       const settings2 = getSettings();
-      if (settings2.generalMinimumAuthority === 0) {
+      if (!settings2.authorityManage || settings2.generalMinimumAuthority === 0) {
         return null;
       }
       return settings2.generalMinimumAuthority < 0 ? getResources().Authority.maxQuantity : settings2.generalMinimumAuthority;
@@ -12435,7 +12440,7 @@
         // Evil universe: Authority amount is capped by Authority max. When max is below target no
         // amount of tax/soldier management can fix the production penalty, so prioritize the
         // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
-        () => settings2.generalMinimumAuthority > 0 && resources2.Authority.isUnlocked() && resources2.Authority.maxQuantity < settings2.generalMinimumAuthority,
+        () => settings2.authorityManage && settings2.generalMinimumAuthority > 0 && resources2.Authority.isUnlocked() && resources2.Authority.maxQuantity < settings2.generalMinimumAuthority,
         (building) => authorityCapBuildings2.includes(building),
         () => "Raises Authority cap, currently below target",
         () => settings2.buildingWeightingAuthority
@@ -12907,6 +12912,7 @@
     getSettings,
     getBuildings,
     getResources,
+    getState,
     getWindow
   }) {
     return function autoHell2() {
@@ -12914,6 +12920,7 @@
       const settings2 = getSettings();
       const buildings2 = getBuildings();
       const resources2 = getResources();
+      const state2 = getState();
       const debugWindow = getWindow();
       let m = WarManager2;
       if (!m._garrisonVue || !m._hellVue) {
@@ -12985,7 +12992,7 @@
         } else {
           targetHellPatrolSize = m.hellPatrolSize;
         }
-        if (settings2.generalMinimumAuthority !== 0 && resources2.Authority.isUnlocked() && targetHellPatrolSize > 0) {
+        if (settings2.authorityManage && settings2.generalMinimumAuthority !== 0 && resources2.Authority.isUnlocked() && targetHellPatrolSize > 0) {
           let perSoldier = 0.7 + 0.1 * (game2.global.tech["evil"] ?? 0);
           if (game2.global.race["grenadier"]) perSoldier *= 1.75;
           if (game2.global.civic.govern.type === "autocracy") perSoldier *= 1.08;
@@ -13024,6 +13031,9 @@
                 2
               )}, stationed=${m.hellGarrison}→need=${neededStationed}, garrison ${hellGarrison}→${authGarrison} (cap=${maxStationed}, patrolReserve=${patrolReserve}, patrolSize=${targetHellPatrolSize}, avail=${availableHellSoldiers})`
             );
+          }
+          if (authGarrison !== m.hellGarrison) {
+            state2.authoritySoldiersAdjustedTick = state2.scriptTick;
           }
           hellGarrison = authGarrison;
         }
@@ -13316,7 +13326,7 @@
       if (resources2.Money.storageRatio < 0.9) {
         maxMorale = Math.min(maxMorale, settings2.generalMaximumMorale);
       }
-      if (settings2.generalMinimumAuthority !== 0 && resources2.Authority.isUnlocked() && resources2.Authority.currentQuantity < (settings2.generalMinimumAuthority < 0 ? resources2.Authority.maxQuantity : settings2.generalMinimumAuthority)) {
+      if (settings2.authorityManage && settings2.generalMinimumAuthority !== 0 && resources2.Authority.isUnlocked() && resources2.Authority.currentQuantity < (settings2.generalMinimumAuthority < 0 ? resources2.Authority.maxQuantity : settings2.generalMinimumAuthority)) {
         minMorale = Math.min(minMorale, 100);
         maxMorale = Math.min(maxMorale, 100);
       }
@@ -15674,6 +15684,67 @@
       }
       let jobMax = {};
       let minFarmers = 0;
+      let manageAuthorityEntertainers = settings2.authorityManage && settings2.generalMinimumAuthority !== 0 && resources2.Authority.isUnlocked();
+      let authorityMoraleCeiling = null;
+      if (!manageAuthorityEntertainers) {
+        delete state2.authorityEntertainerCap;
+      } else {
+        let authorityPriorityTarget = Math.max(
+          100,
+          settings2.generalMinimumAuthority < 0 ? resources2.Authority.maxQuantity : settings2.generalMinimumAuthority
+        );
+        let authorityTaxLimit = poly2.taxCap(false);
+        let requestedTaxRate = Number(settings2.generalRequestedTaxRate);
+        if (settings2.autoTax && Number.isFinite(requestedTaxRate) && requestedTaxRate >= 0) {
+          authorityTaxLimit = Math.min(
+            Math.max(requestedTaxRate, poly2.taxCap(true)),
+            authorityTaxLimit
+          );
+        }
+        let canIncreaseAuthorityWithTax = game2.global.civic.taxes.display !== false && (settings2.autoTax || haveTask2("tax")) && game2.global.civic.taxes.tax_rate < authorityTaxLimit && resources2.Authority.currentQuantity < authorityPriorityTarget;
+        let soldiersAdjustedThisTick = state2.scriptTick !== void 0 && state2.authoritySoldiersAdjustedTick === state2.scriptTick;
+        if (!canIncreaseAuthorityWithTax && !soldiersAdjustedThisTick) {
+          let moraleAuthorityFactor = game2.global.civic.govern.type === "democracy" ? 0.9 : 1;
+          let authorityAtHundredMorale = resources2.Authority.currentQuantity + Math.max(0, resources2.Morale.currentQuantity - 100) * moraleAuthorityFactor;
+          authorityMoraleCeiling = 100 + Math.max(0, authorityAtHundredMorale - 100) / moraleAuthorityFactor;
+        }
+      }
+      let entertainerMorale = ((game2.global.tech?.["theatre"] ?? 0) + traitVal2("musical", 0)) * traitVal2("emotionless", 0, "-") * traitVal2("high_pop", 1, "=") * (state2.astroSign === "sagittarius" ? 1.05 : 1) * (game2.global.race["lone_survivor"] ? 25 : 1);
+      let superstarMoraleCap = haveTech2("superstar") ? traitVal2("high_pop", 1, "=") : 0;
+      function getAuthorityEntertainerMaximum(job) {
+        if (authorityMoraleCeiling !== null) {
+          let limits = [];
+          if (entertainerMorale > 0) {
+            let potentialWithoutEntertainers = resources2.Morale.rateOfChange - job.count * entertainerMorale;
+            limits.push(
+              Math.floor(
+                (authorityMoraleCeiling - potentialWithoutEntertainers + 1e-9) / entertainerMorale
+              )
+            );
+          }
+          if (superstarMoraleCap > 0) {
+            let capWithoutEntertainers = resources2.Morale.maxQuantity - job.count * superstarMoraleCap;
+            limits.push(
+              Math.floor(
+                (authorityMoraleCeiling - capWithoutEntertainers + 1e-9) / superstarMoraleCap
+              )
+            );
+          }
+          let calculatedCap = limits.length === 0 ? job.count : Math.max(0, ...limits);
+          let previousCap = state2.authorityEntertainerCap;
+          state2.authorityEntertainerCap = resources2.Authority.currentQuantity < 100 && previousCap !== void 0 ? Math.min(previousCap, calculatedCap) : calculatedCap;
+          if (window2.authorityDebug && state2.authorityEntertainerCap !== previousCap) {
+            console.log(
+              `[authority] entertainers cap ${previousCap ?? job.count}→${state2.authorityEntertainerCap} (amount=${resources2.Authority.currentQuantity.toFixed(
+                1
+              )}, morale=${resources2.Morale.currentQuantity.toFixed(
+                1
+              )}→max=${authorityMoraleCeiling.toFixed(1)})`
+            );
+          }
+        }
+        return state2.authorityEntertainerCap ?? Number.MAX_SAFE_INTEGER;
+      }
       state2.maxSpaceMiners = 0;
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < jobList.length; j++) {
@@ -15945,7 +16016,6 @@
             if (job === jobs2.Entertainer && !haveTech2("superstar")) {
               if (jobMax[j] === void 0) {
                 let taxBuffer = (settings2.autoTax || haveTask2("tax")) && game2.global.civic.taxes.tax_rate < poly2.taxCap(false) ? 1 : 0;
-                let entertainerMorale = (game2.global.tech["theatre"] + traitVal2("musical", 0)) * traitVal2("emotionless", 0, "-") * traitVal2("high_pop", 1, "=") * (state2.astroSign === "sagittarius" ? 1.05 : 1) * (game2.global.race["lone_survivor"] ? 25 : 1);
                 let moraleExtra = resources2.Morale.rateOfChange - resources2.Morale.maxQuantity - taxBuffer;
                 jobMax[j] = job.count - Math.floor(moraleExtra / entertainerMorale);
               }
@@ -16026,6 +16096,12 @@
               }
               jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
             }
+          }
+          if (job === jobs2.Entertainer) {
+            jobsToAssign = Math.min(
+              jobsToAssign,
+              getAuthorityEntertainerMaximum(job)
+            );
           }
           if (j === defaultIndex && minDefault > 0) {
             requiredWorkers[j] += Math.min(availableWorkers, minDefault);
@@ -17547,6 +17623,25 @@
       let targetRegion = null;
       let newShip = null;
       let minCrew = settings2.fleetOuterCrew;
+      const getDefenseTarget = (region) => {
+        let target = m.getMaxDefense(region);
+        if (region !== "spc_eris" || game2.global.space.digsite?.count === void 0 || game2.global.space.digsite.count >= 100) {
+          return target;
+        }
+        const requestedTroopers = game2.global.space.shock_trooper?.on ?? 0;
+        const requestedTanks = game2.global.space.tank?.on ?? 0;
+        const requestedUnits = requestedTroopers + requestedTanks;
+        const reportedSupport = resources2.Eris_Support?.currentQuantity;
+        const supportedUnits = Number.isFinite(reportedSupport) ? Math.min(requestedUnits, reportedSupport) : requestedUnits;
+        const activeTroopers = Math.min(requestedTroopers, supportedUnits);
+        const activeTanks = Math.min(
+          requestedTanks,
+          Math.max(0, supportedUnits - activeTroopers)
+        );
+        const conservativeGroundPower = activeTroopers + activeTanks * 100;
+        const digsiteDefense = conservativeGroundPower > 0 ? Math.min(0.9, 350 / conservativeGroundPower) : 0.5;
+        return Math.max(target, digsiteDefense);
+      };
       if (settings2.fleetExploreTau && game2.global.tech["tauceti"] === 1 && m.avail(m._explorerBlueprint) && m.shipCount("tauceti", m._explorerBlueprint) < 1) {
         targetRegion = "tauceti";
         newShip = m._explorerBlueprint;
@@ -17558,7 +17653,7 @@
           minCrew = 0;
         } else {
           let regionsToProtect = m.Regions.filter(
-            (reg) => m.isUnlocked(reg) && m.getWeighting(reg) > 0 && m.syndicate(reg, false, true) < m.getMaxDefense(reg)
+            (reg) => m.isUnlocked(reg) && m.getWeighting(reg) > 0 && m.syndicate(reg, false, true) < getDefenseTarget(reg)
           ).sort(
             (a, b) => (1 - m.syndicate(b, false, true)) * m.getWeighting(b) - (1 - m.syndicate(a, false, true)) * m.getWeighting(a)
           );
@@ -17603,7 +17698,7 @@
         explorer: 6
       }[newShip.class] : m.ClassCrew[newShip.class];
       const shipCrew = baseCrew * traitVal2("high_pop", 0, 1);
-      if (settings2.generalMinimumAuthority !== 0 && game2.global.race.universe === "evil" && resources2.Authority.isUnlocked()) {
+      if (settings2.authorityManage && settings2.generalMinimumAuthority !== 0 && game2.global.race.universe === "evil" && resources2.Authority.isUnlocked()) {
         const authorityTarget = getAuthorityTarget2();
         const predictedAuthority = getPredictedAuthorityAfterRemovingSoldiers2(shipCrew);
         if (authorityTarget !== null && predictedAuthority < authorityTarget) {
@@ -19856,18 +19951,6 @@
         "Maximum allowed morale",
         "Use this to set a maximum allowed morale. The tax rate will be raised to lower morale to this maximum"
       );
-      addSettingsNumber2(
-        currentNode,
-        "generalMinimumAuthority",
-        "Minimum Authority (Evil universe)",
-        "Evil universe only. While Authority is below this value the tax rate will be raised to keep morale at 100 (morale above 100 drains Authority 1:1), and buildings raising the Authority cap get a weighting boost. Set to -1 to target the current Authority maximum (pin it at the cap), or 0 to disable Authority management. Authority below 100 causes a global production penalty of 0.35% per point"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "generalAuthorityMinPatrolPercent",
-        "Authority: min % soldiers on patrol",
-        "Only applies when Minimum Authority is -1 (pin at max). Reserves at least this percentage of available Hell soldiers for patrols (soul gem income) before stationing the rest for Authority, so pinning at max won't kill soul gem income. Set to 0 to station everyone but one patrol (old behaviour)"
-      );
       let governmentOptions = [
         { val: "none", label: "None", hint: "Do not select government" },
         ...Object.values(GovernmentManager2.Types).filter((g) => g.selectable !== false).map((g) => ({
@@ -19923,6 +20006,82 @@
       return implementation.apply(this, args);
     }
     return { buildGovernmentSettings: buildGovernmentSettings2, updateGovernmentSettingsContent: updateGovernmentSettingsContent2 };
+  }
+
+  // src/ui/authority-settings.ts
+  function createAuthoritySettings({
+    getDependency,
+    getOverride
+  }) {
+    const $2 = liveFunction(() => getDependency("$"));
+    const addSettingsNumber2 = liveFunction(
+      () => getDependency("addSettingsNumber")
+    );
+    const addSettingsToggle2 = liveFunction(
+      () => getDependency("addSettingsToggle")
+    );
+    const buildSettingsSection3 = liveFunction(
+      () => getDependency("buildSettingsSection")
+    );
+    const document2 = liveObject4(() => getDependency("document"));
+    const resetAuthoritySettings2 = liveFunction(
+      () => getDependency("resetAuthoritySettings")
+    );
+    const updateSettingsFromState2 = liveFunction(
+      () => getDependency("updateSettingsFromState")
+    );
+    function buildAuthoritySettingsImpl() {
+      const resetFunction = function() {
+        resetAuthoritySettings2(true);
+        updateSettingsFromState2();
+        updateAuthoritySettingsContent2();
+      };
+      buildSettingsSection3(
+        "authority",
+        "Authority",
+        resetFunction,
+        updateAuthoritySettingsContent2
+      );
+    }
+    function updateAuthoritySettingsContentImpl() {
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentNode = $2("#script_authorityContent");
+      currentNode.empty().off("*");
+      addSettingsToggle2(
+        currentNode,
+        "authorityManage",
+        "Manage Authority",
+        "Global switch for Authority automation. Controls morale capping, home and Hell soldier reserves, outer-fleet crew protection, and Authority-cap building weighting."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "generalMinimumAuthority",
+        "Target Authority",
+        "Evil universe only. Authority below 100 causes a global production penalty of 0.35% per point. Set to -1 to target the current Authority maximum, or 0 to disable target-based management while leaving the global switch on."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "generalAuthorityMinPatrolPercent",
+        "Minimum Hell patrol percentage",
+        "Only applies when Target Authority is -1. Reserves at least this percentage of available Hell soldiers for patrols and Soul Gem income before stationing the rest for Authority."
+      );
+      addSettingsNumber2(
+        currentNode,
+        "buildingWeightingAuthority",
+        "Authority-cap building multiplier",
+        "AutoBuild weighting multiplier for buildings that raise the Authority cap while it is below the configured target."
+      );
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildAuthoritySettings2(...args) {
+      const implementation = getOverride("buildAuthoritySettings") ?? buildAuthoritySettingsImpl;
+      return implementation.apply(this, args);
+    }
+    function updateAuthoritySettingsContent2(...args) {
+      const implementation = getOverride("updateAuthoritySettingsContent") ?? updateAuthoritySettingsContentImpl;
+      return implementation.apply(this, args);
+    }
+    return { buildAuthoritySettings: buildAuthoritySettings2, updateAuthoritySettingsContent: updateAuthoritySettingsContent2 };
   }
 
   // src/ui/evolution-settings.ts
@@ -21375,6 +21534,9 @@
         "Explore Tau Ceti",
         "Send explorer to Tau Ceti"
       );
+      currentNode.append(
+        '<div class="has-text-info">While the Eris Digsite is incomplete, its effective defense target is raised automatically from the configured scan/post-capture value so active Troopers and Tanks can overcome Digsite regeneration.</div>'
+      );
       addSettingsHeader12(currentNode, "Fighter");
       for (let [type, parts] of Object.entries(
         FleetManagerOuter2.ShipConfig
@@ -21412,7 +21574,7 @@
             <tr>
               <th class="has-text-warning" style="width:35%">Region</th>
               <th class="has-text-warning" style="width:20%" title="Weighting determines order of ships dispatching, regions with higher weighting will be get ships sooner">Weighting</th>
-              <th class="has-text-warning" style="width:20%" title="Desired protection from syndicate, trying to reach 100%(1.0) defense with full uptime might be wasteful due to excesses and fluctuations">Defend</th>
+              <th class="has-text-warning" style="width:20%" title="Desired protection from syndicate. While the Eris Digsite is incomplete, the script automatically raises its effective target enough for the supported Troopers and Tanks to overcome Digsite regeneration.">Defend</th>
               <th class="has-text-warning" style="width:20%" title="Amounts of scouts to dispatch">Scouts</th>
               <th style="width:5%"></th>
             </tr>
@@ -23016,12 +23178,6 @@
         "Retirement preparation",
         "Tau Fusion Generators, Factories, and Disease Labs below the pre-Isolation targets",
         "buildingWeightingRetirementPrep"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Authority cap buildings (Evil universe)",
-        "Authority cap below configured minimum",
-        "buildingWeightingAuthority"
       );
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
@@ -25596,6 +25752,7 @@
     const buildAchievementGuardSettings2 = (...args) => getContext().buildAchievementGuardSettings(...args);
     const buildChallengeHelperSettings2 = (...args) => getContext().buildChallengeHelperSettings(...args);
     const buildGovernmentSettings2 = (...args) => getContext().buildGovernmentSettings(...args);
+    const buildAuthoritySettings2 = (...args) => getContext().buildAuthoritySettings(...args);
     const buildEvolutionSettings2 = (...args) => getContext().buildEvolutionSettings(...args);
     const buildPlanetSettings2 = (...args) => getContext().buildPlanetSettings(...args);
     const buildTraitSettings2 = (...args) => getContext().buildTraitSettings(...args);
@@ -25645,6 +25802,7 @@
       buildAchievementGuardSettings2();
       buildChallengeHelperSettings2();
       buildGovernmentSettings2(scriptContentNode, "");
+      buildAuthoritySettings2();
       buildEvolutionSettings2();
       buildPlanetSettings2();
       buildTraitSettings2();
@@ -27847,6 +28005,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       resetChallengeHelperSettings,
       resetPrestigeSettings,
       resetGovernmentSettings,
+      resetAuthoritySettings,
       resetEvolutionSettings,
       resetResearchSettings,
       resetMarketSettings,
@@ -27932,6 +28091,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         buildAchievementGuardSettings,
         buildChallengeHelperSettings,
         buildGovernmentSettings,
+        buildAuthoritySettings,
         buildEvolutionSettings,
         buildPlanetSettings,
         buildTraitSettings,
@@ -28542,6 +28702,24 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getOverride: (name) => governmentSettingsOverrides[name]
     });
     const { buildGovernmentSettings, updateGovernmentSettingsContent } = governmentSettings;
+    const authoritySettingsOverrides = {};
+    const getAuthoritySettingsDependency = createDependencyResolver(
+      authoritySettingsOverrides,
+      {
+        $: () => $,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsToggle: () => addSettingsToggle,
+        buildSettingsSection: () => buildSettingsSection,
+        document: () => document,
+        resetAuthoritySettings: () => resetAuthoritySettings,
+        updateSettingsFromState: () => updateSettingsFromState
+      }
+    );
+    const authoritySettings = createAuthoritySettings({
+      getDependency: getAuthoritySettingsDependency,
+      getOverride: (name) => authoritySettingsOverrides[name]
+    });
+    const { buildAuthoritySettings, updateAuthoritySettingsContent } = authoritySettings;
     const evolutionSettingsOverrides = {};
     const getEvolutionSettingsDependency = createDependencyResolver(
       evolutionSettingsOverrides,
@@ -29270,6 +29448,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       "building",
       "project",
       "government",
+      "authority",
       "logging",
       "trait",
       "weighting",
@@ -32733,6 +32912,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       resetMechSettings(false);
       resetFleetSettings(false);
       resetGovernmentSettings(false);
+      resetAuthoritySettings(false);
       resetBuildingSettings(false);
       resetWeightingSettings(false);
       resetMarketSettings(false);
@@ -32998,6 +33178,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           resetChallengeHelperSettings,
           resetPrestigeSettings,
           resetGovernmentSettings,
+          resetAuthoritySettings,
           resetEvolutionSettings,
           resetResearchSettings,
           resetMarketSettings,
@@ -33217,6 +33398,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getSettings: () => settings,
       getBuildings: () => buildings,
       getResources: () => resources,
+      getState: () => state,
       getWindow: () => window
     });
     const autoJobs = createAutoJobs({
@@ -34838,6 +35020,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           challengeHelper: challengeHelperSettings,
           prestige: prestigeSettings,
           government: governmentSettings,
+          authority: authoritySettings,
           evolution: evolutionSettings,
           planet: planetSettings,
           trigger: triggerSettings,
@@ -34855,6 +35038,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           Object.assign(challengeHelperSettingsOverrides, context);
           Object.assign(prestigeSettingsOverrides, context);
           Object.assign(governmentSettingsOverrides, context);
+          Object.assign(authoritySettingsOverrides, context);
           Object.assign(evolutionSettingsOverrides, context);
           Object.assign(planetSettingsOverrides, context);
           Object.assign(triggerSettingsOverrides, context);
