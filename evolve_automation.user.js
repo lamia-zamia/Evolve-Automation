@@ -219,7 +219,7 @@
   function createResetSettings({
     dependencies
   }) {
-    const liveObject4 = (key) => new Proxy(
+    const liveObject5 = (key) => new Proxy(
       {},
       {
         get(_target, property) {
@@ -282,44 +282,44 @@
         return Reflect.get(current, property);
       }
     });
-    const AlchemyManager2 = liveObject4("AlchemyManager");
+    const AlchemyManager2 = liveObject5("AlchemyManager");
     const applySettings2 = liveFunction2("applySettings");
-    const biomeList2 = liveObject4("biomeList");
-    const BuildingManager2 = liveObject4("BuildingManager");
-    const buildings2 = liveObject4("buildings");
-    const challenges2 = liveObject4("challenges");
-    const DroidManager2 = liveObject4("DroidManager");
-    const EjectManager2 = liveObject4("EjectManager");
-    const extraList2 = liveObject4("extraList");
-    const FactoryManager2 = liveObject4("FactoryManager");
-    const game2 = liveObject4("game");
-    const GameLog2 = liveObject4("GameLog");
+    const biomeList2 = liveObject5("biomeList");
+    const BuildingManager2 = liveObject5("BuildingManager");
+    const buildings2 = liveObject5("buildings");
+    const challenges2 = liveObject5("challenges");
+    const DroidManager2 = liveObject5("DroidManager");
+    const EjectManager2 = liveObject5("EjectManager");
+    const extraList2 = liveObject5("extraList");
+    const FactoryManager2 = liveObject5("FactoryManager");
+    const game2 = liveObject5("game");
+    const GameLog2 = liveObject5("GameLog");
     const GenusTrait2 = liveFunction2("GenusTrait");
-    const GovernmentManager2 = liveObject4("GovernmentManager");
+    const GovernmentManager2 = liveObject5("GovernmentManager");
     const initBuildingState2 = liveFunction2("initBuildingState");
-    const JobManager2 = liveObject4("JobManager");
-    const jobs2 = liveObject4("jobs");
+    const JobManager2 = liveObject5("JobManager");
+    const jobs2 = liveObject5("jobs");
     const MajorTrait2 = liveFunction2("MajorTrait");
-    const MarketManager2 = liveObject4("MarketManager");
+    const MarketManager2 = liveObject5("MarketManager");
     const MinorTrait2 = liveFunction2("MinorTrait");
-    const MinorTraitManager2 = liveObject4("MinorTraitManager");
-    const MutableTraitManager2 = liveObject4("MutableTraitManager");
-    const NaniteManager2 = liveObject4("NaniteManager");
-    const ocularPowerData2 = liveObject4("ocularPowerData");
-    const planetBiomes2 = liveObject4("planetBiomes");
-    const planetTraits2 = liveObject4("planetTraits");
-    const poly2 = liveObject4("poly");
-    const ProjectManager2 = liveObject4("ProjectManager");
-    const projects2 = liveObject4("projects");
-    const ReplicatorManager2 = liveObject4("ReplicatorManager");
-    const resources2 = liveObject4("resources");
-    const RitualManager2 = liveObject4("RitualManager");
-    const settingsRaw2 = liveObject4("settingsRaw");
-    const SmelterManager2 = liveObject4("SmelterManager");
-    const StorageManager2 = liveObject4("StorageManager");
-    const SupplyManager2 = liveObject4("SupplyManager");
-    const traitList2 = liveObject4("traitList");
-    const TriggerManager2 = liveObject4("TriggerManager");
+    const MinorTraitManager2 = liveObject5("MinorTraitManager");
+    const MutableTraitManager2 = liveObject5("MutableTraitManager");
+    const NaniteManager2 = liveObject5("NaniteManager");
+    const ocularPowerData2 = liveObject5("ocularPowerData");
+    const planetBiomes2 = liveObject5("planetBiomes");
+    const planetTraits2 = liveObject5("planetTraits");
+    const poly2 = liveObject5("poly");
+    const ProjectManager2 = liveObject5("ProjectManager");
+    const projects2 = liveObject5("projects");
+    const ReplicatorManager2 = liveObject5("ReplicatorManager");
+    const resources2 = liveObject5("resources");
+    const RitualManager2 = liveObject5("RitualManager");
+    const settingsRaw2 = liveObject5("settingsRaw");
+    const SmelterManager2 = liveObject5("SmelterManager");
+    const StorageManager2 = liveObject5("StorageManager");
+    const SupplyManager2 = liveObject5("SupplyManager");
+    const traitList2 = liveObject5("traitList");
+    const TriggerManager2 = liveObject5("TriggerManager");
     function resetWarSettings2(reset) {
       let def = {
         autoFight: false,
@@ -2126,7 +2126,7 @@
   function createEntityClasses({
     dependencies
   }) {
-    const liveObject4 = (key) => new Proxy(
+    const liveObject5 = (key) => new Proxy(
       {},
       {
         get(_target, property) {
@@ -2167,48 +2167,48 @@
     );
     const liveFunction2 = (key) => ((...args) => dependencies[key]()(...args));
     const $2 = liveFunction2("$");
-    const arpaIds2 = liveObject4("arpaIds");
-    const buildingIds2 = liveObject4("buildingIds");
-    const buildings2 = liveObject4("buildings");
+    const arpaIds2 = liveObject5("arpaIds");
+    const buildingIds2 = liveObject5("buildingIds");
+    const buildings2 = liveObject5("buildings");
     const checkAffordableCustom2 = liveFunction2("checkAffordableCustom");
-    const checkTypes2 = liveObject4("checkTypes");
-    const conflictingTraits2 = liveObject4("conflictingTraits");
-    const document2 = liveObject4("document");
-    const fanatAchievements2 = liveObject4("fanatAchievements");
+    const checkTypes2 = liveObject5("checkTypes");
+    const conflictingTraits2 = liveObject5("conflictingTraits");
+    const document2 = liveObject5("document");
+    const fanatAchievements2 = liveObject5("fanatAchievements");
     const Fibonacci2 = liveFunction2("Fibonacci");
-    const game2 = liveObject4("game");
-    const GameLog2 = liveObject4("GameLog");
+    const game2 = liveObject5("game");
+    const GameLog2 = liveObject5("GameLog");
     const getAchievementStar2 = liveFunction2("getAchievementStar");
     const getCitadelConsumption2 = liveFunction2("getCitadelConsumption");
     const getStarLevel2 = liveFunction2("getStarLevel");
     const getVueById2 = liveFunction2("getVueById");
     const haveTask2 = liveFunction2("haveTask");
     const haveTech2 = liveFunction2("haveTech");
-    const jobs2 = liveObject4("jobs");
-    const KeyManager2 = liveObject4("KeyManager");
-    const logIgnore2 = liveObject4("logIgnore");
+    const jobs2 = liveObject5("jobs");
+    const KeyManager2 = liveObject5("KeyManager");
+    const logIgnore2 = liveObject5("logIgnore");
     const logPrestige2 = liveFunction2("logPrestige");
-    const MutableTraitManager2 = liveObject4("MutableTraitManager");
-    const mutationCostMultipliers2 = liveObject4("mutationCostMultipliers");
-    const mutationCostMultipliersGenus2 = liveObject4(
+    const MutableTraitManager2 = liveObject5("MutableTraitManager");
+    const mutationCostMultipliers2 = liveObject5("mutationCostMultipliers");
+    const mutationCostMultipliersGenus2 = liveObject5(
       "mutationCostMultipliersGenus"
     );
     const normalizeProperties2 = liveFunction2("normalizeProperties");
-    const poly2 = liveObject4("poly");
-    const races2 = liveObject4("races");
-    const resources2 = liveObject4("resources");
-    const retBools2 = liveObject4("retBools");
-    const settings2 = liveObject4("settings");
-    const settingsRaw2 = liveObject4("settingsRaw");
-    const specialRaceTraits2 = liveObject4("specialRaceTraits");
-    const state2 = liveObject4("state");
-    const techIds2 = liveObject4("techIds");
+    const poly2 = liveObject5("poly");
+    const races2 = liveObject5("races");
+    const resources2 = liveObject5("resources");
+    const retBools2 = liveObject5("retBools");
+    const settings2 = liveObject5("settings");
+    const settingsRaw2 = liveObject5("settingsRaw");
+    const specialRaceTraits2 = liveObject5("specialRaceTraits");
+    const state2 = liveObject5("state");
+    const techIds2 = liveObject5("techIds");
     const ticksPerSecond2 = liveFunction2("ticksPerSecond");
     const traitVal2 = liveFunction2("traitVal");
-    const TriggerManager2 = liveObject4("TriggerManager");
-    const WarManager2 = liveObject4("WarManager");
-    const win2 = liveObject4("win");
-    const WindowManager2 = liveObject4("WindowManager");
+    const TriggerManager2 = liveObject5("TriggerManager");
+    const WarManager2 = liveObject5("WarManager");
+    const win2 = liveObject5("win");
+    const WindowManager2 = liveObject5("WindowManager");
     class Job2 {
       constructor(id, name, flags) {
         this._originalId = id;
@@ -8158,6 +8158,935 @@
     return { resources: resources2, jobs: jobs2, crafter: crafter2, buildings: buildings2, linkedBuildings: linkedBuildings2, projects: projects2 };
   }
 
+  // src/game/building-state.ts
+  function createBuildingStateInitialization({
+    getBuildings,
+    getBuildingManager
+  }) {
+    function initBuildingState2() {
+      const buildings2 = getBuildings();
+      const BuildingManager2 = getBuildingManager();
+      let priorityList = [];
+      priorityList.push(buildings2.Windmill);
+      priorityList.push(buildings2.Mill);
+      priorityList.push(buildings2.CoalPower);
+      priorityList.push(buildings2.OilPower);
+      priorityList.push(buildings2.FissionPower);
+      priorityList.push(buildings2.TauFusionGenerator);
+      priorityList.push(buildings2.TauGas2AlienSpaceStation);
+      priorityList.push(buildings2.WastelandIncinerator);
+      priorityList.push(buildings2.RuinsHellForge);
+      priorityList.push(buildings2.RuinsInfernoPower);
+      priorityList.push(buildings2.AsphodelEncampment);
+      priorityList.push(buildings2.AsphodelRectory);
+      priorityList.push(buildings2.AsphodelCorruptor);
+      priorityList.push(buildings2.AsphodelSoulEngine);
+      priorityList.push(buildings2.TitanElectrolysis);
+      priorityList.push(buildings2.TitanHydrogen);
+      priorityList.push(buildings2.TitanQuarters);
+      priorityList.push(buildings2.DwarfMassRelayComplete);
+      priorityList.push(buildings2.RuinsArcology);
+      priorityList.push(buildings2.Apartment);
+      priorityList.push(buildings2.Barracks);
+      priorityList.push(buildings2.TouristCenter);
+      priorityList.push(buildings2.University);
+      priorityList.push(buildings2.Smelter);
+      priorityList.push(buildings2.Temple);
+      priorityList.push(buildings2.OilWell);
+      priorityList.push(buildings2.StorageYard);
+      priorityList.push(buildings2.Warehouse);
+      priorityList.push(buildings2.Bank);
+      priorityList.push(buildings2.Hospital);
+      priorityList.push(buildings2.BootCamp);
+      priorityList.push(buildings2.House);
+      priorityList.push(buildings2.Cottage);
+      priorityList.push(buildings2.Farm);
+      priorityList.push(buildings2.Silo);
+      priorityList.push(buildings2.Shed);
+      priorityList.push(buildings2.LumberYard);
+      priorityList.push(buildings2.Foundry);
+      priorityList.push(buildings2.OilDepot);
+      priorityList.push(buildings2.Trade);
+      priorityList.push(buildings2.Amphitheatre);
+      priorityList.push(buildings2.Library);
+      priorityList.push(buildings2.Wharf);
+      priorityList.push(buildings2.NaniteFactory);
+      priorityList.push(buildings2.RedNaniteFactory);
+      priorityList.push(buildings2.TauNaniteFactory);
+      priorityList.push(buildings2.Transmitter);
+      priorityList.push(buildings2.Assembly);
+      priorityList.push(buildings2.RedAssembly);
+      priorityList.push(buildings2.TauAssembly);
+      priorityList.push(buildings2.TauCloning);
+      priorityList.push(buildings2.Lodge);
+      priorityList.push(buildings2.Smokehouse);
+      priorityList.push(buildings2.SoulWell);
+      priorityList.push(buildings2.SlavePen);
+      priorityList.push(buildings2.SlaveMarket);
+      priorityList.push(buildings2.CaptiveHousing);
+      priorityList.push(buildings2.RedCaptiveHousing);
+      priorityList.push(buildings2.TauCaptiveHousing);
+      priorityList.push(buildings2.Graveyard);
+      priorityList.push(buildings2.Shrine);
+      priorityList.push(buildings2.CompostHeap);
+      priorityList.push(buildings2.ConcealWard);
+      priorityList.push(buildings2.Pylon);
+      priorityList.push(buildings2.RedPylon);
+      priorityList.push(buildings2.TauPylon);
+      priorityList.push(buildings2.ForgeHorseshoe);
+      priorityList.push(buildings2.RedForgeHorseshoe);
+      priorityList.push(buildings2.TauForgeHorseshoe);
+      priorityList.push(buildings2.SacrificialAltar);
+      priorityList.push(buildings2.MeditationChamber);
+      priorityList.push(buildings2.Banquet);
+      priorityList.push(buildings2.DwarfMission);
+      priorityList.push(buildings2.DwarfEleriumReactor);
+      priorityList.push(buildings2.DwarfWorldCollider);
+      priorityList.push(buildings2.HellMission);
+      priorityList.push(buildings2.HellGeothermal);
+      priorityList.push(buildings2.HellSwarmPlant);
+      priorityList.push(buildings2.ProximaTransferStation);
+      priorityList.push(buildings2.ProximaMission);
+      priorityList.push(buildings2.ProximaCargoYard);
+      priorityList.push(buildings2.ProximaCruiser);
+      priorityList.push(buildings2.ProximaDyson);
+      priorityList.push(buildings2.ProximaDysonSphere);
+      priorityList.push(buildings2.ProximaOrichalcumSphere);
+      priorityList.push(buildings2.ProximaElysaniteSphere);
+      priorityList.push(buildings2.AlphaMission);
+      priorityList.push(buildings2.AlphaStarport);
+      priorityList.push(buildings2.AlphaHabitat);
+      priorityList.push(buildings2.AlphaFusion);
+      priorityList.push(buildings2.AlphaLuxuryCondo);
+      priorityList.push(buildings2.AlphaMiningDroid);
+      priorityList.push(buildings2.AlphaProcessing);
+      priorityList.push(buildings2.AlphaLaboratory);
+      priorityList.push(buildings2.AlphaExoticZoo);
+      priorityList.push(buildings2.AlphaExchange);
+      priorityList.push(buildings2.AlphaGraphenePlant);
+      priorityList.push(buildings2.AlphaWarehouse);
+      priorityList.push(buildings2.SpaceTestLaunch);
+      priorityList.push(buildings2.SpaceSatellite);
+      priorityList.push(buildings2.SpaceGps);
+      priorityList.push(buildings2.SpacePropellantDepot);
+      priorityList.push(buildings2.SpaceNavBeacon);
+      priorityList.push(buildings2.RedMission);
+      priorityList.push(buildings2.RedTower);
+      priorityList.push(buildings2.RedSpaceport);
+      priorityList.push(buildings2.RedLivingQuarters);
+      priorityList.push(buildings2.RedBiodome);
+      priorityList.push(buildings2.RedSpaceBarracks);
+      priorityList.push(buildings2.RedExoticLab);
+      priorityList.push(buildings2.RedFabrication);
+      priorityList.push(buildings2.RedMine);
+      priorityList.push(buildings2.RedVrCenter);
+      priorityList.push(buildings2.RedZiggurat);
+      priorityList.push(buildings2.RedGarage);
+      priorityList.push(buildings2.RedUniversity);
+      priorityList.push(buildings2.RedTerraformer);
+      priorityList.push(buildings2.MoonMission);
+      priorityList.push(buildings2.MoonBase);
+      priorityList.push(buildings2.MoonObservatory);
+      priorityList.push(buildings2.MoonHeliumMine);
+      priorityList.push(buildings2.MoonIridiumMine);
+      priorityList.push(buildings2.SunMission);
+      priorityList.push(buildings2.SunSwarmControl);
+      priorityList.push(buildings2.SunSwarmSatellite);
+      priorityList.push(buildings2.SunJumpGate);
+      priorityList.push(buildings2.GasMission);
+      priorityList.push(buildings2.GasStorage);
+      priorityList.push(buildings2.GasSpaceDock);
+      priorityList.push(buildings2.GasSpaceDockProbe);
+      priorityList.push(buildings2.GasSpaceDockGECK);
+      priorityList.push(buildings2.GasSpaceDockShipSegment);
+      priorityList.push(buildings2.GasMoonMission);
+      priorityList.push(buildings2.GasMoonDrone);
+      priorityList.push(buildings2.Blackhole);
+      priorityList.push(buildings2.BlackholeStellarEngine);
+      priorityList.push(buildings2.BlackholeJumpShip);
+      priorityList.push(buildings2.BlackholeWormholeMission);
+      priorityList.push(buildings2.BlackholeStargate);
+      priorityList.push(buildings2.SiriusMission);
+      priorityList.push(buildings2.SiriusAnalysis);
+      priorityList.push(buildings2.SiriusSpaceElevator);
+      priorityList.push(buildings2.SiriusGravityDome);
+      priorityList.push(buildings2.SiriusThermalCollector);
+      priorityList.push(buildings2.SiriusAscensionMachine);
+      priorityList.push(buildings2.BlackholeStargateComplete);
+      priorityList.push(buildings2.GatewayMission);
+      priorityList.push(buildings2.GatewayStarbase);
+      priorityList.push(buildings2.GatewayShipDock);
+      priorityList.push(buildings2.StargateStation);
+      priorityList.push(buildings2.StargateTelemetryBeacon);
+      priorityList.push(buildings2.Dreadnought);
+      priorityList.push(buildings2.CruiserShip);
+      priorityList.push(buildings2.FrigateShip);
+      priorityList.push(buildings2.BologniumShip);
+      priorityList.push(buildings2.CorvetteShip);
+      priorityList.push(buildings2.ScoutShip);
+      priorityList.push(buildings2.GorddonMission);
+      priorityList.push(buildings2.GorddonEmbassy);
+      priorityList.push(buildings2.GorddonDormitory);
+      priorityList.push(buildings2.GorddonSymposium);
+      priorityList.push(buildings2.GorddonFreighter);
+      priorityList.push(buildings2.NeutronCitadel);
+      priorityList.push(buildings2.SiriusAscensionTrigger);
+      priorityList.push(buildings2.RedAtmoTerraformer);
+      priorityList.push(buildings2.BlackholeMassEjector);
+      priorityList.push(buildings2.PitSoulForge);
+      priorityList.push(buildings2.Alien1Consulate);
+      priorityList.push(buildings2.Alien1Resort);
+      priorityList.push(buildings2.Alien1VitreloyPlant);
+      priorityList.push(buildings2.Alien1SuperFreighter);
+      priorityList.push(buildings2.Alien2Foothold);
+      priorityList.push(buildings2.Alien2Scavenger);
+      priorityList.push(buildings2.Alien2ArmedMiner);
+      priorityList.push(buildings2.Alien2OreProcessor);
+      priorityList.push(buildings2.ChthonianMineLayer);
+      priorityList.push(buildings2.ChthonianExcavator);
+      priorityList.push(buildings2.ChthonianRaider);
+      priorityList.push(buildings2.Wardenclyffe);
+      priorityList.push(buildings2.BioLab);
+      priorityList.push(buildings2.DwarfWorldController);
+      priorityList.push(buildings2.BlackholeFarReach);
+      priorityList.push(buildings2.NebulaMission);
+      priorityList.push(buildings2.NebulaNexus);
+      priorityList.push(buildings2.NebulaHarvester);
+      priorityList.push(buildings2.NebulaEleriumProspector);
+      priorityList.push(buildings2.BeltMission);
+      priorityList.push(buildings2.BeltSpaceStation);
+      priorityList.push(buildings2.BeltEleriumShip);
+      priorityList.push(buildings2.BeltIridiumShip);
+      priorityList.push(buildings2.BeltIronShip);
+      priorityList.push(buildings2.CementPlant);
+      priorityList.push(buildings2.Factory);
+      priorityList.push(buildings2.GasMoonOutpost);
+      priorityList.push(buildings2.StargateDefensePlatform);
+      priorityList.push(buildings2.RedFactory);
+      priorityList.push(buildings2.AlphaMegaFactory);
+      priorityList.push(buildings2.PortalTurret);
+      priorityList.push(buildings2.BadlandsSensorDrone);
+      priorityList.push(buildings2.PortalWarDroid);
+      priorityList.push(buildings2.BadlandsPredatorDrone);
+      priorityList.push(buildings2.BadlandsAttractor);
+      priorityList.push(buildings2.PortalCarport);
+      priorityList.push(buildings2.BadlandsMinions);
+      priorityList.push(buildings2.BadlandsReaper);
+      priorityList.push(buildings2.BadlandsCorpsePile);
+      priorityList.push(buildings2.BadlandsMortuary);
+      priorityList.push(buildings2.BadlandsCodex);
+      priorityList.push(buildings2.PitGunEmplacement);
+      priorityList.push(buildings2.PitSoulAttractor);
+      priorityList.push(buildings2.PitSoulCapacitor);
+      priorityList.push(buildings2.PitAbsorptionChamber);
+      priorityList.push(buildings2.PitShadowMine);
+      priorityList.push(buildings2.PitTavern);
+      priorityList.push(buildings2.PortalRepairDroid);
+      priorityList.push(buildings2.PitMission);
+      priorityList.push(buildings2.PitAssaultForge);
+      priorityList.push(buildings2.RuinsAncientPillars);
+      priorityList.push(buildings2.WastelandThrone);
+      priorityList.push(buildings2.WastelandWarehouse);
+      priorityList.push(buildings2.WastelandHovel);
+      priorityList.push(buildings2.WastelandHellCasino);
+      priorityList.push(buildings2.WastelandTwistedLab);
+      priorityList.push(buildings2.WastelandDemonForge);
+      priorityList.push(buildings2.WastelandHellFactory);
+      priorityList.push(buildings2.WastelandPumpjack);
+      priorityList.push(buildings2.WastelandDigDemon);
+      priorityList.push(buildings2.WastelandTunneler);
+      priorityList.push(buildings2.WastelandBrute);
+      priorityList.push(buildings2.WastelandAltar);
+      priorityList.push(buildings2.WastelandShrine);
+      priorityList.push(buildings2.WastelandMeditationChamber);
+      priorityList.push(buildings2.RuinsMission);
+      priorityList.push(buildings2.RuinsGuardPost);
+      priorityList.push(buildings2.RuinsVault);
+      priorityList.push(buildings2.RuinsWarVault);
+      priorityList.push(buildings2.RuinsArchaeology);
+      priorityList.push(buildings2.GateMission);
+      priorityList.push(buildings2.GateEastTower);
+      priorityList.push(buildings2.GateWestTower);
+      priorityList.push(buildings2.GateTurret);
+      priorityList.push(buildings2.GateInferniteMine);
+      priorityList.push(buildings2.LakeMission);
+      priorityList.push(buildings2.LakeCoolingTower);
+      priorityList.push(buildings2.LakeHarbor);
+      priorityList.push(buildings2.LakeBireme);
+      priorityList.push(buildings2.LakeTransport);
+      priorityList.push(buildings2.LakeOven);
+      priorityList.push(buildings2.LakeOvenComplete);
+      priorityList.push(buildings2.LakeSoulSteeper);
+      priorityList.push(buildings2.LakeLifeInfuser);
+      priorityList.push(buildings2.SpireMission);
+      priorityList.push(buildings2.SpirePurifier);
+      priorityList.push(buildings2.SpireMechBay);
+      priorityList.push(buildings2.SpireBaseCamp);
+      priorityList.push(buildings2.SpirePort);
+      priorityList.push(buildings2.SpireBridge);
+      priorityList.push(buildings2.SpireSphinx);
+      priorityList.push(buildings2.SpireBribeSphinx);
+      priorityList.push(buildings2.SpireSurveyTower);
+      priorityList.push(buildings2.SpireWaygate);
+      priorityList.push(buildings2.SpireEdenicGate);
+      priorityList.push(buildings2.SpireBazaar);
+      priorityList.push(buildings2.AsphodelMission);
+      priorityList.push(buildings2.AsphodelMechStation);
+      priorityList.push(buildings2.AsphodelHarvester);
+      priorityList.push(buildings2.AsphodelProcessor);
+      priorityList.push(buildings2.AsphodelResearchStation);
+      priorityList.push(buildings2.AsphodelWarehouse);
+      priorityList.push(buildings2.AsphodelStabilizer);
+      priorityList.push(buildings2.AsphodelRuneGate);
+      priorityList.push(buildings2.AsphodelBunker);
+      priorityList.push(buildings2.AsphodelBlissDen);
+      priorityList.push(buildings2.ElysiumMission);
+      priorityList.push(buildings2.ElysiumAmbush);
+      priorityList.push(buildings2.ElysiumRaid);
+      priorityList.push(buildings2.ElysiumSiege);
+      priorityList.push(buildings2.ElysiumScout);
+      priorityList.push(buildings2.ElysiumFireSupportBase);
+      priorityList.push(buildings2.ElysiumMine);
+      priorityList.push(buildings2.ElysiumSacredSmelter);
+      priorityList.push(buildings2.ElysiumEleriumContainment);
+      priorityList.push(buildings2.ElysiumPillbox);
+      priorityList.push(buildings2.ElysiumRestaurant);
+      priorityList.push(buildings2.ElysiumEternalBank);
+      priorityList.push(buildings2.ElysiumArchive);
+      priorityList.push(buildings2.ElysiumNorthPier);
+      priorityList.push(buildings2.ElysiumRushmore);
+      priorityList.push(buildings2.ElysiumReincarnation);
+      priorityList.push(buildings2.ElysiumCement);
+      priorityList.push(buildings2.IsleSouthPier);
+      priorityList.push(buildings2.IsleSpiritBattery);
+      priorityList.push(buildings2.IsleSpiritVacuum);
+      priorityList.push(buildings2.IsleSoulCompactor);
+      priorityList.push(buildings2.PalaceMission);
+      priorityList.push(buildings2.PalaceInfuser);
+      priorityList.push(buildings2.PalaceConduit);
+      priorityList.push(buildings2.PalaceTomb);
+      priorityList.push(buildings2.HellSmelter);
+      priorityList.push(buildings2.DwarfShipyard);
+      priorityList.push(buildings2.DwarfMassRelay);
+      priorityList.push(buildings2.TitanMission);
+      priorityList.push(buildings2.TitanSpaceport);
+      priorityList.push(buildings2.TitanAIColonist);
+      priorityList.push(buildings2.TitanMine);
+      priorityList.push(buildings2.TitanSAM);
+      priorityList.push(buildings2.TitanGraphene);
+      priorityList.push(buildings2.TitanStorehouse);
+      priorityList.push(buildings2.TitanBank);
+      priorityList.push(buildings2.TitanAI);
+      priorityList.push(buildings2.TitanAIComplete);
+      priorityList.push(buildings2.TitanDecoder);
+      priorityList.push(buildings2.EnceladusMission);
+      priorityList.push(buildings2.EnceladusZeroGLab);
+      priorityList.push(buildings2.EnceladusWaterFreighter);
+      priorityList.push(buildings2.EnceladusBase);
+      priorityList.push(buildings2.EnceladusMunitions);
+      priorityList.push(buildings2.TritonMission);
+      priorityList.push(buildings2.TritonFOB);
+      priorityList.push(buildings2.TritonLander);
+      priorityList.push(buildings2.KuiperMission);
+      priorityList.push(buildings2.KuiperOrichalcum);
+      priorityList.push(buildings2.KuiperUranium);
+      priorityList.push(buildings2.KuiperNeutronium);
+      priorityList.push(buildings2.KuiperElerium);
+      priorityList.push(buildings2.ErisMission);
+      priorityList.push(buildings2.ErisDrone);
+      priorityList.push(buildings2.ErisTank);
+      priorityList.push(buildings2.ErisTrooper);
+      priorityList.push(buildings2.TauStarRingworld);
+      priorityList.push(buildings2.TauStarMatrix);
+      priorityList.push(buildings2.TauStarEden);
+      priorityList.push(buildings2.TauMission);
+      priorityList.push(buildings2.TauDismantle);
+      priorityList.push(buildings2.TauOrbitalStation);
+      priorityList.push(buildings2.TauFarm);
+      priorityList.push(buildings2.TauColony);
+      priorityList.push(buildings2.TauHousing);
+      priorityList.push(buildings2.TauExcavate);
+      priorityList.push(buildings2.TauAlienOutpost);
+      priorityList.push(buildings2.TauJumpGate);
+      priorityList.push(buildings2.TauRepository);
+      priorityList.push(buildings2.TauFactory);
+      priorityList.push(buildings2.TauDiseaseLab);
+      priorityList.push(buildings2.TauCasino);
+      priorityList.push(buildings2.TauCulturalCenter);
+      priorityList.push(buildings2.TauMiningPit);
+      priorityList.push(buildings2.TauRedMission);
+      priorityList.push(buildings2.TauRedOrbitalPlatform);
+      priorityList.push(buildings2.TauRedContact);
+      priorityList.push(buildings2.TauRedIntroduce);
+      priorityList.push(buildings2.TauRedSubjugate);
+      priorityList.push(buildings2.TauRedWomlingVillage);
+      priorityList.push(buildings2.TauRedWomlingFarm);
+      priorityList.push(buildings2.TauRedWomlingLab);
+      priorityList.push(buildings2.TauRedWomlingMine);
+      priorityList.push(buildings2.TauRedWomlingFun);
+      priorityList.push(buildings2.TauRedOverseer);
+      priorityList.push(buildings2.TauGasContest);
+      priorityList.push(buildings2.TauGasName1);
+      priorityList.push(buildings2.TauGasName2);
+      priorityList.push(buildings2.TauGasName3);
+      priorityList.push(buildings2.TauGasName4);
+      priorityList.push(buildings2.TauGasName5);
+      priorityList.push(buildings2.TauGasName6);
+      priorityList.push(buildings2.TauGasName7);
+      priorityList.push(buildings2.TauGasName8);
+      priorityList.push(buildings2.TauGasRefuelingStation);
+      priorityList.push(buildings2.TauGasOreRefinery);
+      priorityList.push(buildings2.TauGasWhalingStation);
+      priorityList.push(buildings2.TauGasWomlingStation);
+      priorityList.push(buildings2.TauBeltMission);
+      priorityList.push(buildings2.TauBeltPatrolShip);
+      priorityList.push(buildings2.TauBeltMiningShip);
+      priorityList.push(buildings2.TauBeltWhalingShip);
+      priorityList.push(buildings2.TauGas2Contest);
+      priorityList.push(buildings2.TauGas2Name1);
+      priorityList.push(buildings2.TauGas2Name2);
+      priorityList.push(buildings2.TauGas2Name3);
+      priorityList.push(buildings2.TauGas2Name4);
+      priorityList.push(buildings2.TauGas2Name5);
+      priorityList.push(buildings2.TauGas2Name6);
+      priorityList.push(buildings2.TauGas2Name7);
+      priorityList.push(buildings2.TauGas2Name8);
+      priorityList.push(buildings2.TauGas2AlienSurvey);
+      priorityList.push(buildings2.TauGas2AlienStation);
+      priorityList.push(buildings2.TauGas2MatrioshkaBrain);
+      priorityList.push(buildings2.TauGas2IgnitionDevice);
+      priorityList.push(buildings2.TauGas2IgniteGasGiant);
+      priorityList.push(buildings2.StargateDepot);
+      priorityList.push(buildings2.DwarfEleriumContainer);
+      priorityList.push(buildings2.GasMoonOilExtractor);
+      priorityList.push(buildings2.NeutronMission);
+      priorityList.push(buildings2.NeutronStellarForge);
+      priorityList.push(buildings2.NeutronMiner);
+      priorityList.push(buildings2.MassDriver);
+      priorityList.push(buildings2.MetalRefinery);
+      priorityList.push(buildings2.Casino);
+      priorityList.push(buildings2.HellSpaceCasino);
+      priorityList.push(buildings2.RockQuarry);
+      priorityList.push(buildings2.Sawmill);
+      priorityList.push(buildings2.GasMining);
+      priorityList.push(buildings2.Mine);
+      priorityList.push(buildings2.CoalMine);
+      BuildingManager2.priorityList = priorityList.filter((b) => b);
+      BuildingManager2.statePriorityList = priorityList.filter(
+        (b) => b && b.isSwitchable()
+      );
+    }
+    return { initBuildingState: initBuildingState2 };
+  }
+
+  // src/game/race-initialization.ts
+  function createRaceInitialization({
+    getGame,
+    getEvolutions,
+    getRaces,
+    getImitations,
+    getEvolutionAction,
+    getRace
+  }) {
+    function initialiseRaces2() {
+      const currentGame = getGame();
+      const currentEvolutions = getEvolutions();
+      const currentRaces = getRaces();
+      const currentImitations = getImitations();
+      const CurrentEvolutionAction = getEvolutionAction();
+      const CurrentRace = getRace();
+      for (let id in currentGame.actions.evolution) {
+        currentEvolutions[id] = new CurrentEvolutionAction(id);
+      }
+      let e = currentEvolutions;
+      let bilateralSymmetry = [
+        e.bilateral_symmetry,
+        e.multicellular,
+        e.phagocytosis,
+        e.sexual_reproduction
+      ];
+      let mammals = [e.mammals, ...bilateralSymmetry];
+      let genusEvolution = {
+        eldritch: [e.sentience, e.eldritch, ...bilateralSymmetry],
+        aquatic: [e.sentience, e.aquatic, ...bilateralSymmetry],
+        insectoid: [e.sentience, e.athropods, ...bilateralSymmetry],
+        humanoid: [e.sentience, e.humanoid, ...mammals],
+        giant: [e.sentience, e.gigantism, ...mammals],
+        small: [e.sentience, e.dwarfism, ...mammals],
+        carnivore: [e.sentience, e.carnivore, e.animalism, ...mammals],
+        herbivore: [e.sentience, e.herbivore, e.animalism, ...mammals],
+        //omnivore: [e.sentience, e.omnivore, e.animalism, ...mammals],
+        demonic: [e.sentience, e.demonic, ...mammals],
+        angelic: [e.sentience, e.celestial, ...mammals],
+        fey: [e.sentience, e.fey, ...mammals],
+        heat: [e.sentience, e.heat, ...mammals],
+        polar: [e.sentience, e.polar, ...mammals],
+        sand: [e.sentience, e.sand, ...mammals],
+        avian: [e.sentience, e.endothermic, e.eggshell, ...bilateralSymmetry],
+        reptilian: [e.sentience, e.ectothermic, e.eggshell, ...bilateralSymmetry],
+        plant: [
+          e.sentience,
+          e.bryophyte,
+          e.poikilohydric,
+          e.multicellular,
+          e.chloroplasts,
+          e.sexual_reproduction
+        ],
+        fungi: [
+          e.sentience,
+          e.bryophyte,
+          e.spores,
+          e.multicellular,
+          e.chitin,
+          e.sexual_reproduction
+        ],
+        synthetic: [e.sentience, e.exterminate, e.sexual_reproduction]
+      };
+      for (let id in currentGame.races) {
+        if (id === "protoplasm") {
+          continue;
+        }
+        currentRaces[id] = new CurrentRace(id);
+        let evolutionPath;
+        if (id === "hellspawn") {
+          currentRaces[id].evolutionTree[currentRaces[id].genus] = [
+            e.bunker,
+            e.warlord,
+            ...genusEvolution[currentRaces[id].genus] ?? []
+          ];
+        } else if (id === "junker" || id === "sludge" || id === "ultra_sludge") {
+          for (let genus of Object.keys(genusEvolution)) {
+            currentRaces[id].evolutionTree[genus] = [
+              e.bunker,
+              e[id],
+              ...genusEvolution[genus] ?? []
+            ];
+          }
+        } else if (currentGame.races[id].type === "hybrid") {
+          let hybridGenus = currentGame.races[id].hybrid;
+          currentRaces[id].evolutionTree[hybridGenus[0]] = [
+            e.bunker,
+            e[id],
+            ...genusEvolution[hybridGenus[0]] ?? []
+          ];
+          currentRaces[id].evolutionTree[hybridGenus[1]] = [
+            e.bunker,
+            e[id],
+            ...genusEvolution[hybridGenus[1]] ?? []
+          ];
+        } else {
+          currentRaces[id].evolutionTree[currentRaces[id].genus] = [
+            e.bunker,
+            e[id],
+            ...genusEvolution[currentRaces[id].genus] ?? []
+          ];
+        }
+        currentImitations[id] = new CurrentEvolutionAction(`s-${id}`);
+      }
+    }
+    return { initialiseRaces: initialiseRaces2 };
+  }
+
+  // src/game/state-initialization.ts
+  function liveObject2(getValue) {
+    return new Proxy({}, {
+      get: (_target, property) => Reflect.get(getValue(), property),
+      set: (_target, property, value) => Reflect.set(getValue(), property, value),
+      has: (_target, property) => Reflect.has(getValue(), property),
+      ownKeys: () => Reflect.ownKeys(getValue()),
+      getOwnPropertyDescriptor: (_target, property) => {
+        const descriptor = Reflect.getOwnPropertyDescriptor(getValue(), property);
+        return descriptor ? { ...descriptor, configurable: true } : void 0;
+      },
+      defineProperty: (_target, property, attributes) => Reflect.defineProperty(getValue(), property, attributes)
+    });
+  }
+  function createStateInitialization({
+    getGame,
+    getResources,
+    getJobManager,
+    getCrafter,
+    getBuildings,
+    setBuildings,
+    getProjects,
+    getUpdateCraftCost,
+    getUpdateTabs,
+    getIsLumberRace,
+    getHaveTech,
+    log
+  }) {
+    const game2 = liveObject2(getGame);
+    const resources2 = liveObject2(getResources);
+    const buildings2 = liveObject2(getBuildings);
+    const projects2 = liveObject2(getProjects);
+    const updateCraftCost2 = (...args) => getUpdateCraftCost()(...args);
+    const updateTabs2 = (...args) => getUpdateTabs()(...args);
+    const isLumberRace2 = (...args) => getIsLumberRace()(...args);
+    const haveTech2 = (...args) => getHaveTech()(...args);
+    function initialiseState2() {
+      const JobManager2 = getJobManager();
+      const crafter2 = getCrafter();
+      updateCraftCost2();
+      updateTabs2(false);
+      Object.defineProperty(resources2.Crates, "cost", {
+        get: () => game2.global.race["warlord"] && game2.global.race["iron_wood"] ? { Lumber: 200 } : isLumberRace2() ? { Plywood: 10 } : { Stone: 200 }
+      });
+      resources2.Containers.cost["Steel"] = 125;
+      JobManager2.craftingJobs = Object.values(crafter2);
+      buildings2.Banquet.gameMax = game2.global.stats.achieve.endless_hunger?.l ?? 0;
+      buildings2.RedTerraformer.gameMax = 100;
+      buildings2.RedAtmoTerraformer.gameMax = 1;
+      buildings2.RedTerraform.gameMax = 1;
+      buildings2.GasSpaceDock.gameMax = 1;
+      buildings2.DwarfWorldController.gameMax = 1;
+      buildings2.GasSpaceDockShipSegment.gameMax = 100;
+      buildings2.ProximaDyson.gameMax = 100;
+      buildings2.BlackholeStellarEngine.gameMax = 100;
+      buildings2.DwarfWorldCollider.gameMax = 1859;
+      buildings2.DwarfShipyard.gameMax = 1;
+      buildings2.DwarfMassRelay.gameMax = 100;
+      buildings2.DwarfMassRelayComplete.gameMax = 1;
+      buildings2.TitanAI.gameMax = 100;
+      buildings2.TitanAIComplete.gameMax = 1;
+      buildings2.TritonFOB.gameMax = 1;
+      buildings2.SunJumpGate.gameMax = 100;
+      buildings2.TauJumpGate.gameMax = 100;
+      buildings2.TauAlienOutpost.gameMax = 1;
+      buildings2.TauStarRingworld.gameMax = 1e3;
+      buildings2.TauStarMatrix.gameMax = 1;
+      buildings2.TauGas2AlienStation.gameMax = 100;
+      buildings2.TauGas2AlienSpaceStation.gameMax = 1;
+      buildings2.TauGas2MatrioshkaBrain.gameMax = 1e3;
+      buildings2.TauGas2IgnitionDevice.gameMax = 10;
+      buildings2.ProximaDysonSphere.gameMax = 100;
+      buildings2.ProximaOrichalcumSphere.gameMax = 100;
+      buildings2.ProximaElysaniteSphere.gameMax = 1e3;
+      buildings2.BlackholeStargate.gameMax = 200;
+      buildings2.BlackholeStargateComplete.gameMax = 1;
+      buildings2.SiriusSpaceElevator.gameMax = 100;
+      buildings2.SiriusGravityDome.gameMax = 100;
+      buildings2.SiriusAscensionMachine.gameMax = 100;
+      buildings2.SiriusAscensionTrigger.gameMax = 1;
+      buildings2.WastelandThrone.gameMax = 0;
+      buildings2.RuinsWarVault.gameMax = 1;
+      buildings2.BadlandsCodex.gameMax = 0;
+      buildings2.PitSoulForge.gameMax = 1;
+      buildings2.PitSoulCapacitor.gameMax = 40;
+      buildings2.PitAbsorptionChamber.gameMax = 100;
+      buildings2.GateEastTower.gameMax = 1;
+      buildings2.GateWestTower.gameMax = 1;
+      buildings2.RuinsVault.gameMax = 2;
+      buildings2.LakeOven.gameMax = 100;
+      buildings2.LakeOvenComplete.gameMax = 1;
+      buildings2.SpireBridge.gameMax = 10;
+      buildings2.SpireEdenicGate.gameMax = 1;
+      buildings2.AsphodelMechStation.gameMax = 10;
+      buildings2.AsphodelRuneGate.gameMax = 100;
+      buildings2.ElysiumFireSupportBase.gameMax = 101;
+      buildings2.ElysiumNorthPier.gameMax = 10;
+      buildings2.ElysiumRushmore.gameMax = 1;
+      buildings2.ElysiumReincarnation.gameMax = 1;
+      buildings2.IsleSouthPier.gameMax = 10;
+      buildings2.IsleSoulCompactor.gameMax = 1;
+      buildings2.PalaceInfuser.gameMax = 25;
+      buildings2.PalaceConduit.gameMax = 25;
+      buildings2.PalaceTomb.gameMax = 10;
+      buildings2.GorddonEmbassy.gameMax = 1;
+      buildings2.Alien1Consulate.gameMax = 1;
+      projects2.LaunchFacility.gameMax = 1;
+      projects2.ManaSyphon.gameMax = 80;
+      buildings2.CoalPower.addResourceConsumption(
+        () => game2.global.race.universe === "magic" ? resources2.Mana : resources2.Coal,
+        () => game2.global.race["environmentalist"] ? 0 : game2.global.race.universe === "magic" ? 0.05 : 0.65
+      );
+      buildings2.OilPower.addResourceConsumption(
+        resources2.Oil,
+        () => game2.global.race["environmentalist"] ? 0 : 0.65
+      );
+      buildings2.FissionPower.addResourceConsumption(resources2.Uranium, 0.1);
+      buildings2.TouristCenter.addResourceConsumption(resources2.Food, 50);
+      buildings2.SpaceNavBeacon.addSupport(resources2.Moon_Support);
+      buildings2.SpaceNavBeacon.addResourceConsumption(
+        resources2.Red_Support,
+        () => haveTech2("luna", 3) ? -1 : 0
+      );
+      buildings2.MoonBase.addSupport(resources2.Moon_Support);
+      buildings2.MoonIridiumMine.addSupport(resources2.Moon_Support);
+      buildings2.MoonHeliumMine.addSupport(resources2.Moon_Support);
+      buildings2.MoonObservatory.addSupport(resources2.Moon_Support);
+      buildings2.RedSpaceport.addSupport(resources2.Red_Support);
+      buildings2.RedTower.addSupport(resources2.Red_Support);
+      buildings2.RedLivingQuarters.addSupport(resources2.Red_Support);
+      buildings2.RedVrCenter.addSupport(resources2.Red_Support);
+      buildings2.RedMine.addSupport(resources2.Red_Support);
+      buildings2.RedFabrication.addSupport(resources2.Red_Support);
+      buildings2.RedBiodome.addSupport(resources2.Red_Support);
+      buildings2.RedExoticLab.addSupport(resources2.Red_Support);
+      buildings2.SunSwarmControl.addSupport(resources2.Sun_Support);
+      buildings2.SunSwarmSatellite.addSupport(resources2.Sun_Support);
+      buildings2.BeltSpaceStation.addSupport(resources2.Belt_Support);
+      buildings2.BeltEleriumShip.addSupport(resources2.Belt_Support);
+      buildings2.BeltIridiumShip.addSupport(resources2.Belt_Support);
+      buildings2.BeltIronShip.addSupport(resources2.Belt_Support);
+      buildings2.AlphaStarport.addSupport(resources2.Alpha_Support);
+      buildings2.AlphaHabitat.addSupport(resources2.Alpha_Support);
+      buildings2.AlphaMiningDroid.addSupport(resources2.Alpha_Support);
+      buildings2.AlphaProcessing.addSupport(resources2.Alpha_Support);
+      buildings2.AlphaFusion.addSupport(resources2.Alpha_Support);
+      buildings2.AlphaLaboratory.addSupport(resources2.Alpha_Support);
+      buildings2.AlphaExchange.addSupport(resources2.Alpha_Support);
+      buildings2.AlphaGraphenePlant.addSupport(resources2.Alpha_Support);
+      buildings2.AlphaExoticZoo.addResourceConsumption(resources2.Alpha_Support, 1);
+      buildings2.ProximaTransferStation.addSupport(resources2.Alpha_Support);
+      buildings2.NebulaNexus.addSupport(resources2.Nebula_Support);
+      buildings2.NebulaHarvester.addSupport(resources2.Nebula_Support);
+      buildings2.NebulaEleriumProspector.addSupport(resources2.Nebula_Support);
+      buildings2.GatewayStarbase.addSupport(resources2.Gateway_Support);
+      buildings2.GatewayShipDock.addSupport(resources2.Gateway_Support);
+      buildings2.BologniumShip.addSupport(resources2.Gateway_Support);
+      buildings2.ScoutShip.addSupport(resources2.Gateway_Support);
+      buildings2.CorvetteShip.addSupport(resources2.Gateway_Support);
+      buildings2.FrigateShip.addSupport(resources2.Gateway_Support);
+      buildings2.CruiserShip.addSupport(resources2.Gateway_Support);
+      buildings2.Dreadnought.addSupport(resources2.Gateway_Support);
+      buildings2.StargateStation.addSupport(resources2.Gateway_Support);
+      buildings2.StargateTelemetryBeacon.addSupport(resources2.Gateway_Support);
+      buildings2.Alien2Foothold.addSupport(resources2.Alien_Support);
+      buildings2.Alien2ArmedMiner.addSupport(resources2.Alien_Support);
+      buildings2.Alien2OreProcessor.addSupport(resources2.Alien_Support);
+      buildings2.Alien2Scavenger.addSupport(resources2.Alien_Support);
+      buildings2.LakeHarbor.addSupport(resources2.Lake_Support);
+      buildings2.LakeBireme.addSupport(resources2.Lake_Support);
+      buildings2.LakeTransport.addSupport(resources2.Lake_Support);
+      buildings2.SpirePurifier.addSupport(resources2.Spire_Support);
+      buildings2.SpirePort.addSupport(resources2.Spire_Support);
+      buildings2.SpireBaseCamp.addSupport(resources2.Spire_Support);
+      buildings2.SpireMechBay.addSupport(resources2.Spire_Support);
+      buildings2.TitanElectrolysis.addSupport(resources2.Titan_Support);
+      buildings2.TitanQuarters.addSupport(resources2.Titan_Support);
+      buildings2.TitanMine.addSupport(resources2.Titan_Support);
+      buildings2.TitanGraphene.addSupport(resources2.Titan_Support);
+      buildings2.TitanDecoder.addResourceConsumption(resources2.Titan_Support, 1);
+      buildings2.TitanSpaceport.addSupport(resources2.Enceladus_Support);
+      buildings2.EnceladusWaterFreighter.addSupport(resources2.Enceladus_Support);
+      buildings2.EnceladusZeroGLab.addSupport(resources2.Enceladus_Support);
+      buildings2.EnceladusBase.addSupport(resources2.Enceladus_Support);
+      buildings2.TitanElectrolysis.addResourceConsumption(
+        resources2.Electrolysis_Support,
+        -1
+      );
+      buildings2.TitanHydrogen.addResourceConsumption(
+        resources2.Electrolysis_Support,
+        1
+      );
+      buildings2.ErisDrone.addSupport(resources2.Eris_Support);
+      buildings2.ErisTrooper.addSupport(resources2.Eris_Support);
+      buildings2.ErisTank.addSupport(resources2.Eris_Support);
+      buildings2.TauOrbitalStation.addSupport(resources2.Tau_Support);
+      buildings2.TauFarm.addSupport(resources2.Tau_Support);
+      buildings2.TauColony.addSupport(resources2.Tau_Support);
+      buildings2.TauFactory.addSupport(resources2.Tau_Support);
+      buildings2.TauDiseaseLab.addSupport(resources2.Tau_Support);
+      buildings2.TauMiningPit.addSupport(resources2.Tau_Support);
+      buildings2.TauRedOrbitalPlatform.addSupport(resources2.Tau_Red_Support);
+      buildings2.TauRedOverseer.addSupport(resources2.Tau_Red_Support);
+      buildings2.TauRedWomlingVillage.addSupport(resources2.Tau_Red_Support);
+      buildings2.TauRedWomlingFarm.addSupport(resources2.Tau_Red_Support);
+      buildings2.TauRedWomlingMine.addSupport(resources2.Tau_Red_Support);
+      buildings2.TauRedWomlingFun.addSupport(resources2.Tau_Red_Support);
+      buildings2.TauRedWomlingLab.addSupport(resources2.Tau_Red_Support);
+      buildings2.TauRedWomlingVillage.addResourceConsumption(
+        resources2.Womlings_Support,
+        () => haveTech2("womling_pop", 2) ? -6 : -5
+      );
+      buildings2.TauRedWomlingFarm.addResourceConsumption(
+        resources2.Womlings_Support,
+        () => buildings2.TauRedWomlingFarm.autoStateSmart ? 2 : 0
+      );
+      buildings2.TauRedWomlingLab.addResourceConsumption(
+        resources2.Womlings_Support,
+        () => buildings2.TauRedWomlingLab.autoStateSmart ? 1 : 0
+      );
+      buildings2.TauRedWomlingMine.addResourceConsumption(
+        resources2.Womlings_Support,
+        () => buildings2.TauRedWomlingMine.autoStateSmart ? 6 : 0
+      );
+      buildings2.TauBeltPatrolShip.addSupport(resources2.Tau_Belt_Support);
+      buildings2.TauBeltMiningShip.addSupport(resources2.Tau_Belt_Support);
+      buildings2.TauBeltWhalingShip.addSupport(resources2.Tau_Belt_Support);
+      buildings2.AsphodelEncampment.addSupport(resources2.Asphodel_Support);
+      buildings2.AsphodelSoulEngine.addSupport(resources2.Asphodel_Support);
+      buildings2.AsphodelResearchStation.addSupport(resources2.Asphodel_Support);
+      buildings2.AsphodelHarvester.addSupport(resources2.Asphodel_Support);
+      buildings2.AsphodelProcessor.addSupport(resources2.Asphodel_Support);
+      buildings2.AsphodelBunker.addSupport(resources2.Asphodel_Support);
+      buildings2.AsphodelBlissDen.addSupport(resources2.Asphodel_Support);
+      buildings2.AsphodelRectory.addSupport(resources2.Asphodel_Support);
+      buildings2.AsphodelCorruptor.addSupport(resources2.Asphodel_Support);
+      buildings2.GasMining.produces = [resources2.Helium_3];
+      buildings2.GasMoonOilExtractor.produces = [resources2.Oil];
+      buildings2.CoalMine.produces = [resources2.Coal];
+      buildings2.NebulaHarvester.produces = [
+        resources2.Helium_3,
+        resources2.Deuterium
+      ];
+      buildings2.KuiperElerium.produces = [resources2.Elerium];
+      buildings2.EnceladusWaterFreighter.produces = [resources2.Water];
+      buildings2.MoonBase.addResourceConsumption(resources2.Oil, 2);
+      buildings2.RedSpaceport.addResourceConsumption(resources2.Helium_3, 1.25);
+      buildings2.RedSpaceport.addResourceConsumption(
+        resources2.Food,
+        () => game2.global.race["cataclysm"] || game2.global.race["orbit_decayed"] ? 2 : 25
+      );
+      buildings2.RedFactory.addResourceConsumption(resources2.Helium_3, 1);
+      buildings2.RedSpaceBarracks.addResourceConsumption(resources2.Oil, 2);
+      buildings2.RedSpaceBarracks.addResourceConsumption(
+        resources2.Food,
+        () => game2.global.race["cataclysm"] || game2.global.race["orbit_decayed"] ? 0 : 10
+      );
+      buildings2.HellGeothermal.addResourceConsumption(resources2.Helium_3, 0.5);
+      buildings2.GasMoonOutpost.addResourceConsumption(resources2.Oil, 2);
+      buildings2.BeltSpaceStation.addResourceConsumption(
+        resources2.Food,
+        () => game2.global.race["fasting"] ? 0 : game2.global.race["cataclysm"] || game2.global.race["orbit_decayed"] ? 1 : 10
+      );
+      buildings2.BeltSpaceStation.addResourceConsumption(resources2.Helium_3, 2.5);
+      buildings2.DwarfEleriumReactor.addResourceConsumption(
+        resources2.Elerium,
+        0.05
+      );
+      buildings2.AlphaStarport.addResourceConsumption(resources2.Food, 100);
+      buildings2.AlphaStarport.addResourceConsumption(resources2.Helium_3, 5);
+      buildings2.AlphaFusion.addResourceConsumption(resources2.Deuterium, 1.25);
+      buildings2.AlphaExoticZoo.addResourceConsumption(resources2.Food, 12e3);
+      buildings2.AlphaMegaFactory.addResourceConsumption(resources2.Deuterium, 5);
+      buildings2.ProximaTransferStation.addResourceConsumption(
+        resources2.Uranium,
+        0.28
+      );
+      buildings2.ProximaCruiser.addResourceConsumption(resources2.Helium_3, 6);
+      buildings2.NeutronMiner.addResourceConsumption(resources2.Helium_3, 3);
+      buildings2.GatewayStarbase.addResourceConsumption(resources2.Helium_3, 25);
+      buildings2.GatewayStarbase.addResourceConsumption(resources2.Food, 250);
+      buildings2.BologniumShip.addResourceConsumption(resources2.Helium_3, 5);
+      buildings2.ScoutShip.addResourceConsumption(resources2.Helium_3, 6);
+      buildings2.CorvetteShip.addResourceConsumption(resources2.Helium_3, 10);
+      buildings2.FrigateShip.addResourceConsumption(resources2.Helium_3, 25);
+      buildings2.CruiserShip.addResourceConsumption(resources2.Deuterium, 25);
+      buildings2.Dreadnought.addResourceConsumption(resources2.Deuterium, 80);
+      buildings2.GorddonEmbassy.addResourceConsumption(
+        resources2.Food,
+        () => game2.global.race["fasting"] ? 0 : 7500
+      );
+      buildings2.GorddonFreighter.addResourceConsumption(resources2.Helium_3, 12);
+      buildings2.Alien1VitreloyPlant.addResourceConsumption(
+        resources2.Bolognium,
+        2.5
+      );
+      buildings2.Alien1VitreloyPlant.addResourceConsumption(
+        resources2.Stanene,
+        100
+      );
+      buildings2.Alien1VitreloyPlant.addResourceConsumption(
+        resources2.Money,
+        5e4
+      );
+      buildings2.Alien1SuperFreighter.addResourceConsumption(
+        resources2.Helium_3,
+        25
+      );
+      buildings2.Alien2Foothold.addResourceConsumption(resources2.Elerium, 2.5);
+      buildings2.Alien2ArmedMiner.addResourceConsumption(resources2.Helium_3, 10);
+      buildings2.Alien2Scavenger.addResourceConsumption(resources2.Helium_3, 12);
+      buildings2.ChthonianMineLayer.addResourceConsumption(resources2.Helium_3, 8);
+      buildings2.ChthonianRaider.addResourceConsumption(resources2.Helium_3, 18);
+      buildings2.RuinsInfernoPower.addResourceConsumption(resources2.Infernite, 5);
+      buildings2.RuinsInfernoPower.addResourceConsumption(resources2.Coal, 100);
+      buildings2.RuinsInfernoPower.addResourceConsumption(resources2.Oil, 80);
+      buildings2.LakeOvenComplete.addResourceConsumption(resources2.Infernite, 225);
+      buildings2.TitanElectrolysis.addResourceConsumption(resources2.Water, 35);
+      buildings2.TitanQuarters.addResourceConsumption(resources2.Water, 12);
+      buildings2.TitanQuarters.addResourceConsumption(resources2.Food, 500);
+      buildings2.TitanDecoder.addResourceConsumption(resources2.Cipher, 0.06);
+      buildings2.TitanAIComplete.addResourceConsumption(resources2.Water, 1e3);
+      buildings2.EnceladusWaterFreighter.addResourceConsumption(
+        resources2.Helium_3,
+        5
+      );
+      buildings2.TritonFOB.addResourceConsumption(resources2.Helium_3, 125);
+      buildings2.TritonLander.addResourceConsumption(resources2.Oil, 50);
+      buildings2.KuiperOrichalcum.addResourceConsumption(resources2.Oil, 200);
+      buildings2.KuiperUranium.addResourceConsumption(resources2.Oil, 60);
+      buildings2.KuiperNeutronium.addResourceConsumption(resources2.Oil, 60);
+      buildings2.KuiperElerium.addResourceConsumption(resources2.Oil, 125);
+      buildings2.ErisDrone.addResourceConsumption(resources2.Uranium, 5);
+      buildings2.TauOrbitalStation.addResourceConsumption(
+        resources2.Helium_3,
+        () => haveTech2("isolation") ? game2.global.race["lone_survivor"] ? 5 : 25 : 400
+      );
+      buildings2.TauColony.addResourceConsumption(
+        resources2.Food,
+        () => haveTech2("isolation") ? game2.global.race["lone_survivor"] ? -2 : 75 : 1e3
+      );
+      buildings2.TauFusionGenerator.addResourceConsumption(
+        resources2.Helium_3,
+        () => haveTech2("isolation") ? game2.global.race["lone_survivor"] ? -15 : 75 : 500
+      );
+      buildings2.TauCulturalCenter.addResourceConsumption(
+        resources2.Food,
+        () => game2.global.race["lone_survivor"] ? 25 : 500
+      );
+      buildings2.TauRedOrbitalPlatform.addResourceConsumption(
+        resources2.Oil,
+        () => game2.global.race["lone_survivor"] ? 0 : haveTech2("isolation") ? 32 : 125
+      );
+      buildings2.TauRedOrbitalPlatform.addResourceConsumption(
+        resources2.Helium_3,
+        () => game2.global.race["lone_survivor"] ? haveTech2("isolation") ? 8 : 125 : 0
+      );
+      buildings2.TauBeltPatrolShip.addResourceConsumption(
+        resources2.Helium_3,
+        () => haveTech2("isolation") ? 15 : 250
+      );
+      buildings2.TauBeltMiningShip.addResourceConsumption(
+        resources2.Helium_3,
+        () => haveTech2("isolation") ? 12 : 75
+      );
+      buildings2.TauBeltWhalingShip.addResourceConsumption(
+        resources2.Helium_3,
+        () => haveTech2("isolation") ? 14 : 90
+      );
+      buildings2.TauGas2AlienSpaceStation.addResourceConsumption(
+        resources2.Elerium,
+        () => game2.global.race["lone_survivor"] ? 1 : 10
+      );
+      setBuildings(
+        Object.fromEntries(
+          Object.entries(buildings2).filter(
+            ([id, b]) => b.definition ? true : log(`${b.name} action not found.`)
+          )
+        )
+      );
+      Object.values(buildings2).forEach((building) => {
+        if (building.powered > 0) {
+          let powerId = (building._location || building._tab) + ":" + building.id;
+          if (game2.global.power.indexOf(powerId) === -1) {
+            building.overridePowered = 0;
+          }
+        }
+      });
+      buildings2.Windmill.overridePowered = -1;
+      buildings2.SunSwarmSatellite.overridePowered = -0.35;
+      buildings2.ProximaDyson.overridePowered = -1.25;
+      buildings2.ProximaDysonSphere.overridePowered = -5;
+      buildings2.ProximaOrichalcumSphere.overridePowered = -8;
+      buildings2.ProximaElysaniteSphere.overridePowered = -18;
+      buildings2.BlackholeStellarEngine.overridePowered = 0;
+      buildings2.WastelandIncinerator.overridePowered = -25;
+    }
+    return { initialiseState: initialiseState2 };
+  }
+
   // src/planning/cost-conflicts.ts
   function createCostConflicts({
     getState,
@@ -10914,7 +11843,7 @@
   }
 
   // src/policies/building-weighting.ts
-  function liveObject2(getValue) {
+  function liveObject3(getValue) {
     return new Proxy({}, {
       get: (_target, property) => Reflect.get(getValue(), property),
       set: (_target, property, value) => Reflect.set(getValue(), property, value),
@@ -10959,14 +11888,14 @@
     getCitadelConsumptionFn,
     ResourceAction: ResourceAction2
   }) {
-    const game2 = liveObject2(getGame);
-    const settings2 = liveObject2(getSettings);
-    const state2 = liveObject2(getState);
-    const resources2 = liveObject2(getResources);
-    const buildings2 = liveObject2(getBuildings);
-    const poly2 = liveObject2(getPoly);
-    const MechManager2 = liveObject2(getMechManager);
-    const techIds2 = liveObject2(getTechIds);
+    const game2 = liveObject3(getGame);
+    const settings2 = liveObject3(getSettings);
+    const state2 = liveObject3(getState);
+    const resources2 = liveObject3(getResources);
+    const buildings2 = liveObject3(getBuildings);
+    const poly2 = liveObject3(getPoly);
+    const MechManager2 = liveObject3(getMechManager);
+    const techIds2 = liveObject3(getTechIds);
     const traitVal2 = (...args) => getTraitVal()(...args);
     const haveTech2 = (...args) => getHaveTech()(...args);
     const haveTask2 = (...args) => getHaveTask()(...args);
@@ -18058,7 +18987,7 @@
       value: Reflect.get(object, property)
     };
   }
-  function liveObject3(getValue) {
+  function liveObject4(getValue) {
     return new Proxy(
       {},
       {
@@ -18120,7 +19049,7 @@
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
-    const document2 = liveObject3(() => getDependency("document"));
+    const document2 = liveObject4(() => getDependency("document"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetGeneralSettings2 = liveFunction(
       () => getDependency("resetGeneralSettings")
@@ -18276,7 +19205,7 @@
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
-    const document2 = liveObject3(() => getDependency("document"));
+    const document2 = liveObject4(() => getDependency("document"));
     const resetAchievementGuardSettings2 = liveFunction(
       () => getDependency("resetAchievementGuardSettings")
     );
@@ -18387,7 +19316,7 @@
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
-    const document2 = liveObject3(() => getDependency("document"));
+    const document2 = liveObject4(() => getDependency("document"));
     const resetChallengeHelperSettings2 = liveFunction(
       () => getDependency("resetChallengeHelperSettings")
     );
@@ -18468,10 +19397,10 @@
     const buildSettingsSection22 = liveFunction(
       () => getDependency("buildSettingsSection2")
     );
-    const buildings2 = liveObject3(() => getDependency("buildings"));
+    const buildings2 = liveObject4(() => getDependency("buildings"));
     const confirm2 = liveFunction(() => getDependency("confirm"));
-    const document2 = liveObject3(() => getDependency("document"));
-    const game2 = liveObject3(() => getDependency("game"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const game2 = liveObject4(() => getDependency("game"));
     const haveTech2 = liveFunction(() => getDependency("haveTech"));
     const isApocalypsePrestigeAvailable2 = liveFunction(
       () => getDependency("isApocalypsePrestigeAvailable")
@@ -18503,12 +19432,12 @@
     const openOverrideModal2 = liveFunction(
       () => getDependency("openOverrideModal")
     );
-    const prestigeOptions2 = liveObject3(() => getDependency("prestigeOptions"));
+    const prestigeOptions2 = liveObject4(() => getDependency("prestigeOptions"));
     const resetPrestigeSettings2 = liveFunction(
       () => getDependency("resetPrestigeSettings")
     );
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
-    const state2 = liveObject3(() => getDependency("state"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
+    const state2 = liveObject4(() => getDependency("state"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
     );
@@ -18767,7 +19696,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const GovernmentManager2 = liveObject3(
+    const GovernmentManager2 = liveObject4(
       () => getDependency("GovernmentManager")
     );
     const addSettingsNumber2 = liveFunction(
@@ -18779,9 +19708,9 @@
     const buildSettingsSection22 = liveFunction(
       () => getDependency("buildSettingsSection2")
     );
-    const document2 = liveObject3(() => getDependency("document"));
-    const game2 = liveObject3(() => getDependency("game"));
-    const governors2 = liveObject3(() => getDependency("governors"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const game2 = liveObject4(() => getDependency("game"));
+    const governors2 = liveObject4(() => getDependency("governors"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetGovernmentSettings2 = liveFunction(
       () => getDependency("resetGovernmentSettings")
@@ -18922,25 +19851,25 @@
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
-    const challenges2 = liveObject3(() => getDependency("challenges"));
-    const document2 = liveObject3(() => getDependency("document"));
-    const evolutionSettingsToStore2 = liveObject3(
+    const challenges2 = liveObject4(() => getDependency("challenges"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const evolutionSettingsToStore2 = liveObject4(
       () => getDependency("evolutionSettingsToStore")
     );
-    const game2 = liveObject3(() => getDependency("game"));
+    const game2 = liveObject4(() => getDependency("game"));
     const getStarLevel2 = liveFunction(() => getDependency("getStarLevel"));
-    const prestigeOptions2 = liveObject3(() => getDependency("prestigeOptions"));
-    const prestigeTypes2 = liveObject3(() => getDependency("prestigeTypes"));
-    const races2 = liveObject3(() => getDependency("races"));
+    const prestigeOptions2 = liveObject4(() => getDependency("prestigeOptions"));
+    const prestigeTypes2 = liveObject4(() => getDependency("prestigeTypes"));
+    const races2 = liveObject4(() => getDependency("races"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetEvolutionSettings2 = liveFunction(
       () => getDependency("resetEvolutionSettings")
     );
-    const settings2 = liveObject3(() => getDependency("settings"));
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const settings2 = liveObject4(() => getDependency("settings"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
-    const state2 = liveObject3(() => getDependency("state"));
-    const universes2 = liveObject3(() => getDependency("universes"));
+    const state2 = liveObject4(() => getDependency("state"));
+    const universes2 = liveObject4(() => getDependency("universes"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
     );
@@ -19291,18 +20220,18 @@
   }) {
     const $2 = liveFunction(() => getDependency("$"));
     const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
-    const biomeList2 = liveObject3(() => getDependency("biomeList"));
+    const biomeList2 = liveObject4(() => getDependency("biomeList"));
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject3(() => getDependency("document"));
-    const extraList2 = liveObject3(() => getDependency("extraList"));
-    const game2 = liveObject3(() => getDependency("game"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const extraList2 = liveObject4(() => getDependency("extraList"));
+    const game2 = liveObject4(() => getDependency("game"));
     const resetPlanetSettings2 = liveFunction(
       () => getDependency("resetPlanetSettings")
     );
-    const traitList2 = liveObject3(() => getDependency("traitList"));
+    const traitList2 = liveObject4(() => getDependency("traitList"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
     );
@@ -19396,22 +20325,22 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const TriggerManager2 = liveObject3(() => getDependency("TriggerManager"));
-    const argType2 = liveObject3(() => getDependency("argType"));
+    const TriggerManager2 = liveObject4(() => getDependency("TriggerManager"));
+    const argType2 = liveObject4(() => getDependency("argType"));
     const buildInputNode2 = liveFunction(() => getDependency("buildInputNode"));
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
-    const checkTypes2 = liveObject3(() => getDependency("checkTypes"));
-    const document2 = liveObject3(() => getDependency("document"));
-    const overrideOnlyChecks2 = liveObject3(
+    const checkTypes2 = liveObject4(() => getDependency("checkTypes"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const overrideOnlyChecks2 = liveObject4(
       () => getDependency("overrideOnlyChecks")
     );
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetTriggerSettings2 = liveFunction(
       () => getDependency("resetTriggerSettings")
     );
-    const retBools2 = liveObject3(() => getDependency("retBools"));
+    const retBools2 = liveObject4(() => getDependency("retBools"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
@@ -19738,13 +20667,13 @@
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
-    const document2 = liveObject3(() => getDependency("document"));
-    const game2 = liveObject3(() => getDependency("game"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const game2 = liveObject4(() => getDependency("game"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetResearchSettings2 = liveFunction(
       () => getDependency("resetResearchSettings")
     );
-    const techIds2 = liveObject3(() => getDependency("techIds"));
+    const techIds2 = liveObject4(() => getDependency("techIds"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
     );
@@ -19842,7 +20771,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const SpyManager2 = liveObject3(() => getDependency("SpyManager"));
+    const SpyManager2 = liveObject4(() => getDependency("SpyManager"));
     const addSettingsHeader12 = liveFunction(
       () => getDependency("addSettingsHeader1")
     );
@@ -19858,8 +20787,8 @@
     const buildSettingsSection22 = liveFunction(
       () => getDependency("buildSettingsSection2")
     );
-    const document2 = liveObject3(() => getDependency("document"));
-    const game2 = liveObject3(() => getDependency("game"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const game2 = liveObject4(() => getDependency("game"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetWarSettings2 = liveFunction(
       () => getDependency("resetWarSettings")
@@ -20082,7 +21011,7 @@
     const buildSettingsSection22 = liveFunction(
       () => getDependency("buildSettingsSection2")
     );
-    const document2 = liveObject3(() => getDependency("document"));
+    const document2 = liveObject4(() => getDependency("document"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetHellSettings2 = liveFunction(
       () => getDependency("resetHellSettings")
@@ -20250,7 +21179,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const FleetManagerOuter2 = liveObject3(
+    const FleetManagerOuter2 = liveObject4(
       () => getDependency("FleetManagerOuter")
     );
     const addSettingsHeader12 = liveFunction(
@@ -20273,9 +21202,9 @@
       () => getDependency("buildSettingsSection2")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject3(() => getDependency("document"));
-    const galaxyRegions2 = liveObject3(() => getDependency("galaxyRegions"));
-    const game2 = liveObject3(() => getDependency("game"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const galaxyRegions2 = liveObject4(() => getDependency("galaxyRegions"));
+    const game2 = liveObject4(() => getDependency("game"));
     const openOverrideModal2 = liveFunction(
       () => getDependency("openOverrideModal")
     );
@@ -20283,8 +21212,8 @@
     const resetFleetSettings2 = liveFunction(
       () => getDependency("resetFleetSettings")
     );
-    const settings2 = liveObject3(() => getDependency("settings"));
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const settings2 = liveObject4(() => getDependency("settings"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
@@ -20601,7 +21530,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const MechManager2 = liveObject3(() => getDependency("MechManager"));
+    const MechManager2 = liveObject4(() => getDependency("MechManager"));
     const addSettingsNumber2 = liveFunction(
       () => getDependency("addSettingsNumber")
     );
@@ -20620,8 +21549,8 @@
     const calculateMechStats2 = liveFunction(
       () => getDependency("calculateMechStats")
     );
-    const document2 = liveObject3(() => getDependency("document"));
-    const game2 = liveObject3(() => getDependency("game"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const game2 = liveObject4(() => getDependency("game"));
     const removeMechInfo2 = liveFunction(() => getDependency("removeMechInfo"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetMechSettings2 = liveFunction(
@@ -20883,9 +21812,9 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const EjectManager2 = liveObject3(() => getDependency("EjectManager"));
-    const NaniteManager2 = liveObject3(() => getDependency("NaniteManager"));
-    const SupplyManager2 = liveObject3(() => getDependency("SupplyManager"));
+    const EjectManager2 = liveObject4(() => getDependency("EjectManager"));
+    const NaniteManager2 = liveObject4(() => getDependency("NaniteManager"));
+    const SupplyManager2 = liveObject4(() => getDependency("SupplyManager"));
     const addSettingsNumber2 = liveFunction(
       () => getDependency("addSettingsNumber")
     );
@@ -20900,7 +21829,7 @@
       () => getDependency("buildSettingsSection")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject3(() => getDependency("document"));
+    const document2 = liveObject4(() => getDependency("document"));
     const removeEjectToggles2 = liveFunction(
       () => getDependency("removeEjectToggles")
     );
@@ -20911,7 +21840,7 @@
     const resetEjectorSettings2 = liveFunction(
       () => getDependency("resetEjectorSettings")
     );
-    const resources2 = liveObject3(() => getDependency("resources"));
+    const resources2 = liveObject4(() => getDependency("resources"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
     );
@@ -21064,7 +21993,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const MarketManager2 = liveObject3(() => getDependency("MarketManager"));
+    const MarketManager2 = liveObject4(() => getDependency("MarketManager"));
     const addSettingsNumber2 = liveFunction(
       () => getDependency("addSettingsNumber")
     );
@@ -21080,8 +22009,8 @@
       () => getDependency("buildSettingsSection")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject3(() => getDependency("document"));
-    const poly2 = liveObject3(() => getDependency("poly"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const poly2 = liveObject4(() => getDependency("poly"));
     const removeMarketToggles2 = liveFunction(
       () => getDependency("removeMarketToggles")
     );
@@ -21089,8 +22018,8 @@
     const resetMarketSettings2 = liveFunction(
       () => getDependency("resetMarketSettings")
     );
-    const resources2 = liveObject3(() => getDependency("resources"));
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const resources2 = liveObject4(() => getDependency("resources"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
@@ -21269,7 +22198,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const StorageManager2 = liveObject3(() => getDependency("StorageManager"));
+    const StorageManager2 = liveObject4(() => getDependency("StorageManager"));
     const addSettingsToggle2 = liveFunction(
       () => getDependency("addSettingsToggle")
     );
@@ -21279,7 +22208,7 @@
       () => getDependency("buildSettingsSection")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject3(() => getDependency("document"));
+    const document2 = liveObject4(() => getDependency("document"));
     const removeStorageToggles2 = liveFunction(
       () => getDependency("removeStorageToggles")
     );
@@ -21287,7 +22216,7 @@
     const resetStorageSettings2 = liveFunction(
       () => getDependency("resetStorageSettings")
     );
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
@@ -21402,8 +22331,8 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const AlchemyManager2 = liveObject3(() => getDependency("AlchemyManager"));
-    const RitualManager2 = liveObject3(() => getDependency("RitualManager"));
+    const AlchemyManager2 = liveObject4(() => getDependency("AlchemyManager"));
+    const RitualManager2 = liveObject4(() => getDependency("RitualManager"));
     const addSettingsNumber2 = liveFunction(
       () => getDependency("addSettingsNumber")
     );
@@ -21419,8 +22348,8 @@
       () => getDependency("buildSettingsSection")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject3(() => getDependency("document"));
-    const game2 = liveObject3(() => getDependency("game"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const game2 = liveObject4(() => getDependency("game"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetMagicSettings2 = liveFunction(
       () => getDependency("resetMagicSettings")
@@ -21565,7 +22494,7 @@
     const $2 = liveFunction(() => getDependency("$"));
     const BasicJob2 = liveFunction(() => getDependency("BasicJob"));
     const CraftingJob2 = liveFunction(() => getDependency("CraftingJob"));
-    const JobManager2 = liveObject3(() => getDependency("JobManager"));
+    const JobManager2 = liveObject4(() => getDependency("JobManager"));
     const addSettingsNumber2 = liveFunction(
       () => getDependency("addSettingsNumber")
     );
@@ -21581,13 +22510,13 @@
       () => getDependency("buildSettingsSection")
     );
     const confirm2 = liveFunction(() => getDependency("confirm"));
-    const document2 = liveObject3(() => getDependency("document"));
-    const jobs2 = liveObject3(() => getDependency("jobs"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const jobs2 = liveObject4(() => getDependency("jobs"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetJobSettings2 = liveFunction(
       () => getDependency("resetJobSettings")
     );
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
@@ -21792,7 +22721,7 @@
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
-    const document2 = liveObject3(() => getDependency("document"));
+    const document2 = liveObject4(() => getDependency("document"));
     const resetWeightingSettings2 = liveFunction(
       () => getDependency("resetWeightingSettings")
     );
@@ -22033,7 +22962,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const BuildingManager2 = liveObject3(() => getDependency("BuildingManager"));
+    const BuildingManager2 = liveObject4(() => getDependency("BuildingManager"));
     const addSettingsNumber2 = liveFunction(
       () => getDependency("addSettingsNumber")
     );
@@ -22052,16 +22981,16 @@
       () => getDependency("buildSettingsSection")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const buildingIds2 = liveObject3(() => getDependency("buildingIds"));
-    const checkCompare2 = liveObject3(() => getDependency("checkCompare"));
+    const buildingIds2 = liveObject4(() => getDependency("buildingIds"));
+    const checkCompare2 = liveObject4(() => getDependency("checkCompare"));
     const confirm2 = liveFunction(() => getDependency("confirm"));
-    const document2 = liveObject3(() => getDependency("document"));
+    const document2 = liveObject4(() => getDependency("document"));
     const getRealNumber2 = liveFunction(() => getDependency("getRealNumber"));
     const initBuildingState2 = liveFunction(
       () => getDependency("initBuildingState")
     );
-    const linkedBuildings2 = liveObject3(() => getDependency("linkedBuildings"));
-    const overrideKey2 = liveObject3(() => getDependency("overrideKey"));
+    const linkedBuildings2 = liveObject4(() => getDependency("linkedBuildings"));
+    const overrideKey2 = liveObject4(() => getDependency("overrideKey"));
     const removeBuildingToggles2 = liveFunction(
       () => getDependency("removeBuildingToggles")
     );
@@ -22069,8 +22998,8 @@
       () => getDependency("resetBuildingSettings")
     );
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resources2 = liveObject3(() => getDependency("resources"));
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const resources2 = liveObject4(() => getDependency("resources"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
@@ -22431,7 +23360,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const ProjectManager2 = liveObject3(() => getDependency("ProjectManager"));
+    const ProjectManager2 = liveObject4(() => getDependency("ProjectManager"));
     const addSettingsNumber2 = liveFunction(
       () => getDependency("addSettingsNumber")
     );
@@ -22444,12 +23373,12 @@
       () => getDependency("buildSettingsSection")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject3(() => getDependency("document"));
+    const document2 = liveObject4(() => getDependency("document"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetProjectSettings2 = liveFunction(
       () => getDependency("resetProjectSettings")
     );
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
@@ -22563,12 +23492,12 @@
     const buildSettingsSection22 = liveFunction(
       () => getDependency("buildSettingsSection2")
     );
-    const document2 = liveObject3(() => getDependency("document"));
-    const game2 = liveObject3(() => getDependency("game"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const game2 = liveObject4(() => getDependency("game"));
     const resetLoggingSettings2 = liveFunction(
       () => getDependency("resetLoggingSettings")
     );
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
     );
@@ -22665,15 +23594,15 @@
     const buildWarSettings2 = liveFunction(
       () => getDependency("buildWarSettings")
     );
-    const document2 = liveObject3(() => getDependency("document"));
+    const document2 = liveObject4(() => getDependency("document"));
     const openOverrideModal2 = liveFunction(
       () => getDependency("openOverrideModal")
     );
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
     );
-    const window2 = liveObject3(() => getDependency("window"));
+    const window2 = liveObject4(() => getDependency("window"));
     function createSettingToggleImpl(node, settingKey, title, enabledCallBack, disabledCallBack) {
       let toggle = $2(`
           <label class="switch script_bg_${settingKey}" tabindex="0" title="${title}">
@@ -22830,9 +23759,9 @@
     const buildPrestigeSettings2 = liveFunction(
       () => getDependency("buildPrestigeSettings")
     );
-    const document2 = liveObject3(() => getDependency("document"));
-    const prestigeTypes2 = liveObject3(() => getDependency("prestigeTypes"));
-    const settings2 = liveObject3(() => getDependency("settings"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const prestigeTypes2 = liveObject4(() => getDependency("prestigeTypes"));
+    const settings2 = liveObject4(() => getDependency("settings"));
     function updatePrestigeInTopBarImpl() {
       const parentId = "s-prestige-type";
       let parentNode = document2.getElementById(parentId);
@@ -22900,9 +23829,9 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const document2 = liveObject3(() => getDependency("document"));
-    const game2 = liveObject3(() => getDependency("game"));
-    const settings2 = liveObject3(() => getDependency("settings"));
+    const document2 = liveObject4(() => getDependency("document"));
+    const game2 = liveObject4(() => getDependency("game"));
+    const settings2 = liveObject4(() => getDependency("settings"));
     function updateTotalDaysInTopBarImpl() {
       if (settings2.displayTotalDaysTypeInTopBar) {
         addTotalDaysToTopBar2();
@@ -22962,11 +23891,11 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const ProjectManager2 = liveObject3(() => getDependency("ProjectManager"));
+    const ProjectManager2 = liveObject4(() => getDependency("ProjectManager"));
     const addToggleCallbacks2 = liveFunction(
       () => getDependency("addToggleCallbacks")
     );
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
     function createArpaTogglesImpl() {
       removeArpaToggles2();
       for (let i = 0; i < ProjectManager2.priorityList.length; i++) {
@@ -23010,8 +23939,8 @@
     const addToggleCallbacks2 = liveFunction(
       () => getDependency("addToggleCallbacks")
     );
-    const craftablesList2 = liveObject3(() => getDependency("craftablesList"));
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const craftablesList2 = liveObject4(() => getDependency("craftablesList"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
     function createCraftTogglesImpl() {
       removeCraftToggles2();
       for (let i = 0; i < craftablesList2.length; i++) {
@@ -23051,13 +23980,13 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const BuildingManager2 = liveObject3(() => getDependency("BuildingManager"));
+    const BuildingManager2 = liveObject4(() => getDependency("BuildingManager"));
     const addToggleCallbacks2 = liveFunction(
       () => getDependency("addToggleCallbacks")
     );
-    const settings2 = liveObject3(() => getDependency("settings"));
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
-    const state2 = liveObject3(() => getDependency("state"));
+    const settings2 = liveObject4(() => getDependency("settings"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
+    const state2 = liveObject4(() => getDependency("state"));
     function createBuildingTogglesImpl() {
       removeBuildingToggles2();
       if (!settings2.showSettings) return;
@@ -23101,11 +24030,11 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const EjectManager2 = liveObject3(() => getDependency("EjectManager"));
+    const EjectManager2 = liveObject4(() => getDependency("EjectManager"));
     const addToggleCallbacks2 = liveFunction(
       () => getDependency("addToggleCallbacks")
     );
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
     function createEjectTogglesImpl() {
       removeEjectToggles2();
       $2("#eject").append(
@@ -23150,11 +24079,11 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const SupplyManager2 = liveObject3(() => getDependency("SupplyManager"));
+    const SupplyManager2 = liveObject4(() => getDependency("SupplyManager"));
     const addToggleCallbacks2 = liveFunction(
       () => getDependency("addToggleCallbacks")
     );
-    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
     function createSupplyTogglesImpl() {
       removeSupplyToggles2();
       $2("#spireSupply").append(
@@ -24524,7 +25453,7 @@
 
   // src/ui/settings-shell.ts
   function createSettingsShell({ getContext }) {
-    const liveObject4 = (key) => new Proxy(
+    const liveObject5 = (key) => new Proxy(
       {},
       {
         get(_target, property) {
@@ -24558,10 +25487,10 @@
         return typeof value === "function" ? value.bind(current) : value;
       }
     });
-    const document2 = liveObject4("document");
-    const settingsRaw2 = liveObject4("settingsRaw");
-    const settings2 = liveObject4("settings");
-    const game2 = liveObject4("game");
+    const document2 = liveObject5("document");
+    const settingsRaw2 = liveObject5("settingsRaw");
+    const settings2 = liveObject5("settings");
+    const game2 = liveObject5("game");
     const buildPrestigeSettings2 = (...args) => getContext().buildPrestigeSettings(...args);
     const buildGeneralSettings2 = (...args) => getContext().buildGeneralSettings(...args);
     const buildInterfaceSettings2 = (...args) => getContext().buildInterfaceSettings(...args);
@@ -24790,7 +25719,7 @@
   function createSettingsControls({
     getContext
   }) {
-    const liveObject4 = (key) => new Proxy(
+    const liveObject5 = (key) => new Proxy(
       {},
       {
         get(_target, property) {
@@ -24824,13 +25753,13 @@
         return typeof value === "function" ? value.bind(current) : value;
       }
     });
-    const settingsRaw2 = liveObject4("settingsRaw");
-    const settings2 = liveObject4("settings");
-    const techIds2 = liveObject4("techIds");
-    const win2 = liveObject4("win");
-    const checkCompare2 = liveObject4("checkCompare");
-    const checkCustom2 = liveObject4("checkCustom");
-    const checkTypes2 = liveObject4("checkTypes");
+    const settingsRaw2 = liveObject5("settingsRaw");
+    const settings2 = liveObject5("settings");
+    const techIds2 = liveObject5("techIds");
+    const win2 = liveObject5("win");
+    const checkCompare2 = liveObject5("checkCompare");
+    const checkCustom2 = liveObject5("checkCustom");
+    const checkTypes2 = liveObject5("checkTypes");
     const getRealNumber2 = (...args) => getContext().getRealNumber(...args);
     const openOptionsModal2 = (...args) => getContext().openOptionsModal(...args);
     const sorterHelper2 = (...args) => getContext().sorterHelper(...args);
@@ -25497,7 +26426,7 @@
   function createOverrideCatalog({
     getContext
   }) {
-    const liveObject4 = (key) => new Proxy(
+    const liveObject5 = (key) => new Proxy(
       {},
       {
         get(_target, property) {
@@ -25520,26 +26449,26 @@
         }
       }
     );
-    const settings2 = liveObject4("settings");
-    const settingsRaw2 = liveObject4("settingsRaw");
-    const state2 = liveObject4("state");
-    const game2 = liveObject4("game");
-    const buildingIds2 = liveObject4("buildingIds");
-    const buildings2 = liveObject4("buildings");
-    const resources2 = liveObject4("resources");
-    const techIds2 = liveObject4("techIds");
-    const arpaIds2 = liveObject4("arpaIds");
-    const jobIds2 = liveObject4("jobIds");
-    const races2 = liveObject4("races");
-    const GovernmentManager2 = liveObject4("GovernmentManager");
-    const SmelterManager2 = liveObject4("SmelterManager");
-    const FactoryManager2 = liveObject4("FactoryManager");
-    const WarManager2 = liveObject4("WarManager");
-    const universes2 = liveObject4("universes");
-    const governors2 = liveObject4("governors");
-    const challenges2 = liveObject4("challenges");
-    const biomeList2 = liveObject4("biomeList");
-    const traitList2 = liveObject4("traitList");
+    const settings2 = liveObject5("settings");
+    const settingsRaw2 = liveObject5("settingsRaw");
+    const state2 = liveObject5("state");
+    const game2 = liveObject5("game");
+    const buildingIds2 = liveObject5("buildingIds");
+    const buildings2 = liveObject5("buildings");
+    const resources2 = liveObject5("resources");
+    const techIds2 = liveObject5("techIds");
+    const arpaIds2 = liveObject5("arpaIds");
+    const jobIds2 = liveObject5("jobIds");
+    const races2 = liveObject5("races");
+    const GovernmentManager2 = liveObject5("GovernmentManager");
+    const SmelterManager2 = liveObject5("SmelterManager");
+    const FactoryManager2 = liveObject5("FactoryManager");
+    const WarManager2 = liveObject5("WarManager");
+    const universes2 = liveObject5("universes");
+    const governors2 = liveObject5("governors");
+    const challenges2 = liveObject5("challenges");
+    const biomeList2 = liveObject5("biomeList");
+    const traitList2 = liveObject5("traitList");
     const buildSelectOptions2 = (...args) => getContext().buildSelectOptions(...args);
     const fastEval2 = (...args) => getContext().fastEval(...args);
     const getGovernor2 = (...args) => getContext().getGovernor(...args);
@@ -26223,7 +27152,7 @@
   function createScriptRuntimeUI({
     getContext
   }) {
-    const liveObject4 = (key) => new Proxy(
+    const liveObject5 = (key) => new Proxy(
       {},
       {
         get(_target, property) {
@@ -26243,10 +27172,10 @@
         return getContext().$(...args);
       }
     });
-    const document2 = liveObject4("document");
-    const state2 = liveObject4("state");
-    const game2 = liveObject4("game");
-    const win2 = liveObject4("win");
+    const document2 = liveObject5("document");
+    const state2 = liveObject5("state");
+    const game2 = liveObject5("game");
+    const win2 = liveObject5("win");
     const createOptionsModal2 = (...args) => getContext().createOptionsModal(...args);
     const openOptionsModal2 = (...args) => getContext().openOptionsModal(...args);
     function updateDebugData2() {
@@ -31583,863 +32512,72 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    function initialiseState() {
-      updateCraftCost();
-      updateTabs(false);
-      Object.defineProperty(resources.Crates, "cost", {
-        get: () => game.global.race["warlord"] && game.global.race["iron_wood"] ? { Lumber: 200 } : isLumberRace() ? { Plywood: 10 } : { Stone: 200 }
-      });
-      resources.Containers.cost["Steel"] = 125;
-      JobManager.craftingJobs = Object.values(crafter);
-      buildings.Banquet.gameMax = game.global.stats.achieve.endless_hunger?.l ?? 0;
-      buildings.RedTerraformer.gameMax = 100;
-      buildings.RedAtmoTerraformer.gameMax = 1;
-      buildings.RedTerraform.gameMax = 1;
-      buildings.GasSpaceDock.gameMax = 1;
-      buildings.DwarfWorldController.gameMax = 1;
-      buildings.GasSpaceDockShipSegment.gameMax = 100;
-      buildings.ProximaDyson.gameMax = 100;
-      buildings.BlackholeStellarEngine.gameMax = 100;
-      buildings.DwarfWorldCollider.gameMax = 1859;
-      buildings.DwarfShipyard.gameMax = 1;
-      buildings.DwarfMassRelay.gameMax = 100;
-      buildings.DwarfMassRelayComplete.gameMax = 1;
-      buildings.TitanAI.gameMax = 100;
-      buildings.TitanAIComplete.gameMax = 1;
-      buildings.TritonFOB.gameMax = 1;
-      buildings.SunJumpGate.gameMax = 100;
-      buildings.TauJumpGate.gameMax = 100;
-      buildings.TauAlienOutpost.gameMax = 1;
-      buildings.TauStarRingworld.gameMax = 1e3;
-      buildings.TauStarMatrix.gameMax = 1;
-      buildings.TauGas2AlienStation.gameMax = 100;
-      buildings.TauGas2AlienSpaceStation.gameMax = 1;
-      buildings.TauGas2MatrioshkaBrain.gameMax = 1e3;
-      buildings.TauGas2IgnitionDevice.gameMax = 10;
-      buildings.ProximaDysonSphere.gameMax = 100;
-      buildings.ProximaOrichalcumSphere.gameMax = 100;
-      buildings.ProximaElysaniteSphere.gameMax = 1e3;
-      buildings.BlackholeStargate.gameMax = 200;
-      buildings.BlackholeStargateComplete.gameMax = 1;
-      buildings.SiriusSpaceElevator.gameMax = 100;
-      buildings.SiriusGravityDome.gameMax = 100;
-      buildings.SiriusAscensionMachine.gameMax = 100;
-      buildings.SiriusAscensionTrigger.gameMax = 1;
-      buildings.WastelandThrone.gameMax = 0;
-      buildings.RuinsWarVault.gameMax = 1;
-      buildings.BadlandsCodex.gameMax = 0;
-      buildings.PitSoulForge.gameMax = 1;
-      buildings.PitSoulCapacitor.gameMax = 40;
-      buildings.PitAbsorptionChamber.gameMax = 100;
-      buildings.GateEastTower.gameMax = 1;
-      buildings.GateWestTower.gameMax = 1;
-      buildings.RuinsVault.gameMax = 2;
-      buildings.LakeOven.gameMax = 100;
-      buildings.LakeOvenComplete.gameMax = 1;
-      buildings.SpireBridge.gameMax = 10;
-      buildings.SpireEdenicGate.gameMax = 1;
-      buildings.AsphodelMechStation.gameMax = 10;
-      buildings.AsphodelRuneGate.gameMax = 100;
-      buildings.ElysiumFireSupportBase.gameMax = 101;
-      buildings.ElysiumNorthPier.gameMax = 10;
-      buildings.ElysiumRushmore.gameMax = 1;
-      buildings.ElysiumReincarnation.gameMax = 1;
-      buildings.IsleSouthPier.gameMax = 10;
-      buildings.IsleSoulCompactor.gameMax = 1;
-      buildings.PalaceInfuser.gameMax = 25;
-      buildings.PalaceConduit.gameMax = 25;
-      buildings.PalaceTomb.gameMax = 10;
-      buildings.GorddonEmbassy.gameMax = 1;
-      buildings.Alien1Consulate.gameMax = 1;
-      projects.LaunchFacility.gameMax = 1;
-      projects.ManaSyphon.gameMax = 80;
-      buildings.CoalPower.addResourceConsumption(
-        () => game.global.race.universe === "magic" ? resources.Mana : resources.Coal,
-        () => game.global.race["environmentalist"] ? 0 : game.global.race.universe === "magic" ? 0.05 : 0.65
-      );
-      buildings.OilPower.addResourceConsumption(
-        resources.Oil,
-        () => game.global.race["environmentalist"] ? 0 : 0.65
-      );
-      buildings.FissionPower.addResourceConsumption(resources.Uranium, 0.1);
-      buildings.TouristCenter.addResourceConsumption(resources.Food, 50);
-      buildings.SpaceNavBeacon.addSupport(resources.Moon_Support);
-      buildings.SpaceNavBeacon.addResourceConsumption(
-        resources.Red_Support,
-        () => haveTech("luna", 3) ? -1 : 0
-      );
-      buildings.MoonBase.addSupport(resources.Moon_Support);
-      buildings.MoonIridiumMine.addSupport(resources.Moon_Support);
-      buildings.MoonHeliumMine.addSupport(resources.Moon_Support);
-      buildings.MoonObservatory.addSupport(resources.Moon_Support);
-      buildings.RedSpaceport.addSupport(resources.Red_Support);
-      buildings.RedTower.addSupport(resources.Red_Support);
-      buildings.RedLivingQuarters.addSupport(resources.Red_Support);
-      buildings.RedVrCenter.addSupport(resources.Red_Support);
-      buildings.RedMine.addSupport(resources.Red_Support);
-      buildings.RedFabrication.addSupport(resources.Red_Support);
-      buildings.RedBiodome.addSupport(resources.Red_Support);
-      buildings.RedExoticLab.addSupport(resources.Red_Support);
-      buildings.SunSwarmControl.addSupport(resources.Sun_Support);
-      buildings.SunSwarmSatellite.addSupport(resources.Sun_Support);
-      buildings.BeltSpaceStation.addSupport(resources.Belt_Support);
-      buildings.BeltEleriumShip.addSupport(resources.Belt_Support);
-      buildings.BeltIridiumShip.addSupport(resources.Belt_Support);
-      buildings.BeltIronShip.addSupport(resources.Belt_Support);
-      buildings.AlphaStarport.addSupport(resources.Alpha_Support);
-      buildings.AlphaHabitat.addSupport(resources.Alpha_Support);
-      buildings.AlphaMiningDroid.addSupport(resources.Alpha_Support);
-      buildings.AlphaProcessing.addSupport(resources.Alpha_Support);
-      buildings.AlphaFusion.addSupport(resources.Alpha_Support);
-      buildings.AlphaLaboratory.addSupport(resources.Alpha_Support);
-      buildings.AlphaExchange.addSupport(resources.Alpha_Support);
-      buildings.AlphaGraphenePlant.addSupport(resources.Alpha_Support);
-      buildings.AlphaExoticZoo.addResourceConsumption(resources.Alpha_Support, 1);
-      buildings.ProximaTransferStation.addSupport(resources.Alpha_Support);
-      buildings.NebulaNexus.addSupport(resources.Nebula_Support);
-      buildings.NebulaHarvester.addSupport(resources.Nebula_Support);
-      buildings.NebulaEleriumProspector.addSupport(resources.Nebula_Support);
-      buildings.GatewayStarbase.addSupport(resources.Gateway_Support);
-      buildings.GatewayShipDock.addSupport(resources.Gateway_Support);
-      buildings.BologniumShip.addSupport(resources.Gateway_Support);
-      buildings.ScoutShip.addSupport(resources.Gateway_Support);
-      buildings.CorvetteShip.addSupport(resources.Gateway_Support);
-      buildings.FrigateShip.addSupport(resources.Gateway_Support);
-      buildings.CruiserShip.addSupport(resources.Gateway_Support);
-      buildings.Dreadnought.addSupport(resources.Gateway_Support);
-      buildings.StargateStation.addSupport(resources.Gateway_Support);
-      buildings.StargateTelemetryBeacon.addSupport(resources.Gateway_Support);
-      buildings.Alien2Foothold.addSupport(resources.Alien_Support);
-      buildings.Alien2ArmedMiner.addSupport(resources.Alien_Support);
-      buildings.Alien2OreProcessor.addSupport(resources.Alien_Support);
-      buildings.Alien2Scavenger.addSupport(resources.Alien_Support);
-      buildings.LakeHarbor.addSupport(resources.Lake_Support);
-      buildings.LakeBireme.addSupport(resources.Lake_Support);
-      buildings.LakeTransport.addSupport(resources.Lake_Support);
-      buildings.SpirePurifier.addSupport(resources.Spire_Support);
-      buildings.SpirePort.addSupport(resources.Spire_Support);
-      buildings.SpireBaseCamp.addSupport(resources.Spire_Support);
-      buildings.SpireMechBay.addSupport(resources.Spire_Support);
-      buildings.TitanElectrolysis.addSupport(resources.Titan_Support);
-      buildings.TitanQuarters.addSupport(resources.Titan_Support);
-      buildings.TitanMine.addSupport(resources.Titan_Support);
-      buildings.TitanGraphene.addSupport(resources.Titan_Support);
-      buildings.TitanDecoder.addResourceConsumption(resources.Titan_Support, 1);
-      buildings.TitanSpaceport.addSupport(resources.Enceladus_Support);
-      buildings.EnceladusWaterFreighter.addSupport(resources.Enceladus_Support);
-      buildings.EnceladusZeroGLab.addSupport(resources.Enceladus_Support);
-      buildings.EnceladusBase.addSupport(resources.Enceladus_Support);
-      buildings.TitanElectrolysis.addResourceConsumption(
-        resources.Electrolysis_Support,
-        -1
-      );
-      buildings.TitanHydrogen.addResourceConsumption(
-        resources.Electrolysis_Support,
-        1
-      );
-      buildings.ErisDrone.addSupport(resources.Eris_Support);
-      buildings.ErisTrooper.addSupport(resources.Eris_Support);
-      buildings.ErisTank.addSupport(resources.Eris_Support);
-      buildings.TauOrbitalStation.addSupport(resources.Tau_Support);
-      buildings.TauFarm.addSupport(resources.Tau_Support);
-      buildings.TauColony.addSupport(resources.Tau_Support);
-      buildings.TauFactory.addSupport(resources.Tau_Support);
-      buildings.TauDiseaseLab.addSupport(resources.Tau_Support);
-      buildings.TauMiningPit.addSupport(resources.Tau_Support);
-      buildings.TauRedOrbitalPlatform.addSupport(resources.Tau_Red_Support);
-      buildings.TauRedOverseer.addSupport(resources.Tau_Red_Support);
-      buildings.TauRedWomlingVillage.addSupport(resources.Tau_Red_Support);
-      buildings.TauRedWomlingFarm.addSupport(resources.Tau_Red_Support);
-      buildings.TauRedWomlingMine.addSupport(resources.Tau_Red_Support);
-      buildings.TauRedWomlingFun.addSupport(resources.Tau_Red_Support);
-      buildings.TauRedWomlingLab.addSupport(resources.Tau_Red_Support);
-      buildings.TauRedWomlingVillage.addResourceConsumption(
-        resources.Womlings_Support,
-        () => haveTech("womling_pop", 2) ? -6 : -5
-      );
-      buildings.TauRedWomlingFarm.addResourceConsumption(
-        resources.Womlings_Support,
-        () => buildings.TauRedWomlingFarm.autoStateSmart ? 2 : 0
-      );
-      buildings.TauRedWomlingLab.addResourceConsumption(
-        resources.Womlings_Support,
-        () => buildings.TauRedWomlingLab.autoStateSmart ? 1 : 0
-      );
-      buildings.TauRedWomlingMine.addResourceConsumption(
-        resources.Womlings_Support,
-        () => buildings.TauRedWomlingMine.autoStateSmart ? 6 : 0
-      );
-      buildings.TauBeltPatrolShip.addSupport(resources.Tau_Belt_Support);
-      buildings.TauBeltMiningShip.addSupport(resources.Tau_Belt_Support);
-      buildings.TauBeltWhalingShip.addSupport(resources.Tau_Belt_Support);
-      buildings.AsphodelEncampment.addSupport(resources.Asphodel_Support);
-      buildings.AsphodelSoulEngine.addSupport(resources.Asphodel_Support);
-      buildings.AsphodelResearchStation.addSupport(resources.Asphodel_Support);
-      buildings.AsphodelHarvester.addSupport(resources.Asphodel_Support);
-      buildings.AsphodelProcessor.addSupport(resources.Asphodel_Support);
-      buildings.AsphodelBunker.addSupport(resources.Asphodel_Support);
-      buildings.AsphodelBlissDen.addSupport(resources.Asphodel_Support);
-      buildings.AsphodelRectory.addSupport(resources.Asphodel_Support);
-      buildings.AsphodelCorruptor.addSupport(resources.Asphodel_Support);
-      buildings.GasMining.produces = [resources.Helium_3];
-      buildings.GasMoonOilExtractor.produces = [resources.Oil];
-      buildings.CoalMine.produces = [resources.Coal];
-      buildings.NebulaHarvester.produces = [
-        resources.Helium_3,
-        resources.Deuterium
-      ];
-      buildings.KuiperElerium.produces = [resources.Elerium];
-      buildings.EnceladusWaterFreighter.produces = [resources.Water];
-      buildings.MoonBase.addResourceConsumption(resources.Oil, 2);
-      buildings.RedSpaceport.addResourceConsumption(resources.Helium_3, 1.25);
-      buildings.RedSpaceport.addResourceConsumption(
-        resources.Food,
-        () => game.global.race["cataclysm"] || game.global.race["orbit_decayed"] ? 2 : 25
-      );
-      buildings.RedFactory.addResourceConsumption(resources.Helium_3, 1);
-      buildings.RedSpaceBarracks.addResourceConsumption(resources.Oil, 2);
-      buildings.RedSpaceBarracks.addResourceConsumption(
-        resources.Food,
-        () => game.global.race["cataclysm"] || game.global.race["orbit_decayed"] ? 0 : 10
-      );
-      buildings.HellGeothermal.addResourceConsumption(resources.Helium_3, 0.5);
-      buildings.GasMoonOutpost.addResourceConsumption(resources.Oil, 2);
-      buildings.BeltSpaceStation.addResourceConsumption(
-        resources.Food,
-        () => game.global.race["fasting"] ? 0 : game.global.race["cataclysm"] || game.global.race["orbit_decayed"] ? 1 : 10
-      );
-      buildings.BeltSpaceStation.addResourceConsumption(resources.Helium_3, 2.5);
-      buildings.DwarfEleriumReactor.addResourceConsumption(
-        resources.Elerium,
-        0.05
-      );
-      buildings.AlphaStarport.addResourceConsumption(resources.Food, 100);
-      buildings.AlphaStarport.addResourceConsumption(resources.Helium_3, 5);
-      buildings.AlphaFusion.addResourceConsumption(resources.Deuterium, 1.25);
-      buildings.AlphaExoticZoo.addResourceConsumption(resources.Food, 12e3);
-      buildings.AlphaMegaFactory.addResourceConsumption(resources.Deuterium, 5);
-      buildings.ProximaTransferStation.addResourceConsumption(
-        resources.Uranium,
-        0.28
-      );
-      buildings.ProximaCruiser.addResourceConsumption(resources.Helium_3, 6);
-      buildings.NeutronMiner.addResourceConsumption(resources.Helium_3, 3);
-      buildings.GatewayStarbase.addResourceConsumption(resources.Helium_3, 25);
-      buildings.GatewayStarbase.addResourceConsumption(resources.Food, 250);
-      buildings.BologniumShip.addResourceConsumption(resources.Helium_3, 5);
-      buildings.ScoutShip.addResourceConsumption(resources.Helium_3, 6);
-      buildings.CorvetteShip.addResourceConsumption(resources.Helium_3, 10);
-      buildings.FrigateShip.addResourceConsumption(resources.Helium_3, 25);
-      buildings.CruiserShip.addResourceConsumption(resources.Deuterium, 25);
-      buildings.Dreadnought.addResourceConsumption(resources.Deuterium, 80);
-      buildings.GorddonEmbassy.addResourceConsumption(
-        resources.Food,
-        () => game.global.race["fasting"] ? 0 : 7500
-      );
-      buildings.GorddonFreighter.addResourceConsumption(resources.Helium_3, 12);
-      buildings.Alien1VitreloyPlant.addResourceConsumption(
-        resources.Bolognium,
-        2.5
-      );
-      buildings.Alien1VitreloyPlant.addResourceConsumption(
-        resources.Stanene,
-        100
-      );
-      buildings.Alien1VitreloyPlant.addResourceConsumption(
-        resources.Money,
-        5e4
-      );
-      buildings.Alien1SuperFreighter.addResourceConsumption(
-        resources.Helium_3,
-        25
-      );
-      buildings.Alien2Foothold.addResourceConsumption(resources.Elerium, 2.5);
-      buildings.Alien2ArmedMiner.addResourceConsumption(resources.Helium_3, 10);
-      buildings.Alien2Scavenger.addResourceConsumption(resources.Helium_3, 12);
-      buildings.ChthonianMineLayer.addResourceConsumption(resources.Helium_3, 8);
-      buildings.ChthonianRaider.addResourceConsumption(resources.Helium_3, 18);
-      buildings.RuinsInfernoPower.addResourceConsumption(resources.Infernite, 5);
-      buildings.RuinsInfernoPower.addResourceConsumption(resources.Coal, 100);
-      buildings.RuinsInfernoPower.addResourceConsumption(resources.Oil, 80);
-      buildings.LakeOvenComplete.addResourceConsumption(resources.Infernite, 225);
-      buildings.TitanElectrolysis.addResourceConsumption(resources.Water, 35);
-      buildings.TitanQuarters.addResourceConsumption(resources.Water, 12);
-      buildings.TitanQuarters.addResourceConsumption(resources.Food, 500);
-      buildings.TitanDecoder.addResourceConsumption(resources.Cipher, 0.06);
-      buildings.TitanAIComplete.addResourceConsumption(resources.Water, 1e3);
-      buildings.EnceladusWaterFreighter.addResourceConsumption(
-        resources.Helium_3,
-        5
-      );
-      buildings.TritonFOB.addResourceConsumption(resources.Helium_3, 125);
-      buildings.TritonLander.addResourceConsumption(resources.Oil, 50);
-      buildings.KuiperOrichalcum.addResourceConsumption(resources.Oil, 200);
-      buildings.KuiperUranium.addResourceConsumption(resources.Oil, 60);
-      buildings.KuiperNeutronium.addResourceConsumption(resources.Oil, 60);
-      buildings.KuiperElerium.addResourceConsumption(resources.Oil, 125);
-      buildings.ErisDrone.addResourceConsumption(resources.Uranium, 5);
-      buildings.TauOrbitalStation.addResourceConsumption(
-        resources.Helium_3,
-        () => haveTech("isolation") ? game.global.race["lone_survivor"] ? 5 : 25 : 400
-      );
-      buildings.TauColony.addResourceConsumption(
-        resources.Food,
-        () => haveTech("isolation") ? game.global.race["lone_survivor"] ? -2 : 75 : 1e3
-      );
-      buildings.TauFusionGenerator.addResourceConsumption(
-        resources.Helium_3,
-        () => haveTech("isolation") ? game.global.race["lone_survivor"] ? -15 : 75 : 500
-      );
-      buildings.TauCulturalCenter.addResourceConsumption(
-        resources.Food,
-        () => game.global.race["lone_survivor"] ? 25 : 500
-      );
-      buildings.TauRedOrbitalPlatform.addResourceConsumption(
-        resources.Oil,
-        () => game.global.race["lone_survivor"] ? 0 : haveTech("isolation") ? 32 : 125
-      );
-      buildings.TauRedOrbitalPlatform.addResourceConsumption(
-        resources.Helium_3,
-        () => game.global.race["lone_survivor"] ? haveTech("isolation") ? 8 : 125 : 0
-      );
-      buildings.TauBeltPatrolShip.addResourceConsumption(
-        resources.Helium_3,
-        () => haveTech("isolation") ? 15 : 250
-      );
-      buildings.TauBeltMiningShip.addResourceConsumption(
-        resources.Helium_3,
-        () => haveTech("isolation") ? 12 : 75
-      );
-      buildings.TauBeltWhalingShip.addResourceConsumption(
-        resources.Helium_3,
-        () => haveTech("isolation") ? 14 : 90
-      );
-      buildings.TauGas2AlienSpaceStation.addResourceConsumption(
-        resources.Elerium,
-        () => game.global.race["lone_survivor"] ? 1 : 10
-      );
-      buildings = Object.fromEntries(
-        Object.entries(buildings).filter(
-          ([id, b]) => b.definition ? true : console.log(`${b.name} action not found.`)
-        )
-      );
-      Object.values(buildings).forEach((building) => {
-        if (building.powered > 0) {
-          let powerId = (building._location || building._tab) + ":" + building.id;
-          if (game.global.power.indexOf(powerId) === -1) {
-            building.overridePowered = 0;
-          }
+    let stateInitializationTestActions = null;
+    const { initialiseState } = createStateInitialization({
+      getGame: () => game,
+      getResources: () => resources,
+      getJobManager: () => JobManager,
+      getCrafter: () => crafter,
+      getBuildings: () => buildings,
+      setBuildings: (value) => buildings = value,
+      getProjects: () => projects,
+      getUpdateCraftCost: () => stateInitializationTestActions?.updateCraftCost ?? updateCraftCost,
+      getUpdateTabs: () => stateInitializationTestActions?.updateTabs ?? updateTabs,
+      getIsLumberRace: () => stateInitializationTestActions?.isLumberRace ?? isLumberRace,
+      getHaveTech: () => stateInitializationTestActions?.haveTech ?? haveTech,
+      log: (message) => console.log(message)
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        initialiseState,
+        getStateInitializationTestContext: () => ({
+          game,
+          resources,
+          JobManager,
+          crafter,
+          buildings,
+          projects
+        }),
+        setStateInitializationTestContext(context) {
+          game = context.game;
+          resources = context.resources;
+          JobManager = context.JobManager;
+          crafter = context.crafter;
+          buildings = context.buildings;
+          projects = context.projects;
+          stateInitializationTestActions = context.actions;
         }
       });
-      buildings.Windmill.overridePowered = -1;
-      buildings.SunSwarmSatellite.overridePowered = -0.35;
-      buildings.ProximaDyson.overridePowered = -1.25;
-      buildings.ProximaDysonSphere.overridePowered = -5;
-      buildings.ProximaOrichalcumSphere.overridePowered = -8;
-      buildings.ProximaElysaniteSphere.overridePowered = -18;
-      buildings.BlackholeStellarEngine.overridePowered = 0;
-      buildings.WastelandIncinerator.overridePowered = -25;
     }
-    function initialiseRaces() {
-      for (let id in game.actions.evolution) {
-        evolutions[id] = new EvolutionAction(id);
-      }
-      let e = evolutions;
-      let bilateralSymmetry = [
-        e.bilateral_symmetry,
-        e.multicellular,
-        e.phagocytosis,
-        e.sexual_reproduction
-      ];
-      let mammals = [e.mammals, ...bilateralSymmetry];
-      let genusEvolution = {
-        eldritch: [e.sentience, e.eldritch, ...bilateralSymmetry],
-        aquatic: [e.sentience, e.aquatic, ...bilateralSymmetry],
-        insectoid: [e.sentience, e.athropods, ...bilateralSymmetry],
-        humanoid: [e.sentience, e.humanoid, ...mammals],
-        giant: [e.sentience, e.gigantism, ...mammals],
-        small: [e.sentience, e.dwarfism, ...mammals],
-        carnivore: [e.sentience, e.carnivore, e.animalism, ...mammals],
-        herbivore: [e.sentience, e.herbivore, e.animalism, ...mammals],
-        //omnivore: [e.sentience, e.omnivore, e.animalism, ...mammals],
-        demonic: [e.sentience, e.demonic, ...mammals],
-        angelic: [e.sentience, e.celestial, ...mammals],
-        fey: [e.sentience, e.fey, ...mammals],
-        heat: [e.sentience, e.heat, ...mammals],
-        polar: [e.sentience, e.polar, ...mammals],
-        sand: [e.sentience, e.sand, ...mammals],
-        avian: [e.sentience, e.endothermic, e.eggshell, ...bilateralSymmetry],
-        reptilian: [e.sentience, e.ectothermic, e.eggshell, ...bilateralSymmetry],
-        plant: [
-          e.sentience,
-          e.bryophyte,
-          e.poikilohydric,
-          e.multicellular,
-          e.chloroplasts,
-          e.sexual_reproduction
-        ],
-        fungi: [
-          e.sentience,
-          e.bryophyte,
-          e.spores,
-          e.multicellular,
-          e.chitin,
-          e.sexual_reproduction
-        ],
-        synthetic: [e.sentience, e.exterminate, e.sexual_reproduction]
-      };
-      for (let id in game.races) {
-        if (id === "protoplasm") {
-          continue;
+    let raceInitializationTestContext = null;
+    const { initialiseRaces } = createRaceInitialization({
+      getGame: () => raceInitializationTestContext?.game ?? game,
+      getEvolutions: () => raceInitializationTestContext?.evolutions ?? evolutions,
+      getRaces: () => raceInitializationTestContext?.races ?? races,
+      getImitations: () => raceInitializationTestContext?.imitations ?? imitations,
+      getEvolutionAction: () => raceInitializationTestContext?.EvolutionAction ?? EvolutionAction,
+      getRace: () => raceInitializationTestContext?.Race ?? Race
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        initialiseRaces,
+        setRaceInitializationTestContext(context) {
+          raceInitializationTestContext = context;
         }
-        races[id] = new Race(id);
-        let evolutionPath;
-        if (id === "hellspawn") {
-          races[id].evolutionTree[races[id].genus] = [
-            e.bunker,
-            e.warlord,
-            ...genusEvolution[races[id].genus] ?? []
-          ];
-        } else if (id === "junker" || id === "sludge" || id === "ultra_sludge") {
-          for (let genus of Object.keys(genusEvolution)) {
-            races[id].evolutionTree[genus] = [
-              e.bunker,
-              e[id],
-              ...genusEvolution[genus] ?? []
-            ];
-          }
-        } else if (game.races[id].type === "hybrid") {
-          let hybridGenus = game.races[id].hybrid;
-          races[id].evolutionTree[hybridGenus[0]] = [
-            e.bunker,
-            e[id],
-            ...genusEvolution[hybridGenus[0]] ?? []
-          ];
-          races[id].evolutionTree[hybridGenus[1]] = [
-            e.bunker,
-            e[id],
-            ...genusEvolution[hybridGenus[1]] ?? []
-          ];
-        } else {
-          races[id].evolutionTree[races[id].genus] = [
-            e.bunker,
-            e[id],
-            ...genusEvolution[races[id].genus] ?? []
-          ];
-        }
-        imitations[id] = new EvolutionAction(`s-${id}`);
-      }
+      });
     }
-    function initBuildingState() {
-      let priorityList = [];
-      priorityList.push(buildings.Windmill);
-      priorityList.push(buildings.Mill);
-      priorityList.push(buildings.CoalPower);
-      priorityList.push(buildings.OilPower);
-      priorityList.push(buildings.FissionPower);
-      priorityList.push(buildings.TauFusionGenerator);
-      priorityList.push(buildings.TauGas2AlienSpaceStation);
-      priorityList.push(buildings.WastelandIncinerator);
-      priorityList.push(buildings.RuinsHellForge);
-      priorityList.push(buildings.RuinsInfernoPower);
-      priorityList.push(buildings.AsphodelEncampment);
-      priorityList.push(buildings.AsphodelRectory);
-      priorityList.push(buildings.AsphodelCorruptor);
-      priorityList.push(buildings.AsphodelSoulEngine);
-      priorityList.push(buildings.TitanElectrolysis);
-      priorityList.push(buildings.TitanHydrogen);
-      priorityList.push(buildings.TitanQuarters);
-      priorityList.push(buildings.DwarfMassRelayComplete);
-      priorityList.push(buildings.RuinsArcology);
-      priorityList.push(buildings.Apartment);
-      priorityList.push(buildings.Barracks);
-      priorityList.push(buildings.TouristCenter);
-      priorityList.push(buildings.University);
-      priorityList.push(buildings.Smelter);
-      priorityList.push(buildings.Temple);
-      priorityList.push(buildings.OilWell);
-      priorityList.push(buildings.StorageYard);
-      priorityList.push(buildings.Warehouse);
-      priorityList.push(buildings.Bank);
-      priorityList.push(buildings.Hospital);
-      priorityList.push(buildings.BootCamp);
-      priorityList.push(buildings.House);
-      priorityList.push(buildings.Cottage);
-      priorityList.push(buildings.Farm);
-      priorityList.push(buildings.Silo);
-      priorityList.push(buildings.Shed);
-      priorityList.push(buildings.LumberYard);
-      priorityList.push(buildings.Foundry);
-      priorityList.push(buildings.OilDepot);
-      priorityList.push(buildings.Trade);
-      priorityList.push(buildings.Amphitheatre);
-      priorityList.push(buildings.Library);
-      priorityList.push(buildings.Wharf);
-      priorityList.push(buildings.NaniteFactory);
-      priorityList.push(buildings.RedNaniteFactory);
-      priorityList.push(buildings.TauNaniteFactory);
-      priorityList.push(buildings.Transmitter);
-      priorityList.push(buildings.Assembly);
-      priorityList.push(buildings.RedAssembly);
-      priorityList.push(buildings.TauAssembly);
-      priorityList.push(buildings.TauCloning);
-      priorityList.push(buildings.Lodge);
-      priorityList.push(buildings.Smokehouse);
-      priorityList.push(buildings.SoulWell);
-      priorityList.push(buildings.SlavePen);
-      priorityList.push(buildings.SlaveMarket);
-      priorityList.push(buildings.CaptiveHousing);
-      priorityList.push(buildings.RedCaptiveHousing);
-      priorityList.push(buildings.TauCaptiveHousing);
-      priorityList.push(buildings.Graveyard);
-      priorityList.push(buildings.Shrine);
-      priorityList.push(buildings.CompostHeap);
-      priorityList.push(buildings.ConcealWard);
-      priorityList.push(buildings.Pylon);
-      priorityList.push(buildings.RedPylon);
-      priorityList.push(buildings.TauPylon);
-      priorityList.push(buildings.ForgeHorseshoe);
-      priorityList.push(buildings.RedForgeHorseshoe);
-      priorityList.push(buildings.TauForgeHorseshoe);
-      priorityList.push(buildings.SacrificialAltar);
-      priorityList.push(buildings.MeditationChamber);
-      priorityList.push(buildings.Banquet);
-      priorityList.push(buildings.DwarfMission);
-      priorityList.push(buildings.DwarfEleriumReactor);
-      priorityList.push(buildings.DwarfWorldCollider);
-      priorityList.push(buildings.HellMission);
-      priorityList.push(buildings.HellGeothermal);
-      priorityList.push(buildings.HellSwarmPlant);
-      priorityList.push(buildings.ProximaTransferStation);
-      priorityList.push(buildings.ProximaMission);
-      priorityList.push(buildings.ProximaCargoYard);
-      priorityList.push(buildings.ProximaCruiser);
-      priorityList.push(buildings.ProximaDyson);
-      priorityList.push(buildings.ProximaDysonSphere);
-      priorityList.push(buildings.ProximaOrichalcumSphere);
-      priorityList.push(buildings.ProximaElysaniteSphere);
-      priorityList.push(buildings.AlphaMission);
-      priorityList.push(buildings.AlphaStarport);
-      priorityList.push(buildings.AlphaHabitat);
-      priorityList.push(buildings.AlphaFusion);
-      priorityList.push(buildings.AlphaLuxuryCondo);
-      priorityList.push(buildings.AlphaMiningDroid);
-      priorityList.push(buildings.AlphaProcessing);
-      priorityList.push(buildings.AlphaLaboratory);
-      priorityList.push(buildings.AlphaExoticZoo);
-      priorityList.push(buildings.AlphaExchange);
-      priorityList.push(buildings.AlphaGraphenePlant);
-      priorityList.push(buildings.AlphaWarehouse);
-      priorityList.push(buildings.SpaceTestLaunch);
-      priorityList.push(buildings.SpaceSatellite);
-      priorityList.push(buildings.SpaceGps);
-      priorityList.push(buildings.SpacePropellantDepot);
-      priorityList.push(buildings.SpaceNavBeacon);
-      priorityList.push(buildings.RedMission);
-      priorityList.push(buildings.RedTower);
-      priorityList.push(buildings.RedSpaceport);
-      priorityList.push(buildings.RedLivingQuarters);
-      priorityList.push(buildings.RedBiodome);
-      priorityList.push(buildings.RedSpaceBarracks);
-      priorityList.push(buildings.RedExoticLab);
-      priorityList.push(buildings.RedFabrication);
-      priorityList.push(buildings.RedMine);
-      priorityList.push(buildings.RedVrCenter);
-      priorityList.push(buildings.RedZiggurat);
-      priorityList.push(buildings.RedGarage);
-      priorityList.push(buildings.RedUniversity);
-      priorityList.push(buildings.RedTerraformer);
-      priorityList.push(buildings.MoonMission);
-      priorityList.push(buildings.MoonBase);
-      priorityList.push(buildings.MoonObservatory);
-      priorityList.push(buildings.MoonHeliumMine);
-      priorityList.push(buildings.MoonIridiumMine);
-      priorityList.push(buildings.SunMission);
-      priorityList.push(buildings.SunSwarmControl);
-      priorityList.push(buildings.SunSwarmSatellite);
-      priorityList.push(buildings.SunJumpGate);
-      priorityList.push(buildings.GasMission);
-      priorityList.push(buildings.GasStorage);
-      priorityList.push(buildings.GasSpaceDock);
-      priorityList.push(buildings.GasSpaceDockProbe);
-      priorityList.push(buildings.GasSpaceDockGECK);
-      priorityList.push(buildings.GasSpaceDockShipSegment);
-      priorityList.push(buildings.GasMoonMission);
-      priorityList.push(buildings.GasMoonDrone);
-      priorityList.push(buildings.Blackhole);
-      priorityList.push(buildings.BlackholeStellarEngine);
-      priorityList.push(buildings.BlackholeJumpShip);
-      priorityList.push(buildings.BlackholeWormholeMission);
-      priorityList.push(buildings.BlackholeStargate);
-      priorityList.push(buildings.SiriusMission);
-      priorityList.push(buildings.SiriusAnalysis);
-      priorityList.push(buildings.SiriusSpaceElevator);
-      priorityList.push(buildings.SiriusGravityDome);
-      priorityList.push(buildings.SiriusThermalCollector);
-      priorityList.push(buildings.SiriusAscensionMachine);
-      priorityList.push(buildings.BlackholeStargateComplete);
-      priorityList.push(buildings.GatewayMission);
-      priorityList.push(buildings.GatewayStarbase);
-      priorityList.push(buildings.GatewayShipDock);
-      priorityList.push(buildings.StargateStation);
-      priorityList.push(buildings.StargateTelemetryBeacon);
-      priorityList.push(buildings.Dreadnought);
-      priorityList.push(buildings.CruiserShip);
-      priorityList.push(buildings.FrigateShip);
-      priorityList.push(buildings.BologniumShip);
-      priorityList.push(buildings.CorvetteShip);
-      priorityList.push(buildings.ScoutShip);
-      priorityList.push(buildings.GorddonMission);
-      priorityList.push(buildings.GorddonEmbassy);
-      priorityList.push(buildings.GorddonDormitory);
-      priorityList.push(buildings.GorddonSymposium);
-      priorityList.push(buildings.GorddonFreighter);
-      priorityList.push(buildings.NeutronCitadel);
-      priorityList.push(buildings.SiriusAscensionTrigger);
-      priorityList.push(buildings.RedAtmoTerraformer);
-      priorityList.push(buildings.BlackholeMassEjector);
-      priorityList.push(buildings.PitSoulForge);
-      priorityList.push(buildings.Alien1Consulate);
-      priorityList.push(buildings.Alien1Resort);
-      priorityList.push(buildings.Alien1VitreloyPlant);
-      priorityList.push(buildings.Alien1SuperFreighter);
-      priorityList.push(buildings.Alien2Foothold);
-      priorityList.push(buildings.Alien2Scavenger);
-      priorityList.push(buildings.Alien2ArmedMiner);
-      priorityList.push(buildings.Alien2OreProcessor);
-      priorityList.push(buildings.ChthonianMineLayer);
-      priorityList.push(buildings.ChthonianExcavator);
-      priorityList.push(buildings.ChthonianRaider);
-      priorityList.push(buildings.Wardenclyffe);
-      priorityList.push(buildings.BioLab);
-      priorityList.push(buildings.DwarfWorldController);
-      priorityList.push(buildings.BlackholeFarReach);
-      priorityList.push(buildings.NebulaMission);
-      priorityList.push(buildings.NebulaNexus);
-      priorityList.push(buildings.NebulaHarvester);
-      priorityList.push(buildings.NebulaEleriumProspector);
-      priorityList.push(buildings.BeltMission);
-      priorityList.push(buildings.BeltSpaceStation);
-      priorityList.push(buildings.BeltEleriumShip);
-      priorityList.push(buildings.BeltIridiumShip);
-      priorityList.push(buildings.BeltIronShip);
-      priorityList.push(buildings.CementPlant);
-      priorityList.push(buildings.Factory);
-      priorityList.push(buildings.GasMoonOutpost);
-      priorityList.push(buildings.StargateDefensePlatform);
-      priorityList.push(buildings.RedFactory);
-      priorityList.push(buildings.AlphaMegaFactory);
-      priorityList.push(buildings.PortalTurret);
-      priorityList.push(buildings.BadlandsSensorDrone);
-      priorityList.push(buildings.PortalWarDroid);
-      priorityList.push(buildings.BadlandsPredatorDrone);
-      priorityList.push(buildings.BadlandsAttractor);
-      priorityList.push(buildings.PortalCarport);
-      priorityList.push(buildings.BadlandsMinions);
-      priorityList.push(buildings.BadlandsReaper);
-      priorityList.push(buildings.BadlandsCorpsePile);
-      priorityList.push(buildings.BadlandsMortuary);
-      priorityList.push(buildings.BadlandsCodex);
-      priorityList.push(buildings.PitGunEmplacement);
-      priorityList.push(buildings.PitSoulAttractor);
-      priorityList.push(buildings.PitSoulCapacitor);
-      priorityList.push(buildings.PitAbsorptionChamber);
-      priorityList.push(buildings.PitShadowMine);
-      priorityList.push(buildings.PitTavern);
-      priorityList.push(buildings.PortalRepairDroid);
-      priorityList.push(buildings.PitMission);
-      priorityList.push(buildings.PitAssaultForge);
-      priorityList.push(buildings.RuinsAncientPillars);
-      priorityList.push(buildings.WastelandThrone);
-      priorityList.push(buildings.WastelandWarehouse);
-      priorityList.push(buildings.WastelandHovel);
-      priorityList.push(buildings.WastelandHellCasino);
-      priorityList.push(buildings.WastelandTwistedLab);
-      priorityList.push(buildings.WastelandDemonForge);
-      priorityList.push(buildings.WastelandHellFactory);
-      priorityList.push(buildings.WastelandPumpjack);
-      priorityList.push(buildings.WastelandDigDemon);
-      priorityList.push(buildings.WastelandTunneler);
-      priorityList.push(buildings.WastelandBrute);
-      priorityList.push(buildings.WastelandAltar);
-      priorityList.push(buildings.WastelandShrine);
-      priorityList.push(buildings.WastelandMeditationChamber);
-      priorityList.push(buildings.RuinsMission);
-      priorityList.push(buildings.RuinsGuardPost);
-      priorityList.push(buildings.RuinsVault);
-      priorityList.push(buildings.RuinsWarVault);
-      priorityList.push(buildings.RuinsArchaeology);
-      priorityList.push(buildings.GateMission);
-      priorityList.push(buildings.GateEastTower);
-      priorityList.push(buildings.GateWestTower);
-      priorityList.push(buildings.GateTurret);
-      priorityList.push(buildings.GateInferniteMine);
-      priorityList.push(buildings.LakeMission);
-      priorityList.push(buildings.LakeCoolingTower);
-      priorityList.push(buildings.LakeHarbor);
-      priorityList.push(buildings.LakeBireme);
-      priorityList.push(buildings.LakeTransport);
-      priorityList.push(buildings.LakeOven);
-      priorityList.push(buildings.LakeOvenComplete);
-      priorityList.push(buildings.LakeSoulSteeper);
-      priorityList.push(buildings.LakeLifeInfuser);
-      priorityList.push(buildings.SpireMission);
-      priorityList.push(buildings.SpirePurifier);
-      priorityList.push(buildings.SpireMechBay);
-      priorityList.push(buildings.SpireBaseCamp);
-      priorityList.push(buildings.SpirePort);
-      priorityList.push(buildings.SpireBridge);
-      priorityList.push(buildings.SpireSphinx);
-      priorityList.push(buildings.SpireBribeSphinx);
-      priorityList.push(buildings.SpireSurveyTower);
-      priorityList.push(buildings.SpireWaygate);
-      priorityList.push(buildings.SpireEdenicGate);
-      priorityList.push(buildings.SpireBazaar);
-      priorityList.push(buildings.AsphodelMission);
-      priorityList.push(buildings.AsphodelMechStation);
-      priorityList.push(buildings.AsphodelHarvester);
-      priorityList.push(buildings.AsphodelProcessor);
-      priorityList.push(buildings.AsphodelResearchStation);
-      priorityList.push(buildings.AsphodelWarehouse);
-      priorityList.push(buildings.AsphodelStabilizer);
-      priorityList.push(buildings.AsphodelRuneGate);
-      priorityList.push(buildings.AsphodelBunker);
-      priorityList.push(buildings.AsphodelBlissDen);
-      priorityList.push(buildings.ElysiumMission);
-      priorityList.push(buildings.ElysiumAmbush);
-      priorityList.push(buildings.ElysiumRaid);
-      priorityList.push(buildings.ElysiumSiege);
-      priorityList.push(buildings.ElysiumScout);
-      priorityList.push(buildings.ElysiumFireSupportBase);
-      priorityList.push(buildings.ElysiumMine);
-      priorityList.push(buildings.ElysiumSacredSmelter);
-      priorityList.push(buildings.ElysiumEleriumContainment);
-      priorityList.push(buildings.ElysiumPillbox);
-      priorityList.push(buildings.ElysiumRestaurant);
-      priorityList.push(buildings.ElysiumEternalBank);
-      priorityList.push(buildings.ElysiumArchive);
-      priorityList.push(buildings.ElysiumNorthPier);
-      priorityList.push(buildings.ElysiumRushmore);
-      priorityList.push(buildings.ElysiumReincarnation);
-      priorityList.push(buildings.ElysiumCement);
-      priorityList.push(buildings.IsleSouthPier);
-      priorityList.push(buildings.IsleSpiritBattery);
-      priorityList.push(buildings.IsleSpiritVacuum);
-      priorityList.push(buildings.IsleSoulCompactor);
-      priorityList.push(buildings.PalaceMission);
-      priorityList.push(buildings.PalaceInfuser);
-      priorityList.push(buildings.PalaceConduit);
-      priorityList.push(buildings.PalaceTomb);
-      priorityList.push(buildings.HellSmelter);
-      priorityList.push(buildings.DwarfShipyard);
-      priorityList.push(buildings.DwarfMassRelay);
-      priorityList.push(buildings.TitanMission);
-      priorityList.push(buildings.TitanSpaceport);
-      priorityList.push(buildings.TitanAIColonist);
-      priorityList.push(buildings.TitanMine);
-      priorityList.push(buildings.TitanSAM);
-      priorityList.push(buildings.TitanGraphene);
-      priorityList.push(buildings.TitanStorehouse);
-      priorityList.push(buildings.TitanBank);
-      priorityList.push(buildings.TitanAI);
-      priorityList.push(buildings.TitanAIComplete);
-      priorityList.push(buildings.TitanDecoder);
-      priorityList.push(buildings.EnceladusMission);
-      priorityList.push(buildings.EnceladusZeroGLab);
-      priorityList.push(buildings.EnceladusWaterFreighter);
-      priorityList.push(buildings.EnceladusBase);
-      priorityList.push(buildings.EnceladusMunitions);
-      priorityList.push(buildings.TritonMission);
-      priorityList.push(buildings.TritonFOB);
-      priorityList.push(buildings.TritonLander);
-      priorityList.push(buildings.KuiperMission);
-      priorityList.push(buildings.KuiperOrichalcum);
-      priorityList.push(buildings.KuiperUranium);
-      priorityList.push(buildings.KuiperNeutronium);
-      priorityList.push(buildings.KuiperElerium);
-      priorityList.push(buildings.ErisMission);
-      priorityList.push(buildings.ErisDrone);
-      priorityList.push(buildings.ErisTank);
-      priorityList.push(buildings.ErisTrooper);
-      priorityList.push(buildings.TauStarRingworld);
-      priorityList.push(buildings.TauStarMatrix);
-      priorityList.push(buildings.TauStarEden);
-      priorityList.push(buildings.TauMission);
-      priorityList.push(buildings.TauDismantle);
-      priorityList.push(buildings.TauOrbitalStation);
-      priorityList.push(buildings.TauFarm);
-      priorityList.push(buildings.TauColony);
-      priorityList.push(buildings.TauHousing);
-      priorityList.push(buildings.TauExcavate);
-      priorityList.push(buildings.TauAlienOutpost);
-      priorityList.push(buildings.TauJumpGate);
-      priorityList.push(buildings.TauRepository);
-      priorityList.push(buildings.TauFactory);
-      priorityList.push(buildings.TauDiseaseLab);
-      priorityList.push(buildings.TauCasino);
-      priorityList.push(buildings.TauCulturalCenter);
-      priorityList.push(buildings.TauMiningPit);
-      priorityList.push(buildings.TauRedMission);
-      priorityList.push(buildings.TauRedOrbitalPlatform);
-      priorityList.push(buildings.TauRedContact);
-      priorityList.push(buildings.TauRedIntroduce);
-      priorityList.push(buildings.TauRedSubjugate);
-      priorityList.push(buildings.TauRedWomlingVillage);
-      priorityList.push(buildings.TauRedWomlingFarm);
-      priorityList.push(buildings.TauRedWomlingLab);
-      priorityList.push(buildings.TauRedWomlingMine);
-      priorityList.push(buildings.TauRedWomlingFun);
-      priorityList.push(buildings.TauRedOverseer);
-      priorityList.push(buildings.TauGasContest);
-      priorityList.push(buildings.TauGasName1);
-      priorityList.push(buildings.TauGasName2);
-      priorityList.push(buildings.TauGasName3);
-      priorityList.push(buildings.TauGasName4);
-      priorityList.push(buildings.TauGasName5);
-      priorityList.push(buildings.TauGasName6);
-      priorityList.push(buildings.TauGasName7);
-      priorityList.push(buildings.TauGasName8);
-      priorityList.push(buildings.TauGasRefuelingStation);
-      priorityList.push(buildings.TauGasOreRefinery);
-      priorityList.push(buildings.TauGasWhalingStation);
-      priorityList.push(buildings.TauGasWomlingStation);
-      priorityList.push(buildings.TauBeltMission);
-      priorityList.push(buildings.TauBeltPatrolShip);
-      priorityList.push(buildings.TauBeltMiningShip);
-      priorityList.push(buildings.TauBeltWhalingShip);
-      priorityList.push(buildings.TauGas2Contest);
-      priorityList.push(buildings.TauGas2Name1);
-      priorityList.push(buildings.TauGas2Name2);
-      priorityList.push(buildings.TauGas2Name3);
-      priorityList.push(buildings.TauGas2Name4);
-      priorityList.push(buildings.TauGas2Name5);
-      priorityList.push(buildings.TauGas2Name6);
-      priorityList.push(buildings.TauGas2Name7);
-      priorityList.push(buildings.TauGas2Name8);
-      priorityList.push(buildings.TauGas2AlienSurvey);
-      priorityList.push(buildings.TauGas2AlienStation);
-      priorityList.push(buildings.TauGas2MatrioshkaBrain);
-      priorityList.push(buildings.TauGas2IgnitionDevice);
-      priorityList.push(buildings.TauGas2IgniteGasGiant);
-      priorityList.push(buildings.StargateDepot);
-      priorityList.push(buildings.DwarfEleriumContainer);
-      priorityList.push(buildings.GasMoonOilExtractor);
-      priorityList.push(buildings.NeutronMission);
-      priorityList.push(buildings.NeutronStellarForge);
-      priorityList.push(buildings.NeutronMiner);
-      priorityList.push(buildings.MassDriver);
-      priorityList.push(buildings.MetalRefinery);
-      priorityList.push(buildings.Casino);
-      priorityList.push(buildings.HellSpaceCasino);
-      priorityList.push(buildings.RockQuarry);
-      priorityList.push(buildings.Sawmill);
-      priorityList.push(buildings.GasMining);
-      priorityList.push(buildings.Mine);
-      priorityList.push(buildings.CoalMine);
-      BuildingManager.priorityList = priorityList.filter((b) => b);
-      BuildingManager.statePriorityList = priorityList.filter(
-        (b) => b && b.isSwitchable()
-      );
+    const { initBuildingState } = createBuildingStateInitialization({
+      getBuildings: () => buildings,
+      getBuildingManager: () => BuildingManager
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        initBuildingState,
+        setBuildingStateTestContext(context) {
+          buildings = context.buildings;
+          BuildingManager = context.BuildingManager;
+        }
+      });
     }
     const {
       updateStateFromSettings,
