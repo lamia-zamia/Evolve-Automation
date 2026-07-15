@@ -283,4 +283,88 @@ assert.ok(domTrace.includes("remove:#mTabCivil .ea-building-toggle"));
 assert.ok(domTrace.includes("remove:#resEjector .ea-eject-toggle"));
 assert.ok(domTrace.includes("remove:#resCargo .ea-supply-toggle"));
 
+const inline = hooks.finalInlineUiBoundaries;
+assert.deepEqual(Object.keys(inline), [
+  "updateActiveTargetsUI",
+  "buildActiveTargetsUI",
+  "removeActiveTargetsUI",
+  "buildBuildPlannerUI",
+  "removeBuildPlannerUI",
+  "createMechInfo",
+  "removeMechInfo",
+  "createMarketToggles",
+  "removeMarketToggles",
+  "createStorageToggles",
+  "removeStorageToggles",
+]);
+
+hooks.setFinalInlineUiBoundariesTestContext({
+  settingsRaw: {
+    buyIron: true,
+    sellIron: false,
+    res_trade_buy_Iron: true,
+    res_trade_sell_Iron: false,
+    res_storageIron: true,
+    res_storage_o_Iron: false,
+  },
+  state: { plannerStats: {} },
+  game: {
+    global: {
+      race: {},
+      portal: { mechbay: { mechs: [] } },
+    },
+    loc: (key) => `loc:${key}`,
+  },
+  resources: { Food: { id: "Food" }, Iron: { id: "Iron" } },
+  MarketManager: { priorityList: [{ id: "Iron" }] },
+  StorageManager: { priorityList: [{ id: "Iron" }] },
+  MechManager: {
+    isActive: false,
+    initLab: () => false,
+    mechObserver: { disconnect: () => domTrace.push("mech:disconnect") },
+  },
+});
+
+domTrace.length = 0;
+inline.buildActiveTargetsUI();
+inline.removeActiveTargetsUI();
+inline.buildBuildPlannerUI();
+inline.removeBuildPlannerUI();
+inline.createMechInfo();
+inline.removeMechInfo();
+inline.createMarketToggles();
+inline.removeMarketToggles();
+inline.createStorageToggles();
+inline.removeStorageToggles();
+assert.ok(
+  domTrace.some(
+    (entry) =>
+      entry.startsWith("select:") && entry.includes("active_targets-wrapper"),
+  ),
+);
+assert.ok(
+  domTrace.some(
+    (entry) =>
+      entry.startsWith("select:") && entry.includes("script_planner-wrapper"),
+  ),
+);
+assert.ok(domTrace.includes("mech:disconnect"));
+for (const key of [
+  "buyIron",
+  "sellIron",
+  "res_trade_buy_Iron",
+  "res_trade_sell_Iron",
+  "res_storageIron",
+  "res_storage_o_Iron",
+]) {
+  assert.ok(
+    domTrace.some((entry) => entry.includes(`script_${key}`)),
+    `missing inline toggle ${key}`,
+  );
+}
+assert.ok(domTrace.includes("remove:#market .ea-market-toggle"));
+assert.ok(domTrace.includes("remove:#script_market_top_row"));
+assert.ok(domTrace.includes("remove:#resStorage .ea-storage-toggle"));
+assert.ok(domTrace.includes("remove:#script_storage_top_row"));
+
 console.log("Next 15 UI-boundary bundled characterization tests passed");

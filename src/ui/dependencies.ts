@@ -1,5 +1,17 @@
 type Loose = any;
 
+export function createDependencyResolver(
+  overrides: Record<string, Loose>,
+  dependencies: Record<string, () => Loose>,
+) {
+  return (name: string) => {
+    if (Object.prototype.hasOwnProperty.call(overrides, name)) {
+      return overrides[name];
+    }
+    return dependencies[name]?.();
+  };
+}
+
 function propertyDescriptor(value: Loose, property: PropertyKey) {
   const object = Object(value);
   const descriptor = Object.getOwnPropertyDescriptor(object, property);

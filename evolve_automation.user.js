@@ -215,6 +215,918 @@
     };
   }
 
+  // src/settings/reset-settings.ts
+  function createResetSettings({
+    dependencies
+  }) {
+    const liveObject4 = (key) => new Proxy(
+      {},
+      {
+        get(_target, property) {
+          const current = dependencies[key]();
+          const value = Reflect.get(current, property);
+          return typeof value === "function" ? value.bind(current) : value;
+        },
+        set(_target, property, value) {
+          return Reflect.set(
+            dependencies[key](),
+            property,
+            value
+          );
+        },
+        deleteProperty(_target, property) {
+          return Reflect.deleteProperty(
+            dependencies[key](),
+            property
+          );
+        },
+        has(_target, property) {
+          return Reflect.has(dependencies[key](), property);
+        },
+        ownKeys() {
+          return Reflect.ownKeys(dependencies[key]());
+        },
+        getOwnPropertyDescriptor(_target, property) {
+          const current = dependencies[key]();
+          const descriptor = Object.getOwnPropertyDescriptor(current, property);
+          return {
+            configurable: true,
+            enumerable: descriptor?.enumerable ?? true,
+            writable: true,
+            value: Reflect.get(current, property)
+          };
+        }
+      }
+    );
+    const liveFunction2 = (key) => new Proxy(function() {
+    }, {
+      apply(_target, thisArg, argumentsList) {
+        return Reflect.apply(
+          dependencies[key](),
+          thisArg,
+          argumentsList
+        );
+      },
+      construct(_target, argumentsList, newTarget) {
+        return Reflect.construct(
+          dependencies[key](),
+          argumentsList,
+          newTarget
+        );
+      },
+      get(_target, property) {
+        const current = dependencies[key]();
+        if (property === Symbol.hasInstance) {
+          return (value) => value instanceof current;
+        }
+        return Reflect.get(current, property);
+      }
+    });
+    const AlchemyManager2 = liveObject4("AlchemyManager");
+    const applySettings2 = liveFunction2("applySettings");
+    const biomeList2 = liveObject4("biomeList");
+    const BuildingManager2 = liveObject4("BuildingManager");
+    const buildings2 = liveObject4("buildings");
+    const challenges2 = liveObject4("challenges");
+    const DroidManager2 = liveObject4("DroidManager");
+    const EjectManager2 = liveObject4("EjectManager");
+    const extraList2 = liveObject4("extraList");
+    const FactoryManager2 = liveObject4("FactoryManager");
+    const game2 = liveObject4("game");
+    const GameLog2 = liveObject4("GameLog");
+    const GenusTrait2 = liveFunction2("GenusTrait");
+    const GovernmentManager2 = liveObject4("GovernmentManager");
+    const initBuildingState2 = liveFunction2("initBuildingState");
+    const JobManager2 = liveObject4("JobManager");
+    const jobs2 = liveObject4("jobs");
+    const MajorTrait2 = liveFunction2("MajorTrait");
+    const MarketManager2 = liveObject4("MarketManager");
+    const MinorTrait2 = liveFunction2("MinorTrait");
+    const MinorTraitManager2 = liveObject4("MinorTraitManager");
+    const MutableTraitManager2 = liveObject4("MutableTraitManager");
+    const NaniteManager2 = liveObject4("NaniteManager");
+    const ocularPowerData2 = liveObject4("ocularPowerData");
+    const planetBiomes2 = liveObject4("planetBiomes");
+    const planetTraits2 = liveObject4("planetTraits");
+    const poly2 = liveObject4("poly");
+    const ProjectManager2 = liveObject4("ProjectManager");
+    const projects2 = liveObject4("projects");
+    const ReplicatorManager2 = liveObject4("ReplicatorManager");
+    const resources2 = liveObject4("resources");
+    const RitualManager2 = liveObject4("RitualManager");
+    const settingsRaw2 = liveObject4("settingsRaw");
+    const SmelterManager2 = liveObject4("SmelterManager");
+    const StorageManager2 = liveObject4("StorageManager");
+    const SupplyManager2 = liveObject4("SupplyManager");
+    const traitList2 = liveObject4("traitList");
+    const TriggerManager2 = liveObject4("TriggerManager");
+    function resetWarSettings2(reset) {
+      let def = {
+        autoFight: false,
+        foreignAttackLivingSoldiersPercent: 90,
+        foreignAttackHealthySoldiersPercent: 90,
+        foreignHireMercMoneyStoragePercent: 90,
+        foreignHireMercCostLowerThanIncome: 1,
+        foreignHireMercDeadSoldiers: 1,
+        foreignMinAdvantage: 40,
+        foreignMaxAdvantage: 80,
+        foreignMaxSiegeBattalion: 10,
+        foreignProtect: "auto",
+        foreignPacifist: false,
+        foreignUnification: true,
+        foreignForceSabotage: true,
+        foreignOccupyLast: true,
+        foreignTrainSpy: true,
+        foreignSpyMax: 2,
+        foreignPowerRequired: 75,
+        foreignPolicyInferior: "Annex",
+        foreignPolicySuperior: "Sabotage",
+        foreignPolicyRival: "Influence"
+      };
+      applySettings2(def, reset);
+    }
+    function resetHellSettings2(reset) {
+      let def = {
+        autoHell: false,
+        hellHomeGarrison: 10,
+        hellMinSoldiers: 20,
+        hellMinSoldiersPercent: 90,
+        hellAssaultReserve: true,
+        hellTargetFortressDamage: 100,
+        hellLowWallsMulti: 3,
+        hellHandlePatrolSize: true,
+        hellPatrolMinRating: 30,
+        hellPatrolThreatPercent: 8,
+        hellPatrolDroneMod: 5,
+        hellPatrolDroidMod: 5,
+        hellPatrolBootcampMod: 0,
+        hellBolsterPatrolPercentTop: 50,
+        hellBolsterPatrolPercentBottom: 20,
+        hellBolsterPatrolRating: 300,
+        hellAttractorTopThreat: 9e3,
+        hellAttractorBottomThreat: 6e3,
+        warlordHandleFortress: true,
+        warlordMinimumMinions: 1e3
+      };
+      applySettings2(def, reset);
+    }
+    function resetGeneralSettings2(reset) {
+      let def = {
+        masterScriptToggle: true,
+        showSettings: true,
+        autoPrestige: false,
+        tickRate: 4,
+        tickSchedule: false,
+        researchRequest: true,
+        researchRequestSpace: false,
+        missionRequest: true,
+        useDemanded: true,
+        prioritizeTriggers: "savereq",
+        prioritizeQueue: "savereq",
+        prioritizeUnify: "savereq",
+        prioritizeOuterFleet: "ignore",
+        buildingAlwaysClick: false,
+        buildingClickPerTick: 50,
+        scriptSettingsExportFilename: "evolve-script-settings.json"
+      };
+      applySettings2(def, reset);
+    }
+    function resetInterfaceSettings2(reset) {
+      let def = {
+        activeTargetsUI: false,
+        buildPlannerUI: true,
+        buildPlannerCollapsed: false,
+        displayPrestigeTypeInTopBar: true,
+        displayTotalDaysTypeInTopBar: false,
+        performanceHackAvoidDrawTech: false
+      };
+      applySettings2(def, reset);
+    }
+    function resetStateLogSettings2(reset) {
+      let def = {
+        stateLogEnabled: false,
+        stateLogAutoDownload: false,
+        stateLogInterval: 20
+      };
+      applySettings2(def, reset);
+    }
+    function resetAchievementGuardSettings2(reset) {
+      let def = {
+        achievementGuards: false,
+        guardPacifist: true,
+        guardDreaded: true,
+        guardCultOfPersonality: true,
+        guardAnarchist: true,
+        guardEnergetic: true,
+        guardRedDead: true,
+        guardSecondEvolution: true,
+        guardBananaRepublic: true
+      };
+      applySettings2(def, reset);
+    }
+    function resetChallengeHelperSettings2(reset) {
+      let def = {
+        inflationChallengeAssist: true,
+        inflationChallengeSaveMinutes: 30,
+        retirementChallengeAssist: true
+      };
+      applySettings2(def, reset);
+    }
+    function resetPrestigeSettings2(reset) {
+      let def = {
+        prestigeType: "none",
+        prestigeMADIgnoreArpa: true,
+        prestigeMADWait: true,
+        prestigeMADPopulation: 1,
+        prestigeWaitAT: false,
+        prestigeGECK: 0,
+        prestigeBioseedConstruct: true,
+        prestigeBioseedProbes: 3,
+        prestigeWhiteholeSaveGems: true,
+        prestigeWhiteholeMinMass: 8,
+        prestigeAscensionPillar: true,
+        prestigeCustomRaceMode: "reuse",
+        prestigeCustomRacePreset: "0",
+        prestigeCustomRacePresets: [
+          { name: "General", json: "" },
+          { name: "Banana + EMF", json: "" },
+          { name: "Cataclysm", json: "" }
+        ],
+        prestigeDemonicFloor: 100,
+        prestigeDemonicPotential: 0.6,
+        prestigeDemonicBomb: false,
+        prestigeVaxStrat: "none"
+      };
+      applySettings2(def, reset);
+    }
+    function resetGovernmentSettings2(reset) {
+      let def = {
+        autoTax: false,
+        autoGovernment: false,
+        generalRequestedTaxRate: -1,
+        generalMinimumTaxRate: 20,
+        generalMinimumMorale: 105,
+        generalMaximumMorale: 500,
+        generalMinimumAuthority: 100,
+        // Evil universe: keep Authority at or above this (0 to disable, -1 to target the current Authority max)
+        generalAuthorityMinPatrolPercent: 40,
+        // -1 (pin-at-max) mode only: reserve at least this % of available Hell soldiers for patrols (soul gem income) instead of stationing everyone
+        govInterim: GovernmentManager2.Types.democracy.id,
+        govFinal: GovernmentManager2.Types.technocracy.id,
+        govSpace: GovernmentManager2.Types.corpocracy.id,
+        govGovernor: "none"
+      };
+      applySettings2(def, reset);
+    }
+    function resetEvolutionSettings2(reset) {
+      let def = {
+        autoEvolution: false,
+        userUniverseTargetName: "none",
+        userPlanetTargetName: "none",
+        userEvolutionTarget: "auto",
+        userEvolutionGenus: "fungi",
+        evolutionQueue: [],
+        evolutionQueueEnabled: false,
+        evolutionQueueRepeat: false,
+        evolutionAutoUnbound: true,
+        evolutionBackup: false
+      };
+      challenges2.forEach((set) => def["challenge_" + set[0].id] = false);
+      applySettings2(def, reset);
+    }
+    function resetResearchSettings2(reset) {
+      let def = {
+        autoResearch: false,
+        userResearchTheology_1: "auto",
+        userResearchTheology_2: "auto",
+        researchIgnore: ["tech-purify"]
+      };
+      applySettings2(def, reset);
+    }
+    function resetMarketSettings2(reset) {
+      MarketManager2.priorityList = Object.values(resources2).filter((r) => r.is.tradable).reverse();
+      let def = {
+        autoMarket: false,
+        autoGalaxyMarket: false,
+        tradeRouteMinimumMoneyPerSecond: 500,
+        tradeRouteMinimumMoneyPercentage: 50,
+        tradeRouteSellExcess: true,
+        minimumMoney: 0,
+        minimumMoneyPercentage: 0,
+        marketMinIngredients: 0
+      };
+      for (let i = 0; i < MarketManager2.priorityList.length; i++) {
+        let resource = MarketManager2.priorityList[i];
+        let id = resource.id;
+        def["res_buy_p_" + id] = i;
+        def["buy" + id] = false;
+        def["res_buy_r_" + id] = 0.5;
+        def["sell" + id] = false;
+        def["res_sell_r_" + id] = 0.9;
+        def["res_trade_buy_" + id] = true;
+        def["res_trade_sell_" + id] = true;
+        def["res_trade_w_" + id] = 1;
+        def["res_trade_p_" + id] = 1;
+      }
+      const setTradePriority = (priority, items) => items.forEach((id) => def["res_trade_p_" + id] = priority);
+      setTradePriority(1, ["Food"]);
+      setTradePriority(2, ["Helium_3", "Uranium", "Oil", "Coal"]);
+      setTradePriority(3, ["Stone", "Chrysotile", "Lumber"]);
+      setTradePriority(4, ["Aluminium", "Iron", "Copper"]);
+      setTradePriority(5, ["Furs"]);
+      setTradePriority(6, ["Cement"]);
+      setTradePriority(7, ["Steel"]);
+      setTradePriority(8, ["Titanium"]);
+      setTradePriority(9, ["Polymer", "Alloy"]);
+      setTradePriority(10, ["Iridium"]);
+      setTradePriority(-1, ["Crystal"]);
+      for (let i = 0; i < poly2.galaxyOffers.length; i++) {
+        let resource = resources2[poly2.galaxyOffers[i].buy.res];
+        let id = resource.id;
+        def["res_galaxy_w_" + id] = 1;
+        def["res_galaxy_p_" + id] = i + 1;
+      }
+      applySettings2(def, reset);
+      MarketManager2.sortByPriority();
+    }
+    function resetStorageSettings2(reset) {
+      StorageManager2.priorityList = Object.values(resources2).filter((r) => r.hasStorage()).reverse();
+      let def = {
+        autoStorage: false,
+        storageLimitPreMad: true,
+        storageSafeReassign: true,
+        storageAssignExtra: true,
+        storageAssignPart: false
+      };
+      for (let i = 0; i < StorageManager2.priorityList.length; i++) {
+        let resource = StorageManager2.priorityList[i];
+        let id = resource.id;
+        def["res_storage" + id] = true;
+        def["res_storage_p_" + id] = i;
+        def["res_storage_o_" + id] = false;
+        def["res_min_store" + id] = 1;
+        def["res_max_store" + id] = -1;
+      }
+      def["res_storage_o_" + resources2.Orichalcum.id] = true;
+      def["res_storage_o_" + resources2.Vitreloy.id] = true;
+      def["res_storage_o_" + resources2.Bolognium.id] = true;
+      applySettings2(def, reset);
+      StorageManager2.sortByPriority();
+    }
+    function resetMinorTraitSettings2(reset) {
+      MinorTraitManager2.priorityList = Object.entries(game2.traits).filter(
+        ([id, trait]) => trait.type === "minor" || id === "mastery" || id === "fortify"
+      ).map(([id, trait]) => new MinorTrait2(id));
+      let def = {
+        autoMinorTrait: false,
+        shifterGenus: "ignore",
+        imitateRace: "ignore",
+        buildingShrineType: "know",
+        slaveIncome: 25e3,
+        jobScalePop: true,
+        psychicPower: "auto",
+        psychicBoostRes: "auto",
+        wishMinor: "none",
+        wishMajor: "none",
+        autoGenetics: false,
+        geneticsSequence: "none",
+        geneticsBoost: "none",
+        geneticsAssemble: "auto"
+      };
+      for (let i = 0; i < MinorTraitManager2.priorityList.length; i++) {
+        let trait = MinorTraitManager2.priorityList[i];
+        let id = trait.traitName;
+        def["mTrait_" + id] = true;
+        def["mTrait_p_" + id] = i;
+        def["mTrait_w_" + id] = 1;
+      }
+      Object.values(ocularPowerData2).forEach((v) => {
+        def["ocularPower_" + v.id] = true;
+        def["ocularPower_p_" + v.id] = 100;
+      });
+      applySettings2(def, reset);
+      MinorTraitManager2.sortByPriority();
+    }
+    function resetMutableTraitSettings2(reset) {
+      let unobtainableTraits = ["xenophobic", "rigid", "soul_eater"];
+      MutableTraitManager2.priorityList = Object.entries(game2.traits).filter(
+        ([id, trait]) => (trait.type === "major" || trait.type === "genus") && !unobtainableTraits.includes(id)
+      ).map(
+        ([id, trait]) => trait.type === "major" ? new MajorTrait2(id) : new GenusTrait2(id)
+      ).sort(
+        (a, b) => Object.keys(poly2.genus_traits).indexOf(a.genus) - Object.keys(poly2.genus_traits).indexOf(b.genus) || a.type < b.type
+      );
+      let def = {
+        autoMutateTraits: false,
+        doNotGoBelowPlasmidSoftcap: true,
+        minimumPlasmidsToPreserve: 0
+      };
+      for (let i = 0; i < MutableTraitManager2.priorityList.length; i++) {
+        let trait = MutableTraitManager2.priorityList[i];
+        let id = trait.traitName;
+        def["mutableTrait_p_" + id] = i;
+        def["mutableTrait_purge_" + id] = false;
+        if (trait.isGainable()) {
+          def["mutableTrait_gain_" + id] = false;
+        }
+        if (poly2.neg_roll_traits.includes(id)) {
+          def["mutableTrait_reset_" + id] = false;
+        }
+      }
+      applySettings2(def, reset);
+      MutableTraitManager2.sortByPriority();
+    }
+    function resetJobSettings2(reset) {
+      JobManager2.priorityList = Object.values(jobs2);
+      let def = {
+        autoJobs: false,
+        autoCraftsmen: false,
+        jobSetDefault: true,
+        jobManageServants: true,
+        jobLumberWeighting: 50,
+        jobQuarryWeighting: 50,
+        jobCrystalWeighting: 50,
+        jobScavengerWeighting: 5,
+        jobRaiderWeighting: 20,
+        jobForagerWeighting: 50,
+        jobDisableMiners: true
+      };
+      for (let i = 0; i < JobManager2.priorityList.length; i++) {
+        let job = JobManager2.priorityList[i];
+        let id = job._originalId;
+        def["job_" + id] = true;
+        def["job_p_" + id] = i;
+        if (job.is.smart) {
+          def["job_s_" + id] = true;
+        }
+      }
+      const setBreakpoints = (job, b1, b2, b3) => {
+        def["job_b1_" + job._originalId] = b1;
+        def["job_b2_" + job._originalId] = b2;
+        def["job_b3_" + job._originalId] = b3;
+      };
+      setBreakpoints(jobs2.Colonist, -1, -1, -1);
+      setBreakpoints(jobs2.Teamster, 10, -1, -1);
+      setBreakpoints(jobs2.Meditator, -1, -1, -1);
+      setBreakpoints(jobs2.Hunter, -1, -1, -1);
+      setBreakpoints(jobs2.Farmer, -1, -1, -1);
+      setBreakpoints(jobs2.Forager, 4, 10, 0);
+      setBreakpoints(jobs2.Lumberjack, 4, 10, 0);
+      setBreakpoints(jobs2.QuarryWorker, 4, 10, 0);
+      setBreakpoints(jobs2.CrystalMiner, 2, 5, 0);
+      setBreakpoints(jobs2.Scavenger, 0, 0, 0);
+      setBreakpoints(jobs2.TitanColonist, -1, -1, -1);
+      setBreakpoints(jobs2.PitMiner, 1, 12, -1);
+      setBreakpoints(jobs2.Miner, 3, 5, -1);
+      setBreakpoints(jobs2.CoalMiner, 2, 4, -1);
+      setBreakpoints(jobs2.CementWorker, 4, 8, -1);
+      setBreakpoints(jobs2.Professor, 6, 10, -1);
+      setBreakpoints(jobs2.Scientist, 3, 6, -1);
+      setBreakpoints(jobs2.Entertainer, 2, 5, -1);
+      setBreakpoints(jobs2.HellSurveyor, 1, 1, -1);
+      setBreakpoints(jobs2.SpaceMiner, 1, 3, -1);
+      setBreakpoints(jobs2.Torturer, 1, 1, -1);
+      setBreakpoints(jobs2.Archaeologist, 1, 1, -1);
+      setBreakpoints(jobs2.GhostTrapper, 1, 1, -1);
+      setBreakpoints(jobs2.ElysiumMiner, 1, 1, -1);
+      setBreakpoints(jobs2.Banker, 3, 5, -1);
+      setBreakpoints(jobs2.Priest, 0, 0, -1);
+      setBreakpoints(jobs2.Unemployed, 0, 0, 0);
+      applySettings2(def, reset);
+      JobManager2.sortByPriority();
+    }
+    function resetWeightingSettings2(reset) {
+      let def = {
+        buildingBuildIfStorageFull: false,
+        buildingWeightingNew: 3,
+        buildingWeightingUselessPowerPlant: 0.01,
+        buildingWeightingNeedfulPowerPlant: 3,
+        buildingWeightingUnderpowered: 0.8,
+        buildingWeightingUselessKnowledge: 0.01,
+        buildingWeightingNeedfulKnowledge: 5,
+        buildingWeightingMissingFuel: 10,
+        buildingWeightingNonOperatingCity: 0.2,
+        buildingWeightingNonOperating: 0,
+        buildingWeightingAuthority: 10,
+        buildingWeightingMissingSupply: 0,
+        buildingWeightingMissingSupport: 0,
+        buildingWeightingUselessSupport: 0.01,
+        buildingWeightingMADUseless: 0,
+        buildingWeightingUnusedEjectors: 0.1,
+        buildingWeightingCrateUseless: 0.01,
+        buildingWeightingHorseshoeUseless: 0.1,
+        buildingWeightingZenUseless: 0.01,
+        buildingWeightingGateTurret: 0.01,
+        buildingWeightingNeedStorage: 1,
+        buildingWeightingUselessHousing: 1,
+        buildingWeightingTemporal: 0.2,
+        buildingWeightingSolar: 0.2,
+        buildingWeightingOverlord: 0,
+        buildingWeightingBananaObjective: 2,
+        buildingWeightingInflationMoney: 2,
+        buildingWeightingRetirementPrep: 10
+      };
+      applySettings2(def, reset);
+    }
+    function resetBuildingSettings2(reset) {
+      initBuildingState2();
+      let def = {
+        autoBuild: false,
+        autoPower: false,
+        buildingsIgnoreZeroRate: false,
+        buildingsLimitPowered: true,
+        buildingTowerSuppression: 100,
+        buildingConsumptionCheck: "perResource",
+        buildingsTransportGem: false,
+        buildingsBestFreighter: false,
+        buildingsUseMultiClick: false,
+        buildingEnabledAll: true,
+        buildingStateAll: true
+      };
+      for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
+        let building = BuildingManager2.priorityList[i];
+        let id = building._vueBinding;
+        def["bat" + id] = true;
+        def["bld_p_" + id] = i;
+        def["bld_m_" + id] = -1;
+        def["bld_w_" + id] = 100;
+        if (building.isSwitchable()) {
+          def["bld_s_" + id] = true;
+        }
+        if (building.is.smart) {
+          def["bld_s2_" + id] = true;
+        }
+      }
+      def["bld_s2_space-iridium_mine"] = false;
+      def["bld_s2_space-helium_mine"] = false;
+      [
+        "RedVrCenter",
+        "NeutronCitadel",
+        "PortalWarDroid",
+        "BadlandsPredatorDrone",
+        "PortalRepairDroid",
+        "SpireWaygate",
+        "TauRedContact",
+        "TauRedIntroduce",
+        "TauRedSubjugate",
+        "TauGasName1",
+        "TauGasName2",
+        "TauGasName3",
+        "TauGasName4",
+        "TauGasName5",
+        "TauGasName6",
+        "TauGasName7",
+        "TauGasName8",
+        "TauGas2Name1",
+        "TauGas2Name2",
+        "TauGas2Name3",
+        "TauGas2Name4",
+        "TauGas2Name5",
+        "TauGas2Name6",
+        "TauGas2Name7",
+        "TauGas2Name8"
+      ].forEach((b) => def["bat" + buildings2[b]._vueBinding] = false);
+      def["bld_m_" + buildings2.ForgeHorseshoe._vueBinding] = 20;
+      def["bld_m_" + buildings2.RedForgeHorseshoe._vueBinding] = 20;
+      def["bld_m_" + buildings2.TauForgeHorseshoe._vueBinding] = 20;
+      def["bld_m_" + buildings2.BeltEleriumShip._vueBinding] = 15;
+      def["bld_m_" + buildings2.BeltIridiumShip._vueBinding] = 15;
+      applySettings2(def, reset);
+      BuildingManager2.sortByPriority();
+    }
+    function resetProjectSettings2(reset) {
+      ProjectManager2.priorityList = Object.values(projects2);
+      let def = {
+        autoARPA: false,
+        arpaScaleWeighting: true,
+        arpaStep: 5
+      };
+      let projectPriority = 0;
+      const setProject = (item, autoBuildEnabled, _autoMax, _weighting) => {
+        let id = projects2[item].id;
+        def["arpa_" + id] = autoBuildEnabled;
+        def["arpa_p_" + id] = projectPriority++;
+        def["arpa_m_" + id] = _autoMax;
+        def["arpa_w_" + id] = _weighting;
+      };
+      setProject("LaunchFacility", true, -1, 100);
+      setProject("SuperCollider", true, -1, 5);
+      setProject("StockExchange", true, -1, 0.5);
+      setProject("Monument", true, -1, 1);
+      setProject("Railway", true, -1, 0.1);
+      setProject("Nexus", true, -1, 1);
+      setProject("RoidEject", true, -1, 1);
+      setProject("ManaSyphon", false, 79, 1);
+      setProject("Depot", true, -1, 1);
+      applySettings2(def, reset);
+      ProjectManager2.sortByPriority();
+    }
+    function resetMagicSettings2(reset) {
+      AlchemyManager2.priorityList = Object.values(resources2).filter(
+        (r) => AlchemyManager2.transmuteTier(r) > 0
+      );
+      let def = {
+        autoAlchemy: false,
+        autoPylon: false,
+        magicFullmetalHelper: true,
+        magicAlchemyManaUse: 0.5,
+        productionRitualManaUse: 0.5,
+        productionRitualSafe: true
+      };
+      for (let i = 0; i < AlchemyManager2.priorityList.length; i++) {
+        let resource = AlchemyManager2.priorityList[i];
+        let id = resource.id;
+        def["res_alchemy_" + id] = true;
+        def["res_alchemy_w_" + id] = 0;
+      }
+      for (let spell of Object.values(RitualManager2.Productions)) {
+        def["spell_w_" + spell.id] = 100;
+      }
+      def["spell_w_hunting"] = 10;
+      def["spell_w_farmer"] = 1;
+      applySettings2(def, reset);
+    }
+    function resetProductionSettings2(reset) {
+      let def = {
+        autoQuarry: false,
+        autoMine: false,
+        autoExtractor: false,
+        autoGraphenePlant: false,
+        autoSmelter: false,
+        autoCraft: false,
+        autoFactory: false,
+        autoMiningDroid: false,
+        autoReplicator: false,
+        productionChrysotileWeight: 2,
+        productionAdamantiteWeight: 1,
+        productionExtWeight_common: 1,
+        productionExtWeight_uncommon: 1,
+        productionExtWeight_rare: 1,
+        productionFoundryWeighting: "demanded",
+        productionCraftsmen: "nocraft",
+        productionSmelting: "required",
+        productionSmeltingIridium: 0.5,
+        productionFactoryWeighting: "none",
+        productionFactoryMinIngredients: 0,
+        productionFactoryFocusMaterials: false,
+        replicatorAssignGovernorTask: true,
+        replicatorWeightingMode: "mass"
+      };
+      const setFoundryProduct = (item, autoCraftEnabled, crafterEnabled, craftWeighting, craftPreserve) => {
+        let id = resources2[item].id;
+        def["craft" + id] = autoCraftEnabled;
+        def["job_" + id] = crafterEnabled;
+        def["foundry_w_" + id] = craftWeighting;
+        def["foundry_p_" + id] = craftPreserve;
+      };
+      setFoundryProduct("Plywood", true, true, 1, 0);
+      setFoundryProduct("Brick", true, true, 1, 0);
+      setFoundryProduct("Wrought_Iron", true, true, 1, 0);
+      setFoundryProduct("Sheet_Metal", true, true, 2, 0);
+      setFoundryProduct("Mythril", true, true, 3, 0);
+      setFoundryProduct("Aerogel", true, true, 3, 0);
+      setFoundryProduct("Nanoweave", true, true, 10, 0);
+      setFoundryProduct("Scarletite", true, true, 1, 0);
+      setFoundryProduct("Quantium", true, true, 1, 0);
+      Object.values(SmelterManager2.Fuels).forEach((fuel, i) => {
+        def["smelter_fuel_p_" + fuel.id] = i;
+      });
+      const setFactoryProduct = (item, enabled, weighting, priority) => {
+        let id = FactoryManager2.Productions[item].resource.id;
+        def["production_" + id] = enabled;
+        def["production_w_" + id] = weighting;
+        def["production_p_" + id] = priority;
+      };
+      setFactoryProduct("LuxuryGoods", true, 1, 2);
+      setFactoryProduct("Furs", true, 1, 1);
+      setFactoryProduct("Alloy", true, 1, 3);
+      setFactoryProduct("Polymer", true, 1, 3);
+      setFactoryProduct("NanoTube", true, 4, 3);
+      setFactoryProduct("Stanene", true, 4, 3);
+      const setDroidProduct = (item, weighting, priority) => {
+        let id = DroidManager2.Productions[item].resource.id;
+        def["droid_w_" + id] = weighting;
+        def["droid_pr_" + id] = priority;
+      };
+      setDroidProduct("Adamantite", 15, 1);
+      setDroidProduct("Aluminium", 1, 1);
+      setDroidProduct("Uranium", 5, -1);
+      setDroidProduct("Coal", 5, -1);
+      const setReplicatorProduct = (item, enabled, weighting, priority) => {
+        let id = ReplicatorManager2.Productions[item].id;
+        def["replicator_" + id] = enabled;
+        def["replicator_w_" + id] = weighting;
+        def["replicator_p_" + id] = priority;
+      };
+      Object.values(ReplicatorManager2.Productions).forEach(
+        (production) => setReplicatorProduct(production.id, true, 1, 1)
+      );
+      applySettings2(def, reset);
+    }
+    function resetTriggerSettings2(reset) {
+      let def = {
+        autoTrigger: false
+      };
+      if (reset || !settingsRaw2.hasOwnProperty("autoTrigger")) {
+        TriggerManager2.priorityList = [];
+        TriggerManager2.AddTrigger(
+          "BuildingCount",
+          "space-moon_mission",
+          1,
+          "build",
+          "space-moon_base",
+          1
+        );
+        TriggerManager2.AddTrigger(
+          "BuildingCount",
+          "space-moon_base",
+          1,
+          "build",
+          "space-iridium_mine",
+          1
+        );
+        TriggerManager2.AddTrigger(
+          "BuildingCount",
+          "space-moon_base",
+          1,
+          "build",
+          "space-helium_mine",
+          1
+        );
+        settingsRaw2.triggers = JSON.parse(
+          JSON.stringify(TriggerManager2.priorityList)
+        );
+      }
+      applySettings2(def, reset);
+    }
+    function resetLoggingSettings2(reset) {
+      let def = {
+        hellTurnOffLogMessages: true,
+        logFilter: "",
+        logEnabled: true
+      };
+      Object.keys(GameLog2.Types).forEach((id) => def["log_" + id] = true);
+      def["log_mercenary"] = false;
+      def["log_multi_construction"] = false;
+      def["log_prestige"] = false;
+      def["log_prestige_format"] = "Reset: {resetType}, Species: {species}, Duration: {timeStamp} days";
+      applySettings2(def, reset);
+    }
+    function resetPlanetSettings2(reset) {
+      let def = {};
+      biomeList2.forEach(
+        (biome) => def["biome_w_" + biome] = (planetBiomes2.length - planetBiomes2.indexOf(biome)) * 10
+      );
+      traitList2.forEach(
+        (trait) => def["trait_w_" + trait] = (planetTraits2.length - planetTraits2.indexOf(trait)) * 10
+      );
+      extraList2.forEach((extra) => def["extra_w_" + extra] = 0);
+      def["extra_w_Achievement"] = 1e3;
+      applySettings2(def, reset);
+    }
+    function resetFleetSettings2(reset) {
+      let def = {
+        autoFleet: false,
+        fleetOuterCrew: 30,
+        fleetOuterShips: "custom",
+        fleetExploreTau: true,
+        fleetMaxCover: true,
+        fleetCrewReclaim: true,
+        fleetEmbassyKnowledge: 6e6,
+        fleetAlienGiftKnowledge: 65e5,
+        fleetAlien2Knowledge: 8e6,
+        fleetAlien2Loses: "none",
+        fleetChthonianLoses: "low",
+        // Default combat ship
+        fleet_outer_class: "destroyer",
+        fleet_outer_armor: "neutronium",
+        fleet_outer_weapon: "plasma",
+        fleet_outer_engine: "ion",
+        fleet_outer_power: "fission",
+        fleet_outer_sensor: "lidar",
+        // Default scout ship
+        fleet_scout_class: "corvette",
+        fleet_scout_armor: "neutronium",
+        fleet_scout_weapon: "plasma",
+        fleet_scout_engine: "tie",
+        fleet_scout_power: "fusion",
+        fleet_scout_sensor: "quantum",
+        // Default andromeda regions priority
+        fleet_pr_gxy_stargate: 0,
+        fleet_pr_gxy_alien2: 1,
+        fleet_pr_gxy_alien1: 2,
+        fleet_pr_gxy_chthonian: 3,
+        fleet_pr_gxy_gateway: 4,
+        fleet_pr_gxy_gorddon: 5
+      };
+      const setOuterRegion = (id, weighting, protect, scouts) => {
+        def["fleet_outer_pr_" + id] = weighting;
+        def["fleet_outer_def_" + id] = protect;
+        def["fleet_outer_sc_" + id] = scouts;
+      };
+      setOuterRegion("spc_moon", 1, 0.9, 0);
+      setOuterRegion("spc_red", 3, 0.9, 0);
+      setOuterRegion("spc_gas", 0, 0.9, 0);
+      setOuterRegion("spc_gas_moon", 0, 0.9, 0);
+      setOuterRegion("spc_belt", 1, 0.9, 0);
+      setOuterRegion("spc_titan", 5, 0.9, 1);
+      setOuterRegion("spc_enceladus", 3, 0.9, 1);
+      setOuterRegion("spc_triton", 10, 0.95, 2);
+      setOuterRegion("spc_kuiper", 5, 0.9, 2);
+      setOuterRegion("spc_eris", 100, 0.01, 1);
+      applySettings2(def, reset);
+    }
+    function resetMechSettings2(reset) {
+      let def = {
+        autoMech: false,
+        mechScrap: "mixed",
+        mechScrapEfficiency: 1.5,
+        mechCollectorValue: 0.5,
+        mechBuild: "random",
+        mechSize: "titan",
+        mechSizeGravity: "auto",
+        mechFillBay: true,
+        mechScouts: 0.05,
+        mechScoutsRebuild: false,
+        mechMinSupply: 1e3,
+        mechMaxCollectors: 0.5,
+        mechInfernalCollector: true,
+        mechSpecial: "prefered",
+        mechSaveSupplyRatio: 1,
+        buildingMechsFirst: true,
+        mechBaysFirst: true,
+        mechWaygatePotential: 0.4
+      };
+      applySettings2(def, reset);
+    }
+    function resetEjectorSettings2(reset) {
+      if (game2.global.race.universe === "magic") {
+        EjectManager2.priorityList = Object.values(resources2).filter((r) => EjectManager2.isConsumable(r)).sort((a, b) => b.atomicMass - a.atomicMass);
+      } else {
+        EjectManager2.priorityList = Object.values(resources2).filter(
+          (r) => EjectManager2.isConsumable(r) && r !== resources2.Elerium && r !== resources2.Infernite
+        ).sort((a, b) => b.atomicMass - a.atomicMass);
+        EjectManager2.priorityList.unshift(resources2.Infernite);
+        EjectManager2.priorityList.unshift(resources2.Elerium);
+      }
+      SupplyManager2.priorityList = Object.values(resources2).filter((r) => SupplyManager2.isConsumable(r)).sort(
+        (a, b) => SupplyManager2.supplyIn(b.id) - SupplyManager2.supplyIn(a.id)
+      );
+      NaniteManager2.priorityList = Object.values(resources2).filter((r) => NaniteManager2.isConsumable(r)).sort((a, b) => b.atomicMass - a.atomicMass);
+      let def = {
+        autoEject: false,
+        autoSupply: false,
+        autoNanite: false,
+        ejectMode: "cap",
+        supplyMode: "mixed",
+        naniteMode: "full",
+        prestigeWhiteholeStabiliseMass: true,
+        prestigeWhiteholeStabiliseCooldown: 120
+      };
+      for (let resource of EjectManager2.priorityList) {
+        def["res_eject" + resource.id] = resource.is.tradable ?? false;
+      }
+      for (let resource of SupplyManager2.priorityList) {
+        def["res_supply" + resource.id] = resource.is.tradable ?? false;
+      }
+      for (let resource of NaniteManager2.priorityList) {
+        def["res_nanite" + resource.id] = resource.is.tradable ?? false;
+      }
+      def["res_eject" + resources2.Elerium.id] = true;
+      def["res_eject" + resources2.Infernite.id] = true;
+      applySettings2(def, reset);
+    }
+    return {
+      resetWarSettings: resetWarSettings2,
+      resetHellSettings: resetHellSettings2,
+      resetGeneralSettings: resetGeneralSettings2,
+      resetInterfaceSettings: resetInterfaceSettings2,
+      resetStateLogSettings: resetStateLogSettings2,
+      resetAchievementGuardSettings: resetAchievementGuardSettings2,
+      resetChallengeHelperSettings: resetChallengeHelperSettings2,
+      resetPrestigeSettings: resetPrestigeSettings2,
+      resetGovernmentSettings: resetGovernmentSettings2,
+      resetEvolutionSettings: resetEvolutionSettings2,
+      resetResearchSettings: resetResearchSettings2,
+      resetMarketSettings: resetMarketSettings2,
+      resetStorageSettings: resetStorageSettings2,
+      resetMinorTraitSettings: resetMinorTraitSettings2,
+      resetMutableTraitSettings: resetMutableTraitSettings2,
+      resetJobSettings: resetJobSettings2,
+      resetWeightingSettings: resetWeightingSettings2,
+      resetBuildingSettings: resetBuildingSettings2,
+      resetProjectSettings: resetProjectSettings2,
+      resetMagicSettings: resetMagicSettings2,
+      resetProductionSettings: resetProductionSettings2,
+      resetTriggerSettings: resetTriggerSettings2,
+      resetLoggingSettings: resetLoggingSettings2,
+      resetPlanetSettings: resetPlanetSettings2,
+      resetFleetSettings: resetFleetSettings2,
+      resetMechSettings: resetMechSettings2,
+      resetEjectorSettings: resetEjectorSettings2
+    };
+  }
+
   // src/settings/queued-settings.ts
   function createQueuedSettings({
     getSettings,
@@ -1208,6 +2120,6042 @@
       state2.lastFlier = game2.global.race.flier;
     }
     return { updateCraftCost: updateCraftCost2 };
+  }
+
+  // src/game/entities.ts
+  function createEntityClasses({
+    dependencies
+  }) {
+    const liveObject4 = (key) => new Proxy(
+      {},
+      {
+        get(_target, property) {
+          const current = dependencies[key]();
+          const value = current?.[property];
+          return typeof value === "function" ? value.bind(current) : value;
+        },
+        set(_target, property, value) {
+          return Reflect.set(
+            dependencies[key](),
+            property,
+            value
+          );
+        },
+        deleteProperty(_target, property) {
+          return Reflect.deleteProperty(
+            dependencies[key](),
+            property
+          );
+        },
+        has(_target, property) {
+          return Reflect.has(dependencies[key](), property);
+        },
+        ownKeys() {
+          return Reflect.ownKeys(dependencies[key]());
+        },
+        getOwnPropertyDescriptor(_target, property) {
+          const current = dependencies[key]();
+          const descriptor = Object.getOwnPropertyDescriptor(current, property);
+          return {
+            configurable: true,
+            enumerable: descriptor?.enumerable ?? true,
+            writable: true,
+            value: Reflect.get(current, property)
+          };
+        }
+      }
+    );
+    const liveFunction2 = (key) => ((...args) => dependencies[key]()(...args));
+    const $2 = liveFunction2("$");
+    const arpaIds2 = liveObject4("arpaIds");
+    const buildingIds2 = liveObject4("buildingIds");
+    const buildings2 = liveObject4("buildings");
+    const checkAffordableCustom2 = liveFunction2("checkAffordableCustom");
+    const checkTypes2 = liveObject4("checkTypes");
+    const conflictingTraits2 = liveObject4("conflictingTraits");
+    const document2 = liveObject4("document");
+    const fanatAchievements2 = liveObject4("fanatAchievements");
+    const Fibonacci2 = liveFunction2("Fibonacci");
+    const game2 = liveObject4("game");
+    const GameLog2 = liveObject4("GameLog");
+    const getAchievementStar2 = liveFunction2("getAchievementStar");
+    const getCitadelConsumption2 = liveFunction2("getCitadelConsumption");
+    const getStarLevel2 = liveFunction2("getStarLevel");
+    const getVueById2 = liveFunction2("getVueById");
+    const haveTask2 = liveFunction2("haveTask");
+    const haveTech2 = liveFunction2("haveTech");
+    const jobs2 = liveObject4("jobs");
+    const KeyManager2 = liveObject4("KeyManager");
+    const logIgnore2 = liveObject4("logIgnore");
+    const logPrestige2 = liveFunction2("logPrestige");
+    const MutableTraitManager2 = liveObject4("MutableTraitManager");
+    const mutationCostMultipliers2 = liveObject4("mutationCostMultipliers");
+    const mutationCostMultipliersGenus2 = liveObject4(
+      "mutationCostMultipliersGenus"
+    );
+    const normalizeProperties2 = liveFunction2("normalizeProperties");
+    const poly2 = liveObject4("poly");
+    const races2 = liveObject4("races");
+    const resources2 = liveObject4("resources");
+    const retBools2 = liveObject4("retBools");
+    const settings2 = liveObject4("settings");
+    const settingsRaw2 = liveObject4("settingsRaw");
+    const specialRaceTraits2 = liveObject4("specialRaceTraits");
+    const state2 = liveObject4("state");
+    const techIds2 = liveObject4("techIds");
+    const ticksPerSecond2 = liveFunction2("ticksPerSecond");
+    const traitVal2 = liveFunction2("traitVal");
+    const TriggerManager2 = liveObject4("TriggerManager");
+    const WarManager2 = liveObject4("WarManager");
+    const win2 = liveObject4("win");
+    const WindowManager2 = liveObject4("WindowManager");
+    class Job2 {
+      constructor(id, name, flags) {
+        this._originalId = id;
+        this._originalName = name;
+        this._workerBinding = "civ-" + this._originalId;
+        this.is = normalizeProperties2(flags) ?? {};
+      }
+      get autoJobEnabled() {
+        return settings2["job_" + this._originalId];
+      }
+      get isSmartEnabled() {
+        return settings2["job_s_" + this._originalId];
+      }
+      get priority() {
+        return settingsRaw2["job_p_" + this._originalId];
+      }
+      getBreakpoint(n) {
+        return settings2[`job_b${n + 1}_${this._originalId}`];
+      }
+      get definition() {
+        return game2.global.civic[this._originalId];
+      }
+      get id() {
+        return this.definition.job;
+      }
+      get name() {
+        return this.definition.name;
+      }
+      isUnlocked() {
+        return this.definition.display;
+      }
+      isManaged() {
+        if (!this.isUnlocked()) {
+          return false;
+        }
+        return this.autoJobEnabled;
+      }
+      get workers() {
+        return this.definition.workers;
+      }
+      get servants() {
+        return 0;
+      }
+      get count() {
+        return this.workers + this.servants * traitVal2("high_pop", 0, 1);
+      }
+      get max() {
+        return this.definition.max;
+      }
+      breakpointEmployees(breakpoint, ignoreMax) {
+        let breakpointActual = this.getBreakpoint(breakpoint);
+        if (breakpointActual === -1) {
+          breakpointActual = Number.MAX_SAFE_INTEGER;
+        } else if (settings2.jobScalePop && this._originalId !== "hell_surveyor") {
+          breakpointActual *= traitVal2("high_pop", 0, 1);
+        }
+        return ignoreMax ? breakpointActual : Math.min(breakpointActual, this.max);
+      }
+      addWorkers(count) {
+        if (this.isDefault()) {
+          return false;
+        }
+        if (count < 0) {
+          this.removeWorkers(-1 * count);
+        }
+        let vue = getVueById2(this._workerBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        for (let m of KeyManager2.click(count)) {
+          vue.add();
+        }
+      }
+      removeWorkers(count) {
+        if (this.isDefault()) {
+          return false;
+        }
+        if (count < 0) {
+          this.addWorkers(-1 * count);
+        }
+        let vue = getVueById2(this._workerBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        for (let m of KeyManager2.click(count)) {
+          vue.sub();
+        }
+      }
+      isDefault() {
+        return false;
+      }
+    }
+    class BasicJob2 extends Job2 {
+      constructor(...args) {
+        super(...args);
+        this._servantBinding = "servant-" + this._originalId;
+      }
+      get servants() {
+        return game2.global.race.servants?.jobs[this._originalId] ?? 0;
+      }
+      get max() {
+        return Number.MAX_SAFE_INTEGER;
+      }
+      addServants(count) {
+        if (count < 0) {
+          this.removeServants(-1 * count);
+        }
+        let vue = getVueById2(this._servantBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        for (let m of KeyManager2.click(count)) {
+          vue.add();
+        }
+      }
+      removeServants(count) {
+        if (count < 0) {
+          this.addServants(-1 * count);
+        }
+        let vue = getVueById2(this._servantBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        for (let m of KeyManager2.click(count)) {
+          vue.sub();
+        }
+      }
+      isDefault() {
+        return game2.global.civic.d_job === this.id;
+      }
+      setAsDefault() {
+        getVueById2(this._workerBinding)?.setDefault(this.id);
+      }
+    }
+    class CraftingJob2 extends Job2 {
+      constructor(id, name, resource) {
+        super(id, name, { serve: true });
+        this._crafterBinding = "foundry";
+        this._servantBinding = "skilledServants";
+        this.resource = resource;
+      }
+      get definition() {
+        return game2.global.civic["craftsman"];
+      }
+      get id() {
+        return this.resource.id;
+      }
+      isUnlocked() {
+        return game2.global.resource[this._originalId].display;
+      }
+      get servants() {
+        return game2.global.race.servants?.sjobs[this._originalId] ?? 0;
+      }
+      get workers() {
+        return game2.global.city.foundry?.[this._originalId] ?? 0;
+      }
+      get max() {
+        return game2.global.civic.craftsman.max;
+      }
+      addWorkers(count) {
+        if (!this.isUnlocked()) {
+          return false;
+        }
+        if (count < 0) {
+          this.removeWorkers(-1 * count);
+        }
+        let vue = getVueById2(this._crafterBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        for (let m of KeyManager2.click(count)) {
+          vue.add(this._originalId);
+        }
+      }
+      removeWorkers(count) {
+        if (!this.isUnlocked()) {
+          return false;
+        }
+        if (count < 0) {
+          this.addWorkers(-1 * count);
+        }
+        let vue = getVueById2(this._crafterBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        for (let m of KeyManager2.click(count)) {
+          vue.sub(this._originalId);
+        }
+      }
+      addServants(count) {
+        if (count < 0) {
+          this.removeServants(-1 * count);
+        }
+        let vue = getVueById2(this._servantBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        for (let m of KeyManager2.click(count)) {
+          vue.add(this._originalId);
+        }
+      }
+      removeServants(count) {
+        if (count < 0) {
+          this.addServants(-1 * count);
+        }
+        let vue = getVueById2(this._servantBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        for (let m of KeyManager2.click(count)) {
+          vue.sub(this._originalId);
+        }
+      }
+    }
+    class Resource2 {
+      constructor(name, id, flags) {
+        this.name = name;
+        this._id = id;
+        this.currentQuantity = 0;
+        this.maxQuantity = 0;
+        this.rateOfChange = 0;
+        this.rateMods = {};
+        this.tradeBuyPrice = 0;
+        this.tradeSellPrice = 0;
+        this.tradeRoutes = 0;
+        this.incomeAdusted = false;
+        this.maxCost = 0;
+        this.storageRequired = 1;
+        this.requestedQuantity = 0;
+        this.cost = {};
+        this._vueBinding = "res" + id;
+        this._stackVueBinding = "stack-" + id;
+        this._marketVueBinding = "market-" + id;
+        this.is = normalizeProperties2(flags) ?? {};
+      }
+      get autoCraftEnabled() {
+        return settings2["craft" + this.id];
+      }
+      get craftWeighting() {
+        return settings2["foundry_w_" + this.id];
+      }
+      get craftPreserve() {
+        return settings2["foundry_p_" + this.id];
+      }
+      get autoStorageEnabled() {
+        return settings2["res_storage" + this.id];
+      }
+      get storagePriority() {
+        return settingsRaw2["res_storage_p_" + this.id];
+      }
+      get storeOverflow() {
+        return settings2["res_storage_o_" + this.id];
+      }
+      get minStorage() {
+        return settings2["res_min_store" + this.id];
+      }
+      get maxStorage() {
+        return settings2["res_max_store" + this.id];
+      }
+      get marketPriority() {
+        return settingsRaw2["res_buy_p_" + this.id];
+      }
+      get autoBuyEnabled() {
+        return settings2["buy" + this.id];
+      }
+      get autoBuyRatio() {
+        return settings2["res_buy_r_" + this.id];
+      }
+      get autoSellEnabled() {
+        return settings2["sell" + this.id];
+      }
+      get autoSellRatio() {
+        return settings2["res_sell_r_" + this.id];
+      }
+      get autoTradeBuyEnabled() {
+        return settings2["res_trade_buy_" + this.id];
+      }
+      get autoTradeSellEnabled() {
+        return settings2["res_trade_sell_" + this.id];
+      }
+      get autoTradeWeighting() {
+        return settings2["res_trade_w_" + this.id];
+      }
+      get autoTradePriority() {
+        return settings2["res_trade_p_" + this.id];
+      }
+      get galaxyMarketWeighting() {
+        return settings2["res_galaxy_w_" + this.id];
+      }
+      get galaxyMarketPriority() {
+        return settings2["res_galaxy_p_" + this.id];
+      }
+      get title() {
+        return this.instance?.name || this.name;
+      }
+      get instance() {
+        return game2.global.resource[this.id];
+      }
+      get id() {
+        return this._id;
+      }
+      get currentCrates() {
+        return this.instance.crates;
+      }
+      get currentContainers() {
+        return this.instance.containers;
+      }
+      updateData() {
+        if (!this.isUnlocked()) {
+          return;
+        }
+        let instance = this.instance;
+        this.currentQuantity = instance.amount;
+        this.maxQuantity = instance.max >= 0 ? instance.max : Number.MAX_SAFE_INTEGER;
+        this.rateOfChange = instance.diff;
+        this.rateMods = {};
+        this.incomeAdusted = false;
+      }
+      finalizeData() {
+        if (!this.isUnlocked() || this.constructor !== Resource2) {
+          return;
+        }
+        if (settings2.autoMarket && this.is.tradable) {
+          this.tradeRoutes = this.instance.trade;
+          this.tradeBuyPrice = game2.tradeBuyPrice(this._id);
+          this.tradeSellPrice = game2.tradeSellPrice(this._id);
+          let tradeDiff = game2.breakdown.p.consume[this._id]?.Trade || 0;
+          if (tradeDiff > 0) {
+            this.rateMods["buy"] = tradeDiff * -1;
+          } else if (tradeDiff < 0) {
+            this.rateMods["sell"] = tradeDiff * -1;
+            this.rateOfChange += this.rateMods["sell"];
+          }
+        }
+        if (game2.global.race["decay"] && this.tradeRouteQuantity > 0 && this.currentQuantity >= 50) {
+          this.rateMods["decay"] = (this.currentQuantity - 50) * (1e-3 * this.tradeRouteQuantity);
+          this.rateOfChange += this.rateMods["decay"];
+        }
+      }
+      calculateRateOfChange(apply) {
+        let value = this.rateOfChange;
+        for (let mod in this.rateMods) {
+          if (apply[mod] ?? apply.all) {
+            value -= this.rateMods[mod];
+          }
+        }
+        return value;
+      }
+      isDemanded() {
+        return this.requestedQuantity > this.currentQuantity;
+      }
+      get income() {
+        return this.calculateRateOfChange({ buy: false, all: true });
+      }
+      get spareQuantity() {
+        return this.currentQuantity - this.requestedQuantity;
+      }
+      get spareMaxQuantity() {
+        return this.maxQuantity - this.requestedQuantity;
+      }
+      isUnlocked() {
+        return this.instance?.display ?? false;
+      }
+      isRoutesUnlocked() {
+        return this.isUnlocked() && !(this === resources2.Food && (game2.global.race["artifical"] || game2.global.race["fasting"])) && (game2.global.race["banana"] && this === resources2.Food || game2.global.tech["trade"] && !game2.global.race["terrifying"]);
+      }
+      isManagedStorage() {
+        return this.hasStorage() && this.autoStorageEnabled;
+      }
+      get atomicMass() {
+        return game2.atomic_mass[this.id] ?? 0;
+      }
+      isUseful() {
+        return this.storageRatio < 0.99 || this.isDemanded() || this.rateMods["eject"] > 0 || this.rateMods["supply"] > 0 || this.storeOverflow && this.currentQuantity < this.maxStorage;
+      }
+      getProduction(source, locArg) {
+        let produced = 0;
+        let labelFound = false;
+        for (let [label, value] of Object.entries(
+          game2.breakdown.p[this._id] ?? {}
+        )) {
+          if (value.indexOf("%") === -1) {
+            if (labelFound) {
+              break;
+            } else if (label === poly2.loc(source, locArg)) {
+              labelFound = true;
+              produced += parseFloat(value) || 0;
+            }
+          } else if (labelFound && this.isValidProductionLabel(label)) {
+            produced *= 1 + (parseFloat(value) || 0) / 100;
+          }
+        }
+        return produced * state2.globalProductionModifier;
+      }
+      isValidProductionLabel(label) {
+        if (this._id === "Iron" && label === `ᄂ${poly2.loc("space_syndicate")}`)
+          return false;
+        return true;
+      }
+      getBusyWorkers(workersSource, workersCount, locArg) {
+        if (this.incomeAdusted) {
+          return workersCount;
+        }
+        let newWorkers = 0;
+        if (workersCount > 0) {
+          let totalIncome = this.getProduction(workersSource, locArg);
+          let resPerWorker = totalIncome / workersCount;
+          let usedIncome = totalIncome - this.income;
+          if (usedIncome > 0) {
+            newWorkers = Math.ceil(usedIncome / resPerWorker);
+          }
+        } else if (this.income < 0) {
+          newWorkers = 1;
+        }
+        return newWorkers;
+      }
+      isCraftable() {
+        return game2.craftCost.hasOwnProperty(this.id);
+      }
+      hasStorage() {
+        return this.instance?.stackable ?? false;
+      }
+      get tradeRouteQuantity() {
+        return game2.tradeRatio[this.id] || -1;
+      }
+      get storageRatio() {
+        return this.maxQuantity > 0 ? this.currentQuantity / this.maxQuantity : 1;
+      }
+      isCapped() {
+        return this.maxQuantity > 0 ? this.currentQuantity + this.rateOfChange / ticksPerSecond2() >= this.maxQuantity : true;
+      }
+      get usefulRatio() {
+        return this.maxQuantity > 0 && this.storageRequired > 0 ? this.currentQuantity / Math.min(this.maxQuantity, this.storageRequired) : 1;
+      }
+      get timeToFull() {
+        if (this.storageRatio > 0.98) {
+          return Number.MIN_SAFE_INTEGER;
+        }
+        let totalRateOfCharge = this.income;
+        if (totalRateOfCharge <= 0) {
+          return Number.MAX_SAFE_INTEGER;
+        }
+        return (this.maxQuantity - this.currentQuantity) / totalRateOfCharge;
+      }
+      get timeToRequired() {
+        if (this.storageRatio > 0.98) {
+          return Number.MIN_SAFE_INTEGER;
+        }
+        if (this.storageRequired <= 1) {
+          return 0;
+        }
+        let totalRateOfCharge = this.income;
+        if (totalRateOfCharge <= 0) {
+          return Number.MAX_SAFE_INTEGER;
+        }
+        return (Math.min(this.maxQuantity, this.storageRequired) - this.currentQuantity) / totalRateOfCharge;
+      }
+      tryCraftX(count) {
+        let vue = getVueById2(this._vueBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        KeyManager2.set(false, false, false);
+        vue.craft(this.id, count);
+      }
+      requestQuantity(req) {
+        if (this.requestedQuantity < req) {
+          req = Math.min(req, this.maxQuantity);
+          this.requestedQuantity = req;
+        }
+      }
+    }
+    class SoulGem2 extends Resource2 {
+      updateData() {
+        super.updateData();
+        this.rateOfChange = state2.soulGemPerHour / 3600;
+      }
+    }
+    class Troops2 extends Resource2 {
+      updateData() {
+        if (!this.isUnlocked()) {
+          return;
+        }
+        this.currentQuantity = WarManager2.currentCityGarrison;
+        this.maxQuantity = WarManager2.maxCityGarrison;
+        this.rateOfChange = 0;
+      }
+      isUnlocked() {
+        return WarManager2._garrisonVue !== void 0;
+      }
+    }
+    class Supply2 extends Resource2 {
+      updateData() {
+        if (!this.isUnlocked()) {
+          return;
+        }
+        this.currentQuantity = game2.global.portal.purifier.supply;
+        this.maxQuantity = game2.global.portal.purifier.sup_max;
+        this.rateOfChange = game2.global.portal.purifier.diff;
+      }
+      isUnlocked() {
+        return game2.global.portal.hasOwnProperty("purifier");
+      }
+    }
+    class Power2 extends Resource2 {
+      updateData() {
+        if (!this.isUnlocked()) {
+          return;
+        }
+        this.currentQuantity = game2.global.city.power;
+        if (haveTask2("replicate")) {
+          this.currentQuantity += game2.global.race.replicator.pow;
+        }
+        this.rateOfChange = this.currentQuantity;
+        this.maxQuantity = 0;
+        if (game2.global.race.powered) {
+          this.maxQuantity += (resources2.Population.maxQuantity - resources2.Population.currentQuantity) * traitVal2("powered", 0);
+        }
+        for (let building of Object.values(buildings2)) {
+          if (building.stateOffCount > 0) {
+            let missingAmount = building.stateOffCount;
+            if (building.autoMax < building.count && settings2.masterScriptToggle && settings2.autoPower && building.autoStateEnabled && settings2.buildingsLimitPowered) {
+              missingAmount -= building.count - building.autoMax;
+            }
+            if (building === buildings2.NeutronCitadel) {
+              this.maxQuantity += getCitadelConsumption2(building.stateOnCount + missingAmount) - getCitadelConsumption2(building.stateOnCount);
+            } else {
+              this.maxQuantity += missingAmount * building.powered;
+            }
+          }
+        }
+      }
+      get usefulRatio() {
+        return this.currentQuantity >= this.maxQuantity ? 1 : 0;
+      }
+      isUnlocked() {
+        return game2.global.city.powered;
+      }
+    }
+    class Support2 extends Resource2 {
+      // This isn't really a resource but we're going to make a dummy one so that we can treat it like a resource
+      constructor(name, id, region, inRegionId) {
+        super(name, id);
+        this._region = region;
+        this._inRegionId = inRegionId;
+      }
+      updateData() {
+        if (!this.isUnlocked()) {
+          return;
+        }
+        this.maxQuantity = game2.global[this._region][this.supportId].s_max;
+        this.currentQuantity = game2.global[this._region][this.supportId].support;
+        this.rateOfChange = this.maxQuantity - this.currentQuantity;
+      }
+      get supportId() {
+        return game2.actions[this._region][this._inRegionId].info.support;
+      }
+      get storageRatio() {
+        return this.maxQuantity > 0 ? (this.maxQuantity - this.currentQuantity) / this.maxQuantity : 1;
+      }
+      isUnlocked() {
+        return game2.global[this._region][this.supportId] !== void 0;
+      }
+    }
+    class BeltSupport2 extends Support2 {
+      // Unlike other supports this one takes in account available workers
+      updateData() {
+        if (!this.isUnlocked()) {
+          return;
+        }
+        let maxStations = settings2.autoPower && buildings2.BeltSpaceStation.autoStateEnabled ? buildings2.BeltSpaceStation.count : buildings2.BeltSpaceStation.stateOnCount;
+        let maxWorkers = settings2.autoJobs && jobs2.SpaceMiner.autoJobEnabled && jobs2.SpaceMiner.isSmartEnabled ? state2.maxSpaceMiners : jobs2.SpaceMiner.count;
+        this.maxQuantity = Math.min(
+          maxStations * 3 * traitVal2("high_pop", 0, 1),
+          maxWorkers
+        );
+        this.currentQuantity = game2.global[this._region][this.supportId].support;
+        this.rateOfChange = this.maxQuantity - this.currentQuantity;
+      }
+    }
+    class ElectrolysisSupport2 extends Support2 {
+      updateData() {
+        if (!this.isUnlocked()) {
+          return;
+        }
+        this.maxQuantity = buildings2.TitanElectrolysis.stateOnCount;
+        this.currentQuantity = buildings2.TitanHydrogen.stateOnCount;
+        this.rateOfChange = this.maxQuantity - this.currentQuantity;
+      }
+      isUnlocked() {
+        return game2.global.race["truepath"] ? true : false;
+      }
+    }
+    class WomlingsSupport2 extends Support2 {
+      updateData() {
+        if (!this.isUnlocked()) {
+          return;
+        }
+        this.maxQuantity = buildings2.TauRedWomlingVillage.stateOnCount * (haveTech2("womling_pop", 2) ? 6 : 5);
+        this.currentQuantity = buildings2.TauRedWomlingFarm.stateOnCount * 2 + buildings2.TauRedWomlingLab.stateOnCount + buildings2.TauRedWomlingMine.stateOnCount * 6;
+        this.rateOfChange = this.maxQuantity - this.currentQuantity;
+      }
+      isUnlocked() {
+        return haveTech2("tau_red", 5) ? true : false;
+      }
+    }
+    class PrestigeResource2 extends Resource2 {
+      updateData() {
+        this.currentQuantity = game2.global.prestige[this.id].count;
+        this.maxQuantity = Number.MAX_SAFE_INTEGER;
+      }
+      isUnlocked() {
+        return true;
+      }
+    }
+    class Population2 extends Resource2 {
+      get id() {
+        return game2.global.race.species;
+      }
+    }
+    class Morale2 extends Resource2 {
+      updateData() {
+        this.currentQuantity = game2.global.city.morale.current;
+        this.maxQuantity = game2.global.city.morale.cap;
+        this.rateOfChange = game2.global.city.morale.potential;
+        this.incomeAdusted = false;
+      }
+      isUnlocked() {
+        return true;
+      }
+    }
+    class Thrall2 extends Resource2 {
+      updateData() {
+        if (!this.isUnlocked()) {
+          return;
+        }
+        this.currentQuantity = 0;
+        this.rateOfChange = 0;
+        for (let i = 0; i < game2.global.city.surfaceDwellers.length; i++) {
+          this.currentQuantity += game2.global.city.captive_housing[`race${i}`];
+          this.rateOfChange += game2.global.city.captive_housing[`jailrace${i}`];
+        }
+        this.currentQuantity += this.rateOfChange;
+        this.maxQuantity = game2.global.city.captive_housing.raceCap;
+      }
+      isUnlocked() {
+        return game2.global.city.captive_housing ? true : false;
+      }
+    }
+    class ResourceProductionCost2 {
+      constructor(resource, quantity, minRateOfChange) {
+        this.resource = resource;
+        this.quantity = quantity;
+        this.minRateOfChange = minRateOfChange;
+      }
+    }
+    class Action2 {
+      constructor(name, tab, id, location, flags) {
+        this.name = name;
+        this._tab = tab;
+        this._id = id;
+        this._location = location;
+        this.gameMax = Number.MAX_SAFE_INTEGER;
+        this._vueBinding = this._tab + "-" + this.id;
+        this.weighting = 0;
+        this.extraDescription = "";
+        this.consumption = [];
+        this.cost = {};
+        this.overridePowered = void 0;
+        this.is = normalizeProperties2(flags) ?? {};
+      }
+      get autoBuildEnabled() {
+        return settings2["bat" + this._vueBinding];
+      }
+      get autoStateEnabled() {
+        return settings2["bld_s_" + this._vueBinding];
+      }
+      get autoStateSmart() {
+        return settings2["bld_s2_" + this._vueBinding];
+      }
+      get priority() {
+        return settingsRaw2["bld_p_" + this._vueBinding];
+      }
+      get _weighting() {
+        return settings2["bld_w_" + this._vueBinding];
+      }
+      get _autoMax() {
+        return settings2["bld_m_" + this._vueBinding];
+      }
+      get definition() {
+        if (this._location !== "") {
+          return game2.actions[this._tab][this._location][this._id];
+        } else {
+          return game2.actions[this._tab][this._id];
+        }
+      }
+      get instance() {
+        return game2.global[this._tab][this._id];
+      }
+      get id() {
+        return this._id;
+      }
+      get title() {
+        let def = this.definition;
+        return def ? typeof def.title === "function" ? def.title() : def.title : this.name;
+      }
+      get desc() {
+        let def = this.definition;
+        return def ? typeof def.desc === "function" ? def.desc() : def.desc : this.name;
+      }
+      get vue() {
+        return getVueById2(this._vueBinding);
+      }
+      /* That's a right(ish) way to do, but compared to hardcoded numbers it's a performance tax for... nothing really, as i'll still need to manually declare a lot of things for each new building, and it's already declared for all existing ones. I'll put it on hold for now.
+          get gameMax() {
+              // queue_complete need an initialized instance to read a current count
+              return this.instance && this.definition.queue_complete ? this.instance.count + this.definition.queue_complete() : Number.MAX_SAFE_INTEGER;
+          }*/
+      get autoMax() {
+        return this._autoMax >= 0 && this._autoMax <= this.gameMax ? this._autoMax : this.gameMax;
+      }
+      isUnlocked() {
+        if (this._tab === "city" && !game2.global.settings.showCity || this._tab === "space" && !game2.global.settings.showSpace && !game2.global.settings.showOuter || this._tab === "interstellar" && !game2.global.settings.showDeep || this._tab === "portal" && !game2.global.settings.showPortal || this._tab === "galaxy" && !game2.global.settings.showGalactic || this._tab === "tauceti" && !game2.global.settings.showTau || this._tab === "eden" && !game2.global.settings.showEden) {
+          return false;
+        }
+        return this.vue !== void 0;
+      }
+      isSwitchable() {
+        return this.definition.hasOwnProperty("powered") || this.definition.hasOwnProperty("switchable");
+      }
+      isMission() {
+        return this.definition.hasOwnProperty("grant");
+      }
+      isComplete() {
+        return haveTech2(this.definition.grant[0], this.definition.grant[1]);
+      }
+      isSmartManaged() {
+        return settings2.autoPower && this.isUnlocked() && this.autoStateEnabled && this.autoStateSmart;
+      }
+      isAutoBuildable() {
+        return this.isUnlocked() && this.autoBuildEnabled && this._weighting > 0 && this.count < this.autoMax;
+      }
+      // export function checkPowerRequirements(c_action) from actions.js
+      checkPowerRequirements() {
+        for (let [tech, value] of Object.entries(
+          this.definition.power_reqs ?? {}
+        )) {
+          if (!haveTech2(tech, value)) {
+            return false;
+          }
+        }
+        return true;
+      }
+      get powered() {
+        if (this.overridePowered !== void 0) {
+          return this.overridePowered;
+        }
+        if (!this.definition.hasOwnProperty("powered") || !this.checkPowerRequirements()) {
+          return 0;
+        }
+        return this.definition.powered();
+      }
+      updateResourceRequirements() {
+        if (!this.isUnlocked()) {
+          return;
+        }
+        this.cost = {};
+        if (!this.definition.cost) {
+          return;
+        }
+        let adjustedCosts = poly2.adjustCosts(this.definition);
+        for (let resourceName in adjustedCosts) {
+          if (resources2[resourceName]) {
+            let resourceAmount = Number(adjustedCosts[resourceName]());
+            if (resourceAmount > 0) {
+              this.cost[resourceName] = resourceAmount;
+            }
+          }
+        }
+      }
+      isAffordable(max = false) {
+        return game2.checkAffordable(this.definition, max);
+      }
+      // Whether the action is clickable is determined by whether it is unlocked, affordable and not a "permanently clickable" action
+      isClickable() {
+        return this.isUnlocked() && this.isAffordable() && this.count < this.gameMax;
+      }
+      // This is a "safe" click. It will only click if the container is currently clickable.
+      // ie. it won't bypass the interface and click the node if it isn't clickable in the UI.
+      click() {
+        if (!this.isClickable()) {
+          return false;
+        }
+        let doMultiClick = this.is.multiSegmented && settings2.buildingsUseMultiClick;
+        let amountToBuild = 1;
+        if (doMultiClick) {
+          amountToBuild = this.gameMax - this.count;
+          for (let res in this.cost) {
+            amountToBuild = Math.min(
+              amountToBuild,
+              Math.floor(resources2[res].currentQuantity / this.cost[res])
+            );
+          }
+          if (amountToBuild < 1) {
+            amountToBuild = 1;
+          }
+        }
+        for (let res in this.cost) {
+          resources2[res].currentQuantity -= this.cost[res] * amountToBuild;
+        }
+        if (game2.global.race.species !== "protoplasm" && !logIgnore2.includes(this.id)) {
+          if (this.gameMax < Number.MAX_SAFE_INTEGER && this.count + amountToBuild < this.gameMax) {
+            GameLog2.logSuccess(
+              "multi_construction",
+              poly2.loc("build_success", [
+                `${this.title} (${this.count + amountToBuild})`
+              ]),
+              ["queue", "building_queue"]
+            );
+          } else {
+            GameLog2.logSuccess(
+              "construction",
+              poly2.loc("build_success", [this.title]),
+              ["queue", "building_queue"]
+            );
+          }
+        }
+        KeyManager2.set(doMultiClick, doMultiClick, doMultiClick);
+        if (this.is.prestige) {
+          logPrestige2();
+        }
+        let popper = $2("#popper");
+        if (settings2.performanceHackAvoidDrawTech && this.definition.refresh && this.count > 0 && !this.definition.grant && !this.definition.post && !this.definition.queue_complete && !this.is.prestige && !game2.global.race.inflation && (popper.length === 0 || !popper.is(":visible"))) {
+          this.definition.action();
+          return true;
+        }
+        if (popper.length > 0 && popper.data("id").indexOf(this._vueBinding) === -1) {
+          popper.attr("id", "TotallyNotAPopper");
+          try {
+            this.vue.action();
+          } finally {
+            popper.attr("id", "popper");
+          }
+        } else {
+          this.vue.action();
+        }
+        if (this.is.prestige) {
+          state2.goal = "GameOverMan";
+        }
+        return true;
+      }
+      addSupport(resource) {
+        this.consumption.push(
+          normalizeProperties2({
+            resource,
+            rate: () => this.definition.support() * -1
+          })
+        );
+      }
+      addResourceConsumption(resource, rate) {
+        this.consumption.push(
+          normalizeProperties2({ resource, rate })
+        );
+      }
+      getFuelRate(idx) {
+        if (!this.consumption[idx]) {
+          return 0;
+        }
+        let resource = this.consumption[idx].resource;
+        let rate = this.consumption[idx].rate;
+        if (this._tab === "space" && (resource === resources2.Oil || resource === resources2.Helium_3)) {
+          rate = game2.fuel_adjust(rate, true);
+        } else if ((this._tab === "interstellar" || this._tab === "galaxy" || this._tab === "tauceti") && (resource === resources2.Deuterium || resource === resources2.Helium_3) && this !== buildings2.AlphaFusion) {
+          rate = game2.int_fuel_adjust(rate);
+        }
+        return rate;
+      }
+      getMissingConsumption() {
+        for (let j = 0; j < this.consumption.length; j++) {
+          let resource = this.consumption[j].resource;
+          if (resource instanceof Support2) {
+            continue;
+          }
+          if (resource === resources2.Food && settings2.autoJobs && (jobs2.Farmer.autoJobEnabled || jobs2.Hunter.autoJobEnabled)) {
+            continue;
+          }
+          let consumptionRate = this.getFuelRate(j);
+          if (resource.storageRatio < 0.95 && consumptionRate > 0 && resource.calculateRateOfChange({ buy: true }) < consumptionRate) {
+            return resource;
+          }
+        }
+        return null;
+      }
+      getMissingSupport() {
+        if (game2.global.race["fasting"] && this === buildings2.AlphaMiningDroid && this.count < 1) {
+          return null;
+        }
+        for (let j = 0; j < this.consumption.length; j++) {
+          let resource = this.consumption[j].resource;
+          if (resource === resources2.Spire_Support && this.autoStateSmart) {
+            continue;
+          }
+          if (resource === resources2.Tau_Belt_Support) {
+            continue;
+          }
+          if (resource === resources2.Womlings_Support && resource.rateOfChange > 0) {
+            continue;
+          }
+          let rate = this.consumption[j].rate;
+          if (!(resource instanceof Support2) || rate <= 0) {
+            continue;
+          }
+          if (resource.rateOfChange < rate) {
+            return resource;
+          }
+        }
+        return null;
+      }
+      getUselessSupport() {
+        if (this === buildings2.GatewayStarbase || this === buildings2.AlphaHabitat || this === buildings2.SpaceNavBeacon && game2.global.race["orbit_decayed"]) {
+          return null;
+        }
+        let uselessSupports = [];
+        for (let j = 0; j < this.consumption.length; j++) {
+          let resource = this.consumption[j].resource;
+          let rate = this.consumption[j].rate;
+          if (!(resource instanceof Support2) || rate >= 0) {
+            continue;
+          }
+          let minSupport = resource === resources2.Belt_Support ? 2 * traitVal2("high_pop", 0, 1) : resource === resources2.Gateway_Support ? 5 : resource === resources2.Womlings_Support ? 6 : 1;
+          if (resource.rateOfChange >= minSupport) {
+            uselessSupports.push(resource);
+          } else {
+            return null;
+          }
+        }
+        return uselessSupports[0] ?? null;
+      }
+      get count() {
+        if (this.isMission()) {
+          return this.isComplete() ? 1 : 0;
+        }
+        if (!this.isUnlocked()) {
+          return 0;
+        }
+        if (this === buildings2.Banquet) {
+          return this.instance?.count ? this.instance.level : 0;
+        }
+        return this.instance?.count ?? 0;
+      }
+      hasState() {
+        if (!this.isUnlocked()) {
+          return false;
+        }
+        return this.definition.powered && haveTech2("high_tech", 2) && this.checkPowerRequirements() || this.definition.switchable?.() || false;
+      }
+      get stateOnCount() {
+        if (!this.hasState() || this.count < 1) {
+          return 0;
+        }
+        return this.instance.on;
+      }
+      get stateOffCount() {
+        if (!this.hasState() || this.count < 1) {
+          return 0;
+        }
+        return this.instance.count - this.instance.on;
+      }
+      tryAdjustState(adjustCount) {
+        if (adjustCount === 0 || !this.hasState()) {
+          return false;
+        }
+        let vue = this.vue;
+        if (adjustCount > 0) {
+          for (let m of KeyManager2.click(adjustCount)) {
+            vue.power_on();
+          }
+          return true;
+        }
+        if (adjustCount < 0) {
+          for (let m of KeyManager2.click(adjustCount * -1)) {
+            vue.power_off();
+          }
+          return true;
+        }
+      }
+    }
+    class CityAction2 extends Action2 {
+      get instance() {
+        return game2.global.city[this._id];
+      }
+    }
+    class Pillar2 extends Action2 {
+      get count() {
+        return this.isUnlocked() ? this.definition.count() : 0;
+      }
+      get stateOnCount() {
+        return this.isUnlocked() ? this.definition.on() : 0;
+      }
+      isAffordable(max = false) {
+        if (game2.global.tech.pillars !== 1 || game2.global.race.universe === "micro") {
+          return false;
+        }
+        return game2.checkAffordable(this.definition, max);
+      }
+    }
+    class ResourceAction2 extends Action2 {
+      constructor(name, tab, id, location, res, flags) {
+        super(name, tab, id, location, flags);
+        this.resource = resources2[res];
+      }
+      get count() {
+        return this.resource.currentQuantity;
+      }
+    }
+    class EvolutionAction2 extends Action2 {
+      constructor(id) {
+        super("", "evolution", id, "");
+      }
+      isUnlocked() {
+        let node = document2.getElementById(this._vueBinding);
+        return node !== null && !node.classList.contains("is-hidden");
+      }
+    }
+    class SpaceDock2 extends Action2 {
+      isOptionsCached() {
+        if (this.count < 1 || game2.global.tech["genesis"] < 4) {
+          return true;
+        }
+        if (!buildings2.GasSpaceDockProbe.isOptionsCached() || game2.global.tech["genesis"] >= 5 && !buildings2.GasSpaceDockShipSegment.isOptionsCached() || game2.global.tech["genesis"] === 6 && !buildings2.GasSpaceDockPrepForLaunch.isOptionsCached() || game2.global.tech["genesis"] >= 7 && !buildings2.GasSpaceDockLaunch.isOptionsCached() || game2.global.tech["geck"] >= 1 && !buildings2.GasSpaceDockGECK.isOptionsCached()) {
+          return false;
+        }
+        return true;
+      }
+      cacheOptions() {
+        if (this.count < 1 || WindowManager2.isOpen()) {
+          return false;
+        }
+        let optionsNode = document2.querySelector("#space-star_dock .special");
+        WindowManager2.openModalWindowWithCallback(optionsNode, this.title, () => {
+          buildings2.GasSpaceDockProbe.cacheOptions();
+          buildings2.GasSpaceDockGECK.cacheOptions();
+          buildings2.GasSpaceDockShipSegment.cacheOptions();
+          buildings2.GasSpaceDockPrepForLaunch.cacheOptions();
+          buildings2.GasSpaceDockLaunch.cacheOptions();
+        });
+        return true;
+      }
+    }
+    class ModalAction2 extends Action2 {
+      constructor(...args) {
+        super(...args);
+        this._vue = void 0;
+      }
+      get vue() {
+        return this._vue;
+      }
+      isOptionsCached() {
+        return this._vue !== void 0;
+      }
+      cacheOptions() {
+        this._vue = getVueById2(this._vueBinding);
+      }
+      isUnlocked() {
+        if (!game2.global.settings.showSpace) {
+          return false;
+        }
+        return this._vue !== void 0;
+      }
+    }
+    class Project2 extends Action2 {
+      constructor(name, id) {
+        super(name, "arpa", id, "");
+        this._vueBinding = "arpa" + this.id;
+        this.currentStep = 1;
+      }
+      get autoBuildEnabled() {
+        return settings2["arpa_" + this._id];
+      }
+      get priority() {
+        return settingsRaw2["arpa_p_" + this._id];
+      }
+      get _autoMax() {
+        return settings2["arpa_m_" + this._id];
+      }
+      get _weighting() {
+        return settings2["arpa_w_" + this._id];
+      }
+      updateResourceRequirements() {
+        if (!this.isUnlocked()) {
+          return;
+        }
+        this.cost = {};
+        let maxStep = Math.min(
+          100 - this.progress,
+          state2.triggerTargets.includes(this) ? 100 : settings2.arpaStep
+        );
+        let adjustedCosts = poly2.arpaAdjustCosts(this.definition.cost);
+        for (let resourceName in adjustedCosts) {
+          if (resources2[resourceName]) {
+            let resourceAmount = Number(adjustedCosts[resourceName]());
+            if (resourceAmount > 0) {
+              this.cost[resourceName] = resourceAmount / 100;
+              maxStep = Math.min(
+                maxStep,
+                resources2[resourceName].maxQuantity / this.cost[resourceName]
+              );
+            }
+          }
+        }
+        this.currentStep = Math.max(Math.floor(maxStep), 1);
+        if (this.currentStep > 1) {
+          for (let res in this.cost) {
+            this.cost[res] *= this.currentStep;
+          }
+        }
+      }
+      // Override Action's version, because these have a 'grant' but aren't missions.
+      isMission() {
+        return this.gameMax === 1;
+      }
+      get count() {
+        return this.instance?.rank ?? 0;
+      }
+      get progress() {
+        return this.instance?.complete ?? 0;
+      }
+      isAffordable(max = false) {
+        return checkAffordableCustom2(this.cost, max);
+      }
+      isClickable() {
+        return this.isUnlocked() && this.isAffordable(false);
+      }
+      click() {
+        if (!this.isClickable()) {
+          return false;
+        }
+        for (let res in this.cost) {
+          resources2[res].currentQuantity -= this.cost[res];
+        }
+        if (this.progress + this.currentStep < 100) {
+          GameLog2.logSuccess(
+            "arpa",
+            poly2.loc("build_success", [
+              `${this.title} (${this.progress + this.currentStep}%)`
+            ]),
+            ["queue", "building_queue"]
+          );
+        } else {
+          GameLog2.logSuccess(
+            "construction",
+            poly2.loc("build_success", [this.title]),
+            ["queue", "building_queue"]
+          );
+          if (this.id === "syphon" && this.count == 79) {
+            logPrestige2();
+          }
+        }
+        KeyManager2.set(false, false, false);
+        if (settings2.performanceHackAvoidDrawTech && this.count >= 10 && !(this.id === "syphon" && this.count >= 79)) {
+          let mainVue = win2.$("#mainColumn > div:first-child")[0]?.__vue__;
+          if (mainVue) {
+            let oldTabLoad = mainVue.s.tabLoad;
+            try {
+              mainVue.s.tabLoad = false;
+              getVueById2(this._vueBinding).build(this.id, this.currentStep);
+            } finally {
+              mainVue.s.tabLoad = oldTabLoad;
+            }
+          } else {
+            getVueById2(this._vueBinding).build(this.id, this.currentStep);
+          }
+          return true;
+        }
+        getVueById2(this._vueBinding).build(this.id, this.currentStep);
+        return true;
+      }
+    }
+    class Technology2 {
+      // These techs have the same name as some others - use a descriptor for disambiguation
+      static techDiscriminators = {
+        wind_plant: "Power",
+        demonic_craftsman: "Evil",
+        evil_planning: "Evil",
+        adamantite_processing_flier: "Flier",
+        alt_anthropology: "Post-Transcendence",
+        alt_fanaticism: "Post-Transcendence",
+        study_alt: "Post-Preeminence",
+        deify_alt: "Post-Preeminence",
+        dyson_sphere: "Plans",
+        unification: "Plans",
+        exotic_infusion: "1st Warning",
+        infusion_check: "2nd Warning",
+        protocol66: "Warning",
+        bac_tanks_tp: "True Path",
+        ai_core_tp: "True Path",
+        terraforming_tp: "True Path",
+        higgs_boson_tp: "True Path",
+        stanene_tp: "True Path",
+        graphene_tp: "True Path",
+        virtual_reality_tp: "True Path",
+        adamantite_vault_tp: "True Path",
+        iridium_smelting: "True Path",
+        bolognium_crates_tp: "True Path",
+        adamantite_containers_tp: "True Path",
+        orichalcum_panels_tp: "True Path",
+        dreadnought_ship: "True Path",
+        fusion_generator: "True Path",
+        replicator: "Lone Survivor"
+      };
+      constructor(id) {
+        this._id = id;
+        this._vueBinding = "tech-" + id;
+        this.cost = {};
+      }
+      get id() {
+        return this._id;
+      }
+      isUnlocked() {
+        return document2.querySelector(
+          "#" + this._vueBinding + " > .button:not(.precog)"
+        ) !== null && getVueById2(this._vueBinding) !== void 0;
+      }
+      get definition() {
+        return game2.actions.tech[this._id];
+      }
+      get title() {
+        let def = this.definition;
+        let title = typeof def.title === "function" ? def.title() : def.title;
+        if (this._id in Technology2.techDiscriminators) {
+          title += ` (${Technology2.techDiscriminators[this._id]})`;
+        }
+        return title;
+      }
+      get name() {
+        return this.title;
+      }
+      isAffordable(max = false) {
+        return game2.checkAffordable(this.definition, max);
+      }
+      // Whether the action is clickable is determined by whether it is unlocked, affordable and not a "permanently clickable" action
+      isClickable() {
+        return this.isUnlocked() && this.isAffordable();
+      }
+      // This is a "safe" click. It will only click if the container is currently clickable.
+      // ie. it won't bypass the interface and click the node if it isn't clickable in the UI.
+      click() {
+        if (!this.isClickable()) {
+          return false;
+        }
+        for (let res in this.cost) {
+          resources2[res].currentQuantity -= this.cost[res];
+        }
+        getVueById2(this._vueBinding).action();
+        let def = this.definition;
+        let title = typeof def.title === "function" ? def.title() : def.title;
+        GameLog2.logSuccess("research", poly2.loc("research_success", [title]), [
+          "queue",
+          "research_queue"
+        ]);
+        return true;
+      }
+      isResearched() {
+        return document2.querySelector("#tech-" + this.id + " .oldTech") !== null;
+      }
+      updateResourceRequirements() {
+        if (!this.isUnlocked()) {
+          return;
+        }
+        this.cost = {};
+        if (!this.definition.cost) {
+          return;
+        }
+        let adjustedCosts = poly2.adjustCosts(this.definition);
+        for (let resourceName in adjustedCosts) {
+          if (resources2[resourceName]) {
+            let resourceAmount = Number(adjustedCosts[resourceName]());
+            if (resourceAmount > 0) {
+              this.cost[resourceName] = resourceAmount;
+            }
+          }
+        }
+      }
+    }
+    class Race2 {
+      constructor(id) {
+        this.id = id;
+        this.evolutionTree = {};
+      }
+      get name() {
+        return game2.races[this.id].name ?? `Custom (${this.id} slot)`;
+      }
+      get desc() {
+        let nameRef = game2.races[this.id].desc;
+        return typeof nameRef === "function" ? nameRef() : typeof nameRef === "string" ? nameRef : "Custom";
+      }
+      get genus() {
+        return game2.races[this.id].type;
+      }
+      getWeighting(verbose) {
+        let habitability = this.getHabitability();
+        if (habitability < (settings2.evolutionAutoUnbound ? 0.8 : 1)) {
+          return -1;
+        }
+        const noMADRace = ["sludge", "ultra_sludge", "hellspawn"];
+        const noPillarRace = [
+          "custom",
+          "junker",
+          "sludge",
+          "ultra_sludge",
+          "hybrid",
+          "hellspawn"
+        ];
+        const noGreatnessGenus = ["hybrid"];
+        const noGreatnessRace = ["hellspawn"];
+        const noExtinctionRace = ["hellspawn"];
+        const challengeRace = ["junker", "sludge", "ultra_sludge", "hellspawn"];
+        const greatnessReset = [
+          "bioseed",
+          "ascension",
+          "terraform",
+          "matrix",
+          "retire",
+          "eden",
+          "apotheosis"
+        ];
+        const midTierReset = [
+          "bioseed",
+          "cataclysm",
+          "whitehole",
+          "vacuum",
+          "terraform"
+        ];
+        const highTierReset = ["ascension", "demonic", "apotheosis"];
+        const bestForMid = [
+          "human",
+          "cath",
+          "capybara",
+          "gnome",
+          "cyclops",
+          "gecko",
+          "dracnid",
+          "entish",
+          "shroomi",
+          "antid",
+          "sharkin",
+          "dryad",
+          "salamander",
+          "yeti",
+          "kamel",
+          "imp",
+          "unicorn",
+          "synth",
+          "shoggoth"
+        ];
+        const bestForHigh = [
+          "human",
+          "cath",
+          "capybara",
+          "gnome",
+          "cyclops",
+          "gecko",
+          "dracnid",
+          "entish",
+          "shroomi",
+          "scorpid",
+          "sharkin",
+          "dryad",
+          "salamander",
+          "wendigo",
+          "kamel",
+          "balorg",
+          "unicorn",
+          "nano",
+          "ghast"
+        ];
+        const goodImitates = [
+          "wyvern",
+          "dwarf",
+          "dracnid",
+          "octigoran",
+          "unicorn",
+          "salamander",
+          "cyclops",
+          "kamel",
+          "arraak",
+          "troll",
+          "custom"
+        ];
+        const noImitates = ["junker", "nano", "synth", "hellspawn"];
+        let goals = [];
+        let weighting = 0;
+        let starLevel = getStarLevel2(settings2);
+        const checkAchievement = (baseWeight, id) => {
+          let improve = starLevel - getAchievementStar2(id);
+          if (improve > 0) {
+            weighting += baseWeight * improve;
+            goals.push(`achieve_${id}_name`);
+            if (game2.global.race.universe !== "micro" && game2.global.race.universe !== "standard") {
+              weighting += baseWeight * Math.max(0, starLevel - getAchievementStar2(id, "standard"));
+            }
+          }
+        };
+        if ((settings2.prestigeType === "ascension" && settings2.prestigeAscensionPillar || ["demonic", "apotheosis"].includes(settings2.prestigeType)) && game2.global.race.universe !== "micro") {
+          let speciesPillarLevel = game2.global.pillars[this.id] ?? 0;
+          let canPillar = !speciesPillarLevel && resources2.Harmony.currentQuantity >= 1;
+          let canUpgrade = speciesPillarLevel && speciesPillarLevel < starLevel;
+          if (canPillar || canUpgrade) {
+            weighting += 1e3 * Math.max(0, starLevel - speciesPillarLevel);
+            if (!speciesPillarLevel && !challengeRace.includes(this.id))
+              weighting += 1e5;
+            goals.push("feat_equilibrium_name");
+            if (!noPillarRace.includes(this.id)) {
+              let genusPillar = Math.max(
+                ...Object.values(races2).filter(
+                  (r) => r.genus === this.genus && !noPillarRace.includes(r.id)
+                ).map((r) => game2.global.pillars[r.id] ?? 0)
+              );
+              let improve = starLevel - genusPillar;
+              if (improve > 0) {
+                weighting += 1e4 * improve;
+                goals.push("achieve_enlightenment_name");
+              }
+            }
+          }
+        }
+        if (settings2.prestigeType === "apocalypse") {
+          let imitateUnlocked = game2.global.stats?.synth?.[this.id] ?? false;
+          if (!noImitates.includes(this.id) && !imitateUnlocked) {
+            weighting += 1e4;
+            goals.push("feat_planned_obsolescence_name");
+            if (goodImitates.includes(this.id)) {
+              weighting += (goodImitates.length - 1 - goodImitates.indexOf(this.id)) * 5e3;
+            }
+          }
+        }
+        if (greatnessReset.includes(settings2.prestigeType)) {
+          if (!noGreatnessGenus.includes(this.genus) && !noGreatnessRace.includes(this.id)) {
+            checkAchievement(100, "genus_" + this.genus);
+          }
+        } else if (!noExtinctionRace.includes(this.id) && (!noMADRace.includes(this.id) || settings2.prestigeType !== "mad")) {
+          checkAchievement(100, "extinct_" + this.id);
+        }
+        if (this.genus === "demonic" && settings2.prestigeType !== "mad" && settings2.prestigeType !== "bioseed") {
+          checkAchievement(50, "blood_war");
+        }
+        if (this.id === "sharkin" && settings2.prestigeType !== "mad") {
+          checkAchievement(50, "laser_shark");
+        }
+        if (game2.global.race.universe === "micro" && settings2.prestigeType === "bioseed") {
+          let smallRace = this.genus === "small" || game2.races[this.id].traits.compact;
+          checkAchievement(50, smallRace ? "macro" : "marble");
+        }
+        if (this.id === "balorg" && game2.global.race.universe === "magic" && settings2.prestigeType === "vacuum") {
+          checkAchievement(50, "pass");
+        }
+        for (let set of fanatAchievements2) {
+          if (this.id === set.race && game2.global.race.gods === set.god) {
+            checkAchievement(150, set.achieve);
+          }
+        }
+        if (weighting > 0 && habitability === 1 && this.getCondition() !== "" && !challengeRace.includes(this.id)) {
+          weighting += 500;
+        }
+        if (midTierReset.includes(settings2.prestigeType) && bestForMid.includes(this.id) || highTierReset.includes(settings2.prestigeType) && bestForHigh.includes(this.id)) {
+          weighting += 1;
+        }
+        if (this.id === game2.global.race.gods) {
+          checkAchievement(10, "second_evolution");
+        }
+        for (let set of fanatAchievements2) {
+          if (this.id === set.god) {
+            checkAchievement(5, set.achieve);
+          }
+        }
+        if (game2.global.race.universe !== "micro") {
+          const checkFeat = (id) => {
+            let improve = starLevel - (game2.global.stats.feat[id] ?? 0);
+            if (improve > 0) {
+              weighting += 1 * improve;
+              goals.push(`feat_${id}_name`);
+            }
+          };
+          if (game2.global.city.biome === "hellscape" && this.genus !== "demonic") {
+            switch (settings2.prestigeType) {
+              case "mad":
+              case "cataclysm":
+                checkFeat("take_no_advice");
+                break;
+              case "bioseed":
+                checkFeat("ill_advised");
+                break;
+            }
+          }
+          if (this.id === "junker") {
+            switch (settings2.prestigeType) {
+              case "bioseed":
+                checkFeat("organ_harvester");
+                break;
+              case "ascension":
+              case "demonic":
+                checkFeat("garbage_pie");
+              // Fall through: these prestige types also qualify for The Misery.
+              case "terraform":
+              case "whitehole":
+              case "vacuum":
+              case "apocalypse":
+                checkFeat("the_misery");
+                break;
+            }
+          }
+          if (settings2.prestigeType === "whitehole" && game2.global.race.universe === "evil" && this.genus === "angelic") {
+            checkFeat("nephilim");
+          }
+          if (settings2.prestigeType === "demonic" && this.genus === "angelic") {
+            checkFeat("twisted");
+          }
+          if (settings2.prestigeType === "ascension" && settings2.challenge_emfield && this.genus === "artifical" && this.id !== "custom") {
+            checkFeat("digital_ascension");
+          }
+          if (settings2.prestigeType === "demonic" && this.id === "sludge") {
+            checkFeat("slime_lord");
+          }
+        }
+        if (challengeRace.includes(this.id)) {
+          weighting *= starLevel < 5 ? 0 : 0.01;
+        }
+        weighting *= habitability;
+        return verbose ? goals : weighting;
+      }
+      getHabitability() {
+        switch (this.id) {
+          case "hellspawn":
+            return game2.global.race.universe === "evil" && game2.global.stats.achieve["godslayer"]?.e ? 1 : 0;
+          case "junker":
+            return game2.global.genes.challenge ? 1 : 0;
+          case "sludge":
+            return (game2.global.stats.achieve["ascended"] || game2.global.stats.achieve["corrupted"]) && game2.global.stats.achieve["extinct_junker"] ? 1 : 0;
+          case "ultra_sludge":
+            return game2.global.stats.achieve["godslayer"] && game2.global.stats.achieve["extinct_sludge"] ? 1 : 0;
+          case "hybrid":
+            return game2.global.stats.achieve["what_is_best"]?.e >= 5 ? 1 : 0;
+        }
+        let unboundMod = game2.global.blood.unbound >= 4 ? 0.95 : game2.global.blood.unbound >= 2 ? 0.9 : game2.global.blood.unbound >= 1 ? 0.8 : 0;
+        let shadowMod = game2.global.blood.unbound >= 3 ? unboundMod : 0;
+        switch (this.genus) {
+          case "aquatic":
+            return ["swamp", "oceanic"].includes(game2.global.city.biome) ? 1 : unboundMod;
+          case "fey":
+            return ["forest", "swamp", "taiga"].includes(game2.global.city.biome) ? 1 : unboundMod;
+          case "sand":
+            return ["ashland", "desert"].includes(game2.global.city.biome) ? 1 : unboundMod;
+          case "heat":
+            return ["ashland", "volcanic"].includes(game2.global.city.biome) ? 1 : unboundMod;
+          case "polar":
+            return ["tundra", "taiga"].includes(game2.global.city.biome) ? 1 : unboundMod;
+          case "demonic":
+            return game2.global.city.biome === "hellscape" ? 1 : shadowMod;
+          case "angelic":
+            return game2.global.city.biome === "eden" ? 1 : shadowMod;
+          case "synthetic":
+            return game2.global.stats.achieve["obsolete"]?.l >= 5 ? 1 : 0;
+          case "eldritch":
+            return game2.global.stats.achieve["nightmare"]?.mg ? 1 : 0;
+          case "hybrid":
+            return game2.global.stats.achieve["godslayer"] ? 1 : 0;
+          case void 0:
+            return 0;
+          default:
+            return 1;
+        }
+      }
+      getCondition() {
+        switch (this.id) {
+          case "hellspawn":
+            return poly2.loc("wiki_challenges_reqs_reset", [
+              `${poly2.loc("wiki_universe_evil")} ${poly2.loc(
+                "wiki_resets_apotheosis"
+              )}`
+            ]);
+          case "junker":
+            return "Genetic Dead End unlocked.";
+          case "sludge":
+            return "Failed Experiment unlocked.";
+          case "ultra_sludge":
+            return "Ultra Failed Experiment unlocked.";
+          case "custom":
+            return `Complete an Ascension reset and be on a suitable planet for your chosen genus (${this.genus ? game2.loc("genelab_genus_" + this.genus) : "not set"}).`;
+          case "hybrid":
+            return game2.loc("wiki_achieve_what_is_best");
+        }
+        switch (this.genus) {
+          case "aquatic":
+            return "Oceanic or Swamp planet.";
+          case "fey":
+            return "Forest, Swamp or Taiga planet.";
+          case "sand":
+            return "Ashland or Desert planet.";
+          case "heat":
+            return "Ashland or Volcanic planet.";
+          case "polar":
+            return "Tundra or Taiga planet.";
+          case "demonic":
+            return "Hellscape planet.";
+          case "angelic":
+            return "Eden planet.";
+          case "synthetic":
+            return game2.loc("wiki_achieve_obsolete");
+          case "eldritch":
+            return game2.loc("wiki_achieve_nightmare");
+          case "hybrid":
+            return game2.loc("wiki_achieve_godslayer");
+          case void 0:
+            return "Unknown.";
+          default:
+            return "";
+        }
+      }
+    }
+    class Trigger2 {
+      constructor(seq, priority, requirementType, requirementId, requirementCount, actionType, actionId, actionCount) {
+        this.seq = seq;
+        this.priority = priority;
+        this.requirementType = requirementType;
+        this.requirementId = requirementId;
+        this.requirementCount = requirementCount;
+        this.actionType = actionType;
+        this.actionId = actionId;
+        this.actionCount = actionCount;
+        this.complete = false;
+      }
+      cost() {
+        if (this.actionType === "research") {
+          return techIds2[this.actionId].definition.cost;
+        }
+        if (this.actionType === "build") {
+          return buildingIds2[this.actionId].definition.cost;
+        }
+        if (this.actionType === "arpa") {
+          return arpaIds2[this.actionId].definition.cost;
+        }
+        return {};
+      }
+      isActionPossible() {
+        let obj = null;
+        if (this.actionType === "research") {
+          obj = techIds2[this.actionId];
+        }
+        if (this.actionType === "build") {
+          obj = buildingIds2[this.actionId];
+        }
+        if (this.actionType === "arpa") {
+          obj = arpaIds2[this.actionId];
+        }
+        return obj && obj.isUnlocked() && obj.isAffordable(true);
+      }
+      updateComplete() {
+        if (this.complete) {
+          return false;
+        }
+        if (this.actionType === "research" && techIds2[this.actionId].isResearched()) {
+          this.complete = true;
+          return true;
+        }
+        if (this.actionType === "build" && buildingIds2[this.actionId].count >= this.actionCount) {
+          this.complete = true;
+          return true;
+        }
+        if (this.actionType === "arpa" && arpaIds2[this.actionId].count >= this.actionCount) {
+          this.complete = true;
+          return true;
+        }
+        return false;
+      }
+      areRequirementsMet() {
+        if (this.requirementType === "chain") {
+          return this.priority < 1 || TriggerManager2.priorityList[this.priority - 1]?.complete;
+        } else if (checkTypes2[this.requirementType]) {
+          try {
+            if (retBools2.includes(this.requirementType)) {
+              return checkTypes2[this.requirementType].fn(this.requirementId) == this.requirementCount;
+            } else {
+              return checkTypes2[this.requirementType].fn(this.requirementId) >= this.requirementCount;
+            }
+          } catch (error) {
+            let displayName = `${this.requirementType} ${this.requirementId} x${this.requirementCount} => ${this.actionType}: ${this.actionId} x${this.actionCount}`;
+            let msg = `Trigger ${this.seq} [${displayName}] requirement is invalid! Fix or remove it. (${error})`;
+            if (!WindowManager2.isOpen() && !Object.values(game2.global.lastMsg.all).find(
+              (log) => log.m === msg
+            )) {
+              GameLog2.logDanger("special", msg, ["events", "major_events"]);
+            }
+          }
+        }
+        return false;
+      }
+      updateRequirementType(requirementType) {
+        if (requirementType === this.requirementType) {
+          return;
+        }
+        if (requirementType === "chain") {
+          this.requirementType = requirementType;
+          this.requirementId = "";
+          this.requirementCount = 0;
+          return;
+        }
+        if (!checkTypes2[requirementType]) {
+          return;
+        }
+        let oldArg = checkTypes2[this.requirementType]?.arg ?? null;
+        let oldOpts = checkTypes2[this.requirementType]?.options ?? null;
+        let newArg = checkTypes2[requirementType].arg;
+        let newOpts = checkTypes2[requirementType].options;
+        this.requirementType = requirementType;
+        this.requirementCount = 1;
+        this.complete = false;
+        if (oldArg !== newArg || oldOpts !== newOpts) {
+          this.requirementId = checkTypes2[this.requirementType].def;
+        }
+      }
+      updateActionType(actionType) {
+        if (actionType === this.actionType) {
+          return;
+        }
+        this.actionType = actionType;
+        this.complete = false;
+        if (this.actionType === "research") {
+          this.actionId = "tech-club";
+          this.actionCount = 0;
+          return;
+        }
+        if (this.actionType === "build") {
+          this.actionId = "city-basic_housing";
+          this.actionCount = 1;
+          return;
+        }
+        if (this.actionType === "arpa") {
+          this.actionId = "arpalhc";
+          this.actionCount = 1;
+          return;
+        }
+      }
+    }
+    class MinorTrait2 {
+      constructor(traitName) {
+        this.traitName = traitName;
+      }
+      get enabled() {
+        return settings2["mTrait_" + this.traitName];
+      }
+      get priority() {
+        return settingsRaw2["mTrait_p_" + this.traitName];
+      }
+      get weighting() {
+        return settings2["mTrait_w_" + this.traitName];
+      }
+      isUnlocked() {
+        return game2.global.settings.mtorder.includes(this.traitName);
+      }
+      geneCount() {
+        return game2.global.race.minor[this.traitName] ?? 0;
+      }
+      phageCount() {
+        return game2.global.genes.minor[this.traitName] ?? 0;
+      }
+      totalCount() {
+        return game2.global.race[this.traitName] ?? 0;
+      }
+      geneCost() {
+        return this.traitName === "mastery" ? Fibonacci2(this.geneCount()) * 5 : Fibonacci2(this.geneCount());
+      }
+    }
+    class MutableTrait2 {
+      constructor(traitName) {
+        this.traitName = traitName;
+        this.baseCost = Math.abs(game2.traits[traitName].val);
+        this.isPositive = game2.traits[traitName].val >= 0;
+      }
+      get gainEnabled() {
+        return settings2["mutableTrait_gain_" + this.traitName];
+      }
+      get purgeEnabled() {
+        return settings2["mutableTrait_purge_" + this.traitName];
+      }
+      get resetEnabled() {
+        return settings2["mutableTrait_reset_" + this.traitName];
+      }
+      get priority() {
+        return settingsRaw2["mutableTrait_p_" + this.traitName];
+      }
+      get name() {
+        return game2.loc("trait_" + this.traitName + "_name");
+      }
+      canGain() {
+        if (game2.global.race.species === "hellspawn" && game2.global.race["warlord"]) {
+          return false;
+        }
+        return this.gainEnabled && !this.purgeEnabled && this.canMutate("gain") && game2.global.race[this.traitName] === void 0 && !conflictingTraits2.some(
+          (set) => set[0] === this.traitName && game2.global.race[set[1]] !== void 0 || set[1] === this.traitName && game2.global.race[set[0]] !== void 0
+        );
+      }
+      canPurge() {
+        return this.purgeEnabled && !this.gainEnabled && this.canMutate("purge") && game2.global.race[this.traitName] !== void 0 && !((game2.global.race.species === "sludge" || game2.global.race.species === "ultra_sludge") && this.traitName === "ooze") && !game2.global.race.ss_traits?.includes(this.traitName) && !game2.global.race.iTraits?.hasOwnProperty(this.traitName);
+      }
+      canMutate(action) {
+        let currentPlasmids = resources2[game2.global.race.universe === "antimatter" ? "AntiPlasmid" : "Plasmid"].currentQuantity;
+        return currentPlasmids - this.mutationCost(action) >= MutableTraitManager2.minimumPlasmidsToPreserve && !((game2.global.race.species === "sludge" || game2.global.race.species === "ultra_sludge") && game2.global.race["modified"]);
+      }
+      mutationCost(action) {
+        let mult = mutationCostMultipliers2[game2.global.race.species]?.[action] ?? 1;
+        let multGenus = mutationCostMultipliersGenus2[game2.races[game2.global.race.species].type]?.[action] ?? 1;
+        return this.baseCost * 5 * mult * multGenus;
+      }
+    }
+    class MajorTrait2 extends MutableTrait2 {
+      constructor(traitName) {
+        super(traitName);
+        this.type = "major";
+        let ownerRace = Object.entries(game2.races).filter(
+          ([id, race]) => id !== "custom" && id !== "hybrid" && race.traits[traitName] !== void 0
+        ).map(([id, race]) => ({ id, genus: race.type }))[0] ?? {};
+        this.source = ownerRace.id ?? specialRaceTraits2[traitName] ?? "";
+        this.racesThatCanGain = Object.entries(game2.races).filter(
+          ([id, race]) => id == ownerRace.id || (race?.type == "hybrid" ? race?.hybrid?.includes(ownerRace.genus) : race?.type === ownerRace.genus)
+        ).map(([id, race]) => id).flat();
+        this.genus = this.source === "reindeer" ? "herbivore" : ownerRace.genus;
+      }
+      isGainable() {
+        return this.traitName !== "frail" && this.traitName !== "ooze";
+      }
+      canGain() {
+        return super.canGain() && game2.global.genes["mutation"] >= 3 && this.racesThatCanGain.includes(game2.global.race.species);
+      }
+      canPurge() {
+        return super.canPurge() && game2.global.genes["mutation"] >= 1;
+      }
+    }
+    class GenusTrait2 extends MutableTrait2 {
+      constructor(traitName) {
+        super(traitName);
+        this.type = "genus";
+        let genus = Object.entries(poly2.genus_traits).filter(([id, traits]) => traits[traitName] !== void 0).map(([id, traits]) => id);
+        this.source = genus[0] ?? specialRaceTraits2[traitName] ?? "";
+        this.genus = this.source;
+      }
+      isGainable() {
+        return false;
+      }
+      canGain() {
+        return false;
+      }
+      canPurge() {
+        return super.canPurge() && game2.global.genes["mutation"] >= 2;
+      }
+    }
+    return {
+      Job: Job2,
+      BasicJob: BasicJob2,
+      CraftingJob: CraftingJob2,
+      Resource: Resource2,
+      SoulGem: SoulGem2,
+      Troops: Troops2,
+      Supply: Supply2,
+      Power: Power2,
+      Support: Support2,
+      BeltSupport: BeltSupport2,
+      ElectrolysisSupport: ElectrolysisSupport2,
+      WomlingsSupport: WomlingsSupport2,
+      PrestigeResource: PrestigeResource2,
+      Population: Population2,
+      Morale: Morale2,
+      Thrall: Thrall2,
+      ResourceProductionCost: ResourceProductionCost2,
+      Action: Action2,
+      CityAction: CityAction2,
+      Pillar: Pillar2,
+      ResourceAction: ResourceAction2,
+      EvolutionAction: EvolutionAction2,
+      SpaceDock: SpaceDock2,
+      ModalAction: ModalAction2,
+      Project: Project2,
+      Technology: Technology2,
+      Race: Race2,
+      Trigger: Trigger2,
+      MinorTrait: MinorTrait2,
+      MutableTrait: MutableTrait2,
+      MajorTrait: MajorTrait2,
+      GenusTrait: GenusTrait2
+    };
+  }
+
+  // src/game/compatibility.ts
+  function liveObject(getValue) {
+    return new Proxy({}, {
+      get: (_target, property) => Reflect.get(getValue(), property),
+      set: (_target, property, value) => Reflect.set(getValue(), property, value),
+      has: (_target, property) => Reflect.has(getValue(), property),
+      ownKeys: () => Reflect.ownKeys(getValue()),
+      getOwnPropertyDescriptor: (_target, property) => {
+        const descriptor = Reflect.getOwnPropertyDescriptor(getValue(), property);
+        return descriptor ? { ...descriptor, configurable: true } : void 0;
+      }
+    });
+  }
+  function createGameCompatibility({
+    getGame,
+    getBuildings,
+    getTraitVal,
+    getHaveTech,
+    getGovernor: getGovernor2,
+    getVueById: getVueById2,
+    normalizeProperties: normalizeProperties2,
+    cloneInto: cloneInto2,
+    getUnsafeWindow,
+    getDate
+  }) {
+    const game2 = liveObject(getGame);
+    const buildings2 = liveObject(getBuildings);
+    const traitVal2 = (...args) => getTraitVal()(...args);
+    const haveTech2 = (...args) => getHaveTech()(...args);
+    const poly2 = {
+      // Taken directly from game code with no functional changes, and minified.
+      // export function astrologySign() from seasons.js
+      astrologySign: function() {
+        let t = getDate();
+        if (0 === t.getMonth() && t.getDate() >= 20 || 1 === t.getMonth() && 18 >= t.getDate())
+          return "aquarius";
+        if (1 === t.getMonth() && t.getDate() >= 19 || 2 === t.getMonth() && 20 >= t.getDate())
+          return "pisces";
+        if (2 === t.getMonth() && t.getDate() >= 21 || 3 === t.getMonth() && 19 >= t.getDate())
+          return "aries";
+        if (3 === t.getMonth() && t.getDate() >= 20 || 4 === t.getMonth() && 20 >= t.getDate())
+          return "taurus";
+        if (4 === t.getMonth() && t.getDate() >= 21 || 5 === t.getMonth() && 21 >= t.getDate())
+          return "gemini";
+        else if (5 === t.getMonth() && t.getDate() >= 22 || 6 === t.getMonth() && 22 >= t.getDate())
+          return "cancer";
+        else if (6 === t.getMonth() && t.getDate() >= 23 || 7 === t.getMonth() && 22 >= t.getDate())
+          return "leo";
+        else if (7 === t.getMonth() && t.getDate() >= 23 || 8 === t.getMonth() && 22 >= t.getDate())
+          return "virgo";
+        else if (8 === t.getMonth() && t.getDate() >= 23 || 9 === t.getMonth() && 22 >= t.getDate())
+          return "libra";
+        else if (9 === t.getMonth() && t.getDate() >= 23 || 10 === t.getMonth() && 22 >= t.getDate())
+          return "scorpio";
+        else if (10 === t.getMonth() && t.getDate() >= 23 || 11 === t.getMonth() && 21 >= t.getDate())
+          return "sagittarius";
+        else if (11 === t.getMonth() && t.getDate() >= 22 || 0 === t.getMonth() && 19 >= t.getDate())
+          return "capricorn";
+        else return "time itself is broken";
+      },
+      // export function arpaAdjustCosts(costs) from arpa.js
+      arpaAdjustCosts: function(t) {
+        return t = (function(t2) {
+          var r = traitVal2("creative", 1, "-");
+          if (r < 1) {
+            var a = {};
+            return Object.keys(t2).forEach(function(e) {
+              a[e] = function() {
+                return t2[e]() * r;
+              };
+            }), a;
+          }
+          return t2;
+        })(t), poly2.adjustCosts({ cost: t });
+      },
+      // function govPrice(gov) from civics.js
+      govPrice: function(e) {
+        let o = game2.global.civic.foreign[`gov${e}`], i = 15384 * o.eco;
+        return i *= 1 + 1.6 * o.hstl / 100, +(i *= 1 - 0.25 * o.unrest / 100).toFixed(0);
+      },
+      // export const galaxyOffers from resources.js
+      galaxyOffers: normalizeProperties2([
+        { buy: { res: "Deuterium", vol: 5 }, sell: { res: "Helium_3", vol: 25 } },
+        {
+          buy: { res: "Neutronium", vol: 2.5 },
+          sell: { res: "Copper", vol: 200 }
+        },
+        { buy: { res: "Adamantite", vol: 3 }, sell: { res: "Iron", vol: 300 } },
+        { buy: { res: "Elerium", vol: 1 }, sell: { res: "Oil", vol: 125 } },
+        {
+          buy: { res: "Nano_Tube", vol: 10 },
+          sell: { res: "Titanium", vol: 20 }
+        },
+        {
+          buy: { res: "Graphene", vol: 25 },
+          sell: {
+            res: () => game2.global.race.kindling_kindred || game2.global.race.smoldering ? game2.global.race.smoldering ? "Chrysotile" : "Stone" : "Lumber",
+            vol: 1e3
+          }
+        },
+        {
+          buy: { res: "Stanene", vol: 40 },
+          sell: { res: "Aluminium", vol: 800 }
+        },
+        {
+          buy: { res: "Bolognium", vol: 0.75 },
+          sell: { res: "Uranium", vol: 4 }
+        },
+        { buy: { res: "Vitreloy", vol: 1 }, sell: { res: "Infernite", vol: 1 } }
+      ]),
+      // export const supplyValue from resources.js
+      supplyValue: {
+        Lumber: { in: 0.5, out: 25e3 },
+        Chrysotile: { in: 0.5, out: 25e3 },
+        Stone: { in: 0.5, out: 25e3 },
+        Crystal: { in: 3, out: 25e3 },
+        Furs: { in: 3, out: 25e3 },
+        Copper: { in: 1.5, out: 25e3 },
+        Iron: { in: 1.5, out: 25e3 },
+        Aluminium: { in: 2.5, out: 25e3 },
+        Cement: { in: 3, out: 25e3 },
+        Coal: { in: 1.5, out: 25e3 },
+        Oil: { in: 2.5, out: 12e3 },
+        Uranium: { in: 5, out: 300 },
+        Steel: { in: 3, out: 25e3 },
+        Titanium: { in: 3, out: 25e3 },
+        Alloy: { in: 6, out: 25e3 },
+        Polymer: { in: 6, out: 25e3 },
+        Iridium: { in: 8, out: 25e3 },
+        Helium_3: { in: 4.5, out: 12e3 },
+        Deuterium: { in: 4, out: 1e3 },
+        Neutronium: { in: 15, out: 1e3 },
+        Adamantite: { in: 12.5, out: 1e3 },
+        Infernite: { in: 25, out: 250 },
+        Elerium: { in: 30, out: 250 },
+        Nano_Tube: { in: 6.5, out: 1e3 },
+        Graphene: { in: 5, out: 1e3 },
+        Stanene: { in: 4.5, out: 1e3 },
+        Bolognium: { in: 18, out: 1e3 },
+        Vitreloy: { in: 14, out: 1e3 },
+        Orichalcum: { in: 10, out: 1e3 },
+        Plywood: { in: 10, out: 250 },
+        Brick: { in: 10, out: 250 },
+        Wrought_Iron: { in: 10, out: 250 },
+        Sheet_Metal: { in: 10, out: 250 },
+        Mythril: { in: 12.5, out: 250 },
+        Aerogel: { in: 16.5, out: 250 },
+        Nanoweave: { in: 18, out: 250 },
+        Scarletite: { in: 35, out: 250 }
+      },
+      // export const monsters from portal.js
+      monsters: {
+        fire_elm: {
+          weapon: {
+            laser: 1.05,
+            flame: 0,
+            plasma: 0.25,
+            kinetic: 0.5,
+            missile: 0.5,
+            sonic: 1,
+            shotgun: 0.75,
+            tesla: 0.65,
+            claws: 0.5,
+            venom: 0.62,
+            cold: 1.25,
+            shock: 0.68,
+            fire: 0,
+            acid: 0.25,
+            stone: 0.5,
+            iron: 0.5,
+            flesh: 0.3,
+            ice: 1.12,
+            magma: 0,
+            axe: 0.5,
+            hammer: 0.5
+          },
+          nozone: { freeze: true, flooded: true },
+          amp: { hot: 1.75, humid: 0.8, steam: 0.9 }
+        },
+        water_elm: {
+          weapon: {
+            laser: 0.65,
+            flame: 0.5,
+            plasma: 1,
+            kinetic: 0.2,
+            missile: 0.5,
+            sonic: 0.5,
+            shotgun: 0.25,
+            tesla: 0.75,
+            claws: 0.4,
+            venom: 0.8,
+            cold: 1.1,
+            shock: 0.68,
+            fire: 0.8,
+            acid: 0.25,
+            stone: 0.4,
+            iron: 0.3,
+            flesh: 0.5,
+            ice: 1.1,
+            magma: 0.75,
+            axe: 0.45,
+            hammer: 0.45
+          },
+          nozone: { hot: true, freeze: true },
+          amp: { steam: 1.5, river: 1.1, flooded: 2, rain: 1.75, humid: 1.25 }
+        },
+        rock_golem: {
+          weapon: {
+            laser: 1,
+            flame: 0.5,
+            plasma: 1,
+            kinetic: 0.65,
+            missile: 0.95,
+            sonic: 0.75,
+            shotgun: 0.35,
+            tesla: 0,
+            claws: 0.7,
+            venom: 0.25,
+            cold: 0.35,
+            shock: 0,
+            fire: 0.9,
+            acid: 1,
+            stone: 0.5,
+            iron: 0.65,
+            flesh: 0.3,
+            ice: 0.3,
+            magma: 0.9,
+            axe: 0.2,
+            hammer: 1
+          },
+          nozone: {},
+          amp: {}
+        },
+        bone_golem: {
+          weapon: {
+            laser: 0.45,
+            flame: 0.35,
+            plasma: 0.55,
+            kinetic: 1,
+            missile: 1,
+            sonic: 0.75,
+            shotgun: 0.75,
+            tesla: 0.15,
+            claws: 0.75,
+            venom: 0,
+            cold: 0.2,
+            shock: 0.15,
+            fire: 0.4,
+            acid: 0.85,
+            stone: 0.9,
+            iron: 1,
+            flesh: 0.15,
+            ice: 0.3,
+            magma: 0.9,
+            axe: 0.65,
+            hammer: 1.2
+          },
+          nozone: {},
+          amp: {}
+        },
+        mech_dino: {
+          weapon: {
+            laser: 0.85,
+            flame: 0.05,
+            plasma: 0.55,
+            kinetic: 0.45,
+            missile: 0.5,
+            sonic: 0.35,
+            shotgun: 0.5,
+            tesla: 1,
+            claws: 0.38,
+            venom: 0.1,
+            cold: 0.5,
+            shock: 1.1,
+            fire: 0.5,
+            acid: 0.75,
+            stone: 0.5,
+            iron: 0.5,
+            flesh: 0.15,
+            ice: 0.3,
+            magma: 0.9,
+            axe: 0.6,
+            hammer: 0.4
+          },
+          nozone: {},
+          amp: {}
+        },
+        plant: {
+          weapon: {
+            laser: 0.42,
+            flame: 1,
+            plasma: 0.65,
+            kinetic: 0.2,
+            missile: 0.25,
+            sonic: 0.75,
+            shotgun: 0.35,
+            tesla: 0.38,
+            claws: 0.25,
+            venom: 0.25,
+            cold: 0.65,
+            shock: 0.28,
+            fire: 1,
+            acid: 0.45,
+            stone: 0.6,
+            iron: 0.5,
+            flesh: 0.5,
+            ice: 0.55,
+            magma: 1,
+            axe: 0.25,
+            hammer: 0.15
+          },
+          nozone: {},
+          amp: {}
+        },
+        crazed: {
+          weapon: {
+            laser: 0.5,
+            flame: 0.85,
+            plasma: 0.65,
+            kinetic: 1,
+            missile: 0.35,
+            sonic: 0.15,
+            shotgun: 0.95,
+            tesla: 0.6,
+            claws: 1,
+            venom: 0.5,
+            cold: 0.5,
+            shock: 0.75,
+            fire: 0.5,
+            acid: 0.5,
+            stone: 0.7,
+            iron: 0.8,
+            flesh: 0.9,
+            ice: 0.4,
+            magma: 0.5,
+            axe: 1,
+            hammer: 0.75
+          },
+          nozone: {},
+          amp: {}
+        },
+        minotaur: {
+          weapon: {
+            laser: 0.32,
+            flame: 0.5,
+            plasma: 0.82,
+            kinetic: 0.44,
+            missile: 1,
+            sonic: 0.15,
+            shotgun: 0.2,
+            tesla: 0.35,
+            claws: 0.6,
+            venom: 1.1,
+            cold: 0.5,
+            shock: 0.3,
+            fire: 0.5,
+            acid: 1,
+            stone: 0.6,
+            iron: 0.9,
+            flesh: 0.3,
+            ice: 0.4,
+            magma: 0.55,
+            axe: 0.75,
+            hammer: 0.6
+          },
+          nozone: {},
+          amp: {}
+        },
+        ooze: {
+          weapon: {
+            laser: 0.2,
+            flame: 0.65,
+            plasma: 1,
+            kinetic: 0,
+            missile: 0,
+            sonic: 0.85,
+            shotgun: 0,
+            tesla: 0.15,
+            claws: 0,
+            venom: 0.15,
+            cold: 1.5,
+            shock: 0.2,
+            fire: 0.6,
+            acid: 0.5,
+            stone: 0,
+            iron: 0,
+            flesh: 0,
+            ice: 1.25,
+            magma: 0.7,
+            axe: 0,
+            hammer: 0
+          },
+          nozone: {},
+          amp: {}
+        },
+        zombie: {
+          weapon: {
+            laser: 0.35,
+            flame: 1,
+            plasma: 0.45,
+            kinetic: 0.08,
+            missile: 0.8,
+            sonic: 0.18,
+            shotgun: 0.95,
+            tesla: 0.05,
+            claws: 0.85,
+            venom: 0,
+            cold: 0.2,
+            shock: 0.35,
+            fire: 0.95,
+            acid: 0.5,
+            stone: 0.5,
+            iron: 0.5,
+            flesh: 0.35,
+            ice: 0.25,
+            magma: 0.9,
+            axe: 1,
+            hammer: 0.5
+          },
+          nozone: {},
+          amp: {}
+        },
+        raptor: {
+          weapon: {
+            laser: 0.68,
+            flame: 0.55,
+            plasma: 0.85,
+            kinetic: 1,
+            missile: 0.44,
+            sonic: 0.22,
+            shotgun: 0.33,
+            tesla: 0.66,
+            claws: 0.85,
+            venom: 0.5,
+            cold: 0.5,
+            shock: 0.88,
+            fire: 0.6,
+            acid: 0.6,
+            stone: 1,
+            iron: 0.85,
+            flesh: 0.45,
+            ice: 0.5,
+            magma: 0.65,
+            axe: 0.9,
+            hammer: 0.6
+          },
+          nozone: {},
+          amp: {}
+        },
+        frost_giant: {
+          weapon: {
+            laser: 0.9,
+            flame: 0.82,
+            plasma: 1,
+            kinetic: 0.25,
+            missile: 0.08,
+            sonic: 0.45,
+            shotgun: 0.28,
+            tesla: 0.5,
+            claws: 0.35,
+            venom: 0.15,
+            cold: 0,
+            shock: 0.6,
+            fire: 1.2,
+            acid: 0.5,
+            stone: 0.35,
+            iron: 1,
+            flesh: 0.3,
+            ice: 0,
+            magma: 1.1,
+            axe: 0.5,
+            hammer: 1
+          },
+          nozone: { hot: true },
+          amp: { freeze: 2.5, hail: 1.65 }
+        },
+        swarm: {
+          weapon: {
+            laser: 0.02,
+            flame: 1,
+            plasma: 0.04,
+            kinetic: 0.01,
+            missile: 0.08,
+            sonic: 0.66,
+            shotgun: 0.38,
+            tesla: 0.45,
+            claws: 0.05,
+            venom: 0.01,
+            cold: 0.8,
+            shock: 0.75,
+            fire: 0.8,
+            acid: 0.75,
+            stone: 0.03,
+            iron: 0.03,
+            flesh: 0.03,
+            ice: 0.3,
+            magma: 0.5,
+            axe: 0.01,
+            hammer: 0.05
+          },
+          nozone: {},
+          amp: {}
+        },
+        dragon: {
+          weapon: {
+            laser: 0.18,
+            flame: 0,
+            plasma: 0.12,
+            kinetic: 0.35,
+            missile: 1,
+            sonic: 0.22,
+            shotgun: 0.65,
+            tesla: 0.15,
+            claws: 0.38,
+            venom: 0.88,
+            cold: 0.8,
+            shock: 0.35,
+            fire: 0,
+            acid: 0.85,
+            stone: 0.03,
+            iron: 0.03,
+            flesh: 0.03,
+            ice: 0.3,
+            magma: 0,
+            axe: 0.4,
+            hammer: 0.55
+          },
+          nozone: {},
+          amp: {}
+        },
+        mech_dragon: {
+          weapon: {
+            laser: 0.84,
+            flame: 0.1,
+            plasma: 0.68,
+            kinetic: 0.18,
+            missile: 0.75,
+            sonic: 0.22,
+            shotgun: 0.28,
+            tesla: 1,
+            claws: 0.28,
+            venom: 0,
+            cold: 0.35,
+            shock: 1,
+            fire: 0.15,
+            acid: 0.72,
+            stone: 0.5,
+            iron: 0.5,
+            flesh: 0.5,
+            ice: 0.2,
+            magma: 0.15,
+            axe: 0.25,
+            hammer: 0.8
+          },
+          nozone: {},
+          amp: {}
+        },
+        construct: {
+          weapon: {
+            laser: 0.5,
+            flame: 0.2,
+            plasma: 0.6,
+            kinetic: 0.34,
+            missile: 0.9,
+            sonic: 0.08,
+            shotgun: 0.28,
+            tesla: 1,
+            claws: 0.28,
+            venom: 0,
+            cold: 0.45,
+            shock: 1.1,
+            fire: 0.22,
+            acid: 0.68,
+            stone: 0.55,
+            iron: 0.55,
+            flesh: 0.4,
+            ice: 0.4,
+            magma: 0.18,
+            axe: 0.42,
+            hammer: 0.95
+          },
+          nozone: {},
+          amp: {}
+        },
+        beholder: {
+          weapon: {
+            laser: 0.75,
+            flame: 0.15,
+            plasma: 1,
+            kinetic: 0.45,
+            missile: 0.05,
+            sonic: 0.01,
+            shotgun: 0.12,
+            tesla: 0.3,
+            claws: 0.48,
+            venom: 0.9,
+            cold: 0.88,
+            shock: 0.24,
+            fire: 0.18,
+            acid: 0.9,
+            stone: 0.72,
+            iron: 0.45,
+            flesh: 0.85,
+            ice: 0.92,
+            magma: 0.16,
+            axe: 0.44,
+            hammer: 0.08
+          },
+          nozone: {},
+          amp: {}
+        },
+        worm: {
+          weapon: {
+            laser: 0.55,
+            flame: 0.38,
+            plasma: 0.45,
+            kinetic: 0.2,
+            missile: 0.05,
+            sonic: 1,
+            shotgun: 0.02,
+            tesla: 0.01,
+            claws: 0.18,
+            venom: 0.65,
+            cold: 1,
+            shock: 0.02,
+            fire: 0.38,
+            acid: 0.48,
+            stone: 0.22,
+            iron: 0.24,
+            flesh: 0.35,
+            ice: 1,
+            magma: 0.4,
+            axe: 0.15,
+            hammer: 0.05
+          },
+          nozone: {},
+          amp: {}
+        },
+        hydra: {
+          weapon: {
+            laser: 0.85,
+            flame: 0.75,
+            plasma: 0.85,
+            kinetic: 0.25,
+            missile: 0.45,
+            sonic: 0.5,
+            shotgun: 0.6,
+            tesla: 0.65,
+            claws: 0.3,
+            venom: 0.65,
+            cold: 0.55,
+            shock: 0.65,
+            fire: 0.75,
+            acid: 0.85,
+            stone: 0.25,
+            iron: 0.15,
+            flesh: 0.2,
+            ice: 0.55,
+            magma: 0.75,
+            axe: 0.45,
+            hammer: 0.65
+          },
+          nozone: {},
+          amp: {}
+        },
+        colossus: {
+          weapon: {
+            laser: 1,
+            flame: 0.05,
+            plasma: 0.75,
+            kinetic: 0.45,
+            missile: 1,
+            sonic: 0.35,
+            shotgun: 0.35,
+            tesla: 0.5,
+            claws: 0.48,
+            venom: 0.22,
+            cold: 0.25,
+            shock: 0.65,
+            fire: 0.15,
+            acid: 0.95,
+            stone: 0.55,
+            iron: 0.95,
+            flesh: 0.25,
+            ice: 0.35,
+            magma: 0.2,
+            axe: 0.55,
+            hammer: 0.35
+          },
+          nozone: {},
+          amp: {}
+        },
+        lich: {
+          weapon: {
+            laser: 0.1,
+            flame: 0.1,
+            plasma: 0.1,
+            kinetic: 0.45,
+            missile: 0.75,
+            sonic: 0.35,
+            shotgun: 0.75,
+            tesla: 0.5,
+            claws: 0.4,
+            venom: 0.01,
+            cold: 0.1,
+            shock: 0.5,
+            fire: 0.1,
+            acid: 0.1,
+            stone: 0.35,
+            iron: 0.25,
+            flesh: 0.95,
+            ice: 0.1,
+            magma: 0.1,
+            axe: 0.4,
+            hammer: 1
+          },
+          nozone: {},
+          amp: {}
+        },
+        ape: {
+          weapon: {
+            laser: 1,
+            flame: 0.95,
+            plasma: 0.85,
+            kinetic: 0.5,
+            missile: 0.5,
+            sonic: 0.05,
+            shotgun: 0.35,
+            tesla: 0.68,
+            claws: 0.65,
+            venom: 0.95,
+            cold: 0.5,
+            shock: 0.5,
+            fire: 0.75,
+            acid: 0.65,
+            stone: 0.5,
+            iron: 0.5,
+            flesh: 0.5,
+            ice: 0.5,
+            magma: 0.75,
+            axe: 0.65,
+            hammer: 0.5
+          },
+          nozone: {},
+          amp: {}
+        },
+        bandit: {
+          weapon: {
+            laser: 0.65,
+            flame: 0.5,
+            plasma: 0.85,
+            kinetic: 1,
+            missile: 0.5,
+            sonic: 0.25,
+            shotgun: 0.75,
+            tesla: 0.25,
+            claws: 1,
+            venom: 0.15,
+            cold: 0.5,
+            shock: 0.25,
+            fire: 0.5,
+            acid: 0.5,
+            stone: 0.5,
+            iron: 0.8,
+            flesh: 0.5,
+            ice: 0.5,
+            magma: 0.5,
+            axe: 1,
+            hammer: 0.5
+          },
+          nozone: {},
+          amp: {}
+        },
+        croc: {
+          weapon: {
+            laser: 0.65,
+            flame: 0.05,
+            plasma: 0.6,
+            kinetic: 0.5,
+            missile: 0.5,
+            sonic: 1,
+            shotgun: 0.2,
+            tesla: 0.75,
+            claws: 1,
+            venom: 0.5,
+            cold: 1,
+            shock: 0.75,
+            fire: 0.05,
+            acid: 0.08,
+            stone: 0.6,
+            iron: 0.5,
+            flesh: 0.25,
+            ice: 0.95,
+            magma: 0.05,
+            axe: 0.75,
+            hammer: 0.5
+          },
+          nozone: {},
+          amp: {}
+        },
+        djinni: {
+          weapon: {
+            laser: 0,
+            flame: 0.35,
+            plasma: 1,
+            kinetic: 0.15,
+            missile: 0,
+            sonic: 0.65,
+            shotgun: 0.22,
+            tesla: 0.4,
+            claws: 0.18,
+            venom: 0.12,
+            cold: 0.9,
+            shock: 0.45,
+            fire: 0.3,
+            acid: 0.1,
+            stone: 0.2,
+            iron: 0.95,
+            flesh: 0.2,
+            ice: 0.9,
+            magma: 0.3,
+            axe: 0.12,
+            hammer: 0
+          },
+          nozone: {},
+          amp: {}
+        },
+        snake: {
+          weapon: {
+            laser: 0.5,
+            flame: 0.5,
+            plasma: 0.5,
+            kinetic: 0.5,
+            missile: 0.5,
+            sonic: 0.5,
+            shotgun: 0.5,
+            tesla: 0.5,
+            claws: 0.5,
+            venom: 0.02,
+            cold: 0.75,
+            shock: 0.5,
+            fire: 0.5,
+            acid: 0.5,
+            stone: 0.5,
+            iron: 0.5,
+            flesh: 0.5,
+            ice: 0.75,
+            magma: 0.5,
+            axe: 0.5,
+            hammer: 0.5
+          },
+          nozone: {},
+          amp: {}
+        },
+        centipede: {
+          weapon: {
+            laser: 0.5,
+            flame: 0.85,
+            plasma: 0.95,
+            kinetic: 0.65,
+            missile: 0.6,
+            sonic: 0,
+            shotgun: 0.5,
+            tesla: 0.01,
+            claws: 0.65,
+            venom: 0.01,
+            cold: 0,
+            shock: 0.01,
+            fire: 0.88,
+            acid: 0.95,
+            stone: 0.6,
+            iron: 0.45,
+            flesh: 0.55,
+            ice: 0,
+            magma: 0.88,
+            axe: 0.7,
+            hammer: 0.4
+          },
+          nozone: {},
+          amp: {}
+        },
+        spider: {
+          weapon: {
+            laser: 0.65,
+            flame: 1,
+            plasma: 0.22,
+            kinetic: 0.75,
+            missile: 0.15,
+            sonic: 0.38,
+            shotgun: 0.9,
+            tesla: 0.18,
+            claws: 0.12,
+            venom: 0.05,
+            cold: 0.5,
+            shock: 0.32,
+            fire: 1,
+            acid: 0.65,
+            stone: 0.8,
+            iron: 0.5,
+            flesh: 0.5,
+            ice: 0.5,
+            magma: 1,
+            axe: 0.18,
+            hammer: 0.75
+          },
+          nozone: {},
+          amp: {}
+        },
+        manticore: {
+          weapon: {
+            laser: 0.05,
+            flame: 0.25,
+            plasma: 0.95,
+            kinetic: 0.5,
+            missile: 0.15,
+            sonic: 0.48,
+            shotgun: 0.4,
+            tesla: 0.6,
+            claws: 0.5,
+            venom: 0.5,
+            cold: 0.8,
+            shock: 0.75,
+            fire: 0.15,
+            acid: 0.95,
+            stone: 0.25,
+            iron: 0.5,
+            flesh: 0.8,
+            ice: 0.8,
+            magma: 0.15,
+            axe: 0.5,
+            hammer: 0.25
+          },
+          nozone: {},
+          amp: {}
+        },
+        fiend: {
+          weapon: {
+            laser: 0.75,
+            flame: 0.25,
+            plasma: 0.5,
+            kinetic: 0.25,
+            missile: 0.75,
+            sonic: 0.25,
+            shotgun: 0.5,
+            tesla: 0.5,
+            claws: 0.65,
+            venom: 0.1,
+            cold: 0.65,
+            shock: 0.5,
+            fire: 0.2,
+            acid: 0.5,
+            stone: 0.25,
+            iron: 0.75,
+            flesh: 1,
+            ice: 0.65,
+            magma: 0.2,
+            axe: 0.75,
+            hammer: 0.25
+          },
+          nozone: {},
+          amp: {}
+        },
+        bat: {
+          weapon: {
+            laser: 0.16,
+            flame: 0.18,
+            plasma: 0.12,
+            kinetic: 0.25,
+            missile: 0.02,
+            sonic: 1,
+            shotgun: 0.9,
+            tesla: 0.58,
+            claws: 0.1,
+            venom: 0.1,
+            cold: 0.8,
+            shock: 0.65,
+            fire: 0.15,
+            acid: 0.5,
+            stone: 0.1,
+            iron: 0.1,
+            flesh: 0.5,
+            ice: 0.8,
+            magma: 0.2,
+            axe: 0.1,
+            hammer: 0.1
+          },
+          nozone: {},
+          amp: {}
+        },
+        medusa: {
+          weapon: {
+            laser: 0.35,
+            flame: 0.1,
+            plasma: 0.3,
+            kinetic: 0.95,
+            missile: 1,
+            sonic: 0.15,
+            shotgun: 0.88,
+            tesla: 0.26,
+            claws: 0.42,
+            venom: 0.3,
+            cold: 0.48,
+            shock: 0.28,
+            fire: 0.1,
+            acid: 0.85,
+            stone: 1,
+            iron: 0.25,
+            flesh: 0.75,
+            ice: 0.52,
+            magma: 0.12,
+            axe: 0.34,
+            hammer: 1
+          },
+          nozone: {},
+          amp: {}
+        },
+        ettin: {
+          weapon: {
+            laser: 0.5,
+            flame: 0.35,
+            plasma: 0.8,
+            kinetic: 0.5,
+            missile: 0.25,
+            sonic: 0.3,
+            shotgun: 0.6,
+            tesla: 0.09,
+            claws: 0.5,
+            venom: 0.95,
+            cold: 0.3,
+            shock: 0.8,
+            fire: 0.38,
+            acid: 0.9,
+            stone: 0.6,
+            iron: 0.75,
+            flesh: 0.4,
+            ice: 0.28,
+            magma: 0.32,
+            axe: 0.45,
+            hammer: 0.25
+          },
+          nozone: {},
+          amp: {}
+        },
+        faceless: {
+          weapon: {
+            laser: 0.6,
+            flame: 0.28,
+            plasma: 0.6,
+            kinetic: 0,
+            missile: 0.05,
+            sonic: 0.8,
+            shotgun: 0.15,
+            tesla: 1,
+            claws: 0.02,
+            venom: 0.01,
+            cold: 0,
+            shock: 1,
+            fire: 0.25,
+            acid: 0.55,
+            stone: 0.15,
+            iron: 0.15,
+            flesh: 0.95,
+            ice: 0,
+            magma: 0.25,
+            axe: 0.01,
+            hammer: 0.05
+          },
+          nozone: {},
+          amp: {}
+        },
+        enchanted: {
+          weapon: {
+            laser: 1,
+            flame: 0.02,
+            plasma: 0.95,
+            kinetic: 0.2,
+            missile: 0.7,
+            sonic: 0.05,
+            shotgun: 0.65,
+            tesla: 0.01,
+            claws: 0.1,
+            venom: 0,
+            cold: 0.5,
+            shock: 0.01,
+            fire: 0.02,
+            acid: 1,
+            stone: 0.25,
+            iron: 0.75,
+            flesh: 0.1,
+            ice: 0.5,
+            magma: 0.03,
+            axe: 0.1,
+            hammer: 0.5
+          },
+          nozone: {},
+          amp: {}
+        },
+        gargoyle: {
+          weapon: {
+            laser: 0.15,
+            flame: 0.4,
+            plasma: 0.3,
+            kinetic: 0.5,
+            missile: 0.5,
+            sonic: 0.85,
+            shotgun: 1,
+            tesla: 0.2,
+            claws: 0.45,
+            venom: 0.05,
+            cold: 0.15,
+            shock: 0.08,
+            fire: 0.38,
+            acid: 0.85,
+            stone: 1,
+            iron: 0.85,
+            flesh: 0.25,
+            ice: 0.15,
+            magma: 0.35,
+            axe: 0.42,
+            hammer: 1
+          },
+          nozone: {},
+          amp: {}
+        },
+        chimera: {
+          weapon: {
+            laser: 0.38,
+            flame: 0.6,
+            plasma: 0.42,
+            kinetic: 0.85,
+            missile: 0.35,
+            sonic: 0.5,
+            shotgun: 0.65,
+            tesla: 0.8,
+            claws: 0.92,
+            venom: 0.5,
+            cold: 0.45,
+            shock: 0.8,
+            fire: 0.56,
+            acid: 0.4,
+            stone: 0.5,
+            iron: 0.5,
+            flesh: 0.5,
+            ice: 0.48,
+            magma: 0.54,
+            axe: 0.88,
+            hammer: 0.42
+          },
+          nozone: {},
+          amp: {}
+        },
+        gorgon: {
+          weapon: {
+            laser: 0.65,
+            flame: 0.65,
+            plasma: 0.64,
+            kinetic: 0.65,
+            missile: 0.66,
+            sonic: 0.65,
+            shotgun: 0.65,
+            tesla: 0.65,
+            claws: 0.65,
+            venom: 0.65,
+            cold: 0.65,
+            shock: 0.65,
+            fire: 0.65,
+            acid: 0.65,
+            stone: 0.65,
+            iron: 0.65,
+            flesh: 0.65,
+            ice: 0.65,
+            magma: 0.65,
+            axe: 0.65,
+            hammer: 0.65
+          },
+          nozone: {},
+          amp: {}
+        },
+        kraken: {
+          weapon: {
+            laser: 0.75,
+            flame: 0.35,
+            plasma: 0.75,
+            kinetic: 0.35,
+            missile: 0.5,
+            sonic: 0.18,
+            shotgun: 0.05,
+            tesla: 0.85,
+            claws: 0.32,
+            venom: 0.8,
+            cold: 0.66,
+            shock: 0.82,
+            fire: 0.33,
+            acid: 0.75,
+            stone: 0.45,
+            iron: 0.35,
+            flesh: 0.4,
+            ice: 0.66,
+            magma: 0.33,
+            axe: 0.36,
+            hammer: 0.5
+          },
+          nozone: {},
+          amp: {}
+        },
+        homunculus: {
+          weapon: {
+            laser: 0.05,
+            flame: 1,
+            plasma: 0.1,
+            kinetic: 0.85,
+            missile: 0.65,
+            sonic: 0.5,
+            shotgun: 0.75,
+            tesla: 0.2,
+            claws: 0.85,
+            venom: 0.4,
+            cold: 0.12,
+            shock: 0.22,
+            fire: 1,
+            acid: 0.13,
+            stone: 0.65,
+            iron: 0.68,
+            flesh: 0.95,
+            ice: 0.18,
+            magma: 0.9,
+            axe: 0.85,
+            hammer: 0.65
+          },
+          nozone: {},
+          amp: {}
+        },
+        giant_chicken: {
+          weapon: {
+            laser: 0.95,
+            flame: 0.95,
+            plasma: 0.95,
+            kinetic: 0.95,
+            missile: 0.95,
+            sonic: 0.95,
+            shotgun: 0.95,
+            tesla: 0.95,
+            claws: 0.95,
+            venom: 0.96,
+            cold: 0.95,
+            shock: 0.95,
+            fire: 0.95,
+            acid: 0.95,
+            stone: 0.95,
+            iron: 0.95,
+            flesh: 0.94,
+            ice: 0.95,
+            magma: 0.95,
+            axe: 0.95,
+            hammer: 0.95
+          },
+          nozone: {},
+          amp: {}
+        },
+        skeleton_pack: {
+          weapon: {
+            laser: 0.5,
+            flame: 0.1,
+            plasma: 0.5,
+            kinetic: 1,
+            missile: 1.2,
+            sonic: 0.5,
+            shotgun: 1.05,
+            tesla: 0.2,
+            claws: 0.65,
+            venom: 0,
+            cold: 0.11,
+            shock: 0.22,
+            fire: 0.1,
+            acid: 0.5,
+            stone: 1,
+            iron: 0.65,
+            flesh: 0.25,
+            ice: 0.1,
+            magma: 0.12,
+            axe: 0.15,
+            hammer: 1.08
+          },
+          nozone: {},
+          amp: {}
+        }
+      },
+      // export function hellSupression(area, val) from portal.js
+      hellSupression: function(t, e) {
+        switch (t) {
+          case "ruins": {
+            let t2 = e || buildings2.RuinsGuardPost.stateOnCount, r = 75 * buildings2.RuinsArcology.stateOnCount, a = game2.armyRating(t2 * traitVal2("high_pop", 0, 1), "hellArmy", 0);
+            a *= traitVal2("holy", 1, "+");
+            let l = (a + r) / 5e3;
+            return { supress: l > 1 ? 1 : l, rating: a + r };
+          }
+          case "gate": {
+            let t2 = poly2.hellSupression("ruins", e), r = 100 * buildings2.GateTurret.stateOnCount;
+            r *= traitVal2("holy", 1, "+");
+            let a = (t2.rating + r) / 7500;
+            return { supress: a > 1 ? 1 : a, rating: t2.rating + r };
+          }
+          default:
+            return 0;
+        }
+      },
+      // function taxCap(min) from civics.js
+      taxCap: function(e) {
+        let a = (haveTech2("currency", 5) || game2.global.race.terrifying) && !game2.global.race.noble;
+        if (e) return a ? 0 : traitVal2("noble", 0, 10);
+        {
+          let e2 = traitVal2("noble", 1, 30);
+          return a && (e2 += 20), "oligarchy" === game2.global.civic.govern.type && (e2 += "bureaucrat" === getGovernor2() ? 25 : 20), "noble" === getGovernor2() && (e2 += 20), game2.global.race["wish"] && game2.global.race["wishStats"] && (e2 += game2.global.race.wishStats.tax), e2;
+        }
+      },
+      // export function mechCost(size,infernal) from portal.js
+      mechCost: function(e, a, x) {
+        let l = 9999, r = 1e7;
+        switch (e) {
+          case "small":
+            {
+              let e2 = (x ?? game2.global.blood.prepared) >= 2 ? 5e4 : 75e3;
+              r = a ? 2.5 * e2 : e2, l = a ? 20 : 1;
+            }
+            break;
+          case "medium":
+            r = a ? 45e4 : 18e4, l = a ? 100 : 4;
+            break;
+          case "large":
+            r = a ? 925e3 : 375e3, l = a ? 500 : 20;
+            break;
+          case "titan":
+            r = a ? 15e5 : 75e4, l = a ? 1500 : 75;
+            break;
+          case "collector": {
+            let e2 = (x ?? game2.global.blood.prepared) >= 2 ? 8e3 : 1e4;
+            r = a ? 2.5 * e2 : e2, l = 1;
+          }
+        }
+        return { s: l, c: r };
+      },
+      // function terrainRating(mech,rating,effects) from portal.js
+      terrainRating: function(e, i, s2, x) {
+        return !e.equip.includes("special") || "small" !== e.size && "medium" !== e.size && "collector" !== e.size || i < 1 && (i += (1 - i) * (s2.includes("gravity") ? 0.1 : 0.2)), "small" !== e.size && i < 1 && (i += (s2.includes("fog") || s2.includes("dark") ? 5e-3 : 0.01) * (x ?? game2.global.portal.mechbay.scouts)) > 1 && (i = 1), i;
+      },
+      // function weaponPower(mech,power) from portal.js
+      weaponPower: function(e, i) {
+        return i < 1 && 0 !== i && e.equip.includes("special") && "titan" === e.size && (i += 0.25 * (1 - i)), !e.equip.includes("special") || "large" !== e.size && "cyberdemon" !== e.size || (i *= 1.02), i;
+      },
+      // export function timeFormat(time) from functions.js
+      timeFormat: function(e) {
+        let i;
+        if (e < 0) i = game2.loc("time_never");
+        else if ((e = +e.toFixed(0)) > 60) {
+          let l = e % 60, s2 = (e - l) / 60;
+          if (s2 >= 60) {
+            let e2 = s2 % 60, l2 = (s2 - e2) / 60;
+            if (l2 > 24) {
+              i = `${(l2 - (e2 = l2 % 24)) / 24}d ${e2}h`;
+            } else i = `${l2}h ${e2 = ("0" + e2).slice(-2)}m`;
+          } else
+            i = `${s2 = ("0" + s2).slice(-2)}m ${l = ("0" + l).slice(-2)}s`;
+        } else i = `${e = ("0" + e).slice(-2)}s`;
+        return i;
+      },
+      // export universeAffix(universe) from achieve.js
+      universeAffix: function(e) {
+        switch (e = e || game2.global.race.universe) {
+          case "evil":
+            return "e";
+          case "antimatter":
+            return "a";
+          case "heavy":
+            return "h";
+          case "micro":
+            return "m";
+          case "magic":
+            return "mg";
+          default:
+            return "l";
+        }
+      },
+      // export const genus_traits from races.js (added spores:1 to fungi manually)
+      genus_traits: {
+        humanoid: { adaptable: 1, wasteful: 1 },
+        carnivore: { carnivore: 1, beast: 1, cautious: 1 },
+        herbivore: { herbivore: 1, instinct: 1 },
+        small: { small: 1, weak: 1 },
+        giant: { large: 1, strong: 1 },
+        reptilian: { cold_blooded: 1, scales: 1 },
+        avian: { flier: 1, hollow_bones: 1, sky_lover: 1 },
+        insectoid: { high_pop: 1, fast_growth: 1, high_metabolism: 1 },
+        plant: { sappy: 1, asymmetrical: 1 },
+        fungi: { detritivore: 1, spongy: 1, spores: 1 },
+        aquatic: { submerged: 1, low_light: 1 },
+        fey: { elusive: 1, iron_allergy: 1 },
+        heat: { smoldering: 1, cold_intolerance: 1 },
+        polar: { chilled: 1, heat_intolerance: 1 },
+        sand: { scavenger: 1, nomadic: 1 },
+        demonic: { immoral: 1, evil: 1, soul_eater: 1 },
+        angelic: { blissful: 1, pompous: 1, holy: 1 },
+        synthetic: { artifical: 1, powered: 1 },
+        eldritch: { psychic: 1, tormented: 1, darkness: 1, unfathomable: 1 },
+        hybrid: {}
+      },
+      // export const neg_roll_traits from races.js
+      neg_roll_traits: [
+        "angry",
+        "arrogant",
+        "atrophy",
+        "diverse",
+        "dumb",
+        "fragrant",
+        "frail",
+        "freespirit",
+        "gluttony",
+        "gnawer",
+        "greedy",
+        "hard_of_hearing",
+        "heavy",
+        "hooved",
+        "invertebrate",
+        "lazy",
+        "mistrustful",
+        "nearsighted",
+        "nyctophilia",
+        "paranoid",
+        "pathetic",
+        "pessimistic",
+        "puny",
+        "pyrophobia",
+        "skittish",
+        "slow",
+        "slow_regen",
+        "snowy",
+        "solitary",
+        "unorganized"
+      ],
+      // Reimplemented:
+      // export function crateValue() from resources.js
+      crateValue: () => Number(
+        getVueById2("createHead")?.buildCrateDesc().match(/(\d+)/g)[1] ?? 0
+      ),
+      // export function containerValue() from resources.js
+      containerValue: () => Number(
+        getVueById2("createHead")?.buildContainerDesc().match(/(\d+)/g)[1] ?? 0
+      ),
+      // Firefox compatibility:
+      adjustCosts: (c_action, wiki) => game2.adjustCosts(
+        cloneInto2(c_action, getUnsafeWindow(), { cloneFunctions: true }),
+        wiki
+      ),
+      loc: (key, variables) => game2.loc(key, cloneInto2(variables, getUnsafeWindow())),
+      messageQueue: (msg, color, dnr, tags) => game2.messageQueue(msg, color, dnr, cloneInto2(tags, getUnsafeWindow())),
+      shipCosts: (bp) => game2.shipCosts(cloneInto2(bp, getUnsafeWindow()))
+    };
+    return poly2;
+  }
+
+  // src/game/entity-catalogs.ts
+  function createEntityCatalogs({
+    classes,
+    getHaveTech,
+    setResources
+  }) {
+    const {
+      Action: Action2,
+      BasicJob: BasicJob2,
+      BeltSupport: BeltSupport2,
+      CityAction: CityAction2,
+      CraftingJob: CraftingJob2,
+      ElectrolysisSupport: ElectrolysisSupport2,
+      Job: Job2,
+      ModalAction: ModalAction2,
+      Morale: Morale2,
+      Pillar: Pillar2,
+      Population: Population2,
+      Power: Power2,
+      PrestigeResource: PrestigeResource2,
+      Project: Project2,
+      Resource: Resource2,
+      ResourceAction: ResourceAction2,
+      SoulGem: SoulGem2,
+      SpaceDock: SpaceDock2,
+      Supply: Supply2,
+      Support: Support2,
+      Thrall: Thrall2,
+      Troops: Troops2,
+      WomlingsSupport: WomlingsSupport2
+    } = classes;
+    const haveTech2 = (...args) => getHaveTech()(...args);
+    const resources2 = {
+      // Resources order follow game order, and used to initialize priorities
+      // Evolution resources
+      RNA: new Resource2("RNA", "RNA"),
+      DNA: new Resource2("DNA", "DNA"),
+      // Base resources
+      Money: new Resource2("Money", "Money"),
+      Population: new Population2("Population", "Population"),
+      // We can't store the full elementId because we don't know the name of the population node until later
+      Slave: new Resource2("Slave", "Slave"),
+      Mana: new Resource2("Mana", "Mana"),
+      Energy: new Resource2("Energy", "Energy"),
+      Sus: new Resource2("Suspicion", "Sus"),
+      Authority: new Resource2("Authority", "Authority"),
+      Knowledge: new Resource2("Knowledge", "Knowledge"),
+      Omniscience: new Resource2("Omniscience", "Omniscience"),
+      Zen: new Resource2("Zen", "Zen"),
+      Crates: new Resource2("Crates", "Crates"),
+      Containers: new Resource2("Containers", "Containers"),
+      // Basic resources (can trade for these)
+      Food: new Resource2("Food", "Food", { tradable: true }),
+      Lumber: new Resource2("Lumber", "Lumber", { tradable: true }),
+      Chrysotile: new Resource2("Chrysotile", "Chrysotile", { tradable: true }),
+      Stone: new Resource2("Stone", "Stone", { tradable: true }),
+      Crystal: new Resource2("Crystal", "Crystal", { tradable: true }),
+      Furs: new Resource2("Furs", "Furs", { tradable: true }),
+      Copper: new Resource2("Copper", "Copper", { tradable: true }),
+      Iron: new Resource2("Iron", "Iron", { tradable: true }),
+      Aluminium: new Resource2("Aluminium", "Aluminium", { tradable: true }),
+      Cement: new Resource2("Cement", "Cement", { tradable: true }),
+      Coal: new Resource2("Coal", "Coal", { tradable: true }),
+      Oil: new Resource2("Oil", "Oil", { tradable: true }),
+      Uranium: new Resource2("Uranium", "Uranium", { tradable: true }),
+      Steel: new Resource2("Steel", "Steel", { tradable: true }),
+      Titanium: new Resource2("Titanium", "Titanium", { tradable: true }),
+      Alloy: new Resource2("Alloy", "Alloy", { tradable: true }),
+      Polymer: new Resource2("Polymer", "Polymer", { tradable: true }),
+      Iridium: new Resource2("Iridium", "Iridium", { tradable: true }),
+      Helium_3: new Resource2("Helium-3", "Helium_3", { tradable: true }),
+      // Advanced resources
+      Water: new Resource2("Water", "Water"),
+      Deuterium: new Resource2("Deuterium", "Deuterium"),
+      Neutronium: new Resource2("Neutronium", "Neutronium"),
+      Adamantite: new Resource2("Adamantite", "Adamantite"),
+      Infernite: new Resource2("Infernite", "Infernite"),
+      Elerium: new Resource2("Elerium", "Elerium"),
+      Nano_Tube: new Resource2("Nano Tube", "Nano_Tube"),
+      Graphene: new Resource2("Graphene", "Graphene"),
+      Stanene: new Resource2("Stanene", "Stanene"),
+      Bolognium: new Resource2("Bolognium", "Bolognium"),
+      Vitreloy: new Resource2("Vitreloy", "Vitreloy"),
+      Orichalcum: new Resource2("Orichalcum", "Orichalcum"),
+      Asphodel_Powder: new Resource2("Asphodel Powder", "Asphodel_Powder"),
+      Elysanite: new Resource2("Elysanite", "Elysanite"),
+      Unobtainium: new Resource2("Unobtainium", "Unobtainium"),
+      Materials: new Resource2("Materials", "Materials"),
+      Horseshoe: new Resource2("Horseshoe", "Horseshoe"),
+      Nanite: new Resource2("Nanite", "Nanite"),
+      Genes: new Resource2("Genes", "Genes"),
+      Soul_Gem: new SoulGem2("Soul Gem", "Soul_Gem"),
+      // Craftable resources
+      Plywood: new Resource2("Plywood", "Plywood"),
+      Brick: new Resource2("Brick", "Brick"),
+      Wrought_Iron: new Resource2("Wrought Iron", "Wrought_Iron"),
+      Sheet_Metal: new Resource2("Sheet Metal", "Sheet_Metal"),
+      Mythril: new Resource2("Mythril", "Mythril"),
+      Aerogel: new Resource2("Aerogel", "Aerogel"),
+      Nanoweave: new Resource2("Nanoweave", "Nanoweave"),
+      Scarletite: new Resource2("Scarletite", "Scarletite"),
+      Quantium: new Resource2("Quantium", "Quantium"),
+      // Special resources
+      Corrupt_Gem: new Resource2("Corrupt Gem", "Corrupt_Gem"),
+      Codex: new Resource2("Codex", "Codex"),
+      Cipher: new Resource2("Encrypted Data", "Cipher"),
+      Demonic_Essence: new Resource2("Demonic Essence", "Demonic_Essence"),
+      Blessed_Essence: new Resource2("Blessed Essence", "Blessed_Essence"),
+      // Prestige resources
+      Blood_Stone: new PrestigeResource2("Blood Stone", "Blood_Stone"),
+      Artifact: new PrestigeResource2("Artifact", "Artifact"),
+      Plasmid: new PrestigeResource2("Plasmid", "Plasmid"),
+      AntiPlasmid: new PrestigeResource2("Anti-Plasmid", "AntiPlasmid"),
+      Supercoiled: new PrestigeResource2("Supercoiled", "Supercoiled"),
+      Phage: new PrestigeResource2("Phage", "Phage"),
+      Dark: new PrestigeResource2("Dark", "Dark"),
+      Harmony: new PrestigeResource2("Harmony", "Harmony"),
+      AICore: new PrestigeResource2("AI Core", "AICore"),
+      // Special not-really-resources-but-we'll-treat-them-like-resources resources
+      Troops: new Troops2("Troops", "Troops"),
+      Supply: new Supply2("Supplies", "Supply"),
+      Power: new Power2("Power", "Power"),
+      Morale: new Morale2("Morale", "Morale"),
+      Thrall: new Thrall2("Thrall", "Thrall"),
+      Womlings_Support: new WomlingsSupport2(
+        "Womlings",
+        "Womlings_Support",
+        "",
+        ""
+      ),
+      Moon_Support: new Support2(
+        "Moon Support",
+        "Moon_Support",
+        "space",
+        "spc_moon"
+      ),
+      Red_Support: new Support2("Red Support", "Red_Support", "space", "spc_red"),
+      Sun_Support: new Support2("Sun Support", "Sun_Support", "space", "spc_sun"),
+      Belt_Support: new BeltSupport2(
+        "Belt Support",
+        "Belt_Support",
+        "space",
+        "spc_belt"
+      ),
+      Titan_Support: new Support2(
+        "Titan Support",
+        "Titan_Support",
+        "space",
+        "spc_titan"
+      ),
+      Electrolysis_Support: new ElectrolysisSupport2(
+        "Electrolysis Plant",
+        "Electrolysis_Support",
+        "",
+        ""
+      ),
+      Enceladus_Support: new Support2(
+        "Enceladus Support",
+        "Enceladus_Support",
+        "space",
+        "spc_enceladus"
+      ),
+      Eris_Support: new Support2(
+        "Eris Support",
+        "Eris_Support",
+        "space",
+        "spc_eris"
+      ),
+      Tau_Support: new Support2(
+        "Tau Ceti Support",
+        "Tau_Support",
+        "tauceti",
+        "tau_home"
+      ),
+      Tau_Red_Support: new Support2(
+        "Tau Ceti Red Support",
+        "Tau_Red_Support",
+        "tauceti",
+        "tau_red"
+      ),
+      Tau_Belt_Support: new Support2(
+        "Tau Ceti Belt Support",
+        "Tau_Belt_Support",
+        "tauceti",
+        "tau_roid"
+      ),
+      Alpha_Support: new Support2(
+        "Alpha Support",
+        "Alpha_Support",
+        "interstellar",
+        "int_alpha"
+      ),
+      Nebula_Support: new Support2(
+        "Nebula Support",
+        "Nebula_Support",
+        "interstellar",
+        "int_nebula"
+      ),
+      Gateway_Support: new Support2(
+        "Gateway Support",
+        "Gateway_Support",
+        "galaxy",
+        "gxy_gateway"
+      ),
+      Alien_Support: new Support2(
+        "Alien Support",
+        "Alien_Support",
+        "galaxy",
+        "gxy_alien2"
+      ),
+      Lake_Support: new Support2(
+        "Lake Support",
+        "Lake_Support",
+        "portal",
+        "prtl_lake"
+      ),
+      Spire_Support: new Support2(
+        "Spire Support",
+        "Spire_Support",
+        "portal",
+        "prtl_spire"
+      ),
+      Asphodel_Support: new Support2(
+        "Asphodel Support",
+        "Asphodel_Support",
+        "eden",
+        "eden_asphodel"
+      )
+    };
+    setResources(resources2);
+    const jobs2 = {
+      Unemployed: new BasicJob2("unemployed", "Unemployed"),
+      Colonist: new Job2("colonist", "Colonist"),
+      Teamster: new BasicJob2("teamster", "Teamster", { smart: true }),
+      Meditator: new BasicJob2("meditator", "Meditator", { smart: true }),
+      Hunter: new BasicJob2("hunter", "Hunter", { serve: true, smart: true }),
+      Farmer: new BasicJob2("farmer", "Farmer", { serve: true, smart: true }),
+      Forager: new BasicJob2("forager", "Forager", { serve: true, split: true }),
+      Lumberjack: new BasicJob2("lumberjack", "Lumberjack", {
+        serve: true,
+        split: true,
+        smart: true
+      }),
+      QuarryWorker: new BasicJob2("quarry_worker", "Quarry Worker", {
+        serve: true,
+        split: true,
+        smart: true
+      }),
+      CrystalMiner: new BasicJob2("crystal_miner", "Crystal Miner", {
+        serve: true,
+        split: true,
+        smart: true
+      }),
+      Scavenger: new BasicJob2("scavenger", "Scavenger", {
+        serve: true,
+        split: true
+      }),
+      TitanColonist: new Job2("titan_colonist", "Titan Colonist"),
+      Miner: new Job2("miner", "Miner", { smart: true }),
+      CoalMiner: new Job2("coal_miner", "Coal Miner", { smart: true }),
+      CementWorker: new Job2("cement_worker", "Cement Worker", { smart: true }),
+      Professor: new Job2("professor", "Professor", { smart: true }),
+      Scientist: new Job2("scientist", "Scientist", { smart: true }),
+      Entertainer: new Job2("entertainer", "Entertainer", { smart: true }),
+      HellSurveyor: new Job2("hell_surveyor", "Hell Surveyor", { smart: true }),
+      SpaceMiner: new Job2("space_miner", "Space Miner", { smart: true }),
+      PitMiner: new Job2("pit_miner", "Pit Miner"),
+      Torturer: new Job2("torturer", "Tormentor", { smart: true }),
+      Archaeologist: new Job2("archaeologist", "Archaeologist"),
+      GhostTrapper: new Job2("ghost_trapper", "Ghost Trapper"),
+      ElysiumMiner: new Job2("elysium_miner", "Elysium Miner"),
+      Banker: new Job2("banker", "Banker", { smart: true }),
+      Priest: new Job2("priest", "Priest")
+    };
+    const crafter2 = {
+      Scarletite: new CraftingJob2(
+        "Scarletite",
+        "Scarletite Crafter",
+        resources2.Scarletite
+      ),
+      Quantium: new CraftingJob2(
+        "Quantium",
+        "Quantium Crafter",
+        resources2.Quantium
+      ),
+      Plywood: new CraftingJob2("Plywood", "Plywood Crafter", resources2.Plywood),
+      Brick: new CraftingJob2("Brick", "Brick Crafter", resources2.Brick),
+      WroughtIron: new CraftingJob2(
+        "Wrought_Iron",
+        "Wrought Iron Crafter",
+        resources2.Wrought_Iron
+      ),
+      SheetMetal: new CraftingJob2(
+        "Sheet_Metal",
+        "Sheet Metal Crafter",
+        resources2.Sheet_Metal
+      ),
+      Mythril: new CraftingJob2("Mythril", "Mythril Crafter", resources2.Mythril),
+      Aerogel: new CraftingJob2("Aerogel", "Aerogel Crafter", resources2.Aerogel),
+      Nanoweave: new CraftingJob2(
+        "Nanoweave",
+        "Nanoweave Crafter",
+        resources2.Nanoweave
+      )
+    };
+    const buildings2 = {
+      Food: new ResourceAction2("Gather Food", "city", "food", "", "Food"),
+      Lumber: new ResourceAction2("Gather Lumber", "city", "lumber", "", "Lumber"),
+      Stone: new ResourceAction2("Gather Stone", "city", "stone", "", "Stone"),
+      Chrysotile: new ResourceAction2(
+        "Gather Chrysotile",
+        "city",
+        "chrysotile",
+        "",
+        "Chrysotile"
+      ),
+      Slaughter: new Action2("Slaughter the Weak", "city", "slaughter", ""),
+      ForgeHorseshoe: new ResourceAction2(
+        "Horseshoe",
+        "city",
+        "horseshoe",
+        "",
+        "Horseshoe",
+        { housing: true, garrison: true }
+      ),
+      SlaveMarket: new ResourceAction2(
+        "Slave Market",
+        "city",
+        "slave_market",
+        "",
+        "Slave"
+      ),
+      SacrificialAltar: new Action2("Sacrificial Altar", "city", "s_alter", ""),
+      House: new Action2("Cabin", "city", "basic_housing", "", { housing: true }),
+      Cottage: new Action2("Cottage", "city", "cottage", "", { housing: true }),
+      Apartment: new Action2("Apartment", "city", "apartment", "", {
+        housing: true
+      }),
+      Lodge: new Action2("Lodge", "city", "lodge", "", { housing: true }),
+      Smokehouse: new Action2("Smokehouse", "city", "smokehouse", ""),
+      SoulWell: new Action2("Soul Well", "city", "soul_well", ""),
+      SlavePen: new Action2("Slave Pen", "city", "slave_pen", ""),
+      Transmitter: new Action2("Transmitter", "city", "transmitter", "", {
+        housing: true
+      }),
+      CaptiveHousing: new Action2(
+        "Captive Housing",
+        "city",
+        "captive_housing",
+        ""
+      ),
+      Farm: new Action2("Farm", "city", "farm", "", { housing: true }),
+      CompostHeap: new Action2("Compost Heap", "city", "compost", ""),
+      Mill: new Action2("Windmill", "city", "mill", "", { smart: true }),
+      Windmill: new Action2("Windmill (Evil)", "city", "windmill", ""),
+      Silo: new Action2("Grain Silo", "city", "silo", ""),
+      Assembly: new ResourceAction2(
+        "Assembly",
+        "city",
+        "assembly",
+        "",
+        "Population",
+        { housing: true, important: true }
+      ),
+      Barracks: new Action2("Barracks", "city", "garrison", "", {
+        garrison: true
+      }),
+      Hospital: new Action2("Hospital", "city", "hospital", ""),
+      BootCamp: new Action2("Boot Camp", "city", "boot_camp", ""),
+      Shed: new Action2("Shed", "city", "shed", ""),
+      StorageYard: new Action2("Freight Yard", "city", "storage_yard", ""),
+      Warehouse: new Action2("Container Port", "city", "warehouse", ""),
+      Bank: new Action2("Bank", "city", "bank", ""),
+      Pylon: new Action2("Pylon", "city", "pylon", ""),
+      ConcealWard: new Action2(
+        "Conceal Ward (Witch Hunting)",
+        "city",
+        "conceal_ward",
+        ""
+      ),
+      Graveyard: new Action2("Graveyard", "city", "graveyard", ""),
+      LumberYard: new Action2("Lumber Yard", "city", "lumber_yard", ""),
+      Sawmill: new Action2("Sawmill", "city", "sawmill", ""),
+      RockQuarry: new Action2("Rock Quarry", "city", "rock_quarry", ""),
+      CementPlant: new Action2("Cement Plant", "city", "cement_plant", "", {
+        smart: true
+      }),
+      Foundry: new Action2("Foundry", "city", "foundry", ""),
+      Factory: new Action2("Factory", "city", "factory", ""),
+      NaniteFactory: new Action2("Nanite Factory", "city", "nanite_factory", ""),
+      Smelter: new Action2("Smelter", "city", "smelter", ""),
+      MetalRefinery: new Action2("Metal Refinery", "city", "metal_refinery", ""),
+      Mine: new Action2("Mine", "city", "mine", "", { smart: true }),
+      CoalMine: new Action2("Coal Mine", "city", "coal_mine", "", { smart: true }),
+      OilWell: new Action2("Oil Derrick", "city", "oil_well", ""),
+      OilDepot: new Action2("Fuel Depot", "city", "oil_depot", ""),
+      Trade: new Action2("Trade Post", "city", "trade", ""),
+      Wharf: new Action2("Wharf", "city", "wharf", ""),
+      TouristCenter: new Action2("Tourist Center", "city", "tourist_center", "", {
+        smart: true
+      }),
+      Amphitheatre: new Action2("Amphitheatre", "city", "amphitheatre", ""),
+      Casino: new Action2("Casino", "city", "casino", ""),
+      Temple: new Action2("Temple", "city", "temple", ""),
+      Shrine: new Action2("Shrine", "city", "shrine", ""),
+      MeditationChamber: new Action2(
+        "Meditation Chamber",
+        "city",
+        "meditation",
+        ""
+      ),
+      Banquet: new Action2("Banquet Hall", "city", "banquet", ""),
+      University: new Action2("University", "city", "university", "", {
+        knowledge: true
+      }),
+      Library: new Action2("Library", "city", "library", "", { knowledge: true }),
+      Wardenclyffe: new Action2("Wardenclyffe", "city", "wardenclyffe", "", {
+        knowledge: true
+      }),
+      BioLab: new Action2("Bioscience Lab", "city", "biolab", "", {
+        knowledge: true
+      }),
+      CoalPower: new Action2("Coal Powerplant", "city", "coal_power", ""),
+      OilPower: new Action2("Oil Powerplant", "city", "oil_power", ""),
+      FissionPower: new Action2("Fission Reactor", "city", "fission_power", ""),
+      MassDriver: new Action2("Mass Driver", "city", "mass_driver", "", {
+        knowledge: () => haveTech2("mass", 2)
+      }),
+      SpaceTestLaunch: new Action2(
+        "Space Test Launch",
+        "space",
+        "test_launch",
+        "spc_home"
+      ),
+      SpaceSatellite: new Action2(
+        "Space Satellite",
+        "space",
+        "satellite",
+        "spc_home",
+        { knowledge: true }
+      ),
+      SpaceGps: new Action2("Space Gps", "space", "gps", "spc_home"),
+      SpacePropellantDepot: new Action2(
+        "Space Propellant Depot",
+        "space",
+        "propellant_depot",
+        "spc_home"
+      ),
+      SpaceNavBeacon: new Action2(
+        "Space Navigation Beacon",
+        "space",
+        "nav_beacon",
+        "spc_home"
+      ),
+      MoonMission: new Action2(
+        "Moon Mission",
+        "space",
+        "moon_mission",
+        "spc_moon"
+      ),
+      MoonBase: new Action2("Moon Base", "space", "moon_base", "spc_moon"),
+      MoonIridiumMine: new Action2(
+        "Moon Iridium Mine",
+        "space",
+        "iridium_mine",
+        "spc_moon",
+        { smart: true }
+      ),
+      MoonHeliumMine: new Action2(
+        "Moon Helium-3 Mine",
+        "space",
+        "helium_mine",
+        "spc_moon",
+        { smart: true }
+      ),
+      MoonObservatory: new Action2(
+        "Moon Observatory",
+        "space",
+        "observatory",
+        "spc_moon",
+        { knowledge: true }
+      ),
+      RedMission: new Action2("Red Mission", "space", "red_mission", "spc_red"),
+      RedSpaceport: new Action2("Red Spaceport", "space", "spaceport", "spc_red"),
+      RedTower: new Action2("Red Space Control", "space", "red_tower", "spc_red"),
+      RedCaptiveHousing: new CityAction2(
+        "Red Captive Housing (Cataclysm)",
+        "space",
+        "captive_housing",
+        "spc_red"
+      ),
+      RedTerraformer: new Action2(
+        "Red Terraformer (Orbit Decay)",
+        "space",
+        "terraformer",
+        "spc_red",
+        { multiSegmented: true }
+      ),
+      RedAtmoTerraformer: new Action2(
+        "Red Terraformer (Orbit Decay, Complete)",
+        "space",
+        "atmo_terraformer",
+        "spc_red"
+      ),
+      RedTerraform: new Action2(
+        "Red Terraform (Orbit Decay)",
+        "space",
+        "terraform",
+        "spc_red",
+        { prestige: true }
+      ),
+      RedAssembly: new ResourceAction2(
+        "Red Assembly (Cataclysm)",
+        "space",
+        "assembly",
+        "spc_red",
+        "Population",
+        { housing: true, important: true }
+      ),
+      RedLivingQuarters: new Action2(
+        "Red Living Quarters",
+        "space",
+        "living_quarters",
+        "spc_red",
+        { housing: true }
+      ),
+      RedPylon: new Action2("Red Pylon (Cataclysm)", "space", "pylon", "spc_red"),
+      RedVrCenter: new Action2("Red VR Center", "space", "vr_center", "spc_red"),
+      RedGarage: new Action2("Red Garage", "space", "garage", "spc_red"),
+      RedMine: new Action2("Red Mine", "space", "red_mine", "spc_red"),
+      RedFabrication: new Action2(
+        "Red Fabrication",
+        "space",
+        "fabrication",
+        "spc_red"
+      ),
+      RedFactory: new Action2("Red Factory", "space", "red_factory", "spc_red"),
+      RedNaniteFactory: new CityAction2(
+        "Red Nanite Factory (Cataclysm)",
+        "space",
+        "nanite_factory",
+        "spc_red"
+      ),
+      RedBiodome: new Action2("Red Biodome", "space", "biodome", "spc_red"),
+      RedUniversity: new Action2(
+        "Red University (Orbit Decay)",
+        "space",
+        "red_university",
+        "spc_red",
+        { knowledge: true }
+      ),
+      RedExoticLab: new Action2(
+        "Red Exotic Materials Lab",
+        "space",
+        "exotic_lab",
+        "spc_red",
+        { knowledge: true }
+      ),
+      RedZiggurat: new Action2("Red Ziggurat", "space", "ziggurat", "spc_red"),
+      RedSpaceBarracks: new Action2(
+        "Red Marine Barracks",
+        "space",
+        "space_barracks",
+        "spc_red",
+        { garrison: true }
+      ),
+      RedForgeHorseshoe: new ResourceAction2(
+        "Red Horseshoe (Cataclysm)",
+        "space",
+        "horseshoe",
+        "spc_red",
+        "Horseshoe",
+        { housing: true, garrison: true }
+      ),
+      HellMission: new Action2(
+        "Hell Mission",
+        "space",
+        "hell_mission",
+        "spc_hell"
+      ),
+      HellGeothermal: new Action2(
+        "Hell Geothermal Plant",
+        "space",
+        "geothermal",
+        "spc_hell"
+      ),
+      HellSmelter: new Action2(
+        "Hell Smelter",
+        "space",
+        "hell_smelter",
+        "spc_hell"
+      ),
+      HellSpaceCasino: new Action2(
+        "Hell Space Casino",
+        "space",
+        "spc_casino",
+        "spc_hell"
+      ),
+      HellSwarmPlant: new Action2(
+        "Hell Swarm Plant",
+        "space",
+        "swarm_plant",
+        "spc_hell"
+      ),
+      SunMission: new Action2("Sun Mission", "space", "sun_mission", "spc_sun"),
+      SunSwarmControl: new Action2(
+        "Sun Control Station",
+        "space",
+        "swarm_control",
+        "spc_sun"
+      ),
+      SunSwarmSatellite: new Action2(
+        "Sun Swarm Satellite",
+        "space",
+        "swarm_satellite",
+        "spc_sun"
+      ),
+      SunJumpGate: new Action2("Sun Jump Gate", "space", "jump_gate", "spc_sun", {
+        multiSegmented: true
+      }),
+      GasMission: new Action2("Gas Mission", "space", "gas_mission", "spc_gas"),
+      GasMining: new Action2(
+        "Gas Helium-3 Collector",
+        "space",
+        "gas_mining",
+        "spc_gas",
+        { smart: true }
+      ),
+      GasStorage: new Action2("Gas Fuel Depot", "space", "gas_storage", "spc_gas"),
+      GasSpaceDock: new SpaceDock2(
+        "Gas Space Dock",
+        "space",
+        "star_dock",
+        "spc_gas"
+      ),
+      GasSpaceDockProbe: new ModalAction2(
+        "Space Dock Probe",
+        "starDock",
+        "probes",
+        ""
+      ),
+      GasSpaceDockGECK: new ModalAction2(
+        "Space Dock G.E.C.K.",
+        "starDock",
+        "geck",
+        ""
+      ),
+      GasSpaceDockShipSegment: new ModalAction2(
+        "Space Dock Bioseeder Ship",
+        "starDock",
+        "seeder",
+        "",
+        { multiSegmented: true }
+      ),
+      GasSpaceDockPrepForLaunch: new ModalAction2(
+        "Space Dock Prep Ship",
+        "starDock",
+        "prep_ship",
+        ""
+      ),
+      GasSpaceDockLaunch: new ModalAction2(
+        "Space Dock Launch Ship",
+        "starDock",
+        "launch_ship",
+        "",
+        { prestige: true }
+      ),
+      GasMoonMission: new Action2(
+        "Gas Moon Mission",
+        "space",
+        "gas_moon_mission",
+        "spc_gas_moon"
+      ),
+      GasMoonOutpost: new Action2(
+        "Gas Moon Mining Outpost",
+        "space",
+        "outpost",
+        "spc_gas_moon"
+      ),
+      GasMoonDrone: new Action2(
+        "Gas Moon Mining Drone",
+        "space",
+        "drone",
+        "spc_gas_moon"
+      ),
+      GasMoonOilExtractor: new Action2(
+        "Gas Moon Oil Extractor",
+        "space",
+        "oil_extractor",
+        "spc_gas_moon",
+        { smart: true }
+      ),
+      BeltMission: new Action2(
+        "Belt Mission",
+        "space",
+        "belt_mission",
+        "spc_belt"
+      ),
+      BeltSpaceStation: new Action2(
+        "Belt Space Station",
+        "space",
+        "space_station",
+        "spc_belt",
+        { smart: true }
+      ),
+      BeltEleriumShip: new Action2(
+        "Belt Elerium Mining Ship",
+        "space",
+        "elerium_ship",
+        "spc_belt",
+        { smart: true }
+      ),
+      BeltIridiumShip: new Action2(
+        "Belt Iridium Mining Ship",
+        "space",
+        "iridium_ship",
+        "spc_belt",
+        { smart: true }
+      ),
+      BeltIronShip: new Action2(
+        "Belt Iron Mining Ship",
+        "space",
+        "iron_ship",
+        "spc_belt",
+        { smart: true }
+      ),
+      DwarfMission: new Action2(
+        "Dwarf Mission",
+        "space",
+        "dwarf_mission",
+        "spc_dwarf"
+      ),
+      DwarfEleriumContainer: new Action2(
+        "Dwarf Elerium Storage",
+        "space",
+        "elerium_contain",
+        "spc_dwarf"
+      ),
+      DwarfEleriumReactor: new Action2(
+        "Dwarf Elerium Reactor",
+        "space",
+        "e_reactor",
+        "spc_dwarf"
+      ),
+      DwarfWorldCollider: new Action2(
+        "Dwarf World Collider",
+        "space",
+        "world_collider",
+        "spc_dwarf",
+        { multiSegmented: true }
+      ),
+      DwarfWorldController: new Action2(
+        "Dwarf World Collider (Complete)",
+        "space",
+        "world_controller",
+        "spc_dwarf",
+        { knowledge: true }
+      ),
+      DwarfShipyard: new Action2(
+        "Dwarf Ship Yard",
+        "space",
+        "shipyard",
+        "spc_dwarf"
+      ),
+      DwarfMassRelay: new Action2(
+        "Dwarf Mass Relay",
+        "space",
+        "mass_relay",
+        "spc_dwarf",
+        { multiSegmented: true }
+      ),
+      DwarfMassRelayComplete: new Action2(
+        "Dwarf Mass Relay (Complete)",
+        "space",
+        "m_relay",
+        "spc_dwarf"
+      ),
+      TitanMission: new Action2(
+        "Titan Mission",
+        "space",
+        "titan_mission",
+        "spc_titan"
+      ),
+      TitanSpaceport: new Action2(
+        "Titan Spaceport",
+        "space",
+        "titan_spaceport",
+        "spc_titan"
+      ),
+      TitanElectrolysis: new Action2(
+        "Titan Electrolysis",
+        "space",
+        "electrolysis",
+        "spc_titan"
+      ),
+      TitanHydrogen: new Action2(
+        "Titan Hydrogen Plant",
+        "space",
+        "hydrogen_plant",
+        "spc_titan"
+      ),
+      TitanQuarters: new Action2(
+        "Titan Habitat",
+        "space",
+        "titan_quarters",
+        "spc_titan"
+      ),
+      TitanMine: new Action2("Titan Mine", "space", "titan_mine", "spc_titan"),
+      TitanStorehouse: new Action2(
+        "Titan Storehouse",
+        "space",
+        "storehouse",
+        "spc_titan"
+      ),
+      TitanBank: new Action2("Titan Bank", "space", "titan_bank", "spc_titan"),
+      TitanGraphene: new Action2(
+        "Titan Graphene Plant",
+        "space",
+        "g_factory",
+        "spc_titan"
+      ),
+      TitanSAM: new Action2("Titan SAM Site", "space", "sam", "spc_titan"),
+      TitanDecoder: new Action2("Titan Decoder", "space", "decoder", "spc_titan"),
+      TitanAI: new Action2("Titan AI Core", "space", "ai_core", "spc_titan", {
+        multiSegmented: true
+      }),
+      TitanAIComplete: new Action2(
+        "Titan AI Core (Complete)",
+        "space",
+        "ai_core2",
+        "spc_titan"
+      ),
+      TitanAIColonist: new Action2(
+        "Titan AI Colonist",
+        "space",
+        "ai_colonist",
+        "spc_titan"
+      ),
+      EnceladusMission: new Action2(
+        "Enceladus Mission",
+        "space",
+        "enceladus_mission",
+        "spc_enceladus"
+      ),
+      EnceladusWaterFreighter: new Action2(
+        "Enceladus Water Freighter",
+        "space",
+        "water_freighter",
+        "spc_enceladus",
+        { smart: true }
+      ),
+      EnceladusZeroGLab: new Action2(
+        "Enceladus Zero Gravity Lab",
+        "space",
+        "zero_g_lab",
+        "spc_enceladus"
+      ),
+      EnceladusBase: new Action2(
+        "Enceladus Operational Base",
+        "space",
+        "operating_base",
+        "spc_enceladus"
+      ),
+      EnceladusMunitions: new Action2(
+        "Enceladus Munitions Depot",
+        "space",
+        "munitions_depot",
+        "spc_enceladus"
+      ),
+      TritonMission: new Action2(
+        "Triton Mission",
+        "space",
+        "triton_mission",
+        "spc_triton"
+      ),
+      TritonFOB: new Action2("Triton Forward Base", "space", "fob", "spc_triton"),
+      TritonLander: new Action2(
+        "Triton Troop Lander",
+        "space",
+        "lander",
+        "spc_triton",
+        { smart: true }
+      ),
+      TritonCrashedShip: new Action2(
+        "Triton Derelict Ship",
+        "space",
+        "crashed_ship",
+        "spc_triton"
+      ),
+      KuiperMission: new Action2(
+        "Kuiper Mission",
+        "space",
+        "kuiper_mission",
+        "spc_kuiper"
+      ),
+      KuiperOrichalcum: new Action2(
+        "Kuiper Orichalcum Mine",
+        "space",
+        "orichalcum_mine",
+        "spc_kuiper",
+        { smart: true }
+      ),
+      KuiperUranium: new Action2(
+        "Kuiper Uranium Mine",
+        "space",
+        "uranium_mine",
+        "spc_kuiper",
+        { smart: true }
+      ),
+      KuiperNeutronium: new Action2(
+        "Kuiper Neutronium Mine",
+        "space",
+        "neutronium_mine",
+        "spc_kuiper",
+        { smart: true }
+      ),
+      KuiperElerium: new Action2(
+        "Kuiper Elerium Mine",
+        "space",
+        "elerium_mine",
+        "spc_kuiper",
+        { smart: true }
+      ),
+      ErisMission: new Action2(
+        "Eris Mission",
+        "space",
+        "eris_mission",
+        "spc_eris"
+      ),
+      ErisDrone: new Action2(
+        "Eris Control Relay",
+        "space",
+        "drone_control",
+        "spc_eris"
+      ),
+      ErisTrooper: new Action2(
+        "Eris Android Trooper",
+        "space",
+        "shock_trooper",
+        "spc_eris"
+      ),
+      ErisTank: new Action2("Eris Tank", "space", "tank", "spc_eris"),
+      ErisDigsite: new Action2("Eris Digsite", "space", "digsite", "spc_eris"),
+      TauStarRingworld: new Action2(
+        "Tau Star Ringworld",
+        "tauceti",
+        "ringworld",
+        "tau_star",
+        { multiSegmented: true }
+      ),
+      TauStarMatrix: new Action2(
+        "Tau Star Matrix",
+        "tauceti",
+        "matrix",
+        "tau_star"
+      ),
+      TauStarBluePill: new Action2(
+        "Tau Star Blue Pill",
+        "tauceti",
+        "blue_pill",
+        "tau_star",
+        { prestige: true }
+      ),
+      TauStarEden: new Action2(
+        "Tau Star Garden of Eden",
+        "tauceti",
+        "goe_facility",
+        "tau_star",
+        { prestige: true }
+      ),
+      TauMission: new Action2(
+        "Tau Mission",
+        "tauceti",
+        "home_mission",
+        "tau_home"
+      ),
+      TauDismantle: new Action2(
+        "Tau Dismantle Ship",
+        "tauceti",
+        "dismantle",
+        "tau_home"
+      ),
+      TauOrbitalStation: new Action2(
+        "Tau Orbital Station",
+        "tauceti",
+        "orbital_station",
+        "tau_home"
+      ),
+      TauColony: new Action2("Tau Colony", "tauceti", "colony", "tau_home", {
+        housing: true
+      }),
+      TauHousing: new Action2(
+        "Tau Housing",
+        "tauceti",
+        "tau_housing",
+        "tau_home",
+        { housing: true }
+      ),
+      TauCaptiveHousing: new CityAction2(
+        "Tau Captive Housing",
+        "tauceti",
+        "captive_housing",
+        "tau_home"
+      ),
+      TauPylon: new Action2("Tau Pylon", "tauceti", "pylon", "tau_home"),
+      TauCloning: new ResourceAction2(
+        "Tau Cloning",
+        "tauceti",
+        "cloning_facility",
+        "tau_home",
+        "Population",
+        { housing: true }
+      ),
+      TauForgeHorseshoe: new ResourceAction2(
+        "Tau Horseshoe",
+        "tauceti",
+        "horseshoe",
+        "tau_home",
+        "Horseshoe",
+        { housing: true, garrison: true }
+      ),
+      TauAssembly: new ResourceAction2(
+        "Tau Assembly",
+        "tauceti",
+        "assembly",
+        "tau_home",
+        "Population",
+        { housing: true, important: true }
+      ),
+      TauNaniteFactory: new CityAction2(
+        "Tau Nanite Factory",
+        "tauceti",
+        "nanite_factory",
+        "tau_home"
+      ),
+      TauFarm: new Action2(
+        "Tau High-Tech Farm",
+        "tauceti",
+        "tau_farm",
+        "tau_home"
+      ),
+      TauMiningPit: new Action2(
+        "Tau Mining Pit",
+        "tauceti",
+        "mining_pit",
+        "tau_home",
+        { smart: true }
+      ),
+      TauExcavate: new Action2("Tau Excavate", "tauceti", "excavate", "tau_home"),
+      TauAlienOutpost: new Action2(
+        "Tau Alien Outpost",
+        "tauceti",
+        "alien_outpost",
+        "tau_home",
+        { knowledge: true }
+      ),
+      TauJumpGate: new Action2(
+        "Tau Jump Gate",
+        "tauceti",
+        "jump_gate",
+        "tau_home",
+        { multiSegmented: true }
+      ),
+      TauFusionGenerator: new Action2(
+        "Tau Fusion Generator",
+        "tauceti",
+        "fusion_generator",
+        "tau_home"
+      ),
+      TauRepository: new Action2(
+        "Tau Repository",
+        "tauceti",
+        "repository",
+        "tau_home"
+      ),
+      TauFactory: new Action2(
+        "Tau High-Tech Factory",
+        "tauceti",
+        "tau_factory",
+        "tau_home"
+      ),
+      TauDiseaseLab: new Action2(
+        "Tau Disease Lab",
+        "tauceti",
+        "infectious_disease_lab",
+        "tau_home",
+        { knowledge: true }
+      ),
+      TauCasino: new Action2(
+        "Tau Casino",
+        "tauceti",
+        "tauceti_casino",
+        "tau_home"
+      ),
+      TauCulturalCenter: new Action2(
+        "Tau Cultural Center",
+        "tauceti",
+        "tau_cultural_center",
+        "tau_home"
+      ),
+      TauRedMission: new Action2(
+        "Tau Red Mission",
+        "tauceti",
+        "red_mission",
+        "tau_red"
+      ),
+      TauRedOrbitalPlatform: new Action2(
+        "Tau Red Orbital Platform",
+        "tauceti",
+        "orbital_platform",
+        "tau_red"
+      ),
+      TauRedContact: new Action2(
+        "Tau Red Contact",
+        "tauceti",
+        "contact",
+        "tau_red"
+      ),
+      TauRedIntroduce: new Action2(
+        "Tau Red Introduce",
+        "tauceti",
+        "introduce",
+        "tau_red"
+      ),
+      TauRedSubjugate: new Action2(
+        "Tau Red Subjugate",
+        "tauceti",
+        "subjugate",
+        "tau_red"
+      ),
+      TauRedJeff: new Action2("Tau Red Jeff", "tauceti", "jeff", "tau_red"),
+      TauRedOverseer: new Action2(
+        "Tau Red Overseer",
+        "tauceti",
+        "overseer",
+        "tau_red",
+        { smart: true }
+      ),
+      TauRedWomlingVillage: new Action2(
+        "Tau Red Womling Village",
+        "tauceti",
+        "womling_village",
+        "tau_red"
+      ),
+      TauRedWomlingFarm: new Action2(
+        "Tau Red Womling Farm",
+        "tauceti",
+        "womling_farm",
+        "tau_red",
+        { smart: true }
+      ),
+      TauRedWomlingMine: new Action2(
+        "Tau Red Womling Mine",
+        "tauceti",
+        "womling_mine",
+        "tau_red",
+        { smart: true }
+      ),
+      TauRedWomlingFun: new Action2(
+        "Tau Red Womling Theater",
+        "tauceti",
+        "womling_fun",
+        "tau_red",
+        { smart: true }
+      ),
+      TauRedWomlingLab: new Action2(
+        "Tau Red Womling Lab",
+        "tauceti",
+        "womling_lab",
+        "tau_red",
+        { smart: true, knowledge: true }
+      ),
+      TauGasContest: new Action2(
+        "Tau Gas Naming Contest",
+        "tauceti",
+        "gas_contest",
+        "tau_gas"
+      ),
+      TauGasName1: new Action2(
+        "Tau Gas Name 1",
+        "tauceti",
+        "gas_contest-a1",
+        "tau_gas",
+        { random: true }
+      ),
+      TauGasName2: new Action2(
+        "Tau Gas Name 2",
+        "tauceti",
+        "gas_contest-a2",
+        "tau_gas",
+        { random: true }
+      ),
+      TauGasName3: new Action2(
+        "Tau Gas Name 3",
+        "tauceti",
+        "gas_contest-a3",
+        "tau_gas",
+        { random: true }
+      ),
+      TauGasName4: new Action2(
+        "Tau Gas Name 4",
+        "tauceti",
+        "gas_contest-a4",
+        "tau_gas",
+        { random: true }
+      ),
+      TauGasName5: new Action2(
+        "Tau Gas Name 5",
+        "tauceti",
+        "gas_contest-a5",
+        "tau_gas",
+        { random: true }
+      ),
+      TauGasName6: new Action2(
+        "Tau Gas Name 6",
+        "tauceti",
+        "gas_contest-a6",
+        "tau_gas",
+        { random: true }
+      ),
+      TauGasName7: new Action2(
+        "Tau Gas Name 7",
+        "tauceti",
+        "gas_contest-a7",
+        "tau_gas",
+        { random: true }
+      ),
+      TauGasName8: new Action2(
+        "Tau Gas Name 8",
+        "tauceti",
+        "gas_contest-a8",
+        "tau_gas",
+        { random: true }
+      ),
+      TauGasRefuelingStation: new Action2(
+        "Tau Gas Refueling Station",
+        "tauceti",
+        "refueling_station",
+        "tau_gas"
+      ),
+      TauGasOreRefinery: new Action2(
+        "Tau Gas Ore Refinery",
+        "tauceti",
+        "ore_refinery",
+        "tau_gas"
+      ),
+      TauGasWhalingStation: new Action2(
+        "Tau Gas Whale Processor",
+        "tauceti",
+        "whaling_station",
+        "tau_gas",
+        { smart: true }
+      ),
+      TauGasWomlingStation: new Action2(
+        "Tau Gas Womling Station",
+        "tauceti",
+        "womling_station",
+        "tau_gas"
+      ),
+      TauBeltMission: new Action2(
+        "Tau Belt Mission",
+        "tauceti",
+        "roid_mission",
+        "tau_roid"
+      ),
+      TauBeltPatrolShip: new Action2(
+        "Tau Belt Patrol Ship",
+        "tauceti",
+        "patrol_ship",
+        "tau_roid"
+      ),
+      TauBeltMiningShip: new Action2(
+        "Tau Belt Extractor Ship",
+        "tauceti",
+        "mining_ship",
+        "tau_roid"
+      ),
+      TauBeltWhalingShip: new Action2(
+        "Tau Belt Whaling Ship",
+        "tauceti",
+        "whaling_ship",
+        "tau_roid"
+      ),
+      TauGas2Contest: new Action2(
+        "Tau Gas 2 Naming Contest",
+        "tauceti",
+        "gas_contest2",
+        "tau_gas2"
+      ),
+      TauGas2Name1: new Action2(
+        "Tau Gas 2 Name 1",
+        "tauceti",
+        "gas_contest-b1",
+        "tau_gas2",
+        { random: true }
+      ),
+      TauGas2Name2: new Action2(
+        "Tau Gas 2 Name 2",
+        "tauceti",
+        "gas_contest-b2",
+        "tau_gas2",
+        { random: true }
+      ),
+      TauGas2Name3: new Action2(
+        "Tau Gas 2 Name 3",
+        "tauceti",
+        "gas_contest-b3",
+        "tau_gas2",
+        { random: true }
+      ),
+      TauGas2Name4: new Action2(
+        "Tau Gas 2 Name 4",
+        "tauceti",
+        "gas_contest-b4",
+        "tau_gas2",
+        { random: true }
+      ),
+      TauGas2Name5: new Action2(
+        "Tau Gas 2 Name 5",
+        "tauceti",
+        "gas_contest-b5",
+        "tau_gas2",
+        { random: true }
+      ),
+      TauGas2Name6: new Action2(
+        "Tau Gas 2 Name 6",
+        "tauceti",
+        "gas_contest-b6",
+        "tau_gas2",
+        { random: true }
+      ),
+      TauGas2Name7: new Action2(
+        "Tau Gas 2 Name 7",
+        "tauceti",
+        "gas_contest-b7",
+        "tau_gas2",
+        { random: true }
+      ),
+      TauGas2Name8: new Action2(
+        "Tau Gas 2 Name 8",
+        "tauceti",
+        "gas_contest-b8",
+        "tau_gas2",
+        { random: true }
+      ),
+      TauGas2AlienSurvey: new Action2(
+        "Tau Gas 2 Alien Station (Survey)",
+        "tauceti",
+        "alien_station_survey",
+        "tau_gas2"
+      ),
+      TauGas2AlienStation: new Action2(
+        "Tau Gas 2 Alien Station",
+        "tauceti",
+        "alien_station",
+        "tau_gas2",
+        { multiSegmented: true }
+      ),
+      TauGas2AlienSpaceStation: new Action2(
+        "Tau Gas 2 Alien Space Station",
+        "tauceti",
+        "alien_space_station",
+        "tau_gas2"
+      ),
+      TauGas2MatrioshkaBrain: new Action2(
+        "Tau Gas 2 Matrioshka Brain",
+        "tauceti",
+        "matrioshka_brain",
+        "tau_gas2",
+        { multiSegmented: true }
+      ),
+      TauGas2IgnitionDevice: new Action2(
+        "Tau Gas 2 Ignition Device",
+        "tauceti",
+        "ignition_device",
+        "tau_gas2",
+        { multiSegmented: true }
+      ),
+      TauGas2IgniteGasGiant: new Action2(
+        "Tau Gas 2 Ignite Gas Giant",
+        "tauceti",
+        "ignite_gas_giant",
+        "tau_gas2",
+        { prestige: true }
+      ),
+      AlphaMission: new Action2(
+        "Alpha Centauri Mission",
+        "interstellar",
+        "alpha_mission",
+        "int_alpha"
+      ),
+      AlphaStarport: new Action2(
+        "Alpha Starport",
+        "interstellar",
+        "starport",
+        "int_alpha"
+      ),
+      AlphaHabitat: new Action2(
+        "Alpha Habitat",
+        "interstellar",
+        "habitat",
+        "int_alpha",
+        { housing: true }
+      ),
+      AlphaMiningDroid: new Action2(
+        "Alpha Mining Droid",
+        "interstellar",
+        "mining_droid",
+        "int_alpha"
+      ),
+      AlphaProcessing: new Action2(
+        "Alpha Processing Facility",
+        "interstellar",
+        "processing",
+        "int_alpha"
+      ),
+      AlphaFusion: new Action2(
+        "Alpha Fusion Reactor",
+        "interstellar",
+        "fusion",
+        "int_alpha"
+      ),
+      AlphaLaboratory: new Action2(
+        "Alpha Laboratory",
+        "interstellar",
+        "laboratory",
+        "int_alpha",
+        { knowledge: true }
+      ),
+      AlphaExchange: new Action2(
+        "Alpha Exchange",
+        "interstellar",
+        "exchange",
+        "int_alpha"
+      ),
+      AlphaGraphenePlant: new Action2(
+        "Alpha Graphene Plant",
+        "interstellar",
+        "g_factory",
+        "int_alpha"
+      ),
+      AlphaWarehouse: new Action2(
+        "Alpha Warehouse",
+        "interstellar",
+        "warehouse",
+        "int_alpha"
+      ),
+      AlphaMegaFactory: new Action2(
+        "Alpha Mega Factory",
+        "interstellar",
+        "int_factory",
+        "int_alpha"
+      ),
+      AlphaLuxuryCondo: new Action2(
+        "Alpha Luxury Condo",
+        "interstellar",
+        "luxury_condo",
+        "int_alpha",
+        { housing: true }
+      ),
+      AlphaExoticZoo: new Action2(
+        "Alpha Exotic Zoo",
+        "interstellar",
+        "zoo",
+        "int_alpha"
+      ),
+      ProximaMission: new Action2(
+        "Proxima Mission",
+        "interstellar",
+        "proxima_mission",
+        "int_proxima"
+      ),
+      ProximaTransferStation: new Action2(
+        "Proxima Transfer Station",
+        "interstellar",
+        "xfer_station",
+        "int_proxima"
+      ),
+      ProximaCargoYard: new Action2(
+        "Proxima Cargo Yard",
+        "interstellar",
+        "cargo_yard",
+        "int_proxima"
+      ),
+      ProximaCruiser: new Action2(
+        "Proxima Patrol Cruiser",
+        "interstellar",
+        "cruiser",
+        "int_proxima",
+        { garrison: true }
+      ),
+      ProximaDyson: new Action2(
+        "Proxima Dyson Sphere (Adamantite)",
+        "interstellar",
+        "dyson",
+        "int_proxima",
+        { multiSegmented: true }
+      ),
+      ProximaDysonSphere: new Action2(
+        "Proxima Dyson Sphere (Bolognium)",
+        "interstellar",
+        "dyson_sphere",
+        "int_proxima",
+        { multiSegmented: true }
+      ),
+      ProximaOrichalcumSphere: new Action2(
+        "Proxima Dyson Sphere (Orichalcum)",
+        "interstellar",
+        "orichalcum_sphere",
+        "int_proxima",
+        { multiSegmented: true }
+      ),
+      ProximaElysaniteSphere: new Action2(
+        "Proxima Dyson Sphere (Elysanite)",
+        "interstellar",
+        "elysanite_sphere",
+        "int_proxima",
+        { multiSegmented: true }
+      ),
+      NebulaMission: new Action2(
+        "Nebula Mission",
+        "interstellar",
+        "nebula_mission",
+        "int_nebula"
+      ),
+      NebulaNexus: new Action2(
+        "Nebula Nexus",
+        "interstellar",
+        "nexus",
+        "int_nebula"
+      ),
+      NebulaHarvester: new Action2(
+        "Nebula Harvester",
+        "interstellar",
+        "harvester",
+        "int_nebula",
+        { smart: true }
+      ),
+      NebulaEleriumProspector: new Action2(
+        "Nebula Elerium Prospector",
+        "interstellar",
+        "elerium_prospector",
+        "int_nebula"
+      ),
+      NeutronMission: new Action2(
+        "Neutron Mission",
+        "interstellar",
+        "neutron_mission",
+        "int_neutron"
+      ),
+      NeutronMiner: new Action2(
+        "Neutron Miner",
+        "interstellar",
+        "neutron_miner",
+        "int_neutron"
+      ),
+      NeutronCitadel: new Action2(
+        "Neutron Citadel Station",
+        "interstellar",
+        "citadel",
+        "int_neutron"
+      ),
+      NeutronStellarForge: new Action2(
+        "Neutron Stellar Forge",
+        "interstellar",
+        "stellar_forge",
+        "int_neutron"
+      ),
+      Blackhole: new Action2(
+        "Blackhole Mission",
+        "interstellar",
+        "blackhole_mission",
+        "int_blackhole"
+      ),
+      BlackholeFarReach: new Action2(
+        "Blackhole Farpoint",
+        "interstellar",
+        "far_reach",
+        "int_blackhole",
+        { knowledge: true }
+      ),
+      BlackholeStellarEngine: new Action2(
+        "Blackhole Stellar Engine",
+        "interstellar",
+        "stellar_engine",
+        "int_blackhole",
+        { multiSegmented: true }
+      ),
+      BlackholeMassEjector: new Action2(
+        "Blackhole Mass Ejector",
+        "interstellar",
+        "mass_ejector",
+        "int_blackhole"
+      ),
+      BlackholeJumpShip: new Action2(
+        "Blackhole Jump Ship",
+        "interstellar",
+        "jump_ship",
+        "int_blackhole"
+      ),
+      BlackholeWormholeMission: new Action2(
+        "Blackhole Wormhole Mission",
+        "interstellar",
+        "wormhole_mission",
+        "int_blackhole"
+      ),
+      BlackholeStargate: new Action2(
+        "Blackhole Stargate",
+        "interstellar",
+        "stargate",
+        "int_blackhole",
+        { multiSegmented: true }
+      ),
+      BlackholeStargateComplete: new Action2(
+        "Blackhole Stargate (Complete)",
+        "interstellar",
+        "s_gate",
+        "int_blackhole"
+      ),
+      SiriusMission: new Action2(
+        "Sirius Mission",
+        "interstellar",
+        "sirius_mission",
+        "int_sirius"
+      ),
+      SiriusAnalysis: new Action2(
+        "Sirius B Analysis",
+        "interstellar",
+        "sirius_b",
+        "int_sirius"
+      ),
+      SiriusSpaceElevator: new Action2(
+        "Sirius Space Elevator",
+        "interstellar",
+        "space_elevator",
+        "int_sirius",
+        { multiSegmented: true }
+      ),
+      SiriusGravityDome: new Action2(
+        "Sirius Gravity Dome",
+        "interstellar",
+        "gravity_dome",
+        "int_sirius",
+        { multiSegmented: true }
+      ),
+      SiriusAscensionMachine: new Action2(
+        "Sirius Ascension Machine",
+        "interstellar",
+        "ascension_machine",
+        "int_sirius",
+        { multiSegmented: true }
+      ),
+      SiriusAscensionTrigger: new Action2(
+        "Sirius Ascension Machine (Complete)",
+        "interstellar",
+        "ascension_trigger",
+        "int_sirius",
+        { smart: true }
+      ),
+      SiriusAscend: new Action2(
+        "Sirius Ascend",
+        "interstellar",
+        "ascend",
+        "int_sirius",
+        { prestige: true }
+      ),
+      SiriusThermalCollector: new Action2(
+        "Sirius Thermal Collector",
+        "interstellar",
+        "thermal_collector",
+        "int_sirius"
+      ),
+      GatewayMission: new Action2(
+        "Gateway Mission",
+        "galaxy",
+        "gateway_mission",
+        "gxy_gateway"
+      ),
+      GatewayStarbase: new Action2(
+        "Gateway Starbase",
+        "galaxy",
+        "starbase",
+        "gxy_gateway",
+        { garrison: true }
+      ),
+      GatewayShipDock: new Action2(
+        "Gateway Ship Dock",
+        "galaxy",
+        "ship_dock",
+        "gxy_gateway"
+      ),
+      BologniumShip: new Action2(
+        "Gateway Bolognium Ship",
+        "galaxy",
+        "bolognium_ship",
+        "gxy_gateway",
+        { ship: true, smart: true }
+      ),
+      ScoutShip: new Action2(
+        "Gateway Scout Ship",
+        "galaxy",
+        "scout_ship",
+        "gxy_gateway",
+        { ship: true, smart: true }
+      ),
+      CorvetteShip: new Action2(
+        "Gateway Corvette Ship",
+        "galaxy",
+        "corvette_ship",
+        "gxy_gateway",
+        { ship: true, smart: true }
+      ),
+      FrigateShip: new Action2(
+        "Gateway Frigate Ship",
+        "galaxy",
+        "frigate_ship",
+        "gxy_gateway",
+        { ship: true }
+      ),
+      CruiserShip: new Action2(
+        "Gateway Cruiser Ship",
+        "galaxy",
+        "cruiser_ship",
+        "gxy_gateway",
+        { ship: true }
+      ),
+      Dreadnought: new Action2(
+        "Gateway Dreadnought",
+        "galaxy",
+        "dreadnought",
+        "gxy_gateway",
+        { ship: true }
+      ),
+      StargateStation: new Action2(
+        "Stargate Station",
+        "galaxy",
+        "gateway_station",
+        "gxy_stargate"
+      ),
+      StargateTelemetryBeacon: new Action2(
+        "Stargate Telemetry Beacon",
+        "galaxy",
+        "telemetry_beacon",
+        "gxy_stargate",
+        { knowledge: true }
+      ),
+      StargateDepot: new Action2(
+        "Stargate Depot",
+        "galaxy",
+        "gateway_depot",
+        "gxy_stargate"
+      ),
+      StargateDefensePlatform: new Action2(
+        "Stargate Defense Platform",
+        "galaxy",
+        "defense_platform",
+        "gxy_stargate"
+      ),
+      GorddonMission: new Action2(
+        "Gorddon Mission",
+        "galaxy",
+        "gorddon_mission",
+        "gxy_gorddon"
+      ),
+      GorddonEmbassy: new Action2(
+        "Gorddon Embassy",
+        "galaxy",
+        "embassy",
+        "gxy_gorddon",
+        { housing: true }
+      ),
+      GorddonDormitory: new Action2(
+        "Gorddon Dormitory",
+        "galaxy",
+        "dormitory",
+        "gxy_gorddon",
+        { housing: true }
+      ),
+      GorddonSymposium: new Action2(
+        "Gorddon Symposium",
+        "galaxy",
+        "symposium",
+        "gxy_gorddon",
+        { knowledge: true }
+      ),
+      GorddonFreighter: new Action2(
+        "Gorddon Freighter",
+        "galaxy",
+        "freighter",
+        "gxy_gorddon",
+        { ship: true }
+      ),
+      Alien1Consulate: new Action2(
+        "Alien 1 Consulate",
+        "galaxy",
+        "consulate",
+        "gxy_alien1",
+        { housing: true }
+      ),
+      Alien1Resort: new Action2(
+        "Alien 1 Resort",
+        "galaxy",
+        "resort",
+        "gxy_alien1"
+      ),
+      Alien1VitreloyPlant: new Action2(
+        "Alien 1 Vitreloy Plant",
+        "galaxy",
+        "vitreloy_plant",
+        "gxy_alien1",
+        { smart: true }
+      ),
+      Alien1SuperFreighter: new Action2(
+        "Alien 1 Super Freighter",
+        "galaxy",
+        "super_freighter",
+        "gxy_alien1",
+        { ship: true }
+      ),
+      Alien2Mission: new Action2(
+        "Alien 2 Mission",
+        "galaxy",
+        "alien2_mission",
+        "gxy_alien2"
+      ),
+      Alien2Foothold: new Action2(
+        "Alien 2 Foothold",
+        "galaxy",
+        "foothold",
+        "gxy_alien2"
+      ),
+      Alien2ArmedMiner: new Action2(
+        "Alien 2 Armed Miner",
+        "galaxy",
+        "armed_miner",
+        "gxy_alien2",
+        { ship: true, smart: true }
+      ),
+      Alien2OreProcessor: new Action2(
+        "Alien 2 Ore Processor",
+        "galaxy",
+        "ore_processor",
+        "gxy_alien2"
+      ),
+      Alien2Scavenger: new Action2(
+        "Alien 2 Scavenger",
+        "galaxy",
+        "scavenger",
+        "gxy_alien2",
+        { knowledge: true, ship: true }
+      ),
+      ChthonianMission: new Action2(
+        "Chthonian Mission",
+        "galaxy",
+        "chthonian_mission",
+        "gxy_chthonian"
+      ),
+      ChthonianMineLayer: new Action2(
+        "Chthonian Mine Layer",
+        "galaxy",
+        "minelayer",
+        "gxy_chthonian",
+        { ship: true, smart: true }
+      ),
+      ChthonianExcavator: new Action2(
+        "Chthonian Excavator",
+        "galaxy",
+        "excavator",
+        "gxy_chthonian",
+        { smart: true }
+      ),
+      ChthonianRaider: new Action2(
+        "Chthonian Corsair",
+        "galaxy",
+        "raider",
+        "gxy_chthonian",
+        { ship: true, smart: true }
+      ),
+      PortalTurret: new Action2(
+        "Portal Laser Turret",
+        "portal",
+        "turret",
+        "prtl_fortress"
+      ),
+      PortalCarport: new Action2(
+        "Portal Surveyor Carport",
+        "portal",
+        "carport",
+        "prtl_fortress"
+      ),
+      PortalWarDroid: new Action2(
+        "Portal War Droid",
+        "portal",
+        "war_droid",
+        "prtl_fortress"
+      ),
+      PortalRepairDroid: new Action2(
+        "Portal Repair Droid",
+        "portal",
+        "repair_droid",
+        "prtl_fortress"
+      ),
+      BadlandsPredatorDrone: new Action2(
+        "Badlands Predator Drone",
+        "portal",
+        "war_drone",
+        "prtl_badlands"
+      ),
+      BadlandsSensorDrone: new Action2(
+        "Badlands Sensor Drone",
+        "portal",
+        "sensor_drone",
+        "prtl_badlands"
+      ),
+      BadlandsAttractor: new Action2(
+        "Badlands Attractor Beacon",
+        "portal",
+        "attractor",
+        "prtl_badlands",
+        { smart: true }
+      ),
+      BadlandsMinions: new Action2(
+        "Badlands Minions Lair (Warlord)",
+        "portal",
+        "minions",
+        "prtl_badlands"
+      ),
+      BadlandsReaper: new Action2(
+        "Badlands Soul Reaper (Warlord)",
+        "portal",
+        "reaper",
+        "prtl_badlands"
+      ),
+      BadlandsCorpsePile: new Action2(
+        "Badlands Corpse Pile (Warlord)",
+        "portal",
+        "corpse_pile",
+        "prtl_badlands"
+      ),
+      BadlandsMortuary: new Action2(
+        "Badlands Mortuary (Warlord)",
+        "portal",
+        "mortuary",
+        "prtl_badlands"
+      ),
+      BadlandsCodex: new Action2(
+        "Badlands Create Codex (Warlord)",
+        "portal",
+        "codex",
+        "prtl_badlands"
+      ),
+      WastelandThrone: new Action2(
+        "Wasteland Throne of Evil (Warlord)",
+        "portal",
+        "throne",
+        "prtl_wasteland"
+      ),
+      WastelandIncinerator: new Action2(
+        "Wasteland Incinerator (Warlord)",
+        "portal",
+        "incinerator",
+        "prtl_wasteland"
+      ),
+      WastelandWarehouse: new Action2(
+        "Wasteland Warehouse (Warlord)",
+        "portal",
+        "warehouse",
+        "prtl_wasteland"
+      ),
+      WastelandHovel: new Action2(
+        "Wasteland Hellspawn Hovel (Warlord)",
+        "portal",
+        "hovel",
+        "prtl_wasteland",
+        { housing: true }
+      ),
+      WastelandHellCasino: new Action2(
+        "Wasteland Den of Sin (Warlord)",
+        "portal",
+        "hell_casino",
+        "prtl_wasteland"
+      ),
+      WastelandTwistedLab: new Action2(
+        "Wasteland Twisted Lab (Warlord)",
+        "portal",
+        "twisted_lab",
+        "prtl_wasteland",
+        { knowledge: true }
+      ),
+      WastelandDemonForge: new Action2(
+        "Wasteland Demon Forge (Warlord)",
+        "portal",
+        "demon_forge",
+        "prtl_wasteland"
+      ),
+      WastelandHellFactory: new Action2(
+        "Wasteland Terror Factory (Warlord)",
+        "portal",
+        "hell_factory",
+        "prtl_wasteland"
+      ),
+      WastelandPumpjack: new Action2(
+        "Wasteland Hellish Pumpjack (Warlord)",
+        "portal",
+        "pumpjack",
+        "prtl_wasteland"
+      ),
+      WastelandDigDemon: new Action2(
+        "Wasteland Dig Demon Burrow (Warlord)",
+        "portal",
+        "dig_demon",
+        "prtl_wasteland"
+      ),
+      WastelandTunneler: new Action2(
+        "Wasteland Tunneler Demon (Warlord)",
+        "portal",
+        "tunneler",
+        "prtl_wasteland"
+      ),
+      WastelandBrute: new Action2(
+        "Wasteland Brute Hut (Warlord)",
+        "portal",
+        "brute",
+        "prtl_wasteland",
+        { garrison: true }
+      ),
+      WastelandAltar: new CityAction2(
+        "Wasteland Sacrificial Altar (Warlord)",
+        "portal",
+        "s_alter",
+        "prtl_wasteland"
+      ),
+      WastelandShrine: new CityAction2(
+        "Wasteland Shrine (Warlord)",
+        "portal",
+        "shrine",
+        "prtl_wasteland"
+      ),
+      WastelandMeditationChamber: new CityAction2(
+        "Wasteland Meditation Chamber (Warlord)",
+        "portal",
+        "meditation",
+        "prtl_wasteland"
+      ),
+      PitMission: new Action2("Pit Mission", "portal", "pit_mission", "prtl_pit"),
+      PitAssaultForge: new Action2(
+        "Pit Assault Forge",
+        "portal",
+        "assault_forge",
+        "prtl_pit"
+      ),
+      PitSoulForge: new Action2(
+        "Pit Soul Forge",
+        "portal",
+        "soul_forge",
+        "prtl_pit"
+      ),
+      PitGunEmplacement: new Action2(
+        "Pit Gun Emplacement",
+        "portal",
+        "gun_emplacement",
+        "prtl_pit"
+      ),
+      PitSoulAttractor: new Action2(
+        "Pit Soul Attractor",
+        "portal",
+        "soul_attractor",
+        "prtl_pit"
+      ),
+      PitSoulCapacitor: new Action2(
+        "Pit Soul Capacitor (Witch Hunting)",
+        "portal",
+        "soul_capacitor",
+        "prtl_pit"
+      ),
+      PitAbsorptionChamber: new Action2(
+        "Pit Absorption Chamber (Witch Hunting)",
+        "portal",
+        "absorption_chamber",
+        "prtl_pit"
+      ),
+      PitShadowMine: new Action2(
+        "Pit Shadow Mine (Warlord)",
+        "portal",
+        "shadow_mine",
+        "prtl_pit"
+      ),
+      PitTavern: new Action2(
+        "Pit Tavern (Warlord)",
+        "portal",
+        "tavern",
+        "prtl_pit"
+      ),
+      RuinsMission: new Action2(
+        "Ruins Mission",
+        "portal",
+        "ruins_mission",
+        "prtl_ruins"
+      ),
+      RuinsGuardPost: new Action2(
+        "Ruins Guard Post",
+        "portal",
+        "guard_post",
+        "prtl_ruins",
+        { smart: true }
+      ),
+      RuinsVault: new Action2("Ruins Vault", "portal", "vault", "prtl_ruins"),
+      RuinsWarVault: new Action2(
+        "Ruins Vault (Warlord)",
+        "portal",
+        "war_vault",
+        "prtl_ruins"
+      ),
+      RuinsArchaeology: new Action2(
+        "Ruins Archaeology",
+        "portal",
+        "archaeology",
+        "prtl_ruins"
+      ),
+      RuinsArcology: new Action2(
+        "Ruins Arcology",
+        "portal",
+        "arcology",
+        "prtl_ruins"
+      ),
+      RuinsHellForge: new Action2(
+        "Ruins Infernal Forge",
+        "portal",
+        "hell_forge",
+        "prtl_ruins"
+      ),
+      RuinsInfernoPower: new Action2(
+        "Ruins Inferno Reactor",
+        "portal",
+        "inferno_power",
+        "prtl_ruins"
+      ),
+      RuinsAncientPillars: new Pillar2(
+        "Ruins Ancient Pillars",
+        "portal",
+        "ancient_pillars",
+        "prtl_ruins"
+      ),
+      GateMission: new Action2(
+        "Gate Mission",
+        "portal",
+        "gate_mission",
+        "prtl_gate"
+      ),
+      GateEastTower: new Action2(
+        "Gate East Tower",
+        "portal",
+        "east_tower",
+        "prtl_gate",
+        { multiSegmented: true }
+      ),
+      GateWestTower: new Action2(
+        "Gate West Tower",
+        "portal",
+        "west_tower",
+        "prtl_gate",
+        { multiSegmented: true }
+      ),
+      GateTurret: new Action2("Gate Turret", "portal", "gate_turret", "prtl_gate"),
+      GateInferniteMine: new Action2(
+        "Gate Infernite Mine",
+        "portal",
+        "infernite_mine",
+        "prtl_gate"
+      ),
+      LakeMission: new Action2(
+        "Lake Mission",
+        "portal",
+        "lake_mission",
+        "prtl_lake"
+      ),
+      LakeHarbor: new Action2("Lake Harbor", "portal", "harbor", "prtl_lake", {
+        smart: true
+      }),
+      LakeCoolingTower: new Action2(
+        "Lake Cooling Tower",
+        "portal",
+        "cooling_tower",
+        "prtl_lake",
+        { smart: true }
+      ),
+      LakeBireme: new Action2(
+        "Lake Bireme Warship",
+        "portal",
+        "bireme",
+        "prtl_lake",
+        { smart: true }
+      ),
+      LakeTransport: new Action2(
+        "Lake Transport",
+        "portal",
+        "transport",
+        "prtl_lake",
+        { smart: true }
+      ),
+      LakeOven: new Action2(
+        "Lake Cooker (Fasting)",
+        "portal",
+        "oven",
+        "prtl_lake"
+      ),
+      LakeOvenComplete: new Action2(
+        "Lake Cooker (Fasting, Complete)",
+        "portal",
+        "oven_complete",
+        "prtl_lake"
+      ),
+      LakeSoulSteeper: new Action2(
+        "Lake Soul Steeper (Fasting)",
+        "portal",
+        "dish_soul_steeper",
+        "prtl_lake"
+      ),
+      LakeLifeInfuser: new Action2(
+        "Lake Life Infuser (Fasting)",
+        "portal",
+        "dish_life_infuser",
+        "prtl_lake"
+      ),
+      LakeDevilishDish: new Action2(
+        "Lake Devilish Dish (Fasting)",
+        "portal",
+        "devilish_dish",
+        "prtl_lake"
+      ),
+      SpireMission: new Action2(
+        "Spire Mission",
+        "portal",
+        "spire_mission",
+        "prtl_spire"
+      ),
+      SpirePurifier: new Action2(
+        "Spire Purifier",
+        "portal",
+        "purifier",
+        "prtl_spire",
+        { smart: true }
+      ),
+      SpirePort: new Action2("Spire Port", "portal", "port", "prtl_spire", {
+        smart: true
+      }),
+      SpireBaseCamp: new Action2(
+        "Spire Base Camp",
+        "portal",
+        "base_camp",
+        "prtl_spire",
+        { smart: true }
+      ),
+      SpireBridge: new Action2("Spire Bridge", "portal", "bridge", "prtl_spire"),
+      SpireSphinx: new Action2("Spire Sphinx", "portal", "sphinx", "prtl_spire"),
+      SpireBribeSphinx: new Action2(
+        "Spire Bribe Sphinx",
+        "portal",
+        "bribe_sphinx",
+        "prtl_spire"
+      ),
+      SpireSurveyTower: new Action2(
+        "Spire Survey Tower",
+        "portal",
+        "spire_survey",
+        "prtl_spire"
+      ),
+      SpireMechBay: new Action2(
+        "Spire Mech Bay",
+        "portal",
+        "mechbay",
+        "prtl_spire",
+        { smart: true }
+      ),
+      SpireTower: new Action2("Spire Tower", "portal", "spire", "prtl_spire"),
+      SpireWaygate: new Action2(
+        "Spire Waygate",
+        "portal",
+        "waygate",
+        "prtl_spire",
+        { smart: true }
+      ),
+      SpireEdenicGate: new Action2(
+        "Spire Edenic Gate",
+        "portal",
+        "edenic_gate",
+        "prtl_spire"
+      ),
+      SpireBazaar: new Action2(
+        "Spire Bazaar (Warlord)",
+        "portal",
+        "bazaar",
+        "prtl_spire"
+      ),
+      AsphodelMission: new Action2(
+        "Asphodel Mission",
+        "eden",
+        "survery_meadows",
+        "eden_asphodel"
+      ),
+      AsphodelEncampment: new Action2(
+        "Asphodel Encampment",
+        "eden",
+        "encampment",
+        "eden_asphodel"
+      ),
+      AsphodelSoulEngine: new Action2(
+        "Asphodel Soul Engine",
+        "eden",
+        "soul_engine",
+        "eden_asphodel"
+      ),
+      AsphodelMechStation: new Action2(
+        "Asphodel Mech Station",
+        "eden",
+        "mech_station",
+        "eden_asphodel",
+        { multiSegmented: true }
+      ),
+      AsphodelHarvester: new Action2(
+        "Asphodel Harvester",
+        "eden",
+        "asphodel_harvester",
+        "eden_asphodel",
+        { smart: true }
+      ),
+      AsphodelProcessor: new Action2(
+        "Asphodel Muon Processor",
+        "eden",
+        "ectoplasm_processor",
+        "eden_asphodel"
+      ),
+      AsphodelResearchStation: new Action2(
+        "Asphodel Research Station",
+        "eden",
+        "research_station",
+        "eden_asphodel"
+      ),
+      AsphodelWarehouse: new Action2(
+        "Asphodel Warehouse",
+        "eden",
+        "warehouse",
+        "eden_asphodel"
+      ),
+      AsphodelStabilizer: new Action2(
+        "Asphodel Stabilizer",
+        "eden",
+        "stabilizer",
+        "eden_asphodel"
+      ),
+      AsphodelRuneGate: new Action2(
+        "Asphodel Rune Gate",
+        "eden",
+        "rune_gate",
+        "eden_asphodel",
+        { multiSegmented: true }
+      ),
+      AsphodelRuneGateOpen: new Action2(
+        "Asphodel Rune Gate (Complete)",
+        "eden",
+        "rune_gate_open",
+        "eden_asphodel"
+      ),
+      AsphodelBunker: new Action2(
+        "Asphodel Bunker",
+        "eden",
+        "bunker",
+        "eden_asphodel",
+        { garrison: true }
+      ),
+      AsphodelBlissDen: new Action2(
+        "Asphodel Bliss Den",
+        "eden",
+        "bliss_den",
+        "eden_asphodel"
+      ),
+      AsphodelRectory: new Action2(
+        "Asphodel Rectory",
+        "eden",
+        "rectory",
+        "eden_asphodel",
+        { housing: true }
+      ),
+      AsphodelCorruptor: new Action2(
+        "Asphodel Corruptor (Warlord)",
+        "eden",
+        "corruptor",
+        "eden_asphodel"
+      ),
+      ElysiumMission: new Action2(
+        "Elysium Mission",
+        "eden",
+        "survey_fields",
+        "eden_elysium"
+      ),
+      ElysiumFortress: new Action2(
+        "Elysium Celestial Fortress",
+        "eden",
+        "fortress",
+        "eden_elysium"
+      ),
+      ElysiumSiege: new Action2(
+        "Elysium Siege Fortress",
+        "eden",
+        "siege_fortress",
+        "eden_elysium"
+      ),
+      ElysiumRaid: new Action2(
+        "Elysium Raid Supplies",
+        "eden",
+        "raid_supplies",
+        "eden_elysium"
+      ),
+      ElysiumAmbush: new Action2(
+        "Elysium Ambush Patrol",
+        "eden",
+        "ambush_patrol",
+        "eden_elysium"
+      ),
+      ElysiumRuinedFortress: new Action2(
+        "Elysium Ruined Fortress",
+        "eden",
+        "ruined_fortress",
+        "eden_elysium"
+      ),
+      ElysiumScout: new Action2(
+        "Elysium Scout",
+        "eden",
+        "scout_elysium",
+        "eden_elysium"
+      ),
+      ElysiumFireSupportBase: new Action2(
+        "Elysium Fire Support Base",
+        "eden",
+        "fire_support_base",
+        "eden_elysium",
+        { multiSegmented: true }
+      ),
+      ElysiumMine: new Action2(
+        "Elysium Mine",
+        "eden",
+        "elysanite_mine",
+        "eden_elysium"
+      ),
+      ElysiumSacredSmelter: new Action2(
+        "Elysium Sacred Smelter",
+        "eden",
+        "sacred_smelter",
+        "eden_elysium"
+      ),
+      ElysiumEleriumContainment: new Action2(
+        "Elysium Elerium Containment",
+        "eden",
+        "elerium_containment",
+        "eden_elysium"
+      ),
+      ElysiumPillbox: new Action2(
+        "Elysium Pillbox",
+        "eden",
+        "pillbox",
+        "eden_elysium"
+      ),
+      // TODO: Need some interaction with autoHell
+      ElysiumRestaurant: new Action2(
+        "Elysium Restaurant",
+        "eden",
+        "restaurant",
+        "eden_elysium"
+      ),
+      ElysiumEternalBank: new Action2(
+        "Elysium Eternal Bank",
+        "eden",
+        "eternal_bank",
+        "eden_elysium"
+      ),
+      ElysiumArchive: new Action2(
+        "Elysium Archive",
+        "eden",
+        "archive",
+        "eden_elysium"
+      ),
+      ElysiumNorthPier: new Action2(
+        "Elysium North Pier",
+        "eden",
+        "north_pier",
+        "eden_elysium",
+        { multiSegmented: true }
+      ),
+      ElysiumRushmore: new Action2(
+        "Elysium Rushmore",
+        "eden",
+        "rushmore",
+        "eden_elysium"
+      ),
+      ElysiumReincarnation: new Action2(
+        "Elysium Reincarnation",
+        "eden",
+        "reincarnation",
+        "eden_elysium"
+      ),
+      ElysiumCement: new Action2(
+        "Elysium Cement",
+        "eden",
+        "eden_cement",
+        "eden_elysium"
+      ),
+      IsleSouthPier: new Action2(
+        "Isle South Pier",
+        "eden",
+        "south_pier",
+        "eden_isle",
+        { multiSegmented: true }
+      ),
+      IsleWestTower: new Action2(
+        "Isle West Tower",
+        "eden",
+        "west_tower",
+        "eden_isle"
+      ),
+      IsleGarrison: new Action2(
+        "Isle Garrison",
+        "eden",
+        "isle_garrison",
+        "eden_isle"
+      ),
+      IsleEastTower: new Action2(
+        "Isle East Tower",
+        "eden",
+        "east_tower",
+        "eden_isle"
+      ),
+      IsleSpiritVacuum: new Action2(
+        "Isle Spirit Vacuum",
+        "eden",
+        "spirit_vacuum",
+        "eden_isle"
+      ),
+      IsleSpiritBattery: new Action2(
+        "Isle Spirit Battery",
+        "eden",
+        "spirit_battery",
+        "eden_isle"
+      ),
+      IsleSoulCompactor: new Action2(
+        "Isle Soul Compactor",
+        "eden",
+        "soul_compactor",
+        "eden_isle"
+      ),
+      PalaceMission: new Action2(
+        "Palace Mission",
+        "eden",
+        "scout_palace",
+        "eden_palace"
+      ),
+      PalaceThrone: new Action2("Palace Throne", "eden", "throne", "eden_palace"),
+      PalaceInfuser: new Action2(
+        "Palace Infuser",
+        "eden",
+        "infuser",
+        "eden_palace",
+        { multiSegmented: true }
+      ),
+      PalaceApotheosis: new Action2(
+        "Palace Apotheosis",
+        "eden",
+        "apotheosis",
+        "eden_palace",
+        { prestige: true }
+      ),
+      PalaceConduit: new Action2(
+        "Palace Conduit",
+        "eden",
+        "conduit",
+        "eden_palace",
+        { multiSegmented: true }
+      ),
+      PalaceTomb: new Action2("Palace Tomb", "eden", "tomb", "eden_palace", {
+        multiSegmented: true
+      })
+    };
+    const linkedBuildings2 = [
+      [buildings2.LakeTransport, buildings2.LakeBireme],
+      [buildings2.SpirePort, buildings2.SpireBaseCamp]
+    ];
+    const projects2 = {
+      LaunchFacility: new Project2("Launch Facility", "launch_facility"),
+      SuperCollider: new Project2("Supercollider", "lhc"),
+      StockExchange: new Project2("Stock Exchange", "stock_exchange"),
+      Monument: new Project2("Monument", "monument"),
+      Railway: new Project2("Railway", "railway"),
+      Nexus: new Project2("Nexus", "nexus"),
+      RoidEject: new Project2("Asteroid Redirect", "roid_eject"),
+      ManaSyphon: new Project2("Mana Syphon", "syphon"),
+      Depot: new Project2("Depot", "tp_depot")
+    };
+    return { resources: resources2, jobs: jobs2, crafter: crafter2, buildings: buildings2, linkedBuildings: linkedBuildings2, projects: projects2 };
   }
 
   // src/planning/cost-conflicts.ts
@@ -3963,6 +10911,819 @@
       return false;
     }
     return { getTechConflict: getTechConflict2 };
+  }
+
+  // src/policies/building-weighting.ts
+  function liveObject2(getValue) {
+    return new Proxy({}, {
+      get: (_target, property) => Reflect.get(getValue(), property),
+      set: (_target, property, value) => Reflect.set(getValue(), property, value),
+      has: (_target, property) => Reflect.has(getValue(), property),
+      ownKeys: () => Reflect.ownKeys(getValue()),
+      getOwnPropertyDescriptor: (_target, property) => {
+        const descriptor = Reflect.getOwnPropertyDescriptor(getValue(), property);
+        return descriptor ? { ...descriptor, configurable: true } : void 0;
+      }
+    });
+  }
+  function createBuildingWeightingPolicy({
+    getGame,
+    getSettings,
+    getState,
+    getResources,
+    getBuildings,
+    getPoly,
+    getMechManager,
+    getTechIds,
+    getTraitVal,
+    getHaveTech,
+    getHaveTask,
+    getPiracyMultiplierFn,
+    getGalaxyAssaultPending,
+    getGalaxyRegionsFn,
+    getGalaxyCombatShipPowerFn,
+    getNumberStringFn,
+    getNiceNumberFn,
+    getIsLumberRace,
+    getBananaRepublicObjectiveComplete,
+    getInflationChallengeAssistActive,
+    getInflationChallengeMoneyReachable,
+    getRetirementChallengeAssistActive,
+    getRetirementPreparationMissing,
+    getGuardActive,
+    getIsHellSupressUseful,
+    getBestSupplyRatioFn,
+    getIsGECKNeeded,
+    getIsPrestigeAllowed,
+    getIsPillarFinished,
+    getCitadelConsumptionFn,
+    ResourceAction: ResourceAction2
+  }) {
+    const game2 = liveObject2(getGame);
+    const settings2 = liveObject2(getSettings);
+    const state2 = liveObject2(getState);
+    const resources2 = liveObject2(getResources);
+    const buildings2 = liveObject2(getBuildings);
+    const poly2 = liveObject2(getPoly);
+    const MechManager2 = liveObject2(getMechManager);
+    const techIds2 = liveObject2(getTechIds);
+    const traitVal2 = (...args) => getTraitVal()(...args);
+    const haveTech2 = (...args) => getHaveTech()(...args);
+    const haveTask2 = (...args) => getHaveTask()(...args);
+    const getPiracyMultiplier2 = (...args) => getPiracyMultiplierFn()(...args);
+    const galaxyAssaultPending2 = (...args) => getGalaxyAssaultPending()(...args);
+    const getGalaxyRegions2 = (...args) => getGalaxyRegionsFn()(...args);
+    const getGalaxyCombatShipPower2 = (...args) => getGalaxyCombatShipPowerFn()(...args);
+    const getNumberString2 = (...args) => getNumberStringFn()(...args);
+    const getNiceNumber2 = (...args) => getNiceNumberFn()(...args);
+    const isLumberRace2 = (...args) => getIsLumberRace()(...args);
+    const bananaRepublicObjectiveComplete2 = (...args) => getBananaRepublicObjectiveComplete()(...args);
+    const inflationChallengeAssistActive2 = (...args) => getInflationChallengeAssistActive()(...args);
+    const inflationChallengeMoneyReachable2 = (...args) => getInflationChallengeMoneyReachable()(...args);
+    const retirementChallengeAssistActive2 = (...args) => getRetirementChallengeAssistActive()(...args);
+    const retirementPreparationMissing2 = (...args) => getRetirementPreparationMissing()(...args);
+    const guardActive2 = (...args) => getGuardActive()(...args);
+    const isHellSupressUseful2 = (...args) => getIsHellSupressUseful()(...args);
+    const getBestSupplyRatio2 = (...args) => getBestSupplyRatioFn()(...args);
+    const isGECKNeeded2 = (...args) => getIsGECKNeeded()(...args);
+    const isPrestigeAllowed2 = (...args) => getIsPrestigeAllowed()(...args);
+    const isPillarFinished2 = (...args) => getIsPillarFinished()(...args);
+    const getCitadelConsumption2 = (...args) => getCitadelConsumptionFn()(...args);
+    const wrGlobalCondition2 = 0;
+    const wrIndividualCondition2 = 1;
+    const wrDescription2 = 2;
+    const wrMultiplier2 = 3;
+    const authorityCapBuildings2 = [
+      buildings2.Barracks,
+      buildings2.Temple,
+      buildings2.RedSpaceBarracks,
+      buildings2.ProximaCruiser,
+      buildings2.BeltSpaceStation,
+      buildings2.WastelandBrute,
+      buildings2.BadlandsMinions,
+      buildings2.WastelandThrone,
+      buildings2.AsphodelBunker
+    ];
+    const INFLATION_CHALLENGE_MONEY2 = 25e10;
+    const RETIREMENT_PREP2 = {
+      fusionGenerators: 20,
+      factories: 18,
+      scienceLabs: 11,
+      graphene: 2e8
+    };
+    const inflationMoneyStorageBuildings2 = [
+      buildings2.Bank,
+      buildings2.Casino,
+      buildings2.HellSpaceCasino,
+      buildings2.TitanBank,
+      buildings2.TauCasino,
+      buildings2.AlphaExchange,
+      buildings2.RuinsVault,
+      buildings2.RuinsWarVault,
+      buildings2.WastelandHellCasino,
+      buildings2.ElysiumEternalBank
+    ];
+    const inflationMoneyIncomeBuildings2 = [
+      buildings2.TouristCenter,
+      buildings2.Casino,
+      buildings2.HellSpaceCasino,
+      buildings2.TauCasino,
+      buildings2.AlphaLuxuryCondo,
+      buildings2.WastelandHellCasino
+    ];
+    const galaxyCombatShips2 = [
+      buildings2.ScoutShip,
+      buildings2.CorvetteShip,
+      buildings2.FrigateShip,
+      buildings2.CruiserShip,
+      buildings2.Dreadnought
+    ];
+    const weightingRules2 = [
+      [
+        () => !settings2.autoBuild,
+        () => true,
+        () => "",
+        () => 0
+        // Set weighting to zero right away, and skip all checks if autoBuild is disabled
+      ],
+      [
+        () => true,
+        (building) => !building.isUnlocked(),
+        () => "Locked",
+        () => 0
+        // Should always be on top, processing locked building may lead to issues
+      ],
+      [
+        () => true,
+        (building) => state2.queuedTargets.includes(building),
+        () => "Queued building, processing...",
+        () => 0
+      ],
+      [
+        () => true,
+        (building) => state2.triggerTargets.includes(building),
+        () => "Active trigger, processing...",
+        () => 0
+      ],
+      [
+        () => true,
+        (building) => !building.autoBuildEnabled,
+        () => "AutoBuild disabled",
+        () => 0
+      ],
+      [
+        () => true,
+        (building) => building.count >= building.autoMax,
+        () => "Maximum amount reached",
+        () => 0
+      ],
+      [
+        () => true,
+        (building) => !building.isAffordable(true),
+        () => "",
+        () => 0
+        // Red buildings need to be filtered out, so they won't prevent affordable buildings with lower weight from building
+      ],
+      [
+        () => game2.global.race["truepath"] && buildings2.SpaceTestLaunch.isUnlocked() && !haveTech2("world_control"),
+        (building) => {
+          if (building === buildings2.SpaceTestLaunch) {
+            let sabotage = 1;
+            for (let i = 0; i < 3; i++) {
+              let gov = game2.global.civic.foreign[`gov${i}`];
+              if (!gov.occ && !gov.anx && !gov.buy) {
+                sabotage++;
+              }
+            }
+            return 1 / (sabotage + 1);
+          }
+        },
+        (chance) => `${Math.round(chance * 100)}% chance of successful launch`,
+        (chance) => chance < 0.5 ? chance : 0
+      ],
+      [
+        () => settings2.jobDisableMiners && buildings2.GatewayStarbase.count > 0,
+        (building) => building === buildings2.CoalMine || building === buildings2.Mine && !(game2.global.race["sappy"] && game2.global.race["smoldering"]),
+        () => "Miners disabled in Andromeda",
+        () => 0
+      ],
+      [
+        () => haveTech2("piracy"),
+        (building) => building === buildings2.StargateDefensePlatform && buildings2.StargateDefensePlatform.count * 20 >= (game2.global.race["instinct"] ? 0.09 : 0.1) * game2.global.tech.piracy * getPiracyMultiplier2(),
+        () => "Piracy fully supressed",
+        () => 0
+      ],
+      [
+        () => settings2.autoFleet && game2.global.tech["piracy"] && !galaxyAssaultPending2(),
+        (building) => {
+          if (galaxyCombatShips2.includes(building)) {
+            let totalNeed = getGalaxyRegions2().reduce(
+              (sum, region) => sum + (region.useful ? Math.max(0, region.piracy - region.armada) : 0),
+              0
+            );
+            return getGalaxyCombatShipPower2() >= totalNeed;
+          }
+        },
+        () => "Piracy fully covered by fleet",
+        () => 0
+      ],
+      [
+        () => settings2.autoMech && settings2.mechBuild !== "none" && settings2.buildingMechsFirst && buildings2.SpireMechBay.count > 0 && buildings2.SpireMechBay.stateOffCount === 0,
+        (building) => {
+          if (building.cost["Supply"]) {
+            if (MechManager2.isActive) {
+              return "Building mechs...";
+            }
+            let mechBay = game2.global.portal.mechbay;
+            let newSize = !haveTask2("mech") ? settings2.mechBuild === "random" ? MechManager2.getPreferredSize()[0] : mechBay.blueprint.size : "titan";
+            let [newGems, newSupply, newSpace] = MechManager2.getMechCost({
+              size: newSize
+            });
+            if (newSpace <= mechBay.max - mechBay.bay && newSupply <= resources2.Supply.maxQuantity && newGems <= resources2.Soul_Gem.currentQuantity) {
+              return "Saving supplies for new mech";
+            }
+          }
+        },
+        (note) => note,
+        () => 0
+      ],
+      [
+        () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "ascension" && !game2.global.race["witch_hunter"],
+        (building) => building === buildings2.GateEastTower || building === buildings2.GateWestTower,
+        () => "Not needed for Ascension prestige",
+        () => 0
+      ],
+      [
+        () => buildings2.GateEastTower.isUnlocked() && buildings2.GateWestTower.isUnlocked() && poly2.hellSupression("gate").supress < settings2.buildingTowerSuppression / 100,
+        (building) => building === buildings2.GateEastTower || building === buildings2.GateWestTower,
+        () => "Too low gate supression",
+        () => 0
+      ],
+      [
+        () => settings2.prestigeType === "whitehole" && settings2.prestigeWhiteholeSaveGems,
+        (building) => {
+          if (building.cost["Soul_Gem"] > resources2.Soul_Gem.currentQuantity - 10) {
+            return true;
+          }
+        },
+        () => "Saving up Soul Gems for prestige",
+        () => 0
+      ],
+      [
+        () => {
+          return buildings2.GorddonFreighter.isAutoBuildable() && buildings2.GorddonFreighter.isAffordable(true) && buildings2.Alien1SuperFreighter.isAutoBuildable() && buildings2.Alien1SuperFreighter.isAffordable(true);
+        },
+        (building) => {
+          if (building === buildings2.GorddonFreighter || building === buildings2.Alien1SuperFreighter) {
+            let regCount = buildings2.GorddonFreighter.count;
+            let regTotal = (1 + (regCount + 1) * 0.03) / (1 + regCount * 0.03) - 1;
+            let regCrew = regTotal / 3;
+            let supCount = buildings2.Alien1SuperFreighter.count;
+            let supTotal = (1 + (supCount + 1) * 0.08) / (1 + supCount * 0.08) - 1;
+            let supCrew = supTotal / 5;
+            if (building === buildings2.GorddonFreighter && regCrew < supCrew) {
+              return buildings2.Alien1SuperFreighter;
+            }
+            if (building === buildings2.Alien1SuperFreighter && supCrew < regCrew) {
+              return buildings2.GorddonFreighter;
+            }
+          }
+        },
+        (other) => `${other.title} gives more Money`,
+        () => settings2.buildingsBestFreighter ? 0 : 1
+        // Find what's better - Freighter or Super Freighter
+      ],
+      [
+        () => {
+          return buildings2.LakeBireme.isAutoBuildable() && buildings2.LakeBireme.isAffordable(true) && buildings2.LakeTransport.isAutoBuildable() && buildings2.LakeTransport.isAffordable(true) && resources2.Lake_Support.rateOfChange <= 1;
+        },
+        (building) => {
+          if (building === buildings2.LakeBireme || building === buildings2.LakeTransport) {
+            let biremeCount = buildings2.LakeBireme.count;
+            let transportCount = buildings2.LakeTransport.count;
+            let rating = game2.global.blood["spire"] && game2.global.blood.spire >= 2 ? 0.8 : 0.85;
+            let nextBireme = (1 - rating ** (biremeCount + 1)) * (transportCount * 5);
+            let nextTransport = (1 - rating ** biremeCount) * ((transportCount + 1) * 5);
+            if (settings2.buildingsTransportGem) {
+              let currentSupply = (1 - rating ** biremeCount) * (transportCount * 5);
+              nextBireme = (nextBireme - currentSupply) / buildings2.LakeBireme.cost["Soul_Gem"];
+              nextTransport = (nextTransport - currentSupply) / buildings2.LakeTransport.cost["Soul_Gem"];
+            }
+            if (building === buildings2.LakeBireme && nextBireme < nextTransport) {
+              return buildings2.LakeTransport;
+            }
+            if (building === buildings2.LakeTransport && nextTransport < nextBireme) {
+              return buildings2.LakeBireme;
+            }
+          }
+        },
+        (other) => `${other.title} gives more Supplies`,
+        () => 0
+        // Find what's better - Bireme or Transport
+      ],
+      [
+        () => {
+          return buildings2.SpirePort.isAutoBuildable() && buildings2.SpirePort.isAffordable(true) && buildings2.SpireBaseCamp.isAutoBuildable() && buildings2.SpireBaseCamp.isAffordable(true);
+        },
+        (building) => {
+          if (building === buildings2.SpirePort || building === buildings2.SpireBaseCamp) {
+            let portCount = buildings2.SpirePort.count;
+            let baseCount = buildings2.SpireBaseCamp.count;
+            let nextPort = (portCount + 1) * (1 + baseCount * 0.4);
+            let nextBase = portCount * (1 + (baseCount + 1) * 0.4);
+            if (building === buildings2.SpirePort && nextPort < nextBase) {
+              return buildings2.SpireBaseCamp;
+            }
+            if (building === buildings2.SpireBaseCamp && nextBase < nextPort) {
+              return buildings2.SpirePort;
+            }
+          }
+        },
+        (other) => `${other.title} gives more Max Supplies`,
+        () => 0
+        // Find what's better - Port or Base
+      ],
+      [
+        () => haveTech2("waygate", 2),
+        (building) => building === buildings2.SpireWaygate,
+        () => "",
+        () => 0
+        // We can't limit waygate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
+      ],
+      [
+        () => haveTech2("edenic", 3),
+        (building) => building === buildings2.SpireEdenicGate,
+        () => "",
+        () => 0
+        // We can't limit edenic gate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
+      ],
+      [
+        () => haveTech2("elysium", 8),
+        (building) => {
+          if (building === buildings2.ElysiumFireSupportBase) {
+            if (haveTech2("isle", 2)) {
+              return "Garrison is destroyed";
+            }
+            if (!haveTech2("elysium", 10) && building.count >= 100) {
+              return "Missing Elerium Cannon tech";
+            }
+          }
+        },
+        (note) => note,
+        () => 0
+        // Build up to 100, and then fire after researching cannon
+      ],
+      [
+        () => haveTech2("asphodel", 8),
+        (building) => building === buildings2.AsphodelStabilizer && building.count >= buildings2.AsphodelWarehouse.count,
+        () => "Can not exceed amount of Warehouses",
+        () => 0
+      ],
+      [
+        () => haveTech2("hell_spire", 8) || game2.global.race["warlord"],
+        (building) => building === buildings2.SpireSphinx,
+        () => "",
+        () => 0
+        // Sphinx not usable after solving / Harmachis not usable during Warlord
+      ],
+      [
+        () => game2.global.race["artifical"] && haveTech2("focus_cure", 7),
+        (building) => building instanceof ResourceAction2 && building.resource === resources2.Population && building !== buildings2.TauCloning,
+        () => "Assembling is not possible",
+        () => 0
+      ],
+      [
+        () => game2.global.race["artifical"],
+        (building) => building instanceof ResourceAction2 && building.resource === resources2.Population && resources2.Population.storageRatio === 1,
+        () => "No empty housings",
+        () => 0
+      ],
+      [
+        () => buildings2.GorddonEmbassy.count === 0 && resources2.Knowledge.maxQuantity < settings2.fleetEmbassyKnowledge,
+        (building) => building === buildings2.GorddonEmbassy,
+        () => `${getNumberString2(
+          settings2.fleetEmbassyKnowledge
+        )} Max Knowledge required`,
+        () => 0
+      ],
+      [
+        () => game2.global.race["magnificent"] && settings2.buildingShrineType !== "any",
+        (building) => {
+          if (building.id && building.id.includes("shrine")) {
+            let bonus = null;
+            if (game2.global.city.calendar.moon > 0 && game2.global.city.calendar.moon < 7) {
+              bonus = "morale";
+            } else if (game2.global.city.calendar.moon > 7 && game2.global.city.calendar.moon < 14) {
+              bonus = "metal";
+            } else if (game2.global.city.calendar.moon > 14 && game2.global.city.calendar.moon < 21) {
+              bonus = "know";
+            } else if (game2.global.city.calendar.moon > 21) {
+              bonus = "tax";
+            } else if ([0, 7, 14, 21].includes(game2.global.city.calendar.moon)) {
+              bonus = "rotating";
+            } else {
+              return true;
+            }
+            if (settings2.buildingShrineType === "equally") {
+              let minShrine = Math.min(
+                game2.global.city.shrine.morale,
+                game2.global.city.shrine.metal,
+                game2.global.city.shrine.know,
+                game2.global.city.shrine.tax
+              );
+              return game2.global.city.shrine[bonus] !== minShrine;
+            } else {
+              return settings2.buildingShrineType !== bonus;
+            }
+          }
+        },
+        () => "Wrong shrine",
+        () => 0
+      ],
+      [
+        () => game2.global.race["slaver"],
+        (building) => {
+          if (building === buildings2.SlaveMarket) {
+            if (resources2.Slave.currentQuantity >= resources2.Slave.maxQuantity) {
+              return "Slave pens already full";
+            }
+            if (resources2.Money.currentQuantity + resources2.Money.rateOfChange < resources2.Money.maxQuantity && resources2.Money.rateOfChange < settings2.slaveIncome) {
+              return "Buying slaves only with excess money";
+            }
+          }
+        },
+        (note) => note,
+        () => 0
+        // Slave Market
+      ],
+      [
+        () => game2.global.race["cannibalize"],
+        (building) => {
+          if (building._id === "s_alter" && building.count > 0) {
+            if (resources2.Population.currentQuantity < 1) {
+              return "Too low population";
+            }
+            if (resources2.Population.currentQuantity !== resources2.Population.maxQuantity) {
+              return "Sacrifices performed only with full population";
+            }
+            if (game2.global.race["parasite"] && game2.global.city.calendar.wind === 0) {
+              return "Parasites sacrificed only during windy weather";
+            }
+            if (game2.global.civic[game2.global.civic.d_job].workers < 1) {
+              return "No default workers to sacrifice";
+            }
+            if (game2.global.city.s_alter.rage >= 3600 && game2.global.city.s_alter.regen >= 3600 && game2.global.city.s_alter.mind >= 3600 && game2.global.city.s_alter.mine >= 3600 && (!isLumberRace2() || game2.global.city.s_alter.harvest >= 3600)) {
+              return "Sacrifice bonus already high enough";
+            }
+          }
+        },
+        (note) => note,
+        () => 0
+        // Sacrificial Altar
+      ],
+      [
+        () => true,
+        (building) => building.getMissingConsumption(),
+        (resource) => `Missing ${resource.name} to operate`,
+        () => settings2.buildingWeightingMissingSupply
+      ],
+      [
+        () => true,
+        (building) => building.getMissingSupport(),
+        (support) => `Missing ${support.name} to operate`,
+        () => settings2.buildingWeightingMissingSupport
+      ],
+      [
+        () => true,
+        (building) => building.getUselessSupport(),
+        (support) => `Provided ${support.name} not currently needed`,
+        () => settings2.buildingWeightingUselessSupport
+      ],
+      [
+        () => game2.global.race["truepath"] && resources2.Tau_Belt_Support.maxQuantity <= resources2.Tau_Belt_Support.currentQuantity,
+        (building) => {
+          if (building === buildings2.TauBeltWhalingShip || building === buildings2.TauBeltMiningShip) {
+            let s_max = resources2.Tau_Belt_Support.maxQuantity;
+            let s_cur = resources2.Tau_Belt_Support.currentQuantity;
+            let currentEff = 1 - (1 - s_max / s_cur) ** 1.4;
+            let nextEff = 1 - (1 - s_max / (s_cur + 1)) ** 1.4;
+            return nextEff * (s_cur + 1) - currentEff * s_cur;
+          }
+        },
+        (eff) => `Low security, new ship will be ${getNiceNumber2(eff * 100)}% efficient`,
+        (eff) => eff ?? -1
+      ],
+      [
+        () => game2.global.race["truepath"],
+        // "&& game.global.tech.tau_red === 4" doesn't want to work for some reason.
+        (building) => {
+          if (building === buildings2.TauRedContact || building === buildings2.TauRedIntroduce || building === buildings2.TauRedSubjugate) {
+            let missing = null;
+            for (let [id, stat] of Object.entries({
+              TauRedContact: "friend",
+              TauRedIntroduce: "god",
+              TauRedSubjugate: "lord"
+            })) {
+              if (!game2.global.stats.womling[stat][poly2.universeAffix()]) {
+                if (building === buildings2[id]) {
+                  return false;
+                }
+                if (buildings2[id].isAutoBuildable()) {
+                  missing = id;
+                }
+              }
+            }
+            return missing;
+          }
+        },
+        (id) => `Overlord achievement is missing ${buildings2[id].name}`,
+        () => settings2.buildingWeightingOverlord
+      ],
+      [
+        // Evil universe: Authority amount is capped by Authority max. When max is below target no
+        // amount of tax/soldier management can fix the production penalty, so prioritize the
+        // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
+        () => settings2.generalMinimumAuthority > 0 && resources2.Authority.isUnlocked() && resources2.Authority.maxQuantity < settings2.generalMinimumAuthority,
+        (building) => authorityCapBuildings2.includes(building),
+        () => "Raises Authority cap, currently below target",
+        () => settings2.buildingWeightingAuthority
+      ],
+      [
+        () => settings2.achievementGuards && settings2.guardBananaRepublic && game2.global.race["banana"],
+        (building) => building === buildings2.DwarfWorldCollider && !bananaRepublicObjectiveComplete2("b2"),
+        () => "Banana Republic objective",
+        () => settings2.buildingWeightingBananaObjective
+      ],
+      [
+        () => inflationChallengeAssistActive2(),
+        (building) => {
+          if (!inflationChallengeMoneyReachable2() && inflationMoneyStorageBuildings2.includes(building)) {
+            return "storage";
+          }
+          if (inflationChallengeMoneyReachable2() && inflationMoneyIncomeBuildings2.includes(building)) {
+            return "income";
+          }
+          return false;
+        },
+        (kind) => kind === "storage" ? "Inflation challenge needs Money storage" : "Inflation challenge needs Money income",
+        () => settings2.buildingWeightingInflationMoney
+      ],
+      [
+        () => retirementChallengeAssistActive2() && retirementPreparationMissing2().length > 0,
+        (building) => {
+          if (building === buildings2.TauFusionGenerator && building.count < RETIREMENT_PREP2.fusionGenerators) {
+            return RETIREMENT_PREP2.fusionGenerators;
+          }
+          if (building === buildings2.TauFactory && building.count < RETIREMENT_PREP2.factories) {
+            return RETIREMENT_PREP2.factories;
+          }
+          if (building === buildings2.TauDiseaseLab && building.count < RETIREMENT_PREP2.scienceLabs) {
+            return RETIREMENT_PREP2.scienceLabs;
+          }
+          return false;
+        },
+        (target, building) => `Retirement preparation: build ${target} ${building.name}`,
+        () => settings2.buildingWeightingRetirementPrep
+      ],
+      [
+        () => settings2.achievementGuards,
+        (building) => building === buildings2.Dreadnought && guardActive2("guardDreaded") ? "Dreaded" : building === buildings2.SiriusThermalCollector && guardActive2("guardEnergetic") ? "Energetic" : building === buildings2.RedSpaceport && guardActive2("guardRedDead") ? "Red Dead" : false,
+        (name) => `${name} achievement guard`,
+        () => 0
+      ],
+      [
+        () => true,
+        (building) => building._tab === "city" && building !== buildings2.Mill && building !== buildings2.Banquet && building.stateOffCount > 0,
+        () => "Still have some non operating buildings",
+        () => settings2.buildingWeightingNonOperatingCity
+      ],
+      [
+        () => true,
+        (building) => {
+          if (building === buildings2.BlackholeStellarEngine) {
+            return false;
+          }
+          if ((building === buildings2.BadlandsAttractor || building === buildings2.SpireMechBay) && building.isSmartManaged()) {
+            return false;
+          }
+          if (building === buildings2.RuinsGuardPost && building.isSmartManaged() && !isHellSupressUseful2()) {
+            if (building.count < Math.ceil(
+              5e3 / (game2.armyRating(traitVal2("high_pop", 0, 1), "hellArmy", 0) * traitVal2("holy", 1, "+"))
+            )) {
+              return false;
+            }
+          }
+          let supplyIndex = building === buildings2.SpirePort ? 1 : building === buildings2.SpireBaseCamp ? 2 : -1;
+          if (supplyIndex > 0 && (buildings2.SpireMechBay.isSmartManaged() || buildings2.SpirePurifier.isSmartManaged())) {
+            if (building.count < getBestSupplyRatio2(
+              resources2.Spire_Support.maxQuantity,
+              buildings2.SpirePort.autoMax,
+              buildings2.SpireBaseCamp.autoMax
+            )[supplyIndex]) {
+              return false;
+            }
+          }
+          if (building._tab !== "city" && building.stateOffCount > 0) {
+            return true;
+          }
+        },
+        () => "Still have some non operating buildings",
+        () => settings2.buildingWeightingNonOperating
+      ],
+      [
+        () => settings2.prestigeType !== "bioseed" || !isGECKNeeded2(),
+        (building) => building === buildings2.GasSpaceDockGECK,
+        () => "Max allowed amount of G.E.C.K reached",
+        () => 0
+      ],
+      [
+        () => game2.global.race["lone_survivor"] && !isPrestigeAllowed2("eden"),
+        (building) => building === buildings2.TauStarEden,
+        () => "Prestiging not currently allowed",
+        () => 0
+      ],
+      [
+        () => game2.global.race["truepath"] && (!isPrestigeAllowed2("retire") || buildings2.TauGas2MatrioshkaBrain.count < 1e3),
+        (building) => building === buildings2.TauGas2IgniteGasGiant,
+        () => "Prestiging not currently allowed",
+        () => 0
+      ],
+      [
+        () => settings2.prestigeBioseedConstruct && settings2.prestigeType !== "bioseed",
+        (building) => building === buildings2.GasSpaceDock || building === buildings2.GasSpaceDockShipSegment || building === buildings2.GasSpaceDockProbe,
+        () => "Not needed for current prestige",
+        () => 0
+      ],
+      [
+        () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "bioseed",
+        (building) => building === buildings2.DwarfWorldCollider || building === buildings2.TitanMission,
+        () => "Not needed for Bioseed prestige",
+        () => 0
+      ],
+      [
+        () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "whitehole",
+        (building) => building === buildings2.BlackholeJumpShip,
+        () => "Not needed for Whitehole prestige",
+        () => 0
+      ],
+      [
+        () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "vacuum",
+        (building) => building === buildings2.BlackholeStellarEngine,
+        () => "Not needed for Vacuum Collapse prestige",
+        () => 0
+      ],
+      [
+        () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "ascension" && isPillarFinished2() && !game2.global.race["witch_hunter"],
+        (building) => building === buildings2.PitMission || building === buildings2.RuinsMission,
+        () => "Not needed for Ascension prestige",
+        () => 0
+      ],
+      [
+        () => game2.global.race["witch_hunter"] && settings2.prestigeType === "ascension",
+        (building) => building === buildings2.SpireWaygate,
+        () => "Not needed for Witch Hunter's Ascension prestige",
+        () => 0
+      ],
+      [
+        () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "terraform",
+        (building) => building === buildings2.PitMission || building === buildings2.RuinsMission,
+        () => "Not needed for Terraform prestige",
+        () => 0
+      ],
+      [
+        () => settings2.autoPrestige && settings2.prestigeType === "mad" && (haveTech2("mad") || techIds2["tech-mad"].isUnlocked() && techIds2["tech-mad"].isAffordable(true)),
+        (building) => !building.is.housing && !building.is.garrison && !building.cost["Knowledge"] && building !== buildings2.OilWell,
+        () => "Awaiting MAD prestige",
+        () => settings2.buildingWeightingMADUseless
+      ],
+      [
+        () => true,
+        (building) => !(building instanceof ResourceAction2) && building.count === 0,
+        () => "New building",
+        () => settings2.buildingWeightingNew
+      ],
+      [
+        () => resources2.Power.isUnlocked() && resources2.Power.currentQuantity < resources2.Power.maxQuantity,
+        (building) => building === buildings2.LakeCoolingTower || building.powered < 0,
+        () => "Need more energy",
+        () => settings2.buildingWeightingNeedfulPowerPlant
+      ],
+      [
+        () => resources2.Power.isUnlocked() && resources2.Power.currentQuantity > resources2.Power.maxQuantity,
+        (building) => building !== buildings2.Mill && (building === buildings2.LakeCoolingTower || building.powered < 0),
+        () => "No need for more energy",
+        () => settings2.buildingWeightingUselessPowerPlant
+      ],
+      [
+        () => resources2.Power.isUnlocked(),
+        (building) => building !== buildings2.LakeCoolingTower && building.powered > 0 && (building === buildings2.NeutronCitadel ? getCitadelConsumption2(building.count + 1) - getCitadelConsumption2(building.count) : building.powered) > resources2.Power.currentQuantity,
+        () => "Not enough energy",
+        () => settings2.buildingWeightingUnderpowered
+      ],
+      [
+        () => Math.max(
+          state2.knowledgeRequiredByTechs,
+          state2.knowledgeRequiredByBuildTargets
+        ) <= resources2.Knowledge.maxQuantity,
+        (building) => building.is.knowledge && building !== buildings2.Wardenclyffe && (building !== buildings2.StargateTelemetryBeacon || building.count > 0),
+        // We want Wardenclyffe for morale; first beacon required for progress
+        () => "No need for more knowledge",
+        () => settings2.buildingWeightingUselessKnowledge
+      ],
+      [
+        () => state2.cheapestTechKnowledge > resources2.Knowledge.maxQuantity || state2.knowledgeRequiredByBuildTargets > resources2.Knowledge.maxQuantity,
+        (building) => building.is.knowledge,
+        () => "Need more knowledge",
+        () => settings2.buildingWeightingNeedfulKnowledge
+      ],
+      [
+        () => buildings2.BlackholeMassEjector.count > 0 && buildings2.BlackholeMassEjector.count * 1e3 - game2.global.interstellar.mass_ejector.total > 100,
+        (building) => building === buildings2.BlackholeMassEjector,
+        () => "Still have some unused ejectors",
+        () => settings2.buildingWeightingUnusedEjectors
+      ],
+      [
+        () => resources2.Crates.storageRatio < 1 || resources2.Containers.storageRatio < 1,
+        (building) => building === buildings2.StorageYard || building === buildings2.Warehouse || building === buildings2.EnceladusMunitions,
+        () => "Still have some unused storage",
+        () => settings2.buildingWeightingCrateUseless
+      ],
+      [
+        () => resources2.Oil.maxQuantity < resources2.Oil.maxCost && buildings2.OilWell.count <= 0 && buildings2.GasMoonOilExtractor.count <= 0,
+        (building) => building === buildings2.OilWell || building === buildings2.GasMoonOilExtractor,
+        () => "Need more fuel",
+        () => settings2.buildingWeightingMissingFuel
+      ],
+      [
+        () => resources2.Helium_3.isUnlocked() && resources2.Helium_3.maxQuantity < resources2.Helium_3.maxCost || resources2.Oil.maxQuantity < resources2.Oil.maxCost,
+        (building) => building === buildings2.OilDepot || building === buildings2.SpacePropellantDepot || building === buildings2.GasStorage,
+        () => "Need more fuel",
+        () => settings2.buildingWeightingMissingFuel
+      ],
+      [
+        () => game2.global.race.hooved && resources2.Horseshoe.spareQuantity >= resources2.Horseshoe.storageRequired,
+        (building) => building instanceof ResourceAction2 && building.resource === resources2.Horseshoe,
+        () => `No more ${resources2.Horseshoe.title} needed`,
+        () => settings2.buildingWeightingHorseshoeUseless
+      ],
+      [
+        () => game2.global.race.calm && resources2.Zen.currentQuantity < resources2.Zen.maxQuantity,
+        (building) => building.id.includes("meditation"),
+        () => "No more Meditation Space needed",
+        () => settings2.buildingWeightingZenUseless
+      ],
+      [
+        () => buildings2.GateTurret.isUnlocked() && poly2.hellSupression("gate").rating > 7501 + game2.armyRating(traitVal2("high_pop", 0, 1), "hellArmy", 0) * traitVal2("holy", 1, "+"),
+        (building) => building === buildings2.GateTurret,
+        () => "Gate demons fully supressed",
+        () => settings2.buildingWeightingGateTurret
+      ],
+      [
+        () => (resources2.Containers.isUnlocked() || resources2.Crates.isUnlocked()) && resources2.Containers.storageRatio === 1 && resources2.Crates.storageRatio === 1,
+        (building) => building === buildings2.Shed || building === buildings2.RedGarage || building === buildings2.AlphaWarehouse || building === buildings2.ProximaCargoYard || building === buildings2.TitanStorehouse,
+        () => "Need more storage",
+        () => settings2.buildingWeightingNeedStorage
+      ],
+      [
+        () => resources2.Population.maxQuantity > 50 && resources2.Population.storageRatio < 0.9,
+        (building) => building.is.housing && building !== buildings2.Alien1Consulate && building !== buildings2.Transmitter && !(building instanceof ResourceAction2),
+        () => "No more houses needed",
+        () => settings2.buildingWeightingUselessHousing
+      ],
+      [
+        () => game2.global.race["orbit_decay"] && !game2.global.race["orbit_decayed"],
+        (building) => (building._tab === "city" || building._location === "spc_moon") && !(building instanceof ResourceAction2),
+        () => "Will be destroyed after impact",
+        () => settings2.buildingWeightingTemporal
+      ],
+      [
+        () => game2.global.tech.tau_gas === 1,
+        // Only used for name contest, no need to check at other game stages
+        (building) => building.is.random,
+        () => "Randomized weighting",
+        () => 1 + Math.random()
+        // Fluctuate weight to pick random item
+      ],
+      [
+        () => game2.global.race["truepath"] && haveTech2("tauceti", 2),
+        (building) => (building._tab === "city" || building._tab === "space" || building._tab === "starDock") && !(building instanceof ResourceAction2),
+        () => "Solar System building",
+        () => settings2.buildingWeightingSolar
+      ]
+    ];
+    return {
+      wrGlobalCondition: wrGlobalCondition2,
+      wrIndividualCondition: wrIndividualCondition2,
+      wrDescription: wrDescription2,
+      wrMultiplier: wrMultiplier2,
+      authorityCapBuildings: authorityCapBuildings2,
+      INFLATION_CHALLENGE_MONEY: INFLATION_CHALLENGE_MONEY2,
+      RETIREMENT_PREP: RETIREMENT_PREP2,
+      inflationMoneyStorageBuildings: inflationMoneyStorageBuildings2,
+      inflationMoneyIncomeBuildings: inflationMoneyIncomeBuildings2,
+      galaxyCombatShips: galaxyCombatShips2,
+      weightingRules: weightingRules2
+    };
   }
 
   // src/planning/trade-routes.ts
@@ -10279,6 +18040,14 @@
   }
 
   // src/ui/dependencies.ts
+  function createDependencyResolver(overrides, dependencies) {
+    return (name) => {
+      if (Object.prototype.hasOwnProperty.call(overrides, name)) {
+        return overrides[name];
+      }
+      return dependencies[name]?.();
+    };
+  }
   function propertyDescriptor(value, property) {
     const object = Object(value);
     const descriptor = Object.getOwnPropertyDescriptor(object, property);
@@ -10289,7 +18058,7 @@
       value: Reflect.get(object, property)
     };
   }
-  function liveObject(getValue) {
+  function liveObject3(getValue) {
     return new Proxy(
       {},
       {
@@ -10351,7 +18120,7 @@
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
-    const document2 = liveObject(() => getDependency("document"));
+    const document2 = liveObject3(() => getDependency("document"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetGeneralSettings2 = liveFunction(
       () => getDependency("resetGeneralSettings")
@@ -10507,7 +18276,7 @@
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
-    const document2 = liveObject(() => getDependency("document"));
+    const document2 = liveObject3(() => getDependency("document"));
     const resetAchievementGuardSettings2 = liveFunction(
       () => getDependency("resetAchievementGuardSettings")
     );
@@ -10618,7 +18387,7 @@
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
-    const document2 = liveObject(() => getDependency("document"));
+    const document2 = liveObject3(() => getDependency("document"));
     const resetChallengeHelperSettings2 = liveFunction(
       () => getDependency("resetChallengeHelperSettings")
     );
@@ -10699,10 +18468,10 @@
     const buildSettingsSection22 = liveFunction(
       () => getDependency("buildSettingsSection2")
     );
-    const buildings2 = liveObject(() => getDependency("buildings"));
+    const buildings2 = liveObject3(() => getDependency("buildings"));
     const confirm2 = liveFunction(() => getDependency("confirm"));
-    const document2 = liveObject(() => getDependency("document"));
-    const game2 = liveObject(() => getDependency("game"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const game2 = liveObject3(() => getDependency("game"));
     const haveTech2 = liveFunction(() => getDependency("haveTech"));
     const isApocalypsePrestigeAvailable2 = liveFunction(
       () => getDependency("isApocalypsePrestigeAvailable")
@@ -10734,12 +18503,12 @@
     const openOverrideModal2 = liveFunction(
       () => getDependency("openOverrideModal")
     );
-    const prestigeOptions2 = liveObject(() => getDependency("prestigeOptions"));
+    const prestigeOptions2 = liveObject3(() => getDependency("prestigeOptions"));
     const resetPrestigeSettings2 = liveFunction(
       () => getDependency("resetPrestigeSettings")
     );
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
-    const state2 = liveObject(() => getDependency("state"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const state2 = liveObject3(() => getDependency("state"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
     );
@@ -10998,7 +18767,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const GovernmentManager2 = liveObject(
+    const GovernmentManager2 = liveObject3(
       () => getDependency("GovernmentManager")
     );
     const addSettingsNumber2 = liveFunction(
@@ -11010,9 +18779,9 @@
     const buildSettingsSection22 = liveFunction(
       () => getDependency("buildSettingsSection2")
     );
-    const document2 = liveObject(() => getDependency("document"));
-    const game2 = liveObject(() => getDependency("game"));
-    const governors2 = liveObject(() => getDependency("governors"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const game2 = liveObject3(() => getDependency("game"));
+    const governors2 = liveObject3(() => getDependency("governors"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetGovernmentSettings2 = liveFunction(
       () => getDependency("resetGovernmentSettings")
@@ -11153,25 +18922,25 @@
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
-    const challenges2 = liveObject(() => getDependency("challenges"));
-    const document2 = liveObject(() => getDependency("document"));
-    const evolutionSettingsToStore2 = liveObject(
+    const challenges2 = liveObject3(() => getDependency("challenges"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const evolutionSettingsToStore2 = liveObject3(
       () => getDependency("evolutionSettingsToStore")
     );
-    const game2 = liveObject(() => getDependency("game"));
+    const game2 = liveObject3(() => getDependency("game"));
     const getStarLevel2 = liveFunction(() => getDependency("getStarLevel"));
-    const prestigeOptions2 = liveObject(() => getDependency("prestigeOptions"));
-    const prestigeTypes2 = liveObject(() => getDependency("prestigeTypes"));
-    const races2 = liveObject(() => getDependency("races"));
+    const prestigeOptions2 = liveObject3(() => getDependency("prestigeOptions"));
+    const prestigeTypes2 = liveObject3(() => getDependency("prestigeTypes"));
+    const races2 = liveObject3(() => getDependency("races"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetEvolutionSettings2 = liveFunction(
       () => getDependency("resetEvolutionSettings")
     );
-    const settings2 = liveObject(() => getDependency("settings"));
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const settings2 = liveObject3(() => getDependency("settings"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
-    const state2 = liveObject(() => getDependency("state"));
-    const universes2 = liveObject(() => getDependency("universes"));
+    const state2 = liveObject3(() => getDependency("state"));
+    const universes2 = liveObject3(() => getDependency("universes"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
     );
@@ -11522,18 +19291,18 @@
   }) {
     const $2 = liveFunction(() => getDependency("$"));
     const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
-    const biomeList2 = liveObject(() => getDependency("biomeList"));
+    const biomeList2 = liveObject3(() => getDependency("biomeList"));
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject(() => getDependency("document"));
-    const extraList2 = liveObject(() => getDependency("extraList"));
-    const game2 = liveObject(() => getDependency("game"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const extraList2 = liveObject3(() => getDependency("extraList"));
+    const game2 = liveObject3(() => getDependency("game"));
     const resetPlanetSettings2 = liveFunction(
       () => getDependency("resetPlanetSettings")
     );
-    const traitList2 = liveObject(() => getDependency("traitList"));
+    const traitList2 = liveObject3(() => getDependency("traitList"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
     );
@@ -11627,22 +19396,22 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const TriggerManager2 = liveObject(() => getDependency("TriggerManager"));
-    const argType2 = liveObject(() => getDependency("argType"));
+    const TriggerManager2 = liveObject3(() => getDependency("TriggerManager"));
+    const argType2 = liveObject3(() => getDependency("argType"));
     const buildInputNode2 = liveFunction(() => getDependency("buildInputNode"));
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
-    const checkTypes2 = liveObject(() => getDependency("checkTypes"));
-    const document2 = liveObject(() => getDependency("document"));
-    const overrideOnlyChecks2 = liveObject(
+    const checkTypes2 = liveObject3(() => getDependency("checkTypes"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const overrideOnlyChecks2 = liveObject3(
       () => getDependency("overrideOnlyChecks")
     );
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetTriggerSettings2 = liveFunction(
       () => getDependency("resetTriggerSettings")
     );
-    const retBools2 = liveObject(() => getDependency("retBools"));
+    const retBools2 = liveObject3(() => getDependency("retBools"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
@@ -11969,13 +19738,13 @@
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
-    const document2 = liveObject(() => getDependency("document"));
-    const game2 = liveObject(() => getDependency("game"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const game2 = liveObject3(() => getDependency("game"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetResearchSettings2 = liveFunction(
       () => getDependency("resetResearchSettings")
     );
-    const techIds2 = liveObject(() => getDependency("techIds"));
+    const techIds2 = liveObject3(() => getDependency("techIds"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
     );
@@ -12073,7 +19842,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const SpyManager2 = liveObject(() => getDependency("SpyManager"));
+    const SpyManager2 = liveObject3(() => getDependency("SpyManager"));
     const addSettingsHeader12 = liveFunction(
       () => getDependency("addSettingsHeader1")
     );
@@ -12089,8 +19858,8 @@
     const buildSettingsSection22 = liveFunction(
       () => getDependency("buildSettingsSection2")
     );
-    const document2 = liveObject(() => getDependency("document"));
-    const game2 = liveObject(() => getDependency("game"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const game2 = liveObject3(() => getDependency("game"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetWarSettings2 = liveFunction(
       () => getDependency("resetWarSettings")
@@ -12313,7 +20082,7 @@
     const buildSettingsSection22 = liveFunction(
       () => getDependency("buildSettingsSection2")
     );
-    const document2 = liveObject(() => getDependency("document"));
+    const document2 = liveObject3(() => getDependency("document"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetHellSettings2 = liveFunction(
       () => getDependency("resetHellSettings")
@@ -12481,7 +20250,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const FleetManagerOuter2 = liveObject(
+    const FleetManagerOuter2 = liveObject3(
       () => getDependency("FleetManagerOuter")
     );
     const addSettingsHeader12 = liveFunction(
@@ -12504,9 +20273,9 @@
       () => getDependency("buildSettingsSection2")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject(() => getDependency("document"));
-    const galaxyRegions2 = liveObject(() => getDependency("galaxyRegions"));
-    const game2 = liveObject(() => getDependency("game"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const galaxyRegions2 = liveObject3(() => getDependency("galaxyRegions"));
+    const game2 = liveObject3(() => getDependency("game"));
     const openOverrideModal2 = liveFunction(
       () => getDependency("openOverrideModal")
     );
@@ -12514,8 +20283,8 @@
     const resetFleetSettings2 = liveFunction(
       () => getDependency("resetFleetSettings")
     );
-    const settings2 = liveObject(() => getDependency("settings"));
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const settings2 = liveObject3(() => getDependency("settings"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
@@ -12832,7 +20601,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const MechManager2 = liveObject(() => getDependency("MechManager"));
+    const MechManager2 = liveObject3(() => getDependency("MechManager"));
     const addSettingsNumber2 = liveFunction(
       () => getDependency("addSettingsNumber")
     );
@@ -12851,8 +20620,8 @@
     const calculateMechStats2 = liveFunction(
       () => getDependency("calculateMechStats")
     );
-    const document2 = liveObject(() => getDependency("document"));
-    const game2 = liveObject(() => getDependency("game"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const game2 = liveObject3(() => getDependency("game"));
     const removeMechInfo2 = liveFunction(() => getDependency("removeMechInfo"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetMechSettings2 = liveFunction(
@@ -13114,9 +20883,9 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const EjectManager2 = liveObject(() => getDependency("EjectManager"));
-    const NaniteManager2 = liveObject(() => getDependency("NaniteManager"));
-    const SupplyManager2 = liveObject(() => getDependency("SupplyManager"));
+    const EjectManager2 = liveObject3(() => getDependency("EjectManager"));
+    const NaniteManager2 = liveObject3(() => getDependency("NaniteManager"));
+    const SupplyManager2 = liveObject3(() => getDependency("SupplyManager"));
     const addSettingsNumber2 = liveFunction(
       () => getDependency("addSettingsNumber")
     );
@@ -13131,7 +20900,7 @@
       () => getDependency("buildSettingsSection")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject(() => getDependency("document"));
+    const document2 = liveObject3(() => getDependency("document"));
     const removeEjectToggles2 = liveFunction(
       () => getDependency("removeEjectToggles")
     );
@@ -13142,7 +20911,7 @@
     const resetEjectorSettings2 = liveFunction(
       () => getDependency("resetEjectorSettings")
     );
-    const resources2 = liveObject(() => getDependency("resources"));
+    const resources2 = liveObject3(() => getDependency("resources"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
     );
@@ -13295,7 +21064,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const MarketManager2 = liveObject(() => getDependency("MarketManager"));
+    const MarketManager2 = liveObject3(() => getDependency("MarketManager"));
     const addSettingsNumber2 = liveFunction(
       () => getDependency("addSettingsNumber")
     );
@@ -13311,8 +21080,8 @@
       () => getDependency("buildSettingsSection")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject(() => getDependency("document"));
-    const poly2 = liveObject(() => getDependency("poly"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const poly2 = liveObject3(() => getDependency("poly"));
     const removeMarketToggles2 = liveFunction(
       () => getDependency("removeMarketToggles")
     );
@@ -13320,8 +21089,8 @@
     const resetMarketSettings2 = liveFunction(
       () => getDependency("resetMarketSettings")
     );
-    const resources2 = liveObject(() => getDependency("resources"));
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const resources2 = liveObject3(() => getDependency("resources"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
@@ -13500,7 +21269,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const StorageManager2 = liveObject(() => getDependency("StorageManager"));
+    const StorageManager2 = liveObject3(() => getDependency("StorageManager"));
     const addSettingsToggle2 = liveFunction(
       () => getDependency("addSettingsToggle")
     );
@@ -13510,7 +21279,7 @@
       () => getDependency("buildSettingsSection")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject(() => getDependency("document"));
+    const document2 = liveObject3(() => getDependency("document"));
     const removeStorageToggles2 = liveFunction(
       () => getDependency("removeStorageToggles")
     );
@@ -13518,7 +21287,7 @@
     const resetStorageSettings2 = liveFunction(
       () => getDependency("resetStorageSettings")
     );
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
@@ -13633,8 +21402,8 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const AlchemyManager2 = liveObject(() => getDependency("AlchemyManager"));
-    const RitualManager2 = liveObject(() => getDependency("RitualManager"));
+    const AlchemyManager2 = liveObject3(() => getDependency("AlchemyManager"));
+    const RitualManager2 = liveObject3(() => getDependency("RitualManager"));
     const addSettingsNumber2 = liveFunction(
       () => getDependency("addSettingsNumber")
     );
@@ -13650,8 +21419,8 @@
       () => getDependency("buildSettingsSection")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject(() => getDependency("document"));
-    const game2 = liveObject(() => getDependency("game"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const game2 = liveObject3(() => getDependency("game"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetMagicSettings2 = liveFunction(
       () => getDependency("resetMagicSettings")
@@ -13796,7 +21565,7 @@
     const $2 = liveFunction(() => getDependency("$"));
     const BasicJob2 = liveFunction(() => getDependency("BasicJob"));
     const CraftingJob2 = liveFunction(() => getDependency("CraftingJob"));
-    const JobManager2 = liveObject(() => getDependency("JobManager"));
+    const JobManager2 = liveObject3(() => getDependency("JobManager"));
     const addSettingsNumber2 = liveFunction(
       () => getDependency("addSettingsNumber")
     );
@@ -13812,13 +21581,13 @@
       () => getDependency("buildSettingsSection")
     );
     const confirm2 = liveFunction(() => getDependency("confirm"));
-    const document2 = liveObject(() => getDependency("document"));
-    const jobs2 = liveObject(() => getDependency("jobs"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const jobs2 = liveObject3(() => getDependency("jobs"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetJobSettings2 = liveFunction(
       () => getDependency("resetJobSettings")
     );
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
@@ -14023,7 +21792,7 @@
     const buildSettingsSection3 = liveFunction(
       () => getDependency("buildSettingsSection")
     );
-    const document2 = liveObject(() => getDependency("document"));
+    const document2 = liveObject3(() => getDependency("document"));
     const resetWeightingSettings2 = liveFunction(
       () => getDependency("resetWeightingSettings")
     );
@@ -14264,7 +22033,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const BuildingManager2 = liveObject(() => getDependency("BuildingManager"));
+    const BuildingManager2 = liveObject3(() => getDependency("BuildingManager"));
     const addSettingsNumber2 = liveFunction(
       () => getDependency("addSettingsNumber")
     );
@@ -14283,16 +22052,16 @@
       () => getDependency("buildSettingsSection")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const buildingIds2 = liveObject(() => getDependency("buildingIds"));
-    const checkCompare2 = liveObject(() => getDependency("checkCompare"));
+    const buildingIds2 = liveObject3(() => getDependency("buildingIds"));
+    const checkCompare2 = liveObject3(() => getDependency("checkCompare"));
     const confirm2 = liveFunction(() => getDependency("confirm"));
-    const document2 = liveObject(() => getDependency("document"));
+    const document2 = liveObject3(() => getDependency("document"));
     const getRealNumber2 = liveFunction(() => getDependency("getRealNumber"));
     const initBuildingState2 = liveFunction(
       () => getDependency("initBuildingState")
     );
-    const linkedBuildings2 = liveObject(() => getDependency("linkedBuildings"));
-    const overrideKey2 = liveObject(() => getDependency("overrideKey"));
+    const linkedBuildings2 = liveObject3(() => getDependency("linkedBuildings"));
+    const overrideKey2 = liveObject3(() => getDependency("overrideKey"));
     const removeBuildingToggles2 = liveFunction(
       () => getDependency("removeBuildingToggles")
     );
@@ -14300,8 +22069,8 @@
       () => getDependency("resetBuildingSettings")
     );
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resources2 = liveObject(() => getDependency("resources"));
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const resources2 = liveObject3(() => getDependency("resources"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
@@ -14662,7 +22431,7 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const ProjectManager2 = liveObject(() => getDependency("ProjectManager"));
+    const ProjectManager2 = liveObject3(() => getDependency("ProjectManager"));
     const addSettingsNumber2 = liveFunction(
       () => getDependency("addSettingsNumber")
     );
@@ -14675,12 +22444,12 @@
       () => getDependency("buildSettingsSection")
     );
     const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject(() => getDependency("document"));
+    const document2 = liveObject3(() => getDependency("document"));
     const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
     const resetProjectSettings2 = liveFunction(
       () => getDependency("resetProjectSettings")
     );
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
     const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
@@ -14794,12 +22563,12 @@
     const buildSettingsSection22 = liveFunction(
       () => getDependency("buildSettingsSection2")
     );
-    const document2 = liveObject(() => getDependency("document"));
-    const game2 = liveObject(() => getDependency("game"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const game2 = liveObject3(() => getDependency("game"));
     const resetLoggingSettings2 = liveFunction(
       () => getDependency("resetLoggingSettings")
     );
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
     );
@@ -14896,15 +22665,15 @@
     const buildWarSettings2 = liveFunction(
       () => getDependency("buildWarSettings")
     );
-    const document2 = liveObject(() => getDependency("document"));
+    const document2 = liveObject3(() => getDependency("document"));
     const openOverrideModal2 = liveFunction(
       () => getDependency("openOverrideModal")
     );
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
     const updateSettingsFromState2 = liveFunction(
       () => getDependency("updateSettingsFromState")
     );
-    const window2 = liveObject(() => getDependency("window"));
+    const window2 = liveObject3(() => getDependency("window"));
     function createSettingToggleImpl(node, settingKey, title, enabledCallBack, disabledCallBack) {
       let toggle = $2(`
           <label class="switch script_bg_${settingKey}" tabindex="0" title="${title}">
@@ -15061,9 +22830,9 @@
     const buildPrestigeSettings2 = liveFunction(
       () => getDependency("buildPrestigeSettings")
     );
-    const document2 = liveObject(() => getDependency("document"));
-    const prestigeTypes2 = liveObject(() => getDependency("prestigeTypes"));
-    const settings2 = liveObject(() => getDependency("settings"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const prestigeTypes2 = liveObject3(() => getDependency("prestigeTypes"));
+    const settings2 = liveObject3(() => getDependency("settings"));
     function updatePrestigeInTopBarImpl() {
       const parentId = "s-prestige-type";
       let parentNode = document2.getElementById(parentId);
@@ -15131,9 +22900,9 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const document2 = liveObject(() => getDependency("document"));
-    const game2 = liveObject(() => getDependency("game"));
-    const settings2 = liveObject(() => getDependency("settings"));
+    const document2 = liveObject3(() => getDependency("document"));
+    const game2 = liveObject3(() => getDependency("game"));
+    const settings2 = liveObject3(() => getDependency("settings"));
     function updateTotalDaysInTopBarImpl() {
       if (settings2.displayTotalDaysTypeInTopBar) {
         addTotalDaysToTopBar2();
@@ -15193,11 +22962,11 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const ProjectManager2 = liveObject(() => getDependency("ProjectManager"));
+    const ProjectManager2 = liveObject3(() => getDependency("ProjectManager"));
     const addToggleCallbacks2 = liveFunction(
       () => getDependency("addToggleCallbacks")
     );
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
     function createArpaTogglesImpl() {
       removeArpaToggles2();
       for (let i = 0; i < ProjectManager2.priorityList.length; i++) {
@@ -15241,8 +23010,8 @@
     const addToggleCallbacks2 = liveFunction(
       () => getDependency("addToggleCallbacks")
     );
-    const craftablesList2 = liveObject(() => getDependency("craftablesList"));
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const craftablesList2 = liveObject3(() => getDependency("craftablesList"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
     function createCraftTogglesImpl() {
       removeCraftToggles2();
       for (let i = 0; i < craftablesList2.length; i++) {
@@ -15282,13 +23051,13 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const BuildingManager2 = liveObject(() => getDependency("BuildingManager"));
+    const BuildingManager2 = liveObject3(() => getDependency("BuildingManager"));
     const addToggleCallbacks2 = liveFunction(
       () => getDependency("addToggleCallbacks")
     );
-    const settings2 = liveObject(() => getDependency("settings"));
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
-    const state2 = liveObject(() => getDependency("state"));
+    const settings2 = liveObject3(() => getDependency("settings"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
+    const state2 = liveObject3(() => getDependency("state"));
     function createBuildingTogglesImpl() {
       removeBuildingToggles2();
       if (!settings2.showSettings) return;
@@ -15332,11 +23101,11 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const EjectManager2 = liveObject(() => getDependency("EjectManager"));
+    const EjectManager2 = liveObject3(() => getDependency("EjectManager"));
     const addToggleCallbacks2 = liveFunction(
       () => getDependency("addToggleCallbacks")
     );
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
     function createEjectTogglesImpl() {
       removeEjectToggles2();
       $2("#eject").append(
@@ -15381,11 +23150,11 @@
     getOverride
   }) {
     const $2 = liveFunction(() => getDependency("$"));
-    const SupplyManager2 = liveObject(() => getDependency("SupplyManager"));
+    const SupplyManager2 = liveObject3(() => getDependency("SupplyManager"));
     const addToggleCallbacks2 = liveFunction(
       () => getDependency("addToggleCallbacks")
     );
-    const settingsRaw2 = liveObject(() => getDependency("settingsRaw"));
+    const settingsRaw2 = liveObject3(() => getDependency("settingsRaw"));
     function createSupplyTogglesImpl() {
       removeSupplyToggles2();
       $2("#spireSupply").append(
@@ -15424,6 +23193,3616 @@
     return { createSupplyToggles: createSupplyToggles2, removeSupplyToggles: removeSupplyToggles2 };
   }
 
+  // src/ui/queue-panels.ts
+  function createQueuePanels({
+    getJQuery,
+    getGame,
+    getResources,
+    getPoly,
+    getSettingsRaw,
+    getState,
+    getMultiSegmentedTimeLeft: getMultiSegmentedTimeLeft2,
+    isProject,
+    isTechnology,
+    getResizeObserver,
+    updateSettingsFromState: updateSettingsFromState2,
+    makePlannerStats: makePlannerStats2,
+    savePlannerStats: savePlannerStats2
+  }) {
+    const dependencies = {
+      getJQuery,
+      getGame,
+      getResources,
+      getPoly,
+      getSettingsRaw,
+      getState,
+      getMultiSegmentedTimeLeft: getMultiSegmentedTimeLeft2,
+      isProject,
+      isTechnology,
+      getResizeObserver,
+      updateSettingsFromState: updateSettingsFromState2,
+      makePlannerStats: makePlannerStats2,
+      savePlannerStats: savePlannerStats2
+    };
+    function updateActiveTargetsUI2(queuedTargets, type) {
+      const $2 = dependencies.getJQuery();
+      const game2 = dependencies.getGame();
+      const resources2 = dependencies.getResources();
+      const poly2 = dependencies.getPoly();
+      if (queuedTargets.length) {
+        $2(`#active_targets .target-type-box.${type}`).show();
+      } else {
+        $2(`#active_targets .target-type-box.${type}`).hide();
+        return;
+      }
+      $2(`#active_targets ul.active_targets-list.${type}`).html(
+        queuedTargets.map((target) => {
+          let targetName = target.name, targetTimeLeft = "", targetSegments = "", researchTimeLeft = 0, isArpaProject = type === "arpa" || dependencies.isProject(target), isMultiSegmented = target.is && target.is.multiSegmented, isTablessBuilding = type === "buildings" && !target._tab;
+          if (target.count && !isMultiSegmented) {
+            targetName += ` #${target.count + 1}`;
+          }
+          if (target.instance && target.instance.time) {
+            targetTimeLeft = `${target.instance.time}`;
+          }
+          const costs = target.cost;
+          if (dependencies.isTechnology(target)) {
+            if ($2.isEmptyObject(target.cost)) {
+              targetTimeLeft = "Waiting on prerequisite";
+            } else if (target.cost.Knowledge > game2.global.resource.Knowledge.max) {
+              targetTimeLeft = "Not enough Knowledge";
+            }
+          } else if (isArpaProject) {
+            targetName += ` (${target.progress}%)`;
+            const segmentedTimeLeft = dependencies.getMultiSegmentedTimeLeft(target);
+            targetTimeLeft = `${segmentedTimeLeft.timeLeft}</span> <span class="has-text-danger">(${segmentedTimeLeft.resource})</span>`;
+          }
+          const costsHTML = Object.keys(costs).map((resource) => {
+            let res = resources2[resource], className = "has-text-success", resourceTimeLeft = "";
+            let resourceCost = costs[resource];
+            if (isArpaProject) {
+              resourceCost = costs[resource] * ((100 - target.progress) / target.currentStep);
+            } else if (isMultiSegmented) {
+              resourceCost = costs[resource] * (target.gameMax - target.count);
+            }
+            if (res.currentQuantity < resourceCost) {
+              className = "has-text-danger";
+              if (res.maxQuantity >= resourceCost && res.income > 0) {
+                const timeLeftRaw = (resourceCost - res.currentQuantity) / res.income;
+                if (dependencies.isTechnology(target) && timeLeftRaw > researchTimeLeft) {
+                  researchTimeLeft = timeLeftRaw;
+                }
+                resourceTimeLeft = `${poly2.timeFormat(timeLeftRaw)}`;
+                if (res === resources2.Soul_Gem) {
+                  resourceTimeLeft = `~${resourceTimeLeft}`;
+                }
+              } else if (isArpaProject && res.name === "Knowledge" && res.income > 0) {
+                resourceTimeLeft = poly2.timeFormat(
+                  res.currentQuantity / res.income
+                );
+              } else {
+                targetTimeLeft = resourceTimeLeft = "Never";
+              }
+            }
+            const progressBarWidth = res.currentQuantity / resourceCost * 100;
+            const isReplicatingClassName = game2.global.race.replicator && game2.global.race.replicator.res === resource ? "is-replicating" : "";
+            return `
+                    <li>
+                        <div class='active_targets-resource-row'>
+                            <div class='active_targets-resource-text'>
+                                <span class='${className}'>${res.title}</span>
+                            </div>
+                            <div class="percentage-full-progress-bar-wrapper ${isReplicatingClassName}">
+                                <div class="percentage-full-progress-bar" style="width: ${progressBarWidth}%;"></div>
+                            </div>
+                            <div class="active_targets-time-left">${resourceTimeLeft}</div>
+                        </div>
+                    </li>`;
+          }).join("");
+          if (isMultiSegmented) {
+            targetSegments = `(${target.count} / ${target.gameMax})`;
+            const segmentedTimeLeft = dependencies.getMultiSegmentedTimeLeft(target);
+            targetTimeLeft = `${segmentedTimeLeft.timeLeft} <span class="has-text-danger">(${segmentedTimeLeft.resource})</span>`;
+          }
+          if (dependencies.isTechnology(target) && targetTimeLeft === "") {
+            targetTimeLeft = poly2.timeFormat(researchTimeLeft);
+          }
+          const targetNameDisplay = `<span class="active-target-title name">${targetName} </span><span class="active-target-title time">${targetTimeLeft} <span class="active-target-segments has-text-special">${targetSegments}</span></span>`;
+          let queueid = "";
+          if (type === "buildings") {
+            queueid = isTablessBuilding ? `${target.id}` : `${target._tab}-${target.id}`;
+          } else if (type === "arpa") {
+            queueid = `${target._tab}${target.id}`;
+          } else if (type === "research" || type === "triggers") {
+            queueid = target.id;
+          }
+          return `
+                    <li class="active-target-li">
+                        ${targetNameDisplay} <span class="active-target-remove-x ${type}" data-queueid="${queueid}" data-type="${type}">＋</span>
+                        <ul class="active_targets-sub-list">
+                            ${costsHTML}
+                        </ul>
+                    </li>
+                `;
+        })
+      );
+    }
+    function buildActiveTargetsUI2() {
+      const $2 = dependencies.getJQuery();
+      $2("#buildQueue").before(`
+            <div id="active_targets-wrapper" class="bldQueue vscroll right">
+                <h2 class="has-text-success">Detailed Queue</h2>
+                <div id="active_targets">
+                    <div class="target-type-box triggers" style="display: none;">
+                        <h2>Triggers</h2>
+                        <ul class="active_targets-list triggers"></ul>
+                    </div>
+                    <div class="target-type-box buildings" style="display: none;">
+                        <h2>Buildings</h2>
+                        <ul class="active_targets-list buildings"></ul>
+                    </div>
+                    <div class="target-type-box research" style="display: none;">
+                        <h2>Research</h2>
+                        <ul class="active_targets-list research"></ul>
+                    </div>
+                    <div class="target-type-box arpa" style="display: none;">
+                        <h2>A.R.P.A.</h2>
+                        <ul class="active_targets-list arpa"></ul>
+                    </div>
+                </div>
+            </div>`);
+      const ResizeObserver2 = dependencies.getResizeObserver();
+      if (typeof ResizeObserver2 === "function") {
+        const resizeObserver = new ResizeObserver2((entries) => {
+          for (const entry of entries) {
+            if (entry.borderBoxSize) {
+              const elementHeight = entry.borderBoxSize[0].blockSize;
+              const totalHeight = `${elementHeight + $2("#buildQueue").outerHeight()}px`;
+              $2("#msgQueue").css(
+                "max-height",
+                `calc((100vh - ${totalHeight}) - 6rem)`
+              );
+            }
+          }
+        });
+        resizeObserver.observe($2("#active_targets-wrapper")[0]);
+      }
+    }
+    function removeActiveTargetsUI2() {
+      dependencies.getJQuery()("#active_targets-wrapper").remove();
+    }
+    function buildBuildPlannerUI2() {
+      const $2 = dependencies.getJQuery();
+      const settingsRaw2 = dependencies.getSettingsRaw();
+      if ($2("#buildQueue").length === 0) {
+        return;
+      }
+      $2("#buildQueue").before(`
+            <div id="script_planner-wrapper" class="bldQueue vscroll right">
+                <h2 id="script_planner-header" class="has-text-success">Script Planner</h2>
+                <div id="script_planner">
+                    <ul id="script_planner-list"></ul>
+                    <div id="script_planner-stats">
+                        <h2>Bottlenecks <a id="script_planner-reset">reset</a></h2>
+                        <div id="script_planner-stats-text"></div>
+                    </div>
+                </div>
+            </div>`);
+      $2("#script_planner").toggle(!settingsRaw2.buildPlannerCollapsed);
+      $2("#script_planner-header").on("click", function() {
+        settingsRaw2.buildPlannerCollapsed = !settingsRaw2.buildPlannerCollapsed;
+        $2("#script_planner").toggle(!settingsRaw2.buildPlannerCollapsed);
+        dependencies.updateSettingsFromState();
+      });
+      $2("#script_planner-reset").on("click", function() {
+        dependencies.getState().plannerStats = dependencies.makePlannerStats();
+        dependencies.savePlannerStats();
+        $2("#script_planner-stats-text").html("");
+      });
+    }
+    function removeBuildPlannerUI2() {
+      dependencies.getJQuery()("#script_planner-wrapper").remove();
+    }
+    return {
+      updateActiveTargetsUI: updateActiveTargetsUI2,
+      buildActiveTargetsUI: buildActiveTargetsUI2,
+      removeActiveTargetsUI: removeActiveTargetsUI2,
+      buildBuildPlannerUI: buildBuildPlannerUI2,
+      removeBuildPlannerUI: removeBuildPlannerUI2
+    };
+  }
+
+  // src/ui/mech-info.ts
+  function createMechInfoUI({
+    getDocument,
+    getJQuery,
+    getGame,
+    getMechManager,
+    getVueById: getVueById2,
+    getNiceNumber: getNiceNumber2
+  }) {
+    const dependencies = {
+      getDocument,
+      getJQuery,
+      getGame,
+      getMechManager,
+      getVueById: getVueById2,
+      getNiceNumber: getNiceNumber2
+    };
+    function createMechInfo2() {
+      const $2 = dependencies.getJQuery();
+      const MechManager2 = dependencies.getMechManager();
+      if ($2(`#mechList .mechRow[draggable=true]`).length > 0) {
+        return;
+      }
+      if (MechManager2.isActive || MechManager2.initLab()) {
+        MechManager2.mechObserver.disconnect();
+        const list = dependencies.getVueById("mechList");
+        const game2 = dependencies.getGame();
+        for (let i = 0; i < list._vnode.children.length; i++) {
+          const mech = game2.global.portal.mechbay.mechs[i];
+          const stats = MechManager2.getMechStats(mech);
+          const rating = stats.power / MechManager2.bestMech[mech.size].power;
+          const info = (mech.size === "collector" ? `${Math.round(rating * 100)}%, ${dependencies.getNiceNumber(
+            stats.power * MechManager2.collectorValue
+          )} /s` : `${Math.round(rating * 100)}%, ${dependencies.getNiceNumber(
+            stats.power * 100
+          )}, ${dependencies.getNiceNumber(stats.efficiency * 100)}`) + " | ";
+          const mechNode = list._vnode.children[i].elm;
+          const firstNode = $2(mechNode.childNodes[0]);
+          if (firstNode.hasClass("ea-mech-info")) {
+            firstNode.text(info);
+          } else {
+            const note = dependencies.getDocument().createElement("span");
+            note.className = "ea-mech-info";
+            note.innerHTML = info;
+            mechNode.insertBefore(note, mechNode.firstChild);
+          }
+        }
+        MechManager2.mechObserver.observe(
+          dependencies.getDocument().getElementById("mechList"),
+          { childList: true }
+        );
+      }
+    }
+    function removeMechInfo2() {
+      dependencies.getMechManager().mechObserver.disconnect();
+      dependencies.getJQuery()("#mechList .ea-mech-info").remove();
+    }
+    return { createMechInfo: createMechInfo2, removeMechInfo: removeMechInfo2 };
+  }
+
+  // src/ui/resource-toggles.ts
+  function createResourceToggleUI({
+    getJQuery,
+    getGame,
+    getSettingsRaw,
+    getResources,
+    getMarketManager,
+    getStorageManager,
+    addToggleCallbacks: addToggleCallbacks2
+  }) {
+    const dependencies = {
+      getJQuery,
+      getGame,
+      getSettingsRaw,
+      getResources,
+      getMarketManager,
+      getStorageManager,
+      addToggleCallbacks: addToggleCallbacks2
+    };
+    function createMarketToggles2() {
+      const $2 = dependencies.getJQuery();
+      const game2 = dependencies.getGame();
+      const settingsRaw2 = dependencies.getSettingsRaw();
+      const resources2 = dependencies.getResources();
+      removeMarketToggles2();
+      if (!game2.global.race["no_trade"]) {
+        $2("#market .market-item[id] .res").width("5rem");
+        $2("#market .market-item[id] .buy span").text("B");
+        $2("#market .market-item[id] .sell span").text("S");
+        $2("#market .market-item[id] .trade > :first-child").text("R");
+        $2("#market .market-item[id] .trade .zero").text("×");
+      }
+      $2("#market-qty").after(`
+          <div class="market-item vb" id="script_market_top_row" style="overflow:hidden">
+            <span style="margin-left: auto; margin-right: 0.2rem; float:right;">
+              ${!game2.global.race["no_trade"] ? `
+              <span class="has-text-success" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">Buy</span>
+              <span class="has-text-danger" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">Sell</span>` : ""}
+              <span class="has-text-warning" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">In</span>
+              <span class="has-text-warning" style="width: 2.75rem; display: inline-block; text-align: center;">Away</span>
+            </span>
+          </div>`);
+      for (const resource of dependencies.getMarketManager().priorityList) {
+        if (resource === resources2.Food && (game2.global.race["artifical"] || game2.global.race["fasting"])) {
+          continue;
+        }
+        const marketElement = $2("#market-" + resource.id);
+        if (marketElement.length > 0) {
+          const marketRow = $2(
+            '<span class="ea-market-toggle" style="margin-left: auto; margin-right: 0.2rem; float:right;"></span>'
+          );
+          if (!game2.global.race["no_trade"]) {
+            const buyKey = "buy" + resource.id;
+            const sellKey = "sell" + resource.id;
+            marketRow.append(
+              dependencies.addToggleCallbacks(
+                $2(
+                  `<label tabindex="0" title="Enable buying of this resource." class="switch"><input class="script_${buyKey}" type="checkbox"${settingsRaw2[buyKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
+                ),
+                buyKey
+              ),
+              dependencies.addToggleCallbacks(
+                $2(
+                  `<label tabindex="0" title="Enable selling of this resource." class="switch"><input class="script_${sellKey}" type="checkbox"${settingsRaw2[sellKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
+                ),
+                sellKey
+              )
+            );
+          }
+          const tradeBuyKey = "res_trade_buy_" + resource.id;
+          const tradeSellKey = "res_trade_sell_" + resource.id;
+          marketRow.append(
+            dependencies.addToggleCallbacks(
+              $2(
+                `<label tabindex="0" title="Enable trading for this resource." class="switch"><input class="script_${tradeBuyKey}" type="checkbox"${settingsRaw2[tradeBuyKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
+              ),
+              tradeBuyKey
+            ),
+            dependencies.addToggleCallbacks(
+              $2(
+                `<label tabindex="0" title="Enable trading this resource away." class="switch"><input class="script_${tradeSellKey}" type="checkbox"${settingsRaw2[tradeSellKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
+              ),
+              tradeSellKey
+            )
+          );
+          marketRow.appendTo(marketElement);
+        }
+      }
+    }
+    function removeMarketToggles2() {
+      const $2 = dependencies.getJQuery();
+      const game2 = dependencies.getGame();
+      $2("#market .ea-market-toggle").remove();
+      $2("#script_market_top_row").remove();
+      if (!game2.global.race["no_trade"]) {
+        $2("#market .market-item[id] .res").width("7.5rem");
+        $2("#market .market-item[id] .buy span").text(
+          game2.loc("resource_market_buy")
+        );
+        $2("#market .market-item[id] .sell span").text(
+          game2.loc("resource_market_sell")
+        );
+        $2("#market .market-item[id] .trade > :first-child").text(
+          game2.loc("resource_market_routes")
+        );
+        $2("#market .market-item[id] .trade .zero").text(
+          game2.loc("cancel_routes")
+        );
+      }
+    }
+    function createStorageToggles2() {
+      const $2 = dependencies.getJQuery();
+      const settingsRaw2 = dependencies.getSettingsRaw();
+      removeStorageToggles2();
+      $2("#createHead").after(`
+          <div class="market-item vb" id="script_storage_top_row" style="overflow:hidden">
+            <span style="margin-left: auto; margin-right: 0.2rem; float:right;">
+              <span class="has-text-warning" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">Auto</span>
+              <span class="has-text-warning" style="width: 2.75rem; display: inline-block; text-align: center;">Over</span>
+            </span>
+          </div>`);
+      for (const resource of dependencies.getStorageManager().priorityList) {
+        const storageElement = $2("#stack-" + resource.id);
+        if (storageElement.length > 0) {
+          const storeKey = "res_storage" + resource.id;
+          const overKey = "res_storage_o_" + resource.id;
+          $2(
+            `<span class="ea-storage-toggle" style="margin-left: auto; margin-right: 0.2rem; float:right;"></span>`
+          ).append(
+            dependencies.addToggleCallbacks(
+              $2(
+                `<label tabindex="0" title="Enable storing of this resource." class="switch"><input class="script_${storeKey}" type="checkbox"${settingsRaw2[storeKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
+              ),
+              storeKey
+            ),
+            dependencies.addToggleCallbacks(
+              $2(
+                `<label tabindex="0" title="Enable storing overflow of this resource." class="switch"><input class="script_${overKey}" type="checkbox"${settingsRaw2[overKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
+              ),
+              overKey
+            )
+          ).appendTo(storageElement);
+        }
+      }
+    }
+    function removeStorageToggles2() {
+      const $2 = dependencies.getJQuery();
+      $2("#resStorage .ea-storage-toggle").remove();
+      $2("#script_storage_top_row").remove();
+    }
+    return {
+      createMarketToggles: createMarketToggles2,
+      removeMarketToggles: removeMarketToggles2,
+      createStorageToggles: createStorageToggles2,
+      removeStorageToggles: removeStorageToggles2
+    };
+  }
+
+  // src/ui/tooltips.ts
+  function createTooltipUI({
+    getContext,
+    isTechnology
+  }) {
+    function getTooltipInfo2(obj) {
+      const {
+        settings: settings2,
+        state: state2,
+        game: game2,
+        buildings: buildings2,
+        jobs: jobs2,
+        resources: resources2,
+        MechManager: MechManager2,
+        FleetManagerOuter: FleetManagerOuter2,
+        getCitadelConsumption: getCitadelConsumption2,
+        getNiceNumber: getNiceNumber2,
+        getCostConflict: getCostConflict2,
+        getTechConflict: getTechConflict2,
+        haveTech: haveTech2,
+        getHealingRate: getHealingRate2,
+        getGrowthRate: getGrowthRate2,
+        getGovernor: getGovernor2,
+        traitVal: traitVal2
+      } = getContext();
+      const notes = [];
+      if (obj === buildings2.NeutronCitadel) {
+        const diff = getCitadelConsumption2(obj.stateOnCount + 1) - getCitadelConsumption2(obj.stateOnCount);
+        notes.push(
+          `Next level will increase total consumption by ${getNiceNumber2(
+            diff
+          )} MW`
+        );
+      }
+      if (obj === buildings2.SpireMechBay && MechManager2.initLab()) {
+        notes.push(
+          `Current team potential: ${getNiceNumber2(MechManager2.mechsPotential)}`
+        );
+        const supplyCollected = MechManager2.activeMechs.filter((mech) => mech.size === "collector").reduce(
+          (sum, mech) => sum + mech.power * MechManager2.collectorValue,
+          0
+        );
+        if (supplyCollected > 0) {
+          notes.push(`Supplies collected: ${getNiceNumber2(supplyCollected)} /s`);
+        }
+      }
+      if ((isTechnology(obj) || !settings2.autoARPA && obj._tab === "arpa" || !settings2.autoBuild && obj._tab !== "arpa") && !state2.queuedTargetsAll.includes(obj) && !state2.triggerTargets.includes(obj)) {
+        const conflict = getCostConflict2(obj);
+        if (conflict) {
+          notes.push(
+            `Conflicts with ${conflict.actionList.map((action) => {
+              return `<span class="has-text-info">${action}</span>`;
+            }).join(", ")} for ${conflict.resList.map((res) => {
+              return `<span class="has-text-info">${res}</span>`;
+            }).join(", ")} (${conflict.obj.cause})`
+          );
+        }
+      }
+      if (isTechnology(obj)) {
+        if (state2.queuedTargetsAll.includes(obj)) {
+          notes.push("Queued research, processing...");
+        } else if (state2.triggerTargets.includes(obj)) {
+          notes.push("Active trigger, processing...");
+        } else {
+          const conflict = getTechConflict2(obj);
+          if (conflict) {
+            notes.push(conflict);
+          }
+        }
+      }
+      if (obj === buildings2.GorddonFreighter && haveTech2("banking", 13)) {
+        const count = obj.stateOnCount;
+        const total = ((1 + (count + 1) * 0.03) / (1 + count * 0.03) - 1) * 100;
+        const crew = total / 3;
+        notes.push(
+          `Next level will increase ${buildings2.AlphaExchange.title} storage by +${getNiceNumber2(total)}% (+${getNiceNumber2(
+            crew
+          )}% per crew)`
+        );
+      }
+      if (obj === buildings2.Alien1SuperFreighter && haveTech2("banking", 13)) {
+        const count = obj.stateOnCount;
+        const total = ((1 + (count + 1) * 0.08) / (1 + count * 0.08) - 1) * 100;
+        const crew = total / 5;
+        notes.push(
+          `Next level will increase ${buildings2.AlphaExchange.title} storage by +${getNiceNumber2(total)}% (+${getNiceNumber2(
+            crew
+          )}% per crew)`
+        );
+      }
+      if (obj === buildings2.Hospital || obj === buildings2.BootCamp && game2.global.race["artifical"] || obj === buildings2.EnceladusBase && game2.global.race["orbit_decayed"]) {
+        notes.push(`~${getNiceNumber2(getHealingRate2())} soldiers healed per day`);
+      }
+      if (obj === buildings2.Hospital) {
+        const growth = 1 / (getGrowthRate2() * 4);
+        notes.push(`~${getNiceNumber2(growth)} seconds to increase population`);
+      }
+      if (obj === buildings2.PortalCarport && jobs2.HellSurveyor.count > 0) {
+        const influx = 5 * (1 + buildings2.BadlandsAttractor.stateOnCount * 0.22);
+        const demons = (influx * 10 + influx * 50) / 2;
+        let divisor = getGovernor2() === "sports" ? 1100 : 1e3;
+        divisor *= traitVal2("blurry", 0, "+");
+        divisor *= traitVal2("instinct", 0, "+");
+        divisor += haveTech2("infernite", 5) ? 250 : 0;
+        const danger = demons / divisor;
+        const risk = 10 - Math.min(10, jobs2.HellSurveyor.count) / 2;
+        const rate = danger / 2 * Math.min(1, danger / risk);
+        const wreck = 1 / (rate / 5);
+        notes.push(
+          `Up to ~${getNiceNumber2(
+            wreck
+          )} seconds to break car (with full supression)`
+        );
+      }
+      if (obj === buildings2.PortalRepairDroid) {
+        const wallRepair = Math.round(200 * 0.95 ** obj.stateOnCount) / 4;
+        const carRepair = Math.round(180 * 0.92 ** obj.stateOnCount) / 4;
+        notes.push(`${getNiceNumber2(wallRepair)} seconds to repair 1% of wall`);
+        notes.push(`${getNiceNumber2(carRepair)} seconds to repair car`);
+      }
+      if (obj === buildings2.BadlandsAttractor) {
+        const influx = 5 * (1 + obj.stateOnCount * 0.22);
+        let gem_chance = game2.global.stats.achieve.technophobe?.l >= 5 ? 9e3 : 1e4;
+        if (game2.global.race.universe === "evil" && resources2.Dark.currentQuantity > 1) {
+          const de = resources2.Dark.currentQuantity * (1 + resources2.Harmony.currentQuantity * 0.01);
+          gem_chance -= Math.round(Math.log2(de) * 2);
+        }
+        gem_chance = Math.round(gem_chance * 0.948 ** obj.stateOnCount);
+        gem_chance = Math.round(gem_chance * traitVal2("ghostly", 2, "-"));
+        gem_chance = Math.max(12, gem_chance);
+        const drop = 1 / gem_chance * 100;
+        notes.push(
+          `~${getNiceNumber2(drop)}% chance to find ${resources2.Soul_Gem.title}`
+        );
+        notes.push(
+          `Up to ~${getNiceNumber2(influx * 10)}-${getNiceNumber2(
+            influx * 50
+          )} demons spawned per day`
+        );
+      }
+      if (obj === buildings2.Smokehouse) {
+        const spoilage = 50 * 0.9 ** obj.count;
+        notes.push(
+          `${getNiceNumber2(spoilage)}% of stored ${resources2.Food.title} spoiled per second`
+        );
+      }
+      if (obj === buildings2.LakeCoolingTower) {
+        const coolers = buildings2.LakeCoolingTower.stateOnCount;
+        const current = 500 * 0.92 ** coolers;
+        const next = 500 * 0.92 ** (coolers + 1);
+        const diff = (current - next) * buildings2.LakeHarbor.stateOnCount * (game2.global.race["emfield"] ? 1.5 : 1);
+        notes.push(
+          `Next level will decrease total consumption by ${getNiceNumber2(
+            diff
+          )} MW`
+        );
+      }
+      if (obj === buildings2.DwarfShipyard) {
+        if (settings2.autoFleet && FleetManagerOuter2.nextShipMsg) {
+          notes.push(FleetManagerOuter2.nextShipMsg);
+        }
+      }
+      if (obj === buildings2.IsleSpiritBattery) {
+        const batteries = buildings2.IsleSpiritBattery.stateOnCount;
+        let coefficient = 0.9;
+        if (game2.global.race["warlord"] && buildings2.AsphodelCorruptor && game2.global.tech?.asphodel >= 13) {
+          const corruptors = buildings2.AsphodelCorruptor.on;
+          coefficient = 1 - (1 + (corruptors || 0) * 0.03) / 10;
+        }
+        const current = 18e3 * coefficient ** batteries;
+        const next = 18e3 * coefficient ** (batteries + 1);
+        const diff = (current - next) * buildings2.IsleSpiritVacuum.stateOnCount * (game2.global.race["emfield"] ? 1.5 : 1);
+        notes.push(
+          `Next level will decrease total consumption by ${getNiceNumber2(
+            diff
+          )} MW`
+        );
+      }
+      if (obj.extraDescription) {
+        notes.push(obj.extraDescription);
+      }
+      return notes.join("<br>");
+    }
+    function tooltipObserverCallback2(mutations) {
+      const { settings: settings2, document: document2, MutationObserver: MutationObserver2 } = getContext();
+      if (!settings2.masterScriptToggle || document2.hidden) {
+        return;
+      }
+      mutations.forEach(
+        (mutation) => mutation.addedNodes.forEach((node) => {
+          if (node.id === "popper") {
+            const popperObserver = new MutationObserver2(() => {
+              if (!node.querySelector(".script-tooltip")) {
+                popperObserver.disconnect();
+                addTooltip2(node);
+                popperObserver.observe(node, { childList: true });
+              }
+            });
+            addTooltip2(node);
+            popperObserver.observe(node, { childList: true });
+          }
+        })
+      );
+    }
+    const infusionStep = {
+      "blood-lust": 15,
+      "blood-illuminate": 12,
+      "blood-greed": 16,
+      "blood-hoarder": 14,
+      "blood-artisan": 8,
+      "blood-attract": 4,
+      "blood-wrath": 2
+    };
+    function addTooltip2(node) {
+      const {
+        $: $2,
+        state: state2,
+        game: game2,
+        buildings: buildings2,
+        resources: resources2,
+        techIds: techIds2,
+        buildingIds: buildingIds2,
+        arpaIds: arpaIds2,
+        poly: poly2,
+        getNiceNumber: getNiceNumber2
+      } = getContext();
+      $2(node).append(`<span class="script-tooltip" hidden></span>`);
+      const dataId = node.dataset.id;
+      if (dataId === "powerStatus") {
+        $2(node).append(
+          `<p class="modal_bd"><span>Disabled</span><span class="has-text-danger">${getNiceNumber2(
+            resources2.Power.maxQuantity
+          )}</span></p>`
+        );
+        return;
+      } else if (infusionStep[dataId]) {
+        $2(node).find(".costList .res-Blood_Stone").append(` (+${infusionStep[dataId]})`);
+        return;
+      } else if (state2.tooltips[dataId]) {
+        $2(node).append(
+          `<div style="border-top: solid .0625rem #999">${state2.tooltips[dataId]}</div>`
+        );
+        return;
+      }
+      let match = null;
+      let obj = null;
+      if (match = dataId.match(/^popArpa([a-z_-]+)\d*$/)) {
+        obj = arpaIds2["arpa" + match[1]];
+      } else if (match = dataId.match(/^q([A-Za-z_-]+)\d*$/)) {
+        obj = buildingIds2[match[1]] || arpaIds2[match[1]];
+      } else {
+        obj = buildingIds2[dataId] || techIds2[dataId];
+      }
+      if (!obj || isTechnology(obj) && obj.isResearched()) {
+        return;
+      }
+      if (obj === buildings2.BlackholeStellarEngine && game2.global.race.universe !== "magic" && buildings2.BlackholeMassEjector.count > 0 && game2.global.interstellar.stellar_engine.exotic < 0.025) {
+        const massPerSec = resources2.Elerium.atomicMass * game2.global.interstellar.mass_ejector.Elerium + resources2.Infernite.atomicMass * game2.global.interstellar.mass_ejector.Infernite || -1;
+        const missingExotics = (0.025 - game2.global.interstellar.stellar_engine.exotic) * 1e10;
+        $2(node).append(
+          `<div id="popTimer" class="flair has-text-advanced">Contaminated in [${poly2.timeFormat(
+            missingExotics / massPerSec
+          )}]</div>`
+        );
+      }
+      if (obj === buildings2.TauRedJeff && buildings2.TauRedWomlingLab.count > 0) {
+        let expo = game2.global.stats.achieve.overlord?.l >= 5 ? 4.9 : 5;
+        expo -= game2.global.race["lone_survivor"] ? 0.1 : 0;
+        const nextTech = (game2.global.tech.womling_tech + 2) ** expo;
+        const curTech = game2.global.tauceti.womling_lab.tech;
+        const completion = Math.floor(curTech / nextTech * 100);
+        $2(node).find("div:eq(1)>div:eq(5)").append(` (${completion}%)`);
+        const rate = game2.global.tauceti.womling_lab.scientist / 2 * Math.min(1, game2.global.tauceti.womling_lab.scientist * 0.1);
+        const eta = rate > 0 ? Math.ceil((nextTech - curTech) / rate) : -1;
+        $2(node).append(
+          `<div id="popTimer" class="flair has-text-advanced">Next Tech Level in ~[${poly2.timeFormat(
+            eta
+          )}]</div>`
+        );
+      }
+      const description = getTooltipInfo2(obj);
+      if (description) {
+        $2(node).append(
+          `<div style="border-top: solid .0625rem #999">${description}</div>`
+        );
+      }
+    }
+    return { getTooltipInfo: getTooltipInfo2, tooltipObserverCallback: tooltipObserverCallback2, addTooltip: addTooltip2 };
+  }
+
+  // src/ui/custom-race-ui.ts
+  function createCustomRaceUI({ getContext }) {
+    function showCustomRaceImportStatus2(message, danger = false) {
+      const { $: $2 } = getContext();
+      let status = $2("#scriptCustomRaceImportStatus");
+      if (status.length === 0) {
+        status = $2('<p id="scriptCustomRaceImportStatus"></p>');
+        $2("#celestialLab .create").before(status);
+      }
+      status.toggleClass("has-text-danger", danger).toggleClass("has-text-warning", !danger).text(message);
+    }
+    function getCustomRacePreset2(raw = false) {
+      const { settingsRaw: settingsRaw2, settings: settings2 } = getContext();
+      let source = raw ? settingsRaw2 : settings2;
+      let presets = source.prestigeCustomRacePresets;
+      if (!Array.isArray(presets) || presets.length === 0) {
+        return { name: "General", json: "" };
+      }
+      let index = Number.parseInt(source.prestigeCustomRacePreset, 10);
+      if (!Number.isInteger(index) || index < 0 || index >= presets.length) {
+        index = 0;
+      }
+      let preset = presets[index];
+      return {
+        name: typeof preset?.name === "string" && preset.name.trim() ? preset.name.trim() : `Preset ${index + 1}`,
+        json: typeof preset?.json === "string" ? preset.json.trim() : ""
+      };
+    }
+    function refreshCustomRacePresetSelectors2() {
+      const { $: $2, settingsRaw: settingsRaw2 } = getContext();
+      $2(".script_prestigeCustomRacePreset").each(function() {
+        let select = $2(this).empty();
+        (settingsRaw2.prestigeCustomRacePresets ?? []).forEach(
+          (preset, index) => $2("<option></option>").val(String(index)).text(preset.name || `Preset ${index + 1}`).appendTo(select)
+        );
+        select.val(settingsRaw2.prestigeCustomRacePreset);
+      });
+    }
+    function buildCustomRacePresetEditor2(modal) {
+      const {
+        $: $2,
+        settingsRaw: settingsRaw2,
+        state: state2,
+        game: game2,
+        poly: poly2,
+        customRaceDraftFromPreset: customRaceDraftFromPreset2,
+        customRaceEditorTraits: customRaceEditorTraits2,
+        customRaceRankOptions: customRaceRankOptions2,
+        customRaceTraitEffect: customRaceTraitEffect2,
+        customRaceGeneBalance: customRaceGeneBalance2,
+        updateSettingsFromState: updateSettingsFromState2,
+        alert: alert2
+      } = getContext();
+      modal.empty().off("*").addClass("celestialLab");
+      modal.closest(".script-modal-content").addClass("custom-race-modal");
+      modal.append(`
+      <style>
+        .script-modal-content.custom-race-modal { width: min(96vw, 1400px); margin-top: 2vh; margin-bottom: 2vh; }
+        .script-modal-content.custom-race-modal .script-modal-body { max-height: calc(96vh - 70px); overflow-y: auto; }
+        #scriptModalBody.celestialLab { font-size: .92rem; }
+        #scriptModalBody.celestialLab .button,
+        #scriptModalBody.celestialLab input.input,
+        #scriptModalBody.celestialLab select { height: 2em; min-height: 2em; font-size: .92rem; padding-top: 0; padding-bottom: 0; }
+        #scriptModalBody.celestialLab .fields { margin-bottom: .35rem; }
+        #scriptModalBody.celestialLab .trait_selection .field { margin-bottom: .1rem; }
+        #scriptModalBody.celestialLab .script-custom-trait .rc { min-width: 4.8rem; text-align: center; }
+        #scriptModalBody.celestialLab .script-custom-effect,
+        #scriptModalBody.celestialLab .script-custom-traits { scrollbar-color: #777 transparent; scrollbar-width: auto; }
+        #scriptModalBody.celestialLab .script-custom-effect::-webkit-scrollbar,
+        #scriptModalBody.celestialLab .script-custom-traits::-webkit-scrollbar { width: 10px; }
+        #scriptModalBody.celestialLab .script-custom-effect::-webkit-scrollbar-thumb,
+        #scriptModalBody.celestialLab .script-custom-traits::-webkit-scrollbar-thumb { background: #777; border-radius: 5px; }
+      </style>`);
+      if (!Array.isArray(settingsRaw2.prestigeCustomRacePresets) || settingsRaw2.prestigeCustomRacePresets.length === 0) {
+        settingsRaw2.prestigeCustomRacePresets = [{ name: "General", json: "" }];
+        settingsRaw2.prestigeCustomRacePreset = "0";
+      }
+      let presetIndex = Number.parseInt(settingsRaw2.prestigeCustomRacePreset, 10);
+      if (!Number.isInteger(presetIndex) || presetIndex < 0 || presetIndex >= settingsRaw2.prestigeCustomRacePresets.length) {
+        presetIndex = 0;
+        settingsRaw2.prestigeCustomRacePreset = "0";
+      }
+      let preset = settingsRaw2.prestigeCustomRacePresets[presetIndex];
+      let draft = customRaceDraftFromPreset2(preset);
+      modal.append(
+        '<div><h3 class="has-text-danger">Custom Race Presets</h3> - <span class="has-text-warning">Automation Custom Lab</span></div>'
+      );
+      let controls = $2(
+        '<div class="fields" style="margin-bottom:10px;"></div>'
+      ).appendTo(modal);
+      let presetSelect = $2(
+        '<select class="select" style="width:220px;"></select>'
+      ).appendTo(controls);
+      settingsRaw2.prestigeCustomRacePresets.forEach((item, index) => {
+        $2("<option></option>").val(String(index)).text(item.name || `Preset ${index + 1}`).appendTo(presetSelect);
+      });
+      presetSelect.val(String(presetIndex));
+      let presetName = $2(
+        '<input class="input" type="text" maxlength="60" style="width:180px;" />'
+      ).val(preset.name || `Preset ${presetIndex + 1}`).appendTo(controls);
+      let addButton = $2(
+        '<button class="button" type="button">Add</button>'
+      ).appendTo(controls);
+      let cloneButton = $2(
+        '<button class="button" type="button">Clone</button>'
+      ).appendTo(controls);
+      let deleteButton = $2(
+        '<button class="button" type="button">Delete</button>'
+      ).appendTo(controls);
+      let captureButton = $2(
+        '<button class="button" type="button">Capture saved custom</button>'
+      ).appendTo(controls);
+      let summary = $2(
+        '<div class="has-text-warning" style="margin:8px 0; font-weight:bold;"></div>'
+      ).appendTo(modal);
+      let identity = $2(
+        '<details style="margin:4px 0;"><summary class="has-text-caution">Race names and description</summary></details>'
+      ).appendTo(modal);
+      let form = $2(
+        '<div class="fields" style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;"></div>'
+      ).appendTo(identity);
+      const addTextField = (key, label, max) => {
+        let row = $2('<label style="display:flex; gap:8px;"></label>').appendTo(
+          form
+        );
+        $2("<span></span>").text(label).appendTo(row);
+        let input = $2(
+          `<input class="input" type="text" maxlength="${max}" style="flex:1;" />`
+        ).val(draft[key]).appendTo(row);
+        input.on("change", function() {
+          draft[key] = this.value.trim();
+          saveDraft();
+        });
+      };
+      addTextField("name", "Name", 20);
+      addTextField("entity", "Entity", 40);
+      addTextField("home", "Homeworld", 20);
+      addTextField("red", "Red planet", 20);
+      addTextField("hell", "Hell", 20);
+      addTextField("gas", "Gas giant", 20);
+      addTextField("gas_moon", "Gas moon", 20);
+      addTextField("dwarf", "Dwarf planet", 20);
+      let descRow = $2(
+        '<label style="display:block; margin-top:6px;"></label>'
+      ).appendTo(identity);
+      $2("<span>Description</span>").appendTo(descRow);
+      $2(
+        '<textarea class="textarea" maxlength="255" style="width:100%; min-height:55px;"></textarea>'
+      ).val(draft.desc).on("change", function() {
+        draft.desc = this.value.trim();
+        saveDraft();
+      }).appendTo(descRow);
+      let outerNames = $2(
+        '<details style="margin-top:6px;"><summary class="has-text-caution">Outer-system names</summary><div class="fields" style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;"></div></details>'
+      ).appendTo(identity);
+      let outerForm = outerNames.find("div");
+      const addOuterField = (key, label) => {
+        let row = $2('<label style="display:flex; gap:8px;"></label>').appendTo(
+          outerForm
+        );
+        $2("<span></span>").text(label).appendTo(row);
+        $2('<input class="input" type="text" maxlength="20" style="flex:1;" />').val(draft[key]).on("change", function() {
+          draft[key] = this.value.trim();
+          saveDraft();
+        }).appendTo(row);
+      };
+      addOuterField("titan", "Titan");
+      addOuterField("enceladus", "Enceladus");
+      addOuterField("triton", "Triton");
+      addOuterField("eris", "Eris");
+      let raceControls = $2(
+        '<div class="genus_selection" style="display:flex; gap:18px; margin:8px 0;"></div>'
+      ).appendTo(modal);
+      let genusLabel = $2(
+        '<label class="genus"><span class="has-text-caution header">Genus </span></label>'
+      ).appendTo(raceControls);
+      let genusSelect = $2("<select></select>").appendTo(genusLabel);
+      Object.keys(poly2.genus_traits).filter(
+        (genus) => genus !== "hybrid" && (genus === draft.genus || game2.global.stats.achieve[`genus_${genus}`]?.l)
+      ).forEach(
+        (genus) => $2("<option></option>").val(genus).text(game2.loc(`genelab_genus_${genus}`)).appendTo(genusSelect)
+      );
+      genusSelect.val(draft.genus).on("change", function() {
+        draft.genus = this.value;
+        saveDraft();
+        updateSummary();
+      });
+      let fanaticLabel = $2(
+        '<label class="fanatic"><span class="has-text-caution header">Fanaticism </span></label>'
+      ).appendTo(raceControls);
+      let fanaticSelect = $2("<select></select>").appendTo(fanaticLabel);
+      let genusInfo = $2(
+        '<div class="has-text-info" style="margin-bottom:6px;"></div>'
+      ).appendTo(modal);
+      let effectPanel = $2(
+        '<div class="script-custom-effect" style="height:112px; overflow-y:scroll; overflow-x:hidden; overflow-wrap:anywhere; white-space:normal; scrollbar-gutter:stable; overscroll-behavior:contain; pointer-events:auto; position:relative; z-index:2; padding:5px 9px; margin-bottom:5px; border-top:1px solid #777; border-bottom:1px solid #777; text-align:left;"></div>'
+      ).appendTo(modal);
+      let activeTrait = null;
+      const showTraitEffect = (id) => {
+        activeTrait = id;
+        let trait = game2.traits[id];
+        let rank = draft.ranks[id] ?? 1;
+        effectPanel.empty();
+        $2("<strong class='has-text-warning'></strong>").text(`${trait.name} · r${rank}`).appendTo(effectPanel);
+        $2("<div class='desc'></div>").html(typeof trait.desc === "function" ? trait.desc() : trait.desc).appendTo(effectPanel);
+        $2(
+          `<div class="effect ${trait.val >= 0 ? "has-text-success" : "has-text-danger"}"></div>`
+        ).html(customRaceTraitEffect2(id, rank)).appendTo(effectPanel);
+      };
+      effectPanel.text("Hover or select a trait to see its current-rank effect.");
+      let filter = $2(
+        '<input class="input" type="search" placeholder="Filter traits..." style="width:100%; margin:4px 0 8px;" />'
+      ).appendTo(identity);
+      let traitsArea = $2(
+        '<div class="script-custom-traits" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; max-height:52vh; overflow-y:scroll; overflow-x:hidden; scrollbar-gutter:stable;"></div>'
+      ).appendTo(modal);
+      let positiveArea = $2(
+        '<div class="cool trait_selection"><h4 class="has-text-success">Positive traits</h4></div>'
+      ).appendTo(traitsArea);
+      let negativeArea = $2(
+        '<div class="lame trait_selection"><h4 class="has-text-danger">Negative traits</h4></div>'
+      ).appendTo(traitsArea);
+      let traitRows = [];
+      let lastCategory = { positive: null, negative: null };
+      for (let [id, trait] of customRaceEditorTraits2(draft)) {
+        let side = trait.val >= 0 ? "positive" : "negative";
+        let targetArea = trait.val >= 0 ? positiveArea : negativeArea;
+        if (lastCategory[side] !== trait.taxonomy) {
+          lastCategory[side] = trait.taxonomy;
+          $2("<h5 class='has-text-caution'></h5>").text(game2.loc(`genelab_traits_${trait.taxonomy}`) ?? trait.taxonomy).appendTo(targetArea);
+        }
+        let row = $2(
+          `<div class="script-custom-trait field t${id}" style="display:flex; align-items:center; gap:5px; padding:2px 0;"></div>`
+        ).appendTo(targetArea);
+        row.attr(
+          "data-search",
+          `${trait.name} ${id} ${trait.taxonomy}`.toLowerCase()
+        );
+        row.on("mouseenter click", () => showTraitEffect(id));
+        let checkbox = $2('<input type="checkbox" />').prop("checked", draft.traitlist.includes(id)).appendTo(row);
+        $2(
+          `<span class="${trait.val >= 0 ? "has-text-success" : "has-text-danger"}" style="flex:1;"></span>`
+        ).text(`${trait.name} [${trait.val >= 0 ? "+" : ""}${trait.val}]`).attr(
+          "title",
+          typeof trait.desc === "function" ? trait.desc() : trait.desc
+        ).appendTo(row);
+        let ranks = customRaceRankOptions2(id);
+        let currentRank = draft.ranks[id] ?? 1;
+        if (!ranks.includes(currentRank)) ranks.push(currentRank);
+        ranks.sort((a, b) => a - b);
+        let rankWrap = $2(
+          '<span class="rc" style="white-space:nowrap;"></span>'
+        ).appendTo(row);
+        let rankDown = $2(
+          '<span class="sub has-text-danger" role="button">−</span>'
+        ).appendTo(rankWrap);
+        let rankValue = $2(
+          '<span class="has-text-warning" style="padding:0 4px;"></span>'
+        ).appendTo(rankWrap);
+        let rankUp = $2(
+          '<span class="add has-text-success" role="button">+</span>'
+        ).appendTo(rankWrap);
+        const updateRank = () => {
+          currentRank = draft.ranks[id] ?? 1;
+          rankValue.text(`r${currentRank}`);
+          rankWrap.toggleClass("inactive-row", !checkbox.prop("checked"));
+          if (activeTrait === id) showTraitEffect(id);
+        };
+        checkbox.on("change", function() {
+          if (this.checked) {
+            if (!draft.traitlist.includes(id)) draft.traitlist.push(id);
+            draft.ranks[id] = currentRank;
+          } else {
+            draft.traitlist = draft.traitlist.filter((traitId) => traitId !== id);
+            delete draft.ranks[id];
+            if (draft.fanaticism === id) draft.fanaticism = false;
+          }
+          updateRank();
+          saveDraft();
+          updateSummary();
+        });
+        rankDown.on("click", function() {
+          if (!checkbox.prop("checked")) return;
+          let index = ranks.indexOf(currentRank);
+          if (index > 0) draft.ranks[id] = ranks[index - 1];
+          updateRank();
+          saveDraft();
+          updateSummary();
+        });
+        rankUp.on("click", function() {
+          if (!checkbox.prop("checked")) return;
+          let index = ranks.indexOf(currentRank);
+          if (index < ranks.length - 1) draft.ranks[id] = ranks[index + 1];
+          updateRank();
+          saveDraft();
+          updateSummary();
+        });
+        updateRank();
+        traitRows.push(row);
+      }
+      filter.on("input", function() {
+        let query = this.value.trim().toLowerCase();
+        traitRows.forEach(
+          (row) => row.toggle(!query || row.attr("data-search").includes(query))
+        );
+      });
+      let advanced = $2(
+        '<details style="margin-top:10px;"><summary>Advanced JSON import/export</summary></details>'
+      ).appendTo(modal);
+      let rawJson = $2(
+        '<textarea class="textarea" style="width:100%; min-height:160px;"></textarea>'
+      ).appendTo(advanced);
+      let loadRaw = $2(
+        '<button class="button" type="button">Load JSON into editor</button>'
+      ).appendTo(advanced);
+      let rawStatus = $2('<span style="margin-left:8px;"></span>').appendTo(
+        advanced
+      );
+      function saveDraft() {
+        draft.genes = 0;
+        preset.json = JSON.stringify(draft, null, 2);
+        rawJson.val(preset.json);
+        state2.customRaceImportAttempt = null;
+        updateSettingsFromState2();
+      }
+      function updateSummary() {
+        let balance = customRaceGeneBalance2(draft);
+        summary.toggleClass("has-text-success", balance >= 0).toggleClass("has-text-danger", balance < 0).text(
+          `Genes remaining: ${balance} · ${draft.traitlist.length} selected traits · live lab validation still applies`
+        );
+        let builtIns = Object.keys(poly2.genus_traits[draft.genus] ?? {}).filter((id) => !(draft.genus === "fungi" && id === "spores")).map((id) => game2.traits[id]?.name ?? id);
+        genusInfo.text(`Genus traits: ${builtIns.join(", ") || "none"}`);
+        fanaticSelect.empty();
+        $2("<option></option>").val("").text("Automatic / none").appendTo(fanaticSelect);
+        draft.traitlist.forEach(
+          (id) => $2("<option></option>").val(id).text(game2.traits[id]?.name ?? id).appendTo(fanaticSelect)
+        );
+        fanaticSelect.val(draft.fanaticism || "");
+      }
+      fanaticSelect.on("change", function() {
+        draft.fanaticism = this.value || false;
+        saveDraft();
+      });
+      presetSelect.on("change", function() {
+        settingsRaw2.prestigeCustomRacePreset = this.value;
+        updateSettingsFromState2();
+        refreshCustomRacePresetSelectors2();
+        buildCustomRacePresetEditor2(modal);
+      });
+      presetName.on("change", function() {
+        preset.name = this.value.trim() || `Preset ${presetIndex + 1}`;
+        updateSettingsFromState2();
+        presetSelect.find(`option[value="${presetIndex}"]`).text(preset.name);
+        refreshCustomRacePresetSelectors2();
+      });
+      addButton.on("click", function() {
+        settingsRaw2.prestigeCustomRacePresets.push({
+          name: `Preset ${settingsRaw2.prestigeCustomRacePresets.length + 1}`,
+          json: ""
+        });
+        settingsRaw2.prestigeCustomRacePreset = String(
+          settingsRaw2.prestigeCustomRacePresets.length - 1
+        );
+        updateSettingsFromState2();
+        refreshCustomRacePresetSelectors2();
+        buildCustomRacePresetEditor2(modal);
+      });
+      cloneButton.on("click", function() {
+        let clone = {
+          name: `${preset.name || `Preset ${presetIndex + 1}`} copy`,
+          json: preset.json
+        };
+        settingsRaw2.prestigeCustomRacePresets.push(clone);
+        settingsRaw2.prestigeCustomRacePreset = String(
+          settingsRaw2.prestigeCustomRacePresets.length - 1
+        );
+        updateSettingsFromState2();
+        refreshCustomRacePresetSelectors2();
+        buildCustomRacePresetEditor2(modal);
+      });
+      deleteButton.on("click", function() {
+        if (settingsRaw2.prestigeCustomRacePresets.length > 1) {
+          settingsRaw2.prestigeCustomRacePresets.splice(presetIndex, 1);
+        } else {
+          settingsRaw2.prestigeCustomRacePresets[0] = {
+            name: "General",
+            json: ""
+          };
+        }
+        settingsRaw2.prestigeCustomRacePreset = "0";
+        updateSettingsFromState2();
+        refreshCustomRacePresetSelectors2();
+        buildCustomRacePresetEditor2(modal);
+      });
+      captureButton.on("click", function() {
+        let savedRace = game2.global.custom?.race0;
+        if (!savedRace) {
+          alert2("There is no saved custom race to capture yet.");
+          return;
+        }
+        preset.json = JSON.stringify(
+          {
+            ...savedRace,
+            genes: 0,
+            traitlist: (savedRace.traits ?? []).slice(),
+            traits: void 0
+          },
+          (key, value) => value === void 0 ? void 0 : value,
+          2
+        );
+        buildCustomRacePresetEditor2(modal);
+      });
+      loadRaw.on("click", function() {
+        try {
+          let parsed = JSON.parse(rawJson.val());
+          if (!parsed || typeof parsed !== "object")
+            throw new Error("not an object");
+          preset.json = JSON.stringify(parsed, null, 2);
+          rawStatus.removeClass("has-text-danger").text("");
+          updateSettingsFromState2();
+          buildCustomRacePresetEditor2(modal);
+        } catch (error) {
+          rawStatus.addClass("has-text-danger").text(`Invalid JSON: ${error.message}`);
+        }
+      });
+      saveDraft();
+      updateSummary();
+    }
+    function importCustomRaceIntoLab2() {
+      const {
+        settings: settings2,
+        state: state2,
+        game: game2,
+        document: document2,
+        getVueById: getVueById2,
+        customRaceRankOptions: customRaceRankOptions2
+      } = getContext();
+      let preset = getCustomRacePreset2();
+      let attemptKey = `${settings2.prestigeCustomRacePreset}:${preset.json}`;
+      if (state2.customRaceImportAttempt === attemptKey) {
+        return false;
+      }
+      state2.customRaceImportAttempt = attemptKey;
+      let template;
+      try {
+        template = JSON.parse(preset.json);
+      } catch (error) {
+        showCustomRaceImportStatus2(
+          `Automatic custom-race import of “${preset.name}” paused: invalid JSON (${error.message}).`,
+          true
+        );
+        return false;
+      }
+      let lab = getVueById2("celestialLab");
+      let traits = template.traitlist ?? template.traits;
+      if (!lab?.g || !Array.isArray(traits) || typeof template.genus !== "string") {
+        showCustomRaceImportStatus2(
+          "Automatic custom-race import paused: expected a game custom-race export with genus and traitlist.",
+          true
+        );
+        return false;
+      }
+      if (new Set(traits).size !== traits.length) {
+        showCustomRaceImportStatus2(
+          "Automatic custom-race import paused: traitlist contains duplicates.",
+          true
+        );
+        return false;
+      }
+      let requiredText = [
+        "name",
+        "desc",
+        "entity",
+        "home",
+        "red",
+        "hell",
+        "gas",
+        "gas_moon",
+        "dwarf"
+      ];
+      let missingText = requiredText.filter(
+        (key) => typeof template[key] !== "string" || template[key].length === 0
+      );
+      if (missingText.length > 0) {
+        showCustomRaceImportStatus2(
+          `Automatic custom-race import paused: missing ${missingText.join(", ")}.`,
+          true
+        );
+        return false;
+      }
+      if (!game2.global.stats.achieve[`genus_${template.genus}`]?.l && template.genus !== lab.g.genus) {
+        showCustomRaceImportStatus2(
+          `Automatic custom-race import paused: ${template.genus} genus is not unlocked.`,
+          true
+        );
+        return false;
+      }
+      let unavailableTraits = traits.filter(
+        (trait) => typeof trait !== "string" || !/^[a-z0-9_]+$/.test(trait) || document2.querySelector(`#celestialLab .t${trait}`) === null
+      );
+      if (unavailableTraits.length > 0) {
+        showCustomRaceImportStatus2(
+          `Automatic custom-race import paused: unavailable traits ${unavailableTraits.join(", ")}.`,
+          true
+        );
+        return false;
+      }
+      let ranks = template.ranks ?? {};
+      if (typeof ranks !== "object" || Array.isArray(ranks) || Object.entries(ranks).some(
+        ([trait, rank]) => !traits.includes(trait) || typeof rank !== "number" || !Number.isFinite(rank) || rank <= 0 || !customRaceRankOptions2(trait).includes(rank)
+      )) {
+        showCustomRaceImportStatus2(
+          "Automatic custom-race import paused: ranks must contain positive numeric values for selected traits only.",
+          true
+        );
+        return false;
+      }
+      let fanaticism = template.fanaticism || false;
+      if (fanaticism && !traits.includes(fanaticism)) {
+        showCustomRaceImportStatus2(
+          `Automatic custom-race import paused: Fanaticism trait ${fanaticism} is not selected.`,
+          true
+        );
+        return false;
+      }
+      let textLimits = {
+        name: 20,
+        desc: 255,
+        entity: 40,
+        home: 20,
+        red: 20,
+        hell: 20,
+        gas: 20,
+        gas_moon: 20,
+        dwarf: 20
+      };
+      requiredText.forEach(
+        (key) => lab.g[key] = template[key].substring(0, textLimits[key])
+      );
+      ["titan", "enceladus", "triton", "eris"].forEach((key) => {
+        if (typeof template[key] === "string" && template[key].length > 0) {
+          lab.g[key] = template[key];
+        }
+      });
+      lab.g.genus = template.genus;
+      lab.g.traitlist = traits.slice();
+      lab.g.fanaticism = fanaticism;
+      lab.g.ranks ??= {};
+      Object.keys(lab.g.ranks).forEach((trait) => delete lab.g.ranks[trait]);
+      Object.assign(lab.g.ranks, ranks);
+      lab.geneEdit();
+      if (lab.g.genes < 0) {
+        showCustomRaceImportStatus2(
+          `Automatic custom-race import paused: template exceeds the live gene budget by ${Math.abs(lab.g.genes)}. Edit the lab or paste a cheaper export.`,
+          true
+        );
+        return false;
+      }
+      return true;
+    }
+    function automateLab2() {
+      const { document: document2, settings: settings2, state: state2, game: game2, updateOverrides: updateOverrides2 } = getContext();
+      let createCustom = document2.querySelector("#celestialLab .create button");
+      if (createCustom) {
+        updateOverrides2();
+        if (settings2.masterScriptToggle && settings2.autoPrestige && ["ascension", "terraform", "apotheosis"].includes(settings2.prestigeType)) {
+          let customMode = ["reuse", "pause", "import"].includes(
+            settings2.prestigeCustomRaceMode
+          ) ? settings2.prestigeCustomRaceMode : "reuse";
+          if (customMode !== "import") {
+            state2.customRaceImportAttempt = null;
+          }
+          if (customMode === "pause") {
+            showCustomRaceImportStatus2(
+              "Auto Prestige paused by Custom race handling: Pause in lab."
+            );
+            return;
+          }
+          if (customMode === "import" && !importCustomRaceIntoLab2()) {
+            return;
+          }
+          if (customMode === "reuse" && !game2.global.custom?.race0) {
+            showCustomRaceImportStatus2(
+              "Auto Prestige paused: no saved custom race. Design one here or select Import selected preset in Prestige settings."
+            );
+            return;
+          }
+          state2.goal = "GameOverMan";
+          createCustom.click();
+          return;
+        }
+      }
+    }
+    return {
+      showCustomRaceImportStatus: showCustomRaceImportStatus2,
+      getCustomRacePreset: getCustomRacePreset2,
+      refreshCustomRacePresetSelectors: refreshCustomRacePresetSelectors2,
+      buildCustomRacePresetEditor: buildCustomRacePresetEditor2,
+      importCustomRaceIntoLab: importCustomRaceIntoLab2,
+      automateLab: automateLab2
+    };
+  }
+
+  // src/ui/settings-shell.ts
+  function createSettingsShell({ getContext }) {
+    const liveObject4 = (key) => new Proxy(
+      {},
+      {
+        get(_target, property) {
+          const current = getContext()[key];
+          const value = current?.[property];
+          return typeof value === "function" ? value.bind(current) : value;
+        },
+        set(_target, property, value) {
+          getContext()[key][property] = value;
+          return true;
+        },
+        deleteProperty(_target, property) {
+          return delete getContext()[key][property];
+        },
+        ownKeys() {
+          return Reflect.ownKeys(getContext()[key] ?? {});
+        },
+        getOwnPropertyDescriptor() {
+          return { enumerable: true, configurable: true };
+        }
+      }
+    );
+    const $2 = new Proxy(function() {
+    }, {
+      apply(_target, _thisArg, args) {
+        return getContext().$(...args);
+      },
+      get(_target, property) {
+        const current = getContext().$;
+        const value = current[property];
+        return typeof value === "function" ? value.bind(current) : value;
+      }
+    });
+    const document2 = liveObject4("document");
+    const settingsRaw2 = liveObject4("settingsRaw");
+    const settings2 = liveObject4("settings");
+    const game2 = liveObject4("game");
+    const buildPrestigeSettings2 = (...args) => getContext().buildPrestigeSettings(...args);
+    const buildGeneralSettings2 = (...args) => getContext().buildGeneralSettings(...args);
+    const buildInterfaceSettings2 = (...args) => getContext().buildInterfaceSettings(...args);
+    const buildStateLogSettings2 = (...args) => getContext().buildStateLogSettings(...args);
+    const buildAchievementGuardSettings2 = (...args) => getContext().buildAchievementGuardSettings(...args);
+    const buildChallengeHelperSettings2 = (...args) => getContext().buildChallengeHelperSettings(...args);
+    const buildGovernmentSettings2 = (...args) => getContext().buildGovernmentSettings(...args);
+    const buildEvolutionSettings2 = (...args) => getContext().buildEvolutionSettings(...args);
+    const buildPlanetSettings2 = (...args) => getContext().buildPlanetSettings(...args);
+    const buildTraitSettings2 = (...args) => getContext().buildTraitSettings(...args);
+    const buildTriggerSettings2 = (...args) => getContext().buildTriggerSettings(...args);
+    const buildResearchSettings2 = (...args) => getContext().buildResearchSettings(...args);
+    const buildWarSettings2 = (...args) => getContext().buildWarSettings(...args);
+    const buildHellSettings2 = (...args) => getContext().buildHellSettings(...args);
+    const buildMechSettings2 = (...args) => getContext().buildMechSettings(...args);
+    const buildFleetSettings2 = (...args) => getContext().buildFleetSettings(...args);
+    const buildEjectorSettings2 = (...args) => getContext().buildEjectorSettings(...args);
+    const buildMarketSettings2 = (...args) => getContext().buildMarketSettings(...args);
+    const buildStorageSettings2 = (...args) => getContext().buildStorageSettings(...args);
+    const buildMagicSettings2 = (...args) => getContext().buildMagicSettings(...args);
+    const buildProductionSettings2 = (...args) => getContext().buildProductionSettings(...args);
+    const buildJobSettings2 = (...args) => getContext().buildJobSettings(...args);
+    const buildBuildingSettings2 = (...args) => getContext().buildBuildingSettings(...args);
+    const buildWeightingSettings2 = (...args) => getContext().buildWeightingSettings(...args);
+    const buildProjectSettings2 = (...args) => getContext().buildProjectSettings(...args);
+    const buildLoggingSettings2 = (...args) => getContext().buildLoggingSettings(...args);
+    const filterBuildingSettingsTable2 = (...args) => getContext().filterBuildingSettingsTable(...args);
+    const updateSettingsFromState2 = (...args) => getContext().updateSettingsFromState(...args);
+    const importSettings2 = (...args) => getContext().importSettings(...args);
+    const exportSettings2 = (...args) => getContext().exportSettings(...args);
+    const triggerFileDownload2 = (...args) => getContext().triggerFileDownload(...args);
+    const confirm2 = (...args) => getContext().confirm(...args);
+    function removeScriptSettings2() {
+      $2("#script_settings").remove();
+    }
+    function buildScriptSettings2() {
+      if (game2.global.settings.civTabs != 7) {
+        return;
+      }
+      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let scriptContentNode = $2("#script_settings");
+      if (scriptContentNode.length !== 0) {
+        return;
+      }
+      scriptContentNode = $2(
+        '<div id="script_settings" style="margin-top: 30px;"></div>'
+      );
+      $2(".settings").append(scriptContentNode);
+      buildImportExport2();
+      buildPrestigeSettings2(scriptContentNode, "");
+      buildGeneralSettings2();
+      buildInterfaceSettings2();
+      buildStateLogSettings2();
+      buildAchievementGuardSettings2();
+      buildChallengeHelperSettings2();
+      buildGovernmentSettings2(scriptContentNode, "");
+      buildEvolutionSettings2();
+      buildPlanetSettings2();
+      buildTraitSettings2();
+      buildTriggerSettings2();
+      buildResearchSettings2();
+      buildWarSettings2(scriptContentNode, "");
+      buildHellSettings2(scriptContentNode, "");
+      buildMechSettings2();
+      buildFleetSettings2(scriptContentNode, "");
+      buildEjectorSettings2();
+      buildMarketSettings2();
+      buildStorageSettings2();
+      buildMagicSettings2();
+      buildProductionSettings2();
+      buildJobSettings2();
+      buildBuildingSettings2();
+      buildWeightingSettings2();
+      buildProjectSettings2();
+      buildLoggingSettings2(scriptContentNode, "");
+      let collapsibles = document2.querySelectorAll(
+        "#script_settings .script-collapsible"
+      );
+      for (let i = 0; i < collapsibles.length; i++) {
+        collapsibles[i].addEventListener("click", function() {
+          this.classList.toggle("script-contentactive");
+          let content = this.nextElementSibling;
+          if (content.style.display === "block") {
+            settingsRaw2[collapsibles[i].id] = true;
+            content.style.display = "none";
+            let search = content.getElementsByClassName("script-searchsettings");
+            if (search.length > 0) {
+              search[0].value = "";
+              filterBuildingSettingsTable2();
+            }
+          } else {
+            settingsRaw2[collapsibles[i].id] = false;
+            content.style.display = "block";
+          }
+          updateSettingsFromState2();
+        });
+      }
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function buildImportExport2() {
+      let importExportBase = $2(".importExport").last();
+      if (importExportBase === null) {
+        return;
+      }
+      if (document2.getElementById("script_importExportButtons") !== null) {
+        return;
+      }
+      let importExportNode = $2(
+        '<div id="script_importExportButtons" style="margin-top: 6px">'
+      );
+      importExportBase.after(importExportNode);
+      importExportNode.append(
+        ' <button id="script_settingsImport" class="button">Import Script Settings</button>'
+      );
+      $2("#script_settingsImport").on("click", function() {
+        const str = $2("#importExport").val();
+        if (str.length > 0) {
+          if (importSettings2(str)) {
+            $2("#importExport").val("");
+          }
+        }
+      });
+      importExportNode.append(
+        ' <button id="script_settingsExport" class="button">Export Script Settings</button>'
+      );
+      $2("#script_settingsExport").on("click", function() {
+        $2("#importExport").val(exportSettings2());
+        $2("#importExport").select();
+        document2.execCommand("copy");
+      });
+      importExportNode.append(
+        ' <button id="script_settingsFile" class="button">Script Settings as File</button>'
+      );
+      $2("#script_settingsFile").on("click", function() {
+        let json = JSON.stringify(settingsRaw2, void 0, 2);
+        triggerFileDownload2(json, settings2.scriptSettingsExportFilename);
+      });
+    }
+    function buildSettingsSectionImpl2(parentNode, sectionId, sectionName, resetFunction, updateSettingsContentFunction) {
+      const triggerID = `${sectionId}SettingsCollapsed`;
+      const resetID = `script_reset${sectionId}`;
+      const contentID = `script_${sectionId}Content`;
+      const section = $2(`
+          <div id="script_${sectionId}Settings" style="margin-top: 10px;">
+            <h3 id="${triggerID}" class="script-collapsible text-center has-text-success">${sectionName} Settings</h3>
+            <div class="script-content">
+              <div style="margin-top: 10px;"><button id="${resetID}" class="button">Reset ${sectionName} Settings</button></div>
+              <div style="margin-top: 10px; margin-bottom: 10px;" id="${contentID}"></div>
+            </div>
+          </div>`);
+      parentNode.append(section);
+      if (!settingsRaw2[sectionId + "SettingsCollapsed"]) {
+        updateSettingsContentFunction();
+        let element = document2.getElementById(triggerID);
+        element.classList.toggle("script-contentactive");
+        element.nextElementSibling.style.display = "block";
+      } else {
+        section.find(`> #${triggerID}`).on("click", () => {
+          if (section.find(`#${contentID}`).is(":empty")) {
+            updateSettingsContentFunction();
+          }
+        });
+      }
+      section.find(`#${resetID}`).on("click", genericResetFunction2.bind(null, resetFunction, sectionName));
+    }
+    function buildSettingsSection3(sectionId, sectionName, resetFunction, updateSettingsContentFunction) {
+      buildSettingsSectionImpl2(
+        $2("#script_settings"),
+        sectionId,
+        sectionName,
+        resetFunction,
+        updateSettingsContentFunction
+      );
+    }
+    function buildSettingsSection22(parentNode, secondaryPrefix, sectionId, sectionName, resetFunction, updateSettingsContentFunction) {
+      if (secondaryPrefix !== "") {
+        parentNode.append(
+          `<div style="margin-top: 10px; margin-bottom: 10px;" id="script_${secondaryPrefix + sectionId}Content"></div>`
+        );
+        updateSettingsContentFunction(secondaryPrefix);
+      } else {
+        buildSettingsSectionImpl2(
+          parentNode,
+          sectionId,
+          sectionName,
+          resetFunction,
+          () => updateSettingsContentFunction("")
+        );
+      }
+    }
+    function genericResetFunction2(resetFunction, sectionName) {
+      if (confirm2("Are you sure you wish to reset " + sectionName + " Settings?")) {
+        resetFunction();
+      }
+    }
+    function addStandardHeading2(node, heading) {
+      node.append(
+        `<div style="margin-top: 5px; width: 600px; text-align: left;"><span class="has-text-danger" style="margin-left: 10px;">${heading}</span></div>`
+      );
+    }
+    function addSettingsHeader12(node, headerText) {
+      node.append(
+        `<div style="margin: 4px; width: 100%; display: inline-block; text-align: left;"><span class="has-text-success" style="font-weight: bold;">${headerText}</span></div>`
+      );
+    }
+    function addSettingsHeader22(node, headerText) {
+      node.append(
+        `<div style="margin: 2px; width: 90%; display: inline-block; text-align: left;"><span class="has-text-caution">${headerText}</span></div>`
+      );
+    }
+    return {
+      removeScriptSettings: removeScriptSettings2,
+      buildScriptSettings: buildScriptSettings2,
+      buildImportExport: buildImportExport2,
+      buildSettingsSectionImpl: buildSettingsSectionImpl2,
+      buildSettingsSection: buildSettingsSection3,
+      buildSettingsSection2: buildSettingsSection22,
+      genericResetFunction: genericResetFunction2,
+      addStandardHeading: addStandardHeading2,
+      addSettingsHeader1: addSettingsHeader12,
+      addSettingsHeader2: addSettingsHeader22
+    };
+  }
+
+  // src/ui/settings-controls.ts
+  function createSettingsControls({
+    getContext
+  }) {
+    const liveObject4 = (key) => new Proxy(
+      {},
+      {
+        get(_target, property) {
+          const current = getContext()[key];
+          const value = current?.[property];
+          return typeof value === "function" ? value.bind(current) : value;
+        },
+        set(_target, property, value) {
+          getContext()[key][property] = value;
+          return true;
+        },
+        deleteProperty(_target, property) {
+          return delete getContext()[key][property];
+        },
+        ownKeys() {
+          return Reflect.ownKeys(getContext()[key] ?? {});
+        },
+        getOwnPropertyDescriptor() {
+          return { enumerable: true, configurable: true };
+        }
+      }
+    );
+    const $2 = new Proxy(function() {
+    }, {
+      apply(_target, _thisArg, args) {
+        return getContext().$(...args);
+      },
+      get(_target, property) {
+        const current = getContext().$;
+        const value = current[property];
+        return typeof value === "function" ? value.bind(current) : value;
+      }
+    });
+    const settingsRaw2 = liveObject4("settingsRaw");
+    const settings2 = liveObject4("settings");
+    const techIds2 = liveObject4("techIds");
+    const win2 = liveObject4("win");
+    const checkCompare2 = liveObject4("checkCompare");
+    const checkCustom2 = liveObject4("checkCustom");
+    const checkTypes2 = liveObject4("checkTypes");
+    const getRealNumber2 = (...args) => getContext().getRealNumber(...args);
+    const openOptionsModal2 = (...args) => getContext().openOptionsModal(...args);
+    const sorterHelper2 = (...args) => getContext().sorterHelper(...args);
+    const updateSettingsFromState2 = (...args) => getContext().updateSettingsFromState(...args);
+    function _2(check, arg) {
+      return checkTypes2[check].fn(arg);
+    }
+    function openOverrideModal2(event) {
+      if (event[getContext().overrideKey]) {
+        event.preventDefault();
+        openOptionsModal2(event.data.label, function(modal) {
+          modal.append(
+            `<div style="margin-top: 10px; margin-bottom: 10px;" id="script_${event.data.name}Modal"></div>`
+          );
+          $2(".script-modal-content").addClass("override-modal");
+          buildOverrideSettings2(
+            event.data.name,
+            event.data.type,
+            event.data.options
+          );
+        });
+      }
+    }
+    function buildOverrideSettings2(settingName, type, options) {
+      const rebuild = () => buildOverrideSettings2(settingName, type, options);
+      let overrides = settingsRaw2.overrides[settingName] ?? [];
+      let currentNode = $2(`#script_${settingName}Modal`);
+      currentNode.empty().off("*");
+      currentNode.append(`
+          <table style="width:100%; text-align: left">
+            <tr>
+              <th class="has-text-warning" colspan="2">Variable 1</th>
+              <th class="has-text-warning" colspan="1">Check</th>
+              <th class="has-text-warning" colspan="2">Variable 2</th>
+              <th class="has-text-warning" colspan="3">Result</th>
+            </tr>
+            <tr>
+              <th class="has-text-warning" style="width:16%">Type</th>
+              <th class="has-text-warning" style="width:16%">Value</th>
+              <th class="has-text-warning" style="width:10%"></th>
+              <th class="has-text-warning" style="width:16%">Type</th>
+              <th class="has-text-warning" style="width:16%">Value</th>
+              <th class="has-text-warning" style="width:14%"></th>
+              <th style="width:12%"></th>
+            </tr>
+            <tbody id="script_${settingName}ModalTable"></tbody>
+          </table>`);
+      let newTableBodyText = "";
+      for (let i = 0; i < overrides.length; i++) {
+        newTableBodyText += `<tr id="script_${settingName}_o${i}" value="${i}" class="script-draggable"><td style="width:16%"></td><td style="width:16%"></td><td style="width:10%"></td><td style="width:16%"></td><td style="width:16%"></td><td style="width:14%"></td><td style="width:12%"><span class="script-lastcolumn"></span></td></tr>`;
+      }
+      let listField = typeof settingsRaw2[settingName] === "object";
+      let note = listField ? "All values passed checks will be added or removed from list" : "First value passed check will be used. Default value:";
+      let note_2 = "The current value:";
+      let current = listField ? `<td style="width:32%" colspan="2">${note_2}</td>
+          <td style="width:56%" colspan="4"></td>` : `<td style="width:74%" colspan="5">${note_2}</td>
+          <td style="width:14%"></td>`;
+      newTableBodyText += `
+          <tr id="script_${settingName}_d" class="unsortable">
+            <td style="width:74%" colspan="5">${note}</td>
+            <td style="width:14%"></td>
+            <td style="width:12%"><a class="button is-small" style="width: 26px; height: 26px"><span>+</span></a></td>
+          </tr>
+          <tr id="script_override_true_value" class="unsortable" value="${settingName}" type="${type}">
+            ${current}
+            <td style="width:12%"></td>
+          </tr>`;
+      let tableBodyNode = $2(`#script_${settingName}ModalTable`);
+      tableBodyNode.append($2(newTableBodyText));
+      if (!listField) {
+        $2(`#script_${settingName}_d td:eq(1)`).append(
+          buildInputNode2(
+            type,
+            options,
+            settingsRaw2[settingName],
+            function(result) {
+              settingsRaw2[settingName] = result;
+              updateSettingsFromState2();
+              let retType = typeof result === "boolean" ? "checked" : "value";
+              $2(".script_" + settingName).prop(retType, settingsRaw2[settingName]);
+            }
+          )
+        );
+      }
+      $2(`#script_override_true_value td:eq(1)`).append(
+        buildInputNodeForDisplay2(type, options, settings2[settingName])
+      );
+      $2(`#script_${settingName}_d a`).on("click", function() {
+        if (!settingsRaw2.overrides[settingName]) {
+          settingsRaw2.overrides[settingName] = [];
+          $2(".script_bg_" + settingName).addClass("inactive-row");
+        }
+        settingsRaw2.overrides[settingName].push({
+          type1: "Boolean",
+          arg1: true,
+          type2: "Boolean",
+          arg2: false,
+          cmp: "==",
+          ret: settingsRaw2[settingName]
+        });
+        updateSettingsFromState2();
+        rebuild();
+      });
+      for (let i = 0; i < overrides.length; i++) {
+        let override = overrides[i];
+        let tableElement = $2(`#script_${settingName}_o${i}`).children().eq(0);
+        tableElement.append(buildConditionType2(override, 1, rebuild));
+        tableElement = tableElement.next();
+        tableElement.append(buildConditionArg2(override, 1));
+        tableElement = tableElement.next();
+        tableElement.append(buildConditionComparator2(override, rebuild));
+        tableElement = tableElement.next();
+        tableElement.append(buildConditionType2(override, 2, rebuild));
+        tableElement = tableElement.next();
+        tableElement.append(buildConditionArg2(override, 2));
+        tableElement = tableElement.next();
+        if (!checkCustom2[override.cmp]) {
+          tableElement.append(buildConditionRet2(override, type, options));
+        }
+        tableElement = tableElement.next();
+        tableElement.append(buildConditionRemove2(settingName, i, rebuild));
+        tableElement.append(buildConditionDuplicate2(settingName, i, rebuild));
+        tableElement.append(buildConditionEvalize2(settingName, i, rebuild));
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: sorterHelper2,
+        update: function() {
+          let newOrder = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          settingsRaw2.overrides[settingName] = newOrder.map(
+            (i) => settingsRaw2.overrides[settingName][i]
+          );
+          updateSettingsFromState2();
+          rebuild();
+        }
+      });
+    }
+    function buildInputNode2(type, options, value, callback) {
+      switch (type) {
+        case "string":
+          return $2(`
+                  <input type="text" class="input is-small" style="height: 22px; width:100%"/>`).val(value).on("change", function() {
+            callback(this.value);
+          });
+        case "number":
+          return $2(`
+                  <input type="text" class="input is-small" style="height: 22px; width:100%"/>`).val(value).on("change", function() {
+            let parsedValue = getRealNumber2(this.value);
+            if (isNaN(parsedValue)) {
+              parsedValue = value;
+            }
+            this.value = parsedValue;
+            callback(parsedValue);
+          });
+        case "boolean":
+          return $2(`
+                  <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
+                    <input type="checkbox">
+                    <span class="check" style="height:5px; max-width:15px"></span><span style="margin-left: 20px;"></span>
+                  </label>`).find("input").prop("checked", value).on("change", function() {
+            callback(this.checked);
+          }).end();
+        case "select":
+          return $2(`
+                  <select style="width: 100%">${options}</select>`).val(value).on("change", function() {
+            callback(this.value);
+          });
+        case "select_cb":
+          return $2(`
+                  <select style="width: 100%">${buildSelectOptions2(
+            options()
+          )}</select>`).val(value).on("change", function() {
+            callback(this.value);
+          });
+        case "list":
+          return buildObjectListInput2(
+            options.list,
+            options.name,
+            options.id,
+            value,
+            callback
+          );
+        case "list_cb":
+          return buildObjectListInput2(options(), "name", "id", value, callback);
+        default:
+          return "";
+      }
+    }
+    function buildInputNodeForDisplay2(type, options, value) {
+      switch (type) {
+        case "string":
+        case "number":
+          return $2(`
+                  <input type="text" class="input is-small" style="height: 22px; width:100%" disabled="disabled"/>`).val(
+            value
+          );
+        case "boolean":
+          return $2(`
+                  <label tabindex="0" disabled="disabled" class="switch is-disabled" style="position:absolute; margin-top: 8px; margin-left: 10px;">
+                    <input type="checkbox"  disabled="disabled">
+                    <span class="check" style="height:5px; max-width:15px"></span><span style="margin-left: 20px;"></span>
+                  </label>`).find("input").prop("checked", value).end();
+        case "select":
+          return $2(`
+                  <select style="width: 100%"  disabled="disabled" class="dropdown is-disabled">${options}</select>`).val(
+            value
+          );
+        case "list":
+          return $2(`
+                  <span></span>`).text(
+            value.map((item) => options.list[item]?.name ?? "[Invalid item]").join(", ")
+          );
+        default:
+          return $2(`
+                  <span></span>`).text(JSON.stringify(value));
+      }
+    }
+    function changeDisplayInputNode2(currentNode) {
+      let type = currentNode.attr("type");
+      let id = currentNode.attr("value");
+      let value = settings2[currentNode.attr("value")];
+      let node = currentNode.find(`td:eq(1)>*:first-child`);
+      switch (type) {
+        case "string":
+        case "number":
+        case "select":
+          return node.val(value);
+        case "boolean":
+          return node.find("input").prop("checked", value);
+        case "list":
+          if (id === "researchIgnore") {
+            return node.text(
+              value.map((item) => techIds2[item]?.name ?? "[Invalid item]").join(", ")
+            );
+          }
+        // fall through
+        default:
+          return node.text(JSON.stringify(value));
+      }
+    }
+    function buildConditionType2(override, num, rebuild) {
+      let types = Object.entries(checkTypes2).map(
+        ([id, type]) => `<option value="${id}" title="${type.desc}">${id.replace(/([A-Z])/g, " $1").trim()}</option>`
+      ).join();
+      return $2(`<select style="width: 100%">${types}</select>`).val(override["type" + num]).on("change", function() {
+        override["type" + num] = this.value;
+        override["arg" + num] = checkTypes2[this.value].def;
+        updateSettingsFromState2();
+        rebuild();
+      });
+    }
+    function buildConditionArg2(override, num) {
+      let check = checkTypes2[override["type" + num]];
+      return check ? buildInputNode2(
+        check.arg,
+        check.options,
+        override["arg" + num],
+        function(result) {
+          override["arg" + num] = result;
+          updateSettingsFromState2();
+        }
+      ) : "";
+    }
+    function buildConditionComparator2(override, rebuild) {
+      let types = Object.entries(checkCompare2).map(
+        ([id, fn]) => `<option value="${id}" title="${checkCustom2[id] ?? fn.toString().substr(10)}">${id}</option>`
+      ).join();
+      return $2(`<select style="width: 100%">${types}</select>`).val(override.cmp).on("change", function() {
+        override.cmp = this.value;
+        updateSettingsFromState2();
+        rebuild();
+      });
+    }
+    function buildConditionRemove2(settingName, id, rebuild) {
+      return $2(
+        `<a class="button is-small" style="width: 26px; height: 26px"><span>-</span></a>`
+      ).on("click", function() {
+        settingsRaw2.overrides[settingName].splice(id, 1);
+        if (settingsRaw2.overrides[settingName].length === 0) {
+          delete settingsRaw2.overrides[settingName];
+          $2(".script_bg_" + settingName).removeClass("inactive-row");
+        }
+        updateSettingsFromState2();
+        rebuild();
+      });
+    }
+    function buildConditionDuplicate2(settingName, id, rebuild) {
+      return $2(
+        `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 1.2rem;">&#9282;</span></a>`
+      ).on("click", function() {
+        settingsRaw2.overrides[settingName].splice(id, 0, {
+          ...settingsRaw2.overrides[settingName][id]
+        });
+        updateSettingsFromState2();
+        rebuild();
+      });
+    }
+    function buildConditionEvalize2(settingName, id, rebuild) {
+      return $2(
+        `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 0.9rem;">E</span></a>`
+      ).on("click", function() {
+        let override = settingsRaw2.overrides[settingName][id];
+        let check = checkCompare2[override.cmp].toString().substr(10).replace(/([ab])/g, (s2, v) => {
+          let idx = v === "a" ? 1 : 2;
+          switch (override["type" + idx]) {
+            case "Number":
+            case "Boolean":
+              return override["arg" + idx];
+            case "Eval":
+              return `(${override["arg" + idx]})`;
+            case "String":
+              return JSON.stringify(override["arg" + idx]);
+            default:
+              return `_("${override["type" + idx]}",${JSON.stringify(
+                override["arg" + idx]
+              )})`;
+          }
+        });
+        win2.prompt("Eval of this condition:", check);
+      });
+    }
+    function buildConditionRet2(override, type, options) {
+      return buildInputNode2(
+        type,
+        options,
+        override.ret,
+        function(result) {
+          override.ret = result;
+          updateSettingsFromState2();
+        }
+      );
+    }
+    function buildObjectListInput2(list, name, id, value, callback) {
+      let listNode = $2(`<input type="text" style="width:100%"></input>`);
+      let onChange = function(event, ui) {
+        event.preventDefault();
+        if (ui.item === null) {
+          let foundItem = Object.values(list).find(
+            (obj) => obj[name] === this.value
+          );
+          if (foundItem !== void 0) {
+            ui.item = { label: this.value, value: foundItem[id] };
+          }
+        }
+        if (ui.item !== null && Object.values(list).some((obj) => obj[id] === ui.item.value)) {
+          this.value = ui.item.label;
+          callback(ui.item.value);
+        } else if (list.hasOwnProperty(value)) {
+          this.value = list[value][name];
+          callback(value);
+        } else {
+          this.value = "";
+          callback(null);
+        }
+      };
+      listNode.autocomplete({
+        minLength: 2,
+        delay: 0,
+        source: function(request, response) {
+          let matcher = new RegExp(
+            $2.ui.autocomplete.escapeRegex(request.term),
+            "i"
+          );
+          response(
+            Object.values(list).filter((item) => matcher.test(item[name])).map((item) => ({ label: item[name], value: item[id] }))
+          );
+        },
+        select: onChange,
+        // Dropdown list click
+        focus: onChange,
+        // Arrow keys press
+        change: onChange
+        // Keyboard type
+      });
+      if (Object.values(list).some((obj) => obj[id] === value)) {
+        listNode.val(list[value][name]);
+      }
+      return listNode;
+    }
+    function addSettingsToggle2(node, settingName, labelText, hintText, enabledCallBack, disabledCallBack) {
+      return $2(`
+          <div class="script_bg_${settingName}" style="margin-top: 5px; width: 90%; display: inline-block; text-align: left;">
+            <label title="${hintText}" tabindex="0" class="switch">
+              <input class="script_${settingName}" type="checkbox" ${settingsRaw2[settingName] ? " checked" : ""}><span class="check"></span>
+              <span style="margin-left: 10px;">${labelText}</span>
+            </label>
+          </div>`).toggleClass("inactive-row", Boolean(settingsRaw2.overrides[settingName])).on("change", "input", function() {
+        settingsRaw2[settingName] = this.checked;
+        updateSettingsFromState2();
+        $2(".script_" + settingName).prop("checked", settingsRaw2[settingName]);
+        if (settingsRaw2[settingName] && enabledCallBack) {
+          enabledCallBack();
+        }
+        if (!settingsRaw2[settingName] && disabledCallBack) {
+          disabledCallBack();
+        }
+      }).on(
+        "click",
+        {
+          label: `${labelText} (${settingName})`,
+          name: settingName,
+          type: "boolean"
+        },
+        openOverrideModal2
+      ).appendTo(node);
+      if (settingsRaw2[settingName] && enabledCallBack) {
+        enabledCallBack();
+      }
+    }
+    function addSettingsNumber2(node, settingName, labelText, hintText) {
+      return $2(`
+          <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
+            <label title="${hintText}" tabindex="0">
+              <span>${labelText}</span>
+              <input class="script_${settingName}" type="text" style="text-align: right; height: 18px; width: 150px; float: right;" value="${settingsRaw2[settingName]}"></input>
+            </label>
+          </div>`).toggleClass("inactive-row", Boolean(settingsRaw2.overrides[settingName])).on("change", "input", function() {
+        let parsedValue = getRealNumber2(this.value);
+        if (!isNaN(parsedValue)) {
+          settingsRaw2[settingName] = parsedValue;
+          updateSettingsFromState2();
+        }
+        $2(".script_" + settingName).val(settingsRaw2[settingName]);
+      }).on(
+        "click",
+        {
+          label: `${labelText} (${settingName})`,
+          name: settingName,
+          type: "number"
+        },
+        openOverrideModal2
+      ).appendTo(node);
+    }
+    function addSettingsString2(node, settingName, labelText, hintText) {
+      return $2(`
+          <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
+            <label title="${hintText}" tabindex="0">
+              <span>${labelText}</span>
+              <input class="script_${settingName}" type="text" style="text-align: right; height: 18px; width: 70%; float: right;" value="${settingsRaw2[settingName]}"></input>
+            </label>
+          </div>`).toggleClass("inactive-row", Boolean(settingsRaw2.overrides[settingName])).on("change", "input", function() {
+        settingsRaw2[settingName] = this.value;
+        updateSettingsFromState2();
+        $2(".script_" + settingName).val(settingsRaw2[settingName]);
+      }).on(
+        "click",
+        {
+          label: `${labelText} (${settingName})`,
+          name: settingName,
+          type: "string"
+        },
+        openOverrideModal2
+      ).appendTo(node);
+    }
+    function buildSelectOptions2(optionsList) {
+      return optionsList.map(
+        (item) => `<option value="${item.val}" title="${item.hint ?? ""}">${item.label}</option>`
+      ).join();
+    }
+    function addSettingsSelect2(node, settingName, labelText, hintText, optionsList) {
+      let options = buildSelectOptions2(optionsList);
+      return $2(`
+          <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
+            <label title="${hintText}" tabindex="0">
+              <span>${labelText}</span>
+              <select class="script_${settingName}" style="width: 150px; float: right;">
+                ${options}
+              </select>
+            </label>
+          </div>`).toggleClass("inactive-row", Boolean(settingsRaw2.overrides[settingName])).find("select").val(settingsRaw2[settingName]).on("change", function() {
+        settingsRaw2[settingName] = this.value;
+        updateSettingsFromState2();
+        $2(".script_" + settingName).val(settingsRaw2[settingName]);
+      }).end().on(
+        "click",
+        {
+          label: `${labelText} (${settingName})`,
+          name: settingName,
+          type: "select",
+          options
+        },
+        openOverrideModal2
+      ).appendTo(node);
+    }
+    function addSettingsList2(node, settingName, labelText, hintText, list) {
+      let listBlock = $2(`
+          <div class="script_bg_${settingName}" style="display: inline-block; width: 90%; margin-top: 6px;">
+            <label title="${hintText}" tabindex="0">
+              <span>${labelText}</span>
+              <input type="text" style="height: 25px; width: 150px; float: right;" placeholder="Research...">
+              <button class="button" style="height: 25px; float: right; margin-right: 4px; margin-left: 4px;">Remove</button>
+              <button class="button" style="height: 25px; float: right;">Add</button>
+            </label>
+            <br>
+            <textarea class="script_${settingName} textarea" style="margin-top: 12px" readonly></textarea>
+          </div>`).toggleClass("inactive-row", Boolean(settingsRaw2.overrides[settingName])).on(
+        "click",
+        {
+          label: `Add or Remove (${settingName})`,
+          name: settingName,
+          type: "list",
+          options: { list, name: "name", id: "_vueBinding" }
+        },
+        openOverrideModal2
+      ).appendTo(node);
+      let selectedItem = "";
+      let updateList = function() {
+        let techsString = settingsRaw2[settingName].map(
+          (id) => Object.values(list).find((obj) => obj._vueBinding === id).name
+        ).join(", ");
+        $2(".script_" + settingName).val(techsString);
+      };
+      let onChange = function(event, ui) {
+        event.preventDefault();
+        if (ui.item === null) {
+          let typedName = Object.values(list).find(
+            (obj) => obj.name === this.value
+          );
+          if (typedName !== void 0) {
+            ui.item = { label: this.value, value: typedName._vueBinding };
+          }
+        }
+        if (ui.item !== null && list.hasOwnProperty(ui.item.value)) {
+          this.value = ui.item.label;
+          selectedItem = ui.item.value;
+        } else {
+          this.value = "";
+          selectedItem = null;
+        }
+      };
+      listBlock.find("input").autocomplete({
+        minLength: 2,
+        delay: 0,
+        source: function(request, response) {
+          let matcher = new RegExp(
+            $2.ui.autocomplete.escapeRegex(request.term),
+            "i"
+          );
+          response(
+            Object.values(list).filter((item) => matcher.test(item.name)).map((item) => ({ label: item.name, value: item._vueBinding }))
+          );
+        },
+        select: onChange,
+        // Dropdown list click
+        focus: onChange,
+        // Arrow keys press
+        change: onChange
+        // Keyboard type
+      });
+      listBlock.on("click", "button:eq(1)", function() {
+        if (selectedItem && !settingsRaw2[settingName].includes(selectedItem)) {
+          settingsRaw2[settingName].push(selectedItem);
+          settingsRaw2[settingName].sort();
+          updateSettingsFromState2();
+          updateList();
+        }
+      });
+      listBlock.on("click", "button:eq(0)", function() {
+        if (selectedItem && settingsRaw2[settingName].includes(selectedItem)) {
+          settingsRaw2[settingName].splice(
+            settingsRaw2[settingName].indexOf(selectedItem),
+            1
+          );
+          settingsRaw2[settingName].sort();
+          updateSettingsFromState2();
+          updateList();
+        }
+      });
+      updateList();
+    }
+    function addInputCallbacks2(node, settingKey) {
+      return node.on("change", function() {
+        let parsedValue = getRealNumber2(this.value);
+        if (!isNaN(parsedValue)) {
+          settingsRaw2[settingKey] = parsedValue;
+          updateSettingsFromState2();
+        }
+        $2(".script_" + settingKey).val(settingsRaw2[settingKey]);
+      }).on(
+        "click",
+        { label: `Number (${settingKey})`, name: settingKey, type: "number" },
+        openOverrideModal2
+      );
+    }
+    function addTableInput2(node, settingKey) {
+      node.addClass(
+        "script_bg_" + settingKey + (settingsRaw2.overrides[settingKey] ? " inactive-row" : "")
+      ).append(
+        addInputCallbacks2(
+          $2(
+            `<input class="script_${settingKey}" type="text" class="input is-small" style="height: 25px; width:100%" value="${settingsRaw2[settingKey]}"/>`
+          ),
+          settingKey
+        )
+      );
+    }
+    function addToggleCallbacks2(node, settingKey) {
+      return node.on("change", "input", function() {
+        settingsRaw2[settingKey] = this.checked;
+        updateSettingsFromState2();
+        $2(".script_" + settingKey).prop("checked", settingsRaw2[settingKey]);
+      }).on(
+        "click",
+        { label: `Toggle (${settingKey})`, name: settingKey, type: "boolean" },
+        openOverrideModal2
+      );
+    }
+    function addTableToggle2(node, settingKey) {
+      node.addClass(
+        "script_bg_" + settingKey + (settingsRaw2.overrides[settingKey] ? " inactive-row" : "")
+      ).append(
+        addToggleCallbacks2(
+          $2(`
+          <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
+            <input class="script_${settingKey}" type="checkbox"${settingsRaw2[settingKey] ? " checked" : ""}>
+            <span class="check" style="height:5px; max-width:15px"></span>
+            <span style="margin-left: 20px;"></span>
+          </label>`),
+          settingKey
+        )
+      );
+    }
+    function buildTableLabel2(note, title = "", color = "has-text-info") {
+      return $2(`<span class="${color}" title="${title}" >${note}</span>`);
+    }
+    function resetCheckbox2(...items) {
+      Array.from(items).forEach(
+        (item) => $2(".script_" + item).prop("checked", settingsRaw2[item])
+      );
+    }
+    return {
+      evaluateCheck: _2,
+      openOverrideModal: openOverrideModal2,
+      buildOverrideSettings: buildOverrideSettings2,
+      buildInputNode: buildInputNode2,
+      buildInputNodeForDisplay: buildInputNodeForDisplay2,
+      changeDisplayInputNode: changeDisplayInputNode2,
+      buildConditionType: buildConditionType2,
+      buildConditionArg: buildConditionArg2,
+      buildConditionComparator: buildConditionComparator2,
+      buildConditionRemove: buildConditionRemove2,
+      buildConditionDuplicate: buildConditionDuplicate2,
+      buildConditionEvalize: buildConditionEvalize2,
+      buildConditionRet: buildConditionRet2,
+      buildObjectListInput: buildObjectListInput2,
+      addSettingsToggle: addSettingsToggle2,
+      addSettingsNumber: addSettingsNumber2,
+      addSettingsString: addSettingsString2,
+      buildSelectOptions: buildSelectOptions2,
+      addSettingsSelect: addSettingsSelect2,
+      addSettingsList: addSettingsList2,
+      addInputCallbacks: addInputCallbacks2,
+      addTableInput: addTableInput2,
+      addToggleCallbacks: addToggleCallbacks2,
+      addTableToggle: addTableToggle2,
+      buildTableLabel: buildTableLabel2,
+      resetCheckbox: resetCheckbox2
+    };
+  }
+
+  // src/settings/override-catalog.ts
+  function createOverrideCatalog({
+    getContext
+  }) {
+    const liveObject4 = (key) => new Proxy(
+      {},
+      {
+        get(_target, property) {
+          const current = getContext()[key];
+          const value = current?.[property];
+          return typeof value === "function" ? value.bind(current) : value;
+        },
+        set(_target, property, value) {
+          getContext()[key][property] = value;
+          return true;
+        },
+        deleteProperty(_target, property) {
+          return delete getContext()[key][property];
+        },
+        ownKeys() {
+          return Reflect.ownKeys(getContext()[key] ?? {});
+        },
+        getOwnPropertyDescriptor() {
+          return { enumerable: true, configurable: true };
+        }
+      }
+    );
+    const settings2 = liveObject4("settings");
+    const settingsRaw2 = liveObject4("settingsRaw");
+    const state2 = liveObject4("state");
+    const game2 = liveObject4("game");
+    const buildingIds2 = liveObject4("buildingIds");
+    const buildings2 = liveObject4("buildings");
+    const resources2 = liveObject4("resources");
+    const techIds2 = liveObject4("techIds");
+    const arpaIds2 = liveObject4("arpaIds");
+    const jobIds2 = liveObject4("jobIds");
+    const races2 = liveObject4("races");
+    const GovernmentManager2 = liveObject4("GovernmentManager");
+    const SmelterManager2 = liveObject4("SmelterManager");
+    const FactoryManager2 = liveObject4("FactoryManager");
+    const WarManager2 = liveObject4("WarManager");
+    const universes2 = liveObject4("universes");
+    const governors2 = liveObject4("governors");
+    const challenges2 = liveObject4("challenges");
+    const biomeList2 = liveObject4("biomeList");
+    const traitList2 = liveObject4("traitList");
+    const buildSelectOptions2 = (...args) => getContext().buildSelectOptions(...args);
+    const fastEval2 = (...args) => getContext().fastEval(...args);
+    const getGovernor2 = (...args) => getContext().getGovernor(...args);
+    const historicalRelayChargeRatio = () => {
+      return game2.global.space.m_relay?.charged / 1e4;
+    };
+    const prestigeTypes2 = [
+      { val: "none", label: "None", hint: "Endless game" },
+      {
+        val: "mad",
+        short_label: "MAD",
+        label: "Mutual Assured Destruction",
+        hint: "MAD prestige once MAD has been researched and all soldiers are home"
+      },
+      {
+        val: "bioseed",
+        label: "Bioseed",
+        hint: "Launches the bioseeder ship to perform prestige when required probes have been constructed"
+      },
+      {
+        val: "cataclysm",
+        label: "Cataclysm",
+        hint: "Perform cataclysm reset by researching Dial It To 11 once available"
+      },
+      {
+        val: "whitehole",
+        label: "Whitehole",
+        hint: "Infuses the blackhole with exotic materials to perform prestige"
+      },
+      {
+        val: "vacuum",
+        short_label: "Vacuum",
+        label: "Vacuum Collapse",
+        hint: "Build Mana Syphons until the end"
+      },
+      {
+        val: "apocalypse",
+        label: "AI Apocalypse",
+        hint: "Perform AI Apocalypse reset by researching Protocol 66 once available"
+      },
+      {
+        val: "ascension",
+        label: "Ascension",
+        hint: "Allows research of Incorporeal Existence and Ascension. Ascension Machine is managed by autoPower. Use Custom race handling in Prestige settings to reuse, pause for editing, or automatically import a race at the post-reset lab."
+      },
+      {
+        val: "demonic",
+        short_label: "DI",
+        label: "Demonic Infusion",
+        hint: "Sacrifice your entire civilization to absorb the essence of a greater demon lord"
+      },
+      {
+        val: "terraform",
+        label: "Terraform",
+        hint: "Create new planet by building and powering Terraformer. Atmosphere Terraformer is managed by autoPower. Disable autoPrestige if you want to change custom planet. Otherwise current one will be used , or default one if there's no current. "
+      },
+      {
+        val: "matrix",
+        label: "Matrix",
+        hint: "Build a computer simulation and trap your entire civilization in it"
+      },
+      {
+        val: "retire",
+        label: "Retirement",
+        hint: "Retire and enjoy the easy life."
+      },
+      { val: "eden", label: "Eden", hint: "Build Garden Of Eden." },
+      { val: "apotheosis", label: "Apotheosis", hint: "Kill the God." }
+    ];
+    const prestigeOptions2 = buildSelectOptions2(prestigeTypes2);
+    const checkCompare2 = {
+      "==": (a, b) => a == b,
+      "!=": (a, b) => a != b,
+      ">": (a, b) => a > b,
+      "<": (a, b) => a < b,
+      ">=": (a, b) => a >= b,
+      "<=": (a, b) => a <= b,
+      "===": (a, b) => a === b,
+      "!==": (a, b) => a !== b,
+      AND: (a, b) => a && b,
+      OR: (a, b) => a || b,
+      NAND: (a, b) => !(a && b),
+      NOR: (a, b) => !(a || b),
+      XOR: (a, b) => !a != !b,
+      XNOR: (a, b) => !a == !b,
+      "AND!": (a, b) => a && !b,
+      "OR!": (a, b) => a || !b,
+      "A?B": (a, b) => a,
+      "!A?B": (a, b) => !a
+    };
+    const checkCustom2 = {
+      "A?B": "Special check, uses Var2 as result if Var1 is truthy",
+      "!A?B": "Special check, uses Var2 as result if Var1 is falsy"
+    };
+    const argType2 = {
+      building_cost: {
+        def: "city-farm.Money",
+        arg: "list_cb",
+        options: () => Object.fromEntries(
+          Object.keys(buildingIds2).map(
+            (b) => Object.keys(buildingIds2[b].cost).map((r) => [
+              `${b}.${r}`,
+              {
+                name: `${buildingIds2[b].name} (${resources2[r].name})`,
+                id: `${b}.${r}`
+              }
+            ])
+          ).flat()
+        )
+      },
+      building: {
+        def: "city-farm",
+        arg: "list",
+        options: { list: buildingIds2, name: "name", id: "_vueBinding" }
+      },
+      research: {
+        def: "tech-mad",
+        arg: "list",
+        options: { list: techIds2, name: "name", id: "_vueBinding" }
+      },
+      trait: {
+        def: "kindling_kindred",
+        arg: "list_cb",
+        options: () => Object.fromEntries(
+          Object.entries(game2.traits).map(
+            ([id, trait]) => [id, { name: trait.name, id }]
+          )
+        )
+      },
+      genus: {
+        def: "humanoid",
+        arg: "select_cb",
+        options: () => [
+          { val: "organism", label: game2.loc(`race_protoplasm`) },
+          ...Object.values(game2.races).map((r) => r.type).filter((g, i, a) => g && g !== "organism" && a.indexOf(g) === i).map((g) => ({ val: g, label: game2.loc(`genelab_genus_${g}`) }))
+        ]
+      },
+      genus_ss: {
+        def: "humanoid",
+        arg: "select_cb",
+        options: () => [
+          { val: "none", label: game2.loc(`genelab_genus_none`) },
+          ...Object.values(game2.races).map((r) => r.type).filter(
+            (g, i, a) => g && g !== "organism" && g !== "synthetic" && a.indexOf(g) === i
+          ).map((g) => ({ val: g, label: game2.loc(`genelab_genus_${g}`) }))
+        ]
+      },
+      project: {
+        def: "arpalaunch_facility",
+        arg: "select_cb",
+        options: () => Object.values(arpaIds2).map((p) => ({
+          val: p._vueBinding,
+          label: p.name
+        }))
+      },
+      job: {
+        def: "unemployed",
+        arg: "select_cb",
+        options: () => Object.values(jobIds2).map((j) => ({
+          val: j._originalId,
+          label: j._originalName
+        }))
+      },
+      job_servant: {
+        def: "farmer",
+        arg: "select_cb",
+        options: () => Object.values(jobIds2).filter((j) => j.is.serve).map((j) => ({ val: j._originalId, label: j._originalName }))
+      },
+      resource: {
+        def: "Food",
+        arg: "select_cb",
+        options: () => Object.values(resources2).map((r) => ({ val: r._id, label: r.name }))
+      },
+      race: {
+        def: "species",
+        arg: "select_cb",
+        options: () => [
+          { val: "species", label: "Current Race", hint: "Current race" },
+          { val: "gods", label: "Fanaticism Race", hint: "Gods race" },
+          { val: "old_gods", label: "Deify Race", hint: "Old gods race" },
+          { val: "srace", label: "Imitation Race", hint: "Imitation trait race" },
+          {
+            val: "protoplasm",
+            label: "Protoplasm",
+            hint: "Race is not chosen yet"
+          },
+          ...Object.values(races2).map((race) => ({
+            val: race.id,
+            label: race.name,
+            hint: race.desc
+          }))
+        ]
+      },
+      challenge: {
+        def: "junker",
+        arg: "select_cb",
+        options: () => challenges2.flat().map((c) => ({
+          val: c.trait,
+          label: game2.loc(`evo_challenge_${c.id}`),
+          hint: game2.loc(`evo_challenge_${c.id}_effect`)
+        }))
+      },
+      universe: {
+        def: "standard",
+        arg: "select_cb",
+        options: () => [
+          {
+            val: "bigbang",
+            label: "Big Bang",
+            hint: "Universe is not chosen yet"
+          },
+          ...universes2.map((u) => ({
+            val: u,
+            label: game2.loc(`universe_${u}`),
+            hint: game2.loc(`universe_${u}_desc`)
+          }))
+        ]
+      },
+      government: {
+        def: "anarchy",
+        arg: "select_cb",
+        options: () => Object.keys(GovernmentManager2.Types).map((g) => ({
+          val: g,
+          label: game2.loc(`govern_${g}`),
+          hint: game2.loc(`govern_${g}_desc`)
+        }))
+      },
+      governor: {
+        def: "none",
+        arg: "select_cb",
+        options: () => [
+          { val: "none", label: "None", hint: "No governor selected" },
+          ...governors2.map((id) => ({
+            val: id,
+            label: game2.loc(`governor_${id}`),
+            hint: game2.loc(`governor_${id}_desc`)
+          }))
+        ]
+      },
+      queue: {
+        def: "queue",
+        arg: "select_cb",
+        options: () => [
+          {
+            val: "queue",
+            label: "Building",
+            hint: "Buildings and projects queue"
+          },
+          { val: "r_queue", label: "Research", hint: "Research queue" },
+          { val: "evo", label: "Evolution", hint: "Evolution queue" }
+        ]
+      },
+      date: {
+        def: "day",
+        arg: "select_cb",
+        options: () => [
+          { val: "day", label: "Day (Year)", hint: "Day of year" },
+          {
+            val: "moon",
+            label: "Day (Month)",
+            hint: "Day of month (0-27 range)"
+          },
+          { val: "total", label: "Day (Total)", hint: "Day of run" },
+          { val: "year", label: "Year", hint: "Year of run" },
+          { val: "orbit", label: "Orbit", hint: "Planet orbit in days" },
+          {
+            val: "season",
+            label: "Season",
+            hint: "Current season (0 - Spring, 1 - Summer, 2 - Fall, 3 - Winter)"
+          },
+          {
+            val: "temp",
+            label: "Temperature",
+            hint: "Current temperature (0 - Cold, 1 - Normal, 2 - Hot)"
+          },
+          {
+            val: "impact",
+            label: "Impact",
+            hint: "Days remaining before Moon Impact, for Orbit Decay scenario"
+          }
+        ]
+      },
+      soldiers: {
+        def: "workers",
+        arg: "select_cb",
+        options: () => [
+          { val: "workers", label: "Total Soldiers" },
+          { val: "max", label: "Total Soldiers Max" },
+          { val: "currentCityGarrison", label: "City Soldiers" },
+          { val: "maxCityGarrison", label: "City Soldiers Max" },
+          { val: "hellSoldiers", label: "Hell Soldiers" },
+          { val: "hellGarrison", label: "Hell Garrison" },
+          { val: "hellPatrols", label: "Hell Patrols" },
+          { val: "hellPatrolSize", label: "Hell Patrol Size" },
+          { val: "wounded", label: "Wounded Soldiers" },
+          { val: "deadSoldiers", label: "Dead Soldiers" },
+          { val: "crew", label: "Ship Crew" },
+          { val: "mercenaryCost", label: "Mercenary Cost" }
+        ]
+      },
+      tab: {
+        def: "civTabs1",
+        arg: "select_cb",
+        options: () => [
+          { val: "civTabs0", label: game2.loc("tab_evolve") },
+          { val: "civTabs1", label: game2.loc("tab_civil") },
+          { val: "civTabs2", label: game2.loc("tab_civics") },
+          { val: "civTabs3", label: game2.loc("tab_research") },
+          { val: "civTabs4", label: game2.loc("tab_resources") },
+          { val: "civTabs5", label: game2.loc("tech_arpa") },
+          { val: "civTabs6", label: game2.loc("mTabStats") },
+          { val: "civTabs7", label: game2.loc("tab_settings") }
+        ]
+      },
+      biome: {
+        def: "grassland",
+        arg: "select_cb",
+        options: () => biomeList2.map((b) => ({ val: b, label: game2.loc(`biome_${b}_name`) }))
+      },
+      ptrait: {
+        def: "",
+        arg: "select_cb",
+        options: () => [
+          { val: "", label: "None", hint: "Planet have no trait" },
+          ...traitList2.slice(1).map((t) => ({ val: t, label: game2.loc(`planet_${t}`) }))
+        ]
+      },
+      industry: {
+        def: "smelters",
+        arg: "select_cb",
+        options: () => [
+          { val: "smelters", label: "Total Smelter Slot Count" },
+          { val: "factories", label: "Total Factory Slot Count" }
+        ]
+      },
+      other: {
+        def: "rname",
+        arg: "select_cb",
+        options: () => [
+          {
+            val: "rname",
+            label: "Race Name",
+            hint: "Ingame name of current race as string."
+          },
+          {
+            val: "tpfleet",
+            label: "Fleet Size",
+            hint: "Amount of ships in True Path fleet as number."
+          },
+          {
+            val: "mrelay",
+            label: "Mass Relay charge",
+            hint: "Charge percentage of the Mass Relay (0 = 0%, 0.5 = 50%, 1 = 100%"
+          },
+          {
+            val: "satcost",
+            label: "Satellite Cost",
+            hint: "Money cost of next Swarm Satellite"
+          },
+          {
+            val: "bcar",
+            label: "Broken Cars",
+            hint: "Amount of broken Surveyour Carports"
+          },
+          {
+            val: "alevel",
+            label: "Active challenges",
+            hint: "Amount of active challenges"
+          },
+          {
+            val: "tknow",
+            label: "Tech Knowledge",
+            hint: "Knowledge needed for most expensive unlocked research"
+          }
+        ]
+      }
+    };
+    const argMap = {
+      race: (r) => r === "species" || r === "gods" || r === "old_gods" ? game2.global.race[r] : r === "srace" ? game2.global.race.srace ?? "protoplasm" : r,
+      date: (d) => d === "total" ? game2.global.stats.days : d === "impact" ? game2.global.race["orbit_decay"] ? game2.global.race["orbit_decay"] - game2.global.stats.days : -1 : game2.global.city.calendar[d],
+      industry: (b) => b === "smelters" ? SmelterManager2.maxOperating() : b === "factories" ? FactoryManager2.maxOperating() : b,
+      other: (o) => o === "rname" ? game2.races[game2.global.race.species === "protoplasm" && game2.global.race.evoFinalMenu ? game2.global.race.evoFinalMenu : game2.global.race.species].name : o === "tpfleet" ? game2.global.space.shipyard?.ships?.length ?? 0 : o === "mrelay" ? historicalRelayChargeRatio() : o === "satcost" ? buildings2.SunSwarmSatellite.cost.Money ?? 0 : o === "bcar" ? game2.global.portal.carport?.damaged ?? 0 : o === "alevel" ? game2.alevel() - 1 : o === "tknow" ? state2.knowledgeRequiredByTechs : o
+    };
+    const checkTypes2 = {
+      String: {
+        fn: (v) => v,
+        arg: "string",
+        def: "none",
+        desc: "Returns string"
+      },
+      Number: { fn: (v) => v, arg: "number", def: 0, desc: "Returns number" },
+      Boolean: {
+        fn: (v) => v,
+        arg: "boolean",
+        def: false,
+        desc: "Returns boolean"
+      },
+      SettingDefault: {
+        fn: (s2) => settingsRaw2[s2],
+        arg: "string",
+        def: "masterScriptToggle",
+        desc: "Returns default value of setting, types varies"
+      },
+      SettingCurrent: {
+        fn: (s2) => settings2[s2],
+        arg: "string",
+        def: "masterScriptToggle",
+        desc: "Returns current value of setting, types varies"
+      },
+      Eval: {
+        fn: (s2) => fastEval2(s2),
+        arg: "string",
+        def: "Math.PI",
+        desc: "Returns result of evaluating code"
+      },
+      BuildingCost: {
+        fn: (id) => {
+          let [b, r] = id.split(".");
+          return buildingIds2[b].cost[r] ?? 0;
+        },
+        ...argType2.building_cost,
+        desc: "Return material cost of building as number\n(Due to technical limitations some options might not appear in list until you unlock corresponding building in game)"
+      },
+      BuildingUnlocked: {
+        fn: (b) => buildingIds2[b].isUnlocked(),
+        ...argType2.building,
+        desc: "Return true when building is unlocked"
+      },
+      BuildingClickable: {
+        fn: (b) => buildingIds2[b].isClickable(),
+        ...argType2.building,
+        desc: "Return true when building have all required resources, and can be purchased"
+      },
+      BuildingAffordable: {
+        fn: (b) => buildingIds2[b].isAffordable(true),
+        ...argType2.building,
+        desc: "Return true when building is affordable, i.e. costs of all resources below storage caps"
+      },
+      BuildingCount: {
+        fn: (b) => buildingIds2[b].count,
+        ...argType2.building,
+        desc: "Returns amount of buildings as number"
+      },
+      BuildingEnabled: {
+        fn: (b) => buildingIds2[b].stateOnCount,
+        ...argType2.building,
+        desc: "Returns amount of powered buildings as number"
+      },
+      BuildingDisabled: {
+        fn: (b) => buildingIds2[b].stateOffCount,
+        ...argType2.building,
+        desc: "Returns amount of unpowered buildings as number"
+      },
+      BuildingQueued: {
+        fn: (b) => state2.queuedTargetsAll.includes(buildingIds2[b]),
+        ...argType2.building,
+        desc: "Returns true when building in queue"
+      },
+      ProjectUnlocked: {
+        fn: (p) => arpaIds2[p].isUnlocked(),
+        ...argType2.project,
+        desc: "Return true when project is unlocked"
+      },
+      ProjectCount: {
+        fn: (p) => arpaIds2[p].count,
+        ...argType2.project,
+        desc: "Returns amount of projects as number"
+      },
+      ProjectProgress: {
+        fn: (p) => arpaIds2[p].progress,
+        ...argType2.project,
+        desc: "Returns progress of projects as number"
+      },
+      JobUnlocked: {
+        fn: (j) => jobIds2[j].isUnlocked(),
+        ...argType2.job,
+        desc: "Returns true when job is unlocked"
+      },
+      JobCount: {
+        fn: (j) => jobIds2[j].count,
+        ...argType2.job,
+        desc: "Returns current amount of employees(both workers, and servants) as number"
+      },
+      JobMax: {
+        fn: (j) => jobIds2[j].max,
+        ...argType2.job,
+        desc: "Returns maximum amount of assigned workers as number"
+      },
+      JobWorkers: {
+        fn: (j) => jobIds2[j].workers,
+        ...argType2.job,
+        desc: "Returns current amount of workers as number"
+      },
+      JobServants: {
+        fn: (j) => jobIds2[j].servants,
+        ...argType2.job_servant,
+        desc: "Returns current amount of servants as number"
+      },
+      ResearchUnlocked: {
+        fn: (r) => techIds2[r].isUnlocked(),
+        ...argType2.research,
+        desc: "Returns true when research is unlocked"
+      },
+      ResearchComplete: {
+        fn: (r) => techIds2[r].isResearched(),
+        ...argType2.research,
+        desc: "Returns true when research is complete"
+      },
+      ResourceUnlocked: {
+        fn: (r) => resources2[r].isUnlocked(),
+        ...argType2.resource,
+        desc: "Returns true when resource or support is unlocked"
+      },
+      ResourceQuantity: {
+        fn: (r) => resources2[r].currentQuantity,
+        ...argType2.resource,
+        desc: "Returns current amount of resource or support as number"
+      },
+      ResourceStorage: {
+        fn: (r) => resources2[r].maxQuantity,
+        ...argType2.resource,
+        desc: "Returns maximum amount of resource or support as number. Power returns 'Disabled' amount."
+      },
+      ResourceMaxCost: {
+        fn: (r) => resources2[r].maxCost,
+        ...argType2.resource,
+        desc: "Returns maximum cost of resource as number."
+      },
+      ResourceIncome: {
+        fn: (r) => resources2[r].rateOfChange,
+        ...argType2.resource,
+        desc: "Returns current income of resource or unused support as number"
+      },
+      // rateOfChange holds full diff of resource at the moment when overrides checked
+      ResourceRatio: {
+        fn: (r) => resources2[r].storageRatio,
+        ...argType2.resource,
+        desc: "Returns storage ratio of resource as number. Number 0.5 means that storage is 50% full, and such."
+      },
+      ResourceSatisfied: {
+        fn: (r) => resources2[r].usefulRatio >= 1,
+        ...argType2.resource,
+        desc: "Returns true when current amount of resource above maximum costs"
+      },
+      ResourceSatisfyRatio: {
+        fn: (r) => resources2[r].usefulRatio,
+        ...argType2.resource,
+        desc: "Returns satisfy ratio of resource. Number 0.5 means that storead amount equal half of maximum costs"
+      },
+      ResourceDemanded: {
+        fn: (r) => resources2[r].isDemanded(),
+        ...argType2.resource,
+        desc: "Returns true when resource is demanded, i.e. missed by some prioritized task, such as queue or trigger"
+      },
+      RaceId: {
+        fn: (r) => argMap.race(r),
+        ...argType2.race,
+        desc: "Returns ID of selected race as string"
+      },
+      RacePillared: {
+        fn: (r) => game2.global.pillars[argMap.race(r)] >= game2.alevel(),
+        ...argType2.race,
+        desc: "Returns true when selected race pillared at current star level"
+      },
+      RaceGenus: {
+        fn: (g) => races2[game2.global.race.species]?.genus === g,
+        ...argType2.genus,
+        desc: "Returns true when playing selected genus"
+      },
+      MimicGenus: {
+        fn: (g) => (game2.global.race.ss_genus ?? "none") === g,
+        ...argType2.genus_ss,
+        desc: "Returns true when mimicking selected genus"
+      },
+      TraitLevel: {
+        fn: (t) => game2.global.race[t] ?? 0,
+        ...argType2.trait,
+        desc: "Returns trait level as number"
+      },
+      ResetType: {
+        fn: (r) => settings2.prestigeType === r,
+        arg: "select",
+        options: prestigeOptions2,
+        def: "mad",
+        desc: "Returns true when selected reset is active"
+      },
+      Challenge: {
+        fn: (c) => game2.global.race[c] ? true : false,
+        ...argType2.challenge,
+        desc: "Returns true when selected challenge is active"
+      },
+      Universe: {
+        fn: (u) => game2.global.race.universe === u,
+        ...argType2.universe,
+        desc: "Returns true when playing in selected universe"
+      },
+      Government: {
+        fn: (g) => game2.global.civic.govern.type === g,
+        ...argType2.government,
+        desc: "Returns true when selected government is active"
+      },
+      Governor: {
+        fn: (g) => getGovernor2() === g,
+        ...argType2.governor,
+        desc: "Returns true when selected governor is active"
+      },
+      Queue: {
+        fn: (q) => q === "evo" ? settingsRaw2.evolutionQueue.length : game2.global[q].queue.length,
+        ...argType2.queue,
+        desc: "Returns amount of items in queue as number"
+      },
+      Date: {
+        fn: (d) => argMap.date(d),
+        ...argType2.date,
+        desc: "Returns ingame date as number"
+      },
+      Soldiers: {
+        fn: (s2) => WarManager2[s2],
+        ...argType2.soldiers,
+        desc: "Returns amount of soldiers as number"
+      },
+      PlanetBiome: {
+        fn: (b) => game2.global.city.biome === b,
+        ...argType2.biome,
+        desc: "Returns true when playing in selected biome"
+      },
+      PlanetTrait: {
+        fn: (t) => game2.global.city.ptrait.includes(t),
+        ...argType2.ptrait,
+        desc: "Returns true when planet have selected trait"
+      },
+      Industry: {
+        fn: (r) => argMap.industry(r),
+        ...argType2.industry,
+        desc: "Returns information about Industry buildings"
+      },
+      Other: {
+        fn: (o) => argMap.other(o),
+        ...argType2.other,
+        desc: "Other uncategorized variables"
+      }
+    };
+    const retBools2 = [
+      "Boolean",
+      "BuildingUnlocked",
+      "BuildingClickable",
+      "BuildingAffordable",
+      "BuildingQueued",
+      "ProjectUnlocked",
+      "JobUnlocked",
+      "ResearchUnlocked",
+      "ResearchComplete",
+      "ResourceUnlocked",
+      "ResourceSatisfied",
+      "ResourceDemanded",
+      "RacePillared",
+      "RaceGenus",
+      "MimicGenus",
+      "ResetType",
+      "Challenge",
+      "Universe",
+      "Government",
+      "Governor",
+      "PlanetBiome",
+      "PlanetTrait"
+    ];
+    const overrideOnlyChecks2 = ["String", "Number", "RaceId"];
+    return {
+      prestigeTypes: prestigeTypes2,
+      prestigeOptions: prestigeOptions2,
+      checkCompare: checkCompare2,
+      checkCustom: checkCustom2,
+      argType: argType2,
+      checkTypes: checkTypes2,
+      retBools: retBools2,
+      overrideOnlyChecks: overrideOnlyChecks2
+    };
+  }
+
+  // src/ui/script-runtime.ts
+  function createScriptRuntimeUI({
+    getContext
+  }) {
+    const liveObject4 = (key) => new Proxy(
+      {},
+      {
+        get(_target, property) {
+          const current = getContext()[key];
+          const value = current?.[property];
+          return typeof value === "function" ? value.bind(current) : value;
+        },
+        set(_target, property, value) {
+          getContext()[key][property] = value;
+          return true;
+        }
+      }
+    );
+    const $2 = new Proxy(function() {
+    }, {
+      apply(_target, _thisArg, args) {
+        return getContext().$(...args);
+      }
+    });
+    const document2 = liveObject4("document");
+    const state2 = liveObject4("state");
+    const game2 = liveObject4("game");
+    const win2 = liveObject4("win");
+    const createOptionsModal2 = (...args) => getContext().createOptionsModal(...args);
+    const openOptionsModal2 = (...args) => getContext().openOptionsModal(...args);
+    function updateDebugData2() {
+      state2.forcedUpdate = true;
+      game2.updateDebugData();
+      state2.forcedUpdate = false;
+    }
+    function addScriptStyle2() {
+      let cssData = {
+        dark: {
+          background: "#282f2f",
+          alt: "#0f1414",
+          hover: "#010303",
+          border: "#ccc",
+          primary: "#fff",
+          hasTextWarning: "#ffdd57"
+        },
+        light: {
+          background: "#fff",
+          alt: "#dddddd",
+          hover: "#ccc",
+          border: "#000",
+          primary: "#000",
+          hasTextWarning: "#7a6304"
+        },
+        night: {
+          background: "#282f2f",
+          alt: "#1b1b1b",
+          hover: "#0a0a0a",
+          border: "#ccc",
+          primary: "#fff",
+          hasTextWarning: "#ffdd57"
+        },
+        darkNight: {
+          background: "#282f2f",
+          alt: "#1b1b1b",
+          hover: "#0a0a0a",
+          border: "#ccc",
+          primary: "#b8b8b8",
+          hasTextWarning: "#ffcc00"
+        },
+        redgreen: {
+          background: "#282f2f",
+          alt: "#1b1b1b",
+          hover: "#0a0a0a",
+          border: "#ccc",
+          primary: "#fff",
+          hasTextWarning: "#ffdd57"
+        },
+        gruvboxLight: {
+          background: "#fbf1c7",
+          alt: "#f9f5d7",
+          hover: "#e8e4c6",
+          border: "#3c3836",
+          primary: "#3c3836",
+          hasTextWarning: "#b57614"
+        },
+        gruvboxDark: {
+          background: "#282828",
+          alt: "#1d2021",
+          hover: "#0c0f10",
+          border: "#3c3836",
+          primary: "#ebdbb2",
+          hasTextWarning: "#fabd2f"
+        },
+        orangeSoda: {
+          background: "#131516",
+          alt: "#292929",
+          hover: "#181818",
+          border: "#313638",
+          primary: "#EBDBB2",
+          hasTextWarning: "#F06543"
+        },
+        dracula: {
+          background: "#282a36",
+          alt: "#1d2021",
+          hover: "#C0F10",
+          border: "#44475a",
+          primary: "#f8f8f2",
+          hasTextWarning: "#f1fa8c"
+        }
+      };
+      let styles = "";
+      for (let [theme, color] of Object.entries(cssData)) {
+        styles += `
+                html.${theme} .script-modal-content {
+                    background-color: ${color.background};
+                }
+
+                html.${theme} .script-modal-header {
+                    border-color: ${color.border};
+                }
+
+                /*
+                html.${theme} .script-modal-body .button {
+                    background-color: ${color.alt};
+                }*/
+
+                html.${theme} .script-modal-body table td,
+                html.${theme} .script-modal-body table th {
+                    border-color: ${color.border};
+                }
+
+                html.${theme} .script-collapsible {
+                    background-color: ${color.alt};
+                }
+
+                html.${theme} .script-collapsible:after {
+                    color: ${color.primary};
+                }
+
+                html.${theme} .script-contentactive,
+                html.${theme} .script-collapsible:hover {
+                    background-color: ${color.hover};
+                }
+
+                html.${theme} .percentage-full-progress-bar-wrapper {
+                    background-color: ${color.hasTextWarning}15;
+                }
+                html.${theme} .percentage-full-progress-bar {
+                    background-color: ${color.hasTextWarning}75;
+                }
+
+                html.${theme} .percentage-full-progress-bar-wrapper.is-replicating {
+                    background-image: linear-gradient(135deg,${color.hasTextWarning}30 25%,transparent 25%,transparent 50%,${color.hasTextWarning}30 50%,${color.hasTextWarning}30 75%,transparent 75%,transparent);
+                }
+
+                html.${theme} #active_targets .target-type-box {
+                    background-color: ${color.alt}75;
+                }`;
+      }
+      styles += `
+            .script-lastcolumn:after { float: right; content: "\\21c5"; }
+            .script-refresh:after { float: right; content: "\\21ba"; cursor: pointer; }
+            .script-draggable { cursor: move; cursor: grab; }
+            .script-draggable:active { cursor: grabbing !important; }
+            .ui-sortable-helper { display: table; cursor: grabbing !important; }
+
+            .script-collapsible {
+                color: white;
+                cursor: pointer;
+                padding: 18px;
+                width: 100%;
+                border: none;
+                text-align: left;
+                outline: none;
+                font-size: 15px;
+            }
+
+            .script-collapsible:after {
+                content: '\\002B';
+                color: white;
+                font-weight: bold;
+                float: right;
+                margin-left: 5px;
+            }
+
+            .script-contentactive:after {
+                content: "\\2212";
+            }
+
+            .script-content {
+                padding: 0 18px;
+                display: none;
+                //max-height: 0;
+                overflow: hidden;
+                //transition: max-height 0.2s ease-out;
+            }
+
+            .script-searchsettings {
+                width: 100%;
+                margin-top: 20px;
+                margin-bottom: 10px;
+            }
+
+            /* Open script options button */
+            .s-options-button {
+                padding-right: 2px;
+                cursor: pointer;
+            }
+
+            /* The Modal (background) */
+            .script-modal {
+              display: none; /* Hidden by default */
+              position: fixed; /* Stay in place */
+              z-index: 100; /* Sit on top */
+              left: 0;
+              top: 0;
+              width: 100%; /* Full width */
+              height: 100%; /* Full height */
+              background-color: rgb(0,0,0); /* Fallback color */
+              background-color: rgba(10,10,10,.86); /* Blackish w/ opacity */
+              overflow-y: auto; /* Allow scrollbar */
+            }
+
+            /* Modal Content/Box */
+            .script-modal-content {
+                position: relative;
+                margin: auto;
+                margin-top: 50px;
+                margin-bottom: 50px;
+                padding: 0px;
+                width: 900px;
+                border-radius: .5rem;
+                text-align: center;
+            }
+
+            .script-modal-content.override-modal {
+                width: 70%;
+                min-width: 900px;
+            }
+
+            /* The Close Button */
+            .script-modal-close {
+              float: right;
+              font-size: 28px;
+              margin-top: 20px;
+              margin-right: 20px;
+            }
+
+            .script-modal-close:hover,
+            .script-modal-close:focus {
+              cursor: pointer;
+            }
+
+            /* Modal Header */
+            .script-modal-header {
+              padding: 4px 16px;
+              margin-bottom: .5rem;
+              border-bottom: #ccc solid .0625rem;
+              text-align: center;
+            }
+
+            /* Modal Body */
+            .script-modal-body {
+                padding: 2px 16px;
+                text-align: center;
+                overflow: auto;
+            }
+
+            /* Autocomplete styles */
+            .ui-autocomplete {
+                background-color: #000;
+                position: absolute;
+                top: 0;
+                left: 0;
+                cursor: default;
+                z-index: 10000 !important;
+            }
+
+            .ui-helper-hidden-accessible {
+                border: 0;
+                clip: rect(0 0 0 0);
+                height: 1px;
+                margin: -1px;
+                overflow: hidden;
+                padding: 0;
+                position: absolute;
+                width: 1px;
+            }
+
+            .selectable span {
+                -moz-user-select: text !important;
+                -khtml-user-select: text !important;
+                -webkit-user-select: text !important;
+                -ms-user-select: text !important;
+                user-select: text !important;
+            }
+
+            .ea-craft-toggle {
+                max-width:75px;
+                margin-top:4px;
+                position:absolute;
+                left:50%;
+            }
+
+            /* Reduce message log clutterness */
+            .main #msgQueueFilters span:not(:last-child) {
+                !important; margin-right: 0.25rem;
+            }
+
+            /* Fixes for game styles */
+            .main .resources .resource :first-child { white-space: nowrap; }
+            #popTimer { margin-bottom: 0.1rem }
+            .barracks { white-space: nowrap; }
+            .area { width: calc(100% / 6) !important; max-width: 8rem; }
+            .offer-item { width: 15% !important; max-width: 7.5rem; }
+            .tradeTotal { margin-left: 11.5rem !important; }
+
+            /* Styles for queued targets UI */
+            #active_targets-wrapper {
+                padding: 1rem;
+                max-height: 50vh;
+            }
+
+            #sideQueue #active_targets-wrapper {
+                max-height: 50vh;
+            }
+
+            #active_targets {
+                font-size: 0.9em;
+                max-width: 500px;
+            }
+
+            #active_targets .target-type-box {
+                background-color: #1d2021;
+                margin: 10px 0;
+                padding: 0.5rem 1rem;
+            }
+
+            #active_targets ul {
+                list-style-type: none;
+                padding-top: 5px;
+            }
+
+            .active_targets-list > li {
+                margin-top: 10px;
+                width: 100%;
+            }
+
+            .active-target-title {
+                display: inline-block;
+            }
+            .active-target-title.name {
+                width: 40%;
+            }
+            .active-target-title.time {
+                width: 40%;
+            }
+            .active-target-segments {
+                white-space: nowrap;
+            }
+
+            #active_targets .active_targets-sub-list {
+                list-style-type: none;
+            }
+
+            #active_targets .active_targets-sub-list li {
+                width: 100%;
+                padding: 0;
+            }
+
+            #active_targets > ul > li:not(:first-child) {
+              margin-top: 10px;
+            }
+
+            #active_targets .active_targets-resource-text {
+                display: flex;
+                width: 40%;
+            }
+
+            #active_targets .active_targets-resource-text span {
+                margin-left: 10px;
+            }
+
+            #active_targets .active_targets-resource-row {
+                display: flex;
+            }
+
+            #active_targets .active_targets-resource-row .percentage-full-progress-bar-wrapper {
+                display: flex;
+                margin: 5px 0 0 0;
+                width: 35%;
+                height: 9px;
+                overflow: hidden;
+            }
+
+            /* Styles for script planner UI */
+            #script_planner-wrapper {
+                padding: 1rem;
+                max-height: 40vh;
+            }
+            #script_planner-header {
+                cursor: pointer;
+            }
+            #script_planner {
+                font-size: 0.9em;
+                max-width: 500px;
+            }
+            #script_planner ul {
+                list-style-type: none;
+            }
+            #script_planner li {
+                display: block;
+                width: 100%;
+                height: auto !important;
+                max-height: none !important;
+                line-height: normal;
+                overflow: visible;
+                margin-top: 6px;
+            }
+            #script_planner .planner-row,
+            #script_planner .planner-note {
+                height: auto !important;
+                line-height: normal;
+            }
+            #script_planner .planner-row {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto auto;
+                column-gap: 8px;
+                align-items: baseline;
+            }
+            #script_planner .planner-row > span {
+                position: static;
+                float: none;
+                width: auto;
+                display: block;
+            }
+            #script_planner .planner-name {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            #script_planner .planner-weight,
+            #script_planner .planner-time {
+                white-space: nowrap;
+                text-align: right;
+            }
+            #script_planner .planner-note {
+                font-size: 0.85em;
+                opacity: 0.7;
+            }
+            #script_planner-stats {
+                margin-top: 12px;
+            }
+            #script_planner-reset {
+                font-size: 0.75em;
+                margin-left: 8px;
+            }
+
+            .percentage-full-progress-bar-wrapper.is-replicating {
+                background-image: linear-gradient(135deg,rgba(255,255,255,.95) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.95) 50%,rgba(255,255,255,.95) 75%,transparent 75%,transparent);
+                background-size: 20px 20px;
+                animation: progress-bar-stripes 2s linear reverse infinite;
+            }
+
+            @keyframes progress-bar-stripes {
+              0% {
+                background-position: 40px 0;
+              }
+              100% {
+                background-position: 0 0;
+              }
+            }
+
+            #active_targets .active_targets-time-left {
+                width: auto;
+                text-align: left;
+                font-size: 0.8rem;
+                margin-left: 10px;
+            }
+
+            .active-target-remove-x {
+                margin-left: 10px;
+                opacity: 0.5;
+                cursor: pointer;
+                float: right;
+                transform: rotate(45deg);
+                font-size: 1.1rem;
+                line-height: 1rem;
+            }
+
+            .active-target-remove-x:hover {
+                opacity: 1;
+                font-size: 1.2rem;
+            }
+        `;
+      var css = document2.createElement("style");
+      css.type = "text/css";
+      css.appendChild(document2.createTextNode(styles));
+      document2.getElementsByTagName("head")[0].appendChild(css);
+    }
+    function checkIgnoredError2(e) {
+      if (typeof e !== "string") e = String(e);
+      let ignoreRegexes = [
+        // Currently no known game errors. Example regex:
+        // /.*ReferenceError.*defineGovernor.*/,
+      ];
+      if (ignoreRegexes.find((regex) => regex.test(e))) {
+        return true;
+      }
+      return false;
+    }
+    function displayScriptWarningNode2(title, msg, stack) {
+      if (typeof stack === "string") {
+        msg = `${msg}
+
+Stack info:
+${stack}`;
+      }
+      let versionPart = "unknown";
+      try {
+        let gmInfo = typeof GM_info !== "undefined" ? GM_info : typeof GM !== "undefined" ? GM?.info : null;
+        if (gmInfo?.script?.version) {
+          versionPart = gmInfo.script.version;
+        }
+      } catch (internalError) {
+        console.error("Error in error handler: %o", internalError);
+        msg = `${msg}
+-----
+Error in error handler: ${internalError}`;
+      }
+      msg = `${msg}
+
+Script version: ${versionPart} ${getContext().scriptVersionExtra}
+`;
+      $2("#script-script-warning").remove();
+      let clickable = $2(
+        `<span id="script-script-warning" style="cursor: pointer; border-right: 1px solid; margin-right: 1rem; padding-right: 1rem">⚠️ ${title}</span>`
+      );
+      clickable.on("click", (e) => {
+        const builder = (currentNode) => {
+          currentNode.append(
+            $2(
+              `<textarea style="width: 100%; height: 100%; min-height: 400px; margin-bottom: 10px">`
+            ).val(msg)
+          );
+        };
+        createOptionsModal2();
+        openOptionsModal2(`Script Notice: ${title}`, builder);
+        clickable.remove();
+      });
+      $2("#versionLog").before(clickable);
+    }
+    function addErrorHandler2() {
+      win2.addEventListener("error", (e) => {
+        if (!checkIgnoredError2(e?.message)) {
+          displayScriptWarningNode2(
+            "Script Error",
+            `${e?.message} in ${e?.filename}:${e?.lineno}:${e?.colno}.`,
+            e?.error?.stack
+          );
+        }
+        return false;
+      });
+      if (win2?.Vue?.config && !win2?.Vue?.config?.errorHandler) {
+        win2.Vue.config.errorHandler = (err, vm, info) => {
+          if (!checkIgnoredError2(err)) {
+            displayScriptWarningNode2(
+              "Script Error",
+              `Vue error: ${err}`,
+              err?.stack
+            );
+          }
+        };
+      }
+    }
+    return {
+      updateDebugData: updateDebugData2,
+      addScriptStyle: addScriptStyle2,
+      checkIgnoredError: checkIgnoredError2,
+      displayScriptWarningNode: displayScriptWarningNode2,
+      addErrorHandler: addErrorHandler2
+    };
+  }
+
   // src/main.js
   (function($) {
     "use strict";
@@ -15431,6 +26810,194 @@
     var settingsRaw = JSON.parse(localStorage.getItem("settings")) ?? {};
     var settings = {};
     var game = null;
+    const {
+      resetWarSettings,
+      resetHellSettings,
+      resetGeneralSettings,
+      resetInterfaceSettings,
+      resetStateLogSettings,
+      resetAchievementGuardSettings,
+      resetChallengeHelperSettings,
+      resetPrestigeSettings,
+      resetGovernmentSettings,
+      resetEvolutionSettings,
+      resetResearchSettings,
+      resetMarketSettings,
+      resetStorageSettings,
+      resetMinorTraitSettings,
+      resetMutableTraitSettings,
+      resetJobSettings,
+      resetWeightingSettings,
+      resetBuildingSettings,
+      resetProjectSettings,
+      resetMagicSettings,
+      resetProductionSettings,
+      resetTriggerSettings,
+      resetLoggingSettings,
+      resetPlanetSettings,
+      resetFleetSettings,
+      resetMechSettings,
+      resetEjectorSettings
+    } = createResetSettings({
+      dependencies: {
+        AlchemyManager: () => AlchemyManager,
+        applySettings: () => applySettings,
+        biomeList: () => biomeList,
+        BuildingManager: () => BuildingManager,
+        buildings: () => buildings,
+        challenges: () => challenges,
+        DroidManager: () => DroidManager,
+        EjectManager: () => EjectManager,
+        extraList: () => extraList,
+        FactoryManager: () => FactoryManager,
+        game: () => game,
+        GameLog: () => GameLog,
+        GenusTrait: () => GenusTrait,
+        GovernmentManager: () => GovernmentManager,
+        initBuildingState: () => initBuildingState,
+        JobManager: () => JobManager,
+        jobs: () => jobs,
+        MajorTrait: () => MajorTrait,
+        MarketManager: () => MarketManager,
+        MinorTrait: () => MinorTrait,
+        MinorTraitManager: () => MinorTraitManager,
+        MutableTraitManager: () => MutableTraitManager,
+        NaniteManager: () => NaniteManager,
+        ocularPowerData: () => ocularPowerData,
+        planetBiomes: () => planetBiomes,
+        planetTraits: () => planetTraits,
+        poly: () => poly,
+        ProjectManager: () => ProjectManager,
+        projects: () => projects,
+        ReplicatorManager: () => ReplicatorManager,
+        resources: () => resources,
+        RitualManager: () => RitualManager,
+        settingsRaw: () => settingsRaw,
+        SmelterManager: () => SmelterManager,
+        StorageManager: () => StorageManager,
+        SupplyManager: () => SupplyManager,
+        traitList: () => traitList,
+        TriggerManager: () => TriggerManager
+      }
+    });
+    const {
+      removeScriptSettings,
+      buildScriptSettings,
+      buildImportExport,
+      buildSettingsSectionImpl,
+      buildSettingsSection,
+      buildSettingsSection2,
+      genericResetFunction,
+      addStandardHeading,
+      addSettingsHeader1,
+      addSettingsHeader2
+    } = createSettingsShell({
+      getContext: () => ({
+        $,
+        document,
+        settingsRaw,
+        settings,
+        game,
+        buildPrestigeSettings,
+        buildGeneralSettings,
+        buildInterfaceSettings,
+        buildStateLogSettings,
+        buildAchievementGuardSettings,
+        buildChallengeHelperSettings,
+        buildGovernmentSettings,
+        buildEvolutionSettings,
+        buildPlanetSettings,
+        buildTraitSettings,
+        buildTriggerSettings,
+        buildResearchSettings,
+        buildWarSettings,
+        buildHellSettings,
+        buildMechSettings,
+        buildFleetSettings,
+        buildEjectorSettings,
+        buildMarketSettings,
+        buildStorageSettings,
+        buildMagicSettings,
+        buildProductionSettings,
+        buildJobSettings,
+        buildBuildingSettings,
+        buildWeightingSettings,
+        buildProjectSettings,
+        buildLoggingSettings,
+        filterBuildingSettingsTable,
+        updateSettingsFromState,
+        importSettings,
+        exportSettings,
+        triggerFileDownload,
+        confirm: (...args) => confirm(...args)
+      })
+    });
+    const {
+      evaluateCheck: _,
+      openOverrideModal,
+      buildOverrideSettings,
+      buildInputNode,
+      buildInputNodeForDisplay,
+      changeDisplayInputNode,
+      buildConditionType,
+      buildConditionArg,
+      buildConditionComparator,
+      buildConditionRemove,
+      buildConditionDuplicate,
+      buildConditionEvalize,
+      buildConditionRet,
+      buildObjectListInput,
+      addSettingsToggle,
+      addSettingsNumber,
+      addSettingsString,
+      buildSelectOptions,
+      addSettingsSelect,
+      addSettingsList,
+      addInputCallbacks,
+      addTableInput,
+      addToggleCallbacks,
+      addTableToggle,
+      buildTableLabel,
+      resetCheckbox
+    } = createSettingsControls({
+      getContext: () => ({
+        $,
+        settingsRaw,
+        settings,
+        techIds,
+        win,
+        checkCompare,
+        checkCustom,
+        checkTypes,
+        overrideKey,
+        getRealNumber,
+        openOptionsModal,
+        sorterHelper,
+        updateSettingsFromState
+      })
+    });
+    const { createMechInfo, removeMechInfo } = createMechInfoUI({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getGame: () => game,
+      getMechManager: () => MechManager,
+      getVueById: (id) => getVueById(id),
+      getNiceNumber: (value) => getNiceNumber(value)
+    });
+    const {
+      createMarketToggles,
+      removeMarketToggles,
+      createStorageToggles,
+      removeStorageToggles
+    } = createResourceToggleUI({
+      getJQuery: () => $,
+      getGame: () => game,
+      getSettingsRaw: () => settingsRaw,
+      getResources: () => resources,
+      getMarketManager: () => MarketManager,
+      getStorageManager: () => StorageManager,
+      addToggleCallbacks: (node, settingKey) => addToggleCallbacks(node, settingKey)
+    });
     const {
       buildProductionSettings,
       updateProductionSettingsContent,
@@ -15487,88 +27054,51 @@
       });
     }
     const storageBoundaryOverrides = {};
-    function getStorageBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(storageBoundaryOverrides, name)) {
-        return storageBoundaryOverrides[name];
+    const getStorageBoundaryDependency = createDependencyResolver(
+      storageBoundaryOverrides,
+      {
+        $: () => $,
+        StorageManager: () => StorageManager,
+        addSettingsToggle: () => addSettingsToggle,
+        addTableInput: () => addTableInput,
+        addTableToggle: () => addTableToggle,
+        buildSettingsSection: () => buildSettingsSection,
+        buildTableLabel: () => buildTableLabel,
+        document: () => document,
+        removeStorageToggles: () => removeStorageToggles,
+        resetCheckbox: () => resetCheckbox,
+        resetStorageSettings: () => resetStorageSettings,
+        settingsRaw: () => settingsRaw,
+        sorterHelper: () => sorterHelper,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "StorageManager":
-          return StorageManager;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "addTableInput":
-          return addTableInput;
-        case "addTableToggle":
-          return addTableToggle;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "buildTableLabel":
-          return buildTableLabel;
-        case "document":
-          return document;
-        case "removeStorageToggles":
-          return removeStorageToggles;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetStorageSettings":
-          return resetStorageSettings;
-        case "settingsRaw":
-          return settingsRaw;
-        case "sorterHelper":
-          return sorterHelper;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const storageBoundary = createStorageSettings({
       getDependency: getStorageBoundaryDependency,
       getOverride: (name) => storageBoundaryOverrides[name]
     });
     const { buildStorageSettings, updateStorageSettingsContent } = storageBoundary;
     const magicBoundaryOverrides = {};
-    function getMagicBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(magicBoundaryOverrides, name)) {
-        return magicBoundaryOverrides[name];
+    const getMagicBoundaryDependency = createDependencyResolver(
+      magicBoundaryOverrides,
+      {
+        $: () => $,
+        AlchemyManager: () => AlchemyManager,
+        RitualManager: () => RitualManager,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsToggle: () => addSettingsToggle,
+        addStandardHeading: () => addStandardHeading,
+        addTableInput: () => addTableInput,
+        addTableToggle: () => addTableToggle,
+        buildSettingsSection: () => buildSettingsSection,
+        buildTableLabel: () => buildTableLabel,
+        document: () => document,
+        game: () => game,
+        resetCheckbox: () => resetCheckbox,
+        resetMagicSettings: () => resetMagicSettings,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "AlchemyManager":
-          return AlchemyManager;
-        case "RitualManager":
-          return RitualManager;
-        case "addSettingsNumber":
-          return addSettingsNumber;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "addStandardHeading":
-          return addStandardHeading;
-        case "addTableInput":
-          return addTableInput;
-        case "addTableToggle":
-          return addTableToggle;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "buildTableLabel":
-          return buildTableLabel;
-        case "document":
-          return document;
-        case "game":
-          return game;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetMagicSettings":
-          return resetMagicSettings;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const magicBoundary = createMagicSettings({
       getDependency: getMagicBoundaryDependency,
       getOverride: (name) => magicBoundaryOverrides[name]
@@ -15580,51 +27110,29 @@
       updateMagicPylon
     } = magicBoundary;
     const jobsBoundaryOverrides = {};
-    function getJobsBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(jobsBoundaryOverrides, name)) {
-        return jobsBoundaryOverrides[name];
+    const getJobsBoundaryDependency = createDependencyResolver(
+      jobsBoundaryOverrides,
+      {
+        $: () => $,
+        BasicJob: () => BasicJob,
+        CraftingJob: () => CraftingJob,
+        JobManager: () => JobManager,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsToggle: () => addSettingsToggle,
+        addTableInput: () => addTableInput,
+        addTableToggle: () => addTableToggle,
+        addToggleCallbacks: () => addToggleCallbacks,
+        buildSettingsSection: () => buildSettingsSection,
+        confirm: () => confirm,
+        document: () => document,
+        jobs: () => jobs,
+        resetCheckbox: () => resetCheckbox,
+        resetJobSettings: () => resetJobSettings,
+        settingsRaw: () => settingsRaw,
+        sorterHelper: () => sorterHelper,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "BasicJob":
-          return BasicJob;
-        case "CraftingJob":
-          return CraftingJob;
-        case "JobManager":
-          return JobManager;
-        case "addSettingsNumber":
-          return addSettingsNumber;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "addTableInput":
-          return addTableInput;
-        case "addTableToggle":
-          return addTableToggle;
-        case "addToggleCallbacks":
-          return addToggleCallbacks;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "confirm":
-          return confirm;
-        case "document":
-          return document;
-        case "jobs":
-          return jobs;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetJobSettings":
-          return resetJobSettings;
-        case "settingsRaw":
-          return settingsRaw;
-        case "sorterHelper":
-          return sorterHelper;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const jobsBoundary = createJobSettings({
       getDependency: getJobsBoundaryDependency,
       getOverride: (name) => jobsBoundaryOverrides[name]
@@ -15636,29 +27144,18 @@
       buildJobSettingsInput
     } = jobsBoundary;
     const weightingBoundaryOverrides = {};
-    function getWeightingBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(weightingBoundaryOverrides, name)) {
-        return weightingBoundaryOverrides[name];
+    const getWeightingBoundaryDependency = createDependencyResolver(
+      weightingBoundaryOverrides,
+      {
+        $: () => $,
+        addSettingsToggle: () => addSettingsToggle,
+        addTableInput: () => addTableInput,
+        buildSettingsSection: () => buildSettingsSection,
+        document: () => document,
+        resetWeightingSettings: () => resetWeightingSettings,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "addTableInput":
-          return addTableInput;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "document":
-          return document;
-        case "resetWeightingSettings":
-          return resetWeightingSettings;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const weightingBoundary = createWeightingSettings({
       getDependency: getWeightingBoundaryDependency,
       getOverride: (name) => weightingBoundaryOverrides[name]
@@ -15669,65 +27166,36 @@
       addWeightingRule
     } = weightingBoundary;
     const buildingBoundaryOverrides = {};
-    function getBuildingBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(buildingBoundaryOverrides, name)) {
-        return buildingBoundaryOverrides[name];
+    const getBuildingBoundaryDependency = createDependencyResolver(
+      buildingBoundaryOverrides,
+      {
+        $: () => $,
+        BuildingManager: () => BuildingManager,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsSelect: () => addSettingsSelect,
+        addSettingsToggle: () => addSettingsToggle,
+        addTableInput: () => addTableInput,
+        addTableToggle: () => addTableToggle,
+        addToggleCallbacks: () => addToggleCallbacks,
+        buildSettingsSection: () => buildSettingsSection,
+        buildTableLabel: () => buildTableLabel,
+        buildingIds: () => buildingIds,
+        checkCompare: () => checkCompare,
+        confirm: () => confirm,
+        document: () => document,
+        getRealNumber: () => getRealNumber,
+        initBuildingState: () => initBuildingState,
+        linkedBuildings: () => linkedBuildings,
+        overrideKey: () => overrideKey,
+        removeBuildingToggles: () => removeBuildingToggles,
+        resetBuildingSettings: () => resetBuildingSettings,
+        resetCheckbox: () => resetCheckbox,
+        resources: () => resources,
+        settingsRaw: () => settingsRaw,
+        sorterHelper: () => sorterHelper,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "BuildingManager":
-          return BuildingManager;
-        case "addSettingsNumber":
-          return addSettingsNumber;
-        case "addSettingsSelect":
-          return addSettingsSelect;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "addTableInput":
-          return addTableInput;
-        case "addTableToggle":
-          return addTableToggle;
-        case "addToggleCallbacks":
-          return addToggleCallbacks;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "buildTableLabel":
-          return buildTableLabel;
-        case "buildingIds":
-          return buildingIds;
-        case "checkCompare":
-          return checkCompare;
-        case "confirm":
-          return confirm;
-        case "document":
-          return document;
-        case "getRealNumber":
-          return getRealNumber;
-        case "initBuildingState":
-          return initBuildingState;
-        case "linkedBuildings":
-          return linkedBuildings;
-        case "overrideKey":
-          return overrideKey;
-        case "removeBuildingToggles":
-          return removeBuildingToggles;
-        case "resetBuildingSettings":
-          return resetBuildingSettings;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resources":
-          return resources;
-        case "settingsRaw":
-          return settingsRaw;
-        case "sorterHelper":
-          return sorterHelper;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const buildingBoundary = createBuildingSettings({
       getDependency: getBuildingBoundaryDependency,
       getOverride: (name) => buildingBoundaryOverrides[name]
@@ -15741,117 +27209,69 @@
       buildAllBuildingStateSettingsToggle
     } = buildingBoundary;
     const projectBoundaryOverrides = {};
-    function getProjectBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(projectBoundaryOverrides, name)) {
-        return projectBoundaryOverrides[name];
+    const getProjectBoundaryDependency = createDependencyResolver(
+      projectBoundaryOverrides,
+      {
+        $: () => $,
+        ProjectManager: () => ProjectManager,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsToggle: () => addSettingsToggle,
+        addTableInput: () => addTableInput,
+        addTableToggle: () => addTableToggle,
+        buildSettingsSection: () => buildSettingsSection,
+        buildTableLabel: () => buildTableLabel,
+        document: () => document,
+        resetCheckbox: () => resetCheckbox,
+        resetProjectSettings: () => resetProjectSettings,
+        settingsRaw: () => settingsRaw,
+        sorterHelper: () => sorterHelper,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "ProjectManager":
-          return ProjectManager;
-        case "addSettingsNumber":
-          return addSettingsNumber;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "addTableInput":
-          return addTableInput;
-        case "addTableToggle":
-          return addTableToggle;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "buildTableLabel":
-          return buildTableLabel;
-        case "document":
-          return document;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetProjectSettings":
-          return resetProjectSettings;
-        case "settingsRaw":
-          return settingsRaw;
-        case "sorterHelper":
-          return sorterHelper;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const projectBoundary = createProjectSettings({
       getDependency: getProjectBoundaryDependency,
       getOverride: (name) => projectBoundaryOverrides[name]
     });
     const { buildProjectSettings, updateProjectSettingsContent } = projectBoundary;
     const loggingBoundaryOverrides = {};
-    function getLoggingBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(loggingBoundaryOverrides, name)) {
-        return loggingBoundaryOverrides[name];
+    const getLoggingBoundaryDependency = createDependencyResolver(
+      loggingBoundaryOverrides,
+      {
+        $: () => $,
+        GameLog: () => GameLog,
+        addSettingsHeader1: () => addSettingsHeader1,
+        addSettingsString: () => addSettingsString,
+        addSettingsToggle: () => addSettingsToggle,
+        buildFilterRegExp: () => buildFilterRegExp,
+        buildSettingsSection2: () => buildSettingsSection2,
+        document: () => document,
+        game: () => game,
+        resetLoggingSettings: () => resetLoggingSettings,
+        settingsRaw: () => settingsRaw,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "GameLog":
-          return GameLog;
-        case "addSettingsHeader1":
-          return addSettingsHeader1;
-        case "addSettingsString":
-          return addSettingsString;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "buildFilterRegExp":
-          return buildFilterRegExp;
-        case "buildSettingsSection2":
-          return buildSettingsSection2;
-        case "document":
-          return document;
-        case "game":
-          return game;
-        case "resetLoggingSettings":
-          return resetLoggingSettings;
-        case "settingsRaw":
-          return settingsRaw;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const loggingBoundary = createLoggingSettings({
       getDependency: getLoggingBoundaryDependency,
       getOverride: (name) => loggingBoundaryOverrides[name]
     });
     const { buildLoggingSettings, updateLoggingSettingsContent } = loggingBoundary;
     const optionsBoundaryOverrides = {};
-    function getOptionsBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(optionsBoundaryOverrides, name)) {
-        return optionsBoundaryOverrides[name];
+    const getOptionsBoundaryDependency = createDependencyResolver(
+      optionsBoundaryOverrides,
+      {
+        $: () => $,
+        buildFleetSettings: () => buildFleetSettings,
+        buildGovernmentSettings: () => buildGovernmentSettings,
+        buildHellSettings: () => buildHellSettings,
+        buildWarSettings: () => buildWarSettings,
+        document: () => document,
+        openOverrideModal: () => openOverrideModal,
+        settingsRaw: () => settingsRaw,
+        updateSettingsFromState: () => updateSettingsFromState,
+        window: () => window
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "buildFleetSettings":
-          return buildFleetSettings;
-        case "buildGovernmentSettings":
-          return buildGovernmentSettings;
-        case "buildHellSettings":
-          return buildHellSettings;
-        case "buildWarSettings":
-          return buildWarSettings;
-        case "document":
-          return document;
-        case "openOverrideModal":
-          return openOverrideModal;
-        case "settingsRaw":
-          return settingsRaw;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        case "window":
-          return window;
-        default:
-          return void 0;
-      }
-    }
+    );
     const optionsBoundary = createOptionsModalUI({
       getDependency: getOptionsBoundaryDependency,
       getOverride: (name) => optionsBoundaryOverrides[name]
@@ -15864,54 +27284,31 @@
       createOptionsModal
     } = optionsBoundary;
     const prestigeTopBarBoundaryOverrides = {};
-    function getPrestigeTopBarBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(
-        prestigeTopBarBoundaryOverrides,
-        name
-      )) {
-        return prestigeTopBarBoundaryOverrides[name];
+    const getPrestigeTopBarBoundaryDependency = createDependencyResolver(
+      prestigeTopBarBoundaryOverrides,
+      {
+        addOptionUI: () => addOptionUI,
+        buildPrestigeSettings: () => buildPrestigeSettings,
+        document: () => document,
+        prestigeTypes: () => prestigeTypes,
+        settings: () => settings
       }
-      switch (name) {
-        case "addOptionUI":
-          return addOptionUI;
-        case "buildPrestigeSettings":
-          return buildPrestigeSettings;
-        case "document":
-          return document;
-        case "prestigeTypes":
-          return prestigeTypes;
-        case "settings":
-          return settings;
-        default:
-          return void 0;
-      }
-    }
+    );
     const prestigeTopBarBoundary = createPrestigeTopBar({
       getDependency: getPrestigeTopBarBoundaryDependency,
       getOverride: (name) => prestigeTopBarBoundaryOverrides[name]
     });
     const { updatePrestigeInTopBar, removePrestigeFromTopBar } = prestigeTopBarBoundary;
     const totalDaysTopBarBoundaryOverrides = {};
-    function getTotalDaysTopBarBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(
-        totalDaysTopBarBoundaryOverrides,
-        name
-      )) {
-        return totalDaysTopBarBoundaryOverrides[name];
+    const getTotalDaysTopBarBoundaryDependency = createDependencyResolver(
+      totalDaysTopBarBoundaryOverrides,
+      {
+        $: () => $,
+        document: () => document,
+        game: () => game,
+        settings: () => settings
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "document":
-          return document;
-        case "game":
-          return game;
-        case "settings":
-          return settings;
-        default:
-          return void 0;
-      }
-    }
+    );
     const totalDaysTopBarBoundary = createTotalDaysTopBar({
       getDependency: getTotalDaysTopBarBoundaryDependency,
       getOverride: (name) => totalDaysTopBarBoundaryOverrides[name]
@@ -15922,189 +27319,116 @@
       removeTotalDaysFromTopBar
     } = totalDaysTopBarBoundary;
     const arpaTogglesBoundaryOverrides = {};
-    function getArpaTogglesBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(arpaTogglesBoundaryOverrides, name)) {
-        return arpaTogglesBoundaryOverrides[name];
+    const getArpaTogglesBoundaryDependency = createDependencyResolver(
+      arpaTogglesBoundaryOverrides,
+      {
+        $: () => $,
+        ProjectManager: () => ProjectManager,
+        addToggleCallbacks: () => addToggleCallbacks,
+        settingsRaw: () => settingsRaw
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "ProjectManager":
-          return ProjectManager;
-        case "addToggleCallbacks":
-          return addToggleCallbacks;
-        case "settingsRaw":
-          return settingsRaw;
-        default:
-          return void 0;
-      }
-    }
+    );
     const arpaTogglesBoundary = createArpaToggleUI({
       getDependency: getArpaTogglesBoundaryDependency,
       getOverride: (name) => arpaTogglesBoundaryOverrides[name]
     });
     const { createArpaToggles, removeArpaToggles } = arpaTogglesBoundary;
     const craftTogglesBoundaryOverrides = {};
-    function getCraftTogglesBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(craftTogglesBoundaryOverrides, name)) {
-        return craftTogglesBoundaryOverrides[name];
+    const getCraftTogglesBoundaryDependency = createDependencyResolver(
+      craftTogglesBoundaryOverrides,
+      {
+        $: () => $,
+        addToggleCallbacks: () => addToggleCallbacks,
+        craftablesList: () => craftablesList,
+        settingsRaw: () => settingsRaw
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "addToggleCallbacks":
-          return addToggleCallbacks;
-        case "craftablesList":
-          return craftablesList;
-        case "settingsRaw":
-          return settingsRaw;
-        default:
-          return void 0;
-      }
-    }
+    );
     const craftTogglesBoundary = createCraftToggleUI({
       getDependency: getCraftTogglesBoundaryDependency,
       getOverride: (name) => craftTogglesBoundaryOverrides[name]
     });
     const { createCraftToggles, removeCraftToggles } = craftTogglesBoundary;
     const buildingTogglesBoundaryOverrides = {};
-    function getBuildingTogglesBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(
-        buildingTogglesBoundaryOverrides,
-        name
-      )) {
-        return buildingTogglesBoundaryOverrides[name];
+    const getBuildingTogglesBoundaryDependency = createDependencyResolver(
+      buildingTogglesBoundaryOverrides,
+      {
+        $: () => $,
+        BuildingManager: () => BuildingManager,
+        addToggleCallbacks: () => addToggleCallbacks,
+        settings: () => settings,
+        settingsRaw: () => settingsRaw,
+        state: () => state
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "BuildingManager":
-          return BuildingManager;
-        case "addToggleCallbacks":
-          return addToggleCallbacks;
-        case "settings":
-          return settings;
-        case "settingsRaw":
-          return settingsRaw;
-        case "state":
-          return state;
-        default:
-          return void 0;
-      }
-    }
+    );
     const buildingTogglesBoundary = createBuildingToggleUI({
       getDependency: getBuildingTogglesBoundaryDependency,
       getOverride: (name) => buildingTogglesBoundaryOverrides[name]
     });
     const { createBuildingToggles, removeBuildingToggles } = buildingTogglesBoundary;
     const ejectTogglesBoundaryOverrides = {};
-    function getEjectTogglesBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(ejectTogglesBoundaryOverrides, name)) {
-        return ejectTogglesBoundaryOverrides[name];
+    const getEjectTogglesBoundaryDependency = createDependencyResolver(
+      ejectTogglesBoundaryOverrides,
+      {
+        $: () => $,
+        EjectManager: () => EjectManager,
+        addToggleCallbacks: () => addToggleCallbacks,
+        settingsRaw: () => settingsRaw
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "EjectManager":
-          return EjectManager;
-        case "addToggleCallbacks":
-          return addToggleCallbacks;
-        case "settingsRaw":
-          return settingsRaw;
-        default:
-          return void 0;
-      }
-    }
+    );
     const ejectTogglesBoundary = createEjectToggleUI({
       getDependency: getEjectTogglesBoundaryDependency,
       getOverride: (name) => ejectTogglesBoundaryOverrides[name]
     });
     const { createEjectToggles, removeEjectToggles } = ejectTogglesBoundary;
     const supplyTogglesBoundaryOverrides = {};
-    function getSupplyTogglesBoundaryDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(supplyTogglesBoundaryOverrides, name)) {
-        return supplyTogglesBoundaryOverrides[name];
+    const getSupplyTogglesBoundaryDependency = createDependencyResolver(
+      supplyTogglesBoundaryOverrides,
+      {
+        $: () => $,
+        SupplyManager: () => SupplyManager,
+        addToggleCallbacks: () => addToggleCallbacks,
+        settingsRaw: () => settingsRaw
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "SupplyManager":
-          return SupplyManager;
-        case "addToggleCallbacks":
-          return addToggleCallbacks;
-        case "settingsRaw":
-          return settingsRaw;
-        default:
-          return void 0;
-      }
-    }
+    );
     const supplyTogglesBoundary = createSupplyToggleUI({
       getDependency: getSupplyTogglesBoundaryDependency,
       getOverride: (name) => supplyTogglesBoundaryOverrides[name]
     });
     const { createSupplyToggles, removeSupplyToggles } = supplyTogglesBoundary;
     const generalSettingsOverrides = {};
-    function getGeneralSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(generalSettingsOverrides, name)) {
-        return generalSettingsOverrides[name];
+    const getGeneralSettingsDependency = createDependencyResolver(
+      generalSettingsOverrides,
+      {
+        $: () => $,
+        addSettingsHeader1: () => addSettingsHeader1,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsSelect: () => addSettingsSelect,
+        addSettingsString: () => addSettingsString,
+        addSettingsToggle: () => addSettingsToggle,
+        buildSettingsSection: () => buildSettingsSection,
+        document: () => document,
+        resetCheckbox: () => resetCheckbox,
+        resetGeneralSettings: () => resetGeneralSettings,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "addSettingsHeader1":
-          return addSettingsHeader1;
-        case "addSettingsNumber":
-          return addSettingsNumber;
-        case "addSettingsSelect":
-          return addSettingsSelect;
-        case "addSettingsString":
-          return addSettingsString;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "document":
-          return document;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetGeneralSettings":
-          return resetGeneralSettings;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const generalSettings = createGeneralSettings({
       getDependency: getGeneralSettingsDependency,
       getOverride: (name) => generalSettingsOverrides[name]
     });
     const { buildGeneralSettings, updateGeneralSettingsContent } = generalSettings;
     const achievementGuardSettingsOverrides = {};
-    function getAchievementGuardSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(
-        achievementGuardSettingsOverrides,
-        name
-      )) {
-        return achievementGuardSettingsOverrides[name];
+    const getAchievementGuardSettingsDependency = createDependencyResolver(
+      achievementGuardSettingsOverrides,
+      {
+        $: () => $,
+        addSettingsToggle: () => addSettingsToggle,
+        buildSettingsSection: () => buildSettingsSection,
+        document: () => document,
+        resetAchievementGuardSettings: () => resetAchievementGuardSettings,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "document":
-          return document;
-        case "resetAchievementGuardSettings":
-          return resetAchievementGuardSettings;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const achievementGuardSettings = createAchievementGuardSettings({
       getDependency: getAchievementGuardSettingsDependency,
       getOverride: (name) => achievementGuardSettingsOverrides[name]
@@ -16114,195 +27438,110 @@
       updateAchievementGuardSettingsContent
     } = achievementGuardSettings;
     const challengeHelperSettingsOverrides = {};
-    function getChallengeHelperSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(
-        challengeHelperSettingsOverrides,
-        name
-      )) {
-        return challengeHelperSettingsOverrides[name];
+    const getChallengeHelperSettingsDependency = createDependencyResolver(
+      challengeHelperSettingsOverrides,
+      {
+        $: () => $,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsToggle: () => addSettingsToggle,
+        buildSettingsSection: () => buildSettingsSection,
+        document: () => document,
+        resetChallengeHelperSettings: () => resetChallengeHelperSettings,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "addSettingsNumber":
-          return addSettingsNumber;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "document":
-          return document;
-        case "resetChallengeHelperSettings":
-          return resetChallengeHelperSettings;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const challengeHelperSettings = createChallengeHelperSettings({
       getDependency: getChallengeHelperSettingsDependency,
       getOverride: (name) => challengeHelperSettingsOverrides[name]
     });
     const { buildChallengeHelperSettings, updateChallengeHelperSettingsContent } = challengeHelperSettings;
     const prestigeSettingsOverrides = {};
-    function getPrestigeSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(prestigeSettingsOverrides, name)) {
-        return prestigeSettingsOverrides[name];
+    const getPrestigeSettingsDependency = createDependencyResolver(
+      prestigeSettingsOverrides,
+      {
+        $: () => $,
+        addSettingsHeader1: () => addSettingsHeader1,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsSelect: () => addSettingsSelect,
+        addSettingsToggle: () => addSettingsToggle,
+        buildCustomRacePresetEditor: () => buildCustomRacePresetEditor,
+        buildSettingsSection2: () => buildSettingsSection2,
+        buildings: () => buildings,
+        confirm: () => confirm,
+        document: () => document,
+        game: () => game,
+        haveTech: () => haveTech,
+        isApocalypsePrestigeAvailable: () => isApocalypsePrestigeAvailable,
+        isAscensionPrestigeAvailable: () => isAscensionPrestigeAvailable,
+        isBioseederPrestigeAvailable: () => isBioseederPrestigeAvailable,
+        isCataclysmPrestigeAvailable: () => isCataclysmPrestigeAvailable,
+        isDemonicPrestigeAvailable: () => isDemonicPrestigeAvailable,
+        isPrestigeAllowed: () => isPrestigeAllowed,
+        isWhiteholePrestigeAvailable: () => isWhiteholePrestigeAvailable,
+        isWitchAscensionPrestigeAvailable: () => isWitchAscensionPrestigeAvailable,
+        openOptionsModal: () => openOptionsModal,
+        openOverrideModal: () => openOverrideModal,
+        prestigeOptions: () => prestigeOptions,
+        resetPrestigeSettings: () => resetPrestigeSettings,
+        settingsRaw: () => settingsRaw,
+        state: () => state,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "addSettingsHeader1":
-          return addSettingsHeader1;
-        case "addSettingsNumber":
-          return addSettingsNumber;
-        case "addSettingsSelect":
-          return addSettingsSelect;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "buildCustomRacePresetEditor":
-          return buildCustomRacePresetEditor;
-        case "buildSettingsSection2":
-          return buildSettingsSection2;
-        case "buildings":
-          return buildings;
-        case "confirm":
-          return confirm;
-        case "document":
-          return document;
-        case "game":
-          return game;
-        case "haveTech":
-          return haveTech;
-        case "isApocalypsePrestigeAvailable":
-          return isApocalypsePrestigeAvailable;
-        case "isAscensionPrestigeAvailable":
-          return isAscensionPrestigeAvailable;
-        case "isBioseederPrestigeAvailable":
-          return isBioseederPrestigeAvailable;
-        case "isCataclysmPrestigeAvailable":
-          return isCataclysmPrestigeAvailable;
-        case "isDemonicPrestigeAvailable":
-          return isDemonicPrestigeAvailable;
-        case "isPrestigeAllowed":
-          return isPrestigeAllowed;
-        case "isWhiteholePrestigeAvailable":
-          return isWhiteholePrestigeAvailable;
-        case "isWitchAscensionPrestigeAvailable":
-          return isWitchAscensionPrestigeAvailable;
-        case "openOptionsModal":
-          return openOptionsModal;
-        case "openOverrideModal":
-          return openOverrideModal;
-        case "prestigeOptions":
-          return prestigeOptions;
-        case "resetPrestigeSettings":
-          return resetPrestigeSettings;
-        case "settingsRaw":
-          return settingsRaw;
-        case "state":
-          return state;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const prestigeSettings = createPrestigeSettings({
       getDependency: getPrestigeSettingsDependency,
       getOverride: (name) => prestigeSettingsOverrides[name]
     });
     const { buildPrestigeSettings, updatePrestigeSettingsContent } = prestigeSettings;
     const governmentSettingsOverrides = {};
-    function getGovernmentSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(governmentSettingsOverrides, name)) {
-        return governmentSettingsOverrides[name];
+    const getGovernmentSettingsDependency = createDependencyResolver(
+      governmentSettingsOverrides,
+      {
+        $: () => $,
+        GovernmentManager: () => GovernmentManager,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsSelect: () => addSettingsSelect,
+        buildSettingsSection2: () => buildSettingsSection2,
+        document: () => document,
+        game: () => game,
+        governors: () => governors,
+        resetCheckbox: () => resetCheckbox,
+        resetGovernmentSettings: () => resetGovernmentSettings,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "GovernmentManager":
-          return GovernmentManager;
-        case "addSettingsNumber":
-          return addSettingsNumber;
-        case "addSettingsSelect":
-          return addSettingsSelect;
-        case "buildSettingsSection2":
-          return buildSettingsSection2;
-        case "document":
-          return document;
-        case "game":
-          return game;
-        case "governors":
-          return governors;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetGovernmentSettings":
-          return resetGovernmentSettings;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const governmentSettings = createGovernmentSettings({
       getDependency: getGovernmentSettingsDependency,
       getOverride: (name) => governmentSettingsOverrides[name]
     });
     const { buildGovernmentSettings, updateGovernmentSettingsContent } = governmentSettings;
     const evolutionSettingsOverrides = {};
-    function getEvolutionSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(evolutionSettingsOverrides, name)) {
-        return evolutionSettingsOverrides[name];
+    const getEvolutionSettingsDependency = createDependencyResolver(
+      evolutionSettingsOverrides,
+      {
+        $: () => $,
+        addSettingsSelect: () => addSettingsSelect,
+        addSettingsToggle: () => addSettingsToggle,
+        addStandardHeading: () => addStandardHeading,
+        buildSettingsSection: () => buildSettingsSection,
+        challenges: () => challenges,
+        document: () => document,
+        evolutionSettingsToStore: () => evolutionSettingsToStore,
+        game: () => game,
+        getStarLevel: () => getStarLevel,
+        prestigeOptions: () => prestigeOptions,
+        prestigeTypes: () => prestigeTypes,
+        races: () => races,
+        resetCheckbox: () => resetCheckbox,
+        resetEvolutionSettings: () => resetEvolutionSettings,
+        settings: () => settings,
+        settingsRaw: () => settingsRaw,
+        sorterHelper: () => sorterHelper,
+        state: () => state,
+        universes: () => universes,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "addSettingsSelect":
-          return addSettingsSelect;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "addStandardHeading":
-          return addStandardHeading;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "challenges":
-          return challenges;
-        case "document":
-          return document;
-        case "evolutionSettingsToStore":
-          return evolutionSettingsToStore;
-        case "game":
-          return game;
-        case "getStarLevel":
-          return getStarLevel;
-        case "prestigeOptions":
-          return prestigeOptions;
-        case "prestigeTypes":
-          return prestigeTypes;
-        case "races":
-          return races;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetEvolutionSettings":
-          return resetEvolutionSettings;
-        case "settings":
-          return settings;
-        case "settingsRaw":
-          return settingsRaw;
-        case "sorterHelper":
-          return sorterHelper;
-        case "state":
-          return state;
-        case "universes":
-          return universes;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const evolutionSettings = createEvolutionSettings({
       getDependency: getEvolutionSettingsDependency,
       getOverride: (name) => evolutionSettingsOverrides[name]
@@ -16315,78 +27554,46 @@
       addEvolutionSetting
     } = evolutionSettings;
     const planetSettingsOverrides = {};
-    function getPlanetSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(planetSettingsOverrides, name)) {
-        return planetSettingsOverrides[name];
+    const getPlanetSettingsDependency = createDependencyResolver(
+      planetSettingsOverrides,
+      {
+        $: () => $,
+        addTableInput: () => addTableInput,
+        biomeList: () => biomeList,
+        buildSettingsSection: () => buildSettingsSection,
+        buildTableLabel: () => buildTableLabel,
+        document: () => document,
+        extraList: () => extraList,
+        game: () => game,
+        resetPlanetSettings: () => resetPlanetSettings,
+        traitList: () => traitList,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "addTableInput":
-          return addTableInput;
-        case "biomeList":
-          return biomeList;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "buildTableLabel":
-          return buildTableLabel;
-        case "document":
-          return document;
-        case "extraList":
-          return extraList;
-        case "game":
-          return game;
-        case "resetPlanetSettings":
-          return resetPlanetSettings;
-        case "traitList":
-          return traitList;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const planetSettings = createPlanetSettings({
       getDependency: getPlanetSettingsDependency,
       getOverride: (name) => planetSettingsOverrides[name]
     });
     const { buildPlanetSettings, updatePlanetSettingsContent } = planetSettings;
     const triggerSettingsOverrides = {};
-    function getTriggerSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(triggerSettingsOverrides, name)) {
-        return triggerSettingsOverrides[name];
+    const getTriggerSettingsDependency = createDependencyResolver(
+      triggerSettingsOverrides,
+      {
+        $: () => $,
+        TriggerManager: () => TriggerManager,
+        argType: () => argType,
+        buildInputNode: () => buildInputNode,
+        buildSettingsSection: () => buildSettingsSection,
+        checkTypes: () => checkTypes,
+        document: () => document,
+        overrideOnlyChecks: () => overrideOnlyChecks,
+        resetCheckbox: () => resetCheckbox,
+        resetTriggerSettings: () => resetTriggerSettings,
+        retBools: () => retBools,
+        sorterHelper: () => sorterHelper,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "TriggerManager":
-          return TriggerManager;
-        case "argType":
-          return argType;
-        case "buildInputNode":
-          return buildInputNode;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "checkTypes":
-          return checkTypes;
-        case "document":
-          return document;
-        case "overrideOnlyChecks":
-          return overrideOnlyChecks;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetTriggerSettings":
-          return resetTriggerSettings;
-        case "retBools":
-          return retBools;
-        case "sorterHelper":
-          return sorterHelper;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const triggerSettings = createTriggerSettings({
       getDependency: getTriggerSettingsDependency,
       getOverride: (name) => triggerSettingsOverrides[name]
@@ -16404,162 +27611,95 @@
       buildTriggerSettingsColumn
     } = triggerSettings;
     const researchSettingsOverrides = {};
-    function getResearchSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(researchSettingsOverrides, name)) {
-        return researchSettingsOverrides[name];
+    const getResearchSettingsDependency = createDependencyResolver(
+      researchSettingsOverrides,
+      {
+        $: () => $,
+        addSettingsList: () => addSettingsList,
+        addSettingsSelect: () => addSettingsSelect,
+        buildSettingsSection: () => buildSettingsSection,
+        document: () => document,
+        game: () => game,
+        resetCheckbox: () => resetCheckbox,
+        resetResearchSettings: () => resetResearchSettings,
+        techIds: () => techIds,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "addSettingsList":
-          return addSettingsList;
-        case "addSettingsSelect":
-          return addSettingsSelect;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "document":
-          return document;
-        case "game":
-          return game;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetResearchSettings":
-          return resetResearchSettings;
-        case "techIds":
-          return techIds;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const researchSettings = createResearchSettings({
       getDependency: getResearchSettingsDependency,
       getOverride: (name) => researchSettingsOverrides[name]
     });
     const { buildResearchSettings, updateResearchSettingsContent } = researchSettings;
     const warSettingsOverrides = {};
-    function getWarSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(warSettingsOverrides, name)) {
-        return warSettingsOverrides[name];
+    const getWarSettingsDependency = createDependencyResolver(
+      warSettingsOverrides,
+      {
+        $: () => $,
+        SpyManager: () => SpyManager,
+        addSettingsHeader1: () => addSettingsHeader1,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsSelect: () => addSettingsSelect,
+        addSettingsToggle: () => addSettingsToggle,
+        buildSettingsSection2: () => buildSettingsSection2,
+        document: () => document,
+        game: () => game,
+        resetCheckbox: () => resetCheckbox,
+        resetWarSettings: () => resetWarSettings,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "SpyManager":
-          return SpyManager;
-        case "addSettingsHeader1":
-          return addSettingsHeader1;
-        case "addSettingsNumber":
-          return addSettingsNumber;
-        case "addSettingsSelect":
-          return addSettingsSelect;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "buildSettingsSection2":
-          return buildSettingsSection2;
-        case "document":
-          return document;
-        case "game":
-          return game;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetWarSettings":
-          return resetWarSettings;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const warSettings = createWarSettings({
       getDependency: getWarSettingsDependency,
       getOverride: (name) => warSettingsOverrides[name]
     });
     const { buildWarSettings, updateWarSettingsContent } = warSettings;
     const hellSettingsOverrides = {};
-    function getHellSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(hellSettingsOverrides, name)) {
-        return hellSettingsOverrides[name];
+    const getHellSettingsDependency = createDependencyResolver(
+      hellSettingsOverrides,
+      {
+        $: () => $,
+        addSettingsHeader1: () => addSettingsHeader1,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsToggle: () => addSettingsToggle,
+        buildSettingsSection2: () => buildSettingsSection2,
+        document: () => document,
+        resetCheckbox: () => resetCheckbox,
+        resetHellSettings: () => resetHellSettings,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "addSettingsHeader1":
-          return addSettingsHeader1;
-        case "addSettingsNumber":
-          return addSettingsNumber;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "buildSettingsSection2":
-          return buildSettingsSection2;
-        case "document":
-          return document;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetHellSettings":
-          return resetHellSettings;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const hellSettings = createHellSettings({
       getDependency: getHellSettingsDependency,
       getOverride: (name) => hellSettingsOverrides[name]
     });
     const { buildHellSettings, updateHellSettingsContent } = hellSettings;
     const fleetSettingsOverrides = {};
-    function getFleetSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(fleetSettingsOverrides, name)) {
-        return fleetSettingsOverrides[name];
+    const getFleetSettingsDependency = createDependencyResolver(
+      fleetSettingsOverrides,
+      {
+        $: () => $,
+        FleetManagerOuter: () => FleetManagerOuter,
+        addSettingsHeader1: () => addSettingsHeader1,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsSelect: () => addSettingsSelect,
+        addSettingsToggle: () => addSettingsToggle,
+        addStandardHeading: () => addStandardHeading,
+        addTableInput: () => addTableInput,
+        buildSettingsSection2: () => buildSettingsSection2,
+        buildTableLabel: () => buildTableLabel,
+        document: () => document,
+        galaxyRegions: () => galaxyRegions,
+        game: () => game,
+        openOverrideModal: () => openOverrideModal,
+        resetCheckbox: () => resetCheckbox,
+        resetFleetSettings: () => resetFleetSettings,
+        settings: () => settings,
+        settingsRaw: () => settingsRaw,
+        sorterHelper: () => sorterHelper,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "FleetManagerOuter":
-          return FleetManagerOuter;
-        case "addSettingsHeader1":
-          return addSettingsHeader1;
-        case "addSettingsNumber":
-          return addSettingsNumber;
-        case "addSettingsSelect":
-          return addSettingsSelect;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "addStandardHeading":
-          return addStandardHeading;
-        case "addTableInput":
-          return addTableInput;
-        case "buildSettingsSection2":
-          return buildSettingsSection2;
-        case "buildTableLabel":
-          return buildTableLabel;
-        case "document":
-          return document;
-        case "galaxyRegions":
-          return galaxyRegions;
-        case "game":
-          return game;
-        case "openOverrideModal":
-          return openOverrideModal;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetFleetSettings":
-          return resetFleetSettings;
-        case "settings":
-          return settings;
-        case "settingsRaw":
-          return settingsRaw;
-        case "sorterHelper":
-          return sorterHelper;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const fleetSettings = createFleetSettings({
       getDependency: getFleetSettingsDependency,
       getOverride: (name) => fleetSettingsOverrides[name]
@@ -16571,143 +27711,82 @@
       updateFleetAndromeda
     } = fleetSettings;
     const mechSettingsOverrides = {};
-    function getMechSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(mechSettingsOverrides, name)) {
-        return mechSettingsOverrides[name];
+    const getMechSettingsDependency = createDependencyResolver(
+      mechSettingsOverrides,
+      {
+        $: () => $,
+        MechManager: () => MechManager,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsSelect: () => addSettingsSelect,
+        addSettingsToggle: () => addSettingsToggle,
+        addStandardHeading: () => addStandardHeading,
+        buildSettingsSection: () => buildSettingsSection,
+        calculateMechStats: () => calculateMechStats,
+        document: () => document,
+        game: () => game,
+        removeMechInfo: () => removeMechInfo,
+        resetCheckbox: () => resetCheckbox,
+        resetMechSettings: () => resetMechSettings,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "MechManager":
-          return MechManager;
-        case "addSettingsNumber":
-          return addSettingsNumber;
-        case "addSettingsSelect":
-          return addSettingsSelect;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "addStandardHeading":
-          return addStandardHeading;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "calculateMechStats":
-          return calculateMechStats;
-        case "document":
-          return document;
-        case "game":
-          return game;
-        case "removeMechInfo":
-          return removeMechInfo;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetMechSettings":
-          return resetMechSettings;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const mechSettings = createMechSettings({
       getDependency: getMechSettingsDependency,
       getOverride: (name) => mechSettingsOverrides[name]
     });
     const { buildMechSettings, updateMechSettingsContent } = mechSettings;
     const ejectorSettingsOverrides = {};
-    function getEjectorSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(ejectorSettingsOverrides, name)) {
-        return ejectorSettingsOverrides[name];
+    const getEjectorSettingsDependency = createDependencyResolver(
+      ejectorSettingsOverrides,
+      {
+        $: () => $,
+        EjectManager: () => EjectManager,
+        NaniteManager: () => NaniteManager,
+        SupplyManager: () => SupplyManager,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsSelect: () => addSettingsSelect,
+        addSettingsToggle: () => addSettingsToggle,
+        addTableToggle: () => addTableToggle,
+        buildSettingsSection: () => buildSettingsSection,
+        buildTableLabel: () => buildTableLabel,
+        document: () => document,
+        removeEjectToggles: () => removeEjectToggles,
+        removeSupplyToggles: () => removeSupplyToggles,
+        resetCheckbox: () => resetCheckbox,
+        resetEjectorSettings: () => resetEjectorSettings,
+        resources: () => resources,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "EjectManager":
-          return EjectManager;
-        case "NaniteManager":
-          return NaniteManager;
-        case "SupplyManager":
-          return SupplyManager;
-        case "addSettingsNumber":
-          return addSettingsNumber;
-        case "addSettingsSelect":
-          return addSettingsSelect;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "addTableToggle":
-          return addTableToggle;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "buildTableLabel":
-          return buildTableLabel;
-        case "document":
-          return document;
-        case "removeEjectToggles":
-          return removeEjectToggles;
-        case "removeSupplyToggles":
-          return removeSupplyToggles;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetEjectorSettings":
-          return resetEjectorSettings;
-        case "resources":
-          return resources;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const ejectorSettings = createEjectorSettings({
       getDependency: getEjectorSettingsDependency,
       getOverride: (name) => ejectorSettingsOverrides[name]
     });
     const { buildEjectorSettings, updateEjectorSettingsContent } = ejectorSettings;
     const marketSettingsOverrides = {};
-    function getMarketSettingsDependency(name) {
-      if (Object.prototype.hasOwnProperty.call(marketSettingsOverrides, name)) {
-        return marketSettingsOverrides[name];
+    const getMarketSettingsDependency = createDependencyResolver(
+      marketSettingsOverrides,
+      {
+        $: () => $,
+        MarketManager: () => MarketManager,
+        addSettingsNumber: () => addSettingsNumber,
+        addSettingsToggle: () => addSettingsToggle,
+        addStandardHeading: () => addStandardHeading,
+        addTableInput: () => addTableInput,
+        addTableToggle: () => addTableToggle,
+        buildSettingsSection: () => buildSettingsSection,
+        buildTableLabel: () => buildTableLabel,
+        document: () => document,
+        poly: () => poly,
+        removeMarketToggles: () => removeMarketToggles,
+        resetCheckbox: () => resetCheckbox,
+        resetMarketSettings: () => resetMarketSettings,
+        resources: () => resources,
+        settingsRaw: () => settingsRaw,
+        sorterHelper: () => sorterHelper,
+        updateSettingsFromState: () => updateSettingsFromState
       }
-      switch (name) {
-        case "$":
-          return $;
-        case "MarketManager":
-          return MarketManager;
-        case "addSettingsNumber":
-          return addSettingsNumber;
-        case "addSettingsToggle":
-          return addSettingsToggle;
-        case "addStandardHeading":
-          return addStandardHeading;
-        case "addTableInput":
-          return addTableInput;
-        case "addTableToggle":
-          return addTableToggle;
-        case "buildSettingsSection":
-          return buildSettingsSection;
-        case "buildTableLabel":
-          return buildTableLabel;
-        case "document":
-          return document;
-        case "poly":
-          return poly;
-        case "removeMarketToggles":
-          return removeMarketToggles;
-        case "resetCheckbox":
-          return resetCheckbox;
-        case "resetMarketSettings":
-          return resetMarketSettings;
-        case "resources":
-          return resources;
-        case "settingsRaw":
-          return settingsRaw;
-        case "sorterHelper":
-          return sorterHelper;
-        case "updateSettingsFromState":
-          return updateSettingsFromState;
-        default:
-          return void 0;
-      }
-    }
+    );
     const marketSettings = createMarketSettings({
       getDependency: getMarketSettingsDependency,
       getOverride: (name) => marketSettingsOverrides[name]
@@ -16861,1857 +27940,119 @@
     }
     var checkActions = false;
     let safeMode = String(window.location).toLowerCase().indexOf("safemode") !== -1;
-    class Job {
-      constructor(id, name, flags) {
-        this._originalId = id;
-        this._originalName = name;
-        this._workerBinding = "civ-" + this._originalId;
-        this.is = normalizeProperties(flags) ?? {};
-      }
-      get autoJobEnabled() {
-        return settings["job_" + this._originalId];
-      }
-      get isSmartEnabled() {
-        return settings["job_s_" + this._originalId];
-      }
-      get priority() {
-        return settingsRaw["job_p_" + this._originalId];
-      }
-      getBreakpoint(n) {
-        return settings[`job_b${n + 1}_${this._originalId}`];
-      }
-      get definition() {
-        return game.global.civic[this._originalId];
-      }
-      get id() {
-        return this.definition.job;
-      }
-      get name() {
-        return this.definition.name;
-      }
-      isUnlocked() {
-        return this.definition.display;
-      }
-      isManaged() {
-        if (!this.isUnlocked()) {
-          return false;
-        }
-        return this.autoJobEnabled;
-      }
-      get workers() {
-        return this.definition.workers;
-      }
-      get servants() {
-        return 0;
-      }
-      get count() {
-        return this.workers + this.servants * traitVal("high_pop", 0, 1);
-      }
-      get max() {
-        return this.definition.max;
-      }
-      breakpointEmployees(breakpoint, ignoreMax) {
-        let breakpointActual = this.getBreakpoint(breakpoint);
-        if (breakpointActual === -1) {
-          breakpointActual = Number.MAX_SAFE_INTEGER;
-        } else if (settings.jobScalePop && this._originalId !== "hell_surveyor") {
-          breakpointActual *= traitVal("high_pop", 0, 1);
-        }
-        return ignoreMax ? breakpointActual : Math.min(breakpointActual, this.max);
-      }
-      addWorkers(count) {
-        if (this.isDefault()) {
-          return false;
-        }
-        if (count < 0) {
-          this.removeWorkers(-1 * count);
-        }
-        let vue = getVueById(this._workerBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of KeyManager.click(count)) {
-          vue.add();
-        }
-      }
-      removeWorkers(count) {
-        if (this.isDefault()) {
-          return false;
-        }
-        if (count < 0) {
-          this.addWorkers(-1 * count);
-        }
-        let vue = getVueById(this._workerBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of KeyManager.click(count)) {
-          vue.sub();
-        }
-      }
-      isDefault() {
-        return false;
-      }
-    }
-    class BasicJob extends Job {
-      constructor(...args) {
-        super(...args);
-        this._servantBinding = "servant-" + this._originalId;
-      }
-      get servants() {
-        return game.global.race.servants?.jobs[this._originalId] ?? 0;
-      }
-      get max() {
-        return Number.MAX_SAFE_INTEGER;
-      }
-      addServants(count) {
-        if (count < 0) {
-          this.removeServants(-1 * count);
-        }
-        let vue = getVueById(this._servantBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of KeyManager.click(count)) {
-          vue.add();
-        }
-      }
-      removeServants(count) {
-        if (count < 0) {
-          this.addServants(-1 * count);
-        }
-        let vue = getVueById(this._servantBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of KeyManager.click(count)) {
-          vue.sub();
-        }
-      }
-      isDefault() {
-        return game.global.civic.d_job === this.id;
-      }
-      setAsDefault() {
-        getVueById(this._workerBinding)?.setDefault(this.id);
-      }
-    }
-    class CraftingJob extends Job {
-      constructor(id, name, resource) {
-        super(id, name, { serve: true });
-        this._crafterBinding = "foundry";
-        this._servantBinding = "skilledServants";
-        this.resource = resource;
-      }
-      get definition() {
-        return game.global.civic["craftsman"];
-      }
-      get id() {
-        return this.resource.id;
-      }
-      isUnlocked() {
-        return game.global.resource[this._originalId].display;
-      }
-      get servants() {
-        return game.global.race.servants?.sjobs[this._originalId] ?? 0;
-      }
-      get workers() {
-        return game.global.city.foundry?.[this._originalId] ?? 0;
-      }
-      get max() {
-        return game.global.civic.craftsman.max;
-      }
-      addWorkers(count) {
-        if (!this.isUnlocked()) {
-          return false;
-        }
-        if (count < 0) {
-          this.removeWorkers(-1 * count);
-        }
-        let vue = getVueById(this._crafterBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of KeyManager.click(count)) {
-          vue.add(this._originalId);
-        }
-      }
-      removeWorkers(count) {
-        if (!this.isUnlocked()) {
-          return false;
-        }
-        if (count < 0) {
-          this.addWorkers(-1 * count);
-        }
-        let vue = getVueById(this._crafterBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of KeyManager.click(count)) {
-          vue.sub(this._originalId);
-        }
-      }
-      addServants(count) {
-        if (count < 0) {
-          this.removeServants(-1 * count);
-        }
-        let vue = getVueById(this._servantBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of KeyManager.click(count)) {
-          vue.add(this._originalId);
-        }
-      }
-      removeServants(count) {
-        if (count < 0) {
-          this.addServants(-1 * count);
-        }
-        let vue = getVueById(this._servantBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of KeyManager.click(count)) {
-          vue.sub(this._originalId);
-        }
-      }
-    }
-    class Resource {
-      constructor(name, id, flags) {
-        this.name = name;
-        this._id = id;
-        this.currentQuantity = 0;
-        this.maxQuantity = 0;
-        this.rateOfChange = 0;
-        this.rateMods = {};
-        this.tradeBuyPrice = 0;
-        this.tradeSellPrice = 0;
-        this.tradeRoutes = 0;
-        this.incomeAdusted = false;
-        this.maxCost = 0;
-        this.storageRequired = 1;
-        this.requestedQuantity = 0;
-        this.cost = {};
-        this._vueBinding = "res" + id;
-        this._stackVueBinding = "stack-" + id;
-        this._marketVueBinding = "market-" + id;
-        this.is = normalizeProperties(flags) ?? {};
-      }
-      get autoCraftEnabled() {
-        return settings["craft" + this.id];
-      }
-      get craftWeighting() {
-        return settings["foundry_w_" + this.id];
-      }
-      get craftPreserve() {
-        return settings["foundry_p_" + this.id];
-      }
-      get autoStorageEnabled() {
-        return settings["res_storage" + this.id];
-      }
-      get storagePriority() {
-        return settingsRaw["res_storage_p_" + this.id];
-      }
-      get storeOverflow() {
-        return settings["res_storage_o_" + this.id];
-      }
-      get minStorage() {
-        return settings["res_min_store" + this.id];
-      }
-      get maxStorage() {
-        return settings["res_max_store" + this.id];
-      }
-      get marketPriority() {
-        return settingsRaw["res_buy_p_" + this.id];
-      }
-      get autoBuyEnabled() {
-        return settings["buy" + this.id];
-      }
-      get autoBuyRatio() {
-        return settings["res_buy_r_" + this.id];
-      }
-      get autoSellEnabled() {
-        return settings["sell" + this.id];
-      }
-      get autoSellRatio() {
-        return settings["res_sell_r_" + this.id];
-      }
-      get autoTradeBuyEnabled() {
-        return settings["res_trade_buy_" + this.id];
-      }
-      get autoTradeSellEnabled() {
-        return settings["res_trade_sell_" + this.id];
-      }
-      get autoTradeWeighting() {
-        return settings["res_trade_w_" + this.id];
-      }
-      get autoTradePriority() {
-        return settings["res_trade_p_" + this.id];
-      }
-      get galaxyMarketWeighting() {
-        return settings["res_galaxy_w_" + this.id];
-      }
-      get galaxyMarketPriority() {
-        return settings["res_galaxy_p_" + this.id];
-      }
-      get title() {
-        return this.instance?.name || this.name;
-      }
-      get instance() {
-        return game.global.resource[this.id];
-      }
-      get id() {
-        return this._id;
-      }
-      get currentCrates() {
-        return this.instance.crates;
-      }
-      get currentContainers() {
-        return this.instance.containers;
-      }
-      updateData() {
-        if (!this.isUnlocked()) {
-          return;
-        }
-        let instance = this.instance;
-        this.currentQuantity = instance.amount;
-        this.maxQuantity = instance.max >= 0 ? instance.max : Number.MAX_SAFE_INTEGER;
-        this.rateOfChange = instance.diff;
-        this.rateMods = {};
-        this.incomeAdusted = false;
-      }
-      finalizeData() {
-        if (!this.isUnlocked() || this.constructor !== Resource) {
-          return;
-        }
-        if (settings.autoMarket && this.is.tradable) {
-          this.tradeRoutes = this.instance.trade;
-          this.tradeBuyPrice = game.tradeBuyPrice(this._id);
-          this.tradeSellPrice = game.tradeSellPrice(this._id);
-          let tradeDiff = game.breakdown.p.consume[this._id]?.Trade || 0;
-          if (tradeDiff > 0) {
-            this.rateMods["buy"] = tradeDiff * -1;
-          } else if (tradeDiff < 0) {
-            this.rateMods["sell"] = tradeDiff * -1;
-            this.rateOfChange += this.rateMods["sell"];
-          }
-        }
-        if (game.global.race["decay"] && this.tradeRouteQuantity > 0 && this.currentQuantity >= 50) {
-          this.rateMods["decay"] = (this.currentQuantity - 50) * (1e-3 * this.tradeRouteQuantity);
-          this.rateOfChange += this.rateMods["decay"];
-        }
-      }
-      calculateRateOfChange(apply) {
-        let value = this.rateOfChange;
-        for (let mod in this.rateMods) {
-          if (apply[mod] ?? apply.all) {
-            value -= this.rateMods[mod];
-          }
-        }
-        return value;
-      }
-      isDemanded() {
-        return this.requestedQuantity > this.currentQuantity;
-      }
-      get income() {
-        return this.calculateRateOfChange({ buy: false, all: true });
-      }
-      get spareQuantity() {
-        return this.currentQuantity - this.requestedQuantity;
-      }
-      get spareMaxQuantity() {
-        return this.maxQuantity - this.requestedQuantity;
-      }
-      isUnlocked() {
-        return this.instance?.display ?? false;
-      }
-      isRoutesUnlocked() {
-        return this.isUnlocked() && !(this === resources.Food && (game.global.race["artifical"] || game.global.race["fasting"])) && (game.global.race["banana"] && this === resources.Food || game.global.tech["trade"] && !game.global.race["terrifying"]);
-      }
-      isManagedStorage() {
-        return this.hasStorage() && this.autoStorageEnabled;
-      }
-      get atomicMass() {
-        return game.atomic_mass[this.id] ?? 0;
-      }
-      isUseful() {
-        return this.storageRatio < 0.99 || this.isDemanded() || this.rateMods["eject"] > 0 || this.rateMods["supply"] > 0 || this.storeOverflow && this.currentQuantity < this.maxStorage;
-      }
-      getProduction(source, locArg) {
-        let produced = 0;
-        let labelFound = false;
-        for (let [label, value] of Object.entries(
-          game.breakdown.p[this._id] ?? {}
-        )) {
-          if (value.indexOf("%") === -1) {
-            if (labelFound) {
-              break;
-            } else if (label === poly.loc(source, locArg)) {
-              labelFound = true;
-              produced += parseFloat(value) || 0;
-            }
-          } else if (labelFound && this.isValidProductionLabel(label)) {
-            produced *= 1 + (parseFloat(value) || 0) / 100;
-          }
-        }
-        return produced * state.globalProductionModifier;
-      }
-      isValidProductionLabel(label) {
-        if (this._id === "Iron" && label === `ᄂ${poly.loc("space_syndicate")}`)
-          return false;
-        return true;
-      }
-      getBusyWorkers(workersSource, workersCount, locArg) {
-        if (this.incomeAdusted) {
-          return workersCount;
-        }
-        let newWorkers = 0;
-        if (workersCount > 0) {
-          let totalIncome = this.getProduction(workersSource, locArg);
-          let resPerWorker = totalIncome / workersCount;
-          let usedIncome = totalIncome - this.income;
-          if (usedIncome > 0) {
-            newWorkers = Math.ceil(usedIncome / resPerWorker);
-          }
-        } else if (this.income < 0) {
-          newWorkers = 1;
-        }
-        return newWorkers;
-      }
-      isCraftable() {
-        return game.craftCost.hasOwnProperty(this.id);
-      }
-      hasStorage() {
-        return this.instance?.stackable ?? false;
-      }
-      get tradeRouteQuantity() {
-        return game.tradeRatio[this.id] || -1;
-      }
-      get storageRatio() {
-        return this.maxQuantity > 0 ? this.currentQuantity / this.maxQuantity : 1;
-      }
-      isCapped() {
-        return this.maxQuantity > 0 ? this.currentQuantity + this.rateOfChange / ticksPerSecond() >= this.maxQuantity : true;
-      }
-      get usefulRatio() {
-        return this.maxQuantity > 0 && this.storageRequired > 0 ? this.currentQuantity / Math.min(this.maxQuantity, this.storageRequired) : 1;
-      }
-      get timeToFull() {
-        if (this.storageRatio > 0.98) {
-          return Number.MIN_SAFE_INTEGER;
-        }
-        let totalRateOfCharge = this.income;
-        if (totalRateOfCharge <= 0) {
-          return Number.MAX_SAFE_INTEGER;
-        }
-        return (this.maxQuantity - this.currentQuantity) / totalRateOfCharge;
-      }
-      get timeToRequired() {
-        if (this.storageRatio > 0.98) {
-          return Number.MIN_SAFE_INTEGER;
-        }
-        if (this.storageRequired <= 1) {
-          return 0;
-        }
-        let totalRateOfCharge = this.income;
-        if (totalRateOfCharge <= 0) {
-          return Number.MAX_SAFE_INTEGER;
-        }
-        return (Math.min(this.maxQuantity, this.storageRequired) - this.currentQuantity) / totalRateOfCharge;
-      }
-      tryCraftX(count) {
-        let vue = getVueById(this._vueBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        KeyManager.set(false, false, false);
-        vue.craft(this.id, count);
-      }
-      requestQuantity(req) {
-        if (this.requestedQuantity < req) {
-          req = Math.min(req, this.maxQuantity);
-          this.requestedQuantity = req;
-        }
-      }
-    }
-    class SoulGem extends Resource {
-      updateData() {
-        super.updateData();
-        this.rateOfChange = state.soulGemPerHour / 3600;
-      }
-    }
-    class Troops extends Resource {
-      updateData() {
-        if (!this.isUnlocked()) {
-          return;
-        }
-        this.currentQuantity = WarManager.currentCityGarrison;
-        this.maxQuantity = WarManager.maxCityGarrison;
-        this.rateOfChange = 0;
-      }
-      isUnlocked() {
-        return WarManager._garrisonVue !== void 0;
-      }
-    }
-    class Supply extends Resource {
-      updateData() {
-        if (!this.isUnlocked()) {
-          return;
-        }
-        this.currentQuantity = game.global.portal.purifier.supply;
-        this.maxQuantity = game.global.portal.purifier.sup_max;
-        this.rateOfChange = game.global.portal.purifier.diff;
-      }
-      isUnlocked() {
-        return game.global.portal.hasOwnProperty("purifier");
-      }
-    }
-    class Power extends Resource {
-      updateData() {
-        if (!this.isUnlocked()) {
-          return;
-        }
-        this.currentQuantity = game.global.city.power;
-        if (haveTask("replicate")) {
-          this.currentQuantity += game.global.race.replicator.pow;
-        }
-        this.rateOfChange = this.currentQuantity;
-        this.maxQuantity = 0;
-        if (game.global.race.powered) {
-          this.maxQuantity += (resources.Population.maxQuantity - resources.Population.currentQuantity) * traitVal("powered", 0);
-        }
-        for (let building of Object.values(buildings)) {
-          if (building.stateOffCount > 0) {
-            let missingAmount = building.stateOffCount;
-            if (building.autoMax < building.count && settings.masterScriptToggle && settings.autoPower && building.autoStateEnabled && settings.buildingsLimitPowered) {
-              missingAmount -= building.count - building.autoMax;
-            }
-            if (building === buildings.NeutronCitadel) {
-              this.maxQuantity += getCitadelConsumption(building.stateOnCount + missingAmount) - getCitadelConsumption(building.stateOnCount);
-            } else {
-              this.maxQuantity += missingAmount * building.powered;
-            }
-          }
-        }
-      }
-      get usefulRatio() {
-        return this.currentQuantity >= this.maxQuantity ? 1 : 0;
-      }
-      isUnlocked() {
-        return game.global.city.powered;
-      }
-    }
-    class Support extends Resource {
-      // This isn't really a resource but we're going to make a dummy one so that we can treat it like a resource
-      constructor(name, id, region, inRegionId) {
-        super(name, id);
-        this._region = region;
-        this._inRegionId = inRegionId;
-      }
-      updateData() {
-        if (!this.isUnlocked()) {
-          return;
-        }
-        this.maxQuantity = game.global[this._region][this.supportId].s_max;
-        this.currentQuantity = game.global[this._region][this.supportId].support;
-        this.rateOfChange = this.maxQuantity - this.currentQuantity;
-      }
-      get supportId() {
-        return game.actions[this._region][this._inRegionId].info.support;
-      }
-      get storageRatio() {
-        return this.maxQuantity > 0 ? (this.maxQuantity - this.currentQuantity) / this.maxQuantity : 1;
-      }
-      isUnlocked() {
-        return game.global[this._region][this.supportId] !== void 0;
-      }
-    }
-    class BeltSupport extends Support {
-      // Unlike other supports this one takes in account available workers
-      updateData() {
-        if (!this.isUnlocked()) {
-          return;
-        }
-        let maxStations = settings.autoPower && buildings.BeltSpaceStation.autoStateEnabled ? buildings.BeltSpaceStation.count : buildings.BeltSpaceStation.stateOnCount;
-        let maxWorkers = settings.autoJobs && jobs.SpaceMiner.autoJobEnabled && jobs.SpaceMiner.isSmartEnabled ? state.maxSpaceMiners : jobs.SpaceMiner.count;
-        this.maxQuantity = Math.min(
-          maxStations * 3 * traitVal("high_pop", 0, 1),
-          maxWorkers
-        );
-        this.currentQuantity = game.global[this._region][this.supportId].support;
-        this.rateOfChange = this.maxQuantity - this.currentQuantity;
-      }
-    }
-    class ElectrolysisSupport extends Support {
-      updateData() {
-        if (!this.isUnlocked()) {
-          return;
-        }
-        this.maxQuantity = buildings.TitanElectrolysis.stateOnCount;
-        this.currentQuantity = buildings.TitanHydrogen.stateOnCount;
-        this.rateOfChange = this.maxQuantity - this.currentQuantity;
-      }
-      isUnlocked() {
-        return game.global.race["truepath"] ? true : false;
-      }
-    }
-    class WomlingsSupport extends Support {
-      updateData() {
-        if (!this.isUnlocked()) {
-          return;
-        }
-        this.maxQuantity = buildings.TauRedWomlingVillage.stateOnCount * (haveTech("womling_pop", 2) ? 6 : 5);
-        this.currentQuantity = buildings.TauRedWomlingFarm.stateOnCount * 2 + buildings.TauRedWomlingLab.stateOnCount + buildings.TauRedWomlingMine.stateOnCount * 6;
-        this.rateOfChange = this.maxQuantity - this.currentQuantity;
-      }
-      isUnlocked() {
-        return haveTech("tau_red", 5) ? true : false;
-      }
-    }
-    class PrestigeResource extends Resource {
-      updateData() {
-        this.currentQuantity = game.global.prestige[this.id].count;
-        this.maxQuantity = Number.MAX_SAFE_INTEGER;
-      }
-      isUnlocked() {
-        return true;
-      }
-    }
-    class Population extends Resource {
-      get id() {
-        return game.global.race.species;
-      }
-    }
-    class Morale extends Resource {
-      updateData() {
-        this.currentQuantity = game.global.city.morale.current;
-        this.maxQuantity = game.global.city.morale.cap;
-        this.rateOfChange = game.global.city.morale.potential;
-        this.incomeAdusted = false;
-      }
-      isUnlocked() {
-        return true;
-      }
-    }
-    class Thrall extends Resource {
-      updateData() {
-        if (!this.isUnlocked()) {
-          return;
-        }
-        this.currentQuantity = 0;
-        this.rateOfChange = 0;
-        for (let i = 0; i < game.global.city.surfaceDwellers.length; i++) {
-          this.currentQuantity += game.global.city.captive_housing[`race${i}`];
-          this.rateOfChange += game.global.city.captive_housing[`jailrace${i}`];
-        }
-        this.currentQuantity += this.rateOfChange;
-        this.maxQuantity = game.global.city.captive_housing.raceCap;
-      }
-      isUnlocked() {
-        return game.global.city.captive_housing ? true : false;
-      }
-    }
-    class ResourceProductionCost {
-      constructor(resource, quantity, minRateOfChange) {
-        this.resource = resource;
-        this.quantity = quantity;
-        this.minRateOfChange = minRateOfChange;
-      }
-    }
-    class Action {
-      constructor(name, tab, id, location, flags) {
-        this.name = name;
-        this._tab = tab;
-        this._id = id;
-        this._location = location;
-        this.gameMax = Number.MAX_SAFE_INTEGER;
-        this._vueBinding = this._tab + "-" + this.id;
-        this.weighting = 0;
-        this.extraDescription = "";
-        this.consumption = [];
-        this.cost = {};
-        this.overridePowered = void 0;
-        this.is = normalizeProperties(flags) ?? {};
-      }
-      get autoBuildEnabled() {
-        return settings["bat" + this._vueBinding];
-      }
-      get autoStateEnabled() {
-        return settings["bld_s_" + this._vueBinding];
-      }
-      get autoStateSmart() {
-        return settings["bld_s2_" + this._vueBinding];
-      }
-      get priority() {
-        return settingsRaw["bld_p_" + this._vueBinding];
-      }
-      get _weighting() {
-        return settings["bld_w_" + this._vueBinding];
-      }
-      get _autoMax() {
-        return settings["bld_m_" + this._vueBinding];
-      }
-      get definition() {
-        if (this._location !== "") {
-          return game.actions[this._tab][this._location][this._id];
-        } else {
-          return game.actions[this._tab][this._id];
-        }
-      }
-      get instance() {
-        return game.global[this._tab][this._id];
-      }
-      get id() {
-        return this._id;
-      }
-      get title() {
-        let def = this.definition;
-        return def ? typeof def.title === "function" ? def.title() : def.title : this.name;
-      }
-      get desc() {
-        let def = this.definition;
-        return def ? typeof def.desc === "function" ? def.desc() : def.desc : this.name;
-      }
-      get vue() {
-        return getVueById(this._vueBinding);
-      }
-      /* That's a right(ish) way to do, but compared to hardcoded numbers it's a performance tax for... nothing really, as i'll still need to manually declare a lot of things for each new building, and it's already declared for all existing ones. I'll put it on hold for now.
-          get gameMax() {
-              // queue_complete need an initialized instance to read a current count
-              return this.instance && this.definition.queue_complete ? this.instance.count + this.definition.queue_complete() : Number.MAX_SAFE_INTEGER;
-          }*/
-      get autoMax() {
-        return this._autoMax >= 0 && this._autoMax <= this.gameMax ? this._autoMax : this.gameMax;
-      }
-      isUnlocked() {
-        if (this._tab === "city" && !game.global.settings.showCity || this._tab === "space" && !game.global.settings.showSpace && !game.global.settings.showOuter || this._tab === "interstellar" && !game.global.settings.showDeep || this._tab === "portal" && !game.global.settings.showPortal || this._tab === "galaxy" && !game.global.settings.showGalactic || this._tab === "tauceti" && !game.global.settings.showTau || this._tab === "eden" && !game.global.settings.showEden) {
-          return false;
-        }
-        return this.vue !== void 0;
-      }
-      isSwitchable() {
-        return this.definition.hasOwnProperty("powered") || this.definition.hasOwnProperty("switchable");
-      }
-      isMission() {
-        return this.definition.hasOwnProperty("grant");
-      }
-      isComplete() {
-        return haveTech(this.definition.grant[0], this.definition.grant[1]);
-      }
-      isSmartManaged() {
-        return settings.autoPower && this.isUnlocked() && this.autoStateEnabled && this.autoStateSmart;
-      }
-      isAutoBuildable() {
-        return this.isUnlocked() && this.autoBuildEnabled && this._weighting > 0 && this.count < this.autoMax;
-      }
-      // export function checkPowerRequirements(c_action) from actions.js
-      checkPowerRequirements() {
-        for (let [tech, value] of Object.entries(
-          this.definition.power_reqs ?? {}
-        )) {
-          if (!haveTech(tech, value)) {
-            return false;
-          }
-        }
-        return true;
-      }
-      get powered() {
-        if (this.overridePowered !== void 0) {
-          return this.overridePowered;
-        }
-        if (!this.definition.hasOwnProperty("powered") || !this.checkPowerRequirements()) {
-          return 0;
-        }
-        return this.definition.powered();
-      }
-      updateResourceRequirements() {
-        if (!this.isUnlocked()) {
-          return;
-        }
-        this.cost = {};
-        if (!this.definition.cost) {
-          return;
-        }
-        let adjustedCosts = poly.adjustCosts(this.definition);
-        for (let resourceName in adjustedCosts) {
-          if (resources[resourceName]) {
-            let resourceAmount = Number(adjustedCosts[resourceName]());
-            if (resourceAmount > 0) {
-              this.cost[resourceName] = resourceAmount;
-            }
-          }
-        }
-      }
-      isAffordable(max = false) {
-        return game.checkAffordable(this.definition, max);
-      }
-      // Whether the action is clickable is determined by whether it is unlocked, affordable and not a "permanently clickable" action
-      isClickable() {
-        return this.isUnlocked() && this.isAffordable() && this.count < this.gameMax;
-      }
-      // This is a "safe" click. It will only click if the container is currently clickable.
-      // ie. it won't bypass the interface and click the node if it isn't clickable in the UI.
-      click() {
-        if (!this.isClickable()) {
-          return false;
-        }
-        let doMultiClick = this.is.multiSegmented && settings.buildingsUseMultiClick;
-        let amountToBuild = 1;
-        if (doMultiClick) {
-          amountToBuild = this.gameMax - this.count;
-          for (let res in this.cost) {
-            amountToBuild = Math.min(
-              amountToBuild,
-              Math.floor(resources[res].currentQuantity / this.cost[res])
-            );
-          }
-          if (amountToBuild < 1) {
-            amountToBuild = 1;
-          }
-        }
-        for (let res in this.cost) {
-          resources[res].currentQuantity -= this.cost[res] * amountToBuild;
-        }
-        if (game.global.race.species !== "protoplasm" && !logIgnore.includes(this.id)) {
-          if (this.gameMax < Number.MAX_SAFE_INTEGER && this.count + amountToBuild < this.gameMax) {
-            GameLog.logSuccess(
-              "multi_construction",
-              poly.loc("build_success", [
-                `${this.title} (${this.count + amountToBuild})`
-              ]),
-              ["queue", "building_queue"]
-            );
-          } else {
-            GameLog.logSuccess(
-              "construction",
-              poly.loc("build_success", [this.title]),
-              ["queue", "building_queue"]
-            );
-          }
-        }
-        KeyManager.set(doMultiClick, doMultiClick, doMultiClick);
-        if (this.is.prestige) {
-          logPrestige();
-        }
-        let popper = $("#popper");
-        if (settings.performanceHackAvoidDrawTech && this.definition.refresh && this.count > 0 && !this.definition.grant && !this.definition.post && !this.definition.queue_complete && !this.is.prestige && !game.global.race.inflation && (popper.length === 0 || !popper.is(":visible"))) {
-          this.definition.action();
-          return true;
-        }
-        if (popper.length > 0 && popper.data("id").indexOf(this._vueBinding) === -1) {
-          popper.attr("id", "TotallyNotAPopper");
-          try {
-            this.vue.action();
-          } finally {
-            popper.attr("id", "popper");
-          }
-        } else {
-          this.vue.action();
-        }
-        if (this.is.prestige) {
-          state.goal = "GameOverMan";
-        }
-        return true;
-      }
-      addSupport(resource) {
-        this.consumption.push(
-          normalizeProperties({
-            resource,
-            rate: () => this.definition.support() * -1
-          })
-        );
-      }
-      addResourceConsumption(resource, rate) {
-        this.consumption.push(
-          normalizeProperties({ resource, rate })
-        );
-      }
-      getFuelRate(idx) {
-        if (!this.consumption[idx]) {
-          return 0;
-        }
-        let resource = this.consumption[idx].resource;
-        let rate = this.consumption[idx].rate;
-        if (this._tab === "space" && (resource === resources.Oil || resource === resources.Helium_3)) {
-          rate = game.fuel_adjust(rate, true);
-        } else if ((this._tab === "interstellar" || this._tab === "galaxy" || this._tab === "tauceti") && (resource === resources.Deuterium || resource === resources.Helium_3) && this !== buildings.AlphaFusion) {
-          rate = game.int_fuel_adjust(rate);
-        }
-        return rate;
-      }
-      getMissingConsumption() {
-        for (let j = 0; j < this.consumption.length; j++) {
-          let resource = this.consumption[j].resource;
-          if (resource instanceof Support) {
-            continue;
-          }
-          if (resource === resources.Food && settings.autoJobs && (jobs.Farmer.autoJobEnabled || jobs.Hunter.autoJobEnabled)) {
-            continue;
-          }
-          let consumptionRate = this.getFuelRate(j);
-          if (resource.storageRatio < 0.95 && consumptionRate > 0 && resource.calculateRateOfChange({ buy: true }) < consumptionRate) {
-            return resource;
-          }
-        }
-        return null;
-      }
-      getMissingSupport() {
-        if (game.global.race["fasting"] && this === buildings.AlphaMiningDroid && this.count < 1) {
-          return null;
-        }
-        for (let j = 0; j < this.consumption.length; j++) {
-          let resource = this.consumption[j].resource;
-          if (resource === resources.Spire_Support && this.autoStateSmart) {
-            continue;
-          }
-          if (resource === resources.Tau_Belt_Support) {
-            continue;
-          }
-          if (resource === resources.Womlings_Support && resource.rateOfChange > 0) {
-            continue;
-          }
-          let rate = this.consumption[j].rate;
-          if (!(resource instanceof Support) || rate <= 0) {
-            continue;
-          }
-          if (resource.rateOfChange < rate) {
-            return resource;
-          }
-        }
-        return null;
-      }
-      getUselessSupport() {
-        if (this === buildings.GatewayStarbase || this === buildings.AlphaHabitat || this === buildings.SpaceNavBeacon && game.global.race["orbit_decayed"]) {
-          return null;
-        }
-        let uselessSupports = [];
-        for (let j = 0; j < this.consumption.length; j++) {
-          let resource = this.consumption[j].resource;
-          let rate = this.consumption[j].rate;
-          if (!(resource instanceof Support) || rate >= 0) {
-            continue;
-          }
-          let minSupport = resource === resources.Belt_Support ? 2 * traitVal("high_pop", 0, 1) : resource === resources.Gateway_Support ? 5 : resource === resources.Womlings_Support ? 6 : 1;
-          if (resource.rateOfChange >= minSupport) {
-            uselessSupports.push(resource);
-          } else {
-            return null;
-          }
-        }
-        return uselessSupports[0] ?? null;
-      }
-      get count() {
-        if (this.isMission()) {
-          return this.isComplete() ? 1 : 0;
-        }
-        if (!this.isUnlocked()) {
-          return 0;
-        }
-        if (this === buildings.Banquet) {
-          return this.instance?.count ? this.instance.level : 0;
-        }
-        return this.instance?.count ?? 0;
-      }
-      hasState() {
-        if (!this.isUnlocked()) {
-          return false;
-        }
-        return this.definition.powered && haveTech("high_tech", 2) && this.checkPowerRequirements() || this.definition.switchable?.() || false;
-      }
-      get stateOnCount() {
-        if (!this.hasState() || this.count < 1) {
-          return 0;
-        }
-        return this.instance.on;
-      }
-      get stateOffCount() {
-        if (!this.hasState() || this.count < 1) {
-          return 0;
-        }
-        return this.instance.count - this.instance.on;
-      }
-      tryAdjustState(adjustCount) {
-        if (adjustCount === 0 || !this.hasState()) {
-          return false;
-        }
-        let vue = this.vue;
-        if (adjustCount > 0) {
-          for (let m of KeyManager.click(adjustCount)) {
-            vue.power_on();
-          }
-          return true;
-        }
-        if (adjustCount < 0) {
-          for (let m of KeyManager.click(adjustCount * -1)) {
-            vue.power_off();
-          }
-          return true;
-        }
-      }
-    }
-    class CityAction extends Action {
-      get instance() {
-        return game.global.city[this._id];
-      }
-    }
-    class Pillar extends Action {
-      get count() {
-        return this.isUnlocked() ? this.definition.count() : 0;
-      }
-      get stateOnCount() {
-        return this.isUnlocked() ? this.definition.on() : 0;
-      }
-      isAffordable(max = false) {
-        if (game.global.tech.pillars !== 1 || game.global.race.universe === "micro") {
-          return false;
-        }
-        return game.checkAffordable(this.definition, max);
-      }
-    }
-    class ResourceAction extends Action {
-      constructor(name, tab, id, location, res, flags) {
-        super(name, tab, id, location, flags);
-        this.resource = resources[res];
-      }
-      get count() {
-        return this.resource.currentQuantity;
-      }
-    }
-    class EvolutionAction extends Action {
-      constructor(id) {
-        super("", "evolution", id, "");
-      }
-      isUnlocked() {
-        let node = document.getElementById(this._vueBinding);
-        return node !== null && !node.classList.contains("is-hidden");
-      }
-    }
-    class SpaceDock extends Action {
-      isOptionsCached() {
-        if (this.count < 1 || game.global.tech["genesis"] < 4) {
-          return true;
-        }
-        if (!buildings.GasSpaceDockProbe.isOptionsCached() || game.global.tech["genesis"] >= 5 && !buildings.GasSpaceDockShipSegment.isOptionsCached() || game.global.tech["genesis"] === 6 && !buildings.GasSpaceDockPrepForLaunch.isOptionsCached() || game.global.tech["genesis"] >= 7 && !buildings.GasSpaceDockLaunch.isOptionsCached() || game.global.tech["geck"] >= 1 && !buildings.GasSpaceDockGECK.isOptionsCached()) {
-          return false;
-        }
-        return true;
-      }
-      cacheOptions() {
-        if (this.count < 1 || WindowManager.isOpen()) {
-          return false;
-        }
-        let optionsNode = document.querySelector("#space-star_dock .special");
-        WindowManager.openModalWindowWithCallback(optionsNode, this.title, () => {
-          buildings.GasSpaceDockProbe.cacheOptions();
-          buildings.GasSpaceDockGECK.cacheOptions();
-          buildings.GasSpaceDockShipSegment.cacheOptions();
-          buildings.GasSpaceDockPrepForLaunch.cacheOptions();
-          buildings.GasSpaceDockLaunch.cacheOptions();
-        });
-        return true;
-      }
-    }
-    class ModalAction extends Action {
-      constructor(...args) {
-        super(...args);
-        this._vue = void 0;
-      }
-      get vue() {
-        return this._vue;
-      }
-      isOptionsCached() {
-        return this._vue !== void 0;
-      }
-      cacheOptions() {
-        this._vue = getVueById(this._vueBinding);
-      }
-      isUnlocked() {
-        if (!game.global.settings.showSpace) {
-          return false;
-        }
-        return this._vue !== void 0;
-      }
-    }
-    class Project extends Action {
-      constructor(name, id) {
-        super(name, "arpa", id, "");
-        this._vueBinding = "arpa" + this.id;
-        this.currentStep = 1;
-      }
-      get autoBuildEnabled() {
-        return settings["arpa_" + this._id];
-      }
-      get priority() {
-        return settingsRaw["arpa_p_" + this._id];
-      }
-      get _autoMax() {
-        return settings["arpa_m_" + this._id];
-      }
-      get _weighting() {
-        return settings["arpa_w_" + this._id];
-      }
-      updateResourceRequirements() {
-        if (!this.isUnlocked()) {
-          return;
-        }
-        this.cost = {};
-        let maxStep = Math.min(
-          100 - this.progress,
-          state.triggerTargets.includes(this) ? 100 : settings.arpaStep
-        );
-        let adjustedCosts = poly.arpaAdjustCosts(this.definition.cost);
-        for (let resourceName in adjustedCosts) {
-          if (resources[resourceName]) {
-            let resourceAmount = Number(adjustedCosts[resourceName]());
-            if (resourceAmount > 0) {
-              this.cost[resourceName] = resourceAmount / 100;
-              maxStep = Math.min(
-                maxStep,
-                resources[resourceName].maxQuantity / this.cost[resourceName]
-              );
-            }
-          }
-        }
-        this.currentStep = Math.max(Math.floor(maxStep), 1);
-        if (this.currentStep > 1) {
-          for (let res in this.cost) {
-            this.cost[res] *= this.currentStep;
-          }
-        }
-      }
-      // Override Action's version, because these have a 'grant' but aren't missions.
-      isMission() {
-        return this.gameMax === 1;
-      }
-      get count() {
-        return this.instance?.rank ?? 0;
-      }
-      get progress() {
-        return this.instance?.complete ?? 0;
-      }
-      isAffordable(max = false) {
-        return checkAffordableCustom(this.cost, max);
-      }
-      isClickable() {
-        return this.isUnlocked() && this.isAffordable(false);
-      }
-      click() {
-        if (!this.isClickable()) {
-          return false;
-        }
-        for (let res in this.cost) {
-          resources[res].currentQuantity -= this.cost[res];
-        }
-        if (this.progress + this.currentStep < 100) {
-          GameLog.logSuccess(
-            "arpa",
-            poly.loc("build_success", [
-              `${this.title} (${this.progress + this.currentStep}%)`
-            ]),
-            ["queue", "building_queue"]
-          );
-        } else {
-          GameLog.logSuccess(
-            "construction",
-            poly.loc("build_success", [this.title]),
-            ["queue", "building_queue"]
-          );
-          if (this.id === "syphon" && this.count == 79) {
-            logPrestige();
-          }
-        }
-        KeyManager.set(false, false, false);
-        if (settings.performanceHackAvoidDrawTech && this.count >= 10 && !(this.id === "syphon" && this.count >= 79)) {
-          let mainVue = win.$("#mainColumn > div:first-child")[0]?.__vue__;
-          if (mainVue) {
-            let oldTabLoad = mainVue.s.tabLoad;
-            try {
-              mainVue.s.tabLoad = false;
-              getVueById(this._vueBinding).build(this.id, this.currentStep);
-            } finally {
-              mainVue.s.tabLoad = oldTabLoad;
-            }
-          } else {
-            getVueById(this._vueBinding).build(this.id, this.currentStep);
-          }
-          return true;
-        }
-        getVueById(this._vueBinding).build(this.id, this.currentStep);
-        return true;
-      }
-    }
-    class Technology {
-      // These techs have the same name as some others - use a descriptor for disambiguation
-      static techDiscriminators = {
-        wind_plant: "Power",
-        demonic_craftsman: "Evil",
-        evil_planning: "Evil",
-        adamantite_processing_flier: "Flier",
-        alt_anthropology: "Post-Transcendence",
-        alt_fanaticism: "Post-Transcendence",
-        study_alt: "Post-Preeminence",
-        deify_alt: "Post-Preeminence",
-        dyson_sphere: "Plans",
-        unification: "Plans",
-        exotic_infusion: "1st Warning",
-        infusion_check: "2nd Warning",
-        protocol66: "Warning",
-        bac_tanks_tp: "True Path",
-        ai_core_tp: "True Path",
-        terraforming_tp: "True Path",
-        higgs_boson_tp: "True Path",
-        stanene_tp: "True Path",
-        graphene_tp: "True Path",
-        virtual_reality_tp: "True Path",
-        adamantite_vault_tp: "True Path",
-        iridium_smelting: "True Path",
-        bolognium_crates_tp: "True Path",
-        adamantite_containers_tp: "True Path",
-        orichalcum_panels_tp: "True Path",
-        dreadnought_ship: "True Path",
-        fusion_generator: "True Path",
-        replicator: "Lone Survivor"
+    const {
+      Job,
+      BasicJob,
+      CraftingJob,
+      Resource,
+      SoulGem,
+      Troops,
+      Supply,
+      Power,
+      Support,
+      BeltSupport,
+      ElectrolysisSupport,
+      WomlingsSupport,
+      PrestigeResource,
+      Population,
+      Morale,
+      Thrall,
+      ResourceProductionCost,
+      Action,
+      CityAction,
+      Pillar,
+      ResourceAction,
+      EvolutionAction,
+      SpaceDock,
+      ModalAction,
+      Project,
+      Technology,
+      Race,
+      Trigger,
+      MinorTrait,
+      MutableTrait,
+      MajorTrait,
+      GenusTrait
+    } = createEntityClasses({
+      dependencies: {
+        $: () => $,
+        arpaIds: () => arpaIds,
+        buildingIds: () => buildingIds,
+        buildings: () => buildings,
+        checkAffordableCustom: () => checkAffordableCustom,
+        checkTypes: () => checkTypes,
+        conflictingTraits: () => conflictingTraits,
+        document: () => document,
+        fanatAchievements: () => fanatAchievements,
+        Fibonacci: () => Fibonacci,
+        game: () => game,
+        GameLog: () => GameLog,
+        getAchievementStar: () => getAchievementStar,
+        getCitadelConsumption: () => getCitadelConsumption,
+        getStarLevel: () => getStarLevel,
+        getVueById: () => getVueById,
+        haveTask: () => haveTask,
+        haveTech: () => haveTech,
+        jobs: () => jobs,
+        KeyManager: () => KeyManager,
+        logIgnore: () => logIgnore,
+        logPrestige: () => logPrestige,
+        MutableTraitManager: () => MutableTraitManager,
+        mutationCostMultipliers: () => mutationCostMultipliers,
+        mutationCostMultipliersGenus: () => mutationCostMultipliersGenus,
+        normalizeProperties: () => normalizeProperties,
+        poly: () => poly,
+        races: () => races,
+        resources: () => resources,
+        retBools: () => retBools,
+        settings: () => settings,
+        settingsRaw: () => settingsRaw,
+        specialRaceTraits: () => specialRaceTraits,
+        state: () => state,
+        techIds: () => techIds,
+        ticksPerSecond: () => ticksPerSecond,
+        traitVal: () => traitVal,
+        TriggerManager: () => TriggerManager,
+        WarManager: () => WarManager,
+        win: () => win,
+        WindowManager: () => WindowManager
+      }
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      window.__EA_TEST_HOOKS__.entityClasses = {
+        Job,
+        BasicJob,
+        CraftingJob,
+        Resource,
+        SoulGem,
+        Troops,
+        Supply,
+        Power,
+        Support,
+        BeltSupport,
+        ElectrolysisSupport,
+        WomlingsSupport,
+        PrestigeResource,
+        Population,
+        Morale,
+        Thrall,
+        ResourceProductionCost,
+        Action,
+        CityAction,
+        Pillar,
+        ResourceAction,
+        EvolutionAction,
+        SpaceDock,
+        ModalAction,
+        Project,
+        Technology,
+        Race,
+        Trigger,
+        MinorTrait,
+        MutableTrait,
+        MajorTrait,
+        GenusTrait
       };
-      constructor(id) {
-        this._id = id;
-        this._vueBinding = "tech-" + id;
-        this.cost = {};
-      }
-      get id() {
-        return this._id;
-      }
-      isUnlocked() {
-        return document.querySelector(
-          "#" + this._vueBinding + " > .button:not(.precog)"
-        ) !== null && getVueById(this._vueBinding) !== void 0;
-      }
-      get definition() {
-        return game.actions.tech[this._id];
-      }
-      get title() {
-        let def = this.definition;
-        let title = typeof def.title === "function" ? def.title() : def.title;
-        if (this._id in Technology.techDiscriminators) {
-          title += ` (${Technology.techDiscriminators[this._id]})`;
-        }
-        return title;
-      }
-      get name() {
-        return this.title;
-      }
-      isAffordable(max = false) {
-        return game.checkAffordable(this.definition, max);
-      }
-      // Whether the action is clickable is determined by whether it is unlocked, affordable and not a "permanently clickable" action
-      isClickable() {
-        return this.isUnlocked() && this.isAffordable();
-      }
-      // This is a "safe" click. It will only click if the container is currently clickable.
-      // ie. it won't bypass the interface and click the node if it isn't clickable in the UI.
-      click() {
-        if (!this.isClickable()) {
-          return false;
-        }
-        for (let res in this.cost) {
-          resources[res].currentQuantity -= this.cost[res];
-        }
-        getVueById(this._vueBinding).action();
-        let def = this.definition;
-        let title = typeof def.title === "function" ? def.title() : def.title;
-        GameLog.logSuccess("research", poly.loc("research_success", [title]), [
-          "queue",
-          "research_queue"
-        ]);
-        return true;
-      }
-      isResearched() {
-        return document.querySelector("#tech-" + this.id + " .oldTech") !== null;
-      }
-      updateResourceRequirements() {
-        if (!this.isUnlocked()) {
-          return;
-        }
-        this.cost = {};
-        if (!this.definition.cost) {
-          return;
-        }
-        let adjustedCosts = poly.adjustCosts(this.definition);
-        for (let resourceName in adjustedCosts) {
-          if (resources[resourceName]) {
-            let resourceAmount = Number(adjustedCosts[resourceName]());
-            if (resourceAmount > 0) {
-              this.cost[resourceName] = resourceAmount;
-            }
-          }
-        }
-      }
-    }
-    class Race {
-      constructor(id) {
-        this.id = id;
-        this.evolutionTree = {};
-      }
-      get name() {
-        return game.races[this.id].name ?? `Custom (${this.id} slot)`;
-      }
-      get desc() {
-        let nameRef = game.races[this.id].desc;
-        return typeof nameRef === "function" ? nameRef() : typeof nameRef === "string" ? nameRef : "Custom";
-      }
-      get genus() {
-        return game.races[this.id].type;
-      }
-      getWeighting(verbose) {
-        let habitability = this.getHabitability();
-        if (habitability < (settings.evolutionAutoUnbound ? 0.8 : 1)) {
-          return -1;
-        }
-        const noMADRace = ["sludge", "ultra_sludge", "hellspawn"];
-        const noPillarRace = [
-          "custom",
-          "junker",
-          "sludge",
-          "ultra_sludge",
-          "hybrid",
-          "hellspawn"
-        ];
-        const noGreatnessGenus = ["hybrid"];
-        const noGreatnessRace = ["hellspawn"];
-        const noExtinctionRace = ["hellspawn"];
-        const challengeRace = ["junker", "sludge", "ultra_sludge", "hellspawn"];
-        const greatnessReset = [
-          "bioseed",
-          "ascension",
-          "terraform",
-          "matrix",
-          "retire",
-          "eden",
-          "apotheosis"
-        ];
-        const midTierReset = [
-          "bioseed",
-          "cataclysm",
-          "whitehole",
-          "vacuum",
-          "terraform"
-        ];
-        const highTierReset = ["ascension", "demonic", "apotheosis"];
-        const bestForMid = [
-          "human",
-          "cath",
-          "capybara",
-          "gnome",
-          "cyclops",
-          "gecko",
-          "dracnid",
-          "entish",
-          "shroomi",
-          "antid",
-          "sharkin",
-          "dryad",
-          "salamander",
-          "yeti",
-          "kamel",
-          "imp",
-          "unicorn",
-          "synth",
-          "shoggoth"
-        ];
-        const bestForHigh = [
-          "human",
-          "cath",
-          "capybara",
-          "gnome",
-          "cyclops",
-          "gecko",
-          "dracnid",
-          "entish",
-          "shroomi",
-          "scorpid",
-          "sharkin",
-          "dryad",
-          "salamander",
-          "wendigo",
-          "kamel",
-          "balorg",
-          "unicorn",
-          "nano",
-          "ghast"
-        ];
-        const goodImitates = [
-          "wyvern",
-          "dwarf",
-          "dracnid",
-          "octigoran",
-          "unicorn",
-          "salamander",
-          "cyclops",
-          "kamel",
-          "arraak",
-          "troll",
-          "custom"
-        ];
-        const noImitates = ["junker", "nano", "synth", "hellspawn"];
-        let goals = [];
-        let weighting = 0;
-        let starLevel = getStarLevel(settings);
-        const checkAchievement = (baseWeight, id) => {
-          let improve = starLevel - getAchievementStar(id);
-          if (improve > 0) {
-            weighting += baseWeight * improve;
-            goals.push(`achieve_${id}_name`);
-            if (game.global.race.universe !== "micro" && game.global.race.universe !== "standard") {
-              weighting += baseWeight * Math.max(0, starLevel - getAchievementStar(id, "standard"));
-            }
-          }
-        };
-        if ((settings.prestigeType === "ascension" && settings.prestigeAscensionPillar || ["demonic", "apotheosis"].includes(settings.prestigeType)) && game.global.race.universe !== "micro") {
-          let speciesPillarLevel = game.global.pillars[this.id] ?? 0;
-          let canPillar = !speciesPillarLevel && resources.Harmony.currentQuantity >= 1;
-          let canUpgrade = speciesPillarLevel && speciesPillarLevel < starLevel;
-          if (canPillar || canUpgrade) {
-            weighting += 1e3 * Math.max(0, starLevel - speciesPillarLevel);
-            if (!speciesPillarLevel && !challengeRace.includes(this.id))
-              weighting += 1e5;
-            goals.push("feat_equilibrium_name");
-            if (!noPillarRace.includes(this.id)) {
-              let genusPillar = Math.max(
-                ...Object.values(races).filter(
-                  (r) => r.genus === this.genus && !noPillarRace.includes(r.id)
-                ).map((r) => game.global.pillars[r.id] ?? 0)
-              );
-              let improve = starLevel - genusPillar;
-              if (improve > 0) {
-                weighting += 1e4 * improve;
-                goals.push("achieve_enlightenment_name");
-              }
-            }
-          }
-        }
-        if (settings.prestigeType === "apocalypse") {
-          let imitateUnlocked = game.global.stats?.synth?.[this.id] ?? false;
-          if (!noImitates.includes(this.id) && !imitateUnlocked) {
-            weighting += 1e4;
-            goals.push("feat_planned_obsolescence_name");
-            if (goodImitates.includes(this.id)) {
-              weighting += (goodImitates.length - 1 - goodImitates.indexOf(this.id)) * 5e3;
-            }
-          }
-        }
-        if (greatnessReset.includes(settings.prestigeType)) {
-          if (!noGreatnessGenus.includes(this.genus) && !noGreatnessRace.includes(this.id)) {
-            checkAchievement(100, "genus_" + this.genus);
-          }
-        } else if (!noExtinctionRace.includes(this.id) && (!noMADRace.includes(this.id) || settings.prestigeType !== "mad")) {
-          checkAchievement(100, "extinct_" + this.id);
-        }
-        if (this.genus === "demonic" && settings.prestigeType !== "mad" && settings.prestigeType !== "bioseed") {
-          checkAchievement(50, "blood_war");
-        }
-        if (this.id === "sharkin" && settings.prestigeType !== "mad") {
-          checkAchievement(50, "laser_shark");
-        }
-        if (game.global.race.universe === "micro" && settings.prestigeType === "bioseed") {
-          let smallRace = this.genus === "small" || game.races[this.id].traits.compact;
-          checkAchievement(50, smallRace ? "macro" : "marble");
-        }
-        if (this.id === "balorg" && game.global.race.universe === "magic" && settings.prestigeType === "vacuum") {
-          checkAchievement(50, "pass");
-        }
-        for (let set of fanatAchievements) {
-          if (this.id === set.race && game.global.race.gods === set.god) {
-            checkAchievement(150, set.achieve);
-          }
-        }
-        if (weighting > 0 && habitability === 1 && this.getCondition() !== "" && !challengeRace.includes(this.id)) {
-          weighting += 500;
-        }
-        if (midTierReset.includes(settings.prestigeType) && bestForMid.includes(this.id) || highTierReset.includes(settings.prestigeType) && bestForHigh.includes(this.id)) {
-          weighting += 1;
-        }
-        if (this.id === game.global.race.gods) {
-          checkAchievement(10, "second_evolution");
-        }
-        for (let set of fanatAchievements) {
-          if (this.id === set.god) {
-            checkAchievement(5, set.achieve);
-          }
-        }
-        if (game.global.race.universe !== "micro") {
-          const checkFeat = (id) => {
-            let improve = starLevel - (game.global.stats.feat[id] ?? 0);
-            if (improve > 0) {
-              weighting += 1 * improve;
-              goals.push(`feat_${id}_name`);
-            }
-          };
-          if (game.global.city.biome === "hellscape" && this.genus !== "demonic") {
-            switch (settings.prestigeType) {
-              case "mad":
-              case "cataclysm":
-                checkFeat("take_no_advice");
-                break;
-              case "bioseed":
-                checkFeat("ill_advised");
-                break;
-            }
-          }
-          if (this.id === "junker") {
-            switch (settings.prestigeType) {
-              case "bioseed":
-                checkFeat("organ_harvester");
-                break;
-              case "ascension":
-              case "demonic":
-                checkFeat("garbage_pie");
-              case "terraform":
-              case "whitehole":
-              case "vacuum":
-              case "apocalypse":
-                checkFeat("the_misery");
-                break;
-            }
-          }
-          if (settings.prestigeType === "whitehole" && game.global.race.universe === "evil" && this.genus === "angelic") {
-            checkFeat("nephilim");
-          }
-          if (settings.prestigeType === "demonic" && this.genus === "angelic") {
-            checkFeat("twisted");
-          }
-          if (settings.prestigeType === "ascension" && settings.challenge_emfield && this.genus === "artifical" && this.id !== "custom") {
-            checkFeat("digital_ascension");
-          }
-          if (settings.prestigeType === "demonic" && this.id === "sludge") {
-            checkFeat("slime_lord");
-          }
-        }
-        if (challengeRace.includes(this.id)) {
-          weighting *= starLevel < 5 ? 0 : 0.01;
-        }
-        weighting *= habitability;
-        return verbose ? goals : weighting;
-      }
-      getHabitability() {
-        switch (this.id) {
-          case "hellspawn":
-            return game.global.race.universe === "evil" && game.global.stats.achieve["godslayer"]?.e ? 1 : 0;
-          case "junker":
-            return game.global.genes.challenge ? 1 : 0;
-          case "sludge":
-            return (game.global.stats.achieve["ascended"] || game.global.stats.achieve["corrupted"]) && game.global.stats.achieve["extinct_junker"] ? 1 : 0;
-          case "ultra_sludge":
-            return game.global.stats.achieve["godslayer"] && game.global.stats.achieve["extinct_sludge"] ? 1 : 0;
-          case "hybrid":
-            return game.global.stats.achieve["what_is_best"]?.e >= 5 ? 1 : 0;
-        }
-        let unboundMod = game.global.blood.unbound >= 4 ? 0.95 : game.global.blood.unbound >= 2 ? 0.9 : game.global.blood.unbound >= 1 ? 0.8 : 0;
-        let shadowMod = game.global.blood.unbound >= 3 ? unboundMod : 0;
-        switch (this.genus) {
-          case "aquatic":
-            return ["swamp", "oceanic"].includes(game.global.city.biome) ? 1 : unboundMod;
-          case "fey":
-            return ["forest", "swamp", "taiga"].includes(game.global.city.biome) ? 1 : unboundMod;
-          case "sand":
-            return ["ashland", "desert"].includes(game.global.city.biome) ? 1 : unboundMod;
-          case "heat":
-            return ["ashland", "volcanic"].includes(game.global.city.biome) ? 1 : unboundMod;
-          case "polar":
-            return ["tundra", "taiga"].includes(game.global.city.biome) ? 1 : unboundMod;
-          case "demonic":
-            return game.global.city.biome === "hellscape" ? 1 : shadowMod;
-          case "angelic":
-            return game.global.city.biome === "eden" ? 1 : shadowMod;
-          case "synthetic":
-            return game.global.stats.achieve["obsolete"]?.l >= 5 ? 1 : 0;
-          case "eldritch":
-            return game.global.stats.achieve["nightmare"]?.mg ? 1 : 0;
-          case "hybrid":
-            return game.global.stats.achieve["godslayer"] ? 1 : 0;
-          case void 0:
-            return 0;
-          default:
-            return 1;
-        }
-      }
-      getCondition() {
-        switch (this.id) {
-          case "hellspawn":
-            return poly.loc("wiki_challenges_reqs_reset", [
-              `${poly.loc("wiki_universe_evil")} ${poly.loc(
-                "wiki_resets_apotheosis"
-              )}`
-            ]);
-          case "junker":
-            return "Genetic Dead End unlocked.";
-          case "sludge":
-            return "Failed Experiment unlocked.";
-          case "ultra_sludge":
-            return "Ultra Failed Experiment unlocked.";
-          case "custom":
-            return `Complete an Ascension reset and be on a suitable planet for your chosen genus (${this.genus ? game.loc("genelab_genus_" + this.genus) : "not set"}).`;
-          case "hybrid":
-            return game.loc("wiki_achieve_what_is_best");
-        }
-        switch (this.genus) {
-          case "aquatic":
-            return "Oceanic or Swamp planet.";
-          case "fey":
-            return "Forest, Swamp or Taiga planet.";
-          case "sand":
-            return "Ashland or Desert planet.";
-          case "heat":
-            return "Ashland or Volcanic planet.";
-          case "polar":
-            return "Tundra or Taiga planet.";
-          case "demonic":
-            return "Hellscape planet.";
-          case "angelic":
-            return "Eden planet.";
-          case "synthetic":
-            return game.loc("wiki_achieve_obsolete");
-          case "eldritch":
-            return game.loc("wiki_achieve_nightmare");
-          case "hybrid":
-            return game.loc("wiki_achieve_godslayer");
-          case void 0:
-            return "Unknown.";
-          default:
-            return "";
-        }
-      }
-    }
-    class Trigger {
-      constructor(seq, priority, requirementType, requirementId, requirementCount, actionType, actionId, actionCount) {
-        this.seq = seq;
-        this.priority = priority;
-        this.requirementType = requirementType;
-        this.requirementId = requirementId;
-        this.requirementCount = requirementCount;
-        this.actionType = actionType;
-        this.actionId = actionId;
-        this.actionCount = actionCount;
-        this.complete = false;
-      }
-      cost() {
-        if (this.actionType === "research") {
-          return techIds[this.actionId].definition.cost;
-        }
-        if (this.actionType === "build") {
-          return buildingIds[this.actionId].definition.cost;
-        }
-        if (this.actionType === "arpa") {
-          return arpaIds[this.actionId].definition.cost;
-        }
-        return {};
-      }
-      isActionPossible() {
-        let obj = null;
-        if (this.actionType === "research") {
-          obj = techIds[this.actionId];
-        }
-        if (this.actionType === "build") {
-          obj = buildingIds[this.actionId];
-        }
-        if (this.actionType === "arpa") {
-          obj = arpaIds[this.actionId];
-        }
-        return obj && obj.isUnlocked() && obj.isAffordable(true);
-      }
-      updateComplete() {
-        if (this.complete) {
-          return false;
-        }
-        if (this.actionType === "research" && techIds[this.actionId].isResearched()) {
-          this.complete = true;
-          return true;
-        }
-        if (this.actionType === "build" && buildingIds[this.actionId].count >= this.actionCount) {
-          this.complete = true;
-          return true;
-        }
-        if (this.actionType === "arpa" && arpaIds[this.actionId].count >= this.actionCount) {
-          this.complete = true;
-          return true;
-        }
-        return false;
-      }
-      areRequirementsMet() {
-        if (this.requirementType === "chain") {
-          return this.priority < 1 || TriggerManager.priorityList[this.priority - 1]?.complete;
-        } else if (checkTypes[this.requirementType]) {
-          try {
-            if (retBools.includes(this.requirementType)) {
-              return checkTypes[this.requirementType].fn(this.requirementId) == this.requirementCount;
-            } else {
-              return checkTypes[this.requirementType].fn(this.requirementId) >= this.requirementCount;
-            }
-          } catch (error) {
-            let displayName = `${this.requirementType} ${this.requirementId} x${this.requirementCount} => ${this.actionType}: ${this.actionId} x${this.actionCount}`;
-            let msg = `Trigger ${this.seq} [${displayName}] requirement is invalid! Fix or remove it. (${error})`;
-            if (!WindowManager.isOpen() && !Object.values(game.global.lastMsg.all).find((log) => log.m === msg)) {
-              GameLog.logDanger("special", msg, ["events", "major_events"]);
-            }
-          }
-        }
-        return false;
-      }
-      updateRequirementType(requirementType) {
-        if (requirementType === this.requirementType) {
-          return;
-        }
-        if (requirementType === "chain") {
-          this.requirementType = requirementType;
-          this.requirementId = "";
-          this.requirementCount = 0;
-          return;
-        }
-        if (!checkTypes[requirementType]) {
-          return;
-        }
-        let oldArg = checkTypes[this.requirementType]?.arg ?? null;
-        let oldOpts = checkTypes[this.requirementType]?.options ?? null;
-        let newArg = checkTypes[requirementType].arg;
-        let newOpts = checkTypes[requirementType].options;
-        this.requirementType = requirementType;
-        this.requirementCount = 1;
-        this.complete = false;
-        if (oldArg !== newArg || oldOpts !== newOpts) {
-          this.requirementId = checkTypes[this.requirementType].def;
-        }
-      }
-      updateActionType(actionType) {
-        if (actionType === this.actionType) {
-          return;
-        }
-        this.actionType = actionType;
-        this.complete = false;
-        if (this.actionType === "research") {
-          this.actionId = "tech-club";
-          this.actionCount = 0;
-          return;
-        }
-        if (this.actionType === "build") {
-          this.actionId = "city-basic_housing";
-          this.actionCount = 1;
-          return;
-        }
-        if (this.actionType === "arpa") {
-          this.actionId = "arpalhc";
-          this.actionCount = 1;
-          return;
-        }
-      }
-    }
-    class MinorTrait {
-      constructor(traitName) {
-        this.traitName = traitName;
-      }
-      get enabled() {
-        return settings["mTrait_" + this.traitName];
-      }
-      get priority() {
-        return settingsRaw["mTrait_p_" + this.traitName];
-      }
-      get weighting() {
-        return settings["mTrait_w_" + this.traitName];
-      }
-      isUnlocked() {
-        return game.global.settings.mtorder.includes(this.traitName);
-      }
-      geneCount() {
-        return game.global.race.minor[this.traitName] ?? 0;
-      }
-      phageCount() {
-        return game.global.genes.minor[this.traitName] ?? 0;
-      }
-      totalCount() {
-        return game.global.race[this.traitName] ?? 0;
-      }
-      geneCost() {
-        return this.traitName === "mastery" ? Fibonacci(this.geneCount()) * 5 : Fibonacci(this.geneCount());
-      }
-    }
-    class MutableTrait {
-      constructor(traitName) {
-        this.traitName = traitName;
-        this.baseCost = Math.abs(game.traits[traitName].val);
-        this.isPositive = game.traits[traitName].val >= 0;
-      }
-      get gainEnabled() {
-        return settings["mutableTrait_gain_" + this.traitName];
-      }
-      get purgeEnabled() {
-        return settings["mutableTrait_purge_" + this.traitName];
-      }
-      get resetEnabled() {
-        return settings["mutableTrait_reset_" + this.traitName];
-      }
-      get priority() {
-        return settingsRaw["mutableTrait_p_" + this.traitName];
-      }
-      get name() {
-        return game.loc("trait_" + this.traitName + "_name");
-      }
-      canGain() {
-        if (game.global.race.species === "hellspawn" && game.global.race["warlord"]) {
-          return false;
-        }
-        return this.gainEnabled && !this.purgeEnabled && this.canMutate("gain") && game.global.race[this.traitName] === void 0 && !conflictingTraits.some(
-          (set) => set[0] === this.traitName && game.global.race[set[1]] !== void 0 || set[1] === this.traitName && game.global.race[set[0]] !== void 0
-        );
-      }
-      canPurge() {
-        return this.purgeEnabled && !this.gainEnabled && this.canMutate("purge") && game.global.race[this.traitName] !== void 0 && !((game.global.race.species === "sludge" || game.global.race.species === "ultra_sludge") && this.traitName === "ooze") && !game.global.race.ss_traits?.includes(this.traitName) && !game.global.race.iTraits?.hasOwnProperty(this.traitName);
-      }
-      canMutate(action) {
-        let currentPlasmids = resources[game.global.race.universe === "antimatter" ? "AntiPlasmid" : "Plasmid"].currentQuantity;
-        return currentPlasmids - this.mutationCost(action) >= MutableTraitManager.minimumPlasmidsToPreserve && !((game.global.race.species === "sludge" || game.global.race.species === "ultra_sludge") && game.global.race["modified"]);
-      }
-      mutationCost(action) {
-        let mult = mutationCostMultipliers[game.global.race.species]?.[action] ?? 1;
-        let multGenus = mutationCostMultipliersGenus[game.races[game.global.race.species].type]?.[action] ?? 1;
-        return this.baseCost * 5 * mult * multGenus;
-      }
-    }
-    class MajorTrait extends MutableTrait {
-      constructor(traitName) {
-        super(traitName);
-        this.type = "major";
-        let ownerRace = Object.entries(game.races).filter(
-          ([id, race]) => id !== "custom" && id !== "hybrid" && race.traits[traitName] !== void 0
-        ).map(([id, race]) => ({ id, genus: race.type }))[0] ?? {};
-        this.source = ownerRace.id ?? specialRaceTraits[traitName] ?? "";
-        this.racesThatCanGain = Object.entries(game.races).filter(
-          ([id, race]) => id == ownerRace.id || (race?.type == "hybrid" ? race?.hybrid?.includes(ownerRace.genus) : race?.type === ownerRace.genus)
-        ).map(([id, race]) => id).flat();
-        this.genus = this.source === "reindeer" ? "herbivore" : ownerRace.genus;
-      }
-      isGainable() {
-        return this.traitName !== "frail" && this.traitName !== "ooze";
-      }
-      canGain() {
-        return super.canGain() && game.global.genes["mutation"] >= 3 && this.racesThatCanGain.includes(game.global.race.species);
-      }
-      canPurge() {
-        return super.canPurge() && game.global.genes["mutation"] >= 1;
-      }
-    }
-    class GenusTrait extends MutableTrait {
-      constructor(traitName) {
-        super(traitName);
-        this.type = "genus";
-        let genus = Object.entries(poly.genus_traits).filter(([id, traits]) => traits[traitName] !== void 0).map(([id, traits]) => id);
-        this.source = genus[0] ?? specialRaceTraits[traitName] ?? "";
-        this.genus = this.source;
-      }
-      isGainable() {
-        return false;
-      }
-      canGain() {
-        return false;
-      }
-      canPurge() {
-        return super.canPurge() && game.global.genes["mutation"] >= 2;
-      }
     }
     const biomeList = [
       "grassland",
@@ -19006,3291 +28347,109 @@
       whiteholeLastStabilise: 0,
       whiteholeLastExoticMass: 0
     };
-    var resources = {
-      // Resources order follow game order, and used to initialize priorities
-      // Evolution resources
-      RNA: new Resource("RNA", "RNA"),
-      DNA: new Resource("DNA", "DNA"),
-      // Base resources
-      Money: new Resource("Money", "Money"),
-      Population: new Population("Population", "Population"),
-      // We can't store the full elementId because we don't know the name of the population node until later
-      Slave: new Resource("Slave", "Slave"),
-      Mana: new Resource("Mana", "Mana"),
-      Energy: new Resource("Energy", "Energy"),
-      Sus: new Resource("Suspicion", "Sus"),
-      Authority: new Resource("Authority", "Authority"),
-      Knowledge: new Resource("Knowledge", "Knowledge"),
-      Omniscience: new Resource("Omniscience", "Omniscience"),
-      Zen: new Resource("Zen", "Zen"),
-      Crates: new Resource("Crates", "Crates"),
-      Containers: new Resource("Containers", "Containers"),
-      // Basic resources (can trade for these)
-      Food: new Resource("Food", "Food", { tradable: true }),
-      Lumber: new Resource("Lumber", "Lumber", { tradable: true }),
-      Chrysotile: new Resource("Chrysotile", "Chrysotile", { tradable: true }),
-      Stone: new Resource("Stone", "Stone", { tradable: true }),
-      Crystal: new Resource("Crystal", "Crystal", { tradable: true }),
-      Furs: new Resource("Furs", "Furs", { tradable: true }),
-      Copper: new Resource("Copper", "Copper", { tradable: true }),
-      Iron: new Resource("Iron", "Iron", { tradable: true }),
-      Aluminium: new Resource("Aluminium", "Aluminium", { tradable: true }),
-      Cement: new Resource("Cement", "Cement", { tradable: true }),
-      Coal: new Resource("Coal", "Coal", { tradable: true }),
-      Oil: new Resource("Oil", "Oil", { tradable: true }),
-      Uranium: new Resource("Uranium", "Uranium", { tradable: true }),
-      Steel: new Resource("Steel", "Steel", { tradable: true }),
-      Titanium: new Resource("Titanium", "Titanium", { tradable: true }),
-      Alloy: new Resource("Alloy", "Alloy", { tradable: true }),
-      Polymer: new Resource("Polymer", "Polymer", { tradable: true }),
-      Iridium: new Resource("Iridium", "Iridium", { tradable: true }),
-      Helium_3: new Resource("Helium-3", "Helium_3", { tradable: true }),
-      // Advanced resources
-      Water: new Resource("Water", "Water"),
-      Deuterium: new Resource("Deuterium", "Deuterium"),
-      Neutronium: new Resource("Neutronium", "Neutronium"),
-      Adamantite: new Resource("Adamantite", "Adamantite"),
-      Infernite: new Resource("Infernite", "Infernite"),
-      Elerium: new Resource("Elerium", "Elerium"),
-      Nano_Tube: new Resource("Nano Tube", "Nano_Tube"),
-      Graphene: new Resource("Graphene", "Graphene"),
-      Stanene: new Resource("Stanene", "Stanene"),
-      Bolognium: new Resource("Bolognium", "Bolognium"),
-      Vitreloy: new Resource("Vitreloy", "Vitreloy"),
-      Orichalcum: new Resource("Orichalcum", "Orichalcum"),
-      Asphodel_Powder: new Resource("Asphodel Powder", "Asphodel_Powder"),
-      Elysanite: new Resource("Elysanite", "Elysanite"),
-      Unobtainium: new Resource("Unobtainium", "Unobtainium"),
-      Materials: new Resource("Materials", "Materials"),
-      Horseshoe: new Resource("Horseshoe", "Horseshoe"),
-      Nanite: new Resource("Nanite", "Nanite"),
-      Genes: new Resource("Genes", "Genes"),
-      Soul_Gem: new SoulGem("Soul Gem", "Soul_Gem"),
-      // Craftable resources
-      Plywood: new Resource("Plywood", "Plywood"),
-      Brick: new Resource("Brick", "Brick"),
-      Wrought_Iron: new Resource("Wrought Iron", "Wrought_Iron"),
-      Sheet_Metal: new Resource("Sheet Metal", "Sheet_Metal"),
-      Mythril: new Resource("Mythril", "Mythril"),
-      Aerogel: new Resource("Aerogel", "Aerogel"),
-      Nanoweave: new Resource("Nanoweave", "Nanoweave"),
-      Scarletite: new Resource("Scarletite", "Scarletite"),
-      Quantium: new Resource("Quantium", "Quantium"),
-      // Special resources
-      Corrupt_Gem: new Resource("Corrupt Gem", "Corrupt_Gem"),
-      Codex: new Resource("Codex", "Codex"),
-      Cipher: new Resource("Encrypted Data", "Cipher"),
-      Demonic_Essence: new Resource("Demonic Essence", "Demonic_Essence"),
-      Blessed_Essence: new Resource("Blessed Essence", "Blessed_Essence"),
-      // Prestige resources
-      Blood_Stone: new PrestigeResource("Blood Stone", "Blood_Stone"),
-      Artifact: new PrestigeResource("Artifact", "Artifact"),
-      Plasmid: new PrestigeResource("Plasmid", "Plasmid"),
-      AntiPlasmid: new PrestigeResource("Anti-Plasmid", "AntiPlasmid"),
-      Supercoiled: new PrestigeResource("Supercoiled", "Supercoiled"),
-      Phage: new PrestigeResource("Phage", "Phage"),
-      Dark: new PrestigeResource("Dark", "Dark"),
-      Harmony: new PrestigeResource("Harmony", "Harmony"),
-      AICore: new PrestigeResource("AI Core", "AICore"),
-      // Special not-really-resources-but-we'll-treat-them-like-resources resources
-      Troops: new Troops("Troops", "Troops"),
-      Supply: new Supply("Supplies", "Supply"),
-      Power: new Power("Power", "Power"),
-      Morale: new Morale("Morale", "Morale"),
-      Thrall: new Thrall("Thrall", "Thrall"),
-      Womlings_Support: new WomlingsSupport(
-        "Womlings",
-        "Womlings_Support",
-        "",
-        ""
-      ),
-      Moon_Support: new Support(
-        "Moon Support",
-        "Moon_Support",
-        "space",
-        "spc_moon"
-      ),
-      Red_Support: new Support("Red Support", "Red_Support", "space", "spc_red"),
-      Sun_Support: new Support("Sun Support", "Sun_Support", "space", "spc_sun"),
-      Belt_Support: new BeltSupport(
-        "Belt Support",
-        "Belt_Support",
-        "space",
-        "spc_belt"
-      ),
-      Titan_Support: new Support(
-        "Titan Support",
-        "Titan_Support",
-        "space",
-        "spc_titan"
-      ),
-      Electrolysis_Support: new ElectrolysisSupport(
-        "Electrolysis Plant",
-        "Electrolysis_Support",
-        "",
-        ""
-      ),
-      Enceladus_Support: new Support(
-        "Enceladus Support",
-        "Enceladus_Support",
-        "space",
-        "spc_enceladus"
-      ),
-      Eris_Support: new Support(
-        "Eris Support",
-        "Eris_Support",
-        "space",
-        "spc_eris"
-      ),
-      Tau_Support: new Support(
-        "Tau Ceti Support",
-        "Tau_Support",
-        "tauceti",
-        "tau_home"
-      ),
-      Tau_Red_Support: new Support(
-        "Tau Ceti Red Support",
-        "Tau_Red_Support",
-        "tauceti",
-        "tau_red"
-      ),
-      Tau_Belt_Support: new Support(
-        "Tau Ceti Belt Support",
-        "Tau_Belt_Support",
-        "tauceti",
-        "tau_roid"
-      ),
-      Alpha_Support: new Support(
-        "Alpha Support",
-        "Alpha_Support",
-        "interstellar",
-        "int_alpha"
-      ),
-      Nebula_Support: new Support(
-        "Nebula Support",
-        "Nebula_Support",
-        "interstellar",
-        "int_nebula"
-      ),
-      Gateway_Support: new Support(
-        "Gateway Support",
-        "Gateway_Support",
-        "galaxy",
-        "gxy_gateway"
-      ),
-      Alien_Support: new Support(
-        "Alien Support",
-        "Alien_Support",
-        "galaxy",
-        "gxy_alien2"
-      ),
-      Lake_Support: new Support(
-        "Lake Support",
-        "Lake_Support",
-        "portal",
-        "prtl_lake"
-      ),
-      Spire_Support: new Support(
-        "Spire Support",
-        "Spire_Support",
-        "portal",
-        "prtl_spire"
-      ),
-      Asphodel_Support: new Support(
-        "Asphodel Support",
-        "Asphodel_Support",
-        "eden",
-        "eden_asphodel"
-      )
-    };
-    var jobs = {
-      Unemployed: new BasicJob("unemployed", "Unemployed"),
-      Colonist: new Job("colonist", "Colonist"),
-      Teamster: new BasicJob("teamster", "Teamster", { smart: true }),
-      Meditator: new BasicJob("meditator", "Meditator", { smart: true }),
-      Hunter: new BasicJob("hunter", "Hunter", { serve: true, smart: true }),
-      Farmer: new BasicJob("farmer", "Farmer", { serve: true, smart: true }),
-      Forager: new BasicJob("forager", "Forager", { serve: true, split: true }),
-      Lumberjack: new BasicJob("lumberjack", "Lumberjack", {
-        serve: true,
-        split: true,
-        smart: true
-      }),
-      QuarryWorker: new BasicJob("quarry_worker", "Quarry Worker", {
-        serve: true,
-        split: true,
-        smart: true
-      }),
-      CrystalMiner: new BasicJob("crystal_miner", "Crystal Miner", {
-        serve: true,
-        split: true,
-        smart: true
-      }),
-      Scavenger: new BasicJob("scavenger", "Scavenger", {
-        serve: true,
-        split: true
-      }),
-      TitanColonist: new Job("titan_colonist", "Titan Colonist"),
-      Miner: new Job("miner", "Miner", { smart: true }),
-      CoalMiner: new Job("coal_miner", "Coal Miner", { smart: true }),
-      CementWorker: new Job("cement_worker", "Cement Worker", { smart: true }),
-      Professor: new Job("professor", "Professor", { smart: true }),
-      Scientist: new Job("scientist", "Scientist", { smart: true }),
-      Entertainer: new Job("entertainer", "Entertainer", { smart: true }),
-      HellSurveyor: new Job("hell_surveyor", "Hell Surveyor", { smart: true }),
-      SpaceMiner: new Job("space_miner", "Space Miner", { smart: true }),
-      PitMiner: new Job("pit_miner", "Pit Miner"),
-      Torturer: new Job("torturer", "Tormentor", { smart: true }),
-      Archaeologist: new Job("archaeologist", "Archaeologist"),
-      GhostTrapper: new Job("ghost_trapper", "Ghost Trapper"),
-      ElysiumMiner: new Job("elysium_miner", "Elysium Miner"),
-      Banker: new Job("banker", "Banker", { smart: true }),
-      Priest: new Job("priest", "Priest")
-    };
-    var crafter = {
-      Scarletite: new CraftingJob(
-        "Scarletite",
-        "Scarletite Crafter",
-        resources.Scarletite
-      ),
-      Quantium: new CraftingJob(
-        "Quantium",
-        "Quantium Crafter",
-        resources.Quantium
-      ),
-      Plywood: new CraftingJob("Plywood", "Plywood Crafter", resources.Plywood),
-      Brick: new CraftingJob("Brick", "Brick Crafter", resources.Brick),
-      WroughtIron: new CraftingJob(
-        "Wrought_Iron",
-        "Wrought Iron Crafter",
-        resources.Wrought_Iron
-      ),
-      SheetMetal: new CraftingJob(
-        "Sheet_Metal",
-        "Sheet Metal Crafter",
-        resources.Sheet_Metal
-      ),
-      Mythril: new CraftingJob("Mythril", "Mythril Crafter", resources.Mythril),
-      Aerogel: new CraftingJob("Aerogel", "Aerogel Crafter", resources.Aerogel),
-      Nanoweave: new CraftingJob(
-        "Nanoweave",
-        "Nanoweave Crafter",
-        resources.Nanoweave
-      )
-    };
-    var buildings = {
-      Food: new ResourceAction("Gather Food", "city", "food", "", "Food"),
-      Lumber: new ResourceAction("Gather Lumber", "city", "lumber", "", "Lumber"),
-      Stone: new ResourceAction("Gather Stone", "city", "stone", "", "Stone"),
-      Chrysotile: new ResourceAction(
-        "Gather Chrysotile",
-        "city",
-        "chrysotile",
-        "",
-        "Chrysotile"
-      ),
-      Slaughter: new Action("Slaughter the Weak", "city", "slaughter", ""),
-      ForgeHorseshoe: new ResourceAction(
-        "Horseshoe",
-        "city",
-        "horseshoe",
-        "",
-        "Horseshoe",
-        { housing: true, garrison: true }
-      ),
-      SlaveMarket: new ResourceAction(
-        "Slave Market",
-        "city",
-        "slave_market",
-        "",
-        "Slave"
-      ),
-      SacrificialAltar: new Action("Sacrificial Altar", "city", "s_alter", ""),
-      House: new Action("Cabin", "city", "basic_housing", "", { housing: true }),
-      Cottage: new Action("Cottage", "city", "cottage", "", { housing: true }),
-      Apartment: new Action("Apartment", "city", "apartment", "", {
-        housing: true
-      }),
-      Lodge: new Action("Lodge", "city", "lodge", "", { housing: true }),
-      Smokehouse: new Action("Smokehouse", "city", "smokehouse", ""),
-      SoulWell: new Action("Soul Well", "city", "soul_well", ""),
-      SlavePen: new Action("Slave Pen", "city", "slave_pen", ""),
-      Transmitter: new Action("Transmitter", "city", "transmitter", "", {
-        housing: true
-      }),
-      CaptiveHousing: new Action(
-        "Captive Housing",
-        "city",
-        "captive_housing",
-        ""
-      ),
-      Farm: new Action("Farm", "city", "farm", "", { housing: true }),
-      CompostHeap: new Action("Compost Heap", "city", "compost", ""),
-      Mill: new Action("Windmill", "city", "mill", "", { smart: true }),
-      Windmill: new Action("Windmill (Evil)", "city", "windmill", ""),
-      Silo: new Action("Grain Silo", "city", "silo", ""),
-      Assembly: new ResourceAction(
-        "Assembly",
-        "city",
-        "assembly",
-        "",
-        "Population",
-        { housing: true, important: true }
-      ),
-      Barracks: new Action("Barracks", "city", "garrison", "", {
-        garrison: true
-      }),
-      Hospital: new Action("Hospital", "city", "hospital", ""),
-      BootCamp: new Action("Boot Camp", "city", "boot_camp", ""),
-      Shed: new Action("Shed", "city", "shed", ""),
-      StorageYard: new Action("Freight Yard", "city", "storage_yard", ""),
-      Warehouse: new Action("Container Port", "city", "warehouse", ""),
-      Bank: new Action("Bank", "city", "bank", ""),
-      Pylon: new Action("Pylon", "city", "pylon", ""),
-      ConcealWard: new Action(
-        "Conceal Ward (Witch Hunting)",
-        "city",
-        "conceal_ward",
-        ""
-      ),
-      Graveyard: new Action("Graveyard", "city", "graveyard", ""),
-      LumberYard: new Action("Lumber Yard", "city", "lumber_yard", ""),
-      Sawmill: new Action("Sawmill", "city", "sawmill", ""),
-      RockQuarry: new Action("Rock Quarry", "city", "rock_quarry", ""),
-      CementPlant: new Action("Cement Plant", "city", "cement_plant", "", {
-        smart: true
-      }),
-      Foundry: new Action("Foundry", "city", "foundry", ""),
-      Factory: new Action("Factory", "city", "factory", ""),
-      NaniteFactory: new Action("Nanite Factory", "city", "nanite_factory", ""),
-      Smelter: new Action("Smelter", "city", "smelter", ""),
-      MetalRefinery: new Action("Metal Refinery", "city", "metal_refinery", ""),
-      Mine: new Action("Mine", "city", "mine", "", { smart: true }),
-      CoalMine: new Action("Coal Mine", "city", "coal_mine", "", { smart: true }),
-      OilWell: new Action("Oil Derrick", "city", "oil_well", ""),
-      OilDepot: new Action("Fuel Depot", "city", "oil_depot", ""),
-      Trade: new Action("Trade Post", "city", "trade", ""),
-      Wharf: new Action("Wharf", "city", "wharf", ""),
-      TouristCenter: new Action("Tourist Center", "city", "tourist_center", "", {
-        smart: true
-      }),
-      Amphitheatre: new Action("Amphitheatre", "city", "amphitheatre", ""),
-      Casino: new Action("Casino", "city", "casino", ""),
-      Temple: new Action("Temple", "city", "temple", ""),
-      Shrine: new Action("Shrine", "city", "shrine", ""),
-      MeditationChamber: new Action(
-        "Meditation Chamber",
-        "city",
-        "meditation",
-        ""
-      ),
-      Banquet: new Action("Banquet Hall", "city", "banquet", ""),
-      University: new Action("University", "city", "university", "", {
-        knowledge: true
-      }),
-      Library: new Action("Library", "city", "library", "", { knowledge: true }),
-      Wardenclyffe: new Action("Wardenclyffe", "city", "wardenclyffe", "", {
-        knowledge: true
-      }),
-      BioLab: new Action("Bioscience Lab", "city", "biolab", "", {
-        knowledge: true
-      }),
-      CoalPower: new Action("Coal Powerplant", "city", "coal_power", ""),
-      OilPower: new Action("Oil Powerplant", "city", "oil_power", ""),
-      FissionPower: new Action("Fission Reactor", "city", "fission_power", ""),
-      MassDriver: new Action("Mass Driver", "city", "mass_driver", "", {
-        knowledge: () => haveTech("mass", 2)
-      }),
-      SpaceTestLaunch: new Action(
-        "Space Test Launch",
-        "space",
-        "test_launch",
-        "spc_home"
-      ),
-      SpaceSatellite: new Action(
-        "Space Satellite",
-        "space",
-        "satellite",
-        "spc_home",
-        { knowledge: true }
-      ),
-      SpaceGps: new Action("Space Gps", "space", "gps", "spc_home"),
-      SpacePropellantDepot: new Action(
-        "Space Propellant Depot",
-        "space",
-        "propellant_depot",
-        "spc_home"
-      ),
-      SpaceNavBeacon: new Action(
-        "Space Navigation Beacon",
-        "space",
-        "nav_beacon",
-        "spc_home"
-      ),
-      MoonMission: new Action(
-        "Moon Mission",
-        "space",
-        "moon_mission",
-        "spc_moon"
-      ),
-      MoonBase: new Action("Moon Base", "space", "moon_base", "spc_moon"),
-      MoonIridiumMine: new Action(
-        "Moon Iridium Mine",
-        "space",
-        "iridium_mine",
-        "spc_moon",
-        { smart: true }
-      ),
-      MoonHeliumMine: new Action(
-        "Moon Helium-3 Mine",
-        "space",
-        "helium_mine",
-        "spc_moon",
-        { smart: true }
-      ),
-      MoonObservatory: new Action(
-        "Moon Observatory",
-        "space",
-        "observatory",
-        "spc_moon",
-        { knowledge: true }
-      ),
-      RedMission: new Action("Red Mission", "space", "red_mission", "spc_red"),
-      RedSpaceport: new Action("Red Spaceport", "space", "spaceport", "spc_red"),
-      RedTower: new Action("Red Space Control", "space", "red_tower", "spc_red"),
-      RedCaptiveHousing: new CityAction(
-        "Red Captive Housing (Cataclysm)",
-        "space",
-        "captive_housing",
-        "spc_red"
-      ),
-      RedTerraformer: new Action(
-        "Red Terraformer (Orbit Decay)",
-        "space",
-        "terraformer",
-        "spc_red",
-        { multiSegmented: true }
-      ),
-      RedAtmoTerraformer: new Action(
-        "Red Terraformer (Orbit Decay, Complete)",
-        "space",
-        "atmo_terraformer",
-        "spc_red"
-      ),
-      RedTerraform: new Action(
-        "Red Terraform (Orbit Decay)",
-        "space",
-        "terraform",
-        "spc_red",
-        { prestige: true }
-      ),
-      RedAssembly: new ResourceAction(
-        "Red Assembly (Cataclysm)",
-        "space",
-        "assembly",
-        "spc_red",
-        "Population",
-        { housing: true, important: true }
-      ),
-      RedLivingQuarters: new Action(
-        "Red Living Quarters",
-        "space",
-        "living_quarters",
-        "spc_red",
-        { housing: true }
-      ),
-      RedPylon: new Action("Red Pylon (Cataclysm)", "space", "pylon", "spc_red"),
-      RedVrCenter: new Action("Red VR Center", "space", "vr_center", "spc_red"),
-      RedGarage: new Action("Red Garage", "space", "garage", "spc_red"),
-      RedMine: new Action("Red Mine", "space", "red_mine", "spc_red"),
-      RedFabrication: new Action(
-        "Red Fabrication",
-        "space",
-        "fabrication",
-        "spc_red"
-      ),
-      RedFactory: new Action("Red Factory", "space", "red_factory", "spc_red"),
-      RedNaniteFactory: new CityAction(
-        "Red Nanite Factory (Cataclysm)",
-        "space",
-        "nanite_factory",
-        "spc_red"
-      ),
-      RedBiodome: new Action("Red Biodome", "space", "biodome", "spc_red"),
-      RedUniversity: new Action(
-        "Red University (Orbit Decay)",
-        "space",
-        "red_university",
-        "spc_red",
-        { knowledge: true }
-      ),
-      RedExoticLab: new Action(
-        "Red Exotic Materials Lab",
-        "space",
-        "exotic_lab",
-        "spc_red",
-        { knowledge: true }
-      ),
-      RedZiggurat: new Action("Red Ziggurat", "space", "ziggurat", "spc_red"),
-      RedSpaceBarracks: new Action(
-        "Red Marine Barracks",
-        "space",
-        "space_barracks",
-        "spc_red",
-        { garrison: true }
-      ),
-      RedForgeHorseshoe: new ResourceAction(
-        "Red Horseshoe (Cataclysm)",
-        "space",
-        "horseshoe",
-        "spc_red",
-        "Horseshoe",
-        { housing: true, garrison: true }
-      ),
-      HellMission: new Action(
-        "Hell Mission",
-        "space",
-        "hell_mission",
-        "spc_hell"
-      ),
-      HellGeothermal: new Action(
-        "Hell Geothermal Plant",
-        "space",
-        "geothermal",
-        "spc_hell"
-      ),
-      HellSmelter: new Action(
-        "Hell Smelter",
-        "space",
-        "hell_smelter",
-        "spc_hell"
-      ),
-      HellSpaceCasino: new Action(
-        "Hell Space Casino",
-        "space",
-        "spc_casino",
-        "spc_hell"
-      ),
-      HellSwarmPlant: new Action(
-        "Hell Swarm Plant",
-        "space",
-        "swarm_plant",
-        "spc_hell"
-      ),
-      SunMission: new Action("Sun Mission", "space", "sun_mission", "spc_sun"),
-      SunSwarmControl: new Action(
-        "Sun Control Station",
-        "space",
-        "swarm_control",
-        "spc_sun"
-      ),
-      SunSwarmSatellite: new Action(
-        "Sun Swarm Satellite",
-        "space",
-        "swarm_satellite",
-        "spc_sun"
-      ),
-      SunJumpGate: new Action("Sun Jump Gate", "space", "jump_gate", "spc_sun", {
-        multiSegmented: true
-      }),
-      GasMission: new Action("Gas Mission", "space", "gas_mission", "spc_gas"),
-      GasMining: new Action(
-        "Gas Helium-3 Collector",
-        "space",
-        "gas_mining",
-        "spc_gas",
-        { smart: true }
-      ),
-      GasStorage: new Action("Gas Fuel Depot", "space", "gas_storage", "spc_gas"),
-      GasSpaceDock: new SpaceDock(
-        "Gas Space Dock",
-        "space",
-        "star_dock",
-        "spc_gas"
-      ),
-      GasSpaceDockProbe: new ModalAction(
-        "Space Dock Probe",
-        "starDock",
-        "probes",
-        ""
-      ),
-      GasSpaceDockGECK: new ModalAction(
-        "Space Dock G.E.C.K.",
-        "starDock",
-        "geck",
-        ""
-      ),
-      GasSpaceDockShipSegment: new ModalAction(
-        "Space Dock Bioseeder Ship",
-        "starDock",
-        "seeder",
-        "",
-        { multiSegmented: true }
-      ),
-      GasSpaceDockPrepForLaunch: new ModalAction(
-        "Space Dock Prep Ship",
-        "starDock",
-        "prep_ship",
-        ""
-      ),
-      GasSpaceDockLaunch: new ModalAction(
-        "Space Dock Launch Ship",
-        "starDock",
-        "launch_ship",
-        "",
-        { prestige: true }
-      ),
-      GasMoonMission: new Action(
-        "Gas Moon Mission",
-        "space",
-        "gas_moon_mission",
-        "spc_gas_moon"
-      ),
-      GasMoonOutpost: new Action(
-        "Gas Moon Mining Outpost",
-        "space",
-        "outpost",
-        "spc_gas_moon"
-      ),
-      GasMoonDrone: new Action(
-        "Gas Moon Mining Drone",
-        "space",
-        "drone",
-        "spc_gas_moon"
-      ),
-      GasMoonOilExtractor: new Action(
-        "Gas Moon Oil Extractor",
-        "space",
-        "oil_extractor",
-        "spc_gas_moon",
-        { smart: true }
-      ),
-      BeltMission: new Action(
-        "Belt Mission",
-        "space",
-        "belt_mission",
-        "spc_belt"
-      ),
-      BeltSpaceStation: new Action(
-        "Belt Space Station",
-        "space",
-        "space_station",
-        "spc_belt",
-        { smart: true }
-      ),
-      BeltEleriumShip: new Action(
-        "Belt Elerium Mining Ship",
-        "space",
-        "elerium_ship",
-        "spc_belt",
-        { smart: true }
-      ),
-      BeltIridiumShip: new Action(
-        "Belt Iridium Mining Ship",
-        "space",
-        "iridium_ship",
-        "spc_belt",
-        { smart: true }
-      ),
-      BeltIronShip: new Action(
-        "Belt Iron Mining Ship",
-        "space",
-        "iron_ship",
-        "spc_belt",
-        { smart: true }
-      ),
-      DwarfMission: new Action(
-        "Dwarf Mission",
-        "space",
-        "dwarf_mission",
-        "spc_dwarf"
-      ),
-      DwarfEleriumContainer: new Action(
-        "Dwarf Elerium Storage",
-        "space",
-        "elerium_contain",
-        "spc_dwarf"
-      ),
-      DwarfEleriumReactor: new Action(
-        "Dwarf Elerium Reactor",
-        "space",
-        "e_reactor",
-        "spc_dwarf"
-      ),
-      DwarfWorldCollider: new Action(
-        "Dwarf World Collider",
-        "space",
-        "world_collider",
-        "spc_dwarf",
-        { multiSegmented: true }
-      ),
-      DwarfWorldController: new Action(
-        "Dwarf World Collider (Complete)",
-        "space",
-        "world_controller",
-        "spc_dwarf",
-        { knowledge: true }
-      ),
-      DwarfShipyard: new Action(
-        "Dwarf Ship Yard",
-        "space",
-        "shipyard",
-        "spc_dwarf"
-      ),
-      DwarfMassRelay: new Action(
-        "Dwarf Mass Relay",
-        "space",
-        "mass_relay",
-        "spc_dwarf",
-        { multiSegmented: true }
-      ),
-      DwarfMassRelayComplete: new Action(
-        "Dwarf Mass Relay (Complete)",
-        "space",
-        "m_relay",
-        "spc_dwarf"
-      ),
-      TitanMission: new Action(
-        "Titan Mission",
-        "space",
-        "titan_mission",
-        "spc_titan"
-      ),
-      TitanSpaceport: new Action(
-        "Titan Spaceport",
-        "space",
-        "titan_spaceport",
-        "spc_titan"
-      ),
-      TitanElectrolysis: new Action(
-        "Titan Electrolysis",
-        "space",
-        "electrolysis",
-        "spc_titan"
-      ),
-      TitanHydrogen: new Action(
-        "Titan Hydrogen Plant",
-        "space",
-        "hydrogen_plant",
-        "spc_titan"
-      ),
-      TitanQuarters: new Action(
-        "Titan Habitat",
-        "space",
-        "titan_quarters",
-        "spc_titan"
-      ),
-      TitanMine: new Action("Titan Mine", "space", "titan_mine", "spc_titan"),
-      TitanStorehouse: new Action(
-        "Titan Storehouse",
-        "space",
-        "storehouse",
-        "spc_titan"
-      ),
-      TitanBank: new Action("Titan Bank", "space", "titan_bank", "spc_titan"),
-      TitanGraphene: new Action(
-        "Titan Graphene Plant",
-        "space",
-        "g_factory",
-        "spc_titan"
-      ),
-      TitanSAM: new Action("Titan SAM Site", "space", "sam", "spc_titan"),
-      TitanDecoder: new Action("Titan Decoder", "space", "decoder", "spc_titan"),
-      TitanAI: new Action("Titan AI Core", "space", "ai_core", "spc_titan", {
-        multiSegmented: true
-      }),
-      TitanAIComplete: new Action(
-        "Titan AI Core (Complete)",
-        "space",
-        "ai_core2",
-        "spc_titan"
-      ),
-      TitanAIColonist: new Action(
-        "Titan AI Colonist",
-        "space",
-        "ai_colonist",
-        "spc_titan"
-      ),
-      EnceladusMission: new Action(
-        "Enceladus Mission",
-        "space",
-        "enceladus_mission",
-        "spc_enceladus"
-      ),
-      EnceladusWaterFreighter: new Action(
-        "Enceladus Water Freighter",
-        "space",
-        "water_freighter",
-        "spc_enceladus",
-        { smart: true }
-      ),
-      EnceladusZeroGLab: new Action(
-        "Enceladus Zero Gravity Lab",
-        "space",
-        "zero_g_lab",
-        "spc_enceladus"
-      ),
-      EnceladusBase: new Action(
-        "Enceladus Operational Base",
-        "space",
-        "operating_base",
-        "spc_enceladus"
-      ),
-      EnceladusMunitions: new Action(
-        "Enceladus Munitions Depot",
-        "space",
-        "munitions_depot",
-        "spc_enceladus"
-      ),
-      TritonMission: new Action(
-        "Triton Mission",
-        "space",
-        "triton_mission",
-        "spc_triton"
-      ),
-      TritonFOB: new Action("Triton Forward Base", "space", "fob", "spc_triton"),
-      TritonLander: new Action(
-        "Triton Troop Lander",
-        "space",
-        "lander",
-        "spc_triton",
-        { smart: true }
-      ),
-      TritonCrashedShip: new Action(
-        "Triton Derelict Ship",
-        "space",
-        "crashed_ship",
-        "spc_triton"
-      ),
-      KuiperMission: new Action(
-        "Kuiper Mission",
-        "space",
-        "kuiper_mission",
-        "spc_kuiper"
-      ),
-      KuiperOrichalcum: new Action(
-        "Kuiper Orichalcum Mine",
-        "space",
-        "orichalcum_mine",
-        "spc_kuiper",
-        { smart: true }
-      ),
-      KuiperUranium: new Action(
-        "Kuiper Uranium Mine",
-        "space",
-        "uranium_mine",
-        "spc_kuiper",
-        { smart: true }
-      ),
-      KuiperNeutronium: new Action(
-        "Kuiper Neutronium Mine",
-        "space",
-        "neutronium_mine",
-        "spc_kuiper",
-        { smart: true }
-      ),
-      KuiperElerium: new Action(
-        "Kuiper Elerium Mine",
-        "space",
-        "elerium_mine",
-        "spc_kuiper",
-        { smart: true }
-      ),
-      ErisMission: new Action(
-        "Eris Mission",
-        "space",
-        "eris_mission",
-        "spc_eris"
-      ),
-      ErisDrone: new Action(
-        "Eris Control Relay",
-        "space",
-        "drone_control",
-        "spc_eris"
-      ),
-      ErisTrooper: new Action(
-        "Eris Android Trooper",
-        "space",
-        "shock_trooper",
-        "spc_eris"
-      ),
-      ErisTank: new Action("Eris Tank", "space", "tank", "spc_eris"),
-      ErisDigsite: new Action("Eris Digsite", "space", "digsite", "spc_eris"),
-      TauStarRingworld: new Action(
-        "Tau Star Ringworld",
-        "tauceti",
-        "ringworld",
-        "tau_star",
-        { multiSegmented: true }
-      ),
-      TauStarMatrix: new Action(
-        "Tau Star Matrix",
-        "tauceti",
-        "matrix",
-        "tau_star"
-      ),
-      TauStarBluePill: new Action(
-        "Tau Star Blue Pill",
-        "tauceti",
-        "blue_pill",
-        "tau_star",
-        { prestige: true }
-      ),
-      TauStarEden: new Action(
-        "Tau Star Garden of Eden",
-        "tauceti",
-        "goe_facility",
-        "tau_star",
-        { prestige: true }
-      ),
-      TauMission: new Action(
-        "Tau Mission",
-        "tauceti",
-        "home_mission",
-        "tau_home"
-      ),
-      TauDismantle: new Action(
-        "Tau Dismantle Ship",
-        "tauceti",
-        "dismantle",
-        "tau_home"
-      ),
-      TauOrbitalStation: new Action(
-        "Tau Orbital Station",
-        "tauceti",
-        "orbital_station",
-        "tau_home"
-      ),
-      TauColony: new Action("Tau Colony", "tauceti", "colony", "tau_home", {
-        housing: true
-      }),
-      TauHousing: new Action(
-        "Tau Housing",
-        "tauceti",
-        "tau_housing",
-        "tau_home",
-        { housing: true }
-      ),
-      TauCaptiveHousing: new CityAction(
-        "Tau Captive Housing",
-        "tauceti",
-        "captive_housing",
-        "tau_home"
-      ),
-      TauPylon: new Action("Tau Pylon", "tauceti", "pylon", "tau_home"),
-      TauCloning: new ResourceAction(
-        "Tau Cloning",
-        "tauceti",
-        "cloning_facility",
-        "tau_home",
-        "Population",
-        { housing: true }
-      ),
-      TauForgeHorseshoe: new ResourceAction(
-        "Tau Horseshoe",
-        "tauceti",
-        "horseshoe",
-        "tau_home",
-        "Horseshoe",
-        { housing: true, garrison: true }
-      ),
-      TauAssembly: new ResourceAction(
-        "Tau Assembly",
-        "tauceti",
-        "assembly",
-        "tau_home",
-        "Population",
-        { housing: true, important: true }
-      ),
-      TauNaniteFactory: new CityAction(
-        "Tau Nanite Factory",
-        "tauceti",
-        "nanite_factory",
-        "tau_home"
-      ),
-      TauFarm: new Action(
-        "Tau High-Tech Farm",
-        "tauceti",
-        "tau_farm",
-        "tau_home"
-      ),
-      TauMiningPit: new Action(
-        "Tau Mining Pit",
-        "tauceti",
-        "mining_pit",
-        "tau_home",
-        { smart: true }
-      ),
-      TauExcavate: new Action("Tau Excavate", "tauceti", "excavate", "tau_home"),
-      TauAlienOutpost: new Action(
-        "Tau Alien Outpost",
-        "tauceti",
-        "alien_outpost",
-        "tau_home",
-        { knowledge: true }
-      ),
-      TauJumpGate: new Action(
-        "Tau Jump Gate",
-        "tauceti",
-        "jump_gate",
-        "tau_home",
-        { multiSegmented: true }
-      ),
-      TauFusionGenerator: new Action(
-        "Tau Fusion Generator",
-        "tauceti",
-        "fusion_generator",
-        "tau_home"
-      ),
-      TauRepository: new Action(
-        "Tau Repository",
-        "tauceti",
-        "repository",
-        "tau_home"
-      ),
-      TauFactory: new Action(
-        "Tau High-Tech Factory",
-        "tauceti",
-        "tau_factory",
-        "tau_home"
-      ),
-      TauDiseaseLab: new Action(
-        "Tau Disease Lab",
-        "tauceti",
-        "infectious_disease_lab",
-        "tau_home",
-        { knowledge: true }
-      ),
-      TauCasino: new Action(
-        "Tau Casino",
-        "tauceti",
-        "tauceti_casino",
-        "tau_home"
-      ),
-      TauCulturalCenter: new Action(
-        "Tau Cultural Center",
-        "tauceti",
-        "tau_cultural_center",
-        "tau_home"
-      ),
-      TauRedMission: new Action(
-        "Tau Red Mission",
-        "tauceti",
-        "red_mission",
-        "tau_red"
-      ),
-      TauRedOrbitalPlatform: new Action(
-        "Tau Red Orbital Platform",
-        "tauceti",
-        "orbital_platform",
-        "tau_red"
-      ),
-      TauRedContact: new Action(
-        "Tau Red Contact",
-        "tauceti",
-        "contact",
-        "tau_red"
-      ),
-      TauRedIntroduce: new Action(
-        "Tau Red Introduce",
-        "tauceti",
-        "introduce",
-        "tau_red"
-      ),
-      TauRedSubjugate: new Action(
-        "Tau Red Subjugate",
-        "tauceti",
-        "subjugate",
-        "tau_red"
-      ),
-      TauRedJeff: new Action("Tau Red Jeff", "tauceti", "jeff", "tau_red"),
-      TauRedOverseer: new Action(
-        "Tau Red Overseer",
-        "tauceti",
-        "overseer",
-        "tau_red",
-        { smart: true }
-      ),
-      TauRedWomlingVillage: new Action(
-        "Tau Red Womling Village",
-        "tauceti",
-        "womling_village",
-        "tau_red"
-      ),
-      TauRedWomlingFarm: new Action(
-        "Tau Red Womling Farm",
-        "tauceti",
-        "womling_farm",
-        "tau_red",
-        { smart: true }
-      ),
-      TauRedWomlingMine: new Action(
-        "Tau Red Womling Mine",
-        "tauceti",
-        "womling_mine",
-        "tau_red",
-        { smart: true }
-      ),
-      TauRedWomlingFun: new Action(
-        "Tau Red Womling Theater",
-        "tauceti",
-        "womling_fun",
-        "tau_red",
-        { smart: true }
-      ),
-      TauRedWomlingLab: new Action(
-        "Tau Red Womling Lab",
-        "tauceti",
-        "womling_lab",
-        "tau_red",
-        { smart: true, knowledge: true }
-      ),
-      TauGasContest: new Action(
-        "Tau Gas Naming Contest",
-        "tauceti",
-        "gas_contest",
-        "tau_gas"
-      ),
-      TauGasName1: new Action(
-        "Tau Gas Name 1",
-        "tauceti",
-        "gas_contest-a1",
-        "tau_gas",
-        { random: true }
-      ),
-      TauGasName2: new Action(
-        "Tau Gas Name 2",
-        "tauceti",
-        "gas_contest-a2",
-        "tau_gas",
-        { random: true }
-      ),
-      TauGasName3: new Action(
-        "Tau Gas Name 3",
-        "tauceti",
-        "gas_contest-a3",
-        "tau_gas",
-        { random: true }
-      ),
-      TauGasName4: new Action(
-        "Tau Gas Name 4",
-        "tauceti",
-        "gas_contest-a4",
-        "tau_gas",
-        { random: true }
-      ),
-      TauGasName5: new Action(
-        "Tau Gas Name 5",
-        "tauceti",
-        "gas_contest-a5",
-        "tau_gas",
-        { random: true }
-      ),
-      TauGasName6: new Action(
-        "Tau Gas Name 6",
-        "tauceti",
-        "gas_contest-a6",
-        "tau_gas",
-        { random: true }
-      ),
-      TauGasName7: new Action(
-        "Tau Gas Name 7",
-        "tauceti",
-        "gas_contest-a7",
-        "tau_gas",
-        { random: true }
-      ),
-      TauGasName8: new Action(
-        "Tau Gas Name 8",
-        "tauceti",
-        "gas_contest-a8",
-        "tau_gas",
-        { random: true }
-      ),
-      TauGasRefuelingStation: new Action(
-        "Tau Gas Refueling Station",
-        "tauceti",
-        "refueling_station",
-        "tau_gas"
-      ),
-      TauGasOreRefinery: new Action(
-        "Tau Gas Ore Refinery",
-        "tauceti",
-        "ore_refinery",
-        "tau_gas"
-      ),
-      TauGasWhalingStation: new Action(
-        "Tau Gas Whale Processor",
-        "tauceti",
-        "whaling_station",
-        "tau_gas",
-        { smart: true }
-      ),
-      TauGasWomlingStation: new Action(
-        "Tau Gas Womling Station",
-        "tauceti",
-        "womling_station",
-        "tau_gas"
-      ),
-      TauBeltMission: new Action(
-        "Tau Belt Mission",
-        "tauceti",
-        "roid_mission",
-        "tau_roid"
-      ),
-      TauBeltPatrolShip: new Action(
-        "Tau Belt Patrol Ship",
-        "tauceti",
-        "patrol_ship",
-        "tau_roid"
-      ),
-      TauBeltMiningShip: new Action(
-        "Tau Belt Extractor Ship",
-        "tauceti",
-        "mining_ship",
-        "tau_roid"
-      ),
-      TauBeltWhalingShip: new Action(
-        "Tau Belt Whaling Ship",
-        "tauceti",
-        "whaling_ship",
-        "tau_roid"
-      ),
-      TauGas2Contest: new Action(
-        "Tau Gas 2 Naming Contest",
-        "tauceti",
-        "gas_contest2",
-        "tau_gas2"
-      ),
-      TauGas2Name1: new Action(
-        "Tau Gas 2 Name 1",
-        "tauceti",
-        "gas_contest-b1",
-        "tau_gas2",
-        { random: true }
-      ),
-      TauGas2Name2: new Action(
-        "Tau Gas 2 Name 2",
-        "tauceti",
-        "gas_contest-b2",
-        "tau_gas2",
-        { random: true }
-      ),
-      TauGas2Name3: new Action(
-        "Tau Gas 2 Name 3",
-        "tauceti",
-        "gas_contest-b3",
-        "tau_gas2",
-        { random: true }
-      ),
-      TauGas2Name4: new Action(
-        "Tau Gas 2 Name 4",
-        "tauceti",
-        "gas_contest-b4",
-        "tau_gas2",
-        { random: true }
-      ),
-      TauGas2Name5: new Action(
-        "Tau Gas 2 Name 5",
-        "tauceti",
-        "gas_contest-b5",
-        "tau_gas2",
-        { random: true }
-      ),
-      TauGas2Name6: new Action(
-        "Tau Gas 2 Name 6",
-        "tauceti",
-        "gas_contest-b6",
-        "tau_gas2",
-        { random: true }
-      ),
-      TauGas2Name7: new Action(
-        "Tau Gas 2 Name 7",
-        "tauceti",
-        "gas_contest-b7",
-        "tau_gas2",
-        { random: true }
-      ),
-      TauGas2Name8: new Action(
-        "Tau Gas 2 Name 8",
-        "tauceti",
-        "gas_contest-b8",
-        "tau_gas2",
-        { random: true }
-      ),
-      TauGas2AlienSurvey: new Action(
-        "Tau Gas 2 Alien Station (Survey)",
-        "tauceti",
-        "alien_station_survey",
-        "tau_gas2"
-      ),
-      TauGas2AlienStation: new Action(
-        "Tau Gas 2 Alien Station",
-        "tauceti",
-        "alien_station",
-        "tau_gas2",
-        { multiSegmented: true }
-      ),
-      TauGas2AlienSpaceStation: new Action(
-        "Tau Gas 2 Alien Space Station",
-        "tauceti",
-        "alien_space_station",
-        "tau_gas2"
-      ),
-      TauGas2MatrioshkaBrain: new Action(
-        "Tau Gas 2 Matrioshka Brain",
-        "tauceti",
-        "matrioshka_brain",
-        "tau_gas2",
-        { multiSegmented: true }
-      ),
-      TauGas2IgnitionDevice: new Action(
-        "Tau Gas 2 Ignition Device",
-        "tauceti",
-        "ignition_device",
-        "tau_gas2",
-        { multiSegmented: true }
-      ),
-      TauGas2IgniteGasGiant: new Action(
-        "Tau Gas 2 Ignite Gas Giant",
-        "tauceti",
-        "ignite_gas_giant",
-        "tau_gas2",
-        { prestige: true }
-      ),
-      AlphaMission: new Action(
-        "Alpha Centauri Mission",
-        "interstellar",
-        "alpha_mission",
-        "int_alpha"
-      ),
-      AlphaStarport: new Action(
-        "Alpha Starport",
-        "interstellar",
-        "starport",
-        "int_alpha"
-      ),
-      AlphaHabitat: new Action(
-        "Alpha Habitat",
-        "interstellar",
-        "habitat",
-        "int_alpha",
-        { housing: true }
-      ),
-      AlphaMiningDroid: new Action(
-        "Alpha Mining Droid",
-        "interstellar",
-        "mining_droid",
-        "int_alpha"
-      ),
-      AlphaProcessing: new Action(
-        "Alpha Processing Facility",
-        "interstellar",
-        "processing",
-        "int_alpha"
-      ),
-      AlphaFusion: new Action(
-        "Alpha Fusion Reactor",
-        "interstellar",
-        "fusion",
-        "int_alpha"
-      ),
-      AlphaLaboratory: new Action(
-        "Alpha Laboratory",
-        "interstellar",
-        "laboratory",
-        "int_alpha",
-        { knowledge: true }
-      ),
-      AlphaExchange: new Action(
-        "Alpha Exchange",
-        "interstellar",
-        "exchange",
-        "int_alpha"
-      ),
-      AlphaGraphenePlant: new Action(
-        "Alpha Graphene Plant",
-        "interstellar",
-        "g_factory",
-        "int_alpha"
-      ),
-      AlphaWarehouse: new Action(
-        "Alpha Warehouse",
-        "interstellar",
-        "warehouse",
-        "int_alpha"
-      ),
-      AlphaMegaFactory: new Action(
-        "Alpha Mega Factory",
-        "interstellar",
-        "int_factory",
-        "int_alpha"
-      ),
-      AlphaLuxuryCondo: new Action(
-        "Alpha Luxury Condo",
-        "interstellar",
-        "luxury_condo",
-        "int_alpha",
-        { housing: true }
-      ),
-      AlphaExoticZoo: new Action(
-        "Alpha Exotic Zoo",
-        "interstellar",
-        "zoo",
-        "int_alpha"
-      ),
-      ProximaMission: new Action(
-        "Proxima Mission",
-        "interstellar",
-        "proxima_mission",
-        "int_proxima"
-      ),
-      ProximaTransferStation: new Action(
-        "Proxima Transfer Station",
-        "interstellar",
-        "xfer_station",
-        "int_proxima"
-      ),
-      ProximaCargoYard: new Action(
-        "Proxima Cargo Yard",
-        "interstellar",
-        "cargo_yard",
-        "int_proxima"
-      ),
-      ProximaCruiser: new Action(
-        "Proxima Patrol Cruiser",
-        "interstellar",
-        "cruiser",
-        "int_proxima",
-        { garrison: true }
-      ),
-      ProximaDyson: new Action(
-        "Proxima Dyson Sphere (Adamantite)",
-        "interstellar",
-        "dyson",
-        "int_proxima",
-        { multiSegmented: true }
-      ),
-      ProximaDysonSphere: new Action(
-        "Proxima Dyson Sphere (Bolognium)",
-        "interstellar",
-        "dyson_sphere",
-        "int_proxima",
-        { multiSegmented: true }
-      ),
-      ProximaOrichalcumSphere: new Action(
-        "Proxima Dyson Sphere (Orichalcum)",
-        "interstellar",
-        "orichalcum_sphere",
-        "int_proxima",
-        { multiSegmented: true }
-      ),
-      ProximaElysaniteSphere: new Action(
-        "Proxima Dyson Sphere (Elysanite)",
-        "interstellar",
-        "elysanite_sphere",
-        "int_proxima",
-        { multiSegmented: true }
-      ),
-      NebulaMission: new Action(
-        "Nebula Mission",
-        "interstellar",
-        "nebula_mission",
-        "int_nebula"
-      ),
-      NebulaNexus: new Action(
-        "Nebula Nexus",
-        "interstellar",
-        "nexus",
-        "int_nebula"
-      ),
-      NebulaHarvester: new Action(
-        "Nebula Harvester",
-        "interstellar",
-        "harvester",
-        "int_nebula",
-        { smart: true }
-      ),
-      NebulaEleriumProspector: new Action(
-        "Nebula Elerium Prospector",
-        "interstellar",
-        "elerium_prospector",
-        "int_nebula"
-      ),
-      NeutronMission: new Action(
-        "Neutron Mission",
-        "interstellar",
-        "neutron_mission",
-        "int_neutron"
-      ),
-      NeutronMiner: new Action(
-        "Neutron Miner",
-        "interstellar",
-        "neutron_miner",
-        "int_neutron"
-      ),
-      NeutronCitadel: new Action(
-        "Neutron Citadel Station",
-        "interstellar",
-        "citadel",
-        "int_neutron"
-      ),
-      NeutronStellarForge: new Action(
-        "Neutron Stellar Forge",
-        "interstellar",
-        "stellar_forge",
-        "int_neutron"
-      ),
-      Blackhole: new Action(
-        "Blackhole Mission",
-        "interstellar",
-        "blackhole_mission",
-        "int_blackhole"
-      ),
-      BlackholeFarReach: new Action(
-        "Blackhole Farpoint",
-        "interstellar",
-        "far_reach",
-        "int_blackhole",
-        { knowledge: true }
-      ),
-      BlackholeStellarEngine: new Action(
-        "Blackhole Stellar Engine",
-        "interstellar",
-        "stellar_engine",
-        "int_blackhole",
-        { multiSegmented: true }
-      ),
-      BlackholeMassEjector: new Action(
-        "Blackhole Mass Ejector",
-        "interstellar",
-        "mass_ejector",
-        "int_blackhole"
-      ),
-      BlackholeJumpShip: new Action(
-        "Blackhole Jump Ship",
-        "interstellar",
-        "jump_ship",
-        "int_blackhole"
-      ),
-      BlackholeWormholeMission: new Action(
-        "Blackhole Wormhole Mission",
-        "interstellar",
-        "wormhole_mission",
-        "int_blackhole"
-      ),
-      BlackholeStargate: new Action(
-        "Blackhole Stargate",
-        "interstellar",
-        "stargate",
-        "int_blackhole",
-        { multiSegmented: true }
-      ),
-      BlackholeStargateComplete: new Action(
-        "Blackhole Stargate (Complete)",
-        "interstellar",
-        "s_gate",
-        "int_blackhole"
-      ),
-      SiriusMission: new Action(
-        "Sirius Mission",
-        "interstellar",
-        "sirius_mission",
-        "int_sirius"
-      ),
-      SiriusAnalysis: new Action(
-        "Sirius B Analysis",
-        "interstellar",
-        "sirius_b",
-        "int_sirius"
-      ),
-      SiriusSpaceElevator: new Action(
-        "Sirius Space Elevator",
-        "interstellar",
-        "space_elevator",
-        "int_sirius",
-        { multiSegmented: true }
-      ),
-      SiriusGravityDome: new Action(
-        "Sirius Gravity Dome",
-        "interstellar",
-        "gravity_dome",
-        "int_sirius",
-        { multiSegmented: true }
-      ),
-      SiriusAscensionMachine: new Action(
-        "Sirius Ascension Machine",
-        "interstellar",
-        "ascension_machine",
-        "int_sirius",
-        { multiSegmented: true }
-      ),
-      SiriusAscensionTrigger: new Action(
-        "Sirius Ascension Machine (Complete)",
-        "interstellar",
-        "ascension_trigger",
-        "int_sirius",
-        { smart: true }
-      ),
-      SiriusAscend: new Action(
-        "Sirius Ascend",
-        "interstellar",
-        "ascend",
-        "int_sirius",
-        { prestige: true }
-      ),
-      SiriusThermalCollector: new Action(
-        "Sirius Thermal Collector",
-        "interstellar",
-        "thermal_collector",
-        "int_sirius"
-      ),
-      GatewayMission: new Action(
-        "Gateway Mission",
-        "galaxy",
-        "gateway_mission",
-        "gxy_gateway"
-      ),
-      GatewayStarbase: new Action(
-        "Gateway Starbase",
-        "galaxy",
-        "starbase",
-        "gxy_gateway",
-        { garrison: true }
-      ),
-      GatewayShipDock: new Action(
-        "Gateway Ship Dock",
-        "galaxy",
-        "ship_dock",
-        "gxy_gateway"
-      ),
-      BologniumShip: new Action(
-        "Gateway Bolognium Ship",
-        "galaxy",
-        "bolognium_ship",
-        "gxy_gateway",
-        { ship: true, smart: true }
-      ),
-      ScoutShip: new Action(
-        "Gateway Scout Ship",
-        "galaxy",
-        "scout_ship",
-        "gxy_gateway",
-        { ship: true, smart: true }
-      ),
-      CorvetteShip: new Action(
-        "Gateway Corvette Ship",
-        "galaxy",
-        "corvette_ship",
-        "gxy_gateway",
-        { ship: true, smart: true }
-      ),
-      FrigateShip: new Action(
-        "Gateway Frigate Ship",
-        "galaxy",
-        "frigate_ship",
-        "gxy_gateway",
-        { ship: true }
-      ),
-      CruiserShip: new Action(
-        "Gateway Cruiser Ship",
-        "galaxy",
-        "cruiser_ship",
-        "gxy_gateway",
-        { ship: true }
-      ),
-      Dreadnought: new Action(
-        "Gateway Dreadnought",
-        "galaxy",
-        "dreadnought",
-        "gxy_gateway",
-        { ship: true }
-      ),
-      StargateStation: new Action(
-        "Stargate Station",
-        "galaxy",
-        "gateway_station",
-        "gxy_stargate"
-      ),
-      StargateTelemetryBeacon: new Action(
-        "Stargate Telemetry Beacon",
-        "galaxy",
-        "telemetry_beacon",
-        "gxy_stargate",
-        { knowledge: true }
-      ),
-      StargateDepot: new Action(
-        "Stargate Depot",
-        "galaxy",
-        "gateway_depot",
-        "gxy_stargate"
-      ),
-      StargateDefensePlatform: new Action(
-        "Stargate Defense Platform",
-        "galaxy",
-        "defense_platform",
-        "gxy_stargate"
-      ),
-      GorddonMission: new Action(
-        "Gorddon Mission",
-        "galaxy",
-        "gorddon_mission",
-        "gxy_gorddon"
-      ),
-      GorddonEmbassy: new Action(
-        "Gorddon Embassy",
-        "galaxy",
-        "embassy",
-        "gxy_gorddon",
-        { housing: true }
-      ),
-      GorddonDormitory: new Action(
-        "Gorddon Dormitory",
-        "galaxy",
-        "dormitory",
-        "gxy_gorddon",
-        { housing: true }
-      ),
-      GorddonSymposium: new Action(
-        "Gorddon Symposium",
-        "galaxy",
-        "symposium",
-        "gxy_gorddon",
-        { knowledge: true }
-      ),
-      GorddonFreighter: new Action(
-        "Gorddon Freighter",
-        "galaxy",
-        "freighter",
-        "gxy_gorddon",
-        { ship: true }
-      ),
-      Alien1Consulate: new Action(
-        "Alien 1 Consulate",
-        "galaxy",
-        "consulate",
-        "gxy_alien1",
-        { housing: true }
-      ),
-      Alien1Resort: new Action(
-        "Alien 1 Resort",
-        "galaxy",
-        "resort",
-        "gxy_alien1"
-      ),
-      Alien1VitreloyPlant: new Action(
-        "Alien 1 Vitreloy Plant",
-        "galaxy",
-        "vitreloy_plant",
-        "gxy_alien1",
-        { smart: true }
-      ),
-      Alien1SuperFreighter: new Action(
-        "Alien 1 Super Freighter",
-        "galaxy",
-        "super_freighter",
-        "gxy_alien1",
-        { ship: true }
-      ),
-      Alien2Mission: new Action(
-        "Alien 2 Mission",
-        "galaxy",
-        "alien2_mission",
-        "gxy_alien2"
-      ),
-      Alien2Foothold: new Action(
-        "Alien 2 Foothold",
-        "galaxy",
-        "foothold",
-        "gxy_alien2"
-      ),
-      Alien2ArmedMiner: new Action(
-        "Alien 2 Armed Miner",
-        "galaxy",
-        "armed_miner",
-        "gxy_alien2",
-        { ship: true, smart: true }
-      ),
-      Alien2OreProcessor: new Action(
-        "Alien 2 Ore Processor",
-        "galaxy",
-        "ore_processor",
-        "gxy_alien2"
-      ),
-      Alien2Scavenger: new Action(
-        "Alien 2 Scavenger",
-        "galaxy",
-        "scavenger",
-        "gxy_alien2",
-        { knowledge: true, ship: true }
-      ),
-      ChthonianMission: new Action(
-        "Chthonian Mission",
-        "galaxy",
-        "chthonian_mission",
-        "gxy_chthonian"
-      ),
-      ChthonianMineLayer: new Action(
-        "Chthonian Mine Layer",
-        "galaxy",
-        "minelayer",
-        "gxy_chthonian",
-        { ship: true, smart: true }
-      ),
-      ChthonianExcavator: new Action(
-        "Chthonian Excavator",
-        "galaxy",
-        "excavator",
-        "gxy_chthonian",
-        { smart: true }
-      ),
-      ChthonianRaider: new Action(
-        "Chthonian Corsair",
-        "galaxy",
-        "raider",
-        "gxy_chthonian",
-        { ship: true, smart: true }
-      ),
-      PortalTurret: new Action(
-        "Portal Laser Turret",
-        "portal",
-        "turret",
-        "prtl_fortress"
-      ),
-      PortalCarport: new Action(
-        "Portal Surveyor Carport",
-        "portal",
-        "carport",
-        "prtl_fortress"
-      ),
-      PortalWarDroid: new Action(
-        "Portal War Droid",
-        "portal",
-        "war_droid",
-        "prtl_fortress"
-      ),
-      PortalRepairDroid: new Action(
-        "Portal Repair Droid",
-        "portal",
-        "repair_droid",
-        "prtl_fortress"
-      ),
-      BadlandsPredatorDrone: new Action(
-        "Badlands Predator Drone",
-        "portal",
-        "war_drone",
-        "prtl_badlands"
-      ),
-      BadlandsSensorDrone: new Action(
-        "Badlands Sensor Drone",
-        "portal",
-        "sensor_drone",
-        "prtl_badlands"
-      ),
-      BadlandsAttractor: new Action(
-        "Badlands Attractor Beacon",
-        "portal",
-        "attractor",
-        "prtl_badlands",
-        { smart: true }
-      ),
-      BadlandsMinions: new Action(
-        "Badlands Minions Lair (Warlord)",
-        "portal",
-        "minions",
-        "prtl_badlands"
-      ),
-      BadlandsReaper: new Action(
-        "Badlands Soul Reaper (Warlord)",
-        "portal",
-        "reaper",
-        "prtl_badlands"
-      ),
-      BadlandsCorpsePile: new Action(
-        "Badlands Corpse Pile (Warlord)",
-        "portal",
-        "corpse_pile",
-        "prtl_badlands"
-      ),
-      BadlandsMortuary: new Action(
-        "Badlands Mortuary (Warlord)",
-        "portal",
-        "mortuary",
-        "prtl_badlands"
-      ),
-      BadlandsCodex: new Action(
-        "Badlands Create Codex (Warlord)",
-        "portal",
-        "codex",
-        "prtl_badlands"
-      ),
-      WastelandThrone: new Action(
-        "Wasteland Throne of Evil (Warlord)",
-        "portal",
-        "throne",
-        "prtl_wasteland"
-      ),
-      WastelandIncinerator: new Action(
-        "Wasteland Incinerator (Warlord)",
-        "portal",
-        "incinerator",
-        "prtl_wasteland"
-      ),
-      WastelandWarehouse: new Action(
-        "Wasteland Warehouse (Warlord)",
-        "portal",
-        "warehouse",
-        "prtl_wasteland"
-      ),
-      WastelandHovel: new Action(
-        "Wasteland Hellspawn Hovel (Warlord)",
-        "portal",
-        "hovel",
-        "prtl_wasteland",
-        { housing: true }
-      ),
-      WastelandHellCasino: new Action(
-        "Wasteland Den of Sin (Warlord)",
-        "portal",
-        "hell_casino",
-        "prtl_wasteland"
-      ),
-      WastelandTwistedLab: new Action(
-        "Wasteland Twisted Lab (Warlord)",
-        "portal",
-        "twisted_lab",
-        "prtl_wasteland",
-        { knowledge: true }
-      ),
-      WastelandDemonForge: new Action(
-        "Wasteland Demon Forge (Warlord)",
-        "portal",
-        "demon_forge",
-        "prtl_wasteland"
-      ),
-      WastelandHellFactory: new Action(
-        "Wasteland Terror Factory (Warlord)",
-        "portal",
-        "hell_factory",
-        "prtl_wasteland"
-      ),
-      WastelandPumpjack: new Action(
-        "Wasteland Hellish Pumpjack (Warlord)",
-        "portal",
-        "pumpjack",
-        "prtl_wasteland"
-      ),
-      WastelandDigDemon: new Action(
-        "Wasteland Dig Demon Burrow (Warlord)",
-        "portal",
-        "dig_demon",
-        "prtl_wasteland"
-      ),
-      WastelandTunneler: new Action(
-        "Wasteland Tunneler Demon (Warlord)",
-        "portal",
-        "tunneler",
-        "prtl_wasteland"
-      ),
-      WastelandBrute: new Action(
-        "Wasteland Brute Hut (Warlord)",
-        "portal",
-        "brute",
-        "prtl_wasteland",
-        { garrison: true }
-      ),
-      WastelandAltar: new CityAction(
-        "Wasteland Sacrificial Altar (Warlord)",
-        "portal",
-        "s_alter",
-        "prtl_wasteland"
-      ),
-      WastelandShrine: new CityAction(
-        "Wasteland Shrine (Warlord)",
-        "portal",
-        "shrine",
-        "prtl_wasteland"
-      ),
-      WastelandMeditationChamber: new CityAction(
-        "Wasteland Meditation Chamber (Warlord)",
-        "portal",
-        "meditation",
-        "prtl_wasteland"
-      ),
-      PitMission: new Action("Pit Mission", "portal", "pit_mission", "prtl_pit"),
-      PitAssaultForge: new Action(
-        "Pit Assault Forge",
-        "portal",
-        "assault_forge",
-        "prtl_pit"
-      ),
-      PitSoulForge: new Action(
-        "Pit Soul Forge",
-        "portal",
-        "soul_forge",
-        "prtl_pit"
-      ),
-      PitGunEmplacement: new Action(
-        "Pit Gun Emplacement",
-        "portal",
-        "gun_emplacement",
-        "prtl_pit"
-      ),
-      PitSoulAttractor: new Action(
-        "Pit Soul Attractor",
-        "portal",
-        "soul_attractor",
-        "prtl_pit"
-      ),
-      PitSoulCapacitor: new Action(
-        "Pit Soul Capacitor (Witch Hunting)",
-        "portal",
-        "soul_capacitor",
-        "prtl_pit"
-      ),
-      PitAbsorptionChamber: new Action(
-        "Pit Absorption Chamber (Witch Hunting)",
-        "portal",
-        "absorption_chamber",
-        "prtl_pit"
-      ),
-      PitShadowMine: new Action(
-        "Pit Shadow Mine (Warlord)",
-        "portal",
-        "shadow_mine",
-        "prtl_pit"
-      ),
-      PitTavern: new Action(
-        "Pit Tavern (Warlord)",
-        "portal",
-        "tavern",
-        "prtl_pit"
-      ),
-      RuinsMission: new Action(
-        "Ruins Mission",
-        "portal",
-        "ruins_mission",
-        "prtl_ruins"
-      ),
-      RuinsGuardPost: new Action(
-        "Ruins Guard Post",
-        "portal",
-        "guard_post",
-        "prtl_ruins",
-        { smart: true }
-      ),
-      RuinsVault: new Action("Ruins Vault", "portal", "vault", "prtl_ruins"),
-      RuinsWarVault: new Action(
-        "Ruins Vault (Warlord)",
-        "portal",
-        "war_vault",
-        "prtl_ruins"
-      ),
-      RuinsArchaeology: new Action(
-        "Ruins Archaeology",
-        "portal",
-        "archaeology",
-        "prtl_ruins"
-      ),
-      RuinsArcology: new Action(
-        "Ruins Arcology",
-        "portal",
-        "arcology",
-        "prtl_ruins"
-      ),
-      RuinsHellForge: new Action(
-        "Ruins Infernal Forge",
-        "portal",
-        "hell_forge",
-        "prtl_ruins"
-      ),
-      RuinsInfernoPower: new Action(
-        "Ruins Inferno Reactor",
-        "portal",
-        "inferno_power",
-        "prtl_ruins"
-      ),
-      RuinsAncientPillars: new Pillar(
-        "Ruins Ancient Pillars",
-        "portal",
-        "ancient_pillars",
-        "prtl_ruins"
-      ),
-      GateMission: new Action(
-        "Gate Mission",
-        "portal",
-        "gate_mission",
-        "prtl_gate"
-      ),
-      GateEastTower: new Action(
-        "Gate East Tower",
-        "portal",
-        "east_tower",
-        "prtl_gate",
-        { multiSegmented: true }
-      ),
-      GateWestTower: new Action(
-        "Gate West Tower",
-        "portal",
-        "west_tower",
-        "prtl_gate",
-        { multiSegmented: true }
-      ),
-      GateTurret: new Action("Gate Turret", "portal", "gate_turret", "prtl_gate"),
-      GateInferniteMine: new Action(
-        "Gate Infernite Mine",
-        "portal",
-        "infernite_mine",
-        "prtl_gate"
-      ),
-      LakeMission: new Action(
-        "Lake Mission",
-        "portal",
-        "lake_mission",
-        "prtl_lake"
-      ),
-      LakeHarbor: new Action("Lake Harbor", "portal", "harbor", "prtl_lake", {
-        smart: true
-      }),
-      LakeCoolingTower: new Action(
-        "Lake Cooling Tower",
-        "portal",
-        "cooling_tower",
-        "prtl_lake",
-        { smart: true }
-      ),
-      LakeBireme: new Action(
-        "Lake Bireme Warship",
-        "portal",
-        "bireme",
-        "prtl_lake",
-        { smart: true }
-      ),
-      LakeTransport: new Action(
-        "Lake Transport",
-        "portal",
-        "transport",
-        "prtl_lake",
-        { smart: true }
-      ),
-      LakeOven: new Action(
-        "Lake Cooker (Fasting)",
-        "portal",
-        "oven",
-        "prtl_lake"
-      ),
-      LakeOvenComplete: new Action(
-        "Lake Cooker (Fasting, Complete)",
-        "portal",
-        "oven_complete",
-        "prtl_lake"
-      ),
-      LakeSoulSteeper: new Action(
-        "Lake Soul Steeper (Fasting)",
-        "portal",
-        "dish_soul_steeper",
-        "prtl_lake"
-      ),
-      LakeLifeInfuser: new Action(
-        "Lake Life Infuser (Fasting)",
-        "portal",
-        "dish_life_infuser",
-        "prtl_lake"
-      ),
-      LakeDevilishDish: new Action(
-        "Lake Devilish Dish (Fasting)",
-        "portal",
-        "devilish_dish",
-        "prtl_lake"
-      ),
-      SpireMission: new Action(
-        "Spire Mission",
-        "portal",
-        "spire_mission",
-        "prtl_spire"
-      ),
-      SpirePurifier: new Action(
-        "Spire Purifier",
-        "portal",
-        "purifier",
-        "prtl_spire",
-        { smart: true }
-      ),
-      SpirePort: new Action("Spire Port", "portal", "port", "prtl_spire", {
-        smart: true
-      }),
-      SpireBaseCamp: new Action(
-        "Spire Base Camp",
-        "portal",
-        "base_camp",
-        "prtl_spire",
-        { smart: true }
-      ),
-      SpireBridge: new Action("Spire Bridge", "portal", "bridge", "prtl_spire"),
-      SpireSphinx: new Action("Spire Sphinx", "portal", "sphinx", "prtl_spire"),
-      SpireBribeSphinx: new Action(
-        "Spire Bribe Sphinx",
-        "portal",
-        "bribe_sphinx",
-        "prtl_spire"
-      ),
-      SpireSurveyTower: new Action(
-        "Spire Survey Tower",
-        "portal",
-        "spire_survey",
-        "prtl_spire"
-      ),
-      SpireMechBay: new Action(
-        "Spire Mech Bay",
-        "portal",
-        "mechbay",
-        "prtl_spire",
-        { smart: true }
-      ),
-      SpireTower: new Action("Spire Tower", "portal", "spire", "prtl_spire"),
-      SpireWaygate: new Action(
-        "Spire Waygate",
-        "portal",
-        "waygate",
-        "prtl_spire",
-        { smart: true }
-      ),
-      SpireEdenicGate: new Action(
-        "Spire Edenic Gate",
-        "portal",
-        "edenic_gate",
-        "prtl_spire"
-      ),
-      SpireBazaar: new Action(
-        "Spire Bazaar (Warlord)",
-        "portal",
-        "bazaar",
-        "prtl_spire"
-      ),
-      AsphodelMission: new Action(
-        "Asphodel Mission",
-        "eden",
-        "survery_meadows",
-        "eden_asphodel"
-      ),
-      AsphodelEncampment: new Action(
-        "Asphodel Encampment",
-        "eden",
-        "encampment",
-        "eden_asphodel"
-      ),
-      AsphodelSoulEngine: new Action(
-        "Asphodel Soul Engine",
-        "eden",
-        "soul_engine",
-        "eden_asphodel"
-      ),
-      AsphodelMechStation: new Action(
-        "Asphodel Mech Station",
-        "eden",
-        "mech_station",
-        "eden_asphodel",
-        { multiSegmented: true }
-      ),
-      AsphodelHarvester: new Action(
-        "Asphodel Harvester",
-        "eden",
-        "asphodel_harvester",
-        "eden_asphodel",
-        { smart: true }
-      ),
-      AsphodelProcessor: new Action(
-        "Asphodel Muon Processor",
-        "eden",
-        "ectoplasm_processor",
-        "eden_asphodel"
-      ),
-      AsphodelResearchStation: new Action(
-        "Asphodel Research Station",
-        "eden",
-        "research_station",
-        "eden_asphodel"
-      ),
-      AsphodelWarehouse: new Action(
-        "Asphodel Warehouse",
-        "eden",
-        "warehouse",
-        "eden_asphodel"
-      ),
-      AsphodelStabilizer: new Action(
-        "Asphodel Stabilizer",
-        "eden",
-        "stabilizer",
-        "eden_asphodel"
-      ),
-      AsphodelRuneGate: new Action(
-        "Asphodel Rune Gate",
-        "eden",
-        "rune_gate",
-        "eden_asphodel",
-        { multiSegmented: true }
-      ),
-      AsphodelRuneGateOpen: new Action(
-        "Asphodel Rune Gate (Complete)",
-        "eden",
-        "rune_gate_open",
-        "eden_asphodel"
-      ),
-      AsphodelBunker: new Action(
-        "Asphodel Bunker",
-        "eden",
-        "bunker",
-        "eden_asphodel",
-        { garrison: true }
-      ),
-      AsphodelBlissDen: new Action(
-        "Asphodel Bliss Den",
-        "eden",
-        "bliss_den",
-        "eden_asphodel"
-      ),
-      AsphodelRectory: new Action(
-        "Asphodel Rectory",
-        "eden",
-        "rectory",
-        "eden_asphodel",
-        { housing: true }
-      ),
-      AsphodelCorruptor: new Action(
-        "Asphodel Corruptor (Warlord)",
-        "eden",
-        "corruptor",
-        "eden_asphodel"
-      ),
-      ElysiumMission: new Action(
-        "Elysium Mission",
-        "eden",
-        "survey_fields",
-        "eden_elysium"
-      ),
-      ElysiumFortress: new Action(
-        "Elysium Celestial Fortress",
-        "eden",
-        "fortress",
-        "eden_elysium"
-      ),
-      ElysiumSiege: new Action(
-        "Elysium Siege Fortress",
-        "eden",
-        "siege_fortress",
-        "eden_elysium"
-      ),
-      ElysiumRaid: new Action(
-        "Elysium Raid Supplies",
-        "eden",
-        "raid_supplies",
-        "eden_elysium"
-      ),
-      ElysiumAmbush: new Action(
-        "Elysium Ambush Patrol",
-        "eden",
-        "ambush_patrol",
-        "eden_elysium"
-      ),
-      ElysiumRuinedFortress: new Action(
-        "Elysium Ruined Fortress",
-        "eden",
-        "ruined_fortress",
-        "eden_elysium"
-      ),
-      ElysiumScout: new Action(
-        "Elysium Scout",
-        "eden",
-        "scout_elysium",
-        "eden_elysium"
-      ),
-      ElysiumFireSupportBase: new Action(
-        "Elysium Fire Support Base",
-        "eden",
-        "fire_support_base",
-        "eden_elysium",
-        { multiSegmented: true }
-      ),
-      ElysiumMine: new Action(
-        "Elysium Mine",
-        "eden",
-        "elysanite_mine",
-        "eden_elysium"
-      ),
-      ElysiumSacredSmelter: new Action(
-        "Elysium Sacred Smelter",
-        "eden",
-        "sacred_smelter",
-        "eden_elysium"
-      ),
-      ElysiumEleriumContainment: new Action(
-        "Elysium Elerium Containment",
-        "eden",
-        "elerium_containment",
-        "eden_elysium"
-      ),
-      ElysiumPillbox: new Action(
-        "Elysium Pillbox",
-        "eden",
-        "pillbox",
-        "eden_elysium"
-      ),
-      // TODO: Need some interaction with autoHell
-      ElysiumRestaurant: new Action(
-        "Elysium Restaurant",
-        "eden",
-        "restaurant",
-        "eden_elysium"
-      ),
-      ElysiumEternalBank: new Action(
-        "Elysium Eternal Bank",
-        "eden",
-        "eternal_bank",
-        "eden_elysium"
-      ),
-      ElysiumArchive: new Action(
-        "Elysium Archive",
-        "eden",
-        "archive",
-        "eden_elysium"
-      ),
-      ElysiumNorthPier: new Action(
-        "Elysium North Pier",
-        "eden",
-        "north_pier",
-        "eden_elysium",
-        { multiSegmented: true }
-      ),
-      ElysiumRushmore: new Action(
-        "Elysium Rushmore",
-        "eden",
-        "rushmore",
-        "eden_elysium"
-      ),
-      ElysiumReincarnation: new Action(
-        "Elysium Reincarnation",
-        "eden",
-        "reincarnation",
-        "eden_elysium"
-      ),
-      ElysiumCement: new Action(
-        "Elysium Cement",
-        "eden",
-        "eden_cement",
-        "eden_elysium"
-      ),
-      IsleSouthPier: new Action(
-        "Isle South Pier",
-        "eden",
-        "south_pier",
-        "eden_isle",
-        { multiSegmented: true }
-      ),
-      IsleWestTower: new Action(
-        "Isle West Tower",
-        "eden",
-        "west_tower",
-        "eden_isle"
-      ),
-      IsleGarrison: new Action(
-        "Isle Garrison",
-        "eden",
-        "isle_garrison",
-        "eden_isle"
-      ),
-      IsleEastTower: new Action(
-        "Isle East Tower",
-        "eden",
-        "east_tower",
-        "eden_isle"
-      ),
-      IsleSpiritVacuum: new Action(
-        "Isle Spirit Vacuum",
-        "eden",
-        "spirit_vacuum",
-        "eden_isle"
-      ),
-      IsleSpiritBattery: new Action(
-        "Isle Spirit Battery",
-        "eden",
-        "spirit_battery",
-        "eden_isle"
-      ),
-      IsleSoulCompactor: new Action(
-        "Isle Soul Compactor",
-        "eden",
-        "soul_compactor",
-        "eden_isle"
-      ),
-      PalaceMission: new Action(
-        "Palace Mission",
-        "eden",
-        "scout_palace",
-        "eden_palace"
-      ),
-      PalaceThrone: new Action("Palace Throne", "eden", "throne", "eden_palace"),
-      PalaceInfuser: new Action(
-        "Palace Infuser",
-        "eden",
-        "infuser",
-        "eden_palace",
-        { multiSegmented: true }
-      ),
-      PalaceApotheosis: new Action(
-        "Palace Apotheosis",
-        "eden",
-        "apotheosis",
-        "eden_palace",
-        { prestige: true }
-      ),
-      PalaceConduit: new Action(
-        "Palace Conduit",
-        "eden",
-        "conduit",
-        "eden_palace",
-        { multiSegmented: true }
-      ),
-      PalaceTomb: new Action("Palace Tomb", "eden", "tomb", "eden_palace", {
-        multiSegmented: true
-      })
-    };
-    var linkedBuildings = [
-      [buildings.LakeTransport, buildings.LakeBireme],
-      [buildings.SpirePort, buildings.SpireBaseCamp]
-    ];
-    var projects = {
-      LaunchFacility: new Project("Launch Facility", "launch_facility"),
-      SuperCollider: new Project("Supercollider", "lhc"),
-      StockExchange: new Project("Stock Exchange", "stock_exchange"),
-      Monument: new Project("Monument", "monument"),
-      Railway: new Project("Railway", "railway"),
-      Nexus: new Project("Nexus", "nexus"),
-      RoidEject: new Project("Asteroid Redirect", "roid_eject"),
-      ManaSyphon: new Project("Mana Syphon", "syphon"),
-      Depot: new Project("Depot", "tp_depot")
-    };
-    const wrGlobalCondition = 0;
-    const wrIndividualCondition = 1;
-    const wrDescription = 2;
-    const wrMultiplier = 3;
-    const authorityCapBuildings = [
-      buildings.Barracks,
-      buildings.Temple,
-      buildings.RedSpaceBarracks,
-      buildings.ProximaCruiser,
-      buildings.BeltSpaceStation,
-      buildings.WastelandBrute,
-      buildings.BadlandsMinions,
-      buildings.WastelandThrone,
-      buildings.AsphodelBunker
-    ];
-    const INFLATION_CHALLENGE_MONEY = 25e10;
-    const RETIREMENT_PREP = {
-      fusionGenerators: 20,
-      factories: 18,
-      scienceLabs: 11,
-      graphene: 2e8
-    };
-    const inflationMoneyStorageBuildings = [
-      buildings.Bank,
-      buildings.Casino,
-      buildings.HellSpaceCasino,
-      buildings.TitanBank,
-      buildings.TauCasino,
-      buildings.AlphaExchange,
-      buildings.RuinsVault,
-      buildings.RuinsWarVault,
-      buildings.WastelandHellCasino,
-      buildings.ElysiumEternalBank
-    ];
-    const inflationMoneyIncomeBuildings = [
-      buildings.TouristCenter,
-      buildings.Casino,
-      buildings.HellSpaceCasino,
-      buildings.TauCasino,
-      buildings.AlphaLuxuryCondo,
-      buildings.WastelandHellCasino
-    ];
-    const galaxyCombatShips = [
-      buildings.ScoutShip,
-      buildings.CorvetteShip,
-      buildings.FrigateShip,
-      buildings.CruiserShip,
-      buildings.Dreadnought
-    ];
-    var weightingRules = [
-      [
-        () => !settings.autoBuild,
-        () => true,
-        () => "",
-        () => 0
-        // Set weighting to zero right away, and skip all checks if autoBuild is disabled
-      ],
-      [
-        () => true,
-        (building) => !building.isUnlocked(),
-        () => "Locked",
-        () => 0
-        // Should always be on top, processing locked building may lead to issues
-      ],
-      [
-        () => true,
-        (building) => state.queuedTargets.includes(building),
-        () => "Queued building, processing...",
-        () => 0
-      ],
-      [
-        () => true,
-        (building) => state.triggerTargets.includes(building),
-        () => "Active trigger, processing...",
-        () => 0
-      ],
-      [
-        () => true,
-        (building) => !building.autoBuildEnabled,
-        () => "AutoBuild disabled",
-        () => 0
-      ],
-      [
-        () => true,
-        (building) => building.count >= building.autoMax,
-        () => "Maximum amount reached",
-        () => 0
-      ],
-      [
-        () => true,
-        (building) => !building.isAffordable(true),
-        () => "",
-        () => 0
-        // Red buildings need to be filtered out, so they won't prevent affordable buildings with lower weight from building
-      ],
-      [
-        () => game.global.race["truepath"] && buildings.SpaceTestLaunch.isUnlocked() && !haveTech("world_control"),
-        (building) => {
-          if (building === buildings.SpaceTestLaunch) {
-            let sabotage = 1;
-            for (let i = 0; i < 3; i++) {
-              let gov = game.global.civic.foreign[`gov${i}`];
-              if (!gov.occ && !gov.anx && !gov.buy) {
-                sabotage++;
-              }
-            }
-            return 1 / (sabotage + 1);
-          }
-        },
-        (chance) => `${Math.round(chance * 100)}% chance of successful launch`,
-        (chance) => chance < 0.5 ? chance : 0
-      ],
-      [
-        () => settings.jobDisableMiners && buildings.GatewayStarbase.count > 0,
-        (building) => building === buildings.CoalMine || building === buildings.Mine && !(game.global.race["sappy"] && game.global.race["smoldering"]),
-        () => "Miners disabled in Andromeda",
-        () => 0
-      ],
-      [
-        () => haveTech("piracy"),
-        (building) => building === buildings.StargateDefensePlatform && buildings.StargateDefensePlatform.count * 20 >= (game.global.race["instinct"] ? 0.09 : 0.1) * game.global.tech.piracy * getPiracyMultiplier(),
-        () => "Piracy fully supressed",
-        () => 0
-      ],
-      [
-        () => settings.autoFleet && game.global.tech["piracy"] && !galaxyAssaultPending(),
-        (building) => {
-          if (galaxyCombatShips.includes(building)) {
-            let totalNeed = getGalaxyRegions().reduce(
-              (sum, region) => sum + (region.useful ? Math.max(0, region.piracy - region.armada) : 0),
-              0
-            );
-            return getGalaxyCombatShipPower() >= totalNeed;
-          }
-        },
-        () => "Piracy fully covered by fleet",
-        () => 0
-      ],
-      [
-        () => settings.autoMech && settings.mechBuild !== "none" && settings.buildingMechsFirst && buildings.SpireMechBay.count > 0 && buildings.SpireMechBay.stateOffCount === 0,
-        (building) => {
-          if (building.cost["Supply"]) {
-            if (MechManager.isActive) {
-              return "Building mechs...";
-            }
-            let mechBay = game.global.portal.mechbay;
-            let newSize = !haveTask("mech") ? settings.mechBuild === "random" ? MechManager.getPreferredSize()[0] : mechBay.blueprint.size : "titan";
-            let [newGems, newSupply, newSpace] = MechManager.getMechCost({
-              size: newSize
-            });
-            if (newSpace <= mechBay.max - mechBay.bay && newSupply <= resources.Supply.maxQuantity && newGems <= resources.Soul_Gem.currentQuantity) {
-              return "Saving supplies for new mech";
-            }
-          }
-        },
-        (note) => note,
-        () => 0
-      ],
-      [
-        () => settings.prestigeBioseedConstruct && settings.prestigeType === "ascension" && !game.global.race["witch_hunter"],
-        (building) => building === buildings.GateEastTower || building === buildings.GateWestTower,
-        () => "Not needed for Ascension prestige",
-        () => 0
-      ],
-      [
-        () => buildings.GateEastTower.isUnlocked() && buildings.GateWestTower.isUnlocked() && poly.hellSupression("gate").supress < settings.buildingTowerSuppression / 100,
-        (building) => building === buildings.GateEastTower || building === buildings.GateWestTower,
-        () => "Too low gate supression",
-        () => 0
-      ],
-      [
-        () => settings.prestigeType === "whitehole" && settings.prestigeWhiteholeSaveGems,
-        (building) => {
-          if (building.cost["Soul_Gem"] > resources.Soul_Gem.currentQuantity - 10) {
-            return true;
-          }
-        },
-        () => "Saving up Soul Gems for prestige",
-        () => 0
-      ],
-      [
-        () => {
-          return buildings.GorddonFreighter.isAutoBuildable() && buildings.GorddonFreighter.isAffordable(true) && buildings.Alien1SuperFreighter.isAutoBuildable() && buildings.Alien1SuperFreighter.isAffordable(true);
-        },
-        (building) => {
-          if (building === buildings.GorddonFreighter || building === buildings.Alien1SuperFreighter) {
-            let regCount = buildings.GorddonFreighter.count;
-            let regTotal = (1 + (regCount + 1) * 0.03) / (1 + regCount * 0.03) - 1;
-            let regCrew = regTotal / 3;
-            let supCount = buildings.Alien1SuperFreighter.count;
-            let supTotal = (1 + (supCount + 1) * 0.08) / (1 + supCount * 0.08) - 1;
-            let supCrew = supTotal / 5;
-            if (building === buildings.GorddonFreighter && regCrew < supCrew) {
-              return buildings.Alien1SuperFreighter;
-            }
-            if (building === buildings.Alien1SuperFreighter && supCrew < regCrew) {
-              return buildings.GorddonFreighter;
-            }
-          }
-        },
-        (other) => `${other.title} gives more Money`,
-        () => settings.buildingsBestFreighter ? 0 : 1
-        // Find what's better - Freighter or Super Freighter
-      ],
-      [
-        () => {
-          return buildings.LakeBireme.isAutoBuildable() && buildings.LakeBireme.isAffordable(true) && buildings.LakeTransport.isAutoBuildable() && buildings.LakeTransport.isAffordable(true) && resources.Lake_Support.rateOfChange <= 1;
-        },
-        (building) => {
-          if (building === buildings.LakeBireme || building === buildings.LakeTransport) {
-            let biremeCount = buildings.LakeBireme.count;
-            let transportCount = buildings.LakeTransport.count;
-            let rating = game.global.blood["spire"] && game.global.blood.spire >= 2 ? 0.8 : 0.85;
-            let nextBireme = (1 - rating ** (biremeCount + 1)) * (transportCount * 5);
-            let nextTransport = (1 - rating ** biremeCount) * ((transportCount + 1) * 5);
-            if (settings.buildingsTransportGem) {
-              let currentSupply = (1 - rating ** biremeCount) * (transportCount * 5);
-              nextBireme = (nextBireme - currentSupply) / buildings.LakeBireme.cost["Soul_Gem"];
-              nextTransport = (nextTransport - currentSupply) / buildings.LakeTransport.cost["Soul_Gem"];
-            }
-            if (building === buildings.LakeBireme && nextBireme < nextTransport) {
-              return buildings.LakeTransport;
-            }
-            if (building === buildings.LakeTransport && nextTransport < nextBireme) {
-              return buildings.LakeBireme;
-            }
-          }
-        },
-        (other) => `${other.title} gives more Supplies`,
-        () => 0
-        // Find what's better - Bireme or Transport
-      ],
-      [
-        () => {
-          return buildings.SpirePort.isAutoBuildable() && buildings.SpirePort.isAffordable(true) && buildings.SpireBaseCamp.isAutoBuildable() && buildings.SpireBaseCamp.isAffordable(true);
-        },
-        (building) => {
-          if (building === buildings.SpirePort || building === buildings.SpireBaseCamp) {
-            let portCount = buildings.SpirePort.count;
-            let baseCount = buildings.SpireBaseCamp.count;
-            let nextPort = (portCount + 1) * (1 + baseCount * 0.4);
-            let nextBase = portCount * (1 + (baseCount + 1) * 0.4);
-            if (building === buildings.SpirePort && nextPort < nextBase) {
-              return buildings.SpireBaseCamp;
-            }
-            if (building === buildings.SpireBaseCamp && nextBase < nextPort) {
-              return buildings.SpirePort;
-            }
-          }
-        },
-        (other) => `${other.title} gives more Max Supplies`,
-        () => 0
-        // Find what's better - Port or Base
-      ],
-      [
-        () => haveTech("waygate", 2),
-        (building) => building === buildings.SpireWaygate,
-        () => "",
-        () => 0
-        // We can't limit waygate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
-      ],
-      [
-        () => haveTech("edenic", 3),
-        (building) => building === buildings.SpireEdenicGate,
-        () => "",
-        () => 0
-        // We can't limit edenic gate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
-      ],
-      [
-        () => haveTech("elysium", 8),
-        (building) => {
-          if (building === buildings.ElysiumFireSupportBase) {
-            if (haveTech("isle", 2)) {
-              return "Garrison is destroyed";
-            }
-            if (!haveTech("elysium", 10) && building.count >= 100) {
-              return "Missing Elerium Cannon tech";
-            }
-          }
-        },
-        (note) => note,
-        () => 0
-        // Build up to 100, and then fire after researching cannon
-      ],
-      [
-        () => haveTech("asphodel", 8),
-        (building) => building === buildings.AsphodelStabilizer && building.count >= buildings.AsphodelWarehouse.count,
-        () => "Can not exceed amount of Warehouses",
-        () => 0
-      ],
-      [
-        () => haveTech("hell_spire", 8) || game.global.race["warlord"],
-        (building) => building === buildings.SpireSphinx,
-        () => "",
-        () => 0
-        // Sphinx not usable after solving / Harmachis not usable during Warlord
-      ],
-      [
-        () => game.global.race["artifical"] && haveTech("focus_cure", 7),
-        (building) => building instanceof ResourceAction && building.resource === resources.Population && building !== buildings.TauCloning,
-        () => "Assembling is not possible",
-        () => 0
-      ],
-      [
-        () => game.global.race["artifical"],
-        (building) => building instanceof ResourceAction && building.resource === resources.Population && resources.Population.storageRatio === 1,
-        () => "No empty housings",
-        () => 0
-      ],
-      [
-        () => buildings.GorddonEmbassy.count === 0 && resources.Knowledge.maxQuantity < settings.fleetEmbassyKnowledge,
-        (building) => building === buildings.GorddonEmbassy,
-        () => `${getNumberString(
-          settings.fleetEmbassyKnowledge
-        )} Max Knowledge required`,
-        () => 0
-      ],
-      [
-        () => game.global.race["magnificent"] && settings.buildingShrineType !== "any",
-        (building) => {
-          if (building.id && building.id.includes("shrine")) {
-            let bonus = null;
-            if (game.global.city.calendar.moon > 0 && game.global.city.calendar.moon < 7) {
-              bonus = "morale";
-            } else if (game.global.city.calendar.moon > 7 && game.global.city.calendar.moon < 14) {
-              bonus = "metal";
-            } else if (game.global.city.calendar.moon > 14 && game.global.city.calendar.moon < 21) {
-              bonus = "know";
-            } else if (game.global.city.calendar.moon > 21) {
-              bonus = "tax";
-            } else if ([0, 7, 14, 21].includes(game.global.city.calendar.moon)) {
-              bonus = "rotating";
-            } else {
-              return true;
-            }
-            if (settings.buildingShrineType === "equally") {
-              let minShrine = Math.min(
-                game.global.city.shrine.morale,
-                game.global.city.shrine.metal,
-                game.global.city.shrine.know,
-                game.global.city.shrine.tax
-              );
-              return game.global.city.shrine[bonus] !== minShrine;
-            } else {
-              return settings.buildingShrineType !== bonus;
-            }
-          }
-        },
-        () => "Wrong shrine",
-        () => 0
-      ],
-      [
-        () => game.global.race["slaver"],
-        (building) => {
-          if (building === buildings.SlaveMarket) {
-            if (resources.Slave.currentQuantity >= resources.Slave.maxQuantity) {
-              return "Slave pens already full";
-            }
-            if (resources.Money.currentQuantity + resources.Money.rateOfChange < resources.Money.maxQuantity && resources.Money.rateOfChange < settings.slaveIncome) {
-              return "Buying slaves only with excess money";
-            }
-          }
-        },
-        (note) => note,
-        () => 0
-        // Slave Market
-      ],
-      [
-        () => game.global.race["cannibalize"],
-        (building) => {
-          if (building._id === "s_alter" && building.count > 0) {
-            if (resources.Population.currentQuantity < 1) {
-              return "Too low population";
-            }
-            if (resources.Population.currentQuantity !== resources.Population.maxQuantity) {
-              return "Sacrifices performed only with full population";
-            }
-            if (game.global.race["parasite"] && game.global.city.calendar.wind === 0) {
-              return "Parasites sacrificed only during windy weather";
-            }
-            if (game.global.civic[game.global.civic.d_job].workers < 1) {
-              return "No default workers to sacrifice";
-            }
-            if (game.global.city.s_alter.rage >= 3600 && game.global.city.s_alter.regen >= 3600 && game.global.city.s_alter.mind >= 3600 && game.global.city.s_alter.mine >= 3600 && (!isLumberRace() || game.global.city.s_alter.harvest >= 3600)) {
-              return "Sacrifice bonus already high enough";
-            }
-          }
-        },
-        (note) => note,
-        () => 0
-        // Sacrificial Altar
-      ],
-      [
-        () => true,
-        (building) => building.getMissingConsumption(),
-        (resource) => `Missing ${resource.name} to operate`,
-        () => settings.buildingWeightingMissingSupply
-      ],
-      [
-        () => true,
-        (building) => building.getMissingSupport(),
-        (support) => `Missing ${support.name} to operate`,
-        () => settings.buildingWeightingMissingSupport
-      ],
-      [
-        () => true,
-        (building) => building.getUselessSupport(),
-        (support) => `Provided ${support.name} not currently needed`,
-        () => settings.buildingWeightingUselessSupport
-      ],
-      [
-        () => game.global.race["truepath"] && resources.Tau_Belt_Support.maxQuantity <= resources.Tau_Belt_Support.currentQuantity,
-        (building) => {
-          if (building === buildings.TauBeltWhalingShip || building === buildings.TauBeltMiningShip) {
-            let s_max = resources.Tau_Belt_Support.maxQuantity;
-            let s_cur = resources.Tau_Belt_Support.currentQuantity;
-            let currentEff = 1 - (1 - s_max / s_cur) ** 1.4;
-            let nextEff = 1 - (1 - s_max / (s_cur + 1)) ** 1.4;
-            return nextEff * (s_cur + 1) - currentEff * s_cur;
-          }
-        },
-        (eff) => `Low security, new ship will be ${getNiceNumber(eff * 100)}% efficient`,
-        (eff) => eff ?? -1
-      ],
-      [
-        () => game.global.race["truepath"],
-        // "&& game.global.tech.tau_red === 4" doesn't want to work for some reason.
-        (building) => {
-          if (building === buildings.TauRedContact || building === buildings.TauRedIntroduce || building === buildings.TauRedSubjugate) {
-            let missing = null;
-            for (let [id, stat] of Object.entries({
-              TauRedContact: "friend",
-              TauRedIntroduce: "god",
-              TauRedSubjugate: "lord"
-            })) {
-              if (!game.global.stats.womling[stat][poly.universeAffix()]) {
-                if (building === buildings[id]) {
-                  return false;
-                }
-                if (buildings[id].isAutoBuildable()) {
-                  missing = id;
-                }
-              }
-            }
-            return missing;
-          }
-        },
-        (id) => `Overlord achievement is missing ${buildings[id].name}`,
-        () => settings.buildingWeightingOverlord
-      ],
-      [
-        // Evil universe: Authority amount is capped by Authority max. When max is below target no
-        // amount of tax/soldier management can fix the production penalty, so prioritize the
-        // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
-        () => settings.generalMinimumAuthority > 0 && resources.Authority.isUnlocked() && resources.Authority.maxQuantity < settings.generalMinimumAuthority,
-        (building) => authorityCapBuildings.includes(building),
-        () => "Raises Authority cap, currently below target",
-        () => settings.buildingWeightingAuthority
-      ],
-      [
-        () => settings.achievementGuards && settings.guardBananaRepublic && game.global.race["banana"],
-        (building) => building === buildings.DwarfWorldCollider && !bananaRepublicObjectiveComplete("b2"),
-        () => "Banana Republic objective",
-        () => settings.buildingWeightingBananaObjective
-      ],
-      [
-        () => inflationChallengeAssistActive(),
-        (building) => {
-          if (!inflationChallengeMoneyReachable() && inflationMoneyStorageBuildings.includes(building)) {
-            return "storage";
-          }
-          if (inflationChallengeMoneyReachable() && inflationMoneyIncomeBuildings.includes(building)) {
-            return "income";
-          }
-          return false;
-        },
-        (kind) => kind === "storage" ? "Inflation challenge needs Money storage" : "Inflation challenge needs Money income",
-        () => settings.buildingWeightingInflationMoney
-      ],
-      [
-        () => retirementChallengeAssistActive() && retirementPreparationMissing().length > 0,
-        (building) => {
-          if (building === buildings.TauFusionGenerator && building.count < RETIREMENT_PREP.fusionGenerators) {
-            return RETIREMENT_PREP.fusionGenerators;
-          }
-          if (building === buildings.TauFactory && building.count < RETIREMENT_PREP.factories) {
-            return RETIREMENT_PREP.factories;
-          }
-          if (building === buildings.TauDiseaseLab && building.count < RETIREMENT_PREP.scienceLabs) {
-            return RETIREMENT_PREP.scienceLabs;
-          }
-          return false;
-        },
-        (target, building) => `Retirement preparation: build ${target} ${building.name}`,
-        () => settings.buildingWeightingRetirementPrep
-      ],
-      [
-        () => settings.achievementGuards,
-        (building) => building === buildings.Dreadnought && guardActive("guardDreaded") ? "Dreaded" : building === buildings.SiriusThermalCollector && guardActive("guardEnergetic") ? "Energetic" : building === buildings.RedSpaceport && guardActive("guardRedDead") ? "Red Dead" : false,
-        (name) => `${name} achievement guard`,
-        () => 0
-      ],
-      [
-        () => true,
-        (building) => building._tab === "city" && building !== buildings.Mill && building !== buildings.Banquet && building.stateOffCount > 0,
-        () => "Still have some non operating buildings",
-        () => settings.buildingWeightingNonOperatingCity
-      ],
-      [
-        () => true,
-        (building) => {
-          if (building === buildings.BlackholeStellarEngine) {
-            return false;
-          }
-          if ((building === buildings.BadlandsAttractor || building === buildings.SpireMechBay) && building.isSmartManaged()) {
-            return false;
-          }
-          if (building === buildings.RuinsGuardPost && building.isSmartManaged() && !isHellSupressUseful()) {
-            if (building.count < Math.ceil(
-              5e3 / (game.armyRating(traitVal("high_pop", 0, 1), "hellArmy", 0) * traitVal("holy", 1, "+"))
-            )) {
-              return false;
-            }
-          }
-          let supplyIndex = building === buildings.SpirePort ? 1 : building === buildings.SpireBaseCamp ? 2 : -1;
-          if (supplyIndex > 0 && (buildings.SpireMechBay.isSmartManaged() || buildings.SpirePurifier.isSmartManaged())) {
-            if (building.count < getBestSupplyRatio(
-              resources.Spire_Support.maxQuantity,
-              buildings.SpirePort.autoMax,
-              buildings.SpireBaseCamp.autoMax
-            )[supplyIndex]) {
-              return false;
-            }
-          }
-          if (building._tab !== "city" && building.stateOffCount > 0) {
-            return true;
-          }
-        },
-        () => "Still have some non operating buildings",
-        () => settings.buildingWeightingNonOperating
-      ],
-      [
-        () => settings.prestigeType !== "bioseed" || !isGECKNeeded(),
-        (building) => building === buildings.GasSpaceDockGECK,
-        () => "Max allowed amount of G.E.C.K reached",
-        () => 0
-      ],
-      [
-        () => game.global.race["lone_survivor"] && !isPrestigeAllowed("eden"),
-        (building) => building === buildings.TauStarEden,
-        () => "Prestiging not currently allowed",
-        () => 0
-      ],
-      [
-        () => game.global.race["truepath"] && (!isPrestigeAllowed("retire") || buildings.TauGas2MatrioshkaBrain.count < 1e3),
-        (building) => building === buildings.TauGas2IgniteGasGiant,
-        () => "Prestiging not currently allowed",
-        () => 0
-      ],
-      [
-        () => settings.prestigeBioseedConstruct && settings.prestigeType !== "bioseed",
-        (building) => building === buildings.GasSpaceDock || building === buildings.GasSpaceDockShipSegment || building === buildings.GasSpaceDockProbe,
-        () => "Not needed for current prestige",
-        () => 0
-      ],
-      [
-        () => settings.prestigeBioseedConstruct && settings.prestigeType === "bioseed",
-        (building) => building === buildings.DwarfWorldCollider || building === buildings.TitanMission,
-        () => "Not needed for Bioseed prestige",
-        () => 0
-      ],
-      [
-        () => settings.prestigeBioseedConstruct && settings.prestigeType === "whitehole",
-        (building) => building === buildings.BlackholeJumpShip,
-        () => "Not needed for Whitehole prestige",
-        () => 0
-      ],
-      [
-        () => settings.prestigeBioseedConstruct && settings.prestigeType === "vacuum",
-        (building) => building === buildings.BlackholeStellarEngine,
-        () => "Not needed for Vacuum Collapse prestige",
-        () => 0
-      ],
-      [
-        () => settings.prestigeBioseedConstruct && settings.prestigeType === "ascension" && isPillarFinished() && !game.global.race["witch_hunter"],
-        (building) => building === buildings.PitMission || building === buildings.RuinsMission,
-        () => "Not needed for Ascension prestige",
-        () => 0
-      ],
-      [
-        () => game.global.race["witch_hunter"] && settings.prestigeType === "ascension",
-        (building) => building === buildings.SpireWaygate,
-        () => "Not needed for Witch Hunter's Ascension prestige",
-        () => 0
-      ],
-      [
-        () => settings.prestigeBioseedConstruct && settings.prestigeType === "terraform",
-        (building) => building === buildings.PitMission || building === buildings.RuinsMission,
-        () => "Not needed for Terraform prestige",
-        () => 0
-      ],
-      [
-        () => settings.autoPrestige && settings.prestigeType === "mad" && (haveTech("mad") || techIds["tech-mad"].isUnlocked() && techIds["tech-mad"].isAffordable(true)),
-        (building) => !building.is.housing && !building.is.garrison && !building.cost["Knowledge"] && building !== buildings.OilWell,
-        () => "Awaiting MAD prestige",
-        () => settings.buildingWeightingMADUseless
-      ],
-      [
-        () => true,
-        (building) => !(building instanceof ResourceAction) && building.count === 0,
-        () => "New building",
-        () => settings.buildingWeightingNew
-      ],
-      [
-        () => resources.Power.isUnlocked() && resources.Power.currentQuantity < resources.Power.maxQuantity,
-        (building) => building === buildings.LakeCoolingTower || building.powered < 0,
-        () => "Need more energy",
-        () => settings.buildingWeightingNeedfulPowerPlant
-      ],
-      [
-        () => resources.Power.isUnlocked() && resources.Power.currentQuantity > resources.Power.maxQuantity,
-        (building) => building !== buildings.Mill && (building === buildings.LakeCoolingTower || building.powered < 0),
-        () => "No need for more energy",
-        () => settings.buildingWeightingUselessPowerPlant
-      ],
-      [
-        () => resources.Power.isUnlocked(),
-        (building) => building !== buildings.LakeCoolingTower && building.powered > 0 && (building === buildings.NeutronCitadel ? getCitadelConsumption(building.count + 1) - getCitadelConsumption(building.count) : building.powered) > resources.Power.currentQuantity,
-        () => "Not enough energy",
-        () => settings.buildingWeightingUnderpowered
-      ],
-      [
-        () => Math.max(
-          state.knowledgeRequiredByTechs,
-          state.knowledgeRequiredByBuildTargets
-        ) <= resources.Knowledge.maxQuantity,
-        (building) => building.is.knowledge && building !== buildings.Wardenclyffe && (building !== buildings.StargateTelemetryBeacon || building.count > 0),
-        // We want Wardenclyffe for morale; first beacon required for progress
-        () => "No need for more knowledge",
-        () => settings.buildingWeightingUselessKnowledge
-      ],
-      [
-        () => state.cheapestTechKnowledge > resources.Knowledge.maxQuantity || state.knowledgeRequiredByBuildTargets > resources.Knowledge.maxQuantity,
-        (building) => building.is.knowledge,
-        () => "Need more knowledge",
-        () => settings.buildingWeightingNeedfulKnowledge
-      ],
-      [
-        () => buildings.BlackholeMassEjector.count > 0 && buildings.BlackholeMassEjector.count * 1e3 - game.global.interstellar.mass_ejector.total > 100,
-        (building) => building === buildings.BlackholeMassEjector,
-        () => "Still have some unused ejectors",
-        () => settings.buildingWeightingUnusedEjectors
-      ],
-      [
-        () => resources.Crates.storageRatio < 1 || resources.Containers.storageRatio < 1,
-        (building) => building === buildings.StorageYard || building === buildings.Warehouse || building === buildings.EnceladusMunitions,
-        () => "Still have some unused storage",
-        () => settings.buildingWeightingCrateUseless
-      ],
-      [
-        () => resources.Oil.maxQuantity < resources.Oil.maxCost && buildings.OilWell.count <= 0 && buildings.GasMoonOilExtractor.count <= 0,
-        (building) => building === buildings.OilWell || building === buildings.GasMoonOilExtractor,
-        () => "Need more fuel",
-        () => settings.buildingWeightingMissingFuel
-      ],
-      [
-        () => resources.Helium_3.isUnlocked() && resources.Helium_3.maxQuantity < resources.Helium_3.maxCost || resources.Oil.maxQuantity < resources.Oil.maxCost,
-        (building) => building === buildings.OilDepot || building === buildings.SpacePropellantDepot || building === buildings.GasStorage,
-        () => "Need more fuel",
-        () => settings.buildingWeightingMissingFuel
-      ],
-      [
-        () => game.global.race.hooved && resources.Horseshoe.spareQuantity >= resources.Horseshoe.storageRequired,
-        (building) => building instanceof ResourceAction && building.resource === resources.Horseshoe,
-        () => `No more ${resources.Horseshoe.title} needed`,
-        () => settings.buildingWeightingHorseshoeUseless
-      ],
-      [
-        () => game.global.race.calm && resources.Zen.currentQuantity < resources.Zen.maxQuantity,
-        (building) => building.id.includes("meditation"),
-        () => "No more Meditation Space needed",
-        () => settings.buildingWeightingZenUseless
-      ],
-      [
-        () => buildings.GateTurret.isUnlocked() && poly.hellSupression("gate").rating > 7501 + game.armyRating(traitVal("high_pop", 0, 1), "hellArmy", 0) * traitVal("holy", 1, "+"),
-        (building) => building === buildings.GateTurret,
-        () => "Gate demons fully supressed",
-        () => settings.buildingWeightingGateTurret
-      ],
-      [
-        () => (resources.Containers.isUnlocked() || resources.Crates.isUnlocked()) && resources.Containers.storageRatio === 1 && resources.Crates.storageRatio === 1,
-        (building) => building === buildings.Shed || building === buildings.RedGarage || building === buildings.AlphaWarehouse || building === buildings.ProximaCargoYard || building === buildings.TitanStorehouse,
-        () => "Need more storage",
-        () => settings.buildingWeightingNeedStorage
-      ],
-      [
-        () => resources.Population.maxQuantity > 50 && resources.Population.storageRatio < 0.9,
-        (building) => building.is.housing && building !== buildings.Alien1Consulate && building !== buildings.Transmitter && !(building instanceof ResourceAction),
-        () => "No more houses needed",
-        () => settings.buildingWeightingUselessHousing
-      ],
-      [
-        () => game.global.race["orbit_decay"] && !game.global.race["orbit_decayed"],
-        (building) => (building._tab === "city" || building._location === "spc_moon") && !(building instanceof ResourceAction),
-        () => "Will be destroyed after impact",
-        () => settings.buildingWeightingTemporal
-      ],
-      [
-        () => game.global.tech.tau_gas === 1,
-        // Only used for name contest, no need to check at other game stages
-        (building) => building.is.random,
-        () => "Randomized weighting",
-        () => 1 + Math.random()
-        // Fluctuate weight to pick random item
-      ],
-      [
-        () => game.global.race["truepath"] && haveTech("tauceti", 2),
-        (building) => (building._tab === "city" || building._tab === "space" || building._tab === "starDock") && !(building instanceof ResourceAction),
-        () => "Solar System building",
-        () => settings.buildingWeightingSolar
-      ]
-    ];
+    var { resources, jobs, crafter, buildings, linkedBuildings, projects } = createEntityCatalogs({
+      classes: {
+        Action,
+        BasicJob,
+        BeltSupport,
+        CityAction,
+        CraftingJob,
+        ElectrolysisSupport,
+        Job,
+        ModalAction,
+        Morale,
+        Pillar,
+        Population,
+        Power,
+        PrestigeResource,
+        Project,
+        Resource,
+        ResourceAction,
+        SoulGem,
+        SpaceDock,
+        Supply,
+        Support,
+        Thrall,
+        Troops,
+        WomlingsSupport
+      },
+      getHaveTech: () => haveTech,
+      setResources: (value) => resources = value
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        entityCatalogs: {
+          resources,
+          jobs,
+          crafter,
+          buildings,
+          linkedBuildings,
+          projects
+        }
+      });
+    }
+    const {
+      wrGlobalCondition,
+      wrIndividualCondition,
+      wrDescription,
+      wrMultiplier,
+      authorityCapBuildings,
+      INFLATION_CHALLENGE_MONEY,
+      RETIREMENT_PREP,
+      inflationMoneyStorageBuildings,
+      inflationMoneyIncomeBuildings,
+      galaxyCombatShips,
+      weightingRules
+    } = createBuildingWeightingPolicy({
+      getGame: () => game,
+      getSettings: () => settings,
+      getState: () => state,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getPoly: () => poly,
+      getMechManager: () => MechManager,
+      getTechIds: () => techIds,
+      getTraitVal: () => traitVal,
+      getHaveTech: () => haveTech,
+      getHaveTask: () => haveTask,
+      getPiracyMultiplierFn: () => getPiracyMultiplier,
+      getGalaxyAssaultPending: () => galaxyAssaultPending,
+      getGalaxyRegionsFn: () => getGalaxyRegions,
+      getGalaxyCombatShipPowerFn: () => getGalaxyCombatShipPower,
+      getNumberStringFn: () => getNumberString,
+      getNiceNumberFn: () => getNiceNumber,
+      getIsLumberRace: () => isLumberRace,
+      getBananaRepublicObjectiveComplete: () => bananaRepublicObjectiveComplete,
+      getInflationChallengeAssistActive: () => inflationChallengeAssistActive,
+      getInflationChallengeMoneyReachable: () => inflationChallengeMoneyReachable,
+      getRetirementChallengeAssistActive: () => retirementChallengeAssistActive,
+      getRetirementPreparationMissing: () => retirementPreparationMissing,
+      getGuardActive: () => guardActive,
+      getIsHellSupressUseful: () => isHellSupressUseful,
+      getBestSupplyRatioFn: () => getBestSupplyRatio,
+      getIsGECKNeeded: () => isGECKNeeded,
+      getIsPrestigeAllowed: () => isPrestigeAllowed,
+      getIsPillarFinished: () => isPillarFinished,
+      getCitadelConsumptionFn: () => getCitadelConsumption,
+      ResourceAction
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        weightingPolicy: {
+          wrGlobalCondition,
+          wrIndividualCondition,
+          wrDescription,
+          wrMultiplier,
+          authorityCapBuildings,
+          INFLATION_CHALLENGE_MONEY,
+          RETIREMENT_PREP,
+          inflationMoneyStorageBuildings,
+          inflationMoneyIncomeBuildings,
+          galaxyCombatShips,
+          weightingRules
+        }
+      });
+    }
     var MinorTraitManager = {
       priorityList: [],
       _traitVueBinding: "geneticBreakdown",
@@ -26282,782 +32441,6 @@
         (b) => b && b.isSwitchable()
       );
     }
-    function resetWarSettings(reset) {
-      let def = {
-        autoFight: false,
-        foreignAttackLivingSoldiersPercent: 90,
-        foreignAttackHealthySoldiersPercent: 90,
-        foreignHireMercMoneyStoragePercent: 90,
-        foreignHireMercCostLowerThanIncome: 1,
-        foreignHireMercDeadSoldiers: 1,
-        foreignMinAdvantage: 40,
-        foreignMaxAdvantage: 80,
-        foreignMaxSiegeBattalion: 10,
-        foreignProtect: "auto",
-        foreignPacifist: false,
-        foreignUnification: true,
-        foreignForceSabotage: true,
-        foreignOccupyLast: true,
-        foreignTrainSpy: true,
-        foreignSpyMax: 2,
-        foreignPowerRequired: 75,
-        foreignPolicyInferior: "Annex",
-        foreignPolicySuperior: "Sabotage",
-        foreignPolicyRival: "Influence"
-      };
-      applySettings(def, reset);
-    }
-    function resetHellSettings(reset) {
-      let def = {
-        autoHell: false,
-        hellHomeGarrison: 10,
-        hellMinSoldiers: 20,
-        hellMinSoldiersPercent: 90,
-        hellAssaultReserve: true,
-        hellTargetFortressDamage: 100,
-        hellLowWallsMulti: 3,
-        hellHandlePatrolSize: true,
-        hellPatrolMinRating: 30,
-        hellPatrolThreatPercent: 8,
-        hellPatrolDroneMod: 5,
-        hellPatrolDroidMod: 5,
-        hellPatrolBootcampMod: 0,
-        hellBolsterPatrolPercentTop: 50,
-        hellBolsterPatrolPercentBottom: 20,
-        hellBolsterPatrolRating: 300,
-        hellAttractorTopThreat: 9e3,
-        hellAttractorBottomThreat: 6e3,
-        warlordHandleFortress: true,
-        warlordMinimumMinions: 1e3
-      };
-      applySettings(def, reset);
-    }
-    function resetGeneralSettings(reset) {
-      let def = {
-        masterScriptToggle: true,
-        showSettings: true,
-        autoPrestige: false,
-        tickRate: 4,
-        tickSchedule: false,
-        researchRequest: true,
-        researchRequestSpace: false,
-        missionRequest: true,
-        useDemanded: true,
-        prioritizeTriggers: "savereq",
-        prioritizeQueue: "savereq",
-        prioritizeUnify: "savereq",
-        prioritizeOuterFleet: "ignore",
-        buildingAlwaysClick: false,
-        buildingClickPerTick: 50,
-        scriptSettingsExportFilename: "evolve-script-settings.json"
-      };
-      applySettings(def, reset);
-    }
-    function resetInterfaceSettings(reset) {
-      let def = {
-        activeTargetsUI: false,
-        buildPlannerUI: true,
-        buildPlannerCollapsed: false,
-        displayPrestigeTypeInTopBar: true,
-        displayTotalDaysTypeInTopBar: false,
-        performanceHackAvoidDrawTech: false
-      };
-      applySettings(def, reset);
-    }
-    function resetStateLogSettings(reset) {
-      let def = {
-        stateLogEnabled: false,
-        stateLogAutoDownload: false,
-        stateLogInterval: 20
-      };
-      applySettings(def, reset);
-    }
-    function resetAchievementGuardSettings(reset) {
-      let def = {
-        achievementGuards: false,
-        guardPacifist: true,
-        guardDreaded: true,
-        guardCultOfPersonality: true,
-        guardAnarchist: true,
-        guardEnergetic: true,
-        guardRedDead: true,
-        guardSecondEvolution: true,
-        guardBananaRepublic: true
-      };
-      applySettings(def, reset);
-    }
-    function resetChallengeHelperSettings(reset) {
-      let def = {
-        inflationChallengeAssist: true,
-        inflationChallengeSaveMinutes: 30,
-        retirementChallengeAssist: true
-      };
-      applySettings(def, reset);
-    }
-    function resetPrestigeSettings(reset) {
-      let def = {
-        prestigeType: "none",
-        prestigeMADIgnoreArpa: true,
-        prestigeMADWait: true,
-        prestigeMADPopulation: 1,
-        prestigeWaitAT: false,
-        prestigeGECK: 0,
-        prestigeBioseedConstruct: true,
-        prestigeBioseedProbes: 3,
-        prestigeWhiteholeSaveGems: true,
-        prestigeWhiteholeMinMass: 8,
-        prestigeAscensionPillar: true,
-        prestigeCustomRaceMode: "reuse",
-        prestigeCustomRacePreset: "0",
-        prestigeCustomRacePresets: [
-          { name: "General", json: "" },
-          { name: "Banana + EMF", json: "" },
-          { name: "Cataclysm", json: "" }
-        ],
-        prestigeDemonicFloor: 100,
-        prestigeDemonicPotential: 0.6,
-        prestigeDemonicBomb: false,
-        prestigeVaxStrat: "none"
-      };
-      applySettings(def, reset);
-    }
-    function resetGovernmentSettings(reset) {
-      let def = {
-        autoTax: false,
-        autoGovernment: false,
-        generalRequestedTaxRate: -1,
-        generalMinimumTaxRate: 20,
-        generalMinimumMorale: 105,
-        generalMaximumMorale: 500,
-        generalMinimumAuthority: 100,
-        // Evil universe: keep Authority at or above this (0 to disable, -1 to target the current Authority max)
-        generalAuthorityMinPatrolPercent: 40,
-        // -1 (pin-at-max) mode only: reserve at least this % of available Hell soldiers for patrols (soul gem income) instead of stationing everyone
-        govInterim: GovernmentManager.Types.democracy.id,
-        govFinal: GovernmentManager.Types.technocracy.id,
-        govSpace: GovernmentManager.Types.corpocracy.id,
-        govGovernor: "none"
-      };
-      applySettings(def, reset);
-    }
-    function resetEvolutionSettings(reset) {
-      let def = {
-        autoEvolution: false,
-        userUniverseTargetName: "none",
-        userPlanetTargetName: "none",
-        userEvolutionTarget: "auto",
-        userEvolutionGenus: "fungi",
-        evolutionQueue: [],
-        evolutionQueueEnabled: false,
-        evolutionQueueRepeat: false,
-        evolutionAutoUnbound: true,
-        evolutionBackup: false
-      };
-      challenges.forEach((set) => def["challenge_" + set[0].id] = false);
-      applySettings(def, reset);
-    }
-    function resetResearchSettings(reset) {
-      let def = {
-        autoResearch: false,
-        userResearchTheology_1: "auto",
-        userResearchTheology_2: "auto",
-        researchIgnore: ["tech-purify"]
-      };
-      applySettings(def, reset);
-    }
-    function resetMarketSettings(reset) {
-      MarketManager.priorityList = Object.values(resources).filter((r) => r.is.tradable).reverse();
-      let def = {
-        autoMarket: false,
-        autoGalaxyMarket: false,
-        tradeRouteMinimumMoneyPerSecond: 500,
-        tradeRouteMinimumMoneyPercentage: 50,
-        tradeRouteSellExcess: true,
-        minimumMoney: 0,
-        minimumMoneyPercentage: 0,
-        marketMinIngredients: 0
-      };
-      for (let i = 0; i < MarketManager.priorityList.length; i++) {
-        let resource = MarketManager.priorityList[i];
-        let id = resource.id;
-        def["res_buy_p_" + id] = i;
-        def["buy" + id] = false;
-        def["res_buy_r_" + id] = 0.5;
-        def["sell" + id] = false;
-        def["res_sell_r_" + id] = 0.9;
-        def["res_trade_buy_" + id] = true;
-        def["res_trade_sell_" + id] = true;
-        def["res_trade_w_" + id] = 1;
-        def["res_trade_p_" + id] = 1;
-      }
-      const setTradePriority = (priority, items) => items.forEach((id) => def["res_trade_p_" + id] = priority);
-      setTradePriority(1, ["Food"]);
-      setTradePriority(2, ["Helium_3", "Uranium", "Oil", "Coal"]);
-      setTradePriority(3, ["Stone", "Chrysotile", "Lumber"]);
-      setTradePriority(4, ["Aluminium", "Iron", "Copper"]);
-      setTradePriority(5, ["Furs"]);
-      setTradePriority(6, ["Cement"]);
-      setTradePriority(7, ["Steel"]);
-      setTradePriority(8, ["Titanium"]);
-      setTradePriority(9, ["Polymer", "Alloy"]);
-      setTradePriority(10, ["Iridium"]);
-      setTradePriority(-1, ["Crystal"]);
-      for (let i = 0; i < poly.galaxyOffers.length; i++) {
-        let resource = resources[poly.galaxyOffers[i].buy.res];
-        let id = resource.id;
-        def["res_galaxy_w_" + id] = 1;
-        def["res_galaxy_p_" + id] = i + 1;
-      }
-      applySettings(def, reset);
-      MarketManager.sortByPriority();
-    }
-    function resetStorageSettings(reset) {
-      StorageManager.priorityList = Object.values(resources).filter((r) => r.hasStorage()).reverse();
-      let def = {
-        autoStorage: false,
-        storageLimitPreMad: true,
-        storageSafeReassign: true,
-        storageAssignExtra: true,
-        storageAssignPart: false
-      };
-      for (let i = 0; i < StorageManager.priorityList.length; i++) {
-        let resource = StorageManager.priorityList[i];
-        let id = resource.id;
-        def["res_storage" + id] = true;
-        def["res_storage_p_" + id] = i;
-        def["res_storage_o_" + id] = false;
-        def["res_min_store" + id] = 1;
-        def["res_max_store" + id] = -1;
-      }
-      def["res_storage_o_" + resources.Orichalcum.id] = true;
-      def["res_storage_o_" + resources.Vitreloy.id] = true;
-      def["res_storage_o_" + resources.Bolognium.id] = true;
-      applySettings(def, reset);
-      StorageManager.sortByPriority();
-    }
-    function resetMinorTraitSettings(reset) {
-      MinorTraitManager.priorityList = Object.entries(game.traits).filter(
-        ([id, trait]) => trait.type === "minor" || id === "mastery" || id === "fortify"
-      ).map(([id, trait]) => new MinorTrait(id));
-      let def = {
-        autoMinorTrait: false,
-        shifterGenus: "ignore",
-        imitateRace: "ignore",
-        buildingShrineType: "know",
-        slaveIncome: 25e3,
-        jobScalePop: true,
-        psychicPower: "auto",
-        psychicBoostRes: "auto",
-        wishMinor: "none",
-        wishMajor: "none",
-        autoGenetics: false,
-        geneticsSequence: "none",
-        geneticsBoost: "none",
-        geneticsAssemble: "auto"
-      };
-      for (let i = 0; i < MinorTraitManager.priorityList.length; i++) {
-        let trait = MinorTraitManager.priorityList[i];
-        let id = trait.traitName;
-        def["mTrait_" + id] = true;
-        def["mTrait_p_" + id] = i;
-        def["mTrait_w_" + id] = 1;
-      }
-      Object.values(ocularPowerData).forEach((v) => {
-        def["ocularPower_" + v.id] = true;
-        def["ocularPower_p_" + v.id] = 100;
-      });
-      applySettings(def, reset);
-      MinorTraitManager.sortByPriority();
-    }
-    function resetMutableTraitSettings(reset) {
-      let unobtainableTraits = ["xenophobic", "rigid", "soul_eater"];
-      MutableTraitManager.priorityList = Object.entries(game.traits).filter(
-        ([id, trait]) => (trait.type === "major" || trait.type === "genus") && !unobtainableTraits.includes(id)
-      ).map(
-        ([id, trait]) => trait.type === "major" ? new MajorTrait(id) : new GenusTrait(id)
-      ).sort(
-        (a, b) => Object.keys(poly.genus_traits).indexOf(a.genus) - Object.keys(poly.genus_traits).indexOf(b.genus) || a.type < b.type
-      );
-      let def = {
-        autoMutateTraits: false,
-        doNotGoBelowPlasmidSoftcap: true,
-        minimumPlasmidsToPreserve: 0
-      };
-      for (let i = 0; i < MutableTraitManager.priorityList.length; i++) {
-        let trait = MutableTraitManager.priorityList[i];
-        let id = trait.traitName;
-        def["mutableTrait_p_" + id] = i;
-        def["mutableTrait_purge_" + id] = false;
-        if (trait.isGainable()) {
-          def["mutableTrait_gain_" + id] = false;
-        }
-        if (poly.neg_roll_traits.includes(id)) {
-          def["mutableTrait_reset_" + id] = false;
-        }
-      }
-      applySettings(def, reset);
-      MutableTraitManager.sortByPriority();
-    }
-    function resetJobSettings(reset) {
-      JobManager.priorityList = Object.values(jobs);
-      let def = {
-        autoJobs: false,
-        autoCraftsmen: false,
-        jobSetDefault: true,
-        jobManageServants: true,
-        jobLumberWeighting: 50,
-        jobQuarryWeighting: 50,
-        jobCrystalWeighting: 50,
-        jobScavengerWeighting: 5,
-        jobRaiderWeighting: 20,
-        jobForagerWeighting: 50,
-        jobDisableMiners: true
-      };
-      for (let i = 0; i < JobManager.priorityList.length; i++) {
-        let job = JobManager.priorityList[i];
-        let id = job._originalId;
-        def["job_" + id] = true;
-        def["job_p_" + id] = i;
-        if (job.is.smart) {
-          def["job_s_" + id] = true;
-        }
-      }
-      const setBreakpoints = (job, b1, b2, b3) => {
-        def["job_b1_" + job._originalId] = b1;
-        def["job_b2_" + job._originalId] = b2;
-        def["job_b3_" + job._originalId] = b3;
-      };
-      setBreakpoints(jobs.Colonist, -1, -1, -1);
-      setBreakpoints(jobs.Teamster, 10, -1, -1);
-      setBreakpoints(jobs.Meditator, -1, -1, -1);
-      setBreakpoints(jobs.Hunter, -1, -1, -1);
-      setBreakpoints(jobs.Farmer, -1, -1, -1);
-      setBreakpoints(jobs.Forager, 4, 10, 0);
-      setBreakpoints(jobs.Lumberjack, 4, 10, 0);
-      setBreakpoints(jobs.QuarryWorker, 4, 10, 0);
-      setBreakpoints(jobs.CrystalMiner, 2, 5, 0);
-      setBreakpoints(jobs.Scavenger, 0, 0, 0);
-      setBreakpoints(jobs.TitanColonist, -1, -1, -1);
-      setBreakpoints(jobs.PitMiner, 1, 12, -1);
-      setBreakpoints(jobs.Miner, 3, 5, -1);
-      setBreakpoints(jobs.CoalMiner, 2, 4, -1);
-      setBreakpoints(jobs.CementWorker, 4, 8, -1);
-      setBreakpoints(jobs.Professor, 6, 10, -1);
-      setBreakpoints(jobs.Scientist, 3, 6, -1);
-      setBreakpoints(jobs.Entertainer, 2, 5, -1);
-      setBreakpoints(jobs.HellSurveyor, 1, 1, -1);
-      setBreakpoints(jobs.SpaceMiner, 1, 3, -1);
-      setBreakpoints(jobs.Torturer, 1, 1, -1);
-      setBreakpoints(jobs.Archaeologist, 1, 1, -1);
-      setBreakpoints(jobs.GhostTrapper, 1, 1, -1);
-      setBreakpoints(jobs.ElysiumMiner, 1, 1, -1);
-      setBreakpoints(jobs.Banker, 3, 5, -1);
-      setBreakpoints(jobs.Priest, 0, 0, -1);
-      setBreakpoints(jobs.Unemployed, 0, 0, 0);
-      applySettings(def, reset);
-      JobManager.sortByPriority();
-    }
-    function resetWeightingSettings(reset) {
-      let def = {
-        buildingBuildIfStorageFull: false,
-        buildingWeightingNew: 3,
-        buildingWeightingUselessPowerPlant: 0.01,
-        buildingWeightingNeedfulPowerPlant: 3,
-        buildingWeightingUnderpowered: 0.8,
-        buildingWeightingUselessKnowledge: 0.01,
-        buildingWeightingNeedfulKnowledge: 5,
-        buildingWeightingMissingFuel: 10,
-        buildingWeightingNonOperatingCity: 0.2,
-        buildingWeightingNonOperating: 0,
-        buildingWeightingAuthority: 10,
-        buildingWeightingMissingSupply: 0,
-        buildingWeightingMissingSupport: 0,
-        buildingWeightingUselessSupport: 0.01,
-        buildingWeightingMADUseless: 0,
-        buildingWeightingUnusedEjectors: 0.1,
-        buildingWeightingCrateUseless: 0.01,
-        buildingWeightingHorseshoeUseless: 0.1,
-        buildingWeightingZenUseless: 0.01,
-        buildingWeightingGateTurret: 0.01,
-        buildingWeightingNeedStorage: 1,
-        buildingWeightingUselessHousing: 1,
-        buildingWeightingTemporal: 0.2,
-        buildingWeightingSolar: 0.2,
-        buildingWeightingOverlord: 0,
-        buildingWeightingBananaObjective: 2,
-        buildingWeightingInflationMoney: 2,
-        buildingWeightingRetirementPrep: 10
-      };
-      applySettings(def, reset);
-    }
-    function resetBuildingSettings(reset) {
-      initBuildingState();
-      let def = {
-        autoBuild: false,
-        autoPower: false,
-        buildingsIgnoreZeroRate: false,
-        buildingsLimitPowered: true,
-        buildingTowerSuppression: 100,
-        buildingConsumptionCheck: "perResource",
-        buildingsTransportGem: false,
-        buildingsBestFreighter: false,
-        buildingsUseMultiClick: false,
-        buildingEnabledAll: true,
-        buildingStateAll: true
-      };
-      for (let i = 0; i < BuildingManager.priorityList.length; i++) {
-        let building = BuildingManager.priorityList[i];
-        let id = building._vueBinding;
-        def["bat" + id] = true;
-        def["bld_p_" + id] = i;
-        def["bld_m_" + id] = -1;
-        def["bld_w_" + id] = 100;
-        if (building.isSwitchable()) {
-          def["bld_s_" + id] = true;
-        }
-        if (building.is.smart) {
-          def["bld_s2_" + id] = true;
-        }
-      }
-      def["bld_s2_space-iridium_mine"] = false;
-      def["bld_s2_space-helium_mine"] = false;
-      [
-        "RedVrCenter",
-        "NeutronCitadel",
-        "PortalWarDroid",
-        "BadlandsPredatorDrone",
-        "PortalRepairDroid",
-        "SpireWaygate",
-        "TauRedContact",
-        "TauRedIntroduce",
-        "TauRedSubjugate",
-        "TauGasName1",
-        "TauGasName2",
-        "TauGasName3",
-        "TauGasName4",
-        "TauGasName5",
-        "TauGasName6",
-        "TauGasName7",
-        "TauGasName8",
-        "TauGas2Name1",
-        "TauGas2Name2",
-        "TauGas2Name3",
-        "TauGas2Name4",
-        "TauGas2Name5",
-        "TauGas2Name6",
-        "TauGas2Name7",
-        "TauGas2Name8"
-      ].forEach((b) => def["bat" + buildings[b]._vueBinding] = false);
-      def["bld_m_" + buildings.ForgeHorseshoe._vueBinding] = 20;
-      def["bld_m_" + buildings.RedForgeHorseshoe._vueBinding] = 20;
-      def["bld_m_" + buildings.TauForgeHorseshoe._vueBinding] = 20;
-      def["bld_m_" + buildings.BeltEleriumShip._vueBinding] = 15;
-      def["bld_m_" + buildings.BeltIridiumShip._vueBinding] = 15;
-      applySettings(def, reset);
-      BuildingManager.sortByPriority();
-    }
-    function resetProjectSettings(reset) {
-      ProjectManager.priorityList = Object.values(projects);
-      let def = {
-        autoARPA: false,
-        arpaScaleWeighting: true,
-        arpaStep: 5
-      };
-      let projectPriority = 0;
-      const setProject = (item, autoBuildEnabled, _autoMax, _weighting) => {
-        let id = projects[item].id;
-        def["arpa_" + id] = autoBuildEnabled;
-        def["arpa_p_" + id] = projectPriority++;
-        def["arpa_m_" + id] = _autoMax;
-        def["arpa_w_" + id] = _weighting;
-      };
-      setProject("LaunchFacility", true, -1, 100);
-      setProject("SuperCollider", true, -1, 5);
-      setProject("StockExchange", true, -1, 0.5);
-      setProject("Monument", true, -1, 1);
-      setProject("Railway", true, -1, 0.1);
-      setProject("Nexus", true, -1, 1);
-      setProject("RoidEject", true, -1, 1);
-      setProject("ManaSyphon", false, 79, 1);
-      setProject("Depot", true, -1, 1);
-      applySettings(def, reset);
-      ProjectManager.sortByPriority();
-    }
-    function resetMagicSettings(reset) {
-      AlchemyManager.priorityList = Object.values(resources).filter(
-        (r) => AlchemyManager.transmuteTier(r) > 0
-      );
-      let def = {
-        autoAlchemy: false,
-        autoPylon: false,
-        magicFullmetalHelper: true,
-        magicAlchemyManaUse: 0.5,
-        productionRitualManaUse: 0.5,
-        productionRitualSafe: true
-      };
-      for (let i = 0; i < AlchemyManager.priorityList.length; i++) {
-        let resource = AlchemyManager.priorityList[i];
-        let id = resource.id;
-        def["res_alchemy_" + id] = true;
-        def["res_alchemy_w_" + id] = 0;
-      }
-      for (let spell of Object.values(RitualManager.Productions)) {
-        def["spell_w_" + spell.id] = 100;
-      }
-      def["spell_w_hunting"] = 10;
-      def["spell_w_farmer"] = 1;
-      applySettings(def, reset);
-    }
-    function resetProductionSettings(reset) {
-      let def = {
-        autoQuarry: false,
-        autoMine: false,
-        autoExtractor: false,
-        autoGraphenePlant: false,
-        autoSmelter: false,
-        autoCraft: false,
-        autoFactory: false,
-        autoMiningDroid: false,
-        autoReplicator: false,
-        productionChrysotileWeight: 2,
-        productionAdamantiteWeight: 1,
-        productionExtWeight_common: 1,
-        productionExtWeight_uncommon: 1,
-        productionExtWeight_rare: 1,
-        productionFoundryWeighting: "demanded",
-        productionCraftsmen: "nocraft",
-        productionSmelting: "required",
-        productionSmeltingIridium: 0.5,
-        productionFactoryWeighting: "none",
-        productionFactoryMinIngredients: 0,
-        productionFactoryFocusMaterials: false,
-        replicatorAssignGovernorTask: true,
-        replicatorWeightingMode: "mass"
-      };
-      const setFoundryProduct = (item, autoCraftEnabled, crafterEnabled, craftWeighting, craftPreserve) => {
-        let id = resources[item].id;
-        def["craft" + id] = autoCraftEnabled;
-        def["job_" + id] = crafterEnabled;
-        def["foundry_w_" + id] = craftWeighting;
-        def["foundry_p_" + id] = craftPreserve;
-      };
-      setFoundryProduct("Plywood", true, true, 1, 0);
-      setFoundryProduct("Brick", true, true, 1, 0);
-      setFoundryProduct("Wrought_Iron", true, true, 1, 0);
-      setFoundryProduct("Sheet_Metal", true, true, 2, 0);
-      setFoundryProduct("Mythril", true, true, 3, 0);
-      setFoundryProduct("Aerogel", true, true, 3, 0);
-      setFoundryProduct("Nanoweave", true, true, 10, 0);
-      setFoundryProduct("Scarletite", true, true, 1, 0);
-      setFoundryProduct("Quantium", true, true, 1, 0);
-      Object.values(SmelterManager.Fuels).forEach((fuel, i) => {
-        def["smelter_fuel_p_" + fuel.id] = i;
-      });
-      const setFactoryProduct = (item, enabled, weighting, priority) => {
-        let id = FactoryManager.Productions[item].resource.id;
-        def["production_" + id] = enabled;
-        def["production_w_" + id] = weighting;
-        def["production_p_" + id] = priority;
-      };
-      setFactoryProduct("LuxuryGoods", true, 1, 2);
-      setFactoryProduct("Furs", true, 1, 1);
-      setFactoryProduct("Alloy", true, 1, 3);
-      setFactoryProduct("Polymer", true, 1, 3);
-      setFactoryProduct("NanoTube", true, 4, 3);
-      setFactoryProduct("Stanene", true, 4, 3);
-      const setDroidProduct = (item, weighting, priority) => {
-        let id = DroidManager.Productions[item].resource.id;
-        def["droid_w_" + id] = weighting;
-        def["droid_pr_" + id] = priority;
-      };
-      setDroidProduct("Adamantite", 15, 1);
-      setDroidProduct("Aluminium", 1, 1);
-      setDroidProduct("Uranium", 5, -1);
-      setDroidProduct("Coal", 5, -1);
-      const setReplicatorProduct = (item, enabled, weighting, priority) => {
-        let id = ReplicatorManager.Productions[item].id;
-        def["replicator_" + id] = enabled;
-        def["replicator_w_" + id] = weighting;
-        def["replicator_p_" + id] = priority;
-      };
-      Object.values(ReplicatorManager.Productions).forEach(
-        (production) => setReplicatorProduct(production.id, true, 1, 1)
-      );
-      applySettings(def, reset);
-    }
-    function resetTriggerSettings(reset) {
-      let def = {
-        autoTrigger: false
-      };
-      if (reset || !settingsRaw.hasOwnProperty("autoTrigger")) {
-        TriggerManager.priorityList = [];
-        TriggerManager.AddTrigger(
-          "BuildingCount",
-          "space-moon_mission",
-          1,
-          "build",
-          "space-moon_base",
-          1
-        );
-        TriggerManager.AddTrigger(
-          "BuildingCount",
-          "space-moon_base",
-          1,
-          "build",
-          "space-iridium_mine",
-          1
-        );
-        TriggerManager.AddTrigger(
-          "BuildingCount",
-          "space-moon_base",
-          1,
-          "build",
-          "space-helium_mine",
-          1
-        );
-        settingsRaw.triggers = JSON.parse(
-          JSON.stringify(TriggerManager.priorityList)
-        );
-      }
-      applySettings(def, reset);
-    }
-    function resetLoggingSettings(reset) {
-      let def = {
-        hellTurnOffLogMessages: true,
-        logFilter: "",
-        logEnabled: true
-      };
-      Object.keys(GameLog.Types).forEach((id) => def["log_" + id] = true);
-      def["log_mercenary"] = false;
-      def["log_multi_construction"] = false;
-      def["log_prestige"] = false;
-      def["log_prestige_format"] = "Reset: {resetType}, Species: {species}, Duration: {timeStamp} days";
-      applySettings(def, reset);
-    }
-    function resetPlanetSettings(reset) {
-      let def = {};
-      biomeList.forEach(
-        (biome) => def["biome_w_" + biome] = (planetBiomes.length - planetBiomes.indexOf(biome)) * 10
-      );
-      traitList.forEach(
-        (trait) => def["trait_w_" + trait] = (planetTraits.length - planetTraits.indexOf(trait)) * 10
-      );
-      extraList.forEach((extra) => def["extra_w_" + extra] = 0);
-      def["extra_w_Achievement"] = 1e3;
-      applySettings(def, reset);
-    }
-    function resetFleetSettings(reset) {
-      let def = {
-        autoFleet: false,
-        fleetOuterCrew: 30,
-        fleetOuterShips: "custom",
-        fleetExploreTau: true,
-        fleetMaxCover: true,
-        fleetCrewReclaim: true,
-        fleetEmbassyKnowledge: 6e6,
-        fleetAlienGiftKnowledge: 65e5,
-        fleetAlien2Knowledge: 8e6,
-        fleetAlien2Loses: "none",
-        fleetChthonianLoses: "low",
-        // Default combat ship
-        fleet_outer_class: "destroyer",
-        fleet_outer_armor: "neutronium",
-        fleet_outer_weapon: "plasma",
-        fleet_outer_engine: "ion",
-        fleet_outer_power: "fission",
-        fleet_outer_sensor: "lidar",
-        // Default scout ship
-        fleet_scout_class: "corvette",
-        fleet_scout_armor: "neutronium",
-        fleet_scout_weapon: "plasma",
-        fleet_scout_engine: "tie",
-        fleet_scout_power: "fusion",
-        fleet_scout_sensor: "quantum",
-        // Default andromeda regions priority
-        fleet_pr_gxy_stargate: 0,
-        fleet_pr_gxy_alien2: 1,
-        fleet_pr_gxy_alien1: 2,
-        fleet_pr_gxy_chthonian: 3,
-        fleet_pr_gxy_gateway: 4,
-        fleet_pr_gxy_gorddon: 5
-      };
-      const setOuterRegion = (id, weighting, protect, scouts) => {
-        def["fleet_outer_pr_" + id] = weighting;
-        def["fleet_outer_def_" + id] = protect;
-        def["fleet_outer_sc_" + id] = scouts;
-      };
-      setOuterRegion("spc_moon", 1, 0.9, 0);
-      setOuterRegion("spc_red", 3, 0.9, 0);
-      setOuterRegion("spc_gas", 0, 0.9, 0);
-      setOuterRegion("spc_gas_moon", 0, 0.9, 0);
-      setOuterRegion("spc_belt", 1, 0.9, 0);
-      setOuterRegion("spc_titan", 5, 0.9, 1);
-      setOuterRegion("spc_enceladus", 3, 0.9, 1);
-      setOuterRegion("spc_triton", 10, 0.95, 2);
-      setOuterRegion("spc_kuiper", 5, 0.9, 2);
-      setOuterRegion("spc_eris", 100, 0.01, 1);
-      applySettings(def, reset);
-    }
-    function resetMechSettings(reset) {
-      let def = {
-        autoMech: false,
-        mechScrap: "mixed",
-        mechScrapEfficiency: 1.5,
-        mechCollectorValue: 0.5,
-        mechBuild: "random",
-        mechSize: "titan",
-        mechSizeGravity: "auto",
-        mechFillBay: true,
-        mechScouts: 0.05,
-        mechScoutsRebuild: false,
-        mechMinSupply: 1e3,
-        mechMaxCollectors: 0.5,
-        mechInfernalCollector: true,
-        mechSpecial: "prefered",
-        mechSaveSupplyRatio: 1,
-        buildingMechsFirst: true,
-        mechBaysFirst: true,
-        mechWaygatePotential: 0.4
-      };
-      applySettings(def, reset);
-    }
-    function resetEjectorSettings(reset) {
-      if (game.global.race.universe === "magic") {
-        EjectManager.priorityList = Object.values(resources).filter((r) => EjectManager.isConsumable(r)).sort((a, b) => b.atomicMass - a.atomicMass);
-      } else {
-        EjectManager.priorityList = Object.values(resources).filter(
-          (r) => EjectManager.isConsumable(r) && r !== resources.Elerium && r !== resources.Infernite
-        ).sort((a, b) => b.atomicMass - a.atomicMass);
-        EjectManager.priorityList.unshift(resources.Infernite);
-        EjectManager.priorityList.unshift(resources.Elerium);
-      }
-      SupplyManager.priorityList = Object.values(resources).filter((r) => SupplyManager.isConsumable(r)).sort(
-        (a, b) => SupplyManager.supplyIn(b.id) - SupplyManager.supplyIn(a.id)
-      );
-      NaniteManager.priorityList = Object.values(resources).filter((r) => NaniteManager.isConsumable(r)).sort((a, b) => b.atomicMass - a.atomicMass);
-      let def = {
-        autoEject: false,
-        autoSupply: false,
-        autoNanite: false,
-        ejectMode: "cap",
-        supplyMode: "mixed",
-        naniteMode: "full",
-        prestigeWhiteholeStabiliseMass: true,
-        prestigeWhiteholeStabiliseCooldown: 120
-      };
-      for (let resource of EjectManager.priorityList) {
-        def["res_eject" + resource.id] = resource.is.tradable ?? false;
-      }
-      for (let resource of SupplyManager.priorityList) {
-        def["res_supply" + resource.id] = resource.is.tradable ?? false;
-      }
-      for (let resource of NaniteManager.priorityList) {
-        def["res_nanite" + resource.id] = resource.is.tradable ?? false;
-      }
-      def["res_eject" + resources.Elerium.id] = true;
-      def["res_eject" + resources.Infernite.id] = true;
-      applySettings(def, reset);
-    }
     const {
       updateStateFromSettings,
       updateSettingsFromState,
@@ -27358,6 +32741,35 @@
           updateSettingsFromState,
           applySettings,
           migrateSetting
+        },
+        resetSettings: {
+          resetWarSettings,
+          resetHellSettings,
+          resetGeneralSettings,
+          resetInterfaceSettings,
+          resetStateLogSettings,
+          resetAchievementGuardSettings,
+          resetChallengeHelperSettings,
+          resetPrestigeSettings,
+          resetGovernmentSettings,
+          resetEvolutionSettings,
+          resetResearchSettings,
+          resetMarketSettings,
+          resetStorageSettings,
+          resetMinorTraitSettings,
+          resetMutableTraitSettings,
+          resetJobSettings,
+          resetWeightingSettings,
+          resetBuildingSettings,
+          resetProjectSettings,
+          resetMagicSettings,
+          resetProductionSettings,
+          resetTriggerSettings,
+          resetLoggingSettings,
+          resetPlanetSettings,
+          resetFleetSettings,
+          resetMechSettings,
+          resetEjectorSettings
         },
         setSettingsStateTestContext(context) {
           settingsRaw = context.settingsRaw;
@@ -28362,104 +33774,27 @@
         }
       });
     }
-    function updateActiveTargetsUI(queuedTargets, type) {
-      if (queuedTargets.length) {
-        $(`#active_targets .target-type-box.${type}`).show();
-      } else {
-        $(`#active_targets .target-type-box.${type}`).hide();
-        return;
-      }
-      $(`#active_targets ul.active_targets-list.${type}`).html(
-        queuedTargets.map((target) => {
-          let targetName = target.name, targetTimeLeft = "", targetSegments = "", researchTimeLeft = 0, isArpaProject = type === "arpa" || target instanceof Project, isMultiSegmented = target.is && target.is.multiSegmented, isTablessBuilding = type === "buildings" && !target._tab;
-          if (target.count && !isMultiSegmented) {
-            targetName += ` #${target.count + 1}`;
-          }
-          if (target.instance && target.instance.time) {
-            targetTimeLeft = `${target.instance.time}`;
-          }
-          const costs = target.cost;
-          if (target instanceof Technology) {
-            if ($.isEmptyObject(target.cost)) {
-              targetTimeLeft = "Waiting on prerequisite";
-            } else if (target.cost.Knowledge > game.global.resource.Knowledge.max) {
-              targetTimeLeft = "Not enough Knowledge";
-            }
-          } else if (isArpaProject) {
-            targetName += ` (${target.progress}%)`;
-            const segmentedTimeLeft = getMultiSegmentedTimeLeft(target);
-            targetTimeLeft = `${segmentedTimeLeft.timeLeft}</span> <span class="has-text-danger">(${segmentedTimeLeft.resource})</span>`;
-          }
-          const costsHTML = Object.keys(costs).map((resource) => {
-            let res = resources[resource], className = "has-text-success", resourceTimeLeft = "";
-            let resourceCost = costs[resource];
-            if (isArpaProject) {
-              resourceCost = costs[resource] * ((100 - target.progress) / target.currentStep);
-            } else if (isMultiSegmented) {
-              resourceCost = costs[resource] * (target.gameMax - target.count);
-            }
-            if (res.currentQuantity < resourceCost) {
-              className = "has-text-danger";
-              if (res.maxQuantity >= resourceCost && res.income > 0) {
-                const timeLeftRaw = (resourceCost - res.currentQuantity) / res.income;
-                if (target instanceof Technology && timeLeftRaw > researchTimeLeft) {
-                  researchTimeLeft = timeLeftRaw;
-                }
-                resourceTimeLeft = `${poly.timeFormat(timeLeftRaw)}`;
-                if (res === resources.Soul_Gem) {
-                  resourceTimeLeft = `~${resourceTimeLeft}`;
-                }
-              } else if (isArpaProject && res.name === "Knowledge" && res.income > 0) {
-                resourceTimeLeft = poly.timeFormat(
-                  res.currentQuantity / res.income
-                );
-              } else {
-                targetTimeLeft = resourceTimeLeft = "Never";
-              }
-            }
-            const progressBarWidth = res.currentQuantity / resourceCost * 100;
-            const isReplicatingClassName = game.global.race.replicator && game.global.race.replicator.res === resource ? "is-replicating" : "";
-            return `
-                    <li>
-                        <div class='active_targets-resource-row'>
-                            <div class='active_targets-resource-text'>
-                                <span class='${className}'>${res.title}</span>
-                            </div>
-                            <div class="percentage-full-progress-bar-wrapper ${isReplicatingClassName}">
-                                <div class="percentage-full-progress-bar" style="width: ${progressBarWidth}%;"></div>
-                            </div>
-                            <div class="active_targets-time-left">${resourceTimeLeft}</div>
-                        </div>
-                    </li>`;
-          }).join("");
-          if (isMultiSegmented) {
-            targetSegments = `(${target.count} / ${target.gameMax})`;
-            const segmentedTimeLeft = getMultiSegmentedTimeLeft(target);
-            targetTimeLeft = `${segmentedTimeLeft.timeLeft} <span class="has-text-danger">(${segmentedTimeLeft.resource})</span>`;
-          }
-          if (target instanceof Technology && targetTimeLeft === "") {
-            targetTimeLeft = poly.timeFormat(researchTimeLeft);
-          }
-          const targetNameDisplay = `<span class="active-target-title name">${targetName} </span><span class="active-target-title time">${targetTimeLeft} <span class="active-target-segments has-text-special">${targetSegments}</span></span>`;
-          let queueid = "";
-          if (type === "buildings") {
-            queueid = isTablessBuilding ? `${target.id}` : `${target._tab}-${target.id}`;
-          } else if (type === "arpa") {
-            queueid = `${target._tab}${target.id}`;
-          } else if (type === "research" || type === "triggers") {
-            queueid = target.id;
-          }
-          return `
-                    <li class="active-target-li">
-                        ${targetNameDisplay} <span class="active-target-remove-x ${type}" data-queueid="${queueid}" data-type="${type}">＋</span>
-                        <ul class="active_targets-sub-list">
-                            ${costsHTML}
-                        </ul>
-                    </li>
-                `;
-        })
-      );
-    }
+    const {
+      updateActiveTargetsUI,
+      buildActiveTargetsUI,
+      removeActiveTargetsUI,
+      buildBuildPlannerUI,
+      removeBuildPlannerUI
+    } = createQueuePanels({
+      getJQuery: () => $,
+      getGame: () => game,
+      getResources: () => resources,
+      getPoly: () => poly,
+      getSettingsRaw: () => settingsRaw,
+      getState: () => state,
+      getMultiSegmentedTimeLeft: (target) => getMultiSegmentedTimeLeft(target),
+      isProject: (target) => target instanceof Project,
+      isTechnology: (target) => target instanceof Technology,
+      getResizeObserver: () => typeof ResizeObserver === "function" ? ResizeObserver : void 0,
+      updateSettingsFromState: () => updateSettingsFromState(),
+      makePlannerStats: () => makePlannerStats(),
+      savePlannerStats: () => savePlannerStats()
+    });
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         plannerAnalysis: {
@@ -28656,255 +33991,53 @@
         }
       });
     }
-    function getTooltipInfo(obj) {
-      let notes = [];
-      if (obj === buildings.NeutronCitadel) {
-        let diff = getCitadelConsumption(obj.stateOnCount + 1) - getCitadelConsumption(obj.stateOnCount);
-        notes.push(
-          `Next level will increase total consumption by ${getNiceNumber(
-            diff
-          )} MW`
-        );
-      }
-      if (obj === buildings.SpireMechBay && MechManager.initLab()) {
-        notes.push(
-          `Current team potential: ${getNiceNumber(MechManager.mechsPotential)}`
-        );
-        let supplyCollected = MechManager.activeMechs.filter((mech) => mech.size === "collector").reduce(
-          (sum, mech) => sum + mech.power * MechManager.collectorValue,
-          0
-        );
-        if (supplyCollected > 0) {
-          notes.push(`Supplies collected: ${getNiceNumber(supplyCollected)} /s`);
+    const { getTooltipInfo, tooltipObserverCallback, addTooltip } = createTooltipUI({
+      getContext: () => ({
+        $,
+        document,
+        MutationObserver,
+        settings,
+        state,
+        game,
+        buildings,
+        jobs,
+        resources,
+        techIds,
+        buildingIds,
+        arpaIds,
+        MechManager,
+        FleetManagerOuter,
+        poly,
+        getCitadelConsumption,
+        getNiceNumber,
+        getCostConflict,
+        getTechConflict,
+        haveTech,
+        getHealingRate,
+        getGrowthRate,
+        getGovernor,
+        traitVal
+      }),
+      isTechnology: (value) => value instanceof Technology
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        tooltipUI: { getTooltipInfo, tooltipObserverCallback, addTooltip },
+        setTooltipUITestContext(context) {
+          if ("settings" in context) settings = context.settings;
+          if ("state" in context) state = context.state;
+          if ("game" in context) game = context.game;
+          if ("buildings" in context) buildings = context.buildings;
+          if ("jobs" in context) jobs = context.jobs;
+          if ("resources" in context) resources = context.resources;
+          if ("techIds" in context) techIds = context.techIds;
+          if ("buildingIds" in context) buildingIds = context.buildingIds;
+          if ("arpaIds" in context) arpaIds = context.arpaIds;
+          if ("MechManager" in context) MechManager = context.MechManager;
+          if ("FleetManagerOuter" in context)
+            FleetManagerOuter = context.FleetManagerOuter;
         }
-      }
-      if ((obj instanceof Technology || !settings.autoARPA && obj._tab === "arpa" || !settings.autoBuild && obj._tab !== "arpa") && !state.queuedTargetsAll.includes(obj) && !state.triggerTargets.includes(obj)) {
-        let conflict = getCostConflict(obj);
-        if (conflict) {
-          notes.push(
-            `Conflicts with ${conflict.actionList.map((action) => {
-              return `<span class="has-text-info">${action}</span>`;
-            }).join(", ")} for ${conflict.resList.map((res) => {
-              return `<span class="has-text-info">${res}</span>`;
-            }).join(", ")} (${conflict.obj.cause})`
-          );
-        }
-      }
-      if (obj instanceof Technology) {
-        if (state.queuedTargetsAll.includes(obj)) {
-          notes.push("Queued research, processing...");
-        } else if (state.triggerTargets.includes(obj)) {
-          notes.push("Active trigger, processing...");
-        } else {
-          let conflict = getTechConflict(obj);
-          if (conflict) {
-            notes.push(conflict);
-          }
-        }
-      }
-      if (obj === buildings.GorddonFreighter && haveTech("banking", 13)) {
-        let count = obj.stateOnCount;
-        let total = ((1 + (count + 1) * 0.03) / (1 + count * 0.03) - 1) * 100;
-        let crew = total / 3;
-        notes.push(
-          `Next level will increase ${buildings.AlphaExchange.title} storage by +${getNiceNumber(total)}% (+${getNiceNumber(
-            crew
-          )}% per crew)`
-        );
-      }
-      if (obj === buildings.Alien1SuperFreighter && haveTech("banking", 13)) {
-        let count = obj.stateOnCount;
-        let total = ((1 + (count + 1) * 0.08) / (1 + count * 0.08) - 1) * 100;
-        let crew = total / 5;
-        notes.push(
-          `Next level will increase ${buildings.AlphaExchange.title} storage by +${getNiceNumber(total)}% (+${getNiceNumber(
-            crew
-          )}% per crew)`
-        );
-      }
-      if (obj === buildings.Hospital || obj === buildings.BootCamp && game.global.race["artifical"] || obj === buildings.EnceladusBase && game.global.race["orbit_decayed"]) {
-        notes.push(`~${getNiceNumber(getHealingRate())} soldiers healed per day`);
-      }
-      if (obj === buildings.Hospital) {
-        let growth = 1 / (getGrowthRate() * 4);
-        notes.push(`~${getNiceNumber(growth)} seconds to increase population`);
-      }
-      if (obj === buildings.PortalCarport && jobs.HellSurveyor.count > 0) {
-        let influx = 5 * (1 + buildings.BadlandsAttractor.stateOnCount * 0.22);
-        let demons = (influx * 10 + influx * 50) / 2;
-        let divisor = getGovernor() === "sports" ? 1100 : 1e3;
-        divisor *= traitVal("blurry", 0, "+");
-        divisor *= traitVal("instinct", 0, "+");
-        divisor += haveTech("infernite", 5) ? 250 : 0;
-        let danger = demons / divisor;
-        let risk = 10 - Math.min(10, jobs.HellSurveyor.count) / 2;
-        let rate = danger / 2 * Math.min(1, danger / risk);
-        let wreck = 1 / (rate / 5);
-        notes.push(
-          `Up to ~${getNiceNumber(
-            wreck
-          )} seconds to break car (with full supression)`
-        );
-      }
-      if (obj === buildings.PortalRepairDroid) {
-        let wallRepair = Math.round(200 * 0.95 ** obj.stateOnCount) / 4;
-        let carRepair = Math.round(180 * 0.92 ** obj.stateOnCount) / 4;
-        notes.push(`${getNiceNumber(wallRepair)} seconds to repair 1% of wall`);
-        notes.push(`${getNiceNumber(carRepair)} seconds to repair car`);
-      }
-      if (obj === buildings.BadlandsAttractor) {
-        let influx = 5 * (1 + obj.stateOnCount * 0.22);
-        let gem_chance = game.global.stats.achieve.technophobe?.l >= 5 ? 9e3 : 1e4;
-        if (game.global.race.universe === "evil" && resources.Dark.currentQuantity > 1) {
-          let de = resources.Dark.currentQuantity * (1 + resources.Harmony.currentQuantity * 0.01);
-          gem_chance -= Math.round(Math.log2(de) * 2);
-        }
-        gem_chance = Math.round(gem_chance * 0.948 ** obj.stateOnCount);
-        gem_chance = Math.round(gem_chance * traitVal("ghostly", 2, "-"));
-        gem_chance = Math.max(12, gem_chance);
-        let drop = 1 / gem_chance * 100;
-        notes.push(
-          `~${getNiceNumber(drop)}% chance to find ${resources.Soul_Gem.title}`
-        );
-        notes.push(
-          `Up to ~${getNiceNumber(influx * 10)}-${getNiceNumber(
-            influx * 50
-          )} demons spawned per day`
-        );
-      }
-      if (obj === buildings.Smokehouse) {
-        let spoilage = 50 * 0.9 ** obj.count;
-        notes.push(
-          `${getNiceNumber(spoilage)}% of stored ${resources.Food.title} spoiled per second`
-        );
-      }
-      if (obj === buildings.LakeCoolingTower) {
-        let coolers = buildings.LakeCoolingTower.stateOnCount;
-        let current = 500 * 0.92 ** coolers;
-        let next = 500 * 0.92 ** (coolers + 1);
-        let diff = (current - next) * buildings.LakeHarbor.stateOnCount * (game.global.race["emfield"] ? 1.5 : 1);
-        notes.push(
-          `Next level will decrease total consumption by ${getNiceNumber(
-            diff
-          )} MW`
-        );
-      }
-      if (obj === buildings.DwarfShipyard) {
-        if (settings.autoFleet && FleetManagerOuter.nextShipMsg) {
-          notes.push(FleetManagerOuter.nextShipMsg);
-        }
-      }
-      if (obj === buildings.IsleSpiritBattery) {
-        const batteries = buildings.IsleSpiritBattery.stateOnCount;
-        let coefficient = 0.9;
-        if (game.global.race["warlord"] && buildings.AsphodelCorruptor && game.global.tech?.asphodel >= 13) {
-          const corruptors = buildings.AsphodelCorruptor.on;
-          coefficient = 1 - (1 + (corruptors || 0) * 0.03) / 10;
-        }
-        const current = 18e3 * coefficient ** batteries;
-        const next = 18e3 * coefficient ** (batteries + 1);
-        const diff = (current - next) * buildings.IsleSpiritVacuum.stateOnCount * (game.global.race["emfield"] ? 1.5 : 1);
-        notes.push(
-          `Next level will decrease total consumption by ${getNiceNumber(
-            diff
-          )} MW`
-        );
-      }
-      if (obj.extraDescription) {
-        notes.push(obj.extraDescription);
-      }
-      return notes.join("<br>");
-    }
-    function tooltipObserverCallback(mutations) {
-      if (!settings.masterScriptToggle || document.hidden) {
-        return;
-      }
-      mutations.forEach(
-        (mutation) => mutation.addedNodes.forEach((node) => {
-          if (node.id === "popper") {
-            let popperObserver = new MutationObserver((popperMutations) => {
-              if (!node.querySelector(".script-tooltip")) {
-                popperObserver.disconnect();
-                addTooltip(node);
-                popperObserver.observe(node, { childList: true });
-              }
-            });
-            addTooltip(node);
-            popperObserver.observe(node, { childList: true });
-          }
-        })
-      );
-    }
-    const infusionStep = {
-      "blood-lust": 15,
-      "blood-illuminate": 12,
-      "blood-greed": 16,
-      "blood-hoarder": 14,
-      "blood-artisan": 8,
-      "blood-attract": 4,
-      "blood-wrath": 2
-    };
-    function addTooltip(node) {
-      $(node).append(`<span class="script-tooltip" hidden></span>`);
-      let dataId = node.dataset.id;
-      if (dataId === "powerStatus") {
-        $(node).append(
-          `<p class="modal_bd"><span>Disabled</span><span class="has-text-danger">${getNiceNumber(
-            resources.Power.maxQuantity
-          )}</span></p>`
-        );
-        return;
-      } else if (infusionStep[dataId]) {
-        $(node).find(".costList .res-Blood_Stone").append(` (+${infusionStep[dataId]})`);
-        return;
-      } else if (state.tooltips[dataId]) {
-        $(node).append(
-          `<div style="border-top: solid .0625rem #999">${state.tooltips[dataId]}</div>`
-        );
-        return;
-      }
-      let match = null;
-      let obj = null;
-      if (match = dataId.match(/^popArpa([a-z_-]+)\d*$/)) {
-        obj = arpaIds["arpa" + match[1]];
-      } else if (match = dataId.match(/^q([A-Za-z_-]+)\d*$/)) {
-        obj = buildingIds[match[1]] || arpaIds[match[1]];
-      } else {
-        obj = buildingIds[dataId] || techIds[dataId];
-      }
-      if (!obj || obj instanceof Technology && obj.isResearched()) {
-        return;
-      }
-      if (obj === buildings.BlackholeStellarEngine && game.global.race.universe !== "magic" && buildings.BlackholeMassEjector.count > 0 && game.global.interstellar.stellar_engine.exotic < 0.025) {
-        let massPerSec = resources.Elerium.atomicMass * game.global.interstellar.mass_ejector.Elerium + resources.Infernite.atomicMass * game.global.interstellar.mass_ejector.Infernite || -1;
-        let missingExotics = (0.025 - game.global.interstellar.stellar_engine.exotic) * 1e10;
-        $(node).append(
-          `<div id="popTimer" class="flair has-text-advanced">Contaminated in [${poly.timeFormat(
-            missingExotics / massPerSec
-          )}]</div>`
-        );
-      }
-      if (obj === buildings.TauRedJeff && buildings.TauRedWomlingLab.count > 0) {
-        let expo = game.global.stats.achieve.overlord?.l >= 5 ? 4.9 : 5;
-        expo -= game.global.race["lone_survivor"] ? 0.1 : 0;
-        let nextTech = (game.global.tech.womling_tech + 2) ** expo;
-        let curTech = game.global.tauceti.womling_lab.tech;
-        let completion = Math.floor(curTech / nextTech * 100);
-        $(node).find("div:eq(1)>div:eq(5)").append(` (${completion}%)`);
-        let rate = game.global.tauceti.womling_lab.scientist / 2 * Math.min(1, game.global.tauceti.womling_lab.scientist * 0.1);
-        let eta = rate > 0 ? Math.ceil((nextTech - curTech) / rate) : -1;
-        $(node).append(
-          `<div id="popTimer" class="flair has-text-advanced">Next Tech Level in ~[${poly.timeFormat(
-            eta
-          )}]</div>`
-        );
-      }
-      let description = getTooltipInfo(obj);
-      if (description) {
-        $(node).append(
-          `<div style="border-top: solid .0625rem #999">${description}</div>`
-        );
-      }
+      });
     }
     function updateOverrides() {
       if (safeMode) {
@@ -28983,39 +34116,6 @@
         changeDisplayInputNode(currentNode);
       }
     }
-    function showCustomRaceImportStatus(message, danger = false) {
-      let status = $("#scriptCustomRaceImportStatus");
-      if (status.length === 0) {
-        status = $('<p id="scriptCustomRaceImportStatus"></p>');
-        $("#celestialLab .create").before(status);
-      }
-      status.toggleClass("has-text-danger", danger).toggleClass("has-text-warning", !danger).text(message);
-    }
-    function getCustomRacePreset(raw = false) {
-      let source = raw ? settingsRaw : settings;
-      let presets = source.prestigeCustomRacePresets;
-      if (!Array.isArray(presets) || presets.length === 0) {
-        return { name: "General", json: "" };
-      }
-      let index = Number.parseInt(source.prestigeCustomRacePreset, 10);
-      if (!Number.isInteger(index) || index < 0 || index >= presets.length) {
-        index = 0;
-      }
-      let preset = presets[index];
-      return {
-        name: typeof preset?.name === "string" && preset.name.trim() ? preset.name.trim() : `Preset ${index + 1}`,
-        json: typeof preset?.json === "string" ? preset.json.trim() : ""
-      };
-    }
-    function refreshCustomRacePresetSelectors() {
-      $(".script_prestigeCustomRacePreset").each(function() {
-        let select = $(this).empty();
-        (settingsRaw.prestigeCustomRacePresets ?? []).forEach(
-          (preset, index) => $("<option></option>").val(String(index)).text(preset.name || `Preset ${index + 1}`).appendTo(select)
-        );
-        select.val(settingsRaw.prestigeCustomRacePreset);
-      });
-    }
     const customRaceGenusOpposition = {
       humanoid: ["fungi"],
       carnivore: ["herbivore"],
@@ -29069,537 +34169,54 @@
         }
       });
     }
-    function buildCustomRacePresetEditor(modal) {
-      modal.empty().off("*").addClass("celestialLab");
-      modal.closest(".script-modal-content").addClass("custom-race-modal");
-      modal.append(`
-      <style>
-        .script-modal-content.custom-race-modal { width: min(96vw, 1400px); margin-top: 2vh; margin-bottom: 2vh; }
-        .script-modal-content.custom-race-modal .script-modal-body { max-height: calc(96vh - 70px); overflow-y: auto; }
-        #scriptModalBody.celestialLab { font-size: .92rem; }
-        #scriptModalBody.celestialLab .button,
-        #scriptModalBody.celestialLab input.input,
-        #scriptModalBody.celestialLab select { height: 2em; min-height: 2em; font-size: .92rem; padding-top: 0; padding-bottom: 0; }
-        #scriptModalBody.celestialLab .fields { margin-bottom: .35rem; }
-        #scriptModalBody.celestialLab .trait_selection .field { margin-bottom: .1rem; }
-        #scriptModalBody.celestialLab .script-custom-trait .rc { min-width: 4.8rem; text-align: center; }
-        #scriptModalBody.celestialLab .script-custom-effect,
-        #scriptModalBody.celestialLab .script-custom-traits { scrollbar-color: #777 transparent; scrollbar-width: auto; }
-        #scriptModalBody.celestialLab .script-custom-effect::-webkit-scrollbar,
-        #scriptModalBody.celestialLab .script-custom-traits::-webkit-scrollbar { width: 10px; }
-        #scriptModalBody.celestialLab .script-custom-effect::-webkit-scrollbar-thumb,
-        #scriptModalBody.celestialLab .script-custom-traits::-webkit-scrollbar-thumb { background: #777; border-radius: 5px; }
-      </style>`);
-      if (!Array.isArray(settingsRaw.prestigeCustomRacePresets) || settingsRaw.prestigeCustomRacePresets.length === 0) {
-        settingsRaw.prestigeCustomRacePresets = [{ name: "General", json: "" }];
-        settingsRaw.prestigeCustomRacePreset = "0";
-      }
-      let presetIndex = Number.parseInt(settingsRaw.prestigeCustomRacePreset, 10);
-      if (!Number.isInteger(presetIndex) || presetIndex < 0 || presetIndex >= settingsRaw.prestigeCustomRacePresets.length) {
-        presetIndex = 0;
-        settingsRaw.prestigeCustomRacePreset = "0";
-      }
-      let preset = settingsRaw.prestigeCustomRacePresets[presetIndex];
-      let draft = customRaceDraftFromPreset(preset);
-      modal.append(
-        '<div><h3 class="has-text-danger">Custom Race Presets</h3> - <span class="has-text-warning">Automation Custom Lab</span></div>'
-      );
-      let controls = $(
-        '<div class="fields" style="margin-bottom:10px;"></div>'
-      ).appendTo(modal);
-      let presetSelect = $(
-        '<select class="select" style="width:220px;"></select>'
-      ).appendTo(controls);
-      settingsRaw.prestigeCustomRacePresets.forEach((item, index) => {
-        $("<option></option>").val(String(index)).text(item.name || `Preset ${index + 1}`).appendTo(presetSelect);
-      });
-      presetSelect.val(String(presetIndex));
-      let presetName = $(
-        '<input class="input" type="text" maxlength="60" style="width:180px;" />'
-      ).val(preset.name || `Preset ${presetIndex + 1}`).appendTo(controls);
-      let addButton = $(
-        '<button class="button" type="button">Add</button>'
-      ).appendTo(controls);
-      let cloneButton = $(
-        '<button class="button" type="button">Clone</button>'
-      ).appendTo(controls);
-      let deleteButton = $(
-        '<button class="button" type="button">Delete</button>'
-      ).appendTo(controls);
-      let captureButton = $(
-        '<button class="button" type="button">Capture saved custom</button>'
-      ).appendTo(controls);
-      let summary = $(
-        '<div class="has-text-warning" style="margin:8px 0; font-weight:bold;"></div>'
-      ).appendTo(modal);
-      let identity = $(
-        '<details style="margin:4px 0;"><summary class="has-text-caution">Race names and description</summary></details>'
-      ).appendTo(modal);
-      let form = $(
-        '<div class="fields" style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;"></div>'
-      ).appendTo(identity);
-      const addTextField = (key, label, max) => {
-        let row = $('<label style="display:flex; gap:8px;"></label>').appendTo(
-          form
-        );
-        $("<span></span>").text(label).appendTo(row);
-        let input = $(
-          `<input class="input" type="text" maxlength="${max}" style="flex:1;" />`
-        ).val(draft[key]).appendTo(row);
-        input.on("change", function() {
-          draft[key] = this.value.trim();
-          saveDraft();
-        });
-      };
-      addTextField("name", "Name", 20);
-      addTextField("entity", "Entity", 40);
-      addTextField("home", "Homeworld", 20);
-      addTextField("red", "Red planet", 20);
-      addTextField("hell", "Hell", 20);
-      addTextField("gas", "Gas giant", 20);
-      addTextField("gas_moon", "Gas moon", 20);
-      addTextField("dwarf", "Dwarf planet", 20);
-      let descRow = $(
-        '<label style="display:block; margin-top:6px;"></label>'
-      ).appendTo(identity);
-      $("<span>Description</span>").appendTo(descRow);
-      $(
-        '<textarea class="textarea" maxlength="255" style="width:100%; min-height:55px;"></textarea>'
-      ).val(draft.desc).on("change", function() {
-        draft.desc = this.value.trim();
-        saveDraft();
-      }).appendTo(descRow);
-      let outerNames = $(
-        '<details style="margin-top:6px;"><summary class="has-text-caution">Outer-system names</summary><div class="fields" style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;"></div></details>'
-      ).appendTo(identity);
-      let outerForm = outerNames.find("div");
-      const addOuterField = (key, label) => {
-        let row = $('<label style="display:flex; gap:8px;"></label>').appendTo(
-          outerForm
-        );
-        $("<span></span>").text(label).appendTo(row);
-        $('<input class="input" type="text" maxlength="20" style="flex:1;" />').val(draft[key]).on("change", function() {
-          draft[key] = this.value.trim();
-          saveDraft();
-        }).appendTo(row);
-      };
-      addOuterField("titan", "Titan");
-      addOuterField("enceladus", "Enceladus");
-      addOuterField("triton", "Triton");
-      addOuterField("eris", "Eris");
-      let raceControls = $(
-        '<div class="genus_selection" style="display:flex; gap:18px; margin:8px 0;"></div>'
-      ).appendTo(modal);
-      let genusLabel = $(
-        '<label class="genus"><span class="has-text-caution header">Genus </span></label>'
-      ).appendTo(raceControls);
-      let genusSelect = $("<select></select>").appendTo(genusLabel);
-      Object.keys(poly.genus_traits).filter(
-        (genus) => genus !== "hybrid" && (genus === draft.genus || game.global.stats.achieve[`genus_${genus}`]?.l)
-      ).forEach(
-        (genus) => $("<option></option>").val(genus).text(game.loc(`genelab_genus_${genus}`)).appendTo(genusSelect)
-      );
-      genusSelect.val(draft.genus).on("change", function() {
-        draft.genus = this.value;
-        saveDraft();
-        updateSummary();
-      });
-      let fanaticLabel = $(
-        '<label class="fanatic"><span class="has-text-caution header">Fanaticism </span></label>'
-      ).appendTo(raceControls);
-      let fanaticSelect = $("<select></select>").appendTo(fanaticLabel);
-      let genusInfo = $(
-        '<div class="has-text-info" style="margin-bottom:6px;"></div>'
-      ).appendTo(modal);
-      let effectPanel = $(
-        '<div class="script-custom-effect" style="height:112px; overflow-y:scroll; overflow-x:hidden; overflow-wrap:anywhere; white-space:normal; scrollbar-gutter:stable; overscroll-behavior:contain; pointer-events:auto; position:relative; z-index:2; padding:5px 9px; margin-bottom:5px; border-top:1px solid #777; border-bottom:1px solid #777; text-align:left;"></div>'
-      ).appendTo(modal);
-      let activeTrait = null;
-      const showTraitEffect = (id) => {
-        activeTrait = id;
-        let trait = game.traits[id];
-        let rank = draft.ranks[id] ?? 1;
-        effectPanel.empty();
-        $("<strong class='has-text-warning'></strong>").text(`${trait.name} · r${rank}`).appendTo(effectPanel);
-        $("<div class='desc'></div>").html(typeof trait.desc === "function" ? trait.desc() : trait.desc).appendTo(effectPanel);
-        $(
-          `<div class="effect ${trait.val >= 0 ? "has-text-success" : "has-text-danger"}"></div>`
-        ).html(customRaceTraitEffect(id, rank)).appendTo(effectPanel);
-      };
-      effectPanel.text("Hover or select a trait to see its current-rank effect.");
-      let filter = $(
-        '<input class="input" type="search" placeholder="Filter traits..." style="width:100%; margin:4px 0 8px;" />'
-      ).appendTo(identity);
-      let traitsArea = $(
-        '<div class="script-custom-traits" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; max-height:52vh; overflow-y:scroll; overflow-x:hidden; scrollbar-gutter:stable;"></div>'
-      ).appendTo(modal);
-      let positiveArea = $(
-        '<div class="cool trait_selection"><h4 class="has-text-success">Positive traits</h4></div>'
-      ).appendTo(traitsArea);
-      let negativeArea = $(
-        '<div class="lame trait_selection"><h4 class="has-text-danger">Negative traits</h4></div>'
-      ).appendTo(traitsArea);
-      let traitRows = [];
-      let lastCategory = { positive: null, negative: null };
-      for (let [id, trait] of customRaceEditorTraits(draft)) {
-        let side = trait.val >= 0 ? "positive" : "negative";
-        let targetArea = trait.val >= 0 ? positiveArea : negativeArea;
-        if (lastCategory[side] !== trait.taxonomy) {
-          lastCategory[side] = trait.taxonomy;
-          $("<h5 class='has-text-caution'></h5>").text(game.loc(`genelab_traits_${trait.taxonomy}`) ?? trait.taxonomy).appendTo(targetArea);
-        }
-        let row = $(
-          `<div class="script-custom-trait field t${id}" style="display:flex; align-items:center; gap:5px; padding:2px 0;"></div>`
-        ).appendTo(targetArea);
-        row.attr(
-          "data-search",
-          `${trait.name} ${id} ${trait.taxonomy}`.toLowerCase()
-        );
-        row.on("mouseenter click", () => showTraitEffect(id));
-        let checkbox = $('<input type="checkbox" />').prop("checked", draft.traitlist.includes(id)).appendTo(row);
-        $(
-          `<span class="${trait.val >= 0 ? "has-text-success" : "has-text-danger"}" style="flex:1;"></span>`
-        ).text(`${trait.name} [${trait.val >= 0 ? "+" : ""}${trait.val}]`).attr(
-          "title",
-          typeof trait.desc === "function" ? trait.desc() : trait.desc
-        ).appendTo(row);
-        let ranks = customRaceRankOptions(id);
-        let currentRank = draft.ranks[id] ?? 1;
-        if (!ranks.includes(currentRank)) ranks.push(currentRank);
-        ranks.sort((a, b) => a - b);
-        let rankWrap = $(
-          '<span class="rc" style="white-space:nowrap;"></span>'
-        ).appendTo(row);
-        let rankDown = $(
-          '<span class="sub has-text-danger" role="button">−</span>'
-        ).appendTo(rankWrap);
-        let rankValue = $(
-          '<span class="has-text-warning" style="padding:0 4px;"></span>'
-        ).appendTo(rankWrap);
-        let rankUp = $(
-          '<span class="add has-text-success" role="button">+</span>'
-        ).appendTo(rankWrap);
-        const updateRank = () => {
-          currentRank = draft.ranks[id] ?? 1;
-          rankValue.text(`r${currentRank}`);
-          rankWrap.toggleClass("inactive-row", !checkbox.prop("checked"));
-          if (activeTrait === id) showTraitEffect(id);
-        };
-        checkbox.on("change", function() {
-          if (this.checked) {
-            if (!draft.traitlist.includes(id)) draft.traitlist.push(id);
-            draft.ranks[id] = currentRank;
-          } else {
-            draft.traitlist = draft.traitlist.filter((traitId) => traitId !== id);
-            delete draft.ranks[id];
-            if (draft.fanaticism === id) draft.fanaticism = false;
-          }
-          updateRank();
-          saveDraft();
-          updateSummary();
-        });
-        rankDown.on("click", function() {
-          if (!checkbox.prop("checked")) return;
-          let index = ranks.indexOf(currentRank);
-          if (index > 0) draft.ranks[id] = ranks[index - 1];
-          updateRank();
-          saveDraft();
-          updateSummary();
-        });
-        rankUp.on("click", function() {
-          if (!checkbox.prop("checked")) return;
-          let index = ranks.indexOf(currentRank);
-          if (index < ranks.length - 1) draft.ranks[id] = ranks[index + 1];
-          updateRank();
-          saveDraft();
-          updateSummary();
-        });
-        updateRank();
-        traitRows.push(row);
-      }
-      filter.on("input", function() {
-        let query = this.value.trim().toLowerCase();
-        traitRows.forEach(
-          (row) => row.toggle(!query || row.attr("data-search").includes(query))
-        );
-      });
-      let advanced = $(
-        '<details style="margin-top:10px;"><summary>Advanced JSON import/export</summary></details>'
-      ).appendTo(modal);
-      let rawJson = $(
-        '<textarea class="textarea" style="width:100%; min-height:160px;"></textarea>'
-      ).appendTo(advanced);
-      let loadRaw = $(
-        '<button class="button" type="button">Load JSON into editor</button>'
-      ).appendTo(advanced);
-      let rawStatus = $('<span style="margin-left:8px;"></span>').appendTo(
-        advanced
-      );
-      function saveDraft() {
-        draft.genes = 0;
-        preset.json = JSON.stringify(draft, null, 2);
-        rawJson.val(preset.json);
-        state.customRaceImportAttempt = null;
-        updateSettingsFromState();
-      }
-      function updateSummary() {
-        let balance = customRaceGeneBalance(draft);
-        summary.toggleClass("has-text-success", balance >= 0).toggleClass("has-text-danger", balance < 0).text(
-          `Genes remaining: ${balance} · ${draft.traitlist.length} selected traits · live lab validation still applies`
-        );
-        let builtIns = Object.keys(poly.genus_traits[draft.genus] ?? {}).filter((id) => !(draft.genus === "fungi" && id === "spores")).map((id) => game.traits[id]?.name ?? id);
-        genusInfo.text(`Genus traits: ${builtIns.join(", ") || "none"}`);
-        fanaticSelect.empty();
-        $("<option></option>").val("").text("Automatic / none").appendTo(fanaticSelect);
-        draft.traitlist.forEach(
-          (id) => $("<option></option>").val(id).text(game.traits[id]?.name ?? id).appendTo(fanaticSelect)
-        );
-        fanaticSelect.val(draft.fanaticism || "");
-      }
-      fanaticSelect.on("change", function() {
-        draft.fanaticism = this.value || false;
-        saveDraft();
-      });
-      presetSelect.on("change", function() {
-        settingsRaw.prestigeCustomRacePreset = this.value;
-        updateSettingsFromState();
-        refreshCustomRacePresetSelectors();
-        buildCustomRacePresetEditor(modal);
-      });
-      presetName.on("change", function() {
-        preset.name = this.value.trim() || `Preset ${presetIndex + 1}`;
-        updateSettingsFromState();
-        presetSelect.find(`option[value="${presetIndex}"]`).text(preset.name);
-        refreshCustomRacePresetSelectors();
-      });
-      addButton.on("click", function() {
-        settingsRaw.prestigeCustomRacePresets.push({
-          name: `Preset ${settingsRaw.prestigeCustomRacePresets.length + 1}`,
-          json: ""
-        });
-        settingsRaw.prestigeCustomRacePreset = String(
-          settingsRaw.prestigeCustomRacePresets.length - 1
-        );
-        updateSettingsFromState();
-        refreshCustomRacePresetSelectors();
-        buildCustomRacePresetEditor(modal);
-      });
-      cloneButton.on("click", function() {
-        let clone = {
-          name: `${preset.name || `Preset ${presetIndex + 1}`} copy`,
-          json: preset.json
-        };
-        settingsRaw.prestigeCustomRacePresets.push(clone);
-        settingsRaw.prestigeCustomRacePreset = String(
-          settingsRaw.prestigeCustomRacePresets.length - 1
-        );
-        updateSettingsFromState();
-        refreshCustomRacePresetSelectors();
-        buildCustomRacePresetEditor(modal);
-      });
-      deleteButton.on("click", function() {
-        if (settingsRaw.prestigeCustomRacePresets.length > 1) {
-          settingsRaw.prestigeCustomRacePresets.splice(presetIndex, 1);
-        } else {
-          settingsRaw.prestigeCustomRacePresets[0] = {
-            name: "General",
-            json: ""
-          };
-        }
-        settingsRaw.prestigeCustomRacePreset = "0";
-        updateSettingsFromState();
-        refreshCustomRacePresetSelectors();
-        buildCustomRacePresetEditor(modal);
-      });
-      captureButton.on("click", function() {
-        let savedRace = game.global.custom?.race0;
-        if (!savedRace) {
-          alert("There is no saved custom race to capture yet.");
-          return;
-        }
-        preset.json = JSON.stringify(
-          {
-            ...savedRace,
-            genes: 0,
-            traitlist: (savedRace.traits ?? []).slice(),
-            traits: void 0
-          },
-          (key, value) => value === void 0 ? void 0 : value,
-          2
-        );
-        buildCustomRacePresetEditor(modal);
-      });
-      loadRaw.on("click", function() {
-        try {
-          let parsed = JSON.parse(rawJson.val());
-          if (!parsed || typeof parsed !== "object")
-            throw new Error("not an object");
-          preset.json = JSON.stringify(parsed, null, 2);
-          rawStatus.removeClass("has-text-danger").text("");
-          updateSettingsFromState();
-          buildCustomRacePresetEditor(modal);
-        } catch (error) {
-          rawStatus.addClass("has-text-danger").text(`Invalid JSON: ${error.message}`);
+    const {
+      showCustomRaceImportStatus,
+      getCustomRacePreset,
+      refreshCustomRacePresetSelectors,
+      buildCustomRacePresetEditor,
+      importCustomRaceIntoLab,
+      automateLab
+    } = createCustomRaceUI({
+      getContext: () => ({
+        $,
+        document,
+        settingsRaw,
+        settings,
+        state,
+        game,
+        poly,
+        customRaceDraftFromPreset,
+        customRaceEditorTraits,
+        customRaceRankOptions,
+        customRaceTraitEffect,
+        customRaceGeneBalance,
+        updateSettingsFromState,
+        updateOverrides,
+        getVueById,
+        alert: (message) => alert(message)
+      })
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        customRaceUI: {
+          showCustomRaceImportStatus,
+          getCustomRacePreset,
+          refreshCustomRacePresetSelectors,
+          buildCustomRacePresetEditor,
+          importCustomRaceIntoLab,
+          automateLab
+        },
+        setCustomRaceUITestContext(context) {
+          if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
+          if ("settings" in context) settings = context.settings;
+          if ("state" in context) state = context.state;
+          if ("game" in context) game = context.game;
+          if ("poly" in context) poly = context.poly;
+          if ("resources" in context) resources = context.resources;
+          if ("races" in context) races = context.races;
+          if ("win" in context) win = context.win;
         }
       });
-      saveDraft();
-      updateSummary();
-    }
-    function importCustomRaceIntoLab() {
-      let preset = getCustomRacePreset();
-      let attemptKey = `${settings.prestigeCustomRacePreset}:${preset.json}`;
-      if (state.customRaceImportAttempt === attemptKey) {
-        return false;
-      }
-      state.customRaceImportAttempt = attemptKey;
-      let template;
-      try {
-        template = JSON.parse(preset.json);
-      } catch (error) {
-        showCustomRaceImportStatus(
-          `Automatic custom-race import of “${preset.name}” paused: invalid JSON (${error.message}).`,
-          true
-        );
-        return false;
-      }
-      let lab = getVueById("celestialLab");
-      let traits = template.traitlist ?? template.traits;
-      if (!lab?.g || !Array.isArray(traits) || typeof template.genus !== "string") {
-        showCustomRaceImportStatus(
-          "Automatic custom-race import paused: expected a game custom-race export with genus and traitlist.",
-          true
-        );
-        return false;
-      }
-      if (new Set(traits).size !== traits.length) {
-        showCustomRaceImportStatus(
-          "Automatic custom-race import paused: traitlist contains duplicates.",
-          true
-        );
-        return false;
-      }
-      let requiredText = [
-        "name",
-        "desc",
-        "entity",
-        "home",
-        "red",
-        "hell",
-        "gas",
-        "gas_moon",
-        "dwarf"
-      ];
-      let missingText = requiredText.filter(
-        (key) => typeof template[key] !== "string" || template[key].length === 0
-      );
-      if (missingText.length > 0) {
-        showCustomRaceImportStatus(
-          `Automatic custom-race import paused: missing ${missingText.join(", ")}.`,
-          true
-        );
-        return false;
-      }
-      if (!game.global.stats.achieve[`genus_${template.genus}`]?.l && template.genus !== lab.g.genus) {
-        showCustomRaceImportStatus(
-          `Automatic custom-race import paused: ${template.genus} genus is not unlocked.`,
-          true
-        );
-        return false;
-      }
-      let unavailableTraits = traits.filter(
-        (trait) => typeof trait !== "string" || !/^[a-z0-9_]+$/.test(trait) || document.querySelector(`#celestialLab .t${trait}`) === null
-      );
-      if (unavailableTraits.length > 0) {
-        showCustomRaceImportStatus(
-          `Automatic custom-race import paused: unavailable traits ${unavailableTraits.join(", ")}.`,
-          true
-        );
-        return false;
-      }
-      let ranks = template.ranks ?? {};
-      if (typeof ranks !== "object" || Array.isArray(ranks) || Object.entries(ranks).some(
-        ([trait, rank]) => !traits.includes(trait) || typeof rank !== "number" || !Number.isFinite(rank) || rank <= 0 || !customRaceRankOptions(trait).includes(rank)
-      )) {
-        showCustomRaceImportStatus(
-          "Automatic custom-race import paused: ranks must contain positive numeric values for selected traits only.",
-          true
-        );
-        return false;
-      }
-      let fanaticism = template.fanaticism || false;
-      if (fanaticism && !traits.includes(fanaticism)) {
-        showCustomRaceImportStatus(
-          `Automatic custom-race import paused: Fanaticism trait ${fanaticism} is not selected.`,
-          true
-        );
-        return false;
-      }
-      let textLimits = {
-        name: 20,
-        desc: 255,
-        entity: 40,
-        home: 20,
-        red: 20,
-        hell: 20,
-        gas: 20,
-        gas_moon: 20,
-        dwarf: 20
-      };
-      requiredText.forEach(
-        (key) => lab.g[key] = template[key].substring(0, textLimits[key])
-      );
-      ["titan", "enceladus", "triton", "eris"].forEach((key) => {
-        if (typeof template[key] === "string" && template[key].length > 0) {
-          lab.g[key] = template[key];
-        }
-      });
-      lab.g.genus = template.genus;
-      lab.g.traitlist = traits.slice();
-      lab.g.fanaticism = fanaticism;
-      lab.g.ranks ??= {};
-      Object.keys(lab.g.ranks).forEach((trait) => delete lab.g.ranks[trait]);
-      Object.assign(lab.g.ranks, ranks);
-      lab.geneEdit();
-      if (lab.g.genes < 0) {
-        showCustomRaceImportStatus(
-          `Automatic custom-race import paused: template exceeds the live gene budget by ${Math.abs(lab.g.genes)}. Edit the lab or paste a cheaper export.`,
-          true
-        );
-        return false;
-      }
-      return true;
-    }
-    function automateLab() {
-      let createCustom = document.querySelector("#celestialLab .create button");
-      if (createCustom) {
-        updateOverrides();
-        if (settings.masterScriptToggle && settings.autoPrestige && ["ascension", "terraform", "apotheosis"].includes(settings.prestigeType)) {
-          let customMode = ["reuse", "pause", "import"].includes(
-            settings.prestigeCustomRaceMode
-          ) ? settings.prestigeCustomRaceMode : "reuse";
-          if (customMode !== "import") {
-            state.customRaceImportAttempt = null;
-          }
-          if (customMode === "pause") {
-            showCustomRaceImportStatus(
-              "Auto Prestige paused by Custom race handling: Pause in lab."
-            );
-            return;
-          }
-          if (customMode === "import" && !importCustomRaceIntoLab()) {
-            return;
-          }
-          if (customMode === "reuse" && !game.global.custom?.race0) {
-            showCustomRaceImportStatus(
-              "Auto Prestige paused: no saved custom race. Design one here or select Import selected preset in Prestige settings."
-            );
-            return;
-          }
-          state.goal = "GameOverMan";
-          createCustom.click();
-          return;
-        }
-      }
     }
     let tickTestControllers;
     const tickControllers = {
@@ -29768,2013 +34385,130 @@
         poly.messageQueue(msg, "warning", true, ["events", "major_events"]);
       }
     }
-    function updateDebugData() {
-      state.forcedUpdate = true;
-      game.updateDebugData();
-      state.forcedUpdate = false;
-    }
-    function addScriptStyle() {
-      let cssData = {
-        dark: {
-          background: "#282f2f",
-          alt: "#0f1414",
-          hover: "#010303",
-          border: "#ccc",
-          primary: "#fff",
-          hasTextWarning: "#ffdd57"
+    const {
+      updateDebugData,
+      addScriptStyle,
+      checkIgnoredError,
+      displayScriptWarningNode,
+      addErrorHandler
+    } = createScriptRuntimeUI({
+      getContext: () => ({
+        $,
+        document,
+        state,
+        game,
+        win,
+        createOptionsModal,
+        openOptionsModal,
+        scriptVersionExtra: SCRIPT_VERSION_EXTRA
+      })
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        scriptRuntimeUI: {
+          updateDebugData,
+          addScriptStyle,
+          checkIgnoredError,
+          displayScriptWarningNode,
+          addErrorHandler
         },
-        light: {
-          background: "#fff",
-          alt: "#dddddd",
-          hover: "#ccc",
-          border: "#000",
-          primary: "#000",
-          hasTextWarning: "#7a6304"
+        setScriptRuntimeUITestContext(context) {
+          if ("state" in context) state = context.state;
+          if ("game" in context) game = context.game;
+          if ("win" in context) win = context.win;
+        }
+      });
+    }
+    const {
+      prestigeTypes,
+      prestigeOptions,
+      checkCompare,
+      checkCustom,
+      argType,
+      checkTypes,
+      retBools,
+      overrideOnlyChecks
+    } = createOverrideCatalog({
+      getContext: () => ({
+        settings,
+        settingsRaw,
+        state,
+        game,
+        buildingIds,
+        buildings,
+        resources,
+        techIds,
+        arpaIds,
+        jobIds,
+        races,
+        GovernmentManager,
+        SmelterManager,
+        FactoryManager,
+        WarManager,
+        universes,
+        governors,
+        challenges,
+        biomeList,
+        traitList,
+        buildSelectOptions,
+        fastEval,
+        getGovernor
+      })
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        settingsControls: {
+          removeScriptSettings,
+          buildScriptSettings,
+          buildImportExport,
+          buildSettingsSectionImpl,
+          buildSettingsSection,
+          buildSettingsSection2,
+          genericResetFunction,
+          addStandardHeading,
+          addSettingsHeader1,
+          addSettingsHeader2,
+          buildSelectOptions,
+          openOverrideModal,
+          buildOverrideSettings,
+          buildInputNode,
+          buildInputNodeForDisplay,
+          changeDisplayInputNode,
+          buildConditionType,
+          buildConditionArg,
+          buildConditionComparator,
+          buildConditionRemove,
+          buildConditionDuplicate,
+          buildConditionEvalize,
+          buildConditionRet,
+          buildObjectListInput,
+          addSettingsToggle,
+          addSettingsNumber,
+          addSettingsString,
+          addSettingsSelect,
+          addSettingsList,
+          addInputCallbacks,
+          addTableInput,
+          addToggleCallbacks,
+          addTableToggle,
+          buildTableLabel,
+          resetCheckbox,
+          evaluateCheck: _,
+          prestigeTypes,
+          prestigeOptions,
+          checkCompare,
+          checkCustom,
+          argType,
+          checkTypes
         },
-        night: {
-          background: "#282f2f",
-          alt: "#1b1b1b",
-          hover: "#0a0a0a",
-          border: "#ccc",
-          primary: "#fff",
-          hasTextWarning: "#ffdd57"
-        },
-        darkNight: {
-          background: "#282f2f",
-          alt: "#1b1b1b",
-          hover: "#0a0a0a",
-          border: "#ccc",
-          primary: "#b8b8b8",
-          hasTextWarning: "#ffcc00"
-        },
-        redgreen: {
-          background: "#282f2f",
-          alt: "#1b1b1b",
-          hover: "#0a0a0a",
-          border: "#ccc",
-          primary: "#fff",
-          hasTextWarning: "#ffdd57"
-        },
-        gruvboxLight: {
-          background: "#fbf1c7",
-          alt: "#f9f5d7",
-          hover: "#e8e4c6",
-          border: "#3c3836",
-          primary: "#3c3836",
-          hasTextWarning: "#b57614"
-        },
-        gruvboxDark: {
-          background: "#282828",
-          alt: "#1d2021",
-          hover: "#0c0f10",
-          border: "#3c3836",
-          primary: "#ebdbb2",
-          hasTextWarning: "#fabd2f"
-        },
-        orangeSoda: {
-          background: "#131516",
-          alt: "#292929",
-          hover: "#181818",
-          border: "#313638",
-          primary: "#EBDBB2",
-          hasTextWarning: "#F06543"
-        },
-        dracula: {
-          background: "#282a36",
-          alt: "#1d2021",
-          hover: "#C0F10",
-          border: "#44475a",
-          primary: "#f8f8f2",
-          hasTextWarning: "#f1fa8c"
-        }
-      };
-      let styles = "";
-      for (let [theme, color] of Object.entries(cssData)) {
-        styles += `
-                html.${theme} .script-modal-content {
-                    background-color: ${color.background};
-                }
-
-                html.${theme} .script-modal-header {
-                    border-color: ${color.border};
-                }
-
-                /*
-                html.${theme} .script-modal-body .button {
-                    background-color: ${color.alt};
-                }*/
-
-                html.${theme} .script-modal-body table td,
-                html.${theme} .script-modal-body table th {
-                    border-color: ${color.border};
-                }
-
-                html.${theme} .script-collapsible {
-                    background-color: ${color.alt};
-                }
-
-                html.${theme} .script-collapsible:after {
-                    color: ${color.primary};
-                }
-
-                html.${theme} .script-contentactive,
-                html.${theme} .script-collapsible:hover {
-                    background-color: ${color.hover};
-                }
-
-                html.${theme} .percentage-full-progress-bar-wrapper {
-                    background-color: ${color.hasTextWarning}15;
-                }
-                html.${theme} .percentage-full-progress-bar {
-                    background-color: ${color.hasTextWarning}75;
-                }
-
-                html.${theme} .percentage-full-progress-bar-wrapper.is-replicating {
-                    background-image: linear-gradient(135deg,${color.hasTextWarning}30 25%,transparent 25%,transparent 50%,${color.hasTextWarning}30 50%,${color.hasTextWarning}30 75%,transparent 75%,transparent);
-                }
-
-                html.${theme} #active_targets .target-type-box {
-                    background-color: ${color.alt}75;
-                }`;
-      }
-      styles += `
-            .script-lastcolumn:after { float: right; content: "\\21c5"; }
-            .script-refresh:after { float: right; content: "\\21ba"; cursor: pointer; }
-            .script-draggable { cursor: move; cursor: grab; }
-            .script-draggable:active { cursor: grabbing !important; }
-            .ui-sortable-helper { display: table; cursor: grabbing !important; }
-
-            .script-collapsible {
-                color: white;
-                cursor: pointer;
-                padding: 18px;
-                width: 100%;
-                border: none;
-                text-align: left;
-                outline: none;
-                font-size: 15px;
-            }
-
-            .script-collapsible:after {
-                content: '\\002B';
-                color: white;
-                font-weight: bold;
-                float: right;
-                margin-left: 5px;
-            }
-
-            .script-contentactive:after {
-                content: "\\2212";
-            }
-
-            .script-content {
-                padding: 0 18px;
-                display: none;
-                //max-height: 0;
-                overflow: hidden;
-                //transition: max-height 0.2s ease-out;
-            }
-
-            .script-searchsettings {
-                width: 100%;
-                margin-top: 20px;
-                margin-bottom: 10px;
-            }
-
-            /* Open script options button */
-            .s-options-button {
-                padding-right: 2px;
-                cursor: pointer;
-            }
-
-            /* The Modal (background) */
-            .script-modal {
-              display: none; /* Hidden by default */
-              position: fixed; /* Stay in place */
-              z-index: 100; /* Sit on top */
-              left: 0;
-              top: 0;
-              width: 100%; /* Full width */
-              height: 100%; /* Full height */
-              background-color: rgb(0,0,0); /* Fallback color */
-              background-color: rgba(10,10,10,.86); /* Blackish w/ opacity */
-              overflow-y: auto; /* Allow scrollbar */
-            }
-
-            /* Modal Content/Box */
-            .script-modal-content {
-                position: relative;
-                margin: auto;
-                margin-top: 50px;
-                margin-bottom: 50px;
-                padding: 0px;
-                width: 900px;
-                border-radius: .5rem;
-                text-align: center;
-            }
-
-            .script-modal-content.override-modal {
-                width: 70%;
-                min-width: 900px;
-            }
-
-            /* The Close Button */
-            .script-modal-close {
-              float: right;
-              font-size: 28px;
-              margin-top: 20px;
-              margin-right: 20px;
-            }
-
-            .script-modal-close:hover,
-            .script-modal-close:focus {
-              cursor: pointer;
-            }
-
-            /* Modal Header */
-            .script-modal-header {
-              padding: 4px 16px;
-              margin-bottom: .5rem;
-              border-bottom: #ccc solid .0625rem;
-              text-align: center;
-            }
-
-            /* Modal Body */
-            .script-modal-body {
-                padding: 2px 16px;
-                text-align: center;
-                overflow: auto;
-            }
-
-            /* Autocomplete styles */
-            .ui-autocomplete {
-                background-color: #000;
-                position: absolute;
-                top: 0;
-                left: 0;
-                cursor: default;
-                z-index: 10000 !important;
-            }
-
-            .ui-helper-hidden-accessible {
-                border: 0;
-                clip: rect(0 0 0 0);
-                height: 1px;
-                margin: -1px;
-                overflow: hidden;
-                padding: 0;
-                position: absolute;
-                width: 1px;
-            }
-
-            .selectable span {
-                -moz-user-select: text !important;
-                -khtml-user-select: text !important;
-                -webkit-user-select: text !important;
-                -ms-user-select: text !important;
-                user-select: text !important;
-            }
-
-            .ea-craft-toggle {
-                max-width:75px;
-                margin-top:4px;
-                position:absolute;
-                left:50%;
-            }
-
-            /* Reduce message log clutterness */
-            .main #msgQueueFilters span:not(:last-child) {
-                !important; margin-right: 0.25rem;
-            }
-
-            /* Fixes for game styles */
-            .main .resources .resource :first-child { white-space: nowrap; }
-            #popTimer { margin-bottom: 0.1rem }
-            .barracks { white-space: nowrap; }
-            .area { width: calc(100% / 6) !important; max-width: 8rem; }
-            .offer-item { width: 15% !important; max-width: 7.5rem; }
-            .tradeTotal { margin-left: 11.5rem !important; }
-
-            /* Styles for queued targets UI */
-            #active_targets-wrapper {
-                padding: 1rem;
-                max-height: 50vh;
-            }
-
-            #sideQueue #active_targets-wrapper {
-                max-height: 50vh;
-            }
-
-            #active_targets {
-                font-size: 0.9em;
-                max-width: 500px;
-            }
-
-            #active_targets .target-type-box {
-                background-color: #1d2021;
-                margin: 10px 0;
-                padding: 0.5rem 1rem;
-            }
-
-            #active_targets ul {
-                list-style-type: none;
-                padding-top: 5px;
-            }
-
-            .active_targets-list > li {
-                margin-top: 10px;
-                width: 100%;
-            }
-
-            .active-target-title {
-                display: inline-block;
-            }
-            .active-target-title.name {
-                width: 40%;
-            }
-            .active-target-title.time {
-                width: 40%;
-            }
-            .active-target-segments {
-                white-space: nowrap;
-            }
-
-            #active_targets .active_targets-sub-list {
-                list-style-type: none;
-            }
-
-            #active_targets .active_targets-sub-list li {
-                width: 100%;
-                padding: 0;
-            }
-
-            #active_targets > ul > li:not(:first-child) {
-              margin-top: 10px;
-            }
-
-            #active_targets .active_targets-resource-text {
-                display: flex;
-                width: 40%;
-            }
-
-            #active_targets .active_targets-resource-text span {
-                margin-left: 10px;
-            }
-
-            #active_targets .active_targets-resource-row {
-                display: flex;
-            }
-
-            #active_targets .active_targets-resource-row .percentage-full-progress-bar-wrapper {
-                display: flex;
-                margin: 5px 0 0 0;
-                width: 35%;
-                height: 9px;
-                overflow: hidden;
-            }
-
-            /* Styles for script planner UI */
-            #script_planner-wrapper {
-                padding: 1rem;
-                max-height: 40vh;
-            }
-            #script_planner-header {
-                cursor: pointer;
-            }
-            #script_planner {
-                font-size: 0.9em;
-                max-width: 500px;
-            }
-            #script_planner ul {
-                list-style-type: none;
-            }
-            #script_planner li {
-                display: block;
-                width: 100%;
-                height: auto !important;
-                max-height: none !important;
-                line-height: normal;
-                overflow: visible;
-                margin-top: 6px;
-            }
-            #script_planner .planner-row,
-            #script_planner .planner-note {
-                height: auto !important;
-                line-height: normal;
-            }
-            #script_planner .planner-row {
-                display: grid;
-                grid-template-columns: minmax(0, 1fr) auto auto;
-                column-gap: 8px;
-                align-items: baseline;
-            }
-            #script_planner .planner-row > span {
-                position: static;
-                float: none;
-                width: auto;
-                display: block;
-            }
-            #script_planner .planner-name {
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-            #script_planner .planner-weight,
-            #script_planner .planner-time {
-                white-space: nowrap;
-                text-align: right;
-            }
-            #script_planner .planner-note {
-                font-size: 0.85em;
-                opacity: 0.7;
-            }
-            #script_planner-stats {
-                margin-top: 12px;
-            }
-            #script_planner-reset {
-                font-size: 0.75em;
-                margin-left: 8px;
-            }
-
-            .percentage-full-progress-bar-wrapper.is-replicating {
-                background-image: linear-gradient(135deg,rgba(255,255,255,.95) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.95) 50%,rgba(255,255,255,.95) 75%,transparent 75%,transparent);
-                background-size: 20px 20px;
-                animation: progress-bar-stripes 2s linear reverse infinite;
-            }
-
-            @keyframes progress-bar-stripes {
-              0% {
-                background-position: 40px 0;
-              }
-              100% {
-                background-position: 0 0;
-              }
-            }
-
-            #active_targets .active_targets-time-left {
-                width: auto;
-                text-align: left;
-                font-size: 0.8rem;
-                margin-left: 10px;
-            }
-
-            .active-target-remove-x {
-                margin-left: 10px;
-                opacity: 0.5;
-                cursor: pointer;
-                float: right;
-                transform: rotate(45deg);
-                font-size: 1.1rem;
-                line-height: 1rem;
-            }
-
-            .active-target-remove-x:hover {
-                opacity: 1;
-                font-size: 1.2rem;
-            }
-        `;
-      var css = document.createElement("style");
-      css.type = "text/css";
-      css.appendChild(document.createTextNode(styles));
-      document.getElementsByTagName("head")[0].appendChild(css);
-    }
-    function checkIgnoredError(e) {
-      if (typeof e !== "string") e = String(e);
-      let ignoreRegexes = [
-        // Currently no known game errors. Example regex:
-        // /.*ReferenceError.*defineGovernor.*/,
-      ];
-      if (ignoreRegexes.find((regex) => regex.test(e))) {
-        return true;
-      }
-      return false;
-    }
-    function displayScriptWarningNode(title, msg, stack) {
-      if (typeof stack === "string") {
-        msg = `${msg}
-
-Stack info:
-${stack}`;
-      }
-      let versionPart = "unknown";
-      try {
-        let gmInfo = typeof GM_info !== "undefined" ? GM_info : typeof GM !== "undefined" ? GM?.info : null;
-        if (gmInfo?.script?.version) {
-          versionPart = gmInfo.script.version;
-        }
-      } catch (internalError) {
-        console.error("Error in error handler: %o", internalError);
-        msg = `${msg}
------
-Error in error handler: ${internalError}`;
-      }
-      msg = `${msg}
-
-Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
-`;
-      $("#script-script-warning").remove();
-      let clickable = $(
-        `<span id="script-script-warning" style="cursor: pointer; border-right: 1px solid; margin-right: 1rem; padding-right: 1rem">⚠️ ${title}</span>`
-      );
-      clickable.on("click", (e) => {
-        const builder = (currentNode) => {
-          currentNode.append(
-            $(
-              `<textarea style="width: 100%; height: 100%; min-height: 400px; margin-bottom: 10px">`
-            ).val(msg)
-          );
-        };
-        createOptionsModal();
-        openOptionsModal(`Script Notice: ${title}`, builder);
-        clickable.remove();
-      });
-      $("#versionLog").before(clickable);
-    }
-    function addErrorHandler() {
-      win.addEventListener("error", (e) => {
-        if (!checkIgnoredError(e?.message)) {
-          displayScriptWarningNode(
-            "Script Error",
-            `${e?.message} in ${e?.filename}:${e?.lineno}:${e?.colno}.`,
-            e?.error?.stack
-          );
-        }
-        return false;
-      });
-      if (win?.Vue?.config && !win?.Vue?.config?.errorHandler) {
-        win.Vue.config.errorHandler = (err, vm, info) => {
-          if (!checkIgnoredError(err)) {
-            displayScriptWarningNode(
-              "Script Error",
-              `Vue error: ${err}`,
-              err?.stack
-            );
-          }
-        };
-      }
-    }
-    function removeScriptSettings() {
-      $("#script_settings").remove();
-    }
-    function buildScriptSettings() {
-      if (game.global.settings.civTabs != 7) {
-        return;
-      }
-      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
-      let scriptContentNode = $("#script_settings");
-      if (scriptContentNode.length !== 0) {
-        return;
-      }
-      scriptContentNode = $(
-        '<div id="script_settings" style="margin-top: 30px;"></div>'
-      );
-      $(".settings").append(scriptContentNode);
-      buildImportExport();
-      buildPrestigeSettings(scriptContentNode, "");
-      buildGeneralSettings();
-      buildInterfaceSettings();
-      buildStateLogSettings();
-      buildAchievementGuardSettings();
-      buildChallengeHelperSettings();
-      buildGovernmentSettings(scriptContentNode, "");
-      buildEvolutionSettings();
-      buildPlanetSettings();
-      buildTraitSettings();
-      buildTriggerSettings();
-      buildResearchSettings();
-      buildWarSettings(scriptContentNode, "");
-      buildHellSettings(scriptContentNode, "");
-      buildMechSettings();
-      buildFleetSettings(scriptContentNode, "");
-      buildEjectorSettings();
-      buildMarketSettings();
-      buildStorageSettings();
-      buildMagicSettings();
-      buildProductionSettings();
-      buildJobSettings();
-      buildBuildingSettings();
-      buildWeightingSettings();
-      buildProjectSettings();
-      buildLoggingSettings(scriptContentNode, "");
-      let collapsibles = document.querySelectorAll(
-        "#script_settings .script-collapsible"
-      );
-      for (let i = 0; i < collapsibles.length; i++) {
-        collapsibles[i].addEventListener("click", function() {
-          this.classList.toggle("script-contentactive");
-          let content = this.nextElementSibling;
-          if (content.style.display === "block") {
-            settingsRaw[collapsibles[i].id] = true;
-            content.style.display = "none";
-            let search = content.getElementsByClassName("script-searchsettings");
-            if (search.length > 0) {
-              search[0].value = "";
-              filterBuildingSettingsTable();
-            }
-          } else {
-            settingsRaw[collapsibles[i].id] = false;
-            content.style.display = "block";
-          }
-          updateSettingsFromState();
-        });
-      }
-      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
-    }
-    function buildImportExport() {
-      let importExportBase = $(".importExport").last();
-      if (importExportBase === null) {
-        return;
-      }
-      if (document.getElementById("script_importExportButtons") !== null) {
-        return;
-      }
-      let importExportNode = $(
-        '<div id="script_importExportButtons" style="margin-top: 6px">'
-      );
-      importExportBase.after(importExportNode);
-      importExportNode.append(
-        ' <button id="script_settingsImport" class="button">Import Script Settings</button>'
-      );
-      $("#script_settingsImport").on("click", function() {
-        const str = $("#importExport").val();
-        if (str.length > 0) {
-          if (importSettings(str)) {
-            $("#importExport").val("");
-          }
+        setSettingsControlsTestContext(context) {
+          if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
+          if ("settings" in context) settings = context.settings;
+          if ("game" in context) game = context.game;
+          if ("state" in context) state = context.state;
+          if ("win" in context) win = context.win;
         }
       });
-      importExportNode.append(
-        ' <button id="script_settingsExport" class="button">Export Script Settings</button>'
-      );
-      $("#script_settingsExport").on("click", function() {
-        $("#importExport").val(exportSettings());
-        $("#importExport").select();
-        document.execCommand("copy");
-      });
-      importExportNode.append(
-        ' <button id="script_settingsFile" class="button">Script Settings as File</button>'
-      );
-      $("#script_settingsFile").on("click", function() {
-        let json = JSON.stringify(settingsRaw, void 0, 2);
-        triggerFileDownload(json, settings.scriptSettingsExportFilename);
-      });
-    }
-    function buildSettingsSectionImpl(parentNode, sectionId, sectionName, resetFunction, updateSettingsContentFunction) {
-      const triggerID = `${sectionId}SettingsCollapsed`;
-      const resetID = `script_reset${sectionId}`;
-      const contentID = `script_${sectionId}Content`;
-      const section = $(`
-          <div id="script_${sectionId}Settings" style="margin-top: 10px;">
-            <h3 id="${triggerID}" class="script-collapsible text-center has-text-success">${sectionName} Settings</h3>
-            <div class="script-content">
-              <div style="margin-top: 10px;"><button id="${resetID}" class="button">Reset ${sectionName} Settings</button></div>
-              <div style="margin-top: 10px; margin-bottom: 10px;" id="${contentID}"></div>
-            </div>
-          </div>`);
-      parentNode.append(section);
-      if (!settingsRaw[sectionId + "SettingsCollapsed"]) {
-        updateSettingsContentFunction();
-        let element = document.getElementById(triggerID);
-        element.classList.toggle("script-contentactive");
-        element.nextElementSibling.style.display = "block";
-      } else {
-        section.find(`> #${triggerID}`).on("click", () => {
-          if (section.find(`#${contentID}`).is(":empty")) {
-            updateSettingsContentFunction();
-          }
-        });
-      }
-      section.find(`#${resetID}`).on("click", genericResetFunction.bind(null, resetFunction, sectionName));
-    }
-    function buildSettingsSection(sectionId, sectionName, resetFunction, updateSettingsContentFunction) {
-      buildSettingsSectionImpl(
-        $("#script_settings"),
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateSettingsContentFunction
-      );
-    }
-    function buildSettingsSection2(parentNode, secondaryPrefix, sectionId, sectionName, resetFunction, updateSettingsContentFunction) {
-      if (secondaryPrefix !== "") {
-        parentNode.append(
-          `<div style="margin-top: 10px; margin-bottom: 10px;" id="script_${secondaryPrefix + sectionId}Content"></div>`
-        );
-        updateSettingsContentFunction(secondaryPrefix);
-      } else {
-        buildSettingsSectionImpl(
-          parentNode,
-          sectionId,
-          sectionName,
-          resetFunction,
-          () => updateSettingsContentFunction("")
-        );
-      }
-    }
-    function genericResetFunction(resetFunction, sectionName) {
-      if (confirm("Are you sure you wish to reset " + sectionName + " Settings?")) {
-        resetFunction();
-      }
-    }
-    function addStandardHeading(node, heading) {
-      node.append(
-        `<div style="margin-top: 5px; width: 600px; text-align: left;"><span class="has-text-danger" style="margin-left: 10px;">${heading}</span></div>`
-      );
-    }
-    function addSettingsHeader1(node, headerText) {
-      node.append(
-        `<div style="margin: 4px; width: 100%; display: inline-block; text-align: left;"><span class="has-text-success" style="font-weight: bold;">${headerText}</span></div>`
-      );
-    }
-    function addSettingsHeader2(node, headerText) {
-      node.append(
-        `<div style="margin: 2px; width: 90%; display: inline-block; text-align: left;"><span class="has-text-caution">${headerText}</span></div>`
-      );
-    }
-    const prestigeTypes = [
-      { val: "none", label: "None", hint: "Endless game" },
-      {
-        val: "mad",
-        short_label: "MAD",
-        label: "Mutual Assured Destruction",
-        hint: "MAD prestige once MAD has been researched and all soldiers are home"
-      },
-      {
-        val: "bioseed",
-        label: "Bioseed",
-        hint: "Launches the bioseeder ship to perform prestige when required probes have been constructed"
-      },
-      {
-        val: "cataclysm",
-        label: "Cataclysm",
-        hint: "Perform cataclysm reset by researching Dial It To 11 once available"
-      },
-      {
-        val: "whitehole",
-        label: "Whitehole",
-        hint: "Infuses the blackhole with exotic materials to perform prestige"
-      },
-      {
-        val: "vacuum",
-        short_label: "Vacuum",
-        label: "Vacuum Collapse",
-        hint: "Build Mana Syphons until the end"
-      },
-      {
-        val: "apocalypse",
-        label: "AI Apocalypse",
-        hint: "Perform AI Apocalypse reset by researching Protocol 66 once available"
-      },
-      {
-        val: "ascension",
-        label: "Ascension",
-        hint: "Allows research of Incorporeal Existence and Ascension. Ascension Machine is managed by autoPower. Use Custom race handling in Prestige settings to reuse, pause for editing, or automatically import a race at the post-reset lab."
-      },
-      {
-        val: "demonic",
-        short_label: "DI",
-        label: "Demonic Infusion",
-        hint: "Sacrifice your entire civilization to absorb the essence of a greater demon lord"
-      },
-      {
-        val: "terraform",
-        label: "Terraform",
-        hint: "Create new planet by building and powering Terraformer. Atmosphere Terraformer is managed by autoPower. Disable autoPrestige if you want to change custom planet. Otherwise current one will be used , or default one if there's no current. "
-      },
-      {
-        val: "matrix",
-        label: "Matrix",
-        hint: "Build a computer simulation and trap your entire civilization in it"
-      },
-      {
-        val: "retire",
-        label: "Retirement",
-        hint: "Retire and enjoy the easy life."
-      },
-      { val: "eden", label: "Eden", hint: "Build Garden Of Eden." },
-      { val: "apotheosis", label: "Apotheosis", hint: "Kill the God." }
-    ];
-    const prestigeOptions = buildSelectOptions(prestigeTypes);
-    const checkCompare = {
-      "==": (a, b) => a == b,
-      "!=": (a, b) => a != b,
-      ">": (a, b) => a > b,
-      "<": (a, b) => a < b,
-      ">=": (a, b) => a >= b,
-      "<=": (a, b) => a <= b,
-      "===": (a, b) => a === b,
-      "!==": (a, b) => a !== b,
-      AND: (a, b) => a && b,
-      OR: (a, b) => a || b,
-      NAND: (a, b) => !(a && b),
-      NOR: (a, b) => !(a || b),
-      XOR: (a, b) => !a != !b,
-      XNOR: (a, b) => !a == !b,
-      "AND!": (a, b) => a && !b,
-      "OR!": (a, b) => a || !b,
-      "A?B": (a, b) => a,
-      "!A?B": (a, b) => !a
-    };
-    const checkCustom = {
-      "A?B": "Special check, uses Var2 as result if Var1 is truthy",
-      "!A?B": "Special check, uses Var2 as result if Var1 is falsy"
-    };
-    const argType = {
-      building_cost: {
-        def: "city-farm.Money",
-        arg: "list_cb",
-        options: () => Object.fromEntries(
-          Object.keys(buildingIds).map(
-            (b) => Object.keys(buildingIds[b].cost).map((r) => [
-              `${b}.${r}`,
-              {
-                name: `${buildingIds[b].name} (${resources[r].name})`,
-                id: `${b}.${r}`
-              }
-            ])
-          ).flat()
-        )
-      },
-      building: {
-        def: "city-farm",
-        arg: "list",
-        options: { list: buildingIds, name: "name", id: "_vueBinding" }
-      },
-      research: {
-        def: "tech-mad",
-        arg: "list",
-        options: { list: techIds, name: "name", id: "_vueBinding" }
-      },
-      trait: {
-        def: "kindling_kindred",
-        arg: "list_cb",
-        options: () => Object.fromEntries(
-          Object.entries(game.traits).map(([id, trait]) => [
-            id,
-            { name: trait.name, id }
-          ])
-        )
-      },
-      genus: {
-        def: "humanoid",
-        arg: "select_cb",
-        options: () => [
-          { val: "organism", label: game.loc(`race_protoplasm`) },
-          ...Object.values(game.races).map((r) => r.type).filter((g, i, a) => g && g !== "organism" && a.indexOf(g) === i).map((g) => ({ val: g, label: game.loc(`genelab_genus_${g}`) }))
-        ]
-      },
-      genus_ss: {
-        def: "humanoid",
-        arg: "select_cb",
-        options: () => [
-          { val: "none", label: game.loc(`genelab_genus_none`) },
-          ...Object.values(game.races).map((r) => r.type).filter(
-            (g, i, a) => g && g !== "organism" && g !== "synthetic" && a.indexOf(g) === i
-          ).map((g) => ({ val: g, label: game.loc(`genelab_genus_${g}`) }))
-        ]
-      },
-      project: {
-        def: "arpalaunch_facility",
-        arg: "select_cb",
-        options: () => Object.values(arpaIds).map((p) => ({
-          val: p._vueBinding,
-          label: p.name
-        }))
-      },
-      job: {
-        def: "unemployed",
-        arg: "select_cb",
-        options: () => Object.values(jobIds).map((j) => ({
-          val: j._originalId,
-          label: j._originalName
-        }))
-      },
-      job_servant: {
-        def: "farmer",
-        arg: "select_cb",
-        options: () => Object.values(jobIds).filter((j) => j.is.serve).map((j) => ({ val: j._originalId, label: j._originalName }))
-      },
-      resource: {
-        def: "Food",
-        arg: "select_cb",
-        options: () => Object.values(resources).map((r) => ({ val: r._id, label: r.name }))
-      },
-      race: {
-        def: "species",
-        arg: "select_cb",
-        options: () => [
-          { val: "species", label: "Current Race", hint: "Current race" },
-          { val: "gods", label: "Fanaticism Race", hint: "Gods race" },
-          { val: "old_gods", label: "Deify Race", hint: "Old gods race" },
-          { val: "srace", label: "Imitation Race", hint: "Imitation trait race" },
-          {
-            val: "protoplasm",
-            label: "Protoplasm",
-            hint: "Race is not chosen yet"
-          },
-          ...Object.values(races).map((race) => ({
-            val: race.id,
-            label: race.name,
-            hint: race.desc
-          }))
-        ]
-      },
-      challenge: {
-        def: "junker",
-        arg: "select_cb",
-        options: () => challenges.flat().map((c) => ({
-          val: c.trait,
-          label: game.loc(`evo_challenge_${c.id}`),
-          hint: game.loc(`evo_challenge_${c.id}_effect`)
-        }))
-      },
-      universe: {
-        def: "standard",
-        arg: "select_cb",
-        options: () => [
-          {
-            val: "bigbang",
-            label: "Big Bang",
-            hint: "Universe is not chosen yet"
-          },
-          ...universes.map((u) => ({
-            val: u,
-            label: game.loc(`universe_${u}`),
-            hint: game.loc(`universe_${u}_desc`)
-          }))
-        ]
-      },
-      government: {
-        def: "anarchy",
-        arg: "select_cb",
-        options: () => Object.keys(GovernmentManager.Types).map((g) => ({
-          val: g,
-          label: game.loc(`govern_${g}`),
-          hint: game.loc(`govern_${g}_desc`)
-        }))
-      },
-      governor: {
-        def: "none",
-        arg: "select_cb",
-        options: () => [
-          { val: "none", label: "None", hint: "No governor selected" },
-          ...governors.map((id) => ({
-            val: id,
-            label: game.loc(`governor_${id}`),
-            hint: game.loc(`governor_${id}_desc`)
-          }))
-        ]
-      },
-      queue: {
-        def: "queue",
-        arg: "select_cb",
-        options: () => [
-          {
-            val: "queue",
-            label: "Building",
-            hint: "Buildings and projects queue"
-          },
-          { val: "r_queue", label: "Research", hint: "Research queue" },
-          { val: "evo", label: "Evolution", hint: "Evolution queue" }
-        ]
-      },
-      date: {
-        def: "day",
-        arg: "select_cb",
-        options: () => [
-          { val: "day", label: "Day (Year)", hint: "Day of year" },
-          {
-            val: "moon",
-            label: "Day (Month)",
-            hint: "Day of month (0-27 range)"
-          },
-          { val: "total", label: "Day (Total)", hint: "Day of run" },
-          { val: "year", label: "Year", hint: "Year of run" },
-          { val: "orbit", label: "Orbit", hint: "Planet orbit in days" },
-          {
-            val: "season",
-            label: "Season",
-            hint: "Current season (0 - Spring, 1 - Summer, 2 - Fall, 3 - Winter)"
-          },
-          {
-            val: "temp",
-            label: "Temperature",
-            hint: "Current temperature (0 - Cold, 1 - Normal, 2 - Hot)"
-          },
-          {
-            val: "impact",
-            label: "Impact",
-            hint: "Days remaining before Moon Impact, for Orbit Decay scenario"
-          }
-        ]
-      },
-      soldiers: {
-        def: "workers",
-        arg: "select_cb",
-        options: () => [
-          { val: "workers", label: "Total Soldiers" },
-          { val: "max", label: "Total Soldiers Max" },
-          { val: "currentCityGarrison", label: "City Soldiers" },
-          { val: "maxCityGarrison", label: "City Soldiers Max" },
-          { val: "hellSoldiers", label: "Hell Soldiers" },
-          { val: "hellGarrison", label: "Hell Garrison" },
-          { val: "hellPatrols", label: "Hell Patrols" },
-          { val: "hellPatrolSize", label: "Hell Patrol Size" },
-          { val: "wounded", label: "Wounded Soldiers" },
-          { val: "deadSoldiers", label: "Dead Soldiers" },
-          { val: "crew", label: "Ship Crew" },
-          { val: "mercenaryCost", label: "Mercenary Cost" }
-        ]
-      },
-      tab: {
-        def: "civTabs1",
-        arg: "select_cb",
-        options: () => [
-          { val: "civTabs0", label: game.loc("tab_evolve") },
-          { val: "civTabs1", label: game.loc("tab_civil") },
-          { val: "civTabs2", label: game.loc("tab_civics") },
-          { val: "civTabs3", label: game.loc("tab_research") },
-          { val: "civTabs4", label: game.loc("tab_resources") },
-          { val: "civTabs5", label: game.loc("tech_arpa") },
-          { val: "civTabs6", label: game.loc("mTabStats") },
-          { val: "civTabs7", label: game.loc("tab_settings") }
-        ]
-      },
-      biome: {
-        def: "grassland",
-        arg: "select_cb",
-        options: () => biomeList.map((b) => ({ val: b, label: game.loc(`biome_${b}_name`) }))
-      },
-      ptrait: {
-        def: "",
-        arg: "select_cb",
-        options: () => [
-          { val: "", label: "None", hint: "Planet have no trait" },
-          ...traitList.slice(1).map((t) => ({ val: t, label: game.loc(`planet_${t}`) }))
-        ]
-      },
-      industry: {
-        def: "smelters",
-        arg: "select_cb",
-        options: () => [
-          { val: "smelters", label: "Total Smelter Slot Count" },
-          { val: "factories", label: "Total Factory Slot Count" }
-        ]
-      },
-      other: {
-        def: "rname",
-        arg: "select_cb",
-        options: () => [
-          {
-            val: "rname",
-            label: "Race Name",
-            hint: "Ingame name of current race as string."
-          },
-          {
-            val: "tpfleet",
-            label: "Fleet Size",
-            hint: "Amount of ships in True Path fleet as number."
-          },
-          {
-            val: "mrelay",
-            label: "Mass Relay charge",
-            hint: "Charge percentage of the Mass Relay (0 = 0%, 0.5 = 50%, 1 = 100%"
-          },
-          {
-            val: "satcost",
-            label: "Satellite Cost",
-            hint: "Money cost of next Swarm Satellite"
-          },
-          {
-            val: "bcar",
-            label: "Broken Cars",
-            hint: "Amount of broken Surveyour Carports"
-          },
-          {
-            val: "alevel",
-            label: "Active challenges",
-            hint: "Amount of active challenges"
-          },
-          {
-            val: "tknow",
-            label: "Tech Knowledge",
-            hint: "Knowledge needed for most expensive unlocked research"
-          }
-        ]
-      }
-    };
-    const argMap = {
-      race: (r) => r === "species" || r === "gods" || r === "old_gods" ? game.global.race[r] : r === "srace" ? game.global.race.srace ?? "protoplasm" : r,
-      date: (d) => d === "total" ? game.global.stats.days : d === "impact" ? game.global.race["orbit_decay"] ? game.global.race["orbit_decay"] - game.global.stats.days : -1 : game.global.city.calendar[d],
-      industry: (b) => b === "smelters" ? SmelterManager.maxOperating() : b === "factories" ? FactoryManager.maxOperating() : b,
-      other: (o) => o === "rname" ? game.races[game.global.race.species === "protoplasm" && game.global.race.evoFinalMenu ? game.global.race.evoFinalMenu : game.global.race.species].name : o === "tpfleet" ? game.global.space.shipyard?.ships?.length ?? 0 : o === "mrelay" ? game.global.space.m_relay?.charged / 1e4 : o === "satcost" ? buildings.SunSwarmSatellite.cost.Money ?? 0 : o === "bcar" ? game.global.portal.carport?.damaged ?? 0 : o === "alevel" ? game.alevel() - 1 : o === "tknow" ? state.knowledgeRequiredByTechs : o
-    };
-    const checkTypes = {
-      String: {
-        fn: (v) => v,
-        arg: "string",
-        def: "none",
-        desc: "Returns string"
-      },
-      Number: { fn: (v) => v, arg: "number", def: 0, desc: "Returns number" },
-      Boolean: {
-        fn: (v) => v,
-        arg: "boolean",
-        def: false,
-        desc: "Returns boolean"
-      },
-      SettingDefault: {
-        fn: (s2) => settingsRaw[s2],
-        arg: "string",
-        def: "masterScriptToggle",
-        desc: "Returns default value of setting, types varies"
-      },
-      SettingCurrent: {
-        fn: (s2) => settings[s2],
-        arg: "string",
-        def: "masterScriptToggle",
-        desc: "Returns current value of setting, types varies"
-      },
-      Eval: {
-        fn: (s2) => fastEval(s2),
-        arg: "string",
-        def: "Math.PI",
-        desc: "Returns result of evaluating code"
-      },
-      BuildingCost: {
-        fn: (id) => {
-          let [b, r] = id.split(".");
-          return buildingIds[b].cost[r] ?? 0;
-        },
-        ...argType.building_cost,
-        desc: "Return material cost of building as number\n(Due to technical limitations some options might not appear in list until you unlock corresponding building in game)"
-      },
-      BuildingUnlocked: {
-        fn: (b) => buildingIds[b].isUnlocked(),
-        ...argType.building,
-        desc: "Return true when building is unlocked"
-      },
-      BuildingClickable: {
-        fn: (b) => buildingIds[b].isClickable(),
-        ...argType.building,
-        desc: "Return true when building have all required resources, and can be purchased"
-      },
-      BuildingAffordable: {
-        fn: (b) => buildingIds[b].isAffordable(true),
-        ...argType.building,
-        desc: "Return true when building is affordable, i.e. costs of all resources below storage caps"
-      },
-      BuildingCount: {
-        fn: (b) => buildingIds[b].count,
-        ...argType.building,
-        desc: "Returns amount of buildings as number"
-      },
-      BuildingEnabled: {
-        fn: (b) => buildingIds[b].stateOnCount,
-        ...argType.building,
-        desc: "Returns amount of powered buildings as number"
-      },
-      BuildingDisabled: {
-        fn: (b) => buildingIds[b].stateOffCount,
-        ...argType.building,
-        desc: "Returns amount of unpowered buildings as number"
-      },
-      BuildingQueued: {
-        fn: (b) => state.queuedTargetsAll.includes(buildingIds[b]),
-        ...argType.building,
-        desc: "Returns true when building in queue"
-      },
-      ProjectUnlocked: {
-        fn: (p) => arpaIds[p].isUnlocked(),
-        ...argType.project,
-        desc: "Return true when project is unlocked"
-      },
-      ProjectCount: {
-        fn: (p) => arpaIds[p].count,
-        ...argType.project,
-        desc: "Returns amount of projects as number"
-      },
-      ProjectProgress: {
-        fn: (p) => arpaIds[p].progress,
-        ...argType.project,
-        desc: "Returns progress of projects as number"
-      },
-      JobUnlocked: {
-        fn: (j) => jobIds[j].isUnlocked(),
-        ...argType.job,
-        desc: "Returns true when job is unlocked"
-      },
-      JobCount: {
-        fn: (j) => jobIds[j].count,
-        ...argType.job,
-        desc: "Returns current amount of employees(both workers, and servants) as number"
-      },
-      JobMax: {
-        fn: (j) => jobIds[j].max,
-        ...argType.job,
-        desc: "Returns maximum amount of assigned workers as number"
-      },
-      JobWorkers: {
-        fn: (j) => jobIds[j].workers,
-        ...argType.job,
-        desc: "Returns current amount of workers as number"
-      },
-      JobServants: {
-        fn: (j) => jobIds[j].servants,
-        ...argType.job_servant,
-        desc: "Returns current amount of servants as number"
-      },
-      ResearchUnlocked: {
-        fn: (r) => techIds[r].isUnlocked(),
-        ...argType.research,
-        desc: "Returns true when research is unlocked"
-      },
-      ResearchComplete: {
-        fn: (r) => techIds[r].isResearched(),
-        ...argType.research,
-        desc: "Returns true when research is complete"
-      },
-      ResourceUnlocked: {
-        fn: (r) => resources[r].isUnlocked(),
-        ...argType.resource,
-        desc: "Returns true when resource or support is unlocked"
-      },
-      ResourceQuantity: {
-        fn: (r) => resources[r].currentQuantity,
-        ...argType.resource,
-        desc: "Returns current amount of resource or support as number"
-      },
-      ResourceStorage: {
-        fn: (r) => resources[r].maxQuantity,
-        ...argType.resource,
-        desc: "Returns maximum amount of resource or support as number. Power returns 'Disabled' amount."
-      },
-      ResourceMaxCost: {
-        fn: (r) => resources[r].maxCost,
-        ...argType.resource,
-        desc: "Returns maximum cost of resource as number."
-      },
-      ResourceIncome: {
-        fn: (r) => resources[r].rateOfChange,
-        ...argType.resource,
-        desc: "Returns current income of resource or unused support as number"
-      },
-      // rateOfChange holds full diff of resource at the moment when overrides checked
-      ResourceRatio: {
-        fn: (r) => resources[r].storageRatio,
-        ...argType.resource,
-        desc: "Returns storage ratio of resource as number. Number 0.5 means that storage is 50% full, and such."
-      },
-      ResourceSatisfied: {
-        fn: (r) => resources[r].usefulRatio >= 1,
-        ...argType.resource,
-        desc: "Returns true when current amount of resource above maximum costs"
-      },
-      ResourceSatisfyRatio: {
-        fn: (r) => resources[r].usefulRatio,
-        ...argType.resource,
-        desc: "Returns satisfy ratio of resource. Number 0.5 means that storead amount equal half of maximum costs"
-      },
-      ResourceDemanded: {
-        fn: (r) => resources[r].isDemanded(),
-        ...argType.resource,
-        desc: "Returns true when resource is demanded, i.e. missed by some prioritized task, such as queue or trigger"
-      },
-      RaceId: {
-        fn: (r) => argMap.race(r),
-        ...argType.race,
-        desc: "Returns ID of selected race as string"
-      },
-      RacePillared: {
-        fn: (r) => game.global.pillars[argMap.race(r)] >= game.alevel(),
-        ...argType.race,
-        desc: "Returns true when selected race pillared at current star level"
-      },
-      RaceGenus: {
-        fn: (g) => races[game.global.race.species]?.genus === g,
-        ...argType.genus,
-        desc: "Returns true when playing selected genus"
-      },
-      MimicGenus: {
-        fn: (g) => (game.global.race.ss_genus ?? "none") === g,
-        ...argType.genus_ss,
-        desc: "Returns true when mimicking selected genus"
-      },
-      TraitLevel: {
-        fn: (t) => game.global.race[t] ?? 0,
-        ...argType.trait,
-        desc: "Returns trait level as number"
-      },
-      ResetType: {
-        fn: (r) => settings.prestigeType === r,
-        arg: "select",
-        options: prestigeOptions,
-        def: "mad",
-        desc: "Returns true when selected reset is active"
-      },
-      Challenge: {
-        fn: (c) => game.global.race[c] ? true : false,
-        ...argType.challenge,
-        desc: "Returns true when selected challenge is active"
-      },
-      Universe: {
-        fn: (u) => game.global.race.universe === u,
-        ...argType.universe,
-        desc: "Returns true when playing in selected universe"
-      },
-      Government: {
-        fn: (g) => game.global.civic.govern.type === g,
-        ...argType.government,
-        desc: "Returns true when selected government is active"
-      },
-      Governor: {
-        fn: (g) => getGovernor() === g,
-        ...argType.governor,
-        desc: "Returns true when selected governor is active"
-      },
-      Queue: {
-        fn: (q) => q === "evo" ? settingsRaw.evolutionQueue.length : game.global[q].queue.length,
-        ...argType.queue,
-        desc: "Returns amount of items in queue as number"
-      },
-      Date: {
-        fn: (d) => argMap.date(d),
-        ...argType.date,
-        desc: "Returns ingame date as number"
-      },
-      Soldiers: {
-        fn: (s2) => WarManager[s2],
-        ...argType.soldiers,
-        desc: "Returns amount of soldiers as number"
-      },
-      PlanetBiome: {
-        fn: (b) => game.global.city.biome === b,
-        ...argType.biome,
-        desc: "Returns true when playing in selected biome"
-      },
-      PlanetTrait: {
-        fn: (t) => game.global.city.ptrait.includes(t),
-        ...argType.ptrait,
-        desc: "Returns true when planet have selected trait"
-      },
-      Industry: {
-        fn: (r) => argMap.industry(r),
-        ...argType.industry,
-        desc: "Returns information about Industry buildings"
-      },
-      Other: {
-        fn: (o) => argMap.other(o),
-        ...argType.other,
-        desc: "Other uncategorized variables"
-      }
-    };
-    const retBools = [
-      "Boolean",
-      "BuildingUnlocked",
-      "BuildingClickable",
-      "BuildingAffordable",
-      "BuildingQueued",
-      "ProjectUnlocked",
-      "JobUnlocked",
-      "ResearchUnlocked",
-      "ResearchComplete",
-      "ResourceUnlocked",
-      "ResourceSatisfied",
-      "ResourceDemanded",
-      "RacePillared",
-      "RaceGenus",
-      "MimicGenus",
-      "ResetType",
-      "Challenge",
-      "Universe",
-      "Government",
-      "Governor",
-      "PlanetBiome",
-      "PlanetTrait"
-    ];
-    const overrideOnlyChecks = ["String", "Number", "RaceId"];
-    function _(check, arg) {
-      return checkTypes[check].fn(arg);
-    }
-    function openOverrideModal(event) {
-      if (event[overrideKey]) {
-        event.preventDefault();
-        openOptionsModal(event.data.label, function(modal) {
-          modal.append(
-            `<div style="margin-top: 10px; margin-bottom: 10px;" id="script_${event.data.name}Modal"></div>`
-          );
-          $(".script-modal-content").addClass("override-modal");
-          buildOverrideSettings(
-            event.data.name,
-            event.data.type,
-            event.data.options
-          );
-        });
-      }
-    }
-    function buildOverrideSettings(settingName, type, options) {
-      const rebuild = () => buildOverrideSettings(settingName, type, options);
-      let overrides = settingsRaw.overrides[settingName] ?? [];
-      let currentNode = $(`#script_${settingName}Modal`);
-      currentNode.empty().off("*");
-      currentNode.append(`
-          <table style="width:100%; text-align: left">
-            <tr>
-              <th class="has-text-warning" colspan="2">Variable 1</th>
-              <th class="has-text-warning" colspan="1">Check</th>
-              <th class="has-text-warning" colspan="2">Variable 2</th>
-              <th class="has-text-warning" colspan="3">Result</th>
-            </tr>
-            <tr>
-              <th class="has-text-warning" style="width:16%">Type</th>
-              <th class="has-text-warning" style="width:16%">Value</th>
-              <th class="has-text-warning" style="width:10%"></th>
-              <th class="has-text-warning" style="width:16%">Type</th>
-              <th class="has-text-warning" style="width:16%">Value</th>
-              <th class="has-text-warning" style="width:14%"></th>
-              <th style="width:12%"></th>
-            </tr>
-            <tbody id="script_${settingName}ModalTable"></tbody>
-          </table>`);
-      let newTableBodyText = "";
-      for (let i = 0; i < overrides.length; i++) {
-        newTableBodyText += `<tr id="script_${settingName}_o${i}" value="${i}" class="script-draggable"><td style="width:16%"></td><td style="width:16%"></td><td style="width:10%"></td><td style="width:16%"></td><td style="width:16%"></td><td style="width:14%"></td><td style="width:12%"><span class="script-lastcolumn"></span></td></tr>`;
-      }
-      let listField = typeof settingsRaw[settingName] === "object";
-      let note = listField ? "All values passed checks will be added or removed from list" : "First value passed check will be used. Default value:";
-      let note_2 = "The current value:";
-      let current = listField ? `<td style="width:32%" colspan="2">${note_2}</td>
-          <td style="width:56%" colspan="4"></td>` : `<td style="width:74%" colspan="5">${note_2}</td>
-          <td style="width:14%"></td>`;
-      newTableBodyText += `
-          <tr id="script_${settingName}_d" class="unsortable">
-            <td style="width:74%" colspan="5">${note}</td>
-            <td style="width:14%"></td>
-            <td style="width:12%"><a class="button is-small" style="width: 26px; height: 26px"><span>+</span></a></td>
-          </tr>
-          <tr id="script_override_true_value" class="unsortable" value="${settingName}" type="${type}">
-            ${current}
-            <td style="width:12%"></td>
-          </tr>`;
-      let tableBodyNode = $(`#script_${settingName}ModalTable`);
-      tableBodyNode.append($(newTableBodyText));
-      if (!listField) {
-        $(`#script_${settingName}_d td:eq(1)`).append(
-          buildInputNode(
-            type,
-            options,
-            settingsRaw[settingName],
-            function(result) {
-              settingsRaw[settingName] = result;
-              updateSettingsFromState();
-              let retType = typeof result === "boolean" ? "checked" : "value";
-              $(".script_" + settingName).prop(retType, settingsRaw[settingName]);
-            }
-          )
-        );
-      }
-      $(`#script_override_true_value td:eq(1)`).append(
-        buildInputNodeForDisplay(type, options, settings[settingName])
-      );
-      $(`#script_${settingName}_d a`).on("click", function() {
-        if (!settingsRaw.overrides[settingName]) {
-          settingsRaw.overrides[settingName] = [];
-          $(".script_bg_" + settingName).addClass("inactive-row");
-        }
-        settingsRaw.overrides[settingName].push({
-          type1: "Boolean",
-          arg1: true,
-          type2: "Boolean",
-          arg2: false,
-          cmp: "==",
-          ret: settingsRaw[settingName]
-        });
-        updateSettingsFromState();
-        rebuild();
-      });
-      for (let i = 0; i < overrides.length; i++) {
-        let override = overrides[i];
-        let tableElement = $(`#script_${settingName}_o${i}`).children().eq(0);
-        tableElement.append(buildConditionType(override, 1, rebuild));
-        tableElement = tableElement.next();
-        tableElement.append(buildConditionArg(override, 1));
-        tableElement = tableElement.next();
-        tableElement.append(buildConditionComparator(override, rebuild));
-        tableElement = tableElement.next();
-        tableElement.append(buildConditionType(override, 2, rebuild));
-        tableElement = tableElement.next();
-        tableElement.append(buildConditionArg(override, 2));
-        tableElement = tableElement.next();
-        if (!checkCustom[override.cmp]) {
-          tableElement.append(buildConditionRet(override, type, options));
-        }
-        tableElement = tableElement.next();
-        tableElement.append(buildConditionRemove(settingName, i, rebuild));
-        tableElement.append(buildConditionDuplicate(settingName, i, rebuild));
-        tableElement.append(buildConditionEvalize(settingName, i, rebuild));
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper,
-        update: function() {
-          let newOrder = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          settingsRaw.overrides[settingName] = newOrder.map(
-            (i) => settingsRaw.overrides[settingName][i]
-          );
-          updateSettingsFromState();
-          rebuild();
-        }
-      });
-    }
-    function buildInputNode(type, options, value, callback) {
-      switch (type) {
-        case "string":
-          return $(`
-                  <input type="text" class="input is-small" style="height: 22px; width:100%"/>`).val(value).on("change", function() {
-            callback(this.value);
-          });
-        case "number":
-          return $(`
-                  <input type="text" class="input is-small" style="height: 22px; width:100%"/>`).val(value).on("change", function() {
-            let parsedValue = getRealNumber(this.value);
-            if (isNaN(parsedValue)) {
-              parsedValue = value;
-            }
-            this.value = parsedValue;
-            callback(parsedValue);
-          });
-        case "boolean":
-          return $(`
-                  <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
-                    <input type="checkbox">
-                    <span class="check" style="height:5px; max-width:15px"></span><span style="margin-left: 20px;"></span>
-                  </label>`).find("input").prop("checked", value).on("change", function() {
-            callback(this.checked);
-          }).end();
-        case "select":
-          return $(`
-                  <select style="width: 100%">${options}</select>`).val(value).on("change", function() {
-            callback(this.value);
-          });
-        case "select_cb":
-          return $(`
-                  <select style="width: 100%">${buildSelectOptions(
-            options()
-          )}</select>`).val(value).on("change", function() {
-            callback(this.value);
-          });
-        case "list":
-          return buildObjectListInput(
-            options.list,
-            options.name,
-            options.id,
-            value,
-            callback
-          );
-        case "list_cb":
-          return buildObjectListInput(options(), "name", "id", value, callback);
-        default:
-          return "";
-      }
-    }
-    function buildInputNodeForDisplay(type, options, value) {
-      switch (type) {
-        case "string":
-        case "number":
-          return $(`
-                  <input type="text" class="input is-small" style="height: 22px; width:100%" disabled="disabled"/>`).val(
-            value
-          );
-        case "boolean":
-          return $(`
-                  <label tabindex="0" disabled="disabled" class="switch is-disabled" style="position:absolute; margin-top: 8px; margin-left: 10px;">
-                    <input type="checkbox"  disabled="disabled">
-                    <span class="check" style="height:5px; max-width:15px"></span><span style="margin-left: 20px;"></span>
-                  </label>`).find("input").prop("checked", value).end();
-        case "select":
-          return $(`
-                  <select style="width: 100%"  disabled="disabled" class="dropdown is-disabled">${options}</select>`).val(
-            value
-          );
-        case "list":
-          return $(`
-                  <span></span>`).text(
-            value.map((item) => options.list[item]?.name ?? "[Invalid item]").join(", ")
-          );
-        default:
-          return $(`
-                  <span></span>`).text(JSON.stringify(value));
-      }
-    }
-    function changeDisplayInputNode(currentNode) {
-      let type = currentNode.attr("type");
-      let id = currentNode.attr("value");
-      let value = settings[currentNode.attr("value")];
-      let node = currentNode.find(`td:eq(1)>*:first-child`);
-      switch (type) {
-        case "string":
-        case "number":
-        case "select":
-          return node.val(value);
-        case "boolean":
-          return node.find("input").prop("checked", value);
-        case "list":
-          if (id === "researchIgnore") {
-            return node.text(
-              value.map((item) => techIds[item]?.name ?? "[Invalid item]").join(", ")
-            );
-          }
-        // else default
-        default:
-          return node.text(JSON.stringify(value));
-      }
-    }
-    function buildConditionType(override, num, rebuild) {
-      let types = Object.entries(checkTypes).map(
-        ([id, type]) => `<option value="${id}" title="${type.desc}">${id.replace(/([A-Z])/g, " $1").trim()}</option>`
-      ).join();
-      return $(`<select style="width: 100%">${types}</select>`).val(override["type" + num]).on("change", function() {
-        override["type" + num] = this.value;
-        override["arg" + num] = checkTypes[this.value].def;
-        updateSettingsFromState();
-        rebuild();
-      });
-    }
-    function buildConditionArg(override, num) {
-      let check = checkTypes[override["type" + num]];
-      return check ? buildInputNode(
-        check.arg,
-        check.options,
-        override["arg" + num],
-        function(result) {
-          override["arg" + num] = result;
-          updateSettingsFromState();
-        }
-      ) : "";
-    }
-    function buildConditionComparator(override, rebuild) {
-      let types = Object.entries(checkCompare).map(
-        ([id, fn]) => `<option value="${id}" title="${checkCustom[id] ?? fn.toString().substr(10)}">${id}</option>`
-      ).join();
-      return $(`<select style="width: 100%">${types}</select>`).val(override.cmp).on("change", function() {
-        override.cmp = this.value;
-        updateSettingsFromState();
-        rebuild();
-      });
-    }
-    function buildConditionRemove(settingName, id, rebuild) {
-      return $(
-        `<a class="button is-small" style="width: 26px; height: 26px"><span>-</span></a>`
-      ).on("click", function() {
-        settingsRaw.overrides[settingName].splice(id, 1);
-        if (settingsRaw.overrides[settingName].length === 0) {
-          delete settingsRaw.overrides[settingName];
-          $(".script_bg_" + settingName).removeClass("inactive-row");
-        }
-        updateSettingsFromState();
-        rebuild();
-      });
-    }
-    function buildConditionDuplicate(settingName, id, rebuild) {
-      return $(
-        `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 1.2rem;">&#9282;</span></a>`
-      ).on("click", function() {
-        settingsRaw.overrides[settingName].splice(id, 0, {
-          ...settingsRaw.overrides[settingName][id]
-        });
-        updateSettingsFromState();
-        rebuild();
-      });
-    }
-    function buildConditionEvalize(settingName, id, rebuild) {
-      return $(
-        `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 0.9rem;">E</span></a>`
-      ).on("click", function() {
-        let override = settingsRaw.overrides[settingName][id];
-        let check = checkCompare[override.cmp].toString().substr(10).replace(/([ab])/g, (s2, v) => {
-          let idx = v === "a" ? 1 : 2;
-          switch (override["type" + idx]) {
-            case "Number":
-            case "Boolean":
-              return override["arg" + idx];
-            case "Eval":
-              return `(${override["arg" + idx]})`;
-            case "String":
-              return JSON.stringify(override["arg" + idx]);
-            default:
-              return `_("${override["type" + idx]}",${JSON.stringify(
-                override["arg" + idx]
-              )})`;
-          }
-        });
-        win.prompt("Eval of this condition:", check);
-      });
-    }
-    function buildConditionRet(override, type, options) {
-      return buildInputNode(type, options, override.ret, function(result) {
-        override.ret = result;
-        updateSettingsFromState();
-      });
-    }
-    function buildObjectListInput(list, name, id, value, callback) {
-      let listNode = $(`<input type="text" style="width:100%"></input>`);
-      let onChange = function(event, ui) {
-        event.preventDefault();
-        if (ui.item === null) {
-          let foundItem = Object.values(list).find(
-            (obj) => obj[name] === this.value
-          );
-          if (foundItem !== void 0) {
-            ui.item = { label: this.value, value: foundItem[id] };
-          }
-        }
-        if (ui.item !== null && Object.values(list).some((obj) => obj[id] === ui.item.value)) {
-          this.value = ui.item.label;
-          callback(ui.item.value);
-        } else if (list.hasOwnProperty(value)) {
-          this.value = list[value][name];
-          callback(value);
-        } else {
-          this.value = "";
-          callback(null);
-        }
-      };
-      listNode.autocomplete({
-        minLength: 2,
-        delay: 0,
-        source: function(request, response) {
-          let matcher = new RegExp(
-            $.ui.autocomplete.escapeRegex(request.term),
-            "i"
-          );
-          response(
-            Object.values(list).filter((item) => matcher.test(item[name])).map((item) => ({ label: item[name], value: item[id] }))
-          );
-        },
-        select: onChange,
-        // Dropdown list click
-        focus: onChange,
-        // Arrow keys press
-        change: onChange
-        // Keyboard type
-      });
-      if (Object.values(list).some((obj) => obj[id] === value)) {
-        listNode.val(list[value][name]);
-      }
-      return listNode;
-    }
-    function addSettingsToggle(node, settingName, labelText, hintText, enabledCallBack, disabledCallBack) {
-      return $(`
-          <div class="script_bg_${settingName}" style="margin-top: 5px; width: 90%; display: inline-block; text-align: left;">
-            <label title="${hintText}" tabindex="0" class="switch">
-              <input class="script_${settingName}" type="checkbox" ${settingsRaw[settingName] ? " checked" : ""}><span class="check"></span>
-              <span style="margin-left: 10px;">${labelText}</span>
-            </label>
-          </div>`).toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName])).on("change", "input", function() {
-        settingsRaw[settingName] = this.checked;
-        updateSettingsFromState();
-        $(".script_" + settingName).prop("checked", settingsRaw[settingName]);
-        if (settingsRaw[settingName] && enabledCallBack) {
-          enabledCallBack();
-        }
-        if (!settingsRaw[settingName] && disabledCallBack) {
-          disabledCallBack();
-        }
-      }).on(
-        "click",
-        {
-          label: `${labelText} (${settingName})`,
-          name: settingName,
-          type: "boolean"
-        },
-        openOverrideModal
-      ).appendTo(node);
-      if (settingsRaw[settingName] && enabledCallBack) {
-        enabledCallBack();
-      }
-    }
-    function addSettingsNumber(node, settingName, labelText, hintText) {
-      return $(`
-          <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
-            <label title="${hintText}" tabindex="0">
-              <span>${labelText}</span>
-              <input class="script_${settingName}" type="text" style="text-align: right; height: 18px; width: 150px; float: right;" value="${settingsRaw[settingName]}"></input>
-            </label>
-          </div>`).toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName])).on("change", "input", function() {
-        let parsedValue = getRealNumber(this.value);
-        if (!isNaN(parsedValue)) {
-          settingsRaw[settingName] = parsedValue;
-          updateSettingsFromState();
-        }
-        $(".script_" + settingName).val(settingsRaw[settingName]);
-      }).on(
-        "click",
-        {
-          label: `${labelText} (${settingName})`,
-          name: settingName,
-          type: "number"
-        },
-        openOverrideModal
-      ).appendTo(node);
-    }
-    function addSettingsString(node, settingName, labelText, hintText) {
-      return $(`
-          <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
-            <label title="${hintText}" tabindex="0">
-              <span>${labelText}</span>
-              <input class="script_${settingName}" type="text" style="text-align: right; height: 18px; width: 70%; float: right;" value="${settingsRaw[settingName]}"></input>
-            </label>
-          </div>`).toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName])).on("change", "input", function() {
-        settingsRaw[settingName] = this.value;
-        updateSettingsFromState();
-        $(".script_" + settingName).val(settingsRaw[settingName]);
-      }).on(
-        "click",
-        {
-          label: `${labelText} (${settingName})`,
-          name: settingName,
-          type: "string"
-        },
-        openOverrideModal
-      ).appendTo(node);
-    }
-    function buildSelectOptions(optionsList) {
-      return optionsList.map(
-        (item) => `<option value="${item.val}" title="${item.hint ?? ""}">${item.label}</option>`
-      ).join();
-    }
-    function addSettingsSelect(node, settingName, labelText, hintText, optionsList) {
-      let options = buildSelectOptions(optionsList);
-      return $(`
-          <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
-            <label title="${hintText}" tabindex="0">
-              <span>${labelText}</span>
-              <select class="script_${settingName}" style="width: 150px; float: right;">
-                ${options}
-              </select>
-            </label>
-          </div>`).toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName])).find("select").val(settingsRaw[settingName]).on("change", function() {
-        settingsRaw[settingName] = this.value;
-        updateSettingsFromState();
-        $(".script_" + settingName).val(settingsRaw[settingName]);
-      }).end().on(
-        "click",
-        {
-          label: `${labelText} (${settingName})`,
-          name: settingName,
-          type: "select",
-          options
-        },
-        openOverrideModal
-      ).appendTo(node);
-    }
-    function addSettingsList(node, settingName, labelText, hintText, list) {
-      let listBlock = $(`
-          <div class="script_bg_${settingName}" style="display: inline-block; width: 90%; margin-top: 6px;">
-            <label title="${hintText}" tabindex="0">
-              <span>${labelText}</span>
-              <input type="text" style="height: 25px; width: 150px; float: right;" placeholder="Research...">
-              <button class="button" style="height: 25px; float: right; margin-right: 4px; margin-left: 4px;">Remove</button>
-              <button class="button" style="height: 25px; float: right;">Add</button>
-            </label>
-            <br>
-            <textarea class="script_${settingName} textarea" style="margin-top: 12px" readonly></textarea>
-          </div>`).toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName])).on(
-        "click",
-        {
-          label: `Add or Remove (${settingName})`,
-          name: settingName,
-          type: "list",
-          options: { list, name: "name", id: "_vueBinding" }
-        },
-        openOverrideModal
-      ).appendTo(node);
-      let selectedItem = "";
-      let updateList = function() {
-        let techsString = settingsRaw[settingName].map(
-          (id) => Object.values(list).find((obj) => obj._vueBinding === id).name
-        ).join(", ");
-        $(".script_" + settingName).val(techsString);
-      };
-      let onChange = function(event, ui) {
-        event.preventDefault();
-        if (ui.item === null) {
-          let typedName = Object.values(list).find(
-            (obj) => obj.name === this.value
-          );
-          if (typedName !== void 0) {
-            ui.item = { label: this.value, value: typedName._vueBinding };
-          }
-        }
-        if (ui.item !== null && list.hasOwnProperty(ui.item.value)) {
-          this.value = ui.item.label;
-          selectedItem = ui.item.value;
-        } else {
-          this.value = "";
-          selectedItem = null;
-        }
-      };
-      listBlock.find("input").autocomplete({
-        minLength: 2,
-        delay: 0,
-        source: function(request, response) {
-          let matcher = new RegExp(
-            $.ui.autocomplete.escapeRegex(request.term),
-            "i"
-          );
-          response(
-            Object.values(list).filter((item) => matcher.test(item.name)).map((item) => ({ label: item.name, value: item._vueBinding }))
-          );
-        },
-        select: onChange,
-        // Dropdown list click
-        focus: onChange,
-        // Arrow keys press
-        change: onChange
-        // Keyboard type
-      });
-      listBlock.on("click", "button:eq(1)", function() {
-        if (selectedItem && !settingsRaw[settingName].includes(selectedItem)) {
-          settingsRaw[settingName].push(selectedItem);
-          settingsRaw[settingName].sort();
-          updateSettingsFromState();
-          updateList();
-        }
-      });
-      listBlock.on("click", "button:eq(0)", function() {
-        if (selectedItem && settingsRaw[settingName].includes(selectedItem)) {
-          settingsRaw[settingName].splice(
-            settingsRaw[settingName].indexOf(selectedItem),
-            1
-          );
-          settingsRaw[settingName].sort();
-          updateSettingsFromState();
-          updateList();
-        }
-      });
-      updateList();
-    }
-    function addInputCallbacks(node, settingKey) {
-      return node.on("change", function() {
-        let parsedValue = getRealNumber(this.value);
-        if (!isNaN(parsedValue)) {
-          settingsRaw[settingKey] = parsedValue;
-          updateSettingsFromState();
-        }
-        $(".script_" + settingKey).val(settingsRaw[settingKey]);
-      }).on(
-        "click",
-        { label: `Number (${settingKey})`, name: settingKey, type: "number" },
-        openOverrideModal
-      );
-    }
-    function addTableInput(node, settingKey) {
-      node.addClass(
-        "script_bg_" + settingKey + (settingsRaw.overrides[settingKey] ? " inactive-row" : "")
-      ).append(
-        addInputCallbacks(
-          $(
-            `<input class="script_${settingKey}" type="text" class="input is-small" style="height: 25px; width:100%" value="${settingsRaw[settingKey]}"/>`
-          ),
-          settingKey
-        )
-      );
-    }
-    function addToggleCallbacks(node, settingKey) {
-      return node.on("change", "input", function() {
-        settingsRaw[settingKey] = this.checked;
-        updateSettingsFromState();
-        $(".script_" + settingKey).prop("checked", settingsRaw[settingKey]);
-      }).on(
-        "click",
-        { label: `Toggle (${settingKey})`, name: settingKey, type: "boolean" },
-        openOverrideModal
-      );
-    }
-    function addTableToggle(node, settingKey) {
-      node.addClass(
-        "script_bg_" + settingKey + (settingsRaw.overrides[settingKey] ? " inactive-row" : "")
-      ).append(
-        addToggleCallbacks(
-          $(`
-          <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
-            <input class="script_${settingKey}" type="checkbox"${settingsRaw[settingKey] ? " checked" : ""}>
-            <span class="check" style="height:5px; max-width:15px"></span>
-            <span style="margin-left: 20px;"></span>
-          </label>`),
-          settingKey
-        )
-      );
-    }
-    function buildTableLabel(note, title = "", color = "has-text-info") {
-      return $(`<span class="${color}" title="${title}" >${note}</span>`);
-    }
-    function resetCheckbox() {
-      Array.from(arguments).forEach(
-        (item) => $(".script_" + item).prop("checked", settingsRaw[item])
-      );
     }
     let interfaceSettingsTestActions;
     const interfaceSettingsActions = {
@@ -31827,78 +34561,6 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
           settingsRaw = context.settingsRaw;
         }
       });
-    }
-    function buildActiveTargetsUI() {
-      $("#buildQueue").before(`
-            <div id="active_targets-wrapper" class="bldQueue vscroll right">
-                <h2 class="has-text-success">Detailed Queue</h2>
-                <div id="active_targets">
-                    <div class="target-type-box triggers" style="display: none;">
-                        <h2>Triggers</h2>
-                        <ul class="active_targets-list triggers"></ul>
-                    </div>
-                    <div class="target-type-box buildings" style="display: none;">
-                        <h2>Buildings</h2>
-                        <ul class="active_targets-list buildings"></ul>
-                    </div>
-                    <div class="target-type-box research" style="display: none;">
-                        <h2>Research</h2>
-                        <ul class="active_targets-list research"></ul>
-                    </div>
-                    <div class="target-type-box arpa" style="display: none;">
-                        <h2>A.R.P.A.</h2>
-                        <ul class="active_targets-list arpa"></ul>
-                    </div>
-                </div>
-            </div>`);
-      if (typeof ResizeObserver === "function") {
-        const resizeObserver = new ResizeObserver((entries) => {
-          for (const entry of entries) {
-            if (entry.borderBoxSize) {
-              const elementHeight = entry.borderBoxSize[0].blockSize;
-              const totalHeight = `${elementHeight + $(`#buildQueue`).outerHeight()}px`;
-              $("#msgQueue").css(
-                "max-height",
-                `calc((100vh - ${totalHeight}) - 6rem)`
-              );
-            }
-          }
-        });
-        resizeObserver.observe($("#active_targets-wrapper")[0]);
-      }
-    }
-    function removeActiveTargetsUI() {
-      $("#active_targets-wrapper").remove();
-    }
-    function buildBuildPlannerUI() {
-      if ($("#buildQueue").length === 0) {
-        return;
-      }
-      $("#buildQueue").before(`
-            <div id="script_planner-wrapper" class="bldQueue vscroll right">
-                <h2 id="script_planner-header" class="has-text-success">Script Planner</h2>
-                <div id="script_planner">
-                    <ul id="script_planner-list"></ul>
-                    <div id="script_planner-stats">
-                        <h2>Bottlenecks <a id="script_planner-reset">reset</a></h2>
-                        <div id="script_planner-stats-text"></div>
-                    </div>
-                </div>
-            </div>`);
-      $("#script_planner").toggle(!settingsRaw.buildPlannerCollapsed);
-      $("#script_planner-header").on("click", function() {
-        settingsRaw.buildPlannerCollapsed = !settingsRaw.buildPlannerCollapsed;
-        $("#script_planner").toggle(!settingsRaw.buildPlannerCollapsed);
-        updateSettingsFromState();
-      });
-      $("#script_planner-reset").on("click", function() {
-        state.plannerStats = makePlannerStats();
-        savePlannerStats();
-        $("#script_planner-stats-text").html("");
-      });
-    }
-    function removeBuildPlannerUI() {
-      $("#script_planner-wrapper").remove();
     }
     const { calculateMechStats } = createMechStats({
       getDocument: () => document,
@@ -32096,42 +34758,6 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
         }
       });
     }
-    function createMechInfo() {
-      if ($(`#mechList .mechRow[draggable=true]`).length > 0) {
-        return;
-      }
-      if (MechManager.isActive || MechManager.initLab()) {
-        MechManager.mechObserver.disconnect();
-        let list = getVueById("mechList");
-        for (let i = 0; i < list._vnode.children.length; i++) {
-          let mech = game.global.portal.mechbay.mechs[i];
-          let stats = MechManager.getMechStats(mech);
-          let rating = stats.power / MechManager.bestMech[mech.size].power;
-          let info = (mech.size === "collector" ? `${Math.round(rating * 100)}%, ${getNiceNumber(
-            stats.power * MechManager.collectorValue
-          )} /s` : `${Math.round(rating * 100)}%, ${getNiceNumber(
-            stats.power * 100
-          )}, ${getNiceNumber(stats.efficiency * 100)}`) + " | ";
-          let mechNode = list._vnode.children[i].elm;
-          let firstNode = $(mechNode.childNodes[0]);
-          if (firstNode.hasClass("ea-mech-info")) {
-            firstNode.text(info);
-          } else {
-            let note = document.createElement("span");
-            note.className = "ea-mech-info";
-            note.innerHTML = info;
-            mechNode.insertBefore(note, mechNode.firstChild);
-          }
-        }
-        MechManager.mechObserver.observe(document.getElementById("mechList"), {
-          childList: true
-        });
-      }
-    }
-    function removeMechInfo() {
-      MechManager.mechObserver.disconnect();
-      $("#mechList .ea-mech-info").remove();
-    }
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         remainingUiBoundaries: {
@@ -32190,127 +34816,32 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
         }
       });
     }
-    function createMarketToggles() {
-      removeMarketToggles();
-      if (!game.global.race["no_trade"]) {
-        $("#market .market-item[id] .res").width("5rem");
-        $("#market .market-item[id] .buy span").text("B");
-        $("#market .market-item[id] .sell span").text("S");
-        $("#market .market-item[id] .trade > :first-child").text("R");
-        $("#market .market-item[id] .trade .zero").text("×");
-      }
-      $("#market-qty").after(`
-          <div class="market-item vb" id="script_market_top_row" style="overflow:hidden">
-            <span style="margin-left: auto; margin-right: 0.2rem; float:right;">
-              ${!game.global.race["no_trade"] ? `
-              <span class="has-text-success" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">Buy</span>
-              <span class="has-text-danger" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">Sell</span>` : ""}
-              <span class="has-text-warning" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">In</span>
-              <span class="has-text-warning" style="width: 2.75rem; display: inline-block; text-align: center;">Away</span>
-            </span>
-          </div>`);
-      for (let resource of MarketManager.priorityList) {
-        if (resource === resources.Food && (game.global.race["artifical"] || game.global.race["fasting"])) {
-          continue;
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        finalInlineUiBoundaries: {
+          updateActiveTargetsUI,
+          buildActiveTargetsUI,
+          removeActiveTargetsUI,
+          buildBuildPlannerUI,
+          removeBuildPlannerUI,
+          createMechInfo,
+          removeMechInfo,
+          createMarketToggles,
+          removeMarketToggles,
+          createStorageToggles,
+          removeStorageToggles
+        },
+        setFinalInlineUiBoundariesTestContext(context) {
+          if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
+          if ("state" in context) state = context.state;
+          if ("game" in context) game = context.game;
+          if ("resources" in context) resources = context.resources;
+          if ("MarketManager" in context) MarketManager = context.MarketManager;
+          if ("StorageManager" in context)
+            StorageManager = context.StorageManager;
+          if ("MechManager" in context) MechManager = context.MechManager;
         }
-        let marketElement = $("#market-" + resource.id);
-        if (marketElement.length > 0) {
-          let marketRow = $(
-            '<span class="ea-market-toggle" style="margin-left: auto; margin-right: 0.2rem; float:right;"></span>'
-          );
-          if (!game.global.race["no_trade"]) {
-            let buyKey = "buy" + resource.id;
-            let sellKey = "sell" + resource.id;
-            marketRow.append(
-              addToggleCallbacks(
-                $(
-                  `<label tabindex="0" title="Enable buying of this resource." class="switch"><input class="script_${buyKey}" type="checkbox"${settingsRaw[buyKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
-                ),
-                buyKey
-              ),
-              addToggleCallbacks(
-                $(
-                  `<label tabindex="0" title="Enable selling of this resource." class="switch"><input class="script_${sellKey}" type="checkbox"${settingsRaw[sellKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
-                ),
-                sellKey
-              )
-            );
-          }
-          let tradeBuyKey = "res_trade_buy_" + resource.id;
-          let tradeSellKey = "res_trade_sell_" + resource.id;
-          marketRow.append(
-            addToggleCallbacks(
-              $(
-                `<label tabindex="0" title="Enable trading for this resource." class="switch"><input class="script_${tradeBuyKey}" type="checkbox"${settingsRaw[tradeBuyKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
-              ),
-              tradeBuyKey
-            ),
-            addToggleCallbacks(
-              $(
-                `<label tabindex="0" title="Enable trading this resource away." class="switch"><input class="script_${tradeSellKey}" type="checkbox"${settingsRaw[tradeSellKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
-              ),
-              tradeSellKey
-            )
-          );
-          marketRow.appendTo(marketElement);
-        }
-      }
-    }
-    function removeMarketToggles() {
-      $("#market .ea-market-toggle").remove();
-      $("#script_market_top_row").remove();
-      if (!game.global.race["no_trade"]) {
-        $("#market .market-item[id] .res").width("7.5rem");
-        $("#market .market-item[id] .buy span").text(
-          game.loc("resource_market_buy")
-        );
-        $("#market .market-item[id] .sell span").text(
-          game.loc("resource_market_sell")
-        );
-        $("#market .market-item[id] .trade > :first-child").text(
-          game.loc("resource_market_routes")
-        );
-        $("#market .market-item[id] .trade .zero").text(
-          game.loc("cancel_routes")
-        );
-      }
-    }
-    function createStorageToggles() {
-      removeStorageToggles();
-      $("#createHead").after(`
-          <div class="market-item vb" id="script_storage_top_row" style="overflow:hidden">
-            <span style="margin-left: auto; margin-right: 0.2rem; float:right;">
-              <span class="has-text-warning" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">Auto</span>
-              <span class="has-text-warning" style="width: 2.75rem; display: inline-block; text-align: center;">Over</span>
-            </span>
-          </div>`);
-      for (let resource of StorageManager.priorityList) {
-        let storageElement = $("#stack-" + resource.id);
-        if (storageElement.length > 0) {
-          let storeKey = "res_storage" + resource.id;
-          let overKey = "res_storage_o_" + resource.id;
-          $(
-            `<span class="ea-storage-toggle" style="margin-left: auto; margin-right: 0.2rem; float:right;"></span>`
-          ).append(
-            addToggleCallbacks(
-              $(
-                `<label tabindex="0" title="Enable storing of this resource." class="switch"><input class="script_${storeKey}" type="checkbox"${settingsRaw[storeKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
-              ),
-              storeKey
-            ),
-            addToggleCallbacks(
-              $(
-                `<label tabindex="0" title="Enable storing overflow of this resource." class="switch"><input class="script_${overKey}" type="checkbox"${settingsRaw[overKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
-              ),
-              overKey
-            )
-          ).appendTo(storageElement);
-        }
-      }
-    }
-    function removeStorageToggles() {
-      $("#resStorage .ea-storage-toggle").remove();
-      $("#script_storage_top_row").remove();
+      });
     }
     const { sorterHelper } = createSortHelper({
       getJQuery: () => $,
@@ -32450,1433 +34981,23 @@ Script version: ${versionPart} ${SCRIPT_VERSION_EXTRA}
         }
       });
     }
-    var poly = {
-      // Taken directly from game code with no functional changes, and minified.
-      // export function astrologySign() from seasons.js
-      astrologySign: function() {
-        let t = /* @__PURE__ */ new Date();
-        if (0 === t.getMonth() && t.getDate() >= 20 || 1 === t.getMonth() && 18 >= t.getDate())
-          return "aquarius";
-        if (1 === t.getMonth() && t.getDate() >= 19 || 2 === t.getMonth() && 20 >= t.getDate())
-          return "pisces";
-        if (2 === t.getMonth() && t.getDate() >= 21 || 3 === t.getMonth() && 19 >= t.getDate())
-          return "aries";
-        if (3 === t.getMonth() && t.getDate() >= 20 || 4 === t.getMonth() && 20 >= t.getDate())
-          return "taurus";
-        if (4 === t.getMonth() && t.getDate() >= 21 || 5 === t.getMonth() && 21 >= t.getDate())
-          return "gemini";
-        else if (5 === t.getMonth() && t.getDate() >= 22 || 6 === t.getMonth() && 22 >= t.getDate())
-          return "cancer";
-        else if (6 === t.getMonth() && t.getDate() >= 23 || 7 === t.getMonth() && 22 >= t.getDate())
-          return "leo";
-        else if (7 === t.getMonth() && t.getDate() >= 23 || 8 === t.getMonth() && 22 >= t.getDate())
-          return "virgo";
-        else if (8 === t.getMonth() && t.getDate() >= 23 || 9 === t.getMonth() && 22 >= t.getDate())
-          return "libra";
-        else if (9 === t.getMonth() && t.getDate() >= 23 || 10 === t.getMonth() && 22 >= t.getDate())
-          return "scorpio";
-        else if (10 === t.getMonth() && t.getDate() >= 23 || 11 === t.getMonth() && 21 >= t.getDate())
-          return "sagittarius";
-        else if (11 === t.getMonth() && t.getDate() >= 22 || 0 === t.getMonth() && 19 >= t.getDate())
-          return "capricorn";
-        else return "time itself is broken";
-      },
-      // export function arpaAdjustCosts(costs) from arpa.js
-      arpaAdjustCosts: function(t) {
-        return t = (function(t2) {
-          var r = traitVal("creative", 1, "-");
-          if (r < 1) {
-            var a = {};
-            return Object.keys(t2).forEach(function(e) {
-              a[e] = function() {
-                return t2[e]() * r;
-              };
-            }), a;
-          }
-          return t2;
-        })(t), poly.adjustCosts({ cost: t });
-      },
-      // function govPrice(gov) from civics.js
-      govPrice: function(e) {
-        let o = game.global.civic.foreign[`gov${e}`], i = 15384 * o.eco;
-        return i *= 1 + 1.6 * o.hstl / 100, +(i *= 1 - 0.25 * o.unrest / 100).toFixed(0);
-      },
-      // export const galaxyOffers from resources.js
-      galaxyOffers: normalizeProperties([
-        { buy: { res: "Deuterium", vol: 5 }, sell: { res: "Helium_3", vol: 25 } },
-        {
-          buy: { res: "Neutronium", vol: 2.5 },
-          sell: { res: "Copper", vol: 200 }
-        },
-        { buy: { res: "Adamantite", vol: 3 }, sell: { res: "Iron", vol: 300 } },
-        { buy: { res: "Elerium", vol: 1 }, sell: { res: "Oil", vol: 125 } },
-        {
-          buy: { res: "Nano_Tube", vol: 10 },
-          sell: { res: "Titanium", vol: 20 }
-        },
-        {
-          buy: { res: "Graphene", vol: 25 },
-          sell: {
-            res: () => game.global.race.kindling_kindred || game.global.race.smoldering ? game.global.race.smoldering ? "Chrysotile" : "Stone" : "Lumber",
-            vol: 1e3
-          }
-        },
-        {
-          buy: { res: "Stanene", vol: 40 },
-          sell: { res: "Aluminium", vol: 800 }
-        },
-        {
-          buy: { res: "Bolognium", vol: 0.75 },
-          sell: { res: "Uranium", vol: 4 }
-        },
-        { buy: { res: "Vitreloy", vol: 1 }, sell: { res: "Infernite", vol: 1 } }
-      ]),
-      // export const supplyValue from resources.js
-      supplyValue: {
-        Lumber: { in: 0.5, out: 25e3 },
-        Chrysotile: { in: 0.5, out: 25e3 },
-        Stone: { in: 0.5, out: 25e3 },
-        Crystal: { in: 3, out: 25e3 },
-        Furs: { in: 3, out: 25e3 },
-        Copper: { in: 1.5, out: 25e3 },
-        Iron: { in: 1.5, out: 25e3 },
-        Aluminium: { in: 2.5, out: 25e3 },
-        Cement: { in: 3, out: 25e3 },
-        Coal: { in: 1.5, out: 25e3 },
-        Oil: { in: 2.5, out: 12e3 },
-        Uranium: { in: 5, out: 300 },
-        Steel: { in: 3, out: 25e3 },
-        Titanium: { in: 3, out: 25e3 },
-        Alloy: { in: 6, out: 25e3 },
-        Polymer: { in: 6, out: 25e3 },
-        Iridium: { in: 8, out: 25e3 },
-        Helium_3: { in: 4.5, out: 12e3 },
-        Deuterium: { in: 4, out: 1e3 },
-        Neutronium: { in: 15, out: 1e3 },
-        Adamantite: { in: 12.5, out: 1e3 },
-        Infernite: { in: 25, out: 250 },
-        Elerium: { in: 30, out: 250 },
-        Nano_Tube: { in: 6.5, out: 1e3 },
-        Graphene: { in: 5, out: 1e3 },
-        Stanene: { in: 4.5, out: 1e3 },
-        Bolognium: { in: 18, out: 1e3 },
-        Vitreloy: { in: 14, out: 1e3 },
-        Orichalcum: { in: 10, out: 1e3 },
-        Plywood: { in: 10, out: 250 },
-        Brick: { in: 10, out: 250 },
-        Wrought_Iron: { in: 10, out: 250 },
-        Sheet_Metal: { in: 10, out: 250 },
-        Mythril: { in: 12.5, out: 250 },
-        Aerogel: { in: 16.5, out: 250 },
-        Nanoweave: { in: 18, out: 250 },
-        Scarletite: { in: 35, out: 250 }
-      },
-      // export const monsters from portal.js
-      monsters: {
-        fire_elm: {
-          weapon: {
-            laser: 1.05,
-            flame: 0,
-            plasma: 0.25,
-            kinetic: 0.5,
-            missile: 0.5,
-            sonic: 1,
-            shotgun: 0.75,
-            tesla: 0.65,
-            claws: 0.5,
-            venom: 0.62,
-            cold: 1.25,
-            shock: 0.68,
-            fire: 0,
-            acid: 0.25,
-            stone: 0.5,
-            iron: 0.5,
-            flesh: 0.3,
-            ice: 1.12,
-            magma: 0,
-            axe: 0.5,
-            hammer: 0.5
-          },
-          nozone: { freeze: true, flooded: true },
-          amp: { hot: 1.75, humid: 0.8, steam: 0.9 }
-        },
-        water_elm: {
-          weapon: {
-            laser: 0.65,
-            flame: 0.5,
-            plasma: 1,
-            kinetic: 0.2,
-            missile: 0.5,
-            sonic: 0.5,
-            shotgun: 0.25,
-            tesla: 0.75,
-            claws: 0.4,
-            venom: 0.8,
-            cold: 1.1,
-            shock: 0.68,
-            fire: 0.8,
-            acid: 0.25,
-            stone: 0.4,
-            iron: 0.3,
-            flesh: 0.5,
-            ice: 1.1,
-            magma: 0.75,
-            axe: 0.45,
-            hammer: 0.45
-          },
-          nozone: { hot: true, freeze: true },
-          amp: { steam: 1.5, river: 1.1, flooded: 2, rain: 1.75, humid: 1.25 }
-        },
-        rock_golem: {
-          weapon: {
-            laser: 1,
-            flame: 0.5,
-            plasma: 1,
-            kinetic: 0.65,
-            missile: 0.95,
-            sonic: 0.75,
-            shotgun: 0.35,
-            tesla: 0,
-            claws: 0.7,
-            venom: 0.25,
-            cold: 0.35,
-            shock: 0,
-            fire: 0.9,
-            acid: 1,
-            stone: 0.5,
-            iron: 0.65,
-            flesh: 0.3,
-            ice: 0.3,
-            magma: 0.9,
-            axe: 0.2,
-            hammer: 1
-          },
-          nozone: {},
-          amp: {}
-        },
-        bone_golem: {
-          weapon: {
-            laser: 0.45,
-            flame: 0.35,
-            plasma: 0.55,
-            kinetic: 1,
-            missile: 1,
-            sonic: 0.75,
-            shotgun: 0.75,
-            tesla: 0.15,
-            claws: 0.75,
-            venom: 0,
-            cold: 0.2,
-            shock: 0.15,
-            fire: 0.4,
-            acid: 0.85,
-            stone: 0.9,
-            iron: 1,
-            flesh: 0.15,
-            ice: 0.3,
-            magma: 0.9,
-            axe: 0.65,
-            hammer: 1.2
-          },
-          nozone: {},
-          amp: {}
-        },
-        mech_dino: {
-          weapon: {
-            laser: 0.85,
-            flame: 0.05,
-            plasma: 0.55,
-            kinetic: 0.45,
-            missile: 0.5,
-            sonic: 0.35,
-            shotgun: 0.5,
-            tesla: 1,
-            claws: 0.38,
-            venom: 0.1,
-            cold: 0.5,
-            shock: 1.1,
-            fire: 0.5,
-            acid: 0.75,
-            stone: 0.5,
-            iron: 0.5,
-            flesh: 0.15,
-            ice: 0.3,
-            magma: 0.9,
-            axe: 0.6,
-            hammer: 0.4
-          },
-          nozone: {},
-          amp: {}
-        },
-        plant: {
-          weapon: {
-            laser: 0.42,
-            flame: 1,
-            plasma: 0.65,
-            kinetic: 0.2,
-            missile: 0.25,
-            sonic: 0.75,
-            shotgun: 0.35,
-            tesla: 0.38,
-            claws: 0.25,
-            venom: 0.25,
-            cold: 0.65,
-            shock: 0.28,
-            fire: 1,
-            acid: 0.45,
-            stone: 0.6,
-            iron: 0.5,
-            flesh: 0.5,
-            ice: 0.55,
-            magma: 1,
-            axe: 0.25,
-            hammer: 0.15
-          },
-          nozone: {},
-          amp: {}
-        },
-        crazed: {
-          weapon: {
-            laser: 0.5,
-            flame: 0.85,
-            plasma: 0.65,
-            kinetic: 1,
-            missile: 0.35,
-            sonic: 0.15,
-            shotgun: 0.95,
-            tesla: 0.6,
-            claws: 1,
-            venom: 0.5,
-            cold: 0.5,
-            shock: 0.75,
-            fire: 0.5,
-            acid: 0.5,
-            stone: 0.7,
-            iron: 0.8,
-            flesh: 0.9,
-            ice: 0.4,
-            magma: 0.5,
-            axe: 1,
-            hammer: 0.75
-          },
-          nozone: {},
-          amp: {}
-        },
-        minotaur: {
-          weapon: {
-            laser: 0.32,
-            flame: 0.5,
-            plasma: 0.82,
-            kinetic: 0.44,
-            missile: 1,
-            sonic: 0.15,
-            shotgun: 0.2,
-            tesla: 0.35,
-            claws: 0.6,
-            venom: 1.1,
-            cold: 0.5,
-            shock: 0.3,
-            fire: 0.5,
-            acid: 1,
-            stone: 0.6,
-            iron: 0.9,
-            flesh: 0.3,
-            ice: 0.4,
-            magma: 0.55,
-            axe: 0.75,
-            hammer: 0.6
-          },
-          nozone: {},
-          amp: {}
-        },
-        ooze: {
-          weapon: {
-            laser: 0.2,
-            flame: 0.65,
-            plasma: 1,
-            kinetic: 0,
-            missile: 0,
-            sonic: 0.85,
-            shotgun: 0,
-            tesla: 0.15,
-            claws: 0,
-            venom: 0.15,
-            cold: 1.5,
-            shock: 0.2,
-            fire: 0.6,
-            acid: 0.5,
-            stone: 0,
-            iron: 0,
-            flesh: 0,
-            ice: 1.25,
-            magma: 0.7,
-            axe: 0,
-            hammer: 0
-          },
-          nozone: {},
-          amp: {}
-        },
-        zombie: {
-          weapon: {
-            laser: 0.35,
-            flame: 1,
-            plasma: 0.45,
-            kinetic: 0.08,
-            missile: 0.8,
-            sonic: 0.18,
-            shotgun: 0.95,
-            tesla: 0.05,
-            claws: 0.85,
-            venom: 0,
-            cold: 0.2,
-            shock: 0.35,
-            fire: 0.95,
-            acid: 0.5,
-            stone: 0.5,
-            iron: 0.5,
-            flesh: 0.35,
-            ice: 0.25,
-            magma: 0.9,
-            axe: 1,
-            hammer: 0.5
-          },
-          nozone: {},
-          amp: {}
-        },
-        raptor: {
-          weapon: {
-            laser: 0.68,
-            flame: 0.55,
-            plasma: 0.85,
-            kinetic: 1,
-            missile: 0.44,
-            sonic: 0.22,
-            shotgun: 0.33,
-            tesla: 0.66,
-            claws: 0.85,
-            venom: 0.5,
-            cold: 0.5,
-            shock: 0.88,
-            fire: 0.6,
-            acid: 0.6,
-            stone: 1,
-            iron: 0.85,
-            flesh: 0.45,
-            ice: 0.5,
-            magma: 0.65,
-            axe: 0.9,
-            hammer: 0.6
-          },
-          nozone: {},
-          amp: {}
-        },
-        frost_giant: {
-          weapon: {
-            laser: 0.9,
-            flame: 0.82,
-            plasma: 1,
-            kinetic: 0.25,
-            missile: 0.08,
-            sonic: 0.45,
-            shotgun: 0.28,
-            tesla: 0.5,
-            claws: 0.35,
-            venom: 0.15,
-            cold: 0,
-            shock: 0.6,
-            fire: 1.2,
-            acid: 0.5,
-            stone: 0.35,
-            iron: 1,
-            flesh: 0.3,
-            ice: 0,
-            magma: 1.1,
-            axe: 0.5,
-            hammer: 1
-          },
-          nozone: { hot: true },
-          amp: { freeze: 2.5, hail: 1.65 }
-        },
-        swarm: {
-          weapon: {
-            laser: 0.02,
-            flame: 1,
-            plasma: 0.04,
-            kinetic: 0.01,
-            missile: 0.08,
-            sonic: 0.66,
-            shotgun: 0.38,
-            tesla: 0.45,
-            claws: 0.05,
-            venom: 0.01,
-            cold: 0.8,
-            shock: 0.75,
-            fire: 0.8,
-            acid: 0.75,
-            stone: 0.03,
-            iron: 0.03,
-            flesh: 0.03,
-            ice: 0.3,
-            magma: 0.5,
-            axe: 0.01,
-            hammer: 0.05
-          },
-          nozone: {},
-          amp: {}
-        },
-        dragon: {
-          weapon: {
-            laser: 0.18,
-            flame: 0,
-            plasma: 0.12,
-            kinetic: 0.35,
-            missile: 1,
-            sonic: 0.22,
-            shotgun: 0.65,
-            tesla: 0.15,
-            claws: 0.38,
-            venom: 0.88,
-            cold: 0.8,
-            shock: 0.35,
-            fire: 0,
-            acid: 0.85,
-            stone: 0.03,
-            iron: 0.03,
-            flesh: 0.03,
-            ice: 0.3,
-            magma: 0,
-            axe: 0.4,
-            hammer: 0.55
-          },
-          nozone: {},
-          amp: {}
-        },
-        mech_dragon: {
-          weapon: {
-            laser: 0.84,
-            flame: 0.1,
-            plasma: 0.68,
-            kinetic: 0.18,
-            missile: 0.75,
-            sonic: 0.22,
-            shotgun: 0.28,
-            tesla: 1,
-            claws: 0.28,
-            venom: 0,
-            cold: 0.35,
-            shock: 1,
-            fire: 0.15,
-            acid: 0.72,
-            stone: 0.5,
-            iron: 0.5,
-            flesh: 0.5,
-            ice: 0.2,
-            magma: 0.15,
-            axe: 0.25,
-            hammer: 0.8
-          },
-          nozone: {},
-          amp: {}
-        },
-        construct: {
-          weapon: {
-            laser: 0.5,
-            flame: 0.2,
-            plasma: 0.6,
-            kinetic: 0.34,
-            missile: 0.9,
-            sonic: 0.08,
-            shotgun: 0.28,
-            tesla: 1,
-            claws: 0.28,
-            venom: 0,
-            cold: 0.45,
-            shock: 1.1,
-            fire: 0.22,
-            acid: 0.68,
-            stone: 0.55,
-            iron: 0.55,
-            flesh: 0.4,
-            ice: 0.4,
-            magma: 0.18,
-            axe: 0.42,
-            hammer: 0.95
-          },
-          nozone: {},
-          amp: {}
-        },
-        beholder: {
-          weapon: {
-            laser: 0.75,
-            flame: 0.15,
-            plasma: 1,
-            kinetic: 0.45,
-            missile: 0.05,
-            sonic: 0.01,
-            shotgun: 0.12,
-            tesla: 0.3,
-            claws: 0.48,
-            venom: 0.9,
-            cold: 0.88,
-            shock: 0.24,
-            fire: 0.18,
-            acid: 0.9,
-            stone: 0.72,
-            iron: 0.45,
-            flesh: 0.85,
-            ice: 0.92,
-            magma: 0.16,
-            axe: 0.44,
-            hammer: 0.08
-          },
-          nozone: {},
-          amp: {}
-        },
-        worm: {
-          weapon: {
-            laser: 0.55,
-            flame: 0.38,
-            plasma: 0.45,
-            kinetic: 0.2,
-            missile: 0.05,
-            sonic: 1,
-            shotgun: 0.02,
-            tesla: 0.01,
-            claws: 0.18,
-            venom: 0.65,
-            cold: 1,
-            shock: 0.02,
-            fire: 0.38,
-            acid: 0.48,
-            stone: 0.22,
-            iron: 0.24,
-            flesh: 0.35,
-            ice: 1,
-            magma: 0.4,
-            axe: 0.15,
-            hammer: 0.05
-          },
-          nozone: {},
-          amp: {}
-        },
-        hydra: {
-          weapon: {
-            laser: 0.85,
-            flame: 0.75,
-            plasma: 0.85,
-            kinetic: 0.25,
-            missile: 0.45,
-            sonic: 0.5,
-            shotgun: 0.6,
-            tesla: 0.65,
-            claws: 0.3,
-            venom: 0.65,
-            cold: 0.55,
-            shock: 0.65,
-            fire: 0.75,
-            acid: 0.85,
-            stone: 0.25,
-            iron: 0.15,
-            flesh: 0.2,
-            ice: 0.55,
-            magma: 0.75,
-            axe: 0.45,
-            hammer: 0.65
-          },
-          nozone: {},
-          amp: {}
-        },
-        colossus: {
-          weapon: {
-            laser: 1,
-            flame: 0.05,
-            plasma: 0.75,
-            kinetic: 0.45,
-            missile: 1,
-            sonic: 0.35,
-            shotgun: 0.35,
-            tesla: 0.5,
-            claws: 0.48,
-            venom: 0.22,
-            cold: 0.25,
-            shock: 0.65,
-            fire: 0.15,
-            acid: 0.95,
-            stone: 0.55,
-            iron: 0.95,
-            flesh: 0.25,
-            ice: 0.35,
-            magma: 0.2,
-            axe: 0.55,
-            hammer: 0.35
-          },
-          nozone: {},
-          amp: {}
-        },
-        lich: {
-          weapon: {
-            laser: 0.1,
-            flame: 0.1,
-            plasma: 0.1,
-            kinetic: 0.45,
-            missile: 0.75,
-            sonic: 0.35,
-            shotgun: 0.75,
-            tesla: 0.5,
-            claws: 0.4,
-            venom: 0.01,
-            cold: 0.1,
-            shock: 0.5,
-            fire: 0.1,
-            acid: 0.1,
-            stone: 0.35,
-            iron: 0.25,
-            flesh: 0.95,
-            ice: 0.1,
-            magma: 0.1,
-            axe: 0.4,
-            hammer: 1
-          },
-          nozone: {},
-          amp: {}
-        },
-        ape: {
-          weapon: {
-            laser: 1,
-            flame: 0.95,
-            plasma: 0.85,
-            kinetic: 0.5,
-            missile: 0.5,
-            sonic: 0.05,
-            shotgun: 0.35,
-            tesla: 0.68,
-            claws: 0.65,
-            venom: 0.95,
-            cold: 0.5,
-            shock: 0.5,
-            fire: 0.75,
-            acid: 0.65,
-            stone: 0.5,
-            iron: 0.5,
-            flesh: 0.5,
-            ice: 0.5,
-            magma: 0.75,
-            axe: 0.65,
-            hammer: 0.5
-          },
-          nozone: {},
-          amp: {}
-        },
-        bandit: {
-          weapon: {
-            laser: 0.65,
-            flame: 0.5,
-            plasma: 0.85,
-            kinetic: 1,
-            missile: 0.5,
-            sonic: 0.25,
-            shotgun: 0.75,
-            tesla: 0.25,
-            claws: 1,
-            venom: 0.15,
-            cold: 0.5,
-            shock: 0.25,
-            fire: 0.5,
-            acid: 0.5,
-            stone: 0.5,
-            iron: 0.8,
-            flesh: 0.5,
-            ice: 0.5,
-            magma: 0.5,
-            axe: 1,
-            hammer: 0.5
-          },
-          nozone: {},
-          amp: {}
-        },
-        croc: {
-          weapon: {
-            laser: 0.65,
-            flame: 0.05,
-            plasma: 0.6,
-            kinetic: 0.5,
-            missile: 0.5,
-            sonic: 1,
-            shotgun: 0.2,
-            tesla: 0.75,
-            claws: 1,
-            venom: 0.5,
-            cold: 1,
-            shock: 0.75,
-            fire: 0.05,
-            acid: 0.08,
-            stone: 0.6,
-            iron: 0.5,
-            flesh: 0.25,
-            ice: 0.95,
-            magma: 0.05,
-            axe: 0.75,
-            hammer: 0.5
-          },
-          nozone: {},
-          amp: {}
-        },
-        djinni: {
-          weapon: {
-            laser: 0,
-            flame: 0.35,
-            plasma: 1,
-            kinetic: 0.15,
-            missile: 0,
-            sonic: 0.65,
-            shotgun: 0.22,
-            tesla: 0.4,
-            claws: 0.18,
-            venom: 0.12,
-            cold: 0.9,
-            shock: 0.45,
-            fire: 0.3,
-            acid: 0.1,
-            stone: 0.2,
-            iron: 0.95,
-            flesh: 0.2,
-            ice: 0.9,
-            magma: 0.3,
-            axe: 0.12,
-            hammer: 0
-          },
-          nozone: {},
-          amp: {}
-        },
-        snake: {
-          weapon: {
-            laser: 0.5,
-            flame: 0.5,
-            plasma: 0.5,
-            kinetic: 0.5,
-            missile: 0.5,
-            sonic: 0.5,
-            shotgun: 0.5,
-            tesla: 0.5,
-            claws: 0.5,
-            venom: 0.02,
-            cold: 0.75,
-            shock: 0.5,
-            fire: 0.5,
-            acid: 0.5,
-            stone: 0.5,
-            iron: 0.5,
-            flesh: 0.5,
-            ice: 0.75,
-            magma: 0.5,
-            axe: 0.5,
-            hammer: 0.5
-          },
-          nozone: {},
-          amp: {}
-        },
-        centipede: {
-          weapon: {
-            laser: 0.5,
-            flame: 0.85,
-            plasma: 0.95,
-            kinetic: 0.65,
-            missile: 0.6,
-            sonic: 0,
-            shotgun: 0.5,
-            tesla: 0.01,
-            claws: 0.65,
-            venom: 0.01,
-            cold: 0,
-            shock: 0.01,
-            fire: 0.88,
-            acid: 0.95,
-            stone: 0.6,
-            iron: 0.45,
-            flesh: 0.55,
-            ice: 0,
-            magma: 0.88,
-            axe: 0.7,
-            hammer: 0.4
-          },
-          nozone: {},
-          amp: {}
-        },
-        spider: {
-          weapon: {
-            laser: 0.65,
-            flame: 1,
-            plasma: 0.22,
-            kinetic: 0.75,
-            missile: 0.15,
-            sonic: 0.38,
-            shotgun: 0.9,
-            tesla: 0.18,
-            claws: 0.12,
-            venom: 0.05,
-            cold: 0.5,
-            shock: 0.32,
-            fire: 1,
-            acid: 0.65,
-            stone: 0.8,
-            iron: 0.5,
-            flesh: 0.5,
-            ice: 0.5,
-            magma: 1,
-            axe: 0.18,
-            hammer: 0.75
-          },
-          nozone: {},
-          amp: {}
-        },
-        manticore: {
-          weapon: {
-            laser: 0.05,
-            flame: 0.25,
-            plasma: 0.95,
-            kinetic: 0.5,
-            missile: 0.15,
-            sonic: 0.48,
-            shotgun: 0.4,
-            tesla: 0.6,
-            claws: 0.5,
-            venom: 0.5,
-            cold: 0.8,
-            shock: 0.75,
-            fire: 0.15,
-            acid: 0.95,
-            stone: 0.25,
-            iron: 0.5,
-            flesh: 0.8,
-            ice: 0.8,
-            magma: 0.15,
-            axe: 0.5,
-            hammer: 0.25
-          },
-          nozone: {},
-          amp: {}
-        },
-        fiend: {
-          weapon: {
-            laser: 0.75,
-            flame: 0.25,
-            plasma: 0.5,
-            kinetic: 0.25,
-            missile: 0.75,
-            sonic: 0.25,
-            shotgun: 0.5,
-            tesla: 0.5,
-            claws: 0.65,
-            venom: 0.1,
-            cold: 0.65,
-            shock: 0.5,
-            fire: 0.2,
-            acid: 0.5,
-            stone: 0.25,
-            iron: 0.75,
-            flesh: 1,
-            ice: 0.65,
-            magma: 0.2,
-            axe: 0.75,
-            hammer: 0.25
-          },
-          nozone: {},
-          amp: {}
-        },
-        bat: {
-          weapon: {
-            laser: 0.16,
-            flame: 0.18,
-            plasma: 0.12,
-            kinetic: 0.25,
-            missile: 0.02,
-            sonic: 1,
-            shotgun: 0.9,
-            tesla: 0.58,
-            claws: 0.1,
-            venom: 0.1,
-            cold: 0.8,
-            shock: 0.65,
-            fire: 0.15,
-            acid: 0.5,
-            stone: 0.1,
-            iron: 0.1,
-            flesh: 0.5,
-            ice: 0.8,
-            magma: 0.2,
-            axe: 0.1,
-            hammer: 0.1
-          },
-          nozone: {},
-          amp: {}
-        },
-        medusa: {
-          weapon: {
-            laser: 0.35,
-            flame: 0.1,
-            plasma: 0.3,
-            kinetic: 0.95,
-            missile: 1,
-            sonic: 0.15,
-            shotgun: 0.88,
-            tesla: 0.26,
-            claws: 0.42,
-            venom: 0.3,
-            cold: 0.48,
-            shock: 0.28,
-            fire: 0.1,
-            acid: 0.85,
-            stone: 1,
-            iron: 0.25,
-            flesh: 0.75,
-            ice: 0.52,
-            magma: 0.12,
-            axe: 0.34,
-            hammer: 1
-          },
-          nozone: {},
-          amp: {}
-        },
-        ettin: {
-          weapon: {
-            laser: 0.5,
-            flame: 0.35,
-            plasma: 0.8,
-            kinetic: 0.5,
-            missile: 0.25,
-            sonic: 0.3,
-            shotgun: 0.6,
-            tesla: 0.09,
-            claws: 0.5,
-            venom: 0.95,
-            cold: 0.3,
-            shock: 0.8,
-            fire: 0.38,
-            acid: 0.9,
-            stone: 0.6,
-            iron: 0.75,
-            flesh: 0.4,
-            ice: 0.28,
-            magma: 0.32,
-            axe: 0.45,
-            hammer: 0.25
-          },
-          nozone: {},
-          amp: {}
-        },
-        faceless: {
-          weapon: {
-            laser: 0.6,
-            flame: 0.28,
-            plasma: 0.6,
-            kinetic: 0,
-            missile: 0.05,
-            sonic: 0.8,
-            shotgun: 0.15,
-            tesla: 1,
-            claws: 0.02,
-            venom: 0.01,
-            cold: 0,
-            shock: 1,
-            fire: 0.25,
-            acid: 0.55,
-            stone: 0.15,
-            iron: 0.15,
-            flesh: 0.95,
-            ice: 0,
-            magma: 0.25,
-            axe: 0.01,
-            hammer: 0.05
-          },
-          nozone: {},
-          amp: {}
-        },
-        enchanted: {
-          weapon: {
-            laser: 1,
-            flame: 0.02,
-            plasma: 0.95,
-            kinetic: 0.2,
-            missile: 0.7,
-            sonic: 0.05,
-            shotgun: 0.65,
-            tesla: 0.01,
-            claws: 0.1,
-            venom: 0,
-            cold: 0.5,
-            shock: 0.01,
-            fire: 0.02,
-            acid: 1,
-            stone: 0.25,
-            iron: 0.75,
-            flesh: 0.1,
-            ice: 0.5,
-            magma: 0.03,
-            axe: 0.1,
-            hammer: 0.5
-          },
-          nozone: {},
-          amp: {}
-        },
-        gargoyle: {
-          weapon: {
-            laser: 0.15,
-            flame: 0.4,
-            plasma: 0.3,
-            kinetic: 0.5,
-            missile: 0.5,
-            sonic: 0.85,
-            shotgun: 1,
-            tesla: 0.2,
-            claws: 0.45,
-            venom: 0.05,
-            cold: 0.15,
-            shock: 0.08,
-            fire: 0.38,
-            acid: 0.85,
-            stone: 1,
-            iron: 0.85,
-            flesh: 0.25,
-            ice: 0.15,
-            magma: 0.35,
-            axe: 0.42,
-            hammer: 1
-          },
-          nozone: {},
-          amp: {}
-        },
-        chimera: {
-          weapon: {
-            laser: 0.38,
-            flame: 0.6,
-            plasma: 0.42,
-            kinetic: 0.85,
-            missile: 0.35,
-            sonic: 0.5,
-            shotgun: 0.65,
-            tesla: 0.8,
-            claws: 0.92,
-            venom: 0.5,
-            cold: 0.45,
-            shock: 0.8,
-            fire: 0.56,
-            acid: 0.4,
-            stone: 0.5,
-            iron: 0.5,
-            flesh: 0.5,
-            ice: 0.48,
-            magma: 0.54,
-            axe: 0.88,
-            hammer: 0.42
-          },
-          nozone: {},
-          amp: {}
-        },
-        gorgon: {
-          weapon: {
-            laser: 0.65,
-            flame: 0.65,
-            plasma: 0.64,
-            kinetic: 0.65,
-            missile: 0.66,
-            sonic: 0.65,
-            shotgun: 0.65,
-            tesla: 0.65,
-            claws: 0.65,
-            venom: 0.65,
-            cold: 0.65,
-            shock: 0.65,
-            fire: 0.65,
-            acid: 0.65,
-            stone: 0.65,
-            iron: 0.65,
-            flesh: 0.65,
-            ice: 0.65,
-            magma: 0.65,
-            axe: 0.65,
-            hammer: 0.65
-          },
-          nozone: {},
-          amp: {}
-        },
-        kraken: {
-          weapon: {
-            laser: 0.75,
-            flame: 0.35,
-            plasma: 0.75,
-            kinetic: 0.35,
-            missile: 0.5,
-            sonic: 0.18,
-            shotgun: 0.05,
-            tesla: 0.85,
-            claws: 0.32,
-            venom: 0.8,
-            cold: 0.66,
-            shock: 0.82,
-            fire: 0.33,
-            acid: 0.75,
-            stone: 0.45,
-            iron: 0.35,
-            flesh: 0.4,
-            ice: 0.66,
-            magma: 0.33,
-            axe: 0.36,
-            hammer: 0.5
-          },
-          nozone: {},
-          amp: {}
-        },
-        homunculus: {
-          weapon: {
-            laser: 0.05,
-            flame: 1,
-            plasma: 0.1,
-            kinetic: 0.85,
-            missile: 0.65,
-            sonic: 0.5,
-            shotgun: 0.75,
-            tesla: 0.2,
-            claws: 0.85,
-            venom: 0.4,
-            cold: 0.12,
-            shock: 0.22,
-            fire: 1,
-            acid: 0.13,
-            stone: 0.65,
-            iron: 0.68,
-            flesh: 0.95,
-            ice: 0.18,
-            magma: 0.9,
-            axe: 0.85,
-            hammer: 0.65
-          },
-          nozone: {},
-          amp: {}
-        },
-        giant_chicken: {
-          weapon: {
-            laser: 0.95,
-            flame: 0.95,
-            plasma: 0.95,
-            kinetic: 0.95,
-            missile: 0.95,
-            sonic: 0.95,
-            shotgun: 0.95,
-            tesla: 0.95,
-            claws: 0.95,
-            venom: 0.96,
-            cold: 0.95,
-            shock: 0.95,
-            fire: 0.95,
-            acid: 0.95,
-            stone: 0.95,
-            iron: 0.95,
-            flesh: 0.94,
-            ice: 0.95,
-            magma: 0.95,
-            axe: 0.95,
-            hammer: 0.95
-          },
-          nozone: {},
-          amp: {}
-        },
-        skeleton_pack: {
-          weapon: {
-            laser: 0.5,
-            flame: 0.1,
-            plasma: 0.5,
-            kinetic: 1,
-            missile: 1.2,
-            sonic: 0.5,
-            shotgun: 1.05,
-            tesla: 0.2,
-            claws: 0.65,
-            venom: 0,
-            cold: 0.11,
-            shock: 0.22,
-            fire: 0.1,
-            acid: 0.5,
-            stone: 1,
-            iron: 0.65,
-            flesh: 0.25,
-            ice: 0.1,
-            magma: 0.12,
-            axe: 0.15,
-            hammer: 1.08
-          },
-          nozone: {},
-          amp: {}
-        }
-      },
-      // export function hellSupression(area, val) from portal.js
-      hellSupression: function(t, e) {
-        switch (t) {
-          case "ruins": {
-            let t2 = e || buildings.RuinsGuardPost.stateOnCount, r = 75 * buildings.RuinsArcology.stateOnCount, a = game.armyRating(t2 * traitVal("high_pop", 0, 1), "hellArmy", 0);
-            a *= traitVal("holy", 1, "+");
-            let l = (a + r) / 5e3;
-            return { supress: l > 1 ? 1 : l, rating: a + r };
-          }
-          case "gate": {
-            let t2 = poly.hellSupression("ruins", e), r = 100 * buildings.GateTurret.stateOnCount;
-            r *= traitVal("holy", 1, "+");
-            let a = (t2.rating + r) / 7500;
-            return { supress: a > 1 ? 1 : a, rating: t2.rating + r };
-          }
-          default:
-            return 0;
-        }
-      },
-      // function taxCap(min) from civics.js
-      taxCap: function(e) {
-        let a = (haveTech("currency", 5) || game.global.race.terrifying) && !game.global.race.noble;
-        if (e) return a ? 0 : traitVal("noble", 0, 10);
-        {
-          let e2 = traitVal("noble", 1, 30);
-          return a && (e2 += 20), "oligarchy" === game.global.civic.govern.type && (e2 += "bureaucrat" === getGovernor() ? 25 : 20), "noble" === getGovernor() && (e2 += 20), game.global.race["wish"] && game.global.race["wishStats"] && (e2 += game.global.race.wishStats.tax), e2;
-        }
-      },
-      // export function mechCost(size,infernal) from portal.js
-      mechCost: function(e, a, x) {
-        let l = 9999, r = 1e7;
-        switch (e) {
-          case "small":
-            {
-              let e2 = (x ?? game.global.blood.prepared) >= 2 ? 5e4 : 75e3;
-              r = a ? 2.5 * e2 : e2, l = a ? 20 : 1;
-            }
-            break;
-          case "medium":
-            r = a ? 45e4 : 18e4, l = a ? 100 : 4;
-            break;
-          case "large":
-            r = a ? 925e3 : 375e3, l = a ? 500 : 20;
-            break;
-          case "titan":
-            r = a ? 15e5 : 75e4, l = a ? 1500 : 75;
-            break;
-          case "collector": {
-            let e2 = (x ?? game.global.blood.prepared) >= 2 ? 8e3 : 1e4;
-            r = a ? 2.5 * e2 : e2, l = 1;
-          }
-        }
-        return { s: l, c: r };
-      },
-      // function terrainRating(mech,rating,effects) from portal.js
-      terrainRating: function(e, i, s2, x) {
-        return !e.equip.includes("special") || "small" !== e.size && "medium" !== e.size && "collector" !== e.size || i < 1 && (i += (1 - i) * (s2.includes("gravity") ? 0.1 : 0.2)), "small" !== e.size && i < 1 && (i += (s2.includes("fog") || s2.includes("dark") ? 5e-3 : 0.01) * (x ?? game.global.portal.mechbay.scouts)) > 1 && (i = 1), i;
-      },
-      // function weaponPower(mech,power) from portal.js
-      weaponPower: function(e, i) {
-        return i < 1 && 0 !== i && e.equip.includes("special") && "titan" === e.size && (i += 0.25 * (1 - i)), !e.equip.includes("special") || "large" !== e.size && "cyberdemon" !== e.size || (i *= 1.02), i;
-      },
-      // export function timeFormat(time) from functions.js
-      timeFormat: function(e) {
-        let i;
-        if (e < 0) i = game.loc("time_never");
-        else if ((e = +e.toFixed(0)) > 60) {
-          let l = e % 60, s2 = (e - l) / 60;
-          if (s2 >= 60) {
-            let e2 = s2 % 60, l2 = (s2 - e2) / 60;
-            if (l2 > 24) {
-              i = `${(l2 - (e2 = l2 % 24)) / 24}d ${e2}h`;
-            } else i = `${l2}h ${e2 = ("0" + e2).slice(-2)}m`;
-          } else
-            i = `${s2 = ("0" + s2).slice(-2)}m ${l = ("0" + l).slice(-2)}s`;
-        } else i = `${e = ("0" + e).slice(-2)}s`;
-        return i;
-      },
-      // export universeAffix(universe) from achieve.js
-      universeAffix: function(e) {
-        switch (e = e || game.global.race.universe) {
-          case "evil":
-            return "e";
-          case "antimatter":
-            return "a";
-          case "heavy":
-            return "h";
-          case "micro":
-            return "m";
-          case "magic":
-            return "mg";
-          default:
-            return "l";
-        }
-      },
-      // export const genus_traits from races.js (added spores:1 to fungi manually)
-      genus_traits: {
-        humanoid: { adaptable: 1, wasteful: 1 },
-        carnivore: { carnivore: 1, beast: 1, cautious: 1 },
-        herbivore: { herbivore: 1, instinct: 1 },
-        small: { small: 1, weak: 1 },
-        giant: { large: 1, strong: 1 },
-        reptilian: { cold_blooded: 1, scales: 1 },
-        avian: { flier: 1, hollow_bones: 1, sky_lover: 1 },
-        insectoid: { high_pop: 1, fast_growth: 1, high_metabolism: 1 },
-        plant: { sappy: 1, asymmetrical: 1 },
-        fungi: { detritivore: 1, spongy: 1, spores: 1 },
-        aquatic: { submerged: 1, low_light: 1 },
-        fey: { elusive: 1, iron_allergy: 1 },
-        heat: { smoldering: 1, cold_intolerance: 1 },
-        polar: { chilled: 1, heat_intolerance: 1 },
-        sand: { scavenger: 1, nomadic: 1 },
-        demonic: { immoral: 1, evil: 1, soul_eater: 1 },
-        angelic: { blissful: 1, pompous: 1, holy: 1 },
-        synthetic: { artifical: 1, powered: 1 },
-        eldritch: { psychic: 1, tormented: 1, darkness: 1, unfathomable: 1 },
-        hybrid: {}
-      },
-      // export const neg_roll_traits from races.js
-      neg_roll_traits: [
-        "angry",
-        "arrogant",
-        "atrophy",
-        "diverse",
-        "dumb",
-        "fragrant",
-        "frail",
-        "freespirit",
-        "gluttony",
-        "gnawer",
-        "greedy",
-        "hard_of_hearing",
-        "heavy",
-        "hooved",
-        "invertebrate",
-        "lazy",
-        "mistrustful",
-        "nearsighted",
-        "nyctophilia",
-        "paranoid",
-        "pathetic",
-        "pessimistic",
-        "puny",
-        "pyrophobia",
-        "skittish",
-        "slow",
-        "slow_regen",
-        "snowy",
-        "solitary",
-        "unorganized"
-      ],
-      // Reimplemented:
-      // export function crateValue() from resources.js
-      crateValue: () => Number(
-        getVueById("createHead")?.buildCrateDesc().match(/(\d+)/g)[1] ?? 0
-      ),
-      // export function containerValue() from resources.js
-      containerValue: () => Number(
-        getVueById("createHead")?.buildContainerDesc().match(/(\d+)/g)[1] ?? 0
-      ),
-      // Firefox compatibility:
-      adjustCosts: (c_action, wiki) => game.adjustCosts(
-        cloneInto(c_action, unsafeWindow, { cloneFunctions: true }),
-        wiki
-      ),
-      loc: (key, variables) => game.loc(key, cloneInto(variables, unsafeWindow)),
-      messageQueue: (msg, color, dnr, tags) => game.messageQueue(msg, color, dnr, cloneInto(tags, unsafeWindow)),
-      shipCosts: (bp) => game.shipCosts(cloneInto(bp, unsafeWindow))
-    };
+    var poly = createGameCompatibility({
+      getGame: () => game,
+      getBuildings: () => buildings,
+      getTraitVal: () => traitVal,
+      getHaveTech: () => haveTech,
+      getGovernor: () => getGovernor(),
+      getVueById: (...args) => getVueById(...args),
+      normalizeProperties,
+      cloneInto: (...args) => cloneInto(...args),
+      getUnsafeWindow: () => unsafeWindow,
+      getDate: () => /* @__PURE__ */ new Date()
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        gameCompatibility: poly
+      });
+    }
     $().ready(mainAutoEvolveScript);
   })($);
 })();
