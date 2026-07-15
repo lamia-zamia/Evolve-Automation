@@ -1133,6 +1133,454 @@
     };
   }
 
+  // src/settings/migration.ts
+  function createSettingsMigration({
+    getSettingsRaw,
+    getSettings,
+    settingsSections: settingsSections2,
+    applySettings: applySettings2,
+    migrateSetting: migrateSetting2,
+    getResetSettings,
+    getTechIds,
+    getMarketManager,
+    getResources,
+    getProjects,
+    getBuildings,
+    getCrafter
+  }) {
+    function updateStandAloneSettings2() {
+      const settingsRaw2 = getSettingsRaw();
+      const settings2 = getSettings();
+      const techIds2 = getTechIds();
+      const MarketManager2 = getMarketManager();
+      const resources2 = getResources();
+      const projects2 = getProjects();
+      const buildings2 = getBuildings();
+      const crafter2 = getCrafter();
+      const {
+        resetEvolutionSettings: resetEvolutionSettings2,
+        resetWarSettings: resetWarSettings2,
+        resetHellSettings: resetHellSettings2,
+        resetMechSettings: resetMechSettings2,
+        resetFleetSettings: resetFleetSettings2,
+        resetGovernmentSettings: resetGovernmentSettings2,
+        resetAuthoritySettings: resetAuthoritySettings2,
+        resetBuildingSettings: resetBuildingSettings2,
+        resetWeightingSettings: resetWeightingSettings2,
+        resetMarketSettings: resetMarketSettings2,
+        resetResearchSettings: resetResearchSettings2,
+        resetProjectSettings: resetProjectSettings2,
+        resetJobSettings: resetJobSettings2,
+        resetMagicSettings: resetMagicSettings2,
+        resetProductionSettings: resetProductionSettings2,
+        resetStorageSettings: resetStorageSettings2,
+        resetGeneralSettings: resetGeneralSettings2,
+        resetInterfaceSettings: resetInterfaceSettings2,
+        resetStateLogSettings: resetStateLogSettings2,
+        resetAchievementGuardSettings: resetAchievementGuardSettings2,
+        resetChallengeHelperSettings: resetChallengeHelperSettings2,
+        resetPrestigeSettings: resetPrestigeSettings2,
+        resetEjectorSettings: resetEjectorSettings2,
+        resetPlanetSettings: resetPlanetSettings2,
+        resetLoggingSettings: resetLoggingSettings2,
+        resetTriggerSettings: resetTriggerSettings2,
+        resetMinorTraitSettings: resetMinorTraitSettings2,
+        resetMutableTraitSettings: resetMutableTraitSettings2
+      } = getResetSettings();
+      let def = {
+        scriptName: "TMVictor",
+        overrides: {},
+        triggers: []
+      };
+      settingsSections2.forEach((id) => def[id + "SettingsCollapsed"] = true);
+      applySettings2(def, false);
+      if (settingsRaw2.hasOwnProperty("masterScriptToggle")) {
+        if (!settingsRaw2.hasOwnProperty("autoPrestige")) {
+          settingsRaw2.autoPrestige = true;
+          [
+            "job_b1_farmer",
+            "job_b2_farmer",
+            "job_b3_farmer",
+            "job_b1_hunter",
+            "job_b2_hunter",
+            "job_b3_hunter"
+          ].forEach((id) => delete settingsRaw2[id]);
+        }
+        if (!settingsRaw2.hasOwnProperty("buildingsLimitPowered")) {
+          settingsRaw2.buildingsLimitPowered = false;
+        }
+      }
+      if (!settingsRaw2.migrationVersion || settingsRaw2.migrationVersion < 1) {
+        if (settingsRaw2["bld_p_eden-bliss_den"] && settingsRaw2["bld_p_eden-rectory"] && settingsRaw2["bld_p_eden-encampment"] && settingsRaw2["bld_p_eden-bliss_den"] < settingsRaw2["bld_p_eden-rectory"]) {
+          settingsRaw2["bld_p_eden-rectory"] = settingsRaw2["bld_p_eden-encampment"] + 1;
+        }
+        settingsRaw2.migrationVersion = 1;
+      }
+      resetEvolutionSettings2(false);
+      resetWarSettings2(false);
+      resetHellSettings2(false);
+      resetMechSettings2(false);
+      resetFleetSettings2(false);
+      resetGovernmentSettings2(false);
+      resetAuthoritySettings2(false);
+      resetBuildingSettings2(false);
+      resetWeightingSettings2(false);
+      resetMarketSettings2(false);
+      resetResearchSettings2(false);
+      resetProjectSettings2(false);
+      resetJobSettings2(false);
+      resetMagicSettings2(false);
+      resetProductionSettings2(false);
+      resetStorageSettings2(false);
+      resetGeneralSettings2(false);
+      resetInterfaceSettings2(false);
+      resetStateLogSettings2(false);
+      resetAchievementGuardSettings2(false);
+      resetChallengeHelperSettings2(false);
+      resetPrestigeSettings2(false);
+      resetEjectorSettings2(false);
+      resetPlanetSettings2(false);
+      resetLoggingSettings2(false);
+      resetTriggerSettings2(false);
+      resetMinorTraitSettings2(false);
+      resetMutableTraitSettings2(false);
+      for (let key in settingsRaw2.overrides) {
+        for (let i = 0; i < settingsRaw2.overrides[key].length; i++) {
+          let override = settingsRaw2.overrides[key][i];
+          if (typeof settingsRaw2[key] === "string" && typeof override.ret === "number") {
+            override.ret = String(override.ret);
+          }
+          if (typeof settingsRaw2[key] === "number" && typeof override.ret === "string") {
+            override.ret = Number(override.ret);
+          }
+        }
+      }
+      settingsRaw2.triggers.forEach((t) => {
+        if (t.requirementType == "Boolean" && t.requirementCount !== 1) {
+          t.requirementId = t.requirementCount ? t.requirementId : !t.requirementId;
+          t.requirementCount = 1;
+        }
+        if ((t.requirementType === "unlocked" || t.requirementType === "researched") && techIds2["tech-" + t.requirementId]) {
+          t.requirementId = "tech-" + t.requirementId;
+        }
+        if (t.actionType === "research" && techIds2["tech-" + t.actionId]) {
+          t.actionId = "tech-" + t.actionId;
+        }
+        if (t.requirementType === "unlocked") {
+          t.requirementType = "ResearchUnlocked";
+          t.requirementCount = 1;
+        }
+        if (t.requirementType === "researched") {
+          t.requirementType = "ResearchComplete";
+          t.requirementCount = 1;
+        }
+        if (t.requirementType === "built") {
+          t.requirementType = "BuildingCount";
+        }
+      });
+      if (settingsRaw2.hasOwnProperty("productionPrioritizeDemanded")) {
+        settingsRaw2.productionFoundryWeighting = settingsRaw2.productionPrioritizeDemanded ? "demanded" : "none";
+      }
+      settingsRaw2.challenge_plasmid = settingsRaw2.challenge_mastery || settingsRaw2.challenge_plasmid;
+      if (settingsRaw2.hasOwnProperty("res_trade_buy_mtr_Food")) {
+        MarketManager2.priorityList.forEach(
+          (res) => settingsRaw2["res_trade_buy_" + res.id] = true
+        );
+      }
+      if (settingsRaw2.hasOwnProperty("arpa")) {
+        Object.entries(settingsRaw2.arpa).forEach(
+          ([id, enabled]) => settingsRaw2["arpa_" + id] = enabled
+        );
+      }
+      [
+        "buildingWeightingTriggerConflict",
+        "researchAlienGift",
+        "arpaBuildIfStorageFullCraftableMin",
+        "arpaBuildIfStorageFullResourceMaxPercent",
+        "arpaBuildIfStorageFull",
+        "productionMoneyIfOnly",
+        "autoAchievements",
+        "autoChallenge",
+        "autoMAD",
+        "autoSpace",
+        "autoSeeder",
+        "foreignSpyManage",
+        "foreignHireMercCostLowerThan",
+        "userResearchUnification",
+        "btl_Ambush",
+        "btl_max_Ambush",
+        "btl_Raid",
+        "btl_max_Raid",
+        "btl_Pillage",
+        "btl_max_Pillage",
+        "btl_Assault",
+        "btl_max_Assault",
+        "btl_Siege",
+        "btl_max_Siege",
+        "smelter_fuel_Oil",
+        "smelter_fuel_Coal",
+        "smelter_fuel_Lumber",
+        "planetSettingsCollapser",
+        "buildingManageSpire",
+        "hellHandleAttractors",
+        "researchFilter",
+        "challenge_mastery",
+        "hellCountGems",
+        "productionPrioritizeDemanded",
+        "fleetChthonianPower",
+        "productionWaitMana",
+        "arpa",
+        "autoLogging"
+      ].forEach((id) => delete settingsRaw2[id]);
+      [
+        "foreignAttack",
+        "foreignOccupy",
+        "foreignSpy",
+        "foreignSpyMax",
+        "foreignSpyOp"
+      ].forEach(
+        (id) => [0, 1, 2].forEach((index) => delete settingsRaw2[id + index])
+      );
+      ["res_storage_w_", "res_trade_buy_mtr_", "res_trade_sell_mps_"].forEach(
+        (id) => Object.values(resources2).forEach(
+          (resource) => delete settingsRaw2[id + resource.id]
+        )
+      );
+      Object.values(projects2).forEach(
+        (project) => delete settingsRaw2["arpa_ignore_money_" + project.id]
+      );
+      Object.values(buildings2).filter((building) => !building.isSwitchable()).forEach(
+        (building) => delete settingsRaw2["bld_s_" + building._vueBinding]
+      );
+      migrateSetting2("prestigeWhiteholeEjectEnabled", "autoEject", (v) => v);
+      migrateSetting2("mechSaveSupply", "mechSaveSupplyRatio", (v) => v ? 1 : 0);
+      migrateSetting2(
+        "foreignProtectSoldiers",
+        "foreignProtect",
+        (v) => v ? "always" : "never"
+      );
+      migrateSetting2(
+        "prestigeWhiteholeEjectExcess",
+        "ejectMode",
+        (v) => v ? "mixed" : "cap"
+      );
+      migrateSetting2("hellHandlePatrolCount", "autoHell", (v) => v, true);
+      migrateSetting2(
+        "unificationRequest",
+        "prioritizeUnify",
+        (v) => v ? "savereq" : "ignore"
+      );
+      migrateSetting2(
+        "queueRequest",
+        "prioritizeQueue",
+        (v) => v ? "savereq" : "ignore"
+      );
+      migrateSetting2(
+        "triggerRequest",
+        "prioritizeTriggers",
+        (v) => v ? "savereq" : "ignore"
+      );
+      migrateSetting2("govManage", "autoGovernment", (v) => v);
+      migrateSetting2("storagePrioritizedOnly", "storageAssignPart", (v) => !v);
+      migrateSetting2(
+        "fleetScanEris",
+        "fleet_outer_pr_spc_eris",
+        (v) => v ? 100 : 0
+      );
+      migrateSetting2(
+        "jobDisableCraftsmans",
+        "productionCraftsmen",
+        (v) => v ? "nocraft" : "always"
+      );
+      migrateSetting2("activeTriggerUI", "activeTargetsUI", (v) => v);
+      migrateSetting2("autoAssembleGene", "autoGenetics", (v) => v);
+      migrateSetting2("batportal-harbour", "batportal-harbor", (v) => v);
+      migrateSetting2("bld_p_portal-harbour", "bld_p_portal-harbor", (v) => v);
+      migrateSetting2("bld_s_portal-harbour", "bld_s_portal-harbor", (v) => v);
+      migrateSetting2("bld_s2_portal-harbour", "bld_s2_portal-harbor", (v) => v);
+      migrateSetting2("bld_m_portal-harbour", "bld_m_portal-harbor", (v) => v);
+      migrateSetting2("bld_w_portal-harbour", "bld_w_portal-harbor", (v) => v);
+      if (settingsRaw2.hasOwnProperty("genesAssembleGeneAlways")) {
+        if (settingsRaw2.overrides.genesAssembleGeneAlways) {
+          settingsRaw2.overrides.geneticsAssemble = settingsRaw2.overrides.genesAssembleGeneAlways.concat(
+            settingsRaw2.overrides.geneticsAssemble ?? []
+          );
+        }
+        if (!settingsRaw2.genesAssembleGeneAlways) {
+          settingsRaw2.overrides.geneticsAssemble = settingsRaw2.overrides.geneticsAssemble ?? [];
+          settingsRaw2.overrides.geneticsAssemble.push({
+            type1: "ResearchComplete",
+            arg1: "tech-dna_sequencer",
+            type2: "Boolean",
+            arg2: true,
+            cmp: "==",
+            ret: "none"
+          });
+        }
+      }
+      if (settingsRaw2.hasOwnProperty("prestigeWhiteholeEjectAllCount") && settingsRaw2.prestigeWhiteholeEjectAllCount <= 20) {
+        settingsRaw2.overrides.ejectMode = settingsRaw2.overrides.ejectMode ?? [];
+        settingsRaw2.overrides.ejectMode.push({
+          type1: "BuildingCount",
+          arg1: "interstellar-mass_ejector",
+          type2: "Number",
+          arg2: settingsRaw2.prestigeWhiteholeEjectAllCount,
+          cmp: ">=",
+          ret: "all"
+        });
+      }
+      if (settingsRaw2.hasOwnProperty("prestigeAscensionSkipCustom") && !settings2.prestigeAscensionSkipCustom) {
+        settingsRaw2.overrides.autoPrestige = settingsRaw2.overrides.autoPrestige ?? [];
+        settingsRaw2.overrides.autoPrestige.push({
+          type1: "ResetType",
+          arg1: "ascension",
+          type2: "Boolean",
+          arg2: true,
+          cmp: "==",
+          ret: false
+        });
+      }
+      Object.values(crafter2).forEach((job) => {
+        delete settingsRaw2["job_p_" + job._originalId], delete settingsRaw2["job_b1_" + job._originalId], delete settingsRaw2["job_b2_" + job._originalId], delete settingsRaw2["job_b3_" + job._originalId];
+      });
+      ["res_containers_m_", "res_crates_m_"].forEach(
+        (id) => Object.values(resources2).forEach((res) => {
+          delete settingsRaw2[id + res.id], delete settingsRaw2.overrides[id + res.id];
+        })
+      );
+      [
+        "prestigeWhiteholeEjectAllCount",
+        "prestigeWhiteholeDecayRate",
+        "genesAssembleGeneAlways",
+        "buildingsConflictQueue",
+        "buildingsConflictRQueue",
+        "buildingsConflictPQueue",
+        "fleet_outer_pr_spc_hell",
+        "fleet_outer_pr_spc_dwarf",
+        "prestigeEnabledBarracks",
+        "bld_s2_city-garrison",
+        "prestigeAscensionSkipCustom",
+        "prestigeBioseedGECK",
+        "tickTimeout",
+        "minorTraitSettingsCollapsed",
+        "fleetOuterMinSyndicate",
+        "smelter_fuel_p_Star",
+        "replicatorResource"
+      ].forEach((id) => {
+        delete settingsRaw2[id], delete settingsRaw2.overrides[id];
+      });
+    }
+    return { updateStandAloneSettings: updateStandAloneSettings2 };
+  }
+
+  // src/settings/override-evaluation.ts
+  function createOverrideEvaluation({
+    getSafeMode,
+    getSettings,
+    getSettingsRaw,
+    getCheckTypes,
+    getCheckCompare,
+    getCheckCustom,
+    getHaveTask,
+    getWindowManager,
+    getGame,
+    getGameLog,
+    getJQuery,
+    changeDisplayInputNode: changeDisplayInputNode2
+  }) {
+    function updateOverrides2() {
+      const safeMode2 = getSafeMode();
+      const settings2 = getSettings();
+      const settingsRaw2 = getSettingsRaw();
+      const checkTypes2 = getCheckTypes();
+      const checkCompare2 = getCheckCompare();
+      const checkCustom2 = getCheckCustom();
+      const haveTask2 = getHaveTask();
+      const WindowManager2 = getWindowManager();
+      const game2 = getGame();
+      const GameLog2 = getGameLog();
+      const $2 = getJQuery();
+      if (safeMode2) {
+        Object.assign(settings2, settingsRaw2);
+        settings2.masterScriptToggle = false;
+        return;
+      }
+      let xorLists = {};
+      let overrides = {};
+      for (let key in settingsRaw2.overrides) {
+        let conditions = settingsRaw2.overrides[key];
+        for (let i = 0; i < conditions.length; i++) {
+          let check = conditions[i];
+          try {
+            if (!checkTypes2[check.type1]) {
+              throw `${check.type1} variable not found`;
+            }
+            if (!checkTypes2[check.type2]) {
+              throw `${check.type2} variable not found`;
+            }
+            if (!checkCompare2[check.cmp]) {
+              throw `${checkCompare2[check.cmp]} comparator not found`;
+            }
+            let var1 = checkTypes2[check.type1].fn(check.arg1);
+            let var2 = checkTypes2[check.type2].fn(check.arg2);
+            if (!checkCompare2[check.cmp](var1, var2)) {
+              continue;
+            }
+            let ret = checkCustom2[check.cmp] ? var2 : check.ret;
+            if (typeof settingsRaw2[key] === typeof ret) {
+              overrides[key] = ret;
+              break;
+            } else if (typeof settingsRaw2[key] === "object") {
+              xorLists[key] = xorLists[key] ?? [];
+              xorLists[key].push(ret);
+            } else {
+              throw `Expected type: ${typeof settingsRaw2[key]}; Override type: ${typeof ret}`;
+            }
+          } catch (error) {
+            let msg = `Condition ${i + 1} for setting ${key} invalid! Fix or remove it. (${error})`;
+            if (!WindowManager2.isOpen() && !Object.values(game2.global.lastMsg.all).find(
+              (log) => log.m === msg
+            )) {
+              GameLog2.logDanger("special", msg, ["events", "major_events"]);
+            }
+            continue;
+          }
+        }
+      }
+      if (haveTask2("bal_storage") || haveTask2("combo_storage")) {
+        overrides["autoStorage"] = false;
+      }
+      if (haveTask2("trash")) {
+        overrides["autoEject"] = false;
+      }
+      if (haveTask2("tax")) {
+        overrides["autoTax"] = false;
+      }
+      let rawTickRate = overrides["tickRate"] ?? settingsRaw2["tickRate"];
+      overrides["tickRate"] = Math.min(
+        240,
+        Math.max(1, Math.round(rawTickRate * 2)) / 2
+      );
+      Object.assign(settings2, settingsRaw2, overrides);
+      for (let key in xorLists) {
+        settings2[key] = settingsRaw2[key].slice();
+        for (let item of xorLists[key]) {
+          let index = settings2[key].indexOf(item);
+          if (index > -1) {
+            settings2[key].splice(index, 1);
+          } else {
+            settings2[key].push(item);
+          }
+        }
+      }
+      let currentNode = $2(`#script_override_true_value:visible`);
+      if (currentNode.length !== 0) {
+        changeDisplayInputNode2(currentNode);
+      }
+    }
+    return { updateOverrides: updateOverrides2 };
+  }
+
   // src/settings/queued-settings.ts
   function createQueuedSettings({
     getSettings,
@@ -1281,6 +1729,1898 @@
       }
     }
     return { getGovernor: getGovernor2, haveTask: haveTask2, haveTech: haveTech2, isEarlyGame: isEarlyGame2 };
+  }
+
+  // src/game/trait-managers.ts
+  function createTraitManagers({
+    getGame,
+    getSettings,
+    getResources,
+    getVueById: getVueById2,
+    haveTech: haveTech2
+  }) {
+    const MinorTraitManager2 = {
+      priorityList: [],
+      _traitVueBinding: "geneticBreakdown",
+      isUnlocked() {
+        return haveTech2("genetics", 3);
+      },
+      sortByPriority() {
+        this.priorityList.sort((a, b) => a.priority - b.priority);
+      },
+      managedPriorityList() {
+        return this.priorityList.filter(
+          (trait) => trait.enabled && trait.isUnlocked()
+        );
+      },
+      buyTrait(traitName) {
+        getVueById2(this._traitVueBinding)?.gene(traitName);
+      }
+    };
+    const MutableTraitManager2 = {
+      priorityList: [],
+      _traitVueBinding: "geneticBreakdown",
+      isUnlocked() {
+        return haveTech2("genetics", 3) && getGame().global.genes["mutation"];
+      },
+      sortByPriority() {
+        this.priorityList.sort((a, b) => a.priority - b.priority);
+      },
+      gainTrait(traitName) {
+        getVueById2(this._traitVueBinding)?.gain(traitName);
+      },
+      purgeTrait(traitName) {
+        getVueById2(this._traitVueBinding)?.purge(traitName);
+      },
+      get minimumPlasmidsToPreserve() {
+        const settings2 = getSettings();
+        const resources2 = getResources();
+        return Math.max(
+          0,
+          settings2.minimumPlasmidsToPreserve,
+          settings2.doNotGoBelowPlasmidSoftcap ? resources2.Phage.currentQuantity + 250 : 0
+        );
+      }
+    };
+    return { MinorTraitManager: MinorTraitManager2, MutableTraitManager: MutableTraitManager2 };
+  }
+
+  // src/game/industry-managers.ts
+  function createIndustryManagers({
+    getGame,
+    getBuildings,
+    getVueById: getVueById2,
+    getKeyManager,
+    haveTech: haveTech2
+  }) {
+    const QuarryManager2 = {
+      _industryVueBinding: "iQuarry",
+      _industryVue: void 0,
+      initIndustry() {
+        const game2 = getGame();
+        const buildings2 = getBuildings();
+        if (!game2.global.race["smoldering"] || buildings2.RockQuarry.count < 1) {
+          return false;
+        }
+        this._industryVue = getVueById2(this._industryVueBinding);
+        if (this._industryVue === void 0) {
+          return false;
+        }
+        return true;
+      },
+      currentProduction() {
+        const game2 = getGame();
+        return game2.global.city.rock_quarry.asbestos;
+      },
+      increaseProduction(count) {
+        if (count === 0) {
+          return false;
+        }
+        if (count < 0) {
+          return this.decreaseProduction(count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.add();
+        }
+      },
+      decreaseProduction(count) {
+        if (count === 0) {
+          return false;
+        }
+        if (count < 0) {
+          return this.increaseProduction(count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.sub();
+        }
+      }
+    };
+    const MineManager2 = {
+      _industryVueBinding: "iTMine",
+      _industryVue: void 0,
+      initIndustry() {
+        const buildings2 = getBuildings();
+        if (buildings2.TitanMine.count < 1) {
+          return false;
+        }
+        this._industryVue = getVueById2(this._industryVueBinding);
+        if (this._industryVue === void 0) {
+          return false;
+        }
+        return true;
+      },
+      currentProduction() {
+        const game2 = getGame();
+        return game2.global.space.titan_mine.ratio;
+      },
+      increaseProduction(count) {
+        if (count === 0) {
+          return false;
+        }
+        if (count < 0) {
+          return this.decreaseProduction(count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.add();
+        }
+      },
+      decreaseProduction(count) {
+        if (count === 0) {
+          return false;
+        }
+        if (count < 0) {
+          return this.increaseProduction(count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.sub();
+        }
+      }
+    };
+    const ExtractorManager2 = {
+      _industryVueBinding: "iMiningShip",
+      _industryVue: void 0,
+      initIndustry() {
+        const buildings2 = getBuildings();
+        if (!haveTech2("tau_roid", 4) || buildings2.TauBeltMiningShip.count < 1) {
+          return false;
+        }
+        this._industryVue = getVueById2(this._industryVueBinding);
+        if (this._industryVue === void 0) {
+          return false;
+        }
+        return true;
+      },
+      currentProduction(production) {
+        const game2 = getGame();
+        return game2.global.tauceti.mining_ship[production];
+      },
+      increaseProduction(production, count) {
+        if (count === 0) {
+          return false;
+        }
+        if (count < 0) {
+          return this.decreaseProduction(production, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.add(production);
+        }
+      },
+      decreaseProduction(production, count) {
+        if (count === 0) {
+          return false;
+        }
+        if (count < 0) {
+          return this.increaseProduction(production, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.sub(production);
+        }
+      }
+    };
+    return { QuarryManager: QuarryManager2, MineManager: MineManager2, ExtractorManager: ExtractorManager2 };
+  }
+
+  // src/game/magic-managers.ts
+  function createMagicManagers({
+    getGame,
+    getSettings,
+    getResources,
+    getBuildings,
+    getVueById: getVueById2,
+    getKeyManager,
+    haveTech: haveTech2,
+    isLumberRace: isLumberRace2,
+    addProps: addProps2
+  }) {
+    const AlchemyManager2 = {
+      _alchemyVuePrefix: "alchemy",
+      priorityList: [],
+      resEnabled: (id) => getSettings()["res_alchemy_" + id],
+      resWeighting: (id) => getSettings()["res_alchemy_w_" + id],
+      isUnlocked() {
+        return haveTech2("alchemy");
+      },
+      managedPriorityList() {
+        const game2 = getGame();
+        const resources2 = getResources();
+        return this.priorityList.filter(
+          (res) => this.resEnabled(res.id) && res.isUnlocked() && this.transmuteTier(res) <= game2.global.tech.alchemy && (!game2.global.race["artifical"] || res !== resources2.Food)
+        );
+      },
+      transmuteTier(res) {
+        const game2 = getGame();
+        const resources2 = getResources();
+        return !game2.tradeRatio.hasOwnProperty(res.id) || res === resources2.Crystal ? 0 : res.instance?.hasOwnProperty("trade") ? 1 : 2;
+      },
+      currentCount(id) {
+        const game2 = getGame();
+        return game2.global.race.alchemy[id];
+      },
+      transmuteMore(id, count) {
+        const resources2 = getResources();
+        let vue = getVueById2(this._alchemyVuePrefix + id);
+        if (vue === void 0) {
+          return false;
+        }
+        resources2.Mana.rateOfChange -= count * 1;
+        resources2.Crystal.rateOfChange -= count * 0.5;
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          vue.addSpell(id);
+        }
+      },
+      transmuteLess(id, count) {
+        const resources2 = getResources();
+        let vue = getVueById2(this._alchemyVuePrefix + id);
+        if (vue === void 0) {
+          return false;
+        }
+        resources2.Mana.rateOfChange += count * 1;
+        resources2.Crystal.rateOfChange += count * 0.5;
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          vue.subSpell(id);
+        }
+      }
+    };
+    const RitualManager2 = {
+      _industryVueBinding: "iPylon",
+      _industryVue: void 0,
+      Productions: addProps2(
+        {
+          Farmer: {
+            id: "farmer",
+            isUnlocked: () => !getGame().global.race["orbit_decayed"] && !getGame().global.race["cataclysm"] && !getGame().global.race["carnivore"] && !getGame().global.race["soul_eater"] && !getGame().global.race["artifical"] && !getGame().global.race["unfathomable"]
+          },
+          Miner: {
+            id: "miner",
+            isUnlocked: () => !getGame().global.race["cataclysm"]
+          },
+          Lumberjack: {
+            id: "lumberjack",
+            isUnlocked: () => !getGame().global.race["orbit_decayed"] && !getGame().global.race["cataclysm"] && isLumberRace2() && !getGame().global.race["evil"]
+          },
+          Science: { id: "science", isUnlocked: () => true },
+          Factory: { id: "factory", isUnlocked: () => true },
+          Army: { id: "army", isUnlocked: () => true },
+          Hunting: { id: "hunting", isUnlocked: () => true },
+          Crafting: { id: "crafting", isUnlocked: () => haveTech2("magic", 4) }
+        },
+        (s2) => s2.id,
+        [{ s: "spell_w_", p: "weighting" }]
+      ),
+      initIndustry() {
+        const game2 = getGame();
+        const buildings2 = getBuildings();
+        if (buildings2.Pylon.count < 1 && buildings2.RedPylon.count < 1 && buildings2.TauPylon.count < 1 || !game2.global.race["casting"]) {
+          return false;
+        }
+        this._industryVue = getVueById2(this._industryVueBinding);
+        if (this._industryVue === void 0) {
+          return false;
+        }
+        return true;
+      },
+      currentSpells(spell) {
+        const game2 = getGame();
+        return game2.global.race.casting[spell.id];
+      },
+      spellCost(spell) {
+        return this.manaCost(this.currentSpells(spell));
+      },
+      costStep(level) {
+        if (level === 0) {
+          return 25e-4;
+        }
+        let cost = this.manaCost(level);
+        return (cost / level * 1.0025 + 25e-4) * (level + 1) - cost;
+      },
+      // export function manaCost(spell,rate) from industry.js
+      manaCost(level) {
+        return level * (1.0025 ** level - 1);
+      },
+      increaseRitual(spell, count) {
+        if (count === 0 || !spell.isUnlocked()) {
+          return false;
+        }
+        if (count < 0) {
+          return this.decreaseRitual(spell, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.addSpell(spell.id);
+        }
+      },
+      decreaseRitual(spell, count) {
+        if (count === 0 || !spell.isUnlocked()) {
+          return false;
+        }
+        if (count < 0) {
+          return this.increaseRitual(count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.subSpell(spell.id);
+        }
+      }
+    };
+    return { AlchemyManager: AlchemyManager2, RitualManager: RitualManager2 };
+  }
+
+  // src/game/disposal-managers.ts
+  function createDisposalManagers({
+    getGame,
+    getSettings,
+    getResources,
+    getBuildings,
+    getPoly,
+    getVueById: getVueById2,
+    getKeyManager,
+    haveTask: haveTask2
+  }) {
+    const NaniteManager2 = {
+      _industryVueBinding: "iNFactory",
+      _industryVue: void 0,
+      storageShift: 1.005,
+      priorityList: [],
+      // export const nf_resources from industry.js
+      Resources: [
+        "Lumber",
+        "Chrysotile",
+        "Stone",
+        "Crystal",
+        "Furs",
+        "Copper",
+        "Iron",
+        "Aluminium",
+        "Cement",
+        "Coal",
+        "Oil",
+        "Uranium",
+        "Steel",
+        "Titanium",
+        "Alloy",
+        "Polymer",
+        "Iridium",
+        "Helium_3",
+        "Water",
+        "Deuterium",
+        "Neutronium",
+        "Adamantite",
+        "Bolognium",
+        "Orichalcum"
+      ],
+      resEnabled: (id) => getSettings()["res_nanite" + id],
+      isUnlocked() {
+        const game2 = getGame();
+        const buildings2 = getBuildings();
+        return game2.global.race["deconstructor"] && (buildings2.NaniteFactory.count > 0 || buildings2.RedNaniteFactory.count > 0 || buildings2.TauNaniteFactory.count > 0);
+      },
+      isUseful() {
+        return getResources().Nanite.storageRatio < 1;
+      },
+      initIndustry() {
+        if (!this.isUnlocked()) {
+          return false;
+        }
+        this._industryVue = getVueById2(this._industryVueBinding);
+        if (this._industryVue === void 0) {
+          return false;
+        }
+        return true;
+      },
+      isConsumable(res) {
+        return this.Resources.includes(res.id);
+      },
+      updateResources() {
+        if (!this.isUnlocked() || !getSettings().autoNanite) {
+          return;
+        }
+        for (let resource of this.priorityList) {
+          if (resource.isUnlocked()) {
+            resource.rateMods["nanite"] = this.currentConsume(resource.id);
+            resource.rateOfChange += resource.rateMods["nanite"];
+          }
+        }
+      },
+      managedPriorityList() {
+        return this.priorityList;
+      },
+      maxConsume() {
+        return getGame().global.city.nanite_factory.count * 50;
+      },
+      currentConsume(id) {
+        return getGame().global.city.nanite_factory[id];
+      },
+      useRatio() {
+        switch (getSettings().naniteMode) {
+          case "cap":
+            return [0.965];
+          case "excess":
+            return [-1];
+          case "all":
+            return [0.035];
+          case "mixed":
+            return [0.965, -1];
+          case "full":
+            return [0.965, -1, 0.035];
+          default:
+            return [];
+        }
+      },
+      maxConsumeCraftable(resource) {
+        let extraIncome = resource.rateOfChange;
+        let extraStore = resource.currentQuantity - resource.storageRequired * this.storageShift;
+        return Math.max(extraIncome, extraStore);
+      },
+      maxConsumeForRatio(resource, keepRatio) {
+        let extraIncome = resource.rateOfChange;
+        let extraStore = (resource.storageRatio - keepRatio) * resource.maxQuantity;
+        return Math.max(extraIncome, extraStore);
+      },
+      consumeMore(id, count) {
+        const resources2 = getResources();
+        resources2[id].rateMods["nanite"] += count;
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.addItem(id);
+        }
+      },
+      consumeLess(id, count) {
+        const resources2 = getResources();
+        resources2[id].rateMods["nanite"] -= count;
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.subItem(id);
+        }
+      }
+    };
+    const SupplyManager2 = {
+      _supplyVuePrefix: "supply",
+      storageShift: 1.01,
+      priorityList: [],
+      resEnabled: (id) => getSettings()["res_supply" + id],
+      isUnlocked() {
+        return getBuildings().LakeTransport.count > 0;
+      },
+      isUseful() {
+        const resources2 = getResources();
+        const buildings2 = getBuildings();
+        return resources2.Supply.storageRatio < 1 && buildings2.LakeTransport.stateOnCount > 0 && buildings2.LakeBireme.stateOnCount > 0;
+      },
+      initIndustry() {
+        return this.isUnlocked();
+      },
+      isConsumable(res) {
+        return getPoly().supplyValue.hasOwnProperty(res.id);
+      },
+      updateResources() {
+        if (!this.isUnlocked() || !getSettings().autoSupply) {
+          return;
+        }
+        for (let resource of this.priorityList) {
+          if (resource.isUnlocked()) {
+            resource.rateMods["supply"] = this.currentConsume(resource.id) * this.supplyOut(resource.id);
+            resource.rateOfChange += resource.rateMods["supply"];
+          }
+        }
+      },
+      supplyIn(id) {
+        return getPoly().supplyValue[id]?.in ?? 0;
+      },
+      supplyOut(id) {
+        return getPoly().supplyValue[id]?.out ?? 0;
+      },
+      managedPriorityList() {
+        return this.priorityList;
+      },
+      maxConsume() {
+        return getGame().global.portal.transport.cargo.max;
+      },
+      currentConsume(id) {
+        return getGame().global.portal.transport.cargo[id];
+      },
+      useRatio() {
+        switch (getSettings().supplyMode) {
+          case "cap":
+            return [0.975];
+          case "excess":
+            return [-1];
+          case "all":
+            return [0.045];
+          case "mixed":
+            return [0.975, -1];
+          case "full":
+            return [0.975, -1, 0.045];
+          default:
+            return [];
+        }
+      },
+      maxConsumeCraftable(resource) {
+        let extraIncome = resource.calculateRateOfChange({
+          buy: false,
+          nanite: true
+        });
+        let extraStore = resource.currentQuantity - resource.storageRequired * this.storageShift;
+        return Math.max(extraIncome, extraStore) / this.supplyOut(resource.id);
+      },
+      maxConsumeForRatio(resource, keepRatio) {
+        let extraIncome = resource.calculateRateOfChange({
+          buy: false,
+          nanite: true
+        });
+        let extraStore = (resource.storageRatio - keepRatio) * resource.maxQuantity;
+        return Math.max(extraIncome, extraStore) / this.supplyOut(resource.id);
+      },
+      consumeMore(id, count) {
+        const resources2 = getResources();
+        let vue = getVueById2(this._supplyVuePrefix + id);
+        if (vue === void 0) {
+          return false;
+        }
+        resources2[id].rateMods["supply"] += count * this.supplyOut(id);
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          vue.supplyMore(id);
+        }
+      },
+      consumeLess(id, count) {
+        const resources2 = getResources();
+        let vue = getVueById2(this._supplyVuePrefix + id);
+        if (vue === void 0) {
+          return false;
+        }
+        resources2[id].rateMods["supply"] -= count * this.supplyOut(id);
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          vue.supplyLess(id);
+        }
+      }
+    };
+    const EjectManager2 = {
+      _ejectVuePrefix: "eject",
+      storageShift: 1.015,
+      priorityList: [],
+      resEnabled: (id) => getSettings()["res_eject" + id],
+      isUnlocked() {
+        return getBuildings().BlackholeMassEjector.count > 0;
+      },
+      isUseful() {
+        return true;
+      },
+      initIndustry() {
+        return this.isUnlocked();
+      },
+      isConsumable(res) {
+        return getGame().atomic_mass.hasOwnProperty(res.id);
+      },
+      updateResources() {
+        if (!this.isUnlocked() || !getSettings().autoEject && !haveTask2("trash")) {
+          return;
+        }
+        for (let resource of this.priorityList) {
+          if (resource.isUnlocked()) {
+            resource.rateMods["eject"] = this.currentConsume(resource.id);
+            resource.rateOfChange += resource.rateMods["eject"];
+          }
+        }
+      },
+      managedPriorityList() {
+        const game2 = getGame();
+        const resources2 = getResources();
+        return !game2.global.race["artifical"] ? this.priorityList : this.priorityList.filter((r) => r !== resources2.Food);
+      },
+      maxConsume() {
+        return getGame().global.interstellar.mass_ejector.on * 1e3;
+      },
+      currentConsume(id) {
+        return getGame().global.interstellar.mass_ejector[id];
+      },
+      useRatio() {
+        switch (getSettings().ejectMode) {
+          case "cap":
+            return [0.985];
+          case "excess":
+            return [-1];
+          case "all":
+            return [0.055];
+          case "mixed":
+            return [0.985, -1];
+          case "full":
+            return [0.985, -1, 0.055];
+          default:
+            return [];
+        }
+      },
+      maxConsumeCraftable(resource) {
+        let extraIncome = resource.calculateRateOfChange({
+          buy: false,
+          supply: true,
+          nanite: true
+        });
+        let extraStore = resource.currentQuantity - resource.storageRequired * this.storageShift;
+        return Math.max(extraIncome, extraStore);
+      },
+      maxConsumeForRatio(resource, keepRatio) {
+        let extraIncome = resource.calculateRateOfChange({
+          buy: false,
+          supply: true,
+          nanite: true
+        });
+        let extraStore = (resource.storageRatio - keepRatio) * resource.maxQuantity;
+        return Math.max(extraIncome, extraStore);
+      },
+      consumeMore(id, count) {
+        const resources2 = getResources();
+        let vue = getVueById2(this._ejectVuePrefix + id);
+        if (vue === void 0) {
+          return false;
+        }
+        resources2[id].rateMods["eject"] += count;
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          vue.ejectMore(id);
+        }
+      },
+      consumeLess(id, count) {
+        const resources2 = getResources();
+        let vue = getVueById2(this._ejectVuePrefix + id);
+        if (vue === void 0) {
+          return false;
+        }
+        resources2[id].rateMods["eject"] -= count;
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          vue.ejectLess(id);
+        }
+      }
+    };
+    return { NaniteManager: NaniteManager2, SupplyManager: SupplyManager2, EjectManager: EjectManager2 };
+  }
+
+  // src/game/production-managers.ts
+  function createProductionManagers({
+    getGame,
+    getResources,
+    getBuildings,
+    getVueById: getVueById2,
+    getKeyManager,
+    haveTech: haveTech2,
+    isLumberRace: isLumberRace2,
+    addProps: addProps2,
+    normalizeProperties: normalizeProperties2,
+    replicableResources: replicableResources2,
+    ResourceProductionCost: ResourceProductionCost2
+  }) {
+    const resources2 = getResources();
+    const SmelterManager2 = {
+      _industryVueBinding: "iSmelter",
+      _industryVue: void 0,
+      Productions: normalizeProperties2(
+        {
+          Iron: {
+            id: "Iron",
+            unlocked: () => true,
+            resource: resources2.Iron,
+            cost: []
+          },
+          Steel: {
+            id: "Steel",
+            unlocked: () => resources2.Steel.isUnlocked() && haveTech2("smelting", 2),
+            resource: resources2.Steel,
+            cost: [
+              new ResourceProductionCost2(resources2.Coal, 0.25, 1.25),
+              new ResourceProductionCost2(resources2.Iron, 2, 6)
+            ]
+          },
+          Iridium: {
+            id: "Iridium",
+            unlocked: () => resources2.Iridium.isUnlocked() && (haveTech2("m_smelting", 2) || haveTech2("irid_smelting")),
+            resource: resources2.Iridium,
+            cost: []
+          }
+        },
+        [ResourceProductionCost2]
+      ),
+      Fuels: addProps2(
+        normalizeProperties2(
+          {
+            Oil: {
+              id: "Oil",
+              unlocked: () => getGame().global.resource.Oil.display,
+              cost: [new ResourceProductionCost2(resources2.Oil, 0.35, 2)]
+            },
+            Coal: {
+              id: "Coal",
+              unlocked: () => getGame().global.resource.Coal.display,
+              cost: [
+                new ResourceProductionCost2(
+                  resources2.Coal,
+                  () => !isLumberRace2() ? 0.15 : 0.25,
+                  2
+                )
+              ]
+            },
+            Wood: {
+              id: "Wood",
+              unlocked: () => isLumberRace2() || getGame().global.race["evil"],
+              cost: [
+                new ResourceProductionCost2(
+                  () => getGame().global.race["evil"] ? getGame().global.race["soul_eater"] && getGame().global.race.species !== "wendigo" ? resources2.Food : resources2.Furs : resources2.Lumber,
+                  () => getGame().global.race["evil"] && !getGame().global.race["soul_eater"] || getGame().global.race.species === "wendigo" ? 1 : 3,
+                  6
+                )
+              ]
+            },
+            Inferno: {
+              id: "Inferno",
+              unlocked: () => haveTech2("smelting", 8),
+              cost: [
+                new ResourceProductionCost2(resources2.Coal, 50, 50),
+                new ResourceProductionCost2(resources2.Oil, 35, 50),
+                new ResourceProductionCost2(resources2.Infernite, 0.5, 50)
+              ]
+            }
+          },
+          [ResourceProductionCost2]
+        ),
+        (f) => f.id,
+        [{ s: "smelter_fuel_p_", p: "priority" }]
+      ),
+      initIndustry() {
+        const game2 = getGame();
+        const buildings2 = getBuildings();
+        if (game2.global.race["steelen"] || buildings2.Smelter.count < 1 && !game2.global.race["cataclysm"] && !game2.global.race["orbit_decayed"] && !haveTech2("isolation") && !game2.global.race["warlord"]) {
+          return false;
+        }
+        this._industryVue = getVueById2(this._industryVueBinding);
+        if (this._industryVue === void 0) {
+          return false;
+        }
+        return true;
+      },
+      managedFuelPriorityList() {
+        return Object.values(this.Fuels).sort(
+          (a, b) => a.priority - b.priority
+        );
+      },
+      fueledCount(fuel) {
+        if (!fuel.unlocked) {
+          return 0;
+        }
+        return getGame().global.city.smelter[fuel.id];
+      },
+      smeltingCount(production) {
+        if (!production.unlocked) {
+          return 0;
+        }
+        return getGame().global.city.smelter[production.id];
+      },
+      increaseFuel(fuel, count) {
+        if (count === 0 || !fuel.unlocked) {
+          return false;
+        }
+        if (count < 0) {
+          return this.decreaseFuel(fuel, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.addFuel(fuel.id);
+        }
+      },
+      decreaseFuel(fuel, count) {
+        if (count === 0 || !fuel.unlocked) {
+          return false;
+        }
+        if (count < 0) {
+          return this.increaseFuel(fuel, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.subFuel(fuel.id);
+        }
+      },
+      increaseSmelting(id, count) {
+        if (count === 0 || !this.Productions[id].unlocked) {
+          return false;
+        }
+        if (count < 0) {
+          return this.decreaseSmelting(id, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.addMetal(id);
+        }
+      },
+      decreaseSmelting(id, count) {
+        if (count === 0 || !this.Productions[id].unlocked) {
+          return false;
+        }
+        if (count < 0) {
+          return this.increaseSmelting(id, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.subMetal(id);
+        }
+      },
+      maxOperating() {
+        const game2 = getGame();
+        return game2.global.city.smelter.cap - game2.global.city.smelter.Star;
+      },
+      extraOperating() {
+        return getGame().global.city.smelter.Star;
+      },
+      currentFueled() {
+        return this._industryVue.$options.filters.on();
+      }
+    };
+    const FactoryManager2 = {
+      _industryVueBinding: "iFactory",
+      _industryVue: void 0,
+      Productions: addProps2(
+        normalizeProperties2(
+          {
+            LuxuryGoods: {
+              id: "Lux",
+              resource: resources2.Money,
+              unlocked: () => true,
+              cost: [
+                new ResourceProductionCost2(
+                  resources2.Furs,
+                  () => FactoryManager2.f_rate("Lux", "fur"),
+                  5
+                )
+              ]
+            },
+            Furs: {
+              id: "Furs",
+              resource: resources2.Furs,
+              unlocked: () => haveTech2("synthetic_fur"),
+              cost: [
+                new ResourceProductionCost2(
+                  resources2.Money,
+                  () => FactoryManager2.f_rate("Furs", "money"),
+                  1e3
+                ),
+                new ResourceProductionCost2(
+                  resources2.Polymer,
+                  () => FactoryManager2.f_rate("Furs", "polymer"),
+                  10
+                )
+              ]
+            },
+            Alloy: {
+              id: "Alloy",
+              resource: resources2.Alloy,
+              unlocked: () => true,
+              cost: [
+                new ResourceProductionCost2(
+                  resources2.Copper,
+                  () => FactoryManager2.f_rate("Alloy", "copper"),
+                  5
+                ),
+                new ResourceProductionCost2(
+                  resources2.Aluminium,
+                  () => FactoryManager2.f_rate("Alloy", "aluminium"),
+                  5
+                )
+              ]
+            },
+            Polymer: {
+              id: "Polymer",
+              resource: resources2.Polymer,
+              unlocked: () => haveTech2("polymer"),
+              cost: function() {
+                return !isLumberRace2() ? this.cost_kk : this.cost_normal;
+              },
+              cost_kk: [
+                new ResourceProductionCost2(
+                  resources2.Oil,
+                  () => FactoryManager2.f_rate("Polymer", "oil_kk"),
+                  2
+                )
+              ],
+              cost_normal: [
+                new ResourceProductionCost2(
+                  resources2.Oil,
+                  () => FactoryManager2.f_rate("Polymer", "oil"),
+                  2
+                ),
+                new ResourceProductionCost2(
+                  resources2.Lumber,
+                  () => FactoryManager2.f_rate("Polymer", "lumber"),
+                  50
+                )
+              ]
+            },
+            NanoTube: {
+              id: "Nano",
+              resource: resources2.Nano_Tube,
+              unlocked: () => haveTech2("nano"),
+              cost: [
+                new ResourceProductionCost2(
+                  resources2.Coal,
+                  () => FactoryManager2.f_rate("Nano_Tube", "coal"),
+                  15
+                ),
+                new ResourceProductionCost2(
+                  resources2.Neutronium,
+                  () => FactoryManager2.f_rate("Nano_Tube", "neutronium"),
+                  0.2
+                )
+              ]
+            },
+            Stanene: {
+              id: "Stanene",
+              resource: resources2.Stanene,
+              unlocked: () => haveTech2("stanene"),
+              cost: [
+                new ResourceProductionCost2(
+                  resources2.Aluminium,
+                  () => FactoryManager2.f_rate("Stanene", "aluminium"),
+                  50
+                ),
+                new ResourceProductionCost2(
+                  resources2.Nano_Tube,
+                  () => FactoryManager2.f_rate("Stanene", "nano"),
+                  5
+                )
+              ]
+            }
+          },
+          [ResourceProductionCost2]
+        ),
+        (p) => p.resource.id,
+        [
+          { s: "production_", p: "enabled" },
+          { s: "production_w_", p: "weighting" },
+          { s: "production_p_", p: "priority" }
+        ]
+      ),
+      initIndustry() {
+        const buildings2 = getBuildings();
+        if (buildings2.Factory.count < 1 && buildings2.RedFactory.count < 1 && buildings2.TauFactory.count < 1 && buildings2.WastelandHellFactory.count < 1) {
+          return false;
+        }
+        this._industryVue = getVueById2(this._industryVueBinding);
+        if (this._industryVue === void 0) {
+          return false;
+        }
+        return true;
+      },
+      f_rate(production, resource) {
+        const game2 = getGame();
+        return game2.f_rate[production][resource][game2.global.tech["factory"] || 0];
+      },
+      currentOperating() {
+        const game2 = getGame();
+        let total = 0;
+        for (let key in this.Productions) {
+          let production = this.Productions[key];
+          total += game2.global.city.factory[production.id];
+        }
+        return total;
+      },
+      maxOperating() {
+        const game2 = getGame();
+        const buildings2 = getBuildings();
+        let max = buildings2.Factory.stateOnCount + buildings2.RedFactory.stateOnCount + buildings2.AlphaMegaFactory.stateOnCount * 2 + buildings2.TauFactory.stateOnCount * (haveTech2("isolation") ? 5 : 3) + buildings2.WastelandHellFactory.stateOnCount * (3 + (game2.global.portal?.hell_factory?.rank || 1));
+        if (!game2.global.city.factory) {
+          return max;
+        }
+        for (let key in this.Productions) {
+          let production = this.Productions[key];
+          if (production.unlocked && !production.enabled) {
+            max -= game2.global.city.factory[production.id];
+          }
+        }
+        return max;
+      },
+      currentProduction(production) {
+        const game2 = getGame();
+        return production.unlocked ? game2.global.city.factory[production.id] : 0;
+      },
+      increaseProduction(production, count) {
+        if (count === 0 || !production.unlocked) {
+          return false;
+        }
+        if (count < 0) {
+          return this.decreaseProduction(production, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.addItem(production.id);
+        }
+      },
+      decreaseProduction(production, count) {
+        if (count === 0 || !production.unlocked) {
+          return false;
+        }
+        if (count < 0) {
+          return this.increaseProduction(production, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.subItem(production.id);
+        }
+      }
+    };
+    const ReplicatorManager2 = {
+      _industryVueBinding: "iReplicator",
+      _industryVue: void 0,
+      Productions: addProps2(
+        normalizeProperties2(
+          replicableResources2.map((resId) => resources2[resId]).reduce(
+            (a, res) => ({
+              ...a,
+              [res.id]: {
+                id: res.id,
+                resource: res,
+                unlocked: () => res.isUnlocked(),
+                cost: []
+              }
+            }),
+            {}
+          )
+        ),
+        (p) => p.resource.id,
+        [
+          { s: "replicator_", p: "enabled" },
+          { s: "replicator_w_", p: "weighting" },
+          { s: "replicator_p_", p: "priority" }
+        ]
+      ),
+      initIndustry() {
+        if (!haveTech2("replicator")) {
+          return false;
+        }
+        this._industryVue = getVueById2(this._industryVueBinding);
+        if (this._industryVue === void 0) {
+          return false;
+        }
+        return true;
+      },
+      setResource(res) {
+        if (this._industryVue.avail(res)) {
+          this._industryVue.setVal(res);
+        }
+      }
+    };
+    const DroidManager2 = {
+      _industryVueBinding: "iDroid",
+      _industryVue: void 0,
+      Productions: addProps2(
+        {
+          Adamantite: { id: "adam", resource: resources2.Adamantite },
+          Uranium: { id: "uran", resource: resources2.Uranium },
+          Coal: { id: "coal", resource: resources2.Coal },
+          Aluminium: { id: "alum", resource: resources2.Aluminium }
+        },
+        (p) => p.resource.id,
+        [
+          { s: "droid_w_", p: "weighting" },
+          { s: "droid_pr_", p: "priority" }
+        ]
+      ),
+      initIndustry() {
+        const buildings2 = getBuildings();
+        if (buildings2.AlphaMiningDroid.count < 1) {
+          return false;
+        }
+        this._industryVue = getVueById2(this._industryVueBinding);
+        if (this._industryVue === void 0) {
+          return false;
+        }
+        return true;
+      },
+      currentOperating() {
+        const game2 = getGame();
+        let total = 0;
+        for (let key in this.Productions) {
+          let production = this.Productions[key];
+          total += game2.global.interstellar.mining_droid[production.id];
+        }
+        return total;
+      },
+      maxOperating() {
+        return getGame().global.interstellar.mining_droid.on;
+      },
+      currentProduction(production) {
+        return getGame().global.interstellar.mining_droid[production.id];
+      },
+      increaseProduction(production, count) {
+        if (count === 0) {
+          return false;
+        }
+        if (count < 0) {
+          return this.decreaseProduction(production, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.addItem(production.id);
+        }
+      },
+      decreaseProduction(production, count) {
+        if (count === 0) {
+          return false;
+        }
+        if (count < 0) {
+          return this.increaseProduction(production, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.subItem(production.id);
+        }
+      }
+    };
+    const GrapheneManager2 = {
+      _industryVueBinding: "iGraphene",
+      _industryVue: void 0,
+      _graphPlant: null,
+      Fuels: {
+        Lumber: {
+          id: "Lumber",
+          cost: new ResourceProductionCost2(resources2.Lumber, 350, 100),
+          add: "addWood",
+          sub: "subWood"
+        },
+        Coal: {
+          id: "Coal",
+          cost: new ResourceProductionCost2(resources2.Coal, 25, 10),
+          add: "addCoal",
+          sub: "subCoal"
+        },
+        Oil: {
+          id: "Oil",
+          cost: new ResourceProductionCost2(resources2.Oil, 15, 10),
+          add: "addOil",
+          sub: "subOil"
+        }
+      },
+      initIndustry() {
+        const game2 = getGame();
+        const buildings2 = getBuildings();
+        this._graphPlant = game2.global.race["warlord"] ? buildings2.WastelandTwistedLab : game2.global.race["truepath"] ? buildings2.TitanGraphene : buildings2.AlphaGraphenePlant;
+        if ((this._graphPlant.instance?.count ?? 0) < 1) {
+          return false;
+        }
+        this._industryVue = getVueById2(this._industryVueBinding);
+        if (this._industryVue === void 0) {
+          return false;
+        }
+        return true;
+      },
+      maxOperating() {
+        return this._graphPlant.instance.on;
+      },
+      fueledCount(fuel) {
+        return this._graphPlant.instance[fuel.id];
+      },
+      increaseFuel(fuel, count) {
+        if (count === 0 || !fuel.cost.resource.isUnlocked()) {
+          return false;
+        }
+        if (count < 0) {
+          return this.decreaseFuel(fuel, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue[fuel.add]();
+        }
+      },
+      decreaseFuel(fuel, count) {
+        if (count === 0 || !fuel.cost.resource.isUnlocked()) {
+          return false;
+        }
+        if (count < 0) {
+          return this.increaseFuel(fuel, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue[fuel.sub]();
+        }
+      }
+    };
+    return {
+      SmelterManager: SmelterManager2,
+      FactoryManager: FactoryManager2,
+      ReplicatorManager: ReplicatorManager2,
+      DroidManager: DroidManager2,
+      GrapheneManager: GrapheneManager2
+    };
+  }
+
+  // src/game/economy-managers.ts
+  function createEconomyManagers({
+    getGame,
+    getResources,
+    getBuildings,
+    getDocument,
+    getVueById: getVueById2,
+    getKeyManager,
+    getWindowManager,
+    getGameLog,
+    haveTech: haveTech2,
+    traitVal: traitVal2
+  }) {
+    const GalaxyTradeManager2 = {
+      _industryVueBinding: "galaxyTrade",
+      _industryVue: void 0,
+      initIndustry() {
+        const buildings2 = getBuildings();
+        if (buildings2.GorddonFreighter.count + buildings2.Alien1SuperFreighter.count < 1) {
+          return false;
+        }
+        this._industryVue = getVueById2(this._industryVueBinding);
+        if (this._industryVue === void 0) {
+          return false;
+        }
+        return true;
+      },
+      currentOperating() {
+        return getGame().global.galaxy.trade.cur;
+      },
+      maxOperating() {
+        return getGame().global.galaxy.trade.max;
+      },
+      currentProduction(production) {
+        return getGame().global.galaxy.trade["f" + production];
+      },
+      zeroProduction(production) {
+        this._industryVue.zero(production);
+      },
+      increaseProduction(production, count) {
+        if (count === 0) {
+          return false;
+        }
+        if (count < 0) {
+          return this.decreaseProduction(production, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.more(production);
+        }
+      },
+      decreaseProduction(production, count) {
+        if (count === 0) {
+          return false;
+        }
+        if (count < 0) {
+          return this.increaseProduction(production, count * -1);
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._industryVue.less(production);
+        }
+      }
+    };
+    const GovernmentManager2 = {
+      Types: {
+        anarchy: { id: "anarchy", isUnlocked: () => false, selectable: false },
+        dictator: { id: "dictator", isUnlocked: () => false, selectable: false },
+        autocracy: { id: "autocracy", isUnlocked: () => true },
+        democracy: { id: "democracy", isUnlocked: () => true },
+        oligarchy: { id: "oligarchy", isUnlocked: () => true },
+        theocracy: { id: "theocracy", isUnlocked: () => haveTech2("gov_theo") },
+        republic: { id: "republic", isUnlocked: () => haveTech2("govern", 2) },
+        socialist: { id: "socialist", isUnlocked: () => haveTech2("gov_soc") },
+        corpocracy: { id: "corpocracy", isUnlocked: () => haveTech2("gov_corp") },
+        technocracy: {
+          id: "technocracy",
+          isUnlocked: () => haveTech2("govern", 3)
+        },
+        federation: { id: "federation", isUnlocked: () => haveTech2("gov_fed") },
+        magocracy: { id: "magocracy", isUnlocked: () => haveTech2("gov_mage") }
+      },
+      isUnlocked() {
+        let node = getDocument().getElementById("govType");
+        return node !== null && node.style.display !== "none";
+      },
+      isEnabled() {
+        let node = getDocument().querySelector("#govType button");
+        return this.isUnlocked() && node !== null && node.getAttribute("disabled") !== "disabled";
+      },
+      currentGovernment() {
+        return getGame().global.civic.govern.type;
+      },
+      setGovernment(government) {
+        const game2 = getGame();
+        const WindowManager2 = getWindowManager();
+        const GameLog2 = getGameLog();
+        if (this.currentGovernment() === government || WindowManager2.isOpen()) {
+          return;
+        }
+        let optionsNode = getDocument().querySelector("#govType button");
+        let title = game2.loc("civics_government_type");
+        WindowManager2.openModalWindowWithCallback(optionsNode, title, () => {
+          GameLog2.logSuccess(
+            "special",
+            `Revolution! Government changed to ${game2.loc(
+              "govern_" + government
+            )}.`,
+            ["events", "major_events"]
+          );
+          getVueById2("govModal")?.setGov(government);
+        });
+      }
+    };
+    const MarketManager2 = {
+      priorityList: [],
+      multiplier: 0,
+      updateData() {
+        const game2 = getGame();
+        if (game2.global.city.market) {
+          this.multiplier = game2.global.city.market.qty;
+        }
+      },
+      isUnlocked() {
+        return haveTech2("currency", 2);
+      },
+      sortByPriority() {
+        this.priorityList.sort((a, b) => a.marketPriority - b.marketPriority);
+      },
+      isBuySellUnlocked(resource) {
+        return getDocument().querySelector("#market-" + resource.id + " .order") !== null;
+      },
+      setMultiplier(multiplier) {
+        this.multiplier = Math.min(
+          Math.max(1, multiplier),
+          this.getMaxMultiplier()
+        );
+        getVueById2("market-qty").qty = this.multiplier;
+      },
+      getMaxMultiplier() {
+        return getVueById2("market-qty")?.limit() ?? 1;
+      },
+      getUnitBuyPrice(resource) {
+        const game2 = getGame();
+        let price = game2.global.resource[resource.id].value;
+        price *= traitVal2("arrogant", 0, "+");
+        price *= traitVal2("conniving", 0, "-");
+        return price;
+      },
+      getUnitSellPrice(resource) {
+        const game2 = getGame();
+        let divide = 4;
+        divide *= traitVal2("merchant", 0, "-");
+        divide *= traitVal2("asymmetrical", 0, "+");
+        divide *= traitVal2("conniving", 1, "-");
+        return game2.global.resource[resource.id].value / divide;
+      },
+      buy(resource) {
+        const resources2 = getResources();
+        let vue = getVueById2(resource._marketVueBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        let price = this.getUnitBuyPrice(resource) * this.multiplier;
+        if (resources2.Money.currentQuantity < price) {
+          return false;
+        }
+        resources2.Money.currentQuantity -= this.multiplier * this.getUnitBuyPrice(resource);
+        resource.currentQuantity += this.multiplier;
+        vue.purchase(resource.id);
+      },
+      sell(resource) {
+        const resources2 = getResources();
+        let vue = getVueById2(resource._marketVueBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        if (resource.currentQuantity < this.multiplier) {
+          return false;
+        }
+        resources2.Money.currentQuantity += this.multiplier * this.getUnitSellPrice(resource);
+        resource.currentQuantity -= this.multiplier;
+        vue.sell(resource.id);
+      },
+      getImportRouteCap() {
+        if (haveTech2("currency", 6)) {
+          return 1e6;
+        } else if (haveTech2("currency", 4)) {
+          return 100;
+        } else {
+          return 25;
+        }
+      },
+      getExportRouteCap() {
+        if (!getGame().global.race["banana"]) {
+          return this.getImportRouteCap();
+        } else if (haveTech2("currency", 6)) {
+          return 1e6;
+        } else if (haveTech2("currency", 4)) {
+          return 25;
+        } else {
+          return 10;
+        }
+      },
+      getMaxTradeRoutes() {
+        let max = getGame().global.city.market.mtrade;
+        let unmanaged = 0;
+        for (let resource of this.priorityList) {
+          if (!resource.autoTradeBuyEnabled && !resource.autoTradeSellEnabled) {
+            max -= Math.abs(resource.tradeRoutes);
+            unmanaged += resource.tradeRoutes;
+          }
+        }
+        return [max, unmanaged];
+      },
+      zeroTradeRoutes(resource) {
+        getVueById2(resource._marketVueBinding)?.zero(resource.id);
+      },
+      addTradeRoutes(resource, count) {
+        if (!resource.isUnlocked()) {
+          return false;
+        }
+        let vue = getVueById2(resource._marketVueBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          vue.autoBuy(resource.id);
+        }
+      },
+      removeTradeRoutes(resource, count) {
+        if (!resource.isUnlocked()) {
+          return false;
+        }
+        let vue = getVueById2(resource._marketVueBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          vue.autoSell(resource.id);
+        }
+      }
+    };
+    const StorageManager2 = {
+      priorityList: [],
+      crateValue: 0,
+      containerValue: 0,
+      _storageVueBinding: "createHead",
+      _storageVue: void 0,
+      _crateDebounce: {},
+      // { resourceId: { dir, ticks, prev, locked } }
+      _containerDebounce: {},
+      // same
+      initStorage() {
+        if (!this.isUnlocked) {
+          return false;
+        }
+        this._storageVue = getVueById2(this._storageVueBinding);
+        if (this._storageVue === void 0) {
+          return false;
+        }
+        return true;
+      },
+      isUnlocked() {
+        return haveTech2("container");
+      },
+      sortByPriority() {
+        this.priorityList.sort((a, b) => a.storagePriority - b.storagePriority);
+      },
+      constructCrate(count) {
+        if (count <= 0) {
+          return;
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._storageVue.crate();
+        }
+      },
+      constructContainer(count) {
+        if (count <= 0) {
+          return;
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._storageVue.container();
+        }
+      },
+      assignCrate(resource, count) {
+        let vue = getVueById2(resource._stackVueBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          vue.addCrate(resource.id);
+        }
+      },
+      unassignCrate(resource, count) {
+        let vue = getVueById2(resource._stackVueBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          vue.subCrate(resource.id);
+        }
+      },
+      assignContainer(resource, count) {
+        let vue = getVueById2(resource._stackVueBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          vue.addCon(resource.id);
+        }
+      },
+      unassignContainer(resource, count) {
+        let vue = getVueById2(resource._stackVueBinding);
+        if (vue === void 0) {
+          return false;
+        }
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          vue.subCon(resource.id);
+        }
+      }
+    };
+    return {
+      GalaxyTradeManager: GalaxyTradeManager2,
+      GovernmentManager: GovernmentManager2,
+      MarketManager: MarketManager2,
+      StorageManager: StorageManager2
+    };
+  }
+
+  // src/game/core-managers.ts
+  function createCoreManagers({
+    getGame,
+    getSettings,
+    getState,
+    getBuildings,
+    getProjects,
+    getNiceNumber: getNiceNumber2,
+    weightingRules: weightingRules2,
+    wrGlobalCondition: wrGlobalCondition2,
+    wrIndividualCondition: wrIndividualCondition2,
+    wrDescription: wrDescription2,
+    wrMultiplier: wrMultiplier2,
+    isEarlyGame: isEarlyGame2,
+    getIsPrestigeAllowed,
+    getBananaRepublicObjectiveComplete,
+    getInflationChallengeAssistActive,
+    Trigger: Trigger2,
+    getWindow
+  }) {
+    const JobManager2 = {
+      priorityList: [],
+      craftingJobs: [],
+      sortByPriority() {
+        this.priorityList.sort((a, b) => a.priority - b.priority);
+      },
+      managedPriorityList() {
+        const settings2 = getSettings();
+        let ret = [];
+        if (settings2.autoJobs) {
+          ret = this.priorityList.filter((job) => job.isManaged());
+        }
+        if (settings2.autoCraftsmen) {
+          ret = ret.concat(this.craftingJobs.filter((job) => job.isManaged()));
+        }
+        return ret;
+      },
+      servantsMax() {
+        const game2 = getGame();
+        if (!game2.global.race.servants) {
+          return 0;
+        }
+        let max = game2.global.race.servants.max;
+        for (let job of this.priorityList) {
+          if (job.is.serve && !job.isManaged()) {
+            max -= job.servants;
+          }
+        }
+        return max;
+      },
+      skilledServantsMax() {
+        const game2 = getGame();
+        if (!game2.global.race.servants) {
+          return 0;
+        }
+        let max = game2.global.race.servants.smax;
+        for (let job of this.craftingJobs) {
+          if (!job.isManaged()) {
+            max -= job.servants;
+          }
+        }
+        return max;
+      },
+      craftingMax() {
+        const game2 = getGame();
+        if (!game2.global.city.foundry) {
+          return 0;
+        }
+        let max = game2.global.civic.craftsman.max;
+        for (let job of this.craftingJobs) {
+          if (!job.isManaged()) {
+            max -= job.count;
+          }
+        }
+        max -= game2.global.city.foundry.Thermite ?? 0;
+        return max;
+      }
+    };
+    const BuildingManager2 = {
+      priorityList: [],
+      statePriorityList: [],
+      updateBuildings() {
+        const buildings2 = getBuildings();
+        for (let building of Object.values(buildings2)) {
+          building.updateResourceRequirements();
+          building.extraDescription = "";
+        }
+      },
+      updateWeighting() {
+        let activeRules = weightingRules2.filter(
+          (rule) => rule[wrGlobalCondition2]() && rule[wrMultiplier2]() !== 1
+        );
+        for (let building of this.priorityList) {
+          building.weighting = building._weighting;
+          for (let j = 0; j < activeRules.length; j++) {
+            let result = activeRules[j][wrIndividualCondition2](building);
+            if (result) {
+              let note = activeRules[j][wrDescription2](result, building);
+              if (note !== "") {
+                building.extraDescription += note + "<br>";
+              }
+              building.weighting *= activeRules[j][wrMultiplier2](result);
+              if (building.weighting <= 0) {
+                break;
+              }
+            }
+          }
+          if (building.weighting > 0) {
+            building.weighting = Math.max(
+              Number.MIN_VALUE,
+              building.weighting - 1e-7 * building.count
+            );
+            building.extraDescription = "AutoBuild weighting: " + getNiceNumber2(building.weighting) + "<br>" + building.extraDescription;
+          }
+        }
+      },
+      sortByPriority() {
+        this.priorityList.sort((a, b) => a.priority - b.priority);
+        this.statePriorityList.sort((a, b) => a.priority - b.priority);
+      },
+      managedPriorityList() {
+        return this.priorityList.filter((building) => building.weighting > 0);
+      },
+      managedStatePriorityList() {
+        return this.statePriorityList.filter(
+          (building) => building.hasState() && building.autoStateEnabled && building.count > 0
+        );
+      }
+    };
+    const ProjectManager2 = {
+      priorityList: [],
+      updateProjects() {
+        for (let project of this.priorityList) {
+          project.updateResourceRequirements();
+          project.extraDescription = "";
+        }
+      },
+      updateWeighting() {
+        const settings2 = getSettings();
+        const projects2 = getProjects();
+        const state2 = getState();
+        const game2 = getGame();
+        const isPrestigeAllowed2 = getIsPrestigeAllowed();
+        const bananaRepublicObjectiveComplete2 = getBananaRepublicObjectiveComplete();
+        const inflationChallengeAssistActive2 = getInflationChallengeAssistActive();
+        for (let project of this.priorityList) {
+          project.weighting = project._weighting * project.currentStep;
+          if (!project.isUnlocked()) {
+            project.weighting = 0;
+            project.extraDescription = "Locked<br>";
+          }
+          if (!project.autoBuildEnabled || !settings2.autoARPA) {
+            project.weighting = 0;
+            project.extraDescription = "AutoBuild disabled<br>";
+          }
+          if (project.count >= project.autoMax && (project !== projects2.ManaSyphon || !isPrestigeAllowed2("vacuum"))) {
+            project.weighting = 0;
+            project.extraDescription = "Maximum amount reached<br>";
+          }
+          if (settings2.prestigeMADIgnoreArpa && isEarlyGame2()) {
+            project.weighting = 0;
+            project.extraDescription = "Projects ignored Pre-MAD<br>";
+          }
+          if (state2.queuedTargets.includes(project)) {
+            project.weighting = 0;
+            project.extraDescription = "Queued project, processing...<br>";
+          }
+          if (state2.triggerTargets.includes(project)) {
+            project.weighting = 0;
+            project.extraDescription = "Active trigger, processing...<br>";
+          }
+          if (!project.isAffordable(true)) {
+            project.weighting = 0;
+            project.extraDescription = "Not enough storage<br>";
+          }
+          if (project === projects2.ManaSyphon && settings2.prestigeBioseedConstruct && settings2.prestigeType !== "vacuum" && game2.global.race["witch_hunter"]) {
+            project.weighting = 0;
+            project.extraDescription = "Not needed for current prestige<br>";
+          }
+          if (project.weighting > 0 && settings2.achievementGuards && settings2.guardBananaRepublic && game2.global.race["banana"] && project === projects2.Monument && !bananaRepublicObjectiveComplete2("b5")) {
+            project.weighting *= settings2.buildingWeightingBananaObjective;
+            project.extraDescription += "Banana Republic objective<br>";
+          }
+          if (project.weighting > 0 && inflationChallengeAssistActive2() && project === projects2.StockExchange) {
+            project.weighting *= settings2.buildingWeightingInflationMoney;
+            project.extraDescription += "Inflation challenge Money helper<br>";
+          }
+          if (settings2.arpaScaleWeighting) {
+            project.weighting /= 1 - 0.01 * project.progress;
+          }
+          if (project.weighting > 0) {
+            project.extraDescription = `AutoARPA weighting: ${getNiceNumber2(
+              project.weighting
+            )} (${project.currentStep}%)<br>${project.extraDescription}`;
+          }
+        }
+      },
+      sortByPriority() {
+        this.priorityList.sort((a, b) => a.priority - b.priority);
+      },
+      managedPriorityList() {
+        return this.priorityList.filter((project) => project.weighting > 0);
+      }
+    };
+    const TriggerManager2 = {
+      priorityList: [],
+      targetTriggers: [],
+      resetTargetTriggers() {
+        this.targetTriggers = [];
+        for (let trigger of this.priorityList) {
+          trigger.updateComplete();
+          if (!trigger.complete && trigger.areRequirementsMet() && trigger.isActionPossible() && !this.actionConflicts(trigger)) {
+            this.targetTriggers.push(trigger);
+          }
+        }
+      },
+      getTrigger(seq) {
+        return this.priorityList.find((trigger) => trigger.seq === seq);
+      },
+      sortByPriority() {
+        this.priorityList.sort((a, b) => a.priority - b.priority);
+      },
+      AddTrigger(requirementType, requirementId, requirementCount, actionType, actionId, actionCount) {
+        let trigger = new Trigger2(
+          this.priorityList.length,
+          this.priorityList.length,
+          requirementType,
+          requirementId,
+          requirementCount,
+          actionType,
+          actionId,
+          actionCount
+        );
+        this.priorityList.push(trigger);
+        return trigger;
+      },
+      AddTriggerFromSetting(raw) {
+        let existingSequence = this.priorityList.some(
+          (trigger) => trigger.seq === raw.seq
+        );
+        if (!existingSequence) {
+          let trigger = new Trigger2(
+            raw.seq,
+            raw.priority,
+            raw.requirementType,
+            raw.requirementId,
+            raw.requirementCount,
+            raw.actionType,
+            raw.actionId,
+            raw.actionCount
+          );
+          this.priorityList.push(trigger);
+        }
+      },
+      RemoveTrigger(seq) {
+        let indexToRemove = this.priorityList.findIndex(
+          (trigger) => trigger.seq === seq
+        );
+        if (indexToRemove === -1) {
+          return;
+        }
+        this.priorityList.splice(indexToRemove, 1);
+        for (let i = 0; i < this.priorityList.length; i++) {
+          let trigger = this.priorityList[i];
+          trigger.seq = i;
+          trigger.priority = i;
+        }
+      },
+      DuplicateTrigger(seq) {
+        let indexToDuplicate = this.priorityList.findIndex(
+          (trigger2) => trigger2.seq === seq
+        );
+        if (indexToDuplicate === -1) {
+          return;
+        }
+        let triggerToDuplicate = this.priorityList[indexToDuplicate];
+        let trigger = new Trigger2(
+          0,
+          0,
+          triggerToDuplicate.requirementType,
+          triggerToDuplicate.requirementId,
+          triggerToDuplicate.requirementCount,
+          triggerToDuplicate.actionType,
+          triggerToDuplicate.actionId,
+          triggerToDuplicate.actionCount
+        );
+        this.priorityList.splice(indexToDuplicate, 0, trigger);
+        for (let i = 0; i < this.priorityList.length; i++) {
+          let trigger2 = this.priorityList[i];
+          trigger2.seq = i;
+          trigger2.priority = i;
+        }
+      },
+      EvalizeTrigger(seq) {
+        let indexToEval = this.priorityList.findIndex(
+          (trigger2) => trigger2.seq === seq
+        );
+        if (indexToEval === -1) {
+          return;
+        }
+        let trigger = this.priorityList[indexToEval];
+        let check = "";
+        switch (trigger.requirementType) {
+          case "Eval":
+            check = trigger.requirementId;
+            break;
+          default:
+            check = `_("${trigger.requirementType}",${JSON.stringify(
+              trigger.requirementId
+            )})`;
+        }
+        getWindow().prompt("Eval of this condition:", check);
+      },
+      // This function only checks if two triggers use the same resource, it does not check storage
+      actionConflicts(trigger) {
+        for (let targetTrigger of this.targetTriggers) {
+          if (Object.keys(targetTrigger.cost()).some(
+            (cost) => Object.keys(trigger.cost()).includes(cost)
+          )) {
+            return true;
+          }
+        }
+        return false;
+      }
+    };
+    return { JobManager: JobManager2, BuildingManager: BuildingManager2, ProjectManager: ProjectManager2, TriggerManager: TriggerManager2 };
   }
 
   // src/game/race-profile.ts
@@ -29666,1383 +32006,77 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    var MinorTraitManager = {
-      priorityList: [],
-      _traitVueBinding: "geneticBreakdown",
-      isUnlocked() {
-        return haveTech("genetics", 3);
-      },
-      sortByPriority() {
-        this.priorityList.sort((a, b) => a.priority - b.priority);
-      },
-      managedPriorityList() {
-        return this.priorityList.filter(
-          (trait) => trait.enabled && trait.isUnlocked()
-        );
-      },
-      buyTrait(traitName) {
-        getVueById(this._traitVueBinding)?.gene(traitName);
-      }
-    };
-    var MutableTraitManager = {
-      priorityList: [],
-      _traitVueBinding: "geneticBreakdown",
-      isUnlocked() {
-        return haveTech("genetics", 3) && game.global.genes["mutation"];
-      },
-      sortByPriority() {
-        this.priorityList.sort((a, b) => a.priority - b.priority);
-      },
-      gainTrait(traitName) {
-        getVueById(this._traitVueBinding)?.gain(traitName);
-      },
-      purgeTrait(traitName) {
-        getVueById(this._traitVueBinding)?.purge(traitName);
-      },
-      get minimumPlasmidsToPreserve() {
-        return Math.max(
-          0,
-          settings.minimumPlasmidsToPreserve,
-          settings.doNotGoBelowPlasmidSoftcap ? resources.Phage.currentQuantity + 250 : 0
-        );
-      }
-    };
-    var QuarryManager = {
-      _industryVueBinding: "iQuarry",
-      _industryVue: void 0,
-      initIndustry() {
-        if (!game.global.race["smoldering"] || buildings.RockQuarry.count < 1) {
-          return false;
-        }
-        this._industryVue = getVueById(this._industryVueBinding);
-        if (this._industryVue === void 0) {
-          return false;
-        }
-        return true;
-      },
-      currentProduction() {
-        return game.global.city.rock_quarry.asbestos;
-      },
-      increaseProduction(count) {
-        if (count === 0) {
-          return false;
-        }
-        if (count < 0) {
-          return this.decreaseProduction(count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.add();
-        }
-      },
-      decreaseProduction(count) {
-        if (count === 0) {
-          return false;
-        }
-        if (count < 0) {
-          return this.increaseProduction(count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.sub();
-        }
-      }
-    };
-    var MineManager = {
-      _industryVueBinding: "iTMine",
-      _industryVue: void 0,
-      initIndustry() {
-        if (buildings.TitanMine.count < 1) {
-          return false;
-        }
-        this._industryVue = getVueById(this._industryVueBinding);
-        if (this._industryVue === void 0) {
-          return false;
-        }
-        return true;
-      },
-      currentProduction() {
-        return game.global.space.titan_mine.ratio;
-      },
-      increaseProduction(count) {
-        if (count === 0) {
-          return false;
-        }
-        if (count < 0) {
-          return this.decreaseProduction(count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.add();
-        }
-      },
-      decreaseProduction(count) {
-        if (count === 0) {
-          return false;
-        }
-        if (count < 0) {
-          return this.increaseProduction(count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.sub();
-        }
-      }
-    };
-    var ExtractorManager = {
-      _industryVueBinding: "iMiningShip",
-      _industryVue: void 0,
-      initIndustry() {
-        if (!haveTech("tau_roid", 4) || buildings.TauBeltMiningShip.count < 1) {
-          return false;
-        }
-        this._industryVue = getVueById(this._industryVueBinding);
-        if (this._industryVue === void 0) {
-          return false;
-        }
-        return true;
-      },
-      currentProduction(production) {
-        return game.global.tauceti.mining_ship[production];
-      },
-      increaseProduction(production, count) {
-        if (count === 0) {
-          return false;
-        }
-        if (count < 0) {
-          return this.decreaseProduction(production, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.add(production);
-        }
-      },
-      decreaseProduction(production, count) {
-        if (count === 0) {
-          return false;
-        }
-        if (count < 0) {
-          return this.increaseProduction(production, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.sub(production);
-        }
-      }
-    };
-    var NaniteManager = {
-      _industryVueBinding: "iNFactory",
-      _industryVue: void 0,
-      storageShift: 1.005,
-      priorityList: [],
-      // export const nf_resources from industry.js
-      Resources: [
-        "Lumber",
-        "Chrysotile",
-        "Stone",
-        "Crystal",
-        "Furs",
-        "Copper",
-        "Iron",
-        "Aluminium",
-        "Cement",
-        "Coal",
-        "Oil",
-        "Uranium",
-        "Steel",
-        "Titanium",
-        "Alloy",
-        "Polymer",
-        "Iridium",
-        "Helium_3",
-        "Water",
-        "Deuterium",
-        "Neutronium",
-        "Adamantite",
-        "Bolognium",
-        "Orichalcum"
-      ],
-      resEnabled: (id) => settings["res_nanite" + id],
-      isUnlocked() {
-        return game.global.race["deconstructor"] && (buildings.NaniteFactory.count > 0 || buildings.RedNaniteFactory.count > 0 || buildings.TauNaniteFactory.count > 0);
-      },
-      isUseful() {
-        return resources.Nanite.storageRatio < 1;
-      },
-      initIndustry() {
-        if (!this.isUnlocked()) {
-          return false;
-        }
-        this._industryVue = getVueById(this._industryVueBinding);
-        if (this._industryVue === void 0) {
-          return false;
-        }
-        return true;
-      },
-      isConsumable(res) {
-        return this.Resources.includes(res.id);
-      },
-      updateResources() {
-        if (!this.isUnlocked() || !settings.autoNanite) {
-          return;
-        }
-        for (let resource of this.priorityList) {
-          if (resource.isUnlocked()) {
-            resource.rateMods["nanite"] = this.currentConsume(resource.id);
-            resource.rateOfChange += resource.rateMods["nanite"];
-          }
-        }
-      },
-      managedPriorityList() {
-        return this.priorityList;
-      },
-      maxConsume() {
-        return game.global.city.nanite_factory.count * 50;
-      },
-      currentConsume(id) {
-        return game.global.city.nanite_factory[id];
-      },
-      useRatio() {
-        switch (settings.naniteMode) {
-          case "cap":
-            return [0.965];
-          case "excess":
-            return [-1];
-          case "all":
-            return [0.035];
-          case "mixed":
-            return [0.965, -1];
-          case "full":
-            return [0.965, -1, 0.035];
-          default:
-            return [];
-        }
-      },
-      maxConsumeCraftable(resource) {
-        let extraIncome = resource.rateOfChange;
-        let extraStore = resource.currentQuantity - resource.storageRequired * this.storageShift;
-        return Math.max(extraIncome, extraStore);
-      },
-      maxConsumeForRatio(resource, keepRatio) {
-        let extraIncome = resource.rateOfChange;
-        let extraStore = (resource.storageRatio - keepRatio) * resource.maxQuantity;
-        return Math.max(extraIncome, extraStore);
-      },
-      consumeMore(id, count) {
-        resources[id].rateMods["nanite"] += count;
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.addItem(id);
-        }
-      },
-      consumeLess(id, count) {
-        resources[id].rateMods["nanite"] -= count;
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.subItem(id);
-        }
-      }
-    };
-    var SupplyManager = {
-      _supplyVuePrefix: "supply",
-      storageShift: 1.01,
-      priorityList: [],
-      resEnabled: (id) => settings["res_supply" + id],
-      isUnlocked() {
-        return buildings.LakeTransport.count > 0;
-      },
-      isUseful() {
-        return resources.Supply.storageRatio < 1 && buildings.LakeTransport.stateOnCount > 0 && buildings.LakeBireme.stateOnCount > 0;
-      },
-      initIndustry() {
-        return this.isUnlocked();
-      },
-      isConsumable(res) {
-        return poly.supplyValue.hasOwnProperty(res.id);
-      },
-      updateResources() {
-        if (!this.isUnlocked() || !settings.autoSupply) {
-          return;
-        }
-        for (let resource of this.priorityList) {
-          if (resource.isUnlocked()) {
-            resource.rateMods["supply"] = this.currentConsume(resource.id) * this.supplyOut(resource.id);
-            resource.rateOfChange += resource.rateMods["supply"];
-          }
-        }
-      },
-      supplyIn(id) {
-        return poly.supplyValue[id]?.in ?? 0;
-      },
-      supplyOut(id) {
-        return poly.supplyValue[id]?.out ?? 0;
-      },
-      managedPriorityList() {
-        return this.priorityList;
-      },
-      maxConsume() {
-        return game.global.portal.transport.cargo.max;
-      },
-      currentConsume(id) {
-        return game.global.portal.transport.cargo[id];
-      },
-      useRatio() {
-        switch (settings.supplyMode) {
-          case "cap":
-            return [0.975];
-          case "excess":
-            return [-1];
-          case "all":
-            return [0.045];
-          case "mixed":
-            return [0.975, -1];
-          case "full":
-            return [0.975, -1, 0.045];
-          default:
-            return [];
-        }
-      },
-      maxConsumeCraftable(resource) {
-        let extraIncome = resource.calculateRateOfChange({
-          buy: false,
-          nanite: true
-        });
-        let extraStore = resource.currentQuantity - resource.storageRequired * this.storageShift;
-        return Math.max(extraIncome, extraStore) / this.supplyOut(resource.id);
-      },
-      maxConsumeForRatio(resource, keepRatio) {
-        let extraIncome = resource.calculateRateOfChange({
-          buy: false,
-          nanite: true
-        });
-        let extraStore = (resource.storageRatio - keepRatio) * resource.maxQuantity;
-        return Math.max(extraIncome, extraStore) / this.supplyOut(resource.id);
-      },
-      consumeMore(id, count) {
-        let vue = getVueById(this._supplyVuePrefix + id);
-        if (vue === void 0) {
-          return false;
-        }
-        resources[id].rateMods["supply"] += count * this.supplyOut(id);
-        for (let m of KeyManager.click(count)) {
-          vue.supplyMore(id);
-        }
-      },
-      consumeLess(id, count) {
-        let vue = getVueById(this._supplyVuePrefix + id);
-        if (vue === void 0) {
-          return false;
-        }
-        resources[id].rateMods["supply"] -= count * this.supplyOut(id);
-        for (let m of KeyManager.click(count)) {
-          vue.supplyLess(id);
-        }
-      }
-    };
-    var EjectManager = {
-      _ejectVuePrefix: "eject",
-      storageShift: 1.015,
-      priorityList: [],
-      resEnabled: (id) => settings["res_eject" + id],
-      isUnlocked() {
-        return buildings.BlackholeMassEjector.count > 0;
-      },
-      isUseful() {
-        return true;
-      },
-      initIndustry() {
-        return this.isUnlocked();
-      },
-      isConsumable(res) {
-        return game.atomic_mass.hasOwnProperty(res.id);
-      },
-      updateResources() {
-        if (!this.isUnlocked() || !settings.autoEject && !haveTask("trash")) {
-          return;
-        }
-        for (let resource of this.priorityList) {
-          if (resource.isUnlocked()) {
-            resource.rateMods["eject"] = this.currentConsume(resource.id);
-            resource.rateOfChange += resource.rateMods["eject"];
-          }
-        }
-      },
-      managedPriorityList() {
-        return !game.global.race["artifical"] ? this.priorityList : this.priorityList.filter((r) => r !== resources.Food);
-      },
-      maxConsume() {
-        return game.global.interstellar.mass_ejector.on * 1e3;
-      },
-      currentConsume(id) {
-        return game.global.interstellar.mass_ejector[id];
-      },
-      useRatio() {
-        switch (settings.ejectMode) {
-          case "cap":
-            return [0.985];
-          case "excess":
-            return [-1];
-          case "all":
-            return [0.055];
-          case "mixed":
-            return [0.985, -1];
-          case "full":
-            return [0.985, -1, 0.055];
-          default:
-            return [];
-        }
-      },
-      maxConsumeCraftable(resource) {
-        let extraIncome = resource.calculateRateOfChange({
-          buy: false,
-          supply: true,
-          nanite: true
-        });
-        let extraStore = resource.currentQuantity - resource.storageRequired * this.storageShift;
-        return Math.max(extraIncome, extraStore);
-      },
-      maxConsumeForRatio(resource, keepRatio) {
-        let extraIncome = resource.calculateRateOfChange({
-          buy: false,
-          supply: true,
-          nanite: true
-        });
-        let extraStore = (resource.storageRatio - keepRatio) * resource.maxQuantity;
-        return Math.max(extraIncome, extraStore);
-      },
-      consumeMore(id, count) {
-        let vue = getVueById(this._ejectVuePrefix + id);
-        if (vue === void 0) {
-          return false;
-        }
-        resources[id].rateMods["eject"] += count;
-        for (let m of KeyManager.click(count)) {
-          vue.ejectMore(id);
-        }
-      },
-      consumeLess(id, count) {
-        let vue = getVueById(this._ejectVuePrefix + id);
-        if (vue === void 0) {
-          return false;
-        }
-        resources[id].rateMods["eject"] -= count;
-        for (let m of KeyManager.click(count)) {
-          vue.ejectLess(id);
-        }
-      }
-    };
-    var AlchemyManager = {
-      _alchemyVuePrefix: "alchemy",
-      priorityList: [],
-      resEnabled: (id) => settings["res_alchemy_" + id],
-      resWeighting: (id) => settings["res_alchemy_w_" + id],
-      isUnlocked() {
-        return haveTech("alchemy");
-      },
-      managedPriorityList() {
-        return this.priorityList.filter(
-          (res) => this.resEnabled(res.id) && res.isUnlocked() && this.transmuteTier(res) <= game.global.tech.alchemy && (!game.global.race["artifical"] || res !== resources.Food)
-        );
-      },
-      transmuteTier(res) {
-        return !game.tradeRatio.hasOwnProperty(res.id) || res === resources.Crystal ? 0 : res.instance?.hasOwnProperty("trade") ? 1 : 2;
-      },
-      currentCount(id) {
-        return game.global.race.alchemy[id];
-      },
-      transmuteMore(id, count) {
-        let vue = getVueById(this._alchemyVuePrefix + id);
-        if (vue === void 0) {
-          return false;
-        }
-        resources.Mana.rateOfChange -= count * 1;
-        resources.Crystal.rateOfChange -= count * 0.5;
-        for (let m of KeyManager.click(count)) {
-          vue.addSpell(id);
-        }
-      },
-      transmuteLess(id, count) {
-        let vue = getVueById(this._alchemyVuePrefix + id);
-        if (vue === void 0) {
-          return false;
-        }
-        resources.Mana.rateOfChange += count * 1;
-        resources.Crystal.rateOfChange += count * 0.5;
-        for (let m of KeyManager.click(count)) {
-          vue.subSpell(id);
-        }
-      }
-    };
-    var RitualManager = {
-      _industryVueBinding: "iPylon",
-      _industryVue: void 0,
-      Productions: addProps(
-        {
-          Farmer: {
-            id: "farmer",
-            isUnlocked: () => !game.global.race["orbit_decayed"] && !game.global.race["cataclysm"] && !game.global.race["carnivore"] && !game.global.race["soul_eater"] && !game.global.race["artifical"] && !game.global.race["unfathomable"]
-          },
-          Miner: {
-            id: "miner",
-            isUnlocked: () => !game.global.race["cataclysm"]
-          },
-          Lumberjack: {
-            id: "lumberjack",
-            isUnlocked: () => !game.global.race["orbit_decayed"] && !game.global.race["cataclysm"] && isLumberRace() && !game.global.race["evil"]
-          },
-          Science: { id: "science", isUnlocked: () => true },
-          Factory: { id: "factory", isUnlocked: () => true },
-          Army: { id: "army", isUnlocked: () => true },
-          Hunting: { id: "hunting", isUnlocked: () => true },
-          Crafting: { id: "crafting", isUnlocked: () => haveTech("magic", 4) }
-        },
-        (s2) => s2.id,
-        [{ s: "spell_w_", p: "weighting" }]
-      ),
-      initIndustry() {
-        if (buildings.Pylon.count < 1 && buildings.RedPylon.count < 1 && buildings.TauPylon.count < 1 || !game.global.race["casting"]) {
-          return false;
-        }
-        this._industryVue = getVueById(this._industryVueBinding);
-        if (this._industryVue === void 0) {
-          return false;
-        }
-        return true;
-      },
-      currentSpells(spell) {
-        return game.global.race.casting[spell.id];
-      },
-      spellCost(spell) {
-        return this.manaCost(this.currentSpells(spell));
-      },
-      costStep(level) {
-        if (level === 0) {
-          return 25e-4;
-        }
-        let cost = this.manaCost(level);
-        return (cost / level * 1.0025 + 25e-4) * (level + 1) - cost;
-      },
-      // export function manaCost(spell,rate) from industry.js
-      manaCost(level) {
-        return level * (1.0025 ** level - 1);
-      },
-      increaseRitual(spell, count) {
-        if (count === 0 || !spell.isUnlocked()) {
-          return false;
-        }
-        if (count < 0) {
-          return this.decreaseRitual(spell, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.addSpell(spell.id);
-        }
-      },
-      decreaseRitual(spell, count) {
-        if (count === 0 || !spell.isUnlocked()) {
-          return false;
-        }
-        if (count < 0) {
-          return this.increaseRitual(count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.subSpell(spell.id);
-        }
-      }
-    };
-    var SmelterManager = {
-      _industryVueBinding: "iSmelter",
-      _industryVue: void 0,
-      Productions: normalizeProperties(
-        {
-          Iron: {
-            id: "Iron",
-            unlocked: () => true,
-            resource: resources.Iron,
-            cost: []
-          },
-          Steel: {
-            id: "Steel",
-            unlocked: () => resources.Steel.isUnlocked() && haveTech("smelting", 2),
-            resource: resources.Steel,
-            cost: [
-              new ResourceProductionCost(resources.Coal, 0.25, 1.25),
-              new ResourceProductionCost(resources.Iron, 2, 6)
-            ]
-          },
-          Iridium: {
-            id: "Iridium",
-            unlocked: () => resources.Iridium.isUnlocked() && (haveTech("m_smelting", 2) || haveTech("irid_smelting")),
-            resource: resources.Iridium,
-            cost: []
-          }
-        },
-        [ResourceProductionCost]
-      ),
-      Fuels: addProps(
-        normalizeProperties(
-          {
-            Oil: {
-              id: "Oil",
-              unlocked: () => game.global.resource.Oil.display,
-              cost: [new ResourceProductionCost(resources.Oil, 0.35, 2)]
-            },
-            Coal: {
-              id: "Coal",
-              unlocked: () => game.global.resource.Coal.display,
-              cost: [
-                new ResourceProductionCost(
-                  resources.Coal,
-                  () => !isLumberRace() ? 0.15 : 0.25,
-                  2
-                )
-              ]
-            },
-            Wood: {
-              id: "Wood",
-              unlocked: () => isLumberRace() || game.global.race["evil"],
-              cost: [
-                new ResourceProductionCost(
-                  () => game.global.race["evil"] ? game.global.race["soul_eater"] && game.global.race.species !== "wendigo" ? resources.Food : resources.Furs : resources.Lumber,
-                  () => game.global.race["evil"] && !game.global.race["soul_eater"] || game.global.race.species === "wendigo" ? 1 : 3,
-                  6
-                )
-              ]
-            },
-            Inferno: {
-              id: "Inferno",
-              unlocked: () => haveTech("smelting", 8),
-              cost: [
-                new ResourceProductionCost(resources.Coal, 50, 50),
-                new ResourceProductionCost(resources.Oil, 35, 50),
-                new ResourceProductionCost(resources.Infernite, 0.5, 50)
-              ]
-            }
-          },
-          [ResourceProductionCost]
-        ),
-        (f) => f.id,
-        [{ s: "smelter_fuel_p_", p: "priority" }]
-      ),
-      initIndustry() {
-        if (game.global.race["steelen"] || buildings.Smelter.count < 1 && !game.global.race["cataclysm"] && !game.global.race["orbit_decayed"] && !haveTech("isolation") && !game.global.race["warlord"]) {
-          return false;
-        }
-        this._industryVue = getVueById(this._industryVueBinding);
-        if (this._industryVue === void 0) {
-          return false;
-        }
-        return true;
-      },
-      managedFuelPriorityList() {
-        return Object.values(this.Fuels).sort((a, b) => a.priority - b.priority);
-      },
-      fueledCount(fuel) {
-        if (!fuel.unlocked) {
-          return 0;
-        }
-        return game.global.city.smelter[fuel.id];
-      },
-      smeltingCount(production) {
-        if (!production.unlocked) {
-          return 0;
-        }
-        return game.global.city.smelter[production.id];
-      },
-      increaseFuel(fuel, count) {
-        if (count === 0 || !fuel.unlocked) {
-          return false;
-        }
-        if (count < 0) {
-          return this.decreaseFuel(fuel, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.addFuel(fuel.id);
-        }
-      },
-      decreaseFuel(fuel, count) {
-        if (count === 0 || !fuel.unlocked) {
-          return false;
-        }
-        if (count < 0) {
-          return this.increaseFuel(fuel, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.subFuel(fuel.id);
-        }
-      },
-      increaseSmelting(id, count) {
-        if (count === 0 || !this.Productions[id].unlocked) {
-          return false;
-        }
-        if (count < 0) {
-          return this.decreaseSmelting(id, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.addMetal(id);
-        }
-      },
-      decreaseSmelting(id, count) {
-        if (count === 0 || !this.Productions[id].unlocked) {
-          return false;
-        }
-        if (count < 0) {
-          return this.increaseSmelting(id, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.subMetal(id);
-        }
-      },
-      maxOperating() {
-        return game.global.city.smelter.cap - game.global.city.smelter.Star;
-      },
-      extraOperating() {
-        return game.global.city.smelter.Star;
-      },
-      currentFueled() {
-        return this._industryVue.$options.filters.on();
-      }
-    };
-    var FactoryManager = {
-      _industryVueBinding: "iFactory",
-      _industryVue: void 0,
-      Productions: addProps(
-        normalizeProperties(
-          {
-            LuxuryGoods: {
-              id: "Lux",
-              resource: resources.Money,
-              unlocked: () => true,
-              cost: [
-                new ResourceProductionCost(
-                  resources.Furs,
-                  () => FactoryManager.f_rate("Lux", "fur"),
-                  5
-                )
-              ]
-            },
-            Furs: {
-              id: "Furs",
-              resource: resources.Furs,
-              unlocked: () => haveTech("synthetic_fur"),
-              cost: [
-                new ResourceProductionCost(
-                  resources.Money,
-                  () => FactoryManager.f_rate("Furs", "money"),
-                  1e3
-                ),
-                new ResourceProductionCost(
-                  resources.Polymer,
-                  () => FactoryManager.f_rate("Furs", "polymer"),
-                  10
-                )
-              ]
-            },
-            Alloy: {
-              id: "Alloy",
-              resource: resources.Alloy,
-              unlocked: () => true,
-              cost: [
-                new ResourceProductionCost(
-                  resources.Copper,
-                  () => FactoryManager.f_rate("Alloy", "copper"),
-                  5
-                ),
-                new ResourceProductionCost(
-                  resources.Aluminium,
-                  () => FactoryManager.f_rate("Alloy", "aluminium"),
-                  5
-                )
-              ]
-            },
-            Polymer: {
-              id: "Polymer",
-              resource: resources.Polymer,
-              unlocked: () => haveTech("polymer"),
-              cost: function() {
-                return !isLumberRace() ? this.cost_kk : this.cost_normal;
-              },
-              cost_kk: [
-                new ResourceProductionCost(
-                  resources.Oil,
-                  () => FactoryManager.f_rate("Polymer", "oil_kk"),
-                  2
-                )
-              ],
-              cost_normal: [
-                new ResourceProductionCost(
-                  resources.Oil,
-                  () => FactoryManager.f_rate("Polymer", "oil"),
-                  2
-                ),
-                new ResourceProductionCost(
-                  resources.Lumber,
-                  () => FactoryManager.f_rate("Polymer", "lumber"),
-                  50
-                )
-              ]
-            },
-            NanoTube: {
-              id: "Nano",
-              resource: resources.Nano_Tube,
-              unlocked: () => haveTech("nano"),
-              cost: [
-                new ResourceProductionCost(
-                  resources.Coal,
-                  () => FactoryManager.f_rate("Nano_Tube", "coal"),
-                  15
-                ),
-                new ResourceProductionCost(
-                  resources.Neutronium,
-                  () => FactoryManager.f_rate("Nano_Tube", "neutronium"),
-                  0.2
-                )
-              ]
-            },
-            Stanene: {
-              id: "Stanene",
-              resource: resources.Stanene,
-              unlocked: () => haveTech("stanene"),
-              cost: [
-                new ResourceProductionCost(
-                  resources.Aluminium,
-                  () => FactoryManager.f_rate("Stanene", "aluminium"),
-                  50
-                ),
-                new ResourceProductionCost(
-                  resources.Nano_Tube,
-                  () => FactoryManager.f_rate("Stanene", "nano"),
-                  5
-                )
-              ]
-            }
-          },
-          [ResourceProductionCost]
-        ),
-        (p) => p.resource.id,
-        [
-          { s: "production_", p: "enabled" },
-          { s: "production_w_", p: "weighting" },
-          { s: "production_p_", p: "priority" }
-        ]
-      ),
-      initIndustry() {
-        if (buildings.Factory.count < 1 && buildings.RedFactory.count < 1 && buildings.TauFactory.count < 1 && buildings.WastelandHellFactory.count < 1) {
-          return false;
-        }
-        this._industryVue = getVueById(this._industryVueBinding);
-        if (this._industryVue === void 0) {
-          return false;
-        }
-        return true;
-      },
-      f_rate(production, resource) {
-        return game.f_rate[production][resource][game.global.tech["factory"] || 0];
-      },
-      currentOperating() {
-        let total = 0;
-        for (let key in this.Productions) {
-          let production = this.Productions[key];
-          total += game.global.city.factory[production.id];
-        }
-        return total;
-      },
-      maxOperating() {
-        let max = buildings.Factory.stateOnCount + buildings.RedFactory.stateOnCount + buildings.AlphaMegaFactory.stateOnCount * 2 + buildings.TauFactory.stateOnCount * (haveTech("isolation") ? 5 : 3) + buildings.WastelandHellFactory.stateOnCount * (3 + (game.global.portal?.hell_factory?.rank || 1));
-        if (!game.global.city.factory) {
-          return max;
-        }
-        for (let key in this.Productions) {
-          let production = this.Productions[key];
-          if (production.unlocked && !production.enabled) {
-            max -= game.global.city.factory[production.id];
-          }
-        }
-        return max;
-      },
-      currentProduction(production) {
-        return production.unlocked ? game.global.city.factory[production.id] : 0;
-      },
-      increaseProduction(production, count) {
-        if (count === 0 || !production.unlocked) {
-          return false;
-        }
-        if (count < 0) {
-          return this.decreaseProduction(production, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.addItem(production.id);
-        }
-      },
-      decreaseProduction(production, count) {
-        if (count === 0 || !production.unlocked) {
-          return false;
-        }
-        if (count < 0) {
-          return this.increaseProduction(production, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.subItem(production.id);
-        }
-      }
-    };
-    var ReplicatorManager = {
-      _industryVueBinding: "iReplicator",
-      _industryVue: void 0,
-      Productions: addProps(
-        normalizeProperties(
-          replicableResources.map((resId) => resources[resId]).reduce(
-            (a, res) => ({
-              ...a,
-              [res.id]: {
-                id: res.id,
-                resource: res,
-                unlocked: () => res.isUnlocked(),
-                cost: []
-              }
-            }),
-            {}
-          )
-        ),
-        (p) => p.resource.id,
-        [
-          { s: "replicator_", p: "enabled" },
-          { s: "replicator_w_", p: "weighting" },
-          { s: "replicator_p_", p: "priority" }
-        ]
-      ),
-      initIndustry() {
-        if (!haveTech("replicator")) {
-          return false;
-        }
-        this._industryVue = getVueById(this._industryVueBinding);
-        if (this._industryVue === void 0) {
-          return false;
-        }
-        return true;
-      },
-      setResource(res) {
-        if (this._industryVue.avail(res)) {
-          this._industryVue.setVal(res);
-        }
-      }
-    };
-    var DroidManager = {
-      _industryVueBinding: "iDroid",
-      _industryVue: void 0,
-      Productions: addProps(
-        {
-          Adamantite: { id: "adam", resource: resources.Adamantite },
-          Uranium: { id: "uran", resource: resources.Uranium },
-          Coal: { id: "coal", resource: resources.Coal },
-          Aluminium: { id: "alum", resource: resources.Aluminium }
-        },
-        (p) => p.resource.id,
-        [
-          { s: "droid_w_", p: "weighting" },
-          { s: "droid_pr_", p: "priority" }
-        ]
-      ),
-      initIndustry() {
-        if (buildings.AlphaMiningDroid.count < 1) {
-          return false;
-        }
-        this._industryVue = getVueById(this._industryVueBinding);
-        if (this._industryVue === void 0) {
-          return false;
-        }
-        return true;
-      },
-      currentOperating() {
-        let total = 0;
-        for (let key in this.Productions) {
-          let production = this.Productions[key];
-          total += game.global.interstellar.mining_droid[production.id];
-        }
-        return total;
-      },
-      maxOperating() {
-        return game.global.interstellar.mining_droid.on;
-      },
-      currentProduction(production) {
-        return game.global.interstellar.mining_droid[production.id];
-      },
-      increaseProduction(production, count) {
-        if (count === 0) {
-          return false;
-        }
-        if (count < 0) {
-          return this.decreaseProduction(production, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.addItem(production.id);
-        }
-      },
-      decreaseProduction(production, count) {
-        if (count === 0) {
-          return false;
-        }
-        if (count < 0) {
-          return this.increaseProduction(production, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.subItem(production.id);
-        }
-      }
-    };
-    var GrapheneManager = {
-      _industryVueBinding: "iGraphene",
-      _industryVue: void 0,
-      _graphPlant: null,
-      Fuels: {
-        Lumber: {
-          id: "Lumber",
-          cost: new ResourceProductionCost(resources.Lumber, 350, 100),
-          add: "addWood",
-          sub: "subWood"
-        },
-        Coal: {
-          id: "Coal",
-          cost: new ResourceProductionCost(resources.Coal, 25, 10),
-          add: "addCoal",
-          sub: "subCoal"
-        },
-        Oil: {
-          id: "Oil",
-          cost: new ResourceProductionCost(resources.Oil, 15, 10),
-          add: "addOil",
-          sub: "subOil"
-        }
-      },
-      initIndustry() {
-        this._graphPlant = game.global.race["warlord"] ? buildings.WastelandTwistedLab : game.global.race["truepath"] ? buildings.TitanGraphene : buildings.AlphaGraphenePlant;
-        if ((this._graphPlant.instance?.count ?? 0) < 1) {
-          return false;
-        }
-        this._industryVue = getVueById(this._industryVueBinding);
-        if (this._industryVue === void 0) {
-          return false;
-        }
-        return true;
-      },
-      maxOperating() {
-        return this._graphPlant.instance.on;
-      },
-      fueledCount(fuel) {
-        return this._graphPlant.instance[fuel.id];
-      },
-      increaseFuel(fuel, count) {
-        if (count === 0 || !fuel.cost.resource.isUnlocked()) {
-          return false;
-        }
-        if (count < 0) {
-          return this.decreaseFuel(fuel, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue[fuel.add]();
-        }
-      },
-      decreaseFuel(fuel, count) {
-        if (count === 0 || !fuel.cost.resource.isUnlocked()) {
-          return false;
-        }
-        if (count < 0) {
-          return this.increaseFuel(fuel, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue[fuel.sub]();
-        }
-      }
-    };
-    var GalaxyTradeManager = {
-      _industryVueBinding: "galaxyTrade",
-      _industryVue: void 0,
-      initIndustry() {
-        if (buildings.GorddonFreighter.count + buildings.Alien1SuperFreighter.count < 1) {
-          return false;
-        }
-        this._industryVue = getVueById(this._industryVueBinding);
-        if (this._industryVue === void 0) {
-          return false;
-        }
-        return true;
-      },
-      currentOperating() {
-        return game.global.galaxy.trade.cur;
-      },
-      maxOperating() {
-        return game.global.galaxy.trade.max;
-      },
-      currentProduction(production) {
-        return game.global.galaxy.trade["f" + production];
-      },
-      zeroProduction(production) {
-        this._industryVue.zero(production);
-      },
-      increaseProduction(production, count) {
-        if (count === 0) {
-          return false;
-        }
-        if (count < 0) {
-          return this.decreaseProduction(production, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.more(production);
-        }
-      },
-      decreaseProduction(production, count) {
-        if (count === 0) {
-          return false;
-        }
-        if (count < 0) {
-          return this.increaseProduction(production, count * -1);
-        }
-        for (let m of KeyManager.click(count)) {
-          this._industryVue.less(production);
-        }
-      }
-    };
-    var GovernmentManager = {
-      Types: {
-        anarchy: { id: "anarchy", isUnlocked: () => false, selectable: false },
-        dictator: { id: "dictator", isUnlocked: () => false, selectable: false },
-        autocracy: { id: "autocracy", isUnlocked: () => true },
-        democracy: { id: "democracy", isUnlocked: () => true },
-        oligarchy: { id: "oligarchy", isUnlocked: () => true },
-        theocracy: { id: "theocracy", isUnlocked: () => haveTech("gov_theo") },
-        republic: { id: "republic", isUnlocked: () => haveTech("govern", 2) },
-        socialist: { id: "socialist", isUnlocked: () => haveTech("gov_soc") },
-        corpocracy: { id: "corpocracy", isUnlocked: () => haveTech("gov_corp") },
-        technocracy: {
-          id: "technocracy",
-          isUnlocked: () => haveTech("govern", 3)
-        },
-        federation: { id: "federation", isUnlocked: () => haveTech("gov_fed") },
-        magocracy: { id: "magocracy", isUnlocked: () => haveTech("gov_mage") }
-      },
-      isUnlocked() {
-        let node = document.getElementById("govType");
-        return node !== null && node.style.display !== "none";
-      },
-      isEnabled() {
-        let node = document.querySelector("#govType button");
-        return this.isUnlocked() && node !== null && node.getAttribute("disabled") !== "disabled";
-      },
-      currentGovernment() {
-        return game.global.civic.govern.type;
-      },
-      setGovernment(government) {
-        if (this.currentGovernment() === government || WindowManager.isOpen()) {
-          return;
-        }
-        let optionsNode = document.querySelector("#govType button");
-        let title = game.loc("civics_government_type");
-        WindowManager.openModalWindowWithCallback(optionsNode, title, () => {
-          GameLog.logSuccess(
-            "special",
-            `Revolution! Government changed to ${game.loc(
-              "govern_" + government
-            )}.`,
-            ["events", "major_events"]
-          );
-          getVueById("govModal")?.setGov(government);
-        });
-      }
-    };
-    var MarketManager = {
-      priorityList: [],
-      multiplier: 0,
-      updateData() {
-        if (game.global.city.market) {
-          this.multiplier = game.global.city.market.qty;
-        }
-      },
-      isUnlocked() {
-        return haveTech("currency", 2);
-      },
-      sortByPriority() {
-        this.priorityList.sort((a, b) => a.marketPriority - b.marketPriority);
-      },
-      isBuySellUnlocked(resource) {
-        return document.querySelector("#market-" + resource.id + " .order") !== null;
-      },
-      setMultiplier(multiplier) {
-        this.multiplier = Math.min(
-          Math.max(1, multiplier),
-          this.getMaxMultiplier()
-        );
-        getVueById("market-qty").qty = this.multiplier;
-      },
-      getMaxMultiplier() {
-        return getVueById("market-qty")?.limit() ?? 1;
-      },
-      getUnitBuyPrice(resource) {
-        let price = game.global.resource[resource.id].value;
-        price *= traitVal("arrogant", 0, "+");
-        price *= traitVal("conniving", 0, "-");
-        return price;
-      },
-      getUnitSellPrice(resource) {
-        let divide = 4;
-        divide *= traitVal("merchant", 0, "-");
-        divide *= traitVal("asymmetrical", 0, "+");
-        divide *= traitVal("conniving", 1, "-");
-        return game.global.resource[resource.id].value / divide;
-      },
-      buy(resource) {
-        let vue = getVueById(resource._marketVueBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        let price = this.getUnitBuyPrice(resource) * this.multiplier;
-        if (resources.Money.currentQuantity < price) {
-          return false;
-        }
-        resources.Money.currentQuantity -= this.multiplier * this.getUnitBuyPrice(resource);
-        resource.currentQuantity += this.multiplier;
-        vue.purchase(resource.id);
-      },
-      sell(resource) {
-        let vue = getVueById(resource._marketVueBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        if (resource.currentQuantity < this.multiplier) {
-          return false;
-        }
-        resources.Money.currentQuantity += this.multiplier * this.getUnitSellPrice(resource);
-        resource.currentQuantity -= this.multiplier;
-        vue.sell(resource.id);
-      },
-      getImportRouteCap() {
-        if (haveTech("currency", 6)) {
-          return 1e6;
-        } else if (haveTech("currency", 4)) {
-          return 100;
-        } else {
-          return 25;
-        }
-      },
-      getExportRouteCap() {
-        if (!game.global.race["banana"]) {
-          return this.getImportRouteCap();
-        } else if (haveTech("currency", 6)) {
-          return 1e6;
-        } else if (haveTech("currency", 4)) {
-          return 25;
-        } else {
-          return 10;
-        }
-      },
-      getMaxTradeRoutes() {
-        let max = game.global.city.market.mtrade;
-        let unmanaged = 0;
-        for (let resource of this.priorityList) {
-          if (!resource.autoTradeBuyEnabled && !resource.autoTradeSellEnabled) {
-            max -= Math.abs(resource.tradeRoutes);
-            unmanaged += resource.tradeRoutes;
-          }
-        }
-        return [max, unmanaged];
-      },
-      zeroTradeRoutes(resource) {
-        getVueById(resource._marketVueBinding)?.zero(resource.id);
-      },
-      addTradeRoutes(resource, count) {
-        if (!resource.isUnlocked()) {
-          return false;
-        }
-        let vue = getVueById(resource._marketVueBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of KeyManager.click(count)) {
-          vue.autoBuy(resource.id);
-        }
-      },
-      removeTradeRoutes(resource, count) {
-        if (!resource.isUnlocked()) {
-          return false;
-        }
-        let vue = getVueById(resource._marketVueBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of KeyManager.click(count)) {
-          vue.autoSell(resource.id);
-        }
-      }
-    };
-    var StorageManager = {
-      priorityList: [],
-      crateValue: 0,
-      containerValue: 0,
-      _storageVueBinding: "createHead",
-      _storageVue: void 0,
-      _crateDebounce: {},
-      // { resourceId: { dir, ticks, prev, locked } }
-      _containerDebounce: {},
-      // same
-      initStorage() {
-        if (!this.isUnlocked) {
-          return false;
-        }
-        this._storageVue = getVueById(this._storageVueBinding);
-        if (this._storageVue === void 0) {
-          return false;
-        }
-        return true;
-      },
-      isUnlocked() {
-        return haveTech("container");
-      },
-      sortByPriority() {
-        this.priorityList.sort((a, b) => a.storagePriority - b.storagePriority);
-      },
-      constructCrate(count) {
-        if (count <= 0) {
-          return;
-        }
-        for (let m of KeyManager.click(count)) {
-          this._storageVue.crate();
-        }
-      },
-      constructContainer(count) {
-        if (count <= 0) {
-          return;
-        }
-        for (let m of KeyManager.click(count)) {
-          this._storageVue.container();
-        }
-      },
-      assignCrate(resource, count) {
-        let vue = getVueById(resource._stackVueBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of KeyManager.click(count)) {
-          vue.addCrate(resource.id);
-        }
-      },
-      unassignCrate(resource, count) {
-        let vue = getVueById(resource._stackVueBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of KeyManager.click(count)) {
-          vue.subCrate(resource.id);
-        }
-      },
-      assignContainer(resource, count) {
-        let vue = getVueById(resource._stackVueBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of KeyManager.click(count)) {
-          vue.addCon(resource.id);
-        }
-      },
-      unassignContainer(resource, count) {
-        let vue = getVueById(resource._stackVueBinding);
-        if (vue === void 0) {
-          return false;
-        }
-        for (let m of KeyManager.click(count)) {
-          vue.subCon(resource.id);
-        }
-      }
-    };
+    let MinorTraitManager, MutableTraitManager;
+    ({ MinorTraitManager, MutableTraitManager } = createTraitManagers({
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+      getVueById: (id) => getVueById(id),
+      haveTech
+    }));
+    const { QuarryManager, MineManager, ExtractorManager } = createIndustryManagers({
+      getGame: () => game,
+      getBuildings: () => buildings,
+      getVueById: (id) => getVueById(id),
+      getKeyManager: () => KeyManager,
+      haveTech
+    });
+    let NaniteManager, SupplyManager, EjectManager;
+    ({ NaniteManager, SupplyManager, EjectManager } = createDisposalManagers({
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getPoly: () => poly,
+      getVueById: (id) => getVueById(id),
+      getKeyManager: () => KeyManager,
+      haveTask
+    }));
+    let AlchemyManager, RitualManager;
+    ({ AlchemyManager, RitualManager } = createMagicManagers({
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getVueById: (id) => getVueById(id),
+      getKeyManager: () => KeyManager,
+      haveTech,
+      isLumberRace,
+      addProps
+    }));
+    let SmelterManager, FactoryManager, ReplicatorManager, DroidManager, GrapheneManager;
+    ({
+      SmelterManager,
+      FactoryManager,
+      ReplicatorManager,
+      DroidManager,
+      GrapheneManager
+    } = createProductionManagers({
+      getGame: () => game,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getVueById: (id) => getVueById(id),
+      getKeyManager: () => KeyManager,
+      haveTech,
+      isLumberRace,
+      addProps,
+      normalizeProperties,
+      replicableResources,
+      ResourceProductionCost
+    }));
+    let GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager;
+    ({ GalaxyTradeManager, GovernmentManager, MarketManager, StorageManager } = createEconomyManagers({
+      getGame: () => game,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getDocument: () => document,
+      getVueById: (id) => getVueById(id),
+      getKeyManager: () => KeyManager,
+      getWindowManager: () => WindowManager,
+      getGameLog: () => GameLog,
+      haveTech,
+      traitVal
+    }));
     var SpyManager = {
       _foreignVue: void 0,
       purchaseMoney: 0,
@@ -32272,299 +33306,26 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       }
     };
-    var JobManager = {
-      priorityList: [],
-      craftingJobs: [],
-      sortByPriority() {
-        this.priorityList.sort((a, b) => a.priority - b.priority);
-      },
-      managedPriorityList() {
-        let ret = [];
-        if (settings.autoJobs) {
-          ret = this.priorityList.filter((job) => job.isManaged());
-        }
-        if (settings.autoCraftsmen) {
-          ret = ret.concat(this.craftingJobs.filter((job) => job.isManaged()));
-        }
-        return ret;
-      },
-      servantsMax() {
-        if (!game.global.race.servants) {
-          return 0;
-        }
-        let max = game.global.race.servants.max;
-        for (let job of this.priorityList) {
-          if (job.is.serve && !job.isManaged()) {
-            max -= job.servants;
-          }
-        }
-        return max;
-      },
-      skilledServantsMax() {
-        if (!game.global.race.servants) {
-          return 0;
-        }
-        let max = game.global.race.servants.smax;
-        for (let job of this.craftingJobs) {
-          if (!job.isManaged()) {
-            max -= job.servants;
-          }
-        }
-        return max;
-      },
-      craftingMax() {
-        if (!game.global.city.foundry) {
-          return 0;
-        }
-        let max = game.global.civic.craftsman.max;
-        for (let job of this.craftingJobs) {
-          if (!job.isManaged()) {
-            max -= job.count;
-          }
-        }
-        max -= game.global.city.foundry.Thermite ?? 0;
-        return max;
-      }
-    };
-    var BuildingManager = {
-      priorityList: [],
-      statePriorityList: [],
-      updateBuildings() {
-        for (let building of Object.values(buildings)) {
-          building.updateResourceRequirements();
-          building.extraDescription = "";
-        }
-      },
-      updateWeighting() {
-        let activeRules = weightingRules.filter(
-          (rule) => rule[wrGlobalCondition]() && rule[wrMultiplier]() !== 1
-        );
-        for (let building of this.priorityList) {
-          building.weighting = building._weighting;
-          for (let j = 0; j < activeRules.length; j++) {
-            let result = activeRules[j][wrIndividualCondition](building);
-            if (result) {
-              let note = activeRules[j][wrDescription](result, building);
-              if (note !== "") {
-                building.extraDescription += note + "<br>";
-              }
-              building.weighting *= activeRules[j][wrMultiplier](result);
-              if (building.weighting <= 0) {
-                break;
-              }
-            }
-          }
-          if (building.weighting > 0) {
-            building.weighting = Math.max(
-              Number.MIN_VALUE,
-              building.weighting - 1e-7 * building.count
-            );
-            building.extraDescription = "AutoBuild weighting: " + getNiceNumber(building.weighting) + "<br>" + building.extraDescription;
-          }
-        }
-      },
-      sortByPriority() {
-        this.priorityList.sort((a, b) => a.priority - b.priority);
-        this.statePriorityList.sort((a, b) => a.priority - b.priority);
-      },
-      managedPriorityList() {
-        return this.priorityList.filter((building) => building.weighting > 0);
-      },
-      managedStatePriorityList() {
-        return this.statePriorityList.filter(
-          (building) => building.hasState() && building.autoStateEnabled && building.count > 0
-        );
-      }
-    };
-    var ProjectManager = {
-      priorityList: [],
-      updateProjects() {
-        for (let project of this.priorityList) {
-          project.updateResourceRequirements();
-          project.extraDescription = "";
-        }
-      },
-      updateWeighting() {
-        for (let project of this.priorityList) {
-          project.weighting = project._weighting * project.currentStep;
-          if (!project.isUnlocked()) {
-            project.weighting = 0;
-            project.extraDescription = "Locked<br>";
-          }
-          if (!project.autoBuildEnabled || !settings.autoARPA) {
-            project.weighting = 0;
-            project.extraDescription = "AutoBuild disabled<br>";
-          }
-          if (project.count >= project.autoMax && (project !== projects.ManaSyphon || !isPrestigeAllowed("vacuum"))) {
-            project.weighting = 0;
-            project.extraDescription = "Maximum amount reached<br>";
-          }
-          if (settings.prestigeMADIgnoreArpa && isEarlyGame()) {
-            project.weighting = 0;
-            project.extraDescription = "Projects ignored Pre-MAD<br>";
-          }
-          if (state.queuedTargets.includes(project)) {
-            project.weighting = 0;
-            project.extraDescription = "Queued project, processing...<br>";
-          }
-          if (state.triggerTargets.includes(project)) {
-            project.weighting = 0;
-            project.extraDescription = "Active trigger, processing...<br>";
-          }
-          if (!project.isAffordable(true)) {
-            project.weighting = 0;
-            project.extraDescription = "Not enough storage<br>";
-          }
-          if (project === projects.ManaSyphon && settings.prestigeBioseedConstruct && settings.prestigeType !== "vacuum" && game.global.race["witch_hunter"]) {
-            project.weighting = 0;
-            project.extraDescription = "Not needed for current prestige<br>";
-          }
-          if (project.weighting > 0 && settings.achievementGuards && settings.guardBananaRepublic && game.global.race["banana"] && project === projects.Monument && !bananaRepublicObjectiveComplete("b5")) {
-            project.weighting *= settings.buildingWeightingBananaObjective;
-            project.extraDescription += "Banana Republic objective<br>";
-          }
-          if (project.weighting > 0 && inflationChallengeAssistActive() && project === projects.StockExchange) {
-            project.weighting *= settings.buildingWeightingInflationMoney;
-            project.extraDescription += "Inflation challenge Money helper<br>";
-          }
-          if (settings.arpaScaleWeighting) {
-            project.weighting /= 1 - 0.01 * project.progress;
-          }
-          if (project.weighting > 0) {
-            project.extraDescription = `AutoARPA weighting: ${getNiceNumber(
-              project.weighting
-            )} (${project.currentStep}%)<br>${project.extraDescription}`;
-          }
-        }
-      },
-      sortByPriority() {
-        this.priorityList.sort((a, b) => a.priority - b.priority);
-      },
-      managedPriorityList() {
-        return this.priorityList.filter((project) => project.weighting > 0);
-      }
-    };
-    var TriggerManager = {
-      priorityList: [],
-      targetTriggers: [],
-      resetTargetTriggers() {
-        this.targetTriggers = [];
-        for (let trigger of this.priorityList) {
-          trigger.updateComplete();
-          if (!trigger.complete && trigger.areRequirementsMet() && trigger.isActionPossible() && !this.actionConflicts(trigger)) {
-            this.targetTriggers.push(trigger);
-          }
-        }
-      },
-      getTrigger(seq) {
-        return this.priorityList.find((trigger) => trigger.seq === seq);
-      },
-      sortByPriority() {
-        this.priorityList.sort((a, b) => a.priority - b.priority);
-      },
-      AddTrigger(requirementType, requirementId, requirementCount, actionType, actionId, actionCount) {
-        let trigger = new Trigger(
-          this.priorityList.length,
-          this.priorityList.length,
-          requirementType,
-          requirementId,
-          requirementCount,
-          actionType,
-          actionId,
-          actionCount
-        );
-        this.priorityList.push(trigger);
-        return trigger;
-      },
-      AddTriggerFromSetting(raw) {
-        let existingSequence = this.priorityList.some(
-          (trigger) => trigger.seq === raw.seq
-        );
-        if (!existingSequence) {
-          let trigger = new Trigger(
-            raw.seq,
-            raw.priority,
-            raw.requirementType,
-            raw.requirementId,
-            raw.requirementCount,
-            raw.actionType,
-            raw.actionId,
-            raw.actionCount
-          );
-          this.priorityList.push(trigger);
-        }
-      },
-      RemoveTrigger(seq) {
-        let indexToRemove = this.priorityList.findIndex(
-          (trigger) => trigger.seq === seq
-        );
-        if (indexToRemove === -1) {
-          return;
-        }
-        this.priorityList.splice(indexToRemove, 1);
-        for (let i = 0; i < this.priorityList.length; i++) {
-          let trigger = this.priorityList[i];
-          trigger.seq = i;
-          trigger.priority = i;
-        }
-      },
-      DuplicateTrigger(seq) {
-        let indexToDuplicate = this.priorityList.findIndex(
-          (trigger2) => trigger2.seq === seq
-        );
-        if (indexToDuplicate === -1) {
-          return;
-        }
-        let triggerToDuplicate = this.priorityList[indexToDuplicate];
-        let trigger = new Trigger(
-          0,
-          0,
-          triggerToDuplicate.requirementType,
-          triggerToDuplicate.requirementId,
-          triggerToDuplicate.requirementCount,
-          triggerToDuplicate.actionType,
-          triggerToDuplicate.actionId,
-          triggerToDuplicate.actionCount
-        );
-        this.priorityList.splice(indexToDuplicate, 0, trigger);
-        for (let i = 0; i < this.priorityList.length; i++) {
-          let trigger2 = this.priorityList[i];
-          trigger2.seq = i;
-          trigger2.priority = i;
-        }
-      },
-      EvalizeTrigger(seq) {
-        let indexToEval = this.priorityList.findIndex(
-          (trigger2) => trigger2.seq === seq
-        );
-        if (indexToEval === -1) {
-          return;
-        }
-        let trigger = this.priorityList[indexToEval];
-        let check = "";
-        switch (trigger.requirementType) {
-          case "Eval":
-            check = trigger.requirementId;
-            break;
-          default:
-            check = `_("${trigger.requirementType}",${JSON.stringify(
-              trigger.requirementId
-            )})`;
-        }
-        win.prompt("Eval of this condition:", check);
-      },
-      // This function only checks if two triggers use the same resource, it does not check storage
-      actionConflicts(trigger) {
-        for (let targetTrigger of this.targetTriggers) {
-          if (Object.keys(targetTrigger.cost()).some(
-            (cost) => Object.keys(trigger.cost()).includes(cost)
-          )) {
-            return true;
-          }
-        }
-        return false;
-      }
-    };
+    let JobManager, BuildingManager, ProjectManager, TriggerManager;
+    ({ JobManager, BuildingManager, ProjectManager, TriggerManager } = createCoreManagers({
+      getGame: () => game,
+      getSettings: () => settings,
+      getState: () => state,
+      getBuildings: () => buildings,
+      getProjects: () => projects,
+      getNiceNumber,
+      weightingRules,
+      wrGlobalCondition,
+      wrIndividualCondition,
+      wrDescription,
+      wrMultiplier,
+      isEarlyGame,
+      getIsPrestigeAllowed: () => isPrestigeAllowed,
+      getBananaRepublicObjectiveComplete: () => bananaRepublicObjectiveComplete,
+      getInflationChallengeAssistActive: () => inflationChallengeAssistActive,
+      Trigger,
+      getWindow: () => win
+    }));
     var WindowManager = {
       openedByScript: false,
       _callbackWindowTitle: "",
@@ -32876,288 +33637,52 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getTriggerManager: () => TriggerManager,
       storage: localStorage
     });
-    function updateStandAloneSettings() {
-      let def = {
-        scriptName: "TMVictor",
-        overrides: {},
-        triggers: []
-      };
-      settingsSections.forEach((id) => def[id + "SettingsCollapsed"] = true);
-      applySettings(def, false);
-      if (settingsRaw.hasOwnProperty("masterScriptToggle")) {
-        if (!settingsRaw.hasOwnProperty("autoPrestige")) {
-          settingsRaw.autoPrestige = true;
-          [
-            "job_b1_farmer",
-            "job_b2_farmer",
-            "job_b3_farmer",
-            "job_b1_hunter",
-            "job_b2_hunter",
-            "job_b3_hunter"
-          ].forEach((id) => delete settingsRaw[id]);
-        }
-        if (!settingsRaw.hasOwnProperty("buildingsLimitPowered")) {
-          settingsRaw.buildingsLimitPowered = false;
-        }
-      }
-      if (!settingsRaw.migrationVersion || settingsRaw.migrationVersion < 1) {
-        if (settingsRaw["bld_p_eden-bliss_den"] && settingsRaw["bld_p_eden-rectory"] && settingsRaw["bld_p_eden-encampment"] && settingsRaw["bld_p_eden-bliss_den"] < settingsRaw["bld_p_eden-rectory"]) {
-          settingsRaw["bld_p_eden-rectory"] = settingsRaw["bld_p_eden-encampment"] + 1;
-        }
-        settingsRaw.migrationVersion = 1;
-      }
-      resetEvolutionSettings(false);
-      resetWarSettings(false);
-      resetHellSettings(false);
-      resetMechSettings(false);
-      resetFleetSettings(false);
-      resetGovernmentSettings(false);
-      resetAuthoritySettings(false);
-      resetBuildingSettings(false);
-      resetWeightingSettings(false);
-      resetMarketSettings(false);
-      resetResearchSettings(false);
-      resetProjectSettings(false);
-      resetJobSettings(false);
-      resetMagicSettings(false);
-      resetProductionSettings(false);
-      resetStorageSettings(false);
-      resetGeneralSettings(false);
-      resetInterfaceSettings(false);
-      resetStateLogSettings(false);
-      resetAchievementGuardSettings(false);
-      resetChallengeHelperSettings(false);
-      resetPrestigeSettings(false);
-      resetEjectorSettings(false);
-      resetPlanetSettings(false);
-      resetLoggingSettings(false);
-      resetTriggerSettings(false);
-      resetMinorTraitSettings(false);
-      resetMutableTraitSettings(false);
-      for (let key in settingsRaw.overrides) {
-        for (let i = 0; i < settingsRaw.overrides[key].length; i++) {
-          let override = settingsRaw.overrides[key][i];
-          if (typeof settingsRaw[key] === "string" && typeof override.ret === "number") {
-            override.ret = String(override.ret);
-          }
-          if (typeof settingsRaw[key] === "number" && typeof override.ret === "string") {
-            override.ret = Number(override.ret);
-          }
-        }
-      }
-      settingsRaw.triggers.forEach((t) => {
-        if (t.requirementType == "Boolean" && t.requirementCount !== 1) {
-          t.requirementId = t.requirementCount ? t.requirementId : !t.requirementId;
-          t.requirementCount = 1;
-        }
-        if ((t.requirementType === "unlocked" || t.requirementType === "researched") && techIds["tech-" + t.requirementId]) {
-          t.requirementId = "tech-" + t.requirementId;
-        }
-        if (t.actionType === "research" && techIds["tech-" + t.actionId]) {
-          t.actionId = "tech-" + t.actionId;
-        }
-        if (t.requirementType === "unlocked") {
-          t.requirementType = "ResearchUnlocked";
-          t.requirementCount = 1;
-        }
-        if (t.requirementType === "researched") {
-          t.requirementType = "ResearchComplete";
-          t.requirementCount = 1;
-        }
-        if (t.requirementType === "built") {
-          t.requirementType = "BuildingCount";
-        }
-      });
-      if (settingsRaw.hasOwnProperty("productionPrioritizeDemanded")) {
-        settingsRaw.productionFoundryWeighting = settingsRaw.productionPrioritizeDemanded ? "demanded" : "none";
-      }
-      settingsRaw.challenge_plasmid = settingsRaw.challenge_mastery || settingsRaw.challenge_plasmid;
-      if (settingsRaw.hasOwnProperty("res_trade_buy_mtr_Food")) {
-        MarketManager.priorityList.forEach(
-          (res) => settingsRaw["res_trade_buy_" + res.id] = true
-        );
-      }
-      if (settingsRaw.hasOwnProperty("arpa")) {
-        Object.entries(settingsRaw.arpa).forEach(
-          ([id, enabled]) => settingsRaw["arpa_" + id] = enabled
-        );
-      }
-      [
-        "buildingWeightingTriggerConflict",
-        "researchAlienGift",
-        "arpaBuildIfStorageFullCraftableMin",
-        "arpaBuildIfStorageFullResourceMaxPercent",
-        "arpaBuildIfStorageFull",
-        "productionMoneyIfOnly",
-        "autoAchievements",
-        "autoChallenge",
-        "autoMAD",
-        "autoSpace",
-        "autoSeeder",
-        "foreignSpyManage",
-        "foreignHireMercCostLowerThan",
-        "userResearchUnification",
-        "btl_Ambush",
-        "btl_max_Ambush",
-        "btl_Raid",
-        "btl_max_Raid",
-        "btl_Pillage",
-        "btl_max_Pillage",
-        "btl_Assault",
-        "btl_max_Assault",
-        "btl_Siege",
-        "btl_max_Siege",
-        "smelter_fuel_Oil",
-        "smelter_fuel_Coal",
-        "smelter_fuel_Lumber",
-        "planetSettingsCollapser",
-        "buildingManageSpire",
-        "hellHandleAttractors",
-        "researchFilter",
-        "challenge_mastery",
-        "hellCountGems",
-        "productionPrioritizeDemanded",
-        "fleetChthonianPower",
-        "productionWaitMana",
-        "arpa",
-        "autoLogging"
-      ].forEach((id) => delete settingsRaw[id]);
-      [
-        "foreignAttack",
-        "foreignOccupy",
-        "foreignSpy",
-        "foreignSpyMax",
-        "foreignSpyOp"
-      ].forEach(
-        (id) => [0, 1, 2].forEach((index) => delete settingsRaw[id + index])
-      );
-      ["res_storage_w_", "res_trade_buy_mtr_", "res_trade_sell_mps_"].forEach(
-        (id) => Object.values(resources).forEach(
-          (resource) => delete settingsRaw[id + resource.id]
-        )
-      );
-      Object.values(projects).forEach(
-        (project) => delete settingsRaw["arpa_ignore_money_" + project.id]
-      );
-      Object.values(buildings).filter((building) => !building.isSwitchable()).forEach(
-        (building) => delete settingsRaw["bld_s_" + building._vueBinding]
-      );
-      migrateSetting("prestigeWhiteholeEjectEnabled", "autoEject", (v) => v);
-      migrateSetting("mechSaveSupply", "mechSaveSupplyRatio", (v) => v ? 1 : 0);
-      migrateSetting(
-        "foreignProtectSoldiers",
-        "foreignProtect",
-        (v) => v ? "always" : "never"
-      );
-      migrateSetting(
-        "prestigeWhiteholeEjectExcess",
-        "ejectMode",
-        (v) => v ? "mixed" : "cap"
-      );
-      migrateSetting("hellHandlePatrolCount", "autoHell", (v) => v, true);
-      migrateSetting(
-        "unificationRequest",
-        "prioritizeUnify",
-        (v) => v ? "savereq" : "ignore"
-      );
-      migrateSetting(
-        "queueRequest",
-        "prioritizeQueue",
-        (v) => v ? "savereq" : "ignore"
-      );
-      migrateSetting(
-        "triggerRequest",
-        "prioritizeTriggers",
-        (v) => v ? "savereq" : "ignore"
-      );
-      migrateSetting("govManage", "autoGovernment", (v) => v);
-      migrateSetting("storagePrioritizedOnly", "storageAssignPart", (v) => !v);
-      migrateSetting(
-        "fleetScanEris",
-        "fleet_outer_pr_spc_eris",
-        (v) => v ? 100 : 0
-      );
-      migrateSetting(
-        "jobDisableCraftsmans",
-        "productionCraftsmen",
-        (v) => v ? "nocraft" : "always"
-      );
-      migrateSetting("activeTriggerUI", "activeTargetsUI", (v) => v);
-      migrateSetting("autoAssembleGene", "autoGenetics", (v) => v);
-      migrateSetting("batportal-harbour", "batportal-harbor", (v) => v);
-      migrateSetting("bld_p_portal-harbour", "bld_p_portal-harbor", (v) => v);
-      migrateSetting("bld_s_portal-harbour", "bld_s_portal-harbor", (v) => v);
-      migrateSetting("bld_s2_portal-harbour", "bld_s2_portal-harbor", (v) => v);
-      migrateSetting("bld_m_portal-harbour", "bld_m_portal-harbor", (v) => v);
-      migrateSetting("bld_w_portal-harbour", "bld_w_portal-harbor", (v) => v);
-      if (settingsRaw.hasOwnProperty("genesAssembleGeneAlways")) {
-        if (settingsRaw.overrides.genesAssembleGeneAlways) {
-          settingsRaw.overrides.geneticsAssemble = settingsRaw.overrides.genesAssembleGeneAlways.concat(
-            settingsRaw.overrides.geneticsAssemble ?? []
-          );
-        }
-        if (!settingsRaw.genesAssembleGeneAlways) {
-          settingsRaw.overrides.geneticsAssemble = settingsRaw.overrides.geneticsAssemble ?? [];
-          settingsRaw.overrides.geneticsAssemble.push({
-            type1: "ResearchComplete",
-            arg1: "tech-dna_sequencer",
-            type2: "Boolean",
-            arg2: true,
-            cmp: "==",
-            ret: "none"
-          });
-        }
-      }
-      if (settingsRaw.hasOwnProperty("prestigeWhiteholeEjectAllCount") && settingsRaw.prestigeWhiteholeEjectAllCount <= 20) {
-        settingsRaw.overrides.ejectMode = settingsRaw.overrides.ejectMode ?? [];
-        settingsRaw.overrides.ejectMode.push({
-          type1: "BuildingCount",
-          arg1: "interstellar-mass_ejector",
-          type2: "Number",
-          arg2: settingsRaw.prestigeWhiteholeEjectAllCount,
-          cmp: ">=",
-          ret: "all"
-        });
-      }
-      if (settingsRaw.hasOwnProperty("prestigeAscensionSkipCustom") && !settings.prestigeAscensionSkipCustom) {
-        settingsRaw.overrides.autoPrestige = settingsRaw.overrides.autoPrestige ?? [];
-        settingsRaw.overrides.autoPrestige.push({
-          type1: "ResetType",
-          arg1: "ascension",
-          type2: "Boolean",
-          arg2: true,
-          cmp: "==",
-          ret: false
-        });
-      }
-      Object.values(crafter).forEach((job) => {
-        delete settingsRaw["job_p_" + job._originalId], delete settingsRaw["job_b1_" + job._originalId], delete settingsRaw["job_b2_" + job._originalId], delete settingsRaw["job_b3_" + job._originalId];
-      });
-      ["res_containers_m_", "res_crates_m_"].forEach(
-        (id) => Object.values(resources).forEach((res) => {
-          delete settingsRaw[id + res.id], delete settingsRaw.overrides[id + res.id];
-        })
-      );
-      [
-        "prestigeWhiteholeEjectAllCount",
-        "prestigeWhiteholeDecayRate",
-        "genesAssembleGeneAlways",
-        "buildingsConflictQueue",
-        "buildingsConflictRQueue",
-        "buildingsConflictPQueue",
-        "fleet_outer_pr_spc_hell",
-        "fleet_outer_pr_spc_dwarf",
-        "prestigeEnabledBarracks",
-        "bld_s2_city-garrison",
-        "prestigeAscensionSkipCustom",
-        "prestigeBioseedGECK",
-        "tickTimeout",
-        "minorTraitSettingsCollapsed",
-        "fleetOuterMinSyndicate",
-        "smelter_fuel_p_Star",
-        "replicatorResource"
-      ].forEach((id) => {
-        delete settingsRaw[id], delete settingsRaw.overrides[id];
+    const { updateStandAloneSettings } = createSettingsMigration({
+      getSettingsRaw: () => settingsRaw,
+      getSettings: () => settings,
+      settingsSections,
+      applySettings,
+      migrateSetting,
+      getResetSettings: () => ({
+        resetEvolutionSettings,
+        resetWarSettings,
+        resetHellSettings,
+        resetMechSettings,
+        resetFleetSettings,
+        resetGovernmentSettings,
+        resetAuthoritySettings,
+        resetBuildingSettings,
+        resetWeightingSettings,
+        resetMarketSettings,
+        resetResearchSettings,
+        resetProjectSettings,
+        resetJobSettings,
+        resetMagicSettings,
+        resetProductionSettings,
+        resetStorageSettings,
+        resetGeneralSettings,
+        resetInterfaceSettings,
+        resetStateLogSettings,
+        resetAchievementGuardSettings,
+        resetChallengeHelperSettings,
+        resetPrestigeSettings,
+        resetEjectorSettings,
+        resetPlanetSettings,
+        resetLoggingSettings,
+        resetTriggerSettings,
+        resetMinorTraitSettings,
+        resetMutableTraitSettings
+      }),
+      getTechIds: () => techIds,
+      getMarketManager: () => MarketManager,
+      getResources: () => resources,
+      getProjects: () => projects,
+      getBuildings: () => buildings,
+      getCrafter: () => crafter
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        settingsMigration: { updateStandAloneSettings }
       });
     }
     if (window.__EA_TEST_HOOKS__) {
@@ -34471,83 +34996,20 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    function updateOverrides() {
-      if (safeMode) {
-        Object.assign(settings, settingsRaw);
-        settings.masterScriptToggle = false;
-        return;
-      }
-      let xorLists = {};
-      let overrides = {};
-      for (let key in settingsRaw.overrides) {
-        let conditions = settingsRaw.overrides[key];
-        for (let i = 0; i < conditions.length; i++) {
-          let check = conditions[i];
-          try {
-            if (!checkTypes[check.type1]) {
-              throw `${check.type1} variable not found`;
-            }
-            if (!checkTypes[check.type2]) {
-              throw `${check.type2} variable not found`;
-            }
-            if (!checkCompare[check.cmp]) {
-              throw `${checkCompare[check.cmp]} comparator not found`;
-            }
-            let var1 = checkTypes[check.type1].fn(check.arg1);
-            let var2 = checkTypes[check.type2].fn(check.arg2);
-            if (!checkCompare[check.cmp](var1, var2)) {
-              continue;
-            }
-            let ret = checkCustom[check.cmp] ? var2 : check.ret;
-            if (typeof settingsRaw[key] === typeof ret) {
-              overrides[key] = ret;
-              break;
-            } else if (typeof settingsRaw[key] === "object") {
-              xorLists[key] = xorLists[key] ?? [];
-              xorLists[key].push(ret);
-            } else {
-              throw `Expected type: ${typeof settingsRaw[key]}; Override type: ${typeof ret}`;
-            }
-          } catch (error) {
-            let msg = `Condition ${i + 1} for setting ${key} invalid! Fix or remove it. (${error})`;
-            if (!WindowManager.isOpen() && !Object.values(game.global.lastMsg.all).find((log) => log.m === msg)) {
-              GameLog.logDanger("special", msg, ["events", "major_events"]);
-            }
-            continue;
-          }
-        }
-      }
-      if (haveTask("bal_storage") || haveTask("combo_storage")) {
-        overrides["autoStorage"] = false;
-      }
-      if (haveTask("trash")) {
-        overrides["autoEject"] = false;
-      }
-      if (haveTask("tax")) {
-        overrides["autoTax"] = false;
-      }
-      let rawTickRate = overrides["tickRate"] ?? settingsRaw["tickRate"];
-      overrides["tickRate"] = Math.min(
-        240,
-        Math.max(1, Math.round(rawTickRate * 2)) / 2
-      );
-      Object.assign(settings, settingsRaw, overrides);
-      for (let key in xorLists) {
-        settings[key] = settingsRaw[key].slice();
-        for (let item of xorLists[key]) {
-          let index = settings[key].indexOf(item);
-          if (index > -1) {
-            settings[key].splice(index, 1);
-          } else {
-            settings[key].push(item);
-          }
-        }
-      }
-      let currentNode = $(`#script_override_true_value:visible`);
-      if (currentNode.length !== 0) {
-        changeDisplayInputNode(currentNode);
-      }
-    }
+    const { updateOverrides } = createOverrideEvaluation({
+      getSafeMode: () => safeMode,
+      getSettings: () => settings,
+      getSettingsRaw: () => settingsRaw,
+      getCheckTypes: () => checkTypes,
+      getCheckCompare: () => checkCompare,
+      getCheckCustom: () => checkCustom,
+      getHaveTask: () => haveTask,
+      getWindowManager: () => WindowManager,
+      getGame: () => game,
+      getGameLog: () => GameLog,
+      getJQuery: () => $,
+      changeDisplayInputNode
+    });
     const customRaceGenusOpposition = {
       humanoid: ["fungi"],
       carnivore: ["herbivore"],
