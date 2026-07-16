@@ -92,7 +92,9 @@ import { createStorageExpansion } from "./planning/storage-expansion.ts";
 import { createStorageRequirements } from "./planning/storage-requirements.ts";
 import { createDemandPrioritization } from "./planning/demand-prioritization.ts";
 import { createPriorityTargets } from "./planning/priority-targets.ts";
-import { createEvolutionResult } from "./policies/evolution-result.ts";
+import { decideEvolutionResult } from "./domain/evolution-result.ts";
+import { readEvolutionResultInput } from "./adapters/evolve/evolution-result.ts";
+import { formatEvolutionLog } from "./application/evolution-result.ts";
 import {
   assessAuthorityRemoval as assessAuthorityRemovalPolicy,
   calculateAuthorityPerSoldier,
@@ -129,7 +131,15 @@ import { createStateLogSettings } from "./ui/state-log-settings.ts";
 import { createInterfaceSettings } from "./ui/interface-settings.ts";
 import { createTickOrchestration } from "./automation/tick.ts";
 import { createStateUpdate } from "./automation/state-update.ts";
-import { createRunGuards } from "./policies/run-guards.ts";
+import {
+  assessRetirementPreparation as assessRetirementPreparationPolicy,
+  isRetirementAssistActive as isRetirementAssistActivePolicy,
+} from "./domain/retirement-prep.ts";
+import {
+  readRetirementAssistInput,
+  readRetirementPreparationInput,
+} from "./adapters/evolve/retirement-prep.ts";
+import { formatRetirementShortfalls } from "./application/retirement-prep.ts";
 import {
   calculateAchievementStarLevel,
   isAchievementGuardActive,
@@ -151,6 +161,17 @@ import {
   readBananaRepublicProgress,
   readBananaRepublicSmoothieInput,
 } from "./adapters/evolve/banana-republic.ts";
+import {
+  inflationSecondsToFinish as inflationSecondsToFinishPolicy,
+  isInflationAssistActive as isInflationAssistActivePolicy,
+  isInflationMoneyReachable as isInflationMoneyReachablePolicy,
+  shouldSaveInflationMoney as shouldSaveInflationMoneyPolicy,
+} from "./domain/inflation-assist.ts";
+import {
+  readInflationAssistInput,
+  readInflationMoneyInput,
+  readInflationSaveInput,
+} from "./adapters/evolve/inflation-assist.ts";
 import {
   getBlackholeMass as getBlackholeMassPolicy,
   isApocalypsePrestigeAvailable as isApocalypsePrestigeAvailablePolicy,
@@ -2597,24 +2618,73 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     return result.status === "unavailable" ? result.fallbackActive : false;
   };
 
-  let {
-    inflationChallengeAssistActive,
-    inflationChallengeMoneyReachable,
-    inflationChallengeSecondsToFinish,
-    inflationChallengeShouldSaveMoney,
-    retirementChallengeAssistActive,
-    retirementPreparationMissing,
-  } = createRunGuards({
-    getSettings: () => settings,
-    getGame: () => game,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getAchievementStar: (...args) => getAchievementStar(...args),
-    haveTech,
-    getNumberString,
-    inflationChallengeMoney: INFLATION_CHALLENGE_MONEY,
-    retirementPreparation: RETIREMENT_PREP,
-  });
+  let inflationChallengeAssistActive = () => {
+    const result = readInflationAssistInput(
+      settings,
+      game,
+      getAchievementStar("wheelbarrow"),
+    );
+    return result.status === "ready"
+      ? isInflationAssistActivePolicy(result.input)
+      : false;
+  };
+  let inflationChallengeMoneyReachable = () => {
+    const result = readInflationMoneyInput(
+      resources,
+      INFLATION_CHALLENGE_MONEY,
+    );
+    return result.status === "ready"
+      ? isInflationMoneyReachablePolicy(result.input)
+      : false;
+  };
+  let inflationChallengeSecondsToFinish = () => {
+    const result = readInflationMoneyInput(
+      resources,
+      INFLATION_CHALLENGE_MONEY,
+    );
+    return result.status === "ready"
+      ? inflationSecondsToFinishPolicy(result.input)
+      : Number.POSITIVE_INFINITY;
+  };
+  let inflationChallengeShouldSaveMoney = () => {
+    const result = readInflationSaveInput(
+      settings,
+      game,
+      resources,
+      getAchievementStar("wheelbarrow"),
+      INFLATION_CHALLENGE_MONEY,
+    );
+    return result.status === "ready"
+      ? shouldSaveInflationMoneyPolicy(result.input)
+      : false;
+  };
+
+  let retirementChallengeAssistActive = () => {
+    const result = readRetirementAssistInput(
+      settings,
+      game,
+      haveTech("isolation"),
+    );
+    return result.status === "ready"
+      ? isRetirementAssistActivePolicy(result.input)
+      : false;
+  };
+  let retirementPreparationMissing = () => {
+    if (!retirementChallengeAssistActive()) {
+      return [];
+    }
+    const result = readRetirementPreparationInput(
+      buildings,
+      resources,
+      RETIREMENT_PREP,
+    );
+    return result.status === "ready"
+      ? formatRetirementShortfalls(
+          assessRetirementPreparationPolicy(result.input),
+          getNumberString,
+        )
+      : [];
+  };
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
@@ -3695,21 +3765,64 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   }
 
   let evolutionResultTestActions;
-  const { checkEvolutionResult } = createEvolutionResult({
-    getSettings: () => settings,
-    getSettingsRaw: () => settingsRaw,
-    getState: () => state,
-    getGame: () => game,
-    getRaces: () => races,
-    getMutableTraitManager: () => MutableTraitManager,
-    getGameLog: () => GameLog,
-    getDocument: () => document,
-    getAddEvolutionSetting: () =>
-      evolutionResultTestActions?.addEvolutionSetting ?? addEvolutionSetting,
-    getUpdateSettingsFromState: () =>
-      evolutionResultTestActions?.updateSettingsFromState ??
-      updateSettingsFromState,
-  });
+  const checkEvolutionResult = () => {
+    if (!settings.masterScriptToggle || !state.evoCheckNeeded) {
+      return true;
+    }
+    state.evoCheckNeeded = false;
+
+    const read = readEvolutionResultInput(
+      settings,
+      game,
+      races,
+      MutableTraitManager,
+    );
+    if (read.status !== "ready") {
+      // Malformed evolution data: continue the tick without a risky soft reset.
+      return true;
+    }
+    const decision = decideEvolutionResult(read.input);
+    for (const event of decision.logs) {
+      const { level, message, tags } = formatEvolutionLog(event, (key) =>
+        game.loc(key),
+      );
+      if (level === "danger") {
+        GameLog.logDanger("special", message, [...tags]);
+      } else if (level === "warning") {
+        GameLog.logWarning("special", message, [...tags]);
+      } else {
+        GameLog.logInfo("special", message, [...tags]);
+      }
+    }
+
+    if (decision.needReset) {
+      const resetButton = document.querySelector(".reset .button:not(.right)");
+      if (resetButton.innerText === game.loc("reset_soft")) {
+        const addEvolutionSettingFn =
+          evolutionResultTestActions?.addEvolutionSetting ??
+          addEvolutionSetting;
+        const updateSettingsFromStateFn =
+          evolutionResultTestActions?.updateSettingsFromState ??
+          updateSettingsFromState;
+        if (
+          settings.evolutionQueueEnabled &&
+          settingsRaw.evolutionQueue.length > 0
+        ) {
+          if (!settings.evolutionQueueRepeat) {
+            addEvolutionSettingFn();
+          }
+          settingsRaw.evolutionQueue.unshift(settingsRaw.evolutionQueue.pop());
+        }
+        updateSettingsFromStateFn();
+
+        state.goal = "GameOverMan";
+        resetButton.disabled = false;
+        resetButton.click();
+        return false;
+      }
+    }
+    return true;
+  };
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {

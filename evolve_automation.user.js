@@ -13922,6 +13922,35 @@
     return { expandStorage: expandStorage2 };
   }
 
+  // src/domain/knowledge-requirements.ts
+  function reserveBuildCost(costs, target) {
+    if (target.isTechnology || target.isKnowledge) return;
+    if (target.knowledgeCost > 0) costs.push(target.knowledgeCost);
+  }
+  function calculateKnowledgeRequirements(input) {
+    const knowledgeRequiredByTechs = Math.max(0, ...input.techKnowledgeCosts);
+    const cheapestTechKnowledge = input.techKnowledgeCosts.length > 0 ? Math.min(...input.techKnowledgeCosts) : 0;
+    const buildKnowledgeCosts = [];
+    for (const target of input.reservedTargets) {
+      reserveBuildCost(buildKnowledgeCosts, target);
+    }
+    let topTarget = null;
+    for (const candidate of input.buildCandidates) {
+      if (!candidate.autoBuildable || candidate.isKnowledge) continue;
+      if (!topTarget || candidate.weighting > topTarget.weighting) {
+        topTarget = candidate;
+      }
+    }
+    if (topTarget && topTarget.knowledgeCost > 0) {
+      buildKnowledgeCosts.push(topTarget.knowledgeCost);
+    }
+    return {
+      knowledgeRequiredByTechs,
+      cheapestTechKnowledge,
+      knowledgeRequiredByBuildTargets: Math.max(0, ...buildKnowledgeCosts)
+    };
+  }
+
   // src/planning/storage-requirements.ts
   function createStorageRequirements({
     getSettings,
@@ -13977,39 +14006,31 @@
       const buildingManager = getBuildingManager();
       const projectManager = getProjectManager();
       const fleetManagerOuter = getFleetManagerOuter();
-      const techKnowledgeCosts = state2.unlockedTechs.map(
-        (tech) => tech.cost["Knowledge"] ?? 0
-      );
-      if (buildings2.GorddonEmbassy.isAutoBuildable()) {
-        techKnowledgeCosts.push(settings2.fleetEmbassyKnowledge);
-      }
-      state2.knowledgeRequiredByTechs = Math.max(0, ...techKnowledgeCosts);
-      state2.cheapestTechKnowledge = techKnowledgeCosts.length > 0 ? Math.min(...techKnowledgeCosts) : 0;
-      const buildKnowledgeCosts = [];
-      const addBuildKnowledgeCosts = (targets) => {
-        for (const target of targets) {
-          if (isTechnology(target) || target.is?.knowledge) {
-            continue;
-          }
-          const knowledgeCost = target.cost?.Knowledge ?? 0;
-          if (knowledgeCost > 0) {
-            buildKnowledgeCosts.push(knowledgeCost);
-          }
-        }
-      };
-      addBuildKnowledgeCosts(state2.queuedTargetsAll);
-      addBuildKnowledgeCosts(state2.triggerTargets);
-      const topTarget = [
-        ...buildingManager.priorityList,
-        ...projectManager.priorityList
-      ].filter((object) => object.isAutoBuildable?.() && !object.is?.knowledge).reduce(
-        (top, object) => !top || (object.weighting ?? 0) > (top.weighting ?? 0) ? object : top,
-        null
-      );
-      if (topTarget) {
-        addBuildKnowledgeCosts([topTarget]);
-      }
-      state2.knowledgeRequiredByBuildTargets = Math.max(0, ...buildKnowledgeCosts);
+      const knowledge = calculateKnowledgeRequirements({
+        techKnowledgeCosts: [
+          ...state2.unlockedTechs.map((tech) => tech.cost["Knowledge"] ?? 0),
+          ...buildings2.GorddonEmbassy.isAutoBuildable() ? [settings2.fleetEmbassyKnowledge] : []
+        ],
+        reservedTargets: [...state2.queuedTargetsAll, ...state2.triggerTargets].map(
+          (target) => ({
+            knowledgeCost: target.cost?.Knowledge ?? 0,
+            isTechnology: isTechnology(target),
+            isKnowledge: Boolean(target.is?.knowledge)
+          })
+        ),
+        buildCandidates: [
+          ...buildingManager.priorityList,
+          ...projectManager.priorityList
+        ].map((object) => ({
+          knowledgeCost: object.cost?.Knowledge ?? 0,
+          isKnowledge: Boolean(object.is?.knowledge),
+          weighting: object.weighting ?? 0,
+          autoBuildable: Boolean(object.isAutoBuildable?.())
+        }))
+      });
+      state2.knowledgeRequiredByTechs = knowledge.knowledgeRequiredByTechs;
+      state2.cheapestTechKnowledge = knowledge.cheapestTechKnowledge;
+      state2.knowledgeRequiredByBuildTargets = knowledge.knowledgeRequiredByBuildTargets;
       if (settings2.autoFleet && fleetManagerOuter.nextShipExpandable && settings2.prioritizeOuterFleet !== "ignore") {
         requestStorageFor2([{ cost: fleetManagerOuter.nextShipCost }]);
       }
@@ -14359,116 +14380,234 @@
     return { updatePriorityTargets: updatePriorityTargets2 };
   }
 
-  // src/policies/evolution-result.ts
-  var INTENTIONAL_SPECIES = ["junker", "sludge", "ultra_sludge", "hellspawn"];
-  function createEvolutionResult({
-    getSettings,
-    getSettingsRaw,
-    getState,
-    getGame,
-    getRaces,
-    getMutableTraitManager,
-    getGameLog,
-    getDocument,
-    getAddEvolutionSetting,
-    getUpdateSettingsFromState
-  }) {
-    function checkEvolutionResult2() {
-      const settings2 = getSettings();
-      const state2 = getState();
-      if (!settings2.masterScriptToggle || !state2.evoCheckNeeded) {
-        return true;
-      }
-      state2.evoCheckNeeded = false;
-      const game2 = getGame();
-      const races2 = getRaces();
-      const GameLog2 = getGameLog();
-      let needReset = false;
-      if (settings2.autoEvolution && settings2.evolutionBackup) {
-        if (!INTENTIONAL_SPECIES.includes(game2.global.race.species)) {
-          if (settings2.userEvolutionTarget === "auto") {
-            const newRace = races2[game2.global.race.species];
-            if (newRace.getWeighting() <= 0) {
-              const bestWeighting = Math.max(
-                ...Object.values(races2).map((r) => r.getWeighting())
-              );
-              if (bestWeighting > 0) {
-                GameLog2.logDanger(
-                  "special",
-                  `${newRace.name} have no unearned achievements for current prestige, soft resetting and trying again.`,
-                  ["progress", "achievements"]
-                );
-                needReset = true;
-              } else {
-                GameLog2.logWarning(
-                  "special",
-                  `Can't pick a race with unearned achievements for current prestige. Continuing with ${newRace.name}.`,
-                  ["progress", "achievements"]
-                );
-              }
-            }
-          } else if (settings2.userEvolutionTarget !== game2.global.race.species && races2[settings2.userEvolutionTarget].getHabitability() > 0) {
-            GameLog2.logDanger(
-              "special",
-              `Wrong race, soft resetting and trying again.`,
-              ["progress"]
-            );
+  // src/domain/evolution-result.ts
+  var INTENTIONAL_SPECIES = [
+    "junker",
+    "sludge",
+    "ultra_sludge",
+    "hellspawn"
+  ];
+  function isIntentionalSpecies(species) {
+    return INTENTIONAL_SPECIES.includes(species);
+  }
+  function decideEvolutionResult(input) {
+    const logs = [];
+    let needReset = false;
+    if (input.autoEvolution && input.evolutionBackup && !isIntentionalSpecies(input.species)) {
+      if (input.userEvolutionTarget === "auto") {
+        if (input.speciesRace.weighting <= 0) {
+          if (input.bestWeighting > 0) {
+            logs.push({
+              level: "danger",
+              code: "backup-no-achievements",
+              raceName: input.speciesRace.name
+            });
             needReset = true;
+          } else {
+            logs.push({
+              level: "warning",
+              code: "backup-no-race",
+              raceName: input.speciesRace.name
+            });
           }
         }
+      } else if (input.userEvolutionTarget !== input.species && (input.targetHabitability ?? 0) > 0) {
+        logs.push({ level: "danger", code: "wrong-race" });
+        needReset = true;
       }
-      if (settings2.autoMutateTraits) {
-        const baseRace = game2.races[game2.global.race.species];
-        for (const trait of getMutableTraitManager().priorityList) {
-          if (trait.resetEnabled && game2.global.race[trait.traitName] && !baseRace.traits[trait.traitName]) {
-            GameLog2.logDanger(
-              "special",
-              `Gained ${trait.name} trait, soft resetting and trying again.`,
-              ["progress"]
-            );
-            needReset = true;
-            break;
-          }
-        }
-      }
-      if (!needReset && settings2.autoEvolution && settings2.userEvolutionTarget === "auto") {
-        const goals = races2[game2.global.race.species].getWeighting(true);
-        if (goals.length > 0) {
-          GameLog2.logInfo(
-            "special",
-            `Auto Achievement goes for: ${goals.map((s) => game2.loc(s)).join(", ")}.`,
-            ["progress", "achievements"]
-          );
-        } else {
-          GameLog2.logInfo(
-            "special",
-            `Auto Achievement can't pick a goal for this run.`,
-            ["progress", "achievements"]
-          );
-        }
-      }
-      if (needReset) {
-        const resetButton = getDocument().querySelector(
-          ".reset .button:not(.right)"
-        );
-        if (resetButton.innerText === game2.loc("reset_soft")) {
-          const settingsRaw2 = getSettingsRaw();
-          if (settings2.evolutionQueueEnabled && settingsRaw2.evolutionQueue.length > 0) {
-            if (!settings2.evolutionQueueRepeat) {
-              getAddEvolutionSetting()();
-            }
-            settingsRaw2.evolutionQueue.unshift(settingsRaw2.evolutionQueue.pop());
-          }
-          getUpdateSettingsFromState()();
-          state2.goal = "GameOverMan";
-          resetButton.disabled = false;
-          resetButton.click();
-          return false;
-        }
-      }
-      return true;
     }
-    return { checkEvolutionResult: checkEvolutionResult2 };
+    if (input.autoMutateTraits) {
+      for (const trait of input.traits) {
+        if (trait.resetEnabled && trait.gained && !trait.inheritedFromBase) {
+          logs.push({
+            level: "danger",
+            code: "gained-trait",
+            traitName: trait.name
+          });
+          needReset = true;
+          break;
+        }
+      }
+    }
+    if (!needReset && input.autoEvolution && input.userEvolutionTarget === "auto") {
+      logs.push(
+        input.speciesRace.goals.length > 0 ? { level: "info", code: "auto-goals", goals: input.speciesRace.goals } : { level: "info", code: "auto-goals-none" }
+      );
+    }
+    return { logs, needReset };
+  }
+
+  // src/adapters/evolve/evolution-result.ts
+  function isRecord4(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function isFinite2(value) {
+    return typeof value === "number" && Number.isFinite(value);
+  }
+  function unavailable2(reason, field) {
+    return Object.freeze(
+      field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
+    );
+  }
+  function callWeighting(race, returnGoals) {
+    const getWeighting = race["getWeighting"];
+    if (typeof getWeighting !== "function") return void 0;
+    return returnGoals ? getWeighting.call(race, true) : getWeighting.call(race);
+  }
+  function readEvolutionResultInput(rawSettings, rawGame, rawRaces, rawTraitManager) {
+    try {
+      if (!isRecord4(rawSettings)) return unavailable2("invalid-settings");
+      const userEvolutionTarget = rawSettings["userEvolutionTarget"];
+      if (typeof userEvolutionTarget !== "string") {
+        return unavailable2("invalid-settings", "userEvolutionTarget");
+      }
+      const global = isRecord4(rawGame) ? rawGame["global"] : void 0;
+      const race = isRecord4(global) ? global["race"] : void 0;
+      if (!isRecord4(race)) return unavailable2("invalid-game-state", "race");
+      const species = race["species"];
+      if (typeof species !== "string") {
+        return unavailable2("invalid-game-state", "race.species");
+      }
+      if (!isRecord4(rawRaces)) return unavailable2("invalid-race-model");
+      const speciesRace = rawRaces[species];
+      if (!isRecord4(speciesRace)) {
+        return unavailable2("invalid-race-model", species);
+      }
+      const speciesName = speciesRace["name"];
+      if (typeof speciesName !== "string") {
+        return unavailable2("invalid-race-model", `${species}.name`);
+      }
+      const speciesWeighting = callWeighting(speciesRace, false);
+      if (!isFinite2(speciesWeighting)) {
+        return unavailable2("invalid-race-model", `${species}.weighting`);
+      }
+      const rawGoals = callWeighting(speciesRace, true);
+      if (!Array.isArray(rawGoals) || !rawGoals.every((goal) => typeof goal === "string")) {
+        return unavailable2("invalid-race-model", `${species}.goals`);
+      }
+      let bestWeighting = Number.NEGATIVE_INFINITY;
+      for (const [id, candidate] of Object.entries(rawRaces)) {
+        if (!isRecord4(candidate)) {
+          return unavailable2("invalid-race-model", id);
+        }
+        const weighting = callWeighting(candidate, false);
+        if (!isFinite2(weighting)) {
+          return unavailable2("invalid-race-model", `${id}.weighting`);
+        }
+        bestWeighting = Math.max(bestWeighting, weighting);
+      }
+      let targetHabitability;
+      if (userEvolutionTarget !== "auto" && userEvolutionTarget !== species) {
+        const targetRace = rawRaces[userEvolutionTarget];
+        const getHabitability = isRecord4(targetRace) ? targetRace["getHabitability"] : void 0;
+        if (typeof getHabitability !== "function") {
+          return unavailable2(
+            "invalid-race-model",
+            `${userEvolutionTarget}.getHabitability`
+          );
+        }
+        const habitability = getHabitability.call(targetRace);
+        if (!isFinite2(habitability)) {
+          return unavailable2(
+            "invalid-race-model",
+            `${userEvolutionTarget}.habitability`
+          );
+        }
+        targetHabitability = habitability;
+      }
+      const traits = [];
+      const autoMutateTraits = Boolean(rawSettings["autoMutateTraits"]);
+      if (autoMutateTraits) {
+        const gameRaces = isRecord4(rawGame) ? rawGame["races"] : void 0;
+        const baseRace = isRecord4(gameRaces) ? gameRaces[species] : void 0;
+        const baseTraits = isRecord4(baseRace) ? baseRace["traits"] : void 0;
+        if (!isRecord4(baseTraits)) {
+          return unavailable2("invalid-game-state", "races.traits");
+        }
+        const priorityList = isRecord4(rawTraitManager) ? rawTraitManager["priorityList"] : void 0;
+        if (!Array.isArray(priorityList)) {
+          return unavailable2("invalid-trait", "priorityList");
+        }
+        for (const rawTrait of priorityList) {
+          if (!isRecord4(rawTrait)) return unavailable2("invalid-trait");
+          const traitName = rawTrait["traitName"];
+          const name = rawTrait["name"];
+          if (typeof traitName !== "string" || typeof name !== "string") {
+            return unavailable2("invalid-trait");
+          }
+          traits.push({
+            name,
+            resetEnabled: Boolean(rawTrait["resetEnabled"]),
+            gained: Boolean(race[traitName]),
+            inheritedFromBase: Boolean(baseTraits[traitName])
+          });
+        }
+      }
+      return Object.freeze({
+        status: "ready",
+        input: Object.freeze({
+          autoEvolution: Boolean(rawSettings["autoEvolution"]),
+          evolutionBackup: Boolean(rawSettings["evolutionBackup"]),
+          autoMutateTraits,
+          userEvolutionTarget,
+          species,
+          speciesRace: Object.freeze({
+            name: speciesName,
+            weighting: speciesWeighting,
+            goals: Object.freeze([...rawGoals])
+          }),
+          bestWeighting,
+          ...targetHabitability === void 0 ? {} : { targetHabitability },
+          traits: Object.freeze(traits)
+        })
+      });
+    } catch {
+      return unavailable2("inaccessible-data");
+    }
+  }
+
+  // src/application/evolution-result.ts
+  var PROGRESS = ["progress"];
+  var PROGRESS_ACHIEVEMENTS = ["progress", "achievements"];
+  function formatEvolutionLog(event, loc) {
+    switch (event.code) {
+      case "backup-no-achievements":
+        return {
+          level: "danger",
+          message: `${event.raceName} have no unearned achievements for current prestige, soft resetting and trying again.`,
+          tags: PROGRESS_ACHIEVEMENTS
+        };
+      case "backup-no-race":
+        return {
+          level: "warning",
+          message: `Can't pick a race with unearned achievements for current prestige. Continuing with ${event.raceName}.`,
+          tags: PROGRESS_ACHIEVEMENTS
+        };
+      case "wrong-race":
+        return {
+          level: "danger",
+          message: "Wrong race, soft resetting and trying again.",
+          tags: PROGRESS
+        };
+      case "gained-trait":
+        return {
+          level: "danger",
+          message: `Gained ${event.traitName} trait, soft resetting and trying again.`,
+          tags: PROGRESS
+        };
+      case "auto-goals":
+        return {
+          level: "info",
+          message: `Auto Achievement goes for: ${event.goals.map((goal) => loc(goal)).join(", ")}.`,
+          tags: PROGRESS_ACHIEVEMENTS
+        };
+      case "auto-goals-none":
+        return {
+          level: "info",
+          message: "Auto Achievement can't pick a goal for this run.",
+          tags: PROGRESS_ACHIEVEMENTS
+        };
+    }
   }
 
   // src/domain/authority.ts
@@ -14528,13 +14667,13 @@
   }
 
   // src/adapters/evolve/authority.ts
-  function isRecord4(value) {
+  function isRecord5(value) {
     return typeof value === "object" && value !== null;
   }
   function isFiniteNumber3(value) {
     return typeof value === "number" && Number.isFinite(value);
   }
-  function unavailable2(reason) {
+  function unavailable3(reason) {
     return Object.freeze({ status: "unavailable", reason });
   }
   function readAuthorityQuantity(rawQuantity) {
@@ -14542,41 +14681,41 @@
   }
   function readAuthorityPolicyView(rawGame, rawSettings, rawResources, readHighPopulationPercent) {
     try {
-      if (!isRecord4(rawSettings) || typeof rawSettings["authorityManage"] !== "boolean" || !isFiniteNumber3(rawSettings["generalMinimumAuthority"])) {
-        return unavailable2("invalid-settings");
+      if (!isRecord5(rawSettings) || typeof rawSettings["authorityManage"] !== "boolean" || !isFiniteNumber3(rawSettings["generalMinimumAuthority"])) {
+        return unavailable3("invalid-settings");
       }
-      if (!isRecord4(rawResources) || !isRecord4(rawResources["Authority"])) {
-        return unavailable2("invalid-resource");
+      if (!isRecord5(rawResources) || !isRecord5(rawResources["Authority"])) {
+        return unavailable3("invalid-resource");
       }
       const authority = rawResources["Authority"];
       const current = authority["currentQuantity"];
       const maximum = authority["maxQuantity"];
       if (!isFiniteNumber3(current) || current < 0 || !isFiniteNumber3(maximum) || maximum < 0) {
-        return unavailable2("invalid-resource");
+        return unavailable3("invalid-resource");
       }
-      if (!isRecord4(rawGame) || !isRecord4(rawGame["global"])) {
-        return unavailable2("invalid-game-state");
+      if (!isRecord5(rawGame) || !isRecord5(rawGame["global"])) {
+        return unavailable3("invalid-game-state");
       }
       const global = rawGame["global"];
-      if (!isRecord4(global["tech"]) || !isRecord4(global["race"]) || !isRecord4(global["civic"])) {
-        return unavailable2("invalid-game-state");
+      if (!isRecord5(global["tech"]) || !isRecord5(global["race"]) || !isRecord5(global["civic"])) {
+        return unavailable3("invalid-game-state");
       }
       const civic = global["civic"];
-      if (!isRecord4(civic["govern"])) {
-        return unavailable2("invalid-game-state");
+      if (!isRecord5(civic["govern"])) {
+        return unavailable3("invalid-game-state");
       }
       const governmentType = civic["govern"]["type"];
       if (typeof governmentType !== "string") {
-        return unavailable2("invalid-game-state");
+        return unavailable3("invalid-game-state");
       }
       const rawEvilTechLevel = global["tech"]["evil"];
       const evilTechLevel = rawEvilTechLevel ?? 0;
       if (!isFiniteNumber3(evilTechLevel) || evilTechLevel < 0) {
-        return unavailable2("invalid-game-state");
+        return unavailable3("invalid-game-state");
       }
       const highPopulationPercent = readHighPopulationPercent();
       if (!isFiniteNumber3(highPopulationPercent) || highPopulationPercent < 0) {
-        return unavailable2("invalid-trait-value");
+        return unavailable3("invalid-trait-value");
       }
       return Object.freeze({
         status: "ready",
@@ -14596,7 +14735,7 @@
         })
       });
     } catch {
-      return unavailable2("inaccessible-data");
+      return unavailable3("inaccessible-data");
     }
   }
 
@@ -14608,7 +14747,7 @@
   }
 
   // src/adapters/evolve/queue-items.ts
-  function isRecord5(value) {
+  function isRecord6(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
   function isFiniteNumber4(value) {
@@ -14624,8 +14763,8 @@
   }
   function readCostAffordabilityInput(rawCost, rawResources, capacity) {
     try {
-      if (!isRecord5(rawCost)) return unavailableCost("invalid-cost");
-      if (!isRecord5(rawResources)) return unavailableCost("invalid-resource");
+      if (!isRecord6(rawCost)) return unavailableCost("invalid-cost");
+      if (!isRecord6(rawResources)) return unavailableCost("invalid-resource");
       const requirements = [];
       for (const resourceId in rawCost) {
         const requiredQuantity = rawCost[resourceId];
@@ -14633,7 +14772,7 @@
           return unavailableCost("invalid-cost", resourceId);
         }
         const rawResource = rawResources[resourceId];
-        if (!isRecord5(rawResource)) {
+        if (!isRecord6(rawResource)) {
           return unavailableCost("invalid-resource", resourceId);
         }
         const availableQuantity = capacity === "maximum" ? rawResource["maxQuantity"] : rawResource["currentQuantity"];
@@ -14657,7 +14796,7 @@
     }
   }
   function validateCostMap(rawCost, itemId) {
-    if (!isRecord5(rawCost)) return unavailableTarget("invalid-cost", { itemId });
+    if (!isRecord6(rawCost)) return unavailableTarget("invalid-cost", { itemId });
     const cost = {};
     for (const resourceId in rawCost) {
       const quantity = rawCost[resourceId];
@@ -14689,7 +14828,7 @@
     if (rawTarget === void 0 || rawTarget === null) {
       return Object.freeze({ status: "missing", itemId });
     }
-    if (!isRecord5(rawTarget) || typeof rawTarget["id"] !== "string" || typeof rawTarget["title"] !== "string" || typeof rawTarget["isAffordable"] !== "function") {
+    if (!isRecord6(rawTarget) || typeof rawTarget["id"] !== "string" || typeof rawTarget["title"] !== "string" || typeof rawTarget["isAffordable"] !== "function") {
       return unavailableTarget("invalid-target", { itemId });
     }
     const costResult = validateCostMap(rawTarget["cost"], itemId);
@@ -14706,13 +14845,13 @@
   }
   function readQueueTarget(rawItem, dependencies) {
     try {
-      if (!isRecord5(rawItem) || typeof rawItem["id"] !== "string") {
+      if (!isRecord6(rawItem) || typeof rawItem["id"] !== "string") {
         return unavailableTarget("invalid-item");
       }
       const itemId = rawItem["id"];
       const action = rawItem["action"];
       if (action === "tp-ship") {
-        if (typeof rawItem["label"] !== "string" || !isRecord5(dependencies.poly)) {
+        if (typeof rawItem["label"] !== "string" || !isRecord6(dependencies.poly)) {
           return unavailableTarget("invalid-item", { itemId });
         }
         const shipCosts = dependencies.poly["shipCosts"];
@@ -14727,7 +14866,7 @@
         );
       }
       if (action === "hell-mech") {
-        if (typeof rawItem["label"] !== "string" || !isRecord5(dependencies.mechManager)) {
+        if (typeof rawItem["label"] !== "string" || !isRecord6(dependencies.mechManager)) {
           return unavailableTarget("invalid-item", { itemId });
         }
         const getMechCost = dependencies.mechManager["getMechCost"];
@@ -14748,13 +14887,13 @@
           dependencies.resources
         );
       }
-      if (!isRecord5(dependencies.buildingIds) || !isRecord5(dependencies.arpaIds)) {
+      if (!isRecord6(dependencies.buildingIds) || !isRecord6(dependencies.arpaIds)) {
         return unavailableTarget("invalid-target", { itemId });
       }
       const rawTarget = dependencies.buildingIds[itemId] || dependencies.arpaIds[itemId];
       return readCatalogTarget(itemId, rawTarget);
     } catch {
-      const itemId = isRecord5(rawItem) && typeof rawItem["id"] === "string" ? rawItem["id"] : void 0;
+      const itemId = isRecord6(rawItem) && typeof rawItem["id"] === "string" ? rawItem["id"] : void 0;
       return unavailableTarget(
         "inaccessible-data",
         itemId === void 0 ? {} : { itemId }
@@ -14778,30 +14917,30 @@
   }
 
   // src/adapters/evolve/target-timing.ts
-  function isRecord6(value) {
+  function isRecord7(value) {
     return typeof value === "object" && value !== null;
   }
   function isFiniteNumber5(value) {
     return typeof value === "number" && Number.isFinite(value);
   }
-  function unavailable3(reason, resourceId) {
+  function unavailable4(reason, resourceId) {
     return Object.freeze(
       resourceId === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId }
     );
   }
   function readTargetTimingInput(rawGame, rawTarget, isProject) {
     try {
-      if (!isRecord6(rawTarget) || !isRecord6(rawTarget["cost"])) {
-        return unavailable3("invalid-target");
+      if (!isRecord7(rawTarget) || !isRecord7(rawTarget["cost"])) {
+        return unavailable4("invalid-target");
       }
       const remainingSegments = isProject ? projectSegmentsRemaining(rawTarget) : segmentedTargetSegmentsRemaining(rawTarget);
       if (remainingSegments === void 0) {
-        return unavailable3("invalid-target");
+        return unavailable4("invalid-target");
       }
-      if (!isRecord6(rawGame)) return unavailable3("invalid-game-state");
+      if (!isRecord7(rawGame)) return unavailable4("invalid-game-state");
       const global = rawGame["global"];
-      if (!isRecord6(global) || !isRecord6(global["resource"])) {
-        return unavailable3("invalid-game-state");
+      if (!isRecord7(global) || !isRecord7(global["resource"])) {
+        return unavailable4("invalid-game-state");
       }
       const costs = rawTarget["cost"];
       const gameResources = global["resource"];
@@ -14809,16 +14948,16 @@
       for (const resourceId of Object.keys(costs)) {
         const costPerSegment = costs[resourceId];
         if (!isFiniteNumber5(costPerSegment)) {
-          return unavailable3("invalid-target", resourceId);
+          return unavailable4("invalid-target", resourceId);
         }
         const rawResource = gameResources[resourceId];
-        if (!isRecord6(rawResource)) {
-          return unavailable3("invalid-resource", resourceId);
+        if (!isRecord7(rawResource)) {
+          return unavailable4("invalid-resource", resourceId);
         }
         const currentQuantity = rawResource["amount"];
         const rateOfChange = rawResource["diff"];
         if (!isFiniteNumber5(currentQuantity) || !isFiniteNumber5(rateOfChange)) {
-          return unavailable3("invalid-resource", resourceId);
+          return unavailable4("invalid-resource", resourceId);
         }
         requirements.push(
           Object.freeze({
@@ -14837,7 +14976,7 @@
         })
       });
     } catch {
-      return unavailable3("inaccessible-data");
+      return unavailable4("inaccessible-data");
     }
   }
   function projectSegmentsRemaining(target) {
@@ -16310,86 +16449,172 @@
     return { updateState: updateState2 };
   }
 
-  // src/policies/run-guards.ts
-  function createRunGuards({
-    getSettings,
-    getGame,
-    getResources,
-    getBuildings,
-    getAchievementStar: getAchievementStar2,
-    haveTech: haveTech2,
-    getNumberString: getNumberString2,
-    inflationChallengeMoney,
-    retirementPreparation
-  }) {
-    function inflationChallengeAssistActive2() {
-      const settings2 = getSettings();
-      const game2 = getGame();
-      return settings2.inflationChallengeAssist && game2.global.race.hasOwnProperty("inflation") && game2.global.race.inflation !== false && getAchievementStar2("wheelbarrow") < game2.alevel();
+  // src/domain/retirement-prep.ts
+  function isRetirementAssistActive(input) {
+    return input.assistEnabled && input.truepath && input.retirePrestige && !input.isolationResearched;
+  }
+  function assessRetirementPreparation(input) {
+    const { thresholds } = input;
+    const missing = [];
+    if (input.fusionGenerators.count < thresholds.fusionGenerators) {
+      missing.push({
+        kind: "building",
+        name: input.fusionGenerators.name,
+        current: input.fusionGenerators.count,
+        required: thresholds.fusionGenerators
+      });
     }
-    function inflationChallengeMoneyReachable2() {
-      return getResources().Money.maxQuantity >= inflationChallengeMoney;
+    if (input.factories.count < thresholds.factories) {
+      missing.push({
+        kind: "building",
+        name: input.factories.name,
+        current: input.factories.count,
+        required: thresholds.factories
+      });
     }
-    function inflationChallengeSecondsToFinish2() {
-      if (!inflationChallengeMoneyReachable2()) {
-        return Number.POSITIVE_INFINITY;
-      }
-      const money = getResources().Money;
-      const remaining = inflationChallengeMoney - money.currentQuantity;
-      if (remaining <= 0) {
-        return 0;
-      }
-      return money.rateOfChange > 0 ? remaining / money.rateOfChange : Number.POSITIVE_INFINITY;
+    if (input.scienceLabs.count < thresholds.scienceLabs) {
+      missing.push({
+        kind: "building",
+        name: input.scienceLabs.name,
+        current: input.scienceLabs.count,
+        required: thresholds.scienceLabs
+      });
     }
-    function inflationChallengeShouldSaveMoney2() {
-      const settings2 = getSettings();
-      return inflationChallengeAssistActive2() && settings2.inflationChallengeSaveMinutes >= 0 && inflationChallengeSecondsToFinish2() <= settings2.inflationChallengeSaveMinutes * 60;
+    if (input.graphene.maxQuantity < thresholds.graphene) {
+      missing.push({
+        kind: "storage",
+        resource: input.graphene.name,
+        current: input.graphene.maxQuantity,
+        required: thresholds.graphene
+      });
+    } else if (input.graphene.currentQuantity < thresholds.graphene) {
+      missing.push({
+        kind: "stockpile",
+        resource: input.graphene.name,
+        current: input.graphene.currentQuantity,
+        required: thresholds.graphene
+      });
     }
-    function retirementChallengeAssistActive2() {
-      const settings2 = getSettings();
-      return settings2.retirementChallengeAssist && getGame().global.race["truepath"] && settings2.prestigeType === "retire" && !haveTech2("isolation");
+    return missing;
+  }
+
+  // src/adapters/evolve/retirement-prep.ts
+  function isRecord8(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function finiteNonNegative(value) {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0;
+  }
+  function unavailable5(reason, field) {
+    return Object.freeze(
+      field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
+    );
+  }
+  function readRetirementAssistInput(rawSettings, rawGame, isolationResearched) {
+    try {
+      if (!isRecord8(rawSettings)) return unavailable5("invalid-settings");
+      const assist = rawSettings["retirementChallengeAssist"];
+      if (assist !== void 0 && typeof assist !== "boolean") {
+        return unavailable5("invalid-settings", "retirementChallengeAssist");
+      }
+      if (!isRecord8(rawGame)) return unavailable5("invalid-game-state");
+      const global = rawGame["global"];
+      if (!isRecord8(global)) return unavailable5("invalid-game-state");
+      const race = global["race"];
+      if (!isRecord8(race)) return unavailable5("invalid-game-state", "race");
+      return Object.freeze({
+        status: "ready",
+        input: Object.freeze({
+          assistEnabled: assist === true,
+          truepath: Boolean(race["truepath"]),
+          retirePrestige: rawSettings["prestigeType"] === "retire",
+          isolationResearched
+        })
+      });
+    } catch {
+      return unavailable5("inaccessible-data");
     }
-    function retirementPreparationMissing2() {
-      if (!retirementChallengeAssistActive2()) {
-        return [];
+  }
+  function readBuilding(rawBuildings, id) {
+    const building = rawBuildings[id];
+    if (!isRecord8(building)) return void 0;
+    const name = building["name"];
+    const count = building["count"];
+    if (typeof name !== "string" || !finiteNonNegative(count)) return void 0;
+    return { name, count };
+  }
+  function readRetirementPreparationInput(rawBuildings, rawResources, rawThresholds) {
+    try {
+      for (const key of [
+        "fusionGenerators",
+        "factories",
+        "scienceLabs",
+        "graphene"
+      ]) {
+        if (!finiteNonNegative(rawThresholds[key])) {
+          return unavailable5("invalid-thresholds", key);
+        }
       }
-      const buildings2 = getBuildings();
-      const resources2 = getResources();
-      const missing = [];
-      if (buildings2.TauFusionGenerator.count < retirementPreparation.fusionGenerators) {
-        missing.push(
-          `${buildings2.TauFusionGenerator.name} ${buildings2.TauFusionGenerator.count}/${retirementPreparation.fusionGenerators}`
-        );
+      if (!isRecord8(rawBuildings)) return unavailable5("invalid-building");
+      const fusionGenerators = readBuilding(rawBuildings, "TauFusionGenerator");
+      if (!fusionGenerators) {
+        return unavailable5("invalid-building", "TauFusionGenerator");
       }
-      if (buildings2.TauFactory.count < retirementPreparation.factories) {
-        missing.push(
-          `${buildings2.TauFactory.name} ${buildings2.TauFactory.count}/${retirementPreparation.factories}`
-        );
+      const factories = readBuilding(rawBuildings, "TauFactory");
+      if (!factories) return unavailable5("invalid-building", "TauFactory");
+      const scienceLabs = readBuilding(rawBuildings, "TauDiseaseLab");
+      if (!scienceLabs) return unavailable5("invalid-building", "TauDiseaseLab");
+      if (!isRecord8(rawResources)) return unavailable5("invalid-resource");
+      const rawGraphene = rawResources["Graphene"];
+      if (!isRecord8(rawGraphene)) {
+        return unavailable5("invalid-resource", "Graphene");
       }
-      if (buildings2.TauDiseaseLab.count < retirementPreparation.scienceLabs) {
-        missing.push(
-          `${buildings2.TauDiseaseLab.name} ${buildings2.TauDiseaseLab.count}/${retirementPreparation.scienceLabs}`
-        );
+      const grapheneName = rawGraphene["name"];
+      const currentQuantity = rawGraphene["currentQuantity"];
+      const maxQuantity = rawGraphene["maxQuantity"];
+      if (typeof grapheneName !== "string") {
+        return unavailable5("invalid-resource", "Graphene.name");
       }
-      if (resources2.Graphene.maxQuantity < retirementPreparation.graphene) {
-        missing.push(
-          `${resources2.Graphene.name} storage ${getNumberString2(resources2.Graphene.maxQuantity)}/${getNumberString2(retirementPreparation.graphene)}`
-        );
-      } else if (resources2.Graphene.currentQuantity < retirementPreparation.graphene) {
-        missing.push(
-          `${resources2.Graphene.name} stockpile ${getNumberString2(resources2.Graphene.currentQuantity)}/${getNumberString2(retirementPreparation.graphene)}`
-        );
+      if (!finiteNonNegative(currentQuantity)) {
+        return unavailable5("invalid-resource", "Graphene.currentQuantity");
       }
-      return missing;
+      if (!finiteNonNegative(maxQuantity)) {
+        return unavailable5("invalid-resource", "Graphene.maxQuantity");
+      }
+      return Object.freeze({
+        status: "ready",
+        input: Object.freeze({
+          fusionGenerators: Object.freeze(fusionGenerators),
+          factories: Object.freeze(factories),
+          scienceLabs: Object.freeze(scienceLabs),
+          graphene: Object.freeze({
+            name: grapheneName,
+            currentQuantity,
+            maxQuantity
+          }),
+          thresholds: Object.freeze({ ...rawThresholds })
+        })
+      });
+    } catch {
+      return unavailable5("inaccessible-data");
     }
-    return {
-      inflationChallengeAssistActive: inflationChallengeAssistActive2,
-      inflationChallengeMoneyReachable: inflationChallengeMoneyReachable2,
-      inflationChallengeSecondsToFinish: inflationChallengeSecondsToFinish2,
-      inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2,
-      retirementChallengeAssistActive: retirementChallengeAssistActive2,
-      retirementPreparationMissing: retirementPreparationMissing2
-    };
+  }
+
+  // src/application/retirement-prep.ts
+  function formatRetirementShortfall(shortfall, formatNumber) {
+    switch (shortfall.kind) {
+      case "building":
+        return `${shortfall.name} ${shortfall.current}/${shortfall.required}`;
+      case "storage":
+        return `${shortfall.resource} storage ${formatNumber(shortfall.current)}/${formatNumber(shortfall.required)}`;
+      case "stockpile":
+        return `${shortfall.resource} stockpile ${formatNumber(shortfall.current)}/${formatNumber(shortfall.required)}`;
+    }
+  }
+  function formatRetirementShortfalls(shortfalls, formatNumber) {
+    return shortfalls.map(
+      (shortfall) => formatRetirementShortfall(shortfall, formatNumber)
+    );
   }
 
   // src/domain/achievement-guards.ts
@@ -16432,10 +16657,10 @@
   }
 
   // src/adapters/evolve/achievement-guards.ts
-  function isRecord7(value) {
+  function isRecord9(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
-  function finiteNonNegative(value) {
+  function finiteNonNegative2(value) {
     return typeof value === "number" && Number.isFinite(value) && value >= 0;
   }
   function starUnavailable(reason, field) {
@@ -16454,19 +16679,19 @@
     );
   }
   function readGameParts(rawGame) {
-    if (!isRecord7(rawGame)) return void 0;
+    if (!isRecord9(rawGame)) return void 0;
     const global = rawGame["global"];
-    if (!isRecord7(global)) return void 0;
+    if (!isRecord9(global)) return void 0;
     const stats = global["stats"];
-    if (!isRecord7(stats)) return void 0;
+    if (!isRecord9(stats)) return void 0;
     return { game: rawGame, global, stats };
   }
   function readCurrentLevel(rawGame) {
-    if (!isRecord7(rawGame)) return void 0;
+    if (!isRecord9(rawGame)) return void 0;
     const alevel = rawGame["alevel"];
     if (typeof alevel !== "function") return void 0;
     const value = alevel.call(rawGame);
-    return finiteNonNegative(value) ? value : void 0;
+    return finiteNonNegative2(value) ? value : void 0;
   }
   function readFeatStar(rawGame, id) {
     try {
@@ -16475,19 +16700,19 @@
       const rawFeats = parts.stats["feat"];
       if (rawFeats === void 0)
         return Object.freeze({ status: "ready", star: 0 });
-      if (!isRecord7(rawFeats))
+      if (!isRecord9(rawFeats))
         return starUnavailable("invalid-achievement", "feat");
       const value = rawFeats[id];
       if (value === void 0 || value === null) {
         return Object.freeze({ status: "ready", star: 0 });
       }
-      return finiteNonNegative(value) ? Object.freeze({ status: "ready", star: value }) : starUnavailable("invalid-achievement", `feat.${id}`);
+      return finiteNonNegative2(value) ? Object.freeze({ status: "ready", star: value }) : starUnavailable("invalid-achievement", `feat.${id}`);
     } catch {
       return starUnavailable("inaccessible-data");
     }
   }
   function readAchievementStarLevelContext(rawContext) {
-    if (!isRecord7(rawContext)) return levelUnavailable("invalid-settings");
+    if (!isRecord9(rawContext)) return levelUnavailable("invalid-settings");
     const mapping = {
       challengePlasmid: "challenge_plasmid",
       challengeTrade: "challenge_trade",
@@ -16513,7 +16738,7 @@
     try {
       const parts = readGameParts(rawGame);
       if (!parts) return starUnavailable("invalid-game-state");
-      if (!isRecord7(rawPoly)) return starUnavailable("invalid-universe");
+      if (!isRecord9(rawPoly)) return starUnavailable("invalid-universe");
       const universeAffix = rawPoly["universeAffix"];
       if (typeof universeAffix !== "function") {
         return starUnavailable("invalid-universe");
@@ -16521,31 +16746,31 @@
       const affix = universeAffix.call(rawPoly, universe);
       if (typeof affix !== "string") return starUnavailable("invalid-universe");
       const rawAchievements = parts.stats["achieve"];
-      if (!isRecord7(rawAchievements)) {
+      if (!isRecord9(rawAchievements)) {
         return starUnavailable("invalid-achievement", "achieve");
       }
       const rawAchievement = rawAchievements[id];
       if (rawAchievement === void 0 || rawAchievement === null) {
         return Object.freeze({ status: "ready", star: 0 });
       }
-      if (!isRecord7(rawAchievement)) {
+      if (!isRecord9(rawAchievement)) {
         return starUnavailable("invalid-achievement", `achieve.${id}`);
       }
       const value = rawAchievement[affix];
       if (value === void 0 || value === null) {
         return Object.freeze({ status: "ready", star: 0 });
       }
-      return finiteNonNegative(value) ? Object.freeze({ status: "ready", star: value }) : starUnavailable("invalid-achievement", `achieve.${id}.${affix}`);
+      return finiteNonNegative2(value) ? Object.freeze({ status: "ready", star: value }) : starUnavailable("invalid-achievement", `achieve.${id}.${affix}`);
     } catch {
       return starUnavailable("inaccessible-data");
     }
   }
   function readBuildingCount(rawBuildings, id) {
-    if (!isRecord7(rawBuildings)) return void 0;
+    if (!isRecord9(rawBuildings)) return void 0;
     const building = rawBuildings[id];
-    if (!isRecord7(building)) return void 0;
+    if (!isRecord9(building)) return void 0;
     const count = building["count"];
-    return finiteNonNegative(count) ? count : void 0;
+    return finiteNonNegative2(count) ? count : void 0;
   }
   function guardStarId(guard) {
     switch (guard) {
@@ -16566,7 +16791,7 @@
     }
   }
   function configuredFallback(rawSettings, guard) {
-    if (!isRecord7(rawSettings)) return true;
+    if (!isRecord9(rawSettings)) return true;
     return rawSettings["achievementGuards"] !== false && rawSettings[guard] !== false;
   }
   function readAchievementGuardInput(rawSettings, rawGame, rawPoly, rawBuildings, requestedGuard) {
@@ -16575,7 +16800,7 @@
     }
     const fallback = configuredFallback(rawSettings, requestedGuard);
     try {
-      if (!isRecord7(rawSettings)) {
+      if (!isRecord9(rawSettings)) {
         return guardUnavailable("invalid-settings", fallback);
       }
       const master = rawSettings["achievementGuards"];
@@ -16638,7 +16863,7 @@
       switch (requestedGuard) {
         case "guardPacifist": {
           const attacks = parts.stats["attacks"];
-          if (!finiteNonNegative(attacks)) {
+          if (!finiteNonNegative2(attacks)) {
             return guardUnavailable(
               "invalid-game-state",
               fallback,
@@ -16678,8 +16903,8 @@
         case "guardAnarchist": {
           const prestigeType = rawSettings["prestigeType"];
           const civic = parts.global["civic"];
-          const govern = isRecord7(civic) ? civic["govern"] : void 0;
-          const government = isRecord7(govern) ? govern["type"] : void 0;
+          const govern = isRecord9(civic) ? civic["govern"] : void 0;
+          const government = isRecord9(govern) ? govern["type"] : void 0;
           if (typeof prestigeType !== "string") {
             return guardUnavailable("invalid-settings", fallback, "prestigeType");
           }
@@ -16732,8 +16957,8 @@
         }
         case "guardSecondEvolution": {
           const race = parts.global["race"];
-          const species = isRecord7(race) ? race["species"] : void 0;
-          const gods = isRecord7(race) ? race["gods"] : void 0;
+          const species = isRecord9(race) ? race["species"] : void 0;
+          const gods = isRecord9(race) ? race["gods"] : void 0;
           if (typeof species !== "string" || typeof gods !== "string") {
             return guardUnavailable("invalid-game-state", fallback, "race");
           }
@@ -16773,97 +16998,97 @@
   }
 
   // src/adapters/evolve/banana-republic.ts
-  function isRecord8(value) {
+  function isRecord10(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
-  function finiteNonNegative2(value) {
+  function finiteNonNegative3(value) {
     return typeof value === "number" && Number.isFinite(value) && value >= 0;
   }
-  function unavailable4(reason, field) {
+  function unavailable6(reason, field) {
     return Object.freeze(
       field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
     );
   }
   function guardUnavailable2(reason, fallbackActive, field) {
-    return Object.freeze({ ...unavailable4(reason, field), fallbackActive });
+    return Object.freeze({ ...unavailable6(reason, field), fallbackActive });
   }
   function readGlobal(rawGame) {
-    if (!isRecord8(rawGame)) return void 0;
+    if (!isRecord10(rawGame)) return void 0;
     const global = rawGame["global"];
-    return isRecord8(global) ? global : void 0;
+    return isRecord10(global) ? global : void 0;
   }
   function readStats(rawGame) {
     const global = readGlobal(rawGame);
     const stats = global?.["stats"];
-    return isRecord8(stats) ? stats : void 0;
+    return isRecord10(stats) ? stats : void 0;
   }
   function copyUnavailable(result) {
-    return unavailable4(result.reason, result.field);
+    return unavailable6(result.reason, result.field);
   }
   function readBananaRepublicObjective(rawGame, rawPoly, requestedObjective) {
     if (!isBananaObjectiveId(requestedObjective)) {
-      return unavailable4("invalid-achievement", requestedObjective);
+      return unavailable6("invalid-achievement", requestedObjective);
     }
     try {
       const stats = readStats(rawGame);
-      if (!stats) return unavailable4("invalid-game-state");
-      if (!isRecord8(rawPoly)) return unavailable4("invalid-universe");
+      if (!stats) return unavailable6("invalid-game-state");
+      if (!isRecord10(rawPoly)) return unavailable6("invalid-universe");
       const universeAffix = rawPoly["universeAffix"];
       if (typeof universeAffix !== "function") {
-        return unavailable4("invalid-universe");
+        return unavailable6("invalid-universe");
       }
       const universe = universeAffix.call(rawPoly);
-      if (typeof universe !== "string") return unavailable4("invalid-universe");
+      if (typeof universe !== "string") return unavailable6("invalid-universe");
       const rawBanana = stats["banana"];
-      if (!isRecord8(rawBanana)) {
-        return unavailable4("invalid-achievement", "stats.banana");
+      if (!isRecord10(rawBanana)) {
+        return unavailable6("invalid-achievement", "stats.banana");
       }
       const rawObjective = rawBanana[requestedObjective];
-      if (!isRecord8(rawObjective)) {
-        return unavailable4(
+      if (!isRecord10(rawObjective)) {
+        return unavailable6(
           "invalid-achievement",
           `stats.banana.${requestedObjective}`
         );
       }
       const complete = rawObjective[universe];
-      return typeof complete === "boolean" ? Object.freeze({ status: "ready", complete }) : unavailable4(
+      return typeof complete === "boolean" ? Object.freeze({ status: "ready", complete }) : unavailable6(
         "invalid-achievement",
         `stats.banana.${requestedObjective}.${universe}`
       );
     } catch {
-      return unavailable4("inaccessible-data");
+      return unavailable6("inaccessible-data");
     }
   }
   function readBananaRepublicSmoothieInput(rawGame) {
     try {
       const global = readGlobal(rawGame);
       const stats = readStats(rawGame);
-      if (!global || !stats) return unavailable4("invalid-game-state");
+      if (!global || !stats) return unavailable6("invalid-game-state");
       let featStar = 0;
       const rawFeats = stats["feat"];
       if (rawFeats !== void 0) {
-        if (!isRecord8(rawFeats)) {
-          return unavailable4("invalid-achievement", "stats.feat");
+        if (!isRecord10(rawFeats)) {
+          return unavailable6("invalid-achievement", "stats.feat");
         }
         const rawStar = rawFeats["banana"];
         if (rawStar !== void 0 && rawStar !== null) {
-          if (!finiteNonNegative2(rawStar)) {
-            return unavailable4("invalid-achievement", "stats.feat.banana");
+          if (!finiteNonNegative3(rawStar)) {
+            return unavailable6("invalid-achievement", "stats.feat.banana");
           }
           featStar = rawStar;
         }
       }
       const rawResources = global["resource"];
-      if (!isRecord8(rawResources)) return unavailable4("invalid-game-state");
+      if (!isRecord10(rawResources)) return unavailable6("invalid-game-state");
       const tradeRoutes = [];
       for (const [id, rawResource] of Object.entries(rawResources)) {
-        if (!isRecord8(rawResource)) {
-          return unavailable4("invalid-game-state", `resource.${id}`);
+        if (!isRecord10(rawResource)) {
+          return unavailable6("invalid-game-state", `resource.${id}`);
         }
         if (!Object.hasOwn(rawResource, "trade")) continue;
         const trade = rawResource["trade"];
         if (typeof trade !== "number" || !Number.isFinite(trade)) {
-          return unavailable4("invalid-trade", `resource.${id}.trade`);
+          return unavailable6("invalid-trade", `resource.${id}.trade`);
         }
         tradeRoutes.push(trade);
       }
@@ -16875,7 +17100,7 @@
         })
       });
     } catch {
-      return unavailable4("inaccessible-data");
+      return unavailable6("inaccessible-data");
     }
   }
   function readBananaRepublicProgress(rawGame, rawPoly) {
@@ -16896,9 +17121,9 @@
     });
   }
   function readBananaRepublicGuardInput(rawSettings, rawGame, rawPoly) {
-    const fallbackConfigured = !isRecord8(rawSettings) || rawSettings["achievementGuards"] !== false && rawSettings["guardBananaRepublic"] !== false;
+    const fallbackConfigured = !isRecord10(rawSettings) || rawSettings["achievementGuards"] !== false && rawSettings["guardBananaRepublic"] !== false;
     try {
-      if (!isRecord8(rawSettings)) {
+      if (!isRecord10(rawSettings)) {
         return guardUnavailable2("invalid-settings", fallbackConfigured);
       }
       const master = rawSettings["achievementGuards"];
@@ -16911,7 +17136,7 @@
       }
       const global = readGlobal(rawGame);
       const race = global?.["race"];
-      const bananaRace = isRecord8(race) ? race["banana"] : void 0;
+      const bananaRace = isRecord10(race) ? race["banana"] : void 0;
       if (bananaRace === false || bananaRace === void 0) {
         return Object.freeze({ status: "inactive" });
       }
@@ -16933,6 +17158,135 @@
     } catch {
       return guardUnavailable2("inaccessible-data", fallbackConfigured);
     }
+  }
+
+  // src/domain/inflation-assist.ts
+  function isInflationAssistActive(input) {
+    return input.assistEnabled && input.inflationRun && input.wheelbarrowStar < input.achievementLevel;
+  }
+  function isInflationMoneyReachable(input) {
+    return input.maxMoney >= input.targetMoney;
+  }
+  function inflationSecondsToFinish(input) {
+    if (!isInflationMoneyReachable(input)) {
+      return Number.POSITIVE_INFINITY;
+    }
+    const remaining = input.targetMoney - input.currentMoney;
+    if (remaining <= 0) {
+      return 0;
+    }
+    return input.moneyRate > 0 ? remaining / input.moneyRate : Number.POSITIVE_INFINITY;
+  }
+  function shouldSaveInflationMoney(input) {
+    return input.active && input.saveMinutes >= 0 && inflationSecondsToFinish(input.money) <= input.saveMinutes * 60;
+  }
+
+  // src/adapters/evolve/inflation-assist.ts
+  function isRecord11(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function finite(value) {
+    return typeof value === "number" && Number.isFinite(value);
+  }
+  function finiteNonNegative4(value) {
+    return finite(value) && value >= 0;
+  }
+  function unavailable7(reason, field) {
+    return Object.freeze(
+      field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
+    );
+  }
+  function readInflationAssistInput(rawSettings, rawGame, rawWheelbarrowStar) {
+    try {
+      if (!isRecord11(rawSettings)) return unavailable7("invalid-settings");
+      const assist = rawSettings["inflationChallengeAssist"];
+      if (assist !== void 0 && typeof assist !== "boolean") {
+        return unavailable7("invalid-settings", "inflationChallengeAssist");
+      }
+      if (!isRecord11(rawGame)) return unavailable7("invalid-game-state");
+      const global = rawGame["global"];
+      if (!isRecord11(global)) return unavailable7("invalid-game-state");
+      const race = global["race"];
+      if (!isRecord11(race)) return unavailable7("invalid-game-state", "race");
+      const inflationRun = Object.hasOwn(race, "inflation") && race["inflation"] !== false;
+      const alevel = rawGame["alevel"];
+      if (typeof alevel !== "function") {
+        return unavailable7("invalid-game-state", "alevel");
+      }
+      const achievementLevel = alevel.call(rawGame);
+      if (!finiteNonNegative4(achievementLevel)) {
+        return unavailable7("invalid-game-state", "alevel");
+      }
+      if (!finiteNonNegative4(rawWheelbarrowStar)) {
+        return unavailable7("invalid-achievement", "wheelbarrow");
+      }
+      return Object.freeze({
+        status: "ready",
+        input: Object.freeze({
+          assistEnabled: assist === true,
+          inflationRun,
+          wheelbarrowStar: rawWheelbarrowStar,
+          achievementLevel
+        })
+      });
+    } catch {
+      return unavailable7("inaccessible-data");
+    }
+  }
+  function readInflationMoneyInput(rawResources, rawTargetMoney) {
+    try {
+      if (!finiteNonNegative4(rawTargetMoney)) {
+        return unavailable7("invalid-settings", "inflationChallengeMoney");
+      }
+      if (!isRecord11(rawResources)) return unavailable7("invalid-resource");
+      const money = rawResources["Money"];
+      if (!isRecord11(money)) return unavailable7("invalid-resource", "Money");
+      const currentMoney = money["currentQuantity"];
+      const maxMoney = money["maxQuantity"];
+      const moneyRate = money["rateOfChange"];
+      if (!finiteNonNegative4(currentMoney)) {
+        return unavailable7("invalid-resource", "Money.currentQuantity");
+      }
+      if (!finiteNonNegative4(maxMoney)) {
+        return unavailable7("invalid-resource", "Money.maxQuantity");
+      }
+      if (!finite(moneyRate)) {
+        return unavailable7("invalid-resource", "Money.rateOfChange");
+      }
+      return Object.freeze({
+        status: "ready",
+        input: Object.freeze({
+          targetMoney: rawTargetMoney,
+          currentMoney,
+          maxMoney,
+          moneyRate
+        })
+      });
+    } catch {
+      return unavailable7("inaccessible-data");
+    }
+  }
+  function readInflationSaveInput(rawSettings, rawGame, rawResources, rawWheelbarrowStar, rawTargetMoney) {
+    const assist = readInflationAssistInput(
+      rawSettings,
+      rawGame,
+      rawWheelbarrowStar
+    );
+    if (assist.status !== "ready") return assist;
+    const money = readInflationMoneyInput(rawResources, rawTargetMoney);
+    if (money.status !== "ready") return money;
+    const saveMinutes = rawSettings["inflationChallengeSaveMinutes"];
+    if (!finite(saveMinutes)) {
+      return unavailable7("invalid-settings", "inflationChallengeSaveMinutes");
+    }
+    return Object.freeze({
+      status: "ready",
+      input: Object.freeze({
+        active: isInflationAssistActive(assist.input),
+        saveMinutes,
+        money: money.input
+      })
+    });
   }
 
   // src/domain/prestige-eligibility.ts
@@ -16983,13 +17337,13 @@
   }
 
   // src/adapters/evolve/prestige-eligibility.ts
-  function isRecord9(value) {
+  function isRecord12(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
-  function finiteNonNegative3(value) {
+  function finiteNonNegative5(value) {
     return typeof value === "number" && Number.isFinite(value) && value >= 0;
   }
-  function unavailable5(reason, field) {
+  function unavailable8(reason, field) {
     return Object.freeze(
       field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
     );
@@ -17000,7 +17354,7 @@
   }
   function readNumber(record, field) {
     const value = record[field];
-    return finiteNonNegative3(value) ? value : void 0;
+    return finiteNonNegative5(value) ? value : void 0;
   }
   function callBoolean(owner, methodName, ...args) {
     const method = owner[methodName];
@@ -17008,31 +17362,31 @@
     const value = method.call(owner, ...args);
     return typeof value === "boolean" ? value : void 0;
   }
-  function readBuilding(buildings2, id) {
+  function readBuilding2(buildings2, id) {
     const building = buildings2[id];
-    return isRecord9(building) ? building : void 0;
+    return isRecord12(building) ? building : void 0;
   }
   function readTechState(techIds2, id, includeAffordable) {
     const rawTech = techIds2[id];
-    if (!isRecord9(rawTech)) return void 0;
+    if (!isRecord12(rawTech)) return void 0;
     const unlocked = callBoolean(rawTech, "isUnlocked");
     const affordable = includeAffordable ? callBoolean(rawTech, "isAffordable") : false;
     return unlocked === void 0 || affordable === void 0 ? void 0 : Object.freeze({ unlocked, affordable });
   }
   function readPrestigePermissionView(rawSettings, rawGame) {
     try {
-      if (!isRecord9(rawSettings)) return unavailable5("invalid-settings");
+      if (!isRecord12(rawSettings)) return unavailable8("invalid-settings");
       const autoPrestige2 = readBoolean(rawSettings, "autoPrestige");
       const waitForArpa = readBoolean(rawSettings, "prestigeWaitAT");
       const selectedType = rawSettings["prestigeType"];
       if (autoPrestige2 === void 0 || waitForArpa === void 0 || typeof selectedType !== "string") {
-        return unavailable5("invalid-settings");
+        return unavailable8("invalid-settings");
       }
-      if (!isRecord9(rawGame)) return unavailable5("invalid-game-state");
+      if (!isRecord12(rawGame)) return unavailable8("invalid-game-state");
       const global = rawGame["global"];
-      const gameSettings = isRecord9(global) ? global["settings"] : void 0;
-      if (!isRecord9(gameSettings) || !finiteNonNegative3(gameSettings["at"])) {
-        return unavailable5("invalid-game-state", "settings.at");
+      const gameSettings = isRecord12(global) ? global["settings"] : void 0;
+      if (!isRecord12(gameSettings) || !finiteNonNegative5(gameSettings["at"])) {
+        return unavailable8("invalid-game-state", "settings.at");
       }
       return Object.freeze({
         status: "ready",
@@ -17042,34 +17396,34 @@
         })
       });
     } catch {
-      return unavailable5("inaccessible-data");
+      return unavailable8("inaccessible-data");
     }
   }
   function readPillarEligibilityView(rawSettings, rawGame, rawResources) {
     try {
-      if (!isRecord9(rawSettings)) return unavailable5("invalid-settings");
+      if (!isRecord12(rawSettings)) return unavailable8("invalid-settings");
       const requirePillar = readBoolean(rawSettings, "prestigeAscensionPillar");
-      if (requirePillar === void 0) return unavailable5("invalid-settings");
-      if (!isRecord9(rawGame)) return unavailable5("invalid-game-state");
+      if (requirePillar === void 0) return unavailable8("invalid-settings");
+      if (!isRecord12(rawGame)) return unavailable8("invalid-game-state");
       const global = rawGame["global"];
       const alevel = rawGame["alevel"];
-      if (!isRecord9(global) || typeof alevel !== "function") {
-        return unavailable5("invalid-game-state");
+      if (!isRecord12(global) || typeof alevel !== "function") {
+        return unavailable8("invalid-game-state");
       }
       const race = global["race"];
       const pillars = global["pillars"];
-      if (!isRecord9(race) || !isRecord9(pillars) || typeof race["species"] !== "string" || typeof race["universe"] !== "string") {
-        return unavailable5("invalid-game-state");
+      if (!isRecord12(race) || !isRecord12(pillars) || typeof race["species"] !== "string" || typeof race["universe"] !== "string") {
+        return unavailable8("invalid-game-state");
       }
       const ascensionLevel = alevel.call(rawGame);
       const rawPillarLevel = pillars[race["species"]];
-      if (!finiteNonNegative3(ascensionLevel) || rawPillarLevel !== void 0 && !finiteNonNegative3(rawPillarLevel)) {
-        return unavailable5("invalid-game-state");
+      if (!finiteNonNegative5(ascensionLevel) || rawPillarLevel !== void 0 && !finiteNonNegative5(rawPillarLevel)) {
+        return unavailable8("invalid-game-state");
       }
-      if (!isRecord9(rawResources)) return unavailable5("invalid-resource");
+      if (!isRecord12(rawResources)) return unavailable8("invalid-resource");
       const harmony = rawResources["Harmony"];
-      if (!isRecord9(harmony) || !finiteNonNegative3(harmony["currentQuantity"])) {
-        return unavailable5("invalid-resource", "Harmony");
+      if (!isRecord12(harmony) || !finiteNonNegative5(harmony["currentQuantity"])) {
+        return unavailable8("invalid-resource", "Harmony");
       }
       const pillarLevel = rawPillarLevel;
       return Object.freeze({
@@ -17085,18 +17439,18 @@
         })
       });
     } catch {
-      return unavailable5("inaccessible-data");
+      return unavailable8("inaccessible-data");
     }
   }
   function readGeckEligibilityView(rawSettings, rawBuildings, isAchievementUnlocked3) {
     try {
-      if (!isRecord9(rawSettings)) return unavailable5("invalid-settings");
+      if (!isRecord12(rawSettings)) return unavailable8("invalid-settings");
       const requiredGecks = readNumber(rawSettings, "prestigeGECK");
-      if (requiredGecks === void 0) return unavailable5("invalid-settings");
-      if (!isRecord9(rawBuildings)) return unavailable5("invalid-building");
-      const geck = readBuilding(rawBuildings, "GasSpaceDockGECK");
-      if (geck === void 0 || !finiteNonNegative3(geck["count"])) {
-        return unavailable5("invalid-building", "GasSpaceDockGECK.count");
+      if (requiredGecks === void 0) return unavailable8("invalid-settings");
+      if (!isRecord12(rawBuildings)) return unavailable8("invalid-building");
+      const geck = readBuilding2(rawBuildings, "GasSpaceDockGECK");
+      if (geck === void 0 || !finiteNonNegative5(geck["count"])) {
+        return unavailable8("invalid-building", "GasSpaceDockGECK.count");
       }
       const lamentisStandardFive = isAchievementUnlocked3(
         "lamentis",
@@ -17104,7 +17458,7 @@
         "standard"
       );
       if (typeof lamentisStandardFive !== "boolean") {
-        return unavailable5("invalid-external-result");
+        return unavailable8("invalid-external-result");
       }
       return Object.freeze({
         status: "ready",
@@ -17115,12 +17469,12 @@
         })
       });
     } catch {
-      return unavailable5("inaccessible-data");
+      return unavailable8("inaccessible-data");
     }
   }
   function readPrestigeEligibilityView(rawSettings, rawGame, rawResources, rawBuildings, rawTechIds, rawMechManager, haveTech2, isAchievementUnlocked3) {
     try {
-      if (!isRecord9(rawSettings)) return unavailable5("invalid-settings");
+      if (!isRecord12(rawSettings)) return unavailable8("invalid-settings");
       const settings2 = {
         autoPrestige: readBoolean(rawSettings, "autoPrestige"),
         waitForArpa: readBoolean(rawSettings, "prestigeWaitAT"),
@@ -17134,47 +17488,47 @@
         minimumSpireFloor: readNumber(rawSettings, "prestigeDemonicFloor")
       };
       for (const [field, value] of Object.entries(settings2)) {
-        if (value === void 0) return unavailable5("invalid-settings", field);
+        if (value === void 0) return unavailable8("invalid-settings", field);
       }
-      if (!isRecord9(rawGame)) return unavailable5("invalid-game-state");
+      if (!isRecord12(rawGame)) return unavailable8("invalid-game-state");
       const global = rawGame["global"];
-      if (!isRecord9(global)) return unavailable5("invalid-game-state", "global");
+      if (!isRecord12(global)) return unavailable8("invalid-game-state", "global");
       const gameSettings = global["settings"];
       const race = global["race"];
       const pillars = global["pillars"];
       const interstellar = global["interstellar"];
-      if (!isRecord9(gameSettings) || !isRecord9(race) || !isRecord9(pillars) || !isRecord9(interstellar) || typeof race["species"] !== "string" || typeof race["universe"] !== "string" || !finiteNonNegative3(gameSettings["at"])) {
-        return unavailable5("invalid-game-state");
+      if (!isRecord12(gameSettings) || !isRecord12(race) || !isRecord12(pillars) || !isRecord12(interstellar) || typeof race["species"] !== "string" || typeof race["universe"] !== "string" || !finiteNonNegative5(gameSettings["at"])) {
+        return unavailable8("invalid-game-state");
       }
       const alevel = rawGame["alevel"];
       if (typeof alevel !== "function") {
-        return unavailable5("invalid-game-state", "alevel");
+        return unavailable8("invalid-game-state", "alevel");
       }
       const ascensionLevel = alevel.call(rawGame);
-      if (!finiteNonNegative3(ascensionLevel)) {
-        return unavailable5("invalid-game-state", "alevel");
+      if (!finiteNonNegative5(ascensionLevel)) {
+        return unavailable8("invalid-game-state", "alevel");
       }
       const rawPillarLevel = pillars[race["species"]];
-      if (rawPillarLevel !== void 0 && !finiteNonNegative3(rawPillarLevel)) {
-        return unavailable5("invalid-game-state", "pillarLevel");
+      if (rawPillarLevel !== void 0 && !finiteNonNegative5(rawPillarLevel)) {
+        return unavailable8("invalid-game-state", "pillarLevel");
       }
       const pillarLevel = rawPillarLevel;
       const rawEngine = interstellar["stellar_engine"];
       let blackholeMass = 0;
       let blackholeExotic = 0;
       if (rawEngine !== null && rawEngine !== void 0) {
-        if (!isRecord9(rawEngine) || !finiteNonNegative3(rawEngine["mass"]) || !finiteNonNegative3(rawEngine["exotic"])) {
-          return unavailable5("invalid-game-state", "stellar_engine");
+        if (!isRecord12(rawEngine) || !finiteNonNegative5(rawEngine["mass"]) || !finiteNonNegative5(rawEngine["exotic"])) {
+          return unavailable8("invalid-game-state", "stellar_engine");
         }
         blackholeMass = rawEngine["mass"];
         blackholeExotic = rawEngine["exotic"];
       }
-      if (!isRecord9(rawResources)) return unavailable5("invalid-resource");
+      if (!isRecord12(rawResources)) return unavailable8("invalid-resource");
       const harmony = rawResources["Harmony"];
-      if (!isRecord9(harmony) || !finiteNonNegative3(harmony["currentQuantity"])) {
-        return unavailable5("invalid-resource", "Harmony");
+      if (!isRecord12(harmony) || !finiteNonNegative5(harmony["currentQuantity"])) {
+        return unavailable8("invalid-resource", "Harmony");
       }
-      if (!isRecord9(rawBuildings)) return unavailable5("invalid-building");
+      if (!isRecord12(rawBuildings)) return unavailable8("invalid-building");
       const buildingIds2 = [
         "GasSpaceDock",
         "GasSpaceDockShipSegment",
@@ -17187,8 +17541,8 @@
       ];
       const buildingRecords = {};
       for (const id of buildingIds2) {
-        const building = readBuilding(rawBuildings, id);
-        if (building === void 0) return unavailable5("invalid-building", id);
+        const building = readBuilding2(rawBuildings, id);
+        if (building === void 0) return unavailable8("invalid-building", id);
         buildingRecords[id] = building;
       }
       for (const id of [
@@ -17200,8 +17554,8 @@
         "SpireTower"
       ]) {
         const building = buildingRecords[id];
-        if (building === void 0 || !finiteNonNegative3(building["count"])) {
-          return unavailable5("invalid-building", `${id}.count`);
+        if (building === void 0 || !finiteNonNegative5(building["count"])) {
+          return unavailable8("invalid-building", `${id}.count`);
         }
       }
       const siriusAscendUnlocked = callBoolean(
@@ -17209,10 +17563,10 @@
         "isUnlocked"
       );
       const capacitorInstance = buildingRecords["PitSoulCapacitor"]["instance"];
-      if (siriusAscendUnlocked === void 0 || !isRecord9(capacitorInstance) || !finiteNonNegative3(capacitorInstance["energy"])) {
-        return unavailable5("invalid-building");
+      if (siriusAscendUnlocked === void 0 || !isRecord12(capacitorInstance) || !finiteNonNegative5(capacitorInstance["energy"])) {
+        return unavailable8("invalid-building");
       }
-      if (!isRecord9(rawTechIds)) return unavailable5("invalid-tech");
+      if (!isRecord12(rawTechIds)) return unavailable8("invalid-tech");
       const techIds2 = [
         "tech-dial_it_to_11",
         "tech-exotic_infusion",
@@ -17230,14 +17584,14 @@
           id,
           id === "tech-demonic_infusion" || id === "tech-final_ingredient"
         );
-        if (state2 === void 0) return unavailable5("invalid-tech", id);
+        if (state2 === void 0) return unavailable8("invalid-tech", id);
         techStates[id] = state2;
       }
-      if (!isRecord9(rawMechManager)) return unavailable5("invalid-mech-state");
+      if (!isRecord12(rawMechManager)) return unavailable8("invalid-mech-state");
       const mechActive = rawMechManager["isActive"];
       const mechPotential = rawMechManager["mechsPotential"];
-      if (typeof mechActive !== "boolean" || !finiteNonNegative3(mechPotential)) {
-        return unavailable5("invalid-mech-state");
+      if (typeof mechActive !== "boolean" || !finiteNonNegative5(mechPotential)) {
+        return unavailable8("invalid-mech-state");
       }
       const forbiddenLevelFive = haveTech2("forbidden", 5);
       const dishLevelTwo = haveTech2("dish", 2);
@@ -17247,7 +17601,7 @@
         "standard"
       );
       if (typeof forbiddenLevelFive !== "boolean" || typeof dishLevelTwo !== "boolean" || typeof lamentisStandardFive !== "boolean") {
-        return unavailable5("invalid-external-result");
+        return unavailable8("invalid-external-result");
       }
       const view = {
         settings: Object.freeze(settings2),
@@ -17291,7 +17645,7 @@
       };
       return Object.freeze({ status: "ready", view: Object.freeze(view) });
     } catch {
-      return unavailable5("inaccessible-data");
+      return unavailable8("inaccessible-data");
     }
   }
 
@@ -17426,13 +17780,13 @@
   }
 
   // src/adapters/evolve/tech-conflicts.ts
-  function isRecord10(value) {
+  function isRecord13(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
-  function finiteNonNegative4(value) {
+  function finiteNonNegative6(value) {
     return typeof value === "number" && Number.isFinite(value) && value >= 0;
   }
-  function unavailable6(reason, field) {
+  function unavailable9(reason, field) {
     return Object.freeze(
       field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
     );
@@ -17447,25 +17801,25 @@
   }
   function numberSetting(settings2, field) {
     const value = settings2[field];
-    return finiteNonNegative4(value) ? value : void 0;
+    return finiteNonNegative6(value) ? value : void 0;
   }
   function readBooleanResult(value) {
     return typeof value === "boolean" ? value : void 0;
   }
   function readTechConflictInput(rawTech, rawSettings, rawResources, rawState, rawGame, dependencies) {
     try {
-      if (!isRecord10(rawTech) || typeof rawTech["_vueBinding"] !== "string" || !isRecord10(rawTech["cost"])) {
-        return unavailable6("invalid-target");
+      if (!isRecord13(rawTech) || typeof rawTech["_vueBinding"] !== "string" || !isRecord13(rawTech["cost"])) {
+        return unavailable9("invalid-target");
       }
       const itemId = rawTech["_vueBinding"];
       const rawSoulGemCost = rawTech["cost"]["Soul_Gem"];
-      if (rawSoulGemCost !== void 0 && !finiteNonNegative4(rawSoulGemCost)) {
-        return unavailable6("invalid-target", "cost.Soul_Gem");
+      if (rawSoulGemCost !== void 0 && !finiteNonNegative6(rawSoulGemCost)) {
+        return unavailable9("invalid-target", "cost.Soul_Gem");
       }
-      if (!isRecord10(rawSettings)) return unavailable6("invalid-settings");
+      if (!isRecord13(rawSettings)) return unavailable9("invalid-settings");
       const rawIgnoredResearch = rawSettings["researchIgnore"];
       if (!Array.isArray(rawIgnoredResearch) || !rawIgnoredResearch.every((value) => typeof value === "string")) {
-        return unavailable6("invalid-settings", "researchIgnore");
+        return unavailable9("invalid-settings", "researchIgnore");
       }
       const settings2 = {
         ignoredResearch: Object.freeze([...rawIgnoredResearch]),
@@ -17493,36 +17847,36 @@
         alienGiftKnowledge: numberSetting(rawSettings, "fleetAlienGiftKnowledge")
       };
       for (const [field, value] of Object.entries(settings2)) {
-        if (value === void 0) return unavailable6("invalid-settings", field);
+        if (value === void 0) return unavailable9("invalid-settings", field);
       }
-      if (!isRecord10(rawResources)) return unavailable6("invalid-resource");
+      if (!isRecord13(rawResources)) return unavailable9("invalid-resource");
       const soulGems = rawResources["Soul_Gem"];
       const knowledge = rawResources["Knowledge"];
-      if (!isRecord10(soulGems) || !finiteNonNegative4(soulGems["currentQuantity"])) {
-        return unavailable6("invalid-resource", "Soul_Gem.currentQuantity");
+      if (!isRecord13(soulGems) || !finiteNonNegative6(soulGems["currentQuantity"])) {
+        return unavailable9("invalid-resource", "Soul_Gem.currentQuantity");
       }
-      if (!isRecord10(knowledge) || !finiteNonNegative4(knowledge["maxQuantity"])) {
-        return unavailable6("invalid-resource", "Knowledge.maxQuantity");
+      if (!isRecord13(knowledge) || !finiteNonNegative6(knowledge["maxQuantity"])) {
+        return unavailable9("invalid-resource", "Knowledge.maxQuantity");
       }
-      if (!isRecord10(rawState)) return unavailable6("invalid-state");
+      if (!isRecord13(rawState)) return unavailable9("invalid-state");
       const rawLastAtMs = rawState["whiteholeLastStabilise"];
-      if (rawLastAtMs !== void 0 && rawLastAtMs !== 0 && !finiteNonNegative4(rawLastAtMs)) {
-        return unavailable6("invalid-state", "whiteholeLastStabilise");
+      if (rawLastAtMs !== void 0 && rawLastAtMs !== 0 && !finiteNonNegative6(rawLastAtMs)) {
+        return unavailable9("invalid-state", "whiteholeLastStabilise");
       }
       const lastAtMs = rawLastAtMs === void 0 || rawLastAtMs === 0 ? null : rawLastAtMs;
-      if (!isRecord10(rawGame)) return unavailable6("invalid-game-state");
+      if (!isRecord13(rawGame)) return unavailable9("invalid-game-state");
       const global = rawGame["global"];
       const alevel = rawGame["alevel"];
-      const race = isRecord10(global) ? global["race"] : void 0;
-      if (!isRecord10(race) || typeof race["species"] !== "string" || typeof race["gods"] !== "string" || typeof alevel !== "function") {
-        return unavailable6("invalid-game-state");
+      const race = isRecord13(global) ? global["race"] : void 0;
+      if (!isRecord13(race) || typeof race["species"] !== "string" || typeof race["gods"] !== "string" || typeof alevel !== "function") {
+        return unavailable9("invalid-game-state");
       }
       const achievementLevel = alevel.call(rawGame);
-      if (!finiteNonNegative4(achievementLevel)) {
-        return unavailable6("invalid-game-state", "alevel");
+      if (!finiteNonNegative6(achievementLevel)) {
+        return unavailable9("invalid-game-state", "alevel");
       }
       const nowMs = itemId === "tech-stabilize_blackhole" ? dependencies.clock.nowMs() : 0;
-      if (!finiteNonNegative4(nowMs)) return unavailable6("invalid-clock");
+      if (!finiteNonNegative6(nowMs)) return unavailable9("invalid-clock");
       let bananaRepublic = false;
       let cultOfPersonality = false;
       let pacifist = false;
@@ -17537,7 +17891,7 @@
           dependencies.guardActive("guardPacifist")
         );
         if (bananaRepublic === void 0 || cultOfPersonality === void 0 || pacifist === void 0) {
-          return unavailable6("invalid-external-result", "guard");
+          return unavailable9("invalid-external-result", "guard");
         }
       }
       let retirementAssist = false;
@@ -17547,13 +17901,13 @@
           dependencies.retirementChallengeAssistActive()
         );
         if (active === void 0) {
-          return unavailable6("invalid-external-result", "retirementAssist");
+          return unavailable9("invalid-external-result", "retirementAssist");
         }
         retirementAssist = active;
         if (active) {
           const missing = dependencies.retirementPreparationMissing();
           if (!Array.isArray(missing) || !missing.every((value) => typeof value === "string")) {
-            return unavailable6(
+            return unavailable9(
               "invalid-external-result",
               "retirementPreparation"
             );
@@ -17568,23 +17922,23 @@
           dependencies.guardActive("guardSecondEvolution")
         );
         if (active === void 0) {
-          return unavailable6("invalid-external-result", "secondEvolution");
+          return unavailable9("invalid-external-result", "secondEvolution");
         }
         secondEvolution = active;
         if (!active) {
           if (!Array.isArray(dependencies.fanatAchievements)) {
-            return unavailable6("invalid-external-result", "fanatAchievements");
+            return unavailable9("invalid-external-result", "fanatAchievements");
           }
           for (const rawCombination of dependencies.fanatAchievements) {
-            if (!isRecord10(rawCombination) || typeof rawCombination["race"] !== "string" || typeof rawCombination["god"] !== "string" || typeof rawCombination["achieve"] !== "string") {
-              return unavailable6("invalid-external-result", "fanatAchievements");
+            if (!isRecord13(rawCombination) || typeof rawCombination["race"] !== "string" || typeof rawCombination["god"] !== "string" || typeof rawCombination["achieve"] !== "string") {
+              return unavailable9("invalid-external-result", "fanatAchievements");
             }
             const unlocked = dependencies.isAchievementUnlocked(
               rawCombination["achieve"],
               achievementLevel
             );
             if (typeof unlocked !== "boolean") {
-              return unavailable6("invalid-external-result", "achievement");
+              return unavailable9("invalid-external-result", "achievement");
             }
             fanaticismAchievements.push(
               Object.freeze({
@@ -17624,7 +17978,7 @@
       };
       return Object.freeze({ status: "ready", input: Object.freeze(input) });
     } catch {
-      return unavailable6("inaccessible-data");
+      return unavailable9("inaccessible-data");
     }
   }
 
@@ -19606,22 +19960,22 @@
       gm: readSafely(() => typeof GM === "undefined" ? void 0 : GM)
     });
   }
-  function isRecord11(value) {
+  function isRecord14(value) {
     return typeof value === "object" && value !== null;
   }
   function asBridge(value) {
     return typeof value === "function" ? value : void 0;
   }
   function readVersion(info) {
-    if (!isRecord11(info)) return void 0;
+    if (!isRecord14(info)) return void 0;
     const script = info["script"];
-    if (!isRecord11(script)) return void 0;
+    if (!isRecord14(script)) return void 0;
     const version = script["version"];
     return typeof version === "string" && version.length > 0 ? version : void 0;
   }
   function createUserscriptEnvironment(browserWindow, globals = readAmbientUserscriptGlobals()) {
     const candidatePageWindow = readSafely(() => globals.unsafeWindow);
-    const pageWindow = isRecord11(candidatePageWindow) ? candidatePageWindow : browserWindow;
+    const pageWindow = isRecord14(candidatePageWindow) ? candidatePageWindow : browserWindow;
     const cloneBridge = asBridge(readSafely(() => globals.cloneInto));
     const exportBridge = asBridge(readSafely(() => globals.exportFunction));
     const needsSandboxBridge = pageWindow !== browserWindow && cloneBridge !== void 0 && exportBridge !== void 0;
@@ -19653,7 +20007,7 @@
         const directInfo = globals.gmInfo;
         if (directInfo !== void 0) return readVersion(directInfo);
         const gm = globals.gm;
-        return isRecord11(gm) ? readVersion(gm["info"]) : void 0;
+        return isRecord14(gm) ? readVersion(gm["info"]) : void 0;
       });
     }
     return Object.freeze({
@@ -36485,24 +36839,60 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       }
       return result.status === "unavailable" ? result.fallbackActive : false;
     };
-    let {
-      inflationChallengeAssistActive,
-      inflationChallengeMoneyReachable,
-      inflationChallengeSecondsToFinish,
-      inflationChallengeShouldSaveMoney,
-      retirementChallengeAssistActive,
-      retirementPreparationMissing
-    } = createRunGuards({
-      getSettings: () => settings,
-      getGame: () => game,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getAchievementStar: (...args) => getAchievementStar(...args),
-      haveTech,
-      getNumberString,
-      inflationChallengeMoney: INFLATION_CHALLENGE_MONEY,
-      retirementPreparation: RETIREMENT_PREP
-    });
+    let inflationChallengeAssistActive = () => {
+      const result = readInflationAssistInput(
+        settings,
+        game,
+        getAchievementStar("wheelbarrow")
+      );
+      return result.status === "ready" ? isInflationAssistActive(result.input) : false;
+    };
+    let inflationChallengeMoneyReachable = () => {
+      const result = readInflationMoneyInput(
+        resources,
+        INFLATION_CHALLENGE_MONEY
+      );
+      return result.status === "ready" ? isInflationMoneyReachable(result.input) : false;
+    };
+    let inflationChallengeSecondsToFinish = () => {
+      const result = readInflationMoneyInput(
+        resources,
+        INFLATION_CHALLENGE_MONEY
+      );
+      return result.status === "ready" ? inflationSecondsToFinish(result.input) : Number.POSITIVE_INFINITY;
+    };
+    let inflationChallengeShouldSaveMoney = () => {
+      const result = readInflationSaveInput(
+        settings,
+        game,
+        resources,
+        getAchievementStar("wheelbarrow"),
+        INFLATION_CHALLENGE_MONEY
+      );
+      return result.status === "ready" ? shouldSaveInflationMoney(result.input) : false;
+    };
+    let retirementChallengeAssistActive = () => {
+      const result = readRetirementAssistInput(
+        settings,
+        game,
+        haveTech("isolation")
+      );
+      return result.status === "ready" ? isRetirementAssistActive(result.input) : false;
+    };
+    let retirementPreparationMissing = () => {
+      if (!retirementChallengeAssistActive()) {
+        return [];
+      }
+      const result = readRetirementPreparationInput(
+        buildings,
+        resources,
+        RETIREMENT_PREP
+      );
+      return result.status === "ready" ? formatRetirementShortfalls(
+        assessRetirementPreparation(result.input),
+        getNumberString
+      ) : [];
+    };
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         runGuards: {
@@ -37464,18 +37854,54 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       });
     }
     let evolutionResultTestActions;
-    const { checkEvolutionResult } = createEvolutionResult({
-      getSettings: () => settings,
-      getSettingsRaw: () => settingsRaw,
-      getState: () => state,
-      getGame: () => game,
-      getRaces: () => races,
-      getMutableTraitManager: () => MutableTraitManager,
-      getGameLog: () => GameLog,
-      getDocument: () => document,
-      getAddEvolutionSetting: () => evolutionResultTestActions?.addEvolutionSetting ?? addEvolutionSetting,
-      getUpdateSettingsFromState: () => evolutionResultTestActions?.updateSettingsFromState ?? updateSettingsFromState
-    });
+    const checkEvolutionResult = () => {
+      if (!settings.masterScriptToggle || !state.evoCheckNeeded) {
+        return true;
+      }
+      state.evoCheckNeeded = false;
+      const read = readEvolutionResultInput(
+        settings,
+        game,
+        races,
+        MutableTraitManager
+      );
+      if (read.status !== "ready") {
+        return true;
+      }
+      const decision = decideEvolutionResult(read.input);
+      for (const event of decision.logs) {
+        const { level, message, tags } = formatEvolutionLog(
+          event,
+          (key) => game.loc(key)
+        );
+        if (level === "danger") {
+          GameLog.logDanger("special", message, [...tags]);
+        } else if (level === "warning") {
+          GameLog.logWarning("special", message, [...tags]);
+        } else {
+          GameLog.logInfo("special", message, [...tags]);
+        }
+      }
+      if (decision.needReset) {
+        const resetButton = document.querySelector(".reset .button:not(.right)");
+        if (resetButton.innerText === game.loc("reset_soft")) {
+          const addEvolutionSettingFn = evolutionResultTestActions?.addEvolutionSetting ?? addEvolutionSetting;
+          const updateSettingsFromStateFn = evolutionResultTestActions?.updateSettingsFromState ?? updateSettingsFromState;
+          if (settings.evolutionQueueEnabled && settingsRaw.evolutionQueue.length > 0) {
+            if (!settings.evolutionQueueRepeat) {
+              addEvolutionSettingFn();
+            }
+            settingsRaw.evolutionQueue.unshift(settingsRaw.evolutionQueue.pop());
+          }
+          updateSettingsFromStateFn();
+          state.goal = "GameOverMan";
+          resetButton.disabled = false;
+          resetButton.click();
+          return false;
+        }
+      }
+      return true;
+    };
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         checkEvolutionResult: () => checkEvolutionResult(),

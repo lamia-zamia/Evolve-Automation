@@ -1,3 +1,5 @@
+import { calculateKnowledgeRequirements } from "../domain/knowledge-requirements.ts";
+
 type StorageResource = {
   maxQuantity: number;
   maxCost: number;
@@ -117,44 +119,34 @@ export function createStorageRequirements({
     const projectManager = getProjectManager();
     const fleetManagerOuter = getFleetManagerOuter();
 
-    const techKnowledgeCosts = state.unlockedTechs.map(
-      (tech) => tech.cost["Knowledge"] ?? 0,
-    );
-    if (buildings.GorddonEmbassy.isAutoBuildable()) {
-      techKnowledgeCosts.push(settings.fleetEmbassyKnowledge);
-    }
-    state.knowledgeRequiredByTechs = Math.max(0, ...techKnowledgeCosts);
-    state.cheapestTechKnowledge =
-      techKnowledgeCosts.length > 0 ? Math.min(...techKnowledgeCosts) : 0;
-
-    const buildKnowledgeCosts: number[] = [];
-    const addBuildKnowledgeCosts = (targets: StorageTarget[]) => {
-      for (const target of targets) {
-        if (isTechnology(target) || target.is?.knowledge) {
-          continue;
-        }
-        const knowledgeCost = target.cost?.Knowledge ?? 0;
-        if (knowledgeCost > 0) {
-          buildKnowledgeCosts.push(knowledgeCost);
-        }
-      }
-    };
-    addBuildKnowledgeCosts(state.queuedTargetsAll);
-    addBuildKnowledgeCosts(state.triggerTargets);
-    const topTarget = [
-      ...buildingManager.priorityList,
-      ...projectManager.priorityList,
-    ]
-      .filter((object) => object.isAutoBuildable?.() && !object.is?.knowledge)
-      .reduce<StorageTarget | null>(
-        (top, object) =>
-          !top || (object.weighting ?? 0) > (top.weighting ?? 0) ? object : top,
-        null,
-      );
-    if (topTarget) {
-      addBuildKnowledgeCosts([topTarget]);
-    }
-    state.knowledgeRequiredByBuildTargets = Math.max(0, ...buildKnowledgeCosts);
+    const knowledge = calculateKnowledgeRequirements({
+      techKnowledgeCosts: [
+        ...state.unlockedTechs.map((tech) => tech.cost["Knowledge"] ?? 0),
+        ...(buildings.GorddonEmbassy.isAutoBuildable()
+          ? [settings.fleetEmbassyKnowledge]
+          : []),
+      ],
+      reservedTargets: [...state.queuedTargetsAll, ...state.triggerTargets].map(
+        (target) => ({
+          knowledgeCost: target.cost?.Knowledge ?? 0,
+          isTechnology: isTechnology(target),
+          isKnowledge: Boolean(target.is?.knowledge),
+        }),
+      ),
+      buildCandidates: [
+        ...buildingManager.priorityList,
+        ...projectManager.priorityList,
+      ].map((object) => ({
+        knowledgeCost: object.cost?.Knowledge ?? 0,
+        isKnowledge: Boolean(object.is?.knowledge),
+        weighting: object.weighting ?? 0,
+        autoBuildable: Boolean(object.isAutoBuildable?.()),
+      })),
+    });
+    state.knowledgeRequiredByTechs = knowledge.knowledgeRequiredByTechs;
+    state.cheapestTechKnowledge = knowledge.cheapestTechKnowledge;
+    state.knowledgeRequiredByBuildTargets =
+      knowledge.knowledgeRequiredByBuildTargets;
 
     if (
       settings.autoFleet &&
