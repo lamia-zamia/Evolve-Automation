@@ -9,8 +9,7 @@ type GameCompatibilityDependencies = {
   getGovernor: () => string;
   getVueById: LooseFunction;
   normalizeProperties: LooseFunction;
-  cloneInto: LooseFunction;
-  getUnsafeWindow: () => unknown;
+  cloneIntoPage: (value: unknown, options?: LooseObject) => any;
   getDate: () => { getMonth: () => number; getDate: () => number };
 };
 
@@ -35,8 +34,7 @@ export function createGameCompatibility({
   getGovernor,
   getVueById,
   normalizeProperties,
-  cloneInto,
-  getUnsafeWindow,
+  cloneIntoPage,
   getDate,
 }: GameCompatibilityDependencies) {
   const game = liveObject(getGame);
@@ -1559,15 +1557,11 @@ export function createGameCompatibility({
 
     // Firefox compatibility:
     adjustCosts: (c_action, wiki?) =>
-      game.adjustCosts(
-        cloneInto(c_action, getUnsafeWindow(), { cloneFunctions: true }),
-        wiki,
-      ),
-    loc: (key, variables) =>
-      game.loc(key, cloneInto(variables, getUnsafeWindow())),
+      game.adjustCosts(cloneIntoPage(c_action, { cloneFunctions: true }), wiki),
+    loc: (key, variables) => game.loc(key, cloneIntoPage(variables)),
     messageQueue: (msg, color, dnr, tags) =>
-      game.messageQueue(msg, color, dnr, cloneInto(tags, getUnsafeWindow())),
-    shipCosts: (bp) => game.shipCosts(cloneInto(bp, getUnsafeWindow())),
+      game.messageQueue(msg, color, dnr, cloneIntoPage(tags)),
+    shipCosts: (bp) => game.shipCosts(cloneIntoPage(bp)),
   };
 
   return poly;

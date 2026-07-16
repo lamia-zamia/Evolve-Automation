@@ -50,14 +50,17 @@ assert.equal(hooks.getCostConflict({ cost: {} }), null);
 
 const first = {
   name: "First Project",
+  cause: "Queue",
   cost: { Iron: 80, Knowledge: 950 },
 };
 const second = {
   name: "Second Project",
+  cause: "Trigger",
   cost: { Iron: 90, Knowledge: 100 },
 };
 const blockedKnowledge = {
   name: "Blocked Project",
+  cause: "Prestige",
   cost: { Copper: 60, Knowledge: 2000 },
 };
 hooks.setCostConflictTestContext({
@@ -68,13 +71,32 @@ hooks.setCostConflictTestContext({
 const conflict = hooks.getCostConflict({
   cost: { Iron: 30, Copper: 0, Knowledge: 100 },
 });
-assert.equal(conflict.res, resources.Copper);
-assert.equal(conflict.obj, blockedKnowledge);
-assert.deepEqual([...conflict.resList], ["Iron", "Knowledge", "Copper"]);
+assert.equal(conflict.status, "conflict");
+assert.equal(conflict.resourceId, "Copper");
+assert.equal(conflict.targetName, "Blocked Project");
+assert.equal(conflict.targetCause, "Prestige");
+assert.deepEqual([...conflict.resourceNames], ["Iron", "Knowledge", "Copper"]);
 assert.deepEqual(
-  [...conflict.actionList],
+  [...conflict.targetNames],
   ["First Project", "Second Project", "Blocked Project"],
 );
+
+hooks.setCostConflictTestContext({
+  state: { conflictTargets: [first] },
+  resources,
+});
+assert.equal(hooks.getCostConflict({ cost: {} }), null);
+
+resources.Copper.currentQuantity = 50;
+hooks.setCostConflictTestContext({
+  state: { conflictTargets: [blockedKnowledge] },
+  resources,
+});
+const explicitZeroConflict = hooks.getCostConflict({
+  cost: { Copper: 0 },
+});
+assert.equal(explicitZeroConflict.resourceId, "Copper");
+assert.deepEqual([...explicitZeroConflict.resourceNames], ["Copper"]);
 
 hooks.setCostConflictTestContext({
   state: { conflictTargets: [blockedKnowledge] },
@@ -84,12 +106,30 @@ resources.Copper.currentQuantity = 60;
 const knowledgeConflict = hooks.getCostConflict({
   cost: { Copper: 0, Knowledge: 100 },
 });
-assert.equal(knowledgeConflict.res, resources.Knowledge);
-assert.deepEqual([...knowledgeConflict.resList], ["Knowledge"]);
+assert.equal(knowledgeConflict.resourceId, "Knowledge");
+assert.deepEqual([...knowledgeConflict.resourceNames], ["Knowledge"]);
 resources.Knowledge.currentQuantity = 2100;
 assert.equal(
   hooks.getCostConflict({ cost: { Copper: 0, Knowledge: 0 } }),
   null,
+);
+
+hooks.setCostConflictTestContext({
+  state: {
+    conflictTargets: [
+      { name: "Malformed Project", cause: "Queue", cost: { Missing: 10 } },
+    ],
+  },
+  resources,
+});
+assert.deepEqual(
+  { ...hooks.getCostConflict({ cost: { Missing: 1 } }) },
+  {
+    status: "unavailable",
+    reason: "invalid-resource",
+    resourceId: "Missing",
+    targetIndex: 0,
+  },
 );
 
 console.log("Cost conflict bundled characterization tests passed");

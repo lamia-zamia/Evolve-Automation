@@ -35,9 +35,7 @@ export function createScriptBootstrap({
   let WindowManager: AnyRecord;
   let $: AnyFunction & AnyRecord;
   let window: AnyRecord;
-  let unsafeWindow: AnyRecord | undefined;
-  let cloneInto: AnyFunction | undefined;
-  let exportFunction: AnyFunction | undefined;
+  let userscriptEnvironment: AnyRecord;
   let win: AnyRecord;
   let needSandboxBypass: boolean;
   let poly: AnyRecord;
@@ -67,9 +65,7 @@ export function createScriptBootstrap({
     WindowManager = context.WindowManager;
     $ = context.$;
     window = context.window;
-    unsafeWindow = context.unsafeWindow;
-    cloneInto = context.cloneInto;
-    exportFunction = context.exportFunction;
+    userscriptEnvironment = context.userscriptEnvironment;
     win = context.win;
     needSandboxBypass = context.needSandboxBypass;
     poly = context.poly;
@@ -198,8 +194,8 @@ export function createScriptBootstrap({
     }
 
     // We'll need real window to access vue objects
-    if (typeof unsafeWindow !== "undefined") {
-      win = unsafeWindow;
+    if (userscriptEnvironment.capabilities.hasPageWindow) {
+      win = userscriptEnvironment.pageWindow;
     } else {
       win = window;
       // Chrome overrides original JQuery with one required by script, we need to restore it to get $._data with events handlers
@@ -270,11 +266,7 @@ export function createScriptBootstrap({
     // The rest of the checks don't need adjusting as unsafeWindow === window in this case and they all use the same code anyway,
     // so there is no performance loss there.
     // If we don't need the sandboxed functions, we can discard our poly. wrappers and directly call the game's ones.
-    needSandboxBypass =
-      typeof unsafeWindow === "object" &&
-      typeof cloneInto === "function" &&
-      typeof exportFunction === "function" &&
-      unsafeWindow !== window;
+    needSandboxBypass = userscriptEnvironment.capabilities.needsSandboxBridge;
     commitContext();
     if (!needSandboxBypass) {
       poly.adjustCosts = game.adjustCosts;
@@ -293,7 +285,7 @@ export function createScriptBootstrap({
 
     // Hook to game loop, to allow script run at full speed in unfocused tab
     const setCallback = (fn) =>
-      !needSandboxBypass ? fn : actions.exportFunction(fn, unsafeWindow);
+      !needSandboxBypass ? fn : userscriptEnvironment.exportToPage(fn);
     // This should be the last var set in game's debug.js:updateDebugData(), otherwise we may be working with partially outdated data
     let breakdown = game.breakdown;
     Object.defineProperty(game, "breakdown", {

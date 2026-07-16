@@ -4161,13 +4161,12 @@
     getGameLog,
     getNeedSandboxBypass,
     getWin,
-    getUnsafeWindow,
     getSortable,
     getUpdateDebugData,
     getCreateMechInfo,
     getVueById: getVueById2,
     kCombinations,
-    cloneInto: cloneInto2,
+    cloneIntoPage,
     createMutationObserver
   }) {
     let game2;
@@ -4178,7 +4177,6 @@
     let GameLog2;
     let needSandboxBypass2;
     let win2;
-    let unsafeWindow2;
     let Sortable2;
     const k_combinations2 = kCombinations;
     const updateDebugData2 = (...args) => getUpdateDebugData()(...args);
@@ -4192,7 +4190,6 @@
       GameLog2 = getGameLog();
       needSandboxBypass2 = getNeedSandboxBypass();
       win2 = getWin();
-      unsafeWindow2 = getUnsafeWindow();
       Sortable2 = getSortable();
     }
     const MechManager2 = {
@@ -4685,7 +4682,7 @@
         };
         if (needSandboxBypass2) {
           win2.Sortable.get(this._listVue.$el).options.onEnd(
-            cloneInto2(sortObj, unsafeWindow2, { cloneFunctions: true })
+            cloneIntoPage(sortObj, { cloneFunctions: true })
           );
         } else {
           Sortable2.get(this._listVue.$el).options.onEnd(sortObj);
@@ -4728,9 +4725,8 @@
     getPoly,
     getWin,
     getNeedSandboxBypass,
-    getUnsafeWindow,
     getKeyboardEvent,
-    cloneInto: cloneInto2
+    cloneIntoPage
   }) {
     let document2;
     let game2;
@@ -4738,7 +4734,6 @@
     let poly2;
     let win2;
     let needSandboxBypass2;
-    let unsafeWindow2;
     let KeyboardEvent2;
     function refreshContext() {
       document2 = getDocument();
@@ -4747,7 +4742,6 @@
       poly2 = getPoly();
       win2 = getWin();
       needSandboxBypass2 = getNeedSandboxBypass();
-      unsafeWindow2 = getUnsafeWindow();
       KeyboardEvent2 = getKeyboardEvent();
     }
     const WindowManager2 = {
@@ -4818,9 +4812,9 @@
           this._unsetFn = (e) => document2.dispatchEvent(new KeyboardEvent2("keyup", e));
           this._allFn = null;
         } else if (needSandboxBypass2) {
-          this._setFn = (e) => set(cloneInto2(e, unsafeWindow2));
-          this._unsetFn = (e) => unset(cloneInto2(e, unsafeWindow2));
-          this._allFn = (e) => all(cloneInto2(e, unsafeWindow2));
+          this._setFn = (e) => set(cloneIntoPage(e));
+          this._unsetFn = (e) => unset(cloneIntoPage(e));
+          this._allFn = (e) => all(cloneIntoPage(e));
         } else {
           this._setFn = set;
           this._unsetFn = unset;
@@ -5010,9 +5004,7 @@
     let WindowManager2;
     let $2;
     let window2;
-    let unsafeWindow2;
-    let cloneInto2;
-    let exportFunction2;
+    let userscriptEnvironment2;
     let win2;
     let needSandboxBypass2;
     let poly2;
@@ -5040,9 +5032,7 @@
       WindowManager2 = context.WindowManager;
       $2 = context.$;
       window2 = context.window;
-      unsafeWindow2 = context.unsafeWindow;
-      cloneInto2 = context.cloneInto;
-      exportFunction2 = context.exportFunction;
+      userscriptEnvironment2 = context.userscriptEnvironment;
       win2 = context.win;
       needSandboxBypass2 = context.needSandboxBypass;
       poly2 = context.poly;
@@ -5141,8 +5131,8 @@
         actions.schedule(mainAutoEvolveScript2, 100);
         return;
       }
-      if (typeof unsafeWindow2 !== "undefined") {
-        win2 = unsafeWindow2;
+      if (userscriptEnvironment2.capabilities.hasPageWindow) {
+        win2 = userscriptEnvironment2.pageWindow;
       } else {
         win2 = window2;
         if (!win2.$._data(win2.document).events?.["keydown"]) {
@@ -5185,7 +5175,7 @@
         document2.body.appendChild(el);
         return;
       }
-      needSandboxBypass2 = typeof unsafeWindow2 === "object" && typeof cloneInto2 === "function" && typeof exportFunction2 === "function" && unsafeWindow2 !== window2;
+      needSandboxBypass2 = userscriptEnvironment2.capabilities.needsSandboxBridge;
       commitContext();
       if (!needSandboxBypass2) {
         poly2.adjustCosts = game2.adjustCosts;
@@ -5200,7 +5190,7 @@
       actions.initialiseRaces();
       initialiseScript2();
       actions.updateOverrides();
-      const setCallback = (fn) => !needSandboxBypass2 ? fn : actions.exportFunction(fn, unsafeWindow2);
+      const setCallback = (fn) => !needSandboxBypass2 ? fn : userscriptEnvironment2.exportToPage(fn);
       let breakdown = game2.breakdown;
       Object.defineProperty(game2, "breakdown", {
         get: setCallback(() => breakdown),
@@ -5385,7 +5375,7 @@
         const projects2 = getProjects();
         const state2 = getState();
         const game2 = getGame();
-        const isPrestigeAllowed2 = getIsPrestigeAllowed();
+        const isPrestigeAllowed3 = getIsPrestigeAllowed();
         const bananaRepublicObjectiveComplete2 = getBananaRepublicObjectiveComplete();
         const inflationChallengeAssistActive2 = getInflationChallengeAssistActive();
         for (let project of this.priorityList) {
@@ -5398,7 +5388,7 @@
             project.weighting = 0;
             project.extraDescription = "AutoBuild disabled<br>";
           }
-          if (project.count >= project.autoMax && (project !== projects2.ManaSyphon || !isPrestigeAllowed2("vacuum"))) {
+          if (project.count >= project.autoMax && (project !== projects2.ManaSyphon || !isPrestigeAllowed3("vacuum"))) {
             project.weighting = 0;
             project.extraDescription = "Maximum amount reached<br>";
           }
@@ -5904,7 +5894,7 @@
     function generatePlanets2() {
       const game2 = getGame();
       const poly2 = getPoly();
-      const isAchievementUnlocked2 = getIsAchievementUnlocked();
+      const isAchievementUnlocked3 = getIsAchievementUnlocked();
       let seed = game2.global.race.seed;
       const seededRandom = (min = 0, max = 1) => {
         seed = (seed * 9301 + 49297) % 233280;
@@ -5988,7 +5978,7 @@
           const maxBound = !hell && game2.global.stats.portals >= 1 ? 7 : 6;
           const subbiome = Math.floor(seededRandom(0, 3)) === 0;
           const biomeIndex = Math.floor(seededRandom(0, maxBound));
-          if (subbiome && isAchievementUnlocked2(`biome_${biomes[biomeIndex]}`, 1) && biomeIndex < subbiomes.length) {
+          if (subbiome && isAchievementUnlocked3(`biome_${biomes[biomeIndex]}`, 1) && biomeIndex < subbiomes.length) {
             const sub = subbiomes[biomeIndex];
             planet.biome = sub instanceof Array ? sub[Math.floor(seededRandom(0, sub.length))] : sub;
           } else {
@@ -6355,23 +6345,23 @@
 
   // src/game/trait-value.ts
   function createTraitValue({ getGame }) {
-    function traitVal2(trait, index, operation) {
+    function traitVal2(trait, index, operation2) {
       const game2 = getGame();
       if (game2.global.race[trait]) {
         const value = game2.traits[trait].vars()[index];
-        if (operation === "-") {
+        if (operation2 === "-") {
           return 1 - value / 100;
-        } else if (operation === "+") {
+        } else if (operation2 === "+") {
           return 1 + value / 100;
-        } else if (operation === "=") {
+        } else if (operation2 === "=") {
           return value / 100;
         } else {
           return value;
         }
-      } else if (operation === "+" || operation === "-" || operation === "=") {
+      } else if (operation2 === "+" || operation2 === "-" || operation2 === "=") {
         return 1;
       } else {
-        return operation ?? 0;
+        return operation2 ?? 0;
       }
     }
     return { traitVal: traitVal2 };
@@ -8415,8 +8405,7 @@
     getGovernor: getGovernor2,
     getVueById: getVueById2,
     normalizeProperties: normalizeProperties2,
-    cloneInto: cloneInto2,
-    getUnsafeWindow,
+    cloneIntoPage,
     getDate
   }) {
     const game2 = liveObject(getGame);
@@ -9842,13 +9831,10 @@
         getVueById2("createHead")?.buildContainerDesc().match(/(\d+)/g)[1] ?? 0
       ),
       // Firefox compatibility:
-      adjustCosts: (c_action, wiki) => game2.adjustCosts(
-        cloneInto2(c_action, getUnsafeWindow(), { cloneFunctions: true }),
-        wiki
-      ),
-      loc: (key, variables) => game2.loc(key, cloneInto2(variables, getUnsafeWindow())),
-      messageQueue: (msg, color, dnr, tags) => game2.messageQueue(msg, color, dnr, cloneInto2(tags, getUnsafeWindow())),
-      shipCosts: (bp) => game2.shipCosts(cloneInto2(bp, getUnsafeWindow()))
+      adjustCosts: (c_action, wiki) => game2.adjustCosts(cloneIntoPage(c_action, { cloneFunctions: true }), wiki),
+      loc: (key, variables) => game2.loc(key, cloneIntoPage(variables)),
+      messageQueue: (msg, color, dnr, tags) => game2.messageQueue(msg, color, dnr, cloneIntoPage(tags)),
+      shipCosts: (bp) => game2.shipCosts(cloneIntoPage(bp))
     };
     return poly2;
   }
@@ -13381,116 +13367,381 @@
     return { initialiseState: initialiseState2 };
   }
 
-  // src/planning/cost-conflicts.ts
-  function createCostConflicts({
-    getState,
-    getResources,
-    isEmptyObject
-  }) {
-    function getCostConflict2(action) {
-      const resources2 = getResources();
-      let conflict = {};
-      for (const priorityTarget of getState().conflictTargets) {
-        let blockKnowledge = true;
-        for (const resourceId in priorityTarget.cost) {
-          if (resourceId !== "Knowledge" && resources2[resourceId].currentQuantity < priorityTarget.cost[resourceId]) {
-            blockKnowledge = false;
-            break;
-          }
-        }
-        for (const resourceId in priorityTarget.cost) {
-          if ((resourceId !== "Knowledge" || blockKnowledge) && priorityTarget.cost[resourceId] > resources2[resourceId].currentQuantity - action.cost[resourceId]) {
-            const resourceList = conflict.resList || [];
-            const actionList = conflict.actionList || [];
-            conflict = {
-              res: resources2[resourceId],
-              obj: priorityTarget,
-              resList: [
-                .../* @__PURE__ */ new Set([...resourceList, resources2[resourceId].name])
-              ],
-              actionList: [.../* @__PURE__ */ new Set([...actionList, priorityTarget.name])]
-            };
-          }
+  // src/domain/cost-conflicts.ts
+  function findCostConflict(input) {
+    const resourceNames = [];
+    const targetNames = [];
+    let resourceId = "";
+    let targetName = "";
+    let targetCause = "";
+    for (const reservedTarget of input.reservedTargets) {
+      let blockKnowledge = true;
+      for (const reservedResourceId of Object.keys(reservedTarget.cost)) {
+        const resource = input.resources[reservedResourceId];
+        const reservedCost = reservedTarget.cost[reservedResourceId];
+        if (reservedResourceId !== "Knowledge" && resource !== void 0 && reservedCost !== void 0 && resource.currentQuantity < reservedCost) {
+          blockKnowledge = false;
+          break;
         }
       }
-      return isEmptyObject(conflict) ? null : conflict;
-    }
-    return { getCostConflict: getCostConflict2 };
-  }
-
-  // src/planning/planner-analysis.ts
-  function createPlannerAnalysis({
-    getGame,
-    getResources,
-    getState,
-    storage
-  }) {
-    function plannerLimitingResource2(target) {
-      if (target.isAffordable()) {
-        return null;
-      }
-      const resources2 = getResources();
-      let worst = null;
-      for (const resourceId in target.cost) {
-        const resource = resources2[resourceId];
-        const quantity = target.cost[resourceId];
-        if (!resource.isUnlocked() || resource.currentQuantity >= quantity) {
+      for (const reservedResourceId of Object.keys(reservedTarget.cost)) {
+        const resource = input.resources[reservedResourceId];
+        const reservedCost = reservedTarget.cost[reservedResourceId];
+        const actionCost = input.actionCost[reservedResourceId];
+        if (resource === void 0 || reservedCost === void 0 || actionCost === void 0 || reservedResourceId === "Knowledge" && !blockKnowledge || reservedCost <= resource.currentQuantity - actionCost) {
           continue;
         }
-        let time;
-        let blocker;
-        if (resource.maxQuantity < quantity) {
-          time = Number.MAX_SAFE_INTEGER;
-          blocker = "storage";
-        } else if (resource.income > 0) {
-          time = (quantity - resource.currentQuantity) / resource.income;
-          blocker = "income";
-        } else {
-          time = Number.MAX_SAFE_INTEGER / 2;
-          blocker = "stalled";
+        resourceId = reservedResourceId;
+        targetName = reservedTarget.name;
+        targetCause = reservedTarget.cause;
+        if (!resourceNames.includes(resource.name)) {
+          resourceNames.push(resource.name);
         }
-        if (!worst || time > worst.time) {
-          worst = { resource, time, blocker };
+        if (!targetNames.includes(reservedTarget.name)) {
+          targetNames.push(reservedTarget.name);
         }
       }
-      return worst;
     }
-    function makePlannerStats2() {
-      const stats = getGame().global.stats;
-      return {
-        startDay: stats.days,
-        day: stats.days,
-        reset: stats.reset,
-        samples: {},
-        total: 0
-      };
+    if (resourceId === "") return null;
+    return Object.freeze({
+      status: "conflict",
+      resourceId,
+      targetName,
+      targetCause,
+      resourceNames: Object.freeze(resourceNames),
+      targetNames: Object.freeze(targetNames)
+    });
+  }
+
+  // src/adapters/evolve/cost-conflicts.ts
+  function isRecord(value) {
+    return typeof value === "object" && value !== null;
+  }
+  function isFiniteNumber(value) {
+    return typeof value === "number" && Number.isFinite(value);
+  }
+  function unavailable(reason, context = {}) {
+    return Object.freeze({ status: "unavailable", reason, ...context });
+  }
+  function freezeCostMap(rawCost, allowZero) {
+    const entries = [];
+    for (const resourceId of Object.keys(rawCost)) {
+      const cost = rawCost[resourceId];
+      if (!isFiniteNumber(cost) || (allowZero ? cost < 0 : cost <= 0)) {
+        return void 0;
+      }
+      entries.push([resourceId, cost]);
     }
-    function loadPlannerStats2() {
-      try {
-        const saved = JSON.parse(
-          storage.getItem("ea_planner_stats")
+    return Object.freeze(Object.fromEntries(entries));
+  }
+  function readCostConflictInput(rawState, rawResources, rawAction) {
+    try {
+      if (!isRecord(rawState) || !Array.isArray(rawState["conflictTargets"])) {
+        return unavailable("invalid-state");
+      }
+      const rawTargets = rawState["conflictTargets"];
+      if (rawTargets.length === 0) {
+        return readyInput({}, [], {});
+      }
+      if (!isRecord(rawResources)) return unavailable("invalid-resource");
+      if (!isRecord(rawAction) || !isRecord(rawAction["cost"])) {
+        return unavailable("invalid-action");
+      }
+      const actionCost = freezeCostMap(rawAction["cost"], true);
+      if (actionCost === void 0) return unavailable("invalid-action");
+      const reservedTargets = [];
+      const resources2 = {};
+      for (let targetIndex = 0; targetIndex < rawTargets.length; targetIndex++) {
+        const rawTarget = rawTargets[targetIndex];
+        if (!isRecord(rawTarget) || typeof rawTarget["name"] !== "string" || !isRecord(rawTarget["cost"])) {
+          return unavailable("invalid-target", { targetIndex });
+        }
+        const cost = freezeCostMap(rawTarget["cost"], false);
+        if (cost === void 0) {
+          return unavailable("invalid-target", { targetIndex });
+        }
+        for (const resourceId of Object.keys(cost)) {
+          if (resources2[resourceId] !== void 0) continue;
+          const rawResource = rawResources[resourceId];
+          if (!isRecord(rawResource) || typeof rawResource["name"] !== "string" || !isFiniteNumber(rawResource["currentQuantity"])) {
+            return unavailable("invalid-resource", {
+              resourceId,
+              targetIndex
+            });
+          }
+          resources2[resourceId] = Object.freeze({
+            name: rawResource["name"],
+            currentQuantity: rawResource["currentQuantity"]
+          });
+        }
+        reservedTargets.push(
+          Object.freeze({
+            name: rawTarget["name"],
+            cause: typeof rawTarget["cause"] === "string" ? rawTarget["cause"] : "",
+            cost
+          })
         );
-        const stats = getGame().global.stats;
-        if (saved && saved.reset === stats.reset && saved.day <= stats.days) {
-          return saved;
+      }
+      return readyInput(actionCost, reservedTargets, resources2);
+    } catch {
+      return unavailable("inaccessible-data");
+    }
+  }
+  function readyInput(actionCost, reservedTargets, resources2) {
+    return Object.freeze({
+      status: "ready",
+      input: Object.freeze({
+        actionCost,
+        reservedTargets: Object.freeze(reservedTargets),
+        resources: Object.freeze(resources2)
+      })
+    });
+  }
+
+  // src/domain/planner-analysis.ts
+  function isRecord2(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function isNonNegativeSafeInteger(value) {
+    return Number.isSafeInteger(value) && value >= 0;
+  }
+  function freezeStats(stats) {
+    return Object.freeze({
+      ...stats,
+      samples: Object.freeze({ ...stats.samples })
+    });
+  }
+  function findPlannerLimit(input) {
+    if (input.affordable) return null;
+    let worst = null;
+    for (const requirement of input.requirements) {
+      if (!requirement.unlocked || requirement.currentQuantity >= requirement.requiredQuantity) {
+        continue;
+      }
+      let time;
+      let blocker;
+      if (requirement.maximumQuantity < requirement.requiredQuantity) {
+        time = Number.MAX_SAFE_INTEGER;
+        blocker = "storage";
+      } else if (requirement.income > 0) {
+        time = (requirement.requiredQuantity - requirement.currentQuantity) / requirement.income;
+        blocker = "income";
+      } else {
+        time = Number.MAX_SAFE_INTEGER / 2;
+        blocker = "stalled";
+      }
+      if (worst === null || time > worst.time) {
+        worst = {
+          resourceId: requirement.resourceId,
+          resourceTitle: requirement.resourceTitle,
+          time,
+          blocker
+        };
+      }
+    }
+    return worst === null ? null : Object.freeze(worst);
+  }
+  function createPlannerStats(run) {
+    if (!isNonNegativeSafeInteger(run.day) || !isNonNegativeSafeInteger(run.reset)) {
+      throw new TypeError(
+        "planner run values must be non-negative safe integers"
+      );
+    }
+    return freezeStats({
+      startDay: run.day,
+      day: run.day,
+      reset: run.reset,
+      samples: {},
+      total: 0
+    });
+  }
+  function parsePlannerStats(value) {
+    if (!isRecord2(value)) return null;
+    const { startDay, day, reset, samples, total } = value;
+    if (!isNonNegativeSafeInteger(startDay) || !isNonNegativeSafeInteger(day) || !isNonNegativeSafeInteger(reset) || !isNonNegativeSafeInteger(total) || startDay > day || !isRecord2(samples)) {
+      return null;
+    }
+    const validatedSamples = {};
+    let sampleTotal = 0;
+    for (const [bucket, count] of Object.entries(samples)) {
+      if (!isNonNegativeSafeInteger(count)) return null;
+      validatedSamples[bucket] = count;
+      sampleTotal += count;
+    }
+    if (!Number.isSafeInteger(sampleTotal) || sampleTotal !== total) return null;
+    return freezeStats({
+      startDay,
+      day,
+      reset,
+      samples: validatedSamples,
+      total
+    });
+  }
+  function selectPlannerStats(saved, run) {
+    return saved !== null && saved.reset === run.reset && saved.day <= run.day ? saved : createPlannerStats(run);
+  }
+  function recordPlannerSample(stats, bucket, currentDay) {
+    if (!isNonNegativeSafeInteger(currentDay)) {
+      throw new TypeError("currentDay must be a non-negative safe integer");
+    }
+    return freezeStats({
+      ...stats,
+      day: currentDay,
+      samples: {
+        ...stats.samples,
+        [bucket]: (stats.samples[bucket] ?? 0) + 1
+      },
+      total: stats.total + 1
+    });
+  }
+
+  // src/adapters/evolve/planner-analysis.ts
+  function isRecord3(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function isFiniteNumber2(value) {
+    return typeof value === "number" && Number.isFinite(value);
+  }
+  function isNonNegativeSafeInteger2(value) {
+    return Number.isSafeInteger(value) && value >= 0;
+  }
+  function unavailableLimit(reason, resourceId) {
+    return Object.freeze(
+      resourceId === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId }
+    );
+  }
+  function readPlannerLimitInput(rawTarget, rawResources) {
+    try {
+      if (!isRecord3(rawTarget) || typeof rawTarget["isAffordable"] !== "function") {
+        return unavailableLimit("invalid-target");
+      }
+      const affordable = rawTarget["isAffordable"].call(rawTarget);
+      if (typeof affordable !== "boolean") {
+        return unavailableLimit("invalid-target");
+      }
+      if (affordable) {
+        return Object.freeze({
+          status: "ready",
+          input: Object.freeze({ affordable, requirements: Object.freeze([]) })
+        });
+      }
+      const rawCosts = rawTarget["cost"];
+      if (!isRecord3(rawCosts)) return unavailableLimit("invalid-target");
+      if (!isRecord3(rawResources)) return unavailableLimit("invalid-resource");
+      const requirements = [];
+      for (const resourceId of Object.keys(rawCosts)) {
+        const requiredQuantity = rawCosts[resourceId];
+        if (!isFiniteNumber2(requiredQuantity) || requiredQuantity < 0) {
+          return unavailableLimit("invalid-target", resourceId);
         }
-      } catch {
-        return makePlannerStats2();
+        const rawResource = rawResources[resourceId];
+        if (!isRecord3(rawResource) || typeof rawResource["title"] !== "string" || typeof rawResource["isUnlocked"] !== "function") {
+          return unavailableLimit("invalid-resource", resourceId);
+        }
+        const currentQuantity = rawResource["currentQuantity"];
+        const maximumQuantity = rawResource["maxQuantity"];
+        const income = rawResource["income"];
+        if (!isFiniteNumber2(currentQuantity) || !isFiniteNumber2(maximumQuantity) || !isFiniteNumber2(income)) {
+          return unavailableLimit("invalid-resource", resourceId);
+        }
+        const unlocked = rawResource["isUnlocked"].call(rawResource);
+        if (typeof unlocked !== "boolean") {
+          return unavailableLimit("invalid-resource", resourceId);
+        }
+        requirements.push(
+          Object.freeze({
+            resourceId,
+            resourceTitle: rawResource["title"],
+            requiredQuantity,
+            currentQuantity,
+            maximumQuantity,
+            income,
+            unlocked
+          })
+        );
       }
-      return makePlannerStats2();
+      return Object.freeze({
+        status: "ready",
+        input: Object.freeze({
+          affordable,
+          requirements: Object.freeze(requirements)
+        })
+      });
+    } catch {
+      return unavailableLimit("inaccessible-data");
     }
-    function savePlannerStats2() {
-      const plannerStats = getState().plannerStats;
-      if (plannerStats) {
-        storage.setItem("ea_planner_stats", JSON.stringify(plannerStats));
+  }
+  function readPlannerRun(rawGame) {
+    try {
+      if (!isRecord3(rawGame)) {
+        return Object.freeze({
+          status: "unavailable",
+          reason: "invalid-game-state"
+        });
       }
+      const global = rawGame["global"];
+      const stats = isRecord3(global) ? global["stats"] : void 0;
+      if (!isRecord3(stats)) {
+        return Object.freeze({
+          status: "unavailable",
+          reason: "invalid-game-state"
+        });
+      }
+      const day = stats["days"];
+      const reset = stats["reset"];
+      if (!isNonNegativeSafeInteger2(day) || !isNonNegativeSafeInteger2(reset)) {
+        return Object.freeze({
+          status: "unavailable",
+          reason: "invalid-game-state"
+        });
+      }
+      return Object.freeze({
+        status: "ready",
+        run: Object.freeze({ day, reset })
+      });
+    } catch {
+      return Object.freeze({
+        status: "unavailable",
+        reason: "inaccessible-data"
+      });
     }
-    return {
-      plannerLimitingResource: plannerLimitingResource2,
-      makePlannerStats: makePlannerStats2,
-      loadPlannerStats: loadPlannerStats2,
-      savePlannerStats: savePlannerStats2
-    };
+  }
+
+  // src/adapters/storage/planner-stats.ts
+  var PLANNER_STATS_KEY = "ea_planner_stats";
+  function createPlannerStatsStore(storage) {
+    return Object.freeze({
+      load() {
+        try {
+          const serialized = storage.getItem(PLANNER_STATS_KEY);
+          return serialized === null ? null : parsePlannerStats(JSON.parse(serialized));
+        } catch {
+          return null;
+        }
+      },
+      save(stats) {
+        try {
+          storage.setItem(PLANNER_STATS_KEY, JSON.stringify(stats));
+          return true;
+        } catch {
+          return false;
+        }
+      }
+    });
+  }
+
+  // src/application/planner-stats.ts
+  function createPlannerStatsLifecycle(store) {
+    return Object.freeze({
+      make: createPlannerStats,
+      load(run) {
+        return selectPlannerStats(store.load(), run);
+      },
+      save(stats) {
+        const validated = parsePlannerStats(stats);
+        return validated !== null && store.save(validated);
+      }
+    });
   }
 
   // src/planning/build-planner.ts
@@ -13520,13 +13771,18 @@
       if (shouldSample && buildRan && targets.length > 0) {
         state2.plannerStats ??= loadPlannerStats2();
         const stats2 = state2.plannerStats;
-        const limit = plannerLimitingResource2(targets[0]);
-        const bucket = limit ? limit.resource.title : "not blocked";
-        stats2.samples[bucket] = (stats2.samples[bucket] ?? 0) + 1;
-        stats2.total++;
-        stats2.day = getGame().global.stats.days;
-        if (stats2.total % 25 === 0) {
-          savePlannerStats2();
+        if (stats2 !== null) {
+          const limit = plannerLimitingResource2(targets[0]);
+          const bucket = limit === null ? "not blocked" : "status" in limit ? "data unavailable" : limit.resourceTitle;
+          const updated = recordPlannerSample(
+            stats2,
+            bucket,
+            getGame().global.stats.days
+          );
+          state2.plannerStats = updated;
+          if (updated.total % 25 === 0) {
+            savePlannerStats2(updated);
+          }
         }
       }
       if (!shouldDraw || getSettingsRaw().buildPlannerCollapsed) {
@@ -13547,14 +13803,17 @@
           if (!limit) {
             status = "ready";
             statusClass = "has-text-success";
+          } else if ("status" in limit) {
+            status = "planner data unavailable";
+            statusClass = "has-text-danger";
           } else if (limit.blocker === "storage") {
-            status = `${limit.resource.title} (storage)`;
+            status = `${limit.resourceTitle} (storage)`;
             statusClass = "has-text-danger";
           } else if (limit.blocker === "stalled") {
-            status = `${limit.resource.title} (no income)`;
+            status = `${limit.resourceTitle} (no income)`;
             statusClass = "has-text-danger";
           } else {
-            status = `${getPoly().timeFormat(limit.time)} (${limit.resource.title})`;
+            status = `${getPoly().timeFormat(limit.time)} (${limit.resourceTitle})`;
             statusClass = "has-text-warning";
           }
           let name = target.title;
@@ -13935,9 +14194,9 @@
     getMechManager,
     getTriggerManager,
     getJQuery,
-    getQueuedItemObj: getQueuedItemObj2,
+    readQueuedTarget: readQueuedTarget2,
     getTechConflict: getTechConflict2,
-    isPrestigeAllowed: isPrestigeAllowed2,
+    isPrestigeAllowed: isPrestigeAllowed3,
     haveTask: haveTask2,
     inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2,
     inflationChallengeMoney
@@ -13950,6 +14209,7 @@
       const buildings2 = getBuildings();
       const techIds2 = getTechIds();
       state2.conflictTargets = [];
+      state2.queueDataUnavailable = false;
       state2.queuedTargets = [];
       state2.queuedTargetsAll = [];
       state2.triggerTargets = [];
@@ -13957,20 +14217,34 @@
       state2.unlockedBuildings = [];
       const queueSave = settings2.prioritizeQueue.includes("save");
       [
-        { type: "queue", noorder: "qAny", map: getQueuedItemObj2 },
-        {
-          type: "r_queue",
-          noorder: "qAny_res",
-          map: (item) => techIds2[item.id]
-        }
+        { type: "queue", noorder: "qAny" },
+        { type: "r_queue", noorder: "qAny_res" }
       ].forEach((queue) => {
         const queueState = game2.global[queue.type];
         if (queueState.display) {
           for (const item of queueState.queue) {
-            const obj = queue.map(item);
+            let obj;
+            let maximumAffordable = false;
+            if (queue.type === "queue") {
+              const result = readQueuedTarget2(item);
+              if (result.status === "ready") {
+                obj = result.target;
+                maximumAffordable = result.maximumAffordable;
+              } else if (result.status === "unavailable" && !state2.queueDataUnavailable) {
+                state2.queueDataUnavailable = true;
+                state2.conflictTargets.push({
+                  name: "Queue data unavailable",
+                  cause: "Queue",
+                  cost: { __EA_QUEUE_DATA_UNAVAILABLE__: 1 }
+                });
+              }
+            } else {
+              obj = techIds2[item.id];
+              maximumAffordable = obj?.isAffordable(true) ?? false;
+            }
             if (obj) {
               state2.queuedTargetsAll.push(obj);
-              if (obj.isAffordable(true)) {
+              if (maximumAffordable) {
                 state2.queuedTargets.push(obj);
                 if (queueSave) {
                   state2.conflictTargets.push({
@@ -14055,7 +14329,7 @@
             cost: obj.cost
           });
         }
-        if (buildings2.TauStarEden.isAutoBuildable() && isPrestigeAllowed2("eden")) {
+        if (buildings2.TauStarEden.isAutoBuildable() && isPrestigeAllowed3("eden")) {
           const obj = buildings2.TauStarEden;
           state2.triggerTargets.push(obj);
           state2.conflictTargets.push({
@@ -14064,7 +14338,7 @@
             cost: obj.cost
           });
         }
-        if (buildings2.TauGas2MatrioshkaBrain.count >= 1e3 && buildings2.TauGas2IgniteGasGiant.isAutoBuildable() && isPrestigeAllowed2("retire")) {
+        if (buildings2.TauGas2MatrioshkaBrain.count >= 1e3 && buildings2.TauGas2IgniteGasGiant.isAutoBuildable() && isPrestigeAllowed3("retire")) {
           const obj = buildings2.TauGas2IgniteGasGiant;
           state2.triggerTargets.push(obj);
           state2.conflictTargets.push({
@@ -14197,144 +14471,396 @@
     return { checkEvolutionResult: checkEvolutionResult2 };
   }
 
-  // src/policies/authority.ts
-  function createAuthorityPolicy({
-    getGame,
-    getSettings,
-    getResources,
-    traitVal: traitVal2
-  }) {
-    function getAuthorityTarget2() {
-      const settings2 = getSettings();
-      if (!settings2.authorityManage || settings2.generalMinimumAuthority === 0) {
-        return null;
-      }
-      return settings2.generalMinimumAuthority < 0 ? getResources().Authority.maxQuantity : settings2.generalMinimumAuthority;
-    }
-    function getAuthorityPerSoldier() {
-      const game2 = getGame();
-      let authorityPerSoldier = (0.7 + 0.1 * (game2.global.tech["evil"] ?? 0)) * (traitVal2("high_pop", 1, 100) / 100);
-      if (game2.global.race["grenadier"]) authorityPerSoldier *= 1.75;
-      if (game2.global.civic.govern.type === "autocracy") {
-        authorityPerSoldier *= 1.08;
-      } else if (game2.global.civic.govern.type === "dictator") {
-        authorityPerSoldier *= 1.12;
-      }
-      return authorityPerSoldier;
-    }
-    function getRequiredAuthorityGarrison2(currentGarrison) {
-      const authorityTarget = getAuthorityTarget2();
-      if (authorityTarget === null) {
-        return 0;
-      }
-      const authorityPerSoldier = getAuthorityPerSoldier();
-      if (authorityPerSoldier <= 0) {
-        return currentGarrison;
-      }
-      const currentAuthority = getResources().Authority.currentQuantity;
-      const nonGarrisonAuthority = currentAuthority - currentGarrison * authorityPerSoldier;
-      return Math.max(
-        0,
-        Math.ceil(
-          (authorityTarget - nonGarrisonAuthority) / authorityPerSoldier - 1e-9
-        )
-      );
-    }
-    function getPredictedAuthorityAfterRemovingSoldiers2(removedSoldiers) {
-      return Math.floor(
-        getResources().Authority.currentQuantity - removedSoldiers * getAuthorityPerSoldier()
-      );
-    }
-    return {
-      getAuthorityTarget: getAuthorityTarget2,
-      getAuthorityPerSoldier,
-      getRequiredAuthorityGarrison: getRequiredAuthorityGarrison2,
-      getPredictedAuthorityAfterRemovingSoldiers: getPredictedAuthorityAfterRemovingSoldiers2
-    };
+  // src/domain/authority.ts
+  function resolveAuthorityTarget(input) {
+    if (!input.manage || input.configuredTarget === 0) return null;
+    return input.configuredTarget < 0 ? input.maximum : input.configuredTarget;
   }
-
-  // src/planning/queue-items.ts
-  function createQueueItems({
-    getResources,
-    getPoly,
-    getMechManager,
-    getBuildingIds,
-    getArpaIds
-  }) {
-    function checkAffordableCustom2(cost, max = false) {
-      const resources2 = getResources();
-      const check = max ? "maxQuantity" : "currentQuantity";
-      for (const resourceId in cost) {
-        if (!resources2[resourceId] || resources2[resourceId][check] < cost[resourceId]) {
-          return false;
-        }
-      }
-      return true;
+  function calculateAuthorityPerSoldier(modifiers) {
+    let authorityPerSoldier = (0.7 + 0.1 * modifiers.evilTechLevel) * (modifiers.highPopulationPercent / 100);
+    if (modifiers.grenadier) authorityPerSoldier *= 1.75;
+    if (modifiers.governmentType === "autocracy") {
+      authorityPerSoldier *= 1.08;
+    } else if (modifiers.governmentType === "dictator") {
+      authorityPerSoldier *= 1.12;
     }
-    function makeTarget(queueItem, cost) {
-      return {
-        id: queueItem.id,
-        name: queueItem.label,
-        title: queueItem.label,
-        cost,
-        isAffordable(max) {
-          return checkAffordableCustom2(this.cost, max);
-        }
-      };
-    }
-    function getQueuedItemObj2(queueItem) {
-      if (queueItem.action === "tp-ship") {
-        return makeTarget(queueItem, getPoly().shipCosts(queueItem.type));
-      } else if (queueItem.action === "hell-mech") {
-        const [gems, supply] = getMechManager().getMechCost(queueItem.type);
-        return makeTarget(queueItem, { Soul_Gem: gems, Supply: supply });
-      } else {
-        return getBuildingIds()[queueItem.id] || getArpaIds()[queueItem.id];
-      }
-    }
-    return { checkAffordableCustom: checkAffordableCustom2, getQueuedItemObj: getQueuedItemObj2 };
+    return authorityPerSoldier;
   }
-
-  // src/planning/target-timing.ts
-  function createTargetTiming({
-    getGame,
-    getPoly,
-    isProject
-  }) {
-    function getMultiSegmentedTimeLeft2(target) {
-      let remainingSegments = target.gameMax - target.count;
-      if (isProject(target)) {
-        remainingSegments = (100 - target.progress) / target.currentStep;
-      }
-      let longestResource = "";
-      let longestTimeLeft = 0;
-      const game2 = getGame();
-      Object.keys(target.cost).forEach((resource) => {
-        const resourceCostTotal = target.cost[resource] * remainingSegments;
-        const resourceTimeLeftRaw = (resourceCostTotal - game2.global.resource[resource].amount) / game2.global.resource[resource].diff;
-        if (resourceTimeLeftRaw > longestTimeLeft && resourceCostTotal > game2.global.resource[resource].amount) {
-          longestResource = resource;
-          longestTimeLeft = resourceTimeLeftRaw;
-        }
+  function calculateRequiredAuthorityGarrison(view, currentGarrison) {
+    const target = resolveAuthorityTarget(view.target);
+    if (target === null) {
+      return Object.freeze({ status: "ready", requiredGarrison: 0 });
+    }
+    const authorityPerSoldier = calculateAuthorityPerSoldier(view.modifiers);
+    if (authorityPerSoldier <= 0) {
+      return Object.freeze({
+        status: "ready",
+        requiredGarrison: currentGarrison
       });
-      return {
-        resource: longestResource,
-        timeLeft: longestTimeLeft === Infinity ? "Never" : getPoly().timeFormat(longestTimeLeft)
-      };
     }
-    return { getMultiSegmentedTimeLeft: getMultiSegmentedTimeLeft2 };
+    const nonGarrisonAuthority = view.current - currentGarrison * authorityPerSoldier;
+    return Object.freeze({
+      status: "ready",
+      requiredGarrison: Math.max(
+        0,
+        Math.ceil((target - nonGarrisonAuthority) / authorityPerSoldier - 1e-9)
+      )
+    });
+  }
+  function predictAuthorityAfterRemovingSoldiers(view, removedSoldiers) {
+    return Math.floor(
+      view.current - removedSoldiers * calculateAuthorityPerSoldier(view.modifiers)
+    );
+  }
+  function assessAuthorityRemoval2(view, removedSoldiers) {
+    const target = resolveAuthorityTarget(view.target);
+    if (target === null) return Object.freeze({ status: "unmanaged" });
+    const predicted = predictAuthorityAfterRemovingSoldiers(
+      view,
+      removedSoldiers
+    );
+    return Object.freeze({
+      status: "ready",
+      target,
+      predicted,
+      blocksRemoval: predicted < target
+    });
   }
 
-  // src/planning/resource-weighting.ts
-  function createResourceWeighting({
-    getState
-  }) {
-    function findRequiredResourceWeight2(resource) {
-      return getState().unlockedBuildings.find(
-        (building) => building.cost[resource.id] > resource.currentQuantity
-      )?.weighting;
+  // src/adapters/evolve/authority.ts
+  function isRecord4(value) {
+    return typeof value === "object" && value !== null;
+  }
+  function isFiniteNumber3(value) {
+    return typeof value === "number" && Number.isFinite(value);
+  }
+  function unavailable2(reason) {
+    return Object.freeze({ status: "unavailable", reason });
+  }
+  function readAuthorityQuantity(rawQuantity) {
+    return isFiniteNumber3(rawQuantity) && rawQuantity >= 0 ? Object.freeze({ status: "ready", value: rawQuantity }) : Object.freeze({ status: "unavailable", reason: "invalid-input" });
+  }
+  function readAuthorityPolicyView(rawGame, rawSettings, rawResources, readHighPopulationPercent) {
+    try {
+      if (!isRecord4(rawSettings) || typeof rawSettings["authorityManage"] !== "boolean" || !isFiniteNumber3(rawSettings["generalMinimumAuthority"])) {
+        return unavailable2("invalid-settings");
+      }
+      if (!isRecord4(rawResources) || !isRecord4(rawResources["Authority"])) {
+        return unavailable2("invalid-resource");
+      }
+      const authority = rawResources["Authority"];
+      const current = authority["currentQuantity"];
+      const maximum = authority["maxQuantity"];
+      if (!isFiniteNumber3(current) || current < 0 || !isFiniteNumber3(maximum) || maximum < 0) {
+        return unavailable2("invalid-resource");
+      }
+      if (!isRecord4(rawGame) || !isRecord4(rawGame["global"])) {
+        return unavailable2("invalid-game-state");
+      }
+      const global = rawGame["global"];
+      if (!isRecord4(global["tech"]) || !isRecord4(global["race"]) || !isRecord4(global["civic"])) {
+        return unavailable2("invalid-game-state");
+      }
+      const civic = global["civic"];
+      if (!isRecord4(civic["govern"])) {
+        return unavailable2("invalid-game-state");
+      }
+      const governmentType = civic["govern"]["type"];
+      if (typeof governmentType !== "string") {
+        return unavailable2("invalid-game-state");
+      }
+      const rawEvilTechLevel = global["tech"]["evil"];
+      const evilTechLevel = rawEvilTechLevel ?? 0;
+      if (!isFiniteNumber3(evilTechLevel) || evilTechLevel < 0) {
+        return unavailable2("invalid-game-state");
+      }
+      const highPopulationPercent = readHighPopulationPercent();
+      if (!isFiniteNumber3(highPopulationPercent) || highPopulationPercent < 0) {
+        return unavailable2("invalid-trait-value");
+      }
+      return Object.freeze({
+        status: "ready",
+        view: Object.freeze({
+          target: Object.freeze({
+            manage: rawSettings["authorityManage"],
+            configuredTarget: rawSettings["generalMinimumAuthority"],
+            maximum
+          }),
+          current,
+          modifiers: Object.freeze({
+            evilTechLevel,
+            highPopulationPercent,
+            grenadier: Boolean(global["race"]["grenadier"]),
+            governmentType
+          })
+        })
+      });
+    } catch {
+      return unavailable2("inaccessible-data");
     }
-    return { findRequiredResourceWeight: findRequiredResourceWeight2 };
+  }
+
+  // src/domain/cost-affordability.ts
+  function isCostAffordable(input) {
+    return input.requirements.every(
+      (requirement) => requirement.availableQuantity >= requirement.requiredQuantity
+    );
+  }
+
+  // src/adapters/evolve/queue-items.ts
+  function isRecord5(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function isFiniteNumber4(value) {
+    return typeof value === "number" && Number.isFinite(value);
+  }
+  function unavailableCost(reason, resourceId) {
+    return Object.freeze(
+      resourceId === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId }
+    );
+  }
+  function unavailableTarget(reason, context = {}) {
+    return Object.freeze({ status: "unavailable", reason, ...context });
+  }
+  function readCostAffordabilityInput(rawCost, rawResources, capacity) {
+    try {
+      if (!isRecord5(rawCost)) return unavailableCost("invalid-cost");
+      if (!isRecord5(rawResources)) return unavailableCost("invalid-resource");
+      const requirements = [];
+      for (const resourceId in rawCost) {
+        const requiredQuantity = rawCost[resourceId];
+        if (!isFiniteNumber4(requiredQuantity) || requiredQuantity < 0) {
+          return unavailableCost("invalid-cost", resourceId);
+        }
+        const rawResource = rawResources[resourceId];
+        if (!isRecord5(rawResource)) {
+          return unavailableCost("invalid-resource", resourceId);
+        }
+        const availableQuantity = capacity === "maximum" ? rawResource["maxQuantity"] : rawResource["currentQuantity"];
+        if (!isFiniteNumber4(availableQuantity)) {
+          return unavailableCost("invalid-resource", resourceId);
+        }
+        requirements.push(
+          Object.freeze({
+            resourceId,
+            requiredQuantity,
+            availableQuantity
+          })
+        );
+      }
+      return Object.freeze({
+        status: "ready",
+        input: Object.freeze({ requirements: Object.freeze(requirements) })
+      });
+    } catch {
+      return unavailableCost("inaccessible-data");
+    }
+  }
+  function validateCostMap(rawCost, itemId) {
+    if (!isRecord5(rawCost)) return unavailableTarget("invalid-cost", { itemId });
+    const cost = {};
+    for (const resourceId in rawCost) {
+      const quantity = rawCost[resourceId];
+      if (!isFiniteNumber4(quantity) || quantity < 0) {
+        return unavailableTarget("invalid-cost", { itemId, resourceId });
+      }
+      cost[resourceId] = quantity;
+    }
+    return Object.freeze({ status: "ready", cost: Object.freeze(cost) });
+  }
+  function syntheticTarget(itemId, label, rawCost, resources2) {
+    const costResult = validateCostMap(rawCost, itemId);
+    if (costResult.status === "unavailable") return costResult;
+    const { cost } = costResult;
+    const affordability = readCostAffordabilityInput(cost, resources2, "maximum");
+    if (affordability.status === "unavailable") {
+      return unavailableTarget(
+        affordability.reason,
+        affordability.resourceId === void 0 ? { itemId } : { itemId, resourceId: affordability.resourceId }
+      );
+    }
+    return Object.freeze({
+      status: "ready",
+      target: Object.freeze({ id: itemId, name: label, title: label, cost }),
+      maximumAffordable: isCostAffordable(affordability.input)
+    });
+  }
+  function readCatalogTarget(itemId, rawTarget) {
+    if (rawTarget === void 0 || rawTarget === null) {
+      return Object.freeze({ status: "missing", itemId });
+    }
+    if (!isRecord5(rawTarget) || typeof rawTarget["id"] !== "string" || typeof rawTarget["title"] !== "string" || typeof rawTarget["isAffordable"] !== "function") {
+      return unavailableTarget("invalid-target", { itemId });
+    }
+    const costResult = validateCostMap(rawTarget["cost"], itemId);
+    if (costResult.status === "unavailable") return costResult;
+    const maximumAffordable = rawTarget["isAffordable"].call(rawTarget, true);
+    if (typeof maximumAffordable !== "boolean") {
+      return unavailableTarget("invalid-target", { itemId });
+    }
+    return Object.freeze({
+      status: "ready",
+      target: rawTarget,
+      maximumAffordable
+    });
+  }
+  function readQueueTarget(rawItem, dependencies) {
+    try {
+      if (!isRecord5(rawItem) || typeof rawItem["id"] !== "string") {
+        return unavailableTarget("invalid-item");
+      }
+      const itemId = rawItem["id"];
+      const action = rawItem["action"];
+      if (action === "tp-ship") {
+        if (typeof rawItem["label"] !== "string" || !isRecord5(dependencies.poly)) {
+          return unavailableTarget("invalid-item", { itemId });
+        }
+        const shipCosts = dependencies.poly["shipCosts"];
+        if (typeof shipCosts !== "function") {
+          return unavailableTarget("invalid-target", { itemId });
+        }
+        return syntheticTarget(
+          itemId,
+          rawItem["label"],
+          shipCosts.call(dependencies.poly, rawItem["type"]),
+          dependencies.resources
+        );
+      }
+      if (action === "hell-mech") {
+        if (typeof rawItem["label"] !== "string" || !isRecord5(dependencies.mechManager)) {
+          return unavailableTarget("invalid-item", { itemId });
+        }
+        const getMechCost = dependencies.mechManager["getMechCost"];
+        if (typeof getMechCost !== "function") {
+          return unavailableTarget("invalid-target", { itemId });
+        }
+        const rawMechCost = getMechCost.call(
+          dependencies.mechManager,
+          rawItem["type"]
+        );
+        if (!Array.isArray(rawMechCost) || rawMechCost.length < 2) {
+          return unavailableTarget("invalid-cost", { itemId });
+        }
+        return syntheticTarget(
+          itemId,
+          rawItem["label"],
+          { Soul_Gem: rawMechCost[0], Supply: rawMechCost[1] },
+          dependencies.resources
+        );
+      }
+      if (!isRecord5(dependencies.buildingIds) || !isRecord5(dependencies.arpaIds)) {
+        return unavailableTarget("invalid-target", { itemId });
+      }
+      const rawTarget = dependencies.buildingIds[itemId] || dependencies.arpaIds[itemId];
+      return readCatalogTarget(itemId, rawTarget);
+    } catch {
+      const itemId = isRecord5(rawItem) && typeof rawItem["id"] === "string" ? rawItem["id"] : void 0;
+      return unavailableTarget(
+        "inaccessible-data",
+        itemId === void 0 ? {} : { itemId }
+      );
+    }
+  }
+
+  // src/domain/target-timing.ts
+  function calculateTargetTiming(input) {
+    let resourceId = "";
+    let seconds = 0;
+    for (const requirement of input.requirements) {
+      const totalCost = requirement.costPerSegment * input.remainingSegments;
+      const rawSeconds = (totalCost - requirement.currentQuantity) / requirement.rateOfChange;
+      if (rawSeconds > seconds && totalCost > requirement.currentQuantity) {
+        resourceId = requirement.resourceId;
+        seconds = rawSeconds;
+      }
+    }
+    return Object.freeze({ resourceId, seconds });
+  }
+
+  // src/adapters/evolve/target-timing.ts
+  function isRecord6(value) {
+    return typeof value === "object" && value !== null;
+  }
+  function isFiniteNumber5(value) {
+    return typeof value === "number" && Number.isFinite(value);
+  }
+  function unavailable3(reason, resourceId) {
+    return Object.freeze(
+      resourceId === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId }
+    );
+  }
+  function readTargetTimingInput(rawGame, rawTarget, isProject) {
+    try {
+      if (!isRecord6(rawTarget) || !isRecord6(rawTarget["cost"])) {
+        return unavailable3("invalid-target");
+      }
+      const remainingSegments = isProject ? projectSegmentsRemaining(rawTarget) : segmentedTargetSegmentsRemaining(rawTarget);
+      if (remainingSegments === void 0) {
+        return unavailable3("invalid-target");
+      }
+      if (!isRecord6(rawGame)) return unavailable3("invalid-game-state");
+      const global = rawGame["global"];
+      if (!isRecord6(global) || !isRecord6(global["resource"])) {
+        return unavailable3("invalid-game-state");
+      }
+      const costs = rawTarget["cost"];
+      const gameResources = global["resource"];
+      const requirements = [];
+      for (const resourceId of Object.keys(costs)) {
+        const costPerSegment = costs[resourceId];
+        if (!isFiniteNumber5(costPerSegment)) {
+          return unavailable3("invalid-target", resourceId);
+        }
+        const rawResource = gameResources[resourceId];
+        if (!isRecord6(rawResource)) {
+          return unavailable3("invalid-resource", resourceId);
+        }
+        const currentQuantity = rawResource["amount"];
+        const rateOfChange = rawResource["diff"];
+        if (!isFiniteNumber5(currentQuantity) || !isFiniteNumber5(rateOfChange)) {
+          return unavailable3("invalid-resource", resourceId);
+        }
+        requirements.push(
+          Object.freeze({
+            resourceId,
+            costPerSegment,
+            currentQuantity,
+            rateOfChange
+          })
+        );
+      }
+      return Object.freeze({
+        status: "ready",
+        input: Object.freeze({
+          remainingSegments,
+          requirements: Object.freeze(requirements)
+        })
+      });
+    } catch {
+      return unavailable3("inaccessible-data");
+    }
+  }
+  function projectSegmentsRemaining(target) {
+    const progress = target["progress"];
+    const currentStep = target["currentStep"];
+    if (!isFiniteNumber5(progress) || !isFiniteNumber5(currentStep)) {
+      return void 0;
+    }
+    return (100 - progress) / currentStep;
+  }
+  function segmentedTargetSegmentsRemaining(target) {
+    const gameMax = target["gameMax"];
+    const count = target["count"];
+    if (!isFiniteNumber5(gameMax) || !isFiniteNumber5(count)) return void 0;
+    return gameMax - count;
+  }
+
+  // src/domain/resource-weighting.ts
+  function findRequiredResourceWeight2(orderedRequirements, resource) {
+    return orderedRequirements.find((requirement) => {
+      const requiredQuantity = requirement.cost[resource.id];
+      return requiredQuantity !== void 0 && requiredQuantity > resource.currentQuantity;
+    })?.weighting;
   }
 
   // src/validation/game-actions.ts
@@ -14461,9 +14987,12 @@
       if (!limit) {
         return [target.title, null, "ready", 0];
       }
+      if ("status" in limit) {
+        return [target.title, limit.resourceId ?? null, "unavailable", 0];
+      }
       return [
         target.title,
-        limit.resource.title,
+        limit.resourceTitle,
         limit.blocker,
         Math.round(limit.time)
       ];
@@ -15785,121 +16314,14 @@
   function createRunGuards({
     getSettings,
     getGame,
-    getPoly,
     getResources,
     getBuildings,
+    getAchievementStar: getAchievementStar2,
     haveTech: haveTech2,
     getNumberString: getNumberString2,
     inflationChallengeMoney,
     retirementPreparation
   }) {
-    function getStarLevel2(context) {
-      let aLevel = 1;
-      if (context.challenge_plasmid) {
-        aLevel++;
-      }
-      if (context.challenge_trade) {
-        aLevel++;
-      }
-      if (context.challenge_craft) {
-        aLevel++;
-      }
-      if (context.challenge_crispr) {
-        aLevel++;
-      }
-      return aLevel;
-    }
-    function getAchievementStar2(id, universe) {
-      const game2 = getGame();
-      const poly2 = getPoly();
-      return game2.global.stats.achieve[id]?.[poly2.universeAffix(universe)] ?? 0;
-    }
-    function isAchievementUnlocked2(id, level, universe) {
-      return getAchievementStar2(id, universe) >= level;
-    }
-    const achievementGuardDefs = {
-      guardPacifist: {
-        id: "pacifist",
-        when: () => getGame().global.stats.attacks === 0
-      },
-      guardDreaded: {
-        id: "dreaded",
-        when: () => getSettings().prestigeType === "ascension" && getBuildings().Dreadnought.count === 0
-      },
-      // Pacifist requires unification, Cult of Personality forbids it - Pacifist wins while armed.
-      guardCultOfPersonality: {
-        id: "cult_of_personality",
-        when: () => !guardActive2("guardPacifist")
-      },
-      guardAnarchist: {
-        id: "anarchist",
-        when: () => {
-          const game2 = getGame();
-          return getSettings().prestigeType === "mad" && game2.global.civic.govern.type === "anarchy";
-        }
-      },
-      guardEnergetic: {
-        id: "energetic",
-        feat: true,
-        when: () => getSettings().prestigeType === "ascension" && getBuildings().SiriusThermalCollector.count === 0
-      },
-      guardRedDead: {
-        id: "red_dead",
-        when: () => getSettings().prestigeType === "mad" && getBuildings().RedSpaceport.count === 0
-      },
-      guardSecondEvolution: {
-        id: "second_evolution",
-        when: () => {
-          const race = getGame().global.race;
-          return race.gods === race.species;
-        }
-      }
-    };
-    function guardActive2(setting) {
-      const settings2 = getSettings();
-      if (!settings2.achievementGuards || !settings2[setting]) {
-        return false;
-      }
-      const guard = achievementGuardDefs[setting];
-      if (!guard) {
-        return false;
-      }
-      const game2 = getGame();
-      const star = guard.feat ? game2.global.stats.feat?.[guard.id] ?? 0 : getAchievementStar2(guard.id);
-      return star < game2.alevel() && guard.when();
-    }
-    function bananaRepublicObjectiveComplete2(id) {
-      const game2 = getGame();
-      const bananaStats = game2.global.stats.banana;
-      const universe = getPoly().universeAffix();
-      return Boolean(bananaStats?.[id]?.[universe]);
-    }
-    function bananaRepublicSmoothieComplete2() {
-      const game2 = getGame();
-      if ((game2.global.stats.feat?.banana ?? 0) > 0) {
-        return true;
-      }
-      let exportRoutes = 0;
-      let hasBigImport = false;
-      Object.values(game2.global.resource).forEach((resource) => {
-        if (!resource.hasOwnProperty("trade")) {
-          return;
-        }
-        if (resource.trade > 0) {
-          exportRoutes += resource.trade;
-        } else if (resource.trade <= -500) {
-          hasBigImport = true;
-        }
-      });
-      return hasBigImport && exportRoutes >= 500;
-    }
-    function bananaRepublicReadyForUnification2() {
-      return ["b1", "b2", "b3", "b4", "b5"].every(bananaRepublicObjectiveComplete2) && bananaRepublicSmoothieComplete2();
-    }
-    function guardBananaRepublicActive2() {
-      const settings2 = getSettings();
-      return settings2.achievementGuards && settings2.guardBananaRepublic && getGame().global.race["banana"] && !bananaRepublicReadyForUnification2();
-    }
     function inflationChallengeAssistActive2() {
       const settings2 = getSettings();
       const game2 = getGame();
@@ -15961,14 +16383,6 @@
       return missing;
     }
     return {
-      getStarLevel: getStarLevel2,
-      getAchievementStar: getAchievementStar2,
-      isAchievementUnlocked: isAchievementUnlocked2,
-      guardActive: guardActive2,
-      bananaRepublicObjectiveComplete: bananaRepublicObjectiveComplete2,
-      bananaRepublicSmoothieComplete: bananaRepublicSmoothieComplete2,
-      bananaRepublicReadyForUnification: bananaRepublicReadyForUnification2,
-      guardBananaRepublicActive: guardBananaRepublicActive2,
       inflationChallengeAssistActive: inflationChallengeAssistActive2,
       inflationChallengeMoneyReachable: inflationChallengeMoneyReachable2,
       inflationChallengeSecondsToFinish: inflationChallengeSecondsToFinish2,
@@ -15978,218 +16392,1291 @@
     };
   }
 
-  // src/policies/prestige-eligibility.ts
-  function createPrestigeEligibility({
-    getSettings,
-    getGame,
-    getResources,
-    getBuildings,
-    getTechIds,
-    getMechManager,
-    getHaveTech,
-    getIsAchievementUnlocked
-  }) {
-    function isPrestigeAllowed2(type) {
-      const settings2 = getSettings();
-      const game2 = getGame();
-      return settings2.autoPrestige && !(settings2.prestigeWaitAT && game2.global.settings.at > 0) && (!type || settings2.prestigeType === type);
+  // src/domain/achievement-guards.ts
+  var ACHIEVEMENT_GUARD_NAMES = [
+    "guardPacifist",
+    "guardDreaded",
+    "guardCultOfPersonality",
+    "guardAnarchist",
+    "guardEnergetic",
+    "guardRedDead",
+    "guardSecondEvolution"
+  ];
+  function isAchievementGuardName(value) {
+    return ACHIEVEMENT_GUARD_NAMES.includes(value);
+  }
+  function calculateAchievementStarLevel(context) {
+    return 1 + Number(context.challengePlasmid) + Number(context.challengeTrade) + Number(context.challengeCraft) + Number(context.challengeCrispr);
+  }
+  function isAchievementUnlocked2(earnedStar, requiredStar) {
+    return earnedStar >= requiredStar;
+  }
+  function isAchievementGuardActive(input) {
+    if (!input.enabled || input.earnedStar >= input.targetStar) return false;
+    switch (input.guard) {
+      case "guardPacifist":
+        return input.attacks === 0;
+      case "guardDreaded":
+        return input.prestigeType === "ascension" && input.dreadnoughts === 0;
+      case "guardCultOfPersonality":
+        return !isAchievementGuardActive(input.pacifist);
+      case "guardAnarchist":
+        return input.prestigeType === "mad" && input.government === "anarchy";
+      case "guardEnergetic":
+        return input.prestigeType === "ascension" && input.thermalCollectors === 0;
+      case "guardRedDead":
+        return input.prestigeType === "mad" && input.redSpaceports === 0;
+      case "guardSecondEvolution":
+        return input.gods === input.species;
     }
-    function isCataclysmPrestigeAvailable2() {
-      return getTechIds()["tech-dial_it_to_11"].isUnlocked();
-    }
-    function isBioseederPrestigeAvailable2() {
-      const buildings2 = getBuildings();
-      const settings2 = getSettings();
-      return !isGECKNeeded2() && buildings2.GasSpaceDock.count >= 1 && buildings2.GasSpaceDockShipSegment.count >= 100 && buildings2.GasSpaceDockProbe.count >= settings2.prestigeBioseedProbes;
-    }
-    function isWhiteholePrestigeAvailable2() {
-      const settings2 = getSettings();
-      const techIds2 = getTechIds();
-      return getBlackholeMass2() >= settings2.prestigeWhiteholeMinMass && (techIds2["tech-exotic_infusion"].isUnlocked() || techIds2["tech-infusion_check"].isUnlocked() || techIds2["tech-infusion_confirm"].isUnlocked());
-    }
-    function isApocalypsePrestigeAvailable2() {
-      const techIds2 = getTechIds();
-      return techIds2["tech-protocol66"].isUnlocked() || techIds2["tech-protocol66a"].isUnlocked();
-    }
-    function isAscensionPrestigeAvailable2() {
-      return getBuildings().SiriusAscend.isUnlocked() && isPillarFinished2();
-    }
-    function isWitchAscensionPrestigeAvailable2(demonic) {
-      const game2 = getGame();
-      const haveTech2 = getHaveTech();
-      if (demonic && (!haveTech2("forbidden", 5) || game2.global.race["fasting"] && !haveTech2("dish", 2))) {
-        return false;
-      }
-      const buildings2 = getBuildings();
-      return buildings2.PitAbsorptionChamber.count >= 100 && buildings2.PitSoulCapacitor.instance.energy >= 1e8 && isPillarFinished2();
-    }
-    function isDemonicPrestigeAvailable2() {
-      const settings2 = getSettings();
-      const MechManager2 = getMechManager();
-      if (settings2.autoMech && (MechManager2.isActive && settings2.prestigeDemonicPotential < 1 || MechManager2.mechsPotential > settings2.prestigeDemonicPotential)) {
-        return false;
-      }
-      const game2 = getGame();
-      const resetTech = getTechIds()[game2.global.race["fasting"] ? "tech-final_ingredient" : "tech-demonic_infusion"];
-      return getBuildings().SpireTower.count > settings2.prestigeDemonicFloor && resetTech.isUnlocked() && resetTech.isAffordable();
-    }
-    function isPillarFinished2() {
-      const game2 = getGame();
-      const speciesPillarLevel = game2.global.pillars[game2.global.race.species];
-      const canPillar = !speciesPillarLevel && getResources().Harmony.currentQuantity >= 1 && game2.global.race.universe !== "micro";
-      const canUpgrade = speciesPillarLevel && speciesPillarLevel < game2.alevel() && game2.global.race.universe !== "micro";
-      return !getSettings().prestigeAscensionPillar || !canPillar && !canUpgrade;
-    }
-    function isGECKNeeded2() {
-      return getIsAchievementUnlocked()("lamentis", 5, "standard") && getBuildings().GasSpaceDockGECK.count < getSettings().prestigeGECK;
-    }
-    function getBlackholeMass2() {
-      const engine = getGame().global.interstellar.stellar_engine;
-      return engine ? engine.mass + engine.exotic : 0;
-    }
-    return {
-      isPrestigeAllowed: isPrestigeAllowed2,
-      isCataclysmPrestigeAvailable: isCataclysmPrestigeAvailable2,
-      isBioseederPrestigeAvailable: isBioseederPrestigeAvailable2,
-      isWhiteholePrestigeAvailable: isWhiteholePrestigeAvailable2,
-      isApocalypsePrestigeAvailable: isApocalypsePrestigeAvailable2,
-      isAscensionPrestigeAvailable: isAscensionPrestigeAvailable2,
-      isWitchAscensionPrestigeAvailable: isWitchAscensionPrestigeAvailable2,
-      isDemonicPrestigeAvailable: isDemonicPrestigeAvailable2,
-      isPillarFinished: isPillarFinished2,
-      isGECKNeeded: isGECKNeeded2,
-      getBlackholeMass: getBlackholeMass2
-    };
   }
 
-  // src/policies/tech-conflicts.ts
-  function createTechConflicts({
-    getSettings,
-    getResources,
-    getState,
-    getGame,
-    getIsAchievementUnlocked,
-    getNumberString: getNumberString2,
-    guardActive: guardActive2,
-    guardBananaRepublicActive: guardBananaRepublicActive2,
-    retirementChallengeAssistActive: retirementChallengeAssistActive2,
-    retirementPreparationMissing: retirementPreparationMissing2,
-    fanatAchievements: fanatAchievements2
-  }) {
-    function getTechConflict2(tech) {
-      const settings2 = getSettings();
-      const resources2 = getResources();
-      const state2 = getState();
-      const game2 = getGame();
-      const isAchievementUnlocked2 = getIsAchievementUnlocked();
-      let itemId = tech._vueBinding;
-      if (settings2.researchIgnore.includes(itemId)) {
-        return "Ignored research";
+  // src/adapters/evolve/achievement-guards.ts
+  function isRecord7(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function finiteNonNegative(value) {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0;
+  }
+  function starUnavailable(reason, field) {
+    return Object.freeze(
+      field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
+    );
+  }
+  function levelUnavailable(reason, field) {
+    return Object.freeze(
+      field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
+    );
+  }
+  function guardUnavailable(reason, fallbackActive, field) {
+    return Object.freeze(
+      field === void 0 ? { status: "unavailable", reason, fallbackActive } : { status: "unavailable", reason, field, fallbackActive }
+    );
+  }
+  function readGameParts(rawGame) {
+    if (!isRecord7(rawGame)) return void 0;
+    const global = rawGame["global"];
+    if (!isRecord7(global)) return void 0;
+    const stats = global["stats"];
+    if (!isRecord7(stats)) return void 0;
+    return { game: rawGame, global, stats };
+  }
+  function readCurrentLevel(rawGame) {
+    if (!isRecord7(rawGame)) return void 0;
+    const alevel = rawGame["alevel"];
+    if (typeof alevel !== "function") return void 0;
+    const value = alevel.call(rawGame);
+    return finiteNonNegative(value) ? value : void 0;
+  }
+  function readFeatStar(rawGame, id) {
+    try {
+      const parts = readGameParts(rawGame);
+      if (!parts) return starUnavailable("invalid-game-state");
+      const rawFeats = parts.stats["feat"];
+      if (rawFeats === void 0)
+        return Object.freeze({ status: "ready", star: 0 });
+      if (!isRecord7(rawFeats))
+        return starUnavailable("invalid-achievement", "feat");
+      const value = rawFeats[id];
+      if (value === void 0 || value === null) {
+        return Object.freeze({ status: "ready", star: 0 });
       }
-      if (itemId === "tech-exotic_infusion" || itemId === "tech-infusion_check" || itemId === "tech-infusion_confirm" || itemId === "tech-dial_it_to_11" || itemId === "tech-limit_collider" || itemId === "tech-demonic_infusion" || itemId === "tech-protocol66" || itemId === "tech-protocol66a" || itemId === "tech-final_ingredient") {
-        return "Reset research";
+      return finiteNonNegative(value) ? Object.freeze({ status: "ready", star: value }) : starUnavailable("invalid-achievement", `feat.${id}`);
+    } catch {
+      return starUnavailable("inaccessible-data");
+    }
+  }
+  function readAchievementStarLevelContext(rawContext) {
+    if (!isRecord7(rawContext)) return levelUnavailable("invalid-settings");
+    const mapping = {
+      challengePlasmid: "challenge_plasmid",
+      challengeTrade: "challenge_trade",
+      challengeCraft: "challenge_craft",
+      challengeCrispr: "challenge_crispr"
+    };
+    const context = {
+      challengePlasmid: false,
+      challengeTrade: false,
+      challengeCraft: false,
+      challengeCrispr: false
+    };
+    for (const [target, source2] of Object.entries(mapping)) {
+      const value = rawContext[source2];
+      if (value !== void 0 && typeof value !== "boolean") {
+        return levelUnavailable("invalid-settings", source2);
       }
-      if (settings2.prestigeType === "whitehole" && settings2.prestigeWhiteholeSaveGems && itemId !== "tech-virtual_reality" && tech.cost["Soul_Gem"] > resources2.Soul_Gem.currentQuantity - 10) {
-        return "Saving up Soul Gems for prestige";
+      context[target] = value === true;
+    }
+    return Object.freeze({ status: "ready", context: Object.freeze(context) });
+  }
+  function readAchievementStar(rawGame, rawPoly, id, universe) {
+    try {
+      const parts = readGameParts(rawGame);
+      if (!parts) return starUnavailable("invalid-game-state");
+      if (!isRecord7(rawPoly)) return starUnavailable("invalid-universe");
+      const universeAffix = rawPoly["universeAffix"];
+      if (typeof universeAffix !== "function") {
+        return starUnavailable("invalid-universe");
       }
-      if (itemId === "tech-isolation_protocol" && settings2.prestigeType !== "retire") {
-        return "Progression fork to Retirement reset";
+      const affix = universeAffix.call(rawPoly, universe);
+      if (typeof affix !== "string") return starUnavailable("invalid-universe");
+      const rawAchievements = parts.stats["achieve"];
+      if (!isRecord7(rawAchievements)) {
+        return starUnavailable("invalid-achievement", "achieve");
       }
-      if (itemId === "tech-isolation_protocol" && retirementChallengeAssistActive2()) {
-        let missing = retirementPreparationMissing2();
-        if (missing.length > 0) {
-          return `Retirement preparation incomplete: ${missing.join(", ")}`;
+      const rawAchievement = rawAchievements[id];
+      if (rawAchievement === void 0 || rawAchievement === null) {
+        return Object.freeze({ status: "ready", star: 0 });
+      }
+      if (!isRecord7(rawAchievement)) {
+        return starUnavailable("invalid-achievement", `achieve.${id}`);
+      }
+      const value = rawAchievement[affix];
+      if (value === void 0 || value === null) {
+        return Object.freeze({ status: "ready", star: 0 });
+      }
+      return finiteNonNegative(value) ? Object.freeze({ status: "ready", star: value }) : starUnavailable("invalid-achievement", `achieve.${id}.${affix}`);
+    } catch {
+      return starUnavailable("inaccessible-data");
+    }
+  }
+  function readBuildingCount(rawBuildings, id) {
+    if (!isRecord7(rawBuildings)) return void 0;
+    const building = rawBuildings[id];
+    if (!isRecord7(building)) return void 0;
+    const count = building["count"];
+    return finiteNonNegative(count) ? count : void 0;
+  }
+  function guardStarId(guard) {
+    switch (guard) {
+      case "guardPacifist":
+        return "pacifist";
+      case "guardDreaded":
+        return "dreaded";
+      case "guardCultOfPersonality":
+        return "cult_of_personality";
+      case "guardAnarchist":
+        return "anarchist";
+      case "guardEnergetic":
+        return "energetic";
+      case "guardRedDead":
+        return "red_dead";
+      case "guardSecondEvolution":
+        return "second_evolution";
+    }
+  }
+  function configuredFallback(rawSettings, guard) {
+    if (!isRecord7(rawSettings)) return true;
+    return rawSettings["achievementGuards"] !== false && rawSettings[guard] !== false;
+  }
+  function readAchievementGuardInput(rawSettings, rawGame, rawPoly, rawBuildings, requestedGuard) {
+    if (!isAchievementGuardName(requestedGuard)) {
+      return Object.freeze({ status: "inactive" });
+    }
+    const fallback = configuredFallback(rawSettings, requestedGuard);
+    try {
+      if (!isRecord7(rawSettings)) {
+        return guardUnavailable("invalid-settings", fallback);
+      }
+      const master = rawSettings["achievementGuards"];
+      const selected = rawSettings[requestedGuard];
+      if (master === false || selected === false) {
+        return Object.freeze({ status: "inactive" });
+      }
+      if (typeof master !== "boolean" || typeof selected !== "boolean") {
+        return guardUnavailable("invalid-settings", fallback, requestedGuard);
+      }
+      let pacifist;
+      let pacifistActive = false;
+      if (requestedGuard === "guardCultOfPersonality") {
+        const result = readAchievementGuardInput(
+          rawSettings,
+          rawGame,
+          rawPoly,
+          rawBuildings,
+          "guardPacifist"
+        );
+        if (result.status === "ready") {
+          pacifist = result.input;
+          pacifistActive = isAchievementGuardActive(result.input);
+        } else if (result.status === "inactive") {
+          pacifist = Object.freeze({
+            guard: "guardPacifist",
+            enabled: false,
+            earnedStar: 0,
+            targetStar: 0,
+            attacks: 0
+          });
+        } else if (result.status === "unavailable") {
+          pacifistActive = result.fallbackActive;
         }
       }
-      if (itemId === "tech-outerplane_summon" && settings2.prestigeType !== "demonic") {
-        return "Progression fork to Witch Hunter's Demonic Infusion";
+      const targetStar = readCurrentLevel(rawGame);
+      if (targetStar === void 0) {
+        return guardUnavailable(
+          "invalid-game-state",
+          requestedGuard === "guardCultOfPersonality" ? !pacifistActive : fallback,
+          "alevel"
+        );
       }
-      if (itemId === "tech-focus_cure" && settings2.prestigeType !== "matrix") {
-        return "Progression fork to Matrix reset";
+      const star = requestedGuard === "guardEnergetic" ? readFeatStar(rawGame, guardStarId(requestedGuard)) : readAchievementStar(rawGame, rawPoly, guardStarId(requestedGuard));
+      if (star.status !== "ready") {
+        return guardUnavailable(
+          star.reason,
+          requestedGuard === "guardCultOfPersonality" ? !pacifistActive : fallback,
+          star.field
+        );
       }
-      if (itemId === "tech-purify_essence" && settings2.prestigeType !== "apotheosis") {
-        return "Progression fork to Apotheosis";
-      }
-      if ((itemId === "tech-vax_strat1" || itemId === "tech-vax_strat2" || itemId === "tech-vax_strat3" || itemId === "tech-vax_strat4") && !itemId.includes(settings2.prestigeVaxStrat)) {
-        return "Undesirable Vaccination Strategy";
-      }
-      if (itemId === "tech-dark_bomb" && (!settings2.prestigeDemonicBomb || settings2.prestigeType !== "demonic")) {
-        return "Dark Bomb disabled";
-      }
-      if ((itemId === "tech-incorporeal" || itemId === "tech-tech_ascension") && settings2.prestigeType !== "ascension" && settings2.prestigeType !== "apotheosis") {
-        return "Not needed for current prestige";
-      }
-      if (itemId === "tech-xeno_gift" && resources2.Knowledge.maxQuantity < settings2.fleetAlienGiftKnowledge) {
-        return `${getNumberString2(
-          settings2.fleetAlienGiftKnowledge
-        )} Max Knowledge required`;
-      }
-      if (itemId === "tech-unification2" || itemId === "tech-unite") {
-        if (guardBananaRepublicActive2()) {
-          return "Banana Republic guard";
-        }
-        if (guardActive2("guardCultOfPersonality")) {
-          return "Cult of Personality achievement guard";
-        }
-        if (!settings2.foreignUnification && !guardActive2("guardPacifist")) {
-          return "Unification disabled";
-        }
-      }
-      if (itemId === "tech-stabilize_blackhole") {
-        if (!settings2.prestigeWhiteholeStabiliseMass) {
-          return "Blackhole stabilization disabled";
-        }
-        if (settings2.prestigeType === "whitehole") {
-          return "Disabled during whilehole reset";
-        }
-        if (settings2.prestigeWhiteholeStabiliseCooldown > 0 && state2.whiteholeLastStabilise) {
-          let diff = (Date.now() - state2.whiteholeLastStabilise) / 1e3;
-          if (diff < settings2.prestigeWhiteholeStabiliseCooldown) {
-            return `On cooldown for ${Math.ceil(
-              settings2.prestigeWhiteholeStabiliseCooldown - diff
-            )} more seconds`;
+      const common = {
+        enabled: true,
+        earnedStar: star.star,
+        targetStar
+      };
+      const parts = readGameParts(rawGame);
+      if (!parts) return guardUnavailable("invalid-game-state", fallback);
+      let input;
+      switch (requestedGuard) {
+        case "guardPacifist": {
+          const attacks = parts.stats["attacks"];
+          if (!finiteNonNegative(attacks)) {
+            return guardUnavailable(
+              "invalid-game-state",
+              fallback,
+              "stats.attacks"
+            );
           }
+          input = { ...common, guard: requestedGuard, attacks };
+          break;
         }
-      }
-      if (itemId === "tech-anthropology" || itemId === "tech-fanaticism") {
-        if (guardActive2("guardSecondEvolution")) {
-          if (itemId === "tech-anthropology") {
-            return "Second Evolution achievement guard";
+        case "guardDreaded": {
+          const prestigeType = rawSettings["prestigeType"];
+          const dreadnoughts = readBuildingCount(rawBuildings, "Dreadnought");
+          if (typeof prestigeType !== "string") {
+            return guardUnavailable("invalid-settings", fallback, "prestigeType");
           }
-        } else if (itemId !== settings2.userResearchTheology_1) {
-          const isFanatRace = () => Object.values(fanatAchievements2).reduce(
-            (result, combo) => result || game2.global.race.species === combo.race && game2.global.race.gods === combo.god && !isAchievementUnlocked2(combo.achieve, game2.alevel()),
-            false
+          if (dreadnoughts === void 0) {
+            return guardUnavailable("invalid-building", fallback, "Dreadnought");
+          }
+          input = {
+            ...common,
+            guard: requestedGuard,
+            prestigeType,
+            dreadnoughts
+          };
+          break;
+        }
+        case "guardCultOfPersonality":
+          if (!pacifist) {
+            return guardUnavailable(
+              "invalid-game-state",
+              !pacifistActive,
+              "pacifist"
+            );
+          }
+          input = { ...common, guard: requestedGuard, pacifist };
+          break;
+        case "guardAnarchist": {
+          const prestigeType = rawSettings["prestigeType"];
+          const civic = parts.global["civic"];
+          const govern = isRecord7(civic) ? civic["govern"] : void 0;
+          const government = isRecord7(govern) ? govern["type"] : void 0;
+          if (typeof prestigeType !== "string") {
+            return guardUnavailable("invalid-settings", fallback, "prestigeType");
+          }
+          if (typeof government !== "string") {
+            return guardUnavailable("invalid-game-state", fallback, "government");
+          }
+          input = { ...common, guard: requestedGuard, prestigeType, government };
+          break;
+        }
+        case "guardEnergetic": {
+          const prestigeType = rawSettings["prestigeType"];
+          const thermalCollectors = readBuildingCount(
+            rawBuildings,
+            "SiriusThermalCollector"
           );
-          if (itemId === "tech-anthropology" && !(settings2.userResearchTheology_1 === "auto" && settings2.prestigeType === "mad" && !isFanatRace())) {
-            return "Undesirable theology path";
+          if (typeof prestigeType !== "string") {
+            return guardUnavailable("invalid-settings", fallback, "prestigeType");
           }
-          if (itemId === "tech-fanaticism" && !(settings2.userResearchTheology_1 === "auto" && (settings2.prestigeType !== "mad" || isFanatRace()))) {
-            return "Undesirable theology path";
+          if (thermalCollectors === void 0) {
+            return guardUnavailable(
+              "invalid-building",
+              fallback,
+              "SiriusThermalCollector"
+            );
           }
+          input = {
+            ...common,
+            guard: requestedGuard,
+            prestigeType,
+            thermalCollectors
+          };
+          break;
+        }
+        case "guardRedDead": {
+          const prestigeType = rawSettings["prestigeType"];
+          const redSpaceports = readBuildingCount(rawBuildings, "RedSpaceport");
+          if (typeof prestigeType !== "string") {
+            return guardUnavailable("invalid-settings", fallback, "prestigeType");
+          }
+          if (redSpaceports === void 0) {
+            return guardUnavailable("invalid-building", fallback, "RedSpaceport");
+          }
+          input = {
+            ...common,
+            guard: requestedGuard,
+            prestigeType,
+            redSpaceports
+          };
+          break;
+        }
+        case "guardSecondEvolution": {
+          const race = parts.global["race"];
+          const species = isRecord7(race) ? race["species"] : void 0;
+          const gods = isRecord7(race) ? race["gods"] : void 0;
+          if (typeof species !== "string" || typeof gods !== "string") {
+            return guardUnavailable("invalid-game-state", fallback, "race");
+          }
+          input = { ...common, guard: requestedGuard, species, gods };
+          break;
         }
       }
-      if (itemId !== settings2.userResearchTheology_2 && (itemId === "tech-deify" || itemId === "tech-study")) {
-        let longRun = [
-          "ascension",
-          "demonic",
-          "apotheosis",
-          "apocalypse",
-          "terraform",
-          "matrix",
-          "retire",
-          "eden"
-        ].includes(settings2.prestigeType);
-        if (itemId === "tech-deify" && !(settings2.userResearchTheology_2 === "auto" && longRun)) {
-          return "Undesirable theology path";
+      return Object.freeze({ status: "ready", input: Object.freeze(input) });
+    } catch {
+      return guardUnavailable("inaccessible-data", fallback);
+    }
+  }
+
+  // src/domain/banana-republic.ts
+  var BANANA_OBJECTIVE_IDS = ["b1", "b2", "b3", "b4", "b5"];
+  function isBananaObjectiveId(value) {
+    return BANANA_OBJECTIVE_IDS.includes(value);
+  }
+  function isBananaRepublicObjectiveComplete(progress, objective) {
+    return progress.objectives[objective];
+  }
+  function isBananaRepublicSmoothieComplete(input) {
+    if (input.featStar > 0) return true;
+    let exportRoutes = 0;
+    let hasBigImport = false;
+    for (const trade of input.tradeRoutes) {
+      if (trade > 0) exportRoutes += trade;
+      else if (trade <= -500) hasBigImport = true;
+    }
+    return hasBigImport && exportRoutes >= 500;
+  }
+  function isBananaRepublicReadyForUnification(progress) {
+    return BANANA_OBJECTIVE_IDS.every((objective) => progress.objectives[objective]) && isBananaRepublicSmoothieComplete(progress.smoothie);
+  }
+  function isBananaRepublicGuardActive(input) {
+    return input.enabled && input.bananaRace && !isBananaRepublicReadyForUnification(input.progress);
+  }
+
+  // src/adapters/evolve/banana-republic.ts
+  function isRecord8(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function finiteNonNegative2(value) {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0;
+  }
+  function unavailable4(reason, field) {
+    return Object.freeze(
+      field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
+    );
+  }
+  function guardUnavailable2(reason, fallbackActive, field) {
+    return Object.freeze({ ...unavailable4(reason, field), fallbackActive });
+  }
+  function readGlobal(rawGame) {
+    if (!isRecord8(rawGame)) return void 0;
+    const global = rawGame["global"];
+    return isRecord8(global) ? global : void 0;
+  }
+  function readStats(rawGame) {
+    const global = readGlobal(rawGame);
+    const stats = global?.["stats"];
+    return isRecord8(stats) ? stats : void 0;
+  }
+  function copyUnavailable(result) {
+    return unavailable4(result.reason, result.field);
+  }
+  function readBananaRepublicObjective(rawGame, rawPoly, requestedObjective) {
+    if (!isBananaObjectiveId(requestedObjective)) {
+      return unavailable4("invalid-achievement", requestedObjective);
+    }
+    try {
+      const stats = readStats(rawGame);
+      if (!stats) return unavailable4("invalid-game-state");
+      if (!isRecord8(rawPoly)) return unavailable4("invalid-universe");
+      const universeAffix = rawPoly["universeAffix"];
+      if (typeof universeAffix !== "function") {
+        return unavailable4("invalid-universe");
+      }
+      const universe = universeAffix.call(rawPoly);
+      if (typeof universe !== "string") return unavailable4("invalid-universe");
+      const rawBanana = stats["banana"];
+      if (!isRecord8(rawBanana)) {
+        return unavailable4("invalid-achievement", "stats.banana");
+      }
+      const rawObjective = rawBanana[requestedObjective];
+      if (!isRecord8(rawObjective)) {
+        return unavailable4(
+          "invalid-achievement",
+          `stats.banana.${requestedObjective}`
+        );
+      }
+      const complete = rawObjective[universe];
+      return typeof complete === "boolean" ? Object.freeze({ status: "ready", complete }) : unavailable4(
+        "invalid-achievement",
+        `stats.banana.${requestedObjective}.${universe}`
+      );
+    } catch {
+      return unavailable4("inaccessible-data");
+    }
+  }
+  function readBananaRepublicSmoothieInput(rawGame) {
+    try {
+      const global = readGlobal(rawGame);
+      const stats = readStats(rawGame);
+      if (!global || !stats) return unavailable4("invalid-game-state");
+      let featStar = 0;
+      const rawFeats = stats["feat"];
+      if (rawFeats !== void 0) {
+        if (!isRecord8(rawFeats)) {
+          return unavailable4("invalid-achievement", "stats.feat");
         }
-        if (itemId === "tech-study" && !(settings2.userResearchTheology_2 === "auto" && !longRun)) {
-          return "Undesirable theology path";
+        const rawStar = rawFeats["banana"];
+        if (rawStar !== void 0 && rawStar !== null) {
+          if (!finiteNonNegative2(rawStar)) {
+            return unavailable4("invalid-achievement", "stats.feat.banana");
+          }
+          featStar = rawStar;
         }
       }
+      const rawResources = global["resource"];
+      if (!isRecord8(rawResources)) return unavailable4("invalid-game-state");
+      const tradeRoutes = [];
+      for (const [id, rawResource] of Object.entries(rawResources)) {
+        if (!isRecord8(rawResource)) {
+          return unavailable4("invalid-game-state", `resource.${id}`);
+        }
+        if (!Object.hasOwn(rawResource, "trade")) continue;
+        const trade = rawResource["trade"];
+        if (typeof trade !== "number" || !Number.isFinite(trade)) {
+          return unavailable4("invalid-trade", `resource.${id}.trade`);
+        }
+        tradeRoutes.push(trade);
+      }
+      return Object.freeze({
+        status: "ready",
+        input: Object.freeze({
+          featStar,
+          tradeRoutes: Object.freeze(tradeRoutes)
+        })
+      });
+    } catch {
+      return unavailable4("inaccessible-data");
+    }
+  }
+  function readBananaRepublicProgress(rawGame, rawPoly) {
+    const objectives = {};
+    for (const objective of BANANA_OBJECTIVE_IDS) {
+      const result = readBananaRepublicObjective(rawGame, rawPoly, objective);
+      if (result.status !== "ready") return copyUnavailable(result);
+      objectives[objective] = result.complete;
+    }
+    const smoothie = readBananaRepublicSmoothieInput(rawGame);
+    if (smoothie.status !== "ready") return copyUnavailable(smoothie);
+    return Object.freeze({
+      status: "ready",
+      progress: Object.freeze({
+        objectives: Object.freeze(objectives),
+        smoothie: smoothie.input
+      })
+    });
+  }
+  function readBananaRepublicGuardInput(rawSettings, rawGame, rawPoly) {
+    const fallbackConfigured = !isRecord8(rawSettings) || rawSettings["achievementGuards"] !== false && rawSettings["guardBananaRepublic"] !== false;
+    try {
+      if (!isRecord8(rawSettings)) {
+        return guardUnavailable2("invalid-settings", fallbackConfigured);
+      }
+      const master = rawSettings["achievementGuards"];
+      const selected = rawSettings["guardBananaRepublic"];
+      if (master === false || selected === false) {
+        return Object.freeze({ status: "inactive" });
+      }
+      if (typeof master !== "boolean" || typeof selected !== "boolean") {
+        return guardUnavailable2("invalid-settings", fallbackConfigured);
+      }
+      const global = readGlobal(rawGame);
+      const race = global?.["race"];
+      const bananaRace = isRecord8(race) ? race["banana"] : void 0;
+      if (bananaRace === false || bananaRace === void 0) {
+        return Object.freeze({ status: "inactive" });
+      }
+      if (bananaRace !== true) {
+        return guardUnavailable2("invalid-game-state", true, "race.banana");
+      }
+      const progress = readBananaRepublicProgress(rawGame, rawPoly);
+      if (progress.status !== "ready") {
+        return guardUnavailable2(progress.reason, true, progress.field);
+      }
+      return Object.freeze({
+        status: "ready",
+        input: Object.freeze({
+          enabled: true,
+          bananaRace: true,
+          progress: progress.progress
+        })
+      });
+    } catch {
+      return guardUnavailable2("inaccessible-data", fallbackConfigured);
+    }
+  }
+
+  // src/domain/prestige-eligibility.ts
+  function isPrestigeAllowed2(view, type) {
+    return view.settings.autoPrestige && !(view.settings.waitForArpa && view.game.activeArpaProjects > 0) && (type === void 0 || view.settings.selectedType === type);
+  }
+  function getBlackholeMass2(view) {
+    return view.game.blackholeMass + view.game.blackholeExotic;
+  }
+  function isGeckNeeded(view) {
+    return view.achievement.lamentisStandardFive && view.buildings.gecks < view.settings.requiredGecks;
+  }
+  function isPillarFinished2(view) {
+    const pillarLevel = view.game.speciesPillarLevel;
+    const outsideMicro = view.game.universe !== "micro";
+    const canPillar = !pillarLevel && view.resources.harmony >= 1 && outsideMicro;
+    const canUpgrade = pillarLevel !== void 0 && pillarLevel !== 0 && pillarLevel < view.game.ascensionLevel && outsideMicro;
+    return !view.settings.requirePillar || !canPillar && !canUpgrade;
+  }
+  function isCataclysmPrestigeAvailable2(view) {
+    return view.tech.cataclysmUnlocked;
+  }
+  function isBioseedPrestigeAvailable(view) {
+    return !isGeckNeeded(view) && view.buildings.spaceDock >= 1 && view.buildings.shipSegments >= 100 && view.buildings.probes >= view.settings.requiredBioseedProbes;
+  }
+  function isWhiteholePrestigeAvailable2(view) {
+    return getBlackholeMass2(view) >= view.settings.minimumBlackholeMass && (view.tech.exoticInfusionUnlocked || view.tech.infusionCheckUnlocked || view.tech.infusionConfirmUnlocked);
+  }
+  function isApocalypsePrestigeAvailable2(view) {
+    return view.tech.protocol66Unlocked || view.tech.protocol66aUnlocked;
+  }
+  function isAscensionPrestigeAvailable2(view) {
+    return view.buildings.siriusAscendUnlocked && isPillarFinished2(view);
+  }
+  function isWitchAscensionPrestigeAvailable2(view, demonic = false) {
+    if (demonic && (!view.tech.forbiddenLevelFive || view.game.fasting && !view.tech.dishLevelTwo)) {
       return false;
     }
-    return { getTechConflict: getTechConflict2 };
+    return view.buildings.absorptionChambers >= 100 && view.buildings.soulCapacitorEnergy >= 1e8 && isPillarFinished2(view);
+  }
+  function isDemonicPrestigeAvailable2(view) {
+    if (view.settings.autoMech && (view.mech.active && view.settings.maximumMechPotential < 1 || view.mech.potential > view.settings.maximumMechPotential)) {
+      return false;
+    }
+    const resetTechUnlocked = view.game.fasting ? view.tech.finalIngredientUnlocked : view.tech.demonicInfusionUnlocked;
+    const resetTechAffordable = view.game.fasting ? view.tech.finalIngredientAffordable : view.tech.demonicInfusionAffordable;
+    return view.buildings.spireFloor >= view.settings.minimumSpireFloor && resetTechUnlocked && resetTechAffordable;
+  }
+
+  // src/adapters/evolve/prestige-eligibility.ts
+  function isRecord9(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function finiteNonNegative3(value) {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0;
+  }
+  function unavailable5(reason, field) {
+    return Object.freeze(
+      field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
+    );
+  }
+  function readBoolean(record, field) {
+    const value = record[field];
+    return typeof value === "boolean" ? value : void 0;
+  }
+  function readNumber(record, field) {
+    const value = record[field];
+    return finiteNonNegative3(value) ? value : void 0;
+  }
+  function callBoolean(owner, methodName, ...args) {
+    const method = owner[methodName];
+    if (typeof method !== "function") return void 0;
+    const value = method.call(owner, ...args);
+    return typeof value === "boolean" ? value : void 0;
+  }
+  function readBuilding(buildings2, id) {
+    const building = buildings2[id];
+    return isRecord9(building) ? building : void 0;
+  }
+  function readTechState(techIds2, id, includeAffordable) {
+    const rawTech = techIds2[id];
+    if (!isRecord9(rawTech)) return void 0;
+    const unlocked = callBoolean(rawTech, "isUnlocked");
+    const affordable = includeAffordable ? callBoolean(rawTech, "isAffordable") : false;
+    return unlocked === void 0 || affordable === void 0 ? void 0 : Object.freeze({ unlocked, affordable });
+  }
+  function readPrestigePermissionView(rawSettings, rawGame) {
+    try {
+      if (!isRecord9(rawSettings)) return unavailable5("invalid-settings");
+      const autoPrestige2 = readBoolean(rawSettings, "autoPrestige");
+      const waitForArpa = readBoolean(rawSettings, "prestigeWaitAT");
+      const selectedType = rawSettings["prestigeType"];
+      if (autoPrestige2 === void 0 || waitForArpa === void 0 || typeof selectedType !== "string") {
+        return unavailable5("invalid-settings");
+      }
+      if (!isRecord9(rawGame)) return unavailable5("invalid-game-state");
+      const global = rawGame["global"];
+      const gameSettings = isRecord9(global) ? global["settings"] : void 0;
+      if (!isRecord9(gameSettings) || !finiteNonNegative3(gameSettings["at"])) {
+        return unavailable5("invalid-game-state", "settings.at");
+      }
+      return Object.freeze({
+        status: "ready",
+        view: Object.freeze({
+          settings: Object.freeze({ autoPrestige: autoPrestige2, waitForArpa, selectedType }),
+          game: Object.freeze({ activeArpaProjects: gameSettings["at"] })
+        })
+      });
+    } catch {
+      return unavailable5("inaccessible-data");
+    }
+  }
+  function readPillarEligibilityView(rawSettings, rawGame, rawResources) {
+    try {
+      if (!isRecord9(rawSettings)) return unavailable5("invalid-settings");
+      const requirePillar = readBoolean(rawSettings, "prestigeAscensionPillar");
+      if (requirePillar === void 0) return unavailable5("invalid-settings");
+      if (!isRecord9(rawGame)) return unavailable5("invalid-game-state");
+      const global = rawGame["global"];
+      const alevel = rawGame["alevel"];
+      if (!isRecord9(global) || typeof alevel !== "function") {
+        return unavailable5("invalid-game-state");
+      }
+      const race = global["race"];
+      const pillars = global["pillars"];
+      if (!isRecord9(race) || !isRecord9(pillars) || typeof race["species"] !== "string" || typeof race["universe"] !== "string") {
+        return unavailable5("invalid-game-state");
+      }
+      const ascensionLevel = alevel.call(rawGame);
+      const rawPillarLevel = pillars[race["species"]];
+      if (!finiteNonNegative3(ascensionLevel) || rawPillarLevel !== void 0 && !finiteNonNegative3(rawPillarLevel)) {
+        return unavailable5("invalid-game-state");
+      }
+      if (!isRecord9(rawResources)) return unavailable5("invalid-resource");
+      const harmony = rawResources["Harmony"];
+      if (!isRecord9(harmony) || !finiteNonNegative3(harmony["currentQuantity"])) {
+        return unavailable5("invalid-resource", "Harmony");
+      }
+      const pillarLevel = rawPillarLevel;
+      return Object.freeze({
+        status: "ready",
+        view: Object.freeze({
+          settings: Object.freeze({ requirePillar }),
+          game: Object.freeze({
+            universe: race["universe"],
+            ascensionLevel,
+            ...pillarLevel === void 0 ? {} : { speciesPillarLevel: pillarLevel }
+          }),
+          resources: Object.freeze({ harmony: harmony["currentQuantity"] })
+        })
+      });
+    } catch {
+      return unavailable5("inaccessible-data");
+    }
+  }
+  function readGeckEligibilityView(rawSettings, rawBuildings, isAchievementUnlocked3) {
+    try {
+      if (!isRecord9(rawSettings)) return unavailable5("invalid-settings");
+      const requiredGecks = readNumber(rawSettings, "prestigeGECK");
+      if (requiredGecks === void 0) return unavailable5("invalid-settings");
+      if (!isRecord9(rawBuildings)) return unavailable5("invalid-building");
+      const geck = readBuilding(rawBuildings, "GasSpaceDockGECK");
+      if (geck === void 0 || !finiteNonNegative3(geck["count"])) {
+        return unavailable5("invalid-building", "GasSpaceDockGECK.count");
+      }
+      const lamentisStandardFive = isAchievementUnlocked3(
+        "lamentis",
+        5,
+        "standard"
+      );
+      if (typeof lamentisStandardFive !== "boolean") {
+        return unavailable5("invalid-external-result");
+      }
+      return Object.freeze({
+        status: "ready",
+        view: Object.freeze({
+          settings: Object.freeze({ requiredGecks }),
+          buildings: Object.freeze({ gecks: geck["count"] }),
+          achievement: Object.freeze({ lamentisStandardFive })
+        })
+      });
+    } catch {
+      return unavailable5("inaccessible-data");
+    }
+  }
+  function readPrestigeEligibilityView(rawSettings, rawGame, rawResources, rawBuildings, rawTechIds, rawMechManager, haveTech2, isAchievementUnlocked3) {
+    try {
+      if (!isRecord9(rawSettings)) return unavailable5("invalid-settings");
+      const settings2 = {
+        autoPrestige: readBoolean(rawSettings, "autoPrestige"),
+        waitForArpa: readBoolean(rawSettings, "prestigeWaitAT"),
+        selectedType: typeof rawSettings["prestigeType"] === "string" ? rawSettings["prestigeType"] : void 0,
+        requiredBioseedProbes: readNumber(rawSettings, "prestigeBioseedProbes"),
+        requiredGecks: readNumber(rawSettings, "prestigeGECK"),
+        minimumBlackholeMass: readNumber(rawSettings, "prestigeWhiteholeMinMass"),
+        requirePillar: readBoolean(rawSettings, "prestigeAscensionPillar"),
+        autoMech: readBoolean(rawSettings, "autoMech"),
+        maximumMechPotential: readNumber(rawSettings, "prestigeDemonicPotential"),
+        minimumSpireFloor: readNumber(rawSettings, "prestigeDemonicFloor")
+      };
+      for (const [field, value] of Object.entries(settings2)) {
+        if (value === void 0) return unavailable5("invalid-settings", field);
+      }
+      if (!isRecord9(rawGame)) return unavailable5("invalid-game-state");
+      const global = rawGame["global"];
+      if (!isRecord9(global)) return unavailable5("invalid-game-state", "global");
+      const gameSettings = global["settings"];
+      const race = global["race"];
+      const pillars = global["pillars"];
+      const interstellar = global["interstellar"];
+      if (!isRecord9(gameSettings) || !isRecord9(race) || !isRecord9(pillars) || !isRecord9(interstellar) || typeof race["species"] !== "string" || typeof race["universe"] !== "string" || !finiteNonNegative3(gameSettings["at"])) {
+        return unavailable5("invalid-game-state");
+      }
+      const alevel = rawGame["alevel"];
+      if (typeof alevel !== "function") {
+        return unavailable5("invalid-game-state", "alevel");
+      }
+      const ascensionLevel = alevel.call(rawGame);
+      if (!finiteNonNegative3(ascensionLevel)) {
+        return unavailable5("invalid-game-state", "alevel");
+      }
+      const rawPillarLevel = pillars[race["species"]];
+      if (rawPillarLevel !== void 0 && !finiteNonNegative3(rawPillarLevel)) {
+        return unavailable5("invalid-game-state", "pillarLevel");
+      }
+      const pillarLevel = rawPillarLevel;
+      const rawEngine = interstellar["stellar_engine"];
+      let blackholeMass = 0;
+      let blackholeExotic = 0;
+      if (rawEngine !== null && rawEngine !== void 0) {
+        if (!isRecord9(rawEngine) || !finiteNonNegative3(rawEngine["mass"]) || !finiteNonNegative3(rawEngine["exotic"])) {
+          return unavailable5("invalid-game-state", "stellar_engine");
+        }
+        blackholeMass = rawEngine["mass"];
+        blackholeExotic = rawEngine["exotic"];
+      }
+      if (!isRecord9(rawResources)) return unavailable5("invalid-resource");
+      const harmony = rawResources["Harmony"];
+      if (!isRecord9(harmony) || !finiteNonNegative3(harmony["currentQuantity"])) {
+        return unavailable5("invalid-resource", "Harmony");
+      }
+      if (!isRecord9(rawBuildings)) return unavailable5("invalid-building");
+      const buildingIds2 = [
+        "GasSpaceDock",
+        "GasSpaceDockShipSegment",
+        "GasSpaceDockProbe",
+        "GasSpaceDockGECK",
+        "SiriusAscend",
+        "PitAbsorptionChamber",
+        "PitSoulCapacitor",
+        "SpireTower"
+      ];
+      const buildingRecords = {};
+      for (const id of buildingIds2) {
+        const building = readBuilding(rawBuildings, id);
+        if (building === void 0) return unavailable5("invalid-building", id);
+        buildingRecords[id] = building;
+      }
+      for (const id of [
+        "GasSpaceDock",
+        "GasSpaceDockShipSegment",
+        "GasSpaceDockProbe",
+        "GasSpaceDockGECK",
+        "PitAbsorptionChamber",
+        "SpireTower"
+      ]) {
+        const building = buildingRecords[id];
+        if (building === void 0 || !finiteNonNegative3(building["count"])) {
+          return unavailable5("invalid-building", `${id}.count`);
+        }
+      }
+      const siriusAscendUnlocked = callBoolean(
+        buildingRecords["SiriusAscend"],
+        "isUnlocked"
+      );
+      const capacitorInstance = buildingRecords["PitSoulCapacitor"]["instance"];
+      if (siriusAscendUnlocked === void 0 || !isRecord9(capacitorInstance) || !finiteNonNegative3(capacitorInstance["energy"])) {
+        return unavailable5("invalid-building");
+      }
+      if (!isRecord9(rawTechIds)) return unavailable5("invalid-tech");
+      const techIds2 = [
+        "tech-dial_it_to_11",
+        "tech-exotic_infusion",
+        "tech-infusion_check",
+        "tech-infusion_confirm",
+        "tech-protocol66",
+        "tech-protocol66a",
+        "tech-demonic_infusion",
+        "tech-final_ingredient"
+      ];
+      const techStates = {};
+      for (const id of techIds2) {
+        const state2 = readTechState(
+          rawTechIds,
+          id,
+          id === "tech-demonic_infusion" || id === "tech-final_ingredient"
+        );
+        if (state2 === void 0) return unavailable5("invalid-tech", id);
+        techStates[id] = state2;
+      }
+      if (!isRecord9(rawMechManager)) return unavailable5("invalid-mech-state");
+      const mechActive = rawMechManager["isActive"];
+      const mechPotential = rawMechManager["mechsPotential"];
+      if (typeof mechActive !== "boolean" || !finiteNonNegative3(mechPotential)) {
+        return unavailable5("invalid-mech-state");
+      }
+      const forbiddenLevelFive = haveTech2("forbidden", 5);
+      const dishLevelTwo = haveTech2("dish", 2);
+      const lamentisStandardFive = isAchievementUnlocked3(
+        "lamentis",
+        5,
+        "standard"
+      );
+      if (typeof forbiddenLevelFive !== "boolean" || typeof dishLevelTwo !== "boolean" || typeof lamentisStandardFive !== "boolean") {
+        return unavailable5("invalid-external-result");
+      }
+      const view = {
+        settings: Object.freeze(settings2),
+        game: Object.freeze({
+          activeArpaProjects: gameSettings["at"],
+          species: race["species"],
+          universe: race["universe"],
+          fasting: Boolean(race["fasting"]),
+          ascensionLevel,
+          ...pillarLevel === void 0 ? {} : { speciesPillarLevel: pillarLevel },
+          blackholeMass,
+          blackholeExotic
+        }),
+        resources: Object.freeze({ harmony: harmony["currentQuantity"] }),
+        buildings: Object.freeze({
+          spaceDock: buildingRecords["GasSpaceDock"]["count"],
+          shipSegments: buildingRecords["GasSpaceDockShipSegment"]["count"],
+          probes: buildingRecords["GasSpaceDockProbe"]["count"],
+          gecks: buildingRecords["GasSpaceDockGECK"]["count"],
+          siriusAscendUnlocked,
+          absorptionChambers: buildingRecords["PitAbsorptionChamber"]["count"],
+          soulCapacitorEnergy: capacitorInstance["energy"],
+          spireFloor: buildingRecords["SpireTower"]["count"]
+        }),
+        tech: Object.freeze({
+          cataclysmUnlocked: techStates["tech-dial_it_to_11"].unlocked,
+          exoticInfusionUnlocked: techStates["tech-exotic_infusion"].unlocked,
+          infusionCheckUnlocked: techStates["tech-infusion_check"].unlocked,
+          infusionConfirmUnlocked: techStates["tech-infusion_confirm"].unlocked,
+          protocol66Unlocked: techStates["tech-protocol66"].unlocked,
+          protocol66aUnlocked: techStates["tech-protocol66a"].unlocked,
+          demonicInfusionUnlocked: techStates["tech-demonic_infusion"].unlocked,
+          demonicInfusionAffordable: techStates["tech-demonic_infusion"].affordable,
+          finalIngredientUnlocked: techStates["tech-final_ingredient"].unlocked,
+          finalIngredientAffordable: techStates["tech-final_ingredient"].affordable,
+          forbiddenLevelFive,
+          dishLevelTwo
+        }),
+        achievement: Object.freeze({ lamentisStandardFive }),
+        mech: Object.freeze({ active: mechActive, potential: mechPotential })
+      };
+      return Object.freeze({ status: "ready", view: Object.freeze(view) });
+    } catch {
+      return unavailable5("inaccessible-data");
+    }
+  }
+
+  // src/domain/tech-conflicts.ts
+  var RESET_RESEARCH = /* @__PURE__ */ new Set([
+    "tech-exotic_infusion",
+    "tech-infusion_check",
+    "tech-infusion_confirm",
+    "tech-dial_it_to_11",
+    "tech-limit_collider",
+    "tech-demonic_infusion",
+    "tech-protocol66",
+    "tech-protocol66a",
+    "tech-final_ingredient"
+  ]);
+  var LONG_RUN_PRESTIGE = /* @__PURE__ */ new Set([
+    "ascension",
+    "demonic",
+    "apotheosis",
+    "apocalypse",
+    "terraform",
+    "matrix",
+    "retire",
+    "eden"
+  ]);
+  function conflict(value) {
+    return Object.freeze(value);
+  }
+  function findTechConflict(input) {
+    const { itemId, settings: settings2 } = input;
+    if (settings2.ignoredResearch.includes(itemId)) {
+      return conflict({ code: "ignored-research" });
+    }
+    if (RESET_RESEARCH.has(itemId)) {
+      return conflict({ code: "reset-research" });
+    }
+    if (settings2.prestigeType === "whitehole" && settings2.saveWhiteholeSoulGems && itemId !== "tech-virtual_reality" && input.soulGemCost !== null && input.soulGemCost > input.resources.soulGems - 10) {
+      return conflict({ code: "saving-soul-gems" });
+    }
+    if (itemId === "tech-isolation_protocol") {
+      if (settings2.prestigeType !== "retire") {
+        return conflict({ code: "retirement-fork" });
+      }
+      if (input.guards.retirementAssist && input.guards.retirementMissing.length > 0) {
+        return conflict({
+          code: "retirement-preparation",
+          missing: Object.freeze([...input.guards.retirementMissing])
+        });
+      }
+    }
+    if (itemId === "tech-outerplane_summon" && settings2.prestigeType !== "demonic") {
+      return conflict({ code: "witch-demonic-fork" });
+    }
+    if (itemId === "tech-focus_cure" && settings2.prestigeType !== "matrix") {
+      return conflict({ code: "matrix-fork" });
+    }
+    if (itemId === "tech-purify_essence" && settings2.prestigeType !== "apotheosis") {
+      return conflict({ code: "apotheosis-fork" });
+    }
+    if (/^tech-vax_strat[1-4]$/.test(itemId) && !itemId.includes(settings2.vaccinationStrategy)) {
+      return conflict({ code: "vaccination-strategy" });
+    }
+    if (itemId === "tech-dark_bomb" && (!settings2.useDemonicBomb || settings2.prestigeType !== "demonic")) {
+      return conflict({ code: "dark-bomb-disabled" });
+    }
+    if ((itemId === "tech-incorporeal" || itemId === "tech-tech_ascension") && settings2.prestigeType !== "ascension" && settings2.prestigeType !== "apotheosis") {
+      return conflict({ code: "prestige-unneeded" });
+    }
+    if (itemId === "tech-xeno_gift" && input.resources.maximumKnowledge < settings2.alienGiftKnowledge) {
+      return conflict({
+        code: "maximum-knowledge",
+        required: settings2.alienGiftKnowledge
+      });
+    }
+    if (itemId === "tech-unification2" || itemId === "tech-unite") {
+      if (input.guards.bananaRepublic) {
+        return conflict({ code: "banana-republic-guard" });
+      }
+      if (input.guards.cultOfPersonality) {
+        return conflict({ code: "cult-of-personality-guard" });
+      }
+      if (!settings2.allowForeignUnification && !input.guards.pacifist) {
+        return conflict({ code: "unification-disabled" });
+      }
+    }
+    if (itemId === "tech-stabilize_blackhole") {
+      if (!settings2.stabilizeBlackhole) {
+        return conflict({ code: "stabilization-disabled" });
+      }
+      if (settings2.prestigeType === "whitehole") {
+        return conflict({ code: "stabilization-during-whitehole" });
+      }
+      if (settings2.stabilizationCooldownSeconds > 0 && input.stabilization.lastAtMs !== null) {
+        const elapsedSeconds = (input.stabilization.nowMs - input.stabilization.lastAtMs) / 1e3;
+        if (elapsedSeconds < settings2.stabilizationCooldownSeconds) {
+          return conflict({
+            code: "stabilization-cooldown",
+            seconds: Math.ceil(
+              settings2.stabilizationCooldownSeconds - elapsedSeconds
+            )
+          });
+        }
+      }
+    }
+    if (itemId === "tech-anthropology" || itemId === "tech-fanaticism") {
+      if (input.guards.secondEvolution) {
+        if (itemId === "tech-anthropology") {
+          return conflict({ code: "second-evolution-guard" });
+        }
+      } else if (itemId !== settings2.theologyChoiceOne) {
+        const isFanaticismRace = input.fanaticismAchievements.some(
+          (combination) => input.race.species === combination.race && input.race.gods === combination.god && !combination.unlocked
+        );
+        if (itemId === "tech-anthropology" && !(settings2.theologyChoiceOne === "auto" && settings2.prestigeType === "mad" && !isFanaticismRace)) {
+          return conflict({ code: "theology-path" });
+        }
+        if (itemId === "tech-fanaticism" && !(settings2.theologyChoiceOne === "auto" && (settings2.prestigeType !== "mad" || isFanaticismRace))) {
+          return conflict({ code: "theology-path" });
+        }
+      }
+    }
+    if (itemId !== settings2.theologyChoiceTwo && (itemId === "tech-deify" || itemId === "tech-study")) {
+      const longRun = LONG_RUN_PRESTIGE.has(settings2.prestigeType);
+      if (itemId === "tech-deify" && !(settings2.theologyChoiceTwo === "auto" && longRun)) {
+        return conflict({ code: "theology-path" });
+      }
+      if (itemId === "tech-study" && !(settings2.theologyChoiceTwo === "auto" && !longRun)) {
+        return conflict({ code: "theology-path" });
+      }
+    }
+    return null;
+  }
+
+  // src/adapters/evolve/tech-conflicts.ts
+  function isRecord10(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function finiteNonNegative4(value) {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0;
+  }
+  function unavailable6(reason, field) {
+    return Object.freeze(
+      field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
+    );
+  }
+  function booleanSetting(settings2, field) {
+    const value = settings2[field];
+    return typeof value === "boolean" ? value : void 0;
+  }
+  function stringSetting(settings2, field) {
+    const value = settings2[field];
+    return typeof value === "string" ? value : void 0;
+  }
+  function numberSetting(settings2, field) {
+    const value = settings2[field];
+    return finiteNonNegative4(value) ? value : void 0;
+  }
+  function readBooleanResult(value) {
+    return typeof value === "boolean" ? value : void 0;
+  }
+  function readTechConflictInput(rawTech, rawSettings, rawResources, rawState, rawGame, dependencies) {
+    try {
+      if (!isRecord10(rawTech) || typeof rawTech["_vueBinding"] !== "string" || !isRecord10(rawTech["cost"])) {
+        return unavailable6("invalid-target");
+      }
+      const itemId = rawTech["_vueBinding"];
+      const rawSoulGemCost = rawTech["cost"]["Soul_Gem"];
+      if (rawSoulGemCost !== void 0 && !finiteNonNegative4(rawSoulGemCost)) {
+        return unavailable6("invalid-target", "cost.Soul_Gem");
+      }
+      if (!isRecord10(rawSettings)) return unavailable6("invalid-settings");
+      const rawIgnoredResearch = rawSettings["researchIgnore"];
+      if (!Array.isArray(rawIgnoredResearch) || !rawIgnoredResearch.every((value) => typeof value === "string")) {
+        return unavailable6("invalid-settings", "researchIgnore");
+      }
+      const settings2 = {
+        ignoredResearch: Object.freeze([...rawIgnoredResearch]),
+        prestigeType: stringSetting(rawSettings, "prestigeType"),
+        saveWhiteholeSoulGems: booleanSetting(
+          rawSettings,
+          "prestigeWhiteholeSaveGems"
+        ),
+        vaccinationStrategy: stringSetting(rawSettings, "prestigeVaxStrat"),
+        useDemonicBomb: booleanSetting(rawSettings, "prestigeDemonicBomb"),
+        allowForeignUnification: booleanSetting(
+          rawSettings,
+          "foreignUnification"
+        ),
+        stabilizeBlackhole: booleanSetting(
+          rawSettings,
+          "prestigeWhiteholeStabiliseMass"
+        ),
+        stabilizationCooldownSeconds: numberSetting(
+          rawSettings,
+          "prestigeWhiteholeStabiliseCooldown"
+        ),
+        theologyChoiceOne: stringSetting(rawSettings, "userResearchTheology_1"),
+        theologyChoiceTwo: stringSetting(rawSettings, "userResearchTheology_2"),
+        alienGiftKnowledge: numberSetting(rawSettings, "fleetAlienGiftKnowledge")
+      };
+      for (const [field, value] of Object.entries(settings2)) {
+        if (value === void 0) return unavailable6("invalid-settings", field);
+      }
+      if (!isRecord10(rawResources)) return unavailable6("invalid-resource");
+      const soulGems = rawResources["Soul_Gem"];
+      const knowledge = rawResources["Knowledge"];
+      if (!isRecord10(soulGems) || !finiteNonNegative4(soulGems["currentQuantity"])) {
+        return unavailable6("invalid-resource", "Soul_Gem.currentQuantity");
+      }
+      if (!isRecord10(knowledge) || !finiteNonNegative4(knowledge["maxQuantity"])) {
+        return unavailable6("invalid-resource", "Knowledge.maxQuantity");
+      }
+      if (!isRecord10(rawState)) return unavailable6("invalid-state");
+      const rawLastAtMs = rawState["whiteholeLastStabilise"];
+      if (rawLastAtMs !== void 0 && rawLastAtMs !== 0 && !finiteNonNegative4(rawLastAtMs)) {
+        return unavailable6("invalid-state", "whiteholeLastStabilise");
+      }
+      const lastAtMs = rawLastAtMs === void 0 || rawLastAtMs === 0 ? null : rawLastAtMs;
+      if (!isRecord10(rawGame)) return unavailable6("invalid-game-state");
+      const global = rawGame["global"];
+      const alevel = rawGame["alevel"];
+      const race = isRecord10(global) ? global["race"] : void 0;
+      if (!isRecord10(race) || typeof race["species"] !== "string" || typeof race["gods"] !== "string" || typeof alevel !== "function") {
+        return unavailable6("invalid-game-state");
+      }
+      const achievementLevel = alevel.call(rawGame);
+      if (!finiteNonNegative4(achievementLevel)) {
+        return unavailable6("invalid-game-state", "alevel");
+      }
+      const nowMs = itemId === "tech-stabilize_blackhole" ? dependencies.clock.nowMs() : 0;
+      if (!finiteNonNegative4(nowMs)) return unavailable6("invalid-clock");
+      let bananaRepublic = false;
+      let cultOfPersonality = false;
+      let pacifist = false;
+      if (itemId === "tech-unification2" || itemId === "tech-unite") {
+        bananaRepublic = readBooleanResult(
+          dependencies.guardBananaRepublicActive()
+        );
+        cultOfPersonality = readBooleanResult(
+          dependencies.guardActive("guardCultOfPersonality")
+        );
+        pacifist = readBooleanResult(
+          dependencies.guardActive("guardPacifist")
+        );
+        if (bananaRepublic === void 0 || cultOfPersonality === void 0 || pacifist === void 0) {
+          return unavailable6("invalid-external-result", "guard");
+        }
+      }
+      let retirementAssist = false;
+      let retirementMissing = Object.freeze([]);
+      if (itemId === "tech-isolation_protocol") {
+        const active = readBooleanResult(
+          dependencies.retirementChallengeAssistActive()
+        );
+        if (active === void 0) {
+          return unavailable6("invalid-external-result", "retirementAssist");
+        }
+        retirementAssist = active;
+        if (active) {
+          const missing = dependencies.retirementPreparationMissing();
+          if (!Array.isArray(missing) || !missing.every((value) => typeof value === "string")) {
+            return unavailable6(
+              "invalid-external-result",
+              "retirementPreparation"
+            );
+          }
+          retirementMissing = Object.freeze([...missing]);
+        }
+      }
+      let secondEvolution = false;
+      const fanaticismAchievements = [];
+      if (itemId === "tech-anthropology" || itemId === "tech-fanaticism") {
+        const active = readBooleanResult(
+          dependencies.guardActive("guardSecondEvolution")
+        );
+        if (active === void 0) {
+          return unavailable6("invalid-external-result", "secondEvolution");
+        }
+        secondEvolution = active;
+        if (!active) {
+          if (!Array.isArray(dependencies.fanatAchievements)) {
+            return unavailable6("invalid-external-result", "fanatAchievements");
+          }
+          for (const rawCombination of dependencies.fanatAchievements) {
+            if (!isRecord10(rawCombination) || typeof rawCombination["race"] !== "string" || typeof rawCombination["god"] !== "string" || typeof rawCombination["achieve"] !== "string") {
+              return unavailable6("invalid-external-result", "fanatAchievements");
+            }
+            const unlocked = dependencies.isAchievementUnlocked(
+              rawCombination["achieve"],
+              achievementLevel
+            );
+            if (typeof unlocked !== "boolean") {
+              return unavailable6("invalid-external-result", "achievement");
+            }
+            fanaticismAchievements.push(
+              Object.freeze({
+                race: rawCombination["race"],
+                god: rawCombination["god"],
+                unlocked
+              })
+            );
+          }
+        }
+      }
+      const input = {
+        itemId,
+        soulGemCost: rawSoulGemCost === void 0 ? null : rawSoulGemCost,
+        settings: Object.freeze(
+          settings2
+        ),
+        resources: Object.freeze({
+          soulGems: soulGems["currentQuantity"],
+          maximumKnowledge: knowledge["maxQuantity"]
+        }),
+        stabilization: Object.freeze({ lastAtMs, nowMs }),
+        race: Object.freeze({
+          species: race["species"],
+          gods: race["gods"],
+          achievementLevel
+        }),
+        guards: Object.freeze({
+          bananaRepublic,
+          cultOfPersonality,
+          pacifist,
+          secondEvolution,
+          retirementAssist,
+          retirementMissing
+        }),
+        fanaticismAchievements: Object.freeze(fanaticismAchievements)
+      };
+      return Object.freeze({ status: "ready", input: Object.freeze(input) });
+    } catch {
+      return unavailable6("inaccessible-data");
+    }
+  }
+
+  // src/application/tech-conflicts.ts
+  function formatTechConflict(conflict2, formatNumber) {
+    switch (conflict2.code) {
+      case "ignored-research":
+        return "Ignored research";
+      case "reset-research":
+        return "Reset research";
+      case "saving-soul-gems":
+        return "Saving up Soul Gems for prestige";
+      case "retirement-fork":
+        return "Progression fork to Retirement reset";
+      case "retirement-preparation":
+        return `Retirement preparation incomplete: ${conflict2.missing.join(", ")}`;
+      case "witch-demonic-fork":
+        return "Progression fork to Witch Hunter's Demonic Infusion";
+      case "matrix-fork":
+        return "Progression fork to Matrix reset";
+      case "apotheosis-fork":
+        return "Progression fork to Apotheosis";
+      case "vaccination-strategy":
+        return "Undesirable Vaccination Strategy";
+      case "dark-bomb-disabled":
+        return "Dark Bomb disabled";
+      case "prestige-unneeded":
+        return "Not needed for current prestige";
+      case "maximum-knowledge":
+        return `${formatNumber(conflict2.required)} Max Knowledge required`;
+      case "banana-republic-guard":
+        return "Banana Republic guard";
+      case "cult-of-personality-guard":
+        return "Cult of Personality achievement guard";
+      case "unification-disabled":
+        return "Unification disabled";
+      case "stabilization-disabled":
+        return "Blackhole stabilization disabled";
+      case "stabilization-during-whitehole":
+        return "Disabled during whitehole reset";
+      case "stabilization-cooldown":
+        return `On cooldown for ${conflict2.seconds} more seconds`;
+      case "second-evolution-guard":
+        return "Second Evolution achievement guard";
+      case "theology-path":
+        return "Undesirable theology path";
+    }
+  }
+
+  // src/adapters/browser/clock.ts
+  function createBrowserClock() {
+    return Object.freeze({ nowMs: () => Date.now() });
   }
 
   // src/policies/building-weighting.ts
@@ -16265,8 +17752,8 @@
     const isHellSupressUseful2 = (...args) => getIsHellSupressUseful()(...args);
     const getBestSupplyRatio2 = (...args) => getBestSupplyRatioFn()(...args);
     const isGECKNeeded2 = (...args) => getIsGECKNeeded()(...args);
-    const isPrestigeAllowed2 = (...args) => getIsPrestigeAllowed()(...args);
-    const isPillarFinished2 = (...args) => getIsPillarFinished()(...args);
+    const isPrestigeAllowed3 = (...args) => getIsPrestigeAllowed()(...args);
+    const isPillarFinished3 = (...args) => getIsPillarFinished()(...args);
     const getCitadelConsumption2 = (...args) => getCitadelConsumptionFn()(...args);
     const wrGlobalCondition2 = 0;
     const wrIndividualCondition2 = 1;
@@ -16822,13 +18309,13 @@
         () => 0
       ],
       [
-        () => game2.global.race["lone_survivor"] && !isPrestigeAllowed2("eden"),
+        () => game2.global.race["lone_survivor"] && !isPrestigeAllowed3("eden"),
         (building) => building === buildings2.TauStarEden,
         () => "Prestiging not currently allowed",
         () => 0
       ],
       [
-        () => game2.global.race["truepath"] && (!isPrestigeAllowed2("retire") || buildings2.TauGas2MatrioshkaBrain.count < 1e3),
+        () => game2.global.race["truepath"] && (!isPrestigeAllowed3("retire") || buildings2.TauGas2MatrioshkaBrain.count < 1e3),
         (building) => building === buildings2.TauGas2IgniteGasGiant,
         () => "Prestiging not currently allowed",
         () => 0
@@ -16858,7 +18345,7 @@
         () => 0
       ],
       [
-        () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "ascension" && isPillarFinished2() && !game2.global.race["witch_hunter"],
+        () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "ascension" && isPillarFinished3() && !game2.global.race["witch_hunter"],
         (building) => building === buildings2.PitMission || building === buildings2.RuinsMission,
         () => "Not needed for Ascension prestige",
         () => 0
@@ -17552,83 +19039,630 @@
     };
   }
 
-  // src/automation/civic/tax.ts
-  function createAutoTax({
-    KeyManager: KeyManager2,
-    getPoly,
-    getResources,
-    getSettings,
-    getGame,
-    getVueById: getVueById2
-  }) {
-    return function autoTax2() {
-      const resources2 = getResources();
-      const settings2 = getSettings();
-      const game2 = getGame();
-      const poly2 = getPoly();
-      if (resources2.Morale.incomeAdusted) {
-        return;
-      }
-      let taxVue = getVueById2("tax_rates");
-      if (taxVue === void 0 || !game2.global.civic.taxes.display) {
-        return;
-      }
-      let currentTaxRate = game2.global.civic.taxes.tax_rate;
-      let currentMorale = resources2.Morale.currentQuantity;
-      let realMorale = resources2.Morale.rateOfChange;
-      let maxMorale = resources2.Morale.maxQuantity;
-      let minMorale = settings2.generalMinimumMorale;
-      let maxTaxRate = poly2.taxCap(false);
-      let minTaxRate = poly2.taxCap(true);
-      if (settings2.generalRequestedTaxRate != -1) {
-        var requestedTaxRateCappedToLimits = Math.min(
-          Math.max(settings2.generalRequestedTaxRate, minTaxRate),
-          maxTaxRate
-        );
-        KeyManager2.set(false, false, false);
-        while (currentTaxRate > requestedTaxRateCappedToLimits) {
-          taxVue.sub();
-          currentTaxRate--;
-        }
-        while (currentTaxRate < requestedTaxRateCappedToLimits) {
-          taxVue.add();
-          currentTaxRate++;
-        }
-        resources2.Morale.incomeAdusted = true;
-        return;
-      }
-      if (resources2.Money.storageRatio < 0.9 && !game2.global.race["banana"]) {
-        minTaxRate = Math.max(minTaxRate, settings2.generalMinimumTaxRate);
-      }
-      let optimalTax = game2.global.race["banana"] ? minTaxRate : resources2.Money.isDemanded() ? maxTaxRate : Math.round(
-        (maxTaxRate - minTaxRate) * Math.max(0, 0.9 - resources2.Money.storageRatio)
-      ) + minTaxRate;
-      if (!game2.global.race["banana"]) {
-        if (currentTaxRate < 20) {
-          maxMorale -= 10 - Math.floor(currentTaxRate / 2);
-        }
-        if (optimalTax < 20) {
-          maxMorale += 10 - Math.floor(minTaxRate / 2);
-        }
-      }
-      if (resources2.Money.storageRatio < 0.9) {
-        maxMorale = Math.min(maxMorale, settings2.generalMaximumMorale);
-      }
-      if (settings2.authorityManage && settings2.generalMinimumAuthority !== 0 && resources2.Authority.isUnlocked() && resources2.Authority.currentQuantity < (settings2.generalMinimumAuthority < 0 ? resources2.Authority.maxQuantity : settings2.generalMinimumAuthority)) {
-        minMorale = Math.min(minMorale, 100);
-        maxMorale = Math.min(maxMorale, 100);
-      }
-      if (currentTaxRate < maxTaxRate && currentMorale >= minMorale + 1 && (currentTaxRate < optimalTax || currentMorale >= maxMorale + 1 || realMorale >= currentMorale + 1 && optimalTax >= 20)) {
-        KeyManager2.set(false, false, false);
-        taxVue.add();
-        resources2.Morale.incomeAdusted = true;
-      }
-      if (currentTaxRate > minTaxRate && currentMorale < maxMorale && (currentTaxRate > optimalTax || currentMorale < minMorale)) {
-        KeyManager2.set(false, false, false);
-        taxVue.sub();
-        resources2.Morale.incomeAdusted = true;
+  // src/domain/identifiers.ts
+  function parseIdentifier(value, label) {
+    if (typeof value !== "string" || value.trim().length === 0) {
+      throw new TypeError(`${label} must be a non-empty string`);
+    }
+    return value;
+  }
+  function automationCycleId(value) {
+    return parseIdentifier(value, "automation cycle id");
+  }
+  function commandId(value) {
+    return parseIdentifier(value, "command id");
+  }
+  function snapshotId(value) {
+    return parseIdentifier(value, "snapshot id");
+  }
+
+  // src/application/cycle-runner.ts
+  function validateMaximum(value) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new TypeError("maxCommandsPerCycle must be a non-negative integer");
+    }
+  }
+  function executorFailure(error) {
+    return {
+      status: "rejected",
+      failure: {
+        code: "executor-error",
+        message: error instanceof Error ? error.message : "command executor failed"
       }
     };
+  }
+  function createCycleRunner(dependencies) {
+    validateMaximum(dependencies.maxCommandsPerCycle);
+    let cycleSequence = 0;
+    function runCycle() {
+      cycleSequence += 1;
+      const cycleId = automationCycleId(`cycle-${cycleSequence}`);
+      const startedAtMs = dependencies.clock.nowMs();
+      const snapshot = dependencies.gameReader.readSnapshot();
+      const settings2 = dependencies.settingsReader.readSettings();
+      dependencies.logger.record({
+        kind: "cycle-started",
+        cycleId,
+        snapshotId: snapshot.metadata.id
+      });
+      const planned = [];
+      const phaseTraces = [];
+      for (const phase of dependencies.phases) {
+        const plannerTraces = [];
+        for (const planner of phase.planners) {
+          const commands = planner.plan(snapshot, settings2);
+          plannerTraces.push({
+            planner: planner.name,
+            commandCount: commands.length
+          });
+          planned.push(...commands);
+        }
+        phaseTraces.push({ phase: phase.name, planners: plannerTraces });
+      }
+      const conflictKeys = /* @__PURE__ */ new Set();
+      const results = [];
+      planned.forEach((command, index) => {
+        const envelope = {
+          id: commandId(`${cycleId}:command-${index + 1}`),
+          expectedSnapshotId: snapshot.metadata.id,
+          command
+        };
+        let outcome;
+        if (index >= dependencies.maxCommandsPerCycle) {
+          outcome = {
+            status: "rejected",
+            failure: {
+              code: "command-limit",
+              message: "cycle command limit reached",
+              context: {
+                commandIndex: index,
+                maximum: dependencies.maxCommandsPerCycle
+              }
+            }
+          };
+        } else {
+          const conflictKey = dependencies.getConflictKey(command);
+          if (conflictKey !== null && conflictKeys.has(conflictKey)) {
+            outcome = {
+              status: "rejected",
+              failure: {
+                code: "command-conflict",
+                message: `conflict on ${conflictKey}`,
+                context: { conflictKey }
+              }
+            };
+          } else {
+            if (conflictKey !== null) {
+              conflictKeys.add(conflictKey);
+            }
+            try {
+              outcome = dependencies.commandExecutor.execute(envelope);
+            } catch (error) {
+              outcome = executorFailure(error);
+            }
+          }
+        }
+        const result = {
+          ...outcome,
+          envelope,
+          completedAtMs: dependencies.clock.nowMs()
+        };
+        results.push(result);
+        dependencies.logger.record({
+          kind: "command-completed",
+          cycleId,
+          result
+        });
+      });
+      const trace = {
+        cycleId,
+        snapshotId: snapshot.metadata.id,
+        startedAtMs,
+        completedAtMs: dependencies.clock.nowMs(),
+        phases: phaseTraces,
+        results
+      };
+      dependencies.publisher.publish(trace);
+      dependencies.logger.record({ kind: "cycle-completed", trace });
+      return trace;
+    }
+    return { runCycle };
+  }
+
+  // src/adapters/validation.ts
+  function requireRecord(value, path) {
+    if (typeof value !== "object" || value === null) {
+      throw new TypeError(`${path} must be an object`);
+    }
+    return value;
+  }
+  function requireNumber(value, path) {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new TypeError(`${path} must be a finite number`);
+    }
+    return value;
+  }
+  function requireBoolean(value, path) {
+    if (typeof value !== "boolean") {
+      throw new TypeError(`${path} must be a boolean`);
+    }
+    return value;
+  }
+  function requireFunction(value, path) {
+    if (typeof value !== "function") {
+      throw new TypeError(`${path} must be a function`);
+    }
+    return value;
+  }
+
+  // src/adapters/browser/tax-controls.ts
+  function createBrowserTaxControls(getVueById2) {
+    function getControls() {
+      const candidate = getVueById2("tax_rates");
+      if (candidate === void 0 || candidate === null) return void 0;
+      const controls = requireRecord(candidate, "tax controls");
+      requireFunction(controls["add"], "tax controls.add");
+      requireFunction(controls["sub"], "tax controls.sub");
+      return controls;
+    }
+    function isAvailable() {
+      return getControls() !== void 0;
+    }
+    function adjust(direction) {
+      const controls = getControls();
+      if (controls === void 0) return false;
+      const methodName = direction === "increase" ? "add" : "sub";
+      const method = requireFunction(
+        controls[methodName],
+        `tax controls.${methodName}`
+      );
+      Reflect.apply(method, controls, []);
+      return true;
+    }
+    return Object.freeze({ isAvailable, adjust });
+  }
+  function createKeyModifierController(clear) {
+    return Object.freeze({ clear });
+  }
+
+  // src/adapters/evolve/tax-command-executor.ts
+  function failure(status, code, message, context) {
+    return context === void 0 ? { status, failure: { code, message } } : { status, failure: { code, message, context } };
+  }
+  function createTaxCommandExecutor(dependencies) {
+    function execute(envelope) {
+      const game2 = requireRecord(dependencies.getGame(), "game");
+      const global = requireRecord(game2["global"], "game.global");
+      const civic = requireRecord(global["civic"], "game.global.civic");
+      const taxes = requireRecord(civic["taxes"], "game.global.civic.taxes");
+      const currentRate = requireNumber(
+        taxes["tax_rate"],
+        "game.global.civic.taxes.tax_rate"
+      );
+      if (currentRate !== envelope.command.expectedRate) {
+        return failure("stale", "stale-tax-rate", "tax rate changed", {
+          expected: envelope.command.expectedRate,
+          actual: currentRate
+        });
+      }
+      if (!requireBoolean(taxes["display"], "game.global.civic.taxes.display")) {
+        return failure("stale", "taxes-hidden", "tax controls became locked");
+      }
+      if (!dependencies.controls.isAvailable()) {
+        return failure(
+          "stale",
+          "tax-controls-unavailable",
+          "tax controls became unavailable"
+        );
+      }
+      const resources2 = requireRecord(dependencies.getResources(), "resources");
+      const morale = requireRecord(resources2["Morale"], "resources.Morale");
+      if (requireBoolean(morale["incomeAdusted"], "resources.Morale.incomeAdusted")) {
+        return failure(
+          "stale",
+          "morale-already-adjusted",
+          "morale was already adjusted"
+        );
+      }
+      for (const batch of envelope.command.batches) {
+        dependencies.keyModifiers.clear();
+        for (const operation2 of batch.operations) {
+          if (!Number.isSafeInteger(operation2.count) || operation2.count < 0) {
+            return failure(
+              "rejected",
+              "invalid-tax-adjustment-count",
+              "tax adjustment count must be a non-negative integer"
+            );
+          }
+          for (let index = 0; index < operation2.count; index += 1) {
+            if (!dependencies.controls.adjust(operation2.direction)) {
+              return failure(
+                "stale",
+                "tax-controls-unavailable",
+                "tax controls became unavailable"
+              );
+            }
+          }
+        }
+        morale["incomeAdusted"] = true;
+      }
+      return { status: "succeeded" };
+    }
+    return Object.freeze({ execute });
+  }
+
+  // src/domain/snapshot.ts
+  function createSnapshotMetadata(input) {
+    if (typeof input.capturedAtMs !== "number" || !Number.isSafeInteger(input.capturedAtMs) || input.capturedAtMs < 0) {
+      throw new TypeError("snapshot capture time must be a non-negative integer");
+    }
+    return Object.freeze({
+      id: snapshotId(input.id),
+      capturedAtMs: input.capturedAtMs
+    });
+  }
+
+  // src/domain/tax.ts
+  function unavailableTaxSnapshot(metadata, reason) {
+    return Object.freeze({ metadata, status: "unavailable", reason });
+  }
+  function operation(direction, count) {
+    return Object.freeze({ direction, count });
+  }
+  function forcedOperations(currentRate, targetRate) {
+    const operations = [];
+    const decreaseCount = currentRate > targetRate ? Math.ceil(currentRate - targetRate) : 0;
+    const rateAfterDecrease = currentRate - decreaseCount;
+    const increaseCount = rateAfterDecrease < targetRate ? Math.ceil(targetRate - rateAfterDecrease) : 0;
+    if (decreaseCount > 0) {
+      operations.push(operation("decrease", decreaseCount));
+    }
+    if (increaseCount > 0) {
+      operations.push(operation("increase", increaseCount));
+    }
+    return operations;
+  }
+  function planTax(snapshot, settings2) {
+    if (snapshot.status === "unavailable") return [];
+    const { currentRate, maximumRate } = snapshot.tax;
+    let minimumRate = snapshot.tax.minimumRate;
+    if (settings2.requestedRate !== -1) {
+      const targetRate = Math.min(
+        Math.max(settings2.requestedRate, minimumRate),
+        maximumRate
+      );
+      return Object.freeze([
+        Object.freeze({
+          kind: "adjust-tax-rate",
+          expectedRate: currentRate,
+          batches: Object.freeze([
+            Object.freeze({
+              operations: Object.freeze(
+                forcedOperations(currentRate, targetRate)
+              )
+            })
+          ])
+        })
+      ]);
+    }
+    if (snapshot.money.storageRatio < 0.9 && !snapshot.banana) {
+      minimumRate = Math.max(minimumRate, settings2.minimumRate);
+    }
+    const optimalRate = snapshot.banana ? minimumRate : snapshot.money.demanded ? maximumRate : Math.round(
+      (maximumRate - minimumRate) * Math.max(0, 0.9 - snapshot.money.storageRatio)
+    ) + minimumRate;
+    let maximumMorale = snapshot.morale.maximum;
+    if (!snapshot.banana) {
+      if (currentRate < 20) {
+        maximumMorale -= 10 - Math.floor(currentRate / 2);
+      }
+      if (optimalRate < 20) {
+        maximumMorale += 10 - Math.floor(minimumRate / 2);
+      }
+    }
+    if (snapshot.money.storageRatio < 0.9) {
+      maximumMorale = Math.min(maximumMorale, settings2.maximumMorale);
+    }
+    let minimumMorale = settings2.minimumMorale;
+    if (settings2.manageAuthority && settings2.authorityTarget !== 0 && snapshot.authority.unlocked && snapshot.authority.current < (settings2.authorityTarget < 0 ? snapshot.authority.maximum : settings2.authorityTarget)) {
+      minimumMorale = Math.min(minimumMorale, 100);
+      maximumMorale = Math.min(maximumMorale, 100);
+    }
+    const batches = [];
+    if (currentRate < maximumRate && snapshot.morale.current >= minimumMorale + 1 && (currentRate < optimalRate || snapshot.morale.current >= maximumMorale + 1 || snapshot.morale.projected >= snapshot.morale.current + 1 && optimalRate >= 20)) {
+      batches.push(
+        Object.freeze({
+          operations: Object.freeze([operation("increase", 1)])
+        })
+      );
+    }
+    if (currentRate > minimumRate && snapshot.morale.current < maximumMorale && (currentRate > optimalRate || snapshot.morale.current < minimumMorale)) {
+      batches.push(
+        Object.freeze({
+          operations: Object.freeze([operation("decrease", 1)])
+        })
+      );
+    }
+    if (batches.length === 0) return [];
+    return Object.freeze([
+      Object.freeze({
+        kind: "adjust-tax-rate",
+        expectedRate: currentRate,
+        batches: Object.freeze(batches)
+      })
+    ]);
+  }
+
+  // src/adapters/evolve/tax-reader.ts
+  function createEvolveTaxReader(dependencies) {
+    let snapshotSequence = 0;
+    function readSnapshot() {
+      snapshotSequence += 1;
+      const metadata = createSnapshotMetadata({
+        id: `tax-snapshot-${snapshotSequence}`,
+        capturedAtMs: dependencies.clock.nowMs()
+      });
+      const resources2 = requireRecord(dependencies.getResources(), "resources");
+      const morale = requireRecord(resources2["Morale"], "resources.Morale");
+      if (requireBoolean(morale["incomeAdusted"], "resources.Morale.incomeAdusted")) {
+        return unavailableTaxSnapshot(metadata, "morale-already-adjusted");
+      }
+      if (!dependencies.controls.isAvailable()) {
+        return unavailableTaxSnapshot(metadata, "controls-unavailable");
+      }
+      const game2 = requireRecord(dependencies.getGame(), "game");
+      const global = requireRecord(game2["global"], "game.global");
+      const civic = requireRecord(global["civic"], "game.global.civic");
+      const taxes = requireRecord(civic["taxes"], "game.global.civic.taxes");
+      if (!requireBoolean(taxes["display"], "game.global.civic.taxes.display")) {
+        return unavailableTaxSnapshot(metadata, "taxes-hidden");
+      }
+      const poly2 = requireRecord(dependencies.getPoly(), "game compatibility");
+      const taxCap = requireFunction(poly2["taxCap"], "game compatibility.taxCap");
+      const maximumRate = requireNumber(
+        Reflect.apply(taxCap, poly2, [false]),
+        "maximum tax rate"
+      );
+      const minimumRate = requireNumber(
+        Reflect.apply(taxCap, poly2, [true]),
+        "minimum tax rate"
+      );
+      if (minimumRate > maximumRate) {
+        throw new TypeError("minimum tax rate cannot exceed maximum tax rate");
+      }
+      const money = requireRecord(resources2["Money"], "resources.Money");
+      const authority = requireRecord(
+        resources2["Authority"],
+        "resources.Authority"
+      );
+      const race = requireRecord(global["race"], "game.global.race");
+      const banana = Boolean(race["banana"]);
+      const isDemanded = requireFunction(
+        money["isDemanded"],
+        "resources.Money.isDemanded"
+      );
+      const isAuthorityUnlocked = requireFunction(
+        authority["isUnlocked"],
+        "resources.Authority.isUnlocked"
+      );
+      const snapshot = {
+        metadata,
+        status: "ready",
+        tax: Object.freeze({
+          currentRate: requireNumber(
+            taxes["tax_rate"],
+            "game.global.civic.taxes.tax_rate"
+          ),
+          minimumRate,
+          maximumRate
+        }),
+        morale: Object.freeze({
+          current: requireNumber(
+            morale["currentQuantity"],
+            "resources.Morale.currentQuantity"
+          ),
+          projected: requireNumber(
+            morale["rateOfChange"],
+            "resources.Morale.rateOfChange"
+          ),
+          maximum: requireNumber(
+            morale["maxQuantity"],
+            "resources.Morale.maxQuantity"
+          )
+        }),
+        money: Object.freeze({
+          storageRatio: requireNumber(
+            money["storageRatio"],
+            "resources.Money.storageRatio"
+          ),
+          demanded: banana ? false : requireBoolean(
+            Reflect.apply(isDemanded, money, []),
+            "resources.Money.isDemanded result"
+          )
+        }),
+        authority: Object.freeze({
+          current: requireNumber(
+            authority["currentQuantity"],
+            "resources.Authority.currentQuantity"
+          ),
+          maximum: requireNumber(
+            authority["maxQuantity"],
+            "resources.Authority.maxQuantity"
+          ),
+          unlocked: requireBoolean(
+            Reflect.apply(isAuthorityUnlocked, authority, []),
+            "resources.Authority.isUnlocked result"
+          )
+        }),
+        banana
+      };
+      return Object.freeze(snapshot);
+    }
+    return Object.freeze({ readSnapshot });
+  }
+
+  // src/adapters/storage/tax-settings-reader.ts
+  function createTaxSettingsReader(getSettings) {
+    function readSettings() {
+      const settings2 = requireRecord(getSettings(), "settings");
+      return Object.freeze({
+        requestedRate: requireNumber(
+          settings2["generalRequestedTaxRate"],
+          "settings.generalRequestedTaxRate"
+        ),
+        minimumRate: requireNumber(
+          settings2["generalMinimumTaxRate"],
+          "settings.generalMinimumTaxRate"
+        ),
+        minimumMorale: requireNumber(
+          settings2["generalMinimumMorale"],
+          "settings.generalMinimumMorale"
+        ),
+        maximumMorale: requireNumber(
+          settings2["generalMaximumMorale"],
+          "settings.generalMaximumMorale"
+        ),
+        manageAuthority: requireBoolean(
+          settings2["authorityManage"],
+          "settings.authorityManage"
+        ),
+        authorityTarget: requireNumber(
+          settings2["generalMinimumAuthority"],
+          "settings.generalMinimumAuthority"
+        )
+      });
+    }
+    return Object.freeze({ readSettings });
+  }
+
+  // src/bootstrap/tax.ts
+  function createTaxAutomation(dependencies) {
+    const clock = Object.freeze({ nowMs: dependencies.nowMs });
+    const controls = createBrowserTaxControls(dependencies.getVueById);
+    const gameReader = createEvolveTaxReader({
+      clock,
+      controls,
+      getGame: dependencies.getGame,
+      getPoly: dependencies.getPoly,
+      getResources: dependencies.getResources
+    });
+    const settingsReader = createTaxSettingsReader(dependencies.getSettings);
+    const commandExecutor = createTaxCommandExecutor({
+      controls,
+      keyModifiers: createKeyModifierController(dependencies.clearKeyModifiers),
+      getGame: dependencies.getGame,
+      getResources: dependencies.getResources
+    });
+    let lastTrace;
+    const runner = createCycleRunner({
+      clock,
+      gameReader,
+      settingsReader,
+      commandExecutor,
+      logger: { record: () => {
+      } },
+      publisher: {
+        publish: (trace) => {
+          lastTrace = trace;
+        }
+      },
+      phases: [
+        {
+          name: "civic",
+          planners: [{ name: "tax", plan: planTax }]
+        }
+      ],
+      getConflictKey: () => "tax-rate",
+      maxCommandsPerCycle: 1
+    });
+    function autoTax2() {
+      lastTrace = runner.runCycle();
+    }
+    return Object.freeze({ autoTax: autoTax2, getLastTrace: () => lastTrace });
+  }
+
+  // src/adapters/userscript/environment.ts
+  function readSafely(read) {
+    try {
+      return read();
+    } catch {
+      return void 0;
+    }
+  }
+  function readAmbientUserscriptGlobals() {
+    return Object.freeze({
+      unsafeWindow: readSafely(
+        () => typeof unsafeWindow === "undefined" ? void 0 : unsafeWindow
+      ),
+      cloneInto: readSafely(
+        () => typeof cloneInto === "undefined" ? void 0 : cloneInto
+      ),
+      exportFunction: readSafely(
+        () => typeof exportFunction === "undefined" ? void 0 : exportFunction
+      ),
+      gmInfo: readSafely(
+        () => typeof GM_info === "undefined" ? void 0 : GM_info
+      ),
+      gm: readSafely(() => typeof GM === "undefined" ? void 0 : GM)
+    });
+  }
+  function isRecord11(value) {
+    return typeof value === "object" && value !== null;
+  }
+  function asBridge(value) {
+    return typeof value === "function" ? value : void 0;
+  }
+  function readVersion(info) {
+    if (!isRecord11(info)) return void 0;
+    const script = info["script"];
+    if (!isRecord11(script)) return void 0;
+    const version = script["version"];
+    return typeof version === "string" && version.length > 0 ? version : void 0;
+  }
+  function createUserscriptEnvironment(browserWindow, globals = readAmbientUserscriptGlobals()) {
+    const candidatePageWindow = readSafely(() => globals.unsafeWindow);
+    const pageWindow = isRecord11(candidatePageWindow) ? candidatePageWindow : browserWindow;
+    const cloneBridge = asBridge(readSafely(() => globals.cloneInto));
+    const exportBridge = asBridge(readSafely(() => globals.exportFunction));
+    const needsSandboxBridge = pageWindow !== browserWindow && cloneBridge !== void 0 && exportBridge !== void 0;
+    const capabilities = Object.freeze({
+      hasPageWindow: pageWindow !== browserWindow,
+      canCloneIntoPage: cloneBridge !== void 0,
+      canExportToPage: exportBridge !== void 0,
+      needsSandboxBridge
+    });
+    function cloneIntoPage(value, options) {
+      if (!needsSandboxBridge || cloneBridge === void 0) return value;
+      const cloned = Reflect.apply(cloneBridge, void 0, [
+        value,
+        pageWindow,
+        options
+      ]);
+      return cloned;
+    }
+    function exportToPage(value) {
+      if (!needsSandboxBridge || exportBridge === void 0) return value;
+      const exported = Reflect.apply(exportBridge, void 0, [
+        value,
+        pageWindow
+      ]);
+      return exported;
+    }
+    function getScriptVersion() {
+      return readSafely(() => {
+        const directInfo = globals.gmInfo;
+        if (directInfo !== void 0) return readVersion(directInfo);
+        const gm = globals.gm;
+        return isRecord11(gm) ? readVersion(gm["info"]) : void 0;
+      });
+    }
+    return Object.freeze({
+      pageWindow,
+      capabilities,
+      cloneIntoPage,
+      exportToPage,
+      getScriptVersion
+    });
   }
 
   // src/automation/economy/smelter.ts
@@ -17983,7 +20017,7 @@
     getSettings,
     getGame,
     getResources,
-    findRequiredResourceWeight: findRequiredResourceWeight2
+    findRequiredResourceWeight: findRequiredResourceWeight3
   }) {
     return function autoFactory2() {
       const state2 = getState();
@@ -18025,7 +20059,7 @@
           onDemand = true;
         }
       }
-      const scalingFactor = settings2.productionFactoryWeighting === "buildings" && state2.unlockedBuildings.length > 0 ? (resource) => findRequiredResourceWeight2(resource) ?? 100 : settings2.productionFactoryWeighting === "demanded" && onDemand ? (resource) => resource.currentQuantity < resource.storageRequired ? 1 : 0 : () => 1;
+      const scalingFactor = settings2.productionFactoryWeighting === "buildings" && state2.unlockedBuildings.length > 0 ? (resource) => findRequiredResourceWeight3(resource) ?? 100 : settings2.productionFactoryWeighting === "demanded" && onDemand ? (resource) => resource.currentQuantity < resource.storageRequired ? 1 : 0 : () => 1;
       const scaledWeights = Object.fromEntries(
         allProducts.map((production) => [
           production.resource.id,
@@ -19507,15 +21541,15 @@
     getVueById: getVueById2,
     logPrestige: logPrestige2,
     getIsBioseederPrestigeAvailable,
-    isCataclysmPrestigeAvailable: isCataclysmPrestigeAvailable2,
+    isCataclysmPrestigeAvailable: isCataclysmPrestigeAvailable3,
     loadQueuedSettings: loadQueuedSettings2,
     getTechIds,
-    isWhiteholePrestigeAvailable: isWhiteholePrestigeAvailable2,
-    isApocalypsePrestigeAvailable: isApocalypsePrestigeAvailable2,
-    isWitchAscensionPrestigeAvailable: isWitchAscensionPrestigeAvailable2,
-    isAscensionPrestigeAvailable: isAscensionPrestigeAvailable2,
+    isWhiteholePrestigeAvailable: isWhiteholePrestigeAvailable3,
+    isApocalypsePrestigeAvailable: isApocalypsePrestigeAvailable3,
+    isWitchAscensionPrestigeAvailable: isWitchAscensionPrestigeAvailable3,
+    isAscensionPrestigeAvailable: isAscensionPrestigeAvailable3,
     KeyManager: KeyManager2,
-    isDemonicPrestigeAvailable: isDemonicPrestigeAvailable2
+    isDemonicPrestigeAvailable: isDemonicPrestigeAvailable3
   }) {
     return function autoPrestige2() {
       const state2 = getState();
@@ -19562,7 +21596,7 @@
             }
           });
         case "cataclysm":
-          return tryReset(isCataclysmPrestigeAvailable2(), () => {
+          return tryReset(isCataclysmPrestigeAvailable3(), () => {
             if (settings2.autoEvolution) {
               loadQueuedSettings2();
             }
@@ -19572,7 +21606,7 @@
             }
           });
         case "whitehole":
-          return tryReset(isWhiteholePrestigeAvailable2(), () => {
+          return tryReset(isWhiteholePrestigeAvailable3(), () => {
             if (techIds2["tech-exotic_infusion"].isUnlocked() && techIds2["tech-exotic_infusion"].isAffordable()) {
               logPrestige2();
             }
@@ -19583,7 +21617,7 @@
             ].forEach((id) => techIds2[id].click());
           });
         case "apocalypse":
-          return tryReset(isApocalypsePrestigeAvailable2(), () => {
+          return tryReset(isApocalypsePrestigeAvailable3(), () => {
             logPrestige2();
             ["tech-protocol66", "tech-protocol66a"].forEach(
               (id) => techIds2[id].click()
@@ -19591,28 +21625,28 @@
           });
         case "ascension":
           if (game2.global.race["witch_hunter"]) {
-            return tryReset(isWitchAscensionPrestigeAvailable2(), () => {
+            return tryReset(isWitchAscensionPrestigeAvailable3(), () => {
               KeyManager2.set(false, false, false);
               logPrestige2();
               buildings2.PitAbsorptionChamber.vue.action();
               state2.goal = "GameOverMan";
             });
           } else {
-            return tryReset(isAscensionPrestigeAvailable2(), () => {
+            return tryReset(isAscensionPrestigeAvailable3(), () => {
               KeyManager2.set(false, false, false);
               buildings2.SiriusAscend.click();
             });
           }
         case "demonic":
           if (game2.global.race["witch_hunter"]) {
-            return tryReset(isWitchAscensionPrestigeAvailable2(true), () => {
+            return tryReset(isWitchAscensionPrestigeAvailable3(true), () => {
               KeyManager2.set(false, false, false);
               logPrestige2();
               buildings2.PitAbsorptionChamber.vue.action();
               state2.goal = "GameOverMan";
             });
           } else {
-            return tryReset(isDemonicPrestigeAvailable2(), () => {
+            return tryReset(isDemonicPrestigeAvailable3(), () => {
               logPrestige2();
               if (game2.global.race["fasting"]) {
                 techIds2["tech-final_ingredient"].click();
@@ -19662,7 +21696,7 @@
       const game2 = getGame();
       const settings2 = getSettings();
       const generatePlanets2 = getGeneratePlanets();
-      const isAchievementUnlocked2 = getIsAchievementUnlocked();
+      const isAchievementUnlocked3 = getIsAchievementUnlocked();
       const planetBiomeGenus2 = getPlanetBiomeGenus();
       const races2 = getRaces();
       const planetBiomes2 = getPlanetBiomes();
@@ -19683,28 +21717,28 @@
       for (let i = 0; i < planets.length; i++) {
         let planet = planets[i];
         planet.achieve = 0;
-        if (!isAchievementUnlocked2("biome_" + planet.biome, alevel)) {
+        if (!isAchievementUnlocked3("biome_" + planet.biome, alevel)) {
           planet.achieve++;
         }
         for (let trait of planet.traits) {
-          if (trait !== "none" && !isAchievementUnlocked2("atmo_" + trait, alevel)) {
+          if (trait !== "none" && !isAchievementUnlocked3("atmo_" + trait, alevel)) {
             planet.achieve++;
           }
         }
         if (planetBiomeGenus2[planet.biome]) {
           for (let id in races2) {
-            if (races2[id].genus === planetBiomeGenus2[planet.biome] && !isAchievementUnlocked2("extinct_" + id, alevel)) {
+            if (races2[id].genus === planetBiomeGenus2[planet.biome] && !isAchievementUnlocked3("extinct_" + id, alevel)) {
               planet.achieve++;
             }
           }
-          if (!isAchievementUnlocked2(
+          if (!isAchievementUnlocked3(
             "genus_" + planetBiomeGenus2[planet.biome],
             alevel
           )) {
             planet.achieve++;
           }
         }
-        if (!isAchievementUnlocked2("madagascar_tree", alevel) && planet.biome === "oceanic" && game2.global.race.gods !== "sharkin") {
+        if (!isAchievementUnlocked3("madagascar_tree", alevel) && planet.biome === "oceanic" && game2.global.race.gods !== "sharkin") {
           planet.achieve++;
         }
       }
@@ -19769,7 +21803,7 @@
     getResources,
     ticksPerSecond: ticksPerSecond2,
     getState,
-    findRequiredResourceWeight: findRequiredResourceWeight2,
+    findRequiredResourceWeight: findRequiredResourceWeight3,
     getPoly,
     isCraftingJob,
     getHaveTask,
@@ -19899,7 +21933,7 @@
           scaledWeightings = Object.fromEntries(
             availableJobs.map((job) => [
               job.id,
-              (findRequiredResourceWeight2(job.resource) ?? 0) * job.resource.craftWeighting
+              (findRequiredResourceWeight3(job.resource) ?? 0) * job.resource.craftWeighting
             ])
           );
           availableJobs.sort(
@@ -20632,13 +22666,13 @@
         if (usesUsedConsumption(building)) {
           continue;
         }
-        let conflict = getCostConflict2(building);
-        if (conflict && !building.is.important) {
-          building.extraDescription += `Conflicts with ${conflict.actionList.map((action) => {
+        let conflict2 = getCostConflict2(building);
+        if (conflict2 && !building.is.important) {
+          building.extraDescription += conflict2.status === "unavailable" ? "Cost reservation data unavailable; skipped for safety<br>" : `Conflicts with ${conflict2.targetNames.map((action) => {
             return `<span class="has-text-info">${action}</span>`;
-          }).join(", ")} for ${conflict.resList.map((res) => {
+          }).join(", ")} for ${conflict2.resourceNames.map((res) => {
             return `<span class="has-text-info">${res}</span>`;
-          }).join(", ")} (${conflict.obj.cause})<br>`;
+          }).join(", ")} (${conflict2.targetCause})<br>`;
           continue;
         }
         if (!settings2.buildingBuildIfStorageFull || !Object.keys(building.cost).some(
@@ -20806,13 +22840,13 @@
     isHellSupressUseful: isHellSupressUseful2,
     getGalaxyRegions: getGalaxyRegions2,
     traitVal: traitVal2,
-    getRequiredAuthorityGarrison: getRequiredAuthorityGarrison2,
+    getAuthorityGarrisonRequirement: getAuthorityGarrisonRequirement2,
     getHaveTech,
     adjustSpire: adjustSpire2,
     getBestSupplyRatio: getBestSupplyRatio2,
     getHealingRate: getHealingRate2,
     isHungryRace: isHungryRace2,
-    isPillarFinished: isPillarFinished2,
+    isPillarFinished: isPillarFinished3,
     getJQuery,
     getBuildingIds
   }) {
@@ -21074,10 +23108,13 @@
             } else {
               let authorityReserve = 0;
               if (game2.global.race.universe === "evil" && resources2.Authority.isUnlocked()) {
-                authorityReserve = Math.min(
-                  WarManager2.currentSoldiers,
-                  getRequiredAuthorityGarrison2(WarManager2.currentCityGarrison)
+                const authorityRequirement = getAuthorityGarrisonRequirement2(
+                  WarManager2.currentCityGarrison
                 );
+                authorityReserve = authorityRequirement.status === "ready" ? Math.min(
+                  WarManager2.currentSoldiers,
+                  authorityRequirement.requiredGarrison
+                ) : WarManager2.currentSoldiers;
               }
               let dispatchSoldiers = WarManager2.currentSoldiers - authorityReserve - Math.max(0, WarManager2.wounded - Math.floor(getHealingRate2()));
               let healthySquads = Math.floor(
@@ -21090,7 +23127,7 @@
               );
             }
           }
-          if (building === buildings2.SiriusAscensionTrigger && building.powered > 0 && (!isPillarFinished2() || settings2.prestigeType !== "ascension")) {
+          if (building === buildings2.SiriusAscensionTrigger && building.powered > 0 && (!isPillarFinished3() || settings2.prestigeType !== "ascension")) {
             maxStateOn = 0;
           }
           if (building === buildings2.RedAtmoTerraformer && settings2.prestigeType !== "terraform") {
@@ -21881,8 +23918,7 @@
     getSettings,
     getResources,
     traitVal: traitVal2,
-    getAuthorityTarget: getAuthorityTarget2,
-    getPredictedAuthorityAfterRemovingSoldiers: getPredictedAuthorityAfterRemovingSoldiers2,
+    assessAuthorityRemoval: assessAuthorityRemoval3,
     GameLog: GameLog2
   }) {
     return function autoFleetOuter2() {
@@ -21987,10 +24023,13 @@
       }[newShip.class] : m.ClassCrew[newShip.class];
       const shipCrew = baseCrew * traitVal2("high_pop", 0, 1);
       if (settings2.authorityManage && settings2.generalMinimumAuthority !== 0 && game2.global.race.universe === "evil" && resources2.Authority.isUnlocked()) {
-        const authorityTarget = getAuthorityTarget2();
-        const predictedAuthority = getPredictedAuthorityAfterRemovingSoldiers2(shipCrew);
-        if (authorityTarget !== null && predictedAuthority < authorityTarget) {
-          m.nextShipMsg = `Next ship(${m.nextShipName}) would lower Authority to ${predictedAuthority}, below the ${authorityTarget} target`;
+        const assessment = assessAuthorityRemoval3(shipCrew);
+        if (assessment.status === "unavailable") {
+          m.nextShipMsg = `Authority data unavailable; ship construction paused`;
+          return;
+        }
+        if (assessment.status === "ready" && assessment.blocksRemoval) {
+          m.nextShipMsg = `Next ship(${m.nextShipName}) would lower Authority to ${assessment.predicted}, below the ${assessment.target} target`;
           return;
         }
       }
@@ -23877,28 +25916,28 @@
     const document2 = liveObject4(() => getDependency("document"));
     const game2 = liveObject4(() => getDependency("game"));
     const haveTech2 = liveFunction(() => getDependency("haveTech"));
-    const isApocalypsePrestigeAvailable2 = liveFunction(
+    const isApocalypsePrestigeAvailable3 = liveFunction(
       () => getDependency("isApocalypsePrestigeAvailable")
     );
-    const isAscensionPrestigeAvailable2 = liveFunction(
+    const isAscensionPrestigeAvailable3 = liveFunction(
       () => getDependency("isAscensionPrestigeAvailable")
     );
     const isBioseederPrestigeAvailable2 = liveFunction(
       () => getDependency("isBioseederPrestigeAvailable")
     );
-    const isCataclysmPrestigeAvailable2 = liveFunction(
+    const isCataclysmPrestigeAvailable3 = liveFunction(
       () => getDependency("isCataclysmPrestigeAvailable")
     );
-    const isDemonicPrestigeAvailable2 = liveFunction(
+    const isDemonicPrestigeAvailable3 = liveFunction(
       () => getDependency("isDemonicPrestigeAvailable")
     );
-    const isPrestigeAllowed2 = liveFunction(
+    const isPrestigeAllowed3 = liveFunction(
       () => getDependency("isPrestigeAllowed")
     );
-    const isWhiteholePrestigeAvailable2 = liveFunction(
+    const isWhiteholePrestigeAvailable3 = liveFunction(
       () => getDependency("isWhiteholePrestigeAvailable")
     );
-    const isWitchAscensionPrestigeAvailable2 = liveFunction(
+    const isWitchAscensionPrestigeAvailable3 = liveFunction(
       () => getDependency("isWitchAscensionPrestigeAvailable")
     );
     const openOptionsModal2 = liveFunction(
@@ -23947,21 +25986,21 @@
             </label>
           </div>`);
       currentNode.find(".script_prestigeType").val(settingsRaw2.prestigeType).on("change", function() {
-        if (isPrestigeAllowed2()) {
+        if (isPrestigeAllowed3()) {
           let confirmationText = "";
           if (this.value === "mad" && haveTech2("mad")) {
             confirmationText = "MAD has already been researched.";
           } else if (this.value === "bioseed" && isBioseederPrestigeAvailable2()) {
             confirmationText = "Required probes are built, and bioseeder ship is ready to launch.";
-          } else if (this.value === "cataclysm" && isCataclysmPrestigeAvailable2()) {
+          } else if (this.value === "cataclysm" && isCataclysmPrestigeAvailable3()) {
             confirmationText = "Dial It To 11 is unlocked. You may prestige immediately.";
-          } else if (this.value === "whitehole" && isWhiteholePrestigeAvailable2()) {
+          } else if (this.value === "whitehole" && isWhiteholePrestigeAvailable3()) {
             confirmationText = "Required mass is reached, and exotic infusion is unlocked.";
-          } else if (this.value === "apocalypse" && isApocalypsePrestigeAvailable2()) {
+          } else if (this.value === "apocalypse" && isApocalypsePrestigeAvailable3()) {
             confirmationText = "Protocol 66 is unlocked.";
-          } else if (this.value === "ascension" && (game2.global.race["witch_hunter"] ? isWitchAscensionPrestigeAvailable2() : isAscensionPrestigeAvailable2())) {
+          } else if (this.value === "ascension" && (game2.global.race["witch_hunter"] ? isWitchAscensionPrestigeAvailable3() : isAscensionPrestigeAvailable3())) {
             confirmationText = game2.global.race["witch_hunter"] ? "Absorption Chamber is built and ready." : "Ascension machine is built and powered.";
-          } else if (this.value === "demonic" && (game2.global.race["witch_hunter"] ? isWitchAscensionPrestigeAvailable2(true) : isDemonicPrestigeAvailable2())) {
+          } else if (this.value === "demonic" && (game2.global.race["witch_hunter"] ? isWitchAscensionPrestigeAvailable3(true) : isDemonicPrestigeAvailable3())) {
             confirmationText = game2.global.race["witch_hunter"] ? "Absorption Chamber is built and ready." : "Required floor is reached, and demon lord is already dead.";
           } else if (this.value === "terraform" && buildings2.RedTerraform.isUnlocked()) {
             confirmationText = "Terraformer is built and powered.";
@@ -28865,8 +30904,9 @@
         dependencies.updateSettingsFromState();
       });
       $2("#script_planner-reset").on("click", function() {
-        dependencies.getState().plannerStats = dependencies.makePlannerStats();
-        dependencies.savePlannerStats();
+        const stats = dependencies.makePlannerStats();
+        dependencies.getState().plannerStats = stats;
+        if (stats !== null) dependencies.savePlannerStats(stats);
         $2("#script_planner-stats-text").html("");
       });
     }
@@ -29147,14 +31187,14 @@
         }
       }
       if ((isTechnology(obj) || !settings2.autoARPA && obj._tab === "arpa" || !settings2.autoBuild && obj._tab !== "arpa") && !state2.queuedTargetsAll.includes(obj) && !state2.triggerTargets.includes(obj)) {
-        const conflict = getCostConflict2(obj);
-        if (conflict) {
+        const conflict2 = getCostConflict2(obj);
+        if (conflict2) {
           notes.push(
-            `Conflicts with ${conflict.actionList.map((action) => {
+            conflict2.status === "unavailable" ? "Cost reservation data unavailable; action blocked for safety" : `Conflicts with ${conflict2.targetNames.map((action) => {
               return `<span class="has-text-info">${action}</span>`;
-            }).join(", ")} for ${conflict.resList.map((res) => {
+            }).join(", ")} for ${conflict2.resourceNames.map((res) => {
               return `<span class="has-text-info">${res}</span>`;
-            }).join(", ")} (${conflict.obj.cause})`
+            }).join(", ")} (${conflict2.targetCause})`
           );
         }
       }
@@ -29164,9 +31204,9 @@
         } else if (state2.triggerTargets.includes(obj)) {
           notes.push("Active trigger, processing...");
         } else {
-          const conflict = getTechConflict2(obj);
-          if (conflict) {
-            notes.push(conflict);
+          const conflict2 = getTechConflict2(obj);
+          if (conflict2) {
+            notes.push(conflict2);
           }
         }
       }
@@ -31694,7 +33734,8 @@
 
   // src/ui/script-runtime.ts
   function createScriptRuntimeUI({
-    getContext
+    getContext,
+    getScriptVersion
   }) {
     const liveObject5 = (key) => new Proxy(
       {},
@@ -32210,18 +34251,7 @@
 Stack info:
 ${stack}`;
       }
-      let versionPart = "unknown";
-      try {
-        let gmInfo = typeof GM_info !== "undefined" ? GM_info : typeof GM !== "undefined" ? GM?.info : null;
-        if (gmInfo?.script?.version) {
-          versionPart = gmInfo.script.version;
-        }
-      } catch (internalError) {
-        console.error("Error in error handler: %o", internalError);
-        msg = `${msg}
------
-Error in error handler: ${internalError}`;
-      }
+      const versionPart = getScriptVersion() ?? "unknown";
       msg = `${msg}
 
 Script version: ${versionPart} ${getContext().scriptVersionExtra}
@@ -32280,6 +34310,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
   (function($) {
     "use strict";
     const { getRealNumber, getNumberString, getNiceNumber } = createNumberFormatting({ numberSuffix });
+    const browserClock = createBrowserClock();
     var settingsRaw = JSON.parse(localStorage.getItem("settings")) ?? {};
     var settings = {};
     var game = null;
@@ -33289,35 +35320,79 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     });
     const { buildMarketSettings, updateMarketSettingsContent } = marketSettings;
     let { traitVal } = createTraitValue({ getGame: () => game });
-    const {
-      getAuthorityTarget,
-      getRequiredAuthorityGarrison,
-      getPredictedAuthorityAfterRemovingSoldiers
-    } = createAuthorityPolicy({
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      traitVal
-    });
+    const readAuthorityView = () => readAuthorityPolicyView(
+      game,
+      settings,
+      resources,
+      () => traitVal("high_pop", 1, 100)
+    );
+    const getAuthorityGarrisonRequirement = (currentGarrison) => {
+      const quantity = readAuthorityQuantity(currentGarrison);
+      if (quantity.status === "unavailable") return quantity;
+      const view = readAuthorityView();
+      return view.status === "ready" ? calculateRequiredAuthorityGarrison(view.view, quantity.value) : view;
+    };
+    const assessAuthorityRemoval = (removedSoldiers) => {
+      const quantity = readAuthorityQuantity(removedSoldiers);
+      if (quantity.status === "unavailable") return quantity;
+      const view = readAuthorityView();
+      return view.status === "ready" ? assessAuthorityRemoval2(view.view, quantity.value) : view;
+    };
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        authorityPolicy: {
+          getAuthorityTarget() {
+            const view = readAuthorityView();
+            return view.status === "ready" ? resolveAuthorityTarget(view.view.target) : view;
+          },
+          getAuthorityPerSoldier() {
+            const view = readAuthorityView();
+            return view.status === "ready" ? calculateAuthorityPerSoldier(view.view.modifiers) : view;
+          },
+          getRequiredAuthorityGarrison(currentGarrison) {
+            const requirement = getAuthorityGarrisonRequirement(currentGarrison);
+            return requirement.status === "ready" ? requirement.requiredGarrison : requirement;
+          },
+          getPredictedAuthorityAfterRemovingSoldiers(removedSoldiers) {
+            const quantity = readAuthorityQuantity(removedSoldiers);
+            if (quantity.status === "unavailable") return quantity;
+            const view = readAuthorityView();
+            return view.status === "ready" ? predictAuthorityAfterRemovingSoldiers(view.view, quantity.value) : view;
+          },
+          assessAuthorityRemoval
+        },
+        setAuthorityPolicyTestContext(context) {
+          game = context.game;
+          settings = context.settings;
+          resources = context.resources;
+        }
+      });
+    }
     const { normalizeProperties, addProps } = createPropertyHelpers({
       getSettings: () => settings
     });
-    let { getCostConflict } = createCostConflicts({
-      getState: () => state,
-      getResources: () => resources,
-      isEmptyObject: (object) => $.isEmptyObject(object)
-    });
-    const {
-      plannerLimitingResource,
-      makePlannerStats,
-      loadPlannerStats,
-      savePlannerStats
-    } = createPlannerAnalysis({
-      getGame: () => game,
-      getResources: () => resources,
-      getState: () => state,
-      storage: localStorage
-    });
+    let getCostConflict = (action) => {
+      const readResult = readCostConflictInput(state, resources, action);
+      return readResult.status === "ready" ? findCostConflict(readResult.input) : readResult;
+    };
+    const plannerStatsLifecycle = createPlannerStatsLifecycle(
+      createPlannerStatsStore(localStorage)
+    );
+    function plannerLimitingResource(target) {
+      const readResult = readPlannerLimitInput(target, resources);
+      return readResult.status === "ready" ? findPlannerLimit(readResult.input) : readResult;
+    }
+    function makePlannerStats() {
+      const readResult = readPlannerRun(game);
+      return readResult.status === "ready" ? plannerStatsLifecycle.make(readResult.run) : null;
+    }
+    function loadPlannerStats() {
+      const readResult = readPlannerRun(game);
+      return readResult.status === "ready" ? plannerStatsLifecycle.load(readResult.run) : null;
+    }
+    function savePlannerStats(stats) {
+      return plannerStatsLifecycle.save(stats);
+    }
     const { expandStorage } = createStorageExpansion({
       getSettings: () => settings,
       getResources: () => resources,
@@ -33430,6 +35505,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getDate: () => /* @__PURE__ */ new Date()
     });
     var win = null;
+    const userscriptEnvironment = createUserscriptEnvironment(window);
     const { getVueById, triggerFileDownload } = createBrowserRuntime({
       getWin: () => win,
       getDocument: () => document,
@@ -34105,13 +36181,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getGameLog: () => GameLog,
       getNeedSandboxBypass: () => needSandboxBypass,
       getWin: () => win,
-      getUnsafeWindow: () => typeof unsafeWindow === "undefined" ? void 0 : unsafeWindow,
       getSortable: () => Sortable,
       getUpdateDebugData: () => updateDebugData,
       getCreateMechInfo: () => createMechInfo,
       getVueById: (id) => getVueById(id),
       kCombinations: k_combinations,
-      cloneInto: (...args) => cloneInto(...args),
+      cloneIntoPage: (value, options) => userscriptEnvironment.cloneIntoPage(value, options),
       createMutationObserver: (callback) => new MutationObserver(callback)
     });
     if (window.__EA_TEST_HOOKS__) {
@@ -34158,9 +36233,8 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getPoly: () => poly,
       getWin: () => win,
       getNeedSandboxBypass: () => needSandboxBypass,
-      getUnsafeWindow: () => typeof unsafeWindow === "undefined" ? void 0 : unsafeWindow,
       getKeyboardEvent: () => KeyboardEvent,
-      cloneInto: (...args) => cloneInto(...args)
+      cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value)
     }));
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
@@ -34364,15 +36438,54 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
+    let getStarLevel = (context) => {
+      const result = readAchievementStarLevelContext(context);
+      return result.status === "ready" ? calculateAchievementStarLevel(result.context) : 1;
+    };
+    let getAchievementStar = (id, universe) => {
+      const result = readAchievementStar(game, poly, id, universe);
+      return result.status === "ready" ? result.star : 0;
+    };
+    let isAchievementUnlocked = (id, level, universe) => {
+      if (typeof level !== "number" || !Number.isFinite(level) || level < 0) {
+        return false;
+      }
+      const result = readAchievementStar(game, poly, id, universe);
+      return result.status === "ready" && isAchievementUnlocked2(result.star, level);
+    };
+    let guardActive = (setting) => {
+      const result = readAchievementGuardInput(
+        settings,
+        game,
+        poly,
+        buildings,
+        setting
+      );
+      if (result.status === "ready") {
+        return isAchievementGuardActive(result.input);
+      }
+      return result.status === "unavailable" ? result.fallbackActive : false;
+    };
+    let bananaRepublicObjectiveComplete = (objective) => {
+      const result = readBananaRepublicObjective(game, poly, objective);
+      return result.status === "ready" ? result.complete : false;
+    };
+    let bananaRepublicSmoothieComplete = () => {
+      const result = readBananaRepublicSmoothieInput(game);
+      return result.status === "ready" ? isBananaRepublicSmoothieComplete(result.input) : false;
+    };
+    let bananaRepublicReadyForUnification = () => {
+      const result = readBananaRepublicProgress(game, poly);
+      return result.status === "ready" ? isBananaRepublicReadyForUnification(result.progress) : false;
+    };
+    let guardBananaRepublicActive = () => {
+      const result = readBananaRepublicGuardInput(settings, game, poly);
+      if (result.status === "ready") {
+        return isBananaRepublicGuardActive(result.input);
+      }
+      return result.status === "unavailable" ? result.fallbackActive : false;
+    };
     let {
-      getStarLevel,
-      getAchievementStar,
-      isAchievementUnlocked,
-      guardActive,
-      bananaRepublicObjectiveComplete,
-      bananaRepublicSmoothieComplete,
-      bananaRepublicReadyForUnification,
-      guardBananaRepublicActive,
       inflationChallengeAssistActive,
       inflationChallengeMoneyReachable,
       inflationChallengeSecondsToFinish,
@@ -34382,9 +36495,9 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     } = createRunGuards({
       getSettings: () => settings,
       getGame: () => game,
-      getPoly: () => poly,
       getResources: () => resources,
       getBuildings: () => buildings,
+      getAchievementStar: (...args) => getAchievementStar(...args),
       haveTech,
       getNumberString,
       inflationChallengeMoney: INFLATION_CHALLENGE_MONEY,
@@ -34442,9 +36555,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const { findRequiredResourceWeight } = createResourceWeighting({
-      getState: () => state
-    });
+    const findRequiredResourceWeight = (resource) => findRequiredResourceWeight2(state.unlockedBuildings, resource);
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         findRequiredResourceWeight,
@@ -34582,14 +36693,28 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getHaveTask: () => haveTask,
       getFoodConsume
     });
-    const autoTax = createAutoTax({
-      KeyManager,
+    const { autoTax } = createTaxAutomation({
       getPoly: () => poly,
       getResources: () => resources,
       getSettings: () => settings,
       getGame: () => game,
-      getVueById
+      getVueById,
+      clearKeyModifiers: () => KeyManager.set(false, false, false),
+      nowMs: () => browserClock.nowMs()
     });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        autoTax: () => autoTax(),
+        setAutoTaxTestContext(context) {
+          if ("game" in context) game = context.game;
+          if ("settings" in context) settings = context.settings;
+          if ("resources" in context) resources = context.resources;
+          if ("poly" in context) poly = context.poly;
+          if ("win" in context) win = context.win;
+          if ("keySet" in context) KeyManager.set = context.keySet;
+        }
+      });
+    }
     const autoAlchemy = createAutoAlchemy({
       AlchemyManager,
       getResources: () => resources,
@@ -34681,28 +36806,64 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    let {
-      isPrestigeAllowed,
-      isCataclysmPrestigeAvailable,
-      isBioseederPrestigeAvailable,
-      isWhiteholePrestigeAvailable,
-      isApocalypsePrestigeAvailable,
-      isAscensionPrestigeAvailable,
-      isWitchAscensionPrestigeAvailable,
-      isDemonicPrestigeAvailable,
-      isPillarFinished,
-      isGECKNeeded,
-      getBlackholeMass
-    } = createPrestigeEligibility({
-      getSettings: () => settings,
-      getGame: () => game,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getTechIds: () => techIds,
-      getMechManager: () => MechManager,
-      getHaveTech: () => haveTech,
-      getIsAchievementUnlocked: () => isAchievementUnlocked
-    });
+    const readPrestigeView = () => readPrestigeEligibilityView(
+      settings,
+      game,
+      resources,
+      buildings,
+      techIds,
+      MechManager,
+      (...args) => haveTech(...args),
+      (...args) => isAchievementUnlocked(...args)
+    );
+    let isPrestigeAllowed = (type) => {
+      const result = readPrestigePermissionView(settings, game);
+      return result.status === "ready" ? isPrestigeAllowed2(result.view, type) : false;
+    };
+    let isCataclysmPrestigeAvailable = () => {
+      const result = readPrestigeView();
+      return result.status === "ready" ? isCataclysmPrestigeAvailable2(result.view) : false;
+    };
+    let isBioseederPrestigeAvailable = () => {
+      const result = readPrestigeView();
+      return result.status === "ready" ? isBioseedPrestigeAvailable(result.view) : false;
+    };
+    let isWhiteholePrestigeAvailable = () => {
+      const result = readPrestigeView();
+      return result.status === "ready" ? isWhiteholePrestigeAvailable2(result.view) : false;
+    };
+    let isApocalypsePrestigeAvailable = () => {
+      const result = readPrestigeView();
+      return result.status === "ready" ? isApocalypsePrestigeAvailable2(result.view) : false;
+    };
+    let isAscensionPrestigeAvailable = () => {
+      const result = readPrestigeView();
+      return result.status === "ready" ? isAscensionPrestigeAvailable2(result.view) : false;
+    };
+    let isWitchAscensionPrestigeAvailable = (demonic) => {
+      const result = readPrestigeView();
+      return result.status === "ready" ? isWitchAscensionPrestigeAvailable2(result.view, demonic) : false;
+    };
+    let isDemonicPrestigeAvailable = () => {
+      const result = readPrestigeView();
+      return result.status === "ready" ? isDemonicPrestigeAvailable2(result.view) : false;
+    };
+    let isPillarFinished = () => {
+      const result = readPillarEligibilityView(settings, game, resources);
+      return result.status === "ready" ? isPillarFinished2(result.view) : false;
+    };
+    let isGECKNeeded = () => {
+      const result = readGeckEligibilityView(
+        settings,
+        buildings,
+        (...args) => isAchievementUnlocked(...args)
+      );
+      return result.status === "ready" ? isGeckNeeded(result.view) : true;
+    };
+    let getBlackholeMass = () => {
+      const result = readPrestigeView();
+      return result.status === "ready" ? getBlackholeMass2(result.view) : 0;
+    };
     const autoPrestige = createAutoPrestige({
       getState: () => state,
       getSettings: () => settings,
@@ -34907,19 +37068,30 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getResources: () => resources,
       getGetCostConflict: () => getCostConflict
     });
-    const { getTechConflict } = createTechConflicts({
-      getSettings: () => settings,
-      getResources: () => resources,
-      getState: () => state,
-      getGame: () => game,
-      getIsAchievementUnlocked: () => isAchievementUnlocked,
-      getNumberString,
-      guardActive,
-      guardBananaRepublicActive,
-      retirementChallengeAssistActive,
-      retirementPreparationMissing,
-      fanatAchievements
-    });
+    let techConflictClock = browserClock;
+    const getTechConflict = (tech) => {
+      const readResult = readTechConflictInput(
+        tech,
+        settings,
+        resources,
+        state,
+        game,
+        {
+          clock: techConflictClock,
+          guardActive,
+          guardBananaRepublicActive,
+          retirementChallengeAssistActive,
+          retirementPreparationMissing,
+          isAchievementUnlocked,
+          fanatAchievements
+        }
+      );
+      if (readResult.status === "unavailable") {
+        return "Research data unavailable";
+      }
+      const conflict2 = findTechConflict(readResult.input);
+      return conflict2 === null ? false : formatTechConflict(conflict2, getNumberString);
+    };
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         getTechConflict,
@@ -34930,6 +37102,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           resources = context.resources;
           buildings = context.buildings;
           isAchievementUnlocked = context.isAchievementUnlocked;
+          techConflictClock = context.clock ?? browserClock;
         }
       });
     }
@@ -34981,7 +37154,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       isHellSupressUseful,
       getGalaxyRegions,
       traitVal,
-      getRequiredAuthorityGarrison,
+      getAuthorityGarrisonRequirement,
       getHaveTech: () => haveTech,
       adjustSpire,
       getBestSupplyRatio,
@@ -35093,8 +37266,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getSettings: () => settings,
       getResources: () => resources,
       traitVal,
-      getAuthorityTarget,
-      getPredictedAuthorityAfterRemovingSoldiers,
+      assessAuthorityRemoval,
       GameLog
     });
     if (window.__EA_TEST_HOOKS__) {
@@ -35235,25 +37407,21 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const { checkAffordableCustom, getQueuedItemObj } = createQueueItems({
-      getResources: () => resources,
-      getPoly: () => poly,
-      getMechManager: () => MechManager,
-      getBuildingIds: () => buildingIds,
-      getArpaIds: () => arpaIds
-    });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
-        queueItems: { checkAffordableCustom, getQueuedItemObj },
-        setQueueItemTestContext(context) {
-          resources = context.resources;
-          poly = context.poly;
-          MechManager = context.MechManager;
-          buildingIds = context.buildingIds;
-          arpaIds = context.arpaIds;
-        }
-      });
+    function checkAffordableCustom(cost, max = false) {
+      const readResult = readCostAffordabilityInput(
+        cost,
+        resources,
+        max ? "maximum" : "current"
+      );
+      return readResult.status === "ready" ? isCostAffordable(readResult.input) : false;
     }
+    const readQueuedTarget = (item) => readQueueTarget(item, {
+      resources,
+      poly,
+      mechManager: MechManager,
+      buildingIds,
+      arpaIds
+    });
     const { updatePriorityTargets } = createPriorityTargets({
       getSettings: () => settings,
       getState: () => state,
@@ -35268,7 +37436,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getMechManager: () => MechManager,
       getTriggerManager: () => TriggerManager,
       getJQuery: () => $,
-      getQueuedItemObj,
+      readQueuedTarget,
       getTechConflict,
       isPrestigeAllowed,
       haveTask,
@@ -35291,6 +37459,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           FleetManagerOuter = context.FleetManagerOuter;
           MechManager = context.MechManager;
           TriggerManager = context.TriggerManager;
+          if (context.poly) poly = context.poly;
         }
       });
     }
@@ -35343,11 +37512,24 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const { getMultiSegmentedTimeLeft } = createTargetTiming({
-      getGame: () => game,
-      getPoly: () => poly,
-      isProject: (target) => target instanceof Project
-    });
+    const getMultiSegmentedTimeLeft = (target) => {
+      const readResult = readTargetTimingInput(
+        game,
+        target,
+        target instanceof Project
+      );
+      if (readResult.status === "unavailable") {
+        return {
+          resource: readResult.resourceId ?? "",
+          timeLeft: "Never"
+        };
+      }
+      const result = calculateTargetTiming(readResult.input);
+      return {
+        resource: result.resourceId,
+        timeLeft: result.seconds === Infinity ? "Never" : poly.timeFormat(result.seconds)
+      };
+    };
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         getMultiSegmentedTimeLeft,
@@ -35385,7 +37567,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getResizeObserver: () => typeof ResizeObserver === "function" ? ResizeObserver : void 0,
       updateSettingsFromState: () => updateSettingsFromState(),
       makePlannerStats: () => makePlannerStats(),
-      savePlannerStats: () => savePlannerStats()
+      savePlannerStats: (stats) => savePlannerStats(stats)
     });
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
@@ -35393,7 +37575,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           plannerLimitingResource,
           makePlannerStats,
           loadPlannerStats,
-          savePlannerStats
+          savePlannerStats: () => savePlannerStats(state.plannerStats)
         },
         setPlannerAnalysisTestContext(context) {
           game = context.game;
@@ -35533,8 +37715,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       exportSettings,
       loadStateLog,
       triggerFileDownload,
-      displayScriptWarningNode,
-      exportFunction: (...args) => exportFunction(...args)
+      displayScriptWarningNode
     };
     const { initialiseScript, mainAutoEvolveScript } = createScriptBootstrap({
       getContext: () => ({
@@ -35557,9 +37738,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         WindowManager,
         $,
         window,
-        unsafeWindow: typeof unsafeWindow === "undefined" ? void 0 : unsafeWindow,
-        cloneInto: typeof cloneInto === "undefined" ? void 0 : cloneInto,
-        exportFunction: typeof exportFunction === "undefined" ? void 0 : exportFunction,
+        userscriptEnvironment,
         win,
         needSandboxBypass,
         poly,
@@ -35879,7 +38058,8 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         createOptionsModal,
         openOptionsModal,
         scriptVersionExtra: SCRIPT_VERSION_EXTRA
-      })
+      }),
+      getScriptVersion: () => userscriptEnvironment.getScriptVersion()
     });
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
@@ -36474,8 +38654,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getGovernor: () => getGovernor(),
       getVueById: (...args) => getVueById(...args),
       normalizeProperties,
-      cloneInto: (...args) => cloneInto(...args),
-      getUnsafeWindow: () => typeof unsafeWindow === "undefined" ? void 0 : unsafeWindow,
+      cloneIntoPage: (value, options) => userscriptEnvironment.cloneIntoPage(value, options),
       getDate: () => /* @__PURE__ */ new Date()
     });
     if (window.__EA_TEST_HOOKS__) {

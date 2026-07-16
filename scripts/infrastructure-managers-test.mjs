@@ -6,7 +6,6 @@ let settings;
 let poly;
 let win;
 let needSandboxBypass = false;
-let unsafeWindow = {};
 const elements = {};
 const selectors = {};
 const trace = [];
@@ -29,9 +28,8 @@ const { WindowManager, KeyManager, GameLog } = createInfrastructureManagers({
   getPoly: () => poly,
   getWin: () => win,
   getNeedSandboxBypass: () => needSandboxBypass,
-  getUnsafeWindow: () => unsafeWindow,
   getKeyboardEvent: () => KeyboardEventStub,
-  cloneInto: (value) => {
+  cloneIntoPage: (value) => {
     trace.push(["clone", value.key ?? "all"]);
     return value;
   },

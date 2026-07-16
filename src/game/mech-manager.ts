@@ -10,13 +10,12 @@ type MechManagerDependencies = {
   getGameLog: () => AnyRecord;
   getNeedSandboxBypass: () => boolean;
   getWin: () => AnyRecord;
-  getUnsafeWindow: () => unknown;
   getSortable: () => AnyRecord;
   getUpdateDebugData: () => AnyFunction;
   getCreateMechInfo: () => AnyFunction;
   getVueById: (id: string) => any;
   kCombinations: (values: any[], size: number) => any[][];
-  cloneInto: (...args: any[]) => any;
+  cloneIntoPage: (value: unknown, options?: AnyRecord) => any;
   createMutationObserver: (callback: (...args: any[]) => void) => unknown;
 };
 
@@ -29,13 +28,12 @@ export function createMechManager({
   getGameLog,
   getNeedSandboxBypass,
   getWin,
-  getUnsafeWindow,
   getSortable,
   getUpdateDebugData,
   getCreateMechInfo,
   getVueById,
   kCombinations,
-  cloneInto,
+  cloneIntoPage,
   createMutationObserver,
 }: MechManagerDependencies) {
   let game: AnyRecord;
@@ -46,7 +44,6 @@ export function createMechManager({
   let GameLog: AnyRecord;
   let needSandboxBypass: boolean;
   let win: AnyRecord;
-  let unsafeWindow: unknown;
   let Sortable: AnyRecord;
 
   const k_combinations = kCombinations;
@@ -62,7 +59,6 @@ export function createMechManager({
     GameLog = getGameLog();
     needSandboxBypass = getNeedSandboxBypass();
     win = getWin();
-    unsafeWindow = getUnsafeWindow();
     Sortable = getSortable();
   }
 
@@ -699,7 +695,7 @@ export function createMechManager({
       if (needSandboxBypass) {
         // Yet another FF fix
         win.Sortable.get(this._listVue.$el).options.onEnd(
-          cloneInto(sortObj, unsafeWindow, { cloneFunctions: true }),
+          cloneIntoPage(sortObj, { cloneFunctions: true }),
         );
       } else {
         Sortable.get(this._listVue.$el).options.onEnd(sortObj);

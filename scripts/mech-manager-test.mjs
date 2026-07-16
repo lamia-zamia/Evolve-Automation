@@ -9,7 +9,6 @@ let poly;
 let GameLog = { logSuccess() {} };
 let needSandboxBypass = false;
 let win;
-let unsafeWindow = {};
 let Sortable;
 let vueById = {};
 let observerCallback;
@@ -24,7 +23,6 @@ const { MechManager } = createMechManager({
   getGameLog: () => GameLog,
   getNeedSandboxBypass: () => needSandboxBypass,
   getWin: () => win,
-  getUnsafeWindow: () => unsafeWindow,
   getSortable: () => Sortable,
   getUpdateDebugData: () => () => trace.push(["debug"]),
   getCreateMechInfo: () => () => trace.push(["info"]),
@@ -34,7 +32,7 @@ const { MechManager } = createMechManager({
     if (size === 1) return values.map((value) => [value]);
     return [];
   },
-  cloneInto: (value, _target, options) => {
+  cloneIntoPage: (value, options) => {
     trace.push(["clone", options.cloneFunctions]);
     return value;
   },

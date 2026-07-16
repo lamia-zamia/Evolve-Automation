@@ -7,8 +7,7 @@ type Dependencies = AutomationDependencies<
   | "getSettings"
   | "getResources"
   | "traitVal"
-  | "getAuthorityTarget"
-  | "getPredictedAuthorityAfterRemovingSoldiers"
+  | "assessAuthorityRemoval"
   | "GameLog"
 >;
 export function createAutoFleetOuter({
@@ -18,8 +17,7 @@ export function createAutoFleetOuter({
   getSettings,
   getResources,
   traitVal,
-  getAuthorityTarget,
-  getPredictedAuthorityAfterRemovingSoldiers,
+  assessAuthorityRemoval,
   GameLog,
 }: Dependencies) {
   return function autoFleetOuter() {
@@ -179,11 +177,13 @@ export function createAutoFleetOuter({
       game.global.race.universe === "evil" &&
       resources.Authority.isUnlocked()
     ) {
-      const authorityTarget = getAuthorityTarget();
-      const predictedAuthority =
-        getPredictedAuthorityAfterRemovingSoldiers(shipCrew);
-      if (authorityTarget !== null && predictedAuthority < authorityTarget) {
-        m.nextShipMsg = `Next ship(${m.nextShipName}) would lower Authority to ${predictedAuthority}, below the ${authorityTarget} target`;
+      const assessment = assessAuthorityRemoval(shipCrew);
+      if (assessment.status === "unavailable") {
+        m.nextShipMsg = `Authority data unavailable; ship construction paused`;
+        return;
+      }
+      if (assessment.status === "ready" && assessment.blocksRemoval) {
+        m.nextShipMsg = `Next ship(${m.nextShipName}) would lower Authority to ${assessment.predicted}, below the ${assessment.target} target`;
         return;
       }
     }

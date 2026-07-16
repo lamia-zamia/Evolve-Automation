@@ -27,11 +27,12 @@ let state = {
   unlockedBuildings: [],
   unlockedTechs: [],
 };
+let plannerLimit = null;
 const lifecycle = createStateLogLifecycle({
   getGame: () => game,
   getResources: () => resources,
   getState: () => state,
-  plannerLimitingResource: () => null,
+  plannerLimitingResource: () => plannerLimit,
   storage: {
     getItem: (key) => stored.get(key) ?? null,
     setItem: (key, value) => stored.set(key, value),
@@ -60,5 +61,30 @@ state = {
 assert.equal(lifecycle.makeStateLog().species, "balorg");
 lifecycle.recordStateSnapshot();
 assert.equal(state.stateLog.samples[0].g, "build");
+
+const target = { title: "Target", cost: {}, isAffordable: () => false };
+plannerLimit = {
+  status: "unavailable",
+  reason: "invalid-resource",
+  resourceId: "Iron",
+};
+assert.deepEqual(lifecycle.stateLogBlocker(target), [
+  "Target",
+  "Iron",
+  "unavailable",
+  0,
+]);
+plannerLimit = {
+  resourceId: "Iron",
+  resourceTitle: "Iron",
+  time: 4.6,
+  blocker: "income",
+};
+assert.deepEqual(lifecycle.stateLogBlocker(target), [
+  "Target",
+  "Iron",
+  "income",
+  5,
+]);
 
 console.log("State log module tests passed");

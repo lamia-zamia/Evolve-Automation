@@ -8,171 +8,26 @@ type RetirementPreparation = {
 type RunGuardDependencies = {
   getSettings: () => any;
   getGame: () => any;
-  getPoly: () => any;
   getResources: () => any;
   getBuildings: () => any;
+  getAchievementStar: (id: string, universe?: string) => number;
   haveTech: (research: string, level?: number) => boolean;
   getNumberString: (amount: number) => string | number;
   inflationChallengeMoney: number;
   retirementPreparation: RetirementPreparation;
 };
 
-type AchievementGuard = {
-  id: string;
-  feat?: boolean;
-  when: () => boolean;
-};
-
 export function createRunGuards({
   getSettings,
   getGame,
-  getPoly,
   getResources,
   getBuildings,
+  getAchievementStar,
   haveTech,
   getNumberString,
   inflationChallengeMoney,
   retirementPreparation,
 }: RunGuardDependencies) {
-  function getStarLevel(context: Record<string, any>) {
-    let aLevel = 1;
-    if (context.challenge_plasmid) {
-      aLevel++;
-    }
-    if (context.challenge_trade) {
-      aLevel++;
-    }
-    if (context.challenge_craft) {
-      aLevel++;
-    }
-    if (context.challenge_crispr) {
-      aLevel++;
-    }
-    return aLevel;
-  }
-
-  function getAchievementStar(id: string, universe?: string) {
-    const game = getGame();
-    const poly = getPoly();
-    return game.global.stats.achieve[id]?.[poly.universeAffix(universe)] ?? 0;
-  }
-
-  function isAchievementUnlocked(id: string, level: number, universe?: string) {
-    return getAchievementStar(id, universe) >= level;
-  }
-
-  // Achievement guards constrain automation so the current run stays eligible. A guard arms only
-  // while the achievement is unearned at the current star level in the current universe (feats are
-  // universe-wide), and releases once earned, lost this run, or out of scope for the reset type.
-  const achievementGuardDefs: Record<string, AchievementGuard> = {
-    guardPacifist: {
-      id: "pacifist",
-      when: () => getGame().global.stats.attacks === 0,
-    },
-    guardDreaded: {
-      id: "dreaded",
-      when: () =>
-        getSettings().prestigeType === "ascension" &&
-        getBuildings().Dreadnought.count === 0,
-    },
-    // Pacifist requires unification, Cult of Personality forbids it - Pacifist wins while armed.
-    guardCultOfPersonality: {
-      id: "cult_of_personality",
-      when: () => !guardActive("guardPacifist"),
-    },
-    guardAnarchist: {
-      id: "anarchist",
-      when: () => {
-        const game = getGame();
-        return (
-          getSettings().prestigeType === "mad" &&
-          game.global.civic.govern.type === "anarchy"
-        );
-      },
-    },
-    guardEnergetic: {
-      id: "energetic",
-      feat: true,
-      when: () =>
-        getSettings().prestigeType === "ascension" &&
-        getBuildings().SiriusThermalCollector.count === 0,
-    },
-    guardRedDead: {
-      id: "red_dead",
-      when: () =>
-        getSettings().prestigeType === "mad" &&
-        getBuildings().RedSpaceport.count === 0,
-    },
-    guardSecondEvolution: {
-      id: "second_evolution",
-      when: () => {
-        const race = getGame().global.race;
-        return race.gods === race.species;
-      },
-    },
-  };
-
-  function guardActive(setting: string) {
-    const settings = getSettings();
-    if (!settings.achievementGuards || !settings[setting]) {
-      return false;
-    }
-    const guard = achievementGuardDefs[setting];
-    if (!guard) {
-      return false;
-    }
-    const game = getGame();
-    const star = guard.feat
-      ? (game.global.stats.feat?.[guard.id] ?? 0)
-      : getAchievementStar(guard.id);
-    return star < game.alevel() && guard.when();
-  }
-
-  function bananaRepublicObjectiveComplete(id: string) {
-    const game = getGame();
-    const bananaStats = game.global.stats.banana;
-    const universe = getPoly().universeAffix();
-    return Boolean(bananaStats?.[id]?.[universe]);
-  }
-
-  function bananaRepublicSmoothieComplete() {
-    const game = getGame();
-    if ((game.global.stats.feat?.banana ?? 0) > 0) {
-      return true;
-    }
-
-    let exportRoutes = 0;
-    let hasBigImport = false;
-    (Object.values(game.global.resource) as any[]).forEach((resource) => {
-      if (!resource.hasOwnProperty("trade")) {
-        return;
-      }
-      if (resource.trade > 0) {
-        exportRoutes += resource.trade;
-      } else if (resource.trade <= -500) {
-        hasBigImport = true;
-      }
-    });
-    return hasBigImport && exportRoutes >= 500;
-  }
-
-  function bananaRepublicReadyForUnification() {
-    return (
-      ["b1", "b2", "b3", "b4", "b5"].every(bananaRepublicObjectiveComplete) &&
-      bananaRepublicSmoothieComplete()
-    );
-  }
-
-  function guardBananaRepublicActive() {
-    const settings = getSettings();
-    return (
-      settings.achievementGuards &&
-      settings.guardBananaRepublic &&
-      getGame().global.race["banana"] &&
-      !bananaRepublicReadyForUnification()
-    );
-  }
-
   function inflationChallengeAssistActive() {
     const settings = getSettings();
     const game = getGame();
@@ -263,14 +118,6 @@ export function createRunGuards({
   }
 
   return {
-    getStarLevel,
-    getAchievementStar,
-    isAchievementUnlocked,
-    guardActive,
-    bananaRepublicObjectiveComplete,
-    bananaRepublicSmoothieComplete,
-    bananaRepublicReadyForUnification,
-    guardBananaRepublicActive,
     inflationChallengeAssistActive,
     inflationChallengeMoneyReachable,
     inflationChallengeSecondsToFinish,

@@ -167,6 +167,12 @@ eligibility = use(resetTech);
 resetTech.game.global.interstellar.stellar_engine = null;
 assert.equal(eligibility.getBlackholeMass(), 0);
 assert.equal(eligibility.isWhiteholePrestigeAvailable(), false);
+resetTech.game.global.interstellar.stellar_engine = {
+  mass: undefined,
+  exotic: 2,
+};
+assert.equal(eligibility.getBlackholeMass(), 0);
+assert.equal(eligibility.isWhiteholePrestigeAvailable(), false);
 resetTech.game.global.interstellar.stellar_engine = { mass: 12, exotic: 0 };
 resetTech.techIds["tech-exotic_infusion"] = tech();
 assert.equal(eligibility.isWhiteholePrestigeAvailable(), false);
@@ -221,7 +227,7 @@ demonic.settings.prestigeDemonicPotential = 0;
 assert.equal(eligibility.isDemonicPrestigeAvailable(), false);
 demonic.settings.autoMech = false;
 demonic.buildings.SpireTower.count = 75;
-assert.equal(eligibility.isDemonicPrestigeAvailable(), false);
+assert.equal(eligibility.isDemonicPrestigeAvailable(), true);
 demonic.buildings.SpireTower.count = 76;
 demonic.game.global.race.fasting = true;
 demonic.techIds["tech-final_ingredient"] = tech({ unlocked: true });

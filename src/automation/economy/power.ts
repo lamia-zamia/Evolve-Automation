@@ -21,7 +21,7 @@ type Dependencies = AutomationDependencies<
   | "isHellSupressUseful"
   | "getGalaxyRegions"
   | "traitVal"
-  | "getRequiredAuthorityGarrison"
+  | "getAuthorityGarrisonRequirement"
   | "getHaveTech"
   | "adjustSpire"
   | "getBestSupplyRatio"
@@ -52,7 +52,7 @@ export function createAutoPower({
   isHellSupressUseful,
   getGalaxyRegions,
   traitVal,
-  getRequiredAuthorityGarrison,
+  getAuthorityGarrisonRequirement,
   getHaveTech,
   adjustSpire,
   getBestSupplyRatio,
@@ -472,10 +472,16 @@ export function createAutoPower({
               game.global.race.universe === "evil" &&
               resources.Authority.isUnlocked()
             ) {
-              authorityReserve = Math.min(
-                WarManager.currentSoldiers,
-                getRequiredAuthorityGarrison(WarManager.currentCityGarrison),
+              const authorityRequirement = getAuthorityGarrisonRequirement(
+                WarManager.currentCityGarrison,
               );
+              authorityReserve =
+                authorityRequirement.status === "ready"
+                  ? Math.min(
+                      WarManager.currentSoldiers,
+                      authorityRequirement.requiredGarrison,
+                    )
+                  : WarManager.currentSoldiers;
             }
             let dispatchSoldiers =
               WarManager.currentSoldiers -

@@ -204,6 +204,51 @@ assert.deepEqual(snapshot(armed), {
   },
 });
 
+const cultPrecedence = makeContext();
+assert.equal(snapshot(cultPrecedence).activeGuards.guardPacifist, true);
+assert.equal(
+  snapshot(cultPrecedence).activeGuards.guardCultOfPersonality,
+  false,
+  "Pacifist wins while both incompatible guards are armed",
+);
+cultPrecedence.game.global.stats.attacks = 1;
+assert.equal(snapshot(cultPrecedence).activeGuards.guardPacifist, false);
+assert.equal(
+  snapshot(cultPrecedence).activeGuards.guardCultOfPersonality,
+  true,
+);
+cultPrecedence.game.global.stats.attacks = 0;
+cultPrecedence.settings.guardPacifist = false;
+assert.equal(
+  snapshot(cultPrecedence).activeGuards.guardCultOfPersonality,
+  true,
+);
+cultPrecedence.settings.guardPacifist = true;
+cultPrecedence.game.global.stats.achieve.pacifist = { "u-standard": 4 };
+assert.equal(snapshot(cultPrecedence).activeGuards.guardPacifist, false);
+assert.equal(
+  snapshot(cultPrecedence).activeGuards.guardCultOfPersonality,
+  true,
+);
+
+const malformedAchievement = makeContext();
+malformedAchievement.game.global.stats.achieve.pacifist = {
+  "u-standard": Number.NaN,
+};
+hooks.setRunGuardTestContext(malformedAchievement);
+assert.equal(hooks.runGuards.getAchievementStar("pacifist"), 0);
+assert.equal(hooks.runGuards.isAchievementUnlocked("pacifist", 1), false);
+assert.equal(
+  hooks.runGuards.guardActive("guardPacifist"),
+  true,
+  "malformed achievement data must not release an armed safety guard",
+);
+assert.equal(
+  hooks.runGuards.guardActive("guardCultOfPersonality"),
+  false,
+  "Pacifist precedence must remain fail-closed on malformed data",
+);
+
 const constrained = makeContext();
 constrained.settings.prestigeType = "retire";
 constrained.resources.Money.maxQuantity = 249_999_999_999;
@@ -243,6 +288,34 @@ assert.deepEqual(snapshot(constrained), {
     ],
   },
 });
+
+const smoothieThreshold = makeContext();
+smoothieThreshold.game.global.resource = {
+  Food: { trade: -500 },
+  Lumber: { trade: 499 },
+  Money: {},
+};
+hooks.setRunGuardTestContext(smoothieThreshold);
+assert.equal(hooks.runGuards.bananaRepublicSmoothieComplete(), false);
+smoothieThreshold.game.global.resource.Lumber.trade = 500;
+assert.equal(hooks.runGuards.bananaRepublicSmoothieComplete(), true);
+smoothieThreshold.game.global.resource.Food.trade = -499;
+assert.equal(hooks.runGuards.bananaRepublicSmoothieComplete(), false);
+
+const malformedBanana = makeContext();
+malformedBanana.game.global.stats.banana.b1 = { "u-standard": "yes" };
+hooks.setRunGuardTestContext(malformedBanana);
+assert.equal(hooks.runGuards.bananaRepublicObjectiveComplete("b1"), false);
+assert.equal(hooks.runGuards.bananaRepublicReadyForUnification(), false);
+assert.equal(
+  hooks.runGuards.guardBananaRepublicActive(),
+  true,
+  "malformed objective state must not release the Banana Republic guard",
+);
+malformedBanana.game.global.stats.banana.b1 = { "u-standard": true };
+malformedBanana.game.global.resource.Food.trade = Number.NaN;
+assert.equal(hooks.runGuards.bananaRepublicSmoothieComplete(), false);
+assert.equal(hooks.runGuards.guardBananaRepublicActive(), true);
 
 constrained.settings.achievementGuards = false;
 constrained.settings.inflationChallengeAssist = false;

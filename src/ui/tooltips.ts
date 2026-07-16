@@ -93,15 +93,17 @@ export function createTooltipUI({
       const conflict = getCostConflict(obj);
       if (conflict) {
         notes.push(
-          `Conflicts with ${conflict.actionList
-            .map((action: string) => {
-              return `<span class="has-text-info">${action}</span>`;
-            })
-            .join(", ")} for ${conflict.resList
-            .map((res: string) => {
-              return `<span class="has-text-info">${res}</span>`;
-            })
-            .join(", ")} (${conflict.obj.cause})`,
+          conflict.status === "unavailable"
+            ? "Cost reservation data unavailable; action blocked for safety"
+            : `Conflicts with ${conflict.targetNames
+                .map((action: string) => {
+                  return `<span class="has-text-info">${action}</span>`;
+                })
+                .join(", ")} for ${conflict.resourceNames
+                .map((res: string) => {
+                  return `<span class="has-text-info">${res}</span>`;
+                })
+                .join(", ")} (${conflict.targetCause})`,
         );
       }
     }

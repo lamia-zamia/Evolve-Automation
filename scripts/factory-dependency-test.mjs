@@ -17,9 +17,22 @@ function findTypeScriptFiles(directory) {
   });
 }
 
-const factoryFiles = findTypeScriptFiles(sourceDirectory).filter(
-  (file) => path.basename(file) !== "dependencies.ts",
-);
+const newArchitectureDirectories = new Set([
+  "adapters",
+  "application",
+  "bootstrap",
+  "domain",
+  "ports",
+]);
+const factoryFiles = findTypeScriptFiles(sourceDirectory).filter((file) => {
+  const [topLevelDirectory] = path
+    .relative(sourceDirectory, file)
+    .split(path.sep);
+  return (
+    !newArchitectureDirectories.has(topLevelDirectory) &&
+    path.basename(file) !== "dependencies.ts"
+  );
+});
 
 const main = fs.readFileSync(mainPath, "utf8");
 

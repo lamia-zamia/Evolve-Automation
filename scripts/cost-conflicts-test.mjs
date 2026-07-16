@@ -1,34 +1,148 @@
 import assert from "node:assert/strict";
 
-import { createCostConflicts } from "../src/planning/cost-conflicts.ts";
+import { readCostConflictInput } from "../src/adapters/evolve/cost-conflicts.ts";
+import { findCostConflict } from "../src/domain/cost-conflicts.ts";
+import { legacyGetCostConflict } from "./test-support/legacy-cost-conflicts.mjs";
 
-let state = { conflictTargets: [] };
-let resources = {
-  Iron: { name: "Iron", currentQuantity: 100 },
-  Knowledge: { name: "Knowledge", currentQuantity: 100 },
-};
-const conflicts = createCostConflicts({
-  getState: () => state,
-  getResources: () => resources,
-  isEmptyObject: (object) => Object.keys(object).length === 0,
-});
+function modernConflict(state, resources, action) {
+  const readResult = readCostConflictInput(state, resources, action);
+  assert.equal(readResult.status, "ready");
+  return findCostConflict(readResult.input);
+}
 
-assert.equal(conflicts.getCostConflict({ cost: {} }), null);
+function normalizeLegacy(conflict, resources) {
+  if (conflict === null) return null;
+  const resourceId = Object.keys(resources).find(
+    (id) => resources[id] === conflict.res,
+  );
+  return {
+    status: "conflict",
+    resourceId,
+    targetName: conflict.obj.name,
+    targetCause: conflict.obj.cause ?? "",
+    resourceNames: conflict.resList,
+    targetNames: conflict.actionList,
+  };
+}
 
-state = {
-  conflictTargets: [{ name: "Research", cost: { Iron: 80, Knowledge: 90 } }],
-};
-let conflict = conflicts.getCostConflict({
-  cost: { Iron: 30, Knowledge: 20 },
-});
-assert.equal(conflict.res, resources.Knowledge);
-assert.deepEqual(conflict.resList, ["Iron", "Knowledge"]);
+const cases = [
+  {
+    name: "no reservations",
+    state: { conflictTargets: [] },
+    resources: {},
+    action: { cost: {} },
+    expected: null,
+  },
+  {
+    name: "aggregates shared resource conflicts in stable order",
+    state: {
+      conflictTargets: [
+        {
+          name: "Research",
+          cause: "Queue",
+          cost: { Iron: 80, Knowledge: 90 },
+        },
+      ],
+    },
+    resources: {
+      Iron: { name: "Iron", currentQuantity: 100 },
+      Knowledge: { name: "Knowledge", currentQuantity: 100 },
+    },
+    action: { cost: { Iron: 30, Knowledge: 20 } },
+    expected: {
+      status: "conflict",
+      resourceId: "Knowledge",
+      targetName: "Research",
+      targetCause: "Queue",
+      resourceNames: ["Iron", "Knowledge"],
+      targetNames: ["Research"],
+    },
+  },
+  {
+    name: "absent action cost means no shared spend",
+    state: {
+      conflictTargets: [
+        { name: "Research", cause: "Queue", cost: { Iron: 80 } },
+      ],
+    },
+    resources: { Iron: { name: "Iron", currentQuantity: 50 } },
+    action: { cost: {} },
+    expected: null,
+  },
+  {
+    name: "explicit zero retains legacy conflict for an existing shortage",
+    state: {
+      conflictTargets: [
+        { name: "Research", cause: "Queue", cost: { Iron: 80 } },
+      ],
+    },
+    resources: { Iron: { name: "Iron", currentQuantity: 50 } },
+    action: { cost: { Iron: 0 } },
+    expected: {
+      status: "conflict",
+      resourceId: "Iron",
+      targetName: "Research",
+      targetCause: "Queue",
+      resourceNames: ["Iron"],
+      targetNames: ["Research"],
+    },
+  },
+  {
+    name: "defers Knowledge while another target cost is unaffordable",
+    state: {
+      conflictTargets: [
+        {
+          name: "Project",
+          cause: "Trigger",
+          cost: { Copper: 60, Knowledge: 2000 },
+        },
+      ],
+    },
+    resources: {
+      Copper: { name: "Copper", currentQuantity: 50 },
+      Knowledge: { name: "Knowledge", currentQuantity: 1000 },
+    },
+    action: { cost: { Knowledge: 100 } },
+    expected: null,
+  },
+  {
+    name: "retains the final target cause while aggregating target names",
+    state: {
+      conflictTargets: [
+        { name: "First", cause: "Queue", cost: { Iron: 80 } },
+        { name: "Second", cause: "Trigger", cost: { Iron: 90 } },
+      ],
+    },
+    resources: { Iron: { name: "Iron", currentQuantity: 100 } },
+    action: { cost: { Iron: 30 } },
+    expected: {
+      status: "conflict",
+      resourceId: "Iron",
+      targetName: "Second",
+      targetCause: "Trigger",
+      resourceNames: ["Iron"],
+      targetNames: ["First", "Second"],
+    },
+  },
+];
 
-resources = {
-  Iron: { name: "Iron", currentQuantity: 200 },
-  Knowledge: { name: "Knowledge", currentQuantity: 200 },
-};
-conflict = conflicts.getCostConflict({ cost: { Iron: 0, Knowledge: 0 } });
-assert.equal(conflict, null);
+for (const testCase of cases) {
+  const modern = modernConflict(
+    testCase.state,
+    testCase.resources,
+    testCase.action,
+  );
+  const legacy = normalizeLegacy(
+    legacyGetCostConflict(testCase.state, testCase.resources, testCase.action),
+    testCase.resources,
+  );
+  assert.deepEqual(modern, testCase.expected, testCase.name);
+  assert.deepEqual(modern, legacy, `${testCase.name}: legacy comparison`);
+  if (modern !== null) {
+    assert.ok(Object.isFrozen(modern));
+    assert.ok(Object.isFrozen(modern.resourceNames));
+    assert.ok(Object.isFrozen(modern.targetNames));
+  }
+}
 
 console.log("Cost conflict module tests passed");

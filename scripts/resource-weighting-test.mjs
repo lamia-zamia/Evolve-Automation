@@ -1,26 +1,58 @@
 import assert from "node:assert/strict";
 
-import { createResourceWeighting } from "../src/planning/resource-weighting.ts";
+import { findRequiredResourceWeight } from "../src/domain/resource-weighting.ts";
+import { legacyFindRequiredResourceWeight } from "./test-support/legacy-resource-weighting.mjs";
 
-let state = {
-  unlockedBuildings: [{ cost: { Iron: 10 }, weighting: 20 }],
-};
-const weighting = createResourceWeighting({ getState: () => state });
-assert.equal(
-  weighting.findRequiredResourceWeight({ id: "Iron", currentQuantity: 0 }),
-  20,
-);
+const cases = [
+  {
+    name: "selects the first ordered shortage",
+    requirements: [
+      { cost: { Iron: 100 }, weighting: 80 },
+      { cost: { Iron: 200 }, weighting: 40 },
+    ],
+    resource: { id: "Iron", currentQuantity: 50 },
+    expected: 80,
+  },
+  {
+    name: "falls through a satisfied higher-priority requirement",
+    requirements: [
+      { cost: { Iron: 100 }, weighting: 80 },
+      { cost: { Iron: 200 }, weighting: 40 },
+    ],
+    resource: { id: "Iron", currentQuantity: 100 },
+    expected: 40,
+  },
+  {
+    name: "uses a strict shortage comparison",
+    requirements: [{ cost: { Iron: 100 }, weighting: 80 }],
+    resource: { id: "Iron", currentQuantity: 100 },
+    expected: undefined,
+  },
+  {
+    name: "ignores requirements for other resources",
+    requirements: [{ cost: { Copper: 100 }, weighting: 80 }],
+    resource: { id: "Iron", currentQuantity: 0 },
+    expected: undefined,
+  },
+  {
+    name: "returns no weighting for an empty requirement list",
+    requirements: [],
+    resource: { id: "Iron", currentQuantity: 0 },
+    expected: undefined,
+  },
+];
 
-state = {
-  unlockedBuildings: [{ cost: { Iron: 100 }, weighting: 80 }],
-};
-assert.equal(
-  weighting.findRequiredResourceWeight({ id: "Iron", currentQuantity: 50 }),
-  80,
-);
-assert.equal(
-  weighting.findRequiredResourceWeight({ id: "Iron", currentQuantity: 100 }),
-  undefined,
-);
+for (const testCase of cases) {
+  const modern = findRequiredResourceWeight(
+    testCase.requirements,
+    testCase.resource,
+  );
+  const legacy = legacyFindRequiredResourceWeight(
+    testCase.requirements,
+    testCase.resource,
+  );
+  assert.equal(modern, testCase.expected, testCase.name);
+  assert.equal(modern, legacy, `${testCase.name}: legacy comparison`);
+}
 
 console.log("Resource weighting module tests passed");

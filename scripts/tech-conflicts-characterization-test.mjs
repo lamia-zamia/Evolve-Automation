@@ -73,6 +73,7 @@ function baseContext(overrides = {}) {
     },
     buildings: overrides.buildings || {},
     isAchievementUnlocked: overrides.isAchievementUnlocked || (() => false),
+    clock: overrides.clock,
   };
 }
 
@@ -176,6 +177,19 @@ assert.equal(
   conflictFor("tech-stabilize_blackhole"),
   "Blackhole stabilization disabled",
 );
+assert.equal(
+  conflictFor(
+    "tech-stabilize_blackhole",
+    {},
+    {
+      settings: {
+        prestigeWhiteholeStabiliseMass: true,
+        prestigeType: "whitehole",
+      },
+    },
+  ),
+  "Disabled during whitehole reset",
+);
 // Stabilization cooldown
 const cooldown = conflictFor(
   "tech-stabilize_blackhole",
@@ -185,12 +199,22 @@ const cooldown = conflictFor(
       prestigeWhiteholeStabiliseMass: true,
       prestigeWhiteholeStabiliseCooldown: 3600,
     },
-    state: { whiteholeLastStabilise: Date.now() },
+    state: { whiteholeLastStabilise: 1_000_000 },
+    clock: { nowMs: () => 1_001_000 },
   },
 );
-assert.ok(
-  typeof cooldown === "string" && cooldown.startsWith("On cooldown for "),
-  `unexpected cooldown conflict: ${cooldown}`,
+assert.equal(cooldown, "On cooldown for 3599 more seconds");
+
+// A malformed explicit Soul Gem cost currently falls through as no conflict.
+assert.equal(
+  conflictFor(
+    "tech-malformed_soul_cost",
+    { Soul_Gem: NaN },
+    {
+      settings: { prestigeType: "whitehole", prestigeWhiteholeSaveGems: true },
+    },
+  ),
+  "Research data unavailable",
 );
 
 // Theology: auto + mad + non-fanatic race allows Anthropology, blocks Fanaticism

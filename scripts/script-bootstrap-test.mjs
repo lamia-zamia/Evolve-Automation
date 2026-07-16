@@ -56,9 +56,14 @@ const context = {
   WindowManager: { openedByScript: false, checkCallbacks() {} },
   $: jquery,
   window: { $: jquery, document: documentStub },
-  unsafeWindow: undefined,
-  cloneInto: undefined,
-  exportFunction: undefined,
+  userscriptEnvironment: {
+    pageWindow: undefined,
+    capabilities: {
+      hasPageWindow: false,
+      needsSandboxBridge: false,
+    },
+    exportToPage: (value) => value,
+  },
   win: {},
   needSandboxBypass: false,
   poly: { messageQueue() {} },
@@ -102,10 +107,6 @@ const actions = {
   loadStateLog: () => [],
   triggerFileDownload() {},
   displayScriptWarningNode() {},
-  exportFunction: (callback) => {
-    trace.push(["export-function"]);
-    return callback;
-  },
 };
 const { initialiseScript, mainAutoEvolveScript } = createScriptBootstrap({
   getContext: () => context,
@@ -181,18 +182,24 @@ assert.match(trace.at(-1)[1], /Can't load jQuery UI/);
 
 // Successful Firefox-style sandbox bootstrap exports both breakdown callbacks.
 jquery.ui = {};
-context.unsafeWindow = { evolve: game };
-context.cloneInto = (value) => value;
-context.exportFunction = (callback) => callback;
+const pageWindow = { evolve: game };
+context.userscriptEnvironment = {
+  pageWindow,
+  capabilities: { hasPageWindow: true, needsSandboxBridge: true },
+  exportToPage: (callback) => {
+    trace.push(["export-function"]);
+    return callback;
+  },
+};
 context.poly = { messageQueue() {} };
 expectedActionContext = {
-  win: context.unsafeWindow,
+  win: pageWindow,
   game,
   needSandboxBypass: true,
 };
 mainAutoEvolveScript();
 assert.equal(context.needSandboxBypass, true);
-assert.equal(context.win, context.unsafeWindow);
+assert.equal(context.win, pageWindow);
 assert.equal(trace.filter(([name]) => name === "export-function").length, 2);
 game.breakdown = { p: { consume: { Food: 1 } } };
 assert.deepEqual(trace.at(-1), ["schedule", "automate", undefined]);

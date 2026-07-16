@@ -36,7 +36,6 @@ let context = {
     getDate: () => 1,
   },
 };
-const unsafeWindow = { marker: "unsafe" };
 const compatibility = createGameCompatibility({
   getGame: () => context.game,
   getBuildings: () => context.buildings,
@@ -45,11 +44,10 @@ const compatibility = createGameCompatibility({
   getGovernor: () => context.governor,
   getVueById: (...args) => context.getVueById(...args),
   normalizeProperties: (value) => value,
-  cloneInto: (value, target, options) => {
-    trace.push(["cloneInto", value, target, options]);
+  cloneIntoPage: (value, options) => {
+    trace.push(["cloneIntoPage", value, options]);
     return value;
   },
-  getUnsafeWindow: () => unsafeWindow,
   getDate: () => context.date,
 });
 
@@ -76,7 +74,7 @@ assert.equal(compatibility.crateValue(), 250);
 assert.equal(compatibility.containerValue(), 500);
 assert.deepEqual(compatibility.adjustCosts({ cost: 1 }, true), { cost: 1 });
 assert.deepEqual(trace.slice(-2), [
-  ["cloneInto", { cost: 1 }, unsafeWindow, { cloneFunctions: true }],
+  ["cloneIntoPage", { cost: 1 }, { cloneFunctions: true }],
   ["adjustCosts", { cost: 1 }, true],
 ]);
 

@@ -71,15 +71,18 @@ export function createAutoBuild({
       // Check queue and trigger conflicts
       let conflict = getCostConflict(building);
       if (conflict && !building.is.important) {
-        building.extraDescription += `Conflicts with ${conflict.actionList
-          .map((action) => {
-            return `<span class="has-text-info">${action}</span>`;
-          })
-          .join(", ")} for ${conflict.resList
-          .map((res) => {
-            return `<span class="has-text-info">${res}</span>`;
-          })
-          .join(", ")} (${conflict.obj.cause})<br>`;
+        building.extraDescription +=
+          conflict.status === "unavailable"
+            ? "Cost reservation data unavailable; skipped for safety<br>"
+            : `Conflicts with ${conflict.targetNames
+                .map((action) => {
+                  return `<span class="has-text-info">${action}</span>`;
+                })
+                .join(", ")} for ${conflict.resourceNames
+                .map((res) => {
+                  return `<span class="has-text-info">${res}</span>`;
+                })
+                .join(", ")} (${conflict.targetCause})<br>`;
         continue;
       }
 

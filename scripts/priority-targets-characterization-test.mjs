@@ -133,8 +133,12 @@ function runScenario({
   mechbay = { max: 0, bay: 0, blueprint: { size: "small" } },
   mechCost = [0, 0, 0],
   preferredSize = ["small"],
+  shipCosts = (blueprint) => ({
+    Money: blueprint?.name === "Scout" ? 50 : 150,
+  }),
   triggers = [],
   knowledgeMax = 0,
+  moneyMax = 0,
   elements = [],
 }) {
   updateCalls.length = 0;
@@ -166,10 +170,11 @@ function runScenario({
         maxQuantity: knowledgeMax,
       },
       Soul_Gem: { name: "Soul Gem", currentQuantity: 100, maxQuantity: 100 },
+      Supply: { name: "Supply", currentQuantity: 30, maxQuantity: 30 },
       Money: {
         name: "Money",
         currentQuantity: 0,
-        maxQuantity: 0,
+        maxQuantity: moneyMax,
         rateOfChange: 0,
       },
     },
@@ -187,6 +192,7 @@ function runScenario({
         return mechCost;
       },
     },
+    poly: { shipCosts },
     TriggerManager: {
       targetTriggers: triggers,
       resetTargetTriggers() {
@@ -407,6 +413,56 @@ assert.deepEqual(scenarioB.conflicts, [
 ]);
 assert.deepEqual(scenarioB.managerCalls, [["getMechCost", "titan"]]);
 assert.deepEqual(scenarioB.unlockedTechs, ["tech-mining"]);
+
+// Scenario C: synthetic ship and mech queue items are mapped into target-shaped
+// cost values and checked against maximum storage in the real priority path.
+const scenarioSyntheticQueue = runScenario({
+  settings: baseSettings({
+    prioritizeQueue: ["save"],
+    prioritizeUnify: [],
+    prioritizeOuterFleet: [],
+    autoFleet: false,
+    autoMech: false,
+    autoTrigger: false,
+  }),
+  queue: {
+    display: true,
+    queue: [
+      {
+        action: "tp-ship",
+        id: "ship-1",
+        label: "Scout",
+        type: { name: "Scout" },
+      },
+      {
+        action: "hell-mech",
+        id: "mech-1",
+        label: "Collector",
+        type: { size: "small", infernal: false },
+      },
+    ],
+  },
+  buildings: {
+    AsphodelEncampment: makeBuilding("AsphodelEncampment"),
+    GorddonEmbassy: makeBuilding("GorddonEmbassy"),
+    TauStarEden: makeBuilding("TauStarEden"),
+    TauGas2MatrioshkaBrain: makeBuilding("TauGas2MatrioshkaBrain"),
+    TauGas2IgniteGasGiant: makeBuilding("TauGas2IgniteGasGiant"),
+  },
+  techIds: { "tech-unification": unification },
+  mechCost: [8, 4, 0],
+  moneyMax: 100,
+});
+assert.deepEqual(scenarioSyntheticQueue.queuedAll, ["ship-1", "mech-1"]);
+assert.deepEqual(scenarioSyntheticQueue.queued, ["ship-1", "mech-1"]);
+assert.deepEqual(scenarioSyntheticQueue.conflicts, [
+  { name: "Scout", cause: "Queue", cost: { Money: 50 } },
+  {
+    name: "Collector",
+    cause: "Queue",
+    cost: { Soul_Gem: 8, Supply: 4 },
+  },
+]);
 
 // Scenario C: no bay space suppresses the mech reservation entirely, and a hidden
 // queue contributes nothing even while it holds entries.

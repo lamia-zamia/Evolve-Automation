@@ -71,6 +71,17 @@ assert.equal(
   tooltips.getTooltipInfo(technology),
   "Queued research, processing...",
 );
+state.queuedTargetsAll = [];
+context.getCostConflict = () => ({
+  status: "unavailable",
+  reason: "invalid-resource",
+});
+assert.equal(
+  tooltips.getTooltipInfo(technology),
+  "Cost reservation data unavailable; action blocked for safety",
+);
+context.getCostConflict = () => undefined;
+state.queuedTargetsAll = [technology];
 assert.equal(
   tooltips.getTooltipInfo(buildings.Hospital),
   "~nice:12 soldiers healed per day<br>~nice:0.5 seconds to increase population",

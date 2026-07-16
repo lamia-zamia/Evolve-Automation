@@ -1,59 +1,153 @@
 import assert from "node:assert/strict";
 
-import { createPlannerAnalysis } from "../src/planning/planner-analysis.ts";
+import {
+  createPlannerStats,
+  findPlannerLimit,
+  parsePlannerStats,
+  recordPlannerSample,
+  selectPlannerStats,
+} from "../src/domain/planner-analysis.ts";
+import { legacyPlannerLimit } from "./test-support/legacy-planner-analysis.mjs";
 
-const stored = new Map();
-let game = { global: { stats: { days: 10, reset: 2 } } };
-let resources = {
-  Iron: {
-    title: "Iron",
+function requirement(resourceId, overrides = {}) {
+  return {
+    resourceId,
+    resourceTitle: resourceId,
+    requiredQuantity: 100,
     currentQuantity: 0,
-    maxQuantity: 100,
+    maximumQuantity: 1000,
     income: 10,
-    isUnlocked: () => true,
+    unlocked: true,
+    ...overrides,
+  };
+}
+
+const cases = [
+  {
+    name: "affordable target",
+    input: { affordable: true, requirements: [requirement("Iron")] },
+    expected: null,
   },
-};
-let state = { plannerStats: null };
-const planner = createPlannerAnalysis({
-  getGame: () => game,
-  getResources: () => resources,
-  getState: () => state,
-  storage: {
-    getItem: (key) => stored.get(key) ?? null,
-    setItem: (key, value) => stored.set(key, value),
+  {
+    name: "income blocker",
+    input: {
+      affordable: false,
+      requirements: [requirement("Iron", { currentQuantity: 20, income: 10 })],
+    },
+    expected: {
+      resourceId: "Iron",
+      resourceTitle: "Iron",
+      time: 8,
+      blocker: "income",
+    },
   },
+  {
+    name: "storage outranks stalled and income",
+    input: {
+      affordable: false,
+      requirements: [
+        requirement("Iron"),
+        requirement("Stone", { income: 0 }),
+        requirement("Money", { maximumQuantity: 50 }),
+      ],
+    },
+    expected: {
+      resourceId: "Money",
+      resourceTitle: "Money",
+      time: Number.MAX_SAFE_INTEGER,
+      blocker: "storage",
+    },
+  },
+  {
+    name: "locked and satisfied requirements are skipped",
+    input: {
+      affordable: false,
+      requirements: [
+        requirement("Locked", { unlocked: false }),
+        requirement("Full", { currentQuantity: 100 }),
+      ],
+    },
+    expected: null,
+  },
+  {
+    name: "equal ETAs retain requirement order",
+    input: {
+      affordable: false,
+      requirements: [requirement("First"), requirement("Second")],
+    },
+    expected: {
+      resourceId: "First",
+      resourceTitle: "First",
+      time: 10,
+      blocker: "income",
+    },
+  },
+];
+
+for (const testCase of cases) {
+  const modern = findPlannerLimit(testCase.input);
+  assert.deepEqual(modern, testCase.expected, testCase.name);
+  assert.deepEqual(
+    modern,
+    legacyPlannerLimit(testCase.input),
+    `${testCase.name}: legacy comparison`,
+  );
+  if (modern !== null) assert.ok(Object.isFrozen(modern));
+}
+
+const fresh = createPlannerStats({ day: 10, reset: 2 });
+assert.deepEqual(fresh, {
+  startDay: 10,
+  day: 10,
+  reset: 2,
+  samples: {},
+  total: 0,
+});
+assert.ok(Object.isFrozen(fresh));
+assert.ok(Object.isFrozen(fresh.samples));
+
+const sampled = recordPlannerSample(fresh, "Iron", 11);
+assert.deepEqual(sampled, {
+  startDay: 10,
+  day: 11,
+  reset: 2,
+  samples: { Iron: 1 },
+  total: 1,
+});
+assert.deepEqual(fresh.samples, {}, "sample transition must not mutate input");
+
+const validSaved = parsePlannerStats({
+  startDay: 8,
+  day: 9,
+  reset: 2,
+  samples: { Iron: 3 },
+  total: 3,
+});
+assert.deepEqual(
+  selectPlannerStats(validSaved, { day: 10, reset: 2 }),
+  validSaved,
+);
+assert.deepEqual(selectPlannerStats(validSaved, { day: 10, reset: 3 }), {
+  startDay: 10,
+  day: 10,
+  reset: 3,
+  samples: {},
+  total: 0,
 });
 
-assert.equal(
-  planner.plannerLimitingResource({
-    isAffordable: () => false,
-    cost: { Iron: 50 },
-  }).time,
-  5,
+for (const invalid of [
+  null,
+  { day: 10, reset: 2 },
+  { startDay: 11, day: 10, reset: 2, samples: {}, total: 0 },
+  { startDay: 10, day: 10, reset: 2, samples: { Iron: -1 }, total: 0 },
+  { startDay: 10, day: 10, reset: 2, samples: { Iron: 1 }, total: 2 },
+  { startDay: 10, day: 10, reset: 2, samples: [], total: 0 },
+]) {
+  assert.equal(parsePlannerStats(invalid), null);
+}
+assert.throws(
+  () => createPlannerStats({ day: -1, reset: 2 }),
+  /non-negative safe integers/,
 );
-assert.equal(planner.makePlannerStats().startDay, 10);
 
-game = { global: { stats: { days: 20, reset: 3 } } };
-resources = {
-  Iron: {
-    title: "Iron",
-    currentQuantity: 0,
-    maxQuantity: 10,
-    income: 10,
-    isUnlocked: () => true,
-  },
-};
-assert.equal(
-  planner.plannerLimitingResource({
-    isAffordable: () => false,
-    cost: { Iron: 50 },
-  }).blocker,
-  "storage",
-);
-assert.equal(planner.makePlannerStats().reset, 3);
-
-state = { plannerStats: { total: 4 } };
-planner.savePlannerStats();
-assert.equal(stored.get("ea_planner_stats"), JSON.stringify({ total: 4 }));
-
-console.log("Planner analysis module tests passed");
+console.log("Planner analysis domain tests passed");

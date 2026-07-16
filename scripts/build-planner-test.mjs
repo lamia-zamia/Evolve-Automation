@@ -45,6 +45,7 @@ function makeContext(overrides = {}) {
 let context = makeContext();
 let loadCalls = 0;
 let saveCalls = 0;
+let savedStats = null;
 let limitCalls = [];
 const { updateBuildPlanner } = createBuildPlanner({
   getSettings: () => context.settings,
@@ -64,11 +65,16 @@ const { updateBuildPlanner } = createBuildPlanner({
     return {
       startDay: 10,
       day: 10,
+      reset: 2,
       samples: { Iron: 24 },
       total: 24,
     };
   },
-  savePlannerStats: () => saveCalls++,
+  savePlannerStats: (stats) => {
+    saveCalls++;
+    savedStats = stats;
+    return true;
+  },
 });
 
 // All mutable objects are resolved per call. Replacing the whole context leaves the stale one
@@ -80,7 +86,8 @@ assert.deepEqual(stale.html, []);
 
 const first = target("First");
 first.limit = {
-  resource: { title: "Iron" },
+  resourceId: "Iron",
+  resourceTitle: "Iron",
   time: 30,
   blocker: "income",
 };
@@ -95,9 +102,11 @@ assert.deepEqual(limitCalls, ["First", "First"]);
 assert.deepEqual(context.state.plannerStats, {
   startDay: 10,
   day: 12,
+  reset: 2,
   samples: { Iron: 25 },
   total: 25,
 });
+assert.equal(savedStats, context.state.plannerStats);
 assert.equal(context.html.length, 2);
 assert.match(context.html[0][1], />4<\/span>/);
 assert.match(context.html[0][1], />30s \(Iron\)<\/span>/);
@@ -112,5 +121,18 @@ updateBuildPlanner();
 assert.deepEqual(context.html, []);
 assert.equal(context.state.plannerStats.total, 25);
 assert.equal(context.state.plannerStats.samples["not blocked"], 1);
+
+context = makeContext();
+const unavailable = target("Unavailable");
+unavailable.limit = {
+  status: "unavailable",
+  reason: "invalid-resource",
+  resourceId: "Missing",
+};
+context.state.unlockedBuildings = [unavailable];
+updateBuildPlanner();
+assert.equal(context.state.plannerStats.samples["data unavailable"], 1);
+assert.match(context.html[0][1], /planner data unavailable/);
+assert.match(context.html[0][1], /has-text-danger/);
 
 console.log("Build planner module tests passed");

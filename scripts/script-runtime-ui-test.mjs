@@ -41,6 +41,7 @@ const runtime = createScriptRuntimeUI({
     openOptionsModal: () => trace.push("open"),
     scriptVersionExtra: "test",
   }),
+  getScriptVersion: () => "3.3.2-test",
 });
 
 runtime.updateDebugData();

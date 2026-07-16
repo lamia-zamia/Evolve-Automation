@@ -1,3 +1,9 @@
+import {
+  recordPlannerSample,
+  type PlannerLimit,
+  type PlannerStats,
+} from "../domain/planner-analysis.ts";
+
 type BuildPlannerSettings = {
   buildPlannerUI: boolean;
   stateLogEnabled: boolean;
@@ -13,26 +19,19 @@ type BuildPlannerTarget = {
   extraDescription: string;
 };
 
-type BuildPlannerStats = {
-  startDay: number;
-  day: number;
-  samples: Record<string, number>;
-  total: number;
-};
-
 type BuildPlannerState = {
   plannerFreshTick: number;
   scriptTick: number;
   unlockedBuildings?: BuildPlannerTarget[];
   queuedTargets: BuildPlannerTarget[];
   triggerTargets: BuildPlannerTarget[];
-  plannerStats?: BuildPlannerStats | null;
+  plannerStats?: Readonly<PlannerStats> | null;
 };
 
-type PlannerLimit = {
-  resource: { title: string };
-  time: number;
-  blocker: "storage" | "income" | "stalled";
+type PlannerLimitUnavailable = {
+  readonly status: "unavailable";
+  readonly reason: string;
+  readonly resourceId?: string;
 };
 
 type JQueryResult = {
@@ -49,9 +48,11 @@ type BuildPlannerDependencies = {
   getJQuery: () => (selector: string) => JQueryResult;
   getPoly: () => { timeFormat: (seconds: number) => string };
   getNiceNumber: (value: number) => number;
-  plannerLimitingResource: (target: BuildPlannerTarget) => PlannerLimit | null;
-  loadPlannerStats: () => BuildPlannerStats;
-  savePlannerStats: () => void;
+  plannerLimitingResource: (
+    target: BuildPlannerTarget,
+  ) => Readonly<PlannerLimit> | PlannerLimitUnavailable | null;
+  loadPlannerStats: () => Readonly<PlannerStats> | null;
+  savePlannerStats: (stats: unknown) => boolean;
 };
 
 export function createBuildPlanner({
@@ -81,13 +82,23 @@ export function createBuildPlanner({
     if (shouldSample && buildRan && targets.length > 0) {
       state.plannerStats ??= loadPlannerStats();
       const stats = state.plannerStats;
-      const limit = plannerLimitingResource(targets[0]);
-      const bucket = limit ? limit.resource.title : "not blocked";
-      stats.samples[bucket] = (stats.samples[bucket] ?? 0) + 1;
-      stats.total++;
-      stats.day = getGame().global.stats.days;
-      if (stats.total % 25 === 0) {
-        savePlannerStats();
+      if (stats !== null) {
+        const limit = plannerLimitingResource(targets[0]);
+        const bucket =
+          limit === null
+            ? "not blocked"
+            : "status" in limit
+              ? "data unavailable"
+              : limit.resourceTitle;
+        const updated = recordPlannerSample(
+          stats,
+          bucket,
+          getGame().global.stats.days,
+        );
+        state.plannerStats = updated;
+        if (updated.total % 25 === 0) {
+          savePlannerStats(updated);
+        }
       }
     }
 
@@ -110,14 +121,17 @@ export function createBuildPlanner({
         if (!limit) {
           status = "ready";
           statusClass = "has-text-success";
+        } else if ("status" in limit) {
+          status = "planner data unavailable";
+          statusClass = "has-text-danger";
         } else if (limit.blocker === "storage") {
-          status = `${limit.resource.title} (storage)`;
+          status = `${limit.resourceTitle} (storage)`;
           statusClass = "has-text-danger";
         } else if (limit.blocker === "stalled") {
-          status = `${limit.resource.title} (no income)`;
+          status = `${limit.resourceTitle} (no income)`;
           statusClass = "has-text-danger";
         } else {
-          status = `${getPoly().timeFormat(limit.time)} (${limit.resource.title})`;
+          status = `${getPoly().timeFormat(limit.time)} (${limit.resourceTitle})`;
           statusClass = "has-text-warning";
         }
         let name = target.title;

@@ -90,4 +90,39 @@ export default defineConfig(
       "prefer-const": "off",
     },
   },
+  {
+    files: [
+      "src/application/**/*.ts",
+      "src/domain/**/*.ts",
+      "src/ports/**/*.ts",
+      "src/adapters/**/*.ts",
+      "src/bootstrap/**/*.ts",
+    ],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "error",
+    },
+  },
+  {
+    files: [
+      "src/application/**/*.ts",
+      "src/domain/**/*.ts",
+      "src/ports/**/*.ts",
+      "src/bootstrap/**/*.ts",
+    ],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        { name: "window", message: "Access browser globals through a port." },
+        {
+          name: "document",
+          message: "Access the DOM through a browser or UI adapter.",
+        },
+        {
+          name: "unsafeWindow",
+          message: "Access userscript globals through the userscript adapter.",
+        },
+        { name: "$", message: "Access jQuery through a browser adapter." },
+      ],
+    },
+  },
 );

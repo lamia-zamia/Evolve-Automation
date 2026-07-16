@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "useUnknownInCatchVariables": true
+  },
+  "include": [
+    "src/application/**/*.ts",
+    "src/domain/**/*.ts",
+    "src/ports/**/*.ts",
+    "src/adapters/**/*.ts",
+    "src/bootstrap/**/*.ts"
+  ]
+}

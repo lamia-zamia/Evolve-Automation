@@ -1,64 +1,80 @@
 import assert from "node:assert/strict";
 
-import { createQueueItems } from "../src/planning/queue-items.ts";
+import { isCostAffordable } from "../src/domain/cost-affordability.ts";
+import { legacyCheckAffordableCustom } from "./test-support/legacy-queue-items.mjs";
 
-let resources = {
-  Money: { currentQuantity: 10, maxQuantity: 100 },
-  Soul_Gem: { currentQuantity: 2, maxQuantity: 20 },
-  Supply: { currentQuantity: 1, maxQuantity: 10 },
-};
-let shipCost = 20;
-let mechCost = [3, 2];
-let buildings = { building: { kind: "building" } };
-let projects = { project: { kind: "project" } };
-const queueItems = createQueueItems({
-  getResources: () => resources,
-  getPoly: () => ({ shipCosts: () => ({ Money: shipCost }) }),
-  getMechManager: () => ({ getMechCost: () => mechCost }),
-  getBuildingIds: () => buildings,
-  getArpaIds: () => projects,
-});
+const cases = [
+  {
+    name: "empty cost",
+    requirements: [],
+    cost: {},
+    resources: {},
+    maximum: false,
+    expected: true,
+  },
+  {
+    name: "exact current quantity",
+    requirements: [
+      { resourceId: "Money", requiredQuantity: 10, availableQuantity: 10 },
+    ],
+    cost: { Money: 10 },
+    resources: { Money: { currentQuantity: 10, maxQuantity: 100 } },
+    maximum: false,
+    expected: true,
+  },
+  {
+    name: "insufficient current quantity",
+    requirements: [
+      { resourceId: "Money", requiredQuantity: 11, availableQuantity: 10 },
+    ],
+    cost: { Money: 11 },
+    resources: { Money: { currentQuantity: 10, maxQuantity: 100 } },
+    maximum: false,
+    expected: false,
+  },
+  {
+    name: "maximum capacity",
+    requirements: [
+      { resourceId: "Money", requiredQuantity: 99, availableQuantity: 100 },
+    ],
+    cost: { Money: 99 },
+    resources: { Money: { currentQuantity: 10, maxQuantity: 100 } },
+    maximum: true,
+    expected: true,
+  },
+  {
+    name: "all requirements must pass",
+    requirements: [
+      { resourceId: "Money", requiredQuantity: 5, availableQuantity: 10 },
+      { resourceId: "Stone", requiredQuantity: 2, availableQuantity: 1 },
+    ],
+    cost: { Money: 5, Stone: 2 },
+    resources: {
+      Money: { currentQuantity: 10, maxQuantity: 10 },
+      Stone: { currentQuantity: 1, maxQuantity: 1 },
+    },
+    maximum: false,
+    expected: false,
+  },
+];
 
-const ship = queueItems.getQueuedItemObj({
-  action: "tp-ship",
-  id: "ship",
-  label: "Ship",
-  type: "scout",
-});
-assert.equal(ship.isAffordable(), false);
-assert.equal(ship.isAffordable(true), true);
+for (const testCase of cases) {
+  const input = Object.freeze({
+    requirements: Object.freeze(
+      testCase.requirements.map((requirement) => Object.freeze(requirement)),
+    ),
+  });
+  const modern = isCostAffordable(input);
+  assert.equal(modern, testCase.expected, testCase.name);
+  assert.equal(
+    modern,
+    legacyCheckAffordableCustom(
+      testCase.cost,
+      testCase.resources,
+      testCase.maximum,
+    ),
+    `${testCase.name}: legacy comparison`,
+  );
+}
 
-resources = {
-  Money: { currentQuantity: 50, maxQuantity: 50 },
-  Soul_Gem: { currentQuantity: 5, maxQuantity: 5 },
-  Supply: { currentQuantity: 5, maxQuantity: 5 },
-};
-shipCost = 40;
-mechCost = [4, 4];
-buildings = { replacement: { kind: "replacement-building" } };
-projects = { replacementProject: { kind: "replacement-project" } };
-assert.equal(ship.isAffordable(), true);
-assert.equal(
-  queueItems
-    .getQueuedItemObj({
-      action: "hell-mech",
-      id: "mech",
-      label: "Mech",
-      type: "collector",
-    })
-    .isAffordable(),
-  true,
-);
-assert.equal(
-  queueItems.getQueuedItemObj({ action: "build", id: "replacement" }),
-  buildings.replacement,
-);
-assert.equal(
-  queueItems.getQueuedItemObj({
-    action: "arpa",
-    id: "replacementProject",
-  }),
-  projects.replacementProject,
-);
-
-console.log("Queue item module tests passed");
+console.log("Queue cost affordability domain tests passed");

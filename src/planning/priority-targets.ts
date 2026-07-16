@@ -15,6 +15,7 @@ type ConflictTarget = {
 
 type PriorityTargetsState = {
   conflictTargets: ConflictTarget[];
+  queueDataUnavailable: boolean;
   queuedTargets: PriorityTarget[];
   queuedTargetsAll: PriorityTarget[];
   triggerTargets: PriorityTarget[];
@@ -36,6 +37,20 @@ type PriorityTargetsSettings = {
 };
 
 type QueuedItem = { id: string; [key: string]: unknown };
+
+type QueuedTargetReadResult =
+  | {
+      status: "ready";
+      target: PriorityTarget;
+      maximumAffordable: boolean;
+    }
+  | { status: "missing"; itemId: string }
+  | {
+      status: "unavailable";
+      reason: string;
+      itemId?: string;
+      resourceId?: string;
+    };
 
 type PriorityTargetsGame = {
   global: {
@@ -85,7 +100,7 @@ type PriorityTargetsDependencies = {
   getJQuery: () => (selector: string) => {
     each(callback: (this: { id: string }) => void): unknown;
   };
-  getQueuedItemObj: (item: QueuedItem) => PriorityTarget | undefined;
+  readQueuedTarget: (item: QueuedItem) => QueuedTargetReadResult;
   getTechConflict: (tech: PriorityTarget) => string | false;
   isPrestigeAllowed: (type?: string) => boolean;
   haveTask: (task: string) => boolean;
@@ -107,7 +122,7 @@ export function createPriorityTargets({
   getMechManager,
   getTriggerManager,
   getJQuery,
-  getQueuedItemObj,
+  readQueuedTarget,
   getTechConflict,
   isPrestigeAllowed,
   haveTask,
@@ -123,6 +138,7 @@ export function createPriorityTargets({
     const techIds = getTechIds();
 
     state.conflictTargets = [];
+    state.queueDataUnavailable = false;
     state.queuedTargets = [];
     state.queuedTargetsAll = [];
     state.triggerTargets = [];
@@ -133,12 +149,8 @@ export function createPriorityTargets({
     const queueSave = settings.prioritizeQueue.includes("save");
     (
       [
-        { type: "queue", noorder: "qAny", map: getQueuedItemObj },
-        {
-          type: "r_queue",
-          noorder: "qAny_res",
-          map: (item: QueuedItem) => techIds[item.id],
-        },
+        { type: "queue", noorder: "qAny" },
+        { type: "r_queue", noorder: "qAny_res" },
       ] as const
     ).forEach((queue) => {
       const queueState = game.global[queue.type] as {
@@ -147,10 +159,34 @@ export function createPriorityTargets({
       };
       if (queueState.display) {
         for (const item of queueState.queue) {
-          const obj = queue.map(item);
+          let obj: PriorityTarget | undefined;
+          let maximumAffordable = false;
+          if (queue.type === "queue") {
+            const result = readQueuedTarget(item);
+            if (result.status === "ready") {
+              obj = result.target;
+              maximumAffordable = result.maximumAffordable;
+            } else if (
+              result.status === "unavailable" &&
+              !state.queueDataUnavailable
+            ) {
+              state.queueDataUnavailable = true;
+              // A malformed visible queue must not let unrelated build/research
+              // spending proceed as though no reservation existed. The missing
+              // resource deliberately drives cost-conflict mapping unavailable.
+              state.conflictTargets.push({
+                name: "Queue data unavailable",
+                cause: "Queue",
+                cost: { __EA_QUEUE_DATA_UNAVAILABLE__: 1 },
+              });
+            }
+          } else {
+            obj = techIds[item.id];
+            maximumAffordable = obj?.isAffordable(true) ?? false;
+          }
           if (obj) {
             state.queuedTargetsAll.push(obj);
-            if (obj.isAffordable(true)) {
+            if (maximumAffordable) {
               state.queuedTargets.push(obj);
               if (queueSave) {
                 state.conflictTargets.push({

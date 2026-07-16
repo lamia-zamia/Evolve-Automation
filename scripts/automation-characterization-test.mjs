@@ -717,6 +717,47 @@ assert.deepEqual(wave4Actions, [
 ]);
 assert.equal(hooks.automationResources.Plasmid.currentQuantity, 15);
 
+const setWave4Conflict = (getCostConflict) =>
+  hooks.setWave4TestContext({
+    generatePlanets: () => [planet],
+    getStarLevel: () => 1,
+    isAchievementUnlocked: () => true,
+    races: {},
+    JobManager: { managedPriorityList: () => [] },
+    BuildingManager: testBuildingManager,
+    ProjectManager: testProjectManager,
+    MutableTraitManager: testMutableTraitManager,
+    getCostConflict,
+  });
+
+wave4Actions.length = 0;
+building.extraDescription = "";
+setWave4Conflict(() => ({
+  status: "conflict",
+  targetNames: ["Queued Project"],
+  resourceNames: ["Iron"],
+  targetCause: "Queue",
+}));
+hooks.autoBuild();
+assert.deepEqual(wave4Actions, [["buildingWeights"], ["projectWeights"]]);
+assert.equal(
+  building.extraDescription,
+  'Conflicts with <span class="has-text-info">Queued Project</span> for <span class="has-text-info">Iron</span> (Queue)<br>',
+);
+
+wave4Actions.length = 0;
+building.extraDescription = "";
+setWave4Conflict(() => ({
+  status: "unavailable",
+  reason: "invalid-resource",
+}));
+hooks.autoBuild();
+assert.deepEqual(wave4Actions, [["buildingWeights"], ["projectWeights"]]);
+assert.equal(
+  building.extraDescription,
+  "Cost reservation data unavailable; skipped for safety<br>",
+);
+
 console.log("Wave 4 bundled characterization tests passed");
 
 for (const name of [

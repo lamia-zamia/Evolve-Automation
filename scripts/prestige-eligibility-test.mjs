@@ -1,88 +1,153 @@
 import assert from "node:assert/strict";
 
-import { createPrestigeEligibility } from "../src/policies/prestige-eligibility.ts";
+import {
+  getBlackholeMass,
+  isApocalypsePrestigeAvailable,
+  isAscensionPrestigeAvailable,
+  isBioseedPrestigeAvailable,
+  isCataclysmPrestigeAvailable,
+  isDemonicPrestigeAvailable,
+  isGeckNeeded,
+  isPillarFinished,
+  isPrestigeAllowed,
+  isWhiteholePrestigeAvailable,
+  isWitchAscensionPrestigeAvailable,
+} from "../src/domain/prestige-eligibility.ts";
+import { legacyPrestigeTrace } from "./test-support/legacy-prestige-eligibility.mjs";
 
-function tech(unlocked = false, affordable = false) {
-  return {
-    isUnlocked: () => unlocked,
-    isAffordable: () => affordable,
-  };
-}
-
-function makeContext() {
-  return {
+function makeView(overrides = {}) {
+  const base = {
     settings: {
       autoPrestige: true,
-      prestigeWaitAT: false,
-      prestigeType: "bioseed",
-      prestigeBioseedProbes: 1,
-      prestigeGECK: 1,
-      prestigeWhiteholeMinMass: 10,
-      prestigeAscensionPillar: false,
+      waitForArpa: false,
+      selectedType: "bioseed",
+      requiredBioseedProbes: 25,
+      requiredGecks: 1,
+      minimumBlackholeMass: 12,
+      requirePillar: true,
       autoMech: false,
-      prestigeDemonicPotential: 0,
-      prestigeDemonicFloor: 0,
+      maximumMechPotential: 0.5,
+      minimumSpireFloor: 75,
     },
     game: {
-      alevel: () => 1,
-      global: {
-        settings: { at: 0 },
-        race: { species: "human", universe: "standard" },
-        pillars: {},
-        interstellar: { stellar_engine: null },
-      },
+      activeArpaProjects: 0,
+      species: "human",
+      universe: "standard",
+      fasting: false,
+      ascensionLevel: 4,
+      blackholeMass: 10,
+      blackholeExotic: 2,
     },
-    resources: { Harmony: { currentQuantity: 0 } },
+    resources: { harmony: 1 },
     buildings: {
-      GasSpaceDock: { count: 1 },
-      GasSpaceDockShipSegment: { count: 100 },
-      GasSpaceDockProbe: { count: 1 },
-      GasSpaceDockGECK: { count: 0 },
-      SiriusAscend: { isUnlocked: () => true },
-      PitAbsorptionChamber: { count: 100 },
-      PitSoulCapacitor: { instance: { energy: 100_000_000 } },
-      SpireTower: { count: 1 },
+      spaceDock: 1,
+      shipSegments: 100,
+      probes: 25,
+      gecks: 1,
+      siriusAscendUnlocked: true,
+      absorptionChambers: 100,
+      soulCapacitorEnergy: 100_000_000,
+      spireFloor: 76,
     },
-    techIds: {
-      "tech-dial_it_to_11": tech(),
-      "tech-exotic_infusion": tech(),
-      "tech-infusion_check": tech(),
-      "tech-infusion_confirm": tech(),
-      "tech-protocol66": tech(),
-      "tech-protocol66a": tech(),
-      "tech-demonic_infusion": tech(true, true),
-      "tech-final_ingredient": tech(true, true),
+    tech: {
+      cataclysmUnlocked: true,
+      exoticInfusionUnlocked: true,
+      infusionCheckUnlocked: false,
+      infusionConfirmUnlocked: false,
+      protocol66Unlocked: true,
+      protocol66aUnlocked: false,
+      demonicInfusionUnlocked: true,
+      demonicInfusionAffordable: true,
+      finalIngredientUnlocked: true,
+      finalIngredientAffordable: true,
+      forbiddenLevelFive: true,
+      dishLevelTwo: true,
     },
-    MechManager: { isActive: false, mechsPotential: 0 },
-    haveTech: () => false,
-    isAchievementUnlocked: () => false,
+    achievement: { lamentisStandardFive: false },
+    mech: { active: false, potential: 0.5 },
+  };
+  return Object.freeze({
+    ...base,
+    ...overrides,
+    settings: Object.freeze({ ...base.settings, ...overrides.settings }),
+    game: Object.freeze({ ...base.game, ...overrides.game }),
+    resources: Object.freeze({ ...base.resources, ...overrides.resources }),
+    buildings: Object.freeze({ ...base.buildings, ...overrides.buildings }),
+    tech: Object.freeze({ ...base.tech, ...overrides.tech }),
+    achievement: Object.freeze({
+      ...base.achievement,
+      ...overrides.achievement,
+    }),
+    mech: Object.freeze({ ...base.mech, ...overrides.mech }),
+  });
+}
+
+function modernTrace(view) {
+  return {
+    allowed: isPrestigeAllowed(view),
+    matching: isPrestigeAllowed(view, "bioseed"),
+    other: isPrestigeAllowed(view, "mad"),
+    cataclysm: isCataclysmPrestigeAvailable(view),
+    bioseed: isBioseedPrestigeAvailable(view),
+    whitehole: isWhiteholePrestigeAvailable(view),
+    apocalypse: isApocalypsePrestigeAvailable(view),
+    ascension: isAscensionPrestigeAvailable(view),
+    witchAscension: isWitchAscensionPrestigeAvailable(view),
+    witchDemonic: isWitchAscensionPrestigeAvailable(view, true),
+    demonic: isDemonicPrestigeAvailable(view),
+    pillarFinished: isPillarFinished(view),
+    geckNeeded: isGeckNeeded(view),
+    blackholeMass: getBlackholeMass(view),
   };
 }
 
-let context = makeContext();
-const eligibility = createPrestigeEligibility({
-  getSettings: () => context.settings,
-  getGame: () => context.game,
-  getResources: () => context.resources,
-  getBuildings: () => context.buildings,
-  getTechIds: () => context.techIds,
-  getMechManager: () => context.MechManager,
-  getHaveTech: () => context.haveTech,
-  getIsAchievementUnlocked: () => context.isAchievementUnlocked,
+const equivalentCases = [
+  ["baseline", makeView()],
+  [
+    "permission and GECK gates",
+    makeView({
+      settings: { waitForArpa: true, requiredGecks: 2 },
+      game: { activeArpaProjects: 1 },
+      achievement: { lamentisStandardFive: true },
+    }),
+  ],
+  ["unfinished pillar", makeView({ game: { speciesPillarLevel: 3 } })],
+  [
+    "micro pillar bypass",
+    makeView({ game: { universe: "micro", speciesPillarLevel: 0 } }),
+  ],
+  [
+    "fasting reset and dish gate",
+    makeView({
+      game: { fasting: true },
+      tech: { dishLevelTwo: false, finalIngredientAffordable: false },
+    }),
+  ],
+  [
+    "active mech gate",
+    makeView({
+      settings: { autoMech: true, maximumMechPotential: 0.5 },
+      mech: { active: true, potential: 0.5 },
+    }),
+  ],
+];
+
+for (const [name, view] of equivalentCases) {
+  assert.deepEqual(modernTrace(view), legacyPrestigeTrace(view), name);
+}
+
+const exactFloor = makeView({ buildings: { spireFloor: 75 } });
+assert.equal(legacyPrestigeTrace(exactFloor).demonic, false);
+assert.equal(
+  isDemonicPrestigeAvailable(exactFloor),
+  true,
+  "configured minimum floor is inclusive",
+);
+
+const exactPotential = makeView({
+  settings: { autoMech: true, maximumMechPotential: 0.5 },
+  mech: { active: false, potential: 0.5 },
 });
+assert.equal(isDemonicPrestigeAvailable(exactPotential), true);
 
-assert.equal(eligibility.isPrestigeAllowed("bioseed"), true);
-assert.equal(eligibility.isCataclysmPrestigeAvailable(), false);
-assert.equal(eligibility.isGECKNeeded(), false);
-
-context = makeContext();
-context.settings.prestigeType = "mad";
-context.techIds["tech-dial_it_to_11"] = tech(true);
-context.isAchievementUnlocked = () => true;
-
-assert.equal(eligibility.isPrestigeAllowed("bioseed"), false);
-assert.equal(eligibility.isCataclysmPrestigeAvailable(), true);
-assert.equal(eligibility.isGECKNeeded(), true);
-assert.equal(eligibility.isBioseederPrestigeAvailable(), false);
-
-console.log("Prestige eligibility module tests passed");
+console.log("Prestige eligibility domain tests passed");

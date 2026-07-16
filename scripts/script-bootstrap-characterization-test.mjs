@@ -73,7 +73,6 @@ const actions = {
   loadStateLog: () => ({ loaded: true }),
   triggerFileDownload: (...args) => trace.push(["download", ...args]),
   displayScriptWarningNode: (...args) => trace.push(["warning", ...args]),
-  exportFunction: (callback) => callback,
 };
 const normalMission = {
   _vueBinding: "normal",

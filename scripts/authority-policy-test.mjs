@@ -1,67 +1,107 @@
 import assert from "node:assert/strict";
 
-import { createAuthorityPolicy } from "../src/policies/authority.ts";
+import {
+  assessAuthorityRemoval,
+  calculateAuthorityPerSoldier,
+  calculateRequiredAuthorityGarrison,
+  predictAuthorityAfterRemovingSoldiers,
+  resolveAuthorityTarget,
+} from "../src/domain/authority.ts";
+import {
+  legacyAuthorityPerSoldier,
+  legacyAuthorityTarget,
+  legacyPredictedAuthority,
+  legacyRequiredAuthorityGarrison,
+} from "./test-support/legacy-authority.mjs";
 
-let game = {
-  global: {
-    race: {},
-    tech: { evil: 1 },
-    civic: { govern: { type: "federation" } },
+function view({
+  manage = true,
+  configuredTarget = 100,
+  maximum = 137,
+  current = 100,
+  evilTechLevel = 1,
+  highPopulationPercent = 100,
+  grenadier = false,
+  governmentType = "federation",
+} = {}) {
+  return {
+    target: { manage, configuredTarget, maximum },
+    current,
+    modifiers: {
+      evilTechLevel,
+      highPopulationPercent,
+      grenadier,
+      governmentType,
+    },
+  };
+}
+
+for (const testCase of [
+  { input: view({ configuredTarget: 0 }), expected: null },
+  { input: view({ manage: false, configuredTarget: -1 }), expected: null },
+  { input: view({ configuredTarget: -1 }), expected: 137 },
+  { input: view({ configuredTarget: -25, maximum: 150 }), expected: 150 },
+  { input: view({ configuredTarget: 100 }), expected: 100 },
+]) {
+  const modern = resolveAuthorityTarget(testCase.input.target);
+  assert.equal(modern, testCase.expected);
+  assert.equal(modern, legacyAuthorityTarget(testCase.input));
+}
+
+for (const input of [
+  view(),
+  view({
+    highPopulationPercent: 50,
+    grenadier: true,
+    governmentType: "dictator",
+  }),
+  view({ evilTechLevel: 0, governmentType: "autocracy" }),
+  view({ highPopulationPercent: 0 }),
+]) {
+  const modern = calculateAuthorityPerSoldier(input.modifiers);
+  assert.ok(Math.abs(modern - legacyAuthorityPerSoldier(input)) < 1e-12);
+}
+
+for (const testCase of [
+  { input: view({ configuredTarget: 0, current: 20 }), garrison: 25 },
+  { input: view({ current: 100 }), garrison: 25 },
+  { input: view({ current: 96 }), garrison: 20 },
+  { input: view({ current: 110 }), garrison: 25 },
+  {
+    input: view({ current: 100, highPopulationPercent: 0 }),
+    garrison: 25,
   },
-};
-let settings = { authorityManage: true, generalMinimumAuthority: 0 };
-let resources = { Authority: { currentQuantity: 100, maxQuantity: 137 } };
-let traitVal = (_trait, _index, fallback) => fallback;
+]) {
+  const modern = calculateRequiredAuthorityGarrison(
+    testCase.input,
+    testCase.garrison,
+  );
+  const legacy = legacyRequiredAuthorityGarrison(
+    testCase.input,
+    testCase.garrison,
+  );
+  assert.equal(modern.status, "ready");
+  assert.equal(modern.requiredGarrison, legacy);
+  assert.ok(Object.isFrozen(modern));
+}
 
-const {
-  getAuthorityPerSoldier,
-  getAuthorityTarget,
-  getPredictedAuthorityAfterRemovingSoldiers,
-  getRequiredAuthorityGarrison,
-} = createAuthorityPolicy({
-  getGame: () => game,
-  getSettings: () => settings,
-  getResources: () => resources,
-  traitVal: (...args) => traitVal(...args),
+for (const removed of [0, 1.25, 2, 10]) {
+  const input = view();
+  assert.equal(
+    predictAuthorityAfterRemovingSoldiers(input, removed),
+    legacyPredictedAuthority(input, removed),
+  );
+}
+
+assert.deepEqual(assessAuthorityRemoval(view(), 2), {
+  status: "ready",
+  target: 100,
+  predicted: 98,
+  blocksRemoval: true,
 });
-
-assert.equal(getAuthorityTarget(), null);
-settings = { authorityManage: false, generalMinimumAuthority: -1 };
-assert.equal(getAuthorityTarget(), null);
-settings = { authorityManage: true, generalMinimumAuthority: -1 };
-assert.equal(getAuthorityTarget(), 137);
-settings = { authorityManage: true, generalMinimumAuthority: 100 };
-assert.equal(getAuthorityTarget(), 100);
-
-assert.ok(Math.abs(getAuthorityPerSoldier() - 0.8) < 1e-12);
-game = {
-  ...game,
-  global: {
-    ...game.global,
-    race: { grenadier: true, high_pop: true },
-    civic: { govern: { type: "dictator" } },
-  },
-};
-traitVal = (trait, index, fallback) =>
-  trait === "high_pop" && index === 1 ? 50 : fallback;
-assert.ok(Math.abs(getAuthorityPerSoldier() - 0.784) < 1e-12);
-
-game = {
-  ...game,
-  global: {
-    ...game.global,
-    race: {},
-    civic: { govern: { type: "federation" } },
-  },
-};
-traitVal = (_trait, _index, fallback) => fallback;
-resources.Authority.currentQuantity = 100;
-assert.equal(getRequiredAuthorityGarrison(25), 25);
-resources.Authority.currentQuantity = 96;
-assert.equal(getRequiredAuthorityGarrison(20), 25);
-resources.Authority.currentQuantity = 110;
-assert.equal(getRequiredAuthorityGarrison(25), 13);
-resources.Authority.currentQuantity = 100;
-assert.equal(getPredictedAuthorityAfterRemovingSoldiers(2), 98);
+assert.deepEqual(assessAuthorityRemoval(view({ configuredTarget: 0 }), 2), {
+  status: "unmanaged",
+});
+assert.ok(Object.isFrozen(assessAuthorityRemoval(view(), 2)));
 
 console.log("Authority policy module tests passed");

@@ -78,18 +78,40 @@ import { createEntityCatalogs } from "./game/entity-catalogs.ts";
 import { createBuildingStateInitialization } from "./game/building-state.ts";
 import { createRaceInitialization } from "./game/race-initialization.ts";
 import { createStateInitialization } from "./game/state-initialization.ts";
-import { createCostConflicts } from "./planning/cost-conflicts.ts";
-import { createPlannerAnalysis } from "./planning/planner-analysis.ts";
+import { findCostConflict } from "./domain/cost-conflicts.ts";
+import { readCostConflictInput } from "./adapters/evolve/cost-conflicts.ts";
+import { findPlannerLimit } from "./domain/planner-analysis.ts";
+import {
+  readPlannerLimitInput,
+  readPlannerRun,
+} from "./adapters/evolve/planner-analysis.ts";
+import { createPlannerStatsStore } from "./adapters/storage/planner-stats.ts";
+import { createPlannerStatsLifecycle } from "./application/planner-stats.ts";
 import { createBuildPlanner } from "./planning/build-planner.ts";
 import { createStorageExpansion } from "./planning/storage-expansion.ts";
 import { createStorageRequirements } from "./planning/storage-requirements.ts";
 import { createDemandPrioritization } from "./planning/demand-prioritization.ts";
 import { createPriorityTargets } from "./planning/priority-targets.ts";
 import { createEvolutionResult } from "./policies/evolution-result.ts";
-import { createAuthorityPolicy } from "./policies/authority.ts";
-import { createQueueItems } from "./planning/queue-items.ts";
-import { createTargetTiming } from "./planning/target-timing.ts";
-import { createResourceWeighting } from "./planning/resource-weighting.ts";
+import {
+  assessAuthorityRemoval as assessAuthorityRemovalPolicy,
+  calculateAuthorityPerSoldier,
+  calculateRequiredAuthorityGarrison,
+  predictAuthorityAfterRemovingSoldiers,
+  resolveAuthorityTarget,
+} from "./domain/authority.ts";
+import {
+  readAuthorityPolicyView,
+  readAuthorityQuantity,
+} from "./adapters/evolve/authority.ts";
+import { isCostAffordable } from "./domain/cost-affordability.ts";
+import {
+  readCostAffordabilityInput,
+  readQueueTarget,
+} from "./adapters/evolve/queue-items.ts";
+import { calculateTargetTiming } from "./domain/target-timing.ts";
+import { readTargetTimingInput } from "./adapters/evolve/target-timing.ts";
+import { findRequiredResourceWeight as findRequiredResourceWeightPolicy } from "./domain/resource-weighting.ts";
 import { createGameActionVerification } from "./validation/game-actions.ts";
 import { createStateLogLifecycle } from "./observability/state-log.ts";
 import { createPrestigeLog } from "./observability/prestige-log.ts";
@@ -108,14 +130,57 @@ import { createInterfaceSettings } from "./ui/interface-settings.ts";
 import { createTickOrchestration } from "./automation/tick.ts";
 import { createStateUpdate } from "./automation/state-update.ts";
 import { createRunGuards } from "./policies/run-guards.ts";
-import { createPrestigeEligibility } from "./policies/prestige-eligibility.ts";
-import { createTechConflicts } from "./policies/tech-conflicts.ts";
+import {
+  calculateAchievementStarLevel,
+  isAchievementGuardActive,
+  isAchievementUnlocked as isAchievementUnlockedPolicy,
+} from "./domain/achievement-guards.ts";
+import {
+  readAchievementGuardInput,
+  readAchievementStar,
+  readAchievementStarLevelContext,
+} from "./adapters/evolve/achievement-guards.ts";
+import {
+  isBananaRepublicGuardActive as isBananaRepublicGuardActivePolicy,
+  isBananaRepublicReadyForUnification as isBananaRepublicReadyForUnificationPolicy,
+  isBananaRepublicSmoothieComplete as isBananaRepublicSmoothieCompletePolicy,
+} from "./domain/banana-republic.ts";
+import {
+  readBananaRepublicGuardInput,
+  readBananaRepublicObjective,
+  readBananaRepublicProgress,
+  readBananaRepublicSmoothieInput,
+} from "./adapters/evolve/banana-republic.ts";
+import {
+  getBlackholeMass as getBlackholeMassPolicy,
+  isApocalypsePrestigeAvailable as isApocalypsePrestigeAvailablePolicy,
+  isAscensionPrestigeAvailable as isAscensionPrestigeAvailablePolicy,
+  isBioseedPrestigeAvailable as isBioseedPrestigeAvailablePolicy,
+  isCataclysmPrestigeAvailable as isCataclysmPrestigeAvailablePolicy,
+  isDemonicPrestigeAvailable as isDemonicPrestigeAvailablePolicy,
+  isGeckNeeded as isGeckNeededPolicy,
+  isPillarFinished as isPillarFinishedPolicy,
+  isPrestigeAllowed as isPrestigeAllowedPolicy,
+  isWhiteholePrestigeAvailable as isWhiteholePrestigeAvailablePolicy,
+  isWitchAscensionPrestigeAvailable as isWitchAscensionPrestigeAvailablePolicy,
+} from "./domain/prestige-eligibility.ts";
+import {
+  readGeckEligibilityView,
+  readPillarEligibilityView,
+  readPrestigeEligibilityView,
+  readPrestigePermissionView,
+} from "./adapters/evolve/prestige-eligibility.ts";
+import { findTechConflict } from "./domain/tech-conflicts.ts";
+import { readTechConflictInput } from "./adapters/evolve/tech-conflicts.ts";
+import { formatTechConflict } from "./application/tech-conflicts.ts";
+import { createBrowserClock } from "./adapters/browser/clock.ts";
 import { createBuildingWeightingPolicy } from "./policies/building-weighting.ts";
 import { createTradeRoutes } from "./planning/trade-routes.ts";
 import { createAutoHell } from "./automation/combat/hell.ts";
 import { createAutoGovernment } from "./automation/civic/government.ts";
 import { createAutoBattle } from "./automation/combat/battle.ts";
-import { createAutoTax } from "./automation/civic/tax.ts";
+import { createTaxAutomation } from "./bootstrap/tax.ts";
+import { createUserscriptEnvironment } from "./adapters/userscript/environment.ts";
 import { createAutoSmelter } from "./automation/economy/smelter.ts";
 import { createAutoAlchemy } from "./automation/economy/alchemy.ts";
 import { createAutoPylon } from "./automation/economy/pylon.ts";
@@ -199,6 +264,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   "use strict";
   const { getRealNumber, getNumberString, getNiceNumber } =
     createNumberFormatting({ numberSuffix });
+  const browserClock = createBrowserClock();
   var settingsRaw = JSON.parse(localStorage.getItem("settings")) ?? {};
   var settings = {};
   var game = null;
@@ -1257,35 +1323,97 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildMarketSettings, updateMarketSettingsContent } = marketSettings;
 
   let { traitVal } = createTraitValue({ getGame: () => game });
-  const {
-    getAuthorityTarget,
-    getRequiredAuthorityGarrison,
-    getPredictedAuthorityAfterRemovingSoldiers,
-  } = createAuthorityPolicy({
-    getGame: () => game,
-    getSettings: () => settings,
-    getResources: () => resources,
-    traitVal,
-  });
+  const readAuthorityView = () =>
+    readAuthorityPolicyView(game, settings, resources, () =>
+      traitVal("high_pop", 1, 100),
+    );
+  const getAuthorityGarrisonRequirement = (currentGarrison) => {
+    const quantity = readAuthorityQuantity(currentGarrison);
+    if (quantity.status === "unavailable") return quantity;
+    const view = readAuthorityView();
+    return view.status === "ready"
+      ? calculateRequiredAuthorityGarrison(view.view, quantity.value)
+      : view;
+  };
+  const assessAuthorityRemoval = (removedSoldiers) => {
+    const quantity = readAuthorityQuantity(removedSoldiers);
+    if (quantity.status === "unavailable") return quantity;
+    const view = readAuthorityView();
+    return view.status === "ready"
+      ? assessAuthorityRemovalPolicy(view.view, quantity.value)
+      : view;
+  };
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      authorityPolicy: {
+        getAuthorityTarget() {
+          const view = readAuthorityView();
+          return view.status === "ready"
+            ? resolveAuthorityTarget(view.view.target)
+            : view;
+        },
+        getAuthorityPerSoldier() {
+          const view = readAuthorityView();
+          return view.status === "ready"
+            ? calculateAuthorityPerSoldier(view.view.modifiers)
+            : view;
+        },
+        getRequiredAuthorityGarrison(currentGarrison) {
+          const requirement = getAuthorityGarrisonRequirement(currentGarrison);
+          return requirement.status === "ready"
+            ? requirement.requiredGarrison
+            : requirement;
+        },
+        getPredictedAuthorityAfterRemovingSoldiers(removedSoldiers) {
+          const quantity = readAuthorityQuantity(removedSoldiers);
+          if (quantity.status === "unavailable") return quantity;
+          const view = readAuthorityView();
+          return view.status === "ready"
+            ? predictAuthorityAfterRemovingSoldiers(view.view, quantity.value)
+            : view;
+        },
+        assessAuthorityRemoval,
+      },
+      setAuthorityPolicyTestContext(context) {
+        game = context.game;
+        settings = context.settings;
+        resources = context.resources;
+      },
+    });
+  }
   const { normalizeProperties, addProps } = createPropertyHelpers({
     getSettings: () => settings,
   });
-  let { getCostConflict } = createCostConflicts({
-    getState: () => state,
-    getResources: () => resources,
-    isEmptyObject: (object) => $.isEmptyObject(object),
-  });
-  const {
-    plannerLimitingResource,
-    makePlannerStats,
-    loadPlannerStats,
-    savePlannerStats,
-  } = createPlannerAnalysis({
-    getGame: () => game,
-    getResources: () => resources,
-    getState: () => state,
-    storage: localStorage,
-  });
+  let getCostConflict = (action) => {
+    const readResult = readCostConflictInput(state, resources, action);
+    return readResult.status === "ready"
+      ? findCostConflict(readResult.input)
+      : readResult;
+  };
+  const plannerStatsLifecycle = createPlannerStatsLifecycle(
+    createPlannerStatsStore(localStorage),
+  );
+  function plannerLimitingResource(target) {
+    const readResult = readPlannerLimitInput(target, resources);
+    return readResult.status === "ready"
+      ? findPlannerLimit(readResult.input)
+      : readResult;
+  }
+  function makePlannerStats() {
+    const readResult = readPlannerRun(game);
+    return readResult.status === "ready"
+      ? plannerStatsLifecycle.make(readResult.run)
+      : null;
+  }
+  function loadPlannerStats() {
+    const readResult = readPlannerRun(game);
+    return readResult.status === "ready"
+      ? plannerStatsLifecycle.load(readResult.run)
+      : null;
+  }
+  function savePlannerStats(stats) {
+    return plannerStatsLifecycle.save(stats);
+  }
   const { expandStorage } = createStorageExpansion({
     getSettings: () => settings,
     getResources: () => resources,
@@ -1401,6 +1529,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getDate: () => new Date(),
   });
   var win = null;
+  const userscriptEnvironment = createUserscriptEnvironment(window);
   const { getVueById, triggerFileDownload } = createBrowserRuntime({
     getWin: () => win,
     getDocument: () => document,
@@ -2126,14 +2255,13 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getGameLog: () => GameLog,
     getNeedSandboxBypass: () => needSandboxBypass,
     getWin: () => win,
-    getUnsafeWindow: () =>
-      typeof unsafeWindow === "undefined" ? undefined : unsafeWindow,
     getSortable: () => Sortable,
     getUpdateDebugData: () => updateDebugData,
     getCreateMechInfo: () => createMechInfo,
     getVueById: (id) => getVueById(id),
     kCombinations: k_combinations,
-    cloneInto: (...args) => cloneInto(...args),
+    cloneIntoPage: (value, options) =>
+      userscriptEnvironment.cloneIntoPage(value, options),
     createMutationObserver: (callback) => new MutationObserver(callback),
   });
 
@@ -2184,10 +2312,8 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getPoly: () => poly,
     getWin: () => win,
     getNeedSandboxBypass: () => needSandboxBypass,
-    getUnsafeWindow: () =>
-      typeof unsafeWindow === "undefined" ? undefined : unsafeWindow,
     getKeyboardEvent: () => KeyboardEvent,
-    cloneInto: (...args) => cloneInto(...args),
+    cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value),
   }));
 
   if (window.__EA_TEST_HOOKS__) {
@@ -2414,15 +2540,64 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
+  let getStarLevel = (context) => {
+    const result = readAchievementStarLevelContext(context);
+    return result.status === "ready"
+      ? calculateAchievementStarLevel(result.context)
+      : 1;
+  };
+  let getAchievementStar = (id, universe) => {
+    const result = readAchievementStar(game, poly, id, universe);
+    return result.status === "ready" ? result.star : 0;
+  };
+  let isAchievementUnlocked = (id, level, universe) => {
+    if (typeof level !== "number" || !Number.isFinite(level) || level < 0) {
+      return false;
+    }
+    const result = readAchievementStar(game, poly, id, universe);
+    return (
+      result.status === "ready" &&
+      isAchievementUnlockedPolicy(result.star, level)
+    );
+  };
+  let guardActive = (setting) => {
+    const result = readAchievementGuardInput(
+      settings,
+      game,
+      poly,
+      buildings,
+      setting,
+    );
+    if (result.status === "ready") {
+      return isAchievementGuardActive(result.input);
+    }
+    return result.status === "unavailable" ? result.fallbackActive : false;
+  };
+  let bananaRepublicObjectiveComplete = (objective) => {
+    const result = readBananaRepublicObjective(game, poly, objective);
+    return result.status === "ready" ? result.complete : false;
+  };
+  let bananaRepublicSmoothieComplete = () => {
+    const result = readBananaRepublicSmoothieInput(game);
+    return result.status === "ready"
+      ? isBananaRepublicSmoothieCompletePolicy(result.input)
+      : false;
+  };
+  let bananaRepublicReadyForUnification = () => {
+    const result = readBananaRepublicProgress(game, poly);
+    return result.status === "ready"
+      ? isBananaRepublicReadyForUnificationPolicy(result.progress)
+      : false;
+  };
+  let guardBananaRepublicActive = () => {
+    const result = readBananaRepublicGuardInput(settings, game, poly);
+    if (result.status === "ready") {
+      return isBananaRepublicGuardActivePolicy(result.input);
+    }
+    return result.status === "unavailable" ? result.fallbackActive : false;
+  };
+
   let {
-    getStarLevel,
-    getAchievementStar,
-    isAchievementUnlocked,
-    guardActive,
-    bananaRepublicObjectiveComplete,
-    bananaRepublicSmoothieComplete,
-    bananaRepublicReadyForUnification,
-    guardBananaRepublicActive,
     inflationChallengeAssistActive,
     inflationChallengeMoneyReachable,
     inflationChallengeSecondsToFinish,
@@ -2432,9 +2607,9 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   } = createRunGuards({
     getSettings: () => settings,
     getGame: () => game,
-    getPoly: () => poly,
     getResources: () => resources,
     getBuildings: () => buildings,
+    getAchievementStar: (...args) => getAchievementStar(...args),
     haveTech,
     getNumberString,
     inflationChallengeMoney: INFLATION_CHALLENGE_MONEY,
@@ -2505,9 +2680,8 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const { findRequiredResourceWeight } = createResourceWeighting({
-    getState: () => state,
-  });
+  const findRequiredResourceWeight = (resource) =>
+    findRequiredResourceWeightPolicy(state.unlockedBuildings, resource);
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
@@ -2662,14 +2836,29 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getFoodConsume,
   });
 
-  const autoTax = createAutoTax({
-    KeyManager,
+  const { autoTax } = createTaxAutomation({
     getPoly: () => poly,
     getResources: () => resources,
     getSettings: () => settings,
     getGame: () => game,
     getVueById,
+    clearKeyModifiers: () => KeyManager.set(false, false, false),
+    nowMs: () => browserClock.nowMs(),
   });
+
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      autoTax: () => autoTax(),
+      setAutoTaxTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("resources" in context) resources = context.resources;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("keySet" in context) KeyManager.set = context.keySet;
+      },
+    });
+  }
 
   const autoAlchemy = createAutoAlchemy({
     AlchemyManager,
@@ -2776,28 +2965,81 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  let {
-    isPrestigeAllowed,
-    isCataclysmPrestigeAvailable,
-    isBioseederPrestigeAvailable,
-    isWhiteholePrestigeAvailable,
-    isApocalypsePrestigeAvailable,
-    isAscensionPrestigeAvailable,
-    isWitchAscensionPrestigeAvailable,
-    isDemonicPrestigeAvailable,
-    isPillarFinished,
-    isGECKNeeded,
-    getBlackholeMass,
-  } = createPrestigeEligibility({
-    getSettings: () => settings,
-    getGame: () => game,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getTechIds: () => techIds,
-    getMechManager: () => MechManager,
-    getHaveTech: () => haveTech,
-    getIsAchievementUnlocked: () => isAchievementUnlocked,
-  });
+  const readPrestigeView = () =>
+    readPrestigeEligibilityView(
+      settings,
+      game,
+      resources,
+      buildings,
+      techIds,
+      MechManager,
+      (...args) => haveTech(...args),
+      (...args) => isAchievementUnlocked(...args),
+    );
+  let isPrestigeAllowed = (type) => {
+    const result = readPrestigePermissionView(settings, game);
+    return result.status === "ready"
+      ? isPrestigeAllowedPolicy(result.view, type)
+      : false;
+  };
+  let isCataclysmPrestigeAvailable = () => {
+    const result = readPrestigeView();
+    return result.status === "ready"
+      ? isCataclysmPrestigeAvailablePolicy(result.view)
+      : false;
+  };
+  let isBioseederPrestigeAvailable = () => {
+    const result = readPrestigeView();
+    return result.status === "ready"
+      ? isBioseedPrestigeAvailablePolicy(result.view)
+      : false;
+  };
+  let isWhiteholePrestigeAvailable = () => {
+    const result = readPrestigeView();
+    return result.status === "ready"
+      ? isWhiteholePrestigeAvailablePolicy(result.view)
+      : false;
+  };
+  let isApocalypsePrestigeAvailable = () => {
+    const result = readPrestigeView();
+    return result.status === "ready"
+      ? isApocalypsePrestigeAvailablePolicy(result.view)
+      : false;
+  };
+  let isAscensionPrestigeAvailable = () => {
+    const result = readPrestigeView();
+    return result.status === "ready"
+      ? isAscensionPrestigeAvailablePolicy(result.view)
+      : false;
+  };
+  let isWitchAscensionPrestigeAvailable = (demonic) => {
+    const result = readPrestigeView();
+    return result.status === "ready"
+      ? isWitchAscensionPrestigeAvailablePolicy(result.view, demonic)
+      : false;
+  };
+  let isDemonicPrestigeAvailable = () => {
+    const result = readPrestigeView();
+    return result.status === "ready"
+      ? isDemonicPrestigeAvailablePolicy(result.view)
+      : false;
+  };
+  let isPillarFinished = () => {
+    const result = readPillarEligibilityView(settings, game, resources);
+    return result.status === "ready"
+      ? isPillarFinishedPolicy(result.view)
+      : false;
+  };
+  let isGECKNeeded = () => {
+    const result = readGeckEligibilityView(settings, buildings, (...args) =>
+      isAchievementUnlocked(...args),
+    );
+    return result.status === "ready" ? isGeckNeededPolicy(result.view) : true;
+  };
+  let getBlackholeMass = () => {
+    const result = readPrestigeView();
+    return result.status === "ready" ? getBlackholeMassPolicy(result.view) : 0;
+  };
 
   const autoPrestige = createAutoPrestige({
     getState: () => state,
@@ -3019,19 +3261,32 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getGetCostConflict: () => getCostConflict,
   });
 
-  const { getTechConflict } = createTechConflicts({
-    getSettings: () => settings,
-    getResources: () => resources,
-    getState: () => state,
-    getGame: () => game,
-    getIsAchievementUnlocked: () => isAchievementUnlocked,
-    getNumberString,
-    guardActive,
-    guardBananaRepublicActive,
-    retirementChallengeAssistActive,
-    retirementPreparationMissing,
-    fanatAchievements,
-  });
+  let techConflictClock = browserClock;
+  const getTechConflict = (tech) => {
+    const readResult = readTechConflictInput(
+      tech,
+      settings,
+      resources,
+      state,
+      game,
+      {
+        clock: techConflictClock,
+        guardActive,
+        guardBananaRepublicActive,
+        retirementChallengeAssistActive,
+        retirementPreparationMissing,
+        isAchievementUnlocked,
+        fanatAchievements,
+      },
+    );
+    if (readResult.status === "unavailable") {
+      return "Research data unavailable";
+    }
+    const conflict = findTechConflict(readResult.input);
+    return conflict === null
+      ? false
+      : formatTechConflict(conflict, getNumberString);
+  };
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
@@ -3043,6 +3298,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         resources = context.resources;
         buildings = context.buildings;
         isAchievementUnlocked = context.isAchievementUnlocked;
+        techConflictClock = context.clock ?? browserClock;
       },
     });
   }
@@ -3098,7 +3354,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     isHellSupressUseful,
     getGalaxyRegions,
     traitVal,
-    getRequiredAuthorityGarrison,
+    getAuthorityGarrisonRequirement,
     getHaveTech: () => haveTech,
     adjustSpire,
     getBestSupplyRatio,
@@ -3221,8 +3477,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getSettings: () => settings,
     getResources: () => resources,
     traitVal,
-    getAuthorityTarget,
-    getPredictedAuthorityAfterRemovingSoldiers,
+    assessAuthorityRemoval,
     GameLog,
   });
 
@@ -3377,26 +3632,24 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const { checkAffordableCustom, getQueuedItemObj } = createQueueItems({
-    getResources: () => resources,
-    getPoly: () => poly,
-    getMechManager: () => MechManager,
-    getBuildingIds: () => buildingIds,
-    getArpaIds: () => arpaIds,
-  });
-
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
-      queueItems: { checkAffordableCustom, getQueuedItemObj },
-      setQueueItemTestContext(context) {
-        resources = context.resources;
-        poly = context.poly;
-        MechManager = context.MechManager;
-        buildingIds = context.buildingIds;
-        arpaIds = context.arpaIds;
-      },
-    });
+  function checkAffordableCustom(cost, max = false) {
+    const readResult = readCostAffordabilityInput(
+      cost,
+      resources,
+      max ? "maximum" : "current",
+    );
+    return readResult.status === "ready"
+      ? isCostAffordable(readResult.input)
+      : false;
   }
+  const readQueuedTarget = (item) =>
+    readQueueTarget(item, {
+      resources,
+      poly,
+      mechManager: MechManager,
+      buildingIds,
+      arpaIds,
+    });
 
   const { updatePriorityTargets } = createPriorityTargets({
     getSettings: () => settings,
@@ -3412,7 +3665,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getMechManager: () => MechManager,
     getTriggerManager: () => TriggerManager,
     getJQuery: () => $,
-    getQueuedItemObj,
+    readQueuedTarget,
     getTechConflict,
     isPrestigeAllowed,
     haveTask,
@@ -3436,6 +3689,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         FleetManagerOuter = context.FleetManagerOuter;
         MechManager = context.MechManager;
         TriggerManager = context.TriggerManager;
+        if (context.poly) poly = context.poly;
       },
     });
   }
@@ -3496,11 +3750,26 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const { getMultiSegmentedTimeLeft } = createTargetTiming({
-    getGame: () => game,
-    getPoly: () => poly,
-    isProject: (target) => target instanceof Project,
-  });
+  const getMultiSegmentedTimeLeft = (target) => {
+    const readResult = readTargetTimingInput(
+      game,
+      target,
+      target instanceof Project,
+    );
+    if (readResult.status === "unavailable") {
+      return {
+        resource: readResult.resourceId ?? "",
+        timeLeft: "Never",
+      };
+    }
+
+    const result = calculateTargetTiming(readResult.input);
+    return {
+      resource: result.resourceId,
+      timeLeft:
+        result.seconds === Infinity ? "Never" : poly.timeFormat(result.seconds),
+    };
+  };
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
@@ -3541,7 +3810,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       typeof ResizeObserver === "function" ? ResizeObserver : undefined,
     updateSettingsFromState: () => updateSettingsFromState(),
     makePlannerStats: () => makePlannerStats(),
-    savePlannerStats: () => savePlannerStats(),
+    savePlannerStats: (stats) => savePlannerStats(stats),
   });
 
   if (window.__EA_TEST_HOOKS__) {
@@ -3550,7 +3819,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         plannerLimitingResource,
         makePlannerStats,
         loadPlannerStats,
-        savePlannerStats,
+        savePlannerStats: () => savePlannerStats(state.plannerStats),
       },
       setPlannerAnalysisTestContext(context) {
         game = context.game;
@@ -3700,7 +3969,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       loadStateLog,
       triggerFileDownload,
       displayScriptWarningNode,
-      exportFunction: (...args) => exportFunction(...args),
     };
 
   const { initialiseScript, mainAutoEvolveScript } = createScriptBootstrap({
@@ -3724,11 +3992,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       WindowManager,
       $,
       window,
-      unsafeWindow:
-        typeof unsafeWindow === "undefined" ? undefined : unsafeWindow,
-      cloneInto: typeof cloneInto === "undefined" ? undefined : cloneInto,
-      exportFunction:
-        typeof exportFunction === "undefined" ? undefined : exportFunction,
+      userscriptEnvironment,
       win,
       needSandboxBypass,
       poly,
@@ -4063,6 +4327,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       openOptionsModal,
       scriptVersionExtra: SCRIPT_VERSION_EXTRA,
     }),
+    getScriptVersion: () => userscriptEnvironment.getScriptVersion(),
   });
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
@@ -4697,9 +4962,8 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getGovernor: () => getGovernor(),
     getVueById: (...args) => getVueById(...args),
     normalizeProperties,
-    cloneInto: (...args) => cloneInto(...args),
-    getUnsafeWindow: () =>
-      typeof unsafeWindow === "undefined" ? undefined : unsafeWindow,
+    cloneIntoPage: (value, options) =>
+      userscriptEnvironment.cloneIntoPage(value, options),
     getDate: () => new Date(),
   });
 

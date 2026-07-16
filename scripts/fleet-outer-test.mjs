@@ -7,6 +7,7 @@ function runFleetCase({
   authorityTarget = 100,
   authorityMax = 100,
   authorityManage = true,
+  authorityUnavailable = false,
   race = {},
   trait = () => undefined,
   regions = ["spc_red"],
@@ -88,18 +89,28 @@ function runFleetCase({
     getSettings: () => settings,
     getResources: () => resources,
     traitVal: (id, index, fallback) => trait(id, index) ?? fallback,
-    getAuthorityTarget: () =>
-      authorityTarget === 0
-        ? null
-        : authorityTarget < 0
-          ? authorityMax
-          : authorityTarget,
-    getPredictedAuthorityAfterRemovingSoldiers: (removed) => {
+    assessAuthorityRemoval: (removed) => {
+      if (authorityUnavailable) {
+        return { status: "unavailable", reason: "invalid-resource" };
+      }
+      const target =
+        authorityTarget === 0
+          ? null
+          : authorityTarget < 0
+            ? authorityMax
+            : authorityTarget;
+      if (target === null) return { status: "unmanaged" };
       const perSoldier =
         0.7 *
         ((trait("high_pop", 1) ?? 100) / 100) *
         (race.grenadier ? 1.75 : 1);
-      return Math.floor(authority - removed * perSoldier);
+      const predicted = Math.floor(authority - removed * perSoldier);
+      return {
+        status: "ready",
+        target,
+        predicted,
+        blocksRemoval: predicted < target,
+      };
     },
     GameLog: { logSuccess: () => actions.push(["log"]) },
   });
@@ -135,6 +146,13 @@ assert.equal(
   globallyDisabled.actions.some(([action]) => action === "build"),
   true,
 );
+
+const unavailable = runFleetCase({ authorityUnavailable: true });
+assert.equal(
+  unavailable.actions.some(([action]) => action === "build"),
+  false,
+);
+assert.match(unavailable.manager.nextShipMsg, /Authority data unavailable/);
 
 const pinAtMax = runFleetCase({
   authority: 102,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createAutoTax } from "../src/automation/civic/tax.ts";
+import { createTaxAutomation } from "../src/bootstrap/tax.ts";
 
 function runTaxCase({
   taxRate = 10,
@@ -47,23 +47,28 @@ function runTaxCase({
       race: {},
     },
   };
-  let poly;
-  const autoTax = createAutoTax({
-    KeyManager: { set: (...args) => actions.push(["keys", ...args]) },
-    getPoly: () => poly,
+  let now = 100;
+  const automation = createTaxAutomation({
+    getPoly: () => ({ taxCap: (minimum) => (minimum ? 0 : 50) }),
     getResources: () => resources,
     getSettings: () => settings,
     getGame: () => game,
     getVueById: () => ({
-      add: () => actions.push(["add"]),
-      sub: () => actions.push(["sub"]),
+      add: () => {
+        actions.push(["add"]);
+        game.global.civic.taxes.tax_rate += 1;
+      },
+      sub: () => {
+        actions.push(["sub"]);
+        game.global.civic.taxes.tax_rate -= 1;
+      },
     }),
+    clearKeyModifiers: () => actions.push(["keys", false, false, false]),
+    nowMs: () => now++,
   });
 
-  // Main initializes poly after wiring the controller, so it must be resolved lazily.
-  poly = { taxCap: (minimum) => (minimum ? 0 : 50) };
-  autoTax();
-  return { actions, resources };
+  automation.autoTax();
+  return { actions, resources, trace: automation.getLastTrace() };
 }
 
 const forced = runTaxCase({ taxRate: 10, requestedTaxRate: 13 });
@@ -74,6 +79,8 @@ assert.deepEqual(forced.actions, [
   ["add"],
 ]);
 assert.equal(forced.resources.Morale.incomeAdusted, true);
+assert.equal(forced.trace.snapshotId, "tax-snapshot-1");
+assert.equal(forced.trace.results[0].status, "succeeded");
 
 const authority = runTaxCase({
   taxRate: 20,
@@ -107,10 +114,7 @@ const alreadyAdjusted = runTaxCase({
   requestedTaxRate: 20,
   moraleAdjusted: true,
 });
-assert.deepEqual(
-  alreadyAdjusted.actions,
-  [],
-  "taxes must only be adjusted once per tick",
-);
+assert.deepEqual(alreadyAdjusted.actions, []);
+assert.deepEqual(alreadyAdjusted.trace.results, []);
 
-console.log("Tax automation regression tests passed");
+console.log("Tax automation application integration tests passed");

@@ -93,7 +93,23 @@ const { updatePriorityTargets } = createPriorityTargets({
       techSweep.forEach((element) => callback.call(element));
     },
   }),
-  getQueuedItemObj: (item) => context.buildingIds[item.id],
+  readQueuedTarget: (item) => {
+    if (context.queueUnavailable) {
+      return {
+        status: "unavailable",
+        reason: "invalid-cost",
+        itemId: item.id,
+      };
+    }
+    const target = context.buildingIds[item.id];
+    return target
+      ? {
+          status: "ready",
+          target,
+          maximumAffordable: target.isAffordable(true),
+        }
+      : { status: "missing", itemId: item.id };
+  },
   getTechConflict: () => false,
   isPrestigeAllowed: () => false,
   haveTask: (task) => mechTask && task === "mech",
@@ -157,5 +173,20 @@ assert.deepEqual(
   context.state.unlockedTechs.map((t) => t.id),
   ["tech-mining"],
 );
+
+// Malformed visible queue data fails closed through a sentinel reservation and
+// is explicitly marked instead of aborting the complete state update.
+techSweep.length = 0;
+context = makeContext({ queueUnavailable: true });
+updatePriorityTargets();
+assert.equal(context.state.queueDataUnavailable, true);
+assert.deepEqual(context.state.queuedTargetsAll, []);
+assert.deepEqual(context.state.conflictTargets, [
+  {
+    name: "Queue data unavailable",
+    cause: "Queue",
+    cost: { __EA_QUEUE_DATA_UNAVAILABLE__: 1 },
+  },
+]);
 
 console.log("Priority targets module tests passed");

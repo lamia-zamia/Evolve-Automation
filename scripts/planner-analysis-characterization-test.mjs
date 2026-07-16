@@ -79,17 +79,37 @@ let limit = planner.plannerLimitingResource({
   isAffordable: () => false,
   cost: { Slow: 110 },
 });
-assert.equal(limit.resource, resources.Slow);
+assert.equal(limit.resourceId, "Slow");
+assert.equal(limit.resourceTitle, "Slow");
 assert.equal(limit.time, 20);
 assert.equal(limit.blocker, "income");
 
 limit = planner.plannerLimitingResource({
   isAffordable: () => false,
+  cost: { Missing: 1 },
+});
+assert.equal(limit.status, "unavailable");
+assert.equal(limit.reason, "invalid-resource");
+assert.equal(limit.resourceId, "Missing");
+
+limit = planner.plannerLimitingResource({
+  isAffordable: () => false,
   cost: { Slow: 110, Stalled: 10, Storage: 100 },
 });
-assert.equal(limit.resource, resources.Storage);
+assert.equal(limit.resourceId, "Storage");
+assert.equal(limit.resourceTitle, "Storage");
 assert.equal(limit.time, Number.MAX_SAFE_INTEGER);
 assert.equal(limit.blocker, "storage");
+
+resources.SameSpeed = resource("Same Speed", {
+  currentQuantity: 10,
+  income: 5,
+});
+limit = planner.plannerLimitingResource({
+  isAffordable: () => false,
+  cost: { Slow: 110, SameSpeed: 110 },
+});
+assert.equal(limit.resourceId, "Slow");
 
 const freshStats = planner.makePlannerStats();
 assert.deepEqual(
@@ -130,9 +150,35 @@ assert.equal(planner.loadPlannerStats().startDay, 123);
 stored.set("ea_planner_stats", JSON.stringify({ day: 124, reset: 7 }));
 assert.equal(planner.loadPlannerStats().startDay, 123);
 
+stored.set("ea_planner_stats", JSON.stringify({ day: 123, reset: 7 }));
+const malformedSameRun = planner.loadPlannerStats();
+assert.deepEqual(
+  { ...malformedSameRun, samples: { ...malformedSameRun.samples } },
+  {
+    startDay: 123,
+    day: 123,
+    reset: 7,
+    samples: {},
+    total: 0,
+  },
+);
+
 state.plannerStats = { total: 9 };
+stored.set("ea_planner_stats", "sentinel");
 planner.savePlannerStats();
-assert.equal(stored.get("ea_planner_stats"), JSON.stringify({ total: 9 }));
+assert.equal(stored.get("ea_planner_stats"), "sentinel");
+state.plannerStats = {
+  startDay: 100,
+  day: 123,
+  reset: 7,
+  samples: { Iron: 2 },
+  total: 2,
+};
+planner.savePlannerStats();
+assert.equal(
+  stored.get("ea_planner_stats"),
+  JSON.stringify(state.plannerStats),
+);
 state.plannerStats = null;
 stored.delete("ea_planner_stats");
 planner.savePlannerStats();

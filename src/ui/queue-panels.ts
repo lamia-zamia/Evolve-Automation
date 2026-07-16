@@ -12,8 +12,8 @@ export interface QueuePanelsDependencies {
   isTechnology: (target: unknown) => boolean;
   getResizeObserver: () => any;
   updateSettingsFromState: () => void;
-  makePlannerStats: () => AnyRecord;
-  savePlannerStats: () => void;
+  makePlannerStats: () => AnyRecord | null;
+  savePlannerStats: (stats: unknown) => boolean;
 }
 
 export function createQueuePanels({
@@ -278,8 +278,9 @@ export function createQueuePanels({
       dependencies.updateSettingsFromState();
     });
     $("#script_planner-reset").on("click", function () {
-      dependencies.getState().plannerStats = dependencies.makePlannerStats();
-      dependencies.savePlannerStats();
+      const stats = dependencies.makePlannerStats();
+      dependencies.getState().plannerStats = stats;
+      if (stats !== null) dependencies.savePlannerStats(stats);
       $("#script_planner-stats-text").html("");
     });
   }

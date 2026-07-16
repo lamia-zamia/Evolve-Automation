@@ -7,9 +7,8 @@ type InfrastructureManagerDependencies = {
   getPoly: () => AnyRecord;
   getWin: () => AnyRecord;
   getNeedSandboxBypass: () => boolean;
-  getUnsafeWindow: () => unknown;
   getKeyboardEvent: () => new (type: string, init: AnyRecord) => unknown;
-  cloneInto: (...args: any[]) => any;
+  cloneIntoPage: (value: unknown) => any;
 };
 
 export function createInfrastructureManagers({
@@ -19,9 +18,8 @@ export function createInfrastructureManagers({
   getPoly,
   getWin,
   getNeedSandboxBypass,
-  getUnsafeWindow,
   getKeyboardEvent,
-  cloneInto,
+  cloneIntoPage,
 }: InfrastructureManagerDependencies) {
   let document: AnyRecord;
   let game: AnyRecord;
@@ -29,7 +27,6 @@ export function createInfrastructureManagers({
   let poly: AnyRecord;
   let win: AnyRecord;
   let needSandboxBypass: boolean;
-  let unsafeWindow: unknown;
   let KeyboardEvent: new (type: string, init: AnyRecord) => unknown;
 
   function refreshContext() {
@@ -39,7 +36,6 @@ export function createInfrastructureManagers({
     poly = getPoly();
     win = getWin();
     needSandboxBypass = getNeedSandboxBypass();
-    unsafeWindow = getUnsafeWindow();
     KeyboardEvent = getKeyboardEvent();
   }
 
@@ -148,9 +144,9 @@ export function createInfrastructureManagers({
         this._allFn = null;
       } else if (needSandboxBypass) {
         // FF fix
-        this._setFn = (e) => set(cloneInto(e, unsafeWindow));
-        this._unsetFn = (e) => unset(cloneInto(e, unsafeWindow));
-        this._allFn = (e) => all(cloneInto(e, unsafeWindow));
+        this._setFn = (e) => set(cloneIntoPage(e));
+        this._unsetFn = (e) => unset(cloneIntoPage(e));
+        this._allFn = (e) => all(cloneIntoPage(e));
       } else {
         this._setFn = set;
         this._unsetFn = unset;

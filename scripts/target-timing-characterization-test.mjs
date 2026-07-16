@@ -84,4 +84,19 @@ assert.deepEqual(
   { resource: "", timeLeft: "0s" },
 );
 
+hooks.setTargetTimingTestContext({
+  game: { global: { resource: {} } },
+  poly: { timeFormat: (seconds) => `${seconds}s` },
+});
+assert.deepEqual(
+  {
+    ...hooks.getMultiSegmentedTimeLeft({
+      gameMax: 1,
+      count: 0,
+      cost: { Missing: 10 },
+    }),
+  },
+  { resource: "Missing", timeLeft: "Never" },
+);
+
 console.log("Target timing bundled characterization tests passed");

@@ -1,9 +1,6 @@
 type AnyRecord = Record<string, any>;
 type AnyFunction = (...args: any[]) => any;
 
-declare const GM_info: AnyRecord | undefined;
-declare const GM: AnyRecord | undefined;
-
 interface ScriptRuntimeUIContext {
   $: AnyFunction & AnyRecord;
   document: AnyRecord;
@@ -17,10 +14,12 @@ interface ScriptRuntimeUIContext {
 
 interface ScriptRuntimeUIDependencies {
   getContext: () => ScriptRuntimeUIContext;
+  getScriptVersion: () => string | undefined;
 }
 
 export function createScriptRuntimeUI({
   getContext,
+  getScriptVersion,
 }: ScriptRuntimeUIDependencies) {
   const liveObject = (key: keyof ScriptRuntimeUIContext) =>
     new Proxy(
@@ -550,29 +549,7 @@ export function createScriptRuntimeUI({
       msg = `${msg}\n\nStack info:\n${stack}`;
     }
 
-    // Add script version to message if available.
-    // This is very annoying to retrieve as it can live in GM_info or in GM.info depending on userscript manager,
-    // it might not be available at all in some cases due to @grant none, and it might be somewhat broken even if available,
-    // as these can be weird getters that might fail in some cases.
-    // Still, if we can get it, it's nice to have.
-    let versionPart = "unknown";
-    try {
-      // We can't test this against the window because it's only available in script eval scope
-      let gmInfo =
-        typeof GM_info !== "undefined"
-          ? GM_info
-          : typeof GM !== "undefined"
-            ? GM?.info
-            : null;
-      if (gmInfo?.script?.version) {
-        versionPart = gmInfo.script.version;
-      }
-    } catch (internalError) {
-      // This should hopefully never happen, but userscript implementations can do some really messed up stuff with GM APIs.
-      // Best not to trust that there's no broken getter, etc.
-      console.error("Error in error handler: %o", internalError);
-      msg = `${msg}\n-----\nError in error handler: ${internalError}`;
-    }
+    const versionPart = getScriptVersion() ?? "unknown";
 
     msg = `${msg}\n\nScript version: ${versionPart} ${getContext().scriptVersionExtra}\n`;
 

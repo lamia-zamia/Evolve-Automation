@@ -16,7 +16,12 @@ type StateLogTarget = {
 
 type StateLogBlocker =
   | 0
-  | [string, string | null, "ready" | "storage" | "income" | "stalled", number];
+  | [
+      string,
+      string | null,
+      "ready" | "storage" | "income" | "stalled" | "unavailable",
+      number,
+    ];
 
 type StateLogSample = {
   d: number;
@@ -65,11 +70,19 @@ type StateLogDependencies = {
     Knowledge: StateLogResource;
   };
   getState: () => StateLogState;
-  plannerLimitingResource: (target: StateLogTarget) => {
-    resource: StateLogResource;
-    time: number;
-    blocker: "storage" | "income" | "stalled";
-  } | null;
+  plannerLimitingResource: (target: StateLogTarget) =>
+    | {
+        resourceId: string;
+        resourceTitle: string;
+        time: number;
+        blocker: "storage" | "income" | "stalled";
+      }
+    | {
+        status: "unavailable";
+        reason: string;
+        resourceId?: string;
+      }
+    | null;
   storage: {
     getItem: (key: string) => string | null;
     setItem: (key: string, value: string) => void;
@@ -144,9 +157,12 @@ export function createStateLogLifecycle({
     if (!limit) {
       return [target.title, null, "ready", 0];
     }
+    if ("status" in limit) {
+      return [target.title, limit.resourceId ?? null, "unavailable", 0];
+    }
     return [
       target.title,
-      limit.resource.title,
+      limit.resourceTitle,
       limit.blocker,
       Math.round(limit.time),
     ];
