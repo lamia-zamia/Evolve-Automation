@@ -27,7 +27,6 @@ const sandbox = {
   setTimeout,
   clearTimeout,
   structuredClone,
-  unsafeWindow: {},
   $: () => ({ ready() {} }),
 };
 sandbox.window = sandbox;

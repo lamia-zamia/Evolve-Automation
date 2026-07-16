@@ -116,6 +116,23 @@
     return { normalizeProperties: normalizeProperties2, addProps: addProps2 };
   }
 
+  // src/utils/fast-evaluator.ts
+  function createFastEvaluator({
+    compileExpression
+  }) {
+    const evalCache = {};
+    function fastEval2(source2) {
+      if (!evalCache[source2]) {
+        evalCache[source2] = compileExpression(source2);
+      }
+      return evalCache[source2]();
+    }
+    function cacheSize() {
+      return Object.keys(evalCache).length;
+    }
+    return { fastEval: fastEval2, cacheSize };
+  }
+
   // src/formatting/numbers.ts
   function createNumberFormatting({
     numberSuffix: numberSuffix2
@@ -2012,7 +2029,7 @@
           Hunting: { id: "hunting", isUnlocked: () => true },
           Crafting: { id: "crafting", isUnlocked: () => haveTech2("magic", 4) }
         },
-        (s2) => s2.id,
+        (s) => s.id,
         [{ s: "spell_w_", p: "weighting" }]
       ),
       initIndustry() {
@@ -3293,6 +3310,1937 @@
       MarketManager: MarketManager2,
       StorageManager: StorageManager2
     };
+  }
+
+  // src/game/foreign-affairs-managers.ts
+  function createForeignAffairsManagers({
+    getGame,
+    getSettings,
+    getState,
+    getResources,
+    getBuildings,
+    getDocument,
+    getPoly,
+    getVueById: getVueById2,
+    getWindowManager,
+    getGameLog,
+    getKeyManager,
+    getHaveTech,
+    getGuardActive,
+    getTraitVal,
+    getGovPower: getGovPower2,
+    getGovName: getGovName2,
+    getOccCosts: getOccCosts2,
+    logError = (...args) => console.error(...args)
+  }) {
+    const haveTech2 = (...args) => getHaveTech()(...args);
+    const guardActive2 = (...args) => getGuardActive()(...args);
+    const traitVal2 = (...args) => getTraitVal()(...args);
+    const SpyManager2 = {
+      _foreignVue: void 0,
+      purchaseMoney: 0,
+      purchaseForeigngs: [],
+      foreignActive: [],
+      foreignTarget: null,
+      Types: {
+        Influence: { id: "influence" },
+        Sabotage: { id: "sabotage" },
+        Incite: { id: "incite" },
+        Annex: { id: "annex" },
+        Purchase: { id: "purchase" }
+      },
+      spyCost(govIndex, spy) {
+        const game2 = getGame();
+        const state2 = getState();
+        let gov = game2.global.civic.foreign[`gov${govIndex}`];
+        spy = spy ?? gov.spy + 1;
+        let base = Math.max(
+          50,
+          Math.round(gov.mil / 2 + gov.hstl / 2 - gov.unrest) + 10
+        );
+        if (game2.global.race["infiltrator"]) {
+          base /= 3;
+        }
+        if (state2.astroSign === "scorpio") {
+          base * 0.88;
+        }
+        return Math.round(base ** spy) + 500;
+      },
+      updateForeigns() {
+        const game2 = getGame();
+        const settings2 = getSettings();
+        const resources2 = getResources();
+        const poly2 = getPoly();
+        this.purchaseMoney = 0;
+        this.purchaseForeigngs = [];
+        this._foreignVue = getVueById2("foreign");
+        let foreignUnlocked = this._foreignVue?.vis();
+        if (foreignUnlocked) {
+          let currentTarget = null;
+          let controlledForeigns = 0;
+          let unlockedForeigns = [];
+          if (!haveTech2("world_control")) {
+            unlockedForeigns.push(0, 1, 2);
+          }
+          if (haveTech2("rival")) {
+            unlockedForeigns.push(3);
+          }
+          let activeForeigns = unlockedForeigns.map((i) => ({
+            id: i,
+            gov: game2.global.civic.foreign[`gov${i}`]
+          }));
+          for (let foreign of activeForeigns) {
+            let rank = foreign.id === 3 ? "Rival" : getGovPower2(foreign.id) <= settings2.foreignPowerRequired ? "Inferior" : "Superior";
+            foreign.policy = settings2[`foreignPolicy${rank}`];
+            if (foreign.gov.anx && foreign.policy === "Annex" || foreign.gov.buy && foreign.policy === "Purchase" || foreign.gov.occ && foreign.policy === "Occupy") {
+              controlledForeigns++;
+            }
+            if (!settings2.foreignPacifist && !guardActive2("guardPacifist") && !foreign.gov.anx && !foreign.gov.buy && rank === "Inferior") {
+              currentTarget = foreign;
+            }
+          }
+          if (activeForeigns.length > 0 && !settings2.foreignPacifist && !guardActive2("guardPacifist")) {
+            currentTarget = currentTarget ?? activeForeigns.find((f) => f.gov.occ) ?? activeForeigns[0];
+            let readyToUnify = settings2.foreignUnification && controlledForeigns >= 2 && game2.global.tech["unify"] === 1;
+            if (!readyToUnify && ["Annex", "Purchase"].includes(currentTarget.policy) && SpyManager2.isEspionageUseful(
+              currentTarget.id,
+              SpyManager2.Types[currentTarget.policy].id
+            )) {
+              currentTarget.policy = "Ignore";
+            }
+            if (!readyToUnify && settings2.foreignForceSabotage && currentTarget.id !== 3 && SpyManager2.isEspionageUseful(
+              currentTarget.id,
+              SpyManager2.Types.Sabotage.id
+            )) {
+              currentTarget.policy = "Sabotage";
+            }
+            if (settings2.foreignUnification && settings2.foreignOccupyLast && !haveTech2("world_control")) {
+              let lastTarget = ["Occupy", "Sabotage"].includes(
+                settings2.foreignPolicySuperior
+              ) ? 2 : currentTarget.id;
+              activeForeigns[lastTarget].policy = readyToUnify ? "Occupy" : "Sabotage";
+            }
+            if (currentTarget.policy === "Influence" || readyToUnify && currentTarget.policy !== "Occupy" || currentTarget.policy === "Betrayal" && currentTarget.gov.mil > 75) {
+              currentTarget = null;
+            }
+          }
+          if (game2.global.tech["unify"] === 1 && (settings2.foreignUnification || guardActive2("guardPacifist")) && settings2.autoFight) {
+            for (let foreign of activeForeigns) {
+              if (foreign.policy === "Purchase" && !foreign.gov.buy && foreign.gov.act !== "purchase") {
+                let moneyNeeded = Math.max(
+                  poly2.govPrice(foreign.id),
+                  foreign.gov.spy < 3 ? this.spyCost(foreign.id, 3) : 0
+                );
+                if (moneyNeeded <= resources2.Money.maxQuantity) {
+                  this.purchaseForeigngs.push(foreign.id);
+                  this.purchaseMoney = Math.max(moneyNeeded, this.purchaseMoney);
+                }
+              }
+            }
+          }
+          this.foreignTarget = currentTarget;
+          this.foreignActive = activeForeigns;
+        } else {
+          this._foreignVue = void 0;
+        }
+      },
+      performEspionage(govIndex, espionageId, influenceAllowed) {
+        const document2 = getDocument();
+        const WindowManager2 = getWindowManager();
+        const resources2 = getResources();
+        const poly2 = getPoly();
+        const game2 = getGame();
+        const GameLog2 = getGameLog();
+        if (WindowManager2.isOpen()) {
+          return;
+        }
+        let optionsSpan = document2.querySelector(
+          `#gov${govIndex} div span:nth-child(3)`
+        );
+        if (optionsSpan.style.display === "none") {
+          return;
+        }
+        let optionsNode = document2.querySelector(
+          `#gov${govIndex} div span:nth-child(3) button`
+        );
+        if (optionsNode === null || optionsNode.getAttribute("disabled") === "disabled") {
+          return;
+        }
+        let espionageToPerform = null;
+        if (espionageId === this.Types.Annex.id || espionageId === this.Types.Purchase.id) {
+          if (this.isEspionageUseful(govIndex, espionageId)) {
+            espionageToPerform = espionageId;
+          } else if (this.isEspionageUseful(govIndex, this.Types.Influence.id) && influenceAllowed) {
+            espionageToPerform = this.Types.Influence.id;
+          } else if (this.isEspionageUseful(govIndex, this.Types.Incite.id)) {
+            espionageToPerform = this.Types.Incite.id;
+          }
+        } else if (this.isEspionageUseful(govIndex, espionageId)) {
+          espionageToPerform = espionageId;
+        }
+        if (espionageToPerform !== null) {
+          if (espionageToPerform === this.Types.Purchase.id) {
+            resources2.Money.currentQuantity -= poly2.govPrice(govIndex);
+          }
+          let title = game2.loc("civics_espionage_actions");
+          WindowManager2.openModalWindowWithCallback(optionsNode, title, () => {
+            GameLog2.logSuccess(
+              "spying",
+              `Performing "${game2.loc(
+                "civics_spy_" + espionageToPerform
+              )}" covert operation against ${getGovName2(govIndex)}.`,
+              ["spy"]
+            );
+            getVueById2("espModal")?.[espionageToPerform]?.(govIndex);
+          });
+        }
+      },
+      isEspionageUseful(govIndex, espionageId) {
+        const game2 = getGame();
+        const resources2 = getResources();
+        const poly2 = getPoly();
+        let gov = game2.global.civic.foreign["gov" + govIndex];
+        switch (espionageId) {
+          case this.Types.Influence.id:
+            return gov.hstl > (gov.spy > 0 ? 0 : 10);
+          case this.Types.Sabotage.id:
+            return gov.spy < 1 || gov.mil > (gov.spy > 1 ? 50 : 74);
+          case this.Types.Incite.id:
+            return gov.spy < 3 || gov.unrest < (gov.spy > 3 ? 100 : 76);
+          case this.Types.Annex.id:
+            return gov.hstl <= 50 && gov.unrest >= 50 && resources2.Morale.currentQuantity >= 200 + gov.hstl - gov.unrest;
+          case this.Types.Purchase.id:
+            return gov.spy >= 3 && resources2.Money.currentQuantity >= poly2.govPrice(govIndex);
+        }
+        return false;
+      }
+    };
+    const WarManager2 = {
+      _garrisonVue: void 0,
+      _hellVue: void 0,
+      workers: 0,
+      wounded: 0,
+      raid: 0,
+      max: 0,
+      m_use: 0,
+      crew: 0,
+      hellSoldiers: 0,
+      hellPatrols: 0,
+      hellPatrolSize: 0,
+      hellAssigned: 0,
+      hellReservedSoldiers: 0,
+      // Warlord properties
+      minions: 0,
+      enemies: 0,
+      updateGarrison() {
+        const game2 = getGame();
+        let garrison = game2.global.civic.garrison;
+        if (garrison) {
+          this.workers = garrison.workers;
+          this.wounded = garrison.wounded;
+          this.raid = garrison.raid;
+          this.max = garrison.max;
+          this.m_use = garrison.m_use;
+          this.crew = garrison.crew;
+          this._garrisonVue = getVueById2("garrison");
+        } else {
+          this._garrisonVue = void 0;
+        }
+      },
+      updateHell() {
+        const game2 = getGame();
+        let fortress = game2.global.portal.fortress;
+        if (fortress) {
+          this.hellSoldiers = fortress.garrison;
+          this.hellPatrols = fortress.patrols;
+          this.hellPatrolSize = fortress.patrol_size;
+          this.hellAssigned = fortress.assigned;
+          this.hellReservedSoldiers = this.getHellReservedSoldiers();
+          this._hellVue = getVueById2("fort");
+          this.minions = game2.global.portal.minions?.spawns;
+          this.enemies = game2.global.portal.throne?.enemy?.length;
+        } else {
+          this._hellVue = void 0;
+        }
+      },
+      get currentSoldiers() {
+        return this.workers - this.crew;
+      },
+      get maxSoldiers() {
+        return this.max - this.crew;
+      },
+      get deadSoldiers() {
+        return this.max - this.workers;
+      },
+      get currentCityGarrison() {
+        const game2 = getGame();
+        return this.currentSoldiers - this.hellSoldiers - (game2.global.space.fob?.troops ?? 0);
+      },
+      get maxCityGarrison() {
+        return this.maxSoldiers - this.hellSoldiers;
+      },
+      get availableGarrison() {
+        const game2 = getGame();
+        return game2.global.race["rage"] ? this.currentCityGarrison : this.currentCityGarrison - this.wounded;
+      },
+      get hellGarrison() {
+        return this.hellSoldiers - this.hellPatrolSize * this.hellPatrols - this.hellReservedSoldiers;
+      },
+      launchCampaign(govIndex) {
+        this._garrisonVue.campaign(govIndex);
+      },
+      release(govIndex) {
+        const game2 = getGame();
+        if (game2.global.civic.foreign["gov" + govIndex].occ) {
+          let occSoldiers = getOccCosts2();
+          this.workers += occSoldiers;
+          this.max += occSoldiers;
+        }
+        this._garrisonVue.campaign(govIndex);
+      },
+      isMercenaryUnlocked() {
+        const game2 = getGame();
+        return game2.global.civic.garrison.mercs;
+      },
+      // function mercCost from civics.js
+      get mercenaryCost() {
+        const game2 = getGame();
+        let cost = Math.round(1.24 ** this.workers * 75) - 50;
+        if (cost > 25e3) {
+          cost = 25e3;
+        }
+        if (this.m_use > 0) {
+          cost *= 1.1 ** this.m_use;
+        }
+        cost *= traitVal2("brute", 0, "-");
+        if (game2.global.race["inflation"]) {
+          cost *= 1 + game2.global.race.inflation / 500;
+        }
+        cost *= traitVal2("high_pop", 1, "=");
+        return Math.round(cost);
+      },
+      hireMercenary() {
+        const resources2 = getResources();
+        const KeyManager2 = getKeyManager();
+        let cost = this.mercenaryCost;
+        if (this.workers >= this.max || resources2.Money.currentQuantity < cost) {
+          return false;
+        }
+        KeyManager2.set(false, false, false);
+        this._garrisonVue.hire();
+        resources2.Money.currentQuantity -= cost;
+        this.workers++;
+        this.m_use++;
+        return true;
+      },
+      getHellReservedSoldiers() {
+        const game2 = getGame();
+        const settings2 = getSettings();
+        const buildings2 = getBuildings();
+        const resources2 = getResources();
+        let soldiers = 0;
+        const soldierRating = game2.armyRating(1, "hellArmy");
+        if (settings2.autoBuild && buildings2.PitAssaultForge.isAutoBuildable() && soldierRating > 0) {
+          if (settings2.hellAssaultReserve || !Object.entries(buildings2.PitAssaultForge.cost).find(
+            ([id, amount]) => resources2[id].currentQuantity < amount
+          )) {
+            soldiers = Math.round(650 / soldierRating);
+          }
+        }
+        if (buildings2.PitSoulForge.count > 0 && (buildings2.PitSoulForge.autoStateEnabled || buildings2.PitSoulForge.stateOnCount > 0) && soldierRating > 0) {
+          let base = game2.global.race["warlord"] ? 400 : 650;
+          let soulForgeSoldiers = Math.round(base / soldierRating);
+          if (buildings2.PitGunEmplacement.count > 0) {
+            soulForgeSoldiers -= Math.floor(
+              buildings2.PitGunEmplacement.stateOnCount * 1.5
+            );
+            soulForgeSoldiers = Math.max(1, soulForgeSoldiers);
+          }
+          soldiers += soulForgeSoldiers;
+        }
+        if (buildings2.RuinsGuardPost.count > 0) {
+          soldiers += (buildings2.RuinsGuardPost.stateOnCount + 1) * traitVal2("high_pop", 0, 1);
+        }
+        return soldiers;
+      },
+      setTactic(newTactic) {
+        const game2 = getGame();
+        let currentTactic = game2.global.civic.garrison.tactic;
+        for (let i = currentTactic; i < newTactic; i++) {
+          this._garrisonVue.next();
+        }
+        for (let i = currentTactic; i > newTactic; i--) {
+          this._garrisonVue.last();
+        }
+      },
+      getCampaignTitle(tactic) {
+        return this._garrisonVue.$options.filters.tactics(tactic);
+      },
+      addBattalion(count) {
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._garrisonVue.aNext();
+        }
+        this.raid = Math.min(this.raid + count, this.currentCityGarrison);
+      },
+      removeBattalion(count) {
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._garrisonVue.aLast();
+        }
+        this.raid = Math.max(this.raid - count, 0);
+      },
+      getGovArmy(tactic, govIndex) {
+        const game2 = getGame();
+        let enemy = [5, 27.5, 62.5, 125, 300][tactic];
+        if (game2.global.race["banana"]) {
+          enemy *= 2;
+        }
+        if (game2.global.city.biome === "swamp") {
+          enemy *= 1.4;
+        }
+        return enemy * getGovPower2(govIndex) / 100;
+      },
+      getAdvantage(army, tactic, govIndex) {
+        return (1 - this.getGovArmy(tactic, govIndex) / army) * 100;
+      },
+      getRatingForAdvantage(adv, tactic, govIndex) {
+        return this.getGovArmy(tactic, govIndex) / (1 - adv / 100);
+      },
+      getSoldiersForAdvantage(advantage, tactic, govIndex) {
+        return this.getSoldiersForAttackRating(
+          this.getRatingForAdvantage(advantage, tactic, govIndex)
+        );
+      },
+      // Calculates the required soldiers to reach the given attack rating, assuming everyone is healthy.
+      getSoldiersForAttackRating(targetRating) {
+        const game2 = getGame();
+        if (!targetRating || targetRating <= 0) {
+          return 0;
+        }
+        let singleSoldierAttackRating = game2.armyRating(10, "army", 0) / 10;
+        let maxSoldiers = Math.ceil(targetRating / singleSoldierAttackRating);
+        if (!game2.global.race["hivemind"]) {
+          return maxSoldiers;
+        }
+        let hiveSize = traitVal2("hivemind", 0);
+        if (maxSoldiers < hiveSize) {
+          maxSoldiers = Math.min(hiveSize, maxSoldiers / (1 - hiveSize * 0.05));
+        }
+        while (maxSoldiers > 1 && game2.armyRating(maxSoldiers - 1, "army", 0) > targetRating) {
+          maxSoldiers--;
+        }
+        return maxSoldiers;
+      },
+      addHellGarrison(count) {
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._hellVue.aNext();
+        }
+        this.hellSoldiers = Math.min(this.hellSoldiers + count, this.workers);
+        this.hellAssigned = this.hellSoldiers;
+      },
+      removeHellGarrison(count) {
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._hellVue.aLast();
+        }
+        let min = this.hellPatrols * this.hellPatrolSize + this.hellReservedSoldiers;
+        this.hellSoldiers = Math.max(this.hellSoldiers - count, min);
+        this.hellAssigned = this.hellSoldiers;
+      },
+      addHellPatrol(count) {
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._hellVue.patInc();
+        }
+        if (this.hellPatrols * this.hellPatrolSize < this.hellSoldiers) {
+          this.hellPatrols += count;
+          if (this.hellSoldiers < this.hellPatrols * this.hellPatrolSize) {
+            this.hellPatrols = Math.floor(
+              this.hellSoldiers / this.hellPatrolSize
+            );
+          }
+        }
+      },
+      removeHellPatrol(count) {
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._hellVue.patDec();
+        }
+        this.hellPatrols = Math.max(this.hellPatrols - count, 0);
+      },
+      addHellPatrolSize(count) {
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._hellVue.patSizeInc();
+        }
+        if (this.hellPatrolSize < this.hellSoldiers) {
+          this.hellPatrolSize += count;
+          if (this.hellSoldiers < this.hellPatrols * this.hellPatrolSize) {
+            this.hellPatrols = Math.floor(
+              this.hellSoldiers / this.hellPatrolSize
+            );
+          }
+        }
+      },
+      removeHellPatrolSize(count) {
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._hellVue.patSizeDec();
+        }
+        this.hellPatrolSize = Math.max(this.hellPatrolSize - count, 1);
+      },
+      attackEnemyFortress(enemyIndex) {
+        const game2 = getGame();
+        if (enemyIndex < 0 || enemyIndex >= game2.global.portal.throne.enemy.length) {
+          return false;
+        }
+        let fortVue = getVueById2("fort");
+        if (!fortVue) {
+          return false;
+        }
+        try {
+          fortVue.attack(enemyIndex);
+          return true;
+        } catch (error) {
+          logError("Failed to attack enemy fortress:", error);
+          return false;
+        }
+      }
+    };
+    return { SpyManager: SpyManager2, WarManager: WarManager2 };
+  }
+
+  // src/game/fleet-managers.ts
+  function createFleetManagers({
+    getGame,
+    getSettings,
+    getResources,
+    getBuildings,
+    getPoly,
+    getVueById: getVueById2,
+    getKeyManager,
+    getHaveTech,
+    getJQuery
+  }) {
+    const haveTech2 = (...args) => getHaveTech()(...args);
+    const FleetManagerOuter2 = {
+      _fleetVueBinding: "shipPlans",
+      _fleetVue: void 0,
+      _explorerBlueprint: {
+        class: "explorer",
+        armor: "neutronium",
+        weapon: "railgun",
+        engine: "emdrive",
+        power: "elerium",
+        sensor: "quantum"
+      },
+      nextShipName: null,
+      nextShipCost: null,
+      nextShipAffordable: null,
+      nextShipExpandable: null,
+      nextShipMsg: null,
+      WeaponPower: {
+        railgun: 36,
+        laser: 64,
+        p_laser: 54,
+        plasma: 90,
+        phaser: 114,
+        disruptor: 156
+      },
+      SensorRange: { visual: 1, radar: 20, lidar: 35, quantum: 60 },
+      ClassPower: {
+        corvette: 1,
+        frigate: 1.5,
+        destroyer: 2.75,
+        cruiser: 5.5,
+        battlecruiser: 10,
+        dreadnought: 22,
+        explorer: 1.2
+      },
+      ClassCrew: {
+        corvette: 2,
+        frigate: 3,
+        destroyer: 4,
+        cruiser: 6,
+        battlecruiser: 8,
+        dreadnought: 10,
+        explorer: 10
+      },
+      // spc_dwarf is ignored, never having any syndicate
+      Regions: [
+        "spc_moon",
+        "spc_red",
+        "spc_gas",
+        "spc_gas_moon",
+        "spc_belt",
+        "spc_titan",
+        "spc_enceladus",
+        "spc_triton",
+        "spc_kuiper",
+        "spc_eris"
+      ],
+      ShipConfig: {
+        class: [
+          "corvette",
+          "frigate",
+          "destroyer",
+          "cruiser",
+          "battlecruiser",
+          "dreadnought",
+          "explorer"
+        ],
+        power: ["solar", "diesel", "fission", "fusion", "elerium"],
+        weapon: ["railgun", "laser", "p_laser", "plasma", "phaser", "disruptor"],
+        armor: ["steel", "alloy", "neutronium"],
+        engine: ["ion", "tie", "pulse", "photon", "vacuum", "emdrive"],
+        sensor: ["visual", "radar", "lidar", "quantum"]
+      },
+      getWeighting(id) {
+        const settings2 = getSettings();
+        return settings2["fleet_outer_pr_" + id];
+      },
+      getMaxDefense(id) {
+        const settings2 = getSettings();
+        return settings2["fleet_outer_def_" + id];
+      },
+      getMaxScouts(id) {
+        const settings2 = getSettings();
+        return settings2["fleet_outer_sc_" + id];
+      },
+      getShipName(ship) {
+        const game2 = getGame();
+        return game2.loc(`outer_shipyard_class_${ship.class}`);
+      },
+      getLocName(loc) {
+        const game2 = getGame();
+        let locRef = loc === "tauceti" ? game2.loc("tech_era_tauceti") : game2.actions.space[loc].info.name;
+        return typeof locRef === "function" ? locRef() : locRef;
+      },
+      isUnlocked(id) {
+        const game2 = getGame();
+        return id === "spc_moon" && game2.global.race["orbit_decayed"] ? false : game2.actions.space[id].info.syndicate?.() ?? false;
+      },
+      updateNextShip(ship) {
+        if (ship) {
+          const poly2 = getPoly();
+          const resources2 = getResources();
+          let cost = poly2.shipCosts(ship);
+          this.nextShipCost = cost;
+          this.nextShipAffordable = true;
+          this.nextShipExpandable = true;
+          this.nextShipMsg = null;
+          this.nextShipName = null;
+          for (let res in cost) {
+            if (resources2[res].maxQuantity < cost[res]) {
+              this.nextShipAffordable = false;
+              if (!resources2[res].hasStorage()) {
+                this.nextShipExpandable = false;
+              }
+            }
+          }
+        } else {
+          this.nextShipCost = null;
+          this.nextShipAffordable = null;
+          this.nextShipExpandable = null;
+          this.nextShipMsg = null;
+          this.nextShipName = null;
+        }
+      },
+      initFleet() {
+        const game2 = getGame();
+        if (!game2.global.tech.syndicate || !game2.global.space.shipyard?.hasOwnProperty("blueprint")) {
+          return false;
+        }
+        this._fleetVue = getVueById2(this._fleetVueBinding);
+        if (this._fleetVue === void 0) {
+          return false;
+        }
+        return true;
+      },
+      getFighterBlueprint() {
+        const settings2 = getSettings();
+        return Object.fromEntries(
+          Object.keys(this.ShipConfig).map((type) => [
+            type,
+            settings2["fleet_outer_" + type]
+          ])
+        );
+      },
+      getScoutBlueprint() {
+        const settings2 = getSettings();
+        return Object.fromEntries(
+          Object.keys(this.ShipConfig).map((type) => [
+            type,
+            settings2["fleet_scout_" + type]
+          ])
+        );
+      },
+      getMissingResource(ship) {
+        const poly2 = getPoly();
+        const resources2 = getResources();
+        let cost = poly2.shipCosts(ship);
+        for (let res in cost) {
+          if (resources2[res].currentQuantity < cost[res]) {
+            return res;
+          }
+        }
+        return null;
+      },
+      avail(ship) {
+        const game2 = getGame();
+        let yard = game2.global.space.shipyard;
+        if (ship.class === "explorer" && (ship.weapon !== "railgun" || ship.sensor !== "quantum")) {
+          return false;
+        }
+        for (let [type, part] of Object.entries(ship)) {
+          if (type !== "name" && yard.blueprint[type] !== part && !(ship.class === "explorer" && (part === "weapon" || part === "sensor"))) {
+            if (!this._fleetVue.avail(
+              type,
+              this.ShipConfig[type].indexOf(part),
+              part
+            )) {
+              return false;
+            }
+          }
+        }
+        return true;
+      },
+      build(ship, region) {
+        const game2 = getGame();
+        const poly2 = getPoly();
+        const resources2 = getResources();
+        const $2 = getJQuery();
+        let yard = game2.global.space.shipyard;
+        for (let [type, part] of Object.entries(ship)) {
+          if (type !== "name" && (yard.blueprint[type] !== part || ship.class === "explorer" || yard.blueprint.class === "explorer")) {
+            this._fleetVue.setVal(type, part);
+          }
+        }
+        if (this._fleetVue.powerText().includes("danger")) {
+          return false;
+        }
+        let cost = poly2.shipCosts(ship);
+        for (let res in cost) {
+          resources2[res].currentQuantity -= cost[res];
+        }
+        if (yard.sort) {
+          $2("#shipPlans .b-checkbox").eq(1).click();
+          this._fleetVue.build();
+          getVueById2("shipReg0")?.setLoc(region, yard.ships.length);
+          $2("#shipPlans .b-checkbox").eq(1).click();
+        } else {
+          this._fleetVue.build();
+          getVueById2("shipReg0")?.setLoc(region, yard.ships.length);
+        }
+        return true;
+      },
+      getShipAttackPower(ship) {
+        return Math.round(
+          this.WeaponPower[ship.weapon] * this.ClassPower[ship.class]
+        );
+      },
+      shipCount(loc, template) {
+        const game2 = getGame();
+        let count = 0;
+        for (let ship of game2.global.space.shipyard.ships) {
+          if (ship.location === loc && ship.class === template.class && ship.power === template.power && ship.weapon === template.weapon && ship.armor === template.armor && ship.engine === template.engine && ship.sensor === template.sensor) {
+            count++;
+          }
+        }
+        return count;
+      },
+      // export function syndicate(region,extra) from truepath.js with added "all" argument
+      syndicate(region, extra, all) {
+        const game2 = getGame();
+        const buildings2 = getBuildings();
+        if (!game2.global.tech["syndicate"] || !game2.global.race["truepath"] || !game2.global.space.syndicate?.hasOwnProperty(region)) {
+          return extra ? { p: 1, r: 0, s: 0 } : 1;
+        }
+        let rivalRel = game2.global.civic.foreign.gov3.hstl;
+        let rival = rivalRel < 10 ? 250 - 25 * rivalRel : rivalRel > 60 ? -13 * (rivalRel - 60) : 0;
+        let divisor = 1e3;
+        switch (region) {
+          case "spc_home":
+          case "spc_moon":
+          case "spc_red":
+          case "spc_hell":
+            divisor = 1250 + rival;
+            break;
+          case "spc_gas":
+          case "spc_gas_moon":
+          case "spc_belt":
+            divisor = 1020 + rival;
+            break;
+          case "spc_titan":
+          case "spc_enceladus":
+            divisor = !haveTech2("triton") ? 600 : game2.actions.space[region].info.syndicate_cap();
+            break;
+          case "spc_triton":
+          case "spc_kuiper":
+          case "spc_eris":
+            divisor = game2.actions.space[region].info.syndicate_cap();
+            break;
+        }
+        let piracy = game2.global.space.syndicate[region];
+        let patrol = 0;
+        let sensor = 0;
+        if (game2.global.space.shipyard?.hasOwnProperty("ships")) {
+          for (let ship of game2.global.space.shipyard.ships) {
+            if (ship.location === region && (ship.transit === 0 && ship.fueled || all)) {
+              let rating = this.getShipAttackPower(ship);
+              patrol += ship.damage > 0 ? Math.round(rating * (100 - ship.damage) / 100) : rating;
+              sensor += this.SensorRange[ship.sensor];
+            }
+          }
+          if (region === "spc_enceladus") {
+            patrol += buildings2.EnceladusBase.stateOnCount * 50;
+          } else if (region === "spc_titan") {
+            patrol += buildings2.TitanSAM.stateOnCount * 25;
+          } else if (region === "spc_triton" && buildings2.TritonFOB.stateOnCount > 0) {
+            patrol += 500;
+            sensor += 10;
+          }
+          if (sensor > 100) {
+            sensor = Math.round((sensor - 100) / (sensor - 100 + 200) * 100) + 100;
+          }
+          patrol = Math.round(patrol * ((sensor + 25) / 125));
+          piracy = piracy - patrol > 0 ? piracy - patrol : 0;
+        }
+        if (extra) {
+          return {
+            p: 1 - +(piracy / divisor).toFixed(4),
+            r: piracy,
+            s: sensor
+          };
+        } else {
+          return 1 - +(piracy / divisor).toFixed(4);
+        }
+      }
+    };
+    const FleetManager2 = {
+      _fleetVueBinding: "fleet",
+      _fleetVue: void 0,
+      neededShips: null,
+      // Per-ship on-counts needed for full piracy coverage, set by autoFleet when crew reclaim is active
+      initFleet() {
+        const game2 = getGame();
+        if (!game2.global.tech.piracy) {
+          return false;
+        }
+        this._fleetVue = getVueById2(this._fleetVueBinding);
+        if (this._fleetVue === void 0) {
+          return false;
+        }
+        return true;
+      },
+      addShip(region, ship, count) {
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._fleetVue.add(region, ship);
+        }
+      },
+      subShip(region, ship, count) {
+        const KeyManager2 = getKeyManager();
+        for (let m of KeyManager2.click(count)) {
+          this._fleetVue.sub(region, ship);
+        }
+      }
+    };
+    return { FleetManagerOuter: FleetManagerOuter2, FleetManager: FleetManager2 };
+  }
+
+  // src/game/mech-manager.ts
+  function createMechManager({
+    getGame,
+    getSettings,
+    getResources,
+    getBuildings,
+    getPoly,
+    getGameLog,
+    getNeedSandboxBypass,
+    getWin,
+    getUnsafeWindow,
+    getSortable,
+    getUpdateDebugData,
+    getCreateMechInfo,
+    getVueById: getVueById2,
+    kCombinations,
+    cloneInto: cloneInto2,
+    createMutationObserver
+  }) {
+    let game2;
+    let settings2;
+    let resources2;
+    let buildings2;
+    let poly2;
+    let GameLog2;
+    let needSandboxBypass2;
+    let win2;
+    let unsafeWindow2;
+    let Sortable2;
+    const k_combinations2 = kCombinations;
+    const updateDebugData2 = (...args) => getUpdateDebugData()(...args);
+    const createMechInfo2 = (...args) => getCreateMechInfo()(...args);
+    function refreshContext() {
+      game2 = getGame();
+      settings2 = getSettings();
+      resources2 = getResources();
+      buildings2 = getBuildings();
+      poly2 = getPoly();
+      GameLog2 = getGameLog();
+      needSandboxBypass2 = getNeedSandboxBypass();
+      win2 = getWin();
+      unsafeWindow2 = getUnsafeWindow();
+      Sortable2 = getSortable();
+    }
+    const MechManager2 = {
+      _assemblyVueBinding: "mechAssembly",
+      _assemblyVue: void 0,
+      _listVueBinding: "mechList",
+      _listVue: void 0,
+      activeMechs: [],
+      inactiveMechs: [],
+      mechsPower: 0,
+      mechsPotential: 0,
+      isActive: false,
+      saveSupply: false,
+      stateHash: 0,
+      bestSize: [],
+      bestGems: [],
+      bestSupply: [],
+      bestMech: {},
+      bestBody: {},
+      bestWeapon: [],
+      Size: ["small", "medium", "large", "titan", "collector"],
+      Chassis: ["wheel", "tread", "biped", "quad", "spider", "hover"],
+      Weapon: [
+        "laser",
+        "kinetic",
+        "shotgun",
+        "missile",
+        "flame",
+        "plasma",
+        "sonic",
+        "tesla"
+      ],
+      Equip: [
+        "special",
+        "shields",
+        "sonar",
+        "grapple",
+        "infrared",
+        "flare",
+        "radiator",
+        "coolant",
+        "ablative",
+        "stabilizer",
+        "seals"
+      ],
+      SizeSlots: { small: 0, medium: 1, large: 2, titan: 4, collector: 2 },
+      SizeWeapons: { small: 1, medium: 1, large: 2, titan: 4, collector: 0 },
+      SmallChassisMod: {
+        wheel: {
+          sand: 0.9,
+          swamp: 0.35,
+          forest: 1,
+          jungle: 0.92,
+          rocky: 0.65,
+          gravel: 1,
+          muddy: 0.85,
+          grass: 1.3,
+          brush: 0.9,
+          concrete: 1.1
+        },
+        tread: {
+          sand: 1.15,
+          swamp: 0.55,
+          forest: 1,
+          jungle: 0.95,
+          rocky: 0.65,
+          gravel: 1.3,
+          muddy: 0.88,
+          grass: 1,
+          brush: 1,
+          concrete: 1
+        },
+        biped: {
+          sand: 0.78,
+          swamp: 0.68,
+          forest: 1,
+          jungle: 0.82,
+          rocky: 0.48,
+          gravel: 1,
+          muddy: 0.85,
+          grass: 1.25,
+          brush: 0.92,
+          concrete: 1
+        },
+        quad: {
+          sand: 0.86,
+          swamp: 0.58,
+          forest: 1.25,
+          jungle: 1,
+          rocky: 0.95,
+          gravel: 0.9,
+          muddy: 0.68,
+          grass: 1,
+          brush: 0.95,
+          concrete: 1
+        },
+        spider: {
+          sand: 0.75,
+          swamp: 0.9,
+          forest: 0.82,
+          jungle: 0.77,
+          rocky: 1.25,
+          gravel: 0.86,
+          muddy: 0.92,
+          grass: 1,
+          brush: 1,
+          concrete: 1
+        },
+        hover: {
+          sand: 1,
+          swamp: 1.35,
+          forest: 0.65,
+          jungle: 0.55,
+          rocky: 0.82,
+          gravel: 1,
+          muddy: 1.15,
+          grass: 1,
+          brush: 0.78,
+          concrete: 1
+        }
+      },
+      LargeChassisMod: {
+        wheel: {
+          sand: 0.85,
+          swamp: 0.18,
+          forest: 1,
+          jungle: 0.85,
+          rocky: 0.5,
+          gravel: 0.95,
+          muddy: 0.58,
+          grass: 1.2,
+          brush: 0.8,
+          concrete: 1
+        },
+        tread: {
+          sand: 1.1,
+          swamp: 0.4,
+          forest: 0.95,
+          jungle: 0.9,
+          rocky: 0.5,
+          gravel: 1.2,
+          muddy: 0.72,
+          grass: 1,
+          brush: 1,
+          concrete: 1
+        },
+        biped: {
+          sand: 0.65,
+          swamp: 0.5,
+          forest: 0.95,
+          jungle: 0.7,
+          rocky: 0.4,
+          gravel: 1,
+          muddy: 0.7,
+          grass: 1.2,
+          brush: 0.85,
+          concrete: 1
+        },
+        quad: {
+          sand: 0.75,
+          swamp: 0.42,
+          forest: 1.2,
+          jungle: 1,
+          rocky: 0.9,
+          gravel: 0.8,
+          muddy: 0.5,
+          grass: 0.95,
+          brush: 0.9,
+          concrete: 1
+        },
+        spider: {
+          sand: 0.65,
+          swamp: 0.78,
+          forest: 0.75,
+          jungle: 0.65,
+          rocky: 1.2,
+          gravel: 0.75,
+          muddy: 0.82,
+          grass: 1,
+          brush: 0.95,
+          concrete: 1
+        },
+        hover: {
+          sand: 1,
+          swamp: 1.2,
+          forest: 0.48,
+          jungle: 0.35,
+          rocky: 0.68,
+          gravel: 1,
+          muddy: 1.08,
+          grass: 1,
+          brush: 0.7,
+          concrete: 1
+        }
+      },
+      StatusMod: {
+        freeze: (mech) => !mech.equip.includes("radiator") ? 0.25 : 1,
+        hot: (mech) => !mech.equip.includes("coolant") ? 0.25 : 1,
+        corrosive: (mech) => !mech.equip.includes("ablative") ? mech.equip.includes("shields") ? 0.75 : 0.25 : 1,
+        humid: (mech) => !mech.equip.includes("seals") ? 0.75 : 1,
+        windy: (mech) => mech.chassis === "hover" ? 0.5 : 1,
+        hilly: (mech) => mech.chassis !== "spider" ? 0.75 : 1,
+        mountain: (mech) => mech.chassis !== "spider" && !mech.equip.includes("grapple") ? mech.equip.includes("flare") ? 0.75 : 0.5 : 1,
+        radioactive: (mech) => !mech.equip.includes("shields") ? 0.5 : 1,
+        quake: (mech) => !mech.equip.includes("stabilizer") ? 0.25 : 1,
+        dust: (mech) => !mech.equip.includes("seals") ? 0.5 : 1,
+        river: (mech) => mech.chassis !== "hover" ? 0.65 : 1,
+        tar: (mech) => mech.chassis !== "quad" ? mech.chassis === "tread" || mech.chassis === "wheel" ? 0.5 : 0.75 : 1,
+        steam: (mech) => !mech.equip.includes("shields") ? 0.75 : 1,
+        flooded: (mech) => mech.chassis !== "hover" ? 0.35 : 1,
+        fog: (mech) => !mech.equip.includes("sonar") ? 0.2 : 1,
+        rain: (mech) => !mech.equip.includes("seals") ? 0.75 : 1,
+        hail: (mech) => !mech.equip.includes("ablative") && !mech.equip.includes("shields") ? 0.75 : 1,
+        chasm: (mech) => !mech.equip.includes("grapple") ? 0.1 : 1,
+        dark: (mech) => !mech.equip.includes("infrared") ? mech.equip.includes("flare") ? 0.25 : 0.1 : 1,
+        gravity: (mech) => mech.size === "titan" ? 0.25 : mech.size === "large" ? 0.45 : mech.size === "medium" ? 0.8 : 1
+      },
+      get collectorValue() {
+        return 2e4 / Math.max(settings2.mechCollectorValue, 1e-6);
+      },
+      mechObserver: createMutationObserver(() => {
+        updateDebugData2();
+        createMechInfo2();
+      }),
+      updateSpire() {
+        let oldHash = this.stateHash;
+        this.stateHash = 0 + game2.global.portal.spire.count + game2.global.blood.prepared + game2.global.blood.wrath + game2.global.portal.mechbay.scouts * 1e7 + (settings2.mechSpecial ? 1e14 : 0) + (settings2.mechInfernalCollector ? 1e15 : 0) + settings2.mechCollectorValue;
+        return this.stateHash !== oldHash;
+      },
+      initLab() {
+        if (game2.global.race["warlord"]) {
+          return false;
+        }
+        if (buildings2.SpireMechBay.count < 1) {
+          return false;
+        }
+        this._assemblyVue = getVueById2(this._assemblyVueBinding);
+        if (this._assemblyVue === void 0) {
+          return false;
+        }
+        this._listVue = getVueById2(this._listVueBinding);
+        if (this._listVue === void 0) {
+          return false;
+        }
+        this.activeMechs = [];
+        this.inactiveMechs = [];
+        this.mechsPower = 0;
+        let mechBay = game2.global.portal.mechbay;
+        for (let i = 0; i < mechBay.mechs.length; i++) {
+          let mech = {
+            id: i,
+            ...mechBay.mechs[i],
+            ...this.getMechStats(mechBay.mechs[i])
+          };
+          if (i < mechBay.active) {
+            this.activeMechs.push(mech);
+            if (mech.size !== "collector") {
+              this.mechsPower += mech.power;
+            }
+          } else {
+            this.inactiveMechs.push(mech);
+          }
+        }
+        if (this.updateSpire()) {
+          this.isActive = true;
+          this.updateBestWeapon();
+          this.Size.forEach((size) => {
+            this.updateBestBody(size);
+            this.bestMech[size] = this.getRandomMech(size);
+          });
+          let sortBy = (prop) => Object.values(this.bestMech).filter((m) => m.size !== "collector").sort((a, b) => b[prop] - a[prop]).map((m) => m.size);
+          this.bestSize = sortBy("efficiency");
+          this.bestGems = sortBy("gems_eff");
+          this.bestSupply = sortBy("supply_eff");
+          createMechInfo2();
+        }
+        let bestMech = this.bestMech[this.bestSize[0]];
+        this.mechsPotential = this.mechsPower / (buildings2.SpireMechBay.count * 25 / this.getMechSpace(bestMech) * bestMech.power) || 0;
+        return true;
+      },
+      getBodyMod(mech) {
+        let floor = game2.global.portal.spire;
+        let terrainFactor = mech.size === "small" || mech.size === "medium" ? this.SmallChassisMod[mech.chassis][floor.type] : this.LargeChassisMod[mech.chassis][floor.type];
+        let rating = poly2.terrainRating(
+          mech,
+          terrainFactor,
+          Object.keys(floor.status)
+        );
+        for (let effect in floor.status) {
+          rating *= this.StatusMod[effect](mech);
+        }
+        return rating;
+      },
+      getWeaponMod(mech) {
+        let weapons = poly2.monsters[game2.global.portal.spire.boss].weapon;
+        let rating = 0;
+        for (let i = 0; i < mech.hardpoint.length; i++) {
+          rating += poly2.weaponPower(mech, weapons[mech.hardpoint[i]]);
+        }
+        return rating;
+      },
+      getSizeMod(mech, concrete) {
+        let isConcrete = concrete ?? game2.global.portal.spire.type === "concrete";
+        switch (mech.size) {
+          case "small":
+            return 25e-4 * (isConcrete ? 0.92 : 1);
+          case "medium":
+            return 75e-4 * (isConcrete ? 0.95 : 1);
+          case "large":
+            return 0.01;
+          case "titan":
+            return 0.012 * (isConcrete ? 1.25 : 1);
+          case "collector":
+            return 25 / this.collectorValue;
+        }
+        return 0;
+      },
+      getProgressMod() {
+        let mod = 1;
+        if (game2.global.stats.achieve.gladiator?.l > 0) {
+          mod *= 1 + game2.global.stats.achieve.gladiator.l * 0.2;
+        }
+        if (game2.global.blood["wrath"]) {
+          mod *= 1 + game2.global.blood.wrath / 20;
+        }
+        mod /= game2.global.portal.spire.count;
+        return mod;
+      },
+      getPreferredSize() {
+        let mechBay = game2.global.portal.mechbay;
+        if (settings2.mechFillBay && mechBay.max % 1 === 0 && (game2.global.blood.prepared >= 2 ? mechBay.bay % 2 !== mechBay.max % 2 : mechBay.max - mechBay.bay === 1)) {
+          return ["collector", true];
+        }
+        if (resources2.Supply.storageRatio < 0.9 && resources2.Supply.rateOfChange < settings2.mechMinSupply) {
+          let collectorsCount = this.activeMechs.filter(
+            (mech) => mech.size === "collector"
+          ).length;
+          if (collectorsCount / mechBay.max < settings2.mechMaxCollectors) {
+            return ["collector", true];
+          }
+        }
+        if (mechBay.scouts * 2 / mechBay.max < settings2.mechScouts) {
+          return ["small", true];
+        }
+        let floorSize = game2.global.portal.spire.status.gravity ? settings2.mechSizeGravity : settings2.mechSize;
+        if (this.Size.includes(floorSize) && (!settings2.mechFillBay || poly2.mechCost(floorSize).c <= resources2.Supply.maxQuantity)) {
+          return [floorSize, false];
+        }
+        let mechPriority = floorSize === "gems" ? this.bestGems : floorSize === "supply" ? this.bestSupply : this.bestSize;
+        for (let i = 0; i < mechPriority.length; i++) {
+          let mechSize = mechPriority[i];
+          let { s, c } = poly2.mechCost(mechSize);
+          if (resources2.Soul_Gem.spareQuantity >= s && resources2.Supply.maxQuantity >= c) {
+            return [mechSize, false];
+          }
+        }
+        return ["titan", false];
+      },
+      getMechStats(mech) {
+        let rating = this.getBodyMod(mech);
+        if (mech.size !== "collector") {
+          rating *= this.getWeaponMod(mech);
+        }
+        let power = rating * this.getSizeMod(mech) * (mech.infernal ? 1.25 : 1);
+        let [gem, supply, space] = this.getMechCost(mech);
+        let [gemRef, supplyRef] = this.getMechRefund(mech);
+        return {
+          power,
+          efficiency: power / space,
+          gems_eff: power / (gem - gemRef),
+          supply_eff: power / (supply - supplyRef)
+        };
+      },
+      getTimeToClear() {
+        return this.mechsPower > 0 ? (100 - game2.global.portal.spire.progress) / (this.mechsPower * this.getProgressMod()) : Number.MAX_SAFE_INTEGER;
+      },
+      updateBestBody(size) {
+        let currentBestBodyMod = 0;
+        let currentBestBodyList = [];
+        let equipmentSlots = this.SizeSlots[size] + (game2.global.blood.prepared ? 1 : 0) - (settings2.mechSpecial === "always" ? 1 : 0);
+        let equipOptions = settings2.mechSpecial === "always" || settings2.mechSpecial === "never" ? this.Equip.slice(1) : this.Equip;
+        let infernal = settings2.mechInfernalCollector && size === "collector" && game2.global.blood.prepared >= 3;
+        k_combinations2(equipOptions, equipmentSlots).forEach((equip) => {
+          this.Chassis.forEach((chassis) => {
+            let mech = {
+              size,
+              chassis,
+              equip,
+              infernal
+            };
+            let mechMod = this.getBodyMod(mech);
+            if (mechMod > currentBestBodyMod) {
+              currentBestBodyMod = mechMod;
+              currentBestBodyList = [mech];
+            } else if (mechMod === currentBestBodyMod) {
+              currentBestBodyList.push(mech);
+            }
+          });
+        });
+        if (settings2.mechSpecial === "always" && equipmentSlots >= 0) {
+          currentBestBodyList.forEach((mech) => mech.equip.unshift("special"));
+        }
+        if (settings2.mechSpecial === "prefered") {
+          let specialEquip = currentBestBodyList.filter(
+            (mech) => mech.equip.includes("special")
+          );
+          if (specialEquip.length > 0) {
+            currentBestBodyList = specialEquip;
+          }
+        }
+        this.bestBody[size] = currentBestBodyList;
+      },
+      updateBestWeapon() {
+        let bestMod = 0;
+        let list = poly2.monsters[game2.global.portal.spire.boss].weapon;
+        for (let weapon of MechManager2.Weapon) {
+          let mod = list[weapon];
+          if (mod > bestMod) {
+            bestMod = mod;
+            this.bestWeapon = [weapon];
+          } else if (mod === bestMod) {
+            this.bestWeapon.push(weapon);
+          }
+        }
+      },
+      getRandomMech(size) {
+        let randomBody = this.bestBody[size][Math.floor(Math.random() * this.bestBody[size].length)];
+        let randomWeapon = this.bestWeapon[Math.floor(Math.random() * this.bestWeapon.length)];
+        let weaponsAmount = this.SizeWeapons[size];
+        let mech = {
+          hardpoint: new Array(weaponsAmount).fill(randomWeapon),
+          ...randomBody
+        };
+        return { ...mech, ...this.getMechStats(mech) };
+      },
+      getMechSpace(mech, prep) {
+        switch (mech.size) {
+          case "small":
+            return 2;
+          case "medium":
+            return (prep ?? game2.global.blood.prepared) >= 2 ? 4 : 5;
+          case "large":
+            return (prep ?? game2.global.blood.prepared) >= 2 ? 8 : 10;
+          case "titan":
+            return (prep ?? game2.global.blood.prepared) >= 2 ? 20 : 25;
+          case "collector":
+            return 1;
+        }
+        return Number.MAX_SAFE_INTEGER;
+      },
+      getMechCost(mech, prep) {
+        let { s, c } = poly2.mechCost(mech.size, mech.infernal, prep);
+        return [s, c, this.getMechSpace(mech, prep)];
+      },
+      getMechRefund(mech, prep) {
+        let { s, c } = poly2.mechCost(mech.size, mech.infernal, prep);
+        return [Math.floor(s / 2), Math.floor(c / 3)];
+      },
+      mechDesc(mech) {
+        let rating = mech.power / this.bestMech[mech.size].power;
+        return `${game2.loc("portal_mech_size_" + mech.size)} ${game2.loc(
+          "portal_mech_chassis_" + mech.chassis
+        )} (${Math.round(rating * 100)}%)`;
+      },
+      buildMech(mech) {
+        this._assemblyVue.b.infernal = mech.infernal;
+        this._assemblyVue.setSize(mech.size);
+        this._assemblyVue.setType(mech.chassis);
+        for (let i = 0; i < mech.hardpoint.length; i++) {
+          this._assemblyVue.setWep(mech.hardpoint[i], i);
+        }
+        for (let i = 0; i < mech.equip.length; i++) {
+          this._assemblyVue.setEquip(mech.equip[i], i);
+        }
+        this._assemblyVue.build();
+        GameLog2.logSuccess(
+          "mech_build",
+          `${this.mechDesc(mech)} mech has been assembled.`,
+          ["hell"]
+        );
+      },
+      scrapMech(mech) {
+        this._listVue.scrap(mech.id);
+      },
+      dragMech(oldId, newId) {
+        let sortObj = {
+          oldDraggableIndex: oldId,
+          newDraggableIndex: newId,
+          from: { querySelectorAll: () => [], insertBefore: () => false }
+        };
+        if (needSandboxBypass2) {
+          win2.Sortable.get(this._listVue.$el).options.onEnd(
+            cloneInto2(sortObj, unsafeWindow2, { cloneFunctions: true })
+          );
+        } else {
+          Sortable2.get(this._listVue.$el).options.onEnd(sortObj);
+        }
+      }
+    };
+    for (const key of Reflect.ownKeys(MechManager2)) {
+      const descriptor = Object.getOwnPropertyDescriptor(MechManager2, key);
+      if (!descriptor) {
+        continue;
+      }
+      if (typeof descriptor.value === "function") {
+        const method = descriptor.value;
+        Object.defineProperty(MechManager2, key, {
+          ...descriptor,
+          value: function(...args) {
+            refreshContext();
+            return method.apply(this, args);
+          }
+        });
+      } else if (descriptor.get) {
+        const getter = descriptor.get;
+        Object.defineProperty(MechManager2, key, {
+          ...descriptor,
+          get: function() {
+            refreshContext();
+            return getter.call(this);
+          }
+        });
+      }
+    }
+    return { MechManager: MechManager2 };
+  }
+
+  // src/game/infrastructure-managers.ts
+  function createInfrastructureManagers({
+    getDocument,
+    getGame,
+    getSettings,
+    getPoly,
+    getWin,
+    getNeedSandboxBypass,
+    getUnsafeWindow,
+    getKeyboardEvent,
+    cloneInto: cloneInto2
+  }) {
+    let document2;
+    let game2;
+    let settings2;
+    let poly2;
+    let win2;
+    let needSandboxBypass2;
+    let unsafeWindow2;
+    let KeyboardEvent2;
+    function refreshContext() {
+      document2 = getDocument();
+      game2 = getGame();
+      settings2 = getSettings();
+      poly2 = getPoly();
+      win2 = getWin();
+      needSandboxBypass2 = getNeedSandboxBypass();
+      unsafeWindow2 = getUnsafeWindow();
+      KeyboardEvent2 = getKeyboardEvent();
+    }
+    const WindowManager2 = {
+      openedByScript: false,
+      _callbackWindowTitle: "",
+      _callbackFunction: null,
+      currentModalWindowTitle() {
+        let modalTitleNode = document2.getElementById("modalBoxTitle");
+        if (modalTitleNode === null) {
+          return "";
+        }
+        let indexOfDash = modalTitleNode.textContent.indexOf(" - ");
+        if (indexOfDash === -1) {
+          return modalTitleNode.textContent;
+        } else {
+          return modalTitleNode.textContent.substring(0, indexOfDash);
+        }
+      },
+      openModalWindowWithCallback(elementToClick, callbackWindowTitle, callbackFunction) {
+        if (this.isOpen()) {
+          return;
+        }
+        this.openedByScript = true;
+        this._callbackWindowTitle = callbackWindowTitle;
+        this._callbackFunction = callbackFunction;
+        elementToClick.click();
+      },
+      isOpen() {
+        return this.openedByScript || document2.getElementById("modalBox") !== null || document2.getElementById("scriptModal")?.style.display === "block";
+      },
+      checkCallbacks() {
+        if (WindowManager2.currentModalWindowTitle() === WindowManager2._callbackWindowTitle && WindowManager2.openedByScript && WindowManager2._callbackFunction) {
+          WindowManager2._callbackFunction();
+          let modalCloseBtn = document2.querySelector(".modal .modal-close");
+          if (modalCloseBtn !== null) {
+            modalCloseBtn.click();
+          }
+        } else {
+          let modal = document2.querySelector(".modal");
+          if (modal !== null) {
+            modal.style.display = "";
+          }
+        }
+        WindowManager2.openedByScript = false;
+        WindowManager2._callbackWindowTitle = "";
+        WindowManager2._callbackFunction = null;
+      }
+    };
+    const KeyManager2 = {
+      _setFn: null,
+      _unsetFn: null,
+      _allFn: null,
+      _eventProp: {
+        Shift: "shiftKey",
+        Control: "ctrlKey",
+        Alt: "altKey",
+        Meta: "metaKey"
+      },
+      _state: { x100: void 0, x25: void 0, x10: void 0 },
+      _mode: "none",
+      init() {
+        let events = win2.$._data(win2.document).events;
+        let set = events?.keydown?.[0]?.handler ?? null;
+        let unset = events?.keyup?.[0]?.handler ?? null;
+        let all = events?.mousemove?.[0]?.handler ?? null;
+        if (!all && (!set || !unset)) {
+          this._setFn = (e) => document2.dispatchEvent(new KeyboardEvent2("keydown", e));
+          this._unsetFn = (e) => document2.dispatchEvent(new KeyboardEvent2("keyup", e));
+          this._allFn = null;
+        } else if (needSandboxBypass2) {
+          this._setFn = (e) => set(cloneInto2(e, unsafeWindow2));
+          this._unsetFn = (e) => unset(cloneInto2(e, unsafeWindow2));
+          this._allFn = (e) => all(cloneInto2(e, unsafeWindow2));
+        } else {
+          this._setFn = set;
+          this._unsetFn = unset;
+          this._allFn = all;
+        }
+      },
+      reset() {
+        this._state.x100 = void 0;
+        this._state.x25 = void 0;
+        this._state.x10 = void 0;
+        let map = game2.global.settings.keyMap;
+        let keys = Object.values(map);
+        let uniq = ["x100", "x25", "x10"].every(
+          (key) => keys.indexOf(map[key]) === keys.lastIndexOf(map[key])
+        );
+        if (!game2.global.settings.mKeys) {
+          this._mode = "none";
+        } else if (!uniq) {
+          this._mode = "unset";
+        } else if (this._allFn && ["x100", "x25", "x10"].every(
+          (key) => ["Shift", "Control", "Alt", "Meta"].includes(
+            game2.global.settings.keyMap[key]
+          )
+        )) {
+          this._mode = "all";
+        } else {
+          this._mode = "each";
+        }
+      },
+      finish() {
+        if (this._state.x100 || this._state.x25 || this._state.x10) {
+          this.set(false, false, false);
+        }
+      },
+      setKey(key, pressed) {
+        if (this._state[key] === pressed) {
+          return;
+        }
+        let fakeEvent = { key: game2.global.settings.keyMap[key] };
+        if (pressed) {
+          this._setFn(fakeEvent);
+        } else {
+          this._unsetFn(fakeEvent);
+        }
+        this._state[key] = pressed;
+      },
+      set(x100, x25, x10) {
+        if (this._mode === "all") {
+          let map = game2.global.settings.keyMap;
+          let fakeEvent = {
+            [this._eventProp[map.x100]]: this._state.x100 = x100,
+            [this._eventProp[map.x25]]: this._state.x25 = x25,
+            [this._eventProp[map.x10]]: this._state.x10 = x10
+          };
+          this._allFn(fakeEvent);
+        } else if (this._mode === "each" || this._mode === "unset") {
+          this.setKey("x100", x100);
+          this.setKey("x25", x25);
+          this.setKey("x10", x10);
+        }
+      },
+      *click(amount) {
+        if (this._mode === "none") {
+          while (amount > 0) {
+            yield amount -= 1;
+          }
+        } else if (this._mode === "unset") {
+          this.set(false, false, false);
+          while (amount > 0) {
+            yield amount -= 1;
+          }
+        } else {
+          while (amount > 0) {
+            if (amount >= 25e3) {
+              this.set(true, true, true);
+              yield amount -= 25e3;
+            } else if (amount >= 2500) {
+              this.set(true, true, false);
+              yield amount -= 2500;
+            } else if (amount >= 1e3) {
+              this.set(true, false, true);
+              yield amount -= 1e3;
+            } else if (amount >= 250) {
+              this.set(false, true, true);
+              yield amount -= 250;
+            } else if (amount >= 100) {
+              this.set(true, false, false);
+              yield amount -= 100;
+            } else if (amount >= 25) {
+              this.set(false, true, false);
+              yield amount -= 25;
+            } else if (amount >= 10) {
+              this.set(false, false, true);
+              yield amount -= 10;
+            } else {
+              this.set(false, false, false);
+              yield amount -= 1;
+            }
+          }
+        }
+      }
+    };
+    const GameLog2 = {
+      Types: {
+        special: "Specials",
+        construction: "Construction",
+        multi_construction: "Multi-part Construction",
+        arpa: "A.R.P.A Progress",
+        research: "Research",
+        spying: "Spying",
+        attack: "Attack",
+        mercenary: "Mercenaries",
+        mech_build: "Mech Build",
+        mech_scrap: "Mech Scrap",
+        outer_fleet: "True Path Fleet",
+        mutation: "Mutations",
+        prestige: "Prestige"
+      },
+      logInfo(loggingType, text, tags) {
+        if (!settings2.logEnabled || !settings2["log_" + loggingType]) {
+          return;
+        }
+        poly2.messageQueue(text, "info", false, tags);
+      },
+      logSuccess(loggingType, text, tags) {
+        if (!settings2.logEnabled || !settings2["log_" + loggingType]) {
+          return;
+        }
+        poly2.messageQueue(text, "success", false, tags);
+      },
+      logWarning(loggingType, text, tags) {
+        if (!settings2.logEnabled || !settings2["log_" + loggingType]) {
+          return;
+        }
+        poly2.messageQueue(text, "warning", false, tags);
+      },
+      logDanger(loggingType, text, tags) {
+        if (!settings2.logEnabled || !settings2["log_" + loggingType]) {
+          return;
+        }
+        poly2.messageQueue(text, "danger", false, tags);
+      }
+    };
+    for (const manager of [WindowManager2, KeyManager2, GameLog2]) {
+      for (const key of Reflect.ownKeys(manager)) {
+        const descriptor = Object.getOwnPropertyDescriptor(manager, key);
+        if (!descriptor || typeof descriptor.value !== "function") {
+          continue;
+        }
+        const method = descriptor.value;
+        Object.defineProperty(manager, key, {
+          ...descriptor,
+          value: function(...args) {
+            refreshContext();
+            return method.apply(this, args);
+          }
+        });
+      }
+    }
+    return { WindowManager: WindowManager2, KeyManager: KeyManager2, GameLog: GameLog2 };
+  }
+
+  // src/game/script-bootstrap.ts
+  function createScriptBootstrap({
+    getContext,
+    getActions,
+    setWin,
+    setGame,
+    setNeedSandboxBypass
+  }) {
+    let game2;
+    let techIds2;
+    let Technology2;
+    let buildings2;
+    let buildingIds2;
+    let state2;
+    let projects2;
+    let arpaIds2;
+    let jobs2;
+    let jobIds2;
+    let crafter2;
+    let TriggerManager2;
+    let checkActions2;
+    let MutationObserver2;
+    let document2;
+    let Node2;
+    let WindowManager2;
+    let $2;
+    let window2;
+    let unsafeWindow2;
+    let cloneInto2;
+    let exportFunction2;
+    let win2;
+    let needSandboxBypass2;
+    let poly2;
+    let settings2;
+    let safeMode2;
+    const getScriptBootstrapActions2 = getActions;
+    function refreshContext() {
+      const context = getContext();
+      game2 = context.game;
+      techIds2 = context.techIds;
+      Technology2 = context.Technology;
+      buildings2 = context.buildings;
+      buildingIds2 = context.buildingIds;
+      state2 = context.state;
+      projects2 = context.projects;
+      arpaIds2 = context.arpaIds;
+      jobs2 = context.jobs;
+      jobIds2 = context.jobIds;
+      crafter2 = context.crafter;
+      TriggerManager2 = context.TriggerManager;
+      checkActions2 = context.checkActions;
+      MutationObserver2 = context.MutationObserver;
+      document2 = context.document;
+      Node2 = context.Node;
+      WindowManager2 = context.WindowManager;
+      $2 = context.$;
+      window2 = context.window;
+      unsafeWindow2 = context.unsafeWindow;
+      cloneInto2 = context.cloneInto;
+      exportFunction2 = context.exportFunction;
+      win2 = context.win;
+      needSandboxBypass2 = context.needSandboxBypass;
+      poly2 = context.poly;
+      settings2 = context.settings;
+      safeMode2 = context.safeMode;
+    }
+    function commitContext() {
+      setWin(win2);
+      setGame(game2);
+      setNeedSandboxBypass(needSandboxBypass2);
+    }
+    let contextDepth = 0;
+    function withContext(fn, name) {
+      const wrapped = function(...args) {
+        const outermost = contextDepth === 0;
+        if (outermost) {
+          refreshContext();
+        }
+        contextDepth++;
+        try {
+          return fn.apply(this, args);
+        } finally {
+          contextDepth--;
+          if (outermost) {
+            commitContext();
+          }
+        }
+      };
+      Object.defineProperty(wrapped, "name", { value: name });
+      return wrapped;
+    }
+    function initialiseScriptImpl() {
+      const actions = getScriptBootstrapActions2();
+      for (let [key, action] of Object.entries(game2.actions.tech)) {
+        techIds2[action.id] = new Technology2(key);
+      }
+      for (let building of Object.values(buildings2)) {
+        buildingIds2[building._vueBinding] = building;
+        if (building.isMission() && building !== buildings2.BlackholeJumpShip && building !== buildings2.PitAssaultForge) {
+          state2.missionBuildingList.push(building);
+        }
+      }
+      for (let project of Object.values(projects2)) {
+        arpaIds2[project._vueBinding] = project;
+      }
+      for (let job of Object.values(jobs2)) {
+        jobIds2[job._originalId] = job;
+      }
+      for (let job of Object.values(crafter2)) {
+        jobIds2[job._originalId] = job;
+      }
+      actions.updateStandAloneSettings();
+      actions.updateStateFromSettings();
+      actions.updateSettingsFromState();
+      TriggerManager2.priorityList.forEach((trigger) => {
+        trigger.complete = false;
+      });
+      if (checkActions2) {
+        actions.verifyGameActions();
+      }
+      new MutationObserver2(actions.tooltipObserverCallback).observe(
+        document2.getElementById("main"),
+        { childList: true }
+      );
+      new MutationObserver2(
+        (bodyMutations) => bodyMutations.forEach(
+          (bodyMutation) => bodyMutation.addedNodes.forEach((node) => {
+            if (node.nodeType === Node2.ELEMENT_NODE && node.classList.contains("modal")) {
+              if (WindowManager2.openedByScript) {
+                node.style.display = "none";
+                new MutationObserver2(WindowManager2.checkCallbacks).observe(
+                  document2.getElementById("modalBox"),
+                  { childList: true }
+                );
+              } else {
+                new MutationObserver2(actions.tooltipObserverCallback).observe(
+                  node,
+                  {
+                    childList: true
+                  }
+                );
+              }
+            }
+          })
+        )
+      ).observe(document2.querySelector("body"), { childList: true });
+      actions.buildFilterRegExp();
+      new MutationObserver2(actions.filterLog).observe(
+        document2.getElementById("msgQueueLog"),
+        { childList: true }
+      );
+    }
+    function mainAutoEvolveScriptImpl() {
+      const actions = getScriptBootstrapActions2();
+      if (document2.getElementById("queueColumn") === null) {
+        actions.schedule(mainAutoEvolveScript2, 100);
+        return;
+      }
+      if (typeof unsafeWindow2 !== "undefined") {
+        win2 = unsafeWindow2;
+      } else {
+        win2 = window2;
+        if (!win2.$._data(win2.document).events?.["keydown"]) {
+          $2.noConflict();
+        }
+      }
+      game2 = win2.evolve;
+      commitContext();
+      if (!game2) {
+        if (state2.warnDebug) {
+          state2.warnDebug = false;
+          actions.alert(
+            "You need to enable Debug Mode in settings for script to work"
+          );
+        }
+        actions.schedule(mainAutoEvolveScript2, 100);
+        return;
+      }
+      if (!game2.global?.race || !game2.breakdown.p.consume) {
+        actions.schedule(mainAutoEvolveScript2, 100);
+        return;
+      }
+      if (!game2.global.settings.tabLoad) {
+        if (state2.warnPreload) {
+          state2.warnPreload = false;
+          actions.alert(
+            "You need to enable Preload Tab Content in settings for script to work"
+          );
+        }
+        actions.schedule(mainAutoEvolveScript2, 100);
+        return;
+      }
+      if (!$2.ui) {
+        let el = document2.createElement("script");
+        el.src = "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js";
+        el.onload = mainAutoEvolveScript2;
+        el.onerror = () => actions.alert(
+          "Can't load jQuery UI. Check browser console for details."
+        );
+        document2.body.appendChild(el);
+        return;
+      }
+      needSandboxBypass2 = typeof unsafeWindow2 === "object" && typeof cloneInto2 === "function" && typeof exportFunction2 === "function" && unsafeWindow2 !== window2;
+      commitContext();
+      if (!needSandboxBypass2) {
+        poly2.adjustCosts = game2.adjustCosts;
+        poly2.loc = game2.loc;
+        poly2.messageQueue = game2.messageQueue;
+        poly2.shipCosts = game2.shipCosts;
+      }
+      actions.addErrorHandler();
+      actions.addScriptStyle();
+      actions.keyManagerInit();
+      actions.initialiseState();
+      actions.initialiseRaces();
+      initialiseScript2();
+      actions.updateOverrides();
+      const setCallback = (fn) => !needSandboxBypass2 ? fn : actions.exportFunction(fn, unsafeWindow2);
+      let breakdown = game2.breakdown;
+      Object.defineProperty(game2, "breakdown", {
+        get: setCallback(() => breakdown),
+        set: setCallback((v) => {
+          breakdown = v;
+          state2.gameTicked = true;
+          if (settings2.tickSchedule) {
+            actions.schedule(actions.automate);
+          } else {
+            actions.automate();
+          }
+        })
+      });
+      actions.repeat(actions.automateLab, 2500);
+      win2.importAutomationSettings = actions.importSettings;
+      win2.exportAutomationSettings = actions.exportSettings;
+      win2.eaExportStateLog = () => actions.triggerFileDownload(
+        JSON.stringify(state2.stateLog ?? actions.loadStateLog()),
+        `evolve-statelog-manual-d${game2.global.stats.days}.json`
+      );
+      if (safeMode2) {
+        const msg = [
+          `Script safe mode is active to let you solve problems in your configuration.`,
+          `The masterScriptToggle is always disabled in this mode, and your overrides don't get evaluated.`,
+          `Fix the problems that required you to use this mode, then remove ?safemode from the URL to deactivate.`
+        ].join("\n");
+        actions.displayScriptWarningNode("Safe mode active", msg, null);
+        poly2.messageQueue(msg, "warning", true, ["events", "major_events"]);
+      }
+    }
+    const initialiseScript2 = withContext(
+      initialiseScriptImpl,
+      "initialiseScript"
+    );
+    let mainAutoEvolveScript2;
+    mainAutoEvolveScript2 = withContext(
+      mainAutoEvolveScriptImpl,
+      "mainAutoEvolveScript"
+    );
+    return { initialiseScript: initialiseScript2, mainAutoEvolveScript: mainAutoEvolveScript2 };
   }
 
   // src/game/core-managers.ts
@@ -4930,7 +6878,7 @@
       isUseful() {
         return this.storageRatio < 0.99 || this.isDemanded() || this.rateMods["eject"] > 0 || this.rateMods["supply"] > 0 || this.storeOverflow && this.currentQuantity < this.maxStorage;
       }
-      getProduction(source, locArg) {
+      getProduction(source2, locArg) {
         let produced = 0;
         let labelFound = false;
         for (let [label, value] of Object.entries(
@@ -4939,7 +6887,7 @@
           if (value.indexOf("%") === -1) {
             if (labelFound) {
               break;
-            } else if (label === poly2.loc(source, locArg)) {
+            } else if (label === poly2.loc(source2, locArg)) {
               labelFound = true;
               produced += parseFloat(value) || 0;
             }
@@ -7788,8 +9736,8 @@
         return { s: l, c: r };
       },
       // function terrainRating(mech,rating,effects) from portal.js
-      terrainRating: function(e, i, s2, x) {
-        return !e.equip.includes("special") || "small" !== e.size && "medium" !== e.size && "collector" !== e.size || i < 1 && (i += (1 - i) * (s2.includes("gravity") ? 0.1 : 0.2)), "small" !== e.size && i < 1 && (i += (s2.includes("fog") || s2.includes("dark") ? 5e-3 : 0.01) * (x ?? game2.global.portal.mechbay.scouts)) > 1 && (i = 1), i;
+      terrainRating: function(e, i, s, x) {
+        return !e.equip.includes("special") || "small" !== e.size && "medium" !== e.size && "collector" !== e.size || i < 1 && (i += (1 - i) * (s.includes("gravity") ? 0.1 : 0.2)), "small" !== e.size && i < 1 && (i += (s.includes("fog") || s.includes("dark") ? 5e-3 : 0.01) * (x ?? game2.global.portal.mechbay.scouts)) > 1 && (i = 1), i;
       },
       // function weaponPower(mech,power) from portal.js
       weaponPower: function(e, i) {
@@ -7800,14 +9748,14 @@
         let i;
         if (e < 0) i = game2.loc("time_never");
         else if ((e = +e.toFixed(0)) > 60) {
-          let l = e % 60, s2 = (e - l) / 60;
-          if (s2 >= 60) {
-            let e2 = s2 % 60, l2 = (s2 - e2) / 60;
+          let l = e % 60, s = (e - l) / 60;
+          if (s >= 60) {
+            let e2 = s % 60, l2 = (s - e2) / 60;
             if (l2 > 24) {
               i = `${(l2 - (e2 = l2 % 24)) / 24}d ${e2}h`;
             } else i = `${l2}h ${e2 = ("0" + e2).slice(-2)}m`;
           } else
-            i = `${s2 = ("0" + s2).slice(-2)}m ${l = ("0" + l).slice(-2)}s`;
+            i = `${s = ("0" + s).slice(-2)}m ${l = ("0" + l).slice(-2)}s`;
         } else i = `${e = ("0" + e).slice(-2)}s`;
         return i;
       },
@@ -12214,7 +14162,7 @@
         if (goals.length > 0) {
           GameLog2.logInfo(
             "special",
-            `Auto Achievement goes for: ${goals.map((s2) => game2.loc(s2)).join(", ")}.`,
+            `Auto Achievement goes for: ${goals.map((s) => game2.loc(s)).join(", ")}.`,
             ["progress", "achievements"]
           );
         } else {
@@ -12804,9 +14752,9 @@
     function sorterHelper2(_event, input) {
       const clone = getJQuery()(input).clone();
       clone.css("position", "absolute");
-      const source = isHTMLElement(input) ? input : input[0];
+      const source2 = isHTMLElement(input) ? input : input[0];
       const cloneNode = clone[0];
-      source.childNodes.forEach((element, index) => {
+      source2.childNodes.forEach((element, index) => {
         if (element.offsetWidth && element.offsetHeight) {
           cloneNode.childNodes[index].style.width = `${element.offsetWidth}px`;
           cloneNode.childNodes[index].style.height = `${element.offsetHeight}px`;
@@ -18518,7 +20466,7 @@
           availableServants += requiredServants[jobDetails.index];
           requiredServants[jobDetails.index] = 0;
         });
-        if (splitJobs.find((s2) => s2.index === defaultIndex) && minDefault > requiredWorkers[defaultIndex]) {
+        if (splitJobs.find((s) => s.index === defaultIndex) && minDefault > requiredWorkers[defaultIndex]) {
           let restoreDef = Math.min(
             availableWorkers,
             minDefault - requiredWorkers[defaultIndex]
@@ -18527,7 +20475,7 @@
           availableWorkers -= restoreDef;
         }
         let currentFarmers = requiredWorkers[farmerIndex] + requiredServants[farmerIndex] * servantMod;
-        if (splitJobs.find((s2) => s2.index === farmerIndex) && minFarmers > currentFarmers) {
+        if (splitJobs.find((s) => s.index === farmerIndex) && minFarmers > currentFarmers) {
           let missingFarmers = minFarmers - currentFarmers;
           let servantsToAssign = Math.min(
             availableServants,
@@ -27455,12 +29403,12 @@
     }
     function getCustomRacePreset2(raw = false) {
       const { settingsRaw: settingsRaw2, settings: settings2 } = getContext();
-      let source = raw ? settingsRaw2 : settings2;
-      let presets = source.prestigeCustomRacePresets;
+      let source2 = raw ? settingsRaw2 : settings2;
+      let presets = source2.prestigeCustomRacePresets;
       if (!Array.isArray(presets) || presets.length === 0) {
         return { name: "General", json: "" };
       }
-      let index = Number.parseInt(source.prestigeCustomRacePreset, 10);
+      let index = Number.parseInt(source2.prestigeCustomRacePreset, 10);
       if (!Number.isInteger(index) || index < 0 || index >= presets.length) {
         index = 0;
       }
@@ -28660,7 +30608,7 @@
         `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 0.9rem;">E</span></a>`
       ).on("click", function() {
         let override = settingsRaw2.overrides[settingName][id];
-        let check = checkCompare2[override.cmp].toString().substr(10).replace(/([ab])/g, (s2, v) => {
+        let check = checkCompare2[override.cmp].toString().substr(10).replace(/([ab])/g, (s, v) => {
           let idx = v === "a" ? 1 : 2;
           switch (override["type" + idx]) {
             case "Number":
@@ -29463,19 +31411,19 @@
         desc: "Returns boolean"
       },
       SettingDefault: {
-        fn: (s2) => settingsRaw2[s2],
+        fn: (s) => settingsRaw2[s],
         arg: "string",
         def: "masterScriptToggle",
         desc: "Returns default value of setting, types varies"
       },
       SettingCurrent: {
-        fn: (s2) => settings2[s2],
+        fn: (s) => settings2[s],
         arg: "string",
         def: "masterScriptToggle",
         desc: "Returns current value of setting, types varies"
       },
       Eval: {
-        fn: (s2) => fastEval2(s2),
+        fn: (s) => fastEval2(s),
         arg: "string",
         def: "Math.PI",
         desc: "Returns result of evaluating code"
@@ -29682,7 +31630,7 @@
         desc: "Returns ingame date as number"
       },
       Soldiers: {
-        fn: (s2) => WarManager2[s2],
+        fn: (s) => WarManager2[s],
         ...argType2.soldiers,
         desc: "Returns amount of soldiers as number"
       },
@@ -30335,6 +32283,9 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     var settingsRaw = JSON.parse(localStorage.getItem("settings")) ?? {};
     var settings = {};
     var game = null;
+    const { fastEval, cacheSize: fastEvalCacheSize } = createFastEvaluator({
+      compileExpression: (source) => eval(`(function() { return ${source} })`)
+    });
     const {
       resetWarSettings,
       resetHellSettings,
@@ -32077,1235 +34028,108 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       haveTech,
       traitVal
     }));
-    var SpyManager = {
-      _foreignVue: void 0,
-      purchaseMoney: 0,
-      purchaseForeigngs: [],
-      foreignActive: [],
-      foreignTarget: null,
-      Types: {
-        Influence: { id: "influence" },
-        Sabotage: { id: "sabotage" },
-        Incite: { id: "incite" },
-        Annex: { id: "annex" },
-        Purchase: { id: "purchase" }
-      },
-      spyCost(govIndex, spy) {
-        let gov = game.global.civic.foreign[`gov${govIndex}`];
-        spy = spy ?? gov.spy + 1;
-        let base = Math.max(
-          50,
-          Math.round(gov.mil / 2 + gov.hstl / 2 - gov.unrest) + 10
-        );
-        if (game.global.race["infiltrator"]) {
-          base /= 3;
-        }
-        if (state.astroSign === "scorpio") {
-          base * 0.88;
-        }
-        return Math.round(base ** spy) + 500;
-      },
-      updateForeigns() {
-        this.purchaseMoney = 0;
-        this.purchaseForeigngs = [];
-        this._foreignVue = getVueById("foreign");
-        let foreignUnlocked = this._foreignVue?.vis();
-        if (foreignUnlocked) {
-          let currentTarget = null;
-          let controlledForeigns = 0;
-          let unlockedForeigns = [];
-          if (!haveTech("world_control")) {
-            unlockedForeigns.push(0, 1, 2);
-          }
-          if (haveTech("rival")) {
-            unlockedForeigns.push(3);
-          }
-          let activeForeigns = unlockedForeigns.map((i) => ({
-            id: i,
-            gov: game.global.civic.foreign[`gov${i}`]
-          }));
-          for (let foreign of activeForeigns) {
-            let rank = foreign.id === 3 ? "Rival" : getGovPower(foreign.id) <= settings.foreignPowerRequired ? "Inferior" : "Superior";
-            foreign.policy = settings[`foreignPolicy${rank}`];
-            if (foreign.gov.anx && foreign.policy === "Annex" || foreign.gov.buy && foreign.policy === "Purchase" || foreign.gov.occ && foreign.policy === "Occupy") {
-              controlledForeigns++;
-            }
-            if (!settings.foreignPacifist && !guardActive("guardPacifist") && !foreign.gov.anx && !foreign.gov.buy && rank === "Inferior") {
-              currentTarget = foreign;
-            }
-          }
-          if (activeForeigns.length > 0 && !settings.foreignPacifist && !guardActive("guardPacifist")) {
-            currentTarget = currentTarget ?? activeForeigns.find((f) => f.gov.occ) ?? activeForeigns[0];
-            let readyToUnify = settings.foreignUnification && controlledForeigns >= 2 && game.global.tech["unify"] === 1;
-            if (!readyToUnify && ["Annex", "Purchase"].includes(currentTarget.policy) && SpyManager.isEspionageUseful(
-              currentTarget.id,
-              SpyManager.Types[currentTarget.policy].id
-            )) {
-              currentTarget.policy = "Ignore";
-            }
-            if (!readyToUnify && settings.foreignForceSabotage && currentTarget.id !== 3 && SpyManager.isEspionageUseful(
-              currentTarget.id,
-              SpyManager.Types.Sabotage.id
-            )) {
-              currentTarget.policy = "Sabotage";
-            }
-            if (settings.foreignUnification && settings.foreignOccupyLast && !haveTech("world_control")) {
-              let lastTarget = ["Occupy", "Sabotage"].includes(
-                settings.foreignPolicySuperior
-              ) ? 2 : currentTarget.id;
-              activeForeigns[lastTarget].policy = readyToUnify ? "Occupy" : "Sabotage";
-            }
-            if (currentTarget.policy === "Influence" || readyToUnify && currentTarget.policy !== "Occupy" || currentTarget.policy === "Betrayal" && currentTarget.gov.mil > 75) {
-              currentTarget = null;
-            }
-          }
-          if (game.global.tech["unify"] === 1 && (settings.foreignUnification || guardActive("guardPacifist")) && settings.autoFight) {
-            for (let foreign of activeForeigns) {
-              if (foreign.policy === "Purchase" && !foreign.gov.buy && foreign.gov.act !== "purchase") {
-                let moneyNeeded = Math.max(
-                  poly.govPrice(foreign.id),
-                  foreign.gov.spy < 3 ? this.spyCost(foreign.id, 3) : 0
-                );
-                if (moneyNeeded <= resources.Money.maxQuantity) {
-                  this.purchaseForeigngs.push(foreign.id);
-                  this.purchaseMoney = Math.max(moneyNeeded, this.purchaseMoney);
-                }
-              }
-            }
-          }
-          this.foreignTarget = currentTarget;
-          this.foreignActive = activeForeigns;
-        } else {
-          this._foreignVue = void 0;
-        }
-      },
-      performEspionage(govIndex, espionageId, influenceAllowed) {
-        if (WindowManager.isOpen()) {
-          return;
-        }
-        let optionsSpan = document.querySelector(
-          `#gov${govIndex} div span:nth-child(3)`
-        );
-        if (optionsSpan.style.display === "none") {
-          return;
-        }
-        let optionsNode = document.querySelector(
-          `#gov${govIndex} div span:nth-child(3) button`
-        );
-        if (optionsNode === null || optionsNode.getAttribute("disabled") === "disabled") {
-          return;
-        }
-        let espionageToPerform = null;
-        if (espionageId === this.Types.Annex.id || espionageId === this.Types.Purchase.id) {
-          if (this.isEspionageUseful(govIndex, espionageId)) {
-            espionageToPerform = espionageId;
-          } else if (this.isEspionageUseful(govIndex, this.Types.Influence.id) && influenceAllowed) {
-            espionageToPerform = this.Types.Influence.id;
-          } else if (this.isEspionageUseful(govIndex, this.Types.Incite.id)) {
-            espionageToPerform = this.Types.Incite.id;
-          }
-        } else if (this.isEspionageUseful(govIndex, espionageId)) {
-          espionageToPerform = espionageId;
-        }
-        if (espionageToPerform !== null) {
-          if (espionageToPerform === this.Types.Purchase.id) {
-            resources.Money.currentQuantity -= poly.govPrice(govIndex);
-          }
-          let title = game.loc("civics_espionage_actions");
-          WindowManager.openModalWindowWithCallback(optionsNode, title, () => {
-            GameLog.logSuccess(
-              "spying",
-              `Performing "${game.loc(
-                "civics_spy_" + espionageToPerform
-              )}" covert operation against ${getGovName(govIndex)}.`,
-              ["spy"]
-            );
-            getVueById("espModal")?.[espionageToPerform]?.(govIndex);
-          });
-        }
-      },
-      isEspionageUseful(govIndex, espionageId) {
-        let gov = game.global.civic.foreign["gov" + govIndex];
-        switch (espionageId) {
-          case this.Types.Influence.id:
-            return gov.hstl > (gov.spy > 0 ? 0 : 10);
-          case this.Types.Sabotage.id:
-            return gov.spy < 1 || gov.mil > (gov.spy > 1 ? 50 : 74);
-          case this.Types.Incite.id:
-            return gov.spy < 3 || gov.unrest < (gov.spy > 3 ? 100 : 76);
-          case this.Types.Annex.id:
-            return gov.hstl <= 50 && gov.unrest >= 50 && resources.Morale.currentQuantity >= 200 + gov.hstl - gov.unrest;
-          case this.Types.Purchase.id:
-            return gov.spy >= 3 && resources.Money.currentQuantity >= poly.govPrice(govIndex);
-        }
-        return false;
-      }
-    };
-    var WarManager = {
-      _garrisonVue: void 0,
-      _hellVue: void 0,
-      workers: 0,
-      wounded: 0,
-      raid: 0,
-      max: 0,
-      m_use: 0,
-      crew: 0,
-      hellSoldiers: 0,
-      hellPatrols: 0,
-      hellPatrolSize: 0,
-      hellAssigned: 0,
-      hellReservedSoldiers: 0,
-      // Warlord properties
-      minions: 0,
-      enemies: 0,
-      updateGarrison() {
-        let garrison = game.global.civic.garrison;
-        if (garrison) {
-          this.workers = garrison.workers;
-          this.wounded = garrison.wounded;
-          this.raid = garrison.raid;
-          this.max = garrison.max;
-          this.m_use = garrison.m_use;
-          this.crew = garrison.crew;
-          this._garrisonVue = getVueById("garrison");
-        } else {
-          this._garrisonVue = void 0;
-        }
-      },
-      updateHell() {
-        let fortress = game.global.portal.fortress;
-        if (fortress) {
-          this.hellSoldiers = fortress.garrison;
-          this.hellPatrols = fortress.patrols;
-          this.hellPatrolSize = fortress.patrol_size;
-          this.hellAssigned = fortress.assigned;
-          this.hellReservedSoldiers = this.getHellReservedSoldiers();
-          this._hellVue = getVueById("fort");
-          this.minions = game.global.portal.minions?.spawns;
-          this.enemies = game.global.portal.throne?.enemy?.length;
-        } else {
-          this._hellVue = void 0;
-        }
-      },
-      get currentSoldiers() {
-        return this.workers - this.crew;
-      },
-      get maxSoldiers() {
-        return this.max - this.crew;
-      },
-      get deadSoldiers() {
-        return this.max - this.workers;
-      },
-      get currentCityGarrison() {
-        return this.currentSoldiers - this.hellSoldiers - (game.global.space.fob?.troops ?? 0);
-      },
-      get maxCityGarrison() {
-        return this.maxSoldiers - this.hellSoldiers;
-      },
-      get availableGarrison() {
-        return game.global.race["rage"] ? this.currentCityGarrison : this.currentCityGarrison - this.wounded;
-      },
-      get hellGarrison() {
-        return this.hellSoldiers - this.hellPatrolSize * this.hellPatrols - this.hellReservedSoldiers;
-      },
-      launchCampaign(govIndex) {
-        this._garrisonVue.campaign(govIndex);
-      },
-      release(govIndex) {
-        if (game.global.civic.foreign["gov" + govIndex].occ) {
-          let occSoldiers = getOccCosts();
-          this.workers += occSoldiers;
-          this.max += occSoldiers;
-        }
-        this._garrisonVue.campaign(govIndex);
-      },
-      isMercenaryUnlocked() {
-        return game.global.civic.garrison.mercs;
-      },
-      // function mercCost from civics.js
-      get mercenaryCost() {
-        let cost = Math.round(1.24 ** this.workers * 75) - 50;
-        if (cost > 25e3) {
-          cost = 25e3;
-        }
-        if (this.m_use > 0) {
-          cost *= 1.1 ** this.m_use;
-        }
-        cost *= traitVal("brute", 0, "-");
-        if (game.global.race["inflation"]) {
-          cost *= 1 + game.global.race.inflation / 500;
-        }
-        cost *= traitVal("high_pop", 1, "=");
-        return Math.round(cost);
-      },
-      hireMercenary() {
-        let cost = this.mercenaryCost;
-        if (this.workers >= this.max || resources.Money.currentQuantity < cost) {
-          return false;
-        }
-        KeyManager.set(false, false, false);
-        this._garrisonVue.hire();
-        resources.Money.currentQuantity -= cost;
-        this.workers++;
-        this.m_use++;
-        return true;
-      },
-      getHellReservedSoldiers() {
-        let soldiers = 0;
-        const soldierRating = game.armyRating(1, "hellArmy");
-        if (settings.autoBuild && buildings.PitAssaultForge.isAutoBuildable() && soldierRating > 0) {
-          if (settings.hellAssaultReserve || !Object.entries(buildings.PitAssaultForge.cost).find(
-            ([id, amount]) => resources[id].currentQuantity < amount
-          )) {
-            soldiers = Math.round(650 / soldierRating);
-          }
-        }
-        if (buildings.PitSoulForge.count > 0 && (buildings.PitSoulForge.autoStateEnabled || buildings.PitSoulForge.stateOnCount > 0) && soldierRating > 0) {
-          let base = game.global.race["warlord"] ? 400 : 650;
-          let soulForgeSoldiers = Math.round(base / soldierRating);
-          if (buildings.PitGunEmplacement.count > 0) {
-            soulForgeSoldiers -= Math.floor(
-              buildings.PitGunEmplacement.stateOnCount * 1.5
-            );
-            soulForgeSoldiers = Math.max(1, soulForgeSoldiers);
-          }
-          soldiers += soulForgeSoldiers;
-        }
-        if (buildings.RuinsGuardPost.count > 0) {
-          soldiers += (buildings.RuinsGuardPost.stateOnCount + 1) * traitVal("high_pop", 0, 1);
-        }
-        return soldiers;
-      },
-      setTactic(newTactic) {
-        let currentTactic = game.global.civic.garrison.tactic;
-        for (let i = currentTactic; i < newTactic; i++) {
-          this._garrisonVue.next();
-        }
-        for (let i = currentTactic; i > newTactic; i--) {
-          this._garrisonVue.last();
-        }
-      },
-      getCampaignTitle(tactic) {
-        return this._garrisonVue.$options.filters.tactics(tactic);
-      },
-      addBattalion(count) {
-        for (let m of KeyManager.click(count)) {
-          this._garrisonVue.aNext();
-        }
-        this.raid = Math.min(this.raid + count, this.currentCityGarrison);
-      },
-      removeBattalion(count) {
-        for (let m of KeyManager.click(count)) {
-          this._garrisonVue.aLast();
-        }
-        this.raid = Math.max(this.raid - count, 0);
-      },
-      getGovArmy(tactic, govIndex) {
-        let enemy = [5, 27.5, 62.5, 125, 300][tactic];
-        if (game.global.race["banana"]) {
-          enemy *= 2;
-        }
-        if (game.global.city.biome === "swamp") {
-          enemy *= 1.4;
-        }
-        return enemy * getGovPower(govIndex) / 100;
-      },
-      getAdvantage(army, tactic, govIndex) {
-        return (1 - this.getGovArmy(tactic, govIndex) / army) * 100;
-      },
-      getRatingForAdvantage(adv, tactic, govIndex) {
-        return this.getGovArmy(tactic, govIndex) / (1 - adv / 100);
-      },
-      getSoldiersForAdvantage(advantage, tactic, govIndex) {
-        return this.getSoldiersForAttackRating(
-          this.getRatingForAdvantage(advantage, tactic, govIndex)
-        );
-      },
-      // Calculates the required soldiers to reach the given attack rating, assuming everyone is healthy.
-      getSoldiersForAttackRating(targetRating) {
-        if (!targetRating || targetRating <= 0) {
-          return 0;
-        }
-        let singleSoldierAttackRating = game.armyRating(10, "army", 0) / 10;
-        let maxSoldiers = Math.ceil(targetRating / singleSoldierAttackRating);
-        if (!game.global.race["hivemind"]) {
-          return maxSoldiers;
-        }
-        let hiveSize = traitVal("hivemind", 0);
-        if (maxSoldiers < hiveSize) {
-          maxSoldiers = Math.min(hiveSize, maxSoldiers / (1 - hiveSize * 0.05));
-        }
-        while (maxSoldiers > 1 && game.armyRating(maxSoldiers - 1, "army", 0) > targetRating) {
-          maxSoldiers--;
-        }
-        return maxSoldiers;
-      },
-      addHellGarrison(count) {
-        for (let m of KeyManager.click(count)) {
-          this._hellVue.aNext();
-        }
-        this.hellSoldiers = Math.min(this.hellSoldiers + count, this.workers);
-        this.hellAssigned = this.hellSoldiers;
-      },
-      removeHellGarrison(count) {
-        for (let m of KeyManager.click(count)) {
-          this._hellVue.aLast();
-        }
-        let min = this.hellPatrols * this.hellPatrolSize + this.hellReservedSoldiers;
-        this.hellSoldiers = Math.max(this.hellSoldiers - count, min);
-        this.hellAssigned = this.hellSoldiers;
-      },
-      addHellPatrol(count) {
-        for (let m of KeyManager.click(count)) {
-          this._hellVue.patInc();
-        }
-        if (this.hellPatrols * this.hellPatrolSize < this.hellSoldiers) {
-          this.hellPatrols += count;
-          if (this.hellSoldiers < this.hellPatrols * this.hellPatrolSize) {
-            this.hellPatrols = Math.floor(
-              this.hellSoldiers / this.hellPatrolSize
-            );
-          }
-        }
-      },
-      removeHellPatrol(count) {
-        for (let m of KeyManager.click(count)) {
-          this._hellVue.patDec();
-        }
-        this.hellPatrols = Math.max(this.hellPatrols - count, 0);
-      },
-      addHellPatrolSize(count) {
-        for (let m of KeyManager.click(count)) {
-          this._hellVue.patSizeInc();
-        }
-        if (this.hellPatrolSize < this.hellSoldiers) {
-          this.hellPatrolSize += count;
-          if (this.hellSoldiers < this.hellPatrols * this.hellPatrolSize) {
-            this.hellPatrols = Math.floor(
-              this.hellSoldiers / this.hellPatrolSize
-            );
-          }
-        }
-      },
-      removeHellPatrolSize(count) {
-        for (let m of KeyManager.click(count)) {
-          this._hellVue.patSizeDec();
-        }
-        this.hellPatrolSize = Math.max(this.hellPatrolSize - count, 1);
-      },
-      attackEnemyFortress(enemyIndex) {
-        if (enemyIndex < 0 || enemyIndex >= game.global.portal.throne.enemy.length) {
-          return false;
-        }
-        let fortVue = getVueById("fort");
-        if (!fortVue) {
-          return false;
-        }
-        try {
-          fortVue.attack(enemyIndex);
-          return true;
-        } catch (error) {
-          console.error("Failed to attack enemy fortress:", error);
-          return false;
-        }
-      }
-    };
-    var FleetManagerOuter = {
-      _fleetVueBinding: "shipPlans",
-      _fleetVue: void 0,
-      _explorerBlueprint: {
-        class: "explorer",
-        armor: "neutronium",
-        weapon: "railgun",
-        engine: "emdrive",
-        power: "elerium",
-        sensor: "quantum"
-      },
-      nextShipName: null,
-      nextShipCost: null,
-      nextShipAffordable: null,
-      nextShipExpandable: null,
-      nextShipMsg: null,
-      WeaponPower: {
-        railgun: 36,
-        laser: 64,
-        p_laser: 54,
-        plasma: 90,
-        phaser: 114,
-        disruptor: 156
-      },
-      SensorRange: { visual: 1, radar: 20, lidar: 35, quantum: 60 },
-      ClassPower: {
-        corvette: 1,
-        frigate: 1.5,
-        destroyer: 2.75,
-        cruiser: 5.5,
-        battlecruiser: 10,
-        dreadnought: 22,
-        explorer: 1.2
-      },
-      ClassCrew: {
-        corvette: 2,
-        frigate: 3,
-        destroyer: 4,
-        cruiser: 6,
-        battlecruiser: 8,
-        dreadnought: 10,
-        explorer: 10
-      },
-      // spc_dwarf is ignored, never having any syndicate
-      Regions: [
-        "spc_moon",
-        "spc_red",
-        "spc_gas",
-        "spc_gas_moon",
-        "spc_belt",
-        "spc_titan",
-        "spc_enceladus",
-        "spc_triton",
-        "spc_kuiper",
-        "spc_eris"
-      ],
-      ShipConfig: {
-        class: [
-          "corvette",
-          "frigate",
-          "destroyer",
-          "cruiser",
-          "battlecruiser",
-          "dreadnought",
-          "explorer"
-        ],
-        power: ["solar", "diesel", "fission", "fusion", "elerium"],
-        weapon: ["railgun", "laser", "p_laser", "plasma", "phaser", "disruptor"],
-        armor: ["steel", "alloy", "neutronium"],
-        engine: ["ion", "tie", "pulse", "photon", "vacuum", "emdrive"],
-        sensor: ["visual", "radar", "lidar", "quantum"]
-      },
-      getWeighting(id) {
-        return settings["fleet_outer_pr_" + id];
-      },
-      getMaxDefense(id) {
-        return settings["fleet_outer_def_" + id];
-      },
-      getMaxScouts(id) {
-        return settings["fleet_outer_sc_" + id];
-      },
-      getShipName(ship) {
-        return game.loc(`outer_shipyard_class_${ship.class}`);
-      },
-      getLocName(loc) {
-        let locRef = loc === "tauceti" ? game.loc("tech_era_tauceti") : game.actions.space[loc].info.name;
-        return typeof locRef === "function" ? locRef() : locRef;
-      },
-      isUnlocked(id) {
-        return id === "spc_moon" && game.global.race["orbit_decayed"] ? false : game.actions.space[id].info.syndicate?.() ?? false;
-      },
-      updateNextShip(ship) {
-        if (ship) {
-          let cost = poly.shipCosts(ship);
-          this.nextShipCost = cost;
-          this.nextShipAffordable = true;
-          this.nextShipExpandable = true;
-          this.nextShipMsg = null;
-          this.nextShipName = null;
-          for (let res in cost) {
-            if (resources[res].maxQuantity < cost[res]) {
-              this.nextShipAffordable = false;
-              if (!resources[res].hasStorage()) {
-                this.nextShipExpandable = false;
-              }
-            }
-          }
-        } else {
-          this.nextShipCost = null;
-          this.nextShipAffordable = null;
-          this.nextShipExpandable = null;
-          this.nextShipMsg = null;
-          this.nextShipName = null;
-        }
-      },
-      initFleet() {
-        if (!game.global.tech.syndicate || !game.global.space.shipyard?.hasOwnProperty("blueprint")) {
-          return false;
-        }
-        this._fleetVue = getVueById(this._fleetVueBinding);
-        if (this._fleetVue === void 0) {
-          return false;
-        }
-        return true;
-      },
-      getFighterBlueprint() {
-        return Object.fromEntries(
-          Object.keys(this.ShipConfig).map((type) => [
-            type,
-            settings["fleet_outer_" + type]
-          ])
-        );
-      },
-      getScoutBlueprint() {
-        return Object.fromEntries(
-          Object.keys(this.ShipConfig).map((type) => [
-            type,
-            settings["fleet_scout_" + type]
-          ])
-        );
-      },
-      getMissingResource(ship) {
-        let cost = poly.shipCosts(ship);
-        for (let res in cost) {
-          if (resources[res].currentQuantity < cost[res]) {
-            return res;
-          }
-        }
-        return null;
-      },
-      avail(ship) {
-        let yard = game.global.space.shipyard;
-        if (ship.class === "explorer" && (ship.weapon !== "railgun" || ship.sensor !== "quantum")) {
-          return false;
-        }
-        for (let [type, part] of Object.entries(ship)) {
-          if (type !== "name" && yard.blueprint[type] !== part && !(ship.class === "explorer" && (part === "weapon" || part === "sensor"))) {
-            if (!this._fleetVue.avail(
-              type,
-              this.ShipConfig[type].indexOf(part),
-              part
-            )) {
-              return false;
-            }
-          }
-        }
-        return true;
-      },
-      build(ship, region) {
-        let yard = game.global.space.shipyard;
-        for (let [type, part] of Object.entries(ship)) {
-          if (type !== "name" && (yard.blueprint[type] !== part || ship.class === "explorer" || yard.blueprint.class === "explorer")) {
-            this._fleetVue.setVal(type, part);
-          }
-        }
-        if (this._fleetVue.powerText().includes("danger")) {
-          return false;
-        }
-        let cost = poly.shipCosts(ship);
-        for (let res in cost) {
-          resources[res].currentQuantity -= cost[res];
-        }
-        if (yard.sort) {
-          $("#shipPlans .b-checkbox").eq(1).click();
-          this._fleetVue.build();
-          getVueById("shipReg0")?.setLoc(region, yard.ships.length);
-          $("#shipPlans .b-checkbox").eq(1).click();
-        } else {
-          this._fleetVue.build();
-          getVueById("shipReg0")?.setLoc(region, yard.ships.length);
-        }
-        return true;
-      },
-      getShipAttackPower(ship) {
-        return Math.round(
-          this.WeaponPower[ship.weapon] * this.ClassPower[ship.class]
-        );
-      },
-      shipCount(loc, template) {
-        let count = 0;
-        for (let ship of game.global.space.shipyard.ships) {
-          if (ship.location === loc && ship.class === template.class && ship.power === template.power && ship.weapon === template.weapon && ship.armor === template.armor && ship.engine === template.engine && ship.sensor === template.sensor) {
-            count++;
-          }
-        }
-        return count;
-      },
-      // export function syndicate(region,extra) from truepath.js with added "all" argument
-      syndicate(region, extra, all) {
-        if (!game.global.tech["syndicate"] || !game.global.race["truepath"] || !game.global.space.syndicate?.hasOwnProperty(region)) {
-          return extra ? { p: 1, r: 0, s: 0 } : 1;
-        }
-        let rivalRel = game.global.civic.foreign.gov3.hstl;
-        let rival = rivalRel < 10 ? 250 - 25 * rivalRel : rivalRel > 60 ? -13 * (rivalRel - 60) : 0;
-        let divisor = 1e3;
-        switch (region) {
-          case "spc_home":
-          case "spc_moon":
-          case "spc_red":
-          case "spc_hell":
-            divisor = 1250 + rival;
-            break;
-          case "spc_gas":
-          case "spc_gas_moon":
-          case "spc_belt":
-            divisor = 1020 + rival;
-            break;
-          case "spc_titan":
-          case "spc_enceladus":
-            divisor = !haveTech("triton") ? 600 : game.actions.space[region].info.syndicate_cap();
-            break;
-          case "spc_triton":
-          case "spc_kuiper":
-          case "spc_eris":
-            divisor = game.actions.space[region].info.syndicate_cap();
-            break;
-        }
-        let piracy = game.global.space.syndicate[region];
-        let patrol = 0;
-        let sensor = 0;
-        if (game.global.space.shipyard?.hasOwnProperty("ships")) {
-          for (let ship of game.global.space.shipyard.ships) {
-            if (ship.location === region && (ship.transit === 0 && ship.fueled || all)) {
-              let rating = this.getShipAttackPower(ship);
-              patrol += ship.damage > 0 ? Math.round(rating * (100 - ship.damage) / 100) : rating;
-              sensor += this.SensorRange[ship.sensor];
-            }
-          }
-          if (region === "spc_enceladus") {
-            patrol += buildings.EnceladusBase.stateOnCount * 50;
-          } else if (region === "spc_titan") {
-            patrol += buildings.TitanSAM.stateOnCount * 25;
-          } else if (region === "spc_triton" && buildings.TritonFOB.stateOnCount > 0) {
-            patrol += 500;
-            sensor += 10;
-          }
-          if (sensor > 100) {
-            sensor = Math.round((sensor - 100) / (sensor - 100 + 200) * 100) + 100;
-          }
-          patrol = Math.round(patrol * ((sensor + 25) / 125));
-          piracy = piracy - patrol > 0 ? piracy - patrol : 0;
-        }
-        if (extra) {
-          return {
-            p: 1 - +(piracy / divisor).toFixed(4),
-            r: piracy,
-            s: sensor
-          };
-        } else {
-          return 1 - +(piracy / divisor).toFixed(4);
-        }
-      }
-    };
-    var FleetManager = {
-      _fleetVueBinding: "fleet",
-      _fleetVue: void 0,
-      neededShips: null,
-      // Per-ship on-counts needed for full piracy coverage, set by autoFleet when crew reclaim is active
-      initFleet() {
-        if (!game.global.tech.piracy) {
-          return false;
-        }
-        this._fleetVue = getVueById(this._fleetVueBinding);
-        if (this._fleetVue === void 0) {
-          return false;
-        }
-        return true;
-      },
-      addShip(region, ship, count) {
-        for (let m of KeyManager.click(count)) {
-          this._fleetVue.add(region, ship);
-        }
-      },
-      subShip(region, ship, count) {
-        for (let m of KeyManager.click(count)) {
-          this._fleetVue.sub(region, ship);
-        }
-      }
-    };
-    var MechManager = {
-      _assemblyVueBinding: "mechAssembly",
-      _assemblyVue: void 0,
-      _listVueBinding: "mechList",
-      _listVue: void 0,
-      activeMechs: [],
-      inactiveMechs: [],
-      mechsPower: 0,
-      mechsPotential: 0,
-      isActive: false,
-      saveSupply: false,
-      stateHash: 0,
-      bestSize: [],
-      bestGems: [],
-      bestSupply: [],
-      bestMech: {},
-      bestBody: {},
-      bestWeapon: [],
-      Size: ["small", "medium", "large", "titan", "collector"],
-      Chassis: ["wheel", "tread", "biped", "quad", "spider", "hover"],
-      Weapon: [
-        "laser",
-        "kinetic",
-        "shotgun",
-        "missile",
-        "flame",
-        "plasma",
-        "sonic",
-        "tesla"
-      ],
-      Equip: [
-        "special",
-        "shields",
-        "sonar",
-        "grapple",
-        "infrared",
-        "flare",
-        "radiator",
-        "coolant",
-        "ablative",
-        "stabilizer",
-        "seals"
-      ],
-      SizeSlots: { small: 0, medium: 1, large: 2, titan: 4, collector: 2 },
-      SizeWeapons: { small: 1, medium: 1, large: 2, titan: 4, collector: 0 },
-      SmallChassisMod: {
-        wheel: {
-          sand: 0.9,
-          swamp: 0.35,
-          forest: 1,
-          jungle: 0.92,
-          rocky: 0.65,
-          gravel: 1,
-          muddy: 0.85,
-          grass: 1.3,
-          brush: 0.9,
-          concrete: 1.1
-        },
-        tread: {
-          sand: 1.15,
-          swamp: 0.55,
-          forest: 1,
-          jungle: 0.95,
-          rocky: 0.65,
-          gravel: 1.3,
-          muddy: 0.88,
-          grass: 1,
-          brush: 1,
-          concrete: 1
-        },
-        biped: {
-          sand: 0.78,
-          swamp: 0.68,
-          forest: 1,
-          jungle: 0.82,
-          rocky: 0.48,
-          gravel: 1,
-          muddy: 0.85,
-          grass: 1.25,
-          brush: 0.92,
-          concrete: 1
-        },
-        quad: {
-          sand: 0.86,
-          swamp: 0.58,
-          forest: 1.25,
-          jungle: 1,
-          rocky: 0.95,
-          gravel: 0.9,
-          muddy: 0.68,
-          grass: 1,
-          brush: 0.95,
-          concrete: 1
-        },
-        spider: {
-          sand: 0.75,
-          swamp: 0.9,
-          forest: 0.82,
-          jungle: 0.77,
-          rocky: 1.25,
-          gravel: 0.86,
-          muddy: 0.92,
-          grass: 1,
-          brush: 1,
-          concrete: 1
-        },
-        hover: {
-          sand: 1,
-          swamp: 1.35,
-          forest: 0.65,
-          jungle: 0.55,
-          rocky: 0.82,
-          gravel: 1,
-          muddy: 1.15,
-          grass: 1,
-          brush: 0.78,
-          concrete: 1
-        }
-      },
-      LargeChassisMod: {
-        wheel: {
-          sand: 0.85,
-          swamp: 0.18,
-          forest: 1,
-          jungle: 0.85,
-          rocky: 0.5,
-          gravel: 0.95,
-          muddy: 0.58,
-          grass: 1.2,
-          brush: 0.8,
-          concrete: 1
-        },
-        tread: {
-          sand: 1.1,
-          swamp: 0.4,
-          forest: 0.95,
-          jungle: 0.9,
-          rocky: 0.5,
-          gravel: 1.2,
-          muddy: 0.72,
-          grass: 1,
-          brush: 1,
-          concrete: 1
-        },
-        biped: {
-          sand: 0.65,
-          swamp: 0.5,
-          forest: 0.95,
-          jungle: 0.7,
-          rocky: 0.4,
-          gravel: 1,
-          muddy: 0.7,
-          grass: 1.2,
-          brush: 0.85,
-          concrete: 1
-        },
-        quad: {
-          sand: 0.75,
-          swamp: 0.42,
-          forest: 1.2,
-          jungle: 1,
-          rocky: 0.9,
-          gravel: 0.8,
-          muddy: 0.5,
-          grass: 0.95,
-          brush: 0.9,
-          concrete: 1
-        },
-        spider: {
-          sand: 0.65,
-          swamp: 0.78,
-          forest: 0.75,
-          jungle: 0.65,
-          rocky: 1.2,
-          gravel: 0.75,
-          muddy: 0.82,
-          grass: 1,
-          brush: 0.95,
-          concrete: 1
-        },
-        hover: {
-          sand: 1,
-          swamp: 1.2,
-          forest: 0.48,
-          jungle: 0.35,
-          rocky: 0.68,
-          gravel: 1,
-          muddy: 1.08,
-          grass: 1,
-          brush: 0.7,
-          concrete: 1
-        }
-      },
-      StatusMod: {
-        freeze: (mech) => !mech.equip.includes("radiator") ? 0.25 : 1,
-        hot: (mech) => !mech.equip.includes("coolant") ? 0.25 : 1,
-        corrosive: (mech) => !mech.equip.includes("ablative") ? mech.equip.includes("shields") ? 0.75 : 0.25 : 1,
-        humid: (mech) => !mech.equip.includes("seals") ? 0.75 : 1,
-        windy: (mech) => mech.chassis === "hover" ? 0.5 : 1,
-        hilly: (mech) => mech.chassis !== "spider" ? 0.75 : 1,
-        mountain: (mech) => mech.chassis !== "spider" && !mech.equip.includes("grapple") ? mech.equip.includes("flare") ? 0.75 : 0.5 : 1,
-        radioactive: (mech) => !mech.equip.includes("shields") ? 0.5 : 1,
-        quake: (mech) => !mech.equip.includes("stabilizer") ? 0.25 : 1,
-        dust: (mech) => !mech.equip.includes("seals") ? 0.5 : 1,
-        river: (mech) => mech.chassis !== "hover" ? 0.65 : 1,
-        tar: (mech) => mech.chassis !== "quad" ? mech.chassis === "tread" || mech.chassis === "wheel" ? 0.5 : 0.75 : 1,
-        steam: (mech) => !mech.equip.includes("shields") ? 0.75 : 1,
-        flooded: (mech) => mech.chassis !== "hover" ? 0.35 : 1,
-        fog: (mech) => !mech.equip.includes("sonar") ? 0.2 : 1,
-        rain: (mech) => !mech.equip.includes("seals") ? 0.75 : 1,
-        hail: (mech) => !mech.equip.includes("ablative") && !mech.equip.includes("shields") ? 0.75 : 1,
-        chasm: (mech) => !mech.equip.includes("grapple") ? 0.1 : 1,
-        dark: (mech) => !mech.equip.includes("infrared") ? mech.equip.includes("flare") ? 0.25 : 0.1 : 1,
-        gravity: (mech) => mech.size === "titan" ? 0.25 : mech.size === "large" ? 0.45 : mech.size === "medium" ? 0.8 : 1
-      },
-      get collectorValue() {
-        return 2e4 / Math.max(settings.mechCollectorValue, 1e-6);
-      },
-      mechObserver: new MutationObserver(() => {
-        updateDebugData();
-        createMechInfo();
-      }),
-      updateSpire() {
-        let oldHash = this.stateHash;
-        this.stateHash = 0 + game.global.portal.spire.count + game.global.blood.prepared + game.global.blood.wrath + game.global.portal.mechbay.scouts * 1e7 + (settings.mechSpecial ? 1e14 : 0) + (settings.mechInfernalCollector ? 1e15 : 0) + settings.mechCollectorValue;
-        return this.stateHash !== oldHash;
-      },
-      initLab() {
-        if (game.global.race["warlord"]) {
-          return false;
-        }
-        if (buildings.SpireMechBay.count < 1) {
-          return false;
-        }
-        this._assemblyVue = getVueById(this._assemblyVueBinding);
-        if (this._assemblyVue === void 0) {
-          return false;
-        }
-        this._listVue = getVueById(this._listVueBinding);
-        if (this._listVue === void 0) {
-          return false;
-        }
-        this.activeMechs = [];
-        this.inactiveMechs = [];
-        this.mechsPower = 0;
-        let mechBay = game.global.portal.mechbay;
-        for (let i = 0; i < mechBay.mechs.length; i++) {
-          let mech = {
-            id: i,
-            ...mechBay.mechs[i],
-            ...this.getMechStats(mechBay.mechs[i])
-          };
-          if (i < mechBay.active) {
-            this.activeMechs.push(mech);
-            if (mech.size !== "collector") {
-              this.mechsPower += mech.power;
-            }
-          } else {
-            this.inactiveMechs.push(mech);
-          }
-        }
-        if (this.updateSpire()) {
-          this.isActive = true;
-          this.updateBestWeapon();
-          this.Size.forEach((size) => {
-            this.updateBestBody(size);
-            this.bestMech[size] = this.getRandomMech(size);
-          });
-          let sortBy = (prop) => Object.values(this.bestMech).filter((m) => m.size !== "collector").sort((a, b) => b[prop] - a[prop]).map((m) => m.size);
-          this.bestSize = sortBy("efficiency");
-          this.bestGems = sortBy("gems_eff");
-          this.bestSupply = sortBy("supply_eff");
-          createMechInfo();
-        }
-        let bestMech = this.bestMech[this.bestSize[0]];
-        this.mechsPotential = this.mechsPower / (buildings.SpireMechBay.count * 25 / this.getMechSpace(bestMech) * bestMech.power) || 0;
-        return true;
-      },
-      getBodyMod(mech) {
-        let floor = game.global.portal.spire;
-        let terrainFactor = mech.size === "small" || mech.size === "medium" ? this.SmallChassisMod[mech.chassis][floor.type] : this.LargeChassisMod[mech.chassis][floor.type];
-        let rating = poly.terrainRating(
-          mech,
-          terrainFactor,
-          Object.keys(floor.status)
-        );
-        for (let effect in floor.status) {
-          rating *= this.StatusMod[effect](mech);
-        }
-        return rating;
-      },
-      getWeaponMod(mech) {
-        let weapons = poly.monsters[game.global.portal.spire.boss].weapon;
-        let rating = 0;
-        for (let i = 0; i < mech.hardpoint.length; i++) {
-          rating += poly.weaponPower(mech, weapons[mech.hardpoint[i]]);
-        }
-        return rating;
-      },
-      getSizeMod(mech, concrete) {
-        let isConcrete = concrete ?? game.global.portal.spire.type === "concrete";
-        switch (mech.size) {
-          case "small":
-            return 25e-4 * (isConcrete ? 0.92 : 1);
-          case "medium":
-            return 75e-4 * (isConcrete ? 0.95 : 1);
-          case "large":
-            return 0.01;
-          case "titan":
-            return 0.012 * (isConcrete ? 1.25 : 1);
-          case "collector":
-            return 25 / this.collectorValue;
-        }
-        return 0;
-      },
-      getProgressMod() {
-        let mod = 1;
-        if (game.global.stats.achieve.gladiator?.l > 0) {
-          mod *= 1 + game.global.stats.achieve.gladiator.l * 0.2;
-        }
-        if (game.global.blood["wrath"]) {
-          mod *= 1 + game.global.blood.wrath / 20;
-        }
-        mod /= game.global.portal.spire.count;
-        return mod;
-      },
-      getPreferredSize() {
-        let mechBay = game.global.portal.mechbay;
-        if (settings.mechFillBay && mechBay.max % 1 === 0 && (game.global.blood.prepared >= 2 ? mechBay.bay % 2 !== mechBay.max % 2 : mechBay.max - mechBay.bay === 1)) {
-          return ["collector", true];
-        }
-        if (resources.Supply.storageRatio < 0.9 && resources.Supply.rateOfChange < settings.mechMinSupply) {
-          let collectorsCount = this.activeMechs.filter(
-            (mech) => mech.size === "collector"
-          ).length;
-          if (collectorsCount / mechBay.max < settings.mechMaxCollectors) {
-            return ["collector", true];
-          }
-        }
-        if (mechBay.scouts * 2 / mechBay.max < settings.mechScouts) {
-          return ["small", true];
-        }
-        let floorSize = game.global.portal.spire.status.gravity ? settings.mechSizeGravity : settings.mechSize;
-        if (this.Size.includes(floorSize) && (!settings.mechFillBay || poly.mechCost(floorSize).c <= resources.Supply.maxQuantity)) {
-          return [floorSize, false];
-        }
-        let mechPriority = floorSize === "gems" ? this.bestGems : floorSize === "supply" ? this.bestSupply : this.bestSize;
-        for (let i = 0; i < mechPriority.length; i++) {
-          let mechSize = mechPriority[i];
-          let { s: s2, c } = poly.mechCost(mechSize);
-          if (resources.Soul_Gem.spareQuantity >= s2 && resources.Supply.maxQuantity >= c) {
-            return [mechSize, false];
-          }
-        }
-        return ["titan", false];
-      },
-      getMechStats(mech) {
-        let rating = this.getBodyMod(mech);
-        if (mech.size !== "collector") {
-          rating *= this.getWeaponMod(mech);
-        }
-        let power = rating * this.getSizeMod(mech) * (mech.infernal ? 1.25 : 1);
-        let [gem, supply, space] = this.getMechCost(mech);
-        let [gemRef, supplyRef] = this.getMechRefund(mech);
-        return {
-          power,
-          efficiency: power / space,
-          gems_eff: power / (gem - gemRef),
-          supply_eff: power / (supply - supplyRef)
-        };
-      },
-      getTimeToClear() {
-        return this.mechsPower > 0 ? (100 - game.global.portal.spire.progress) / (this.mechsPower * this.getProgressMod()) : Number.MAX_SAFE_INTEGER;
-      },
-      updateBestBody(size) {
-        let currentBestBodyMod = 0;
-        let currentBestBodyList = [];
-        let equipmentSlots = this.SizeSlots[size] + (game.global.blood.prepared ? 1 : 0) - (settings.mechSpecial === "always" ? 1 : 0);
-        let equipOptions = settings.mechSpecial === "always" || settings.mechSpecial === "never" ? this.Equip.slice(1) : this.Equip;
-        let infernal = settings.mechInfernalCollector && size === "collector" && game.global.blood.prepared >= 3;
-        k_combinations(equipOptions, equipmentSlots).forEach((equip) => {
-          this.Chassis.forEach((chassis) => {
-            let mech = {
-              size,
-              chassis,
-              equip,
-              infernal
-            };
-            let mechMod = this.getBodyMod(mech);
-            if (mechMod > currentBestBodyMod) {
-              currentBestBodyMod = mechMod;
-              currentBestBodyList = [mech];
-            } else if (mechMod === currentBestBodyMod) {
-              currentBestBodyList.push(mech);
-            }
-          });
-        });
-        if (settings.mechSpecial === "always" && equipmentSlots >= 0) {
-          currentBestBodyList.forEach((mech) => mech.equip.unshift("special"));
-        }
-        if (settings.mechSpecial === "prefered") {
-          let specialEquip = currentBestBodyList.filter(
-            (mech) => mech.equip.includes("special")
-          );
-          if (specialEquip.length > 0) {
-            currentBestBodyList = specialEquip;
-          }
-        }
-        this.bestBody[size] = currentBestBodyList;
-      },
-      updateBestWeapon() {
-        let bestMod = 0;
-        let list = poly.monsters[game.global.portal.spire.boss].weapon;
-        for (let weapon of MechManager.Weapon) {
-          let mod = list[weapon];
-          if (mod > bestMod) {
-            bestMod = mod;
-            this.bestWeapon = [weapon];
-          } else if (mod === bestMod) {
-            this.bestWeapon.push(weapon);
-          }
-        }
-      },
-      getRandomMech(size) {
-        let randomBody = this.bestBody[size][Math.floor(Math.random() * this.bestBody[size].length)];
-        let randomWeapon = this.bestWeapon[Math.floor(Math.random() * this.bestWeapon.length)];
-        let weaponsAmount = this.SizeWeapons[size];
-        let mech = {
-          hardpoint: new Array(weaponsAmount).fill(randomWeapon),
-          ...randomBody
-        };
-        return { ...mech, ...this.getMechStats(mech) };
-      },
-      getMechSpace(mech, prep) {
-        switch (mech.size) {
-          case "small":
-            return 2;
-          case "medium":
-            return (prep ?? game.global.blood.prepared) >= 2 ? 4 : 5;
-          case "large":
-            return (prep ?? game.global.blood.prepared) >= 2 ? 8 : 10;
-          case "titan":
-            return (prep ?? game.global.blood.prepared) >= 2 ? 20 : 25;
-          case "collector":
-            return 1;
-        }
-        return Number.MAX_SAFE_INTEGER;
-      },
-      getMechCost(mech, prep) {
-        let { s: s2, c } = poly.mechCost(mech.size, mech.infernal, prep);
-        return [s2, c, this.getMechSpace(mech, prep)];
-      },
-      getMechRefund(mech, prep) {
-        let { s: s2, c } = poly.mechCost(mech.size, mech.infernal, prep);
-        return [Math.floor(s2 / 2), Math.floor(c / 3)];
-      },
-      mechDesc(mech) {
-        let rating = mech.power / this.bestMech[mech.size].power;
-        return `${game.loc("portal_mech_size_" + mech.size)} ${game.loc(
-          "portal_mech_chassis_" + mech.chassis
-        )} (${Math.round(rating * 100)}%)`;
-      },
-      buildMech(mech) {
-        this._assemblyVue.b.infernal = mech.infernal;
-        this._assemblyVue.setSize(mech.size);
-        this._assemblyVue.setType(mech.chassis);
-        for (let i = 0; i < mech.hardpoint.length; i++) {
-          this._assemblyVue.setWep(mech.hardpoint[i], i);
-        }
-        for (let i = 0; i < mech.equip.length; i++) {
-          this._assemblyVue.setEquip(mech.equip[i], i);
-        }
-        this._assemblyVue.build();
-        GameLog.logSuccess(
-          "mech_build",
-          `${this.mechDesc(mech)} mech has been assembled.`,
-          ["hell"]
-        );
-      },
-      scrapMech(mech) {
-        this._listVue.scrap(mech.id);
-      },
-      dragMech(oldId, newId) {
-        let sortObj = {
-          oldDraggableIndex: oldId,
-          newDraggableIndex: newId,
-          from: { querySelectorAll: () => [], insertBefore: () => false }
-        };
-        if (needSandboxBypass) {
-          win.Sortable.get(this._listVue.$el).options.onEnd(
-            cloneInto(sortObj, unsafeWindow, { cloneFunctions: true })
-          );
-        } else {
-          Sortable.get(this._listVue.$el).options.onEnd(sortObj);
-        }
-      }
-    };
+    let SpyManager, WarManager;
+    ({ SpyManager, WarManager } = createForeignAffairsManagers({
+      getGame: () => game,
+      getSettings: () => settings,
+      getState: () => state,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getDocument: () => document,
+      getPoly: () => poly,
+      getVueById: (id) => getVueById(id),
+      getWindowManager: () => WindowManager,
+      getGameLog: () => GameLog,
+      getKeyManager: () => KeyManager,
+      getHaveTech: () => haveTech,
+      getGuardActive: () => guardActive,
+      getTraitVal: () => traitVal,
+      getGovPower,
+      getGovName,
+      getOccCosts,
+      logError: (...args) => console.error(...args)
+    }));
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        foreignAffairsManagers: { SpyManager, WarManager },
+        setForeignAffairsManagersTestContext(context) {
+          if ("game" in context) game = context.game;
+          if ("settings" in context) settings = context.settings;
+          if ("state" in context) state = context.state;
+          if ("resources" in context) resources = context.resources;
+          if ("buildings" in context) buildings = context.buildings;
+          if ("poly" in context) poly = context.poly;
+          if ("win" in context) win = context.win;
+          if ("WindowManager" in context) WindowManager = context.WindowManager;
+          if ("GameLog" in context) GameLog = context.GameLog;
+          if ("KeyManager" in context) KeyManager = context.KeyManager;
+          if ("haveTech" in context) haveTech = context.haveTech;
+          if ("guardActive" in context) guardActive = context.guardActive;
+          if ("traitVal" in context) traitVal = context.traitVal;
+        }
+      });
+    }
+    let FleetManagerOuter, FleetManager;
+    ({ FleetManagerOuter, FleetManager } = createFleetManagers({
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getPoly: () => poly,
+      getVueById: (id) => getVueById(id),
+      getKeyManager: () => KeyManager,
+      getHaveTech: () => haveTech,
+      getJQuery: () => $
+    }));
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        fleetManagers: { FleetManagerOuter, FleetManager },
+        setFleetManagersTestContext(context) {
+          if ("game" in context) game = context.game;
+          if ("settings" in context) settings = context.settings;
+          if ("resources" in context) resources = context.resources;
+          if ("buildings" in context) buildings = context.buildings;
+          if ("poly" in context) poly = context.poly;
+          if ("win" in context) win = context.win;
+          if ("KeyManager" in context) KeyManager = context.KeyManager;
+          if ("haveTech" in context) haveTech = context.haveTech;
+        }
+      });
+    }
+    let { MechManager } = createMechManager({
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getPoly: () => poly,
+      getGameLog: () => GameLog,
+      getNeedSandboxBypass: () => needSandboxBypass,
+      getWin: () => win,
+      getUnsafeWindow: () => typeof unsafeWindow === "undefined" ? void 0 : unsafeWindow,
+      getSortable: () => Sortable,
+      getUpdateDebugData: () => updateDebugData,
+      getCreateMechInfo: () => createMechInfo,
+      getVueById: (id) => getVueById(id),
+      kCombinations: k_combinations,
+      cloneInto: (...args) => cloneInto(...args),
+      createMutationObserver: (callback) => new MutationObserver(callback)
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        MechManager,
+        setMechManagerTestContext(context) {
+          if ("game" in context) game = context.game;
+          if ("settings" in context) settings = context.settings;
+          if ("resources" in context) resources = context.resources;
+          if ("buildings" in context) buildings = context.buildings;
+          if ("poly" in context) poly = context.poly;
+          if ("win" in context) win = context.win;
+          if ("GameLog" in context) GameLog = context.GameLog;
+          if ("needSandboxBypass" in context)
+            needSandboxBypass = context.needSandboxBypass;
+        }
+      });
+    }
     let JobManager, BuildingManager, ProjectManager, TriggerManager;
     ({ JobManager, BuildingManager, ProjectManager, TriggerManager } = createCoreManagers({
       getGame: () => game,
@@ -33326,220 +34150,31 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       Trigger,
       getWindow: () => win
     }));
-    var WindowManager = {
-      openedByScript: false,
-      _callbackWindowTitle: "",
-      _callbackFunction: null,
-      currentModalWindowTitle() {
-        let modalTitleNode = document.getElementById("modalBoxTitle");
-        if (modalTitleNode === null) {
-          return "";
+    let WindowManager, KeyManager, GameLog;
+    ({ WindowManager, KeyManager, GameLog } = createInfrastructureManagers({
+      getDocument: () => document,
+      getGame: () => game,
+      getSettings: () => settings,
+      getPoly: () => poly,
+      getWin: () => win,
+      getNeedSandboxBypass: () => needSandboxBypass,
+      getUnsafeWindow: () => typeof unsafeWindow === "undefined" ? void 0 : unsafeWindow,
+      getKeyboardEvent: () => KeyboardEvent,
+      cloneInto: (...args) => cloneInto(...args)
+    }));
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        infrastructureManagers: { WindowManager, KeyManager, GameLog },
+        setInfrastructureManagersTestContext(context) {
+          if ("game" in context) game = context.game;
+          if ("settings" in context) settings = context.settings;
+          if ("poly" in context) poly = context.poly;
+          if ("win" in context) win = context.win;
+          if ("needSandboxBypass" in context)
+            needSandboxBypass = context.needSandboxBypass;
         }
-        let indexOfDash = modalTitleNode.textContent.indexOf(" - ");
-        if (indexOfDash === -1) {
-          return modalTitleNode.textContent;
-        } else {
-          return modalTitleNode.textContent.substring(0, indexOfDash);
-        }
-      },
-      openModalWindowWithCallback(elementToClick, callbackWindowTitle, callbackFunction) {
-        if (this.isOpen()) {
-          return;
-        }
-        this.openedByScript = true;
-        this._callbackWindowTitle = callbackWindowTitle;
-        this._callbackFunction = callbackFunction;
-        elementToClick.click();
-      },
-      isOpen() {
-        return this.openedByScript || document.getElementById("modalBox") !== null || document.getElementById("scriptModal")?.style.display === "block";
-      },
-      checkCallbacks() {
-        if (WindowManager.currentModalWindowTitle() === WindowManager._callbackWindowTitle && WindowManager.openedByScript && WindowManager._callbackFunction) {
-          WindowManager._callbackFunction();
-          let modalCloseBtn = document.querySelector(".modal .modal-close");
-          if (modalCloseBtn !== null) {
-            modalCloseBtn.click();
-          }
-        } else {
-          let modal = document.querySelector(".modal");
-          if (modal !== null) {
-            modal.style.display = "";
-          }
-        }
-        WindowManager.openedByScript = false;
-        WindowManager._callbackWindowTitle = "";
-        WindowManager._callbackFunction = null;
-      }
-    };
-    var KeyManager = {
-      _setFn: null,
-      _unsetFn: null,
-      _allFn: null,
-      _eventProp: {
-        Shift: "shiftKey",
-        Control: "ctrlKey",
-        Alt: "altKey",
-        Meta: "metaKey"
-      },
-      _state: { x100: void 0, x25: void 0, x10: void 0 },
-      _mode: "none",
-      init() {
-        let events = win.$._data(win.document).events;
-        let set = events?.keydown?.[0]?.handler ?? null;
-        let unset = events?.keyup?.[0]?.handler ?? null;
-        let all = events?.mousemove?.[0]?.handler ?? null;
-        if (!all && (!set || !unset)) {
-          this._setFn = (e) => document.dispatchEvent(new KeyboardEvent("keydown", e));
-          this._unsetFn = (e) => document.dispatchEvent(new KeyboardEvent("keyup", e));
-          this._allFn = null;
-        } else if (needSandboxBypass) {
-          this._setFn = (e) => set(cloneInto(e, unsafeWindow));
-          this._unsetFn = (e) => unset(cloneInto(e, unsafeWindow));
-          this._allFn = (e) => all(cloneInto(e, unsafeWindow));
-        } else {
-          this._setFn = set;
-          this._unsetFn = unset;
-          this._allFn = all;
-        }
-      },
-      reset() {
-        this._state.x100 = void 0;
-        this._state.x25 = void 0;
-        this._state.x10 = void 0;
-        let map = game.global.settings.keyMap;
-        let keys = Object.values(map);
-        let uniq = ["x100", "x25", "x10"].every(
-          (key) => keys.indexOf(map[key]) === keys.lastIndexOf(map[key])
-        );
-        if (!game.global.settings.mKeys) {
-          this._mode = "none";
-        } else if (!uniq) {
-          this._mode = "unset";
-        } else if (this._allFn && ["x100", "x25", "x10"].every(
-          (key) => ["Shift", "Control", "Alt", "Meta"].includes(
-            game.global.settings.keyMap[key]
-          )
-        )) {
-          this._mode = "all";
-        } else {
-          this._mode = "each";
-        }
-      },
-      finish() {
-        if (this._state.x100 || this._state.x25 || this._state.x10) {
-          this.set(false, false, false);
-        }
-      },
-      setKey(key, pressed) {
-        if (this._state[key] === pressed) {
-          return;
-        }
-        let fakeEvent = { key: game.global.settings.keyMap[key] };
-        if (pressed) {
-          this._setFn(fakeEvent);
-        } else {
-          this._unsetFn(fakeEvent);
-        }
-        this._state[key] = pressed;
-      },
-      set(x100, x25, x10) {
-        if (this._mode === "all") {
-          let map = game.global.settings.keyMap;
-          let fakeEvent = {
-            [this._eventProp[map.x100]]: this._state.x100 = x100,
-            [this._eventProp[map.x25]]: this._state.x25 = x25,
-            [this._eventProp[map.x10]]: this._state.x10 = x10
-          };
-          this._allFn(fakeEvent);
-        } else if (this._mode === "each" || this._mode === "unset") {
-          this.setKey("x100", x100);
-          this.setKey("x25", x25);
-          this.setKey("x10", x10);
-        }
-      },
-      *click(amount) {
-        if (this._mode === "none") {
-          while (amount > 0) {
-            yield amount -= 1;
-          }
-        } else if (this._mode === "unset") {
-          this.set(false, false, false);
-          while (amount > 0) {
-            yield amount -= 1;
-          }
-        } else {
-          while (amount > 0) {
-            if (amount >= 25e3) {
-              this.set(true, true, true);
-              yield amount -= 25e3;
-            } else if (amount >= 2500) {
-              this.set(true, true, false);
-              yield amount -= 2500;
-            } else if (amount >= 1e3) {
-              this.set(true, false, true);
-              yield amount -= 1e3;
-            } else if (amount >= 250) {
-              this.set(false, true, true);
-              yield amount -= 250;
-            } else if (amount >= 100) {
-              this.set(true, false, false);
-              yield amount -= 100;
-            } else if (amount >= 25) {
-              this.set(false, true, false);
-              yield amount -= 25;
-            } else if (amount >= 10) {
-              this.set(false, false, true);
-              yield amount -= 10;
-            } else {
-              this.set(false, false, false);
-              yield amount -= 1;
-            }
-          }
-        }
-      }
-    };
-    var GameLog = {
-      Types: {
-        special: "Specials",
-        construction: "Construction",
-        multi_construction: "Multi-part Construction",
-        arpa: "A.R.P.A Progress",
-        research: "Research",
-        spying: "Spying",
-        attack: "Attack",
-        mercenary: "Mercenaries",
-        mech_build: "Mech Build",
-        mech_scrap: "Mech Scrap",
-        outer_fleet: "True Path Fleet",
-        mutation: "Mutations",
-        prestige: "Prestige"
-      },
-      logInfo(loggingType, text, tags) {
-        if (!settings.logEnabled || !settings["log_" + loggingType]) {
-          return;
-        }
-        poly.messageQueue(text, "info", false, tags);
-      },
-      logSuccess(loggingType, text, tags) {
-        if (!settings.logEnabled || !settings["log_" + loggingType]) {
-          return;
-        }
-        poly.messageQueue(text, "success", false, tags);
-      },
-      logWarning(loggingType, text, tags) {
-        if (!settings.logEnabled || !settings["log_" + loggingType]) {
-          return;
-        }
-        poly.messageQueue(text, "warning", false, tags);
-      },
-      logDanger(loggingType, text, tags) {
-        if (!settings.logEnabled || !settings["log_" + loggingType]) {
-          return;
-        }
-        poly.messageQueue(text, "danger", false, tags);
-      }
-    };
+      });
+    }
     const { updateCraftCost } = createCraftingCosts({
       getGame: () => game,
       getState: () => state,
@@ -34874,62 +35509,100 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    function initialiseScript() {
-      for (let [key, action] of Object.entries(game.actions.tech)) {
-        techIds[action.id] = new Technology(key);
+    let scriptBootstrapTestActions;
+    const getScriptBootstrapActions = () => scriptBootstrapTestActions ?? {
+      updateStandAloneSettings,
+      updateStateFromSettings,
+      updateSettingsFromState,
+      verifyGameActions,
+      tooltipObserverCallback,
+      buildFilterRegExp,
+      filterLog,
+      schedule: (callback, delay) => setTimeout(callback, delay),
+      repeat: (callback, delay) => setInterval(callback, delay),
+      alert: (message) => alert(message),
+      addErrorHandler,
+      addScriptStyle,
+      keyManagerInit: () => KeyManager.init(),
+      initialiseState,
+      initialiseRaces,
+      updateOverrides,
+      automate,
+      automateLab,
+      importSettings,
+      exportSettings,
+      loadStateLog,
+      triggerFileDownload,
+      displayScriptWarningNode,
+      exportFunction: (...args) => exportFunction(...args)
+    };
+    const { initialiseScript, mainAutoEvolveScript } = createScriptBootstrap({
+      getContext: () => ({
+        game,
+        techIds,
+        Technology,
+        buildings,
+        buildingIds,
+        state,
+        projects,
+        arpaIds,
+        jobs,
+        jobIds,
+        crafter,
+        TriggerManager,
+        checkActions,
+        MutationObserver,
+        document,
+        Node,
+        WindowManager,
+        $,
+        window,
+        unsafeWindow: typeof unsafeWindow === "undefined" ? void 0 : unsafeWindow,
+        cloneInto: typeof cloneInto === "undefined" ? void 0 : cloneInto,
+        exportFunction: typeof exportFunction === "undefined" ? void 0 : exportFunction,
+        win,
+        needSandboxBypass,
+        poly,
+        settings,
+        safeMode
+      }),
+      getActions: getScriptBootstrapActions,
+      setWin: (value) => {
+        win = value;
+      },
+      setGame: (value) => {
+        game = value;
+      },
+      setNeedSandboxBypass: (value) => {
+        needSandboxBypass = value;
       }
-      for (let building of Object.values(buildings)) {
-        buildingIds[building._vueBinding] = building;
-        if (building.isMission() && building !== buildings.BlackholeJumpShip && building !== buildings.PitAssaultForge) {
-          state.missionBuildingList.push(building);
+    });
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        scriptBootstrap: { initialiseScript, mainAutoEvolveScript },
+        setScriptBootstrapTestContext(context) {
+          if ("game" in context) game = context.game;
+          if ("state" in context) state = context.state;
+          if ("settings" in context) settings = context.settings;
+          if ("techIds" in context) techIds = context.techIds;
+          if ("buildingIds" in context) buildingIds = context.buildingIds;
+          if ("arpaIds" in context) arpaIds = context.arpaIds;
+          if ("jobIds" in context) jobIds = context.jobIds;
+          if ("buildings" in context) buildings = context.buildings;
+          if ("projects" in context) projects = context.projects;
+          if ("jobs" in context) jobs = context.jobs;
+          if ("crafter" in context) crafter = context.crafter;
+          if ("TriggerManager" in context)
+            TriggerManager = context.TriggerManager;
+          if ("WindowManager" in context) WindowManager = context.WindowManager;
+          if ("KeyManager" in context) KeyManager = context.KeyManager;
+          if ("poly" in context) poly = context.poly;
+          if ("win" in context) win = context.win;
+          if ("safeMode" in context) safeMode = context.safeMode;
+          if ("checkActions" in context) checkActions = context.checkActions;
+          scriptBootstrapTestActions = context.actions;
         }
-      }
-      for (let project of Object.values(projects)) {
-        arpaIds[project._vueBinding] = project;
-      }
-      for (let job of Object.values(jobs)) {
-        jobIds[job._originalId] = job;
-      }
-      for (let job of Object.values(crafter)) {
-        jobIds[job._originalId] = job;
-      }
-      updateStandAloneSettings();
-      updateStateFromSettings();
-      updateSettingsFromState();
-      TriggerManager.priorityList.forEach((trigger) => {
-        trigger.complete = false;
       });
-      if (checkActions) {
-        verifyGameActions();
-      }
-      new MutationObserver(tooltipObserverCallback).observe(
-        document.getElementById("main"),
-        { childList: true }
-      );
-      new MutationObserver(
-        (bodyMutations) => bodyMutations.forEach(
-          (bodyMutation) => bodyMutation.addedNodes.forEach((node) => {
-            if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains("modal")) {
-              if (WindowManager.openedByScript) {
-                node.style.display = "none";
-                new MutationObserver(WindowManager.checkCallbacks).observe(
-                  document.getElementById("modalBox"),
-                  { childList: true }
-                );
-              } else {
-                new MutationObserver(tooltipObserverCallback).observe(node, {
-                  childList: true
-                });
-              }
-            }
-          })
-        )
-      ).observe(document.querySelector("body"), { childList: true });
-      buildFilterRegExp();
-      new MutationObserver(filterLog).observe(
-        document.getElementById("msgQueueLog"),
-        { childList: true }
-      );
     }
     const { buildFilterRegExp, filterLog } = createLogFilter({
       getSettingsRaw: () => settingsRaw,
@@ -35189,95 +35862,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           tickTestControllers = context.controllers;
         }
       });
-    }
-    function mainAutoEvolveScript() {
-      if (document.getElementById("queueColumn") === null) {
-        setTimeout(mainAutoEvolveScript, 100);
-        return;
-      }
-      if (typeof unsafeWindow !== "undefined") {
-        win = unsafeWindow;
-      } else {
-        win = window;
-        if (!win.$._data(win.document).events?.["keydown"]) {
-          $.noConflict();
-        }
-      }
-      game = win.evolve;
-      if (!game) {
-        if (state.warnDebug) {
-          state.warnDebug = false;
-          alert("You need to enable Debug Mode in settings for script to work");
-        }
-        setTimeout(mainAutoEvolveScript, 100);
-        return;
-      }
-      if (!game.global?.race || !game.breakdown.p.consume) {
-        setTimeout(mainAutoEvolveScript, 100);
-        return;
-      }
-      if (!game.global.settings.tabLoad) {
-        if (state.warnPreload) {
-          state.warnPreload = false;
-          alert(
-            "You need to enable Preload Tab Content in settings for script to work"
-          );
-        }
-        setTimeout(mainAutoEvolveScript, 100);
-        return;
-      }
-      if (!$.ui) {
-        let el = document.createElement("script");
-        el.src = "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js";
-        el.onload = mainAutoEvolveScript;
-        el.onerror = () => alert("Can't load jQuery UI. Check browser console for details.");
-        document.body.appendChild(el);
-        return;
-      }
-      needSandboxBypass = typeof unsafeWindow === "object" && typeof cloneInto === "function" && typeof exportFunction === "function" && unsafeWindow !== window;
-      if (!needSandboxBypass) {
-        poly.adjustCosts = game.adjustCosts;
-        poly.loc = game.loc;
-        poly.messageQueue = game.messageQueue;
-        poly.shipCosts = game.shipCosts;
-      }
-      addErrorHandler();
-      addScriptStyle();
-      KeyManager.init();
-      initialiseState();
-      initialiseRaces();
-      initialiseScript();
-      updateOverrides();
-      const setCallback = (fn) => !needSandboxBypass ? fn : exportFunction(fn, unsafeWindow);
-      let breakdown = game.breakdown;
-      Object.defineProperty(game, "breakdown", {
-        get: setCallback(() => breakdown),
-        set: setCallback((v) => {
-          breakdown = v;
-          state.gameTicked = true;
-          if (settings.tickSchedule) {
-            setTimeout(automate);
-          } else {
-            automate();
-          }
-        })
-      });
-      setInterval(automateLab, 2500);
-      win.importAutomationSettings = importSettings;
-      win.exportAutomationSettings = exportSettings;
-      win.eaExportStateLog = () => triggerFileDownload(
-        JSON.stringify(state.stateLog ?? loadStateLog()),
-        `evolve-statelog-manual-d${game.global.stats.days}.json`
-      );
-      if (safeMode) {
-        const msg = [
-          `Script safe mode is active to let you solve problems in your configuration.`,
-          `The masterScriptToggle is always disabled in this mode, and your overrides don't get evaluated.`,
-          `Fix the problems that required you to use this mode, then remove ?safemode from the URL to deactivate.`
-        ].join("\n");
-        displayScriptWarningNode("Safe mode active", msg, null);
-        poly.messageQueue(msg, "warning", true, ["events", "major_events"]);
-      }
     }
     const {
       updateDebugData,
@@ -35808,12 +36392,17 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    var evalCache = {};
-    function fastEval(s) {
-      if (!evalCache[s]) {
-        evalCache[s] = eval(`(function() { return ${s} })`);
-      }
-      return evalCache[s]();
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        fastEvaluator: {
+          fastEval,
+          cacheSize: fastEvalCacheSize
+        },
+        setFastEvaluatorTestContext(context) {
+          if ("settings" in context) settings = context.settings;
+          if ("state" in context) state = context.state;
+        }
+      });
     }
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
@@ -35886,7 +36475,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getVueById: (...args) => getVueById(...args),
       normalizeProperties,
       cloneInto: (...args) => cloneInto(...args),
-      getUnsafeWindow: () => unsafeWindow,
+      getUnsafeWindow: () => typeof unsafeWindow === "undefined" ? void 0 : unsafeWindow,
       getDate: () => /* @__PURE__ */ new Date()
     });
     if (window.__EA_TEST_HOOKS__) {
