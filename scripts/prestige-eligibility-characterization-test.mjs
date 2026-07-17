@@ -201,6 +201,12 @@ pillar.game.global.pillars.human = 0;
 pillar.game.global.race.universe = "micro";
 assert.equal(eligibility.isPillarFinished(), true);
 
+const isolatedAscension = makeContext();
+isolatedAscension.settings.prestigeAscensionPillar = false;
+delete isolatedAscension.buildings.PitSoulCapacitor.instance;
+eligibility = use(isolatedAscension);
+assert.equal(eligibility.isAscensionPrestigeAvailable(), true);
+
 const witch = makeContext();
 witch.settings.prestigeAscensionPillar = false;
 eligibility = use(witch);
@@ -214,6 +220,12 @@ witch.researched.set("dish", 2);
 assert.equal(eligibility.isWitchAscensionPrestigeAvailable(true), true);
 witch.buildings.PitSoulCapacitor.instance.energy--;
 assert.equal(eligibility.isWitchAscensionPrestigeAvailable(), false);
+
+const isolatedWitchAscension = makeContext();
+isolatedWitchAscension.settings.prestigeAscensionPillar = false;
+delete isolatedWitchAscension.buildings.SiriusAscend;
+eligibility = use(isolatedWitchAscension);
+assert.equal(eligibility.isWitchAscensionPrestigeAvailable(), true);
 
 const demonic = makeContext();
 eligibility = use(demonic);

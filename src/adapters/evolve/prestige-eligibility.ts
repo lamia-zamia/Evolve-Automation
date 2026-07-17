@@ -1,8 +1,10 @@
 import type {
+  AscensionEligibilityView,
   GeckEligibilityView,
   PillarEligibilityView,
   PrestigeEligibilityView,
   PrestigePermissionView,
+  WitchAscensionEligibilityView,
 } from "../../domain/prestige-eligibility.ts";
 
 type PrestigeEligibilityUnavailableReason =
@@ -40,6 +42,20 @@ export type PrestigePermissionReadResult =
 
 export type PillarEligibilityReadResult =
   | { readonly status: "ready"; readonly view: Readonly<PillarEligibilityView> }
+  | PrestigeUnavailable;
+
+export type AscensionEligibilityReadResult =
+  | {
+      readonly status: "ready";
+      readonly view: Readonly<AscensionEligibilityView>;
+    }
+  | PrestigeUnavailable;
+
+export type WitchAscensionEligibilityReadResult =
+  | {
+      readonly status: "ready";
+      readonly view: Readonly<WitchAscensionEligibilityView>;
+    }
   | PrestigeUnavailable;
 
 export type GeckEligibilityReadResult =
@@ -203,6 +219,118 @@ export function readPillarEligibilityView(
             : { speciesPillarLevel: pillarLevel }),
         }),
         resources: Object.freeze({ harmony: harmony["currentQuantity"] }),
+      }),
+    });
+  } catch {
+    return unavailable("inaccessible-data");
+  }
+}
+
+export function readAscensionEligibilityView(
+  rawSettings: unknown,
+  rawGame: unknown,
+  rawResources: unknown,
+  rawBuildings: unknown,
+): AscensionEligibilityReadResult {
+  try {
+    const pillar = readPillarEligibilityView(
+      rawSettings,
+      rawGame,
+      rawResources,
+    );
+    if (pillar.status === "unavailable") return pillar;
+    if (!isRecord(rawBuildings)) return unavailable("invalid-building");
+    const siriusAscend = readBuilding(rawBuildings, "SiriusAscend");
+    if (siriusAscend === undefined) {
+      return unavailable("invalid-building", "SiriusAscend");
+    }
+    const siriusAscendUnlocked = callBoolean(siriusAscend, "isUnlocked");
+    if (siriusAscendUnlocked === undefined) {
+      return unavailable("invalid-building", "SiriusAscend.isUnlocked");
+    }
+    return Object.freeze({
+      status: "ready",
+      view: Object.freeze({
+        ...pillar.view,
+        buildings: Object.freeze({ siriusAscendUnlocked }),
+      }),
+    });
+  } catch {
+    return unavailable("inaccessible-data");
+  }
+}
+
+export function readWitchAscensionEligibilityView(
+  rawSettings: unknown,
+  rawGame: unknown,
+  rawResources: unknown,
+  rawBuildings: unknown,
+  demonic: boolean,
+  haveTech: ExternalQuery,
+): WitchAscensionEligibilityReadResult {
+  try {
+    const pillar = readPillarEligibilityView(
+      rawSettings,
+      rawGame,
+      rawResources,
+    );
+    if (pillar.status === "unavailable") return pillar;
+    if (!isRecord(rawGame)) return unavailable("invalid-game-state");
+    const global = rawGame["global"];
+    const race = isRecord(global) ? global["race"] : undefined;
+    if (!isRecord(race)) return unavailable("invalid-game-state", "race");
+
+    if (!isRecord(rawBuildings)) return unavailable("invalid-building");
+    const absorptionChamber = readBuilding(
+      rawBuildings,
+      "PitAbsorptionChamber",
+    );
+    const soulCapacitor = readBuilding(rawBuildings, "PitSoulCapacitor");
+    const capacitorInstance = soulCapacitor?.["instance"];
+    if (
+      absorptionChamber === undefined ||
+      !finiteNonNegative(absorptionChamber["count"])
+    ) {
+      return unavailable("invalid-building", "PitAbsorptionChamber.count");
+    }
+    if (
+      !isRecord(capacitorInstance) ||
+      !finiteNonNegative(capacitorInstance["energy"])
+    ) {
+      return unavailable(
+        "invalid-building",
+        "PitSoulCapacitor.instance.energy",
+      );
+    }
+
+    let forbiddenLevelFive = false;
+    let dishLevelTwo = false;
+    if (demonic) {
+      const rawForbiddenLevelFive = haveTech("forbidden", 5);
+      const rawDishLevelTwo = haveTech("dish", 2);
+      if (
+        typeof rawForbiddenLevelFive !== "boolean" ||
+        typeof rawDishLevelTwo !== "boolean"
+      ) {
+        return unavailable("invalid-external-result");
+      }
+      forbiddenLevelFive = rawForbiddenLevelFive;
+      dishLevelTwo = rawDishLevelTwo;
+    }
+
+    return Object.freeze({
+      status: "ready",
+      view: Object.freeze({
+        ...pillar.view,
+        game: Object.freeze({
+          ...pillar.view.game,
+          fasting: Boolean(race["fasting"]),
+        }),
+        buildings: Object.freeze({
+          absorptionChambers: absorptionChamber["count"],
+          soulCapacitorEnergy: capacitorInstance["energy"],
+        }),
+        tech: Object.freeze({ forbiddenLevelFive, dishLevelTwo }),
       }),
     });
   } catch {

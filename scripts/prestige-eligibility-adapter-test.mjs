@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 
 import {
+  readAscensionEligibilityView,
   readGeckEligibilityView,
   readPillarEligibilityView,
   readPrestigeEligibilityView,
   readPrestigePermissionView,
+  readWitchAscensionEligibilityView,
 } from "../src/adapters/evolve/prestige-eligibility.ts";
+import {
+  isAscensionPrestigeAvailable,
+  isWitchAscensionPrestigeAvailable,
+} from "../src/domain/prestige-eligibility.ts";
 
 function tech(unlocked = false, affordable = false) {
   const value = {
@@ -126,6 +132,34 @@ assert.deepEqual(
     },
   },
 );
+
+input = makeInput();
+input.settings.prestigeAscensionPillar = false;
+delete input.buildings.PitSoulCapacitor.instance;
+const ascension = readAscensionEligibilityView(
+  input.settings,
+  input.game,
+  input.resources,
+  input.buildings,
+);
+assert.equal(ascension.status, "ready");
+assert.equal(isAscensionPrestigeAvailable(ascension.view), true);
+
+input = makeInput();
+input.settings.prestigeAscensionPillar = false;
+delete input.buildings.SiriusAscend;
+const witchAscension = readWitchAscensionEligibilityView(
+  input.settings,
+  input.game,
+  input.resources,
+  input.buildings,
+  false,
+  () => {
+    throw new Error("non-demonic Witch Ascension must not query tech");
+  },
+);
+assert.equal(witchAscension.status, "ready");
+assert.equal(isWitchAscensionPrestigeAvailable(witchAscension.view), true);
 
 input = makeInput();
 input.game.global.interstellar.stellar_engine = { mass: undefined, exotic: 2 };

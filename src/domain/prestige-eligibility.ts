@@ -70,6 +70,26 @@ export interface PillarEligibilityView {
   readonly resources: PrestigeEligibilityView["resources"];
 }
 
+export interface AscensionEligibilityView extends PillarEligibilityView {
+  readonly buildings: Pick<
+    PrestigeEligibilityView["buildings"],
+    "siriusAscendUnlocked"
+  >;
+}
+
+export interface WitchAscensionEligibilityView extends PillarEligibilityView {
+  readonly game: PillarEligibilityView["game"] &
+    Pick<PrestigeEligibilityView["game"], "fasting">;
+  readonly buildings: Pick<
+    PrestigeEligibilityView["buildings"],
+    "absorptionChambers" | "soulCapacitorEnergy"
+  >;
+  readonly tech: Pick<
+    PrestigeEligibilityView["tech"],
+    "forbiddenLevelFive" | "dishLevelTwo"
+  >;
+}
+
 export interface GeckEligibilityView {
   readonly settings: Pick<PrestigeEligibilityView["settings"], "requiredGecks">;
   readonly buildings: Pick<PrestigeEligibilityView["buildings"], "gecks">;
@@ -149,13 +169,13 @@ export function isApocalypsePrestigeAvailable(
 }
 
 export function isAscensionPrestigeAvailable(
-  view: Readonly<PrestigeEligibilityView>,
+  view: Readonly<AscensionEligibilityView>,
 ): boolean {
   return view.buildings.siriusAscendUnlocked && isPillarFinished(view);
 }
 
 export function isWitchAscensionPrestigeAvailable(
-  view: Readonly<PrestigeEligibilityView>,
+  view: Readonly<WitchAscensionEligibilityView>,
   demonic = false,
 ): boolean {
   if (

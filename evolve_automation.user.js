@@ -18275,6 +18275,92 @@
       return unavailable8("inaccessible-data");
     }
   }
+  function readAscensionEligibilityView(rawSettings, rawGame, rawResources, rawBuildings) {
+    try {
+      const pillar = readPillarEligibilityView(
+        rawSettings,
+        rawGame,
+        rawResources
+      );
+      if (pillar.status === "unavailable") return pillar;
+      if (!isRecord12(rawBuildings)) return unavailable8("invalid-building");
+      const siriusAscend = readBuilding2(rawBuildings, "SiriusAscend");
+      if (siriusAscend === void 0) {
+        return unavailable8("invalid-building", "SiriusAscend");
+      }
+      const siriusAscendUnlocked = callBoolean2(siriusAscend, "isUnlocked");
+      if (siriusAscendUnlocked === void 0) {
+        return unavailable8("invalid-building", "SiriusAscend.isUnlocked");
+      }
+      return Object.freeze({
+        status: "ready",
+        view: Object.freeze({
+          ...pillar.view,
+          buildings: Object.freeze({ siriusAscendUnlocked })
+        })
+      });
+    } catch {
+      return unavailable8("inaccessible-data");
+    }
+  }
+  function readWitchAscensionEligibilityView(rawSettings, rawGame, rawResources, rawBuildings, demonic, haveTech2) {
+    try {
+      const pillar = readPillarEligibilityView(
+        rawSettings,
+        rawGame,
+        rawResources
+      );
+      if (pillar.status === "unavailable") return pillar;
+      if (!isRecord12(rawGame)) return unavailable8("invalid-game-state");
+      const global = rawGame["global"];
+      const race = isRecord12(global) ? global["race"] : void 0;
+      if (!isRecord12(race)) return unavailable8("invalid-game-state", "race");
+      if (!isRecord12(rawBuildings)) return unavailable8("invalid-building");
+      const absorptionChamber = readBuilding2(
+        rawBuildings,
+        "PitAbsorptionChamber"
+      );
+      const soulCapacitor = readBuilding2(rawBuildings, "PitSoulCapacitor");
+      const capacitorInstance = soulCapacitor?.["instance"];
+      if (absorptionChamber === void 0 || !finiteNonNegative5(absorptionChamber["count"])) {
+        return unavailable8("invalid-building", "PitAbsorptionChamber.count");
+      }
+      if (!isRecord12(capacitorInstance) || !finiteNonNegative5(capacitorInstance["energy"])) {
+        return unavailable8(
+          "invalid-building",
+          "PitSoulCapacitor.instance.energy"
+        );
+      }
+      let forbiddenLevelFive = false;
+      let dishLevelTwo = false;
+      if (demonic) {
+        const rawForbiddenLevelFive = haveTech2("forbidden", 5);
+        const rawDishLevelTwo = haveTech2("dish", 2);
+        if (typeof rawForbiddenLevelFive !== "boolean" || typeof rawDishLevelTwo !== "boolean") {
+          return unavailable8("invalid-external-result");
+        }
+        forbiddenLevelFive = rawForbiddenLevelFive;
+        dishLevelTwo = rawDishLevelTwo;
+      }
+      return Object.freeze({
+        status: "ready",
+        view: Object.freeze({
+          ...pillar.view,
+          game: Object.freeze({
+            ...pillar.view.game,
+            fasting: Boolean(race["fasting"])
+          }),
+          buildings: Object.freeze({
+            absorptionChambers: absorptionChamber["count"],
+            soulCapacitorEnergy: capacitorInstance["energy"]
+          }),
+          tech: Object.freeze({ forbiddenLevelFive, dishLevelTwo })
+        })
+      });
+    } catch {
+      return unavailable8("inaccessible-data");
+    }
+  }
   function readGeckEligibilityView(rawSettings, rawBuildings, isAchievementUnlocked3) {
     try {
       if (!isRecord12(rawSettings)) return unavailable8("invalid-settings");
@@ -39384,12 +39470,25 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       return result.status === "ready" ? isApocalypsePrestigeAvailable2(result.view) : false;
     };
     let isAscensionPrestigeAvailable = () => {
-      const result = readPrestigeView();
+      const result = readAscensionEligibilityView(
+        settings,
+        game,
+        resources,
+        buildings
+      );
       return result.status === "ready" ? isAscensionPrestigeAvailable2(result.view) : false;
     };
     let isWitchAscensionPrestigeAvailable = (demonic) => {
-      const result = readPrestigeView();
-      return result.status === "ready" ? isWitchAscensionPrestigeAvailable2(result.view, demonic) : false;
+      const isDemonic = Boolean(demonic);
+      const result = readWitchAscensionEligibilityView(
+        settings,
+        game,
+        resources,
+        buildings,
+        isDemonic,
+        (...args) => haveTech(...args)
+      );
+      return result.status === "ready" ? isWitchAscensionPrestigeAvailable2(result.view, isDemonic) : false;
     };
     let isDemonicPrestigeAvailable = () => {
       const result = readPrestigeView();

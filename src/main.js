@@ -188,10 +188,12 @@ import {
   isWitchAscensionPrestigeAvailable as isWitchAscensionPrestigeAvailablePolicy,
 } from "./domain/prestige-eligibility.ts";
 import {
+  readAscensionEligibilityView,
   readGeckEligibilityView,
   readPillarEligibilityView,
   readPrestigeEligibilityView,
   readPrestigePermissionView,
+  readWitchAscensionEligibilityView,
 } from "./adapters/evolve/prestige-eligibility.ts";
 import { findTechConflict } from "./domain/tech-conflicts.ts";
 import { readTechConflictInput } from "./adapters/evolve/tech-conflicts.ts";
@@ -3210,15 +3212,28 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       : false;
   };
   let isAscensionPrestigeAvailable = () => {
-    const result = readPrestigeView();
+    const result = readAscensionEligibilityView(
+      settings,
+      game,
+      resources,
+      buildings,
+    );
     return result.status === "ready"
       ? isAscensionPrestigeAvailablePolicy(result.view)
       : false;
   };
   let isWitchAscensionPrestigeAvailable = (demonic) => {
-    const result = readPrestigeView();
+    const isDemonic = Boolean(demonic);
+    const result = readWitchAscensionEligibilityView(
+      settings,
+      game,
+      resources,
+      buildings,
+      isDemonic,
+      (...args) => haveTech(...args),
+    );
     return result.status === "ready"
-      ? isWitchAscensionPrestigeAvailablePolicy(result.view, demonic)
+      ? isWitchAscensionPrestigeAvailablePolicy(result.view, isDemonic)
       : false;
   };
   let isDemonicPrestigeAvailable = () => {
