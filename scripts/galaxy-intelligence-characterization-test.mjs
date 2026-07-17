@@ -71,6 +71,7 @@ const game = {
       ocularPowerConfig: { f: true },
     },
     tech: { piracy: 10 },
+    galaxy: { trade: { f0: 0 } },
   },
   actions: {
     galaxy: {
@@ -87,9 +88,26 @@ const game = {
   },
 };
 const settings = { fleetChthonianLoses: "ignore" };
+const poly = { galaxyOffers: [{ buy: { res: "Bolognium" } }] };
+let resourcesUseful = true;
+const resources = Object.fromEntries(
+  [
+    "Adamantite",
+    "Bolognium",
+    "Deuterium",
+    "Iridium",
+    "Knowledge",
+    "Neutronium",
+    "Orichalcum",
+    "Polymer",
+    "Vitreloy",
+  ].map((id) => [id, { isUseful: () => resourcesUseful, storageRatio: 0.5 }]),
+);
 hooks.setGalaxyIntelligenceTestContext({
   game,
   buildings,
+  resources,
+  poly,
   settings,
   traitVal: (trait, index, operation) => {
     if (trait === "chicken") {
@@ -113,16 +131,32 @@ assert.deepEqual(
   [
     { name: "gxy_stargate", piracy: 1.08, armada: 40, useful: true },
     { name: "gxy_gateway", piracy: 1.08, armada: 25, useful: true },
-    { name: "gxy_gorddon", piracy: 864, armada: 0, useful: true },
+    { name: "gxy_gorddon", piracy: 864, armada: 0, useful: false },
     { name: "gxy_alien1", piracy: 1080, armada: 0, useful: true },
     { name: "gxy_alien2", piracy: 2700, armada: 130, useful: true },
     {
       name: "gxy_chthonian",
       piracy: 8100.000000000001,
       armada: 38,
-      useful: true,
+      useful: false,
     },
   ],
+);
+
+buildings.ChthonianExcavator.stateOnCount = 1;
+resources.Orichalcum.storageRatio = 1;
+assert.equal(
+  intelligence
+    .getGalaxyRegions()
+    .find((region) => region.name === "gxy_chthonian").useful,
+  false,
+);
+resources.Orichalcum.storageRatio = 0.5;
+assert.equal(
+  intelligence
+    .getGalaxyRegions()
+    .find((region) => region.name === "gxy_chthonian").useful,
+  true,
 );
 
 game.global.race = {};
@@ -130,5 +164,30 @@ buildings.ChthonianMission = mission(false);
 buildings.Alien2Mission = mission(true);
 assert.equal(intelligence.getPiracyMultiplier(), 1);
 assert.equal(intelligence.galaxyAssaultPending(), true);
+
+resourcesUseful = false;
+assert.deepEqual(
+  [...intelligence.getGalaxyRegions()].map(({ name, useful }) => ({
+    name,
+    useful,
+  })),
+  [
+    { name: "gxy_stargate", useful: false },
+    { name: "gxy_gateway", useful: false },
+    { name: "gxy_gorddon", useful: false },
+    { name: "gxy_alien1", useful: false },
+    { name: "gxy_alien2", useful: false },
+    { name: "gxy_chthonian", useful: false },
+  ],
+);
+
+resources.Bolognium = { isUseful: () => true, storageRatio: 0.5 };
+game.global.galaxy.trade.f0 = 1;
+assert.equal(
+  intelligence
+    .getGalaxyRegions()
+    .find((region) => region.name === "gxy_gorddon").useful,
+  true,
+);
 
 console.log("Galaxy intelligence bundled characterization tests passed");

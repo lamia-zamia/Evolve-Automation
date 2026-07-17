@@ -5620,13 +5620,62 @@
     return { getGovName: getGovName2, getGovPower: getGovPower2 };
   }
 
+  // src/domain/combat/galaxy-piracy.ts
+  function anyUseful(demand, resourceIds) {
+    return resourceIds.some((resourceId) => demand[resourceId]);
+  }
+  function decideGalaxyPiracyProtection(input) {
+    const { producers, usefulResources } = input;
+    const gxy_gateway = producers.bologniumShip && usefulResources.Bolognium;
+    const gxy_gorddon = input.gorddonTradeTargetsUsefulResource || producers.gorddonSymposium && usefulResources.Knowledge;
+    const gxy_alien1 = producers.alien1VitreloyPlant && usefulResources.Vitreloy;
+    const gxy_alien2 = producers.alien2ArmedMiner && anyUseful(usefulResources, ["Adamantite", "Bolognium", "Iridium"]) || producers.alien2Scavenger && usefulResources.Knowledge;
+    const gxy_chthonian = producers.chthonianExcavator && usefulResources.Orichalcum;
+    const gxy_stargate = gxy_gateway || gxy_gorddon || gxy_alien1 || gxy_alien2 || gxy_chthonian;
+    return {
+      gxy_stargate,
+      gxy_gateway,
+      gxy_gorddon,
+      gxy_alien1,
+      gxy_alien2,
+      gxy_chthonian
+    };
+  }
+
   // src/game/galaxy-intelligence.ts
   function createGalaxyIntelligence({
     getGame,
     getBuildings,
+    getResources,
+    getGalaxyOffers,
     getSettings,
     getTraitVal
   }) {
+    const piracyResources = [
+      "Adamantite",
+      "Bolognium",
+      "Iridium",
+      "Knowledge",
+      "Orichalcum",
+      "Vitreloy"
+    ];
+    function resourceBenefitsFromPiracy(resourceId) {
+      const resource = getResources()[resourceId];
+      if (resource?.isUseful() !== true) {
+        return false;
+      }
+      return resourceId === "Knowledge" || Number.isFinite(resource.storageRatio) && resource.storageRatio < 0.99;
+    }
+    function gorddonTradeTargetsUsefulResource() {
+      const trade = getGame().global.galaxy?.trade;
+      if (trade === void 0) {
+        return false;
+      }
+      return getGalaxyOffers().some((offer, index) => {
+        const activeRoutes = trade[`f${index}`];
+        return typeof activeRoutes === "number" && activeRoutes > 0 && resourceBenefitsFromPiracy(offer.buy.res);
+      });
+    }
     function getGalaxyCombatShipPower2() {
       const buildings2 = getBuildings();
       const gateway = getGame().actions.galaxy.gxy_gateway;
@@ -5645,42 +5694,60 @@
       const game2 = getGame();
       const buildings2 = getBuildings();
       const instinct = game2.global.race["instinct"];
+      const usefulResources = Object.fromEntries(
+        piracyResources.map((resourceId) => [
+          resourceId,
+          resourceBenefitsFromPiracy(resourceId)
+        ])
+      );
+      const protection = decideGalaxyPiracyProtection({
+        producers: {
+          bologniumShip: buildings2.BologniumShip.stateOnCount > 0,
+          gorddonSymposium: buildings2.GorddonSymposium.stateOnCount > 0,
+          alien1VitreloyPlant: buildings2.Alien1VitreloyPlant.stateOnCount > 0,
+          alien2ArmedMiner: buildings2.Alien2ArmedMiner.stateOnCount > 0,
+          alien2Scavenger: buildings2.Alien2Scavenger.stateOnCount > 0,
+          chthonianExcavator: buildings2.ChthonianExcavator.stateOnCount > 0
+        },
+        usefulResources,
+        gorddonTradeTargetsUsefulResource: gorddonTradeTargetsUsefulResource()
+      });
       const allRegions = [
         {
           name: "gxy_stargate",
           piracy: (instinct ? 0.09 : 0.1) * game2.global.tech.piracy,
           armada: buildings2.StargateDefensePlatform.stateOnCount * 20,
-          useful: true
+          useful: protection.gxy_stargate
         },
         {
           name: "gxy_gateway",
           piracy: (instinct ? 0.09 : 0.1) * game2.global.tech.piracy,
           armada: buildings2.GatewayStarbase.stateOnCount * 25,
-          useful: buildings2.BologniumShip.stateOnCount > 0
+          useful: protection.gxy_gateway
         },
         {
           name: "gxy_gorddon",
           piracy: instinct ? 720 : 800,
           armada: 0,
-          useful: buildings2.GorddonFreighter.stateOnCount > 0 || buildings2.Alien1SuperFreighter.stateOnCount > 0 || buildings2.GorddonSymposium.stateOnCount > 0
+          useful: protection.gxy_gorddon
         },
         {
           name: "gxy_alien1",
           piracy: instinct ? 900 : 1e3,
           armada: 0,
-          useful: buildings2.Alien1VitreloyPlant.stateOnCount > 0
+          useful: protection.gxy_alien1
         },
         {
           name: "gxy_alien2",
           piracy: instinct ? 2250 : 2500,
           armada: buildings2.Alien2Foothold.stateOnCount * 50 + buildings2.Alien2ArmedMiner.stateOnCount * game2.actions.galaxy.gxy_alien2.armed_miner.ship.rating(),
-          useful: buildings2.Alien2Scavenger.stateOnCount > 0 || buildings2.Alien2ArmedMiner.stateOnCount > 0
+          useful: protection.gxy_alien2
         },
         {
           name: "gxy_chthonian",
           piracy: instinct ? 7e3 : 7500,
           armada: buildings2.ChthonianMineLayer.stateOnCount * game2.actions.galaxy.gxy_chthonian.minelayer.ship.rating() + buildings2.ChthonianRaider.stateOnCount * game2.actions.galaxy.gxy_chthonian.raider.ship.rating(),
-          useful: buildings2.ChthonianExcavator.stateOnCount > 0 || buildings2.ChthonianRaider.stateOnCount > 0
+          useful: protection.gxy_chthonian
         }
       ];
       const piracyMultiplier = getPiracyMultiplier2();
@@ -28647,8 +28714,8 @@
       addSettingsToggle2(
         currentNode,
         "fleetCrewReclaim",
-        "Reclaim crews of surplus ships",
-        "Power down combat ships which are not needed to fully supress piracy, releasing their crews back to the workforce. Ships are powered back up when coverage requires them. Inactive while fleet is being accumulated for an assault mission. Surplus ships won't be parked at Gorddon for the Symposium bonus while this is enabled."
+        "Crew combat ships only when useful",
+        "Power combat ships only when reducing piracy improves a resource or knowledge output the automation currently needs, and release all other crews back to the workforce. Active trade routes are protected only while their purchased resource is useful. Inactive while fleet is being accumulated for an assault mission. Surplus ships won't be parked at Gorddon for the Symposium bonus while this is enabled."
       );
       addSettingsNumber2(
         currentNode,
@@ -36191,6 +36258,8 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     } = createGalaxyIntelligence({
       getGame: () => game,
       getBuildings: () => buildings,
+      getResources: () => resources,
+      getGalaxyOffers: () => poly.galaxyOffers,
       getSettings: () => settings,
       getTraitVal: () => traitVal
     });
@@ -38035,6 +38104,8 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         setGalaxyIntelligenceTestContext(context) {
           game = context.game;
           buildings = context.buildings;
+          resources = context.resources;
+          poly = context.poly;
           settings = context.settings;
           traitVal = context.traitVal;
         }

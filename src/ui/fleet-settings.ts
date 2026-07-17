@@ -224,8 +224,8 @@ export function createFleetSettings({
     addSettingsToggle(
       currentNode,
       "fleetCrewReclaim",
-      "Reclaim crews of surplus ships",
-      "Power down combat ships which are not needed to fully supress piracy, releasing their crews back to the workforce. Ships are powered back up when coverage requires them. Inactive while fleet is being accumulated for an assault mission. Surplus ships won't be parked at Gorddon for the Symposium bonus while this is enabled.",
+      "Crew combat ships only when useful",
+      "Power combat ships only when reducing piracy improves a resource or knowledge output the automation currently needs, and release all other crews back to the workforce. Active trade routes are protected only while their purchased resource is useful. Inactive while fleet is being accumulated for an assault mission. Surplus ships won't be parked at Gorddon for the Symposium bonus while this is enabled.",
     );
     addSettingsNumber(
       currentNode,

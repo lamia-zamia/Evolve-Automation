@@ -1,3 +1,8 @@
+import {
+  decideGalaxyPiracyProtection,
+  type GalaxyPiracyResourceId,
+} from "../domain/combat/galaxy-piracy.ts";
+
 type CountBuilding = { count: number };
 type ActiveBuilding = { stateOnCount: number };
 type MissionBuilding = { isUnlocked: () => boolean };
@@ -14,8 +19,6 @@ type GalaxyBuildings = {
   StargateDefensePlatform: ActiveBuilding;
   GatewayStarbase: ActiveBuilding;
   BologniumShip: ActiveBuilding;
-  GorddonFreighter: ActiveBuilding;
-  Alien1SuperFreighter: ActiveBuilding;
   GorddonSymposium: ActiveBuilding;
   Alien1VitreloyPlant: ActiveBuilding;
   Alien2Foothold: ActiveBuilding;
@@ -34,6 +37,7 @@ type GalaxyGame = {
       [key: string]: unknown;
     };
     tech: { piracy: number };
+    galaxy?: { trade?: Readonly<Record<string, unknown>> };
   };
   actions: {
     galaxy: {
@@ -50,9 +54,15 @@ type GalaxyGame = {
   };
 };
 
+type UsefulResource = { isUseful: () => boolean; storageRatio: number };
+type GalaxyResources = Readonly<Record<string, UsefulResource | undefined>>;
+type GalaxyTradeOffer = { readonly buy: { readonly res: string } };
+
 type GalaxyIntelligenceDependencies = {
   getGame: () => GalaxyGame;
   getBuildings: () => GalaxyBuildings;
+  getResources: () => GalaxyResources;
+  getGalaxyOffers: () => readonly GalaxyTradeOffer[];
   getSettings: () => { fleetChthonianLoses: string };
   getTraitVal: () => (
     trait: string,
@@ -64,9 +74,48 @@ type GalaxyIntelligenceDependencies = {
 export function createGalaxyIntelligence({
   getGame,
   getBuildings,
+  getResources,
+  getGalaxyOffers,
   getSettings,
   getTraitVal,
 }: GalaxyIntelligenceDependencies) {
+  const piracyResources: readonly GalaxyPiracyResourceId[] = [
+    "Adamantite",
+    "Bolognium",
+    "Iridium",
+    "Knowledge",
+    "Orichalcum",
+    "Vitreloy",
+  ];
+
+  function resourceBenefitsFromPiracy(resourceId: string): boolean {
+    const resource = getResources()[resourceId];
+    if (resource?.isUseful() !== true) {
+      return false;
+    }
+    // Knowledge production expands capacity. Material production needs storage headroom;
+    // isUseful() alone can remain true at cap when a target demands more than can be stored.
+    return (
+      resourceId === "Knowledge" ||
+      (Number.isFinite(resource.storageRatio) && resource.storageRatio < 0.99)
+    );
+  }
+
+  function gorddonTradeTargetsUsefulResource(): boolean {
+    const trade = getGame().global.galaxy?.trade;
+    if (trade === undefined) {
+      return false;
+    }
+    return getGalaxyOffers().some((offer, index) => {
+      const activeRoutes = trade[`f${index}`];
+      return (
+        typeof activeRoutes === "number" &&
+        activeRoutes > 0 &&
+        resourceBenefitsFromPiracy(offer.buy.res)
+      );
+    });
+  }
+
   function getGalaxyCombatShipPower() {
     const buildings = getBuildings();
     const gateway = getGame().actions.galaxy.gxy_gateway;
@@ -101,38 +150,54 @@ export function createGalaxyIntelligence({
     );
   }
 
-  // Andromeda regions with piracy (already multiplied) and their static, ship-independent defenses
+  // Andromeda regions with piracy (already multiplied), static defenses, and whether reducing
+  // piracy improves an output the current automation cycle needs.
   function getGalaxyRegions() {
     const game = getGame();
     const buildings = getBuildings();
     const instinct = game.global.race["instinct"];
+    const usefulResources = Object.fromEntries(
+      piracyResources.map((resourceId) => [
+        resourceId,
+        resourceBenefitsFromPiracy(resourceId),
+      ]),
+    ) as Record<GalaxyPiracyResourceId, boolean>;
+    const protection = decideGalaxyPiracyProtection({
+      producers: {
+        bologniumShip: buildings.BologniumShip.stateOnCount > 0,
+        gorddonSymposium: buildings.GorddonSymposium.stateOnCount > 0,
+        alien1VitreloyPlant: buildings.Alien1VitreloyPlant.stateOnCount > 0,
+        alien2ArmedMiner: buildings.Alien2ArmedMiner.stateOnCount > 0,
+        alien2Scavenger: buildings.Alien2Scavenger.stateOnCount > 0,
+        chthonianExcavator: buildings.ChthonianExcavator.stateOnCount > 0,
+      },
+      usefulResources,
+      gorddonTradeTargetsUsefulResource: gorddonTradeTargetsUsefulResource(),
+    });
     const allRegions = [
       {
         name: "gxy_stargate",
         piracy: (instinct ? 0.09 : 0.1) * game.global.tech.piracy,
         armada: buildings.StargateDefensePlatform.stateOnCount * 20,
-        useful: true,
+        useful: protection.gxy_stargate,
       },
       {
         name: "gxy_gateway",
         piracy: (instinct ? 0.09 : 0.1) * game.global.tech.piracy,
         armada: buildings.GatewayStarbase.stateOnCount * 25,
-        useful: buildings.BologniumShip.stateOnCount > 0,
+        useful: protection.gxy_gateway,
       },
       {
         name: "gxy_gorddon",
         piracy: instinct ? 720 : 800,
         armada: 0,
-        useful:
-          buildings.GorddonFreighter.stateOnCount > 0 ||
-          buildings.Alien1SuperFreighter.stateOnCount > 0 ||
-          buildings.GorddonSymposium.stateOnCount > 0,
+        useful: protection.gxy_gorddon,
       },
       {
         name: "gxy_alien1",
         piracy: instinct ? 900 : 1000,
         armada: 0,
-        useful: buildings.Alien1VitreloyPlant.stateOnCount > 0,
+        useful: protection.gxy_alien1,
       },
       {
         name: "gxy_alien2",
@@ -141,9 +206,7 @@ export function createGalaxyIntelligence({
           buildings.Alien2Foothold.stateOnCount * 50 +
           buildings.Alien2ArmedMiner.stateOnCount *
             game.actions.galaxy.gxy_alien2.armed_miner.ship.rating(),
-        useful:
-          buildings.Alien2Scavenger.stateOnCount > 0 ||
-          buildings.Alien2ArmedMiner.stateOnCount > 0,
+        useful: protection.gxy_alien2,
       },
       {
         name: "gxy_chthonian",
@@ -153,9 +216,7 @@ export function createGalaxyIntelligence({
             game.actions.galaxy.gxy_chthonian.minelayer.ship.rating() +
           buildings.ChthonianRaider.stateOnCount *
             game.actions.galaxy.gxy_chthonian.raider.ship.rating(),
-        useful:
-          buildings.ChthonianExcavator.stateOnCount > 0 ||
-          buildings.ChthonianRaider.stateOnCount > 0,
+        useful: protection.gxy_chthonian,
       },
     ];
     const piracyMultiplier = getPiracyMultiplier();

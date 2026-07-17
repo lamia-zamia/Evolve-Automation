@@ -45,9 +45,24 @@ let buildings = {
   ChthonianExcavator: active(0),
 };
 let settings = { fleetChthonianLoses: "ignore" };
+const resources = Object.fromEntries(
+  [
+    "Adamantite",
+    "Bolognium",
+    "Deuterium",
+    "Iridium",
+    "Knowledge",
+    "Neutronium",
+    "Orichalcum",
+    "Polymer",
+    "Vitreloy",
+  ].map((id) => [id, { isUseful: () => false }]),
+);
 const intelligence = createGalaxyIntelligence({
   getGame: () => game,
   getBuildings: () => buildings,
+  getResources: () => resources,
+  getGalaxyOffers: () => [],
   getSettings: () => settings,
   getTraitVal: () => () => 1,
 });

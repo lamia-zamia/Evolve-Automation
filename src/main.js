@@ -1531,6 +1531,8 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   } = createGalaxyIntelligence({
     getGame: () => game,
     getBuildings: () => buildings,
+    getResources: () => resources,
+    getGalaxyOffers: () => poly.galaxyOffers,
     getSettings: () => settings,
     getTraitVal: () => traitVal,
   });
@@ -3576,6 +3578,8 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       setGalaxyIntelligenceTestContext(context) {
         game = context.game;
         buildings = context.buildings;
+        resources = context.resources;
+        poly = context.poly;
         settings = context.settings;
         traitVal = context.traitVal;
       },
