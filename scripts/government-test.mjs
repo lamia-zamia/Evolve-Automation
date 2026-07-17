@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 
-import { createAutoGovernment } from "../src/automation/civic/government.ts";
+import { readGovernmentInput } from "../src/adapters/evolve/government.ts";
+import { planGovernment } from "../src/domain/government.ts";
 
+// End-to-end reader + planner + apply, reproducing the legacy autoGovernment
+// scenarios and asserting the same setGovernment / Vue appoint calls.
 function runGovernmentCase({
   guard = false,
   qFactory = true,
@@ -33,22 +36,28 @@ function runGovernmentCase({
     isEnabled: () => true,
     setGovernment: (government) => governmentChanges.push(government),
   };
+  const getVueById = (id) =>
+    id === "candidates"
+      ? { appoint: (candidate) => appointments.push(candidate) }
+      : undefined;
 
-  const autoGovernment = createAutoGovernment({
-    GovernmentManager,
-    getSettings: () => settings,
-    getGame: () => game,
-    guardActive: (setting) => setting === "guardAnarchist" && guard,
-    haveTech: (tech) =>
-      tech === "governor" || (tech === "q_factory" && qFactory),
-    getGovernor: () => currentGovernor,
-    getVueById: (id) =>
-      id === "candidates"
-        ? { appoint: (candidate) => appointments.push(candidate) }
-        : undefined,
-  });
-
-  autoGovernment();
+  const decision = planGovernment(
+    readGovernmentInput({
+      getGovernmentManager: () => GovernmentManager,
+      getSettings: () => settings,
+      getGame: () => game,
+      guardActive: (setting) => setting === "guardAnarchist" && guard,
+      haveTech: (tech) =>
+        tech === "governor" || (tech === "q_factory" && qFactory),
+      getGovernor: () => currentGovernor,
+    }),
+  );
+  if (decision.government !== null) {
+    GovernmentManager.setGovernment(decision.government);
+  }
+  if (decision.appointCandidate !== null) {
+    getVueById("candidates")?.appoint(decision.appointCandidate);
+  }
   return { governmentChanges, appointments };
 }
 
@@ -73,5 +82,69 @@ assert.deepEqual(
   [],
   "an existing governor must not be appointed again",
 );
+
+// Planner unit coverage: interim fallback, no matching candidate, disabled manager.
+assert.deepEqual(
+  planGovernment({
+    isEnabled: true,
+    guardAnarchist: false,
+    haveQFactory: false,
+    haveGovernorTech: true,
+    currentGovernor: "none",
+    govSpace: "federation",
+    govFinal: "none",
+    govInterim: "republic",
+    govGovernor: "scientist",
+    govSpaceUnlocked: true,
+    govFinalUnlocked: false,
+    govInterimUnlocked: true,
+    candidateBackgrounds: ["criminal", "entrepreneur"],
+  }),
+  { government: "republic", appointCandidate: null },
+  "space needs q_factory; final is none so interim wins; no scientist candidate",
+);
+
+assert.deepEqual(
+  planGovernment({
+    isEnabled: false,
+    guardAnarchist: false,
+    haveQFactory: true,
+    haveGovernorTech: false,
+    currentGovernor: "none",
+    govSpace: "federation",
+    govFinal: "democracy",
+    govInterim: "republic",
+    govGovernor: "entrepreneur",
+    govSpaceUnlocked: true,
+    govFinalUnlocked: true,
+    govInterimUnlocked: true,
+    candidateBackgrounds: ["entrepreneur"],
+  }),
+  { government: null, appointCandidate: null },
+  "disabled manager and missing governor tech produce no actions",
+);
+
+// Adapter: absent governor candidates normalize to an empty list (no throw).
+{
+  const input = readGovernmentInput({
+    getGovernmentManager: () => ({
+      Types: {},
+      isEnabled: () => false,
+    }),
+    getSettings: () => ({
+      govSpace: "none",
+      govFinal: "none",
+      govInterim: "none",
+      govGovernor: "none",
+    }),
+    getGame: () => ({ global: { race: {} } }),
+    guardActive: () => false,
+    haveTech: () => false,
+    getGovernor: () => "none",
+  });
+  assert.deepEqual(input.candidateBackgrounds, []);
+  assert.equal(input.govSpaceUnlocked, false);
+  assert.ok(Object.isFrozen(input));
+}
 
 console.log("Government automation regression tests passed");

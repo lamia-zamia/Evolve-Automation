@@ -14243,7 +14243,7 @@
 
   // src/adapters/storage/storage-expansion-settings-reader.ts
   function createStorageExpansionSettingsReader(getSettings) {
-    function readSettings() {
+    function readSettings3() {
       const settings2 = requireRecord(getSettings(), "settings");
       return Object.freeze({
         storageLimitPreMad: requireBoolean(
@@ -14252,7 +14252,7 @@
         )
       });
     }
-    return Object.freeze({ readSettings });
+    return Object.freeze({ readSettings: readSettings3 });
   }
 
   // src/domain/storage-expansion.ts
@@ -14665,125 +14665,371 @@
     });
   }
 
-  // src/planning/demand-prioritization.ts
-  function createDemandPrioritization({
-    getSettings,
-    getState,
-    getResources,
-    getBuildings,
-    getCrafter,
-    getSpyManager,
-    getFleetManagerOuter,
-    getJobManager,
-    getFactoryManager,
-    getIsEarlyGame,
-    isProject,
-    getInflationChallengeAssistActive,
-    getRetirementChallengeAssistActive,
-    getInflationChallengeMoney,
-    getRetirementGraphene,
-    consumptionBalanceTarget
-  }) {
-    function prioritizeDemandedResources2() {
-      const settings2 = getSettings();
-      const state2 = getState();
-      const resources2 = getResources();
-      const buildings2 = getBuildings();
-      let prioritizedTasks = [];
-      if (getInflationChallengeAssistActive()()) {
-        resources2.Money.requestQuantity(getInflationChallengeMoney());
-      }
-      if (getRetirementChallengeAssistActive()()) {
-        resources2.Graphene.requestQuantity(getRetirementGraphene());
-      }
-      if (settings2.prioritizeQueue.includes("req")) {
-        prioritizedTasks.push(...state2.queuedTargets);
-      }
-      if (settings2.prioritizeTriggers.includes("req")) {
-        prioritizedTasks.push(...state2.triggerTargets);
-      }
-      if (settings2.missionRequest) {
-        for (let i = state2.missionBuildingList.length - 1; i >= 0; i--) {
-          const mission = state2.missionBuildingList[i];
-          if (mission.isUnlocked() && mission.autoBuildEnabled && (mission !== buildings2.BlackholeJumpShip || !settings2.prestigeBioseedConstruct || settings2.prestigeType !== "whitehole")) {
-            prioritizedTasks.push(mission);
-          } else if (mission.isComplete()) {
-            state2.missionBuildingList.splice(i, 1);
-          }
-        }
-      }
-      if (prioritizedTasks.length === 0 && (getIsEarlyGame()() ? settings2.researchRequest : settings2.researchRequestSpace)) {
-        prioritizedTasks = state2.unlockedTechs.filter(
-          (technology) => technology.isAffordable(true)
+  // src/adapters/evolve/demand-prioritization.ts
+  function readCosts2(value, path) {
+    if (typeof value !== "object" || value === null) return [];
+    const record = value;
+    const costs = [];
+    for (const key in record) {
+      costs.push(
+        Object.freeze({
+          resourceId: key,
+          amount: requireNumber(record[key], `${path}.${key}`)
+        })
+      );
+    }
+    return costs;
+  }
+  function readProgress(value) {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+  function callBoolean(record, name, path, ...args) {
+    const method = requireFunction(record[name], `${path}.${name}`);
+    return Boolean(Reflect.apply(method, record, args));
+  }
+  function readTarget(raw, path, isProject) {
+    return Object.freeze({
+      costs: Object.freeze(readCosts2(raw["cost"], `${path}.cost`)),
+      isProject: isProject(raw),
+      progress: readProgress(raw["progress"])
+    });
+  }
+  function targetList2(value, path, isProject) {
+    if (!Array.isArray(value)) {
+      throw new TypeError(`${path} must be an array`);
+    }
+    return value.map((entry, index) => {
+      const record = requireRecord(entry, `${path}[${index}]`);
+      return readTarget(record, `${path}[${index}]`, isProject);
+    });
+  }
+  function readMissions(value, blackhole, isProject) {
+    if (!Array.isArray(value)) {
+      throw new TypeError(`state.missionBuildingList must be an array`);
+    }
+    return value.map((entry, index) => {
+      const path = `state.missionBuildingList[${index}]`;
+      const record = requireRecord(entry, path);
+      return Object.freeze({
+        isUnlocked: callBoolean(record, "isUnlocked", path),
+        autoBuildEnabled: Boolean(record["autoBuildEnabled"]),
+        isComplete: callBoolean(record, "isComplete", path),
+        isBlackholeJumpShip: entry === blackhole,
+        target: readTarget(record, path, isProject)
+      });
+    });
+  }
+  function readCrafters(value, resources2) {
+    const crafter2 = requireRecord(value, "crafter");
+    const crafters = [];
+    for (const id in crafter2) {
+      const path = `crafter.${id}`;
+      const entry = requireRecord(crafter2[id], path);
+      const resource = requireRecord(entry["resource"], `${path}.resource`);
+      const cost = requireRecord(resource["cost"], `${path}.resource.cost`);
+      const costs = [];
+      for (const resourceId in cost) {
+        const material = requireRecord(
+          resources2[resourceId],
+          `resources.${resourceId}`
+        );
+        costs.push(
+          Object.freeze({
+            resourceId,
+            amount: requireNumber(
+              cost[resourceId],
+              `${path}.resource.cost.${resourceId}`
+            ),
+            materialMaxQuantity: requireNumber(
+              material["maxQuantity"],
+              `resources.${resourceId}.maxQuantity`
+            )
+          })
         );
       }
-      if (prioritizedTasks.length > 0) {
-        for (let i = 0; i < prioritizedTasks.length; i++) {
-          const demandedObject = prioritizedTasks[i];
-          for (const resourceId in demandedObject.cost) {
-            const resource = resources2[resourceId];
-            let quantity = demandedObject.cost[resourceId];
-            if (isProject(demandedObject) && demandedObject.progress < 99) {
-              quantity *= 2;
-            }
-            resource.requestQuantity(quantity);
-          }
+      crafters.push(
+        Object.freeze({
+          // isDemanded/isUnlocked are always-present Resource methods (legacy `!`).
+          isDemanded: callBoolean(resource, "isDemanded", `${path}.resource`),
+          isUnlocked: callBoolean(resource, "isUnlocked", `${path}.resource`),
+          craftPreserve: requireNumber(
+            resource["craftPreserve"],
+            `${path}.resource.craftPreserve`
+          ),
+          costs: Object.freeze(costs)
+        })
+      );
+    }
+    return crafters;
+  }
+  function readFactoryCosts(value, path) {
+    const list = Array.isArray(value) ? value : [value];
+    return list.map((entry, index) => {
+      const costPath = Array.isArray(value) ? `${path}[${index}]` : path;
+      const cost = requireRecord(entry, costPath);
+      const resource = requireRecord(cost["resource"], `${costPath}.resource`);
+      const resourceId = resource["id"];
+      if (typeof resourceId !== "string") {
+        throw new TypeError(`${costPath}.resource.id must be a string`);
+      }
+      const minRate = cost["minRateOfChange"];
+      return Object.freeze({
+        quantity: requireNumber(cost["quantity"], `${costPath}.quantity`),
+        // Legacy `cost.minRateOfChange ?? 0`.
+        minRateOfChange: minRate == null ? 0 : requireNumber(minRate, `${costPath}.minRateOfChange`),
+        resourceId,
+        resourceMaxQuantity: requireNumber(
+          resource["maxQuantity"],
+          `${costPath}.resource.maxQuantity`
+        )
+      });
+    });
+  }
+  function readFactoryProductions(value) {
+    const productions = requireRecord(value, "FactoryManager.Productions");
+    return Object.values(productions).map((entry, index) => {
+      const path = `FactoryManager.Productions[${index}]`;
+      const production = requireRecord(entry, path);
+      const resource = requireRecord(production["resource"], `${path}.resource`);
+      const weighting = production["weighting"];
+      return Object.freeze({
+        isDemanded: callBoolean(resource, "isDemanded", `${path}.resource`),
+        unlocked: Boolean(production["unlocked"]),
+        enabled: Boolean(production["enabled"]),
+        // Legacy uses `weighting` only as a truthiness gate.
+        weighting: typeof weighting === "number" && Number.isFinite(weighting) ? weighting : 0,
+        costs: Object.freeze(
+          readFactoryCosts(production["cost"], `${path}.cost`)
+        )
+      });
+    });
+  }
+  function readSettings(value) {
+    const settings2 = requireRecord(value, "settings");
+    const string = (name) => {
+      const raw = settings2[name];
+      if (typeof raw !== "string") {
+        throw new TypeError(`settings.${name} must be a string`);
+      }
+      return raw;
+    };
+    return Object.freeze({
+      prioritizeQueue: string("prioritizeQueue"),
+      prioritizeTriggers: string("prioritizeTriggers"),
+      missionRequest: Boolean(settings2["missionRequest"]),
+      prestigeBioseedConstruct: Boolean(settings2["prestigeBioseedConstruct"]),
+      prestigeType: string("prestigeType"),
+      researchRequest: Boolean(settings2["researchRequest"]),
+      researchRequestSpace: Boolean(settings2["researchRequestSpace"]),
+      prioritizeUnify: string("prioritizeUnify"),
+      autoFleet: Boolean(settings2["autoFleet"]),
+      prioritizeOuterFleet: string("prioritizeOuterFleet"),
+      productionFactoryFocusMaterials: Boolean(
+        settings2["productionFactoryFocusMaterials"]
+      ),
+      autoPower: Boolean(settings2["autoPower"]),
+      productionFactoryMinIngredients: requireNumber(
+        settings2["productionFactoryMinIngredients"],
+        "settings.productionFactoryMinIngredients"
+      )
+    });
+  }
+  function readDemandPrioritizationInput(dependencies) {
+    const { isProject } = dependencies;
+    const state2 = requireRecord(dependencies.getState(), "state");
+    const resources2 = requireRecord(dependencies.getResources(), "resources");
+    const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
+    const spyManager = requireRecord(dependencies.getSpyManager(), "SpyManager");
+    const fleet = requireRecord(
+      dependencies.getFleetManagerOuter(),
+      "FleetManagerOuter"
+    );
+    const jobManager = requireRecord(dependencies.getJobManager(), "JobManager");
+    const factoryManager = requireRecord(
+      dependencies.getFactoryManager(),
+      "FactoryManager"
+    );
+    const vitreloy = requireRecord(
+      buildings2["Alien1VitreloyPlant"],
+      "buildings.Alien1VitreloyPlant"
+    );
+    const craftingMax = requireFunction(
+      jobManager["craftingMax"],
+      "JobManager.craftingMax"
+    );
+    const skilledServantsMax = requireFunction(
+      jobManager["skilledServantsMax"],
+      "JobManager.skilledServantsMax"
+    );
+    const maxOperating = requireFunction(
+      factoryManager["maxOperating"],
+      "FactoryManager.maxOperating"
+    );
+    const spyPurchaseMoney = requireNumber(
+      spyManager["purchaseMoney"],
+      "SpyManager.purchaseMoney"
+    );
+    return Object.freeze({
+      settings: readSettings(dependencies.getSettings()),
+      isEarlyGame: dependencies.getIsEarlyGame(),
+      consumptionBalanceTarget: dependencies.consumptionBalanceTarget,
+      inflationMoney: dependencies.isInflationAssistActive() ? requireNumber(
+        dependencies.getInflationChallengeMoney(),
+        "inflation challenge money"
+      ) : null,
+      retirementGraphene: dependencies.isRetirementAssistActive() ? requireNumber(
+        dependencies.getRetirementGraphene(),
+        "retirement graphene"
+      ) : null,
+      queuedTargets: Object.freeze(
+        targetList2(state2["queuedTargets"], "state.queuedTargets", isProject)
+      ),
+      triggerTargets: Object.freeze(
+        targetList2(state2["triggerTargets"], "state.triggerTargets", isProject)
+      ),
+      missions: Object.freeze(
+        readMissions(
+          state2["missionBuildingList"],
+          buildings2["BlackholeJumpShip"],
+          isProject
+        )
+      ),
+      unlockedTechs: Object.freeze(readTechs(state2["unlockedTechs"], isProject)),
+      spyPurchaseMoney,
+      fleet: Object.freeze({
+        nextShipAffordable: Boolean(fleet["nextShipAffordable"]),
+        nextShipCost: Object.freeze(
+          readCosts2(fleet["nextShipCost"], "FleetManagerOuter.nextShipCost")
+        )
+      }),
+      availableCrafters: requireNumber(
+        Reflect.apply(craftingMax, jobManager, []),
+        "JobManager.craftingMax()"
+      ) + requireNumber(
+        Reflect.apply(skilledServantsMax, jobManager, []),
+        "JobManager.skilledServantsMax()"
+      ),
+      crafters: Object.freeze(readCrafters(dependencies.getCrafter(), resources2)),
+      vitreloyPlant: Object.freeze({
+        autoStateEnabled: requireBoolean(
+          vitreloy["autoStateEnabled"],
+          "buildings.Alien1VitreloyPlant.autoStateEnabled"
+        ),
+        count: requireNumber(
+          vitreloy["count"],
+          "buildings.Alien1VitreloyPlant.count"
+        ),
+        stateOnCount: requireNumber(
+          vitreloy["stateOnCount"],
+          "buildings.Alien1VitreloyPlant.stateOnCount"
+        )
+      }),
+      factoryCount: requireNumber(
+        Reflect.apply(maxOperating, factoryManager, []),
+        "FactoryManager.maxOperating()"
+      ),
+      factoryProductions: Object.freeze(
+        readFactoryProductions(factoryManager["Productions"])
+      )
+    });
+  }
+  function readTechs(value, isProject) {
+    if (!Array.isArray(value)) {
+      throw new TypeError(`state.unlockedTechs must be an array`);
+    }
+    return value.map((entry, index) => {
+      const path = `state.unlockedTechs[${index}]`;
+      const record = requireRecord(entry, path);
+      return Object.freeze({
+        isAffordable: callBoolean(record, "isAffordable", path, true),
+        target: readTarget(record, path, isProject)
+      });
+    });
+  }
+
+  // src/domain/demand-prioritization.ts
+  function projectDoubles(target) {
+    return target.isProject && target.progress !== null && target.progress < 99;
+  }
+  function planDemandPrioritization(input) {
+    const { settings: settings2, consumptionBalanceTarget: balance } = input;
+    const requests = [];
+    const removedMissionIndices = [];
+    const request = (resourceId, amount) => {
+      requests.push({ resourceId, amount });
+    };
+    if (input.inflationMoney !== null) {
+      request("Money", input.inflationMoney);
+    }
+    if (input.retirementGraphene !== null) {
+      request("Graphene", input.retirementGraphene);
+    }
+    let prioritizedTasks = [];
+    if (settings2.prioritizeQueue.includes("req")) {
+      prioritizedTasks.push(...input.queuedTargets);
+    }
+    if (settings2.prioritizeTriggers.includes("req")) {
+      prioritizedTasks.push(...input.triggerTargets);
+    }
+    if (settings2.missionRequest) {
+      for (let i = input.missions.length - 1; i >= 0; i--) {
+        const mission = input.missions[i];
+        if (mission === void 0) continue;
+        if (mission.isUnlocked && mission.autoBuildEnabled && (!mission.isBlackholeJumpShip || !settings2.prestigeBioseedConstruct || settings2.prestigeType !== "whitehole")) {
+          prioritizedTasks.push(mission.target);
+        } else if (mission.isComplete) {
+          removedMissionIndices.push(i);
         }
-      }
-      const spyManager = getSpyManager();
-      if (spyManager.purchaseMoney && settings2.prioritizeUnify.includes("req")) {
-        resources2.Money.requestQuantity(spyManager.purchaseMoney);
-      }
-      const fleetManagerOuter = getFleetManagerOuter();
-      if (settings2.autoFleet && fleetManagerOuter.nextShipAffordable && settings2.prioritizeOuterFleet.includes("req")) {
-        for (const resourceId in fleetManagerOuter.nextShipCost) {
-          resources2[resourceId].requestQuantity(
-            fleetManagerOuter.nextShipCost[resourceId]
-          );
-        }
-      }
-      const jobManager = getJobManager();
-      const availableCrafters = jobManager.craftingMax() + jobManager.skilledServantsMax();
-      const crafter2 = getCrafter();
-      for (const crafterId in crafter2) {
-        const resource = crafter2[crafterId].resource;
-        if ((settings2.productionFactoryFocusMaterials || resource.isDemanded()) && resource.isUnlocked()) {
-          for (const resourceId in resource.cost) {
-            const material = resources2[resourceId];
-            const minExpected = material.maxQuantity * resource.craftPreserve + availableCrafters * (1 / 140) * consumptionBalanceTarget * resource.cost[resourceId];
-            material.requestQuantity(minExpected);
-          }
-        }
-      }
-      const prioritizeCosts = (costs, multiplier = 1, storageThreshold = 0) => {
-        const costList = Array.isArray(costs) ? costs : [costs];
-        costList.forEach((cost) => {
-          const request = cost.quantity * multiplier + (cost.minRateOfChange ?? 0) + storageThreshold * cost.resource.maxQuantity;
-          cost.resource.requestQuantity(request);
-        });
-      };
-      const vitreloyPlant = buildings2.Alien1VitreloyPlant;
-      const vitPlantCount = settings2.autoPower && vitreloyPlant.autoStateEnabled ? vitreloyPlant.count : vitreloyPlant.stateOnCount;
-      if (vitPlantCount > 0) {
-        resources2.Stanene.requestQuantity(
-          vitPlantCount * consumptionBalanceTarget * 100
-        );
-      }
-      const factoryManager = getFactoryManager();
-      const factoryCount = factoryManager.maxOperating();
-      if (factoryCount > 0) {
-        Object.values(factoryManager.Productions).forEach((production) => {
-          if ((settings2.productionFactoryFocusMaterials || production.resource.isDemanded()) && production.unlocked && production.enabled && production.weighting) {
-            prioritizeCosts(
-              production.cost,
-              factoryCount * consumptionBalanceTarget,
-              settings2.productionFactoryMinIngredients
-            );
-          }
-        });
       }
     }
-    return { prioritizeDemandedResources: prioritizeDemandedResources2 };
+    if (prioritizedTasks.length === 0 && (input.isEarlyGame ? settings2.researchRequest : settings2.researchRequestSpace)) {
+      prioritizedTasks = input.unlockedTechs.filter((tech) => tech.isAffordable).map((tech) => tech.target);
+    }
+    for (const task of prioritizedTasks) {
+      const multiplier = projectDoubles(task) ? 2 : 1;
+      for (const cost of task.costs) {
+        request(cost.resourceId, cost.amount * multiplier);
+      }
+    }
+    if (input.spyPurchaseMoney && settings2.prioritizeUnify.includes("req")) {
+      request("Money", input.spyPurchaseMoney);
+    }
+    if (settings2.autoFleet && input.fleet.nextShipAffordable && settings2.prioritizeOuterFleet.includes("req")) {
+      for (const cost of input.fleet.nextShipCost) {
+        request(cost.resourceId, cost.amount);
+      }
+    }
+    for (const crafter2 of input.crafters) {
+      if ((settings2.productionFactoryFocusMaterials || crafter2.isDemanded) && crafter2.isUnlocked) {
+        for (const cost of crafter2.costs) {
+          const minExpected = cost.materialMaxQuantity * crafter2.craftPreserve + input.availableCrafters * (1 / 140) * balance * cost.amount;
+          request(cost.resourceId, minExpected);
+        }
+      }
+    }
+    const { vitreloyPlant } = input;
+    const vitPlantCount = settings2.autoPower && vitreloyPlant.autoStateEnabled ? vitreloyPlant.count : vitreloyPlant.stateOnCount;
+    if (vitPlantCount > 0) {
+      request("Stanene", vitPlantCount * balance * 100);
+    }
+    if (input.factoryCount > 0) {
+      const multiplier = input.factoryCount * balance;
+      const storageThreshold = settings2.productionFactoryMinIngredients;
+      for (const production of input.factoryProductions) {
+        if ((settings2.productionFactoryFocusMaterials || production.isDemanded) && production.unlocked && production.enabled && production.weighting) {
+          for (const cost of production.costs) {
+            request(
+              cost.resourceId,
+              cost.quantity * multiplier + cost.minRateOfChange + storageThreshold * cost.resourceMaxQuantity
+            );
+          }
+        }
+      }
+    }
+    return Object.freeze({
+      requests: Object.freeze(requests.map((entry) => Object.freeze(entry))),
+      removedMissionIndices: Object.freeze(removedMissionIndices)
+    });
   }
 
   // src/planning/priority-targets.ts
@@ -17942,7 +18188,7 @@
     const value = record[field];
     return finiteNonNegative5(value) ? value : void 0;
   }
-  function callBoolean(owner, methodName, ...args) {
+  function callBoolean2(owner, methodName, ...args) {
     const method = owner[methodName];
     if (typeof method !== "function") return void 0;
     const value = method.call(owner, ...args);
@@ -17955,8 +18201,8 @@
   function readTechState(techIds2, id, includeAffordable) {
     const rawTech = techIds2[id];
     if (!isRecord12(rawTech)) return void 0;
-    const unlocked = callBoolean(rawTech, "isUnlocked");
-    const affordable = includeAffordable ? callBoolean(rawTech, "isAffordable") : false;
+    const unlocked = callBoolean2(rawTech, "isUnlocked");
+    const affordable = includeAffordable ? callBoolean2(rawTech, "isAffordable") : false;
     return unlocked === void 0 || affordable === void 0 ? void 0 : Object.freeze({ unlocked, affordable });
   }
   function readPrestigePermissionView(rawSettings, rawGame) {
@@ -18144,7 +18390,7 @@
           return unavailable8("invalid-building", `${id}.count`);
         }
       }
-      const siriusAscendUnlocked = callBoolean(
+      const siriusAscendUnlocked = callBoolean2(
         buildingRecords["SiriusAscend"],
         "isUnlocked"
       );
@@ -19438,186 +19684,323 @@
     };
   }
 
-  // src/planning/trade-routes.ts
-  function createTradeRoutes({
-    getSettings,
-    getGame,
-    getResources,
-    getMarketManager,
-    getGovernor: getGovernor2,
-    inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2
-  }) {
-    function adjustTradeRoutes2() {
-      const settings2 = getSettings();
-      const game2 = getGame();
-      const resources2 = getResources();
-      const MarketManager2 = getMarketManager();
-      let sellWeight = settings2.tradeRouteSellExcess ? (resource) => resource.usefulRatio >= 1 ? resource.tradeSellPrice * 1e3 : resource.usefulRatio : (resource) => resource.storageRatio >= 0.99 ? resource.tradeSellPrice * 1e3 : resource.usefulRatio;
-      let tradableResources = MarketManager2.priorityList.filter(
-        (r) => r.isRoutesUnlocked() && (r.autoTradeBuyEnabled || r.autoTradeSellEnabled)
-      ).sort((a, b) => sellWeight(b) - sellWeight(a));
-      let requiredTradeRoutes = {};
-      let currentMoneyPerSecond = resources2.Money.rateOfChange;
-      let tradeRoutesUsed = 0;
-      let importRouteCap = MarketManager2.getImportRouteCap();
-      let exportRouteCap = MarketManager2.getExportRouteCap();
-      let [maxTradeRoutes, unmanagedTradeRoutes] = MarketManager2.getMaxTradeRoutes();
-      let saveInflationMoney = inflationChallengeShouldSaveMoney2();
-      for (let i = 0; i < tradableResources.length; i++) {
-        let resource = tradableResources[i];
-        if (!resource.autoTradeSellEnabled) {
-          continue;
-        }
-        requiredTradeRoutes[resource.id] = 0;
-        if (tradeRoutesUsed >= maxTradeRoutes || game2.global.race["banana"] && tradeRoutesUsed > 0 || (settings2.tradeRouteSellExcess ? resource.usefulRatio < 1 : resource.storageRatio < 0.99)) {
-          continue;
-        }
-        let routesToAssign = Math.min(
-          exportRouteCap,
-          maxTradeRoutes - tradeRoutesUsed,
-          Math.floor(resource.rateOfChange / resource.tradeRouteQuantity)
-        );
-        if (routesToAssign > 0) {
-          tradeRoutesUsed += routesToAssign;
-          requiredTradeRoutes[resource.id] -= routesToAssign;
-          currentMoneyPerSecond += resource.tradeSellPrice * routesToAssign;
-        }
-      }
-      if (saveInflationMoney) {
-        for (let i = 0; i < tradableResources.length; i++) {
-          let resource = tradableResources[i];
-          if (resource.autoTradeBuyEnabled) {
-            requiredTradeRoutes[resource.id] = requiredTradeRoutes[resource.id] ?? 0;
-          }
-        }
-      }
-      let minimumAllowedMoneyPerSecond = Math.min(
-        resources2.Money.maxQuantity - resources2.Money.currentQuantity,
-        Math.max(
-          settings2.tradeRouteMinimumMoneyPerSecond,
-          settings2.tradeRouteMinimumMoneyPercentage / 100 * currentMoneyPerSecond
-        )
-      );
-      let priorityGroups = {};
-      for (let i = 0; i < tradableResources.length; i++) {
-        let resource = tradableResources[i];
-        if (!resource.autoTradeBuyEnabled) {
-          continue;
-        }
-        requiredTradeRoutes[resource.id] = requiredTradeRoutes[resource.id] ?? 0;
-        if (saveInflationMoney) {
-          continue;
-        }
-        if (resource.autoTradeWeighting <= 0 || (settings2.tradeRouteSellExcess ? resource.usefulRatio > 0.99 : resource.storageRatio > 0.98)) {
-          continue;
-        }
-        let priority = resource.autoTradePriority;
-        if (resource.isDemanded()) {
-          priority = Math.max(priority, 100);
-          if (!resources2.Money.isDemanded()) {
-            minimumAllowedMoneyPerSecond = 0;
-          }
-        } else if (priority < 100 && priority !== -1 && resources2.Money.isDemanded()) {
-          continue;
-        }
-        if (priority !== 0) {
-          priorityGroups[priority] = priorityGroups[priority] ?? [];
-          priorityGroups[priority].push(resource);
-        }
-      }
-      let priorityList = Object.keys(priorityGroups).sort((a, b) => Number(b) - Number(a)).map((key) => priorityGroups[key]);
-      if (priorityGroups["-1"] && priorityList.length > 1) {
-        priorityList.splice(priorityList.indexOf(priorityGroups["-1"], 1));
-        priorityList[0].push(...priorityGroups["-1"]);
-      }
-      let resSorter = (a, b) => requiredTradeRoutes[a.id] / a.autoTradeWeighting - requiredTradeRoutes[b.id] / b.autoTradeWeighting || b.autoTradeWeighting - a.autoTradeWeighting;
-      let remainingRoutes, unassignStep;
-      if (getGovernor2() === "entrepreneur") {
-        remainingRoutes = tradeRoutesUsed - unmanagedTradeRoutes;
-        unassignStep = 2;
-      } else {
-        remainingRoutes = maxTradeRoutes;
-        unassignStep = 1;
-      }
-      outerLoop: for (let i = 0; i < priorityList.length && remainingRoutes > 0; i++) {
-        let trades = priorityList[i].sort(
-          (a, b) => a.autoTradeWeighting - b.autoTradeWeighting
-        );
-        assignLoop: while (trades.length > 0 && remainingRoutes > 0) {
-          let resource = trades.sort(resSorter)[0];
-          if (requiredTradeRoutes[resource.id] >= importRouteCap) {
-            trades.shift();
-            continue;
-          }
-          if (currentMoneyPerSecond - resource.tradeBuyPrice < minimumAllowedMoneyPerSecond) {
-            break outerLoop;
-          }
-          if (tradeRoutesUsed < maxTradeRoutes) {
-            currentMoneyPerSecond -= resource.tradeBuyPrice;
-            tradeRoutesUsed++;
-            remainingRoutes--;
-            requiredTradeRoutes[resource.id]++;
-          } else {
-            for (let otherId in requiredTradeRoutes) {
-              if (requiredTradeRoutes[otherId] === void 0) {
-                continue;
-              }
-              let otherResource = resources2[otherId];
-              let currentRequired = requiredTradeRoutes[otherId];
-              if (currentRequired >= 0 || resource === otherResource) {
-                continue;
-              }
-              if (currentMoneyPerSecond - otherResource.tradeSellPrice - resource.tradeBuyPrice > minimumAllowedMoneyPerSecond && remainingRoutes >= unassignStep) {
-                currentMoneyPerSecond -= otherResource.tradeSellPrice;
-                currentMoneyPerSecond -= resource.tradeBuyPrice;
-                requiredTradeRoutes[otherId]++;
-                requiredTradeRoutes[resource.id]++;
-                remainingRoutes -= unassignStep;
-                continue assignLoop;
-              }
-            }
-            break outerLoop;
-          }
-        }
-      }
-      let adjustmentTradeRoutes = [];
-      for (let i = 0; i < tradableResources.length; i++) {
-        let resource = tradableResources[i];
-        if (requiredTradeRoutes[resource.id] === void 0) {
-          continue;
-        }
-        adjustmentTradeRoutes[i] = requiredTradeRoutes[resource.id] - resource.tradeRoutes;
-        if (requiredTradeRoutes[resource.id] === 0 && resource.tradeRoutes !== 0) {
-          MarketManager2.zeroTradeRoutes(resource);
-          adjustmentTradeRoutes[i] = 0;
-        } else if (adjustmentTradeRoutes[i] > 0 && resource.tradeRoutes < 0) {
-          MarketManager2.addTradeRoutes(resource, adjustmentTradeRoutes[i]);
-          adjustmentTradeRoutes[i] = 0;
-        } else if (adjustmentTradeRoutes[i] < 0 && resource.tradeRoutes > 0) {
-          MarketManager2.removeTradeRoutes(
-            resource,
-            -1 * adjustmentTradeRoutes[i]
-          );
-          adjustmentTradeRoutes[i] = 0;
-        }
-      }
-      for (let i = 0; i < tradableResources.length; i++) {
-        let resource = tradableResources[i];
-        if (requiredTradeRoutes[resource.id] === void 0) {
-          continue;
-        }
-        if (adjustmentTradeRoutes[i] > 0) {
-          MarketManager2.addTradeRoutes(resource, adjustmentTradeRoutes[i]);
-        } else if (adjustmentTradeRoutes[i] < 0) {
-          MarketManager2.removeTradeRoutes(
-            resource,
-            -1 * adjustmentTradeRoutes[i]
-          );
-        }
-      }
-      resources2.Money.rateOfChange = currentMoneyPerSecond;
+  // src/adapters/evolve/trade-routes.ts
+  function callBoolean3(record, name, path) {
+    const method = requireFunction(record[name], `${path}.${name}`);
+    return Boolean(Reflect.apply(method, record, []));
+  }
+  function readResourceView(value, index) {
+    const path = `MarketManager.priorityList[${index}]`;
+    const resource = requireRecord(value, path);
+    const id = resource["id"];
+    if (typeof id !== "string") {
+      throw new TypeError(`${path}.id must be a string`);
     }
-    return { adjustTradeRoutes: adjustTradeRoutes2 };
+    const number = (name) => requireNumber(resource[name], `${path}.${name}`);
+    return Object.freeze({
+      id,
+      tradeRoutes: number("tradeRoutes"),
+      autoTradeBuyEnabled: Boolean(resource["autoTradeBuyEnabled"]),
+      autoTradeSellEnabled: Boolean(resource["autoTradeSellEnabled"]),
+      usefulRatio: number("usefulRatio"),
+      storageRatio: number("storageRatio"),
+      tradeSellPrice: number("tradeSellPrice"),
+      tradeBuyPrice: number("tradeBuyPrice"),
+      rateOfChange: number("rateOfChange"),
+      tradeRouteQuantity: number("tradeRouteQuantity"),
+      autoTradeWeighting: number("autoTradeWeighting"),
+      autoTradePriority: number("autoTradePriority"),
+      isRoutesUnlocked: callBoolean3(resource, "isRoutesUnlocked", path),
+      isDemanded: callBoolean3(resource, "isDemanded", path)
+    });
+  }
+  function readMoney(value) {
+    const money = requireRecord(value, "resources.Money");
+    return Object.freeze({
+      rateOfChange: requireNumber(
+        money["rateOfChange"],
+        "resources.Money.rateOfChange"
+      ),
+      maxQuantity: requireNumber(
+        money["maxQuantity"],
+        "resources.Money.maxQuantity"
+      ),
+      currentQuantity: requireNumber(
+        money["currentQuantity"],
+        "resources.Money.currentQuantity"
+      ),
+      isDemanded: callBoolean3(money, "isDemanded", "resources.Money")
+    });
+  }
+  function readSettings2(value) {
+    const settings2 = requireRecord(value, "settings");
+    return Object.freeze({
+      tradeRouteSellExcess: Boolean(settings2["tradeRouteSellExcess"]),
+      tradeRouteMinimumMoneyPerSecond: requireNumber(
+        settings2["tradeRouteMinimumMoneyPerSecond"],
+        "settings.tradeRouteMinimumMoneyPerSecond"
+      ),
+      tradeRouteMinimumMoneyPercentage: requireNumber(
+        settings2["tradeRouteMinimumMoneyPercentage"],
+        "settings.tradeRouteMinimumMoneyPercentage"
+      )
+    });
+  }
+  function readMaxTradeRoutes(manager) {
+    const getMax = requireFunction(
+      manager["getMaxTradeRoutes"],
+      "MarketManager.getMaxTradeRoutes"
+    );
+    const tuple = Reflect.apply(getMax, manager, []);
+    if (!Array.isArray(tuple)) {
+      throw new TypeError(
+        "MarketManager.getMaxTradeRoutes() must return an array"
+      );
+    }
+    return [
+      requireNumber(tuple[0], "MarketManager.getMaxTradeRoutes()[0]"),
+      requireNumber(tuple[1], "MarketManager.getMaxTradeRoutes()[1]")
+    ];
+  }
+  function callNumber(manager, name) {
+    const method = requireFunction(manager[name], `MarketManager.${name}`);
+    return requireNumber(
+      Reflect.apply(method, manager, []),
+      `MarketManager.${name}()`
+    );
+  }
+  function readTradeRoutesInput(dependencies) {
+    const resources2 = requireRecord(dependencies.getResources(), "resources");
+    const manager = requireRecord(
+      dependencies.getMarketManager(),
+      "MarketManager"
+    );
+    const game2 = requireRecord(dependencies.getGame(), "game");
+    const race = requireRecord(
+      requireRecord(game2["global"], "game.global")["race"],
+      "game.global.race"
+    );
+    const priorityListRaw = manager["priorityList"];
+    if (!Array.isArray(priorityListRaw)) {
+      throw new TypeError("MarketManager.priorityList must be an array");
+    }
+    const [maxTradeRoutes, unmanagedTradeRoutes] = readMaxTradeRoutes(manager);
+    return Object.freeze({
+      settings: readSettings2(dependencies.getSettings()),
+      priorityList: Object.freeze(priorityListRaw.map(readResourceView)),
+      money: readMoney(resources2["Money"]),
+      importRouteCap: callNumber(manager, "getImportRouteCap"),
+      exportRouteCap: callNumber(manager, "getExportRouteCap"),
+      maxTradeRoutes,
+      unmanagedTradeRoutes,
+      isBanana: Boolean(race["banana"]),
+      isEntrepreneur: dependencies.getGovernor() === "entrepreneur",
+      saveInflationMoney: dependencies.shouldSaveInflationMoney()
+    });
+  }
+
+  // src/domain/trade-routes.ts
+  function planTradeRoutes(input) {
+    const { settings: settings2 } = input;
+    const money = input.money;
+    const operations = [];
+    const sellWeight = settings2.tradeRouteSellExcess ? (resource) => resource.usefulRatio >= 1 ? resource.tradeSellPrice * 1e3 : resource.usefulRatio : (resource) => resource.storageRatio >= 0.99 ? resource.tradeSellPrice * 1e3 : resource.usefulRatio;
+    const tradableResources = input.priorityList.filter(
+      (r) => r.isRoutesUnlocked && (r.autoTradeBuyEnabled || r.autoTradeSellEnabled)
+    ).sort((a, b) => sellWeight(b) - sellWeight(a));
+    const requiredTradeRoutes = /* @__PURE__ */ new Map();
+    const viewsById = /* @__PURE__ */ new Map();
+    for (const resource of tradableResources) {
+      viewsById.set(resource.id, resource);
+    }
+    let currentMoneyPerSecond = money.rateOfChange;
+    let tradeRoutesUsed = 0;
+    const importRouteCap = input.importRouteCap;
+    const exportRouteCap = input.exportRouteCap;
+    const maxTradeRoutes = input.maxTradeRoutes;
+    const unmanagedTradeRoutes = input.unmanagedTradeRoutes;
+    const saveInflationMoney = input.saveInflationMoney;
+    for (const resource of tradableResources) {
+      if (!resource.autoTradeSellEnabled) {
+        continue;
+      }
+      requiredTradeRoutes.set(resource.id, 0);
+      if (tradeRoutesUsed >= maxTradeRoutes || input.isBanana && tradeRoutesUsed > 0 || (settings2.tradeRouteSellExcess ? resource.usefulRatio < 1 : resource.storageRatio < 0.99)) {
+        continue;
+      }
+      const routesToAssign = Math.min(
+        exportRouteCap,
+        maxTradeRoutes - tradeRoutesUsed,
+        Math.floor(resource.rateOfChange / resource.tradeRouteQuantity)
+      );
+      if (routesToAssign > 0) {
+        tradeRoutesUsed += routesToAssign;
+        requiredTradeRoutes.set(
+          resource.id,
+          (requiredTradeRoutes.get(resource.id) ?? 0) - routesToAssign
+        );
+        currentMoneyPerSecond += resource.tradeSellPrice * routesToAssign;
+      }
+    }
+    if (saveInflationMoney) {
+      for (const resource of tradableResources) {
+        if (resource.autoTradeBuyEnabled) {
+          requiredTradeRoutes.set(
+            resource.id,
+            requiredTradeRoutes.get(resource.id) ?? 0
+          );
+        }
+      }
+    }
+    let minimumAllowedMoneyPerSecond = Math.min(
+      money.maxQuantity - money.currentQuantity,
+      Math.max(
+        settings2.tradeRouteMinimumMoneyPerSecond,
+        settings2.tradeRouteMinimumMoneyPercentage / 100 * currentMoneyPerSecond
+      )
+    );
+    const priorityGroups = {};
+    for (const resource of tradableResources) {
+      if (!resource.autoTradeBuyEnabled) {
+        continue;
+      }
+      requiredTradeRoutes.set(
+        resource.id,
+        requiredTradeRoutes.get(resource.id) ?? 0
+      );
+      if (saveInflationMoney) {
+        continue;
+      }
+      if (resource.autoTradeWeighting <= 0 || (settings2.tradeRouteSellExcess ? resource.usefulRatio > 0.99 : resource.storageRatio > 0.98)) {
+        continue;
+      }
+      let priority = resource.autoTradePriority;
+      if (resource.isDemanded) {
+        priority = Math.max(priority, 100);
+        if (!money.isDemanded) {
+          minimumAllowedMoneyPerSecond = 0;
+        }
+      } else if (priority < 100 && priority !== -1 && money.isDemanded) {
+        continue;
+      }
+      if (priority !== 0) {
+        const group = priorityGroups[priority] ?? [];
+        priorityGroups[priority] = group;
+        group.push(resource);
+      }
+    }
+    const priorityList = Object.keys(priorityGroups).sort((a, b) => Number(b) - Number(a)).map((key) => priorityGroups[key]);
+    const negativeGroup = priorityGroups["-1"];
+    if (negativeGroup && priorityList.length > 1) {
+      priorityList.splice(priorityList.indexOf(negativeGroup, 1));
+      priorityList[0].push(...negativeGroup);
+    }
+    const required = (id) => requiredTradeRoutes.get(id) ?? 0;
+    const resSorter = (a, b) => required(a.id) / a.autoTradeWeighting - required(b.id) / b.autoTradeWeighting || b.autoTradeWeighting - a.autoTradeWeighting;
+    let remainingRoutes;
+    let unassignStep;
+    if (input.isEntrepreneur) {
+      remainingRoutes = tradeRoutesUsed - unmanagedTradeRoutes;
+      unassignStep = 2;
+    } else {
+      remainingRoutes = maxTradeRoutes;
+      unassignStep = 1;
+    }
+    outerLoop: for (let i = 0; i < priorityList.length && remainingRoutes > 0; i++) {
+      const trades = priorityList[i].sort(
+        (a, b) => a.autoTradeWeighting - b.autoTradeWeighting
+      );
+      assignLoop: while (trades.length > 0 && remainingRoutes > 0) {
+        const resource = trades.sort(resSorter)[0];
+        if (required(resource.id) >= importRouteCap) {
+          trades.shift();
+          continue;
+        }
+        if (currentMoneyPerSecond - resource.tradeBuyPrice < minimumAllowedMoneyPerSecond) {
+          break outerLoop;
+        }
+        if (tradeRoutesUsed < maxTradeRoutes) {
+          currentMoneyPerSecond -= resource.tradeBuyPrice;
+          tradeRoutesUsed++;
+          remainingRoutes--;
+          requiredTradeRoutes.set(resource.id, required(resource.id) + 1);
+        } else {
+          let continued = false;
+          for (const otherId of requiredTradeRoutes.keys()) {
+            const currentRequired = requiredTradeRoutes.get(otherId);
+            if (currentRequired === void 0) {
+              continue;
+            }
+            const otherResource = viewsById.get(otherId);
+            if (currentRequired >= 0 || resource === otherResource) {
+              continue;
+            }
+            if (currentMoneyPerSecond - otherResource.tradeSellPrice - resource.tradeBuyPrice > minimumAllowedMoneyPerSecond && remainingRoutes >= unassignStep) {
+              currentMoneyPerSecond -= otherResource.tradeSellPrice;
+              currentMoneyPerSecond -= resource.tradeBuyPrice;
+              requiredTradeRoutes.set(otherId, required(otherId) + 1);
+              requiredTradeRoutes.set(resource.id, required(resource.id) + 1);
+              remainingRoutes -= unassignStep;
+              continued = true;
+              break;
+            }
+          }
+          if (continued) {
+            continue assignLoop;
+          }
+          break outerLoop;
+        }
+      }
+    }
+    const adjustmentTradeRoutes = [];
+    tradableResources.forEach((resource, i) => {
+      if (!requiredTradeRoutes.has(resource.id)) {
+        return;
+      }
+      const adjustment = required(resource.id) - resource.tradeRoutes;
+      adjustmentTradeRoutes[i] = adjustment;
+      if (required(resource.id) === 0 && resource.tradeRoutes !== 0) {
+        operations.push({ kind: "zero", resourceId: resource.id });
+        adjustmentTradeRoutes[i] = 0;
+      } else if (adjustment > 0 && resource.tradeRoutes < 0) {
+        operations.push({
+          kind: "add",
+          resourceId: resource.id,
+          count: adjustment
+        });
+        adjustmentTradeRoutes[i] = 0;
+      } else if (adjustment < 0 && resource.tradeRoutes > 0) {
+        operations.push({
+          kind: "remove",
+          resourceId: resource.id,
+          count: -1 * adjustment
+        });
+        adjustmentTradeRoutes[i] = 0;
+      }
+    });
+    tradableResources.forEach((resource, i) => {
+      if (!requiredTradeRoutes.has(resource.id)) {
+        return;
+      }
+      const adjustment = adjustmentTradeRoutes[i];
+      if (adjustment !== void 0 && adjustment > 0) {
+        operations.push({
+          kind: "add",
+          resourceId: resource.id,
+          count: adjustment
+        });
+      } else if (adjustment !== void 0 && adjustment < 0) {
+        operations.push({
+          kind: "remove",
+          resourceId: resource.id,
+          count: -1 * adjustment
+        });
+      }
+    });
+    return Object.freeze({
+      operations: Object.freeze(operations.map((op) => Object.freeze(op))),
+      moneyRate: currentMoneyPerSecond
+    });
   }
 
   // src/automation/combat/hell.ts
@@ -19791,38 +20174,111 @@
     };
   }
 
-  // src/automation/civic/government.ts
-  function createAutoGovernment({
-    GovernmentManager: GovernmentManager2,
-    getSettings,
-    getGame,
-    guardActive: guardActive2,
-    haveTech: haveTech2,
-    getGovernor: getGovernor2,
-    getVueById: getVueById2
-  }) {
-    return function autoGovernment2() {
-      const settings2 = getSettings();
-      const game2 = getGame();
-      if (GovernmentManager2.isEnabled() && !guardActive2("guardAnarchist")) {
-        if (settings2.govSpace !== "none" && haveTech2("q_factory") && GovernmentManager2.Types[settings2.govSpace].isUnlocked()) {
-          GovernmentManager2.setGovernment(settings2.govSpace);
-        } else if (settings2.govFinal !== "none" && GovernmentManager2.Types[settings2.govFinal].isUnlocked()) {
-          GovernmentManager2.setGovernment(settings2.govFinal);
-        } else if (settings2.govInterim !== "none" && GovernmentManager2.Types[settings2.govInterim].isUnlocked()) {
-          GovernmentManager2.setGovernment(settings2.govInterim);
+  // src/adapters/evolve/government.ts
+  function governmentUnlocked(types, type, path) {
+    if (type === "none") {
+      return false;
+    }
+    const typesRecord = requireRecord(types, `${path}.Types`);
+    const entry = requireRecord(typesRecord[type], `${path}.Types.${type}`);
+    const isUnlocked = requireFunction(
+      entry["isUnlocked"],
+      `${path}.Types.${type}.isUnlocked`
+    );
+    return Boolean(Reflect.apply(isUnlocked, entry, []));
+  }
+  function readString(record, key) {
+    const value = record[key];
+    if (typeof value !== "string") {
+      throw new TypeError(`settings.${key} must be a string`);
+    }
+    return value;
+  }
+  function readCandidateBackgrounds(game2) {
+    const global = requireRecord(game2["global"], "game.global");
+    const race = requireRecord(global["race"], "game.global.race");
+    const governor = race["governor"];
+    if (typeof governor !== "object" || governor === null) {
+      return [];
+    }
+    const candidates = governor["candidates"];
+    if (!Array.isArray(candidates)) {
+      return [];
+    }
+    return candidates.map((candidate, index) => {
+      const record = requireRecord(
+        candidate,
+        `game.global.race.governor.candidates[${index}]`
+      );
+      const bg = record["bg"];
+      return typeof bg === "string" ? bg : "";
+    });
+  }
+  function readGovernmentInput(dependencies) {
+    const manager = requireRecord(
+      dependencies.getGovernmentManager(),
+      "GovernmentManager"
+    );
+    const settings2 = requireRecord(dependencies.getSettings(), "settings");
+    const game2 = requireRecord(dependencies.getGame(), "game");
+    const isEnabled = requireFunction(
+      manager["isEnabled"],
+      "GovernmentManager.isEnabled"
+    );
+    const govSpace = readString(settings2, "govSpace");
+    const govFinal = readString(settings2, "govFinal");
+    const govInterim = readString(settings2, "govInterim");
+    return Object.freeze({
+      isEnabled: Boolean(Reflect.apply(isEnabled, manager, [])),
+      guardAnarchist: dependencies.guardActive("guardAnarchist"),
+      haveQFactory: dependencies.haveTech("q_factory"),
+      haveGovernorTech: dependencies.haveTech("governor"),
+      currentGovernor: dependencies.getGovernor(),
+      govSpace,
+      govFinal,
+      govInterim,
+      govGovernor: readString(settings2, "govGovernor"),
+      govSpaceUnlocked: governmentUnlocked(
+        manager["Types"],
+        govSpace,
+        "GovernmentManager"
+      ),
+      govFinalUnlocked: governmentUnlocked(
+        manager["Types"],
+        govFinal,
+        "GovernmentManager"
+      ),
+      govInterimUnlocked: governmentUnlocked(
+        manager["Types"],
+        govInterim,
+        "GovernmentManager"
+      ),
+      candidateBackgrounds: Object.freeze(readCandidateBackgrounds(game2))
+    });
+  }
+
+  // src/domain/government.ts
+  function planGovernment(input) {
+    let government = null;
+    if (input.isEnabled && !input.guardAnarchist) {
+      if (input.govSpace !== "none" && input.haveQFactory && input.govSpaceUnlocked) {
+        government = input.govSpace;
+      } else if (input.govFinal !== "none" && input.govFinalUnlocked) {
+        government = input.govFinal;
+      } else if (input.govInterim !== "none" && input.govInterimUnlocked) {
+        government = input.govInterim;
+      }
+    }
+    let appointCandidate = null;
+    if (input.haveGovernorTech && input.govGovernor !== "none" && input.currentGovernor === "none") {
+      for (let i = 0; i < input.candidateBackgrounds.length; i++) {
+        if (input.candidateBackgrounds[i] === input.govGovernor) {
+          appointCandidate = i;
+          break;
         }
       }
-      if (haveTech2("governor") && settings2.govGovernor !== "none" && getGovernor2() === "none") {
-        let candidates = game2.global.race.governor?.candidates ?? [];
-        for (let i = 0; i < candidates.length; i++) {
-          if (candidates[i].bg === settings2.govGovernor) {
-            getVueById2("candidates")?.appoint(i);
-            break;
-          }
-        }
-      }
-    };
+    }
+    return Object.freeze({ government, appointCandidate });
   }
 
   // src/automation/combat/battle.ts
@@ -20276,7 +20732,7 @@
 
   // src/adapters/storage/tax-settings-reader.ts
   function createTaxSettingsReader(getSettings) {
-    function readSettings() {
+    function readSettings3() {
       const settings2 = requireRecord(getSettings(), "settings");
       return Object.freeze({
         requestedRate: requireNumber(
@@ -20305,7 +20761,7 @@
         )
       });
     }
-    return Object.freeze({ readSettings });
+    return Object.freeze({ readSettings: readSettings3 });
   }
 
   // src/bootstrap/tax.ts
@@ -20590,64 +21046,202 @@
     };
   }
 
-  // src/automation/economy/alchemy.ts
-  function createAutoAlchemy({
-    AlchemyManager: AlchemyManager2,
-    getResources,
-    getSettings,
-    getGame,
-    getAchievementStar: getAchievementStar2
-  }) {
-    return function autoAlchemy2() {
-      const resources2 = getResources();
-      const settings2 = getSettings();
-      const game2 = getGame();
-      let m = AlchemyManager2;
-      if (!m.isUnlocked()) {
-        return;
-      }
-      let fullList = m.managedPriorityList();
-      let adjustAlchemy = Object.fromEntries(
-        fullList.map((res) => [res.id, m.currentCount(res.id) * -1])
+  // src/adapters/evolve/alchemy.ts
+  function callNumber2(record, name, ...args) {
+    const method = requireFunction(record[name], `AlchemyManager.${name}`);
+    return requireNumber(
+      Reflect.apply(method, record, args),
+      `AlchemyManager.${name}()`
+    );
+  }
+  function callBoolean4(record, name, path) {
+    const method = requireFunction(record[name], `${path}.${name}`);
+    return Boolean(Reflect.apply(method, record, []));
+  }
+  function readResources2(manager) {
+    const list = requireFunction(
+      manager["managedPriorityList"],
+      "AlchemyManager.managedPriorityList"
+    );
+    const priorityList = Reflect.apply(list, manager, []);
+    if (!Array.isArray(priorityList)) {
+      throw new TypeError(
+        "AlchemyManager.managedPriorityList() must return an array"
       );
-      if (!resources2.Crystal.isDemanded()) {
-        let activeList = fullList.filter(
-          (res) => m.resWeighting(res.id) > 0 && res.isUseful()
-        );
-        let totalWeigthing = 0, currentTransmute = 0;
-        for (let res of activeList) {
-          totalWeigthing += m.resWeighting(res.id);
-          currentTransmute += m.currentCount(res.id);
-        }
-        let manaAvailable = (currentTransmute + resources2.Mana.rateOfChange) * (!settings2.autoPylon && resources2.Mana.storageRatio > 0.99 ? 1 : settings2.magicAlchemyManaUse);
-        let crystalAvailable = currentTransmute * 0.15 + resources2.Crystal.currentQuantity + resources2.Crystal.rateOfChange;
-        let maxTransmute = Math.floor(
-          Math.min(manaAvailable, crystalAvailable * (1 / 0.15))
-        );
-        activeList.forEach(
-          (res) => adjustAlchemy[res.id] += Math.floor(
-            maxTransmute * (m.resWeighting(res.id) / totalWeigthing)
-          )
+    }
+    return priorityList.map((entry, index) => {
+      const path = `AlchemyManager.managedPriorityList()[${index}]`;
+      const res = requireRecord(entry, path);
+      const id = res["id"];
+      if (typeof id !== "string") {
+        throw new TypeError(`${path}.id must be a string`);
+      }
+      const instance = res["instance"];
+      return Object.freeze({
+        id,
+        currentCount: callNumber2(manager, "currentCount", id),
+        weighting: callNumber2(manager, "resWeighting", id),
+        isUseful: callBoolean4(res, "isUseful", path),
+        transmuteTier: callNumber2(manager, "transmuteTier", res),
+        isBasic: Boolean(
+          typeof instance === "object" && instance !== null ? instance["basic"] : false
+        )
+      });
+    });
+  }
+  function techLevel(game2, name) {
+    const global = requireRecord(game2["global"], "game.global");
+    const tech = requireRecord(global["tech"], "game.global.tech");
+    const value = tech[name];
+    return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  }
+  function readAlchemyInput(dependencies) {
+    const manager = requireRecord(
+      dependencies.getAlchemyManager(),
+      "AlchemyManager"
+    );
+    if (!callBoolean4(manager, "isUnlocked", "AlchemyManager")) {
+      return Object.freeze({
+        unlocked: false,
+        crystalDemanded: false,
+        manaRateOfChange: 0,
+        manaStorageRatio: 0,
+        manaCurrentQuantity: 0,
+        crystalCurrentQuantity: 0,
+        crystalRateOfChange: 0,
+        autoPylon: false,
+        magicAlchemyManaUse: 0,
+        magicFullmetalHelper: false,
+        universeMagic: false,
+        alchemyTech: 0,
+        fullmetalStar: 0,
+        achievementLevel: 0,
+        resources: Object.freeze([])
+      });
+    }
+    const settings2 = requireRecord(dependencies.getSettings(), "settings");
+    const game2 = requireRecord(dependencies.getGame(), "game");
+    const resourcesRecord = requireRecord(
+      dependencies.getResources(),
+      "resources"
+    );
+    const mana = requireRecord(resourcesRecord["Mana"], "resources.Mana");
+    const crystal = requireRecord(
+      resourcesRecord["Crystal"],
+      "resources.Crystal"
+    );
+    const race = requireRecord(
+      requireRecord(game2["global"], "game.global")["race"],
+      "game.global.race"
+    );
+    const alevel = requireFunction(game2["alevel"], "game.alevel");
+    return Object.freeze({
+      unlocked: true,
+      crystalDemanded: callBoolean4(crystal, "isDemanded", "resources.Crystal"),
+      manaRateOfChange: requireNumber(
+        mana["rateOfChange"],
+        "resources.Mana.rateOfChange"
+      ),
+      manaStorageRatio: requireNumber(
+        mana["storageRatio"],
+        "resources.Mana.storageRatio"
+      ),
+      manaCurrentQuantity: requireNumber(
+        mana["currentQuantity"],
+        "resources.Mana.currentQuantity"
+      ),
+      crystalCurrentQuantity: requireNumber(
+        crystal["currentQuantity"],
+        "resources.Crystal.currentQuantity"
+      ),
+      crystalRateOfChange: requireNumber(
+        crystal["rateOfChange"],
+        "resources.Crystal.rateOfChange"
+      ),
+      autoPylon: Boolean(settings2["autoPylon"]),
+      magicAlchemyManaUse: requireNumber(
+        settings2["magicAlchemyManaUse"],
+        "settings.magicAlchemyManaUse"
+      ),
+      magicFullmetalHelper: Boolean(settings2["magicFullmetalHelper"]),
+      universeMagic: race["universe"] === "magic",
+      alchemyTech: techLevel(game2, "alchemy"),
+      fullmetalStar: requireNumber(
+        dependencies.getAchievementStar("fullmetal"),
+        "fullmetal achievement star"
+      ),
+      achievementLevel: requireNumber(
+        Reflect.apply(alevel, game2, []),
+        "game.alevel()"
+      ),
+      resources: Object.freeze(readResources2(manager))
+    });
+  }
+
+  // src/domain/alchemy.ts
+  var EMPTY = Object.freeze({
+    decrease: Object.freeze([]),
+    increase: Object.freeze([])
+  });
+  function planAlchemy(input) {
+    if (!input.unlocked) {
+      return EMPTY;
+    }
+    const adjust = /* @__PURE__ */ new Map();
+    for (const res of input.resources) {
+      adjust.set(res.id, res.currentCount * -1);
+    }
+    if (!input.crystalDemanded) {
+      const activeList = input.resources.filter(
+        (res) => res.weighting > 0 && res.isUseful
+      );
+      let totalWeighting = 0;
+      let currentTransmute = 0;
+      for (const res of activeList) {
+        totalWeighting += res.weighting;
+        currentTransmute += res.currentCount;
+      }
+      const manaAvailable = (currentTransmute + input.manaRateOfChange) * (!input.autoPylon && input.manaStorageRatio > 0.99 ? 1 : input.magicAlchemyManaUse);
+      const crystalAvailable = currentTransmute * 0.15 + input.crystalCurrentQuantity + input.crystalRateOfChange;
+      const maxTransmute = Math.floor(
+        Math.min(manaAvailable, crystalAvailable * (1 / 0.15))
+      );
+      for (const res of activeList) {
+        adjust.set(
+          res.id,
+          (adjust.get(res.id) ?? 0) + Math.floor(maxTransmute * (res.weighting / totalWeighting))
         );
       }
-      if (settings2.magicFullmetalHelper && game2.global.race.universe === "magic" && game2.global.tech.alchemy >= 2 && getAchievementStar2("fullmetal") < game2.alevel() && resources2.Mana.currentQuantity >= 1 && resources2.Crystal.currentQuantity >= 0.15) {
-        let fullmetalResource = fullList.find(
-          (res) => m.transmuteTier(res) > 1 && !res.instance?.basic
+    }
+    if (input.magicFullmetalHelper && input.universeMagic && input.alchemyTech >= 2 && input.fullmetalStar < input.achievementLevel && input.manaCurrentQuantity >= 1 && input.crystalCurrentQuantity >= 0.15) {
+      const fullmetal = input.resources.find(
+        (res) => res.transmuteTier > 1 && !res.isBasic
+      );
+      if (fullmetal) {
+        adjust.set(
+          fullmetal.id,
+          Math.max(adjust.get(fullmetal.id) ?? 0, 1 - fullmetal.currentCount)
         );
-        if (fullmetalResource) {
-          adjustAlchemy[fullmetalResource.id] = Math.max(
-            adjustAlchemy[fullmetalResource.id],
-            1 - m.currentCount(fullmetalResource.id)
-          );
-        }
       }
-      Object.entries(adjustAlchemy).forEach(
-        ([id, delta]) => delta < 0 && m.transmuteLess(id, delta * -1)
-      );
-      Object.entries(adjustAlchemy).forEach(
-        ([id, delta]) => delta > 0 && m.transmuteMore(id, delta)
-      );
-    };
+    }
+    const decrease = [];
+    const increase = [];
+    for (const res of input.resources) {
+      const delta = adjust.get(res.id) ?? 0;
+      if (delta < 0) {
+        decrease.push(Object.freeze({ id: res.id, count: delta * -1 }));
+      }
+    }
+    for (const res of input.resources) {
+      const delta = adjust.get(res.id) ?? 0;
+      if (delta > 0) {
+        increase.push(Object.freeze({ id: res.id, count: delta }));
+      }
+    }
+    return Object.freeze({
+      decrease: Object.freeze(decrease),
+      increase: Object.freeze(increase)
+    });
   }
 
   // src/automation/economy/pylon.ts
@@ -21074,20 +21668,31 @@
     };
   }
 
-  // src/automation/traits/shapeshift.ts
-  function createAutoShapeshift({
-    getGame,
-    getSettings,
-    getVueById: getVueById2
-  }) {
-    return function autoShapeshift2() {
-      const game2 = getGame();
-      const settings2 = getSettings();
-      if (!game2.global.race["shapeshifter"] || settings2.shifterGenus === "ignore" || game2.global.race.ss_genus === settings2.shifterGenus) {
-        return false;
-      }
-      getVueById2("sshifter")?.setShape(settings2.shifterGenus);
-    };
+  // src/adapters/evolve/shapeshift.ts
+  function readShapeshiftInput(dependencies) {
+    const game2 = requireRecord(dependencies.getGame(), "game");
+    const settings2 = requireRecord(dependencies.getSettings(), "settings");
+    const race = requireRecord(
+      requireRecord(game2["global"], "game.global")["race"],
+      "game.global.race"
+    );
+    const shifterGenus = settings2["shifterGenus"];
+    if (typeof shifterGenus !== "string") {
+      throw new TypeError("settings.shifterGenus must be a string");
+    }
+    return Object.freeze({
+      isShapeshifter: Boolean(race["shapeshifter"]),
+      shifterGenus,
+      currentGenus: race["ss_genus"]
+    });
+  }
+
+  // src/domain/shapeshift.ts
+  function planShapeshift(input) {
+    if (!input.isShapeshifter || input.shifterGenus === "ignore" || input.currentGenus === input.shifterGenus) {
+      return null;
+    }
+    return input.shifterGenus;
   }
 
   // src/automation/traits/wish.ts
@@ -22117,32 +22722,31 @@
     };
   }
 
-  // src/automation/progression/universe-selection.ts
-  function createAutoUniverseSelection({
-    getGame,
-    getSettings,
-    getDocument
-  }) {
-    return function autoUniverseSelection2() {
-      const game2 = getGame();
-      const settings2 = getSettings();
-      const document2 = getDocument();
-      if (!game2.global.race["bigbang"]) {
-        return;
-      }
-      if (game2.global.race.universe !== "bigbang") {
-        return;
-      }
-      if (settings2.userUniverseTargetName === "none") {
-        return;
-      }
-      let action = document2.getElementById(
-        `uni-${settings2.userUniverseTargetName}`
-      );
-      if (action !== null) {
-        action.children[0].click();
-      }
-    };
+  // src/adapters/evolve/universe-selection.ts
+  function readUniverseSelectionInput(dependencies) {
+    const game2 = requireRecord(dependencies.getGame(), "game");
+    const settings2 = requireRecord(dependencies.getSettings(), "settings");
+    const race = requireRecord(
+      requireRecord(game2["global"], "game.global")["race"],
+      "game.global.race"
+    );
+    const targetName = settings2["userUniverseTargetName"];
+    if (typeof targetName !== "string") {
+      throw new TypeError("settings.userUniverseTargetName must be a string");
+    }
+    return Object.freeze({
+      hasBigbang: Boolean(race["bigbang"]),
+      universe: race["universe"],
+      targetName
+    });
+  }
+
+  // src/domain/universe-selection.ts
+  function planUniverseSelection(input) {
+    if (!input.hasBigbang || input.universe !== "bigbang" || input.targetName === "none") {
+      return null;
+    }
+    return input.targetName;
   }
 
   // src/automation/economy/craft.ts
@@ -36202,24 +36806,34 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       state.cheapestTechKnowledge = result.knowledge.cheapestTechKnowledge;
       state.knowledgeRequiredByBuildTargets = result.knowledge.knowledgeRequiredByBuildTargets;
     }
-    const { prioritizeDemandedResources } = createDemandPrioritization({
-      getSettings: () => settings,
-      getState: () => state,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getCrafter: () => crafter,
-      getSpyManager: () => SpyManager,
-      getFleetManagerOuter: () => FleetManagerOuter,
-      getJobManager: () => JobManager,
-      getFactoryManager: () => FactoryManager,
-      getIsEarlyGame: () => isEarlyGame,
-      isProject: (object) => object instanceof Project,
-      getInflationChallengeAssistActive: () => inflationChallengeAssistActive,
-      getRetirementChallengeAssistActive: () => retirementChallengeAssistActive,
-      getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
-      getRetirementGraphene: () => RETIREMENT_PREP.graphene,
-      consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET
-    });
+    function prioritizeDemandedResources() {
+      const result = planDemandPrioritization(
+        readDemandPrioritizationInput({
+          getSettings: () => settings,
+          getState: () => state,
+          getResources: () => resources,
+          getBuildings: () => buildings,
+          getCrafter: () => crafter,
+          getSpyManager: () => SpyManager,
+          getFleetManagerOuter: () => FleetManagerOuter,
+          getJobManager: () => JobManager,
+          getFactoryManager: () => FactoryManager,
+          getIsEarlyGame: () => isEarlyGame(),
+          isProject: (object) => object instanceof Project,
+          isInflationAssistActive: () => inflationChallengeAssistActive(),
+          isRetirementAssistActive: () => retirementChallengeAssistActive(),
+          getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
+          getRetirementGraphene: () => RETIREMENT_PREP.graphene,
+          consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET
+        })
+      );
+      for (const request of result.requests) {
+        resources[request.resourceId].requestQuantity(request.amount);
+      }
+      for (const index of result.removedMissionIndices) {
+        state.missionBuildingList.splice(index, 1);
+      }
+    }
     const {
       makeStateLog,
       loadStateLog,
@@ -37404,11 +38018,20 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getAutoUniverseSelection: () => autoUniverseSelection,
       getAutoPlanetSelection: () => autoPlanetSelection
     });
-    const autoUniverseSelection = createAutoUniverseSelection({
-      getGame: () => game,
-      getSettings: () => settings,
-      getDocument: () => document
-    });
+    const autoUniverseSelection = function autoUniverseSelection2() {
+      const target = planUniverseSelection(
+        readUniverseSelectionInput({
+          getGame: () => game,
+          getSettings: () => settings
+        })
+      );
+      if (target !== null) {
+        const action = document.getElementById(`uni-${target}`);
+        if (action !== null) {
+          action.children[0].click();
+        }
+      }
+    };
     let { generatePlanets } = createPlanetGeneration({
       getGame: () => game,
       getPoly: () => poly,
@@ -37444,15 +38067,24 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getFoundryList: () => foundryList,
       ticksPerSecond
     });
-    const autoGovernment = createAutoGovernment({
-      GovernmentManager,
-      getSettings: () => settings,
-      getGame: () => game,
-      guardActive,
-      haveTech,
-      getGovernor,
-      getVueById
-    });
+    const autoGovernment = function autoGovernment2() {
+      const decision = planGovernment(
+        readGovernmentInput({
+          getGovernmentManager: () => GovernmentManager,
+          getSettings: () => settings,
+          getGame: () => game,
+          guardActive,
+          haveTech,
+          getGovernor
+        })
+      );
+      if (decision.government !== null) {
+        GovernmentManager.setGovernment(decision.government);
+      }
+      if (decision.appointCandidate !== null) {
+        getVueById("candidates")?.appoint(decision.appointCandidate);
+      }
+    };
     const autoMerc = createAutoMerc({
       getWarManager: () => WarManager,
       GameLog,
@@ -37539,13 +38171,23 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const autoAlchemy = createAutoAlchemy({
-      AlchemyManager,
-      getResources: () => resources,
-      getSettings: () => settings,
-      getGame: () => game,
-      getAchievementStar
-    });
+    const autoAlchemy = function autoAlchemy2() {
+      const decision = planAlchemy(
+        readAlchemyInput({
+          getAlchemyManager: () => AlchemyManager,
+          getResources: () => resources,
+          getSettings: () => settings,
+          getGame: () => game,
+          getAchievementStar
+        })
+      );
+      for (const { id, count } of decision.decrease) {
+        AlchemyManager.transmuteLess(id, count);
+      }
+      for (const { id, count } of decision.increase) {
+        AlchemyManager.transmuteMore(id, count);
+      }
+    };
     const autoPylon = createAutoPylon({
       RitualManager,
       getResources: () => resources,
@@ -37753,11 +38395,17 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const autoShapeshift = createAutoShapeshift({
-      getGame: () => game,
-      getSettings: () => settings,
-      getVueById
-    });
+    const autoShapeshift = function autoShapeshift2() {
+      const genus = planShapeshift(
+        readShapeshiftInput({
+          getGame: () => game,
+          getSettings: () => settings
+        })
+      );
+      if (genus !== null) {
+        getVueById("sshifter")?.setShape(genus);
+      }
+    };
     var psychicPowerCost = {
       murder: [10, 8],
       boost: [75, 60],
@@ -38064,14 +38712,29 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    let { adjustTradeRoutes } = createTradeRoutes({
-      getSettings: () => settings,
-      getGame: () => game,
-      getResources: () => resources,
-      getMarketManager: () => MarketManager,
-      getGovernor,
-      inflationChallengeShouldSaveMoney
-    });
+    let adjustTradeRoutes = function adjustTradeRoutes2() {
+      const result = planTradeRoutes(
+        readTradeRoutesInput({
+          getSettings: () => settings,
+          getGame: () => game,
+          getResources: () => resources,
+          getMarketManager: () => MarketManager,
+          getGovernor: () => getGovernor(),
+          shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney()
+        })
+      );
+      for (const operation2 of result.operations) {
+        const resource = resources[operation2.resourceId];
+        if (operation2.kind === "zero") {
+          MarketManager.zeroTradeRoutes(resource);
+        } else if (operation2.kind === "add") {
+          MarketManager.addTradeRoutes(resource, operation2.count);
+        } else {
+          MarketManager.removeTradeRoutes(resource, operation2.count);
+        }
+      }
+      resources.Money.rateOfChange = result.moneyRate;
+    };
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         adjustTradeRoutes,

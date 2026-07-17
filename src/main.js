@@ -91,7 +91,8 @@ import { createBuildPlanner } from "./planning/build-planner.ts";
 import { createStorageExpansion } from "./bootstrap/storage-expansion.ts";
 import { readStorageRequirementsInput } from "./adapters/evolve/storage-requirements.ts";
 import { planStorageRequirements } from "./domain/storage-requirements.ts";
-import { createDemandPrioritization } from "./planning/demand-prioritization.ts";
+import { readDemandPrioritizationInput } from "./adapters/evolve/demand-prioritization.ts";
+import { planDemandPrioritization } from "./domain/demand-prioritization.ts";
 import { createPriorityTargets } from "./planning/priority-targets.ts";
 import { decideEvolutionResult } from "./domain/evolution-result.ts";
 import { readEvolutionResultInput } from "./adapters/evolve/evolution-result.ts";
@@ -197,20 +198,24 @@ import { readTechConflictInput } from "./adapters/evolve/tech-conflicts.ts";
 import { formatTechConflict } from "./application/tech-conflicts.ts";
 import { createBrowserClock } from "./adapters/browser/clock.ts";
 import { createBuildingWeightingPolicy } from "./policies/building-weighting.ts";
-import { createTradeRoutes } from "./planning/trade-routes.ts";
+import { readTradeRoutesInput } from "./adapters/evolve/trade-routes.ts";
+import { planTradeRoutes } from "./domain/trade-routes.ts";
 import { createAutoHell } from "./automation/combat/hell.ts";
-import { createAutoGovernment } from "./automation/civic/government.ts";
+import { readGovernmentInput } from "./adapters/evolve/government.ts";
+import { planGovernment } from "./domain/government.ts";
 import { createAutoBattle } from "./automation/combat/battle.ts";
 import { createTaxAutomation } from "./bootstrap/tax.ts";
 import { createUserscriptEnvironment } from "./adapters/userscript/environment.ts";
 import { createAutoSmelter } from "./automation/economy/smelter.ts";
-import { createAutoAlchemy } from "./automation/economy/alchemy.ts";
+import { readAlchemyInput } from "./adapters/evolve/alchemy.ts";
+import { planAlchemy } from "./domain/alchemy.ts";
 import { createAutoPylon } from "./automation/economy/pylon.ts";
 import { createAutoResourceRatios } from "./automation/economy/resource-ratios.ts";
 import { createAutoFactory } from "./automation/economy/factory.ts";
 import { createAutoMiningDroid } from "./automation/economy/mining-droid.ts";
 import { createAutoGraphenePlant } from "./automation/economy/graphene.ts";
-import { createAutoShapeshift } from "./automation/traits/shapeshift.ts";
+import { readShapeshiftInput } from "./adapters/evolve/shapeshift.ts";
+import { planShapeshift } from "./domain/shapeshift.ts";
 import { createAutoWish } from "./automation/traits/wish.ts";
 import { createAutoGenetics } from "./automation/traits/genetics.ts";
 import { createAutoMerc } from "./automation/combat/mercenary.ts";
@@ -224,7 +229,8 @@ import { createAutoMarket } from "./automation/economy/market.ts";
 import { createAutoGalaxyMarket } from "./automation/economy/galaxy-market.ts";
 import { createAutoGatherResources } from "./automation/economy/gather-resources.ts";
 import { createAutoEvolution } from "./automation/progression/evolution.ts";
-import { createAutoUniverseSelection } from "./automation/progression/universe-selection.ts";
+import { readUniverseSelectionInput } from "./adapters/evolve/universe-selection.ts";
+import { planUniverseSelection } from "./domain/universe-selection.ts";
 import { createAutoCraft } from "./automation/economy/craft.ts";
 import { createAutoSpy } from "./automation/combat/spy.ts";
 import { createAutoPrestige } from "./automation/progression/prestige.ts";
@@ -1473,24 +1479,34 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     state.knowledgeRequiredByBuildTargets =
       result.knowledge.knowledgeRequiredByBuildTargets;
   }
-  const { prioritizeDemandedResources } = createDemandPrioritization({
-    getSettings: () => settings,
-    getState: () => state,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getCrafter: () => crafter,
-    getSpyManager: () => SpyManager,
-    getFleetManagerOuter: () => FleetManagerOuter,
-    getJobManager: () => JobManager,
-    getFactoryManager: () => FactoryManager,
-    getIsEarlyGame: () => isEarlyGame,
-    isProject: (object) => object instanceof Project,
-    getInflationChallengeAssistActive: () => inflationChallengeAssistActive,
-    getRetirementChallengeAssistActive: () => retirementChallengeAssistActive,
-    getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
-    getRetirementGraphene: () => RETIREMENT_PREP.graphene,
-    consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
-  });
+  function prioritizeDemandedResources() {
+    const result = planDemandPrioritization(
+      readDemandPrioritizationInput({
+        getSettings: () => settings,
+        getState: () => state,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getCrafter: () => crafter,
+        getSpyManager: () => SpyManager,
+        getFleetManagerOuter: () => FleetManagerOuter,
+        getJobManager: () => JobManager,
+        getFactoryManager: () => FactoryManager,
+        getIsEarlyGame: () => isEarlyGame(),
+        isProject: (object) => object instanceof Project,
+        isInflationAssistActive: () => inflationChallengeAssistActive(),
+        isRetirementAssistActive: () => retirementChallengeAssistActive(),
+        getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
+        getRetirementGraphene: () => RETIREMENT_PREP.graphene,
+        consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
+      }),
+    );
+    for (const request of result.requests) {
+      resources[request.resourceId].requestQuantity(request.amount);
+    }
+    for (const index of result.removedMissionIndices) {
+      state.missionBuildingList.splice(index, 1);
+    }
+  }
   const {
     makeStateLog,
     loadStateLog,
@@ -2795,11 +2811,20 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getAutoPlanetSelection: () => autoPlanetSelection,
   });
 
-  const autoUniverseSelection = createAutoUniverseSelection({
-    getGame: () => game,
-    getSettings: () => settings,
-    getDocument: () => document,
-  });
+  const autoUniverseSelection = function autoUniverseSelection() {
+    const target = planUniverseSelection(
+      readUniverseSelectionInput({
+        getGame: () => game,
+        getSettings: () => settings,
+      }),
+    );
+    if (target !== null) {
+      const action = document.getElementById(`uni-${target}`);
+      if (action !== null) {
+        action.children[0].click();
+      }
+    }
+  };
 
   // function setPlanet from actions.js
   // Produces same set of planets, accurate for v1.0.29
@@ -2842,15 +2867,24 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     ticksPerSecond,
   });
 
-  const autoGovernment = createAutoGovernment({
-    GovernmentManager,
-    getSettings: () => settings,
-    getGame: () => game,
-    guardActive,
-    haveTech,
-    getGovernor,
-    getVueById,
-  });
+  const autoGovernment = function autoGovernment() {
+    const decision = planGovernment(
+      readGovernmentInput({
+        getGovernmentManager: () => GovernmentManager,
+        getSettings: () => settings,
+        getGame: () => game,
+        guardActive,
+        haveTech,
+        getGovernor,
+      }),
+    );
+    if (decision.government !== null) {
+      GovernmentManager.setGovernment(decision.government);
+    }
+    if (decision.appointCandidate !== null) {
+      getVueById("candidates")?.appoint(decision.appointCandidate);
+    }
+  };
 
   const autoMerc = createAutoMerc({
     getWarManager: () => WarManager,
@@ -2946,13 +2980,23 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const autoAlchemy = createAutoAlchemy({
-    AlchemyManager,
-    getResources: () => resources,
-    getSettings: () => settings,
-    getGame: () => game,
-    getAchievementStar,
-  });
+  const autoAlchemy = function autoAlchemy() {
+    const decision = planAlchemy(
+      readAlchemyInput({
+        getAlchemyManager: () => AlchemyManager,
+        getResources: () => resources,
+        getSettings: () => settings,
+        getGame: () => game,
+        getAchievementStar,
+      }),
+    );
+    for (const { id, count } of decision.decrease) {
+      AlchemyManager.transmuteLess(id, count);
+    }
+    for (const { id, count } of decision.increase) {
+      AlchemyManager.transmuteMore(id, count);
+    }
+  };
 
   const autoPylon = createAutoPylon({
     RitualManager,
@@ -3195,11 +3239,17 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const autoShapeshift = createAutoShapeshift({
-    getGame: () => game,
-    getSettings: () => settings,
-    getVueById,
-  });
+  const autoShapeshift = function autoShapeshift() {
+    const genus = planShapeshift(
+      readShapeshiftInput({
+        getGame: () => game,
+        getSettings: () => settings,
+      }),
+    );
+    if (genus !== null) {
+      getVueById("sshifter")?.setShape(genus);
+    }
+  };
 
   var psychicPowerCost = {
     murder: [10, 8],
@@ -3535,14 +3585,29 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  let { adjustTradeRoutes } = createTradeRoutes({
-    getSettings: () => settings,
-    getGame: () => game,
-    getResources: () => resources,
-    getMarketManager: () => MarketManager,
-    getGovernor,
-    inflationChallengeShouldSaveMoney,
-  });
+  let adjustTradeRoutes = function adjustTradeRoutes() {
+    const result = planTradeRoutes(
+      readTradeRoutesInput({
+        getSettings: () => settings,
+        getGame: () => game,
+        getResources: () => resources,
+        getMarketManager: () => MarketManager,
+        getGovernor: () => getGovernor(),
+        shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney(),
+      }),
+    );
+    for (const operation of result.operations) {
+      const resource = resources[operation.resourceId];
+      if (operation.kind === "zero") {
+        MarketManager.zeroTradeRoutes(resource);
+      } else if (operation.kind === "add") {
+        MarketManager.addTradeRoutes(resource, operation.count);
+      } else {
+        MarketManager.removeTradeRoutes(resource, operation.count);
+      }
+    }
+    resources.Money.rateOfChange = result.moneyRate;
+  };
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
