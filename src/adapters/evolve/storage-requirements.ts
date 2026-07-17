@@ -116,9 +116,10 @@ function readResources(resourcesValue: unknown): StorageResourceState[] {
         // (`settings["sell"+id]` / `["res_sell_r_"+id]`) that are undefined for
         // non-market resources (RNA, DNA, ...). Legacy used them only in
         // `enabled && ratio > 0`, so they are read leniently here. When the
-        // market/trade-routes slice migrates, these should come from a validated
+        // `market` (autoMarket) slice migrates, these should come from a validated
         // market-settings view keyed by sellable-resource id rather than being
-        // coerced per resource at this boundary.
+        // coerced per resource at this boundary. (The trade-routes slice, already
+        // migrated, owns trade-route quantities, not these auto-sell settings.)
         autoSellEnabled: Boolean(resource["autoSellEnabled"]),
         autoSellRatio:
           typeof resource["autoSellRatio"] === "number" &&

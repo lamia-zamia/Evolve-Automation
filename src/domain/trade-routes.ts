@@ -211,6 +211,8 @@ export function planTradeRoutes(
   if (negativeGroup && priorityList.length > 1) {
     // Preserved verbatim: the "1" is indexOf's fromIndex, and splice receives a
     // single argument, so this removes from that index to the end of the list.
+    // Benign in every reachable state but fragile; see the trade-route priority
+    // grouping item in docs/feature-backlog.md before rewriting.
     priorityList.splice(priorityList.indexOf(negativeGroup, 1));
     priorityList[0]!.push(...negativeGroup);
   }

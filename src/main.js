@@ -209,11 +209,22 @@ import { createUserscriptEnvironment } from "./adapters/userscript/environment.t
 import { createAutoSmelter } from "./automation/economy/smelter.ts";
 import { readAlchemyInput } from "./adapters/evolve/alchemy.ts";
 import { planAlchemy } from "./domain/alchemy.ts";
-import { createAutoPylon } from "./automation/economy/pylon.ts";
-import { createAutoResourceRatios } from "./automation/economy/resource-ratios.ts";
+import { readPylonInput } from "./adapters/evolve/pylon.ts";
+import { planPylon } from "./domain/pylon.ts";
+import {
+  readQuarryRatioInput,
+  readMineRatioInput,
+  readExtractorRatioInput,
+} from "./adapters/evolve/resource-ratios.ts";
+import {
+  planQuarryRatio,
+  planMineRatio,
+  planExtractorRatios,
+} from "./domain/resource-ratios.ts";
 import { createAutoFactory } from "./automation/economy/factory.ts";
 import { createAutoMiningDroid } from "./automation/economy/mining-droid.ts";
-import { createAutoGraphenePlant } from "./automation/economy/graphene.ts";
+import { readGrapheneInput } from "./adapters/evolve/graphene.ts";
+import { planGraphene } from "./domain/graphene.ts";
 import { readShapeshiftInput } from "./adapters/evolve/shapeshift.ts";
 import { planShapeshift } from "./domain/shapeshift.ts";
 import { createAutoWish } from "./automation/traits/wish.ts";
@@ -2998,24 +3009,63 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     }
   };
 
-  const autoPylon = createAutoPylon({
-    RitualManager,
-    getResources: () => resources,
-    getSettings: () => settings,
-    getGame: () => game,
-    getJobs: () => jobs,
-    haveTech,
-  });
+  const autoPylon = function autoPylon() {
+    const decision = planPylon(
+      readPylonInput({
+        getRitualManager: () => RitualManager,
+        getResources: () => resources,
+        getSettings: () => settings,
+        getGame: () => game,
+        getJobs: () => jobs,
+        haveTech,
+      }),
+    );
+    if (decision.decrease.length === 0 && decision.increase.length === 0) {
+      return;
+    }
+    const spellsById = {};
+    for (const spell of Object.values(RitualManager.Productions)) {
+      spellsById[spell.id] = spell;
+    }
+    for (const { id, count } of decision.decrease) {
+      RitualManager.decreaseRitual(spellsById[id], count);
+    }
+    for (const { id, count } of decision.increase) {
+      RitualManager.increaseRitual(spellsById[id], count);
+    }
+  };
 
-  const { autoQuarry, autoMine, autoExtractor } = createAutoResourceRatios({
-    QuarryManager,
-    MineManager,
-    ExtractorManager,
+  const resourceRatiosDependencies = {
+    getQuarryManager: () => QuarryManager,
+    getMineManager: () => MineManager,
+    getExtractorManager: () => ExtractorManager,
     getResources: () => resources,
     getSettings: () => settings,
     getBuildings: () => buildings,
     haveTech,
-  });
+  };
+  function autoQuarry() {
+    const delta = planQuarryRatio(
+      readQuarryRatioInput(resourceRatiosDependencies),
+    );
+    if (delta !== null) {
+      QuarryManager.increaseProduction(delta);
+    }
+  }
+  function autoMine() {
+    const delta = planMineRatio(readMineRatioInput(resourceRatiosDependencies));
+    if (delta !== null) {
+      MineManager.increaseProduction(delta);
+    }
+  }
+  function autoExtractor() {
+    const adjustments = planExtractorRatios(
+      readExtractorRatioInput(resourceRatiosDependencies),
+    );
+    for (const { id, delta } of adjustments) {
+      ExtractorManager.increaseProduction(id, delta);
+    }
+  }
 
   const autoSmelter = createAutoSmelter({
     SmelterManager,
@@ -3048,10 +3098,25 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
 
   const autoMiningDroid = createAutoMiningDroid({ DroidManager });
 
-  const autoGraphenePlant = createAutoGraphenePlant({
-    GrapheneManager,
-    getResources: () => resources,
-  });
+  const autoGraphenePlant = function autoGraphenePlant() {
+    const adjustments = planGraphene(
+      readGrapheneInput({
+        getGrapheneManager: () => GrapheneManager,
+        getResources: () => resources,
+        consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
+      }),
+    );
+    for (const { fuelId, delta } of adjustments) {
+      if (delta < 0) {
+        GrapheneManager.decreaseFuel(GrapheneManager.Fuels[fuelId], delta * -1);
+      }
+    }
+    for (const { fuelId, delta } of adjustments) {
+      if (delta > 0) {
+        GrapheneManager.increaseFuel(GrapheneManager.Fuels[fuelId], delta);
+      }
+    }
+  };
 
   // TODO: Allow configuring priorities between eject\supply\nanite
   const autoConsume = createAutoConsume({

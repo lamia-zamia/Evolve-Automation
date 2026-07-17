@@ -14441,9 +14441,10 @@
           // (`settings["sell"+id]` / `["res_sell_r_"+id]`) that are undefined for
           // non-market resources (RNA, DNA, ...). Legacy used them only in
           // `enabled && ratio > 0`, so they are read leniently here. When the
-          // market/trade-routes slice migrates, these should come from a validated
+          // `market` (autoMarket) slice migrates, these should come from a validated
           // market-settings view keyed by sellable-resource id rather than being
-          // coerced per resource at this boundary.
+          // coerced per resource at this boundary. (The trade-routes slice, already
+          // migrated, owns trade-route quantities, not these auto-sell settings.)
           autoSellEnabled: Boolean(resource["autoSellEnabled"]),
           autoSellRatio: typeof resource["autoSellRatio"] === "number" && Number.isFinite(resource["autoSellRatio"]) ? resource["autoSellRatio"] : 0
         })
@@ -21244,137 +21245,368 @@
     });
   }
 
-  // src/automation/economy/pylon.ts
-  function createAutoPylon({
-    RitualManager: RitualManager2,
-    getResources,
-    getSettings,
-    getGame,
-    getJobs,
-    haveTech: haveTech2
-  }) {
-    return function autoPylon2() {
-      const resources2 = getResources();
-      const settings2 = getSettings();
-      const game2 = getGame();
-      const jobs2 = getJobs();
-      let m = RitualManager2;
-      if (!m.initIndustry()) {
+  // src/adapters/evolve/pylon.ts
+  function callBoolean5(record, name, path) {
+    const method = requireFunction(record[name], `${path}.${name}`);
+    return Boolean(Reflect.apply(method, record, []));
+  }
+  function jobCount(jobs2, id) {
+    const job = requireRecord(jobs2[id], `jobs.${id}`);
+    return requireNumber(job["count"], `jobs.${id}.count`);
+  }
+  function readSpells(manager) {
+    const productions = requireRecord(
+      manager["Productions"],
+      "RitualManager.Productions"
+    );
+    const factory = productions["Factory"];
+    const currentSpells = requireFunction(
+      manager["currentSpells"],
+      "RitualManager.currentSpells"
+    );
+    const spells = [];
+    Object.values(productions).forEach((entry, index) => {
+      const path = `RitualManager.Productions[${index}]`;
+      const spell = requireRecord(entry, path);
+      if (!callBoolean5(spell, "isUnlocked", path)) {
         return;
       }
-      let spells = Object.values(m.Productions).filter(
-        (spell) => spell.isUnlocked()
-      );
-      let pylonAdjustments = Object.fromEntries(
-        spells.map((spell) => [spell.id, 0])
-      );
-      let manaToUse = resources2.Mana.rateOfChange * (resources2.Mana.storageRatio > 0.99 ? 1 : settings2.productionRitualManaUse);
-      let usableMana = manaToUse;
-      let maxRituals = settings2.productionRitualSafe && game2.global.race["witch_hunter"] ? jobs2.Priest.count * (haveTech2("roguemagic", 4) ? 4 : 1) : Number.MAX_SAFE_INTEGER;
-      let spellSorter = (a, b) => pylonAdjustments[a.id] / a.weighting - pylonAdjustments[b.id] / b.weighting || b.weighting - a.weighting;
-      let remainingSpells = spells.filter(
-        (spell) => spell.weighting > 0 && (spell !== m.Productions.Factory || jobs2.CementWorker.count > 0)
-      ).sort(spellSorter);
-      spellsLoop: while (remainingSpells.length > 0 && maxRituals > 0) {
-        let spell = remainingSpells.shift();
-        let amount = pylonAdjustments[spell.id];
-        let cost = m.costStep(amount);
-        if (cost <= manaToUse) {
-          pylonAdjustments[spell.id] = amount + 1;
-          manaToUse -= cost;
-          maxRituals--;
-          for (let i = remainingSpells.length - 1; i >= 0; i--) {
-            if (spellSorter(spell, remainingSpells[i]) > 0) {
-              remainingSpells.splice(i + 1, 0, spell);
-              continue spellsLoop;
-            }
-          }
-          remainingSpells.unshift(spell);
-        }
+      const id = spell["id"];
+      if (typeof id !== "string") {
+        throw new TypeError(`${path}.id must be a string`);
       }
-      resources2.Mana.rateOfChange - (usableMana - manaToUse);
-      let pylonDeltas = spells.map(
-        (spell) => pylonAdjustments[spell.id] - m.currentSpells(spell)
+      spells.push(
+        Object.freeze({
+          id,
+          weighting: requireNumber(spell["weighting"], `${path}.weighting`),
+          isFactory: entry === factory,
+          currentSpells: requireNumber(
+            Reflect.apply(currentSpells, manager, [spell]),
+            `RitualManager.currentSpells(${id})`
+          )
+        })
       );
-      spells.forEach(
-        (spell, index) => pylonDeltas[index] < 0 && m.decreaseRitual(spell, pylonDeltas[index] * -1)
-      );
-      spells.forEach(
-        (spell, index) => pylonDeltas[index] > 0 && m.increaseRitual(spell, pylonDeltas[index])
-      );
-    };
+    });
+    return spells;
+  }
+  function readPylonInput(dependencies) {
+    const manager = requireRecord(
+      dependencies.getRitualManager(),
+      "RitualManager"
+    );
+    if (!callBoolean5(manager, "initIndustry", "RitualManager")) {
+      return Object.freeze({
+        initialised: false,
+        manaRateOfChange: 0,
+        manaStorageRatio: 0,
+        ritualManaUse: 0,
+        ritualSafe: false,
+        witchHunter: false,
+        priestCount: 0,
+        haveRoguemagic4: false,
+        cementWorkerCount: 0,
+        spells: Object.freeze([])
+      });
+    }
+    const resources2 = requireRecord(dependencies.getResources(), "resources");
+    const mana = requireRecord(resources2["Mana"], "resources.Mana");
+    const settings2 = requireRecord(dependencies.getSettings(), "settings");
+    const game2 = requireRecord(dependencies.getGame(), "game");
+    const race = requireRecord(
+      requireRecord(game2["global"], "game.global")["race"],
+      "game.global.race"
+    );
+    const jobs2 = requireRecord(dependencies.getJobs(), "jobs");
+    return Object.freeze({
+      initialised: true,
+      manaRateOfChange: requireNumber(
+        mana["rateOfChange"],
+        "resources.Mana.rateOfChange"
+      ),
+      manaStorageRatio: requireNumber(
+        mana["storageRatio"],
+        "resources.Mana.storageRatio"
+      ),
+      ritualManaUse: requireNumber(
+        settings2["productionRitualManaUse"],
+        "settings.productionRitualManaUse"
+      ),
+      ritualSafe: Boolean(settings2["productionRitualSafe"]),
+      witchHunter: Boolean(race["witch_hunter"]),
+      priestCount: jobCount(jobs2, "Priest"),
+      haveRoguemagic4: dependencies.haveTech("roguemagic", 4),
+      cementWorkerCount: jobCount(jobs2, "CementWorker"),
+      spells: Object.freeze(readSpells(manager))
+    });
   }
 
-  // src/automation/economy/resource-ratios.ts
-  function createAutoResourceRatios({
-    QuarryManager: QuarryManager2,
-    MineManager: MineManager2,
-    ExtractorManager: ExtractorManager2,
-    getResources,
-    getSettings,
-    getBuildings,
-    haveTech: haveTech2
-  }) {
-    function autoQuarry2() {
-      const resources2 = getResources();
-      const settings2 = getSettings();
-      const buildings2 = getBuildings();
-      if (!QuarryManager2.initIndustry()) {
-        return;
+  // src/domain/pylon.ts
+  var EMPTY2 = Object.freeze({
+    decrease: Object.freeze([]),
+    increase: Object.freeze([])
+  });
+  function manaCost(level) {
+    return level * (1.0025 ** level - 1);
+  }
+  function costStep(level) {
+    if (level === 0) {
+      return 25e-4;
+    }
+    const cost = manaCost(level);
+    return (cost / level * 1.0025 + 25e-4) * (level + 1) - cost;
+  }
+  function planPylon(input) {
+    if (!input.initialised) {
+      return EMPTY2;
+    }
+    const adjustments = /* @__PURE__ */ new Map();
+    for (const spell of input.spells) {
+      adjustments.set(spell.id, 0);
+    }
+    let manaToUse = input.manaRateOfChange * (input.manaStorageRatio > 0.99 ? 1 : input.ritualManaUse);
+    let maxRituals = input.ritualSafe && input.witchHunter ? input.priestCount * (input.haveRoguemagic4 ? 4 : 1) : Number.MAX_SAFE_INTEGER;
+    const spellSorter = (a, b) => (adjustments.get(a.id) ?? 0) / a.weighting - (adjustments.get(b.id) ?? 0) / b.weighting || b.weighting - a.weighting;
+    const remainingSpells = input.spells.filter(
+      (spell) => spell.weighting > 0 && (!spell.isFactory || input.cementWorkerCount > 0)
+    ).sort(spellSorter);
+    spellsLoop: while (remainingSpells.length > 0 && maxRituals > 0) {
+      const spell = remainingSpells.shift();
+      const amount = adjustments.get(spell.id) ?? 0;
+      const cost = costStep(amount);
+      if (cost <= manaToUse) {
+        adjustments.set(spell.id, amount + 1);
+        manaToUse -= cost;
+        maxRituals--;
+        for (let i = remainingSpells.length - 1; i >= 0; i--) {
+          if (spellSorter(spell, remainingSpells[i]) > 0) {
+            remainingSpells.splice(i + 1, 0, spell);
+            continue spellsLoop;
+          }
+        }
+        remainingSpells.unshift(spell);
       }
-      let chrysotileWeigth = resources2.Chrysotile.isDemanded() ? Number.MAX_SAFE_INTEGER : 100 - resources2.Chrysotile.storageRatio * 100;
-      let stoneWeigth = resources2.Stone.isDemanded() ? Number.MAX_SAFE_INTEGER : 100 - resources2.Stone.storageRatio * 100;
-      if (buildings2.MetalRefinery.count > 0) {
-        stoneWeigth = Math.max(
-          stoneWeigth,
-          resources2.Aluminium.isDemanded() ? Number.MAX_SAFE_INTEGER : 100 - resources2.Aluminium.storageRatio * 100
+    }
+    const decrease = [];
+    const increase = [];
+    for (const spell of input.spells) {
+      const delta = (adjustments.get(spell.id) ?? 0) - spell.currentSpells;
+      if (delta < 0) {
+        decrease.push(Object.freeze({ id: spell.id, count: delta * -1 }));
+      }
+    }
+    for (const spell of input.spells) {
+      const delta = (adjustments.get(spell.id) ?? 0) - spell.currentSpells;
+      if (delta > 0) {
+        increase.push(Object.freeze({ id: spell.id, count: delta }));
+      }
+    }
+    return Object.freeze({
+      decrease: Object.freeze(decrease),
+      increase: Object.freeze(increase)
+    });
+  }
+
+  // src/adapters/evolve/resource-ratios.ts
+  function initIndustry(manager, name) {
+    const init = requireFunction(manager["initIndustry"], `${name}.initIndustry`);
+    return Boolean(Reflect.apply(init, manager, []));
+  }
+  function currentProduction(manager, name, ...args) {
+    const method = requireFunction(
+      manager["currentProduction"],
+      `${name}.currentProduction`
+    );
+    return requireNumber(
+      Reflect.apply(method, manager, args),
+      `${name}.currentProduction()`
+    );
+  }
+  function resourceDemanded(resources2, id) {
+    const resource = requireRecord(resources2[id], `resources.${id}`);
+    const isDemanded = requireFunction(
+      resource["isDemanded"],
+      `resources.${id}.isDemanded`
+    );
+    return Boolean(Reflect.apply(isDemanded, resource, []));
+  }
+  function resourceStorageRatio(resources2, id) {
+    const resource = requireRecord(resources2[id], `resources.${id}`);
+    return requireNumber(
+      resource["storageRatio"],
+      `resources.${id}.storageRatio`
+    );
+  }
+  function settingNumber(settings2, key) {
+    return requireNumber(settings2[key], `settings.${key}`);
+  }
+  function readQuarryRatioInput(dependencies) {
+    const manager = requireRecord(
+      dependencies.getQuarryManager(),
+      "QuarryManager"
+    );
+    if (!initIndustry(manager, "QuarryManager")) {
+      return Object.freeze({
+        initialised: false,
+        currentRatio: 0,
+        chrysotileDemanded: false,
+        chrysotileStorageRatio: 0,
+        stoneDemanded: false,
+        stoneStorageRatio: 0,
+        hasMetalRefinery: false,
+        aluminiumDemanded: false,
+        aluminiumStorageRatio: 0,
+        chrysotileWeight: 0
+      });
+    }
+    const resources2 = requireRecord(dependencies.getResources(), "resources");
+    const settings2 = requireRecord(dependencies.getSettings(), "settings");
+    const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
+    const metalRefinery = requireRecord(
+      buildings2["MetalRefinery"],
+      "buildings.MetalRefinery"
+    );
+    return Object.freeze({
+      initialised: true,
+      currentRatio: currentProduction(manager, "QuarryManager"),
+      chrysotileDemanded: resourceDemanded(resources2, "Chrysotile"),
+      chrysotileStorageRatio: resourceStorageRatio(resources2, "Chrysotile"),
+      stoneDemanded: resourceDemanded(resources2, "Stone"),
+      stoneStorageRatio: resourceStorageRatio(resources2, "Stone"),
+      hasMetalRefinery: requireNumber(metalRefinery["count"], "buildings.MetalRefinery.count") > 0,
+      aluminiumDemanded: resourceDemanded(resources2, "Aluminium"),
+      aluminiumStorageRatio: resourceStorageRatio(resources2, "Aluminium"),
+      chrysotileWeight: settingNumber(settings2, "productionChrysotileWeight")
+    });
+  }
+  function readMineRatioInput(dependencies) {
+    const manager = requireRecord(dependencies.getMineManager(), "MineManager");
+    if (!initIndustry(manager, "MineManager")) {
+      return Object.freeze({
+        initialised: false,
+        currentRatio: 0,
+        adamantiteDemanded: false,
+        adamantiteStorageRatio: 0,
+        aluminiumDemanded: false,
+        aluminiumStorageRatio: 0,
+        adamantiteWeight: 0
+      });
+    }
+    const resources2 = requireRecord(dependencies.getResources(), "resources");
+    const settings2 = requireRecord(dependencies.getSettings(), "settings");
+    return Object.freeze({
+      initialised: true,
+      currentRatio: currentProduction(manager, "MineManager"),
+      adamantiteDemanded: resourceDemanded(resources2, "Adamantite"),
+      adamantiteStorageRatio: resourceStorageRatio(resources2, "Adamantite"),
+      aluminiumDemanded: resourceDemanded(resources2, "Aluminium"),
+      aluminiumStorageRatio: resourceStorageRatio(resources2, "Aluminium"),
+      adamantiteWeight: settingNumber(settings2, "productionAdamantiteWeight")
+    });
+  }
+  function readExtractorRatioInput(dependencies) {
+    const manager = requireRecord(
+      dependencies.getExtractorManager(),
+      "ExtractorManager"
+    );
+    if (!initIndustry(manager, "ExtractorManager")) {
+      return Object.freeze({
+        initialised: false,
+        productions: Object.freeze([])
+      });
+    }
+    const resources2 = requireRecord(dependencies.getResources(), "resources");
+    const settings2 = requireRecord(dependencies.getSettings(), "settings");
+    const specs = [
+      { id: "common", res1: "Iron", res2: "Aluminium" },
+      { id: "uncommon", res1: "Iridium", res2: "Neutronium" }
+    ];
+    if (dependencies.haveTech("tau_roid", 5)) {
+      specs.push({ id: "rare", res1: "Orichalcum", res2: "Elerium" });
+    }
+    const productions = specs.map(
+      (spec) => Object.freeze({
+        id: spec.id,
+        res1Demanded: resourceDemanded(resources2, spec.res1),
+        res1StorageRatio: resourceStorageRatio(resources2, spec.res1),
+        res2Demanded: resourceDemanded(resources2, spec.res2),
+        res2StorageRatio: resourceStorageRatio(resources2, spec.res2),
+        weight: settingNumber(settings2, `productionExtWeight_${spec.id}`),
+        currentRatio: currentProduction(manager, "ExtractorManager", spec.id)
+      })
+    );
+    return Object.freeze({
+      initialised: true,
+      productions: Object.freeze(productions)
+    });
+  }
+
+  // src/domain/resource-ratios.ts
+  var MAX = Number.MAX_SAFE_INTEGER;
+  function fullnessWeight(demanded, storageRatio) {
+    return demanded ? MAX : 100 - storageRatio * 100;
+  }
+  function planQuarryRatio(input) {
+    if (!input.initialised) {
+      return null;
+    }
+    let chrysotileWeigth = fullnessWeight(
+      input.chrysotileDemanded,
+      input.chrysotileStorageRatio
+    );
+    let stoneWeigth = fullnessWeight(
+      input.stoneDemanded,
+      input.stoneStorageRatio
+    );
+    if (input.hasMetalRefinery) {
+      stoneWeigth = Math.max(
+        stoneWeigth,
+        fullnessWeight(input.aluminiumDemanded, input.aluminiumStorageRatio)
+      );
+    }
+    chrysotileWeigth *= input.chrysotileWeight;
+    const newRatio = Math.round(
+      chrysotileWeigth / (chrysotileWeigth + stoneWeigth) * 100
+    );
+    return newRatio - input.currentRatio;
+  }
+  function planMineRatio(input) {
+    if (!input.initialised) {
+      return null;
+    }
+    let adamantiteWeigth = fullnessWeight(
+      input.adamantiteDemanded,
+      input.adamantiteStorageRatio
+    );
+    const aluminiumWeight = fullnessWeight(
+      input.aluminiumDemanded,
+      input.aluminiumStorageRatio
+    );
+    adamantiteWeigth *= input.adamantiteWeight;
+    const newRatio = Math.round(
+      adamantiteWeigth / (adamantiteWeigth + aluminiumWeight) * 100
+    );
+    return newRatio - input.currentRatio;
+  }
+  function planExtractorRatios(input) {
+    if (!input.initialised) {
+      return Object.freeze([]);
+    }
+    return Object.freeze(
+      input.productions.map((prod) => {
+        const res1Weight = fullnessWeight(
+          prod.res1Demanded,
+          prod.res1StorageRatio
         );
-      }
-      chrysotileWeigth *= settings2.productionChrysotileWeight;
-      let currentRatio = QuarryManager2.currentProduction();
-      let newRatio = Math.round(
-        chrysotileWeigth / (chrysotileWeigth + stoneWeigth) * 100
-      );
-      QuarryManager2.increaseProduction(newRatio - currentRatio);
-    }
-    function autoMine2() {
-      const resources2 = getResources();
-      const settings2 = getSettings();
-      if (!MineManager2.initIndustry()) {
-        return;
-      }
-      let adamantiteWeigth = resources2.Adamantite.isDemanded() ? Number.MAX_SAFE_INTEGER : 100 - resources2.Adamantite.storageRatio * 100;
-      let aluminiumWeight = resources2.Aluminium.isDemanded() ? Number.MAX_SAFE_INTEGER : 100 - resources2.Aluminium.storageRatio * 100;
-      adamantiteWeigth *= settings2.productionAdamantiteWeight;
-      let currentRatio = MineManager2.currentProduction();
-      let newRatio = Math.round(
-        adamantiteWeigth / (adamantiteWeigth + aluminiumWeight) * 100
-      );
-      MineManager2.increaseProduction(newRatio - currentRatio);
-    }
-    function autoExtractor2() {
-      const resources2 = getResources();
-      const settings2 = getSettings();
-      if (!ExtractorManager2.initIndustry()) {
-        return;
-      }
-      let productions = [
-        { id: "common", res1: "Iron", res2: "Aluminium" },
-        { id: "uncommon", res1: "Iridium", res2: "Neutronium" }
-      ];
-      if (haveTech2("tau_roid", 5)) {
-        productions.push({ id: "rare", res1: "Orichalcum", res2: "Elerium" });
-      }
-      for (let prod of productions) {
-        let res1Weight = resources2[prod.res1].isDemanded() ? Number.MAX_SAFE_INTEGER : 100 - resources2[prod.res1].storageRatio * 100;
-        let res2Weight = resources2[prod.res2].isDemanded() ? Number.MAX_SAFE_INTEGER : 100 - resources2[prod.res2].storageRatio * 100;
-        res2Weight *= settings2[`productionExtWeight_${prod.id}`];
-        let currentRatio = ExtractorManager2.currentProduction(prod.id);
-        let newRatio = Math.round(res2Weight / (res1Weight + res2Weight) * 100);
-        ExtractorManager2.increaseProduction(prod.id, newRatio - currentRatio);
-      }
-    }
-    return { autoQuarry: autoQuarry2, autoMine: autoMine2, autoExtractor: autoExtractor2 };
+        const res2Weight = fullnessWeight(prod.res2Demanded, prod.res2StorageRatio) * prod.weight;
+        const newRatio = Math.round(
+          res2Weight / (res1Weight + res2Weight) * 100
+        );
+        return Object.freeze({
+          id: prod.id,
+          delta: newRatio - prod.currentRatio
+        });
+      })
+    );
   }
 
   // src/automation/economy/factory.ts
@@ -21618,54 +21850,119 @@
     };
   }
 
-  // src/automation/economy/graphene.ts
-  function createAutoGraphenePlant({
-    GrapheneManager: GrapheneManager2,
-    getResources
-  }) {
-    return function autoGraphenePlant2() {
-      const resources2 = getResources();
-      if (!GrapheneManager2.initIndustry()) {
-        return;
+  // src/adapters/evolve/graphene.ts
+  function callBoolean6(record, name, path) {
+    const method = requireFunction(record[name], `${path}.${name}`);
+    return Boolean(Reflect.apply(method, record, []));
+  }
+  function callNumber3(record, name, path, ...args) {
+    const method = requireFunction(record[name], `${path}.${name}`);
+    return requireNumber(
+      Reflect.apply(method, record, args),
+      `${path}.${name}()`
+    );
+  }
+  function readFuels(manager) {
+    const fuels = requireRecord(manager["Fuels"], "GrapheneManager.Fuels");
+    return Object.values(fuels).map((entry, index) => {
+      const path = `GrapheneManager.Fuels[${index}]`;
+      const fuel = requireRecord(entry, path);
+      const id = fuel["id"];
+      if (typeof id !== "string") {
+        throw new TypeError(`${path}.id must be a string`);
       }
-      let remainingPlants = GrapheneManager2.maxOperating();
-      let fuelAdjust = [];
-      let sortedFuel = Object.values(GrapheneManager2.Fuels).sort(
-        (a, b) => b.cost.resource.storageRatio < 0.995 || a.cost.resource.storageRatio < 0.995 ? b.cost.resource.storageRatio - a.cost.resource.storageRatio : b.cost.resource.rateOfChange - a.cost.resource.rateOfChange
-      );
-      for (let fuel of sortedFuel) {
-        if (remainingPlants === 0) {
-          break;
-        }
-        let resource = fuel.cost.resource;
-        if (!resource.isUnlocked()) {
-          continue;
-        }
-        let currentFuelCount = GrapheneManager2.fueledCount(fuel);
-        let maxFueledForConsumption = remainingPlants;
-        if (!resources2.Graphene.isUseful()) {
-          maxFueledForConsumption = 0;
-        } else if (resource.currentQuantity < maxFueledForConsumption * fuel.cost.quantity * CONSUMPTION_BALANCE_MIN + fuel.cost.minRateOfChange) {
-          let rateOfChange = resource.rateOfChange + fuel.cost.quantity * currentFuelCount - fuel.cost.minRateOfChange;
-          let affordableAmount = Math.floor(rateOfChange / fuel.cost.quantity);
-          maxFueledForConsumption = Math.max(
-            Math.min(maxFueledForConsumption, affordableAmount),
-            0
-          );
-        }
-        let deltaFuel = maxFueledForConsumption - currentFuelCount;
-        if (deltaFuel !== 0) {
-          fuelAdjust.push({ res: fuel, delta: deltaFuel });
-        }
-        remainingPlants -= currentFuelCount + deltaFuel;
+      const cost = requireRecord(fuel["cost"], `${path}.cost`);
+      const resource = requireRecord(cost["resource"], `${path}.cost.resource`);
+      return Object.freeze({
+        id,
+        storageRatio: requireNumber(
+          resource["storageRatio"],
+          `${path}.cost.resource.storageRatio`
+        ),
+        rateOfChange: requireNumber(
+          resource["rateOfChange"],
+          `${path}.cost.resource.rateOfChange`
+        ),
+        currentQuantity: requireNumber(
+          resource["currentQuantity"],
+          `${path}.cost.resource.currentQuantity`
+        ),
+        isUnlocked: callBoolean6(resource, "isUnlocked", `${path}.cost.resource`),
+        costQuantity: requireNumber(cost["quantity"], `${path}.cost.quantity`),
+        costMinRateOfChange: requireNumber(
+          cost["minRateOfChange"],
+          `${path}.cost.minRateOfChange`
+        ),
+        currentFuelCount: callNumber3(
+          manager,
+          "fueledCount",
+          "GrapheneManager",
+          fuel
+        )
+      });
+    });
+  }
+  function readGrapheneInput(dependencies) {
+    const manager = requireRecord(
+      dependencies.getGrapheneManager(),
+      "GrapheneManager"
+    );
+    if (!callBoolean6(manager, "initIndustry", "GrapheneManager")) {
+      return Object.freeze({
+        initialised: false,
+        maxOperating: 0,
+        grapheneUseful: false,
+        consumptionBalanceMin: dependencies.consumptionBalanceMin,
+        fuels: Object.freeze([])
+      });
+    }
+    const resources2 = requireRecord(dependencies.getResources(), "resources");
+    const graphene = requireRecord(resources2["Graphene"], "resources.Graphene");
+    return Object.freeze({
+      initialised: true,
+      maxOperating: callNumber3(manager, "maxOperating", "GrapheneManager"),
+      grapheneUseful: callBoolean6(graphene, "isUseful", "resources.Graphene"),
+      consumptionBalanceMin: dependencies.consumptionBalanceMin,
+      fuels: Object.freeze(readFuels(manager))
+    });
+  }
+
+  // src/domain/graphene.ts
+  function planGraphene(input) {
+    if (!input.initialised) {
+      return Object.freeze([]);
+    }
+    let remainingPlants = input.maxOperating;
+    const fuelAdjust = [];
+    const sortedFuel = [...input.fuels].sort(
+      (a, b) => b.storageRatio < 0.995 || a.storageRatio < 0.995 ? b.storageRatio - a.storageRatio : b.rateOfChange - a.rateOfChange
+    );
+    for (const fuel of sortedFuel) {
+      if (remainingPlants === 0) {
+        break;
       }
-      fuelAdjust.forEach(
-        (fuel) => fuel.delta < 0 && GrapheneManager2.decreaseFuel(fuel.res, fuel.delta * -1)
-      );
-      fuelAdjust.forEach(
-        (fuel) => fuel.delta > 0 && GrapheneManager2.increaseFuel(fuel.res, fuel.delta)
-      );
-    };
+      if (!fuel.isUnlocked) {
+        continue;
+      }
+      const currentFuelCount = fuel.currentFuelCount;
+      let maxFueledForConsumption = remainingPlants;
+      if (!input.grapheneUseful) {
+        maxFueledForConsumption = 0;
+      } else if (fuel.currentQuantity < maxFueledForConsumption * fuel.costQuantity * input.consumptionBalanceMin + fuel.costMinRateOfChange) {
+        const rateOfChange = fuel.rateOfChange + fuel.costQuantity * currentFuelCount - fuel.costMinRateOfChange;
+        const affordableAmount = Math.floor(rateOfChange / fuel.costQuantity);
+        maxFueledForConsumption = Math.max(
+          Math.min(maxFueledForConsumption, affordableAmount),
+          0
+        );
+      }
+      const deltaFuel = maxFueledForConsumption - currentFuelCount;
+      if (deltaFuel !== 0) {
+        fuelAdjust.push(Object.freeze({ fuelId: fuel.id, delta: deltaFuel }));
+      }
+      remainingPlants -= currentFuelCount + deltaFuel;
+    }
+    return Object.freeze(fuelAdjust);
   }
 
   // src/adapters/evolve/shapeshift.ts
@@ -38188,23 +38485,62 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         AlchemyManager.transmuteMore(id, count);
       }
     };
-    const autoPylon = createAutoPylon({
-      RitualManager,
-      getResources: () => resources,
-      getSettings: () => settings,
-      getGame: () => game,
-      getJobs: () => jobs,
-      haveTech
-    });
-    const { autoQuarry, autoMine, autoExtractor } = createAutoResourceRatios({
-      QuarryManager,
-      MineManager,
-      ExtractorManager,
+    const autoPylon = function autoPylon2() {
+      const decision = planPylon(
+        readPylonInput({
+          getRitualManager: () => RitualManager,
+          getResources: () => resources,
+          getSettings: () => settings,
+          getGame: () => game,
+          getJobs: () => jobs,
+          haveTech
+        })
+      );
+      if (decision.decrease.length === 0 && decision.increase.length === 0) {
+        return;
+      }
+      const spellsById = {};
+      for (const spell of Object.values(RitualManager.Productions)) {
+        spellsById[spell.id] = spell;
+      }
+      for (const { id, count } of decision.decrease) {
+        RitualManager.decreaseRitual(spellsById[id], count);
+      }
+      for (const { id, count } of decision.increase) {
+        RitualManager.increaseRitual(spellsById[id], count);
+      }
+    };
+    const resourceRatiosDependencies = {
+      getQuarryManager: () => QuarryManager,
+      getMineManager: () => MineManager,
+      getExtractorManager: () => ExtractorManager,
       getResources: () => resources,
       getSettings: () => settings,
       getBuildings: () => buildings,
       haveTech
-    });
+    };
+    function autoQuarry() {
+      const delta = planQuarryRatio(
+        readQuarryRatioInput(resourceRatiosDependencies)
+      );
+      if (delta !== null) {
+        QuarryManager.increaseProduction(delta);
+      }
+    }
+    function autoMine() {
+      const delta = planMineRatio(readMineRatioInput(resourceRatiosDependencies));
+      if (delta !== null) {
+        MineManager.increaseProduction(delta);
+      }
+    }
+    function autoExtractor() {
+      const adjustments = planExtractorRatios(
+        readExtractorRatioInput(resourceRatiosDependencies)
+      );
+      for (const { id, delta } of adjustments) {
+        ExtractorManager.increaseProduction(id, delta);
+      }
+    }
     const autoSmelter = createAutoSmelter({
       SmelterManager,
       getGame: () => game,
@@ -38232,10 +38568,25 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       });
     }
     const autoMiningDroid = createAutoMiningDroid({ DroidManager });
-    const autoGraphenePlant = createAutoGraphenePlant({
-      GrapheneManager,
-      getResources: () => resources
-    });
+    const autoGraphenePlant = function autoGraphenePlant2() {
+      const adjustments = planGraphene(
+        readGrapheneInput({
+          getGrapheneManager: () => GrapheneManager,
+          getResources: () => resources,
+          consumptionBalanceMin: CONSUMPTION_BALANCE_MIN
+        })
+      );
+      for (const { fuelId, delta } of adjustments) {
+        if (delta < 0) {
+          GrapheneManager.decreaseFuel(GrapheneManager.Fuels[fuelId], delta * -1);
+        }
+      }
+      for (const { fuelId, delta } of adjustments) {
+        if (delta > 0) {
+          GrapheneManager.increaseFuel(GrapheneManager.Fuels[fuelId], delta);
+        }
+      }
+    };
     const autoConsume = createAutoConsume({
       getResources: () => resources,
       isHungryRace
