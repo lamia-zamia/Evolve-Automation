@@ -13859,67 +13859,630 @@
     return { updateBuildPlanner: updateBuildPlanner2 };
   }
 
-  // src/planning/storage-expansion.ts
-  function createStorageExpansion({
-    getSettings,
-    getResources,
-    getBuildings,
-    getStorageManager,
-    getIsEarlyGame,
-    getIsLumberRace
-  }) {
-    function expandStorage2(storageToBuild) {
-      const resources2 = getResources();
-      const storageManager = getStorageManager();
-      let missingStorage = storageToBuild;
-      let numberOfCratesWeCanBuild = resources2.Crates.maxQuantity - resources2.Crates.currentQuantity;
-      let numberOfContainersWeCanBuild = resources2.Containers.maxQuantity - resources2.Containers.currentQuantity;
-      for (const resourceId in resources2.Crates.cost) {
-        numberOfCratesWeCanBuild = Math.min(
-          numberOfCratesWeCanBuild,
-          resources2[resourceId].currentQuantity / resources2.Crates.cost[resourceId]
-        );
-      }
-      for (const resourceId in resources2.Containers.cost) {
-        numberOfContainersWeCanBuild = Math.min(
-          numberOfContainersWeCanBuild,
-          resources2[resourceId].currentQuantity / resources2.Containers.cost[resourceId]
-        );
-      }
-      if (getSettings().storageLimitPreMad && getIsEarlyGame()()) {
-        if (resources2.Steel.storageRatio < 0.8) {
-          numberOfContainersWeCanBuild = 0;
-        }
-        const library = getBuildings().Library;
-        if (getIsLumberRace()() && library.count < 20 && library.cost["Plywood"] > resources2.Plywood.currentQuantity && resources2.Steel.maxQuantity >= resources2.Steel.storageRequired) {
-          numberOfCratesWeCanBuild = 0;
-        }
-      }
-      const cratesToBuild = Math.min(
-        Math.floor(numberOfCratesWeCanBuild),
-        Math.ceil(missingStorage / storageManager.crateValue)
-      );
-      storageManager.constructCrate(cratesToBuild);
-      resources2.Crates.currentQuantity += cratesToBuild;
-      for (const resourceId in resources2.Crates.cost) {
-        resources2[resourceId].currentQuantity -= resources2.Crates.cost[resourceId] * cratesToBuild;
-      }
-      missingStorage -= cratesToBuild * storageManager.crateValue;
-      if (missingStorage > 0) {
-        const containersToBuild = Math.min(
-          Math.floor(numberOfContainersWeCanBuild),
-          Math.ceil(missingStorage / storageManager.containerValue)
-        );
-        storageManager.constructContainer(containersToBuild);
-        resources2.Containers.currentQuantity += containersToBuild;
-        for (const resourceId in resources2.Containers.cost) {
-          resources2[resourceId].currentQuantity -= resources2.Containers.cost[resourceId] * containersToBuild;
-        }
-        missingStorage -= containersToBuild * storageManager.containerValue;
-      }
-      return missingStorage < storageToBuild;
+  // src/domain/identifiers.ts
+  function parseIdentifier(value, label) {
+    if (typeof value !== "string" || value.trim().length === 0) {
+      throw new TypeError(`${label} must be a non-empty string`);
     }
-    return { expandStorage: expandStorage2 };
+    return value;
+  }
+  function automationCycleId(value) {
+    return parseIdentifier(value, "automation cycle id");
+  }
+  function commandId(value) {
+    return parseIdentifier(value, "command id");
+  }
+  function snapshotId(value) {
+    return parseIdentifier(value, "snapshot id");
+  }
+
+  // src/application/cycle-runner.ts
+  function validateMaximum(value) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new TypeError("maxCommandsPerCycle must be a non-negative integer");
+    }
+  }
+  function executorFailure(error) {
+    return {
+      status: "rejected",
+      failure: {
+        code: "executor-error",
+        message: error instanceof Error ? error.message : "command executor failed"
+      }
+    };
+  }
+  function createCycleRunner(dependencies) {
+    validateMaximum(dependencies.maxCommandsPerCycle);
+    let cycleSequence = 0;
+    function runCycle() {
+      cycleSequence += 1;
+      const cycleId = automationCycleId(`cycle-${cycleSequence}`);
+      const startedAtMs = dependencies.clock.nowMs();
+      const snapshot = dependencies.gameReader.readSnapshot();
+      const settings2 = dependencies.settingsReader.readSettings();
+      dependencies.logger.record({
+        kind: "cycle-started",
+        cycleId,
+        snapshotId: snapshot.metadata.id
+      });
+      const planned = [];
+      const phaseTraces = [];
+      for (const phase of dependencies.phases) {
+        const plannerTraces = [];
+        for (const planner of phase.planners) {
+          const commands = planner.plan(snapshot, settings2);
+          plannerTraces.push({
+            planner: planner.name,
+            commandCount: commands.length
+          });
+          planned.push(...commands);
+        }
+        phaseTraces.push({ phase: phase.name, planners: plannerTraces });
+      }
+      const conflictKeys = /* @__PURE__ */ new Set();
+      const results = [];
+      planned.forEach((command, index) => {
+        const envelope = {
+          id: commandId(`${cycleId}:command-${index + 1}`),
+          expectedSnapshotId: snapshot.metadata.id,
+          command
+        };
+        let outcome;
+        if (index >= dependencies.maxCommandsPerCycle) {
+          outcome = {
+            status: "rejected",
+            failure: {
+              code: "command-limit",
+              message: "cycle command limit reached",
+              context: {
+                commandIndex: index,
+                maximum: dependencies.maxCommandsPerCycle
+              }
+            }
+          };
+        } else {
+          const conflictKey = dependencies.getConflictKey(command);
+          if (conflictKey !== null && conflictKeys.has(conflictKey)) {
+            outcome = {
+              status: "rejected",
+              failure: {
+                code: "command-conflict",
+                message: `conflict on ${conflictKey}`,
+                context: { conflictKey }
+              }
+            };
+          } else {
+            if (conflictKey !== null) {
+              conflictKeys.add(conflictKey);
+            }
+            try {
+              outcome = dependencies.commandExecutor.execute(envelope);
+            } catch (error) {
+              outcome = executorFailure(error);
+            }
+          }
+        }
+        const result = {
+          ...outcome,
+          envelope,
+          completedAtMs: dependencies.clock.nowMs()
+        };
+        results.push(result);
+        dependencies.logger.record({
+          kind: "command-completed",
+          cycleId,
+          result
+        });
+      });
+      const trace = {
+        cycleId,
+        snapshotId: snapshot.metadata.id,
+        startedAtMs,
+        completedAtMs: dependencies.clock.nowMs(),
+        phases: phaseTraces,
+        results
+      };
+      dependencies.publisher.publish(trace);
+      dependencies.logger.record({ kind: "cycle-completed", trace });
+      return trace;
+    }
+    return { runCycle };
+  }
+
+  // src/adapters/validation.ts
+  function requireRecord(value, path) {
+    if (typeof value !== "object" || value === null) {
+      throw new TypeError(`${path} must be an object`);
+    }
+    return value;
+  }
+  function requireNumber(value, path) {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new TypeError(`${path} must be a finite number`);
+    }
+    return value;
+  }
+  function requireBoolean(value, path) {
+    if (typeof value !== "boolean") {
+      throw new TypeError(`${path} must be a boolean`);
+    }
+    return value;
+  }
+  function requireFunction(value, path) {
+    if (typeof value !== "function") {
+      throw new TypeError(`${path} must be a function`);
+    }
+    return value;
+  }
+
+  // src/adapters/evolve/storage-command-executor.ts
+  function rejected(code, message) {
+    return { status: "rejected", failure: { code, message } };
+  }
+  function createStorageCommandExecutor(dependencies) {
+    function execute(envelope) {
+      const { command } = envelope;
+      if (typeof command.count !== "number" || !Number.isFinite(command.count)) {
+        return rejected(
+          "invalid-storage-count",
+          "storage construction count must be a finite number"
+        );
+      }
+      const storageManager = requireRecord(
+        dependencies.getStorageManager(),
+        "StorageManager"
+      );
+      const method = command.unit === "crate" ? "constructCrate" : "constructContainer";
+      const construct = requireFunction(
+        storageManager[method],
+        `StorageManager.${method}`
+      );
+      Reflect.apply(construct, storageManager, [command.count]);
+      const resources2 = requireRecord(dependencies.getResources(), "resources");
+      const produced = requireRecord(
+        resources2[command.producedResourceId],
+        `resources.${command.producedResourceId}`
+      );
+      produced["currentQuantity"] = requireNumber(
+        produced["currentQuantity"],
+        `resources.${command.producedResourceId}.currentQuantity`
+      ) + command.count;
+      for (const delta of command.spend) {
+        const resource = requireRecord(
+          resources2[delta.resourceId],
+          `resources.${delta.resourceId}`
+        );
+        resource["currentQuantity"] = requireNumber(
+          resource["currentQuantity"],
+          `resources.${delta.resourceId}.currentQuantity`
+        ) - delta.amount;
+      }
+      return { status: "succeeded" };
+    }
+    return Object.freeze({ execute });
+  }
+
+  // src/domain/snapshot.ts
+  function createSnapshotMetadata(input) {
+    if (typeof input.capturedAtMs !== "number" || !Number.isSafeInteger(input.capturedAtMs) || input.capturedAtMs < 0) {
+      throw new TypeError("snapshot capture time must be a non-negative integer");
+    }
+    return Object.freeze({
+      id: snapshotId(input.id),
+      capturedAtMs: input.capturedAtMs
+    });
+  }
+
+  // src/adapters/evolve/storage-expansion-reader.ts
+  function readView(resources2, resourceId, storagePerUnit) {
+    const view = requireRecord(resources2[resourceId], `resources.${resourceId}`);
+    const costRecord = requireRecord(
+      view["cost"],
+      `resources.${resourceId}.cost`
+    );
+    const costs = [];
+    for (const key in costRecord) {
+      const costPerUnit = requireNumber(
+        costRecord[key],
+        `resources.${resourceId}.cost.${key}`
+      );
+      const costResource = requireRecord(resources2[key], `resources.${key}`);
+      const available = requireNumber(
+        costResource["currentQuantity"],
+        `resources.${key}.currentQuantity`
+      );
+      costs.push(Object.freeze({ resourceId: key, costPerUnit, available }));
+    }
+    return Object.freeze({
+      resourceId,
+      maxQuantity: requireNumber(
+        view["maxQuantity"],
+        `resources.${resourceId}.maxQuantity`
+      ),
+      currentQuantity: requireNumber(
+        view["currentQuantity"],
+        `resources.${resourceId}.currentQuantity`
+      ),
+      storagePerUnit,
+      costs: Object.freeze(costs)
+    });
+  }
+  function readPlywoodCost(library) {
+    const cost = library["cost"];
+    if (typeof cost !== "object" || cost === null) {
+      return null;
+    }
+    const value = cost["Plywood"];
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+  function createEvolveStorageExpansionReader(dependencies) {
+    let snapshotSequence = 0;
+    function readSnapshot() {
+      snapshotSequence += 1;
+      const metadata = createSnapshotMetadata({
+        id: `storage-expansion-snapshot-${snapshotSequence}`,
+        capturedAtMs: dependencies.clock.nowMs()
+      });
+      const resources2 = requireRecord(dependencies.getResources(), "resources");
+      const storageManager = requireRecord(
+        dependencies.getStorageManager(),
+        "StorageManager"
+      );
+      const crateValue = requireNumber(
+        storageManager["crateValue"],
+        "StorageManager.crateValue"
+      );
+      const containerValue = requireNumber(
+        storageManager["containerValue"],
+        "StorageManager.containerValue"
+      );
+      const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
+      const library = requireRecord(buildings2["Library"], "buildings.Library");
+      const steel = requireRecord(resources2["Steel"], "resources.Steel");
+      const plywood = requireRecord(resources2["Plywood"], "resources.Plywood");
+      return Object.freeze({
+        metadata,
+        storageToBuild: dependencies.getStorageToBuild(),
+        crates: readView(resources2, "Crates", crateValue),
+        containers: readView(resources2, "Containers", containerValue),
+        isEarlyGame: Boolean(dependencies.isEarlyGame()),
+        isLumberRace: Boolean(dependencies.isLumberRace()),
+        steel: Object.freeze({
+          storageRatio: requireNumber(
+            steel["storageRatio"],
+            "resources.Steel.storageRatio"
+          ),
+          maxQuantity: requireNumber(
+            steel["maxQuantity"],
+            "resources.Steel.maxQuantity"
+          ),
+          storageRequired: requireNumber(
+            steel["storageRequired"],
+            "resources.Steel.storageRequired"
+          )
+        }),
+        library: Object.freeze({
+          count: requireNumber(library["count"], "buildings.Library.count"),
+          plywoodCost: readPlywoodCost(library)
+        }),
+        plywoodAvailable: requireNumber(
+          plywood["currentQuantity"],
+          "resources.Plywood.currentQuantity"
+        )
+      });
+    }
+    return Object.freeze({ readSnapshot });
+  }
+
+  // src/adapters/storage/storage-expansion-settings-reader.ts
+  function createStorageExpansionSettingsReader(getSettings) {
+    function readSettings() {
+      const settings2 = requireRecord(getSettings(), "settings");
+      return Object.freeze({
+        storageLimitPreMad: requireBoolean(
+          settings2["storageLimitPreMad"],
+          "settings.storageLimitPreMad"
+        )
+      });
+    }
+    return Object.freeze({ readSettings });
+  }
+
+  // src/domain/storage-expansion.ts
+  function affordableUnits(view) {
+    let cap = view.maxQuantity - view.currentQuantity;
+    for (const cost of view.costs) {
+      cap = Math.min(cap, cost.available / cost.costPerUnit);
+    }
+    return cap;
+  }
+  function constructCommand(unit, view, count) {
+    const spend = view.costs.map(
+      (cost) => Object.freeze({
+        resourceId: cost.resourceId,
+        amount: cost.costPerUnit * count
+      })
+    );
+    return Object.freeze({
+      kind: "construct-storage",
+      unit,
+      count,
+      storagePerUnit: view.storagePerUnit,
+      producedResourceId: view.resourceId,
+      spend: Object.freeze(spend)
+    });
+  }
+  function planStorageExpansion(snapshot, settings2) {
+    let missing = snapshot.storageToBuild;
+    let crateCap = affordableUnits(snapshot.crates);
+    let containerCap = affordableUnits(snapshot.containers);
+    if (settings2.storageLimitPreMad && snapshot.isEarlyGame) {
+      if (snapshot.steel.storageRatio < 0.8) {
+        containerCap = 0;
+      }
+      if (snapshot.isLumberRace && snapshot.library.count < 20 && snapshot.library.plywoodCost !== null && snapshot.library.plywoodCost > snapshot.plywoodAvailable && snapshot.steel.maxQuantity >= snapshot.steel.storageRequired) {
+        crateCap = 0;
+      }
+    }
+    const commands = [];
+    const cratesToBuild = Math.min(
+      Math.floor(crateCap),
+      Math.ceil(missing / snapshot.crates.storagePerUnit)
+    );
+    commands.push(constructCommand("crate", snapshot.crates, cratesToBuild));
+    missing -= cratesToBuild * snapshot.crates.storagePerUnit;
+    if (missing > 0) {
+      const containersToBuild = Math.min(
+        Math.floor(containerCap),
+        Math.ceil(missing / snapshot.containers.storagePerUnit)
+      );
+      commands.push(
+        constructCommand("container", snapshot.containers, containersToBuild)
+      );
+    }
+    return Object.freeze(commands);
+  }
+
+  // src/bootstrap/storage-expansion.ts
+  function createStorageExpansion(dependencies) {
+    const clock = Object.freeze({ nowMs: dependencies.nowMs });
+    let pendingStorageToBuild = 0;
+    const gameReader = createEvolveStorageExpansionReader({
+      clock,
+      getStorageToBuild: () => pendingStorageToBuild,
+      getResources: dependencies.getResources,
+      getBuildings: dependencies.getBuildings,
+      getStorageManager: dependencies.getStorageManager,
+      isEarlyGame: dependencies.isEarlyGame,
+      isLumberRace: dependencies.isLumberRace
+    });
+    const settingsReader = createStorageExpansionSettingsReader(
+      dependencies.getSettings
+    );
+    const commandExecutor = createStorageCommandExecutor({
+      getStorageManager: dependencies.getStorageManager,
+      getResources: dependencies.getResources
+    });
+    let lastTrace;
+    const runner = createCycleRunner({
+      clock,
+      gameReader,
+      settingsReader,
+      commandExecutor,
+      logger: { record: () => {
+      } },
+      publisher: {
+        publish: (trace) => {
+          lastTrace = trace;
+        }
+      },
+      phases: [
+        {
+          name: "economy",
+          planners: [{ name: "storage-expansion", plan: planStorageExpansion }]
+        }
+      ],
+      getConflictKey: (command) => `storage-${command.unit}`,
+      maxCommandsPerCycle: 2
+    });
+    function expandStorage2(storageToBuild) {
+      pendingStorageToBuild = storageToBuild;
+      const trace = runner.runCycle();
+      lastTrace = trace;
+      let storageAdded = 0;
+      for (const result of trace.results) {
+        if (result.status === "succeeded") {
+          storageAdded += result.envelope.command.count * result.envelope.command.storagePerUnit;
+        }
+      }
+      return storageAdded > 0;
+    }
+    return Object.freeze({ expandStorage: expandStorage2, getLastTrace: () => lastTrace });
+  }
+
+  // src/adapters/evolve/storage-requirements.ts
+  function readCosts(value) {
+    if (typeof value !== "object" || value === null) return [];
+    const record = value;
+    const costs = [];
+    for (const key in record) {
+      costs.push(
+        Object.freeze({
+          resourceId: key,
+          amount: requireNumber(record[key], `cost.${key}`)
+        })
+      );
+    }
+    return costs;
+  }
+  function knowledgeCostOf(target) {
+    const cost = target["cost"];
+    if (typeof cost !== "object" || cost === null) return 0;
+    const value = cost["Knowledge"];
+    return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  }
+  function isKnowledgeProducer(target) {
+    const is = target["is"];
+    return typeof is === "object" && is !== null && Boolean(is["knowledge"]);
+  }
+  function optionalPredicate(target, name) {
+    const method = target[name];
+    if (typeof method !== "function") return false;
+    return Boolean(
+      Reflect.apply(method, target, [])
+    );
+  }
+  function requireArray(value, path) {
+    if (!Array.isArray(value)) {
+      throw new TypeError(`${path} must be an array`);
+    }
+    return value;
+  }
+  function targetList(value, path) {
+    return requireArray(value, path).map(
+      (entry, index) => requireRecord(entry, `${path}[${index}]`)
+    );
+  }
+  function costTargets(list) {
+    return list.map(
+      (target) => Object.freeze({ costs: readCosts(target["cost"]) })
+    );
+  }
+  function readResources(resourcesValue) {
+    const resources2 = requireRecord(resourcesValue, "resources");
+    const states = [];
+    for (const id in resources2) {
+      const resource = requireRecord(resources2[id], `resources.${id}`);
+      const hasStorage = requireFunction(
+        resource["hasStorage"],
+        `resources.${id}.hasStorage`
+      );
+      states.push(
+        Object.freeze({
+          id,
+          maxQuantity: requireNumber(
+            resource["maxQuantity"],
+            `resources.${id}.maxQuantity`
+          ),
+          maxCost: requireNumber(resource["maxCost"], `resources.${id}.maxCost`),
+          storageRequired: requireNumber(
+            resource["storageRequired"],
+            `resources.${id}.storageRequired`
+          ),
+          hasStorage: Boolean(Reflect.apply(hasStorage, resource, [])),
+          // TRANSITIONAL: auto-sell fields are settings-backed getters
+          // (`settings["sell"+id]` / `["res_sell_r_"+id]`) that are undefined for
+          // non-market resources (RNA, DNA, ...). Legacy used them only in
+          // `enabled && ratio > 0`, so they are read leniently here. When the
+          // market/trade-routes slice migrates, these should come from a validated
+          // market-settings view keyed by sellable-resource id rather than being
+          // coerced per resource at this boundary.
+          autoSellEnabled: Boolean(resource["autoSellEnabled"]),
+          autoSellRatio: typeof resource["autoSellRatio"] === "number" && Number.isFinite(resource["autoSellRatio"]) ? resource["autoSellRatio"] : 0
+        })
+      );
+    }
+    return states;
+  }
+  function readStorageRequirementsInput(dependencies) {
+    const settings2 = requireRecord(dependencies.getSettings(), "settings");
+    const state2 = requireRecord(dependencies.getState(), "state");
+    const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
+    const game2 = requireRecord(dependencies.getGame(), "game");
+    const buildingManager = requireRecord(
+      dependencies.getBuildingManager(),
+      "BuildingManager"
+    );
+    const projectManager = requireRecord(
+      dependencies.getProjectManager(),
+      "ProjectManager"
+    );
+    const fleetManagerOuter = requireRecord(
+      dependencies.getFleetManagerOuter(),
+      "FleetManagerOuter"
+    );
+    const unlockedTechs = targetList(
+      state2["unlockedTechs"],
+      "state.unlockedTechs"
+    );
+    const queuedTargetsAll = targetList(
+      state2["queuedTargetsAll"],
+      "state.queuedTargetsAll"
+    );
+    const triggerTargets = targetList(
+      state2["triggerTargets"],
+      "state.triggerTargets"
+    );
+    const buildingList = targetList(
+      buildingManager["priorityList"],
+      "BuildingManager.priorityList"
+    );
+    const projectList = targetList(
+      projectManager["priorityList"],
+      "ProjectManager.priorityList"
+    );
+    const autoBuildableFiltered = (list) => list.filter(
+      (entry) => optionalPredicate(entry, "isUnlocked") && Boolean(entry["autoBuildEnabled"])
+    );
+    const requestLists = [];
+    const nextShipExpandable = Boolean(fleetManagerOuter["nextShipExpandable"]);
+    if (Boolean(settings2["autoFleet"]) && nextShipExpandable && settings2["prioritizeOuterFleet"] !== "ignore") {
+      requestLists.push([
+        Object.freeze({ costs: readCosts(fleetManagerOuter["nextShipCost"]) })
+      ]);
+    }
+    requestLists.push(costTargets(unlockedTechs));
+    requestLists.push(costTargets(queuedTargetsAll));
+    requestLists.push(costTargets(autoBuildableFiltered(buildingList)));
+    requestLists.push(costTargets(autoBuildableFiltered(projectList)));
+    const embassy = requireRecord(
+      buildings2["GorddonEmbassy"],
+      "buildings.GorddonEmbassy"
+    );
+    const fleetEmbassyKnowledge = requireNumber(
+      settings2["fleetEmbassyKnowledge"],
+      "settings.fleetEmbassyKnowledge"
+    );
+    const knowledge = {
+      techKnowledgeCosts: [
+        ...unlockedTechs.map((tech) => knowledgeCostOf(tech)),
+        ...optionalPredicate(embassy, "isAutoBuildable") ? [fleetEmbassyKnowledge] : []
+      ],
+      reservedTargets: [...queuedTargetsAll, ...triggerTargets].map((target) => ({
+        knowledgeCost: knowledgeCostOf(target),
+        isTechnology: dependencies.isTechnology(target),
+        isKnowledge: isKnowledgeProducer(target)
+      })),
+      buildCandidates: [...buildingList, ...projectList].map((object) => ({
+        knowledgeCost: knowledgeCostOf(object),
+        isKnowledge: isKnowledgeProducer(object),
+        weighting: typeof object["weighting"] === "number" && Number.isFinite(object["weighting"]) ? object["weighting"] : 0,
+        autoBuildable: optionalPredicate(object, "isAutoBuildable")
+      }))
+    };
+    const race = requireRecord(
+      requireRecord(game2["global"], "game.global")["race"],
+      "game.global.race"
+    );
+    return Object.freeze({
+      storageAssignExtra: requireBoolean(
+        settings2["storageAssignExtra"],
+        "settings.storageAssignExtra"
+      ),
+      autoMarket: Boolean(settings2["autoMarket"]),
+      noTrade: Boolean(race["no_trade"]),
+      requestLists: Object.freeze(requestLists),
+      knowledge,
+      resources: Object.freeze(readResources(dependencies.getResources())),
+      inflationMoney: dependencies.isInflationAssistActive() ? requireNumber(
+        dependencies.getInflationChallengeMoney(),
+        "inflation challenge money"
+      ) : null,
+      retirementGraphene: dependencies.isRetirementAssistActive() ? requireNumber(
+        dependencies.getRetirementGraphene(),
+        "retirement graphene"
+      ) : null
+    });
   }
 
   // src/domain/knowledge-requirements.ts
@@ -13951,132 +14514,88 @@
     };
   }
 
-  // src/planning/storage-requirements.ts
-  function createStorageRequirements({
-    getSettings,
-    getState,
-    getResources,
-    getBuildings,
-    getGame,
-    getBuildingManager,
-    getProjectManager,
-    getFleetManagerOuter,
-    isTechnology,
-    getInflationChallengeAssistActive,
-    getRetirementChallengeAssistActive,
-    getInflationChallengeMoney,
-    getRetirementGraphene
-  }) {
-    function requestStorageFor2(list) {
-      const settings2 = getSettings();
-      const resources2 = getResources();
-      const bufferMult = settings2.storageAssignExtra ? 1.03 : 1;
-      listLoop: for (let i = 0; i < list.length; i++) {
-        const object = list[i];
+  // src/domain/storage-requirements.ts
+  function planStorageRequirements(input) {
+    const bufferMult = input.storageAssignExtra ? 1.03 : 1;
+    const acc = /* @__PURE__ */ new Map();
+    for (const resource of input.resources) {
+      acc.set(resource.id, {
+        maxCost: resource.maxCost,
+        storageRequired: resource.storageRequired,
+        maxQuantity: resource.maxQuantity,
+        hasStorage: resource.hasStorage,
+        autoSellEnabled: resource.autoSellEnabled,
+        autoSellRatio: resource.autoSellRatio
+      });
+    }
+    function requestStorageFor(list) {
+      for (const target of list) {
         let storageSuffient = true;
-        for (const resourceId in object.cost) {
-          resources2[resourceId].maxCost = Math.max(
-            object.cost[resourceId],
-            resources2[resourceId].maxCost
-          );
-          if (resources2[resourceId].maxQuantity < object.cost[resourceId] && !resources2[resourceId].hasStorage()) {
+        for (const cost of target.costs) {
+          const resource = acc.get(cost.resourceId);
+          if (resource === void 0) continue;
+          resource.maxCost = Math.max(cost.amount, resource.maxCost);
+          if (resource.maxQuantity < cost.amount && !resource.hasStorage) {
             storageSuffient = false;
           }
         }
-        if (!storageSuffient) {
-          continue listLoop;
-        }
-        for (const resourceId in object.cost) {
-          let assumeCost = object.cost[resourceId] * bufferMult;
-          if (resources2[resourceId].maxQuantity < assumeCost && !resources2[resourceId].hasStorage()) {
-            assumeCost = (object.cost[resourceId] + resources2[resourceId].maxQuantity) / 2;
+        if (!storageSuffient) continue;
+        for (const cost of target.costs) {
+          const resource = acc.get(cost.resourceId);
+          if (resource === void 0) continue;
+          let assumeCost = cost.amount * bufferMult;
+          if (resource.maxQuantity < assumeCost && !resource.hasStorage) {
+            assumeCost = (cost.amount + resource.maxQuantity) / 2;
           }
-          resources2[resourceId].storageRequired = Math.max(
+          resource.storageRequired = Math.max(
             assumeCost,
-            resources2[resourceId].storageRequired
+            resource.storageRequired
           );
         }
       }
     }
-    function calculateRequiredStorages2() {
-      const settings2 = getSettings();
-      const state2 = getState();
-      const resources2 = getResources();
-      const buildings2 = getBuildings();
-      const buildingManager = getBuildingManager();
-      const projectManager = getProjectManager();
-      const fleetManagerOuter = getFleetManagerOuter();
-      const knowledge = calculateKnowledgeRequirements({
-        techKnowledgeCosts: [
-          ...state2.unlockedTechs.map((tech) => tech.cost["Knowledge"] ?? 0),
-          ...buildings2.GorddonEmbassy.isAutoBuildable() ? [settings2.fleetEmbassyKnowledge] : []
-        ],
-        reservedTargets: [...state2.queuedTargetsAll, ...state2.triggerTargets].map(
-          (target) => ({
-            knowledgeCost: target.cost?.Knowledge ?? 0,
-            isTechnology: isTechnology(target),
-            isKnowledge: Boolean(target.is?.knowledge)
-          })
-        ),
-        buildCandidates: [
-          ...buildingManager.priorityList,
-          ...projectManager.priorityList
-        ].map((object) => ({
-          knowledgeCost: object.cost?.Knowledge ?? 0,
-          isKnowledge: Boolean(object.is?.knowledge),
-          weighting: object.weighting ?? 0,
-          autoBuildable: Boolean(object.isAutoBuildable?.())
-        }))
-      });
-      state2.knowledgeRequiredByTechs = knowledge.knowledgeRequiredByTechs;
-      state2.cheapestTechKnowledge = knowledge.cheapestTechKnowledge;
-      state2.knowledgeRequiredByBuildTargets = knowledge.knowledgeRequiredByBuildTargets;
-      if (settings2.autoFleet && fleetManagerOuter.nextShipExpandable && settings2.prioritizeOuterFleet !== "ignore") {
-        requestStorageFor2([{ cost: fleetManagerOuter.nextShipCost }]);
-      }
-      requestStorageFor2(state2.unlockedTechs);
-      requestStorageFor2(state2.queuedTargetsAll);
-      requestStorageFor2(
-        buildingManager.priorityList.filter(
-          (building) => building.isUnlocked?.() && building.autoBuildEnabled
-        )
-      );
-      requestStorageFor2(
-        projectManager.priorityList.filter(
-          (project) => project.isUnlocked?.() && project.autoBuildEnabled
-        )
-      );
-      if (getInflationChallengeAssistActive()()) {
-        const inflationChallengeMoney = getInflationChallengeMoney();
-        resources2.Money.maxCost = Math.max(
-          resources2.Money.maxCost,
-          inflationChallengeMoney
-        );
-        resources2.Money.storageRequired = Math.max(
-          resources2.Money.storageRequired,
-          inflationChallengeMoney
+    for (const list of input.requestLists) {
+      requestStorageFor(list);
+    }
+    if (input.inflationMoney !== null) {
+      const money = acc.get("Money");
+      if (money !== void 0) {
+        money.maxCost = Math.max(money.maxCost, input.inflationMoney);
+        money.storageRequired = Math.max(
+          money.storageRequired,
+          input.inflationMoney
         );
       }
-      if (getRetirementChallengeAssistActive()()) {
-        const retirementGraphene = getRetirementGraphene();
-        resources2.Graphene.maxCost = Math.max(
-          resources2.Graphene.maxCost,
-          retirementGraphene
-        );
-        resources2.Graphene.storageRequired = Math.max(
-          resources2.Graphene.storageRequired,
-          retirementGraphene
+    }
+    if (input.retirementGraphene !== null) {
+      const graphene = acc.get("Graphene");
+      if (graphene !== void 0) {
+        graphene.maxCost = Math.max(graphene.maxCost, input.retirementGraphene);
+        graphene.storageRequired = Math.max(
+          graphene.storageRequired,
+          input.retirementGraphene
         );
       }
-      if (settings2.storageAssignExtra && !getGame().global.race["no_trade"] && settings2.autoMarket) {
-        for (const resourceId in resources2) {
-          if (resources2[resourceId].autoSellEnabled && resources2[resourceId].autoSellRatio > 0) {
-            resources2[resourceId].storageRequired /= resources2[resourceId].autoSellRatio;
-          }
+    }
+    if (input.storageAssignExtra && !input.noTrade && input.autoMarket) {
+      for (const resource of acc.values()) {
+        if (resource.autoSellEnabled && resource.autoSellRatio > 0) {
+          resource.storageRequired /= resource.autoSellRatio;
         }
       }
     }
-    return { requestStorageFor: requestStorageFor2, calculateRequiredStorages: calculateRequiredStorages2 };
+    const resources2 = input.resources.map((resource) => {
+      const state2 = acc.get(resource.id);
+      return Object.freeze({
+        id: resource.id,
+        maxCost: state2 === void 0 ? resource.maxCost : state2.maxCost,
+        storageRequired: state2 === void 0 ? resource.storageRequired : state2.storageRequired
+      });
+    });
+    return Object.freeze({
+      resources: Object.freeze(resources2),
+      knowledge: calculateKnowledgeRequirements(input.knowledge)
+    });
   }
 
   // src/planning/demand-prioritization.ts
@@ -19393,162 +19912,6 @@
     };
   }
 
-  // src/domain/identifiers.ts
-  function parseIdentifier(value, label) {
-    if (typeof value !== "string" || value.trim().length === 0) {
-      throw new TypeError(`${label} must be a non-empty string`);
-    }
-    return value;
-  }
-  function automationCycleId(value) {
-    return parseIdentifier(value, "automation cycle id");
-  }
-  function commandId(value) {
-    return parseIdentifier(value, "command id");
-  }
-  function snapshotId(value) {
-    return parseIdentifier(value, "snapshot id");
-  }
-
-  // src/application/cycle-runner.ts
-  function validateMaximum(value) {
-    if (!Number.isSafeInteger(value) || value < 0) {
-      throw new TypeError("maxCommandsPerCycle must be a non-negative integer");
-    }
-  }
-  function executorFailure(error) {
-    return {
-      status: "rejected",
-      failure: {
-        code: "executor-error",
-        message: error instanceof Error ? error.message : "command executor failed"
-      }
-    };
-  }
-  function createCycleRunner(dependencies) {
-    validateMaximum(dependencies.maxCommandsPerCycle);
-    let cycleSequence = 0;
-    function runCycle() {
-      cycleSequence += 1;
-      const cycleId = automationCycleId(`cycle-${cycleSequence}`);
-      const startedAtMs = dependencies.clock.nowMs();
-      const snapshot = dependencies.gameReader.readSnapshot();
-      const settings2 = dependencies.settingsReader.readSettings();
-      dependencies.logger.record({
-        kind: "cycle-started",
-        cycleId,
-        snapshotId: snapshot.metadata.id
-      });
-      const planned = [];
-      const phaseTraces = [];
-      for (const phase of dependencies.phases) {
-        const plannerTraces = [];
-        for (const planner of phase.planners) {
-          const commands = planner.plan(snapshot, settings2);
-          plannerTraces.push({
-            planner: planner.name,
-            commandCount: commands.length
-          });
-          planned.push(...commands);
-        }
-        phaseTraces.push({ phase: phase.name, planners: plannerTraces });
-      }
-      const conflictKeys = /* @__PURE__ */ new Set();
-      const results = [];
-      planned.forEach((command, index) => {
-        const envelope = {
-          id: commandId(`${cycleId}:command-${index + 1}`),
-          expectedSnapshotId: snapshot.metadata.id,
-          command
-        };
-        let outcome;
-        if (index >= dependencies.maxCommandsPerCycle) {
-          outcome = {
-            status: "rejected",
-            failure: {
-              code: "command-limit",
-              message: "cycle command limit reached",
-              context: {
-                commandIndex: index,
-                maximum: dependencies.maxCommandsPerCycle
-              }
-            }
-          };
-        } else {
-          const conflictKey = dependencies.getConflictKey(command);
-          if (conflictKey !== null && conflictKeys.has(conflictKey)) {
-            outcome = {
-              status: "rejected",
-              failure: {
-                code: "command-conflict",
-                message: `conflict on ${conflictKey}`,
-                context: { conflictKey }
-              }
-            };
-          } else {
-            if (conflictKey !== null) {
-              conflictKeys.add(conflictKey);
-            }
-            try {
-              outcome = dependencies.commandExecutor.execute(envelope);
-            } catch (error) {
-              outcome = executorFailure(error);
-            }
-          }
-        }
-        const result = {
-          ...outcome,
-          envelope,
-          completedAtMs: dependencies.clock.nowMs()
-        };
-        results.push(result);
-        dependencies.logger.record({
-          kind: "command-completed",
-          cycleId,
-          result
-        });
-      });
-      const trace = {
-        cycleId,
-        snapshotId: snapshot.metadata.id,
-        startedAtMs,
-        completedAtMs: dependencies.clock.nowMs(),
-        phases: phaseTraces,
-        results
-      };
-      dependencies.publisher.publish(trace);
-      dependencies.logger.record({ kind: "cycle-completed", trace });
-      return trace;
-    }
-    return { runCycle };
-  }
-
-  // src/adapters/validation.ts
-  function requireRecord(value, path) {
-    if (typeof value !== "object" || value === null) {
-      throw new TypeError(`${path} must be an object`);
-    }
-    return value;
-  }
-  function requireNumber(value, path) {
-    if (typeof value !== "number" || !Number.isFinite(value)) {
-      throw new TypeError(`${path} must be a finite number`);
-    }
-    return value;
-  }
-  function requireBoolean(value, path) {
-    if (typeof value !== "boolean") {
-      throw new TypeError(`${path} must be a boolean`);
-    }
-    return value;
-  }
-  function requireFunction(value, path) {
-    if (typeof value !== "function") {
-      throw new TypeError(`${path} must be a function`);
-    }
-    return value;
-  }
-
   // src/adapters/browser/tax-controls.ts
   function createBrowserTaxControls(getVueById2) {
     function getControls() {
@@ -19643,17 +20006,6 @@
       return { status: "succeeded" };
     }
     return Object.freeze({ execute });
-  }
-
-  // src/domain/snapshot.ts
-  function createSnapshotMetadata(input) {
-    if (typeof input.capturedAtMs !== "number" || !Number.isSafeInteger(input.capturedAtMs) || input.capturedAtMs < 0) {
-      throw new TypeError("snapshot capture time must be a non-negative integer");
-    }
-    return Object.freeze({
-      id: snapshotId(input.id),
-      capturedAtMs: input.capturedAtMs
-    });
   }
 
   // src/domain/tax.ts
@@ -35752,24 +36104,37 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getResources: () => resources,
       getBuildings: () => buildings,
       getStorageManager: () => StorageManager,
-      getIsEarlyGame: () => isEarlyGame,
-      getIsLumberRace: () => isLumberRace
+      isEarlyGame: () => isEarlyGame(),
+      isLumberRace: () => isLumberRace(),
+      nowMs: () => browserClock.nowMs()
     });
-    const { requestStorageFor, calculateRequiredStorages } = createStorageRequirements({
-      getSettings: () => settings,
-      getState: () => state,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getGame: () => game,
-      getBuildingManager: () => BuildingManager,
-      getProjectManager: () => ProjectManager,
-      getFleetManagerOuter: () => FleetManagerOuter,
-      isTechnology: (target) => target instanceof Technology,
-      getInflationChallengeAssistActive: () => inflationChallengeAssistActive,
-      getRetirementChallengeAssistActive: () => retirementChallengeAssistActive,
-      getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
-      getRetirementGraphene: () => RETIREMENT_PREP.graphene
-    });
+    function calculateRequiredStorages() {
+      const result = planStorageRequirements(
+        readStorageRequirementsInput({
+          getSettings: () => settings,
+          getState: () => state,
+          getResources: () => resources,
+          getBuildings: () => buildings,
+          getGame: () => game,
+          getBuildingManager: () => BuildingManager,
+          getProjectManager: () => ProjectManager,
+          getFleetManagerOuter: () => FleetManagerOuter,
+          isTechnology: (target) => target instanceof Technology,
+          isInflationAssistActive: () => inflationChallengeAssistActive(),
+          isRetirementAssistActive: () => retirementChallengeAssistActive(),
+          getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
+          getRetirementGraphene: () => RETIREMENT_PREP.graphene
+        })
+      );
+      for (const requirement of result.resources) {
+        const resource = resources[requirement.id];
+        resource.maxCost = requirement.maxCost;
+        resource.storageRequired = requirement.storageRequired;
+      }
+      state.knowledgeRequiredByTechs = result.knowledge.knowledgeRequiredByTechs;
+      state.cheapestTechKnowledge = result.knowledge.cheapestTechKnowledge;
+      state.knowledgeRequiredByBuildTargets = result.knowledge.knowledgeRequiredByBuildTargets;
+    }
     const { prioritizeDemandedResources } = createDemandPrioritization({
       getSettings: () => settings,
       getState: () => state,
@@ -37757,7 +38122,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     }
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
-        storageRequirements: { requestStorageFor, calculateRequiredStorages },
+        storageRequirements: { calculateRequiredStorages },
         setStorageRequirementTestContext(context) {
           settings = context.settings;
           state = context.state;

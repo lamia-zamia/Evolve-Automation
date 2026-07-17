@@ -28,7 +28,6 @@ vm.runInNewContext(source, sandbox, {
 
 assert.equal(typeof hooks.setStorageRequirementTestContext, "function");
 const requirements = hooks.storageRequirements;
-assert.equal(typeof requirements?.requestStorageFor, "function");
 assert.equal(typeof requirements?.calculateRequiredStorages, "function");
 
 function resource(maxQuantity, hasStorage = false) {
@@ -42,32 +41,8 @@ function resource(maxQuantity, hasStorage = false) {
   };
 }
 
-let settings = { storageAssignExtra: true };
-let resources = {
-  Iron: resource(50),
-  Copper: resource(50, true),
-};
-hooks.setStorageRequirementTestContext({
-  settings,
-  state: {},
-  resources,
-  buildings: {},
-  game: {},
-  BuildingManager: {},
-  ProjectManager: {},
-  FleetManagerOuter: {},
-  inflationChallengeAssistActive: () => false,
-  retirementChallengeAssistActive: () => false,
-});
-requirements.requestStorageFor([
-  { cost: { Iron: 100 } },
-  { cost: { Iron: 40 } },
-  { cost: { Copper: 100 } },
-]);
-assert.equal(resources.Iron.maxCost, 100);
-assert.equal(resources.Iron.storageRequired, 41.2);
-assert.equal(resources.Copper.maxCost, 100);
-assert.equal(resources.Copper.storageRequired, 103);
+let settings;
+let resources;
 
 const target = (cost, weighting = 0, extra = {}) => ({
   cost,

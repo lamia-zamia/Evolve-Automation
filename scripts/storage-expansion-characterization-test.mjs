@@ -114,4 +114,32 @@ assert.deepEqual(context.calls, [
   ["container", 1],
 ]);
 
+// Over-cap latent quirk: when currently-held crates exceed the storage cap,
+// numberOfCratesWeCanBuild is negative, so cratesToBuild is negative. The
+// construct call is a no-op in-game (guarded), but the optimistic resource
+// model is still mutated by the negative count: crate count DECREASES, cost
+// resources INCREASE, and missingStorage INCREASES (raising the container
+// build). This pins that behavior before migration; see the behavior review
+// queue in docs/feature-backlog.md.
+context = makeContext();
+context.resources.Crates.currentQuantity = 5; // over the max of 10? no: raise max-current negative
+context.resources.Crates.maxQuantity = 2;
+hooks.setStorageExpansionTestContext(context);
+assert.equal(hooks.expandStorage(300), true);
+assert.deepEqual(context.calls, [
+  ["crate", -3],
+  ["container", 3],
+]);
+assert.deepEqual(
+  {
+    crates: context.resources.Crates.currentQuantity,
+    containers: context.resources.Containers.currentQuantity,
+    wood: context.resources.Wood.currentQuantity,
+    steel: context.resources.Steel.currentQuantity,
+  },
+  // crates 5 + (-3) = 2; wood 25 - (10 * -3) = 55; missing 300 - (-3*50) = 450
+  // containers: canBuild=min(4, 100/20=5)=4, ceil(450/200)=3 -> 3
+  { crates: 2, containers: 1 + 3, wood: 55, steel: 100 - 20 * 3 },
+);
+
 console.log("Storage expansion bundled characterization tests passed");

@@ -19,8 +19,31 @@ export interface AdjustTaxRateCommand {
   readonly batches: readonly TaxAdjustmentBatch[];
 }
 
+export type StorageUnit = "crate" | "container";
+
+/** One optimistic decrement/increment applied to the script resource model. */
+export interface StorageResourceDelta {
+  readonly resourceId: string;
+  /** Subtracted from the resource's current quantity; may be negative. */
+  readonly amount: number;
+}
+
+/** Build a batch of crates or containers and reconcile the resource model. */
+export interface ConstructStorageCommand {
+  readonly kind: "construct-storage";
+  readonly unit: StorageUnit;
+  /** May be non-positive; construction is a no-op in-game but the model still reconciles. */
+  readonly count: number;
+  /** Storage capacity one unit adds; used to decide whether anything was built. */
+  readonly storagePerUnit: number;
+  /** Resource whose current quantity increases by `count`. */
+  readonly producedResourceId: string;
+  /** Cost resources whose current quantity each decreases by its `amount`. */
+  readonly spend: readonly StorageResourceDelta[];
+}
+
 /** Add variants only when another vertical slice is migrated. */
-export type AutomationCommand = AdjustTaxRateCommand;
+export type AutomationCommand = AdjustTaxRateCommand | ConstructStorageCommand;
 
 export interface CommandEnvelope<
   TCommand extends AutomationCommand = AutomationCommand,

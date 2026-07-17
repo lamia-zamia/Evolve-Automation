@@ -88,8 +88,9 @@ import {
 import { createPlannerStatsStore } from "./adapters/storage/planner-stats.ts";
 import { createPlannerStatsLifecycle } from "./application/planner-stats.ts";
 import { createBuildPlanner } from "./planning/build-planner.ts";
-import { createStorageExpansion } from "./planning/storage-expansion.ts";
-import { createStorageRequirements } from "./planning/storage-requirements.ts";
+import { createStorageExpansion } from "./bootstrap/storage-expansion.ts";
+import { readStorageRequirementsInput } from "./adapters/evolve/storage-requirements.ts";
+import { planStorageRequirements } from "./domain/storage-requirements.ts";
 import { createDemandPrioritization } from "./planning/demand-prioritization.ts";
 import { createPriorityTargets } from "./planning/priority-targets.ts";
 import { decideEvolutionResult } from "./domain/evolution-result.ts";
@@ -1440,25 +1441,38 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getResources: () => resources,
     getBuildings: () => buildings,
     getStorageManager: () => StorageManager,
-    getIsEarlyGame: () => isEarlyGame,
-    getIsLumberRace: () => isLumberRace,
+    isEarlyGame: () => isEarlyGame(),
+    isLumberRace: () => isLumberRace(),
+    nowMs: () => browserClock.nowMs(),
   });
-  const { requestStorageFor, calculateRequiredStorages } =
-    createStorageRequirements({
-      getSettings: () => settings,
-      getState: () => state,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getGame: () => game,
-      getBuildingManager: () => BuildingManager,
-      getProjectManager: () => ProjectManager,
-      getFleetManagerOuter: () => FleetManagerOuter,
-      isTechnology: (target) => target instanceof Technology,
-      getInflationChallengeAssistActive: () => inflationChallengeAssistActive,
-      getRetirementChallengeAssistActive: () => retirementChallengeAssistActive,
-      getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
-      getRetirementGraphene: () => RETIREMENT_PREP.graphene,
-    });
+  function calculateRequiredStorages() {
+    const result = planStorageRequirements(
+      readStorageRequirementsInput({
+        getSettings: () => settings,
+        getState: () => state,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getGame: () => game,
+        getBuildingManager: () => BuildingManager,
+        getProjectManager: () => ProjectManager,
+        getFleetManagerOuter: () => FleetManagerOuter,
+        isTechnology: (target) => target instanceof Technology,
+        isInflationAssistActive: () => inflationChallengeAssistActive(),
+        isRetirementAssistActive: () => retirementChallengeAssistActive(),
+        getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
+        getRetirementGraphene: () => RETIREMENT_PREP.graphene,
+      }),
+    );
+    for (const requirement of result.resources) {
+      const resource = resources[requirement.id];
+      resource.maxCost = requirement.maxCost;
+      resource.storageRequired = requirement.storageRequired;
+    }
+    state.knowledgeRequiredByTechs = result.knowledge.knowledgeRequiredByTechs;
+    state.cheapestTechKnowledge = result.knowledge.cheapestTechKnowledge;
+    state.knowledgeRequiredByBuildTargets =
+      result.knowledge.knowledgeRequiredByBuildTargets;
+  }
   const { prioritizeDemandedResources } = createDemandPrioritization({
     getSettings: () => settings,
     getState: () => state,
@@ -3658,7 +3672,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
-      storageRequirements: { requestStorageFor, calculateRequiredStorages },
+      storageRequirements: { calculateRequiredStorages },
       setStorageRequirementTestContext(context) {
         settings = context.settings;
         state = context.state;
