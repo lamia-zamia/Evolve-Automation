@@ -406,6 +406,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       resources: () => resources,
       RitualManager: () => RitualManager,
       settingsRaw: () => settingsRaw,
+      SmelterManager: () => SmelterManager,
       StorageManager: () => StorageManager,
       SupplyManager: () => SupplyManager,
       traitList: () => traitList,

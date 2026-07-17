@@ -37246,6 +37246,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         resources: () => resources,
         RitualManager: () => RitualManager,
         settingsRaw: () => settingsRaw,
+        SmelterManager: () => SmelterManager,
         StorageManager: () => StorageManager,
         SupplyManager: () => SupplyManager,
         traitList: () => traitList,
