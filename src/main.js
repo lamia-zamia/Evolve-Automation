@@ -212,7 +212,11 @@ import { planGovernment } from "./domain/government.ts";
 import { createAutoBattle } from "./automation/combat/battle.ts";
 import { createTaxAutomation } from "./bootstrap/tax.ts";
 import { createUserscriptEnvironment } from "./adapters/userscript/environment.ts";
-import { createAutoSmelter } from "./automation/economy/smelter.ts";
+import {
+  createSmelterCommandExecutor,
+  readSmelterInput,
+} from "./adapters/evolve/smelter.ts";
+import { planSmelter } from "./domain/smelter.ts";
 import {
   createAlchemyCommandExecutor,
   readAlchemyInput,
@@ -402,7 +406,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       resources: () => resources,
       RitualManager: () => RitualManager,
       settingsRaw: () => settingsRaw,
-      SmelterManager: () => SmelterManager,
       StorageManager: () => StorageManager,
       SupplyManager: () => SupplyManager,
       traitList: () => traitList,
@@ -3084,16 +3087,25 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     );
   }
 
-  const autoSmelter = createAutoSmelter({
-    SmelterManager,
-    getGame: () => game,
-    getState: () => state,
-    getSettings: () => settings,
-    getResources: () => resources,
-    getJobs: () => jobs,
-    getBuildings: () => buildings,
-    haveTech,
-  });
+  const smelterExecutor = createSmelterCommandExecutor(() => SmelterManager);
+  const autoSmelter = function autoSmelter() {
+    const decision = planSmelter(
+      readSmelterInput({
+        getSmelterManager: () => SmelterManager,
+        getGame: () => game,
+        getResources: () => resources,
+        getSettings: () => settings,
+        getJobs: () => jobs,
+        getBuildings: () => buildings,
+        haveTech,
+        consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
+      }),
+    );
+    for (const tooltip of decision.tooltips) {
+      state.tooltips[tooltip.key] = tooltip.value;
+    }
+    smelterExecutor.execute(decision);
+  };
 
   const autoFactory = createAutoFactory({
     FactoryManager,
