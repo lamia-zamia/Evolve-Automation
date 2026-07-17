@@ -1,4 +1,7 @@
 import type { GrapheneFuelView, GrapheneInput } from "../../domain/graphene.ts";
+import type { GrapheneFuelAdjustment } from "../../domain/graphene.ts";
+import type { DecisionExecutor } from "../../ports/decision-executor.ts";
+import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";
 import {
   requireFunction,
   requireNumber,
@@ -34,9 +37,23 @@ function callNumber(
   );
 }
 
-function readFuels(manager: UnknownRecord): GrapheneFuelView[] {
+interface RawFuel {
+  readonly index: number;
+  readonly id: string;
+  readonly fuel: UnknownRecord;
+  readonly cost: UnknownRecord;
+  readonly resource: UnknownRecord;
+  readonly storageRatio: number;
+  readonly rateOfChange: number;
+}
+
+function readFuels(
+  manager: UnknownRecord,
+  graphene: UnknownRecord,
+  maxOperating: number,
+): { readonly fuels: GrapheneFuelView[]; readonly grapheneUseful: boolean } {
   const fuels = requireRecord(manager["Fuels"], "GrapheneManager.Fuels");
-  return Object.values(fuels).map((entry, index) => {
+  const rawFuels: RawFuel[] = Object.values(fuels).map((entry, index) => {
     const path = `GrapheneManager.Fuels[${index}]`;
     const fuel = requireRecord(entry, path);
     const id = fuel["id"];
@@ -45,7 +62,8 @@ function readFuels(manager: UnknownRecord): GrapheneFuelView[] {
     }
     const cost = requireRecord(fuel["cost"], `${path}.cost`);
     const resource = requireRecord(cost["resource"], `${path}.cost.resource`);
-    return Object.freeze({
+    return {
+      index,
       id,
       storageRatio: requireNumber(
         resource["storageRatio"],
@@ -55,29 +73,83 @@ function readFuels(manager: UnknownRecord): GrapheneFuelView[] {
         resource["rateOfChange"],
         `${path}.cost.resource.rateOfChange`,
       ),
-      currentQuantity: requireNumber(
-        resource["currentQuantity"],
-        `${path}.cost.resource.currentQuantity`,
-      ),
-      isUnlocked: callBoolean(resource, "isUnlocked", `${path}.cost.resource`),
-      costQuantity: requireNumber(cost["quantity"], `${path}.cost.quantity`),
-      costMinRateOfChange: requireNumber(
-        cost["minRateOfChange"],
-        `${path}.cost.minRateOfChange`,
-      ),
-      currentFuelCount: callNumber(
-        manager,
-        "fueledCount",
-        "GrapheneManager",
-        fuel,
-      ),
-    });
+      fuel,
+      cost,
+      resource,
+    };
   });
+
+  const result: GrapheneFuelView[] = rawFuels.map((fuel) =>
+    Object.freeze({
+      id: fuel.id,
+      storageRatio: fuel.storageRatio,
+      rateOfChange: fuel.rateOfChange,
+      currentQuantity: 0,
+      isUnlocked: false,
+      costQuantity: 0,
+      costMinRateOfChange: 0,
+      currentFuelCount: 0,
+    }),
+  );
+  let grapheneUseful = false;
+  let usefulnessSampled = false;
+  if (maxOperating !== 0) {
+    const sorted = [...rawFuels].sort((a, b) =>
+      b.storageRatio < 0.995 || a.storageRatio < 0.995
+        ? b.storageRatio - a.storageRatio
+        : b.rateOfChange - a.rateOfChange,
+    );
+    for (const raw of sorted) {
+      const path = `GrapheneManager.Fuels[${raw.index}]`;
+      const isUnlocked = callBoolean(
+        raw.resource,
+        "isUnlocked",
+        `${path}.cost.resource`,
+      );
+      if (!isUnlocked) {
+        continue;
+      }
+      if (!usefulnessSampled) {
+        grapheneUseful = callBoolean(
+          graphene,
+          "isUseful",
+          "resources.Graphene",
+        );
+        usefulnessSampled = true;
+      }
+      result[raw.index] = Object.freeze({
+        id: raw.id,
+        storageRatio: raw.storageRatio,
+        rateOfChange: raw.rateOfChange,
+        currentQuantity: requireNumber(
+          raw.resource["currentQuantity"],
+          `${path}.cost.resource.currentQuantity`,
+        ),
+        isUnlocked: true,
+        costQuantity: requireNumber(
+          raw.cost["quantity"],
+          `${path}.cost.quantity`,
+        ),
+        costMinRateOfChange: requireNumber(
+          raw.cost["minRateOfChange"],
+          `${path}.cost.minRateOfChange`,
+        ),
+        currentFuelCount: callNumber(
+          manager,
+          "fueledCount",
+          "GrapheneManager",
+          raw.fuel,
+        ),
+      });
+    }
+  }
+  return { fuels: result, grapheneUseful };
 }
 
 export function readGrapheneInput(
   dependencies: GrapheneReaderDependencies,
 ): GrapheneInput {
+  const resourcesValue = dependencies.getResources();
   const manager = requireRecord(
     dependencies.getGrapheneManager(),
     "GrapheneManager",
@@ -92,14 +164,81 @@ export function readGrapheneInput(
       fuels: Object.freeze([]),
     });
   }
-  const resources = requireRecord(dependencies.getResources(), "resources");
+  const resources = requireRecord(resourcesValue, "resources");
   const graphene = requireRecord(resources["Graphene"], "resources.Graphene");
+  const maxOperating = callNumber(manager, "maxOperating", "GrapheneManager");
+  const fuelSnapshot = readFuels(manager, graphene, maxOperating);
 
   return Object.freeze({
     initialised: true,
-    maxOperating: callNumber(manager, "maxOperating", "GrapheneManager"),
-    grapheneUseful: callBoolean(graphene, "isUseful", "resources.Graphene"),
+    maxOperating,
+    grapheneUseful: fuelSnapshot.grapheneUseful,
     consumptionBalanceMin: dependencies.consumptionBalanceMin,
-    fuels: Object.freeze(readFuels(manager)),
+    fuels: Object.freeze(fuelSnapshot.fuels),
   });
+}
+
+export function createGrapheneCommandExecutor(
+  getGrapheneManager: () => unknown,
+): DecisionExecutor<readonly GrapheneFuelAdjustment[]> {
+  function execute(adjustments: readonly Readonly<GrapheneFuelAdjustment>[]) {
+    if (adjustments.length === 0) {
+      return SUCCEEDED;
+    }
+    const manager = requireRecord(getGrapheneManager(), "GrapheneManager");
+    const fuels = requireRecord(manager["Fuels"], "GrapheneManager.Fuels");
+    const fueledCount = requireFunction(
+      manager["fueledCount"],
+      "GrapheneManager.fueledCount",
+    );
+    const decreaseFuel = requireFunction(
+      manager["decreaseFuel"],
+      "GrapheneManager.decreaseFuel",
+    );
+    const increaseFuel = requireFunction(
+      manager["increaseFuel"],
+      "GrapheneManager.increaseFuel",
+    );
+    const resolved: {
+      readonly adjustment: Readonly<GrapheneFuelAdjustment>;
+      readonly fuel: UnknownRecord;
+    }[] = [];
+    for (const adjustment of adjustments) {
+      if (!Number.isSafeInteger(adjustment.delta)) {
+        return rejected(
+          "invalid-graphene-adjustment",
+          "graphene fuel adjustment must be a safe integer",
+        );
+      }
+      const fuel = requireRecord(
+        fuels[adjustment.fuelId],
+        `GrapheneManager.Fuels.${adjustment.fuelId}`,
+      );
+      const actual = requireNumber(
+        Reflect.apply(fueledCount, manager, [fuel]),
+        `GrapheneManager.fueledCount(${adjustment.fuelId})`,
+      );
+      if (actual !== adjustment.expectedCurrentFuelCount) {
+        return stale("stale-graphene-fuel", "graphene fuel count changed", {
+          fuelId: adjustment.fuelId,
+          expected: adjustment.expectedCurrentFuelCount,
+          actual,
+        });
+      }
+      resolved.push({ adjustment, fuel });
+    }
+    for (const { adjustment, fuel } of resolved) {
+      if (adjustment.delta < 0) {
+        Reflect.apply(decreaseFuel, manager, [fuel, adjustment.delta * -1]);
+      }
+    }
+    for (const { adjustment, fuel } of resolved) {
+      if (adjustment.delta > 0) {
+        Reflect.apply(increaseFuel, manager, [fuel, adjustment.delta]);
+      }
+    }
+    return SUCCEEDED;
+  }
+
+  return Object.freeze({ execute });
 }

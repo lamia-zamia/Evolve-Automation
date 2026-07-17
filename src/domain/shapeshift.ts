@@ -7,7 +7,7 @@
 export interface ShapeshiftInput {
   readonly isShapeshifter: boolean;
   readonly shifterGenus: string;
-  readonly currentGenus: unknown;
+  readonly currentGenus: string | null;
 }
 
 export function planShapeshift(

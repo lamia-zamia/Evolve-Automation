@@ -1,4 +1,10 @@
-import type { GovernmentInput } from "../../domain/government.ts";
+import type {
+  GovernmentDecision,
+  GovernmentInput,
+} from "../../domain/government.ts";
+import type { DecisionExecutor } from "../../ports/decision-executor.ts";
+import type { GovernmentControls } from "../../ports/government-controls.ts";
+import { stale, SUCCEEDED } from "../command-outcomes.ts";
 import { requireFunction, requireRecord } from "../validation.ts";
 
 export interface GovernmentReaderDependencies {
@@ -77,32 +83,159 @@ export function readGovernmentInput(
   const govSpace = readString(settings, "govSpace");
   const govFinal = readString(settings, "govFinal");
   const govInterim = readString(settings, "govInterim");
+  const govGovernor = readString(settings, "govGovernor");
+
+  const enabled = Boolean(Reflect.apply(isEnabled, manager, []));
+  let guardAnarchist = false;
+  let haveQFactory = false;
+  let govSpaceUnlocked = false;
+  let govFinalUnlocked = false;
+  let govInterimUnlocked = false;
+
+  if (enabled) {
+    guardAnarchist = dependencies.guardActive("guardAnarchist");
+    if (!guardAnarchist) {
+      if (govSpace !== "none") {
+        haveQFactory = dependencies.haveTech("q_factory");
+        if (haveQFactory) {
+          govSpaceUnlocked = governmentUnlocked(
+            manager["Types"],
+            govSpace,
+            "GovernmentManager",
+          );
+        }
+      }
+      if (!govSpaceUnlocked && govFinal !== "none") {
+        govFinalUnlocked = governmentUnlocked(
+          manager["Types"],
+          govFinal,
+          "GovernmentManager",
+        );
+      }
+      if (!govSpaceUnlocked && !govFinalUnlocked && govInterim !== "none") {
+        govInterimUnlocked = governmentUnlocked(
+          manager["Types"],
+          govInterim,
+          "GovernmentManager",
+        );
+      }
+    }
+  }
+
+  let haveGovernorTech = false;
+  let currentGovernor = "none";
+  let candidateBackgrounds: readonly string[] = Object.freeze([]);
+  if (dependencies.haveTech("governor")) {
+    haveGovernorTech = true;
+    if (govGovernor !== "none") {
+      currentGovernor = dependencies.getGovernor();
+      if (currentGovernor === "none") {
+        candidateBackgrounds = Object.freeze(readCandidateBackgrounds(game));
+      }
+    }
+  }
 
   return Object.freeze({
-    isEnabled: Boolean(Reflect.apply(isEnabled, manager, [])),
-    guardAnarchist: dependencies.guardActive("guardAnarchist"),
-    haveQFactory: dependencies.haveTech("q_factory"),
-    haveGovernorTech: dependencies.haveTech("governor"),
-    currentGovernor: dependencies.getGovernor(),
+    isEnabled: enabled,
+    guardAnarchist,
+    haveQFactory,
+    haveGovernorTech,
+    currentGovernor,
     govSpace,
     govFinal,
     govInterim,
-    govGovernor: readString(settings, "govGovernor"),
-    govSpaceUnlocked: governmentUnlocked(
-      manager["Types"],
-      govSpace,
-      "GovernmentManager",
-    ),
-    govFinalUnlocked: governmentUnlocked(
-      manager["Types"],
-      govFinal,
-      "GovernmentManager",
-    ),
-    govInterimUnlocked: governmentUnlocked(
-      manager["Types"],
-      govInterim,
-      "GovernmentManager",
-    ),
-    candidateBackgrounds: Object.freeze(readCandidateBackgrounds(game)),
+    govGovernor,
+    govSpaceUnlocked,
+    govFinalUnlocked,
+    govInterimUnlocked,
+    candidateBackgrounds,
   });
+}
+
+export function createGovernmentCommandExecutor(dependencies: {
+  readonly getGovernmentManager: () => unknown;
+  readonly getGame: () => unknown;
+  readonly getGovernor: () => string;
+  readonly controls: GovernmentControls;
+}): DecisionExecutor<GovernmentDecision> {
+  function execute(decision: Readonly<GovernmentDecision>) {
+    if (decision.government === null && decision.appointCandidate === null) {
+      return SUCCEEDED;
+    }
+    const manager = requireRecord(
+      dependencies.getGovernmentManager(),
+      "GovernmentManager",
+    );
+    let setGovernment: ((government: string) => unknown) | undefined;
+    if (decision.government !== null) {
+      const isEnabled = requireFunction(
+        manager["isEnabled"],
+        "GovernmentManager.isEnabled",
+      );
+      if (!Reflect.apply(isEnabled, manager, [])) {
+        return stale(
+          "government-disabled",
+          "government automation became unavailable",
+        );
+      }
+      if (
+        !governmentUnlocked(
+          manager["Types"],
+          decision.government,
+          "GovernmentManager",
+        )
+      ) {
+        return stale("government-locked", "planned government became locked", {
+          government: decision.government,
+        });
+      }
+      setGovernment = requireFunction(
+        manager["setGovernment"],
+        "GovernmentManager.setGovernment",
+      ) as (government: string) => unknown;
+    }
+
+    if (decision.appointCandidate !== null) {
+      if (dependencies.getGovernor() !== "none") {
+        return stale("governor-appointed", "a governor was already appointed");
+      }
+      const backgrounds = readCandidateBackgrounds(
+        requireRecord(dependencies.getGame(), "game"),
+      );
+      if (
+        backgrounds[decision.appointCandidate] !==
+        decision.appointCandidateBackground
+      ) {
+        return stale(
+          "stale-governor-candidate",
+          "governor candidates changed",
+          {
+            candidateIndex: decision.appointCandidate,
+          },
+        );
+      }
+      if (!dependencies.controls.isCandidateAppointmentAvailable()) {
+        return stale(
+          "governor-controls-unavailable",
+          "governor appointment controls became unavailable",
+        );
+      }
+    }
+
+    if (decision.government !== null && setGovernment !== undefined) {
+      Reflect.apply(setGovernment, manager, [decision.government]);
+    }
+    if (
+      decision.appointCandidate !== null &&
+      !dependencies.controls.appointCandidate(decision.appointCandidate)
+    ) {
+      return stale(
+        "governor-controls-unavailable",
+        "governor appointment controls became unavailable",
+      );
+    }
+    return SUCCEEDED;
+  }
+
+  return Object.freeze({ execute });
 }

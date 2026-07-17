@@ -27,6 +27,8 @@ export interface GovernmentDecision {
   readonly government: string | null;
   /** Candidate index to appoint, or null when none matches / not appointing. */
   readonly appointCandidate: number | null;
+  /** Expected background at `appointCandidate`, used as a stale precondition. */
+  readonly appointCandidateBackground: string | null;
 }
 
 export function planGovernment(
@@ -48,6 +50,7 @@ export function planGovernment(
   }
 
   let appointCandidate: number | null = null;
+  let appointCandidateBackground: string | null = null;
   if (
     input.haveGovernorTech &&
     input.govGovernor !== "none" &&
@@ -56,10 +59,15 @@ export function planGovernment(
     for (let i = 0; i < input.candidateBackgrounds.length; i++) {
       if (input.candidateBackgrounds[i] === input.govGovernor) {
         appointCandidate = i;
+        appointCandidateBackground = input.govGovernor;
         break;
       }
     }
   }
 
-  return Object.freeze({ government, appointCandidate });
+  return Object.freeze({
+    government,
+    appointCandidate,
+    appointCandidateBackground,
+  });
 }

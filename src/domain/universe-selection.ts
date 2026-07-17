@@ -6,7 +6,7 @@
 
 export interface UniverseSelectionInput {
   readonly hasBigbang: boolean;
-  readonly universe: unknown;
+  readonly universe: string | null;
   readonly targetName: string;
 }
 

@@ -25,9 +25,14 @@ export interface QuarryRatioInput {
   readonly chrysotileWeight: number;
 }
 
+export interface ProductionRatioAdjustment {
+  readonly expectedCurrentRatio: number;
+  readonly delta: number;
+}
+
 export function planQuarryRatio(
   input: Readonly<QuarryRatioInput>,
-): number | null {
+): ProductionRatioAdjustment | null {
   if (!input.initialised) {
     return null;
   }
@@ -49,7 +54,10 @@ export function planQuarryRatio(
   const newRatio = Math.round(
     (chrysotileWeigth / (chrysotileWeigth + stoneWeigth)) * 100,
   );
-  return newRatio - input.currentRatio;
+  return Object.freeze({
+    expectedCurrentRatio: input.currentRatio,
+    delta: newRatio - input.currentRatio,
+  });
 }
 
 export interface MineRatioInput {
@@ -62,7 +70,9 @@ export interface MineRatioInput {
   readonly adamantiteWeight: number;
 }
 
-export function planMineRatio(input: Readonly<MineRatioInput>): number | null {
+export function planMineRatio(
+  input: Readonly<MineRatioInput>,
+): ProductionRatioAdjustment | null {
   if (!input.initialised) {
     return null;
   }
@@ -78,7 +88,10 @@ export function planMineRatio(input: Readonly<MineRatioInput>): number | null {
   const newRatio = Math.round(
     (adamantiteWeigth / (adamantiteWeigth + aluminiumWeight)) * 100,
   );
-  return newRatio - input.currentRatio;
+  return Object.freeze({
+    expectedCurrentRatio: input.currentRatio,
+    delta: newRatio - input.currentRatio,
+  });
 }
 
 export interface ExtractorProductionInput {
@@ -98,6 +111,7 @@ export interface ExtractorRatioInput {
 
 export interface ExtractorRatioAdjustment {
   readonly id: string;
+  readonly expectedCurrentRatio: number;
   readonly delta: number;
 }
 
@@ -120,6 +134,7 @@ export function planExtractorRatios(
       );
       return Object.freeze({
         id: prod.id,
+        expectedCurrentRatio: prod.currentRatio,
         delta: newRatio - prod.currentRatio,
       });
     }),

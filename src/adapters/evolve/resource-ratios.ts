@@ -1,9 +1,13 @@
 import type {
+  ExtractorRatioAdjustment,
   ExtractorProductionInput,
   ExtractorRatioInput,
   MineRatioInput,
+  ProductionRatioAdjustment,
   QuarryRatioInput,
 } from "../../domain/resource-ratios.ts";
+import type { DecisionExecutor } from "../../ports/decision-executor.ts";
+import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";
 import {
   requireFunction,
   requireNumber,
@@ -65,6 +69,12 @@ function settingNumber(settings: UnknownRecord, key: string): number {
 export function readQuarryRatioInput(
   dependencies: ResourceRatiosReaderDependencies,
 ): QuarryRatioInput {
+  // Preserve the legacy getter order while deferring validation until the
+  // industry gate succeeds. These getters are transitional bindings; the
+  // returned values are sampled into the immutable view below.
+  const resourcesValue = dependencies.getResources();
+  const settingsValue = dependencies.getSettings();
+  const buildingsValue = dependencies.getBuildings();
   const manager = requireRecord(
     dependencies.getQuarryManager(),
     "QuarryManager",
@@ -83,9 +93,9 @@ export function readQuarryRatioInput(
       chrysotileWeight: 0,
     });
   }
-  const resources = requireRecord(dependencies.getResources(), "resources");
-  const settings = requireRecord(dependencies.getSettings(), "settings");
-  const buildings = requireRecord(dependencies.getBuildings(), "buildings");
+  const resources = requireRecord(resourcesValue, "resources");
+  const settings = requireRecord(settingsValue, "settings");
+  const buildings = requireRecord(buildingsValue, "buildings");
   const metalRefinery = requireRecord(
     buildings["MetalRefinery"],
     "buildings.MetalRefinery",
@@ -109,6 +119,8 @@ export function readQuarryRatioInput(
 export function readMineRatioInput(
   dependencies: ResourceRatiosReaderDependencies,
 ): MineRatioInput {
+  const resourcesValue = dependencies.getResources();
+  const settingsValue = dependencies.getSettings();
   const manager = requireRecord(dependencies.getMineManager(), "MineManager");
   if (!initIndustry(manager, "MineManager")) {
     return Object.freeze({
@@ -121,8 +133,8 @@ export function readMineRatioInput(
       adamantiteWeight: 0,
     });
   }
-  const resources = requireRecord(dependencies.getResources(), "resources");
-  const settings = requireRecord(dependencies.getSettings(), "settings");
+  const resources = requireRecord(resourcesValue, "resources");
+  const settings = requireRecord(settingsValue, "settings");
   return Object.freeze({
     initialised: true,
     currentRatio: currentProduction(manager, "MineManager"),
@@ -137,6 +149,8 @@ export function readMineRatioInput(
 export function readExtractorRatioInput(
   dependencies: ResourceRatiosReaderDependencies,
 ): ExtractorRatioInput {
+  const resourcesValue = dependencies.getResources();
+  const settingsValue = dependencies.getSettings();
   const manager = requireRecord(
     dependencies.getExtractorManager(),
     "ExtractorManager",
@@ -147,8 +161,8 @@ export function readExtractorRatioInput(
       productions: Object.freeze([]),
     });
   }
-  const resources = requireRecord(dependencies.getResources(), "resources");
-  const settings = requireRecord(dependencies.getSettings(), "settings");
+  const resources = requireRecord(resourcesValue, "resources");
+  const settings = requireRecord(settingsValue, "settings");
 
   const specs = [
     { id: "common", res1: "Iron", res2: "Aluminium" },
@@ -174,4 +188,99 @@ export function readExtractorRatioInput(
     initialised: true,
     productions: Object.freeze(productions),
   });
+}
+
+export interface ResourceRatioCommandExecutors {
+  readonly quarry: DecisionExecutor<ProductionRatioAdjustment>;
+  readonly mine: DecisionExecutor<ProductionRatioAdjustment>;
+  readonly extractor: DecisionExecutor<readonly ExtractorRatioAdjustment[]>;
+}
+
+function createSingleRatioExecutor(
+  getManager: () => unknown,
+  managerName: string,
+): DecisionExecutor<ProductionRatioAdjustment> {
+  function execute(adjustment: Readonly<ProductionRatioAdjustment>) {
+    if (!Number.isSafeInteger(adjustment.delta)) {
+      return rejected(
+        "invalid-production-ratio-adjustment",
+        "production ratio adjustment must be a safe integer",
+      );
+    }
+    const manager = requireRecord(getManager(), managerName);
+    const actual = currentProduction(manager, managerName);
+    if (actual !== adjustment.expectedCurrentRatio) {
+      return stale("stale-production-ratio", "production ratio changed", {
+        manager: managerName,
+        expected: adjustment.expectedCurrentRatio,
+        actual,
+      });
+    }
+    const increase = requireFunction(
+      manager["increaseProduction"],
+      `${managerName}.increaseProduction`,
+    );
+    Reflect.apply(increase, manager, [adjustment.delta]);
+    return SUCCEEDED;
+  }
+  return Object.freeze({ execute });
+}
+
+export function createResourceRatioCommandExecutors(dependencies: {
+  readonly getQuarryManager: () => unknown;
+  readonly getMineManager: () => unknown;
+  readonly getExtractorManager: () => unknown;
+}): ResourceRatioCommandExecutors {
+  const quarry = createSingleRatioExecutor(
+    dependencies.getQuarryManager,
+    "QuarryManager",
+  );
+  const mine = createSingleRatioExecutor(
+    dependencies.getMineManager,
+    "MineManager",
+  );
+
+  const extractor: DecisionExecutor<readonly ExtractorRatioAdjustment[]> =
+    Object.freeze({
+      execute(adjustments: readonly Readonly<ExtractorRatioAdjustment>[]) {
+        if (adjustments.length === 0) {
+          return SUCCEEDED;
+        }
+        const manager = requireRecord(
+          dependencies.getExtractorManager(),
+          "ExtractorManager",
+        );
+        const increase = requireFunction(
+          manager["increaseProduction"],
+          "ExtractorManager.increaseProduction",
+        );
+        for (const adjustment of adjustments) {
+          if (!Number.isSafeInteger(adjustment.delta)) {
+            return rejected(
+              "invalid-production-ratio-adjustment",
+              "production ratio adjustment must be a safe integer",
+            );
+          }
+          const actual = currentProduction(
+            manager,
+            "ExtractorManager",
+            adjustment.id,
+          );
+          if (actual !== adjustment.expectedCurrentRatio) {
+            return stale("stale-production-ratio", "production ratio changed", {
+              manager: "ExtractorManager",
+              productionId: adjustment.id,
+              expected: adjustment.expectedCurrentRatio,
+              actual,
+            });
+          }
+        }
+        for (const adjustment of adjustments) {
+          Reflect.apply(increase, manager, [adjustment.id, adjustment.delta]);
+        }
+        return SUCCEEDED;
+      },
+    });
+
+  return Object.freeze({ quarry, mine, extractor });
 }

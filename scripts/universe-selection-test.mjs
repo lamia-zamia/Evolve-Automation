@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 
-import { readUniverseSelectionInput } from "../src/adapters/evolve/universe-selection.ts";
+import { createUniverseSelectionControls } from "../src/adapters/browser/progression-controls.ts";
+import {
+  createUniverseSelectionCommandExecutor,
+  readUniverseSelectionInput,
+} from "../src/adapters/evolve/universe-selection.ts";
 import { planUniverseSelection } from "../src/domain/universe-selection.ts";
 
 // End-to-end reader + planner + apply, matching the legacy autoUniverseSelection.
@@ -25,12 +29,10 @@ function run(scenario) {
       getSettings: () => settings,
     }),
   );
-  if (target !== null) {
-    const action = document.getElementById(`uni-${target}`);
-    if (action !== null) {
-      action.children[0].click();
-    }
-  }
+  createUniverseSelectionCommandExecutor({
+    getGame: () => game,
+    controls: createUniverseSelectionControls(() => document),
+  }).execute(target);
   return clicks;
 }
 
@@ -43,6 +45,15 @@ assert.deepEqual(
   }),
   ["uni-magic"],
   "clicks the configured universe target",
+);
+
+assert.equal(
+  readUniverseSelectionInput({
+    getGame: () => ({ global: { race: { bigbang: true, universe: 7 } } }),
+    getSettings: () => ({ userUniverseTargetName: "magic" }),
+  }).universe,
+  null,
+  "unknown universe value is normalized at the adapter boundary",
 );
 assert.deepEqual(
   run({

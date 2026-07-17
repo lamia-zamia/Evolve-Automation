@@ -27,6 +27,7 @@ export interface GrapheneInput {
 
 export interface GrapheneFuelAdjustment {
   readonly fuelId: string;
+  readonly expectedCurrentFuelCount: number;
   /** Positive increases the fuel, negative decreases it. */
   readonly delta: number;
 }
@@ -79,7 +80,13 @@ export function planGraphene(
 
     const deltaFuel = maxFueledForConsumption - currentFuelCount;
     if (deltaFuel !== 0) {
-      fuelAdjust.push(Object.freeze({ fuelId: fuel.id, delta: deltaFuel }));
+      fuelAdjust.push(
+        Object.freeze({
+          fuelId: fuel.id,
+          expectedCurrentFuelCount: currentFuelCount,
+          delta: deltaFuel,
+        }),
+      );
     }
 
     remainingPlants -= currentFuelCount + deltaFuel;

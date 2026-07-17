@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { readPylonInput } from "../src/adapters/evolve/pylon.ts";
+import {
+  createPylonCommandExecutor,
+  readPylonInput,
+} from "../src/adapters/evolve/pylon.ts";
 import { planPylon } from "../src/domain/pylon.ts";
 
 // Independent transcription of RitualManager.costStep / manaCost from
@@ -154,16 +157,10 @@ function runNew(scenario) {
       haveTech: f.haveTech,
     }),
   );
-  const spellsById = {};
-  for (const spell of Object.values(f.RitualManager.Productions)) {
-    spellsById[spell.id] = spell;
-  }
-  for (const { id, count } of decision.decrease) {
-    f.RitualManager.decreaseRitual(spellsById[id], count);
-  }
-  for (const { id, count } of decision.increase) {
-    f.RitualManager.increaseRitual(spellsById[id], count);
-  }
+  assert.equal(
+    createPylonCommandExecutor(() => f.RitualManager).execute(decision).status,
+    "succeeded",
+  );
   return calls;
 }
 
@@ -246,26 +243,71 @@ for (const scenario of scenarios) {
   );
 }
 
-// Adapter: uninitialised short-circuits without reading resources.
+// Adapter: legacy refreshes getters before initIndustry, but does not inspect
+// the returned values when the industry is unavailable.
 {
+  const getterCalls = [];
   const input = readPylonInput({
     getRitualManager: () => ({ initIndustry: () => false }),
-    getResources: () => {
-      throw new Error("resources must not be read when uninitialised");
-    },
-    getSettings: () => {
-      throw new Error("settings must not be read when uninitialised");
-    },
-    getGame: () => {
-      throw new Error("game must not be read when uninitialised");
-    },
-    getJobs: () => {
-      throw new Error("jobs must not be read when uninitialised");
-    },
+    getResources: () => (getterCalls.push("resources"), null),
+    getSettings: () => (getterCalls.push("settings"), null),
+    getGame: () => (getterCalls.push("game"), null),
+    getJobs: () => (getterCalls.push("jobs"), null),
     haveTech: () => false,
   });
   assert.equal(input.initialised, false);
   assert.deepEqual(input.spells, []);
+  assert.deepEqual(getterCalls, ["resources", "settings", "game", "jobs"]);
+}
+
+// Unsafe ritual mode and a locked Factory do not require either job entry or
+// the roguemagic tech probe.
+{
+  let techCalls = 0;
+  const input = readPylonInput({
+    getRitualManager: () => ({
+      Productions: {
+        Factory: {
+          id: "factory",
+          weighting: 1,
+          isUnlocked: () => false,
+        },
+        Farmer: {
+          id: "farmer",
+          weighting: 1,
+          isUnlocked: () => true,
+        },
+      },
+      initIndustry: () => true,
+      currentSpells: () => 0,
+    }),
+    getResources: () => ({ Mana: { rateOfChange: 1, storageRatio: 1 } }),
+    getSettings: () => ({
+      productionRitualManaUse: 0.5,
+      productionRitualSafe: false,
+    }),
+    getGame: () => null,
+    getJobs: () => null,
+    haveTech: () => (techCalls++, false),
+  });
+  assert.equal(input.priestCount, 0);
+  assert.equal(input.cementWorkerCount, 0);
+  assert.equal(techCalls, 0);
+}
+
+{
+  const mutations = [];
+  const result = createPylonCommandExecutor(() => ({
+    Productions: { Science: { id: "science" } },
+    currentSpells: () => 2,
+    decreaseRitual: (...args) => mutations.push(["decrease", ...args]),
+    increaseRitual: (...args) => mutations.push(["increase", ...args]),
+  })).execute({
+    decrease: [],
+    increase: [{ id: "science", expectedCurrentSpells: 1, count: 1 }],
+  });
+  assert.equal(result.status, "stale");
+  assert.deepEqual(mutations, []);
 }
 
 console.log(

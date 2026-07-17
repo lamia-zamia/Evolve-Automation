@@ -34,6 +34,7 @@ export interface PylonInput {
 
 export interface PylonRitualAdjustment {
   readonly id: string;
+  readonly expectedCurrentSpells: number;
   readonly count: number;
 }
 
@@ -116,13 +117,25 @@ export function planPylon(input: Readonly<PylonInput>): PylonDecision {
   for (const spell of input.spells) {
     const delta = (adjustments.get(spell.id) ?? 0) - spell.currentSpells;
     if (delta < 0) {
-      decrease.push(Object.freeze({ id: spell.id, count: delta * -1 }));
+      decrease.push(
+        Object.freeze({
+          id: spell.id,
+          expectedCurrentSpells: spell.currentSpells,
+          count: delta * -1,
+        }),
+      );
     }
   }
   for (const spell of input.spells) {
     const delta = (adjustments.get(spell.id) ?? 0) - spell.currentSpells;
     if (delta > 0) {
-      increase.push(Object.freeze({ id: spell.id, count: delta }));
+      increase.push(
+        Object.freeze({
+          id: spell.id,
+          expectedCurrentSpells: spell.currentSpells,
+          count: delta,
+        }),
+      );
     }
   }
 

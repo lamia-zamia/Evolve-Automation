@@ -40,6 +40,7 @@ export interface AlchemyInput {
 
 export interface AlchemyAdjustment {
   readonly id: string;
+  readonly expectedCurrentCount: number;
   readonly count: number;
 }
 
@@ -118,13 +119,25 @@ export function planAlchemy(input: Readonly<AlchemyInput>): AlchemyDecision {
   for (const res of input.resources) {
     const delta = adjust.get(res.id) ?? 0;
     if (delta < 0) {
-      decrease.push(Object.freeze({ id: res.id, count: delta * -1 }));
+      decrease.push(
+        Object.freeze({
+          id: res.id,
+          expectedCurrentCount: res.currentCount,
+          count: delta * -1,
+        }),
+      );
     }
   }
   for (const res of input.resources) {
     const delta = adjust.get(res.id) ?? 0;
     if (delta > 0) {
-      increase.push(Object.freeze({ id: res.id, count: delta }));
+      increase.push(
+        Object.freeze({
+          id: res.id,
+          expectedCurrentCount: res.currentCount,
+          count: delta,
+        }),
+      );
     }
   }
 

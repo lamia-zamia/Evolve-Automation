@@ -20175,6 +20175,17 @@
     };
   }
 
+  // src/adapters/command-outcomes.ts
+  var SUCCEEDED = Object.freeze({
+    status: "succeeded"
+  });
+  function rejected2(code, message) {
+    return { status: "rejected", failure: { code, message } };
+  }
+  function stale(code, message, context) {
+    return context === void 0 ? { status: "stale", failure: { code, message } } : { status: "stale", failure: { code, message, context } };
+  }
+
   // src/adapters/evolve/government.ts
   function governmentUnlocked(types, type, path) {
     if (type === "none") {
@@ -20229,32 +20240,165 @@
     const govSpace = readString(settings2, "govSpace");
     const govFinal = readString(settings2, "govFinal");
     const govInterim = readString(settings2, "govInterim");
+    const govGovernor = readString(settings2, "govGovernor");
+    const enabled = Boolean(Reflect.apply(isEnabled, manager, []));
+    let guardAnarchist = false;
+    let haveQFactory = false;
+    let govSpaceUnlocked = false;
+    let govFinalUnlocked = false;
+    let govInterimUnlocked = false;
+    if (enabled) {
+      guardAnarchist = dependencies.guardActive("guardAnarchist");
+      if (!guardAnarchist) {
+        if (govSpace !== "none") {
+          haveQFactory = dependencies.haveTech("q_factory");
+          if (haveQFactory) {
+            govSpaceUnlocked = governmentUnlocked(
+              manager["Types"],
+              govSpace,
+              "GovernmentManager"
+            );
+          }
+        }
+        if (!govSpaceUnlocked && govFinal !== "none") {
+          govFinalUnlocked = governmentUnlocked(
+            manager["Types"],
+            govFinal,
+            "GovernmentManager"
+          );
+        }
+        if (!govSpaceUnlocked && !govFinalUnlocked && govInterim !== "none") {
+          govInterimUnlocked = governmentUnlocked(
+            manager["Types"],
+            govInterim,
+            "GovernmentManager"
+          );
+        }
+      }
+    }
+    let haveGovernorTech = false;
+    let currentGovernor = "none";
+    let candidateBackgrounds = Object.freeze([]);
+    if (dependencies.haveTech("governor")) {
+      haveGovernorTech = true;
+      if (govGovernor !== "none") {
+        currentGovernor = dependencies.getGovernor();
+        if (currentGovernor === "none") {
+          candidateBackgrounds = Object.freeze(readCandidateBackgrounds(game2));
+        }
+      }
+    }
     return Object.freeze({
-      isEnabled: Boolean(Reflect.apply(isEnabled, manager, [])),
-      guardAnarchist: dependencies.guardActive("guardAnarchist"),
-      haveQFactory: dependencies.haveTech("q_factory"),
-      haveGovernorTech: dependencies.haveTech("governor"),
-      currentGovernor: dependencies.getGovernor(),
+      isEnabled: enabled,
+      guardAnarchist,
+      haveQFactory,
+      haveGovernorTech,
+      currentGovernor,
       govSpace,
       govFinal,
       govInterim,
-      govGovernor: readString(settings2, "govGovernor"),
-      govSpaceUnlocked: governmentUnlocked(
-        manager["Types"],
-        govSpace,
+      govGovernor,
+      govSpaceUnlocked,
+      govFinalUnlocked,
+      govInterimUnlocked,
+      candidateBackgrounds
+    });
+  }
+  function createGovernmentCommandExecutor(dependencies) {
+    function execute(decision) {
+      if (decision.government === null && decision.appointCandidate === null) {
+        return SUCCEEDED;
+      }
+      const manager = requireRecord(
+        dependencies.getGovernmentManager(),
         "GovernmentManager"
-      ),
-      govFinalUnlocked: governmentUnlocked(
-        manager["Types"],
-        govFinal,
-        "GovernmentManager"
-      ),
-      govInterimUnlocked: governmentUnlocked(
-        manager["Types"],
-        govInterim,
-        "GovernmentManager"
-      ),
-      candidateBackgrounds: Object.freeze(readCandidateBackgrounds(game2))
+      );
+      let setGovernment;
+      if (decision.government !== null) {
+        const isEnabled = requireFunction(
+          manager["isEnabled"],
+          "GovernmentManager.isEnabled"
+        );
+        if (!Reflect.apply(isEnabled, manager, [])) {
+          return stale(
+            "government-disabled",
+            "government automation became unavailable"
+          );
+        }
+        if (!governmentUnlocked(
+          manager["Types"],
+          decision.government,
+          "GovernmentManager"
+        )) {
+          return stale("government-locked", "planned government became locked", {
+            government: decision.government
+          });
+        }
+        setGovernment = requireFunction(
+          manager["setGovernment"],
+          "GovernmentManager.setGovernment"
+        );
+      }
+      if (decision.appointCandidate !== null) {
+        if (dependencies.getGovernor() !== "none") {
+          return stale("governor-appointed", "a governor was already appointed");
+        }
+        const backgrounds = readCandidateBackgrounds(
+          requireRecord(dependencies.getGame(), "game")
+        );
+        if (backgrounds[decision.appointCandidate] !== decision.appointCandidateBackground) {
+          return stale(
+            "stale-governor-candidate",
+            "governor candidates changed",
+            {
+              candidateIndex: decision.appointCandidate
+            }
+          );
+        }
+        if (!dependencies.controls.isCandidateAppointmentAvailable()) {
+          return stale(
+            "governor-controls-unavailable",
+            "governor appointment controls became unavailable"
+          );
+        }
+      }
+      if (decision.government !== null && setGovernment !== void 0) {
+        Reflect.apply(setGovernment, manager, [decision.government]);
+      }
+      if (decision.appointCandidate !== null && !dependencies.controls.appointCandidate(decision.appointCandidate)) {
+        return stale(
+          "governor-controls-unavailable",
+          "governor appointment controls became unavailable"
+        );
+      }
+      return SUCCEEDED;
+    }
+    return Object.freeze({ execute });
+  }
+
+  // src/adapters/browser/government-controls.ts
+  function createGovernmentControls(getVueById2) {
+    function candidateView() {
+      const value = getVueById2("candidates");
+      return typeof value === "object" && value !== null ? requireRecord(value, "candidate controls") : null;
+    }
+    return Object.freeze({
+      isCandidateAppointmentAvailable: () => {
+        const view = candidateView();
+        return view !== null && typeof view["appoint"] === "function";
+      },
+      appointCandidate: (index) => {
+        const view = candidateView();
+        if (view === null || typeof view["appoint"] !== "function") {
+          return false;
+        }
+        const appoint = requireFunction(
+          view["appoint"],
+          "candidate controls.appoint"
+        );
+        Reflect.apply(appoint, view, [index]);
+        return true;
+      }
     });
   }
 
@@ -20271,15 +20415,21 @@
       }
     }
     let appointCandidate = null;
+    let appointCandidateBackground = null;
     if (input.haveGovernorTech && input.govGovernor !== "none" && input.currentGovernor === "none") {
       for (let i = 0; i < input.candidateBackgrounds.length; i++) {
         if (input.candidateBackgrounds[i] === input.govGovernor) {
           appointCandidate = i;
+          appointCandidateBackground = input.govGovernor;
           break;
         }
       }
     }
-    return Object.freeze({ government, appointCandidate });
+    return Object.freeze({
+      government,
+      appointCandidate,
+      appointCandidateBackground
+    });
   }
 
   // src/automation/combat/battle.ts
@@ -21059,7 +21209,7 @@
     const method = requireFunction(record[name], `${path}.${name}`);
     return Boolean(Reflect.apply(method, record, []));
   }
-  function readResources2(manager) {
+  function readBaseResources(manager) {
     const list = requireFunction(
       manager["managedPriorityList"],
       "AlchemyManager.managedPriorityList"
@@ -21077,18 +21227,52 @@
       if (typeof id !== "string") {
         throw new TypeError(`${path}.id must be a string`);
       }
-      const instance = res["instance"];
-      return Object.freeze({
+      return {
         id,
+        resource: res,
         currentCount: callNumber2(manager, "currentCount", id),
-        weighting: callNumber2(manager, "resWeighting", id),
-        isUseful: callBoolean4(res, "isUseful", path),
-        transmuteTier: callNumber2(manager, "transmuteTier", res),
-        isBasic: Boolean(
-          typeof instance === "object" && instance !== null ? instance["basic"] : false
-        )
-      });
+        weighting: 0,
+        isUseful: false,
+        transmuteTier: 0,
+        isBasic: false
+      };
     });
+  }
+  function sampleActiveResources(manager, resources2) {
+    for (const resource of resources2) {
+      resource.weighting = callNumber2(manager, "resWeighting", resource.id);
+      if (resource.weighting > 0) {
+        resource.isUseful = callBoolean4(
+          resource.resource,
+          "isUseful",
+          `AlchemyManager.managedPriorityList().${resource.id}`
+        );
+      }
+    }
+  }
+  function sampleFullmetalResources(manager, resources2) {
+    for (const resource of resources2) {
+      resource.transmuteTier = callNumber2(
+        manager,
+        "transmuteTier",
+        resource.resource
+      );
+      if (resource.transmuteTier <= 1) {
+        continue;
+      }
+      const instance = resource.resource["instance"];
+      resource.isBasic = Boolean(
+        typeof instance === "object" && instance !== null ? instance["basic"] : false
+      );
+      if (!resource.isBasic) {
+        break;
+      }
+    }
+  }
+  function freezeResources(resources2) {
+    return Object.freeze(
+      resources2.map(({ resource: _resource, ...view }) => Object.freeze(view))
+    );
   }
   function techLevel(game2, name) {
     const global = requireRecord(game2["global"], "game.global");
@@ -21097,6 +21281,9 @@
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
   }
   function readAlchemyInput(dependencies) {
+    const resourcesValue = dependencies.getResources();
+    const settingsValue = dependencies.getSettings();
+    const gameValue = dependencies.getGame();
     const manager = requireRecord(
       dependencies.getAlchemyManager(),
       "AlchemyManager"
@@ -21120,63 +21307,164 @@
         resources: Object.freeze([])
       });
     }
-    const settings2 = requireRecord(dependencies.getSettings(), "settings");
-    const game2 = requireRecord(dependencies.getGame(), "game");
-    const resourcesRecord = requireRecord(
-      dependencies.getResources(),
-      "resources"
-    );
+    const sampledResources = readBaseResources(manager);
+    const settings2 = requireRecord(settingsValue, "settings");
+    const game2 = requireRecord(gameValue, "game");
+    const resourcesRecord = requireRecord(resourcesValue, "resources");
     const mana = requireRecord(resourcesRecord["Mana"], "resources.Mana");
     const crystal = requireRecord(
       resourcesRecord["Crystal"],
       "resources.Crystal"
     );
-    const race = requireRecord(
-      requireRecord(game2["global"], "game.global")["race"],
-      "game.global.race"
+    const crystalDemanded = callBoolean4(
+      crystal,
+      "isDemanded",
+      "resources.Crystal"
     );
-    const alevel = requireFunction(game2["alevel"], "game.alevel");
-    return Object.freeze({
-      unlocked: true,
-      crystalDemanded: callBoolean4(crystal, "isDemanded", "resources.Crystal"),
-      manaRateOfChange: requireNumber(
+    let manaRateOfChange = 0;
+    let manaStorageRatio = 0;
+    let manaCurrentQuantity = 0;
+    let crystalCurrentQuantity = 0;
+    let crystalRateOfChange = 0;
+    let autoPylon2 = false;
+    let magicAlchemyManaUse = 0;
+    if (!crystalDemanded) {
+      sampleActiveResources(manager, sampledResources);
+      manaRateOfChange = requireNumber(
         mana["rateOfChange"],
         "resources.Mana.rateOfChange"
-      ),
-      manaStorageRatio: requireNumber(
+      );
+      manaStorageRatio = requireNumber(
         mana["storageRatio"],
         "resources.Mana.storageRatio"
-      ),
-      manaCurrentQuantity: requireNumber(
-        mana["currentQuantity"],
-        "resources.Mana.currentQuantity"
-      ),
-      crystalCurrentQuantity: requireNumber(
+      );
+      crystalCurrentQuantity = requireNumber(
         crystal["currentQuantity"],
         "resources.Crystal.currentQuantity"
-      ),
-      crystalRateOfChange: requireNumber(
+      );
+      crystalRateOfChange = requireNumber(
         crystal["rateOfChange"],
         "resources.Crystal.rateOfChange"
-      ),
-      autoPylon: Boolean(settings2["autoPylon"]),
-      magicAlchemyManaUse: requireNumber(
+      );
+      autoPylon2 = Boolean(settings2["autoPylon"]);
+      magicAlchemyManaUse = requireNumber(
         settings2["magicAlchemyManaUse"],
         "settings.magicAlchemyManaUse"
-      ),
-      magicFullmetalHelper: Boolean(settings2["magicFullmetalHelper"]),
-      universeMagic: race["universe"] === "magic",
-      alchemyTech: techLevel(game2, "alchemy"),
-      fullmetalStar: requireNumber(
-        dependencies.getAchievementStar("fullmetal"),
-        "fullmetal achievement star"
-      ),
-      achievementLevel: requireNumber(
-        Reflect.apply(alevel, game2, []),
-        "game.alevel()"
-      ),
-      resources: Object.freeze(readResources2(manager))
+      );
+    }
+    const magicFullmetalHelper = Boolean(settings2["magicFullmetalHelper"]);
+    let universeMagic = false;
+    let alchemyTech = 0;
+    let fullmetalStar = 0;
+    let achievementLevel = 0;
+    let fullmetalEnabled = false;
+    if (magicFullmetalHelper) {
+      const race = requireRecord(
+        requireRecord(game2["global"], "game.global")["race"],
+        "game.global.race"
+      );
+      universeMagic = race["universe"] === "magic";
+      if (universeMagic) {
+        alchemyTech = techLevel(game2, "alchemy");
+        if (alchemyTech >= 2) {
+          fullmetalStar = requireNumber(
+            dependencies.getAchievementStar("fullmetal"),
+            "fullmetal achievement star"
+          );
+          const alevel = requireFunction(game2["alevel"], "game.alevel");
+          achievementLevel = requireNumber(
+            Reflect.apply(alevel, game2, []),
+            "game.alevel()"
+          );
+          if (fullmetalStar < achievementLevel) {
+            manaCurrentQuantity = requireNumber(
+              mana["currentQuantity"],
+              "resources.Mana.currentQuantity"
+            );
+            if (manaCurrentQuantity >= 1) {
+              if (crystalDemanded) {
+                crystalCurrentQuantity = requireNumber(
+                  crystal["currentQuantity"],
+                  "resources.Crystal.currentQuantity"
+                );
+              }
+              fullmetalEnabled = crystalCurrentQuantity >= 0.15;
+            }
+          }
+        }
+      }
+    }
+    if (fullmetalEnabled) {
+      sampleFullmetalResources(manager, sampledResources);
+    }
+    return Object.freeze({
+      unlocked: true,
+      crystalDemanded,
+      manaRateOfChange,
+      manaStorageRatio,
+      manaCurrentQuantity,
+      crystalCurrentQuantity,
+      crystalRateOfChange,
+      autoPylon: autoPylon2,
+      magicAlchemyManaUse,
+      magicFullmetalHelper,
+      universeMagic,
+      alchemyTech,
+      fullmetalStar,
+      achievementLevel,
+      resources: freezeResources(sampledResources)
     });
+  }
+  function createAlchemyCommandExecutor(getAlchemyManager) {
+    function execute(decision) {
+      if (decision.decrease.length === 0 && decision.increase.length === 0) {
+        return SUCCEEDED;
+      }
+      const manager = requireRecord(getAlchemyManager(), "AlchemyManager");
+      const currentCount = requireFunction(
+        manager["currentCount"],
+        "AlchemyManager.currentCount"
+      );
+      const transmuteLess = requireFunction(
+        manager["transmuteLess"],
+        "AlchemyManager.transmuteLess"
+      );
+      const transmuteMore = requireFunction(
+        manager["transmuteMore"],
+        "AlchemyManager.transmuteMore"
+      );
+      const adjustments = [
+        ...decision.decrease,
+        ...decision.increase
+      ];
+      for (const adjustment of adjustments) {
+        if (!Number.isSafeInteger(adjustment.count) || adjustment.count < 0) {
+          return rejected2(
+            "invalid-alchemy-adjustment",
+            "alchemy adjustment count must be a non-negative safe integer"
+          );
+        }
+        const actual = requireNumber(
+          Reflect.apply(currentCount, manager, [adjustment.id]),
+          `AlchemyManager.currentCount(${adjustment.id})`
+        );
+        if (actual !== adjustment.expectedCurrentCount) {
+          return stale("stale-alchemy-count", "alchemy count changed", {
+            resourceId: adjustment.id,
+            expected: adjustment.expectedCurrentCount,
+            actual
+          });
+        }
+      }
+      for (const adjustment of decision.decrease) {
+        Reflect.apply(transmuteLess, manager, [adjustment.id, adjustment.count]);
+      }
+      for (const adjustment of decision.increase) {
+        Reflect.apply(transmuteMore, manager, [adjustment.id, adjustment.count]);
+      }
+      return SUCCEEDED;
+    }
+    return Object.freeze({ execute });
   }
 
   // src/domain/alchemy.ts
@@ -21230,13 +21518,25 @@
     for (const res of input.resources) {
       const delta = adjust.get(res.id) ?? 0;
       if (delta < 0) {
-        decrease.push(Object.freeze({ id: res.id, count: delta * -1 }));
+        decrease.push(
+          Object.freeze({
+            id: res.id,
+            expectedCurrentCount: res.currentCount,
+            count: delta * -1
+          })
+        );
       }
     }
     for (const res of input.resources) {
       const delta = adjust.get(res.id) ?? 0;
       if (delta > 0) {
-        increase.push(Object.freeze({ id: res.id, count: delta }));
+        increase.push(
+          Object.freeze({
+            id: res.id,
+            expectedCurrentCount: res.currentCount,
+            count: delta
+          })
+        );
       }
     }
     return Object.freeze({
@@ -21254,16 +21554,12 @@
     const job = requireRecord(jobs2[id], `jobs.${id}`);
     return requireNumber(job["count"], `jobs.${id}.count`);
   }
-  function readSpells(manager) {
+  function readUnlockedSpells(manager) {
     const productions = requireRecord(
       manager["Productions"],
       "RitualManager.Productions"
     );
     const factory = productions["Factory"];
-    const currentSpells = requireFunction(
-      manager["currentSpells"],
-      "RitualManager.currentSpells"
-    );
     const spells = [];
     Object.values(productions).forEach((entry, index) => {
       const path = `RitualManager.Productions[${index}]`;
@@ -21280,16 +21576,32 @@
           id,
           weighting: requireNumber(spell["weighting"], `${path}.weighting`),
           isFactory: entry === factory,
-          currentSpells: requireNumber(
-            Reflect.apply(currentSpells, manager, [spell]),
-            `RitualManager.currentSpells(${id})`
-          )
+          spell
         })
       );
     });
     return spells;
   }
+  function readCurrentSpells(manager, unlocked) {
+    const currentSpells = requireFunction(
+      manager["currentSpells"],
+      "RitualManager.currentSpells"
+    );
+    return unlocked.map(
+      ({ spell, ...view }) => Object.freeze({
+        ...view,
+        currentSpells: requireNumber(
+          Reflect.apply(currentSpells, manager, [spell]),
+          `RitualManager.currentSpells(${view.id})`
+        )
+      })
+    );
+  }
   function readPylonInput(dependencies) {
+    const resourcesValue = dependencies.getResources();
+    const settingsValue = dependencies.getSettings();
+    const gameValue = dependencies.getGame();
+    const jobsValue = dependencies.getJobs();
     const manager = requireRecord(
       dependencies.getRitualManager(),
       "RitualManager"
@@ -21308,15 +21620,34 @@
         spells: Object.freeze([])
       });
     }
-    const resources2 = requireRecord(dependencies.getResources(), "resources");
+    const unlockedSpells = readUnlockedSpells(manager);
+    const resources2 = requireRecord(resourcesValue, "resources");
     const mana = requireRecord(resources2["Mana"], "resources.Mana");
-    const settings2 = requireRecord(dependencies.getSettings(), "settings");
-    const game2 = requireRecord(dependencies.getGame(), "game");
-    const race = requireRecord(
-      requireRecord(game2["global"], "game.global")["race"],
-      "game.global.race"
-    );
-    const jobs2 = requireRecord(dependencies.getJobs(), "jobs");
+    const settings2 = requireRecord(settingsValue, "settings");
+    const ritualSafe = Boolean(settings2["productionRitualSafe"]);
+    let witchHunter = false;
+    if (ritualSafe) {
+      const game2 = requireRecord(gameValue, "game");
+      const race = requireRecord(
+        requireRecord(game2["global"], "game.global")["race"],
+        "game.global.race"
+      );
+      witchHunter = Boolean(race["witch_hunter"]);
+    }
+    let priestCount = 0;
+    let haveRoguemagic4 = false;
+    if (ritualSafe && witchHunter) {
+      const jobs2 = requireRecord(jobsValue, "jobs");
+      priestCount = jobCount(jobs2, "Priest");
+      haveRoguemagic4 = dependencies.haveTech("roguemagic", 4);
+    }
+    let cementWorkerCount = 0;
+    if (unlockedSpells.some((spell) => spell.isFactory && spell.weighting > 0)) {
+      cementWorkerCount = jobCount(
+        requireRecord(jobsValue, "jobs"),
+        "CementWorker"
+      );
+    }
     return Object.freeze({
       initialised: true,
       manaRateOfChange: requireNumber(
@@ -21331,13 +21662,92 @@
         settings2["productionRitualManaUse"],
         "settings.productionRitualManaUse"
       ),
-      ritualSafe: Boolean(settings2["productionRitualSafe"]),
-      witchHunter: Boolean(race["witch_hunter"]),
-      priestCount: jobCount(jobs2, "Priest"),
-      haveRoguemagic4: dependencies.haveTech("roguemagic", 4),
-      cementWorkerCount: jobCount(jobs2, "CementWorker"),
-      spells: Object.freeze(readSpells(manager))
+      ritualSafe,
+      witchHunter,
+      priestCount,
+      haveRoguemagic4,
+      cementWorkerCount,
+      spells: Object.freeze(readCurrentSpells(manager, unlockedSpells))
     });
+  }
+  function createPylonCommandExecutor(getRitualManager) {
+    function execute(decision) {
+      if (decision.decrease.length === 0 && decision.increase.length === 0) {
+        return SUCCEEDED;
+      }
+      const manager = requireRecord(getRitualManager(), "RitualManager");
+      const productions = requireRecord(
+        manager["Productions"],
+        "RitualManager.Productions"
+      );
+      const currentSpells = requireFunction(
+        manager["currentSpells"],
+        "RitualManager.currentSpells"
+      );
+      const decreaseRitual = requireFunction(
+        manager["decreaseRitual"],
+        "RitualManager.decreaseRitual"
+      );
+      const increaseRitual = requireFunction(
+        manager["increaseRitual"],
+        "RitualManager.increaseRitual"
+      );
+      const spellsById = /* @__PURE__ */ new Map();
+      for (const [key, value] of Object.entries(productions)) {
+        const spell = requireRecord(value, `RitualManager.Productions.${key}`);
+        const id = spell["id"];
+        if (typeof id !== "string") {
+          throw new TypeError(
+            `RitualManager.Productions.${key}.id must be a string`
+          );
+        }
+        spellsById.set(id, spell);
+      }
+      const resolved = [];
+      for (const adjustment of [...decision.decrease, ...decision.increase]) {
+        if (!Number.isSafeInteger(adjustment.count) || adjustment.count < 0) {
+          return rejected2(
+            "invalid-pylon-adjustment",
+            "ritual adjustment count must be a non-negative safe integer"
+          );
+        }
+        const spell = spellsById.get(adjustment.id);
+        if (spell === void 0) {
+          return stale(
+            "missing-pylon-spell",
+            "ritual spell is no longer available",
+            {
+              spellId: adjustment.id
+            }
+          );
+        }
+        const actual = requireNumber(
+          Reflect.apply(currentSpells, manager, [spell]),
+          `RitualManager.currentSpells(${adjustment.id})`
+        );
+        if (actual !== adjustment.expectedCurrentSpells) {
+          return stale("stale-pylon-spell", "ritual spell count changed", {
+            spellId: adjustment.id,
+            expected: adjustment.expectedCurrentSpells,
+            actual
+          });
+        }
+        resolved.push({ adjustment, spell });
+      }
+      const decreases = new Set(decision.decrease);
+      for (const { adjustment, spell } of resolved) {
+        if (decreases.has(adjustment)) {
+          Reflect.apply(decreaseRitual, manager, [spell, adjustment.count]);
+        }
+      }
+      for (const { adjustment, spell } of resolved) {
+        if (!decreases.has(adjustment)) {
+          Reflect.apply(increaseRitual, manager, [spell, adjustment.count]);
+        }
+      }
+      return SUCCEEDED;
+    }
+    return Object.freeze({ execute });
   }
 
   // src/domain/pylon.ts
@@ -21391,13 +21801,25 @@
     for (const spell of input.spells) {
       const delta = (adjustments.get(spell.id) ?? 0) - spell.currentSpells;
       if (delta < 0) {
-        decrease.push(Object.freeze({ id: spell.id, count: delta * -1 }));
+        decrease.push(
+          Object.freeze({
+            id: spell.id,
+            expectedCurrentSpells: spell.currentSpells,
+            count: delta * -1
+          })
+        );
       }
     }
     for (const spell of input.spells) {
       const delta = (adjustments.get(spell.id) ?? 0) - spell.currentSpells;
       if (delta > 0) {
-        increase.push(Object.freeze({ id: spell.id, count: delta }));
+        increase.push(
+          Object.freeze({
+            id: spell.id,
+            expectedCurrentSpells: spell.currentSpells,
+            count: delta
+          })
+        );
       }
     }
     return Object.freeze({
@@ -21440,6 +21862,9 @@
     return requireNumber(settings2[key], `settings.${key}`);
   }
   function readQuarryRatioInput(dependencies) {
+    const resourcesValue = dependencies.getResources();
+    const settingsValue = dependencies.getSettings();
+    const buildingsValue = dependencies.getBuildings();
     const manager = requireRecord(
       dependencies.getQuarryManager(),
       "QuarryManager"
@@ -21458,9 +21883,9 @@
         chrysotileWeight: 0
       });
     }
-    const resources2 = requireRecord(dependencies.getResources(), "resources");
-    const settings2 = requireRecord(dependencies.getSettings(), "settings");
-    const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
+    const resources2 = requireRecord(resourcesValue, "resources");
+    const settings2 = requireRecord(settingsValue, "settings");
+    const buildings2 = requireRecord(buildingsValue, "buildings");
     const metalRefinery = requireRecord(
       buildings2["MetalRefinery"],
       "buildings.MetalRefinery"
@@ -21479,6 +21904,8 @@
     });
   }
   function readMineRatioInput(dependencies) {
+    const resourcesValue = dependencies.getResources();
+    const settingsValue = dependencies.getSettings();
     const manager = requireRecord(dependencies.getMineManager(), "MineManager");
     if (!initIndustry(manager, "MineManager")) {
       return Object.freeze({
@@ -21491,8 +21918,8 @@
         adamantiteWeight: 0
       });
     }
-    const resources2 = requireRecord(dependencies.getResources(), "resources");
-    const settings2 = requireRecord(dependencies.getSettings(), "settings");
+    const resources2 = requireRecord(resourcesValue, "resources");
+    const settings2 = requireRecord(settingsValue, "settings");
     return Object.freeze({
       initialised: true,
       currentRatio: currentProduction(manager, "MineManager"),
@@ -21504,6 +21931,8 @@
     });
   }
   function readExtractorRatioInput(dependencies) {
+    const resourcesValue = dependencies.getResources();
+    const settingsValue = dependencies.getSettings();
     const manager = requireRecord(
       dependencies.getExtractorManager(),
       "ExtractorManager"
@@ -21514,8 +21943,8 @@
         productions: Object.freeze([])
       });
     }
-    const resources2 = requireRecord(dependencies.getResources(), "resources");
-    const settings2 = requireRecord(dependencies.getSettings(), "settings");
+    const resources2 = requireRecord(resourcesValue, "resources");
+    const settings2 = requireRecord(settingsValue, "settings");
     const specs = [
       { id: "common", res1: "Iron", res2: "Aluminium" },
       { id: "uncommon", res1: "Iridium", res2: "Neutronium" }
@@ -21538,6 +21967,83 @@
       initialised: true,
       productions: Object.freeze(productions)
     });
+  }
+  function createSingleRatioExecutor(getManager, managerName) {
+    function execute(adjustment) {
+      if (!Number.isSafeInteger(adjustment.delta)) {
+        return rejected2(
+          "invalid-production-ratio-adjustment",
+          "production ratio adjustment must be a safe integer"
+        );
+      }
+      const manager = requireRecord(getManager(), managerName);
+      const actual = currentProduction(manager, managerName);
+      if (actual !== adjustment.expectedCurrentRatio) {
+        return stale("stale-production-ratio", "production ratio changed", {
+          manager: managerName,
+          expected: adjustment.expectedCurrentRatio,
+          actual
+        });
+      }
+      const increase = requireFunction(
+        manager["increaseProduction"],
+        `${managerName}.increaseProduction`
+      );
+      Reflect.apply(increase, manager, [adjustment.delta]);
+      return SUCCEEDED;
+    }
+    return Object.freeze({ execute });
+  }
+  function createResourceRatioCommandExecutors(dependencies) {
+    const quarry = createSingleRatioExecutor(
+      dependencies.getQuarryManager,
+      "QuarryManager"
+    );
+    const mine = createSingleRatioExecutor(
+      dependencies.getMineManager,
+      "MineManager"
+    );
+    const extractor = Object.freeze({
+      execute(adjustments) {
+        if (adjustments.length === 0) {
+          return SUCCEEDED;
+        }
+        const manager = requireRecord(
+          dependencies.getExtractorManager(),
+          "ExtractorManager"
+        );
+        const increase = requireFunction(
+          manager["increaseProduction"],
+          "ExtractorManager.increaseProduction"
+        );
+        for (const adjustment of adjustments) {
+          if (!Number.isSafeInteger(adjustment.delta)) {
+            return rejected2(
+              "invalid-production-ratio-adjustment",
+              "production ratio adjustment must be a safe integer"
+            );
+          }
+          const actual = currentProduction(
+            manager,
+            "ExtractorManager",
+            adjustment.id
+          );
+          if (actual !== adjustment.expectedCurrentRatio) {
+            return stale("stale-production-ratio", "production ratio changed", {
+              manager: "ExtractorManager",
+              productionId: adjustment.id,
+              expected: adjustment.expectedCurrentRatio,
+              actual
+            });
+          }
+        }
+        for (const adjustment of adjustments) {
+          Reflect.apply(increase, manager, [adjustment.id, adjustment.delta]);
+        }
+        return SUCCEEDED;
+      }
+    });
+    return Object.freeze({ quarry, mine, extractor });
   }
 
   // src/domain/resource-ratios.ts
@@ -21567,7 +22073,10 @@
     const newRatio = Math.round(
       chrysotileWeigth / (chrysotileWeigth + stoneWeigth) * 100
     );
-    return newRatio - input.currentRatio;
+    return Object.freeze({
+      expectedCurrentRatio: input.currentRatio,
+      delta: newRatio - input.currentRatio
+    });
   }
   function planMineRatio(input) {
     if (!input.initialised) {
@@ -21585,7 +22094,10 @@
     const newRatio = Math.round(
       adamantiteWeigth / (adamantiteWeigth + aluminiumWeight) * 100
     );
-    return newRatio - input.currentRatio;
+    return Object.freeze({
+      expectedCurrentRatio: input.currentRatio,
+      delta: newRatio - input.currentRatio
+    });
   }
   function planExtractorRatios(input) {
     if (!input.initialised) {
@@ -21603,6 +22115,7 @@
         );
         return Object.freeze({
           id: prod.id,
+          expectedCurrentRatio: prod.currentRatio,
           delta: newRatio - prod.currentRatio
         });
       })
@@ -21862,9 +22375,9 @@
       `${path}.${name}()`
     );
   }
-  function readFuels(manager) {
+  function readFuels(manager, graphene, maxOperating) {
     const fuels = requireRecord(manager["Fuels"], "GrapheneManager.Fuels");
-    return Object.values(fuels).map((entry, index) => {
+    const rawFuels = Object.values(fuels).map((entry, index) => {
       const path = `GrapheneManager.Fuels[${index}]`;
       const fuel = requireRecord(entry, path);
       const id = fuel["id"];
@@ -21873,7 +22386,8 @@
       }
       const cost = requireRecord(fuel["cost"], `${path}.cost`);
       const resource = requireRecord(cost["resource"], `${path}.cost.resource`);
-      return Object.freeze({
+      return {
+        index,
         id,
         storageRatio: requireNumber(
           resource["storageRatio"],
@@ -21883,26 +22397,77 @@
           resource["rateOfChange"],
           `${path}.cost.resource.rateOfChange`
         ),
-        currentQuantity: requireNumber(
-          resource["currentQuantity"],
-          `${path}.cost.resource.currentQuantity`
-        ),
-        isUnlocked: callBoolean6(resource, "isUnlocked", `${path}.cost.resource`),
-        costQuantity: requireNumber(cost["quantity"], `${path}.cost.quantity`),
-        costMinRateOfChange: requireNumber(
-          cost["minRateOfChange"],
-          `${path}.cost.minRateOfChange`
-        ),
-        currentFuelCount: callNumber3(
-          manager,
-          "fueledCount",
-          "GrapheneManager",
-          fuel
-        )
-      });
+        fuel,
+        cost,
+        resource
+      };
     });
+    const result = rawFuels.map(
+      (fuel) => Object.freeze({
+        id: fuel.id,
+        storageRatio: fuel.storageRatio,
+        rateOfChange: fuel.rateOfChange,
+        currentQuantity: 0,
+        isUnlocked: false,
+        costQuantity: 0,
+        costMinRateOfChange: 0,
+        currentFuelCount: 0
+      })
+    );
+    let grapheneUseful = false;
+    let usefulnessSampled = false;
+    if (maxOperating !== 0) {
+      const sorted = [...rawFuels].sort(
+        (a, b) => b.storageRatio < 0.995 || a.storageRatio < 0.995 ? b.storageRatio - a.storageRatio : b.rateOfChange - a.rateOfChange
+      );
+      for (const raw of sorted) {
+        const path = `GrapheneManager.Fuels[${raw.index}]`;
+        const isUnlocked = callBoolean6(
+          raw.resource,
+          "isUnlocked",
+          `${path}.cost.resource`
+        );
+        if (!isUnlocked) {
+          continue;
+        }
+        if (!usefulnessSampled) {
+          grapheneUseful = callBoolean6(
+            graphene,
+            "isUseful",
+            "resources.Graphene"
+          );
+          usefulnessSampled = true;
+        }
+        result[raw.index] = Object.freeze({
+          id: raw.id,
+          storageRatio: raw.storageRatio,
+          rateOfChange: raw.rateOfChange,
+          currentQuantity: requireNumber(
+            raw.resource["currentQuantity"],
+            `${path}.cost.resource.currentQuantity`
+          ),
+          isUnlocked: true,
+          costQuantity: requireNumber(
+            raw.cost["quantity"],
+            `${path}.cost.quantity`
+          ),
+          costMinRateOfChange: requireNumber(
+            raw.cost["minRateOfChange"],
+            `${path}.cost.minRateOfChange`
+          ),
+          currentFuelCount: callNumber3(
+            manager,
+            "fueledCount",
+            "GrapheneManager",
+            raw.fuel
+          )
+        });
+      }
+    }
+    return { fuels: result, grapheneUseful };
   }
   function readGrapheneInput(dependencies) {
+    const resourcesValue = dependencies.getResources();
     const manager = requireRecord(
       dependencies.getGrapheneManager(),
       "GrapheneManager"
@@ -21916,15 +22481,75 @@
         fuels: Object.freeze([])
       });
     }
-    const resources2 = requireRecord(dependencies.getResources(), "resources");
+    const resources2 = requireRecord(resourcesValue, "resources");
     const graphene = requireRecord(resources2["Graphene"], "resources.Graphene");
+    const maxOperating = callNumber3(manager, "maxOperating", "GrapheneManager");
+    const fuelSnapshot = readFuels(manager, graphene, maxOperating);
     return Object.freeze({
       initialised: true,
-      maxOperating: callNumber3(manager, "maxOperating", "GrapheneManager"),
-      grapheneUseful: callBoolean6(graphene, "isUseful", "resources.Graphene"),
+      maxOperating,
+      grapheneUseful: fuelSnapshot.grapheneUseful,
       consumptionBalanceMin: dependencies.consumptionBalanceMin,
-      fuels: Object.freeze(readFuels(manager))
+      fuels: Object.freeze(fuelSnapshot.fuels)
     });
+  }
+  function createGrapheneCommandExecutor(getGrapheneManager) {
+    function execute(adjustments) {
+      if (adjustments.length === 0) {
+        return SUCCEEDED;
+      }
+      const manager = requireRecord(getGrapheneManager(), "GrapheneManager");
+      const fuels = requireRecord(manager["Fuels"], "GrapheneManager.Fuels");
+      const fueledCount = requireFunction(
+        manager["fueledCount"],
+        "GrapheneManager.fueledCount"
+      );
+      const decreaseFuel = requireFunction(
+        manager["decreaseFuel"],
+        "GrapheneManager.decreaseFuel"
+      );
+      const increaseFuel = requireFunction(
+        manager["increaseFuel"],
+        "GrapheneManager.increaseFuel"
+      );
+      const resolved = [];
+      for (const adjustment of adjustments) {
+        if (!Number.isSafeInteger(adjustment.delta)) {
+          return rejected2(
+            "invalid-graphene-adjustment",
+            "graphene fuel adjustment must be a safe integer"
+          );
+        }
+        const fuel = requireRecord(
+          fuels[adjustment.fuelId],
+          `GrapheneManager.Fuels.${adjustment.fuelId}`
+        );
+        const actual = requireNumber(
+          Reflect.apply(fueledCount, manager, [fuel]),
+          `GrapheneManager.fueledCount(${adjustment.fuelId})`
+        );
+        if (actual !== adjustment.expectedCurrentFuelCount) {
+          return stale("stale-graphene-fuel", "graphene fuel count changed", {
+            fuelId: adjustment.fuelId,
+            expected: adjustment.expectedCurrentFuelCount,
+            actual
+          });
+        }
+        resolved.push({ adjustment, fuel });
+      }
+      for (const { adjustment, fuel } of resolved) {
+        if (adjustment.delta < 0) {
+          Reflect.apply(decreaseFuel, manager, [fuel, adjustment.delta * -1]);
+        }
+      }
+      for (const { adjustment, fuel } of resolved) {
+        if (adjustment.delta > 0) {
+          Reflect.apply(increaseFuel, manager, [fuel, adjustment.delta]);
+        }
+      }
+      return SUCCEEDED;
+    }
+    return Object.freeze({ execute });
   }
 
   // src/domain/graphene.ts
@@ -21958,7 +22583,13 @@
       }
       const deltaFuel = maxFueledForConsumption - currentFuelCount;
       if (deltaFuel !== 0) {
-        fuelAdjust.push(Object.freeze({ fuelId: fuel.id, delta: deltaFuel }));
+        fuelAdjust.push(
+          Object.freeze({
+            fuelId: fuel.id,
+            expectedCurrentFuelCount: currentFuelCount,
+            delta: deltaFuel
+          })
+        );
       }
       remainingPlants -= currentFuelCount + deltaFuel;
     }
@@ -21977,10 +22608,97 @@
     if (typeof shifterGenus !== "string") {
       throw new TypeError("settings.shifterGenus must be a string");
     }
+    const currentGenus = race["ss_genus"];
     return Object.freeze({
       isShapeshifter: Boolean(race["shapeshifter"]),
       shifterGenus,
-      currentGenus: race["ss_genus"]
+      currentGenus: typeof currentGenus === "string" ? currentGenus : null
+    });
+  }
+  function createShapeshiftCommandExecutor(dependencies) {
+    return Object.freeze({
+      execute(targetGenus) {
+        if (targetGenus === null) {
+          return SUCCEEDED;
+        }
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const race = requireRecord(
+          requireRecord(game2["global"], "game.global")["race"],
+          "game.global.race"
+        );
+        if (!race["shapeshifter"]) {
+          return stale("shapeshift-locked", "shapeshifting became unavailable");
+        }
+        if (race["ss_genus"] === targetGenus) {
+          return stale(
+            "shape-already-selected",
+            "target shape is already active"
+          );
+        }
+        if (!dependencies.controls.setShape(targetGenus)) {
+          return stale(
+            "shapeshift-controls-unavailable",
+            "shapeshift controls became unavailable"
+          );
+        }
+        return SUCCEEDED;
+      }
+    });
+  }
+
+  // src/adapters/browser/progression-controls.ts
+  function createShapeshiftControls(getVueById2) {
+    return Object.freeze({
+      setShape(genus) {
+        const value = getVueById2("sshifter");
+        if (typeof value !== "object" || value === null) {
+          return false;
+        }
+        const view = requireRecord(value, "shapeshift controls");
+        if (typeof view["setShape"] !== "function") {
+          return false;
+        }
+        const setShape = requireFunction(
+          view["setShape"],
+          "shapeshift controls.setShape"
+        );
+        Reflect.apply(setShape, view, [genus]);
+        return true;
+      }
+    });
+  }
+  function createUniverseSelectionControls(getDocument) {
+    return Object.freeze({
+      selectUniverse(name) {
+        const document2 = requireRecord(getDocument(), "document");
+        const getElementById = requireFunction(
+          document2["getElementById"],
+          "document.getElementById"
+        );
+        const value = Reflect.apply(getElementById, document2, [`uni-${name}`]);
+        if (typeof value !== "object" || value === null) {
+          return false;
+        }
+        const action = requireRecord(value, `document#uni-${name}`);
+        const children = action["children"];
+        if (typeof children !== "object" && !Array.isArray(children) || children === null) {
+          return false;
+        }
+        const first = children[0];
+        if (typeof first !== "object" || first === null) {
+          return false;
+        }
+        const child = requireRecord(first, `document#uni-${name}.children[0]`);
+        if (typeof child["click"] !== "function") {
+          return false;
+        }
+        const click = requireFunction(
+          child["click"],
+          `document#uni-${name}.children[0].click`
+        );
+        Reflect.apply(click, child, []);
+        return true;
+      }
     });
   }
 
@@ -23031,10 +23749,38 @@
     if (typeof targetName !== "string") {
       throw new TypeError("settings.userUniverseTargetName must be a string");
     }
+    const universe = race["universe"];
     return Object.freeze({
       hasBigbang: Boolean(race["bigbang"]),
-      universe: race["universe"],
+      universe: typeof universe === "string" ? universe : null,
       targetName
+    });
+  }
+  function createUniverseSelectionCommandExecutor(dependencies) {
+    return Object.freeze({
+      execute(targetName) {
+        if (targetName === null) {
+          return SUCCEEDED;
+        }
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const race = requireRecord(
+          requireRecord(game2["global"], "game.global")["race"],
+          "game.global.race"
+        );
+        if (!race["bigbang"] || race["universe"] !== "bigbang") {
+          return stale(
+            "universe-selection-unavailable",
+            "universe selection became unavailable"
+          );
+        }
+        if (!dependencies.controls.selectUniverse(targetName)) {
+          return stale(
+            "universe-control-unavailable",
+            "universe selection control became unavailable"
+          );
+        }
+        return SUCCEEDED;
+      }
     });
   }
 
@@ -38315,19 +39061,19 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getAutoUniverseSelection: () => autoUniverseSelection,
       getAutoPlanetSelection: () => autoPlanetSelection
     });
+    const universeSelectionExecutor = createUniverseSelectionCommandExecutor({
+      getGame: () => game,
+      controls: createUniverseSelectionControls(() => document)
+    });
     const autoUniverseSelection = function autoUniverseSelection2() {
-      const target = planUniverseSelection(
-        readUniverseSelectionInput({
-          getGame: () => game,
-          getSettings: () => settings
-        })
+      universeSelectionExecutor.execute(
+        planUniverseSelection(
+          readUniverseSelectionInput({
+            getGame: () => game,
+            getSettings: () => settings
+          })
+        )
       );
-      if (target !== null) {
-        const action = document.getElementById(`uni-${target}`);
-        if (action !== null) {
-          action.children[0].click();
-        }
-      }
     };
     let { generatePlanets } = createPlanetGeneration({
       getGame: () => game,
@@ -38364,23 +39110,25 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getFoundryList: () => foundryList,
       ticksPerSecond
     });
+    const governmentExecutor = createGovernmentCommandExecutor({
+      getGovernmentManager: () => GovernmentManager,
+      getGame: () => game,
+      getGovernor,
+      controls: createGovernmentControls(getVueById)
+    });
     const autoGovernment = function autoGovernment2() {
-      const decision = planGovernment(
-        readGovernmentInput({
-          getGovernmentManager: () => GovernmentManager,
-          getSettings: () => settings,
-          getGame: () => game,
-          guardActive,
-          haveTech,
-          getGovernor
-        })
+      governmentExecutor.execute(
+        planGovernment(
+          readGovernmentInput({
+            getGovernmentManager: () => GovernmentManager,
+            getSettings: () => settings,
+            getGame: () => game,
+            guardActive,
+            haveTech,
+            getGovernor
+          })
+        )
       );
-      if (decision.government !== null) {
-        GovernmentManager.setGovernment(decision.government);
-      }
-      if (decision.appointCandidate !== null) {
-        getVueById("candidates")?.appoint(decision.appointCandidate);
-      }
     };
     const autoMerc = createAutoMerc({
       getWarManager: () => WarManager,
@@ -38468,47 +39216,34 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
+    const alchemyExecutor = createAlchemyCommandExecutor(() => AlchemyManager);
     const autoAlchemy = function autoAlchemy2() {
-      const decision = planAlchemy(
-        readAlchemyInput({
-          getAlchemyManager: () => AlchemyManager,
-          getResources: () => resources,
-          getSettings: () => settings,
-          getGame: () => game,
-          getAchievementStar
-        })
+      alchemyExecutor.execute(
+        planAlchemy(
+          readAlchemyInput({
+            getAlchemyManager: () => AlchemyManager,
+            getResources: () => resources,
+            getSettings: () => settings,
+            getGame: () => game,
+            getAchievementStar
+          })
+        )
       );
-      for (const { id, count } of decision.decrease) {
-        AlchemyManager.transmuteLess(id, count);
-      }
-      for (const { id, count } of decision.increase) {
-        AlchemyManager.transmuteMore(id, count);
-      }
     };
+    const pylonExecutor = createPylonCommandExecutor(() => RitualManager);
     const autoPylon = function autoPylon2() {
-      const decision = planPylon(
-        readPylonInput({
-          getRitualManager: () => RitualManager,
-          getResources: () => resources,
-          getSettings: () => settings,
-          getGame: () => game,
-          getJobs: () => jobs,
-          haveTech
-        })
+      pylonExecutor.execute(
+        planPylon(
+          readPylonInput({
+            getRitualManager: () => RitualManager,
+            getResources: () => resources,
+            getSettings: () => settings,
+            getGame: () => game,
+            getJobs: () => jobs,
+            haveTech
+          })
+        )
       );
-      if (decision.decrease.length === 0 && decision.increase.length === 0) {
-        return;
-      }
-      const spellsById = {};
-      for (const spell of Object.values(RitualManager.Productions)) {
-        spellsById[spell.id] = spell;
-      }
-      for (const { id, count } of decision.decrease) {
-        RitualManager.decreaseRitual(spellsById[id], count);
-      }
-      for (const { id, count } of decision.increase) {
-        RitualManager.increaseRitual(spellsById[id], count);
-      }
     };
     const resourceRatiosDependencies = {
       getQuarryManager: () => QuarryManager,
@@ -38519,27 +39254,29 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getBuildings: () => buildings,
       haveTech
     };
+    const resourceRatioExecutors = createResourceRatioCommandExecutors(
+      resourceRatiosDependencies
+    );
     function autoQuarry() {
-      const delta = planQuarryRatio(
+      const adjustment = planQuarryRatio(
         readQuarryRatioInput(resourceRatiosDependencies)
       );
-      if (delta !== null) {
-        QuarryManager.increaseProduction(delta);
+      if (adjustment !== null) {
+        resourceRatioExecutors.quarry.execute(adjustment);
       }
     }
     function autoMine() {
-      const delta = planMineRatio(readMineRatioInput(resourceRatiosDependencies));
-      if (delta !== null) {
-        MineManager.increaseProduction(delta);
+      const adjustment = planMineRatio(
+        readMineRatioInput(resourceRatiosDependencies)
+      );
+      if (adjustment !== null) {
+        resourceRatioExecutors.mine.execute(adjustment);
       }
     }
     function autoExtractor() {
-      const adjustments = planExtractorRatios(
-        readExtractorRatioInput(resourceRatiosDependencies)
+      resourceRatioExecutors.extractor.execute(
+        planExtractorRatios(readExtractorRatioInput(resourceRatiosDependencies))
       );
-      for (const { id, delta } of adjustments) {
-        ExtractorManager.increaseProduction(id, delta);
-      }
     }
     const autoSmelter = createAutoSmelter({
       SmelterManager,
@@ -38568,24 +39305,17 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       });
     }
     const autoMiningDroid = createAutoMiningDroid({ DroidManager });
+    const grapheneExecutor = createGrapheneCommandExecutor(() => GrapheneManager);
     const autoGraphenePlant = function autoGraphenePlant2() {
-      const adjustments = planGraphene(
-        readGrapheneInput({
-          getGrapheneManager: () => GrapheneManager,
-          getResources: () => resources,
-          consumptionBalanceMin: CONSUMPTION_BALANCE_MIN
-        })
+      grapheneExecutor.execute(
+        planGraphene(
+          readGrapheneInput({
+            getGrapheneManager: () => GrapheneManager,
+            getResources: () => resources,
+            consumptionBalanceMin: CONSUMPTION_BALANCE_MIN
+          })
+        )
       );
-      for (const { fuelId, delta } of adjustments) {
-        if (delta < 0) {
-          GrapheneManager.decreaseFuel(GrapheneManager.Fuels[fuelId], delta * -1);
-        }
-      }
-      for (const { fuelId, delta } of adjustments) {
-        if (delta > 0) {
-          GrapheneManager.increaseFuel(GrapheneManager.Fuels[fuelId], delta);
-        }
-      }
     };
     const autoConsume = createAutoConsume({
       getResources: () => resources,
@@ -38746,16 +39476,19 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
+    const shapeshiftExecutor = createShapeshiftCommandExecutor({
+      getGame: () => game,
+      controls: createShapeshiftControls(getVueById)
+    });
     const autoShapeshift = function autoShapeshift2() {
-      const genus = planShapeshift(
-        readShapeshiftInput({
-          getGame: () => game,
-          getSettings: () => settings
-        })
+      shapeshiftExecutor.execute(
+        planShapeshift(
+          readShapeshiftInput({
+            getGame: () => game,
+            getSettings: () => settings
+          })
+        )
       );
-      if (genus !== null) {
-        getVueById("sshifter")?.setShape(genus);
-      }
     };
     var psychicPowerCost = {
       murder: [10, 8],

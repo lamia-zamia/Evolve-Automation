@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { readAlchemyInput } from "../src/adapters/evolve/alchemy.ts";
+import {
+  createAlchemyCommandExecutor,
+  readAlchemyInput,
+} from "../src/adapters/evolve/alchemy.ts";
 import { planAlchemy } from "../src/domain/alchemy.ts";
 
 // Exact copy of the deleted legacy `autoAlchemy` algorithm, run against
@@ -163,10 +166,11 @@ function runNew(scenario) {
       getAchievementStar: () => f.star,
     }),
   );
-  for (const { id, count } of decision.decrease)
-    f.AlchemyManager.transmuteLess(id, count);
-  for (const { id, count } of decision.increase)
-    f.AlchemyManager.transmuteMore(id, count);
+  assert.equal(
+    createAlchemyCommandExecutor(() => f.AlchemyManager).execute(decision)
+      .status,
+    "succeeded",
+  );
   return actions;
 }
 
@@ -256,26 +260,86 @@ for (const scenario of scenarios) {
   );
 }
 
-// Adapter: locked alchemy short-circuits without reading other state.
+// Adapter: legacy refreshes getter bindings before the locked gate, but the
+// returned state must remain completely uninspected.
 {
+  const getterCalls = [];
   const input = readAlchemyInput({
     getAlchemyManager: () => ({ isUnlocked: () => false }),
-    getResources: () => {
-      throw new Error("resources must not be read when locked");
-    },
-    getSettings: () => {
-      throw new Error("settings must not be read when locked");
-    },
-    getGame: () => {
-      throw new Error("game must not be read when locked");
-    },
+    getResources: () => (getterCalls.push("resources"), null),
+    getSettings: () => (getterCalls.push("settings"), null),
+    getGame: () => (getterCalls.push("game"), null),
     getAchievementStar: () => {
       throw new Error("stars must not be read when locked");
     },
   });
   assert.equal(input.unlocked, false);
   assert.deepEqual(input.resources, []);
+  assert.deepEqual(getterCalls, ["resources", "settings", "game"]);
   assert.ok(Object.isFrozen(input));
+}
+
+// Fullmetal-disabled state must not inspect fullmetal-only game/resource data.
+{
+  const input = readAlchemyInput({
+    getAlchemyManager: () => ({
+      isUnlocked: () => true,
+      managedPriorityList: () => [
+        {
+          id: "Iron",
+          isUseful: () => true,
+          get instance() {
+            throw new Error(
+              "instance must not be read when helper is disabled",
+            );
+          },
+        },
+      ],
+      currentCount: () => 0,
+      resWeighting: () => 1,
+      transmuteTier: () => {
+        throw new Error("tier must not be read when helper is disabled");
+      },
+    }),
+    getResources: () => ({
+      Mana: { rateOfChange: 1, storageRatio: 0.5 },
+      Crystal: {
+        currentQuantity: 1,
+        rateOfChange: 0,
+        isDemanded: () => false,
+      },
+    }),
+    getSettings: () => ({
+      autoPylon: false,
+      magicAlchemyManaUse: 0.5,
+      magicFullmetalHelper: false,
+    }),
+    getGame: () => ({
+      get global() {
+        throw new Error(
+          "game internals must not be read when helper is disabled",
+        );
+      },
+    }),
+    getAchievementStar: () => {
+      throw new Error("achievement must not be read when helper is disabled");
+    },
+  });
+  assert.equal(input.magicFullmetalHelper, false);
+}
+
+{
+  const mutations = [];
+  const result = createAlchemyCommandExecutor(() => ({
+    currentCount: () => 2,
+    transmuteLess: (...args) => mutations.push(["less", ...args]),
+    transmuteMore: (...args) => mutations.push(["more", ...args]),
+  })).execute({
+    decrease: [],
+    increase: [{ id: "Iron", expectedCurrentCount: 1, count: 1 }],
+  });
+  assert.equal(result.status, "stale");
+  assert.deepEqual(mutations, []);
 }
 
 console.log(

@@ -201,20 +201,31 @@ import { createBuildingWeightingPolicy } from "./policies/building-weighting.ts"
 import { readTradeRoutesInput } from "./adapters/evolve/trade-routes.ts";
 import { planTradeRoutes } from "./domain/trade-routes.ts";
 import { createAutoHell } from "./automation/combat/hell.ts";
-import { readGovernmentInput } from "./adapters/evolve/government.ts";
+import {
+  createGovernmentCommandExecutor,
+  readGovernmentInput,
+} from "./adapters/evolve/government.ts";
+import { createGovernmentControls } from "./adapters/browser/government-controls.ts";
 import { planGovernment } from "./domain/government.ts";
 import { createAutoBattle } from "./automation/combat/battle.ts";
 import { createTaxAutomation } from "./bootstrap/tax.ts";
 import { createUserscriptEnvironment } from "./adapters/userscript/environment.ts";
 import { createAutoSmelter } from "./automation/economy/smelter.ts";
-import { readAlchemyInput } from "./adapters/evolve/alchemy.ts";
+import {
+  createAlchemyCommandExecutor,
+  readAlchemyInput,
+} from "./adapters/evolve/alchemy.ts";
 import { planAlchemy } from "./domain/alchemy.ts";
-import { readPylonInput } from "./adapters/evolve/pylon.ts";
+import {
+  createPylonCommandExecutor,
+  readPylonInput,
+} from "./adapters/evolve/pylon.ts";
 import { planPylon } from "./domain/pylon.ts";
 import {
   readQuarryRatioInput,
   readMineRatioInput,
   readExtractorRatioInput,
+  createResourceRatioCommandExecutors,
 } from "./adapters/evolve/resource-ratios.ts";
 import {
   planQuarryRatio,
@@ -223,9 +234,19 @@ import {
 } from "./domain/resource-ratios.ts";
 import { createAutoFactory } from "./automation/economy/factory.ts";
 import { createAutoMiningDroid } from "./automation/economy/mining-droid.ts";
-import { readGrapheneInput } from "./adapters/evolve/graphene.ts";
+import {
+  createGrapheneCommandExecutor,
+  readGrapheneInput,
+} from "./adapters/evolve/graphene.ts";
 import { planGraphene } from "./domain/graphene.ts";
-import { readShapeshiftInput } from "./adapters/evolve/shapeshift.ts";
+import {
+  createShapeshiftCommandExecutor,
+  readShapeshiftInput,
+} from "./adapters/evolve/shapeshift.ts";
+import {
+  createShapeshiftControls,
+  createUniverseSelectionControls,
+} from "./adapters/browser/progression-controls.ts";
 import { planShapeshift } from "./domain/shapeshift.ts";
 import { createAutoWish } from "./automation/traits/wish.ts";
 import { createAutoGenetics } from "./automation/traits/genetics.ts";
@@ -240,7 +261,10 @@ import { createAutoMarket } from "./automation/economy/market.ts";
 import { createAutoGalaxyMarket } from "./automation/economy/galaxy-market.ts";
 import { createAutoGatherResources } from "./automation/economy/gather-resources.ts";
 import { createAutoEvolution } from "./automation/progression/evolution.ts";
-import { readUniverseSelectionInput } from "./adapters/evolve/universe-selection.ts";
+import {
+  createUniverseSelectionCommandExecutor,
+  readUniverseSelectionInput,
+} from "./adapters/evolve/universe-selection.ts";
 import { planUniverseSelection } from "./domain/universe-selection.ts";
 import { createAutoCraft } from "./automation/economy/craft.ts";
 import { createAutoSpy } from "./automation/combat/spy.ts";
@@ -2822,19 +2846,19 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getAutoPlanetSelection: () => autoPlanetSelection,
   });
 
+  const universeSelectionExecutor = createUniverseSelectionCommandExecutor({
+    getGame: () => game,
+    controls: createUniverseSelectionControls(() => document),
+  });
   const autoUniverseSelection = function autoUniverseSelection() {
-    const target = planUniverseSelection(
-      readUniverseSelectionInput({
-        getGame: () => game,
-        getSettings: () => settings,
-      }),
+    universeSelectionExecutor.execute(
+      planUniverseSelection(
+        readUniverseSelectionInput({
+          getGame: () => game,
+          getSettings: () => settings,
+        }),
+      ),
     );
-    if (target !== null) {
-      const action = document.getElementById(`uni-${target}`);
-      if (action !== null) {
-        action.children[0].click();
-      }
-    }
   };
 
   // function setPlanet from actions.js
@@ -2878,23 +2902,25 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     ticksPerSecond,
   });
 
+  const governmentExecutor = createGovernmentCommandExecutor({
+    getGovernmentManager: () => GovernmentManager,
+    getGame: () => game,
+    getGovernor,
+    controls: createGovernmentControls(getVueById),
+  });
   const autoGovernment = function autoGovernment() {
-    const decision = planGovernment(
-      readGovernmentInput({
-        getGovernmentManager: () => GovernmentManager,
-        getSettings: () => settings,
-        getGame: () => game,
-        guardActive,
-        haveTech,
-        getGovernor,
-      }),
+    governmentExecutor.execute(
+      planGovernment(
+        readGovernmentInput({
+          getGovernmentManager: () => GovernmentManager,
+          getSettings: () => settings,
+          getGame: () => game,
+          guardActive,
+          haveTech,
+          getGovernor,
+        }),
+      ),
     );
-    if (decision.government !== null) {
-      GovernmentManager.setGovernment(decision.government);
-    }
-    if (decision.appointCandidate !== null) {
-      getVueById("candidates")?.appoint(decision.appointCandidate);
-    }
   };
 
   const autoMerc = createAutoMerc({
@@ -2991,48 +3017,35 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
+  const alchemyExecutor = createAlchemyCommandExecutor(() => AlchemyManager);
   const autoAlchemy = function autoAlchemy() {
-    const decision = planAlchemy(
-      readAlchemyInput({
-        getAlchemyManager: () => AlchemyManager,
-        getResources: () => resources,
-        getSettings: () => settings,
-        getGame: () => game,
-        getAchievementStar,
-      }),
+    alchemyExecutor.execute(
+      planAlchemy(
+        readAlchemyInput({
+          getAlchemyManager: () => AlchemyManager,
+          getResources: () => resources,
+          getSettings: () => settings,
+          getGame: () => game,
+          getAchievementStar,
+        }),
+      ),
     );
-    for (const { id, count } of decision.decrease) {
-      AlchemyManager.transmuteLess(id, count);
-    }
-    for (const { id, count } of decision.increase) {
-      AlchemyManager.transmuteMore(id, count);
-    }
   };
 
+  const pylonExecutor = createPylonCommandExecutor(() => RitualManager);
   const autoPylon = function autoPylon() {
-    const decision = planPylon(
-      readPylonInput({
-        getRitualManager: () => RitualManager,
-        getResources: () => resources,
-        getSettings: () => settings,
-        getGame: () => game,
-        getJobs: () => jobs,
-        haveTech,
-      }),
+    pylonExecutor.execute(
+      planPylon(
+        readPylonInput({
+          getRitualManager: () => RitualManager,
+          getResources: () => resources,
+          getSettings: () => settings,
+          getGame: () => game,
+          getJobs: () => jobs,
+          haveTech,
+        }),
+      ),
     );
-    if (decision.decrease.length === 0 && decision.increase.length === 0) {
-      return;
-    }
-    const spellsById = {};
-    for (const spell of Object.values(RitualManager.Productions)) {
-      spellsById[spell.id] = spell;
-    }
-    for (const { id, count } of decision.decrease) {
-      RitualManager.decreaseRitual(spellsById[id], count);
-    }
-    for (const { id, count } of decision.increase) {
-      RitualManager.increaseRitual(spellsById[id], count);
-    }
   };
 
   const resourceRatiosDependencies = {
@@ -3044,27 +3057,29 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getBuildings: () => buildings,
     haveTech,
   };
+  const resourceRatioExecutors = createResourceRatioCommandExecutors(
+    resourceRatiosDependencies,
+  );
   function autoQuarry() {
-    const delta = planQuarryRatio(
+    const adjustment = planQuarryRatio(
       readQuarryRatioInput(resourceRatiosDependencies),
     );
-    if (delta !== null) {
-      QuarryManager.increaseProduction(delta);
+    if (adjustment !== null) {
+      resourceRatioExecutors.quarry.execute(adjustment);
     }
   }
   function autoMine() {
-    const delta = planMineRatio(readMineRatioInput(resourceRatiosDependencies));
-    if (delta !== null) {
-      MineManager.increaseProduction(delta);
+    const adjustment = planMineRatio(
+      readMineRatioInput(resourceRatiosDependencies),
+    );
+    if (adjustment !== null) {
+      resourceRatioExecutors.mine.execute(adjustment);
     }
   }
   function autoExtractor() {
-    const adjustments = planExtractorRatios(
-      readExtractorRatioInput(resourceRatiosDependencies),
+    resourceRatioExecutors.extractor.execute(
+      planExtractorRatios(readExtractorRatioInput(resourceRatiosDependencies)),
     );
-    for (const { id, delta } of adjustments) {
-      ExtractorManager.increaseProduction(id, delta);
-    }
   }
 
   const autoSmelter = createAutoSmelter({
@@ -3098,24 +3113,17 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
 
   const autoMiningDroid = createAutoMiningDroid({ DroidManager });
 
+  const grapheneExecutor = createGrapheneCommandExecutor(() => GrapheneManager);
   const autoGraphenePlant = function autoGraphenePlant() {
-    const adjustments = planGraphene(
-      readGrapheneInput({
-        getGrapheneManager: () => GrapheneManager,
-        getResources: () => resources,
-        consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
-      }),
+    grapheneExecutor.execute(
+      planGraphene(
+        readGrapheneInput({
+          getGrapheneManager: () => GrapheneManager,
+          getResources: () => resources,
+          consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
+        }),
+      ),
     );
-    for (const { fuelId, delta } of adjustments) {
-      if (delta < 0) {
-        GrapheneManager.decreaseFuel(GrapheneManager.Fuels[fuelId], delta * -1);
-      }
-    }
-    for (const { fuelId, delta } of adjustments) {
-      if (delta > 0) {
-        GrapheneManager.increaseFuel(GrapheneManager.Fuels[fuelId], delta);
-      }
-    }
   };
 
   // TODO: Allow configuring priorities between eject\supply\nanite
@@ -3304,16 +3312,19 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
+  const shapeshiftExecutor = createShapeshiftCommandExecutor({
+    getGame: () => game,
+    controls: createShapeshiftControls(getVueById),
+  });
   const autoShapeshift = function autoShapeshift() {
-    const genus = planShapeshift(
-      readShapeshiftInput({
-        getGame: () => game,
-        getSettings: () => settings,
-      }),
+    shapeshiftExecutor.execute(
+      planShapeshift(
+        readShapeshiftInput({
+          getGame: () => game,
+          getSettings: () => settings,
+        }),
+      ),
     );
-    if (genus !== null) {
-      getVueById("sshifter")?.setShape(genus);
-    }
   };
 
   var psychicPowerCost = {
