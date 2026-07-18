@@ -1,14 +1,12 @@
-import type { AutomationDependencies } from "../dependencies.ts";
-
-type Dependencies = AutomationDependencies<
-  | "WarManager"
-  | "getGame"
-  | "getSettings"
-  | "getBuildings"
-  | "getResources"
-  | "getState"
-  | "getWindow"
->;
+interface Dependencies {
+  readonly WarManager: any;
+  readonly getGame: () => any;
+  readonly getSettings: () => any;
+  readonly getBuildings: () => any;
+  readonly getResources: () => any;
+  readonly getState: () => any;
+  readonly getWindow: () => any;
+}
 export function createAutoHell({
   WarManager,
   getGame,

@@ -202,7 +202,8 @@ import { createBrowserClock } from "./adapters/browser/clock.ts";
 import { createBuildingWeightingPolicy } from "./policies/building-weighting.ts";
 import { readTradeRoutesInput } from "./adapters/evolve/trade-routes.ts";
 import { planTradeRoutes } from "./domain/trade-routes.ts";
-import { createAutoHell } from "./automation/combat/hell.ts";
+import { runHellAutomation } from "./application/hell.ts";
+import { createHellAdapter } from "./adapters/evolve/hell.ts";
 import {
   createGovernmentCommandExecutor,
   readGovernmentInput,
@@ -3039,15 +3040,21 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   });
   const autoBattle = () => runBattleAutomation(battleAdapter);
 
-  const autoHell = createAutoHell({
-    WarManager,
+  const hellAdapter = createHellAdapter({
+    getWarManager: () => WarManager,
     getGame: () => game,
     getSettings: () => settings,
     getBuildings: () => buildings,
     getResources: () => resources,
     getState: () => state,
-    getWindow: () => window,
+    getDebugWindow: () => window,
+    debugLog: (message) => console.log(message),
   });
+  const autoHell = () => runHellAutomation(hellAdapter);
+
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, { autoHell });
+  }
 
   // TODO: Some way to use servant crafters only
   const autoJobs = createAutoJobs({

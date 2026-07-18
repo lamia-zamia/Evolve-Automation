@@ -20090,179 +20090,222 @@
     });
   }
 
-  // src/automation/combat/hell.ts
-  function createAutoHell({
-    WarManager: WarManager2,
-    getGame,
-    getSettings,
-    getBuildings,
-    getResources,
-    getState,
-    getWindow
-  }) {
-    return function autoHell2() {
-      const game2 = getGame();
-      const settings2 = getSettings();
-      const buildings2 = getBuildings();
-      const resources2 = getResources();
-      const state2 = getState();
-      const debugWindow = getWindow();
-      let m = WarManager2;
-      if (!m._garrisonVue || !m._hellVue) {
-        return;
-      }
-      if (game2.global.race["warlord"]) {
-        let enemies = m.enemies;
-        if (enemies > 0 && settings2.warlordHandleFortress) {
-          let targetMinions = settings2.warlordMinimumMinions;
-          let minionCount = m.minions;
-          if (minionCount > targetMinions) {
-            m.attackEnemyFortress(0);
-          }
+  // src/domain/hell.ts
+  function freezeCommands(commands) {
+    return Object.freeze(commands.map((command) => Object.freeze(command)));
+  }
+  function manageDecision(commands, authorityAdjusted = false, authorityDebug = null) {
+    if (commands.length === 0 && !authorityAdjusted && authorityDebug === null) {
+      return null;
+    }
+    return Object.freeze({
+      kind: "manage-hell",
+      commands: freezeCommands(commands),
+      authorityAdjusted,
+      authorityDebug: authorityDebug === null ? null : Object.freeze(authorityDebug)
+    });
+  }
+  function adjustmentCommands(input, targetSoldiers, targetPatrols, targetPatrolSize) {
+    const commands = [];
+    if (input.handlePatrolSize && input.hellPatrolSize > targetPatrolSize) {
+      commands.push({
+        kind: "remove-patrol-size",
+        count: input.hellPatrolSize - targetPatrolSize
+      });
+    }
+    if (input.hellPatrols > targetPatrols) {
+      commands.push({
+        kind: "remove-patrol",
+        count: input.hellPatrols - targetPatrols
+      });
+    }
+    if (input.hellSoldiers > targetSoldiers) {
+      commands.push({
+        kind: "remove-garrison",
+        count: input.hellSoldiers - targetSoldiers
+      });
+    }
+    if (input.hellSoldiers < targetSoldiers) {
+      commands.push({
+        kind: "add-garrison",
+        count: targetSoldiers - input.hellSoldiers
+      });
+    }
+    if (input.handlePatrolSize && input.hellPatrolSize < targetPatrolSize) {
+      commands.push({
+        kind: "add-patrol-size",
+        count: targetPatrolSize - input.hellPatrolSize
+      });
+    }
+    if (input.hellPatrols < targetPatrols) {
+      commands.push({
+        kind: "add-patrol",
+        count: targetPatrols - input.hellPatrols
+      });
+    }
+    return commands;
+  }
+  function calculatePatrolRating(input) {
+    let rating = input.fortressThreat * input.patrolThreatPercent / 100;
+    rating -= input.patrolDroneModifier * input.warDroneCount * (input.portalTechnology >= 7 ? 1.5 : 1);
+    rating -= input.patrolDroidModifier * input.warDroidCount * (input.hellDroidTechnology ? 2 : 1);
+    rating -= input.patrolBootcampModifier * input.bootCampCount;
+    rating = Math.max(rating, input.minimumPatrolRating);
+    if (input.bolsterPatrolRating > 0 && input.bolsterPercentTop > 0) {
+      const fillRatio = input.currentCityGarrison / input.maximumCityGarrison;
+      if (fillRatio <= input.bolsterPercentTop / 100) {
+        if (fillRatio <= input.bolsterPercentBottom / 100) {
+          rating += input.bolsterPatrolRating;
+        } else if (input.bolsterPercentBottom < input.bolsterPercentTop) {
+          rating += input.bolsterPatrolRating * (input.bolsterPercentTop / 100 - fillRatio) / (input.bolsterPercentTop - input.bolsterPercentBottom) * 100;
         }
-        return;
       }
-      let targetHellSoldiers = 0;
-      let targetHellPatrols = 0;
-      let targetHellPatrolSize = 0;
-      let homeSoldiers = settings2.hellHomeGarrison;
-      if ((buildings2.ElysiumFortress.isUnlocked() || buildings2.ElysiumScout.isUnlocked()) && homeSoldiers < 100) {
-        homeSoldiers = 100;
+    }
+    return rating;
+  }
+  function prepareHellCycle(input) {
+    if (!input.available) return null;
+    if (input.warlord) {
+      return input.enemies > 0 && input.handleEnemyFortress && input.minions > input.minimumMinions ? Object.freeze({ kind: "attack-enemy-fortress", enemyIndex: 0 }) : null;
+    }
+    let homeSoldiers = input.homeGarrison;
+    if (input.elysiumUnlocked && homeSoldiers < 100) homeSoldiers = 100;
+    const canEnter = input.maximumSoldiers > homeSoldiers + input.minimumHellSoldiers && (input.hellSoldiers > input.minimumHellSoldiers || input.currentSoldiers >= input.maximumSoldiers * input.minimumSoldierPercent / 100);
+    if (!canEnter) {
+      if (input.hellAssigned > 0) {
+        return manageDecision([
+          { kind: "remove-patrol-size", count: input.hellPatrolSize },
+          { kind: "remove-patrol", count: input.hellPatrols },
+          { kind: "remove-garrison", count: input.hellSoldiers }
+        ]);
       }
-      if (m.maxSoldiers > homeSoldiers + settings2.hellMinSoldiers && (m.hellSoldiers > settings2.hellMinSoldiers || m.currentSoldiers >= m.maxSoldiers * settings2.hellMinSoldiersPercent / 100)) {
-        targetHellSoldiers = Math.min(m.currentSoldiers, m.maxSoldiers) - homeSoldiers;
-        let availableHellSoldiers = targetHellSoldiers - m.hellReservedSoldiers;
-        let hellWallsMulti = settings2.hellLowWallsMulti * (1 - game2.global.portal.fortress.walls / 100);
-        let hellTargetFortressDamage = game2.global.portal.fortress.threat * 35 / settings2.hellTargetFortressDamage;
-        let hellTurretPower = buildings2.PortalTurret.stateOnCount * (game2.global.tech["turret"] ? game2.global.tech["turret"] >= 2 ? 70 : 50 : 35);
-        let hellGarrison = m.getSoldiersForAttackRating(
-          Math.max(
-            0,
-            hellWallsMulti * hellTargetFortressDamage - hellTurretPower
+      return manageDecision(adjustmentCommands(input, 0, 0, 0));
+    }
+    const targetHellSoldiers = Math.min(input.currentSoldiers, input.maximumSoldiers) - homeSoldiers;
+    const availableHellSoldiers = targetHellSoldiers - input.hellReservedSoldiers;
+    const wallMultiplier = input.lowWallsMultiplier * (1 - input.fortressWalls / 100);
+    const targetDefense = input.fortressThreat * 35 / input.targetFortressDamage;
+    const turretPower = input.turretCount * (input.turretTechnology ? input.turretTechnology >= 2 ? 70 : 50 : 35);
+    return Object.freeze({
+      kind: "calculate-hell-targets",
+      input,
+      targetHellSoldiers,
+      availableHellSoldiers,
+      garrisonRating: Math.max(0, wallMultiplier * targetDefense - turretPower),
+      patrolRating: input.handlePatrolSize ? calculatePatrolRating(input) : null
+    });
+  }
+  function calculateHellBaseTargets(request, targets) {
+    let hellGarrison = targets.garrisonSoldiers;
+    if (request.availableHellSoldiers < hellGarrison) {
+      hellGarrison = 0;
+    } else if (request.availableHellSoldiers < hellGarrison * 2) {
+      hellGarrison = Math.floor(request.availableHellSoldiers / 2);
+    }
+    const patrolSize = request.input.handlePatrolSize ? Math.min(
+      targets.patrolSoldiers,
+      request.availableHellSoldiers - hellGarrison
+    ) : request.input.hellPatrolSize;
+    return Object.freeze({ hellGarrison, patrolSize });
+  }
+  function planHell(request, calculated) {
+    const input = request.input;
+    const base = calculateHellBaseTargets(request, calculated);
+    let hellGarrison = base.hellGarrison;
+    let patrolSize = base.patrolSize;
+    let authorityAdjusted = false;
+    let authorityDebug = null;
+    if (input.manageAuthority && input.minimumAuthority !== 0 && calculated.authority.unlocked && patrolSize > 0) {
+      let perSoldier = 0.7 + 0.1 * input.evilTechnology;
+      if (input.grenadier) perSoldier *= 1.75;
+      if (input.government === "autocracy") perSoldier *= 1.08;
+      else if (input.government === "dictator") perSoldier *= 1.12;
+      const authorityTarget = input.minimumAuthority < 0 ? calculated.authority.maximum : input.minimumAuthority;
+      const deficit = authorityTarget - calculated.authority.current;
+      const neededStationed = input.currentHellGarrison + Math.ceil(deficit / perSoldier);
+      let patrolReserve = 1;
+      if (input.minimumAuthority < 0 && input.minimumAuthorityPatrolPercent > 0) {
+        patrolReserve = Math.min(
+          request.availableHellSoldiers,
+          Math.ceil(
+            request.availableHellSoldiers * input.minimumAuthorityPatrolPercent / 100
           )
         );
-        if (availableHellSoldiers < hellGarrison) {
-          hellGarrison = 0;
-        } else if (availableHellSoldiers < hellGarrison * 2) {
-          hellGarrison = Math.floor(availableHellSoldiers / 2);
-        }
-        if (settings2.hellHandlePatrolSize) {
-          let patrolRating = game2.global.portal.fortress.threat * settings2.hellPatrolThreatPercent / 100;
-          if (game2.global.portal.war_drone) {
-            patrolRating -= settings2.hellPatrolDroneMod * game2.global.portal.war_drone.on * (game2.global.tech["portal"] >= 7 ? 1.5 : 1);
-          }
-          if (game2.global.portal.war_droid) {
-            patrolRating -= settings2.hellPatrolDroidMod * game2.global.portal.war_droid.on * (game2.global.tech["hdroid"] ? 2 : 1);
-          }
-          if (game2.global.city.boot_camp) {
-            patrolRating -= settings2.hellPatrolBootcampMod * game2.global.city.boot_camp.count;
-          }
-          patrolRating = Math.max(patrolRating, settings2.hellPatrolMinRating);
-          if (settings2.hellBolsterPatrolRating > 0 && settings2.hellBolsterPatrolPercentTop > 0) {
-            const homeGarrisonFillRatio = m.currentCityGarrison / m.maxCityGarrison;
-            if (homeGarrisonFillRatio <= settings2.hellBolsterPatrolPercentTop / 100) {
-              if (homeGarrisonFillRatio <= settings2.hellBolsterPatrolPercentBottom / 100) {
-                patrolRating += settings2.hellBolsterPatrolRating;
-              } else if (settings2.hellBolsterPatrolPercentBottom < settings2.hellBolsterPatrolPercentTop) {
-                patrolRating += settings2.hellBolsterPatrolRating * (settings2.hellBolsterPatrolPercentTop / 100 - homeGarrisonFillRatio) / // add rating proportional to where in the range we are
-                (settings2.hellBolsterPatrolPercentTop - settings2.hellBolsterPatrolPercentBottom) * 100;
-              }
-            }
-          }
-          targetHellPatrolSize = m.getSoldiersForAttackRating(patrolRating);
-          targetHellPatrolSize = Math.min(
-            targetHellPatrolSize,
-            availableHellSoldiers - hellGarrison
-          );
-        } else {
-          targetHellPatrolSize = m.hellPatrolSize;
-        }
-        if (settings2.authorityManage && settings2.generalMinimumAuthority !== 0 && resources2.Authority.isUnlocked() && targetHellPatrolSize > 0) {
-          let perSoldier = 0.7 + 0.1 * (game2.global.tech["evil"] ?? 0);
-          if (game2.global.race["grenadier"]) perSoldier *= 1.75;
-          if (game2.global.civic.govern.type === "autocracy") perSoldier *= 1.08;
-          else if (game2.global.civic.govern.type === "dictator")
-            perSoldier *= 1.12;
-          let authorityTarget = settings2.generalMinimumAuthority < 0 ? resources2.Authority.maxQuantity : settings2.generalMinimumAuthority;
-          let deficit = authorityTarget - resources2.Authority.currentQuantity;
-          let neededStationed = m.hellGarrison + Math.ceil(deficit / perSoldier);
-          let patrolReserve = 1;
-          if (settings2.generalMinimumAuthority < 0 && settings2.generalAuthorityMinPatrolPercent > 0) {
-            patrolReserve = Math.min(
-              availableHellSoldiers,
-              Math.ceil(
-                availableHellSoldiers * settings2.generalAuthorityMinPatrolPercent / 100
-              )
-            );
-          }
-          let maxStationed = Math.max(0, availableHellSoldiers - patrolReserve);
-          let authGarrison = Math.max(
-            hellGarrison,
-            Math.min(neededStationed, maxStationed)
-          );
-          let availableForPatrol = Math.max(
-            1,
-            availableHellSoldiers - authGarrison
-          );
-          targetHellPatrolSize = Math.min(
-            targetHellPatrolSize,
-            availableForPatrol
-          );
-          if (debugWindow.authorityDebug && authGarrison !== hellGarrison) {
-            console.log(
-              `[authority] amount=${resources2.Authority.currentQuantity.toFixed(
-                1
-              )}/${authorityTarget.toFixed(0)}, perSoldier=${perSoldier.toFixed(
-                2
-              )}, stationed=${m.hellGarrison}→need=${neededStationed}, garrison ${hellGarrison}→${authGarrison} (cap=${maxStationed}, patrolReserve=${patrolReserve}, patrolSize=${targetHellPatrolSize}, avail=${availableHellSoldiers})`
-            );
-          }
-          if (authGarrison !== m.hellGarrison) {
-            state2.authoritySoldiersAdjustedTick = state2.scriptTick;
-          }
-          hellGarrison = authGarrison;
-        }
-        targetHellPatrols = Math.max(
-          1,
-          Math.floor(
-            (availableHellSoldiers - hellGarrison) / targetHellPatrolSize
-          )
-        );
-        if (settings2.hellHandlePatrolSize && targetHellPatrols === 1) {
-          if (availableHellSoldiers - hellGarrison >= 1.5 * targetHellPatrolSize) {
-            targetHellPatrolSize = Math.floor(
-              (availableHellSoldiers - hellGarrison) / 3
-            );
-            targetHellPatrols = Math.floor(
-              (availableHellSoldiers - hellGarrison) / targetHellPatrolSize
-            );
-          }
-        }
-      } else {
-        if (m.hellAssigned > 0) {
-          m.removeHellPatrolSize(m.hellPatrolSize);
-          m.removeHellPatrol(m.hellPatrols);
-          m.removeHellGarrison(m.hellSoldiers);
-          return;
-        }
       }
-      if (settings2.hellHandlePatrolSize && m.hellPatrolSize > targetHellPatrolSize)
-        m.removeHellPatrolSize(m.hellPatrolSize - targetHellPatrolSize);
-      if (m.hellPatrols > targetHellPatrols)
-        m.removeHellPatrol(m.hellPatrols - targetHellPatrols);
-      if (m.hellSoldiers > targetHellSoldiers)
-        m.removeHellGarrison(m.hellSoldiers - targetHellSoldiers);
-      if (m.hellSoldiers < targetHellSoldiers)
-        m.addHellGarrison(targetHellSoldiers - m.hellSoldiers);
-      if (settings2.hellHandlePatrolSize && m.hellPatrolSize < targetHellPatrolSize)
-        m.addHellPatrolSize(targetHellPatrolSize - m.hellPatrolSize);
-      if (m.hellPatrols < targetHellPatrols)
-        m.addHellPatrol(targetHellPatrols - m.hellPatrols);
-    };
+      const maximumStationed = Math.max(
+        0,
+        request.availableHellSoldiers - patrolReserve
+      );
+      const authorityGarrison = Math.max(
+        hellGarrison,
+        Math.min(neededStationed, maximumStationed)
+      );
+      patrolSize = Math.min(
+        patrolSize,
+        Math.max(1, request.availableHellSoldiers - authorityGarrison)
+      );
+      authorityAdjusted = authorityGarrison !== input.currentHellGarrison;
+      if (calculated.authority.debugEnabled && authorityGarrison !== hellGarrison) {
+        authorityDebug = {
+          amount: calculated.authority.current,
+          target: authorityTarget,
+          perSoldier,
+          currentStationed: input.currentHellGarrison,
+          neededStationed,
+          defenseGarrison: hellGarrison,
+          authorityGarrison,
+          maximumStationed,
+          patrolReserve,
+          patrolSize,
+          availableSoldiers: request.availableHellSoldiers
+        };
+      }
+      hellGarrison = authorityGarrison;
+    }
+    let targetPatrols = Math.max(
+      1,
+      Math.floor((request.availableHellSoldiers - hellGarrison) / patrolSize)
+    );
+    if (input.handlePatrolSize && targetPatrols === 1) {
+      const availableForPatrol = request.availableHellSoldiers - hellGarrison;
+      if (availableForPatrol >= 1.5 * patrolSize) {
+        patrolSize = Math.floor(availableForPatrol / 3);
+        targetPatrols = Math.floor(availableForPatrol / patrolSize);
+      }
+    }
+    return manageDecision(
+      adjustmentCommands(
+        input,
+        request.targetHellSoldiers,
+        targetPatrols,
+        patrolSize
+      ),
+      authorityAdjusted,
+      authorityDebug
+    );
+  }
+
+  // src/application/hell.ts
+  var SUCCEEDED = Object.freeze({
+    status: "succeeded"
+  });
+  function runHellAutomation(dependencies) {
+    const prepared = prepareHellCycle(dependencies.reader.readCycle());
+    if (prepared === null) return SUCCEEDED;
+    let decision2;
+    if (prepared.kind === "calculate-hell-targets") {
+      decision2 = planHell(
+        prepared,
+        dependencies.reader.readCalculation(prepared)
+      );
+    } else {
+      decision2 = prepared;
+    }
+    return decision2 === null ? SUCCEEDED : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/command-outcomes.ts
-  var SUCCEEDED = Object.freeze({
+  var SUCCEEDED2 = Object.freeze({
     status: "succeeded"
   });
   function rejected2(code, message) {
@@ -20270,6 +20313,492 @@
   }
   function stale(code, message, context) {
     return context === void 0 ? { status: "stale", failure: { code, message } } : { status: "stale", failure: { code, message, context } };
+  }
+
+  // src/adapters/evolve/hell.ts
+  function requireString(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function optionalNumber(value, path) {
+    return value === void 0 ? 0 : requireNumber(value, path);
+  }
+  function requireSoldierTarget(value, path) {
+    if (value === Number.POSITIVE_INFINITY) return Number.MAX_SAFE_INTEGER;
+    return requireNumber(value, path);
+  }
+  function call(target, key, path, args = []) {
+    return Reflect.apply(requireFunction(target[key], path), target, args);
+  }
+  function unavailableInput() {
+    return Object.freeze({
+      available: false,
+      warlord: false,
+      enemies: 0,
+      minions: 0,
+      handleEnemyFortress: false,
+      minimumMinions: 0,
+      maximumSoldiers: 0,
+      currentSoldiers: 0,
+      currentCityGarrison: 0,
+      maximumCityGarrison: 0,
+      hellSoldiers: 0,
+      hellPatrols: 0,
+      hellPatrolSize: 0,
+      hellAssigned: 0,
+      hellReservedSoldiers: 0,
+      currentHellGarrison: 0,
+      homeGarrison: 0,
+      minimumHellSoldiers: 0,
+      minimumSoldierPercent: 0,
+      elysiumUnlocked: false,
+      fortressWalls: 0,
+      fortressThreat: 0,
+      lowWallsMultiplier: 0,
+      targetFortressDamage: 1,
+      turretCount: 0,
+      turretTechnology: 0,
+      handlePatrolSize: false,
+      patrolThreatPercent: 0,
+      patrolDroneModifier: 0,
+      patrolDroidModifier: 0,
+      patrolBootcampModifier: 0,
+      minimumPatrolRating: 0,
+      bolsterPatrolRating: 0,
+      bolsterPercentTop: 0,
+      bolsterPercentBottom: 0,
+      warDroneCount: 0,
+      portalTechnology: 0,
+      warDroidCount: 0,
+      hellDroidTechnology: false,
+      bootCampCount: 0,
+      manageAuthority: false,
+      minimumAuthority: 0,
+      minimumAuthorityPatrolPercent: 0,
+      evilTechnology: 0,
+      grenadier: false,
+      government: ""
+    });
+  }
+  function decisionsMatch(left, right) {
+    return JSON.stringify(left) === JSON.stringify(right);
+  }
+  function readUnlocked(building, path) {
+    return Boolean(call(building, "isUnlocked", `${path}.isUnlocked`));
+  }
+  function createHellAdapter(dependencies) {
+    let session = null;
+    const reader = Object.freeze({
+      readCycle() {
+        session = null;
+        const manager = requireRecord(dependencies.getWarManager(), "WarManager");
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const state2 = requireRecord(dependencies.getState(), "state");
+        const debugWindow = requireRecord(
+          dependencies.getDebugWindow(),
+          "debug window"
+        );
+        if (!manager["_garrisonVue"] || !manager["_hellVue"]) {
+          return unavailableInput();
+        }
+        const global = requireRecord(game2["global"], "game.global");
+        const race = requireRecord(global["race"], "game.global.race");
+        const warlord = Boolean(race["warlord"]);
+        if (warlord) {
+          const input2 = Object.freeze({
+            ...unavailableInput(),
+            available: true,
+            warlord: true,
+            enemies: requireNumber(manager["enemies"], "WarManager.enemies"),
+            minions: requireNumber(manager["minions"], "WarManager.minions"),
+            handleEnemyFortress: requireBoolean(
+              settings2["warlordHandleFortress"],
+              "settings.warlordHandleFortress"
+            ),
+            minimumMinions: requireNumber(
+              settings2["warlordMinimumMinions"],
+              "settings.warlordMinimumMinions"
+            )
+          });
+          session = {
+            manager,
+            game: game2,
+            settings: settings2,
+            buildings: buildings2,
+            resources: resources2,
+            state: state2,
+            debugWindow,
+            cycleInput: input2,
+            calculation: null,
+            request: null
+          };
+          return input2;
+        }
+        const portal = requireRecord(global["portal"], "game.global.portal");
+        const fortress = requireRecord(
+          portal["fortress"],
+          "game.global.portal.fortress"
+        );
+        const tech = requireRecord(global["tech"], "game.global.tech");
+        const city = requireRecord(global["city"], "game.global.city");
+        const civic = requireRecord(global["civic"], "game.global.civic");
+        const govern = requireRecord(civic["govern"], "game.global.civic.govern");
+        const elysiumFortress = requireRecord(
+          buildings2["ElysiumFortress"],
+          "buildings.ElysiumFortress"
+        );
+        let elysiumUnlocked = readUnlocked(
+          elysiumFortress,
+          "buildings.ElysiumFortress"
+        );
+        if (!elysiumUnlocked) {
+          elysiumUnlocked = readUnlocked(
+            requireRecord(buildings2["ElysiumScout"], "buildings.ElysiumScout"),
+            "buildings.ElysiumScout"
+          );
+        }
+        const warDrone = portal["war_drone"] ? requireRecord(portal["war_drone"], "game.global.portal.war_drone") : null;
+        const warDroid = portal["war_droid"] ? requireRecord(portal["war_droid"], "game.global.portal.war_droid") : null;
+        const bootCamp = city["boot_camp"] ? requireRecord(city["boot_camp"], "game.global.city.boot_camp") : null;
+        const turret = requireRecord(
+          buildings2["PortalTurret"],
+          "buildings.PortalTurret"
+        );
+        const input = Object.freeze({
+          available: true,
+          warlord: false,
+          enemies: 0,
+          minions: 0,
+          handleEnemyFortress: false,
+          minimumMinions: 0,
+          maximumSoldiers: requireNumber(
+            manager["maxSoldiers"],
+            "WarManager.maxSoldiers"
+          ),
+          currentSoldiers: requireNumber(
+            manager["currentSoldiers"],
+            "WarManager.currentSoldiers"
+          ),
+          currentCityGarrison: requireNumber(
+            manager["currentCityGarrison"],
+            "WarManager.currentCityGarrison"
+          ),
+          maximumCityGarrison: requireNumber(
+            manager["maxCityGarrison"],
+            "WarManager.maxCityGarrison"
+          ),
+          hellSoldiers: requireNumber(
+            manager["hellSoldiers"],
+            "WarManager.hellSoldiers"
+          ),
+          hellPatrols: requireNumber(
+            manager["hellPatrols"],
+            "WarManager.hellPatrols"
+          ),
+          hellPatrolSize: requireNumber(
+            manager["hellPatrolSize"],
+            "WarManager.hellPatrolSize"
+          ),
+          hellAssigned: requireNumber(
+            manager["hellAssigned"],
+            "WarManager.hellAssigned"
+          ),
+          hellReservedSoldiers: requireNumber(
+            manager["hellReservedSoldiers"],
+            "WarManager.hellReservedSoldiers"
+          ),
+          currentHellGarrison: requireNumber(
+            manager["hellGarrison"],
+            "WarManager.hellGarrison"
+          ),
+          homeGarrison: requireNumber(
+            settings2["hellHomeGarrison"],
+            "settings.hellHomeGarrison"
+          ),
+          minimumHellSoldiers: requireNumber(
+            settings2["hellMinSoldiers"],
+            "settings.hellMinSoldiers"
+          ),
+          minimumSoldierPercent: requireNumber(
+            settings2["hellMinSoldiersPercent"],
+            "settings.hellMinSoldiersPercent"
+          ),
+          elysiumUnlocked,
+          fortressWalls: requireNumber(
+            fortress["walls"],
+            "game.global.portal.fortress.walls"
+          ),
+          fortressThreat: requireNumber(
+            fortress["threat"],
+            "game.global.portal.fortress.threat"
+          ),
+          lowWallsMultiplier: requireNumber(
+            settings2["hellLowWallsMulti"],
+            "settings.hellLowWallsMulti"
+          ),
+          targetFortressDamage: requireNumber(
+            settings2["hellTargetFortressDamage"],
+            "settings.hellTargetFortressDamage"
+          ),
+          turretCount: requireNumber(
+            turret["stateOnCount"],
+            "buildings.PortalTurret.stateOnCount"
+          ),
+          turretTechnology: optionalNumber(
+            tech["turret"],
+            "game.global.tech.turret"
+          ),
+          handlePatrolSize: requireBoolean(
+            settings2["hellHandlePatrolSize"],
+            "settings.hellHandlePatrolSize"
+          ),
+          patrolThreatPercent: requireNumber(
+            settings2["hellPatrolThreatPercent"],
+            "settings.hellPatrolThreatPercent"
+          ),
+          patrolDroneModifier: requireNumber(
+            settings2["hellPatrolDroneMod"],
+            "settings.hellPatrolDroneMod"
+          ),
+          patrolDroidModifier: requireNumber(
+            settings2["hellPatrolDroidMod"],
+            "settings.hellPatrolDroidMod"
+          ),
+          patrolBootcampModifier: requireNumber(
+            settings2["hellPatrolBootcampMod"],
+            "settings.hellPatrolBootcampMod"
+          ),
+          minimumPatrolRating: requireNumber(
+            settings2["hellPatrolMinRating"],
+            "settings.hellPatrolMinRating"
+          ),
+          bolsterPatrolRating: requireNumber(
+            settings2["hellBolsterPatrolRating"],
+            "settings.hellBolsterPatrolRating"
+          ),
+          bolsterPercentTop: requireNumber(
+            settings2["hellBolsterPatrolPercentTop"],
+            "settings.hellBolsterPatrolPercentTop"
+          ),
+          bolsterPercentBottom: requireNumber(
+            settings2["hellBolsterPatrolPercentBottom"],
+            "settings.hellBolsterPatrolPercentBottom"
+          ),
+          warDroneCount: warDrone === null ? 0 : requireNumber(warDrone["on"], "game.global.portal.war_drone.on"),
+          portalTechnology: warDrone === null ? 0 : requireNumber(tech["portal"], "game.global.tech.portal"),
+          warDroidCount: warDroid === null ? 0 : requireNumber(warDroid["on"], "game.global.portal.war_droid.on"),
+          hellDroidTechnology: Boolean(tech["hdroid"]),
+          bootCampCount: bootCamp === null ? 0 : requireNumber(
+            bootCamp["count"],
+            "game.global.city.boot_camp.count"
+          ),
+          manageAuthority: requireBoolean(
+            settings2["authorityManage"],
+            "settings.authorityManage"
+          ),
+          minimumAuthority: requireNumber(
+            settings2["generalMinimumAuthority"],
+            "settings.generalMinimumAuthority"
+          ),
+          minimumAuthorityPatrolPercent: requireNumber(
+            settings2["generalAuthorityMinPatrolPercent"],
+            "settings.generalAuthorityMinPatrolPercent"
+          ),
+          evilTechnology: optionalNumber(tech["evil"], "game.global.tech.evil"),
+          grenadier: Boolean(race["grenadier"]),
+          government: requireString(
+            govern["type"],
+            "game.global.civic.govern.type"
+          )
+        });
+        session = {
+          manager,
+          game: game2,
+          settings: settings2,
+          buildings: buildings2,
+          resources: resources2,
+          state: state2,
+          debugWindow,
+          cycleInput: input,
+          calculation: null,
+          request: null
+        };
+        return input;
+      },
+      readCalculation(request) {
+        const active = session;
+        if (active === null) throw new Error("Hell cycle has not been sampled");
+        const expected = prepareHellCycle(active.cycleInput);
+        if (expected === null || expected.kind !== "calculate-hell-targets" || JSON.stringify(expected) !== JSON.stringify(request)) {
+          throw new Error("Hell target request does not match the sampled plan");
+        }
+        const garrisonSoldiers = requireSoldierTarget(
+          call(
+            active.manager,
+            "getSoldiersForAttackRating",
+            "WarManager.getSoldiersForAttackRating",
+            [request.garrisonRating]
+          ),
+          "Hell garrison soldier target"
+        );
+        const patrolSoldiers = request.patrolRating === null ? request.input.hellPatrolSize : requireSoldierTarget(
+          call(
+            active.manager,
+            "getSoldiersForAttackRating",
+            "WarManager.getSoldiersForAttackRating",
+            [request.patrolRating]
+          ),
+          "Hell patrol soldier target"
+        );
+        const base = calculateHellBaseTargets(request, {
+          garrisonSoldiers,
+          patrolSoldiers
+        });
+        let unlocked = false;
+        let current = 0;
+        let maximum = 0;
+        let scriptTick = 0;
+        let debugEnabled = false;
+        if (request.input.manageAuthority && request.input.minimumAuthority !== 0 && base.patrolSize > 0) {
+          const authority = requireRecord(
+            active.resources["Authority"],
+            "resources.Authority"
+          );
+          unlocked = Boolean(
+            call(authority, "isUnlocked", "resources.Authority.isUnlocked")
+          );
+          if (unlocked) {
+            current = requireNumber(
+              authority["currentQuantity"],
+              "resources.Authority.currentQuantity"
+            );
+            maximum = requireNumber(
+              authority["maxQuantity"],
+              "resources.Authority.maxQuantity"
+            );
+            scriptTick = requireNumber(
+              active.state["scriptTick"],
+              "state.scriptTick"
+            );
+            debugEnabled = Boolean(active.debugWindow["authorityDebug"]);
+          }
+        }
+        const calculation = Object.freeze({
+          garrisonSoldiers,
+          patrolSoldiers,
+          authority: Object.freeze({
+            unlocked,
+            current,
+            maximum,
+            scriptTick,
+            debugEnabled
+          })
+        });
+        active.request = request;
+        active.calculation = calculation;
+        return calculation;
+      }
+    });
+    const executor = Object.freeze({
+      execute(decision2) {
+        const active = session;
+        if (active === null) {
+          return stale("hell-session-missing", "Hell session is missing");
+        }
+        if (dependencies.getWarManager() !== active.manager || dependencies.getGame() !== active.game) {
+          return stale("hell-source-changed", "Hell source changed");
+        }
+        const prepared = prepareHellCycle(active.cycleInput);
+        let expected = null;
+        if (prepared !== null && prepared.kind === "calculate-hell-targets") {
+          if (active.calculation === null || active.request === null) {
+            return stale(
+              "hell-calculation-missing",
+              "Hell calculation is missing"
+            );
+          }
+          expected = planHell(active.request, active.calculation);
+        } else if (prepared !== null && (prepared.kind === "manage-hell" || prepared.kind === "attack-enemy-fortress")) {
+          expected = prepared;
+        }
+        if (expected === null || !decisionsMatch(expected, decision2)) {
+          return rejected2(
+            "invalid-hell-decision",
+            "Hell decision does not match the sampled plan"
+          );
+        }
+        if (decision2.kind === "attack-enemy-fortress") {
+          const attack = requireFunction(
+            active.manager["attackEnemyFortress"],
+            "WarManager.attackEnemyFortress"
+          );
+          session = null;
+          Reflect.apply(attack, active.manager, [decision2.enemyIndex]);
+          return SUCCEEDED2;
+        }
+        const methods = /* @__PURE__ */ new Map();
+        for (const command of decision2.commands) {
+          requireNumber(command.count, `Hell ${command.kind} count`);
+          const methodName = commandMethod(command);
+          if (!methods.has(methodName)) {
+            methods.set(
+              methodName,
+              requireFunction(
+                active.manager[methodName],
+                `WarManager.${methodName}`
+              )
+            );
+          }
+        }
+        const manageDecision2 = decision2;
+        session = null;
+        if (manageDecision2.authorityDebug !== null) {
+          const debug = manageDecision2.authorityDebug;
+          dependencies.debugLog(
+            `[authority] amount=${debug.amount.toFixed(1)}/${debug.target.toFixed(0)}, perSoldier=${debug.perSoldier.toFixed(2)}, stationed=${debug.currentStationed}→need=${debug.neededStationed}, garrison ${debug.defenseGarrison}→${debug.authorityGarrison} (cap=${debug.maximumStationed}, patrolReserve=${debug.patrolReserve}, patrolSize=${debug.patrolSize}, avail=${debug.availableSoldiers})`
+          );
+        }
+        if (manageDecision2.authorityAdjusted) {
+          const calculation = active.calculation;
+          if (calculation === null) {
+            return stale(
+              "hell-calculation-missing",
+              "Hell calculation is missing"
+            );
+          }
+          active.state["authoritySoldiersAdjustedTick"] = calculation.authority.scriptTick;
+        }
+        for (const command of manageDecision2.commands) {
+          const methodName = commandMethod(command);
+          Reflect.apply(methods.get(methodName), active.manager, [
+            command.count
+          ]);
+        }
+        return SUCCEEDED2;
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+  function commandMethod(command) {
+    switch (command.kind) {
+      case "remove-patrol-size":
+        return "removeHellPatrolSize";
+      case "remove-patrol":
+        return "removeHellPatrol";
+      case "remove-garrison":
+        return "removeHellGarrison";
+      case "add-garrison":
+        return "addHellGarrison";
+      case "add-patrol-size":
+        return "addHellPatrolSize";
+      case "add-patrol":
+        return "addHellPatrol";
+    }
   }
 
   // src/adapters/evolve/government.ts
@@ -20393,7 +20922,7 @@
   function createGovernmentCommandExecutor(dependencies) {
     function execute2(decision2) {
       if (decision2.government === null && decision2.appointCandidate === null) {
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
       const manager = requireRecord(
         dependencies.getGovernmentManager(),
@@ -20457,7 +20986,7 @@
           "governor appointment controls became unavailable"
         );
       }
-      return SUCCEEDED;
+      return SUCCEEDED2;
     }
     return Object.freeze({ execute: execute2 });
   }
@@ -20659,21 +21188,21 @@
   }
 
   // src/application/battle.ts
-  var SUCCEEDED2 = Object.freeze({
+  var SUCCEEDED3 = Object.freeze({
     status: "succeeded"
   });
   function runBattleAutomation(dependencies) {
     const parameters = prepareBattle(dependencies.reader.readCycle());
-    if (parameters === null) return SUCCEEDED2;
+    if (parameters === null) return SUCCEEDED3;
     const decision2 = planBattle(
       parameters,
       dependencies.reader.readBattlefield(parameters)
     );
-    return decision2 === null ? SUCCEEDED2 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED3 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/battle.ts
-  function requireString(value, path) {
+  function requireString2(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -20691,7 +21220,7 @@
     return {
       input: Object.freeze({
         governmentId: requireNumber(foreign["id"], `${path}.id`),
-        policy: requireString(foreign["policy"], `${path}.policy`),
+        policy: requireString2(foreign["policy"], `${path}.policy`),
         released: Boolean(foreign["released"]),
         occupied: Boolean(government["occ"]),
         annexed: Boolean(government["anx"]),
@@ -20701,7 +21230,7 @@
       record: Object.freeze({ foreign, government })
     };
   }
-  function decisionsMatch(left, right) {
+  function decisionsMatch2(left, right) {
     return left.kind === right.kind && left.governmentId === right.governmentId && left.expectedReleased === right.expectedReleased && left.expectedOccupied === right.expectedOccupied && left.expectedAnnexed === right.expectedAnnexed && left.expectedPurchased === right.expectedPurchased && left.spyCount === right.spyCount && left.tactic === right.tactic && left.battalionSize === right.battalionSize && left.releaseControl === right.releaseControl && left.hellPatrolsToRemove === right.hellPatrolsToRemove && left.hellGarrisonToRemove === right.hellGarrisonToRemove;
   }
   function targetStillMatches(target, decision2) {
@@ -20806,7 +21335,7 @@
         );
         const hellAvailable = Boolean(manager["_hellVue"]);
         const readHell = autoHell2 && hellAvailable;
-        const protectMode = requireString(
+        const protectMode = requireString2(
           settings2["foreignProtect"],
           "settings.foreignProtect"
         );
@@ -21027,7 +21556,7 @@
           return stale("battle-source-changed", "battle source changed");
         }
         const expected = planBattle(active.parameters, active.battlefield);
-        if (expected === null || !decisionsMatch(expected, decision2)) {
+        if (expected === null || !decisionsMatch2(expected, decision2)) {
           return rejected2(
             "invalid-battle-decision",
             "battle decision does not match the sampled plan"
@@ -21080,7 +21609,7 @@
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        const governmentName = requireString(
+        const governmentName = requireString2(
           dependencies.getGovernmentName(decision2.governmentId),
           `government name ${decision2.governmentId}`
         );
@@ -21106,7 +21635,7 @@
         if (removeBattalion !== null) {
           Reflect.apply(removeBattalion, active.manager, [-deltaBattalion]);
         }
-        const campaignTitle = requireString(
+        const campaignTitle = requireString2(
           Reflect.apply(getCampaignTitle, active.manager, [decision2.tactic]),
           `campaign title ${decision2.tactic}`
         );
@@ -21129,7 +21658,7 @@
           ["combat"]
         ]);
         Reflect.apply(launchCampaign, active.manager, [decision2.governmentId]);
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
     return Object.freeze({ reader, executor });
@@ -21838,7 +22367,7 @@
   function createSmelterCommandExecutor(getSmelterManager) {
     function execute2(decision2) {
       if (decision2.fuelAdjustments.length === 0 && decision2.smeltAdjustments.length === 0) {
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
       const manager = requireRecord(getSmelterManager(), "SmelterManager");
       const fuels = requireRecord(manager["Fuels"], "SmelterManager.Fuels");
@@ -21947,7 +22476,7 @@
           Reflect.apply(increaseSmelting, manager, [productionId, delta]);
         }
       }
-      return SUCCEEDED;
+      return SUCCEEDED2;
     }
     return Object.freeze({ execute: execute2 });
   }
@@ -22326,7 +22855,7 @@
   function createAlchemyCommandExecutor(getAlchemyManager) {
     function execute2(decision2) {
       if (decision2.decrease.length === 0 && decision2.increase.length === 0) {
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
       const manager = requireRecord(getAlchemyManager(), "AlchemyManager");
       const currentCount = requireFunction(
@@ -22370,7 +22899,7 @@
       for (const adjustment of decision2.increase) {
         Reflect.apply(transmuteMore, manager, [adjustment.id, adjustment.count]);
       }
-      return SUCCEEDED;
+      return SUCCEEDED2;
     }
     return Object.freeze({ execute: execute2 });
   }
@@ -22581,7 +23110,7 @@
   function createPylonCommandExecutor(getRitualManager) {
     function execute2(decision2) {
       if (decision2.decrease.length === 0 && decision2.increase.length === 0) {
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
       const manager = requireRecord(getRitualManager(), "RitualManager");
       const productions = requireRecord(
@@ -22653,7 +23182,7 @@
           Reflect.apply(increaseRitual, manager, [spell, adjustment.count]);
         }
       }
-      return SUCCEEDED;
+      return SUCCEEDED2;
     }
     return Object.freeze({ execute: execute2 });
   }
@@ -22898,7 +23427,7 @@
         `${managerName}.increaseProduction`
       );
       Reflect.apply(increase, manager, [adjustment.delta]);
-      return SUCCEEDED;
+      return SUCCEEDED2;
     }
     return Object.freeze({ execute: execute2 });
   }
@@ -22914,7 +23443,7 @@
     const extractor = Object.freeze({
       execute(adjustments) {
         if (adjustments.length === 0) {
-          return SUCCEEDED;
+          return SUCCEEDED2;
         }
         const manager = requireRecord(
           dependencies.getExtractorManager(),
@@ -22948,7 +23477,7 @@
         for (const adjustment of adjustments) {
           Reflect.apply(increase, manager, [adjustment.id, adjustment.delta]);
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
     return Object.freeze({ quarry, mine, extractor });
@@ -23186,12 +23715,12 @@
   }
 
   // src/application/factory.ts
-  var SUCCEEDED3 = Object.freeze({
+  var SUCCEEDED4 = Object.freeze({
     status: "succeeded"
   });
   function runFactoryAutomation(dependencies) {
     const decision2 = planFactory(dependencies.reader.read());
-    if (decision2 === null) return SUCCEEDED3;
+    if (decision2 === null) return SUCCEEDED4;
     dependencies.tooltips.publish(decision2.tooltips);
     return dependencies.executor.execute(decision2);
   }
@@ -23603,7 +24132,7 @@
             ]);
           }
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
     return Object.freeze({ reader, executor });
@@ -23729,7 +24258,7 @@
   }
 
   // src/application/mining-droid.ts
-  var SUCCEEDED4 = Object.freeze({
+  var SUCCEEDED5 = Object.freeze({
     status: "succeeded"
   });
   function runMiningDroidAutomation(dependencies) {
@@ -23737,7 +24266,7 @@
       dependencies.reader.readPlanningInput()
     );
     if (targets === null) {
-      return SUCCEEDED4;
+      return SUCCEEDED5;
     }
     const current = dependencies.reader.readCurrent(
       targets.map((target) => target.productionId)
@@ -23919,7 +24448,7 @@
           (adjustment) => adjustment.delta !== 0
         );
         if (active.length === 0) {
-          return SUCCEEDED;
+          return SUCCEEDED2;
         }
         const manager = requireRecord(getManager(), "DroidManager");
         const productions = readProductions(manager).byId;
@@ -23981,7 +24510,7 @@
             ]);
           }
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
   }
@@ -24119,7 +24648,7 @@
   function createGrapheneCommandExecutor(getGrapheneManager) {
     function execute2(adjustments) {
       if (adjustments.length === 0) {
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
       const manager = requireRecord(getGrapheneManager(), "GrapheneManager");
       const fuels = requireRecord(manager["Fuels"], "GrapheneManager.Fuels");
@@ -24170,7 +24699,7 @@
           Reflect.apply(increaseFuel, manager, [fuel, adjustment.delta]);
         }
       }
-      return SUCCEEDED;
+      return SUCCEEDED2;
     }
     return Object.freeze({ execute: execute2 });
   }
@@ -24242,7 +24771,7 @@
     return Object.freeze({
       execute(targetGenus) {
         if (targetGenus === null) {
-          return SUCCEEDED;
+          return SUCCEEDED2;
         }
         const game2 = requireRecord(dependencies.getGame(), "game");
         const race = requireRecord(
@@ -24264,7 +24793,7 @@
             "shapeshift controls became unavailable"
           );
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
   }
@@ -24359,7 +24888,7 @@
   }
 
   // src/application/wish.ts
-  var SUCCEEDED5 = Object.freeze({
+  var SUCCEEDED6 = Object.freeze({
     status: "succeeded"
   });
   function runWishAutomation(dependencies) {
@@ -24367,7 +24896,7 @@
       const outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED5;
+    return SUCCEEDED6;
   }
 
   // src/adapters/evolve/wish.ts
@@ -24476,7 +25005,7 @@
             `${decision2.tier} wish controls became unavailable`
           );
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
   }
@@ -24559,11 +25088,11 @@
   }
 
   // src/application/genetics.ts
-  var SUCCEEDED6 = Object.freeze({
+  var SUCCEEDED7 = Object.freeze({
     status: "succeeded"
   });
   function runGeneticsAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED6;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED7;
     if (!dependencies.controls.capture()) {
       return {
         status: "stale",
@@ -24577,7 +25106,7 @@
       const outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED6;
+    return SUCCEEDED7;
   }
 
   // src/adapters/evolve/genetics.ts
@@ -24771,8 +25300,8 @@
           actual
         });
       }
-      if (actual === decision2.enabled) return SUCCEEDED;
-      return dependencies.controls.toggle(decision2.toggle) ? SUCCEEDED : stale(
+      if (actual === decision2.enabled) return SUCCEEDED2;
+      return dependencies.controls.toggle(decision2.toggle) ? SUCCEEDED2 : stale(
         "genetics-toggle-unavailable",
         `genetics ${decision2.toggle} control became unavailable`
       );
@@ -24811,7 +25340,7 @@
           "genetics assembly control became unavailable"
         );
       }
-      return SUCCEEDED;
+      return SUCCEEDED2;
     };
     const executor = Object.freeze({
       execute(decision2) {
@@ -24962,14 +25491,14 @@
   }
 
   // src/application/mercenary.ts
-  var SUCCEEDED7 = Object.freeze({
+  var SUCCEEDED8 = Object.freeze({
     status: "succeeded"
   });
   function runMercenaryAutomation(dependencies) {
     const cycle = planMercenaryCycle(dependencies.reader.readCycle());
-    if (cycle === null) return SUCCEEDED7;
+    if (cycle === null) return SUCCEEDED8;
     let hired = 0;
-    let outcome = SUCCEEDED7;
+    let outcome = SUCCEEDED8;
     while (true) {
       const decision2 = planMercenaryHire(cycle, dependencies.reader.readState());
       if (decision2 === null) break;
@@ -24987,7 +25516,7 @@
   }
 
   // src/adapters/evolve/mercenary.ts
-  function unavailableInput() {
+  function unavailableInput2() {
     return Object.freeze({
       available: false,
       saveInflationMoney: false,
@@ -25002,7 +25531,7 @@
       moneyStorageRequired: 0
     });
   }
-  function requireString2(value, path) {
+  function requireString3(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -25039,25 +25568,25 @@
         session = null;
         lastState = null;
         const manager = requireRecord(dependencies.getWarManager(), "WarManager");
-        if (!manager["_garrisonVue"]) return unavailableInput();
+        if (!manager["_garrisonVue"]) return unavailableInput2();
         const isUnlocked2 = requireFunction(
           manager["isMercenaryUnlocked"],
           "WarManager.isMercenaryUnlocked"
         );
-        if (!Reflect.apply(isUnlocked2, manager, [])) return unavailableInput();
+        if (!Reflect.apply(isUnlocked2, manager, [])) return unavailableInput2();
         const maxCityGarrison = requireNumber(
           manager["maxCityGarrison"],
           "WarManager.maxCityGarrison"
         );
-        if (maxCityGarrison <= 0) return unavailableInput();
+        if (maxCityGarrison <= 0) return unavailableInput2();
         const state2 = requireRecord(dependencies.getState(), "state");
-        const goal = requireString2(state2["goal"], "state.goal");
+        const goal = requireString3(state2["goal"], "state.goal");
         const saveInflationMoney = Boolean(
           dependencies.shouldSaveInflationMoney()
         );
         if (saveInflationMoney && goal !== "Reset") {
           return Object.freeze({
-            ...unavailableInput(),
+            ...unavailableInput2(),
             available: true,
             saveInflationMoney: true,
             goal
@@ -25225,17 +25754,17 @@
   }
 
   // src/application/psychic.ts
-  var SUCCEEDED8 = Object.freeze({
+  var SUCCEEDED9 = Object.freeze({
     status: "succeeded"
   });
   function runPsychicAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED8;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED9;
     for (const decision2 of planPsychic(dependencies.reader.readPlan())) {
       const outcome = dependencies.executor.execute(decision2);
       if (outcome.status === "succeeded") return outcome;
       if (outcome.failure.code !== "psychic-control-unavailable") return outcome;
     }
-    return SUCCEEDED8;
+    return SUCCEEDED9;
   }
 
   // src/adapters/evolve/psychic.ts
@@ -25285,7 +25814,7 @@
       boostCandidates: Object.freeze([])
     });
   }
-  function decisionsMatch2(left, right) {
+  function decisionsMatch3(left, right) {
     return left.kind === right.kind && left.power === right.power && left.energyCost === right.energyCost && left.expectedEnergy === right.expectedEnergy && left.expectedTechnologyLevel === right.expectedTechnologyLevel && left.boostedResourceId === right.boostedResourceId;
   }
   function roomMatches(record, expected, path) {
@@ -25575,7 +26104,7 @@
           "psychic assault state changed"
         );
       }
-      return SUCCEEDED;
+      return SUCCEEDED2;
     }
     const executor = Object.freeze({
       execute(decision2) {
@@ -25584,7 +26113,7 @@
           return stale("psychic-session-missing", "psychic session is missing");
         }
         const expected = planPsychic(active.input).find(
-          (candidate) => decisionsMatch2(candidate, decision2)
+          (candidate) => decisionsMatch3(candidate, decision2)
         );
         if (expected === void 0) {
           return rejected2(
@@ -25600,7 +26129,7 @@
             `psychic ${decision2.power} control is unavailable`
           );
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
     return Object.freeze({ reader, executor });
@@ -25657,11 +26186,11 @@
   }
 
   // src/application/ocular-power.ts
-  var SUCCEEDED9 = Object.freeze({
+  var SUCCEEDED10 = Object.freeze({
     status: "succeeded"
   });
   function runOcularPowerAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED9;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED10;
     if (!dependencies.controls.capture()) {
       return {
         status: "stale",
@@ -25675,7 +26204,7 @@
       const outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED9;
+    return SUCCEEDED10;
   }
 
   // src/adapters/evolve/ocular-power.ts
@@ -25798,14 +26327,14 @@
             "ocular power controls became unavailable"
           );
         }
-        if (current === decision2.enabled) return SUCCEEDED;
+        if (current === decision2.enabled) return SUCCEEDED2;
         if (!dependencies.controls.toggle(decision2.id)) {
           return stale(
             "ocular-toggle-unavailable",
             `ocular power ${decision2.id} control became unavailable`
           );
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
     return Object.freeze({ reader, executor });
@@ -25891,7 +26420,7 @@
   }
 
   // src/application/minor-trait.ts
-  var SUCCEEDED10 = Object.freeze({
+  var SUCCEEDED11 = Object.freeze({
     status: "succeeded"
   });
   function staleCandidate(index, expectedTraitName, actualTraitName) {
@@ -25907,7 +26436,7 @@
   function runMinorTraitAutomation(dependencies) {
     const summary = summarizeMinorTraits(dependencies.reader.readSummary());
     if (summary === null) {
-      return SUCCEEDED10;
+      return SUCCEEDED11;
     }
     for (let index = 0; index < summary.traits.length; index++) {
       const expected = summary.traits[index];
@@ -25931,7 +26460,7 @@
         return outcome;
       }
     }
-    return SUCCEEDED10;
+    return SUCCEEDED11;
   }
 
   // src/adapters/evolve/minor-trait.ts
@@ -26057,7 +26586,7 @@
         );
         Reflect.apply(buyTrait, manager, [decision2.traitName]);
         genes["currentQuantity"] = actualGenes - decision2.geneCost;
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
   }
@@ -26075,7 +26604,7 @@
   }
 
   // src/application/trigger.ts
-  var SUCCEEDED11 = Object.freeze({
+  var SUCCEEDED12 = Object.freeze({
     status: "succeeded"
   });
   function result(outcome, active) {
@@ -26087,7 +26616,7 @@
     while (true) {
       const decision2 = planTrigger(dependencies.reader.read(index));
       if (decision2 === null) {
-        return result(SUCCEEDED11, active);
+        return result(SUCCEEDED12, active);
       }
       if (decision2.kind === "click") {
         const execution = dependencies.executor.execute(decision2);
@@ -26185,7 +26714,7 @@
           `state.triggerTargets[${decision2.index}].click`
         );
         return executionResult(
-          SUCCEEDED,
+          SUCCEEDED2,
           Boolean(Reflect.apply(click, target, []))
         );
       }
@@ -26525,7 +27054,7 @@
           (adjustment) => adjustment.delta !== 0
         );
         if (activeAdjustments.length === 0) {
-          return SUCCEEDED;
+          return SUCCEEDED2;
         }
         const manager = requireRecord(getManager(), "ConsumeManager");
         const currentConsume = requireFunction(
@@ -26577,7 +27106,7 @@
             ]);
           }
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
   }
@@ -26696,13 +27225,13 @@
   }
 
   // src/application/replicator.ts
-  var SUCCEEDED12 = Object.freeze({
+  var SUCCEEDED13 = Object.freeze({
     status: "succeeded"
   });
   function runReplicatorAutomation(dependencies) {
     const planningInput = dependencies.selectionReader.readPlanningInput();
     if (!planningInput.initialised) {
-      return SUCCEEDED12;
+      return SUCCEEDED13;
     }
     const priorityPlan = planReplicatorPriority(planningInput);
     if (priorityPlan !== null) {
@@ -26718,18 +27247,18 @@
       }
     }
     if (!planningInput.assignGovernorTask) {
-      return SUCCEEDED12;
+      return SUCCEEDED13;
     }
     if (!shouldConfigureReplicatorGovernor(
       dependencies.governorGameReader.readGate()
     ) || !dependencies.governorOfficeReader.open()) {
-      return SUCCEEDED12;
+      return SUCCEEDED13;
     }
     const taskPlan = planReplicatorGovernorTask(
       dependencies.governorGameReader.readTasks()
     );
     if (taskPlan.status === "unavailable") {
-      return SUCCEEDED12;
+      return SUCCEEDED13;
     }
     if (taskPlan.assignment !== null) {
       const outcome = dependencies.governorExecutor.execute(taskPlan.assignment);
@@ -26739,10 +27268,10 @@
     }
     const settings2 = dependencies.governorOfficeReader.readSettings();
     if (settings2 === null) {
-      return SUCCEEDED12;
+      return SUCCEEDED13;
     }
     const settingsDecision = planReplicatorGovernorSettings(settings2);
-    return settingsDecision === null ? SUCCEEDED12 : dependencies.governorExecutor.execute(settingsDecision);
+    return settingsDecision === null ? SUCCEEDED13 : dependencies.governorExecutor.execute(settingsDecision);
   }
 
   // src/adapters/evolve/replicator.ts
@@ -26943,7 +27472,7 @@
           "ReplicatorManager.setResource"
         );
         Reflect.apply(setResource, manager, [decision2.productionId]);
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
   }
@@ -27090,7 +27619,7 @@
               "governorOffice.setTask"
             );
             Reflect.apply(setTask, office, ["replicate", decision2.taskIndex]);
-            return SUCCEEDED;
+            return SUCCEEDED2;
           }
           const current = readGovernorSettings(office);
           if (current === null) {
@@ -27125,7 +27654,7 @@
             current.power["cap"] = 1e12;
           }
           Reflect.apply(forceUpdate, office, []);
-          return SUCCEEDED;
+          return SUCCEEDED2;
         }
       })
     });
@@ -27191,20 +27720,20 @@
   }
 
   // src/application/market.ts
-  var SUCCEEDED13 = Object.freeze({
+  var SUCCEEDED14 = Object.freeze({
     status: "succeeded"
   });
   function runMarketAutomation(dependencies, bulkSell = false, ignoreSellRatio = false) {
     const gate = dependencies.reader.readGate();
     if (!gate.unlocked) {
-      return SUCCEEDED13;
+      return SUCCEEDED14;
     }
     dependencies.tradeRoutes.adjust();
     if (gate.noTrade) {
-      return SUCCEEDED13;
+      return SUCCEEDED14;
     }
     const session = dependencies.reader.readSession();
-    let outcome = SUCCEEDED13;
+    let outcome = SUCCEEDED14;
     for (let index = 0; ; index++) {
       const sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
       if (sellInput === null) {
@@ -27565,7 +28094,7 @@
             "MarketManager.setMultiplier"
           );
           Reflect.apply(setMultiplier2, manager2, [decision2.multiplier]);
-          return SUCCEEDED;
+          return SUCCEEDED2;
         }
         if (!Number.isSafeInteger(decision2.repetitions) || decision2.repetitions < 1 || !Number.isSafeInteger(decision2.multiplier)) {
           return rejected2(
@@ -27619,7 +28148,7 @@
         for (let index = 0; index < decision2.repetitions; index++) {
           Reflect.apply(trade, manager, [resource]);
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
   }
@@ -28436,7 +28965,7 @@
   );
 
   // src/application/power.ts
-  var SUCCEEDED14 = Object.freeze({
+  var SUCCEEDED15 = Object.freeze({
     status: "succeeded"
   });
   function createPowerAutomation(dependencies) {
@@ -28445,7 +28974,7 @@
       run() {
         const plan = planPowerCycle(dependencies.reader.readCycle(), state2);
         if (plan.decision === null) {
-          return SUCCEEDED14;
+          return SUCCEEDED15;
         }
         const cycleOutcome = dependencies.executor.execute(plan.decision);
         if (cycleOutcome.status !== "succeeded") {
@@ -28458,7 +28987,7 @@
           )
         );
         if (warning === null) {
-          return SUCCEEDED14;
+          return SUCCEEDED15;
         }
         const warningOutcome = dependencies.executor.execute(warning);
         if (warningOutcome.status !== "succeeded") {
@@ -28469,7 +28998,7 @@
           warning.binding,
           dependencies.reader.readStateOn(warning.binding)
         );
-        return SUCCEEDED14;
+        return SUCCEEDED15;
       },
       readState() {
         return state2;
@@ -29884,7 +30413,7 @@
             return stale("power-precondition-changed", failure2);
           }
           applyOperations(active, decision2.operations);
-          return SUCCEEDED;
+          return SUCCEEDED2;
         }
         if (decision2.kind !== "shutdown-warned-building") {
           return rejected2("invalid-power-decision", "Unsupported power decision");
@@ -29913,7 +30442,7 @@
           building,
           [-1]
         );
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
     return Object.freeze({ reader, executor });
@@ -30247,7 +30776,7 @@
   });
 
   // src/application/storage-allocation.ts
-  var SUCCEEDED15 = Object.freeze({
+  var SUCCEEDED16 = Object.freeze({
     status: "succeeded"
   });
   function createStorageAllocationAutomation(dependencies) {
@@ -30255,9 +30784,9 @@
     return Object.freeze({
       run() {
         const rawPlan = planStorageAllocation(dependencies.reader.read());
-        if (rawPlan === null) return SUCCEEDED15;
+        if (rawPlan === null) return SUCCEEDED16;
         if (rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild)) {
-          return SUCCEEDED15;
+          return SUCCEEDED16;
         }
         const finalized = finalizeStorageAllocation(rawPlan, state2);
         const outcome = dependencies.executor.execute(finalized.decision);
@@ -30845,7 +31374,7 @@
             ) + adjustment.containerDelta;
           }
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
     return Object.freeze({ reader, executor });
@@ -30934,12 +31463,12 @@
   }
 
   // src/application/galaxy-market.ts
-  var SUCCEEDED16 = Object.freeze({
+  var SUCCEEDED17 = Object.freeze({
     status: "succeeded"
   });
   function runGalaxyMarketAutomation(dependencies) {
     const decision2 = planGalaxyMarket(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED16 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED17 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/galaxy-market.ts
@@ -31225,7 +31754,7 @@
             ]);
           }
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
     return Object.freeze({ reader, executor });
@@ -31355,12 +31884,12 @@
   }
 
   // src/application/gather-resources.ts
-  var SUCCEEDED17 = Object.freeze({
+  var SUCCEEDED18 = Object.freeze({
     status: "succeeded"
   });
   function runGatherResourcesAutomation(dependencies) {
     const decision2 = planGatherResources(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED17 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED18 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/gather-resources.ts
@@ -31689,7 +32218,7 @@
           }
           applyAssignments(entry.operation.afterAction);
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
     return Object.freeze({ reader, executor });
@@ -31895,7 +32424,7 @@
     return Object.freeze({
       execute(targetName) {
         if (targetName === null) {
-          return SUCCEEDED;
+          return SUCCEEDED2;
         }
         const game2 = requireRecord(dependencies.getGame(), "game");
         const race = requireRecord(
@@ -31914,7 +32443,7 @@
             "universe selection control became unavailable"
           );
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
   }
@@ -31981,17 +32510,17 @@
   }
 
   // src/application/craft.ts
-  var SUCCEEDED18 = Object.freeze({
+  var SUCCEEDED19 = Object.freeze({
     status: "succeeded"
   });
   function runCraftAutomation(dependencies) {
     if (!shouldRunCraft(dependencies.reader.readGate())) {
-      return SUCCEEDED18;
+      return SUCCEEDED19;
     }
     for (let index = 0; ; index++) {
       const candidate = dependencies.reader.readCandidate(index);
       if (candidate === null) {
-        return SUCCEEDED18;
+        return SUCCEEDED19;
       }
       const decision2 = planCraft(candidate);
       if (decision2 === null) {
@@ -32263,7 +32792,7 @@
         for (const write of writes) {
           write.resource["currentQuantity"] = write.nextQuantity;
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
   }
@@ -32337,12 +32866,12 @@
   }
 
   // src/application/spy.ts
-  var SUCCEEDED19 = Object.freeze({
+  var SUCCEEDED20 = Object.freeze({
     status: "succeeded"
   });
   function runSpyAutomation(dependencies) {
     const cycle = planSpyCycle(dependencies.reader.readCycle());
-    if (cycle === null) return SUCCEEDED19;
+    if (cycle === null) return SUCCEEDED20;
     if (cycle.trainEnabled) {
       for (let index = 0; index < cycle.foreignCount; index++) {
         const decision2 = planSpyTraining(dependencies.reader.readTraining(index));
@@ -32351,14 +32880,14 @@
         if (outcome.status !== "succeeded") return outcome;
       }
     }
-    if (!cycle.espionageEnabled) return SUCCEEDED19;
+    if (!cycle.espionageEnabled) return SUCCEEDED20;
     for (let index = 0; index < cycle.foreignCount; index++) {
       const decision2 = planSpyEspionage(dependencies.reader.readEspionage(index));
       if (decision2 === null) continue;
       const outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED19;
+    return SUCCEEDED20;
   }
 
   // src/adapters/evolve/spy.ts
@@ -32384,7 +32913,7 @@
     );
     return { foreign, government };
   }
-  function requireString3(value, path) {
+  function requireString4(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -32395,7 +32924,7 @@
     const ids = {};
     for (const [name, rawType] of Object.entries(types)) {
       const type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString3(type["id"], `SpyManager.Types.${name}.id`);
+      ids[name] = requireString4(type["id"], `SpyManager.Types.${name}.id`);
     }
     return Object.freeze(ids);
   }
@@ -32503,7 +33032,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString3(
+        const policy = requireString4(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -32524,7 +33053,7 @@
             "resources.Money.maxQuantity"
           );
         }
-        const governmentName = requireString3(
+        const governmentName = requireString4(
           dependencies.getGovName(governmentId),
           `government name ${governmentId}`
         );
@@ -32570,7 +33099,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString3(
+        const policy = requireString4(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -32662,7 +33191,7 @@
             ["spy"]
           ]);
           Reflect.apply(train, active.view, [decision2.governmentId]);
-          return SUCCEEDED;
+          return SUCCEEDED2;
         }
         if (sampled.kind !== "espionage") {
           return rejected2("invalid-spy-phase", "spy espionage phase changed");
@@ -32678,7 +33207,7 @@
           );
           Reflect.apply(release, warManager, [decision2.governmentId]);
           sampled.foreign["released"] = true;
-          return SUCCEEDED;
+          return SUCCEEDED2;
         }
         if (decision2.kind === "perform-espionage") {
           const performEspionage = requireFunction(
@@ -32690,7 +33219,7 @@
             decision2.missionId,
             decision2.secondaryTarget
           ]);
-          return SUCCEEDED;
+          return SUCCEEDED2;
         }
         return rejected2("invalid-spy-decision", "spy decision is invalid");
       }
@@ -33931,7 +34460,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED20 = Object.freeze({
+  var SUCCEEDED21 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -33939,7 +34468,7 @@
     while (true) {
       const decision2 = planResearch(dependencies.reader.read(startIndex));
       if (decision2 === null) {
-        return SUCCEEDED20;
+        return SUCCEEDED21;
       }
       const result2 = dependencies.executor.execute(decision2);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -34050,11 +34579,11 @@
           "ProjectManager.updateProjects"
         );
         if (!Reflect.apply(click, tech, [])) {
-          return executionResult2(SUCCEEDED, false);
+          return executionResult2(SUCCEEDED2, false);
         }
         Reflect.apply(updateBuildings, buildingManager, []);
         Reflect.apply(updateProjects, projectManager, []);
-        return executionResult2(SUCCEEDED, true);
+        return executionResult2(SUCCEEDED2, true);
       }
     });
   }
@@ -34083,12 +34612,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED21 = Object.freeze({
+  var SUCCEEDED22 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision2 = planMutation(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED21 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED22 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -34287,7 +34816,7 @@
           ["progress"]
         ]);
         currency["currentQuantity"] = actualQuantity - decision2.mutationCost;
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
   }
@@ -34499,7 +35028,7 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString4(value, path) {
+  function requireString5(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -34519,7 +35048,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString4(
+    const status2 = requireString5(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -34588,7 +35117,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString4(
+          mode = requireString5(
             settings2["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -34726,7 +35255,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString4(
+            const id = requireString5(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -34885,7 +35414,7 @@
             );
           }
         }
-        const targetLocationName = requireString4(
+        const targetLocationName = requireString5(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -34918,7 +35447,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString4(
+        const shipName = requireString5(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -34929,7 +35458,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString4(
+        const shipClass = requireString5(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -35001,7 +35530,7 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString4(
+          const resourceId3 = requireString5(
             missingResource,
             "missing outer-fleet resource id"
           );
@@ -35009,7 +35538,7 @@
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString4(
+          missingResourceName = requireString5(
             resource["name"],
             `resources.${resourceId3}.name`
           );
@@ -35073,13 +35602,13 @@
         if (decision2.kind === "outer-fleet-status" && decision2.messageAfterUpdate !== null) {
           active.manager["nextShipMsg"] = decision2.messageAfterUpdate;
         }
-        if (decision2.kind === "outer-fleet-status") return SUCCEEDED;
+        if (decision2.kind === "outer-fleet-status") return SUCCEEDED2;
         if (!Reflect.apply(build, active.manager, [
           blueprint,
           decision2.targetRegion
         ])) {
           active.manager["nextShipMsg"] = `Invalid design! Next ship(${decision2.nextShipName}) is missing power`;
-          return SUCCEEDED;
+          return SUCCEEDED2;
         }
         const gameLog = requireRecord(dependencies.getGameLog(), "GameLog");
         const logSuccess = requireFunction(
@@ -35091,7 +35620,7 @@
           `${decision2.shipName} has been assembled, and dispatched to ${decision2.targetLocationName}.`,
           ["combat"]
         ]);
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
     return Object.freeze({ reader, executor });
@@ -35125,7 +35654,7 @@
     }
     return products;
   }
-  function freezeCommands(commands) {
+  function freezeCommands2(commands) {
     return Object.freeze(
       commands.map((command) => Object.freeze({ ...command }))
     );
@@ -35255,7 +35784,7 @@
     return Object.freeze({
       kind: "launch-galaxy-assault",
       mission: assault.mission,
-      commands: freezeCommands(commands)
+      commands: freezeCommands2(commands)
     });
   }
   function planFleet(input) {
@@ -35418,17 +35947,17 @@
       kind: "manage-galaxy-fleet",
       clearNeededShips: true,
       neededShips,
-      commands: freezeCommands([...removals, ...additions])
+      commands: freezeCommands2([...removals, ...additions])
     });
   }
 
   // src/application/fleet.ts
-  var SUCCEEDED22 = Object.freeze({
+  var SUCCEEDED23 = Object.freeze({
     status: "succeeded"
   });
   function runFleetAutomation(dependencies) {
     const decision2 = planFleet(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED22 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED23 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/fleet.ts
@@ -35439,7 +35968,7 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString5(value, path) {
+  function requireString6(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -35540,7 +36069,7 @@
       return candidate !== void 0 && command.kind === candidate.kind && command.region === candidate.region && command.ship === candidate.ship && command.count === candidate.count;
     });
   }
-  function unavailableInput2() {
+  function unavailableInput3() {
     return Object.freeze({
       available: false,
       ships: Object.freeze([]),
@@ -35577,7 +36106,7 @@
           manager["initFleet"],
           "FleetManager.initFleet"
         );
-        if (!Reflect.apply(initFleet, manager, [])) return unavailableInput2();
+        if (!Reflect.apply(initFleet, manager, [])) return unavailableInput3();
         const global = requireRecord(game2["global"], "game.global");
         const galaxy = requireRecord(global["galaxy"], "game.global.galaxy");
         const defense = requireRecord(
@@ -35615,7 +36144,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString5(
+          const name = requireString6(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -35643,7 +36172,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString5(
+          chthonianLossMode = requireString6(
             settings2["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -35677,7 +36206,7 @@
               settings2["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString5(
+            alien2LossMode = requireString6(
               settings2["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -35835,7 +36364,7 @@
         if (clickMission !== null && mission !== null) {
           Reflect.apply(clickMission, mission, []);
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
     return Object.freeze({ reader, executor });
@@ -35992,22 +36521,22 @@
   }
 
   // src/application/mech.ts
-  var SUCCEEDED23 = Object.freeze({
+  var SUCCEEDED24 = Object.freeze({
     status: "succeeded"
   });
   function runMechAutomation(dependencies) {
     const cycle = planMechCycle(dependencies.reader.readCycle());
-    if (cycle === null) return SUCCEEDED23;
+    if (cycle === null) return SUCCEEDED24;
     const prepared = dependencies.executor.prepare(cycle);
     if (prepared.status !== "succeeded" || !cycle.proceed) return prepared;
     const planning = dependencies.reader.readPlanning(cycle);
-    if (planning === null) return SUCCEEDED23;
+    if (planning === null) return SUCCEEDED24;
     const continuation = planMechContinuation(planning);
     if (continuation.scrap !== null) {
       const scrapped = dependencies.executor.scrap(continuation.scrap);
       if (scrapped.status !== "succeeded") return scrapped;
     }
-    if (continuation.halt) return SUCCEEDED23;
+    if (continuation.halt) return SUCCEEDED24;
     let design = planning.design;
     let cost = planning.cost;
     if (continuation.trySmaller) {
@@ -36022,17 +36551,17 @@
       }
     }
     const build = planMechBuild(continuation, design, cost);
-    return build === null ? SUCCEEDED23 : dependencies.executor.build(build, continuation);
+    return build === null ? SUCCEEDED24 : dependencies.executor.build(build, continuation);
   }
 
   // src/adapters/evolve/mech.ts
-  function requireString6(value, path) {
+  function requireString7(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
     return value;
   }
-  function call(target, key, path, args = []) {
+  function call2(target, key, path, args = []) {
     return Reflect.apply(requireFunction(target[key], path), target, args);
   }
   function readArray(value, path) {
@@ -36045,7 +36574,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString6(raw["size"], `${path}.size`),
+        size: requireString7(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -36080,7 +36609,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString6(raw["size"], `${path}.size`),
+      size: requireString7(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -36116,7 +36645,7 @@
         const global = requireRecord(game2["global"], "game.global");
         const race = requireRecord(global["race"], "game.global.race");
         if (race["warlord"]) return unavailableCycle2();
-        if (!call(manager, "initLab", "MechManager.initLab")) {
+        if (!call2(manager, "initLab", "MechManager.initLab")) {
           return unavailableCycle2();
         }
         const jquery = dependencies.getJQuery();
@@ -36181,7 +36710,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString6(settings2["mechBuild"], "settings.mechBuild")
+          buildMode: requireString7(settings2["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -36210,19 +36739,19 @@
         let forceBuild = false;
         if (active.cycleInput.buildMode === "random") {
           const preferred = readArray(
-            call(manager, "getPreferredSize", "MechManager.getPreferredSize"),
+            call2(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString6(preferred[0], "preferred mech size");
+          const size = requireString7(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
-            call(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
+            call2(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
             "random mech"
           );
         } else {
           const blueprint = requireRecord(bay["blueprint"], "mechbay.blueprint");
           const statistics = requireRecord(
-            call(manager, "getMechStats", "MechManager.getMechStats", [
+            call2(manager, "getMechStats", "MechManager.getMechStats", [
               blueprint
             ]),
             "blueprint mech statistics"
@@ -36232,7 +36761,7 @@
         const design = readDesign(rawDesign, "primary", "selected mech");
         active.designs.set(design.token, rawDesign);
         const cost = readCost2(
-          call(manager, "getMechCost", "MechManager.getMechCost", [rawDesign]),
+          call2(manager, "getMechCost", "MechManager.getMechCost", [rawDesign]),
           "selected mech cost"
         );
         const fillBay = requireBoolean(
@@ -36247,7 +36776,7 @@
           buildings2["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString6(
+        const prestigeType = requireString7(
           settings2["prestigeType"],
           "settings.prestigeType"
         );
@@ -36265,14 +36794,14 @@
         if (saveSupplyRatio > 0 && !lastFloor && !forceBuild) {
           if (baySpace < cost.space) {
             titanSupplyRefund = readCostLikeRefund(
-              call(manager, "getMechRefund", "MechManager.getMechRefund", [
+              call2(manager, "getMechRefund", "MechManager.getMechRefund", [
                 { size: "titan" }
               ]),
               "titan mech refund"
             ).supply;
           }
           saveTimeToClear = requireNumber(
-            call(manager, "getTimeToClear", "MechManager.getTimeToClear"),
+            call2(manager, "getTimeToClear", "MechManager.getTimeToClear"),
             "MechManager.getTimeToClear result"
           );
         }
@@ -36308,23 +36837,23 @@
         );
         let canExpandBay = false;
         if (autoBuild2 && baysFirst && Boolean(
-          call(
+          call2(
             mechBayBuilding,
             "isAutoBuildable",
             "SpireMechBay.isAutoBuildable"
           )
         )) {
           canExpandBay = Boolean(
-            call(mechBayBuilding, "isAffordable", "SpireMechBay.isAffordable", [
+            call2(mechBayBuilding, "isAffordable", "SpireMechBay.isAffordable", [
               true
             ])
           );
           if (!canExpandBay) {
             const purifierAuto = Boolean(
-              call(purifier, "isAutoBuildable", "SpirePurifier.isAutoBuildable")
+              call2(purifier, "isAutoBuildable", "SpirePurifier.isAutoBuildable")
             );
             canExpandBay = purifierAuto && Boolean(
-              call(purifier, "isAffordable", "SpirePurifier.isAffordable", [
+              call2(purifier, "isAffordable", "SpirePurifier.isAffordable", [
                 true
               ])
             ) && requireNumber(
@@ -36333,7 +36862,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString6(
+        const configuredScrapMode = requireString7(
           settings2["mechScrap"],
           "settings.mechScrap"
         );
@@ -36357,12 +36886,12 @@
         const suppressMixed = canExpandBay && supply.input.current < supply.input.maximum && !decision2.prolongActive && supply.input.rate >= minimumSupplyRate;
         if (configuredScrapMode === "mixed" && !suppressMixed && waygateActiveCount !== 1) {
           timeToClear = requireNumber(
-            call(manager, "getTimeToClear", "MechManager.getTimeToClear"),
+            call2(manager, "getTimeToClear", "MechManager.getTimeToClear"),
             "MechManager.getTimeToClear result"
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString6(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString7(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -36425,7 +36954,7 @@
                 let space = 0;
                 if (!(summary.infernal && summary.size !== "collector" || summary.power >= bestPower)) {
                   const refund = readCostLikeRefund(
-                    call(manager, "getMechRefund", "MechManager.getMechRefund", [
+                    call2(manager, "getMechRefund", "MechManager.getMechRefund", [
                       raw
                     ]),
                     `${path} refund`
@@ -36433,7 +36962,7 @@
                   gemRefund = refund.gems;
                   supplyRefund = refund.supply;
                   space = requireNumber(
-                    call(manager, "getMechSpace", "MechManager.getMechSpace", [
+                    call2(manager, "getMechSpace", "MechManager.getMechSpace", [
                       raw
                     ]),
                     `${path} space`
@@ -36460,7 +36989,7 @@
           throw new Error("mech planning has not been sampled");
         }
         return readCost2(
-          call(active.manager, "getMechCost", "MechManager.getMechCost", [
+          call2(active.manager, "getMechCost", "MechManager.getMechCost", [
             { size }
           ]),
           `mech cost for ${size}`
@@ -36472,7 +37001,7 @@
           throw new Error("mech planning has not been sampled");
         }
         const raw = requireRecord(
-          call(active.manager, "getRandomMech", "MechManager.getRandomMech", [
+          call2(active.manager, "getRandomMech", "MechManager.getRandomMech", [
             size
           ]),
           `random ${size} mech`
@@ -36501,12 +37030,12 @@
         active.manager["isActive"] = false;
         active.manager["saveSupply"] = false;
         if (decision2.drag !== null) {
-          call(active.manager, "dragMech", "MechManager.dragMech", [
+          call2(active.manager, "dragMech", "MechManager.dragMech", [
             decision2.drag.oldId,
             decision2.drag.newId
           ]);
         }
-        return SUCCEEDED;
+        return SUCCEEDED2;
       },
       scrap(decision2) {
         const active = session;
@@ -36537,8 +37066,8 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString6(
-            call(active.manager, "mechDesc", "MechManager.mechDesc", [
+          const description = requireString7(
+            call2(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
             "mech description"
@@ -36550,7 +37079,7 @@
           ]);
         }
         for (const mech of rawMechs) {
-          call(active.manager, "scrapMech", "MechManager.scrapMech", [mech]);
+          call2(active.manager, "scrapMech", "MechManager.scrapMech", [mech]);
         }
         const supply = requireRecord(
           active.resources["Supply"],
@@ -36571,7 +37100,7 @@
           gems["currentQuantity"],
           "resources.Soul_Gem.currentQuantity"
         ) + decision2.gemsGained;
-        return SUCCEEDED;
+        return SUCCEEDED2;
       },
       build(decision2, continuation) {
         const active = session;
@@ -36599,12 +37128,12 @@
         ) !== continuation.gemsCurrent) {
           return stale("mech-resources-changed", "mech resources changed");
         }
-        call(active.manager, "buildMech", "MechManager.buildMech", [rawDesign]);
+        call2(active.manager, "buildMech", "MechManager.buildMech", [rawDesign]);
         supply["currentQuantity"] = continuation.supplyCurrent - decision2.cost.supply;
         gems["currentQuantity"] = continuation.gemsCurrent - decision2.cost.gems;
         active.manager["isActive"] = decision2.prolongActive;
         session = null;
-        return SUCCEEDED;
+        return SUCCEEDED2;
       }
     });
     return Object.freeze({ reader, executor });
@@ -48824,15 +49353,20 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getGovernmentName: getGovName
     });
     const autoBattle = () => runBattleAutomation(battleAdapter);
-    const autoHell = createAutoHell({
-      WarManager,
+    const hellAdapter = createHellAdapter({
+      getWarManager: () => WarManager,
       getGame: () => game,
       getSettings: () => settings,
       getBuildings: () => buildings,
       getResources: () => resources,
       getState: () => state,
-      getWindow: () => window
+      getDebugWindow: () => window,
+      debugLog: (message) => console.log(message)
     });
+    const autoHell = () => runHellAutomation(hellAdapter);
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, { autoHell });
+    }
     const autoJobs = createAutoJobs({
       getJobManager: () => JobManager,
       getGame: () => game,
