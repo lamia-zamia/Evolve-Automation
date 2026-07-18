@@ -644,6 +644,7 @@ const testProjectManager = {
   updateProjects: () => wave4Actions.push(["projectCache"]),
 };
 const testTech = {
+  id: "test-tech",
   isAffordable: () => true,
   click: () => (wave4Actions.push(["research"]), true),
 };

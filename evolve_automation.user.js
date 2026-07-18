@@ -25618,26 +25618,141 @@
     };
   }
 
-  // src/automation/progression/research.ts
-  function createAutoResearch({
-    getState,
-    getGetCostConflict,
-    getBuildingManager,
-    getProjectManager
-  }) {
-    return function autoResearch2() {
-      const state2 = getState();
-      const getCostConflict2 = getGetCostConflict();
-      const BuildingManager2 = getBuildingManager();
-      const ProjectManager2 = getProjectManager();
-      for (let tech of state2.unlockedTechs) {
-        if (tech.isAffordable() && !getCostConflict2(tech) && tech.click()) {
-          BuildingManager2.updateBuildings();
-          ProjectManager2.updateProjects();
-          return;
-        }
+  // src/domain/research.ts
+  function planResearch(input) {
+    const tech = input.techs.find(
+      (candidate) => candidate.affordable && !candidate.hasCostConflict
+    );
+    return tech === void 0 ? null : Object.freeze({ index: tech.index, techId: tech.id });
+  }
+
+  // src/application/research.ts
+  var SUCCEEDED2 = Object.freeze({
+    status: "succeeded"
+  });
+  function runResearchAutomation(dependencies) {
+    let startIndex = 0;
+    while (true) {
+      const decision = planResearch(dependencies.reader.read(startIndex));
+      if (decision === null) {
+        return SUCCEEDED2;
       }
-    };
+      const result = dependencies.executor.execute(decision);
+      if (result.outcome.status !== "succeeded" || result.researched) {
+        return result.outcome;
+      }
+      startIndex = decision.index + 1;
+    }
+  }
+
+  // src/adapters/evolve/research.ts
+  function readUnlockedTechs(getState) {
+    const state2 = requireRecord(getState(), "state");
+    const unlockedTechs = state2["unlockedTechs"];
+    if (!Array.isArray(unlockedTechs)) {
+      throw new TypeError("state.unlockedTechs must be an array");
+    }
+    return unlockedTechs;
+  }
+  function readTechId(tech, path) {
+    const id = tech["id"];
+    if (typeof id !== "string") {
+      throw new TypeError(`${path}.id must be a string`);
+    }
+    return id;
+  }
+  function createResearchReader(dependencies) {
+    return Object.freeze({
+      read(startIndex) {
+        if (!Number.isSafeInteger(startIndex) || startIndex < 0) {
+          throw new TypeError(
+            "research start index must be a non-negative integer"
+          );
+        }
+        const unlockedTechs = readUnlockedTechs(dependencies.getState);
+        const techs = [];
+        for (let index = startIndex; index < unlockedTechs.length; index++) {
+          const path = `state.unlockedTechs[${index}]`;
+          const tech = requireRecord(unlockedTechs[index], path);
+          const isAffordable = requireFunction(
+            tech["isAffordable"],
+            `${path}.isAffordable`
+          );
+          const affordable = Boolean(Reflect.apply(isAffordable, tech, []));
+          const view = Object.freeze({
+            index,
+            id: readTechId(tech, path),
+            affordable,
+            // Match the legacy && gate: conflict analysis is irrelevant when the
+            // technology is not affordable.
+            hasCostConflict: affordable ? Boolean(dependencies.getCostConflict(tech)) : false
+          });
+          techs.push(view);
+          if (view.affordable && !view.hasCostConflict) {
+            break;
+          }
+        }
+        return Object.freeze({ techs: Object.freeze(techs) });
+      }
+    });
+  }
+  function executionResult(outcome, researched) {
+    return Object.freeze({ outcome, researched });
+  }
+  function createResearchCommandExecutor(dependencies) {
+    return Object.freeze({
+      execute(decision) {
+        if (!Number.isSafeInteger(decision.index) || decision.index < 0) {
+          return executionResult(
+            rejected2(
+              "invalid-research-index",
+              "research index must be a non-negative integer"
+            ),
+            false
+          );
+        }
+        const unlockedTechs = readUnlockedTechs(dependencies.getState);
+        const value = unlockedTechs[decision.index];
+        const tech = typeof value === "object" && value !== null ? value : null;
+        const actualId = tech !== null && typeof tech["id"] === "string" ? tech["id"] : null;
+        if (actualId !== decision.techId || tech === null) {
+          return executionResult(
+            stale("stale-research-target", "unlocked research list changed", {
+              techId: decision.techId,
+              index: decision.index,
+              actualTechId: actualId
+            }),
+            false
+          );
+        }
+        const click = requireFunction(
+          tech["click"],
+          `state.unlockedTechs[${decision.index}].click`
+        );
+        const buildingManager = requireRecord(
+          dependencies.getBuildingManager(),
+          "BuildingManager"
+        );
+        const updateBuildings = requireFunction(
+          buildingManager["updateBuildings"],
+          "BuildingManager.updateBuildings"
+        );
+        const projectManager = requireRecord(
+          dependencies.getProjectManager(),
+          "ProjectManager"
+        );
+        const updateProjects = requireFunction(
+          projectManager["updateProjects"],
+          "ProjectManager.updateProjects"
+        );
+        if (!Reflect.apply(click, tech, [])) {
+          return executionResult(SUCCEEDED, false);
+        }
+        Reflect.apply(updateBuildings, buildingManager, []);
+        Reflect.apply(updateProjects, projectManager, []);
+        return executionResult(SUCCEEDED, true);
+      }
+    });
   }
 
   // src/automation/traits/mutation.ts
@@ -40148,11 +40263,18 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const autoResearch = createAutoResearch({
+    const researchReader = createResearchReader({
       getState: () => state,
-      getGetCostConflict: () => getCostConflict,
+      getCostConflict: (tech) => getCostConflict(tech)
+    });
+    const researchExecutor = createResearchCommandExecutor({
+      getState: () => state,
       getBuildingManager: () => BuildingManager,
       getProjectManager: () => ProjectManager
+    });
+    const autoResearch = () => runResearchAutomation({
+      reader: researchReader,
+      executor: researchExecutor
     });
     var powerOscLock = {};
     var powerWarnCap = {};

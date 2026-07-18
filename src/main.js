@@ -278,7 +278,11 @@ import { createAutoPrestige } from "./automation/progression/prestige.ts";
 import { createAutoPlanetSelection } from "./automation/progression/planet-selection.ts";
 import { createAutoJobs } from "./automation/civic/jobs.ts";
 import { createAutoBuild } from "./automation/progression/build.ts";
-import { createAutoResearch } from "./automation/progression/research.ts";
+import { runResearchAutomation } from "./application/research.ts";
+import {
+  createResearchCommandExecutor,
+  createResearchReader,
+} from "./adapters/evolve/research.ts";
 import { createAutoMutateTrait } from "./automation/traits/mutation.ts";
 import { createAutoPower } from "./automation/economy/power.ts";
 import { createAutoStorage } from "./automation/economy/storage.ts";
@@ -3564,12 +3568,20 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const autoResearch = createAutoResearch({
+  const researchReader = createResearchReader({
     getState: () => state,
-    getGetCostConflict: () => getCostConflict,
+    getCostConflict: (tech) => getCostConflict(tech),
+  });
+  const researchExecutor = createResearchCommandExecutor({
+    getState: () => state,
     getBuildingManager: () => BuildingManager,
     getProjectManager: () => ProjectManager,
   });
+  const autoResearch = () =>
+    runResearchAutomation({
+      reader: researchReader,
+      executor: researchExecutor,
+    });
 
   var powerOscLock = {}; // { vueBinding: { prev, locked } } — anti-flicker for consumption-limited buildings
   var powerWarnCap = {}; // { vueBinding: { cap, ticks } } — game-imposed cap after a warn-badge shutdown
