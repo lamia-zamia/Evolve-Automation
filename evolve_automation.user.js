@@ -30497,7 +30497,7 @@
             autoBuildEnabled
           });
         };
-        const readArray = (value, path, filterBuildable = false) => {
+        const readArray2 = (value, path, filterBuildable = false) => {
           if (!Array.isArray(value)) {
             throw new TypeError(`${path} must be an array`);
           }
@@ -30545,7 +30545,7 @@
           Object.freeze({
             kind: "queued",
             enabled: true,
-            targets: readArray(
+            targets: readArray2(
               state2["queuedTargetsAll"],
               "state.queuedTargetsAll"
             )
@@ -30553,7 +30553,7 @@
           Object.freeze({
             kind: "triggered",
             enabled: true,
-            targets: readArray(state2["triggerTargets"], "state.triggerTargets")
+            targets: readArray2(state2["triggerTargets"], "state.triggerTargets")
           })
         ];
         const fleetEnabled = Boolean(settings2["autoFleet"]) && Boolean(fleet["nextShipExpandable"]) && settings2["prioritizeOuterFleet"] !== "ignore";
@@ -30576,12 +30576,12 @@
           Object.freeze({
             kind: "technology",
             enabled: true,
-            targets: readArray(state2["unlockedTechs"], "state.unlockedTechs")
+            targets: readArray2(state2["unlockedTechs"], "state.unlockedTechs")
           }),
           Object.freeze({
             kind: "project",
             enabled: true,
-            targets: readArray(
+            targets: readArray2(
               projectManager["priorityList"],
               "ProjectManager.priorityList",
               true
@@ -30590,7 +30590,7 @@
           Object.freeze({
             kind: "building",
             enabled: true,
-            targets: readArray(
+            targets: readArray2(
               buildingManager["priorityList"],
               "BuildingManager.priorityList",
               true
@@ -35841,187 +35841,780 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/automation/combat/mech.ts
-  function createAutoMech({
-    getMechManager,
-    getGame,
-    getSettings,
-    getResources,
-    getBuildings,
-    getHaveTech,
-    getHaveTask,
-    average: average2,
-    GameLog: GameLog2,
-    getJQuery
-  }) {
-    return function autoMech2() {
-      const MechManager2 = getMechManager();
-      const game2 = getGame();
-      const settings2 = getSettings();
-      const resources2 = getResources();
-      const buildings2 = getBuildings();
-      const haveTech2 = getHaveTech();
-      const haveTask2 = getHaveTask();
-      const $2 = getJQuery();
-      let m = MechManager2;
-      if (game2.global.race["warlord"] || !m.initLab() || $2(`#mechList .mechRow[draggable=true]`).length > 0) {
-        return;
+  // src/domain/mech.ts
+  function planMechCycle(input) {
+    if (!input.available) return null;
+    let drag = null;
+    if (input.inactiveMechs.length > 0 && input.activeMechs.length > 0) {
+      const active = [...input.activeMechs].sort(
+        (left, right) => left.efficiency - right.efficiency
+      );
+      const inactive = [...input.inactiveMechs].sort(
+        (left, right) => right.efficiency - left.efficiency
+      );
+      const worstActive = active[0];
+      const bestInactive = inactive[0];
+      if (worstActive !== void 0 && bestInactive !== void 0 && worstActive.efficiency < bestInactive.efficiency) {
+        drag = Object.freeze({
+          oldId: active.length > inactive.length ? worstActive.id : bestInactive.id,
+          newId: active.length > inactive.length ? input.totalMechs - 1 : 0
+        });
       }
-      let mechBay = game2.global.portal.mechbay;
-      let prolongActive = m.isActive;
-      m.isActive = false;
-      let savingSupply = m.saveSupply && settings2.mechBaysFirst && buildings2.SpirePurifier.stateOffCount === 0;
-      m.saveSupply = false;
-      if (m.inactiveMechs.length > 0) {
-        if (m.activeMechs.length > 0) {
-          m.activeMechs.sort((a, b) => a.efficiency - b.efficiency);
-          m.inactiveMechs.sort((a, b) => b.efficiency - a.efficiency);
-          if (m.activeMechs[0].efficiency < m.inactiveMechs[0].efficiency) {
-            if (m.activeMechs.length > m.inactiveMechs.length) {
-              m.dragMech(m.activeMechs[0].id, mechBay.mechs.length - 1);
-            } else {
-              m.dragMech(m.inactiveMechs[0].id, 0);
-            }
-          }
+    }
+    return Object.freeze({
+      kind: "prepare-mech-cycle",
+      prolongActive: input.prolongActive,
+      savingSupply: input.savingSupply,
+      proceed: input.inactiveMechs.length === 0 && !input.hasTask && (input.buildMode === "random" || input.buildMode === "user"),
+      drag
+    });
+  }
+  function shouldSaveMechSupply(input) {
+    if (input.saveSupplyRatio <= 0 || input.lastFloor || input.forceBuild) {
+      return false;
+    }
+    let missing = input.supplyMaximum * input.saveSupplyRatio - input.supplyCurrent;
+    if (input.baySpace < input.designSpace) {
+      missing -= input.titanSupplyRefund;
+    }
+    return input.timeToClear <= missing / input.supplyRate;
+  }
+  function resolveMechScrapMode(input) {
+    if (input.canExpandBay && input.supply.current < input.supply.maximum && !input.prolongActive && input.supply.rate >= input.minimumSupplyRate) {
+      return "none";
+    }
+    if (input.configuredScrapMode !== "mixed") {
+      return input.configuredScrapMode;
+    }
+    if (input.waygateActiveCount === 1) return "single";
+    const mechToBuild = Math.floor(input.baySpace / input.cost.space);
+    const supplyCost = mechToBuild * input.cost.supply + input.supply.maximum * input.saveSupplyRatio;
+    const timeToFullBay = Math.max(
+      (supplyCost - input.supply.current) / input.supply.rate,
+      (mechToBuild * input.cost.gems - input.gems.current) / input.gems.rate
+    );
+    const estimatedTotalPower = input.mechsPower + mechToBuild * input.design.power;
+    const estimatedTimeToClear = input.timeToClear * (input.mechsPower / estimatedTotalPower);
+    return timeToFullBay > estimatedTimeToClear && !input.lastFloor ? "single" : "all";
+  }
+  function shouldReadMechScrapCandidates(input) {
+    const mode = resolveMechScrapMode(input);
+    return input.cost.supply < input.supply.spareMaximum && (mode === "single" && input.baySpace < input.cost.space || mode === "all" && (input.baySpace < input.cost.space || input.supply.spare < input.cost.supply || input.gems.spare < input.cost.gems));
+  }
+  function planMechContinuation(input) {
+    const scrapMode = resolveMechScrapMode(input);
+    let scrap = null;
+    let waitForReplacement = false;
+    let spaceGained = 0;
+    let supplyGained = 0;
+    let gemsGained = 0;
+    if (shouldReadMechScrapCandidates(input)) {
+      const threshold = (input.fillBay ? input.baySpace === 0 : input.baySpace < input.cost.space) && input.supply.storageRatio > 0.9 && !input.savingSupply ? 0 : input.lastFloor ? Math.min(input.scrapEfficiency, 1) : input.scrapEfficiency;
+      const candidates = input.activeMechs.filter((mech) => {
+        if (mech.infernal && mech.size !== "collector" || mech.power >= mech.bestPower) {
+          return false;
         }
-        return;
+        if (input.forceBuild) return true;
+        const costRatio = Math.min(
+          (mech.gemRefund || 0.5) / input.cost.gems,
+          mech.supplyRefund / input.cost.supply
+        );
+        return costRatio / (mech.power / input.design.power) > threshold;
+      }).sort((left, right) => left.efficiency - right.efficiency);
+      let extraScouts = input.rebuildScouts ? Number.MAX_SAFE_INTEGER : input.scouts - input.bayMaximum * input.scoutsRatio / 2;
+      const trash = [];
+      let powerLost = 0;
+      for (let index = 0; index < candidates.length && (input.baySpace + spaceGained < input.cost.space || scrapMode === "all" && (input.supply.spare + supplyGained < input.cost.supply || input.gems.spare + gemsGained < input.cost.gems)); index++) {
+        const mech = candidates[index];
+        if (mech === void 0) continue;
+        if (mech.size === "small") {
+          if (extraScouts < 1) continue;
+          extraScouts--;
+        }
+        spaceGained += mech.space;
+        supplyGained += mech.supplyRefund;
+        gemsGained += mech.gemRefund;
+        powerLost += mech.power;
+        trash.push(mech);
       }
-      if (haveTask2("mech")) {
-        return;
-      }
-      let newMech = {};
-      let newSize, forceBuild;
-      if (settings2.mechBuild === "random") {
-        [newSize, forceBuild] = m.getPreferredSize();
-        newMech = m.getRandomMech(newSize);
-      } else if (settings2.mechBuild === "user") {
-        newMech = { ...mechBay.blueprint, ...m.getMechStats(mechBay.blueprint) };
+      const enoughForReplacement = input.baySpace + spaceGained >= input.cost.space && input.supply.spare + supplyGained >= input.cost.supply && input.gems.spare + gemsGained >= input.cost.gems;
+      if (trash.length > 0 && (input.forceBuild || powerLost / spaceGained < input.design.efficiency) && enoughForReplacement) {
+        const sorted = [...trash].sort((left, right) => right.id - left.id);
+        scrap = Object.freeze({
+          ids: Object.freeze(sorted.map((mech) => mech.id)),
+          supplyGained,
+          gemsGained,
+          spaceGained,
+          averageRating: sorted.reduce((sum, mech) => sum + mech.power / mech.bestPower, 0) / sorted.length
+        });
+      } else if (input.baySpace + spaceGained >= input.cost.space) {
+        waitForReplacement = true;
+        spaceGained = 0;
+        supplyGained = 0;
+        gemsGained = 0;
       } else {
-        return;
+        spaceGained = 0;
+        supplyGained = 0;
+        gemsGained = 0;
       }
-      let [newGems, newSupply, newSpace] = m.getMechCost(newMech);
-      if (!settings2.mechFillBay && resources2.Supply.spareMaxQuantity < newSupply) {
-        return;
-      }
-      let baySpace = mechBay.max - mechBay.bay;
-      let lastFloor = settings2.autoPrestige && settings2.prestigeType === "demonic" && buildings2.SpireTower.count >= settings2.prestigeDemonicFloor && haveTech2("waygate", 3);
-      if (lastFloor) {
-        savingSupply = false;
-      }
-      if (settings2.mechSaveSupplyRatio > 0 && !lastFloor && !forceBuild) {
-        let missingSupplies = resources2.Supply.maxQuantity * settings2.mechSaveSupplyRatio - resources2.Supply.currentQuantity;
-        if (baySpace < newSpace) {
-          missingSupplies -= m.getMechRefund({ size: "titan" })[1];
-        }
-        let timeToFullSupplies = missingSupplies / resources2.Supply.rateOfChange;
-        if (m.getTimeToClear() <= timeToFullSupplies) {
-          return;
-        }
-      }
-      let canExpandBay = settings2.autoBuild && settings2.mechBaysFirst && buildings2.SpireMechBay.isAutoBuildable() && (buildings2.SpireMechBay.isAffordable(true) || buildings2.SpirePurifier.isAutoBuildable() && buildings2.SpirePurifier.isAffordable(true) && buildings2.SpirePurifier.stateOffCount === 0);
-      let mechScrap = settings2.mechScrap;
-      if (canExpandBay && resources2.Supply.currentQuantity < resources2.Supply.maxQuantity && !prolongActive && resources2.Supply.rateOfChange >= settings2.mechMinSupply) {
-        mechScrap = "none";
-      } else if (settings2.mechScrap === "mixed") {
-        if (buildings2.SpireWaygate.stateOnCount === 1) {
-          mechScrap = "single";
-        } else {
-          let mechToBuild = Math.floor(baySpace / newSpace);
-          let supplyCost = mechToBuild * newSupply + resources2.Supply.maxQuantity * settings2.mechSaveSupplyRatio;
-          let timeToFullBay = Math.max(
-            (supplyCost - resources2.Supply.currentQuantity) / resources2.Supply.rateOfChange,
-            (mechToBuild * newGems - resources2.Soul_Gem.currentQuantity) / resources2.Soul_Gem.rateOfChange
-          );
-          let estimatedTotalPower = m.mechsPower + mechToBuild * newMech.power;
-          let estimatedTimeToClear = m.getTimeToClear() * (m.mechsPower / estimatedTotalPower);
-          mechScrap = timeToFullBay > estimatedTimeToClear && !lastFloor ? "single" : "all";
-        }
-      }
-      if (newSupply < resources2.Supply.spareMaxQuantity && (mechScrap === "single" && baySpace < newSpace || mechScrap === "all" && (baySpace < newSpace || resources2.Supply.spareQuantity < newSupply || resources2.Soul_Gem.spareQuantity < newGems))) {
-        let spaceGained = 0;
-        let supplyGained = 0;
-        let gemsGained = 0;
-        let powerLost = 0;
-        let scrapEfficiency = (settings2.mechFillBay ? baySpace === 0 : baySpace < newSpace) && resources2.Supply.storageRatio > 0.9 && !savingSupply ? 0 : lastFloor ? Math.min(settings2.mechScrapEfficiency, 1) : settings2.mechScrapEfficiency;
-        let badMechList = m.activeMechs.filter((mech) => {
-          if (mech.infernal && mech.size !== "collector" || mech.power >= m.bestMech[mech.size].power) {
-            return false;
-          }
-          if (forceBuild) {
-            return true;
-          }
-          let [gemRefund, supplyRefund] = m.getMechRefund(mech);
-          let costRatio = Math.min(
-            (gemRefund || 0.5) / newGems,
-            supplyRefund / newSupply
-          );
-          let powerRatio = mech.power / newMech.power;
-          return costRatio / powerRatio > scrapEfficiency;
-        }).sort((a, b) => a.efficiency - b.efficiency);
-        let extraScouts = settings2.mechScoutsRebuild ? Number.MAX_SAFE_INTEGER : mechBay.scouts - mechBay.max * settings2.mechScouts / 2;
-        let trashMechs = [];
-        for (let i = 0; i < badMechList.length && (baySpace + spaceGained < newSpace || mechScrap === "all" && (resources2.Supply.spareQuantity + supplyGained < newSupply || resources2.Soul_Gem.spareQuantity + gemsGained < newGems)); i++) {
-          if (badMechList[i].size === "small") {
-            if (extraScouts < 1) {
-              continue;
-            } else {
-              extraScouts--;
-            }
-          }
-          spaceGained += m.getMechSpace(badMechList[i]);
-          supplyGained += m.getMechRefund(badMechList[i])[1];
-          gemsGained += m.getMechRefund(badMechList[i])[0];
-          powerLost += badMechList[i].power;
-          trashMechs.push(badMechList[i]);
-        }
-        if (trashMechs.length > 0 && (forceBuild || powerLost / spaceGained < newMech.efficiency) && baySpace + spaceGained >= newSpace && resources2.Supply.spareQuantity + supplyGained >= newSupply && resources2.Soul_Gem.spareQuantity + gemsGained >= newGems) {
-          trashMechs.sort((a, b) => b.id - a.id);
-          if (trashMechs.length > 1) {
-            let rating = average2(
-              trashMechs.map((mech) => mech.power / m.bestMech[mech.size].power)
-            );
-            GameLog2.logSuccess(
-              "mech_scrap",
-              `${trashMechs.length} mechs (~${Math.round(
-                rating * 100
-              )}%) has been scrapped.`,
-              ["hell"]
-            );
-          } else {
-            GameLog2.logSuccess(
-              "mech_scrap",
-              `${m.mechDesc(trashMechs[0])} mech has been scrapped.`,
-              ["hell"]
-            );
-          }
-          trashMechs.forEach((mech) => m.scrapMech(mech));
-          resources2.Supply.currentQuantity = Math.min(
-            resources2.Supply.currentQuantity + supplyGained,
-            resources2.Supply.maxQuantity
-          );
-          resources2.Soul_Gem.currentQuantity += gemsGained;
-          baySpace += spaceGained;
-        } else if (baySpace + spaceGained >= newSpace) {
-          return;
+    }
+    const baySpace = input.baySpace + spaceGained;
+    return Object.freeze({
+      kind: "continue-mech-cycle",
+      scrap,
+      halt: waitForReplacement,
+      trySmaller: !waitForReplacement && input.fillBay && !input.savingSupply && (!input.canExpandBay && baySpace < input.cost.space || input.supply.maximum < input.cost.supply),
+      baySpace,
+      supplyCurrent: Math.min(
+        input.supply.current + supplyGained,
+        input.supply.maximum
+      ),
+      supplySpare: input.supply.spare + supplyGained,
+      gemsCurrent: input.gems.current + gemsGained,
+      gemsSpare: input.gems.spare + gemsGained,
+      supplyMaximum: input.supply.maximum,
+      prolongActive: input.prolongActive
+    });
+  }
+  function smallerMechFits(continuation, cost) {
+    return cost.space <= continuation.baySpace && cost.supply <= continuation.supplyMaximum;
+  }
+  function planMechBuild(continuation, design, cost) {
+    if (continuation.halt || continuation.gemsSpare < cost.gems || continuation.supplySpare < cost.supply || continuation.baySpace < cost.space) {
+      return null;
+    }
+    return Object.freeze({
+      kind: "build-mech",
+      designToken: design.token,
+      cost: Object.freeze({ ...cost }),
+      prolongActive: continuation.prolongActive
+    });
+  }
+
+  // src/application/mech.ts
+  var SUCCEEDED23 = Object.freeze({
+    status: "succeeded"
+  });
+  function runMechAutomation(dependencies) {
+    const cycle = planMechCycle(dependencies.reader.readCycle());
+    if (cycle === null) return SUCCEEDED23;
+    const prepared = dependencies.executor.prepare(cycle);
+    if (prepared.status !== "succeeded" || !cycle.proceed) return prepared;
+    const planning = dependencies.reader.readPlanning(cycle);
+    if (planning === null) return SUCCEEDED23;
+    const continuation = planMechContinuation(planning);
+    if (continuation.scrap !== null) {
+      const scrapped = dependencies.executor.scrap(continuation.scrap);
+      if (scrapped.status !== "succeeded") return scrapped;
+    }
+    if (continuation.halt) return SUCCEEDED23;
+    let design = planning.design;
+    let cost = planning.cost;
+    if (continuation.trySmaller) {
+      for (let index = planning.sizeOrder.indexOf(design.size) - 1; index >= 0; index--) {
+        const size = planning.sizeOrder[index];
+        if (size === void 0) continue;
+        cost = dependencies.reader.readSmallerCost(size);
+        if (smallerMechFits(continuation, cost)) {
+          design = dependencies.reader.readSmallerDesign(size);
+          break;
         }
       }
-      if (settings2.mechFillBay && !savingSupply && (!canExpandBay && baySpace < newSpace || resources2.Supply.maxQuantity < newSupply)) {
-        for (let i = m.Size.indexOf(newMech.size) - 1; i >= 0; i--) {
-          [newGems, newSupply, newSpace] = m.getMechCost({ size: m.Size[i] });
-          if (newSpace <= baySpace && newSupply <= resources2.Supply.maxQuantity) {
-            newMech = m.getRandomMech(m.Size[i]);
-            break;
-          }
-        }
-      }
-      if (resources2.Soul_Gem.spareQuantity >= newGems && resources2.Supply.spareQuantity >= newSupply && baySpace >= newSpace) {
-        m.buildMech(newMech);
-        resources2.Supply.currentQuantity -= newSupply;
-        resources2.Soul_Gem.currentQuantity -= newGems;
-        m.isActive = prolongActive;
-        return;
-      }
+    }
+    const build = planMechBuild(continuation, design, cost);
+    return build === null ? SUCCEEDED23 : dependencies.executor.build(build, continuation);
+  }
+
+  // src/adapters/evolve/mech.ts
+  function requireString6(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function call(target, key, path, args = []) {
+    return Reflect.apply(requireFunction(target[key], path), target, args);
+  }
+  function readArray(value, path) {
+    if (!Array.isArray(value)) throw new TypeError(`${path} must be an array`);
+    return value;
+  }
+  function readSummary(value, path) {
+    const raw = requireRecord(value, path);
+    return {
+      raw,
+      summary: Object.freeze({
+        id: requireNumber(raw["id"], `${path}.id`),
+        size: requireString6(raw["size"], `${path}.size`),
+        infernal: Boolean(raw["infernal"]),
+        power: requireNumber(raw["power"], `${path}.power`),
+        efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
+      })
     };
+  }
+  function readResource2(value, path) {
+    const raw = requireRecord(value, path);
+    return {
+      raw,
+      input: Object.freeze({
+        current: requireNumber(raw["currentQuantity"], `${path}.currentQuantity`),
+        maximum: requireNumber(raw["maxQuantity"], `${path}.maxQuantity`),
+        spare: requireNumber(raw["spareQuantity"], `${path}.spareQuantity`),
+        spareMaximum: requireNumber(
+          raw["spareMaxQuantity"],
+          `${path}.spareMaxQuantity`
+        ),
+        rate: requireNumber(raw["rateOfChange"], `${path}.rateOfChange`),
+        storageRatio: requireNumber(raw["storageRatio"], `${path}.storageRatio`)
+      })
+    };
+  }
+  function readCost2(value, path) {
+    const values = readArray(value, path);
+    return Object.freeze({
+      gems: requireNumber(values[0], `${path}[0]`),
+      supply: requireNumber(values[1], `${path}[1]`),
+      space: requireNumber(values[2], `${path}[2]`)
+    });
+  }
+  function readDesign(raw, token, path) {
+    return Object.freeze({
+      token,
+      size: requireString6(raw["size"], `${path}.size`),
+      power: requireNumber(raw["power"], `${path}.power`),
+      efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
+    });
+  }
+  function cycleDecisionsMatch(left, right) {
+    return left.prolongActive === right.prolongActive && left.savingSupply === right.savingSupply && left.proceed === right.proceed && left.drag?.oldId === right.drag?.oldId && left.drag?.newId === right.drag?.newId;
+  }
+  function unavailableCycle2() {
+    return Object.freeze({
+      available: false,
+      prolongActive: false,
+      savingSupply: false,
+      totalMechs: 0,
+      activeMechs: Object.freeze([]),
+      inactiveMechs: Object.freeze([]),
+      hasTask: false,
+      buildMode: "none"
+    });
+  }
+  function createMechAdapter(dependencies) {
+    let session = null;
+    const reader = Object.freeze({
+      readCycle() {
+        session = null;
+        const manager = requireRecord(
+          dependencies.getMechManager(),
+          "MechManager"
+        );
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
+        const global = requireRecord(game2["global"], "game.global");
+        const race = requireRecord(global["race"], "game.global.race");
+        if (race["warlord"]) return unavailableCycle2();
+        if (!call(manager, "initLab", "MechManager.initLab")) {
+          return unavailableCycle2();
+        }
+        const jquery = dependencies.getJQuery();
+        if (typeof jquery !== "function") {
+          throw new TypeError("jQuery must be a function");
+        }
+        const dragged = requireRecord(
+          Reflect.apply(jquery, void 0, [
+            "#mechList .mechRow[draggable=true]"
+          ]),
+          "mech draggable rows"
+        );
+        if (requireNumber(dragged["length"], "mech draggable rows.length") > 0) {
+          return unavailableCycle2();
+        }
+        const portal = requireRecord(global["portal"], "game.global.portal");
+        const bay = requireRecord(
+          portal["mechbay"],
+          "game.global.portal.mechbay"
+        );
+        const purifier = requireRecord(
+          buildings2["SpirePurifier"],
+          "buildings.SpirePurifier"
+        );
+        const prolongActive = Boolean(manager["isActive"]);
+        const savingSupply = Boolean(manager["saveSupply"]) && requireBoolean(settings2["mechBaysFirst"], "settings.mechBaysFirst") && requireNumber(
+          purifier["stateOffCount"],
+          "buildings.SpirePurifier.stateOffCount"
+        ) === 0;
+        const inactiveRaw = readArray(
+          manager["inactiveMechs"],
+          "MechManager.inactiveMechs"
+        );
+        const mechs = /* @__PURE__ */ new Map();
+        const inactiveMechs = inactiveRaw.map((value, index) => {
+          const result2 = readSummary(
+            value,
+            `MechManager.inactiveMechs[${index}]`
+          );
+          mechs.set(result2.summary.id, result2.raw);
+          return result2.summary;
+        });
+        const activeMechs = inactiveMechs.length === 0 ? [] : readArray(manager["activeMechs"], "MechManager.activeMechs").map(
+          (value, index) => {
+            const result2 = readSummary(
+              value,
+              `MechManager.activeMechs[${index}]`
+            );
+            mechs.set(result2.summary.id, result2.raw);
+            return result2.summary;
+          }
+        );
+        const bayMechs = readArray(
+          bay["mechs"],
+          "game.global.portal.mechbay.mechs"
+        );
+        const input = Object.freeze({
+          available: true,
+          prolongActive,
+          savingSupply,
+          totalMechs: bayMechs.length,
+          activeMechs: Object.freeze(activeMechs),
+          inactiveMechs: Object.freeze(inactiveMechs),
+          hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
+          buildMode: requireString6(settings2["mechBuild"], "settings.mechBuild")
+        });
+        session = {
+          manager,
+          game: game2,
+          settings: settings2,
+          resources: resources2,
+          buildings: buildings2,
+          bay,
+          cycleInput: input,
+          mechs,
+          designs: /* @__PURE__ */ new Map(),
+          planningInput: null,
+          nextToken: 1
+        };
+        return input;
+      },
+      readPlanning(decision2) {
+        const active = session;
+        if (active === null) throw new Error("mech cycle has not been sampled");
+        const expected = planMechCycle(active.cycleInput);
+        if (expected === null || !cycleDecisionsMatch(expected, decision2)) {
+          throw new Error("mech cycle decision does not match the sampled plan");
+        }
+        const { manager, settings: settings2, resources: resources2, buildings: buildings2, bay } = active;
+        let rawDesign;
+        let forceBuild = false;
+        if (active.cycleInput.buildMode === "random") {
+          const preferred = readArray(
+            call(manager, "getPreferredSize", "MechManager.getPreferredSize"),
+            "MechManager.getPreferredSize result"
+          );
+          const size = requireString6(preferred[0], "preferred mech size");
+          forceBuild = Boolean(preferred[1]);
+          rawDesign = requireRecord(
+            call(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
+            "random mech"
+          );
+        } else {
+          const blueprint = requireRecord(bay["blueprint"], "mechbay.blueprint");
+          const statistics = requireRecord(
+            call(manager, "getMechStats", "MechManager.getMechStats", [
+              blueprint
+            ]),
+            "blueprint mech statistics"
+          );
+          rawDesign = { ...blueprint, ...statistics };
+        }
+        const design = readDesign(rawDesign, "primary", "selected mech");
+        active.designs.set(design.token, rawDesign);
+        const cost = readCost2(
+          call(manager, "getMechCost", "MechManager.getMechCost", [rawDesign]),
+          "selected mech cost"
+        );
+        const fillBay = requireBoolean(
+          settings2["mechFillBay"],
+          "settings.mechFillBay"
+        );
+        const supply = readResource2(resources2["Supply"], "resources.Supply");
+        const gems = readResource2(resources2["Soul_Gem"], "resources.Soul_Gem");
+        if (!fillBay && supply.input.spareMaximum < cost.supply) return null;
+        const baySpace = requireNumber(bay["max"], "mechbay.max") - requireNumber(bay["bay"], "mechbay.bay");
+        const tower = requireRecord(
+          buildings2["SpireTower"],
+          "buildings.SpireTower"
+        );
+        const prestigeType = requireString6(
+          settings2["prestigeType"],
+          "settings.prestigeType"
+        );
+        const lastFloor = requireBoolean(settings2["autoPrestige"], "settings.autoPrestige") && prestigeType === "demonic" && requireNumber(tower["count"], "buildings.SpireTower.count") >= requireNumber(
+          settings2["prestigeDemonicFloor"],
+          "settings.prestigeDemonicFloor"
+        ) && Boolean(dependencies.haveTech("waygate", 3));
+        const savingSupply = lastFloor ? false : decision2.savingSupply;
+        const saveSupplyRatio = requireNumber(
+          settings2["mechSaveSupplyRatio"],
+          "settings.mechSaveSupplyRatio"
+        );
+        let titanSupplyRefund = 0;
+        let saveTimeToClear = Number.POSITIVE_INFINITY;
+        if (saveSupplyRatio > 0 && !lastFloor && !forceBuild) {
+          if (baySpace < cost.space) {
+            titanSupplyRefund = readCostLikeRefund(
+              call(manager, "getMechRefund", "MechManager.getMechRefund", [
+                { size: "titan" }
+              ]),
+              "titan mech refund"
+            ).supply;
+          }
+          saveTimeToClear = requireNumber(
+            call(manager, "getTimeToClear", "MechManager.getTimeToClear"),
+            "MechManager.getTimeToClear result"
+          );
+        }
+        if (shouldSaveMechSupply({
+          saveSupplyRatio,
+          lastFloor,
+          forceBuild,
+          supplyMaximum: supply.input.maximum,
+          supplyCurrent: supply.input.current,
+          supplyRate: supply.input.rate,
+          baySpace,
+          designSpace: cost.space,
+          titanSupplyRefund,
+          timeToClear: saveTimeToClear
+        })) {
+          return null;
+        }
+        const mechBayBuilding = requireRecord(
+          buildings2["SpireMechBay"],
+          "buildings.SpireMechBay"
+        );
+        const purifier = requireRecord(
+          buildings2["SpirePurifier"],
+          "buildings.SpirePurifier"
+        );
+        const autoBuild2 = requireBoolean(
+          settings2["autoBuild"],
+          "settings.autoBuild"
+        );
+        const baysFirst = requireBoolean(
+          settings2["mechBaysFirst"],
+          "settings.mechBaysFirst"
+        );
+        let canExpandBay = false;
+        if (autoBuild2 && baysFirst && Boolean(
+          call(
+            mechBayBuilding,
+            "isAutoBuildable",
+            "SpireMechBay.isAutoBuildable"
+          )
+        )) {
+          canExpandBay = Boolean(
+            call(mechBayBuilding, "isAffordable", "SpireMechBay.isAffordable", [
+              true
+            ])
+          );
+          if (!canExpandBay) {
+            const purifierAuto = Boolean(
+              call(purifier, "isAutoBuildable", "SpirePurifier.isAutoBuildable")
+            );
+            canExpandBay = purifierAuto && Boolean(
+              call(purifier, "isAffordable", "SpirePurifier.isAffordable", [
+                true
+              ])
+            ) && requireNumber(
+              purifier["stateOffCount"],
+              "buildings.SpirePurifier.stateOffCount"
+            ) === 0;
+          }
+        }
+        const configuredScrapMode = requireString6(
+          settings2["mechScrap"],
+          "settings.mechScrap"
+        );
+        const minimumSupplyRate = requireNumber(
+          settings2["mechMinSupply"],
+          "settings.mechMinSupply"
+        );
+        const waygate = requireRecord(
+          buildings2["SpireWaygate"],
+          "buildings.SpireWaygate"
+        );
+        const waygateActiveCount = requireNumber(
+          waygate["stateOnCount"],
+          "buildings.SpireWaygate.stateOnCount"
+        );
+        const mechsPower = requireNumber(
+          manager["mechsPower"],
+          "MechManager.mechsPower"
+        );
+        let timeToClear = 0;
+        const suppressMixed = canExpandBay && supply.input.current < supply.input.maximum && !decision2.prolongActive && supply.input.rate >= minimumSupplyRate;
+        if (configuredScrapMode === "mixed" && !suppressMixed && waygateActiveCount !== 1) {
+          timeToClear = requireNumber(
+            call(manager, "getTimeToClear", "MechManager.getTimeToClear"),
+            "MechManager.getTimeToClear result"
+          );
+        }
+        const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
+          (value, index) => requireString6(value, `MechManager.Size[${index}]`)
+        );
+        const base = {
+          design,
+          cost,
+          forceBuild,
+          prolongActive: decision2.prolongActive,
+          savingSupply,
+          fillBay,
+          baySpace,
+          bayMaximum: requireNumber(bay["max"], "mechbay.max"),
+          scouts: requireNumber(bay["scouts"], "mechbay.scouts"),
+          sizeOrder: Object.freeze(sizeOrder),
+          supply: supply.input,
+          gems: gems.input,
+          lastFloor,
+          canExpandBay,
+          configuredScrapMode,
+          waygateActiveCount,
+          minimumSupplyRate,
+          saveSupplyRatio,
+          scrapEfficiency: requireNumber(
+            settings2["mechScrapEfficiency"],
+            "settings.mechScrapEfficiency"
+          ),
+          scoutsRatio: requireNumber(
+            settings2["mechScouts"],
+            "settings.mechScouts"
+          ),
+          rebuildScouts: requireBoolean(
+            settings2["mechScoutsRebuild"],
+            "settings.mechScoutsRebuild"
+          ),
+          mechsPower,
+          timeToClear,
+          activeMechs: Object.freeze([])
+        };
+        resolveMechScrapMode(base);
+        let candidates = Object.freeze([]);
+        if (shouldReadMechScrapCandidates(base)) {
+          const bestMech = requireRecord(
+            manager["bestMech"],
+            "MechManager.bestMech"
+          );
+          candidates = Object.freeze(
+            readArray(manager["activeMechs"], "MechManager.activeMechs").map(
+              (value, index) => {
+                const path = `MechManager.activeMechs[${index}]`;
+                const { raw, summary } = readSummary(value, path);
+                active.mechs.set(summary.id, raw);
+                const best = requireRecord(
+                  bestMech[summary.size],
+                  `MechManager.bestMech.${summary.size}`
+                );
+                const bestPower = requireNumber(
+                  best["power"],
+                  `MechManager.bestMech.${summary.size}.power`
+                );
+                let gemRefund = 0;
+                let supplyRefund = 0;
+                let space = 0;
+                if (!(summary.infernal && summary.size !== "collector" || summary.power >= bestPower)) {
+                  const refund = readCostLikeRefund(
+                    call(manager, "getMechRefund", "MechManager.getMechRefund", [
+                      raw
+                    ]),
+                    `${path} refund`
+                  );
+                  gemRefund = refund.gems;
+                  supplyRefund = refund.supply;
+                  space = requireNumber(
+                    call(manager, "getMechSpace", "MechManager.getMechSpace", [
+                      raw
+                    ]),
+                    `${path} space`
+                  );
+                }
+                return Object.freeze({
+                  ...summary,
+                  bestPower,
+                  gemRefund,
+                  supplyRefund,
+                  space
+                });
+              }
+            )
+          );
+        }
+        const input = Object.freeze({ ...base, activeMechs: candidates });
+        active.planningInput = input;
+        return input;
+      },
+      readSmallerCost(size) {
+        const active = session;
+        if (active === null || active.planningInput === null) {
+          throw new Error("mech planning has not been sampled");
+        }
+        return readCost2(
+          call(active.manager, "getMechCost", "MechManager.getMechCost", [
+            { size }
+          ]),
+          `mech cost for ${size}`
+        );
+      },
+      readSmallerDesign(size) {
+        const active = session;
+        if (active === null || active.planningInput === null) {
+          throw new Error("mech planning has not been sampled");
+        }
+        const raw = requireRecord(
+          call(active.manager, "getRandomMech", "MechManager.getRandomMech", [
+            size
+          ]),
+          `random ${size} mech`
+        );
+        const token = `smaller-${active.nextToken++}`;
+        const design = readDesign(raw, token, `random ${size} mech`);
+        active.designs.set(token, raw);
+        return design;
+      }
+    });
+    const executor = Object.freeze({
+      prepare(decision2) {
+        const active = session;
+        if (active === null)
+          return stale("mech-session-missing", "mech session is missing");
+        if (dependencies.getMechManager() !== active.manager || dependencies.getGame() !== active.game) {
+          return stale("mech-source-changed", "mech source changed");
+        }
+        const expected = planMechCycle(active.cycleInput);
+        if (expected === null || !cycleDecisionsMatch(expected, decision2)) {
+          return rejected2(
+            "invalid-mech-cycle-decision",
+            "mech cycle decision does not match the sampled plan"
+          );
+        }
+        active.manager["isActive"] = false;
+        active.manager["saveSupply"] = false;
+        if (decision2.drag !== null) {
+          call(active.manager, "dragMech", "MechManager.dragMech", [
+            decision2.drag.oldId,
+            decision2.drag.newId
+          ]);
+        }
+        return SUCCEEDED;
+      },
+      scrap(decision2) {
+        const active = session;
+        if (active === null || active.planningInput === null) {
+          return stale("mech-planning-missing", "mech planning is missing");
+        }
+        const log = requireRecord(dependencies.getGameLog(), "GameLog");
+        const logSuccess = requireFunction(
+          log["logSuccess"],
+          "GameLog.logSuccess"
+        );
+        const rawMechs = [];
+        for (const id of decision2.ids) {
+          const mech = active.mechs.get(id);
+          if (mech === void 0) {
+            return stale(
+              "mech-scrap-target-changed",
+              "mech scrap target changed",
+              { id }
+            );
+          }
+          rawMechs.push(mech);
+        }
+        if (rawMechs.length > 1) {
+          Reflect.apply(logSuccess, log, [
+            "mech_scrap",
+            `${rawMechs.length} mechs (~${Math.round(decision2.averageRating * 100)}%) has been scrapped.`,
+            ["hell"]
+          ]);
+        } else if (rawMechs.length === 1) {
+          const description = requireString6(
+            call(active.manager, "mechDesc", "MechManager.mechDesc", [
+              rawMechs[0]
+            ]),
+            "mech description"
+          );
+          Reflect.apply(logSuccess, log, [
+            "mech_scrap",
+            `${description} mech has been scrapped.`,
+            ["hell"]
+          ]);
+        }
+        for (const mech of rawMechs) {
+          call(active.manager, "scrapMech", "MechManager.scrapMech", [mech]);
+        }
+        const supply = requireRecord(
+          active.resources["Supply"],
+          "resources.Supply"
+        );
+        const gems = requireRecord(
+          active.resources["Soul_Gem"],
+          "resources.Soul_Gem"
+        );
+        supply["currentQuantity"] = Math.min(
+          requireNumber(
+            supply["currentQuantity"],
+            "resources.Supply.currentQuantity"
+          ) + decision2.supplyGained,
+          requireNumber(supply["maxQuantity"], "resources.Supply.maxQuantity")
+        );
+        gems["currentQuantity"] = requireNumber(
+          gems["currentQuantity"],
+          "resources.Soul_Gem.currentQuantity"
+        ) + decision2.gemsGained;
+        return SUCCEEDED;
+      },
+      build(decision2, continuation) {
+        const active = session;
+        if (active === null || active.planningInput === null) {
+          return stale("mech-planning-missing", "mech planning is missing");
+        }
+        const rawDesign = active.designs.get(decision2.designToken);
+        if (rawDesign === void 0) {
+          return rejected2("unknown-mech-design", "mech design token is unknown");
+        }
+        const supply = requireRecord(
+          active.resources["Supply"],
+          "resources.Supply"
+        );
+        const gems = requireRecord(
+          active.resources["Soul_Gem"],
+          "resources.Soul_Gem"
+        );
+        if (requireNumber(
+          supply["currentQuantity"],
+          "resources.Supply.currentQuantity"
+        ) !== continuation.supplyCurrent || requireNumber(
+          gems["currentQuantity"],
+          "resources.Soul_Gem.currentQuantity"
+        ) !== continuation.gemsCurrent) {
+          return stale("mech-resources-changed", "mech resources changed");
+        }
+        call(active.manager, "buildMech", "MechManager.buildMech", [rawDesign]);
+        supply["currentQuantity"] = continuation.supplyCurrent - decision2.cost.supply;
+        gems["currentQuantity"] = continuation.gemsCurrent - decision2.cost.gems;
+        active.manager["isActive"] = decision2.prolongActive;
+        session = null;
+        return SUCCEEDED;
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+  function readCostLikeRefund(value, path) {
+    const values = readArray(value, path);
+    return Object.freeze({
+      gems: requireNumber(values[0], `${path}[0]`),
+      supply: requireNumber(values[1], `${path}[1]`)
+    });
   }
 
   // src/ui/production-settings.ts
@@ -49066,18 +49659,18 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       galaxyAssaultPending
     });
     const autoFleet = () => runFleetAutomation(fleetAdapter);
-    const autoMech = createAutoMech({
+    const mechAdapter = createMechAdapter({
       getMechManager: () => MechManager,
       getGame: () => game,
       getSettings: () => settings,
       getResources: () => resources,
       getBuildings: () => buildings,
-      getHaveTech: () => haveTech,
-      getHaveTask: () => haveTask,
-      average,
-      GameLog,
+      haveTech,
+      haveTask,
+      getGameLog: () => GameLog,
       getJQuery: () => $
     });
+    const autoMech = () => runMechAutomation(mechAdapter);
     let scriptDataTestActions;
     const { updateScriptData, finalizeScriptData } = createScriptDataLifecycle({
       getSettings: () => settings,

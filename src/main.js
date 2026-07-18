@@ -346,7 +346,8 @@ import { runOuterFleetAutomation } from "./application/fleet-outer.ts";
 import { createOuterFleetAdapter } from "./adapters/evolve/fleet-outer.ts";
 import { runFleetAutomation } from "./application/fleet.ts";
 import { createFleetAdapter } from "./adapters/evolve/fleet.ts";
-import { createAutoMech } from "./automation/combat/mech.ts";
+import { runMechAutomation } from "./application/mech.ts";
+import { createMechAdapter } from "./adapters/evolve/mech.ts";
 import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
 import { createGeneralSettings } from "./ui/general-settings.ts";
@@ -3961,18 +3962,18 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   });
   const autoFleet = () => runFleetAutomation(fleetAdapter);
 
-  const autoMech = createAutoMech({
+  const mechAdapter = createMechAdapter({
     getMechManager: () => MechManager,
     getGame: () => game,
     getSettings: () => settings,
     getResources: () => resources,
     getBuildings: () => buildings,
-    getHaveTech: () => haveTech,
-    getHaveTask: () => haveTask,
-    average,
-    GameLog,
+    haveTech,
+    haveTask,
+    getGameLog: () => GameLog,
     getJQuery: () => $,
   });
+  const autoMech = () => runMechAutomation(mechAdapter);
 
   let scriptDataTestActions;
   const { updateScriptData, finalizeScriptData } = createScriptDataLifecycle({

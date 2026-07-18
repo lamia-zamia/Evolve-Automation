@@ -1,17 +1,15 @@
-import type { AutomationDependencies } from "../dependencies.ts";
-
-type Dependencies = AutomationDependencies<
-  | "getMechManager"
-  | "getGame"
-  | "getSettings"
-  | "getResources"
-  | "getBuildings"
-  | "getHaveTech"
-  | "getHaveTask"
-  | "average"
-  | "GameLog"
-  | "getJQuery"
->;
+interface Dependencies {
+  readonly getMechManager: () => any;
+  readonly getGame: () => any;
+  readonly getSettings: () => any;
+  readonly getResources: () => any;
+  readonly getBuildings: () => any;
+  readonly getHaveTech: () => any;
+  readonly getHaveTask: () => any;
+  readonly average: (values: number[]) => number;
+  readonly GameLog: any;
+  readonly getJQuery: () => any;
+}
 export function createAutoMech({
   getMechManager,
   getGame,
