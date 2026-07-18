@@ -290,6 +290,9 @@ import {
   createMarketCommandExecutor,
   createMarketReader,
 } from "./adapters/evolve/market.ts";
+import { createPowerAutomation } from "./application/power.ts";
+import { createPowerAdapter } from "./adapters/evolve/power.ts";
+import { createPowerWarningSource } from "./adapters/browser/power-warnings.ts";
 import { createAutoGalaxyMarket } from "./automation/economy/galaxy-market.ts";
 import { createAutoGatherResources } from "./automation/economy/gather-resources.ts";
 import { createAutoEvolution } from "./automation/progression/evolution.ts";
@@ -318,7 +321,6 @@ import {
   createMutationCommandExecutor,
   createMutationReader,
 } from "./adapters/evolve/mutation.ts";
-import { createAutoPower } from "./automation/economy/power.ts";
 import { createAutoStorage } from "./automation/economy/storage.ts";
 import { createAutoFleetOuter } from "./automation/combat/fleet-outer.ts";
 import { createAutoFleet } from "./automation/combat/fleet.ts";
@@ -3670,39 +3672,42 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       executor: researchExecutor,
     });
 
-  var powerOscLock = {}; // { vueBinding: { prev, locked } } — anti-flicker for consumption-limited buildings
-  var powerWarnCap = {}; // { vueBinding: { cap, ticks } } — game-imposed cap after a warn-badge shutdown
-  const autoPower = createAutoPower({
+  const powerWarnings = createPowerWarningSource(
+    () => window.document,
+    () => window,
+  );
+  const powerAdapter = createPowerAdapter({
     getGame: () => game,
     getSettings: () => settings,
     getState: () => state,
     getResources: () => resources,
     getBuildings: () => buildings,
     getJobs: () => jobs,
-    getWindow: () => window,
     getPoly: () => poly,
     getBuildingManager: () => BuildingManager,
     getFleetManager: () => FleetManager,
     getMechManager: () => MechManager,
     getWarManager: () => WarManager,
-    consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
-    Support,
-    getPowerOscLock: () => powerOscLock,
-    getPowerWarnCap: () => powerWarnCap,
-    getCitadelConsumption,
-    isHellSupressUseful,
+    consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
+    isSupportResource: (value) => value instanceof Support,
+    readDebugEnabled: () => powerWarnings.readDebugEnabled(),
+    isHellSuppressionUseful: isHellSupressUseful,
     getGalaxyRegions,
-    traitVal,
+    traitValue: traitVal,
     getAuthorityGarrisonRequirement,
-    getHaveTech: () => haveTech,
-    adjustSpire,
-    getBestSupplyRatio,
+    haveTech,
     getHealingRate,
     isHungryRace,
     isPillarFinished,
-    getJQuery: () => $,
     getBuildingIds: () => buildingIds,
+    log: (message) => console.log(message),
   });
+  const powerAutomation = createPowerAutomation({
+    reader: powerAdapter.reader,
+    executor: powerAdapter.executor,
+    warnings: powerWarnings,
+  });
+  const autoPower = () => powerAutomation.run();
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {

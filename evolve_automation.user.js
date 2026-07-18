@@ -5622,7 +5622,7 @@
 
   // src/domain/combat/galaxy-piracy.ts
   function anyUseful(demand, resourceIds) {
-    return resourceIds.some((resourceId) => demand[resourceId]);
+    return resourceIds.some((resourceId2) => demand[resourceId2]);
   }
   function decideGalaxyPiracyProtection(input) {
     const { producers, usefulResources } = input;
@@ -5659,12 +5659,12 @@
       "Orichalcum",
       "Vitreloy"
     ];
-    function resourceBenefitsFromPiracy(resourceId) {
-      const resource = getResources()[resourceId];
+    function resourceBenefitsFromPiracy(resourceId2) {
+      const resource = getResources()[resourceId2];
       if (resource?.isUseful() !== true) {
         return false;
       }
-      return resourceId === "Knowledge" || Number.isFinite(resource.storageRatio) && resource.storageRatio < 0.99;
+      return resourceId2 === "Knowledge" || Number.isFinite(resource.storageRatio) && resource.storageRatio < 0.99;
     }
     function gorddonTradeTargetsUsefulResource() {
       const trade = getGame().global.galaxy?.trade;
@@ -5695,9 +5695,9 @@
       const buildings2 = getBuildings();
       const instinct = game2.global.race["instinct"];
       const usefulResources = Object.fromEntries(
-        piracyResources.map((resourceId) => [
-          resourceId,
-          resourceBenefitsFromPiracy(resourceId)
+        piracyResources.map((resourceId2) => [
+          resourceId2,
+          resourceBenefitsFromPiracy(resourceId2)
         ])
       );
       const protection = decideGalaxyPiracyProtection({
@@ -13438,7 +13438,7 @@
   function findCostConflict(input) {
     const resourceNames = [];
     const targetNames = [];
-    let resourceId = "";
+    let resourceId2 = "";
     let targetName = "";
     let targetCause = "";
     for (const reservedTarget of input.reservedTargets) {
@@ -13458,7 +13458,7 @@
         if (resource === void 0 || reservedCost === void 0 || actionCost === void 0 || reservedResourceId === "Knowledge" && !blockKnowledge || reservedCost <= resource.currentQuantity - actionCost) {
           continue;
         }
-        resourceId = reservedResourceId;
+        resourceId2 = reservedResourceId;
         targetName = reservedTarget.name;
         targetCause = reservedTarget.cause;
         if (!resourceNames.includes(resource.name)) {
@@ -13469,10 +13469,10 @@
         }
       }
     }
-    if (resourceId === "") return null;
+    if (resourceId2 === "") return null;
     return Object.freeze({
       status: "conflict",
-      resourceId,
+      resourceId: resourceId2,
       targetName,
       targetCause,
       resourceNames: Object.freeze(resourceNames),
@@ -13492,12 +13492,12 @@
   }
   function freezeCostMap(rawCost, allowZero) {
     const entries = [];
-    for (const resourceId of Object.keys(rawCost)) {
-      const cost = rawCost[resourceId];
+    for (const resourceId2 of Object.keys(rawCost)) {
+      const cost = rawCost[resourceId2];
       if (!isFiniteNumber(cost) || (allowZero ? cost < 0 : cost <= 0)) {
         return void 0;
       }
-      entries.push([resourceId, cost]);
+      entries.push([resourceId2, cost]);
     }
     return Object.freeze(Object.fromEntries(entries));
   }
@@ -13527,16 +13527,16 @@
         if (cost === void 0) {
           return unavailable("invalid-target", { targetIndex });
         }
-        for (const resourceId of Object.keys(cost)) {
-          if (resources2[resourceId] !== void 0) continue;
-          const rawResource = rawResources[resourceId];
+        for (const resourceId2 of Object.keys(cost)) {
+          if (resources2[resourceId2] !== void 0) continue;
+          const rawResource = rawResources[resourceId2];
           if (!isRecord(rawResource) || typeof rawResource["name"] !== "string" || !isFiniteNumber(rawResource["currentQuantity"])) {
             return unavailable("invalid-resource", {
-              resourceId,
+              resourceId: resourceId2,
               targetIndex
             });
           }
-          resources2[resourceId] = Object.freeze({
+          resources2[resourceId2] = Object.freeze({
             name: rawResource["name"],
             currentQuantity: rawResource["currentQuantity"]
           });
@@ -13672,9 +13672,9 @@
   function isNonNegativeSafeInteger2(value) {
     return Number.isSafeInteger(value) && value >= 0;
   }
-  function unavailableLimit(reason, resourceId) {
+  function unavailableLimit(reason, resourceId2) {
     return Object.freeze(
-      resourceId === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId }
+      resourceId2 === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId: resourceId2 }
     );
   }
   function readPlannerLimitInput(rawTarget, rawResources) {
@@ -13696,28 +13696,28 @@
       if (!isRecord3(rawCosts)) return unavailableLimit("invalid-target");
       if (!isRecord3(rawResources)) return unavailableLimit("invalid-resource");
       const requirements = [];
-      for (const resourceId of Object.keys(rawCosts)) {
-        const requiredQuantity = rawCosts[resourceId];
+      for (const resourceId2 of Object.keys(rawCosts)) {
+        const requiredQuantity = rawCosts[resourceId2];
         if (!isFiniteNumber2(requiredQuantity) || requiredQuantity < 0) {
-          return unavailableLimit("invalid-target", resourceId);
+          return unavailableLimit("invalid-target", resourceId2);
         }
-        const rawResource = rawResources[resourceId];
+        const rawResource = rawResources[resourceId2];
         if (!isRecord3(rawResource) || typeof rawResource["title"] !== "string" || typeof rawResource["isUnlocked"] !== "function") {
-          return unavailableLimit("invalid-resource", resourceId);
+          return unavailableLimit("invalid-resource", resourceId2);
         }
         const currentQuantity = rawResource["currentQuantity"];
         const maximumQuantity = rawResource["maxQuantity"];
         const income = rawResource["income"];
         if (!isFiniteNumber2(currentQuantity) || !isFiniteNumber2(maximumQuantity) || !isFiniteNumber2(income)) {
-          return unavailableLimit("invalid-resource", resourceId);
+          return unavailableLimit("invalid-resource", resourceId2);
         }
         const unlocked = rawResource["isUnlocked"].call(rawResource);
         if (typeof unlocked !== "boolean") {
-          return unavailableLimit("invalid-resource", resourceId);
+          return unavailableLimit("invalid-resource", resourceId2);
         }
         requirements.push(
           Object.freeze({
-            resourceId,
+            resourceId: resourceId2,
             resourceTitle: rawResource["title"],
             requiredQuantity,
             currentQuantity,
@@ -14141,17 +14141,17 @@
   }
 
   // src/adapters/evolve/storage-expansion-reader.ts
-  function readView(resources2, resourceId, storagePerUnit) {
-    const view = requireRecord(resources2[resourceId], `resources.${resourceId}`);
+  function readView(resources2, resourceId2, storagePerUnit) {
+    const view = requireRecord(resources2[resourceId2], `resources.${resourceId2}`);
     const costRecord = requireRecord(
       view["cost"],
-      `resources.${resourceId}.cost`
+      `resources.${resourceId2}.cost`
     );
     const costs = [];
     for (const key in costRecord) {
       const costPerUnit = requireNumber(
         costRecord[key],
-        `resources.${resourceId}.cost.${key}`
+        `resources.${resourceId2}.cost.${key}`
       );
       const costResource = requireRecord(resources2[key], `resources.${key}`);
       const available = requireNumber(
@@ -14161,14 +14161,14 @@
       costs.push(Object.freeze({ resourceId: key, costPerUnit, available }));
     }
     return Object.freeze({
-      resourceId,
+      resourceId: resourceId2,
       maxQuantity: requireNumber(
         view["maxQuantity"],
-        `resources.${resourceId}.maxQuantity`
+        `resources.${resourceId2}.maxQuantity`
       ),
       currentQuantity: requireNumber(
         view["currentQuantity"],
-        `resources.${resourceId}.currentQuantity`
+        `resources.${resourceId2}.currentQuantity`
       ),
       storagePerUnit,
       costs: Object.freeze(costs)
@@ -14729,21 +14729,21 @@
       const resource = requireRecord(entry["resource"], `${path}.resource`);
       const cost = requireRecord(resource["cost"], `${path}.resource.cost`);
       const costs = [];
-      for (const resourceId in cost) {
+      for (const resourceId2 in cost) {
         const material = requireRecord(
-          resources2[resourceId],
-          `resources.${resourceId}`
+          resources2[resourceId2],
+          `resources.${resourceId2}`
         );
         costs.push(
           Object.freeze({
-            resourceId,
+            resourceId: resourceId2,
             amount: requireNumber(
-              cost[resourceId],
-              `${path}.resource.cost.${resourceId}`
+              cost[resourceId2],
+              `${path}.resource.cost.${resourceId2}`
             ),
             materialMaxQuantity: requireNumber(
               material["maxQuantity"],
-              `resources.${resourceId}.maxQuantity`
+              `resources.${resourceId2}.maxQuantity`
             )
           })
         );
@@ -14769,8 +14769,8 @@
       const costPath = Array.isArray(value) ? `${path}[${index}]` : path;
       const cost = requireRecord(entry, costPath);
       const resource = requireRecord(cost["resource"], `${costPath}.resource`);
-      const resourceId = resource["id"];
-      if (typeof resourceId !== "string") {
+      const resourceId2 = resource["id"];
+      if (typeof resourceId2 !== "string") {
         throw new TypeError(`${costPath}.resource.id must be a string`);
       }
       const minRate = cost["minRateOfChange"];
@@ -14778,7 +14778,7 @@
         quantity: requireNumber(cost["quantity"], `${costPath}.quantity`),
         // Legacy `cost.minRateOfChange ?? 0`.
         minRateOfChange: minRate == null ? 0 : requireNumber(minRate, `${costPath}.minRateOfChange`),
-        resourceId,
+        resourceId: resourceId2,
         resourceMaxQuantity: requireNumber(
           resource["maxQuantity"],
           `${costPath}.resource.maxQuantity`
@@ -14956,8 +14956,8 @@
     const { settings: settings2, consumptionBalanceTarget: balance } = input;
     const requests = [];
     const removedMissionIndices = [];
-    const request = (resourceId, amount) => {
-      requests.push({ resourceId, amount });
+    const request = (resourceId2, amount) => {
+      requests.push({ resourceId: resourceId2, amount });
     };
     if (input.inflationMoney !== null) {
       request("Money", input.inflationMoney);
@@ -15586,9 +15586,9 @@
   function isFiniteNumber4(value) {
     return typeof value === "number" && Number.isFinite(value);
   }
-  function unavailableCost(reason, resourceId) {
+  function unavailableCost(reason, resourceId2) {
     return Object.freeze(
-      resourceId === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId }
+      resourceId2 === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId: resourceId2 }
     );
   }
   function unavailableTarget(reason, context = {}) {
@@ -15599,22 +15599,22 @@
       if (!isRecord6(rawCost)) return unavailableCost("invalid-cost");
       if (!isRecord6(rawResources)) return unavailableCost("invalid-resource");
       const requirements = [];
-      for (const resourceId in rawCost) {
-        const requiredQuantity = rawCost[resourceId];
+      for (const resourceId2 in rawCost) {
+        const requiredQuantity = rawCost[resourceId2];
         if (!isFiniteNumber4(requiredQuantity) || requiredQuantity < 0) {
-          return unavailableCost("invalid-cost", resourceId);
+          return unavailableCost("invalid-cost", resourceId2);
         }
-        const rawResource = rawResources[resourceId];
+        const rawResource = rawResources[resourceId2];
         if (!isRecord6(rawResource)) {
-          return unavailableCost("invalid-resource", resourceId);
+          return unavailableCost("invalid-resource", resourceId2);
         }
         const availableQuantity = capacity === "maximum" ? rawResource["maxQuantity"] : rawResource["currentQuantity"];
         if (!isFiniteNumber4(availableQuantity)) {
-          return unavailableCost("invalid-resource", resourceId);
+          return unavailableCost("invalid-resource", resourceId2);
         }
         requirements.push(
           Object.freeze({
-            resourceId,
+            resourceId: resourceId2,
             requiredQuantity,
             availableQuantity
           })
@@ -15631,12 +15631,12 @@
   function validateCostMap(rawCost, itemId) {
     if (!isRecord6(rawCost)) return unavailableTarget("invalid-cost", { itemId });
     const cost = {};
-    for (const resourceId in rawCost) {
-      const quantity = rawCost[resourceId];
+    for (const resourceId2 in rawCost) {
+      const quantity = rawCost[resourceId2];
       if (!isFiniteNumber4(quantity) || quantity < 0) {
-        return unavailableTarget("invalid-cost", { itemId, resourceId });
+        return unavailableTarget("invalid-cost", { itemId, resourceId: resourceId2 });
       }
-      cost[resourceId] = quantity;
+      cost[resourceId2] = quantity;
     }
     return Object.freeze({ status: "ready", cost: Object.freeze(cost) });
   }
@@ -15736,17 +15736,17 @@
 
   // src/domain/target-timing.ts
   function calculateTargetTiming(input) {
-    let resourceId = "";
+    let resourceId2 = "";
     let seconds = 0;
     for (const requirement of input.requirements) {
       const totalCost = requirement.costPerSegment * input.remainingSegments;
       const rawSeconds = (totalCost - requirement.currentQuantity) / requirement.rateOfChange;
       if (rawSeconds > seconds && totalCost > requirement.currentQuantity) {
-        resourceId = requirement.resourceId;
+        resourceId2 = requirement.resourceId;
         seconds = rawSeconds;
       }
     }
-    return Object.freeze({ resourceId, seconds });
+    return Object.freeze({ resourceId: resourceId2, seconds });
   }
 
   // src/adapters/evolve/target-timing.ts
@@ -15756,9 +15756,9 @@
   function isFiniteNumber5(value) {
     return typeof value === "number" && Number.isFinite(value);
   }
-  function unavailable4(reason, resourceId) {
+  function unavailable4(reason, resourceId2) {
     return Object.freeze(
-      resourceId === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId }
+      resourceId2 === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId: resourceId2 }
     );
   }
   function readTargetTimingInput(rawGame, rawTarget, isProject) {
@@ -15778,23 +15778,23 @@
       const costs = rawTarget["cost"];
       const gameResources = global["resource"];
       const requirements = [];
-      for (const resourceId of Object.keys(costs)) {
-        const costPerSegment = costs[resourceId];
+      for (const resourceId2 of Object.keys(costs)) {
+        const costPerSegment = costs[resourceId2];
         if (!isFiniteNumber5(costPerSegment)) {
-          return unavailable4("invalid-target", resourceId);
+          return unavailable4("invalid-target", resourceId2);
         }
-        const rawResource = gameResources[resourceId];
+        const rawResource = gameResources[resourceId2];
         if (!isRecord7(rawResource)) {
-          return unavailable4("invalid-resource", resourceId);
+          return unavailable4("invalid-resource", resourceId2);
         }
         const currentQuantity = rawResource["amount"];
         const rateOfChange = rawResource["diff"];
         if (!isFiniteNumber5(currentQuantity) || !isFiniteNumber5(rateOfChange)) {
-          return unavailable4("invalid-resource", resourceId);
+          return unavailable4("invalid-resource", resourceId2);
         }
         requirements.push(
           Object.freeze({
-            resourceId,
+            resourceId: resourceId2,
             costPerSegment,
             currentQuantity,
             rateOfChange
@@ -15976,8 +15976,8 @@
       const resources2 = getResources();
       const capped = [];
       const stalled = [];
-      for (const resourceId in resources2) {
-        const resource = resources2[resourceId];
+      for (const resourceId2 in resources2) {
+        const resource = resources2[resourceId2];
         if (!resource.isUnlocked()) {
           continue;
         }
@@ -24100,12 +24100,12 @@
     const currentById = Object.fromEntries(
       input.current.map((entry) => [entry.id, entry.count])
     );
-    const adjustments = Object.keys(consumeAdjustments).map((resourceId) => {
-      const expectedCurrent = currentById[resourceId] ?? 0;
+    const adjustments = Object.keys(consumeAdjustments).map((resourceId2) => {
+      const expectedCurrent = currentById[resourceId2] ?? 0;
       return Object.freeze({
-        resourceId,
+        resourceId: resourceId2,
         expectedCurrent,
-        delta: (consumeAdjustments[resourceId] ?? 0) - expectedCurrent
+        delta: (consumeAdjustments[resourceId2] ?? 0) - expectedCurrent
       });
     });
     return Object.freeze({ adjustments: Object.freeze(adjustments) });
@@ -25210,7 +25210,7 @@
         }
         const path = `MarketManager.priorityList[${index}]`;
         const resource = requireRecord(session.priorityList[index], path);
-        const resourceId = readResourceId2(resource, path);
+        const resourceId2 = readResourceId2(resource, path);
         const flags = requireRecord(resource["is"], `${path}.is`);
         let eligible = Boolean(flags["tradable"]);
         if (eligible) {
@@ -25224,7 +25224,7 @@
             resource
           );
         }
-        const candidate = { index, resourceId, resource, eligible };
+        const candidate = { index, resourceId: resourceId2, resource, eligible };
         session.lastCandidate = candidate;
         if (!eligible || !resource["autoSellEnabled"]) {
           return emptySell(candidate, ignoreSellRatio);
@@ -25268,7 +25268,7 @@
         }
         return Object.freeze({
           index,
-          resourceId,
+          resourceId: resourceId2,
           eligible: true,
           autoSellEnabled: true,
           ignoreSellRatio,
@@ -25445,6 +25445,2318 @@
           Reflect.apply(trade, manager, [resource]);
         }
         return SUCCEEDED;
+      }
+    });
+  }
+
+  // src/domain/power.ts
+  var POWER_WIDE_OSCILLATION_HOLD_TICKS = 10;
+  function mapValue(map, key, label) {
+    const value = map.get(key);
+    if (value === void 0) {
+      throw new TypeError(`missing ${label}`);
+    }
+    return value;
+  }
+  function calculateBusyWorkers(observation, currentWorkers, incomeAdjusted) {
+    if (incomeAdjusted) {
+      return currentWorkers;
+    }
+    if (currentWorkers > 0) {
+      const perWorker = observation.production / currentWorkers;
+      const usedIncome = observation.production - observation.income;
+      return usedIncome > 0 ? Math.ceil(usedIncome / perWorker) : 0;
+    }
+    return observation.income < 0 ? 1 : 0;
+  }
+  function applyBusyCap(maximum, current, observation, resources2) {
+    if (observation.useful) {
+      return { maximum, adjusted: [] };
+    }
+    const resource = mapValue(
+      resources2,
+      observation.resourceId,
+      `power resource ${observation.resourceId}`
+    );
+    const next = Math.min(
+      maximum,
+      calculateBusyWorkers(observation, current, resource.incomeAdjusted)
+    );
+    return {
+      maximum: next,
+      adjusted: next === current ? [] : [observation.resourceId]
+    };
+  }
+  function applySmartRule(building, maximum, current, savingPower, availablePower, resources2) {
+    const rule = building.rule;
+    if (savingPower) {
+      switch (rule.kind) {
+        case "belt-space-station": {
+          const extra = rule.stationStorage > 0 ? Math.floor(
+            (rule.eleriumMaximum - rule.eleriumMaximumCost) / rule.stationStorage
+          ) : 0;
+          const minersNeeded = rule.eleriumShipsOn * 2 + rule.iridiumShipsOn + rule.ironShipsOn;
+          maximum = Math.min(
+            maximum,
+            Math.max(current - extra, Math.ceil(minersNeeded / 3))
+          );
+          break;
+        }
+        case "job-dependent":
+          if (rule.jobCount === 0) {
+            maximum = 0;
+          }
+          break;
+        case "lake-cooling-tower":
+          if (rule.harborCount > 0 && // The caller supplies the current available-power cap as maximum.
+          maximum > 0) {
+            const needed = building.powered * maximum + Number(
+              (500 * 0.92 ** maximum * (rule.electromagneticField ? 1.5 : 1)).toFixed(2)
+            ) * Math.min(2, rule.harborCount);
+            if (availablePower < needed) {
+              maximum = 0;
+            }
+          }
+          break;
+        case "lake-harbor":
+          if (maximum === 1 && building.count > 1) {
+            maximum = 0;
+          }
+          break;
+        case "busy-resource":
+          if (rule.active && rule.savingOnly) {
+            return applyBusyCap(maximum, current, rule.observation, resources2);
+          }
+          break;
+        default:
+          break;
+      }
+    }
+    switch (rule.kind) {
+      case "busy-resource":
+        if (rule.active && !rule.savingOnly) {
+          return applyBusyCap(maximum, current, rule.observation, resources2);
+        }
+        break;
+      case "triton-lander":
+        if (rule.fobOn < 1) {
+          maximum = 0;
+        } else {
+          const dispatch = rule.currentSoldiers - rule.authorityReserve - Math.max(0, rule.wounded - Math.floor(rule.healingRate));
+          maximum = Math.min(
+            maximum,
+            Math.floor(dispatch / (3 * rule.highPopulationMultiplier))
+          );
+        }
+        break;
+      case "ascension-trigger":
+        if (building.powered > 0 && (!rule.pillarFinished || rule.prestigeType !== "ascension")) {
+          maximum = 0;
+        }
+        break;
+      case "terraformer":
+        if (rule.prestigeType !== "terraform") {
+          maximum = 0;
+        }
+        break;
+      case "badlands-attractor": {
+        let best = 0;
+        if (rule.threat < rule.topThreat && rule.hellAssigned > 0) {
+          best = rule.threat > rule.bottomThreat && rule.topThreat > rule.bottomThreat ? Math.floor(
+            maximum * (rule.topThreat - rule.threat) / (rule.topThreat - rule.bottomThreat)
+          ) : maximum;
+        }
+        maximum = Math.min(maximum, current + 1, Math.max(current - 1, best));
+        break;
+      }
+      case "tourist-center":
+        if (!rule.hungryRace && rule.foodStorageRatio < 0.7 && !rule.moneyUseful) {
+          return applyBusyCap(maximum, current, rule.observation, resources2);
+        }
+        break;
+      case "mill":
+        if (building.powered !== 0 && rule.foodStorageRatio < 0.7 && rule.foodWorkers > 0) {
+          maximum = Math.min(
+            maximum,
+            current - (rule.sampledPower - 5) / -building.powered
+          );
+        }
+        break;
+      case "chthonian-mine-layer":
+        if (rule.raiderOn === 0 && rule.excavatorOn === 0 || rule.starbaseOn === 0) {
+          maximum = 0;
+        } else {
+          maximum = Math.min(
+            maximum,
+            current + Math.ceil((rule.piracy - rule.armada) / rule.rating)
+          );
+        }
+        break;
+      case "ruins-guard-post":
+        if (!rule.suppressionUseful) {
+          maximum = 0;
+        } else {
+          let adjustment = (5001 - rule.ruinsRating) / rule.postRating;
+          if (rule.gateUnlocked) {
+            adjustment = Math.max(
+              adjustment,
+              (7501 - rule.gateRating) / rule.postRating
+            );
+          }
+          maximum = Math.min(
+            maximum,
+            current + 1,
+            current + Math.ceil(adjustment)
+          );
+        }
+        break;
+      case "spire-waygate":
+        if (rule.cleared || rule.demonicBombReady || rule.mechPotentialTooHigh && !rule.prestigeFloorProtected) {
+          maximum = 0;
+        }
+        break;
+      case "early-galaxy-ship":
+        if (!rule.piracyUnlocked && rule.embassyUnlocked) {
+          maximum = 0;
+        }
+        break;
+      case "armed-miner":
+        if (rule.observations.every((entry) => !entry.useful)) {
+          let cap = 0;
+          for (const observation of rule.observations) {
+            const resource = mapValue(
+              resources2,
+              observation.resourceId,
+              `power resource ${observation.resourceId}`
+            );
+            cap = Math.max(
+              cap,
+              calculateBusyWorkers(observation, current, resource.incomeAdjusted)
+            );
+          }
+          maximum = Math.min(maximum, cap);
+        }
+        return {
+          maximum,
+          adjusted: maximum === current ? [] : rule.observations.map((entry) => entry.resourceId)
+        };
+      case "bolognium-ship":
+        if (rule.missionBuildable && rule.scoutCount >= 2 && rule.corvetteCount >= 1) {
+          maximum = Math.min(
+            maximum,
+            rule.gatewaySupportMaximum - (rule.scoutCount + rule.corvetteCount)
+          );
+        }
+        if (!rule.observation.useful) {
+          maximum = applyBusyCap(
+            maximum,
+            current,
+            rule.observation,
+            resources2
+          ).maximum;
+        }
+        return {
+          maximum,
+          adjusted: maximum === current ? [] : [rule.observation.resourceId]
+        };
+      case "chthonian-raider":
+        if (rule.starbaseOn === 0) {
+          maximum = 0;
+        } else if (rule.observations.every((entry) => !entry.useful)) {
+          let cap = 0;
+          for (const observation of rule.observations) {
+            const resource = mapValue(
+              resources2,
+              observation.resourceId,
+              `power resource ${observation.resourceId}`
+            );
+            cap = Math.max(
+              cap,
+              calculateBusyWorkers(observation, current, resource.incomeAdjusted)
+            );
+          }
+          maximum = Math.min(maximum, cap);
+        }
+        return {
+          maximum,
+          adjusted: maximum === current ? [] : rule.observations.map((entry) => entry.resourceId)
+        };
+      case "dual-resource":
+        if (rule.observations.every((entry) => !entry.useful)) {
+          let cap = 0;
+          for (const observation of rule.observations) {
+            const resource = mapValue(
+              resources2,
+              observation.resourceId,
+              `power resource ${observation.resourceId}`
+            );
+            cap = Math.max(
+              cap,
+              calculateBusyWorkers(observation, current, resource.incomeAdjusted)
+            );
+          }
+          maximum = Math.min(maximum, cap);
+        }
+        return {
+          maximum,
+          adjusted: maximum === current ? [] : rule.observations.map((entry) => entry.resourceId)
+        };
+      case "womling-farm":
+        maximum = Math.min(
+          maximum,
+          Math.ceil(rule.supportMaximum / rule.cropPerFarm)
+        );
+        break;
+      case "womling-overseer":
+        maximum = Math.min(
+          maximum,
+          Math.ceil(
+            (100 - (rule.loyaltyBase - rule.miners)) / rule.loyaltyPerBuilding
+          )
+        );
+        break;
+      case "womling-fun":
+        maximum = Math.min(
+          maximum,
+          Math.ceil(
+            (100 - (rule.moraleBase - (rule.miners + rule.farmers + rule.injured))) / rule.moralePerBuilding
+          )
+        );
+        break;
+      case "tau-whaling-station": {
+        const efficiency = 1 - (1 - rule.supportMaximum / rule.supportCurrent) ** 1.4;
+        const income = 8 * efficiency * rule.whalingShipsOn;
+        maximum = Math.min(maximum, Math.ceil(income / 12));
+        break;
+      }
+      case "tau-mining-pit":
+        maximum = Math.min(maximum, Math.ceil(rule.populationMaximum / 6));
+        break;
+      default:
+        break;
+    }
+    return { maximum, adjusted: [] };
+  }
+  function getCitadelPowerConsumption(amount, electromagneticField) {
+    return (30 + (amount - 1) * 2.5) * amount * (electromagneticField ? 1.5 : 1);
+  }
+  function getBestPowerSupplyRatio(support, maximumPorts, maximumCamps) {
+    let bestPort = 0;
+    let bestCamp = 0;
+    const optimalPort = Math.ceil(support / 2 + 1);
+    const optimalCamp = Math.floor(support / 2 - 1);
+    if (support <= 3 || optimalPort > maximumPorts) {
+      bestPort = Math.min(maximumPorts, support);
+      bestCamp = Math.min(maximumCamps, support - bestPort);
+    } else if (optimalCamp > maximumCamps) {
+      bestCamp = Math.min(maximumCamps, support);
+      bestPort = Math.min(maximumPorts, support - bestCamp);
+    } else if (optimalPort <= maximumPorts && optimalCamp <= maximumCamps) {
+      bestPort = optimalPort;
+      bestCamp = optimalCamp;
+    }
+    return Object.freeze([
+      Math.round(bestPort * (1 + bestCamp * 0.4) * 1e4 + 100),
+      bestPort,
+      bestCamp
+    ]);
+  }
+  function debouncePower(desired, current, entry) {
+    if (entry.locked !== void 0) {
+      if (desired === entry.a || desired === entry.b) {
+        return entry.locked;
+      }
+      delete entry.locked;
+    }
+    if (entry.holdTicks) {
+      if (desired === entry.a || desired === entry.b) {
+        entry.holdTicks--;
+        if (entry.holdTicks > 0) {
+          return current;
+        }
+        entry.previous = current;
+        return desired;
+      }
+      entry.holdTicks = 0;
+    }
+    if (desired === current) {
+      return desired;
+    }
+    if (entry.previous === desired) {
+      entry.a = current;
+      entry.b = desired;
+      if (Math.abs(desired - current) === 1) {
+        entry.locked = Math.max(current, desired);
+        return entry.locked;
+      }
+      entry.holdTicks = POWER_WIDE_OSCILLATION_HOLD_TICKS;
+      return current;
+    }
+    entry.previous = current;
+    return desired;
+  }
+  function freezeState(oscillations, warningCaps) {
+    return Object.freeze({
+      oscillations: Object.freeze(
+        Object.fromEntries(
+          Object.entries(oscillations).map(([key, value]) => [
+            key,
+            Object.freeze({ ...value })
+          ])
+        )
+      ),
+      warningCaps: Object.freeze(
+        Object.fromEntries(
+          Object.entries(warningCaps).map(([key, value]) => [
+            key,
+            Object.freeze({ ...value })
+          ])
+        )
+      )
+    });
+  }
+  function appendRateOperation(operations, resource, value) {
+    operations.push({
+      kind: "set-resource-rate",
+      resourceId: resource.input.id,
+      expected: resource.rate,
+      value
+    });
+    resource.rate = value;
+  }
+  function appendIncomeAdjusted(operations, resource) {
+    operations.push({
+      kind: "set-income-adjusted",
+      resourceId: resource.input.id,
+      expected: resource.incomeAdjusted,
+      value: true
+    });
+    resource.incomeAdjusted = true;
+  }
+  function planPowerCycle(input, state2) {
+    if (!input.powerUnlocked || input.buildings.length === 0) {
+      return Object.freeze({ decision: null, nextState: state2 });
+    }
+    const operations = [];
+    const resources2 = /* @__PURE__ */ new Map();
+    for (const resource of input.resources) {
+      if (resources2.has(resource.id)) {
+        throw new TypeError(`duplicate power resource ${resource.id}`);
+      }
+      resources2.set(resource.id, {
+        input: resource,
+        rate: resource.rateOfChange,
+        incomeAdjusted: resource.incomeAdjusted
+      });
+    }
+    const buildingById = new Map(
+      input.buildings.map((building) => [building.id, building])
+    );
+    if (buildingById.size !== input.buildings.length) {
+      throw new TypeError("duplicate power building id");
+    }
+    const oscillations = Object.fromEntries(
+      Object.entries(state2.oscillations).map(([key, value]) => [
+        key,
+        { ...value }
+      ])
+    );
+    const warningCaps = Object.fromEntries(
+      Object.entries(state2.warningCaps).map(([key, value]) => [
+        key,
+        { ...value }
+      ])
+    );
+    let availablePower = input.powerCurrent;
+    const missingProducer = {};
+    for (const building of input.buildings) {
+      availablePower += building.powered * building.stateOn;
+      for (const consumption of building.consumptions) {
+        const resource = mapValue(
+          resources2,
+          consumption.resourceId,
+          `power resource ${consumption.resourceId}`
+        );
+        const value = building.rule.kind === "belt-space-station" && resource.input.supportKind === "support" && resource.input.id === "Belt_Support" ? resource.rate - resource.input.maxQuantity : resource.rate + consumption.fuelRate * building.stateOn;
+        appendRateOperation(operations, resource, value);
+        if (resource.input.supportKind !== "none" && consumption.rate < 0) {
+          missingProducer[resource.input.id] = (missingProducer[resource.input.id] ?? 0) + 1;
+        }
+      }
+    }
+    let reservedPower = 0;
+    const producerReserve = /* @__PURE__ */ new Map();
+    for (const building of input.buildings) {
+      if (building.produces.length === 0 || building.powered <= 0) {
+        continue;
+      }
+      const consumed = building.produces.some(
+        (resourceId2) => input.buildings.some(
+          (candidate) => candidate.consumptions.some(
+            (consumption) => consumption.resourceId === resourceId2 && consumption.rate > 0
+          )
+        )
+      );
+      if (!consumed) {
+        continue;
+      }
+      const cap = input.settings.limitPowered ? Math.min(building.count, building.autoMaximum) : building.count;
+      const growth = building.produces.some(
+        (resourceId2) => mapValue(resources2, resourceId2, `producer resource ${resourceId2}`).input.useful
+      ) ? 1 : 0;
+      const reserve = building.powered * Math.min(cap, building.stateOn + growth);
+      producerReserve.set(building.binding, reserve);
+      reservedPower += reserve;
+    }
+    for (const building of input.buildings) {
+      let maximum = building.count;
+      const current = building.stateOn;
+      if (!input.settings.showGalactic && building.tab === "galaxy") {
+        maximum = 0;
+      }
+      if (input.settings.limitPowered) {
+        maximum = Math.min(maximum, building.autoMaximum);
+      }
+      if (building.singleState) {
+        maximum = Math.min(maximum, 1);
+      }
+      reservedPower -= producerReserve.get(building.binding) ?? 0;
+      if (building.rule.kind === "neutron-citadel") {
+        while (maximum > 0 && availablePower - reservedPower < getCitadelPowerConsumption(
+          maximum,
+          building.rule.electromagneticField
+        )) {
+          maximum--;
+        }
+      } else if (building.powered > 0 && !building.ignorePositivePowerCap) {
+        maximum = Math.min(
+          maximum,
+          (availablePower - reservedPower) / building.powered
+        );
+      }
+      if ((building.rule.kind === "ascension-trigger" || building.rule.kind === "terraformer") && availablePower < building.powered) {
+        operations.push({
+          kind: "set-description",
+          buildingId: building.id,
+          expected: building.extraDescription,
+          value: `Missing ${Math.ceil(
+            building.powered - availablePower
+          )} MW to power on<br>${building.extraDescription}`
+        });
+      }
+      if (building.skipGroup !== "none") {
+        continue;
+      }
+      if (building.smartCategory && building.smartEnabled) {
+        const result2 = applySmartRule(
+          building,
+          maximum,
+          current,
+          input.powerCurrent <= input.powerMaximum || input.replicatorAvailable,
+          availablePower,
+          resources2
+        );
+        maximum = result2.maximum;
+        for (const resourceId2 of result2.adjusted) {
+          appendIncomeAdjusted(
+            operations,
+            mapValue(resources2, resourceId2, `power resource ${resourceId2}`)
+          );
+        }
+        if (input.settings.autoFleet && building.fleetMaximum !== null) {
+          maximum = Math.min(maximum, building.fleetMaximum);
+        }
+      }
+      let description = operations.filter(
+        (operation2) => operation2.kind === "set-description" && operation2.buildingId === building.id
+      ).at(-1)?.value ?? building.extraDescription;
+      for (const consumption of building.consumptions) {
+        const resource = mapValue(
+          resources2,
+          consumption.resourceId,
+          `power resource ${consumption.resourceId}`
+        );
+        if (consumption.rate > 0) {
+          if (!resource.input.unlocked) {
+            maximum = 0;
+            break;
+          }
+          if (resource.input.id === "Food") {
+            if (input.fasting) {
+              maximum = 0;
+              break;
+            }
+            if (input.banquetStateOn > 0) {
+              continue;
+            }
+            if (resource.input.storageRatio > 0.05 || input.hungryRace) {
+              continue;
+            }
+          } else if (current > 0 && resource.input.supportKind === "none" && (building.powered < 0 || resource.input.storageRatio >= 0.95) && resource.input.currentQuantity >= maximum * input.consumptionBalanceMinimum * consumption.rate) {
+            continue;
+          } else if (resource.input.supportKind === "tau-belt-support") {
+            continue;
+          }
+          let supported = resource.rate / consumption.rate;
+          if (resource.input.supportKind === "womlings-support") {
+            supported = Math.ceil(supported);
+          }
+          maximum = Math.min(maximum, supported);
+          if (missingProducer[resource.input.id]) {
+            const value = `Make sure all ${resource.input.title} producers are above consumers in buildings list!<br>${description}`;
+            operations.push({
+              kind: "set-description",
+              buildingId: building.id,
+              expected: description,
+              value
+            });
+            description = value;
+          }
+        } else if (missingProducer[resource.input.id] && consumption.rate < 0) {
+          missingProducer[resource.input.id]--;
+        }
+      }
+      if (building.powered < 0) {
+        maximum = Math.max(maximum, current - 1);
+      }
+      maximum = Math.max(0, Math.floor(maximum));
+      const oscillation = oscillations[building.binding] ?? (oscillations[building.binding] = {});
+      maximum = debouncePower(maximum, current, oscillation);
+      const warningCap = warningCaps[building.binding];
+      if (warningCap !== void 0) {
+        const ticks = warningCap.ticks - 1;
+        if (ticks <= 0) {
+          delete warningCaps[building.binding];
+        } else {
+          warningCaps[building.binding] = { cap: warningCap.cap, ticks };
+          maximum = Math.min(maximum, warningCap.cap);
+        }
+      }
+      if (input.debug && maximum !== current) {
+        const consumption = building.consumptions.filter((entry) => entry.fuelRate > 0).map((entry) => {
+          const resource = mapValue(
+            resources2,
+            entry.resourceId,
+            `power resource ${entry.resourceId}`
+          );
+          return `${entry.resourceId}: income=${resource.rate.toFixed(
+            2
+          )}, qty=${resource.input.currentQuantity.toFixed(
+            0
+          )}, perUnit=${entry.fuelRate.toFixed(2)}, reserveTo=${(maximum * input.consumptionBalanceMinimum * entry.rate).toFixed(0)}`;
+        }).join(" | ");
+        const delta = maximum - current;
+        operations.push({
+          kind: "log",
+          message: `[power] ${building.binding}: on ${current}→${maximum} (Δ${delta >= 0 ? "+" : ""}${delta}), powered=${building.powered}, availPower≈${availablePower.toFixed(
+            1
+          )}${reservedPower > 0 ? `, reserved≈${reservedPower.toFixed(1)}` : ""}${consumption ? " || " + consumption : ""}`
+        });
+      }
+      for (const consumption of building.consumptions) {
+        const resource = mapValue(
+          resources2,
+          consumption.resourceId,
+          `power resource ${consumption.resourceId}`
+        );
+        const value = building.rule.kind === "belt-space-station" && resource.input.id === "Belt_Support" ? resource.rate + resource.input.maxQuantity : resource.rate - consumption.fuelRate * maximum;
+        appendRateOperation(operations, resource, value);
+      }
+      operations.push({
+        kind: "adjust-building",
+        buildingId: building.id,
+        binding: building.binding,
+        expectedStateOn: current,
+        amount: maximum - current
+      });
+      availablePower -= building.rule.kind === "neutron-citadel" ? getCitadelPowerConsumption(
+        maximum,
+        building.rule.electromagneticField
+      ) : building.powered * maximum;
+    }
+    const lakeSupport = resources2.get("Lake_Support")?.rate ?? 0;
+    if (input.lake.enabled && lakeSupport > 0) {
+      const rating = input.lake.bloodSpireLevel >= 2 ? 0.8 : 0.85;
+      let bireme = input.lake.biremeCount;
+      let transport = input.lake.transportCount;
+      while (bireme + transport > lakeSupport) {
+        const nextBireme = (1 - rating ** (bireme - 1)) * (transport * 5);
+        const nextTransport = (1 - rating ** bireme) * ((transport - 1) * 5);
+        if (nextBireme > nextTransport) {
+          bireme--;
+        } else {
+          transport--;
+        }
+      }
+      const biremeBuilding = mapValue(
+        buildingById,
+        input.lake.biremeId,
+        "lake bireme"
+      );
+      const transportBuilding = mapValue(
+        buildingById,
+        input.lake.transportId,
+        "lake transport"
+      );
+      operations.push(
+        {
+          kind: "adjust-building",
+          buildingId: biremeBuilding.id,
+          binding: biremeBuilding.binding,
+          expectedStateOn: input.lake.biremeStateOn,
+          amount: bireme - input.lake.biremeStateOn
+        },
+        {
+          kind: "adjust-building",
+          buildingId: transportBuilding.id,
+          binding: transportBuilding.binding,
+          expectedStateOn: input.lake.transportStateOn,
+          amount: transport - input.lake.transportStateOn
+        }
+      );
+    }
+    const spireSupport = Math.floor(resources2.get("Spire_Support")?.rate ?? 0);
+    if (input.spire.enabled && spireSupport > 0) {
+      const spire = input.spire;
+      const buildAllowed = spire.autoBuild && !(spire.autoMech && spire.mechActive) && !(spire.autoPrestige && spire.prestigeType === "demonic" && spire.prestigeDemonicFloor - spire.towerCount <= spire.mechBay.count);
+      const canBuild = (building, checkSmart = false) => buildAllowed && building.autoBuildable && spire.moneyMaximum >= building.moneyCost && (!checkSmart || building.smartManaged);
+      const maximumBay = Math.min(spire.mechBay.count, spireSupport);
+      const currentPort = spire.port.count;
+      const currentCamp = spire.camp.count;
+      const maximumPorts = canBuild(spire.port) ? spire.port.autoMaximum : currentPort;
+      const maximumCamps = canBuild(spire.camp) ? spire.camp.autoMaximum : currentCamp;
+      const nextMechCost = canBuild(spire.mechBay, true) ? spire.mechBay.supplyCost : Number.MAX_SAFE_INTEGER;
+      const nextPurifierCost = canBuild(spire.purifier, true) ? spire.purifier.supplyCost : Number.MAX_SAFE_INTEGER;
+      const [bestSupplies] = getBestPowerSupplyRatio(
+        spireSupport,
+        maximumPorts,
+        maximumCamps
+      );
+      const purifierDescription = operations.filter(
+        (operation2) => operation2.kind === "set-description" && operation2.buildingId === spire.purifier.buildingId
+      ).at(-1)?.value ?? spire.purifierDescription;
+      operations.push({
+        kind: "set-description",
+        buildingId: spire.purifier.buildingId,
+        expected: purifierDescription,
+        value: `Supported Supplies: ${Math.floor(bestSupplies)}<br>${purifierDescription}`
+      });
+      const nextCost = spire.mechQueued && nextMechCost <= bestSupplies ? nextMechCost : spire.purifierQueued && nextPurifierCost <= bestSupplies ? nextPurifierCost : Math.min(nextMechCost, nextPurifierCost);
+      operations.push({
+        kind: "set-mech-save-supply",
+        expected: spire.expectedSaveSupply,
+        value: nextCost <= bestSupplies
+      });
+      let assignStorage = spire.mechQueued || spire.purifierQueued;
+      const addSpireAdjustments = (mech, port, camp) => {
+        for (const [building, target] of [
+          [spire.mechBay, mech],
+          [spire.port, port],
+          [spire.camp, camp]
+        ]) {
+          const source2 = mapValue(
+            buildingById,
+            building.buildingId,
+            `spire building ${building.buildingId}`
+          );
+          operations.push({
+            kind: "adjust-building",
+            buildingId: source2.id,
+            binding: source2.binding,
+            expectedStateOn: building.stateOn,
+            amount: target - building.stateOn
+          });
+        }
+      };
+      for (let targetMech = maximumBay; targetMech >= 0; targetMech--) {
+        const [targetSupplies, targetPort, targetCamp] = getBestPowerSupplyRatio(
+          spireSupport - targetMech,
+          maximumPorts,
+          maximumCamps
+        );
+        const missingStorage = targetPort > currentPort ? spire.port : targetCamp > currentCamp ? spire.camp : null;
+        if (missingStorage !== null) {
+          for (let index = maximumBay; index >= 0; index--) {
+            const [storageSupplies, storagePort, storageCamp] = getBestPowerSupplyRatio(
+              spireSupport - index,
+              currentPort,
+              currentCamp
+            );
+            if (storageSupplies >= missingStorage.supplyCost) {
+              addSpireAdjustments(index, storagePort, storageCamp);
+              break;
+            }
+          }
+          break;
+        }
+        if (spire.supplyCurrent >= targetSupplies) {
+          assignStorage = true;
+        }
+        if (!assignStorage || bestSupplies < nextCost || targetSupplies >= nextCost) {
+          addSpireAdjustments(targetMech, targetPort, targetCamp);
+          break;
+        }
+      }
+    }
+    operations.push({
+      kind: "set-power-model",
+      resourceId: input.powerResourceId,
+      expectedCurrent: input.powerCurrent,
+      expectedRate: mapValue(resources2, input.powerResourceId, "power resource").rate,
+      value: availablePower
+    });
+    return Object.freeze({
+      decision: Object.freeze({
+        kind: "apply-power-cycle",
+        expectedBuildings: Object.freeze(
+          input.buildings.map(
+            (building) => Object.freeze({ id: building.id, binding: building.binding })
+          )
+        ),
+        operations: Object.freeze(operations)
+      }),
+      nextState: freezeState(oscillations, warningCaps)
+    });
+  }
+  function planPowerWarningShutdown(warnings) {
+    for (const warning of warnings) {
+      if (!warning.autoStateEnabled || warning.ship) {
+        continue;
+      }
+      if ((warning.warningKind === "belt-elerium" || warning.warningKind === "belt-iridium" || warning.warningKind === "belt-iron") && warning.beltSupportNeeded <= warning.beltSupportMaximum) {
+        continue;
+      }
+      if ((warning.warningKind === "lake-bireme" || warning.warningKind === "lake-transport") && warning.lakeSupportNeeded <= warning.lakeSupportMaximum) {
+        continue;
+      }
+      if (warning.warningKind === "tau-whaling" || warning.warningKind === "tau-mining") {
+        continue;
+      }
+      return Object.freeze({
+        kind: "shutdown-warned-building",
+        domId: warning.domId,
+        buildingId: warning.buildingId,
+        binding: warning.binding,
+        expectedStateOn: warning.stateOn
+      });
+    }
+    return null;
+  }
+  function recordPowerWarningCap(state2, binding, cap) {
+    const oscillations = { ...state2.oscillations };
+    delete oscillations[binding];
+    return freezeState(oscillations, {
+      ...state2.warningCaps,
+      [binding]: {
+        cap,
+        ticks: POWER_WIDE_OSCILLATION_HOLD_TICKS
+      }
+    });
+  }
+  var EMPTY_POWER_AUTOMATION_STATE = Object.freeze(
+    {
+      oscillations: Object.freeze({}),
+      warningCaps: Object.freeze({})
+    }
+  );
+
+  // src/application/power.ts
+  var SUCCEEDED7 = Object.freeze({
+    status: "succeeded"
+  });
+  function createPowerAutomation(dependencies) {
+    let state2 = EMPTY_POWER_AUTOMATION_STATE;
+    return Object.freeze({
+      run() {
+        const plan = planPowerCycle(dependencies.reader.readCycle(), state2);
+        if (plan.decision === null) {
+          return SUCCEEDED7;
+        }
+        const cycleOutcome = dependencies.executor.execute(plan.decision);
+        if (cycleOutcome.status !== "succeeded") {
+          return cycleOutcome;
+        }
+        state2 = plan.nextState;
+        const warning = planPowerWarningShutdown(
+          dependencies.reader.readWarnings(
+            dependencies.warnings.readWarnedBuildingDomIds()
+          )
+        );
+        if (warning === null) {
+          return SUCCEEDED7;
+        }
+        const warningOutcome = dependencies.executor.execute(warning);
+        if (warningOutcome.status !== "succeeded") {
+          return warningOutcome;
+        }
+        state2 = recordPowerWarningCap(
+          state2,
+          warning.binding,
+          dependencies.reader.readStateOn(warning.binding)
+        );
+        return SUCCEEDED7;
+      },
+      readState() {
+        return state2;
+      }
+    });
+  }
+
+  // src/adapters/evolve/power.ts
+  function readString2(value, path) {
+    if (typeof value !== "string" || value.length === 0) {
+      throw new TypeError(`${path} must be a non-empty string`);
+    }
+    return value;
+  }
+  function readOptionalString(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function callBoolean12(record, name, path, ...args) {
+    return Boolean(
+      Reflect.apply(
+        requireFunction(record[name], `${path}.${name}`),
+        record,
+        args
+      )
+    );
+  }
+  function callNumber8(record, name, path, ...args) {
+    return requireNumber(
+      Reflect.apply(
+        requireFunction(record[name], `${path}.${name}`),
+        record,
+        args
+      ),
+      `${path}.${name}()`
+    );
+  }
+  function namedRecord(catalog, name, path) {
+    return requireRecord(catalog[name], `${path}.${name}`);
+  }
+  function recordAt(root, segments, path) {
+    let current = root;
+    let currentPath = path;
+    for (const segment of segments) {
+      currentPath += `.${segment}`;
+      current = requireRecord(current[segment], currentPath);
+    }
+    return current;
+  }
+  function finiteProperty(record, name, path) {
+    return requireNumber(record[name], `${path}.${name}`);
+  }
+  function buildingId(building, path) {
+    return readString2(building["id"], `${path}.id`);
+  }
+  function buildingBinding(building, path) {
+    return readString2(building["_vueBinding"], `${path}._vueBinding`);
+  }
+  function resourceId(resource, path) {
+    return readString2(resource["id"], `${path}.id`);
+  }
+  function identity(catalog, name, value) {
+    return catalog[name] === value;
+  }
+  function readBooleanSetting(settings2, name) {
+    return Boolean(settings2[name]);
+  }
+  function readNumberSetting(settings2, name) {
+    return requireNumber(settings2[name], `settings.${name}`);
+  }
+  function readStringSetting(settings2, name) {
+    const value = settings2[name];
+    if (typeof value !== "string") {
+      throw new TypeError(`settings.${name} must be a string`);
+    }
+    return value;
+  }
+  function readNestedNumber(root, segments, path) {
+    const final = segments.at(-1);
+    if (final === void 0) {
+      throw new TypeError(`${path} requires a property path`);
+    }
+    const parent = recordAt(root, segments.slice(0, -1), path);
+    return requireNumber(parent[final], `${path}.${segments.join(".")}`);
+  }
+  function readResourceSnapshot(resource, path, namedResources, dependencies) {
+    const id = resourceId(resource, path);
+    const title = resource["title"];
+    if (typeof title !== "string") {
+      throw new TypeError(`${path}.title must be a string`);
+    }
+    const supportKind = identity(namedResources, "Womlings_Support", resource) ? "womlings-support" : identity(namedResources, "Tau_Belt_Support", resource) ? "tau-belt-support" : dependencies.isSupportResource(resource) ? "support" : "none";
+    return Object.freeze({
+      id,
+      title,
+      currentQuantity: finiteProperty(resource, "currentQuantity", path),
+      maxQuantity: finiteProperty(resource, "maxQuantity", path),
+      rateOfChange: finiteProperty(resource, "rateOfChange", path),
+      storageRatio: finiteProperty(resource, "storageRatio", path),
+      unlocked: callBoolean12(resource, "isUnlocked", path),
+      useful: callBoolean12(resource, "isUseful", path),
+      income: finiteProperty(resource, "income", path),
+      incomeAdjusted: Boolean(resource["incomeAdusted"]),
+      supportKind
+    });
+  }
+  function createResourceRegistry(namedResources, dependencies) {
+    const inputs = /* @__PURE__ */ new Map();
+    const records = /* @__PURE__ */ new Map();
+    return {
+      inputs,
+      records,
+      register(value, path) {
+        const resource = requireRecord(value, path);
+        const id = resourceId(resource, path);
+        const existing = records.get(id);
+        if (existing !== void 0) {
+          if (existing !== resource) {
+            throw new TypeError(`power resource id ${id} changed identity`);
+          }
+          const input2 = inputs.get(id);
+          if (input2 === void 0) {
+            throw new TypeError(`missing registered power resource ${id}`);
+          }
+          return input2;
+        }
+        const input = readResourceSnapshot(
+          resource,
+          path,
+          namedResources,
+          dependencies
+        );
+        records.set(id, resource);
+        inputs.set(id, input);
+        return input;
+      }
+    };
+  }
+  function busyObservation(registry, resource, path, source2, locArg) {
+    const record = requireRecord(resource, path);
+    const input = registry.register(record, path);
+    const production = locArg === void 0 ? callNumber8(record, "getProduction", path, source2) : callNumber8(record, "getProduction", path, source2, locArg);
+    return Object.freeze({
+      resourceId: input.id,
+      useful: input.useful,
+      production,
+      income: input.income
+    });
+  }
+  function readAuthorityReserve(game2, resources2, war, dependencies) {
+    const global = requireRecord(game2["global"], "game.global");
+    const race = requireRecord(global["race"], "game.global.race");
+    const authority = namedRecord(resources2, "Authority", "resources");
+    if (race["universe"] !== "evil" || !callBoolean12(authority, "isUnlocked", "resources.Authority")) {
+      return 0;
+    }
+    const currentGarrison = finiteProperty(
+      war,
+      "currentCityGarrison",
+      "WarManager"
+    );
+    const currentSoldiers = finiteProperty(war, "currentSoldiers", "WarManager");
+    const result2 = requireRecord(
+      dependencies.getAuthorityGarrisonRequirement(currentGarrison),
+      "authority garrison requirement"
+    );
+    if (result2["status"] !== "ready") {
+      return currentSoldiers;
+    }
+    return Math.min(
+      currentSoldiers,
+      finiteProperty(
+        result2,
+        "requiredGarrison",
+        "authority garrison requirement"
+      )
+    );
+  }
+  function readBuildingRule(building, path, catalogs, registry, dependencies) {
+    const { game: game2, settings: settings2, resources: resources2, buildings: buildings2, jobs: jobs2, mech, war, poly: poly2 } = catalogs;
+    const global = requireRecord(game2["global"], "game.global");
+    const race = requireRecord(global["race"], "game.global.race");
+    const tech = requireRecord(global["tech"], "game.global.tech");
+    const stateOn = finiteProperty(building, "stateOnCount", path);
+    if (identity(buildings2, "NeutronCitadel", building)) {
+      return Object.freeze({
+        kind: "neutron-citadel",
+        electromagneticField: Boolean(race["emfield"])
+      });
+    }
+    if (identity(buildings2, "BeltSpaceStation", building)) {
+      const breakdown = recordAt(game2, ["breakdown", "c"], "game");
+      const eleriumBreakdown = requireRecord(
+        breakdown["Elerium"] ?? {},
+        "game.breakdown.c.Elerium"
+      );
+      const location = Reflect.apply(
+        requireFunction(game2["loc"], "game.loc"),
+        game2,
+        ["space_belt_station_title"]
+      );
+      const rawStorage = typeof location === "string" ? eleriumBreakdown[location] ?? 0 : 0;
+      const stationStorage = typeof rawStorage === "number" ? rawStorage : Number.parseFloat(String(rawStorage));
+      const elerium = registry.register(
+        namedRecord(resources2, "Elerium", "resources"),
+        "resources.Elerium"
+      );
+      return Object.freeze({
+        kind: "belt-space-station",
+        stationStorage: Number.isFinite(stationStorage) ? stationStorage : 0,
+        eleriumMaximum: elerium.maxQuantity,
+        eleriumMaximumCost: finiteProperty(
+          namedRecord(resources2, "Elerium", "resources"),
+          "maxCost",
+          "resources.Elerium"
+        ),
+        eleriumShipsOn: finiteProperty(
+          namedRecord(buildings2, "BeltEleriumShip", "buildings"),
+          "stateOnCount",
+          "buildings.BeltEleriumShip"
+        ),
+        iridiumShipsOn: finiteProperty(
+          namedRecord(buildings2, "BeltIridiumShip", "buildings"),
+          "stateOnCount",
+          "buildings.BeltIridiumShip"
+        ),
+        ironShipsOn: finiteProperty(
+          namedRecord(buildings2, "BeltIronShip", "buildings"),
+          "stateOnCount",
+          "buildings.BeltIronShip"
+        )
+      });
+    }
+    for (const [buildingName, jobName] of [
+      ["CementPlant", "CementWorker"],
+      ["Mine", "Miner"],
+      ["CoalMine", "CoalMiner"]
+    ]) {
+      if (identity(buildings2, buildingName, building)) {
+        return Object.freeze({
+          kind: "job-dependent",
+          jobCount: finiteProperty(
+            namedRecord(jobs2, jobName, "jobs"),
+            "count",
+            `jobs.${jobName}`
+          )
+        });
+      }
+    }
+    if (identity(buildings2, "LakeCoolingTower", building)) {
+      return Object.freeze({
+        kind: "lake-cooling-tower",
+        harborCount: finiteProperty(
+          namedRecord(buildings2, "LakeHarbor", "buildings"),
+          "count",
+          "buildings.LakeHarbor"
+        ),
+        electromagneticField: Boolean(race["emfield"])
+      });
+    }
+    if (identity(buildings2, "LakeHarbor", building)) {
+      return Object.freeze({ kind: "lake-harbor" });
+    }
+    const busyRules = [
+      ["GasMining", "Helium_3", "space_gas_mining_title"],
+      ["GasMoonOilExtractor", "Oil", "space_gas_moon_oil_extractor_title"]
+    ];
+    for (const [buildingName, resourceName, source2] of busyRules) {
+      if (identity(buildings2, buildingName, building)) {
+        const resource = namedRecord(resources2, resourceName, "resources");
+        return Object.freeze({
+          kind: "busy-resource",
+          active: true,
+          savingOnly: true,
+          observation: busyObservation(
+            registry,
+            resource,
+            `resources.${resourceName}`,
+            source2
+          )
+        });
+      }
+    }
+    for (const [buildingName, resourceName] of [
+      ["KuiperOrichalcum", "Orichalcum"],
+      ["KuiperUranium", "Uranium"],
+      ["KuiperNeutronium", "Neutronium"],
+      ["KuiperElerium", "Elerium"]
+    ]) {
+      if (identity(buildings2, buildingName, building)) {
+        const resource = namedRecord(resources2, resourceName, "resources");
+        const title = registry.register(
+          resource,
+          `resources.${resourceName}`
+        ).title;
+        return Object.freeze({
+          kind: "busy-resource",
+          active: true,
+          savingOnly: true,
+          observation: busyObservation(
+            registry,
+            resource,
+            `resources.${resourceName}`,
+            "space_kuiper_mine",
+            [title]
+          )
+        });
+      }
+    }
+    for (const [buildingName, resourceName] of [
+      ["BeltIridiumShip", "Iridium"],
+      ["BeltIronShip", "Iron"]
+    ]) {
+      if (identity(buildings2, buildingName, building)) {
+        const resource = namedRecord(resources2, resourceName, "resources");
+        const elerium = namedRecord(resources2, "Elerium", "resources");
+        return Object.freeze({
+          kind: "busy-resource",
+          active: callBoolean12(elerium, "isUnlocked", "resources.Elerium"),
+          savingOnly: false,
+          observation: busyObservation(
+            registry,
+            resource,
+            `resources.${resourceName}`,
+            "job_space_miner"
+          )
+        });
+      }
+    }
+    const ordinaryBusyRules = [
+      ["BeltEleriumShip", "Elerium", "job_space_miner"],
+      ["MoonIridiumMine", "Iridium", "space_moon_iridium_mine_title"],
+      ["MoonHeliumMine", "Helium_3", "space_moon_helium_mine_title"],
+      ["Alien1VitreloyPlant", "Vitreloy", "galaxy_vitreloy_plant_bd"],
+      ["ChthonianExcavator", "Orichalcum", "galaxy_excavator"],
+      ["EnceladusWaterFreighter", "Water", "space_water_freighter_title"],
+      ["AsphodelHarvester", "Asphodel_Powder", "eden_asphodel_harvester_title"]
+    ];
+    for (const [buildingName, resourceName, source2] of ordinaryBusyRules) {
+      if (identity(buildings2, buildingName, building)) {
+        return Object.freeze({
+          kind: "busy-resource",
+          active: true,
+          savingOnly: false,
+          observation: busyObservation(
+            registry,
+            namedRecord(resources2, resourceName, "resources"),
+            `resources.${resourceName}`,
+            source2
+          )
+        });
+      }
+    }
+    if (identity(buildings2, "TritonLander", building)) {
+      return Object.freeze({
+        kind: "triton-lander",
+        fobOn: finiteProperty(
+          namedRecord(buildings2, "TritonFOB", "buildings"),
+          "stateOnCount",
+          "buildings.TritonFOB"
+        ),
+        currentSoldiers: finiteProperty(war, "currentSoldiers", "WarManager"),
+        wounded: finiteProperty(war, "wounded", "WarManager"),
+        healingRate: dependencies.getHealingRate(),
+        highPopulationMultiplier: dependencies.traitValue("high_pop", 0, 1),
+        authorityReserve: readAuthorityReserve(
+          game2,
+          resources2,
+          war,
+          dependencies
+        )
+      });
+    }
+    if (identity(buildings2, "SiriusAscensionTrigger", building)) {
+      return Object.freeze({
+        kind: "ascension-trigger",
+        pillarFinished: dependencies.isPillarFinished(),
+        prestigeType: readStringSetting(settings2, "prestigeType")
+      });
+    }
+    if (identity(buildings2, "RedAtmoTerraformer", building)) {
+      return Object.freeze({
+        kind: "terraformer",
+        prestigeType: readStringSetting(settings2, "prestigeType")
+      });
+    }
+    if (identity(buildings2, "BadlandsAttractor", building)) {
+      return Object.freeze({
+        kind: "badlands-attractor",
+        threat: readNestedNumber(
+          game2,
+          ["global", "portal", "fortress", "threat"],
+          "game"
+        ),
+        bottomThreat: readNumberSetting(settings2, "hellAttractorBottomThreat"),
+        topThreat: readNumberSetting(settings2, "hellAttractorTopThreat"),
+        hellAssigned: finiteProperty(war, "hellAssigned", "WarManager")
+      });
+    }
+    if (identity(buildings2, "TouristCenter", building)) {
+      const money = namedRecord(resources2, "Money", "resources");
+      return Object.freeze({
+        kind: "tourist-center",
+        hungryRace: dependencies.isHungryRace(),
+        foodStorageRatio: finiteProperty(
+          namedRecord(resources2, "Food", "resources"),
+          "storageRatio",
+          "resources.Food"
+        ),
+        moneyUseful: callBoolean12(money, "isUseful", "resources.Money"),
+        observation: busyObservation(
+          registry,
+          money,
+          "resources.Money",
+          "tech_tourism"
+        )
+      });
+    }
+    if (identity(buildings2, "Mill", building)) {
+      return Object.freeze({
+        kind: "mill",
+        foodStorageRatio: finiteProperty(
+          namedRecord(resources2, "Food", "resources"),
+          "storageRatio",
+          "resources.Food"
+        ),
+        foodWorkers: finiteProperty(
+          namedRecord(jobs2, "Farmer", "jobs"),
+          "count",
+          "jobs.Farmer"
+        ) + finiteProperty(
+          namedRecord(jobs2, "Hunter", "jobs"),
+          "count",
+          "jobs.Hunter"
+        ),
+        sampledPower: finiteProperty(
+          namedRecord(resources2, "Power", "resources"),
+          "currentQuantity",
+          "resources.Power"
+        )
+      });
+    }
+    if (identity(buildings2, "ChthonianMineLayer", building)) {
+      const regions = dependencies.getGalaxyRegions();
+      if (!Array.isArray(regions)) {
+        throw new TypeError("galaxy regions must be an array");
+      }
+      const region = regions.map((entry, index) => requireRecord(entry, `galaxy regions[${index}]`)).find((entry) => entry["name"] === "gxy_chthonian");
+      if (region === void 0) {
+        throw new TypeError("gxy_chthonian region is missing");
+      }
+      const actions = recordAt(
+        game2,
+        ["actions", "galaxy", "gxy_chthonian", "minelayer", "ship"],
+        "game"
+      );
+      return Object.freeze({
+        kind: "chthonian-mine-layer",
+        raiderOn: finiteProperty(
+          namedRecord(buildings2, "ChthonianRaider", "buildings"),
+          "stateOnCount",
+          "buildings.ChthonianRaider"
+        ),
+        excavatorOn: finiteProperty(
+          namedRecord(buildings2, "ChthonianExcavator", "buildings"),
+          "stateOnCount",
+          "buildings.ChthonianExcavator"
+        ),
+        starbaseOn: finiteProperty(
+          namedRecord(buildings2, "GatewayStarbase", "buildings"),
+          "stateOnCount",
+          "buildings.GatewayStarbase"
+        ),
+        piracy: finiteProperty(region, "piracy", "gxy_chthonian"),
+        armada: finiteProperty(region, "armada", "gxy_chthonian"),
+        rating: callNumber8(actions, "rating", "gxy_chthonian.minelayer.ship")
+      });
+    }
+    if (identity(buildings2, "RuinsGuardPost", building)) {
+      const armyRating = requireNumber(
+        Reflect.apply(
+          requireFunction(game2["armyRating"], "game.armyRating"),
+          game2,
+          [dependencies.traitValue("high_pop", 0, 1), "hellArmy", 0]
+        ),
+        "game.armyRating()"
+      );
+      const suppression = (location) => {
+        const result2 = requireRecord(
+          Reflect.apply(
+            requireFunction(poly2["hellSupression"], "poly.hellSupression"),
+            poly2,
+            [location]
+          ),
+          `poly.hellSupression(${location})`
+        );
+        return finiteProperty(result2, "rating", `hell suppression ${location}`);
+      };
+      return Object.freeze({
+        kind: "ruins-guard-post",
+        suppressionUseful: dependencies.isHellSuppressionUseful(),
+        postRating: armyRating * dependencies.traitValue("holy", 1, "+"),
+        ruinsRating: suppression("ruins"),
+        gateUnlocked: dependencies.haveTech("hell_gate"),
+        gateRating: suppression("gate")
+      });
+    }
+    if (identity(buildings2, "SpireWaygate", building)) {
+      const prestigeType = readStringSetting(settings2, "prestigeType");
+      const universeAffix = Reflect.apply(
+        requireFunction(poly2["universeAffix"], "poly.universeAffix"),
+        poly2,
+        []
+      );
+      if (typeof universeAffix !== "string") {
+        throw new TypeError("poly.universeAffix() must be a string");
+      }
+      const stats = recordAt(game2, ["global", "stats", "spire"], "game");
+      const spireStats = requireRecord(
+        stats[universeAffix] ?? {},
+        `game.global.stats.spire.${universeAffix}`
+      );
+      return Object.freeze({
+        kind: "spire-waygate",
+        cleared: dependencies.haveTech("waygate", 3),
+        demonicBombReady: readBooleanSetting(settings2, "prestigeDemonicBomb") && prestigeType === "demonic" && Number(spireStats["dlstr"] ?? 0) > 0,
+        mechPotentialTooHigh: readBooleanSetting(settings2, "autoMech") && finiteProperty(mech, "mechsPotential", "MechManager") > readNumberSetting(settings2, "mechWaygatePotential"),
+        prestigeFloorProtected: readBooleanSetting(settings2, "autoPrestige") && prestigeType === "demonic" && finiteProperty(
+          namedRecord(buildings2, "SpireTower", "buildings"),
+          "count",
+          "buildings.SpireTower"
+        ) >= readNumberSetting(settings2, "prestigeDemonicFloor")
+      });
+    }
+    if (identity(buildings2, "ScoutShip", building) || identity(buildings2, "CorvetteShip", building)) {
+      return Object.freeze({
+        kind: "early-galaxy-ship",
+        piracyUnlocked: Boolean(tech["piracy"]),
+        embassyUnlocked: callBoolean12(
+          namedRecord(buildings2, "GorddonEmbassy", "buildings"),
+          "isUnlocked",
+          "buildings.GorddonEmbassy"
+        )
+      });
+    }
+    if (identity(buildings2, "Alien2ArmedMiner", building)) {
+      return Object.freeze({
+        kind: "armed-miner",
+        observations: Object.freeze(
+          [
+            ["Bolognium", "galaxy_armed_miner_bd"],
+            ["Adamantite", "galaxy_armed_miner_bd"],
+            ["Iridium", "galaxy_armed_miner_bd"]
+          ].map(
+            ([name, source2]) => busyObservation(
+              registry,
+              namedRecord(resources2, name, "resources"),
+              `resources.${name}`,
+              source2
+            )
+          )
+        )
+      });
+    }
+    if (identity(buildings2, "BologniumShip", building)) {
+      const resource = namedRecord(resources2, "Bolognium", "resources");
+      return Object.freeze({
+        kind: "bolognium-ship",
+        missionBuildable: callBoolean12(
+          namedRecord(buildings2, "GorddonMission", "buildings"),
+          "isAutoBuildable",
+          "buildings.GorddonMission"
+        ),
+        scoutCount: finiteProperty(
+          namedRecord(buildings2, "ScoutShip", "buildings"),
+          "count",
+          "buildings.ScoutShip"
+        ),
+        corvetteCount: finiteProperty(
+          namedRecord(buildings2, "CorvetteShip", "buildings"),
+          "count",
+          "buildings.CorvetteShip"
+        ),
+        gatewaySupportMaximum: finiteProperty(
+          namedRecord(resources2, "Gateway_Support", "resources"),
+          "maxQuantity",
+          "resources.Gateway_Support"
+        ),
+        observation: busyObservation(
+          registry,
+          resource,
+          "resources.Bolognium",
+          "galaxy_bolognium_ship"
+        )
+      });
+    }
+    if (identity(buildings2, "ChthonianRaider", building)) {
+      const observations = [
+        ["Vitreloy", "galaxy_raider"],
+        ["Polymer", "galaxy_raider"],
+        ["Neutronium", "galaxy_raider"],
+        ["Deuterium", "galaxy_raider"]
+      ].map(
+        ([name, source2]) => busyObservation(
+          registry,
+          namedRecord(resources2, name, "resources"),
+          `resources.${name}`,
+          source2
+        )
+      );
+      return Object.freeze({
+        kind: "chthonian-raider",
+        starbaseOn: finiteProperty(
+          namedRecord(buildings2, "GatewayStarbase", "buildings"),
+          "stateOnCount",
+          "buildings.GatewayStarbase"
+        ),
+        observations: Object.freeze(observations)
+      });
+    }
+    if (identity(buildings2, "NebulaHarvester", building)) {
+      const observations = [
+        ["Deuterium", "interstellar_harvester_title"],
+        ["Helium_3", "interstellar_harvester_title"]
+      ].map(
+        ([name, source2]) => busyObservation(
+          registry,
+          namedRecord(resources2, name, "resources"),
+          `resources.${name}`,
+          source2
+        )
+      );
+      return Object.freeze({
+        kind: "dual-resource",
+        observations: Object.freeze(observations)
+      });
+    }
+    if (identity(buildings2, "TauRedWomlingFarm", building)) {
+      return Object.freeze({
+        kind: "womling-farm",
+        supportMaximum: finiteProperty(
+          namedRecord(resources2, "Womlings_Support", "resources"),
+          "maxQuantity",
+          "resources.Womlings_Support"
+        ),
+        cropPerFarm: (dependencies.haveTech("womling_pop") ? 16 : 12) + (dependencies.haveTech("womling_gene") ? 4 : 0)
+      });
+    }
+    if (identity(buildings2, "TauRedOverseer", building)) {
+      return Object.freeze({
+        kind: "womling-overseer",
+        loyaltyBase: race["womling_friend"] ? 25 : race["womling_god"] ? 75 : 0,
+        loyaltyPerBuilding: callNumber8(
+          requireRecord(building["definition"], `${path}.definition`),
+          "val",
+          `${path}.definition`
+        ),
+        miners: readNestedNumber(
+          game2,
+          ["global", "tauceti", "womling_mine", "miners"],
+          "game"
+        )
+      });
+    }
+    if (identity(buildings2, "TauRedWomlingFun", building)) {
+      return Object.freeze({
+        kind: "womling-fun",
+        moraleBase: race["womling_friend"] ? 75 : race["womling_god"] ? 40 : race["womling_lord"] ? 30 : 0,
+        moralePerBuilding: callNumber8(
+          requireRecord(building["definition"], `${path}.definition`),
+          "val",
+          `${path}.definition`
+        ),
+        miners: readNestedNumber(
+          game2,
+          ["global", "tauceti", "womling_mine", "miners"],
+          "game"
+        ),
+        farmers: readNestedNumber(
+          game2,
+          ["global", "tauceti", "womling_farm", "farmers"],
+          "game"
+        ),
+        injured: readNestedNumber(
+          game2,
+          ["global", "tauceti", "overseer", "injured"],
+          "game"
+        )
+      });
+    }
+    if (identity(buildings2, "TauGasWhalingStation", building)) {
+      return Object.freeze({
+        kind: "tau-whaling-station",
+        supportMaximum: finiteProperty(
+          namedRecord(resources2, "Tau_Belt_Support", "resources"),
+          "maxQuantity",
+          "resources.Tau_Belt_Support"
+        ),
+        supportCurrent: finiteProperty(
+          namedRecord(resources2, "Tau_Belt_Support", "resources"),
+          "currentQuantity",
+          "resources.Tau_Belt_Support"
+        ),
+        whalingShipsOn: finiteProperty(
+          namedRecord(buildings2, "TauBeltWhalingShip", "buildings"),
+          "stateOnCount",
+          "buildings.TauBeltWhalingShip"
+        )
+      });
+    }
+    if (identity(buildings2, "TauMiningPit", building)) {
+      return Object.freeze({
+        kind: "tau-mining-pit",
+        populationMaximum: finiteProperty(
+          namedRecord(resources2, "Population", "resources"),
+          "maxQuantity",
+          "resources.Population"
+        )
+      });
+    }
+    return Object.freeze({ kind: "ordinary" });
+  }
+  function readSpireBuilding(building, path) {
+    const cost = requireRecord(building["cost"], `${path}.cost`);
+    return Object.freeze({
+      buildingId: buildingId(building, path),
+      count: finiteProperty(building, "count", path),
+      stateOn: finiteProperty(building, "stateOnCount", path),
+      autoMaximum: finiteProperty(building, "autoMax", path),
+      autoBuildable: callBoolean12(building, "isAutoBuildable", path),
+      smartManaged: callBoolean12(building, "isSmartManaged", path),
+      moneyCost: requireNumber(cost["Money"] ?? 0, `${path}.cost.Money`),
+      supplyCost: requireNumber(cost["Supply"] ?? 0, `${path}.cost.Supply`)
+    });
+  }
+  var EMPTY_SPIRE_BUILDING = Object.freeze({
+    buildingId: "",
+    count: 0,
+    stateOn: 0,
+    autoMaximum: 0,
+    autoBuildable: false,
+    smartManaged: false,
+    moneyCost: 0,
+    supplyCost: 0
+  });
+  var EMPTY_LAKE = Object.freeze({
+    enabled: false,
+    bloodSpireLevel: 0,
+    biremeId: "",
+    biremeCount: 0,
+    biremeStateOn: 0,
+    transportId: "",
+    transportCount: 0,
+    transportStateOn: 0
+  });
+  var EMPTY_SPIRE = Object.freeze({
+    enabled: false,
+    autoBuild: false,
+    autoMech: false,
+    mechActive: false,
+    autoPrestige: false,
+    prestigeType: "",
+    prestigeDemonicFloor: 0,
+    towerCount: 0,
+    moneyMaximum: 0,
+    supplyCurrent: 0,
+    mechQueued: false,
+    purifierQueued: false,
+    purifierDescription: "",
+    expectedSaveSupply: false,
+    mechBay: EMPTY_SPIRE_BUILDING,
+    port: EMPTY_SPIRE_BUILDING,
+    camp: EMPTY_SPIRE_BUILDING,
+    purifier: EMPTY_SPIRE_BUILDING
+  });
+  function createPowerAdapter(dependencies) {
+    let session = null;
+    const reader = Object.freeze({
+      readCycle() {
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const state2 = requireRecord(dependencies.getState(), "state");
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
+        const jobs2 = requireRecord(dependencies.getJobs(), "jobs");
+        const manager = requireRecord(
+          dependencies.getBuildingManager(),
+          "BuildingManager"
+        );
+        const fleet = requireRecord(
+          dependencies.getFleetManager(),
+          "FleetManager"
+        );
+        const mech = requireRecord(dependencies.getMechManager(), "MechManager");
+        const war = requireRecord(dependencies.getWarManager(), "WarManager");
+        const poly2 = requireRecord(dependencies.getPoly(), "poly");
+        const power = namedRecord(resources2, "Power", "resources");
+        if (!callBoolean12(power, "isUnlocked", "resources.Power")) {
+          session = null;
+          return Object.freeze({
+            powerUnlocked: false,
+            powerResourceId: "Power",
+            powerCurrent: 0,
+            powerMaximum: 0,
+            replicatorAvailable: false,
+            fasting: false,
+            hungryRace: false,
+            banquetStateOn: 0,
+            debug: false,
+            consumptionBalanceMinimum: dependencies.consumptionBalanceMinimum,
+            settings: Object.freeze({
+              showGalactic: true,
+              limitPowered: false,
+              autoFleet: false
+            }),
+            resources: Object.freeze([]),
+            buildings: Object.freeze([]),
+            lake: EMPTY_LAKE,
+            spire: EMPTY_SPIRE
+          });
+        }
+        const listValue = Reflect.apply(
+          requireFunction(
+            manager["managedStatePriorityList"],
+            "BuildingManager.managedStatePriorityList"
+          ),
+          manager,
+          []
+        );
+        if (!Array.isArray(listValue)) {
+          throw new TypeError(
+            "BuildingManager.managedStatePriorityList() must return an array"
+          );
+        }
+        const registry = createResourceRegistry(resources2, dependencies);
+        registry.register(power, "resources.Power");
+        const managedRecords = listValue.map(
+          (value, index) => requireRecord(value, `BuildingManager state list[${index}]`)
+        );
+        if (managedRecords.length === 0) {
+          session = Object.freeze({
+            manager,
+            buildings: /* @__PURE__ */ new Map(),
+            resources: registry.records,
+            ordered: Object.freeze([])
+          });
+          return Object.freeze({
+            powerUnlocked: true,
+            powerResourceId: resourceId(power, "resources.Power"),
+            powerCurrent: finiteProperty(
+              power,
+              "currentQuantity",
+              "resources.Power"
+            ),
+            powerMaximum: finiteProperty(power, "maxQuantity", "resources.Power"),
+            replicatorAvailable: false,
+            fasting: false,
+            hungryRace: false,
+            banquetStateOn: 0,
+            debug: false,
+            consumptionBalanceMinimum: dependencies.consumptionBalanceMinimum,
+            settings: Object.freeze({
+              showGalactic: true,
+              limitPowered: false,
+              autoFleet: false
+            }),
+            resources: Object.freeze([...registry.inputs.values()]),
+            buildings: Object.freeze([]),
+            lake: EMPTY_LAKE,
+            spire: EMPTY_SPIRE
+          });
+        }
+        const manageLake = callBoolean12(
+          namedRecord(buildings2, "LakeTransport", "buildings"),
+          "isSmartManaged",
+          "buildings.LakeTransport"
+        ) && callBoolean12(
+          namedRecord(buildings2, "LakeBireme", "buildings"),
+          "isSmartManaged",
+          "buildings.LakeBireme"
+        );
+        const manageSpire = callBoolean12(
+          namedRecord(buildings2, "SpirePort", "buildings"),
+          "isSmartManaged",
+          "buildings.SpirePort"
+        ) && callBoolean12(
+          namedRecord(buildings2, "SpireBaseCamp", "buildings"),
+          "isSmartManaged",
+          "buildings.SpireBaseCamp"
+        );
+        const neededShipsValue = fleet["neededShips"];
+        const neededShips = typeof neededShipsValue === "object" && neededShipsValue !== null ? requireRecord(neededShipsValue, "FleetManager.neededShips") : null;
+        const seenBuildings = /* @__PURE__ */ new Map();
+        const seenBindings = /* @__PURE__ */ new Set();
+        const inputs = managedRecords.map(
+          (building, index) => {
+            const path = `BuildingManager state list[${index}]`;
+            const id = buildingId(building, path);
+            const binding = buildingBinding(building, path);
+            if (seenBuildings.has(id)) {
+              throw new TypeError(`duplicate managed power building ${id}`);
+            }
+            if (seenBindings.has(binding)) {
+              throw new TypeError(`duplicate managed power binding ${binding}`);
+            }
+            seenBuildings.set(id, building);
+            seenBindings.add(binding);
+            const rawConsumptions = building["consumption"];
+            if (!Array.isArray(rawConsumptions)) {
+              throw new TypeError(`${path}.consumption must be an array`);
+            }
+            const consumptions = rawConsumptions.map(
+              (value, consumptionIndex) => {
+                const consumptionPath = `${path}.consumption[${consumptionIndex}]`;
+                const consumption = requireRecord(value, consumptionPath);
+                const resource = registry.register(
+                  consumption["resource"],
+                  `${consumptionPath}.resource`
+                );
+                return Object.freeze({
+                  resourceId: resource.id,
+                  rate: finiteProperty(consumption, "rate", consumptionPath),
+                  fuelRate: callNumber8(
+                    building,
+                    "getFuelRate",
+                    path,
+                    consumptionIndex
+                  )
+                });
+              }
+            );
+            const rawProduces = building["produces"];
+            const produces = rawProduces === void 0 || rawProduces === null ? [] : Array.isArray(rawProduces) ? rawProduces.map(
+              (resource, resourceIndex) => registry.register(
+                resource,
+                `${path}.produces[${resourceIndex}]`
+              ).id
+            ) : (() => {
+              throw new TypeError(`${path}.produces must be an array`);
+            })();
+            const is = requireRecord(building["is"] ?? {}, `${path}.is`);
+            const rule = readBuildingRule(
+              building,
+              path,
+              {
+                game: game2,
+                settings: settings2,
+                resources: resources2,
+                buildings: buildings2,
+                jobs: jobs2,
+                fleet,
+                mech,
+                war,
+                poly: poly2
+              },
+              registry,
+              dependencies
+            );
+            const fleetMaximum = readBooleanSetting(settings2, "autoFleet") && neededShips !== null && Object.prototype.hasOwnProperty.call(neededShips, id) ? requireNumber(neededShips[id], `FleetManager.neededShips.${id}`) : null;
+            const skipGroup = manageSpire && (identity(buildings2, "SpirePort", building) || identity(buildings2, "SpireBaseCamp", building) || identity(buildings2, "SpireMechBay", building)) ? "spire" : manageLake && (identity(buildings2, "LakeTransport", building) || identity(buildings2, "LakeBireme", building)) ? "lake" : "none";
+            return Object.freeze({
+              index,
+              id,
+              binding,
+              count: finiteProperty(building, "count", path),
+              stateOn: finiteProperty(building, "stateOnCount", path),
+              powered: finiteProperty(building, "powered", path),
+              autoMaximum: finiteProperty(building, "autoMax", path),
+              tab: typeof building["_tab"] === "string" ? building["_tab"] : "",
+              smartCategory: Boolean(is["smart"]),
+              smartEnabled: Boolean(building["autoStateSmart"]),
+              ship: Boolean(is["ship"]),
+              singleState: identity(buildings2, "Banquet", building),
+              ignorePositivePowerCap: identity(
+                buildings2,
+                "RuinsHellForge",
+                building
+              ),
+              skipGroup,
+              extraDescription: readOptionalString(
+                building["extraDescription"],
+                `${path}.extraDescription`
+              ),
+              consumptions: Object.freeze(consumptions),
+              produces: Object.freeze(produces),
+              fleetMaximum,
+              rule
+            });
+          }
+        );
+        const lakeBireme = namedRecord(buildings2, "LakeBireme", "buildings");
+        const lakeTransport = namedRecord(
+          buildings2,
+          "LakeTransport",
+          "buildings"
+        );
+        const lake = manageLake ? (() => {
+          const blood = requireRecord(
+            requireRecord(game2["global"], "game.global")["blood"] ?? {},
+            "game.global.blood"
+          );
+          return Object.freeze({
+            enabled: true,
+            bloodSpireLevel: blood["spire"] === void 0 ? 0 : requireNumber(blood["spire"], "game.global.blood.spire"),
+            biremeId: buildingId(lakeBireme, "buildings.LakeBireme"),
+            biremeCount: finiteProperty(
+              lakeBireme,
+              "count",
+              "buildings.LakeBireme"
+            ),
+            biremeStateOn: finiteProperty(
+              lakeBireme,
+              "stateOnCount",
+              "buildings.LakeBireme"
+            ),
+            transportId: buildingId(lakeTransport, "buildings.LakeTransport"),
+            transportCount: finiteProperty(
+              lakeTransport,
+              "count",
+              "buildings.LakeTransport"
+            ),
+            transportStateOn: finiteProperty(
+              lakeTransport,
+              "stateOnCount",
+              "buildings.LakeTransport"
+            )
+          });
+        })() : EMPTY_LAKE;
+        let spire = EMPTY_SPIRE;
+        if (manageSpire) {
+          const spireMech = namedRecord(buildings2, "SpireMechBay", "buildings");
+          const spirePort = namedRecord(buildings2, "SpirePort", "buildings");
+          const spireCamp = namedRecord(buildings2, "SpireBaseCamp", "buildings");
+          const purifier = namedRecord(buildings2, "SpirePurifier", "buildings");
+          const queued = state2["queuedTargetsAll"];
+          if (!Array.isArray(queued)) {
+            throw new TypeError("state.queuedTargetsAll must be an array");
+          }
+          spire = Object.freeze({
+            enabled: true,
+            autoBuild: readBooleanSetting(settings2, "autoBuild"),
+            autoMech: readBooleanSetting(settings2, "autoMech"),
+            mechActive: Boolean(mech["isActive"]),
+            autoPrestige: readBooleanSetting(settings2, "autoPrestige"),
+            prestigeType: readStringSetting(settings2, "prestigeType"),
+            prestigeDemonicFloor: readNumberSetting(
+              settings2,
+              "prestigeDemonicFloor"
+            ),
+            towerCount: finiteProperty(
+              namedRecord(buildings2, "SpireTower", "buildings"),
+              "count",
+              "buildings.SpireTower"
+            ),
+            moneyMaximum: finiteProperty(
+              namedRecord(resources2, "Money", "resources"),
+              "maxQuantity",
+              "resources.Money"
+            ),
+            supplyCurrent: finiteProperty(
+              namedRecord(resources2, "Supply", "resources"),
+              "currentQuantity",
+              "resources.Supply"
+            ),
+            mechQueued: queued.includes(spireMech),
+            purifierQueued: queued.includes(purifier),
+            purifierDescription: readOptionalString(
+              purifier["extraDescription"],
+              "buildings.SpirePurifier.extraDescription"
+            ),
+            expectedSaveSupply: Boolean(mech["saveSupply"]),
+            mechBay: readSpireBuilding(spireMech, "buildings.SpireMechBay"),
+            port: readSpireBuilding(spirePort, "buildings.SpirePort"),
+            camp: readSpireBuilding(spireCamp, "buildings.SpireBaseCamp"),
+            purifier: readSpireBuilding(purifier, "buildings.SpirePurifier")
+          });
+          if (!seenBuildings.has(buildingId(purifier, "buildings.SpirePurifier"))) {
+            seenBuildings.set(
+              buildingId(purifier, "buildings.SpirePurifier"),
+              purifier
+            );
+          }
+        }
+        const global = requireRecord(game2["global"], "game.global");
+        const race = requireRecord(global["race"], "game.global.race");
+        const gameSettings = requireRecord(
+          global["settings"],
+          "game.global.settings"
+        );
+        session = Object.freeze({
+          manager,
+          buildings: seenBuildings,
+          resources: registry.records,
+          ordered: Object.freeze(
+            inputs.map(
+              (building) => Object.freeze({ id: building.id, binding: building.binding })
+            )
+          )
+        });
+        return Object.freeze({
+          powerUnlocked: true,
+          powerResourceId: resourceId(power, "resources.Power"),
+          powerCurrent: finiteProperty(
+            power,
+            "currentQuantity",
+            "resources.Power"
+          ),
+          powerMaximum: finiteProperty(power, "maxQuantity", "resources.Power"),
+          replicatorAvailable: finiteProperty(power, "currentQuantity", "resources.Power") > finiteProperty(power, "maxQuantity", "resources.Power") ? dependencies.haveTech("replicator") : false,
+          fasting: Boolean(race["fasting"]),
+          hungryRace: inputs.some(
+            (building) => building.rule.kind === "tourist-center" || building.consumptions.some(
+              (consumption) => consumption.resourceId === "Food"
+            )
+          ) ? dependencies.isHungryRace() : false,
+          banquetStateOn: finiteProperty(
+            namedRecord(buildings2, "Banquet", "buildings"),
+            "stateOnCount",
+            "buildings.Banquet"
+          ),
+          debug: dependencies.readDebugEnabled(),
+          consumptionBalanceMinimum: dependencies.consumptionBalanceMinimum,
+          settings: Object.freeze({
+            showGalactic: Boolean(gameSettings["showGalactic"]),
+            limitPowered: readBooleanSetting(settings2, "buildingsLimitPowered"),
+            autoFleet: readBooleanSetting(settings2, "autoFleet")
+          }),
+          resources: Object.freeze([...registry.inputs.values()]),
+          buildings: Object.freeze(inputs),
+          lake,
+          spire
+        });
+      },
+      readWarnings(domIds) {
+        if (domIds.length === 0) {
+          return Object.freeze([]);
+        }
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
+        const buildingIds2 = requireRecord(
+          dependencies.getBuildingIds(),
+          "buildingIds"
+        );
+        const highPopulation = dependencies.traitValue("high_pop", 0, 1);
+        const beltNeeded = (finiteProperty(
+          namedRecord(buildings2, "BeltEleriumShip", "buildings"),
+          "stateOnCount",
+          "buildings.BeltEleriumShip"
+        ) * 2 + finiteProperty(
+          namedRecord(buildings2, "BeltIridiumShip", "buildings"),
+          "stateOnCount",
+          "buildings.BeltIridiumShip"
+        ) + finiteProperty(
+          namedRecord(buildings2, "BeltIronShip", "buildings"),
+          "stateOnCount",
+          "buildings.BeltIronShip"
+        )) * highPopulation;
+        const lakeNeeded = finiteProperty(
+          namedRecord(buildings2, "LakeBireme", "buildings"),
+          "stateOnCount",
+          "buildings.LakeBireme"
+        ) + finiteProperty(
+          namedRecord(buildings2, "LakeTransport", "buildings"),
+          "stateOnCount",
+          "buildings.LakeTransport"
+        );
+        return Object.freeze(
+          domIds.flatMap((domId) => {
+            if (domId.length === 0 || buildingIds2[domId] === void 0) {
+              return [];
+            }
+            const building = requireRecord(
+              buildingIds2[domId],
+              `buildingIds.${domId}`
+            );
+            const path = `buildingIds.${domId}`;
+            const is = requireRecord(building["is"] ?? {}, `${path}.is`);
+            const warningKind = identity(buildings2, "BeltEleriumShip", building) ? "belt-elerium" : identity(buildings2, "BeltIridiumShip", building) ? "belt-iridium" : identity(buildings2, "BeltIronShip", building) ? "belt-iron" : identity(buildings2, "LakeBireme", building) ? "lake-bireme" : identity(buildings2, "LakeTransport", building) ? "lake-transport" : identity(buildings2, "TauBeltWhalingShip", building) ? "tau-whaling" : identity(buildings2, "TauBeltMiningShip", building) ? "tau-mining" : "ordinary";
+            return [
+              Object.freeze({
+                domId,
+                buildingId: buildingId(building, path),
+                binding: buildingBinding(building, path),
+                stateOn: finiteProperty(building, "stateOnCount", path),
+                autoStateEnabled: Boolean(building["autoStateEnabled"]),
+                ship: Boolean(is["ship"]),
+                warningKind,
+                beltSupportNeeded: beltNeeded,
+                beltSupportMaximum: finiteProperty(
+                  namedRecord(resources2, "Belt_Support", "resources"),
+                  "maxQuantity",
+                  "resources.Belt_Support"
+                ),
+                lakeSupportNeeded: lakeNeeded,
+                lakeSupportMaximum: finiteProperty(
+                  namedRecord(resources2, "Lake_Support", "resources"),
+                  "maxQuantity",
+                  "resources.Lake_Support"
+                )
+              })
+            ];
+          })
+        );
+      },
+      readStateOn(binding) {
+        if (session === null) {
+          throw new Error("power cycle must be read before state-on resampling");
+        }
+        const building = [...session.buildings.values()].find(
+          (candidate) => candidate["_vueBinding"] === binding
+        );
+        if (building === void 0) {
+          throw new TypeError(`power building binding ${binding} is missing`);
+        }
+        return finiteProperty(
+          building,
+          "stateOnCount",
+          `power building ${binding}`
+        );
+      }
+    });
+    function validateSession(decision) {
+      if (session === null) {
+        return null;
+      }
+      if (decision.expectedBuildings.length !== session.ordered.length) {
+        return null;
+      }
+      const currentValue = Reflect.apply(
+        requireFunction(
+          session.manager["managedStatePriorityList"],
+          "BuildingManager.managedStatePriorityList"
+        ),
+        session.manager,
+        []
+      );
+      if (!Array.isArray(currentValue) || currentValue.length !== session.ordered.length) {
+        return null;
+      }
+      for (let index = 0; index < decision.expectedBuildings.length; index++) {
+        const expected = decision.expectedBuildings[index];
+        const actual = session.ordered[index];
+        const current = currentValue[index];
+        if (expected === void 0 || actual === void 0 || current === void 0 || session.buildings.get(actual.id) !== current || expected.id !== actual.id || expected.binding !== actual.binding) {
+          return null;
+        }
+      }
+      return session;
+    }
+    function preflightOperations(active, operations) {
+      const resourceRates = /* @__PURE__ */ new Map();
+      const resourceAdjusted = /* @__PURE__ */ new Map();
+      const descriptions = /* @__PURE__ */ new Map();
+      const buildingStates = /* @__PURE__ */ new Map();
+      let saveSupply = Boolean(
+        requireRecord(dependencies.getMechManager(), "MechManager")["saveSupply"]
+      );
+      for (const operation2 of operations) {
+        switch (operation2.kind) {
+          case "set-resource-rate": {
+            const resource = active.resources.get(operation2.resourceId);
+            if (resource === void 0)
+              return `resource ${operation2.resourceId} missing`;
+            const current = resourceRates.get(operation2.resourceId) ?? finiteProperty(
+              resource,
+              "rateOfChange",
+              `resource ${operation2.resourceId}`
+            );
+            if (current !== operation2.expected)
+              return `resource ${operation2.resourceId} rate changed`;
+            resourceRates.set(operation2.resourceId, operation2.value);
+            break;
+          }
+          case "set-income-adjusted": {
+            const resource = active.resources.get(operation2.resourceId);
+            if (resource === void 0)
+              return `resource ${operation2.resourceId} missing`;
+            const current = resourceAdjusted.get(operation2.resourceId) ?? Boolean(resource["incomeAdusted"]);
+            if (current !== operation2.expected)
+              return `resource ${operation2.resourceId} adjustment changed`;
+            resourceAdjusted.set(operation2.resourceId, operation2.value);
+            break;
+          }
+          case "set-description": {
+            const building = active.buildings.get(operation2.buildingId);
+            if (building === void 0)
+              return `building ${operation2.buildingId} missing`;
+            const current = descriptions.get(operation2.buildingId) ?? readOptionalString(
+              building["extraDescription"],
+              `building ${operation2.buildingId}.extraDescription`
+            );
+            if (current !== operation2.expected)
+              return `building ${operation2.buildingId} description changed`;
+            descriptions.set(operation2.buildingId, operation2.value);
+            break;
+          }
+          case "adjust-building": {
+            const building = active.buildings.get(operation2.buildingId);
+            if (building === void 0)
+              return `building ${operation2.buildingId} missing`;
+            if (buildingBinding(building, `building ${operation2.buildingId}`) !== operation2.binding)
+              return `building ${operation2.buildingId} binding changed`;
+            const current = buildingStates.get(operation2.buildingId) ?? finiteProperty(
+              building,
+              "stateOnCount",
+              `building ${operation2.buildingId}`
+            );
+            if (current !== operation2.expectedStateOn)
+              return `building ${operation2.buildingId} state changed`;
+            requireFunction(
+              building["tryAdjustState"],
+              `building ${operation2.buildingId}.tryAdjustState`
+            );
+            buildingStates.set(operation2.buildingId, current + operation2.amount);
+            break;
+          }
+          case "set-mech-save-supply":
+            if (saveSupply !== operation2.expected)
+              return "MechManager.saveSupply changed";
+            saveSupply = operation2.value;
+            break;
+          case "set-power-model": {
+            const resource = active.resources.get(operation2.resourceId);
+            if (resource === void 0)
+              return `resource ${operation2.resourceId} missing`;
+            const rate = resourceRates.get(operation2.resourceId) ?? finiteProperty(
+              resource,
+              "rateOfChange",
+              `resource ${operation2.resourceId}`
+            );
+            if (finiteProperty(
+              resource,
+              "currentQuantity",
+              `resource ${operation2.resourceId}`
+            ) !== operation2.expectedCurrent || rate !== operation2.expectedRate)
+              return `resource ${operation2.resourceId} power model changed`;
+            resourceRates.set(operation2.resourceId, operation2.value);
+            break;
+          }
+          case "log":
+            break;
+        }
+      }
+      return null;
+    }
+    function applyOperations(active, operations) {
+      const mech = requireRecord(dependencies.getMechManager(), "MechManager");
+      for (const operation2 of operations) {
+        switch (operation2.kind) {
+          case "set-resource-rate":
+            Reflect.set(
+              active.resources.get(operation2.resourceId),
+              "rateOfChange",
+              operation2.value
+            );
+            break;
+          case "set-income-adjusted":
+            Reflect.set(
+              active.resources.get(operation2.resourceId),
+              "incomeAdusted",
+              operation2.value
+            );
+            break;
+          case "set-description":
+            Reflect.set(
+              active.buildings.get(operation2.buildingId),
+              "extraDescription",
+              operation2.value
+            );
+            break;
+          case "adjust-building": {
+            const building = active.buildings.get(operation2.buildingId);
+            Reflect.apply(
+              requireFunction(
+                building["tryAdjustState"],
+                `building ${operation2.buildingId}.tryAdjustState`
+              ),
+              building,
+              [operation2.amount]
+            );
+            break;
+          }
+          case "set-mech-save-supply":
+            Reflect.set(mech, "saveSupply", operation2.value);
+            break;
+          case "set-power-model": {
+            const resource = active.resources.get(operation2.resourceId);
+            Reflect.set(resource, "currentQuantity", operation2.value);
+            Reflect.set(resource, "rateOfChange", operation2.value);
+            break;
+          }
+          case "log":
+            dependencies.log(operation2.message);
+            break;
+        }
+      }
+    }
+    const executor = Object.freeze({
+      execute(decision) {
+        if (decision.kind === "apply-power-cycle") {
+          const active = validateSession(decision);
+          if (active === null) {
+            return stale(
+              "power-session-changed",
+              "Power planning session changed"
+            );
+          }
+          const failure2 = preflightOperations(active, decision.operations);
+          if (failure2 !== null) {
+            return stale("power-precondition-changed", failure2);
+          }
+          applyOperations(active, decision.operations);
+          return SUCCEEDED;
+        }
+        if (decision.kind !== "shutdown-warned-building") {
+          return rejected2("invalid-power-decision", "Unsupported power decision");
+        }
+        const buildingIds2 = requireRecord(
+          dependencies.getBuildingIds(),
+          "buildingIds"
+        );
+        const value = buildingIds2[decision.domId];
+        if (value === void 0) {
+          return stale("warned-building-missing", "Warned building disappeared");
+        }
+        const building = requireRecord(value, `buildingIds.${decision.domId}`);
+        if (buildingId(building, `buildingIds.${decision.domId}`) !== decision.buildingId || buildingBinding(building, `buildingIds.${decision.domId}`) !== decision.binding || finiteProperty(
+          building,
+          "stateOnCount",
+          `buildingIds.${decision.domId}`
+        ) !== decision.expectedStateOn) {
+          return stale("warned-building-changed", "Warned building changed");
+        }
+        Reflect.apply(
+          requireFunction(
+            building["tryAdjustState"],
+            `buildingIds.${decision.domId}.tryAdjustState`
+          ),
+          building,
+          [-1]
+        );
+        return SUCCEEDED;
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
+  // src/adapters/browser/power-warnings.ts
+  function createPowerWarningSource(getDocument, getWindow) {
+    return Object.freeze({
+      readDebugEnabled() {
+        const value = getWindow();
+        return typeof value === "object" && value !== null && Reflect.get(value, "powerDebug") === true;
+      },
+      readWarnedBuildingDomIds() {
+        return Object.freeze(
+          Array.from(getDocument().querySelectorAll("span.on.warn")).map(
+            (element) => element.parentElement?.id ?? ""
+          )
+        );
       }
     });
   }
@@ -25986,17 +28298,17 @@
   }
 
   // src/application/craft.ts
-  var SUCCEEDED7 = Object.freeze({
+  var SUCCEEDED8 = Object.freeze({
     status: "succeeded"
   });
   function runCraftAutomation(dependencies) {
     if (!shouldRunCraft(dependencies.reader.readGate())) {
-      return SUCCEEDED7;
+      return SUCCEEDED8;
     }
     for (let index = 0; ; index++) {
       const candidate = dependencies.reader.readCandidate(index);
       if (candidate === null) {
-        return SUCCEEDED7;
+        return SUCCEEDED8;
       }
       const decision = planCraft(candidate);
       if (decision === null) {
@@ -26010,7 +28322,7 @@
   }
 
   // src/adapters/evolve/craft.ts
-  function callBoolean12(record, name, path) {
+  function callBoolean13(record, name, path) {
     return Boolean(
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
     );
@@ -26047,7 +28359,7 @@
           resources2["Population"],
           "resources.Population"
         );
-        const populationUnlocked = callBoolean12(
+        const populationUnlocked = callBoolean13(
           population,
           "isUnlocked",
           "resources.Population"
@@ -26074,7 +28386,7 @@
         }
         const path = `foundryList[${index}]`;
         const craftable = requireRecord(session.foundryList[index], path);
-        const unlocked = callBoolean12(craftable, "isUnlocked", path);
+        const unlocked = callBoolean13(craftable, "isUnlocked", path);
         if (!unlocked) {
           return Object.freeze({
             index,
@@ -26100,58 +28412,58 @@
           throw new TypeError(`${path}.cost must contain at least one material`);
         }
         const materials = [];
-        for (const resourceId in cost) {
-          const materialPath = `${path}.cost.${resourceId}`;
-          const costPerCraft = readPositiveCost(cost[resourceId], materialPath);
+        for (const resourceId2 in cost) {
+          const materialPath = `${path}.cost.${resourceId2}`;
+          const costPerCraft = readPositiveCost(cost[resourceId2], materialPath);
           const resource = requireRecord(
-            session.resources[resourceId],
-            `resources.${resourceId}`
+            session.resources[resourceId2],
+            `resources.${resourceId2}`
           );
           const currentQuantity = requireNumber(
             resource["currentQuantity"],
-            `resources.${resourceId}.currentQuantity`
+            `resources.${resourceId2}.currentQuantity`
           );
           const maxQuantity = requireNumber(
             resource["maxQuantity"],
-            `resources.${resourceId}.maxQuantity`
+            `resources.${resourceId2}.maxQuantity`
           );
           const craftPreserve = requireNumber(
             craftable["craftPreserve"],
             `${path}.craftPreserve`
           );
           const base = {
-            resourceId,
+            resourceId: resourceId2,
             costPerCraft,
             currentQuantity,
             maxQuantity,
             craftPreserve
           };
-          if (callBoolean12(craftable, "isDemanded", path)) {
+          if (callBoolean13(craftable, "isDemanded", path)) {
             const thresholdPreserve = requireNumber(
               craftable["craftPreserve"],
               `${path}.craftPreserve`
             );
             const availableQuantity = currentQuantity < maxQuantity * (thresholdPreserve + 0.05) ? currentQuantity : requireNumber(
               resource["spareQuantity"],
-              `resources.${resourceId}.spareQuantity`
+              `resources.${resourceId2}.spareQuantity`
             );
             materials.push(
               Object.freeze({ ...base, mode: "demanded", availableQuantity })
             );
             continue;
           }
-          if (callBoolean12(resource, "isDemanded", `resources.${resourceId}`)) {
+          if (callBoolean13(resource, "isDemanded", `resources.${resourceId2}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
-          const cappedForPriority = callBoolean12(
+          const cappedForPriority = callBoolean13(
             resource,
             "isCapped",
-            `resources.${resourceId}`
+            `resources.${resourceId2}`
           );
           if (!cappedForPriority && requireNumber(
             resource["usefulRatio"],
-            `resources.${resourceId}.usefulRatio`
+            `resources.${resourceId2}.usefulRatio`
           ) < requireNumber(craftable["usefulRatio"], `${path}.usefulRatio`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
@@ -26166,7 +28478,7 @@
                 mode: "required",
                 availableQuantity: requireNumber(
                   resource["spareQuantity"],
-                  `resources.${resourceId}.spareQuantity`
+                  `resources.${resourceId2}.spareQuantity`
                 )
               })
             );
@@ -26174,15 +28486,15 @@
           }
           const resourceRequired = requireNumber(
             resource["storageRequired"],
-            `resources.${resourceId}.storageRequired`
+            `resources.${resourceId2}.storageRequired`
           );
-          if (currentQuantity < resourceRequired && !callBoolean12(resource, "isCapped", `resources.${resourceId}`)) {
+          if (currentQuantity < resourceRequired && !callBoolean13(resource, "isCapped", `resources.${resourceId2}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
           const rateOfChange = requireNumber(
             resource["rateOfChange"],
-            `resources.${resourceId}.rateOfChange`
+            `resources.${resourceId2}.rateOfChange`
           );
           const ticks = requireNumber(
             dependencies.ticksPerSecond(),
@@ -27601,7 +29913,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED8 = Object.freeze({
+  var SUCCEEDED9 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -27609,7 +29921,7 @@
     while (true) {
       const decision = planResearch(dependencies.reader.read(startIndex));
       if (decision === null) {
-        return SUCCEEDED8;
+        return SUCCEEDED9;
       }
       const result2 = dependencies.executor.execute(decision);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -27753,12 +30065,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED9 = Object.freeze({
+  var SUCCEEDED10 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision = planMutation(dependencies.reader.read());
-    return decision === null ? SUCCEEDED9 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED10 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -27794,7 +30106,7 @@
     }
     return priorityList;
   }
-  function readString2(record, key, path) {
+  function readString3(record, key, path) {
     const value = record[key];
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -27822,8 +30134,8 @@
       canGain,
       canPurge,
       mutationCost,
-      traitName: readString2(trait, "traitName", `${path}.traitName`),
-      displayName: readString2(trait, "name", `${path}.name`)
+      traitName: readString3(trait, "traitName", `${path}.traitName`),
+      displayName: readString3(trait, "name", `${path}.name`)
     });
   }
   function createMutationReader(dependencies) {
@@ -27960,810 +30272,6 @@
         return SUCCEEDED;
       }
     });
-  }
-
-  // src/automation/economy/power.ts
-  function createAutoPower({
-    getGame,
-    getSettings,
-    getState,
-    getResources,
-    getBuildings,
-    getJobs,
-    getWindow,
-    getPoly,
-    getBuildingManager,
-    getFleetManager,
-    getMechManager,
-    getWarManager,
-    consumptionBalanceMin,
-    Support: Support2,
-    getPowerOscLock,
-    getPowerWarnCap,
-    getCitadelConsumption: getCitadelConsumption2,
-    isHellSupressUseful: isHellSupressUseful2,
-    getGalaxyRegions: getGalaxyRegions2,
-    traitVal: traitVal2,
-    getAuthorityGarrisonRequirement: getAuthorityGarrisonRequirement2,
-    getHaveTech,
-    adjustSpire: adjustSpire2,
-    getBestSupplyRatio: getBestSupplyRatio2,
-    getHealingRate: getHealingRate2,
-    isHungryRace: isHungryRace2,
-    isPillarFinished: isPillarFinished3,
-    getJQuery,
-    getBuildingIds
-  }) {
-    return function autoPower2() {
-      const game2 = getGame();
-      const settings2 = getSettings();
-      const state2 = getState();
-      const resources2 = getResources();
-      const buildings2 = getBuildings();
-      const jobs2 = getJobs();
-      const window2 = getWindow();
-      const poly2 = getPoly();
-      const BuildingManager2 = getBuildingManager();
-      const FleetManager2 = getFleetManager();
-      const MechManager2 = getMechManager();
-      const WarManager2 = getWarManager();
-      const CONSUMPTION_BALANCE_MIN2 = consumptionBalanceMin;
-      const powerOscLock2 = getPowerOscLock();
-      const powerWarnCap2 = getPowerWarnCap();
-      const haveTech2 = getHaveTech();
-      const $2 = getJQuery();
-      const buildingIds2 = getBuildingIds();
-      if (!resources2.Power.isUnlocked()) {
-        return;
-      }
-      const pdbg = window2.powerDebug ?? false;
-      const WIDE_OSC_HOLD_TICKS = 10;
-      const debouncePower = (id, desired, current) => {
-        let d = powerOscLock2[id] ?? (powerOscLock2[id] = {});
-        if (d.locked !== void 0) {
-          if (desired === d.a || desired === d.b) {
-            return d.locked;
-          }
-          delete d.locked;
-        }
-        if (d.holdTicks) {
-          if (desired === d.a || desired === d.b) {
-            if (--d.holdTicks > 0) {
-              return current;
-            }
-            d.prev = current;
-            return desired;
-          }
-          d.holdTicks = 0;
-        }
-        if (desired === current) {
-          return desired;
-        }
-        if (d.prev === desired) {
-          d.a = current;
-          d.b = desired;
-          if (Math.abs(desired - current) === 1) {
-            d.locked = Math.max(current, desired);
-            return d.locked;
-          }
-          d.holdTicks = WIDE_OSC_HOLD_TICKS;
-          return current;
-        }
-        d.prev = current;
-        return desired;
-      };
-      let buildingList = BuildingManager2.managedStatePriorityList();
-      if (buildingList.length === 0) {
-        return;
-      }
-      let availablePower = resources2.Power.currentQuantity;
-      let missingProducer = {};
-      for (let i = 0; i < buildingList.length; i++) {
-        let building = buildingList[i];
-        availablePower += building.powered * building.stateOnCount;
-        for (let j = 0; j < building.consumption.length; j++) {
-          let resourceType = building.consumption[j];
-          if (building === buildings2.BeltSpaceStation && resourceType.resource === resources2.Belt_Support) {
-            resources2.Belt_Support.rateOfChange -= resources2.Belt_Support.maxQuantity;
-          } else {
-            resourceType.resource.rateOfChange += building.getFuelRate(j) * building.stateOnCount;
-          }
-          if (resourceType.resource instanceof Support2 && resourceType.rate < 0) {
-            missingProducer[resourceType.resource.id] = (missingProducer[resourceType.resource.id] ?? 0) + 1;
-          }
-        }
-      }
-      let reservedPower = 0;
-      let producerReserve = {};
-      for (let i = 0; i < buildingList.length; i++) {
-        let building = buildingList[i];
-        if (!building.produces || building.powered <= 0) {
-          continue;
-        }
-        let consumed = building.produces.some(
-          (res) => buildingList.some(
-            (b) => b.consumption.some((c) => c.resource === res && c.rate > 0)
-          )
-        );
-        if (consumed) {
-          let cap = settings2.buildingsLimitPowered ? Math.min(building.count, building.autoMax) : building.count;
-          let growth = building.produces.some((res) => res.isUseful()) ? 1 : 0;
-          let reserve = building.powered * Math.min(cap, building.stateOnCount + growth);
-          producerReserve[building._vueBinding] = reserve;
-          reservedPower += reserve;
-        }
-      }
-      let manageTransport = buildings2.LakeTransport.isSmartManaged() && buildings2.LakeBireme.isSmartManaged();
-      let manageSpire = buildings2.SpirePort.isSmartManaged() && buildings2.SpireBaseCamp.isSmartManaged();
-      for (let i = 0; i < buildingList.length; i++) {
-        let building = buildingList[i];
-        let maxStateOn = building.count;
-        let currentStateOn = building.stateOnCount;
-        if (!game2.global.settings.showGalactic && building._tab === "galaxy") {
-          maxStateOn = 0;
-        }
-        if (settings2.buildingsLimitPowered) {
-          maxStateOn = Math.min(maxStateOn, building.autoMax);
-        }
-        if (building === buildings2.Banquet) {
-          maxStateOn = Math.min(maxStateOn, 1);
-        }
-        reservedPower -= producerReserve[building._vueBinding] ?? 0;
-        if (building === buildings2.NeutronCitadel) {
-          while (maxStateOn > 0) {
-            if (availablePower - reservedPower >= getCitadelConsumption2(maxStateOn)) {
-              break;
-            } else {
-              maxStateOn--;
-            }
-          }
-        } else if (building.powered > 0 && building !== buildings2.RuinsHellForge) {
-          maxStateOn = Math.min(
-            maxStateOn,
-            (availablePower - reservedPower) / building.powered
-          );
-        }
-        if ((building === buildings2.SiriusAscensionTrigger || building === buildings2.RedAtmoTerraformer) && availablePower < building.powered) {
-          building.extraDescription = `Missing ${Math.ceil(
-            building.powered - availablePower
-          )} MW to power on<br>${building.extraDescription}`;
-        }
-        if (manageSpire && (building === buildings2.SpirePort || building === buildings2.SpireBaseCamp || building === buildings2.SpireMechBay)) {
-          continue;
-        }
-        if (manageTransport && (building === buildings2.LakeTransport || building === buildings2.LakeBireme)) {
-          continue;
-        }
-        if (building.is.smart && building.autoStateSmart) {
-          if (resources2.Power.currentQuantity <= resources2.Power.maxQuantity || haveTech2("replicator")) {
-            if (building === buildings2.BeltSpaceStation) {
-              let stationStorage = parseFloat(
-                game2.breakdown.c.Elerium?.[game2.loc("space_belt_station_title")] ?? 0
-              );
-              let extraStations = stationStorage > 0 ? Math.floor(
-                (resources2.Elerium.maxQuantity - resources2.Elerium.maxCost) / stationStorage
-              ) : 0;
-              let minersNeeded = buildings2.BeltEleriumShip.stateOnCount * 2 + buildings2.BeltIridiumShip.stateOnCount + buildings2.BeltIronShip.stateOnCount;
-              maxStateOn = Math.min(
-                maxStateOn,
-                Math.max(
-                  currentStateOn - extraStations,
-                  Math.ceil(minersNeeded / 3)
-                )
-              );
-            }
-            if (building === buildings2.CementPlant && jobs2.CementWorker.count === 0) {
-              maxStateOn = 0;
-            }
-            if (building === buildings2.Mine && jobs2.Miner.count === 0) {
-              maxStateOn = 0;
-            }
-            if (building === buildings2.CoalMine && jobs2.CoalMiner.count === 0) {
-              maxStateOn = 0;
-            }
-            if (building === buildings2.LakeCoolingTower && availablePower < building.powered * maxStateOn + Number(
-              (500 * 0.92 ** maxStateOn * (game2.global.race["emfield"] ? 1.5 : 1)).toFixed(2)
-            ) * Math.min(2, buildings2.LakeHarbor.count)) {
-              maxStateOn = 0;
-            }
-            if (building === buildings2.LakeHarbor && maxStateOn === 1 && building.count > 1) {
-              maxStateOn = 0;
-            }
-            if (building === buildings2.GasMining && !resources2.Helium_3.isUseful()) {
-              maxStateOn = Math.min(
-                maxStateOn,
-                resources2.Helium_3.getBusyWorkers(
-                  "space_gas_mining_title",
-                  currentStateOn
-                )
-              );
-              if (maxStateOn !== currentStateOn) {
-                resources2.Helium_3.incomeAdusted = true;
-              }
-            }
-            if (building === buildings2.GasMoonOilExtractor && !resources2.Oil.isUseful()) {
-              maxStateOn = Math.min(
-                maxStateOn,
-                resources2.Oil.getBusyWorkers(
-                  "space_gas_moon_oil_extractor_title",
-                  currentStateOn
-                )
-              );
-              if (maxStateOn !== currentStateOn) {
-                resources2.Oil.incomeAdusted = true;
-              }
-            }
-            if (building === buildings2.KuiperOrichalcum && !resources2.Orichalcum.isUseful()) {
-              maxStateOn = Math.min(
-                maxStateOn,
-                resources2.Orichalcum.getBusyWorkers(
-                  "space_kuiper_mine",
-                  currentStateOn,
-                  [resources2.Orichalcum.title]
-                )
-              );
-              if (maxStateOn !== currentStateOn) {
-                resources2.Orichalcum.incomeAdusted = true;
-              }
-            }
-            if (building === buildings2.KuiperUranium && !resources2.Uranium.isUseful()) {
-              maxStateOn = Math.min(
-                maxStateOn,
-                resources2.Uranium.getBusyWorkers(
-                  "space_kuiper_mine",
-                  currentStateOn,
-                  [resources2.Uranium.title]
-                )
-              );
-              if (maxStateOn !== currentStateOn) {
-                resources2.Uranium.incomeAdusted = true;
-              }
-            }
-            if (building === buildings2.KuiperNeutronium && !resources2.Neutronium.isUseful()) {
-              maxStateOn = Math.min(
-                maxStateOn,
-                resources2.Neutronium.getBusyWorkers(
-                  "space_kuiper_mine",
-                  currentStateOn,
-                  [resources2.Neutronium.title]
-                )
-              );
-              if (maxStateOn !== currentStateOn) {
-                resources2.Neutronium.incomeAdusted = true;
-              }
-            }
-            if (building === buildings2.KuiperElerium && !resources2.Elerium.isUseful()) {
-              maxStateOn = Math.min(
-                maxStateOn,
-                resources2.Elerium.getBusyWorkers(
-                  "space_kuiper_mine",
-                  currentStateOn,
-                  [resources2.Elerium.title]
-                )
-              );
-              if (maxStateOn !== currentStateOn) {
-                resources2.Elerium.incomeAdusted = true;
-              }
-            }
-          }
-          if (building === buildings2.TritonLander) {
-            if (buildings2.TritonFOB.stateOnCount < 1) {
-              maxStateOn = 0;
-            } else {
-              let authorityReserve = 0;
-              if (game2.global.race.universe === "evil" && resources2.Authority.isUnlocked()) {
-                const authorityRequirement = getAuthorityGarrisonRequirement2(
-                  WarManager2.currentCityGarrison
-                );
-                authorityReserve = authorityRequirement.status === "ready" ? Math.min(
-                  WarManager2.currentSoldiers,
-                  authorityRequirement.requiredGarrison
-                ) : WarManager2.currentSoldiers;
-              }
-              let dispatchSoldiers = WarManager2.currentSoldiers - authorityReserve - Math.max(0, WarManager2.wounded - Math.floor(getHealingRate2()));
-              let healthySquads = Math.floor(
-                dispatchSoldiers / (3 * traitVal2("high_pop", 0, 1))
-              );
-              maxStateOn = Math.min(
-                maxStateOn,
-                healthySquads
-                /*, maxLanders*/
-              );
-            }
-          }
-          if (building === buildings2.SiriusAscensionTrigger && building.powered > 0 && (!isPillarFinished3() || settings2.prestigeType !== "ascension")) {
-            maxStateOn = 0;
-          }
-          if (building === buildings2.RedAtmoTerraformer && settings2.prestigeType !== "terraform") {
-            maxStateOn = 0;
-          }
-          if (building === buildings2.BadlandsAttractor) {
-            let attractorsBest = 0;
-            if (game2.global.portal.fortress.threat < settings2.hellAttractorTopThreat && WarManager2.hellAssigned > 0) {
-              if (game2.global.portal.fortress.threat > settings2.hellAttractorBottomThreat && settings2.hellAttractorTopThreat > settings2.hellAttractorBottomThreat) {
-                attractorsBest = Math.floor(
-                  maxStateOn * (settings2.hellAttractorTopThreat - game2.global.portal.fortress.threat) / (settings2.hellAttractorTopThreat - settings2.hellAttractorBottomThreat)
-                );
-              } else {
-                attractorsBest = maxStateOn;
-              }
-            }
-            maxStateOn = Math.min(
-              maxStateOn,
-              currentStateOn + 1,
-              Math.max(currentStateOn - 1, attractorsBest)
-            );
-          }
-          if (building === buildings2.TouristCenter && !isHungryRace2() && resources2.Food.storageRatio < 0.7 && !resources2.Money.isUseful()) {
-            maxStateOn = Math.min(
-              maxStateOn,
-              resources2.Money.getBusyWorkers("tech_tourism", currentStateOn)
-            );
-            if (maxStateOn !== currentStateOn) {
-              resources2.Money.incomeAdusted = true;
-            }
-          }
-          if (building === buildings2.Mill && building.powered && resources2.Food.storageRatio < 0.7 && (jobs2.Farmer.count > 0 || jobs2.Hunter.count > 0)) {
-            maxStateOn = Math.min(
-              maxStateOn,
-              currentStateOn - (resources2.Power.currentQuantity - 5) / -building.powered
-            );
-          }
-          if (building === buildings2.ChthonianMineLayer) {
-            if (buildings2.ChthonianRaider.stateOnCount === 0 && buildings2.ChthonianExcavator.stateOnCount === 0 || buildings2.GatewayStarbase.stateOnCount === 0) {
-              maxStateOn = 0;
-            } else {
-              let chthonian = getGalaxyRegions2().find(
-                (region) => region.name === "gxy_chthonian"
-              );
-              let mineAdjust = (chthonian.piracy - chthonian.armada) / game2.actions.galaxy.gxy_chthonian.minelayer.ship.rating();
-              maxStateOn = Math.min(
-                maxStateOn,
-                currentStateOn + Math.ceil(mineAdjust)
-              );
-            }
-          }
-          if (building === buildings2.RuinsGuardPost) {
-            if (isHellSupressUseful2()) {
-              let postRating = game2.armyRating(traitVal2("high_pop", 0, 1), "hellArmy", 0) * traitVal2("holy", 1, "+");
-              let postAdjust = (5001 - poly2.hellSupression("ruins").rating) / postRating;
-              if (haveTech2("hell_gate")) {
-                postAdjust = Math.max(
-                  postAdjust,
-                  (7501 - poly2.hellSupression("gate").rating) / postRating
-                );
-              }
-              maxStateOn = Math.min(
-                maxStateOn,
-                currentStateOn + 1,
-                currentStateOn + Math.ceil(postAdjust)
-              );
-            } else {
-              maxStateOn = 0;
-            }
-          }
-          if (building === buildings2.SpireWaygate && (haveTech2("waygate", 3) || settings2.prestigeDemonicBomb && settings2.prestigeType === "demonic" && game2.global.stats.spire[poly2.universeAffix()]?.dlstr > 0 || settings2.autoMech && MechManager2.mechsPotential > settings2.mechWaygatePotential && !(settings2.autoPrestige && settings2.prestigeType === "demonic" && buildings2.SpireTower.count >= settings2.prestigeDemonicFloor))) {
-            maxStateOn = 0;
-          }
-          if ((building === buildings2.ScoutShip || building === buildings2.CorvetteShip) && !game2.global.tech.piracy && buildings2.GorddonEmbassy.isUnlocked()) {
-            maxStateOn = 0;
-          }
-          if (settings2.autoFleet && FleetManager2.neededShips?.hasOwnProperty(building.id)) {
-            maxStateOn = Math.min(
-              maxStateOn,
-              FleetManager2.neededShips[building.id]
-            );
-          }
-          if (building === buildings2.BeltEleriumShip && !resources2.Elerium.isUseful()) {
-            maxStateOn = Math.min(
-              maxStateOn,
-              resources2.Elerium.getBusyWorkers("job_space_miner", currentStateOn)
-            );
-            if (maxStateOn !== currentStateOn) {
-              resources2.Elerium.incomeAdusted = true;
-            }
-          }
-          if (building === buildings2.BeltIridiumShip && !resources2.Iridium.isUseful() && resources2.Elerium.isUnlocked()) {
-            maxStateOn = Math.min(
-              maxStateOn,
-              resources2.Iridium.getBusyWorkers("job_space_miner", currentStateOn)
-            );
-            if (maxStateOn !== currentStateOn) {
-              resources2.Iridium.incomeAdusted = true;
-            }
-          }
-          if (building === buildings2.BeltIronShip && !resources2.Iron.isUseful() && resources2.Elerium.isUnlocked()) {
-            maxStateOn = Math.min(
-              maxStateOn,
-              resources2.Iron.getBusyWorkers("job_space_miner", currentStateOn)
-            );
-            if (maxStateOn !== currentStateOn) {
-              resources2.Iron.incomeAdusted = true;
-            }
-          }
-          if (building === buildings2.MoonIridiumMine && !resources2.Iridium.isUseful()) {
-            maxStateOn = Math.min(
-              maxStateOn,
-              resources2.Iridium.getBusyWorkers(
-                "space_moon_iridium_mine_title",
-                currentStateOn
-              )
-            );
-            if (maxStateOn !== currentStateOn) {
-              resources2.Iridium.incomeAdusted = true;
-            }
-          }
-          if (building === buildings2.MoonHeliumMine && !resources2.Helium_3.isUseful()) {
-            maxStateOn = Math.min(
-              maxStateOn,
-              resources2.Helium_3.getBusyWorkers(
-                "space_moon_helium_mine_title",
-                currentStateOn
-              )
-            );
-            if (maxStateOn !== currentStateOn) {
-              resources2.Helium_3.incomeAdusted = true;
-            }
-          }
-          if (building === buildings2.Alien2ArmedMiner && !resources2.Bolognium.isUseful() && !resources2.Adamantite.isUseful() && !resources2.Iridium.isUseful()) {
-            let minShips = Math.max(
-              resources2.Bolognium.getBusyWorkers(
-                "galaxy_armed_miner_bd",
-                currentStateOn
-              ),
-              resources2.Adamantite.getBusyWorkers(
-                "galaxy_armed_miner_bd",
-                currentStateOn
-              ),
-              resources2.Iridium.getBusyWorkers(
-                "galaxy_armed_miner_bd",
-                currentStateOn
-              )
-            );
-            maxStateOn = Math.min(maxStateOn, minShips);
-            if (maxStateOn !== currentStateOn) {
-              resources2.Bolognium.incomeAdusted = true;
-              resources2.Adamantite.incomeAdusted = true;
-              resources2.Iridium.incomeAdusted = true;
-            }
-          }
-          if (building === buildings2.BologniumShip) {
-            if (buildings2.GorddonMission.isAutoBuildable() && buildings2.ScoutShip.count >= 2 && buildings2.CorvetteShip.count >= 1) {
-              maxStateOn = Math.min(
-                maxStateOn,
-                resources2.Gateway_Support.maxQuantity - (buildings2.ScoutShip.count + buildings2.CorvetteShip.count)
-              );
-            }
-            if (!resources2.Bolognium.isUseful()) {
-              maxStateOn = Math.min(
-                maxStateOn,
-                resources2.Bolognium.getBusyWorkers(
-                  "galaxy_bolognium_ship",
-                  currentStateOn
-                )
-              );
-            }
-            if (maxStateOn !== currentStateOn) {
-              resources2.Bolognium.incomeAdusted = true;
-            }
-          }
-          if (building === buildings2.ChthonianRaider) {
-            if (buildings2.GatewayStarbase.stateOnCount === 0) {
-              maxStateOn = 0;
-            } else if (!resources2.Vitreloy.isUseful() && !resources2.Polymer.isUseful() && !resources2.Neutronium.isUseful() && !resources2.Deuterium.isUseful()) {
-              let minShips = Math.max(
-                resources2.Vitreloy.getBusyWorkers(
-                  "galaxy_raider",
-                  currentStateOn
-                ),
-                resources2.Polymer.getBusyWorkers("galaxy_raider", currentStateOn),
-                resources2.Neutronium.getBusyWorkers(
-                  "galaxy_raider",
-                  currentStateOn
-                ),
-                resources2.Deuterium.getBusyWorkers(
-                  "galaxy_raider",
-                  currentStateOn
-                )
-              );
-              maxStateOn = Math.min(maxStateOn, minShips);
-            }
-            if (maxStateOn !== currentStateOn) {
-              resources2.Vitreloy.incomeAdusted = true;
-              resources2.Polymer.incomeAdusted = true;
-              resources2.Neutronium.incomeAdusted = true;
-              resources2.Deuterium.incomeAdusted = true;
-            }
-          }
-          if (building === buildings2.Alien1VitreloyPlant && !resources2.Vitreloy.isUseful()) {
-            maxStateOn = Math.min(
-              maxStateOn,
-              resources2.Vitreloy.getBusyWorkers(
-                "galaxy_vitreloy_plant_bd",
-                currentStateOn
-              )
-            );
-            if (maxStateOn !== currentStateOn) {
-              resources2.Vitreloy.incomeAdusted = true;
-            }
-          }
-          if (building === buildings2.ChthonianExcavator && !resources2.Orichalcum.isUseful()) {
-            maxStateOn = Math.min(
-              maxStateOn,
-              resources2.Orichalcum.getBusyWorkers(
-                "galaxy_excavator",
-                currentStateOn
-              )
-            );
-            if (maxStateOn !== currentStateOn) {
-              resources2.Orichalcum.incomeAdusted = true;
-            }
-          }
-          if (building === buildings2.EnceladusWaterFreighter && !resources2.Water.isUseful()) {
-            maxStateOn = Math.min(
-              maxStateOn,
-              resources2.Water.getBusyWorkers(
-                "space_water_freighter_title",
-                currentStateOn
-              )
-            );
-            if (maxStateOn !== currentStateOn) {
-              resources2.Water.incomeAdusted = true;
-            }
-          }
-          if (building === buildings2.NebulaHarvester && !resources2.Deuterium.isUseful() && !resources2.Helium_3.isUseful()) {
-            let minShips = Math.max(
-              resources2.Deuterium.getBusyWorkers(
-                "interstellar_harvester_title",
-                currentStateOn
-              ),
-              resources2.Helium_3.getBusyWorkers(
-                "interstellar_harvester_title",
-                currentStateOn
-              )
-            );
-            maxStateOn = Math.min(maxStateOn, minShips);
-            if (maxStateOn !== currentStateOn) {
-              resources2.Deuterium.incomeAdusted = true;
-              resources2.Helium_3.incomeAdusted = true;
-            }
-          }
-          if (building === buildings2.TauRedWomlingFarm) {
-            let crop_per_farm = haveTech2("womling_pop") ? 16 : 12;
-            if (haveTech2("womling_gene")) {
-              crop_per_farm += 4;
-            }
-            maxStateOn = Math.min(
-              maxStateOn,
-              Math.ceil(resources2.Womlings_Support.maxQuantity / crop_per_farm)
-            );
-          }
-          if (building === buildings2.TauRedOverseer) {
-            let loyal_base = game2.global.race["womling_friend"] ? 25 : game2.global.race["womling_god"] ? 75 : game2.global.race["womling_lord"] ? 0 : 0;
-            let loyal_per = building.definition.val();
-            let loyal_malus = game2.global.tauceti.womling_mine.miners;
-            let overseerNeeded = Math.ceil(
-              (100 - (loyal_base - loyal_malus)) / loyal_per
-            );
-            maxStateOn = Math.min(maxStateOn, overseerNeeded);
-          }
-          if (building === buildings2.TauRedWomlingFun) {
-            let morale_base = game2.global.race["womling_friend"] ? 75 : game2.global.race["womling_god"] ? 40 : game2.global.race["womling_lord"] ? 30 : 0;
-            let morale_per = building.definition.val();
-            let morale_malus = game2.global.tauceti.womling_mine.miners + game2.global.tauceti.womling_farm.farmers + game2.global.tauceti.overseer.injured;
-            let funNeeded = Math.ceil(
-              (100 - (morale_base - morale_malus)) / morale_per
-            );
-            maxStateOn = Math.min(maxStateOn, funNeeded);
-          }
-          if (building === buildings2.TauGasWhalingStation) {
-            let tbs = resources2.Tau_Belt_Support;
-            let shipEff = 1 - (1 - tbs.maxQuantity / tbs.currentQuantity) ** 1.4;
-            let blubInc = 8 * shipEff * buildings2.TauBeltWhalingShip.stateOnCount;
-            maxStateOn = Math.min(maxStateOn, Math.ceil(blubInc / 12));
-          }
-          if (building === buildings2.TauMiningPit) {
-            maxStateOn = Math.min(
-              maxStateOn,
-              Math.ceil(resources2.Population.maxQuantity / 6)
-            );
-          }
-          if (building === buildings2.AsphodelHarvester && !resources2.Asphodel_Powder.isUseful()) {
-            maxStateOn = Math.min(
-              maxStateOn,
-              resources2.Asphodel_Powder.getBusyWorkers(
-                "eden_asphodel_harvester_title",
-                currentStateOn
-              )
-            );
-            if (maxStateOn !== currentStateOn) {
-              resources2.Asphodel_Powder.incomeAdusted = true;
-            }
-          }
-        }
-        for (let j = 0; j < building.consumption.length; j++) {
-          let resourceType = building.consumption[j];
-          if (resourceType.rate > 0) {
-            if (!resourceType.resource.isUnlocked()) {
-              maxStateOn = 0;
-              break;
-            }
-            if (resourceType.resource === resources2.Food) {
-              if (game2.global.race["fasting"]) {
-                maxStateOn = 0;
-                break;
-              }
-              if (buildings2.Banquet.stateOnCount) {
-                continue;
-              }
-              if (resourceType.resource.storageRatio > 0.05 || isHungryRace2()) {
-                continue;
-              }
-            } else if (currentStateOn > 0 && !(resourceType.resource instanceof Support2) && (building.powered < 0 || resourceType.resource.storageRatio >= 0.95) && resourceType.resource.currentQuantity >= maxStateOn * CONSUMPTION_BALANCE_MIN2 * resourceType.rate) {
-              continue;
-            } else if (resourceType.resource === resources2.Tau_Belt_Support) {
-              continue;
-            }
-            let supportedAmount = resourceType.resource.rateOfChange / resourceType.rate;
-            if (resourceType.resource === resources2.Womlings_Support) {
-              supportedAmount = Math.ceil(supportedAmount);
-            }
-            maxStateOn = Math.min(maxStateOn, supportedAmount);
-            if (missingProducer[resourceType.resource.id]) {
-              building.extraDescription = `Make sure all ${resourceType.resource.title} producers are above consumers in buildings list!<br>${building.extraDescription}`;
-            }
-          } else {
-            if (missingProducer[resourceType.resource.id] && resourceType.rate < 0) {
-              missingProducer[resourceType.resource.id] -= 1;
-            }
-          }
-        }
-        if (building.powered < 0) {
-          maxStateOn = Math.max(maxStateOn, currentStateOn - 1);
-        }
-        maxStateOn = Math.max(0, Math.floor(maxStateOn));
-        maxStateOn = debouncePower(
-          building._vueBinding,
-          maxStateOn,
-          currentStateOn
-        );
-        let warnCap = powerWarnCap2[building._vueBinding];
-        if (warnCap) {
-          if (--warnCap.ticks <= 0) {
-            delete powerWarnCap2[building._vueBinding];
-          } else {
-            maxStateOn = Math.min(maxStateOn, warnCap.cap);
-          }
-        }
-        if (pdbg && maxStateOn !== currentStateOn) {
-          let cons = building.consumption.map((c, k) => {
-            let rate = building.getFuelRate(k);
-            return rate > 0 ? `${c.resource.id}: income=${c.resource.rateOfChange.toFixed(
-              2
-            )}, qty=${c.resource.currentQuantity.toFixed(
-              0
-            )}, perUnit=${rate.toFixed(2)}, reserveTo=${(maxStateOn * CONSUMPTION_BALANCE_MIN2 * c.rate).toFixed(0)}` : null;
-          }).filter(Boolean).join(" | ");
-          let d = maxStateOn - currentStateOn;
-          console.log(
-            `[power] ${building._vueBinding}: on ${currentStateOn}→${maxStateOn} (Δ${d >= 0 ? "+" : ""}${d}), powered=${building.powered}, availPower≈${availablePower.toFixed(1)}${reservedPower > 0 ? `, reserved≈${reservedPower.toFixed(1)}` : ""}${cons ? " || " + cons : ""}`
-          );
-        }
-        for (let k = 0; k < building.consumption.length; k++) {
-          let resourceType = building.consumption[k];
-          if (building === buildings2.BeltSpaceStation && resourceType.resource === resources2.Belt_Support) {
-            resources2.Belt_Support.rateOfChange += resources2.Belt_Support.maxQuantity;
-          } else {
-            resourceType.resource.rateOfChange -= building.getFuelRate(k) * maxStateOn;
-          }
-        }
-        building.tryAdjustState(maxStateOn - currentStateOn);
-        if (building === buildings2.NeutronCitadel) {
-          availablePower -= getCitadelConsumption2(maxStateOn);
-        } else {
-          availablePower -= building.powered * maxStateOn;
-        }
-      }
-      if (manageTransport && resources2.Lake_Support.rateOfChange > 0) {
-        let lakeSupport = resources2.Lake_Support.rateOfChange;
-        let rating = game2.global.blood["spire"] && game2.global.blood.spire >= 2 ? 0.8 : 0.85;
-        let bireme = buildings2.LakeBireme;
-        let transport = buildings2.LakeTransport;
-        let biremeCount = bireme.count;
-        let transportCount = transport.count;
-        while (biremeCount + transportCount > lakeSupport) {
-          let nextBireme = (1 - rating ** (biremeCount - 1)) * (transportCount * 5);
-          let nextTransport = (1 - rating ** biremeCount) * ((transportCount - 1) * 5);
-          if (nextBireme > nextTransport) {
-            biremeCount--;
-          } else {
-            transportCount--;
-          }
-        }
-        bireme.tryAdjustState(biremeCount - bireme.stateOnCount);
-        transport.tryAdjustState(transportCount - transport.stateOnCount);
-      }
-      if (manageSpire && resources2.Spire_Support.rateOfChange > 0) {
-        let buildAllowed = settings2.autoBuild && !(settings2.autoMech && MechManager2.isActive) && !(settings2.autoPrestige && settings2.prestigeType === "demonic" && settings2.prestigeDemonicFloor - buildings2.SpireTower.count <= buildings2.SpireMechBay.count);
-        const canBuild = (building, checkSmart) => buildAllowed && building.isAutoBuildable() && resources2.Money.maxQuantity >= (building.cost["Money"] ?? 0) && (!checkSmart || building.isSmartManaged());
-        let spireSupport = Math.floor(resources2.Spire_Support.rateOfChange);
-        let maxBay = Math.min(buildings2.SpireMechBay.count, spireSupport);
-        let currentPort = buildings2.SpirePort.count;
-        let currentCamp = buildings2.SpireBaseCamp.count;
-        let maxPorts = canBuild(buildings2.SpirePort) ? buildings2.SpirePort.autoMax : currentPort;
-        let maxCamps = canBuild(buildings2.SpireBaseCamp) ? buildings2.SpireBaseCamp.autoMax : currentCamp;
-        let nextMechCost = canBuild(buildings2.SpireMechBay, true) ? buildings2.SpireMechBay.cost["Supply"] : Number.MAX_SAFE_INTEGER;
-        let nextPuriCost = canBuild(buildings2.SpirePurifier, true) ? buildings2.SpirePurifier.cost["Supply"] : Number.MAX_SAFE_INTEGER;
-        let mechQueued = state2.queuedTargetsAll.includes(buildings2.SpireMechBay);
-        let puriQueued = state2.queuedTargetsAll.includes(buildings2.SpirePurifier);
-        let [bestSupplies, bestPort, bestBase] = getBestSupplyRatio2(
-          spireSupport,
-          maxPorts,
-          maxCamps
-        );
-        buildings2.SpirePurifier.extraDescription = `Supported Supplies: ${Math.floor(
-          bestSupplies
-        )}<br>${buildings2.SpirePurifier.extraDescription}`;
-        let nextCost = mechQueued && nextMechCost <= bestSupplies ? nextMechCost : puriQueued && nextPuriCost <= bestSupplies ? nextPuriCost : Math.min(nextMechCost, nextPuriCost);
-        MechManager2.saveSupply = nextCost <= bestSupplies;
-        let assignStorage = mechQueued || puriQueued;
-        for (let targetMech = maxBay; targetMech >= 0; targetMech--) {
-          let [targetSupplies, targetPort, targetCamp] = getBestSupplyRatio2(
-            spireSupport - targetMech,
-            maxPorts,
-            maxCamps
-          );
-          let missingStorage = targetPort > currentPort ? buildings2.SpirePort : targetCamp > currentCamp ? buildings2.SpireBaseCamp : null;
-          if (missingStorage) {
-            for (let i = maxBay; i >= 0; i--) {
-              let [storageSupplies, storagePort, storageCamp] = getBestSupplyRatio2(spireSupport - i, currentPort, currentCamp);
-              if (storageSupplies >= missingStorage.cost["Supply"]) {
-                adjustSpire2(i, storagePort, storageCamp);
-                break;
-              }
-            }
-            break;
-          }
-          if (resources2.Supply.currentQuantity >= targetSupplies) {
-            assignStorage = true;
-          }
-          if (!assignStorage || bestSupplies < nextCost || targetSupplies >= nextCost) {
-            adjustSpire2(targetMech, targetPort, targetCamp);
-            break;
-          }
-        }
-      }
-      resources2.Power.currentQuantity = availablePower;
-      resources2.Power.rateOfChange = availablePower;
-      let warnBuildings = $2("span.on.warn");
-      for (let i = 0; i < warnBuildings.length; i++) {
-        let building = buildingIds2[warnBuildings[i].parentNode.id];
-        if (building && building.autoStateEnabled && !building.is.ship) {
-          if (building === buildings2.BeltEleriumShip || building === buildings2.BeltIridiumShip || building === buildings2.BeltIronShip) {
-            let beltSupportNeeded = (buildings2.BeltEleriumShip.stateOnCount * 2 + buildings2.BeltIridiumShip.stateOnCount + buildings2.BeltIronShip.stateOnCount) * traitVal2("high_pop", 0, 1);
-            if (beltSupportNeeded <= resources2.Belt_Support.maxQuantity) {
-              continue;
-            }
-          }
-          if (building === buildings2.LakeBireme || building === buildings2.LakeTransport) {
-            let lakeSupportNeeded = buildings2.LakeBireme.stateOnCount + buildings2.LakeTransport.stateOnCount;
-            if (lakeSupportNeeded <= resources2.Lake_Support.maxQuantity) {
-              continue;
-            }
-          }
-          if (building === buildings2.TauBeltWhalingShip || building === buildings2.TauBeltMiningShip) {
-            continue;
-          }
-          building.tryAdjustState(-1);
-          powerWarnCap2[building._vueBinding] = {
-            cap: building.stateOnCount,
-            ticks: WIDE_OSC_HOLD_TICKS
-          };
-          delete powerOscLock2[building._vueBinding];
-          break;
-        }
-      }
-    };
   }
 
   // src/automation/economy/storage.ts
@@ -36689,12 +38197,12 @@
       let summary = $2(
         '<div class="has-text-warning" style="margin:8px 0; font-weight:bold;"></div>'
       ).appendTo(modal);
-      let identity = $2(
+      let identity2 = $2(
         '<details style="margin:4px 0;"><summary class="has-text-caution">Race names and description</summary></details>'
       ).appendTo(modal);
       let form = $2(
         '<div class="fields" style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;"></div>'
-      ).appendTo(identity);
+      ).appendTo(identity2);
       const addTextField = (key, label, max) => {
         let row = $2('<label style="display:flex; gap:8px;"></label>').appendTo(
           form
@@ -36718,7 +38226,7 @@
       addTextField("dwarf", "Dwarf planet", 20);
       let descRow = $2(
         '<label style="display:block; margin-top:6px;"></label>'
-      ).appendTo(identity);
+      ).appendTo(identity2);
       $2("<span>Description</span>").appendTo(descRow);
       $2(
         '<textarea class="textarea" maxlength="255" style="width:100%; min-height:55px;"></textarea>'
@@ -36728,7 +38236,7 @@
       }).appendTo(descRow);
       let outerNames = $2(
         '<details style="margin-top:6px;"><summary class="has-text-caution">Outer-system names</summary><div class="fields" style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;"></div></details>'
-      ).appendTo(identity);
+      ).appendTo(identity2);
       let outerForm = outerNames.find("div");
       const addOuterField = (key, label) => {
         let row = $2('<label style="display:flex; gap:8px;"></label>').appendTo(
@@ -36786,7 +38294,7 @@
       effectPanel.text("Hover or select a trait to see its current-rank effect.");
       let filter = $2(
         '<input class="input" type="search" placeholder="Filter traits..." style="width:100%; margin:4px 0 8px;" />'
-      ).appendTo(identity);
+      ).appendTo(identity2);
       let traitsArea = $2(
         '<div class="script-custom-traits" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; max-height:52vh; overflow-y:scroll; overflow-x:hidden; scrollbar-gutter:stable;"></div>'
       ).appendTo(modal);
@@ -42486,39 +43994,42 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       reader: researchReader,
       executor: researchExecutor
     });
-    var powerOscLock = {};
-    var powerWarnCap = {};
-    const autoPower = createAutoPower({
+    const powerWarnings = createPowerWarningSource(
+      () => window.document,
+      () => window
+    );
+    const powerAdapter = createPowerAdapter({
       getGame: () => game,
       getSettings: () => settings,
       getState: () => state,
       getResources: () => resources,
       getBuildings: () => buildings,
       getJobs: () => jobs,
-      getWindow: () => window,
       getPoly: () => poly,
       getBuildingManager: () => BuildingManager,
       getFleetManager: () => FleetManager,
       getMechManager: () => MechManager,
       getWarManager: () => WarManager,
-      consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
-      Support,
-      getPowerOscLock: () => powerOscLock,
-      getPowerWarnCap: () => powerWarnCap,
-      getCitadelConsumption,
-      isHellSupressUseful,
+      consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
+      isSupportResource: (value) => value instanceof Support,
+      readDebugEnabled: () => powerWarnings.readDebugEnabled(),
+      isHellSuppressionUseful: isHellSupressUseful,
       getGalaxyRegions,
-      traitVal,
+      traitValue: traitVal,
       getAuthorityGarrisonRequirement,
-      getHaveTech: () => haveTech,
-      adjustSpire,
-      getBestSupplyRatio,
+      haveTech,
       getHealingRate,
       isHungryRace,
       isPillarFinished,
-      getJQuery: () => $,
-      getBuildingIds: () => buildingIds
+      getBuildingIds: () => buildingIds,
+      log: (message) => console.log(message)
     });
+    const powerAutomation = createPowerAutomation({
+      reader: powerAdapter.reader,
+      executor: powerAdapter.executor,
+      warnings: powerWarnings
+    });
+    const autoPower = () => powerAutomation.run();
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         powerSupport: {
