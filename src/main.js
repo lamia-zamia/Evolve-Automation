@@ -259,7 +259,11 @@ import { createAutoGenetics } from "./automation/traits/genetics.ts";
 import { createAutoMerc } from "./automation/combat/mercenary.ts";
 import { createAutoPsychic } from "./automation/traits/psychic.ts";
 import { createAutoOcularPowers } from "./automation/traits/ocular.ts";
-import { createAutoMinorTrait } from "./automation/traits/minor-trait.ts";
+import { runMinorTraitAutomation } from "./application/minor-trait.ts";
+import {
+  createMinorTraitCommandExecutor,
+  createMinorTraitReader,
+} from "./adapters/evolve/minor-trait.ts";
 import { runTriggerAutomation } from "./application/trigger.ts";
 import {
   createTriggerCommandExecutor,
@@ -3677,10 +3681,19 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     expandStorage,
   });
 
-  const autoMinorTrait = createAutoMinorTrait({
+  const minorTraitReader = createMinorTraitReader({
     getMinorTraitManager: () => MinorTraitManager,
     getResources: () => resources,
   });
+  const minorTraitExecutor = createMinorTraitCommandExecutor({
+    getMinorTraitManager: () => MinorTraitManager,
+    getResources: () => resources,
+  });
+  const autoMinorTrait = () =>
+    runMinorTraitAutomation({
+      reader: minorTraitReader,
+      executor: minorTraitExecutor,
+    });
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {

@@ -23410,36 +23410,208 @@
     };
   }
 
-  // src/automation/traits/minor-trait.ts
-  function createAutoMinorTrait({
-    getMinorTraitManager,
-    getResources
-  }) {
-    return function autoMinorTrait2() {
-      const MinorTraitManager2 = getMinorTraitManager();
-      const resources2 = getResources();
-      let m = MinorTraitManager2;
-      if (!m.isUnlocked()) {
-        return;
+  // src/domain/minor-trait.ts
+  function summarizeMinorTraits(input) {
+    if (!input.unlocked || input.traits.length === 0) {
+      return null;
+    }
+    return Object.freeze({
+      traits: input.traits,
+      totalWeighting: input.traits.reduce(
+        (total, trait) => total + trait.weighting,
+        0
+      ),
+      totalGeneCost: input.traits.reduce(
+        (total, trait) => total + trait.initialGeneCost,
+        0
+      )
+    });
+  }
+  function planMinorTraitPurchase(summary, candidate) {
+    const summaryTrait = summary.traits[candidate.index];
+    if (summaryTrait === void 0 || summaryTrait.traitName !== candidate.traitName) {
+      return null;
+    }
+    if (!(summaryTrait.weighting / summary.totalWeighting >= candidate.geneCost / summary.totalGeneCost && candidate.currentGenes >= candidate.geneCost)) {
+      return null;
+    }
+    return Object.freeze({
+      traitName: candidate.traitName,
+      geneCost: candidate.geneCost,
+      expectedGenes: candidate.currentGenes
+    });
+  }
+
+  // src/application/minor-trait.ts
+  var SUCCEEDED2 = Object.freeze({
+    status: "succeeded"
+  });
+  function staleCandidate(index, expectedTraitName, actualTraitName) {
+    return {
+      status: "stale",
+      failure: {
+        code: "stale-minor-trait-candidate",
+        message: "managed minor-trait list changed",
+        context: { index, expectedTraitName, actualTraitName }
       }
-      let traitList2 = m.managedPriorityList();
-      if (traitList2.length === 0) {
-        return;
-      }
-      let totalWeighting = 0;
-      let totalGeneCost = 0;
-      traitList2.forEach((trait) => {
-        totalWeighting += trait.weighting;
-        totalGeneCost += trait.geneCost();
-      });
-      traitList2.forEach((trait) => {
-        let traitCost = trait.geneCost();
-        if (trait.weighting / totalWeighting >= traitCost / totalGeneCost && resources2.Genes.currentQuantity >= traitCost) {
-          m.buyTrait(trait.traitName);
-          resources2.Genes.currentQuantity -= traitCost;
-        }
-      });
     };
+  }
+  function runMinorTraitAutomation(dependencies) {
+    const summary = summarizeMinorTraits(dependencies.reader.readSummary());
+    if (summary === null) {
+      return SUCCEEDED2;
+    }
+    for (let index = 0; index < summary.traits.length; index++) {
+      const expected = summary.traits[index];
+      if (expected === void 0) {
+        continue;
+      }
+      const candidate = dependencies.reader.readCandidate(index);
+      if (candidate === null || candidate.traitName !== expected.traitName) {
+        return staleCandidate(
+          index,
+          expected.traitName,
+          candidate?.traitName ?? null
+        );
+      }
+      const decision = planMinorTraitPurchase(summary, candidate);
+      if (decision === null) {
+        continue;
+      }
+      const outcome = dependencies.executor.execute(decision);
+      if (outcome.status !== "succeeded") {
+        return outcome;
+      }
+    }
+    return SUCCEEDED2;
+  }
+
+  // src/adapters/evolve/minor-trait.ts
+  function readManagedList(manager) {
+    const managedPriorityList = requireFunction(
+      manager["managedPriorityList"],
+      "MinorTraitManager.managedPriorityList"
+    );
+    const list = Reflect.apply(managedPriorityList, manager, []);
+    if (!Array.isArray(list)) {
+      throw new TypeError(
+        "MinorTraitManager.managedPriorityList() must return an array"
+      );
+    }
+    return list;
+  }
+  function readTraitName(trait, path) {
+    const traitName = trait["traitName"];
+    if (typeof traitName !== "string") {
+      throw new TypeError(`${path}.traitName must be a string`);
+    }
+    return traitName;
+  }
+  function readGeneCost(trait, path) {
+    const geneCost = requireFunction(trait["geneCost"], `${path}.geneCost`);
+    const cost = requireNumber(
+      Reflect.apply(geneCost, trait, []),
+      `${path}.geneCost()`
+    );
+    if (cost < 0) {
+      throw new TypeError(`${path}.geneCost() must be non-negative`);
+    }
+    return cost;
+  }
+  function readGenes(getResources) {
+    const resources2 = requireRecord(getResources(), "resources");
+    const genes = requireRecord(resources2["Genes"], "resources.Genes");
+    return requireNumber(
+      genes["currentQuantity"],
+      "resources.Genes.currentQuantity"
+    );
+  }
+  function createMinorTraitReader(dependencies) {
+    return Object.freeze({
+      readSummary() {
+        const manager = requireRecord(
+          dependencies.getMinorTraitManager(),
+          "MinorTraitManager"
+        );
+        const isUnlocked = requireFunction(
+          manager["isUnlocked"],
+          "MinorTraitManager.isUnlocked"
+        );
+        if (!Reflect.apply(isUnlocked, manager, [])) {
+          return Object.freeze({ unlocked: false, traits: Object.freeze([]) });
+        }
+        const list = readManagedList(manager);
+        const traits = list.map((value, index) => {
+          const path = `MinorTraitManager.managedPriorityList()[${index}]`;
+          const trait = requireRecord(value, path);
+          return Object.freeze({
+            index,
+            traitName: readTraitName(trait, path),
+            weighting: requireNumber(trait["weighting"], `${path}.weighting`),
+            initialGeneCost: readGeneCost(trait, path)
+          });
+        });
+        return Object.freeze({ unlocked: true, traits: Object.freeze(traits) });
+      },
+      readCandidate(index) {
+        if (!Number.isSafeInteger(index) || index < 0) {
+          throw new TypeError("minor-trait index must be a non-negative integer");
+        }
+        const manager = requireRecord(
+          dependencies.getMinorTraitManager(),
+          "MinorTraitManager"
+        );
+        const list = readManagedList(manager);
+        if (index >= list.length) {
+          return null;
+        }
+        const path = `MinorTraitManager.managedPriorityList()[${index}]`;
+        const trait = requireRecord(list[index], path);
+        const geneCost = readGeneCost(trait, path);
+        return Object.freeze({
+          index,
+          traitName: readTraitName(trait, path),
+          geneCost,
+          currentGenes: readGenes(dependencies.getResources)
+        });
+      }
+    });
+  }
+  function createMinorTraitCommandExecutor(dependencies) {
+    return Object.freeze({
+      execute(decision) {
+        if (!Number.isFinite(decision.geneCost) || decision.geneCost < 0) {
+          return rejected2(
+            "invalid-minor-trait-cost",
+            "minor-trait gene cost must be a non-negative finite number"
+          );
+        }
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const genes = requireRecord(resources2["Genes"], "resources.Genes");
+        const actualGenes = requireNumber(
+          genes["currentQuantity"],
+          "resources.Genes.currentQuantity"
+        );
+        if (actualGenes !== decision.expectedGenes) {
+          return stale("stale-minor-trait-genes", "Genes balance changed", {
+            traitName: decision.traitName,
+            expected: decision.expectedGenes,
+            actual: actualGenes
+          });
+        }
+        const manager = requireRecord(
+          dependencies.getMinorTraitManager(),
+          "MinorTraitManager"
+        );
+        const buyTrait = requireFunction(
+          manager["buyTrait"],
+          "MinorTraitManager.buyTrait"
+        );
+        Reflect.apply(buyTrait, manager, [decision.traitName]);
+        genes["currentQuantity"] = actualGenes - decision.geneCost;
+        return SUCCEEDED;
+      }
+    });
   }
 
   // src/domain/trigger.ts
@@ -23455,7 +23627,7 @@
   }
 
   // src/application/trigger.ts
-  var SUCCEEDED2 = Object.freeze({
+  var SUCCEEDED3 = Object.freeze({
     status: "succeeded"
   });
   function result(outcome, active) {
@@ -23467,7 +23639,7 @@
     while (true) {
       const decision = planTrigger(dependencies.reader.read(index));
       if (decision === null) {
-        return result(SUCCEEDED2, active);
+        return result(SUCCEEDED3, active);
       }
       if (decision.kind === "click") {
         const execution = dependencies.executor.execute(decision);
@@ -25737,7 +25909,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED3 = Object.freeze({
+  var SUCCEEDED4 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -25745,7 +25917,7 @@
     while (true) {
       const decision = planResearch(dependencies.reader.read(startIndex));
       if (decision === null) {
-        return SUCCEEDED3;
+        return SUCCEEDED4;
       }
       const result2 = dependencies.executor.execute(decision);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -40469,9 +40641,17 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getFleetManagerOuter: () => FleetManagerOuter,
       expandStorage
     });
-    const autoMinorTrait = createAutoMinorTrait({
+    const minorTraitReader = createMinorTraitReader({
       getMinorTraitManager: () => MinorTraitManager,
       getResources: () => resources
+    });
+    const minorTraitExecutor = createMinorTraitCommandExecutor({
+      getMinorTraitManager: () => MinorTraitManager,
+      getResources: () => resources
+    });
+    const autoMinorTrait = () => runMinorTraitAutomation({
+      reader: minorTraitReader,
+      executor: minorTraitExecutor
     });
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
