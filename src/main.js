@@ -266,7 +266,9 @@ import {
   createWishReader,
 } from "./adapters/evolve/wish.ts";
 import { createWishControls } from "./adapters/browser/wish-controls.ts";
-import { createAutoGenetics } from "./automation/traits/genetics.ts";
+import { runGeneticsAutomation } from "./application/genetics.ts";
+import { createGeneticsAdapter } from "./adapters/evolve/genetics.ts";
+import { createGeneticsControls } from "./adapters/browser/genetics-controls.ts";
 import { createAutoMerc } from "./automation/combat/mercenary.ts";
 import { createAutoPsychic } from "./automation/traits/psychic.ts";
 import { runOcularPowerAutomation } from "./application/ocular-power.ts";
@@ -3525,14 +3527,23 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const autoWish = () =>
     runWishAutomation({ reader: wishReader, executor: wishExecutor });
 
-  const autoGenetics = createAutoGenetics({
-    KeyManager,
+  const geneticsControls = createGeneticsControls({
+    getVueById,
+    getKeyManager: () => KeyManager,
+  });
+  const geneticsAdapter = createGeneticsAdapter({
     getGame: () => game,
     getSettings: () => settings,
     getResources: () => resources,
-    getVueById,
-    ticksPerSecond,
+    getTicksPerSecond: () => ticksPerSecond(),
+    controls: geneticsControls,
   });
+  const autoGenetics = () =>
+    runGeneticsAutomation({
+      reader: geneticsAdapter.reader,
+      executor: geneticsAdapter.executor,
+      controls: geneticsControls,
+    });
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {

@@ -24030,59 +24030,425 @@
     });
   }
 
-  // src/automation/traits/genetics.ts
-  function createAutoGenetics({
-    KeyManager: KeyManager2,
-    getGame,
-    getSettings,
-    getResources,
-    getVueById: getVueById2,
-    ticksPerSecond: ticksPerSecond2
-  }) {
-    return function autoGenetics2() {
-      const game2 = getGame();
-      const settings2 = getSettings();
-      const resources2 = getResources();
-      let genetics = game2.global.tech.genetics;
-      let mutations = game2.global.race.mutation;
-      if (!genetics) {
-        return;
-      }
-      let geneticsVue = getVueById2("arpaSequence");
-      let seq = game2.global.arpa.sequence;
-      if (!geneticsVue || !seq) {
-        return;
-      }
-      if (settings2.geneticsSequence === "enabled" && !seq.on || settings2.geneticsSequence === "disabled" && seq.on || settings2.geneticsSequence === "decode" && (seq.on && mutations >= 1 || !seq.on && mutations < 1)) {
-        geneticsVue.toggle();
-      }
-      if (genetics < 5) {
-        return;
-      }
-      if (settings2.geneticsBoost === "enabled" && !seq.boost || settings2.geneticsBoost === "disabled" && seq.boost) {
-        geneticsVue.booster();
-      }
-      if (genetics < 6) {
-        return;
-      }
-      if (settings2.geneticsAssemble === "enabled" && !seq.auto || settings2.geneticsAssemble === "disabled" && seq.auto) {
-        geneticsVue.auto_seq();
-      }
-      if (settings2.geneticsAssemble !== "auto" || resources2.Knowledge.currentQuantity < 2e5 || resources2.Knowledge.isDemanded()) {
-        return;
-      }
-      let nextTickKnowledge = resources2.Knowledge.currentQuantity + resources2.Knowledge.rateOfChange / ticksPerSecond2();
-      let overflowKnowledge = nextTickKnowledge - resources2.Knowledge.maxQuantity;
-      if (overflowKnowledge <= 0) {
-        return;
-      }
-      let genesToAssemble = Math.ceil(overflowKnowledge / 2e5);
-      resources2.Knowledge.currentQuantity -= 2e5 * genesToAssemble;
-      resources2.Genes.currentQuantity += 1 * genesToAssemble;
-      for (let m of KeyManager2.click(genesToAssemble)) {
-        geneticsVue.novo();
-      }
+  // src/domain/genetics.ts
+  function configuredTarget(mode) {
+    if (mode === "enabled") return true;
+    if (mode === "disabled") return false;
+    return null;
+  }
+  function planGenetics(input) {
+    if (!input.available) return Object.freeze([]);
+    const decisions = [];
+    const sequenceTarget = input.sequenceMode === "decode" ? input.mutationCount < 1 : configuredTarget(input.sequenceMode);
+    if (sequenceTarget !== null && sequenceTarget !== input.sequenceOn) {
+      decisions.push(
+        Object.freeze({
+          kind: "set-genetics-toggle",
+          toggle: "sequence",
+          expected: input.sequenceOn,
+          enabled: sequenceTarget
+        })
+      );
+    }
+    if (input.technologyLevel < 5) return Object.freeze(decisions);
+    const boostTarget = configuredTarget(input.boostMode);
+    if (boostTarget !== null && boostTarget !== input.boostOn) {
+      decisions.push(
+        Object.freeze({
+          kind: "set-genetics-toggle",
+          toggle: "boost",
+          expected: input.boostOn,
+          enabled: boostTarget
+        })
+      );
+    }
+    if (input.technologyLevel < 6) return Object.freeze(decisions);
+    const autoTarget = configuredTarget(input.assembleMode);
+    if (autoTarget !== null && autoTarget !== input.autoOn) {
+      decisions.push(
+        Object.freeze({
+          kind: "set-genetics-toggle",
+          toggle: "auto",
+          expected: input.autoOn,
+          enabled: autoTarget
+        })
+      );
+    }
+    const assembly = input.assembly;
+    if (input.assembleMode !== "auto" || assembly === null || assembly.knowledgeCurrent < 2e5 || assembly.knowledgeDemanded) {
+      return Object.freeze(decisions);
+    }
+    const nextTickKnowledge = assembly.knowledgeCurrent + assembly.knowledgeRate / assembly.ticksPerSecond;
+    const overflowKnowledge = nextTickKnowledge - assembly.knowledgeMaximum;
+    if (overflowKnowledge <= 0) return Object.freeze(decisions);
+    const count = Math.ceil(overflowKnowledge / 2e5);
+    decisions.push(
+      Object.freeze({
+        kind: "assemble-genes",
+        count,
+        expectedKnowledge: assembly.knowledgeCurrent,
+        expectedGenes: assembly.genesCurrent,
+        knowledgeAfter: assembly.knowledgeCurrent - 2e5 * count,
+        genesAfter: assembly.genesCurrent + count
+      })
+    );
+    return Object.freeze(decisions);
+  }
+
+  // src/application/genetics.ts
+  var SUCCEEDED5 = Object.freeze({
+    status: "succeeded"
+  });
+  function runGeneticsAutomation(dependencies) {
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED5;
+    if (!dependencies.controls.capture()) {
+      return {
+        status: "stale",
+        failure: {
+          code: "genetics-controls-unavailable",
+          message: "genetics controls are unavailable"
+        }
+      };
+    }
+    for (const decision of planGenetics(dependencies.reader.readPlan())) {
+      const outcome = dependencies.executor.execute(decision);
+      if (outcome.status !== "succeeded") return outcome;
+    }
+    return SUCCEEDED5;
+  }
+
+  // src/adapters/evolve/genetics.ts
+  function readGlobal2(gameValue) {
+    const game2 = requireRecord(gameValue, "game");
+    return requireRecord(game2["global"], "game.global");
+  }
+  function readTechnologyLevel2(global) {
+    const tech = requireRecord(global["tech"], "game.global.tech");
+    const value = tech["genetics"];
+    if (value === void 0 || value === null || value === 0) return 0;
+    return requireNumber(value, "game.global.tech.genetics");
+  }
+  function requireMode(value, path) {
+    if (typeof value !== "string")
+      throw new TypeError(`${path} must be a string`);
+    return value;
+  }
+  function emptyInput2(level) {
+    return Object.freeze({
+      available: false,
+      technologyLevel: level,
+      mutationCount: 0,
+      sequenceMode: "none",
+      sequenceOn: false,
+      boostMode: "none",
+      boostOn: false,
+      assembleMode: "none",
+      autoOn: false,
+      assembly: null
+    });
+  }
+  function readAssembly(dependencies) {
+    const resources2 = requireRecord(dependencies.getResources(), "resources");
+    const knowledge = requireRecord(
+      resources2["Knowledge"],
+      "resources.Knowledge"
+    );
+    const knowledgeCurrent = requireNumber(
+      knowledge["currentQuantity"],
+      "resources.Knowledge.currentQuantity"
+    );
+    if (knowledgeCurrent < 2e5) {
+      return {
+        input: Object.freeze({
+          knowledgeCurrent,
+          knowledgeRate: 0,
+          knowledgeMaximum: 0,
+          knowledgeDemanded: false,
+          genesCurrent: 0,
+          ticksPerSecond: 1
+        }),
+        resources: resources2,
+        knowledge,
+        genes: null
+      };
+    }
+    const isDemanded = requireFunction(
+      knowledge["isDemanded"],
+      "resources.Knowledge.isDemanded"
+    );
+    const knowledgeDemanded = Boolean(Reflect.apply(isDemanded, knowledge, []));
+    if (knowledgeDemanded) {
+      return {
+        input: Object.freeze({
+          knowledgeCurrent,
+          knowledgeRate: 0,
+          knowledgeMaximum: 0,
+          knowledgeDemanded: true,
+          genesCurrent: 0,
+          ticksPerSecond: 1
+        }),
+        resources: resources2,
+        knowledge,
+        genes: null
+      };
+    }
+    const genes = requireRecord(resources2["Genes"], "resources.Genes");
+    const ticksPerSecond2 = requireNumber(
+      dependencies.getTicksPerSecond(),
+      "ticksPerSecond"
+    );
+    if (ticksPerSecond2 <= 0) {
+      throw new TypeError("ticksPerSecond must be greater than zero");
+    }
+    return {
+      input: Object.freeze({
+        knowledgeCurrent,
+        knowledgeRate: requireNumber(
+          knowledge["rateOfChange"],
+          "resources.Knowledge.rateOfChange"
+        ),
+        knowledgeMaximum: requireNumber(
+          knowledge["maxQuantity"],
+          "resources.Knowledge.maxQuantity"
+        ),
+        knowledgeDemanded: false,
+        genesCurrent: requireNumber(
+          genes["currentQuantity"],
+          "resources.Genes.currentQuantity"
+        ),
+        ticksPerSecond: ticksPerSecond2
+      }),
+      resources: resources2,
+      knowledge,
+      genes
     };
+  }
+  function createGeneticsAdapter(dependencies) {
+    let session = null;
+    const reader = Object.freeze({
+      readGate() {
+        const level = readTechnologyLevel2(readGlobal2(dependencies.getGame()));
+        if (level === 0) session = null;
+        return Object.freeze({ unlocked: level !== 0 });
+      },
+      readPlan() {
+        const global = readGlobal2(dependencies.getGame());
+        const level = readTechnologyLevel2(global);
+        if (level === 0) {
+          session = null;
+          return emptyInput2(level);
+        }
+        const arpa = requireRecord(global["arpa"], "game.global.arpa");
+        const rawSequence = arpa["sequence"];
+        if (typeof rawSequence !== "object" || rawSequence === null) {
+          session = null;
+          return emptyInput2(level);
+        }
+        const sequence = requireRecord(rawSequence, "game.global.arpa.sequence");
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const sequenceMode = requireMode(
+          settings2["geneticsSequence"],
+          "settings.geneticsSequence"
+        );
+        const sequenceOn = requireBoolean(
+          sequence["on"],
+          "game.global.arpa.sequence.on"
+        );
+        let mutationCount = 0;
+        if (sequenceMode === "decode") {
+          const race = requireRecord(global["race"], "game.global.race");
+          mutationCount = requireNumber(
+            race["mutation"],
+            "game.global.race.mutation"
+          );
+        }
+        const boostMode = level >= 5 ? requireMode(settings2["geneticsBoost"], "settings.geneticsBoost") : "none";
+        const boostOn = level >= 5 ? requireBoolean(sequence["boost"], "game.global.arpa.sequence.boost") : false;
+        const assembleMode = level >= 6 ? requireMode(
+          settings2["geneticsAssemble"],
+          "settings.geneticsAssemble"
+        ) : "none";
+        const autoOn = level >= 6 ? requireBoolean(sequence["auto"], "game.global.arpa.sequence.auto") : false;
+        const assemblyData = level >= 6 && assembleMode === "auto" ? readAssembly(dependencies) : null;
+        session = Object.freeze({
+          sequence,
+          resources: assemblyData?.resources ?? null,
+          knowledge: assemblyData?.knowledge ?? null,
+          genes: assemblyData?.genes ?? null
+        });
+        return Object.freeze({
+          available: true,
+          technologyLevel: level,
+          mutationCount,
+          sequenceMode,
+          sequenceOn,
+          boostMode,
+          boostOn,
+          assembleMode,
+          autoOn,
+          assembly: assemblyData?.input ?? null
+        });
+      }
+    });
+    const executeToggle = (decision, active) => {
+      const propertyByToggle = {
+        sequence: "on",
+        boost: "boost",
+        auto: "auto"
+      };
+      const property = propertyByToggle[decision.toggle];
+      const actual = requireBoolean(
+        active.sequence[property],
+        `game.global.arpa.sequence.${property}`
+      );
+      if (actual !== decision.expected) {
+        return stale("genetics-toggle-changed", "genetics toggle changed", {
+          toggle: decision.toggle,
+          expected: decision.expected,
+          actual
+        });
+      }
+      if (actual === decision.enabled) return SUCCEEDED;
+      return dependencies.controls.toggle(decision.toggle) ? SUCCEEDED : stale(
+        "genetics-toggle-unavailable",
+        `genetics ${decision.toggle} control became unavailable`
+      );
+    };
+    const executeAssembly = (decision, active) => {
+      if (!Number.isSafeInteger(decision.count) || decision.count <= 0 || !Number.isFinite(decision.knowledgeAfter) || !Number.isFinite(decision.genesAfter)) {
+        return rejected2(
+          "invalid-genetics-assembly",
+          "genetics assembly must have a positive safe count and finite balances"
+        );
+      }
+      if (active.resources === null || active.knowledge === null || active.genes === null || dependencies.getResources() !== active.resources) {
+        return stale("genetics-resources-changed", "genetics resources changed");
+      }
+      const actualKnowledge = requireNumber(
+        active.knowledge["currentQuantity"],
+        "resources.Knowledge.currentQuantity"
+      );
+      const actualGenes = requireNumber(
+        active.genes["currentQuantity"],
+        "resources.Genes.currentQuantity"
+      );
+      if (actualKnowledge !== decision.expectedKnowledge || actualGenes !== decision.expectedGenes) {
+        return stale("genetics-balances-changed", "genetics balances changed", {
+          expectedKnowledge: decision.expectedKnowledge,
+          actualKnowledge,
+          expectedGenes: decision.expectedGenes,
+          actualGenes
+        });
+      }
+      active.knowledge["currentQuantity"] = decision.knowledgeAfter;
+      active.genes["currentQuantity"] = decision.genesAfter;
+      if (!dependencies.controls.assemble(decision.count)) {
+        return stale(
+          "genetics-assembly-unavailable",
+          "genetics assembly control became unavailable"
+        );
+      }
+      return SUCCEEDED;
+    };
+    const executor = Object.freeze({
+      execute(decision) {
+        const active = session;
+        if (active === null) {
+          return stale("genetics-session-missing", "genetics session is missing");
+        }
+        const global = readGlobal2(dependencies.getGame());
+        if (readTechnologyLevel2(global) === 0) {
+          return stale("genetics-locked", "genetics became unavailable");
+        }
+        const arpa = requireRecord(global["arpa"], "game.global.arpa");
+        if (arpa["sequence"] !== active.sequence) {
+          return stale("genetics-sequence-changed", "genetics sequence changed");
+        }
+        if (decision.kind === "set-genetics-toggle") {
+          if (!["sequence", "boost", "auto"].includes(decision.toggle) || typeof decision.expected !== "boolean" || typeof decision.enabled !== "boolean") {
+            return rejected2(
+              "invalid-genetics-toggle",
+              "genetics toggle decision is invalid"
+            );
+          }
+          return executeToggle(decision, active);
+        }
+        if (decision.kind === "assemble-genes") {
+          return executeAssembly(decision, active);
+        }
+        return rejected2(
+          "invalid-genetics-decision",
+          "genetics decision is invalid"
+        );
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
+  // src/adapters/browser/genetics-controls.ts
+  var METHOD_BY_TOGGLE = Object.freeze({
+    sequence: "toggle",
+    boost: "booster",
+    auto: "auto_seq"
+  });
+  function createGeneticsControls(dependencies) {
+    let view = null;
+    return Object.freeze({
+      capture() {
+        const value = dependencies.getVueById("arpaSequence");
+        if (!value) {
+          view = null;
+          return false;
+        }
+        view = requireRecord(value, "arpaSequence Vue view");
+        return true;
+      },
+      toggle(toggle) {
+        if (view === null) return false;
+        const methodName = METHOD_BY_TOGGLE[toggle];
+        if (typeof view[methodName] !== "function") return false;
+        const method = requireFunction(
+          view[methodName],
+          `arpaSequence Vue view.${methodName}`
+        );
+        Reflect.apply(method, view, []);
+        return true;
+      },
+      assemble(count) {
+        if (view === null) return false;
+        if (typeof view["novo"] !== "function") return false;
+        const novo = requireFunction(view["novo"], "arpaSequence Vue view.novo");
+        const keyManager = requireRecord(
+          dependencies.getKeyManager(),
+          "KeyManager"
+        );
+        const click = requireFunction(keyManager["click"], "KeyManager.click");
+        const rawIterable = Reflect.apply(click, keyManager, [count]);
+        const iterable = requireRecord(rawIterable, "KeyManager.click() result");
+        const iterator = requireFunction(
+          iterable[Symbol.iterator],
+          "KeyManager.click() result[Symbol.iterator]"
+        );
+        const iteratorValue = Reflect.apply(iterator, iterable, []);
+        const iteratorRecord = requireRecord(
+          iteratorValue,
+          "KeyManager.click() iterator"
+        );
+        const next = requireFunction(
+          iteratorRecord["next"],
+          "KeyManager.click() iterator.next"
+        );
+        while (true) {
+          const result2 = requireRecord(
+            Reflect.apply(next, iteratorRecord, []),
+            "KeyManager.click() iterator result"
+          );
+          if (result2["done"]) break;
+          Reflect.apply(novo, view, []);
+        }
+        return true;
+      }
+    });
   }
 
   // src/automation/combat/mercenary.ts
@@ -24233,11 +24599,11 @@
   }
 
   // src/application/ocular-power.ts
-  var SUCCEEDED5 = Object.freeze({
+  var SUCCEEDED6 = Object.freeze({
     status: "succeeded"
   });
   function runOcularPowerAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED5;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED6;
     if (!dependencies.controls.capture()) {
       return {
         status: "stale",
@@ -24251,7 +24617,7 @@
       const outcome = dependencies.executor.execute(decision);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED5;
+    return SUCCEEDED6;
   }
 
   // src/adapters/evolve/ocular-power.ts
@@ -24467,7 +24833,7 @@
   }
 
   // src/application/minor-trait.ts
-  var SUCCEEDED6 = Object.freeze({
+  var SUCCEEDED7 = Object.freeze({
     status: "succeeded"
   });
   function staleCandidate(index, expectedTraitName, actualTraitName) {
@@ -24483,7 +24849,7 @@
   function runMinorTraitAutomation(dependencies) {
     const summary = summarizeMinorTraits(dependencies.reader.readSummary());
     if (summary === null) {
-      return SUCCEEDED6;
+      return SUCCEEDED7;
     }
     for (let index = 0; index < summary.traits.length; index++) {
       const expected = summary.traits[index];
@@ -24507,7 +24873,7 @@
         return outcome;
       }
     }
-    return SUCCEEDED6;
+    return SUCCEEDED7;
   }
 
   // src/adapters/evolve/minor-trait.ts
@@ -24651,7 +25017,7 @@
   }
 
   // src/application/trigger.ts
-  var SUCCEEDED7 = Object.freeze({
+  var SUCCEEDED8 = Object.freeze({
     status: "succeeded"
   });
   function result(outcome, active) {
@@ -24663,7 +25029,7 @@
     while (true) {
       const decision = planTrigger(dependencies.reader.read(index));
       if (decision === null) {
-        return result(SUCCEEDED7, active);
+        return result(SUCCEEDED8, active);
       }
       if (decision.kind === "click") {
         const execution = dependencies.executor.execute(decision);
@@ -25272,13 +25638,13 @@
   }
 
   // src/application/replicator.ts
-  var SUCCEEDED8 = Object.freeze({
+  var SUCCEEDED9 = Object.freeze({
     status: "succeeded"
   });
   function runReplicatorAutomation(dependencies) {
     const planningInput = dependencies.selectionReader.readPlanningInput();
     if (!planningInput.initialised) {
-      return SUCCEEDED8;
+      return SUCCEEDED9;
     }
     const priorityPlan = planReplicatorPriority(planningInput);
     if (priorityPlan !== null) {
@@ -25294,18 +25660,18 @@
       }
     }
     if (!planningInput.assignGovernorTask) {
-      return SUCCEEDED8;
+      return SUCCEEDED9;
     }
     if (!shouldConfigureReplicatorGovernor(
       dependencies.governorGameReader.readGate()
     ) || !dependencies.governorOfficeReader.open()) {
-      return SUCCEEDED8;
+      return SUCCEEDED9;
     }
     const taskPlan = planReplicatorGovernorTask(
       dependencies.governorGameReader.readTasks()
     );
     if (taskPlan.status === "unavailable") {
-      return SUCCEEDED8;
+      return SUCCEEDED9;
     }
     if (taskPlan.assignment !== null) {
       const outcome = dependencies.governorExecutor.execute(taskPlan.assignment);
@@ -25315,10 +25681,10 @@
     }
     const settings2 = dependencies.governorOfficeReader.readSettings();
     if (settings2 === null) {
-      return SUCCEEDED8;
+      return SUCCEEDED9;
     }
     const settingsDecision = planReplicatorGovernorSettings(settings2);
-    return settingsDecision === null ? SUCCEEDED8 : dependencies.governorExecutor.execute(settingsDecision);
+    return settingsDecision === null ? SUCCEEDED9 : dependencies.governorExecutor.execute(settingsDecision);
   }
 
   // src/adapters/evolve/replicator.ts
@@ -25767,20 +26133,20 @@
   }
 
   // src/application/market.ts
-  var SUCCEEDED9 = Object.freeze({
+  var SUCCEEDED10 = Object.freeze({
     status: "succeeded"
   });
   function runMarketAutomation(dependencies, bulkSell = false, ignoreSellRatio = false) {
     const gate = dependencies.reader.readGate();
     if (!gate.unlocked) {
-      return SUCCEEDED9;
+      return SUCCEEDED10;
     }
     dependencies.tradeRoutes.adjust();
     if (gate.noTrade) {
-      return SUCCEEDED9;
+      return SUCCEEDED10;
     }
     const session = dependencies.reader.readSession();
-    let outcome = SUCCEEDED9;
+    let outcome = SUCCEEDED10;
     for (let index = 0; ; index++) {
       const sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
       if (sellInput === null) {
@@ -27012,7 +27378,7 @@
   );
 
   // src/application/power.ts
-  var SUCCEEDED10 = Object.freeze({
+  var SUCCEEDED11 = Object.freeze({
     status: "succeeded"
   });
   function createPowerAutomation(dependencies) {
@@ -27021,7 +27387,7 @@
       run() {
         const plan = planPowerCycle(dependencies.reader.readCycle(), state2);
         if (plan.decision === null) {
-          return SUCCEEDED10;
+          return SUCCEEDED11;
         }
         const cycleOutcome = dependencies.executor.execute(plan.decision);
         if (cycleOutcome.status !== "succeeded") {
@@ -27034,7 +27400,7 @@
           )
         );
         if (warning === null) {
-          return SUCCEEDED10;
+          return SUCCEEDED11;
         }
         const warningOutcome = dependencies.executor.execute(warning);
         if (warningOutcome.status !== "succeeded") {
@@ -27045,7 +27411,7 @@
           warning.binding,
           dependencies.reader.readStateOn(warning.binding)
         );
-        return SUCCEEDED10;
+        return SUCCEEDED11;
       },
       readState() {
         return state2;
@@ -28823,7 +29189,7 @@
   });
 
   // src/application/storage-allocation.ts
-  var SUCCEEDED11 = Object.freeze({
+  var SUCCEEDED12 = Object.freeze({
     status: "succeeded"
   });
   function createStorageAllocationAutomation(dependencies) {
@@ -28831,9 +29197,9 @@
     return Object.freeze({
       run() {
         const rawPlan = planStorageAllocation(dependencies.reader.read());
-        if (rawPlan === null) return SUCCEEDED11;
+        if (rawPlan === null) return SUCCEEDED12;
         if (rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild)) {
-          return SUCCEEDED11;
+          return SUCCEEDED12;
         }
         const finalized = finalizeStorageAllocation(rawPlan, state2);
         const outcome = dependencies.executor.execute(finalized.decision);
@@ -28870,7 +29236,7 @@
     const value = resource["autoSellRatio"];
     return value === void 0 || value === null ? 0 : requireNumber(value, `${path}.autoSellRatio`);
   }
-  function emptyInput2(initialized) {
+  function emptyInput3(initialized) {
     return Object.freeze({
       initialized,
       crateValue: 0,
@@ -28931,7 +29297,7 @@
         );
         if (!callBoolean14(manager, "initStorage", "StorageManager")) {
           session = null;
-          return emptyInput2(false);
+          return emptyInput3(false);
         }
         const crateValue = finiteProperty2(
           manager,
@@ -28946,7 +29312,7 @@
         if (crateValue <= 0 || containerValue <= 0) {
           session = null;
           return Object.freeze({
-            ...emptyInput2(true),
+            ...emptyInput3(true),
             crateValue,
             containerValue
           });
@@ -29040,7 +29406,7 @@
         if (managedIds.size === 0) {
           session = null;
           return Object.freeze({
-            ...emptyInput2(true),
+            ...emptyInput3(true),
             crateValue,
             containerValue,
             resources: Object.freeze([...inputs.values()]),
@@ -29510,12 +29876,12 @@
   }
 
   // src/application/galaxy-market.ts
-  var SUCCEEDED12 = Object.freeze({
+  var SUCCEEDED13 = Object.freeze({
     status: "succeeded"
   });
   function runGalaxyMarketAutomation(dependencies) {
     const decision = planGalaxyMarket(dependencies.reader.read());
-    return decision === null ? SUCCEEDED12 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED13 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/galaxy-market.ts
@@ -29559,7 +29925,7 @@
       sellResourceId: requireId3(sell["res"], `${path}.sell.res`)
     });
   }
-  function emptyInput3() {
+  function emptyInput4() {
     return Object.freeze({
       initialized: false,
       maximum: 0,
@@ -29579,7 +29945,7 @@
         const settings2 = requireRecord(dependencies.getSettings(), "settings");
         if (!callBoolean15(manager, "initIndustry", "GalaxyTradeManager")) {
           session = null;
-          return emptyInput3();
+          return emptyInput4();
         }
         const rawOffers = dependencies.getOffers();
         if (!Array.isArray(rawOffers)) {
@@ -29931,12 +30297,12 @@
   }
 
   // src/application/gather-resources.ts
-  var SUCCEEDED13 = Object.freeze({
+  var SUCCEEDED14 = Object.freeze({
     status: "succeeded"
   });
   function runGatherResourcesAutomation(dependencies) {
     const decision = planGatherResources(dependencies.reader.read());
-    return decision === null ? SUCCEEDED13 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED14 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/gather-resources.ts
@@ -29973,7 +30339,7 @@
       `resources.${id}.currentQuantity`
     );
   }
-  function emptyInput4() {
+  function emptyInput5() {
     const empty = Object.freeze({ currentQuantity: 0, maxQuantity: 0 });
     return Object.freeze({
       stopped: true,
@@ -30036,7 +30402,7 @@
           );
           if (quarryCount > 0 || Boolean(race["sappy"])) {
             session = null;
-            return emptyInput4();
+            return emptyInput5();
           }
         }
         const resourcesPerClick = requireNumber(
@@ -30557,17 +30923,17 @@
   }
 
   // src/application/craft.ts
-  var SUCCEEDED14 = Object.freeze({
+  var SUCCEEDED15 = Object.freeze({
     status: "succeeded"
   });
   function runCraftAutomation(dependencies) {
     if (!shouldRunCraft(dependencies.reader.readGate())) {
-      return SUCCEEDED14;
+      return SUCCEEDED15;
     }
     for (let index = 0; ; index++) {
       const candidate = dependencies.reader.readCandidate(index);
       if (candidate === null) {
-        return SUCCEEDED14;
+        return SUCCEEDED15;
       }
       const decision = planCraft(candidate);
       if (decision === null) {
@@ -32172,7 +32538,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED15 = Object.freeze({
+  var SUCCEEDED16 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -32180,7 +32546,7 @@
     while (true) {
       const decision = planResearch(dependencies.reader.read(startIndex));
       if (decision === null) {
-        return SUCCEEDED15;
+        return SUCCEEDED16;
       }
       const result2 = dependencies.executor.execute(decision);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -32324,12 +32690,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED16 = Object.freeze({
+  var SUCCEEDED17 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision = planMutation(dependencies.reader.read());
-    return decision === null ? SUCCEEDED16 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED17 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -45820,13 +46186,21 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       })
     });
     const autoWish = () => runWishAutomation({ reader: wishReader, executor: wishExecutor });
-    const autoGenetics = createAutoGenetics({
-      KeyManager,
+    const geneticsControls = createGeneticsControls({
+      getVueById,
+      getKeyManager: () => KeyManager
+    });
+    const geneticsAdapter = createGeneticsAdapter({
       getGame: () => game,
       getSettings: () => settings,
       getResources: () => resources,
-      getVueById,
-      ticksPerSecond
+      getTicksPerSecond: () => ticksPerSecond(),
+      controls: geneticsControls
+    });
+    const autoGenetics = () => runGeneticsAutomation({
+      reader: geneticsAdapter.reader,
+      executor: geneticsAdapter.executor,
+      controls: geneticsControls
     });
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
