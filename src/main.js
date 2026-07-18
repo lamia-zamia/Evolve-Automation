@@ -293,6 +293,9 @@ import {
 import { createPowerAutomation } from "./application/power.ts";
 import { createPowerAdapter } from "./adapters/evolve/power.ts";
 import { createPowerWarningSource } from "./adapters/browser/power-warnings.ts";
+import { createStorageAllocationAutomation } from "./application/storage-allocation.ts";
+import { createStorageAllocationAdapter } from "./adapters/evolve/storage-allocation.ts";
+import { createStorageDebugSource } from "./adapters/browser/storage-debug.ts";
 import { createAutoGalaxyMarket } from "./automation/economy/galaxy-market.ts";
 import { createAutoGatherResources } from "./automation/economy/gather-resources.ts";
 import { createAutoEvolution } from "./automation/progression/evolution.ts";
@@ -321,7 +324,6 @@ import {
   createMutationCommandExecutor,
   createMutationReader,
 } from "./adapters/evolve/mutation.ts";
-import { createAutoStorage } from "./automation/economy/storage.ts";
 import { createAutoFleetOuter } from "./automation/combat/fleet-outer.ts";
 import { createAutoFleet } from "./automation/combat/fleet.ts";
 import { createAutoMech } from "./automation/combat/mech.ts";
@@ -3739,19 +3741,25 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  // TODO: Implement preserving of old layout, to reduce flickering
-  const autoStorage = createAutoStorage({
+  const storageDebug = createStorageDebugSource(() => window);
+  const storageAllocationAdapter = createStorageAllocationAdapter({
     getStorageManager: () => StorageManager,
     getGame: () => game,
     getSettings: () => settings,
     getState: () => state,
     getResources: () => resources,
-    getWindow: () => window,
     getBuildingManager: () => BuildingManager,
     getProjectManager: () => ProjectManager,
     getFleetManagerOuter: () => FleetManagerOuter,
-    expandStorage,
+    readDebugEnabled: () => storageDebug.readEnabled(),
+    log: (message) => console.log(message),
   });
+  const storageAllocationAutomation = createStorageAllocationAutomation({
+    reader: storageAllocationAdapter.reader,
+    executor: storageAllocationAdapter.executor,
+    expansion: { expand: expandStorage },
+  });
+  const autoStorage = () => storageAllocationAutomation.run();
 
   const minorTraitReader = createMinorTraitReader({
     getMinorTraitManager: () => MinorTraitManager,

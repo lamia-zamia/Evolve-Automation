@@ -5622,7 +5622,7 @@
 
   // src/domain/combat/galaxy-piracy.ts
   function anyUseful(demand, resourceIds) {
-    return resourceIds.some((resourceId2) => demand[resourceId2]);
+    return resourceIds.some((resourceId3) => demand[resourceId3]);
   }
   function decideGalaxyPiracyProtection(input) {
     const { producers, usefulResources } = input;
@@ -5659,12 +5659,12 @@
       "Orichalcum",
       "Vitreloy"
     ];
-    function resourceBenefitsFromPiracy(resourceId2) {
-      const resource = getResources()[resourceId2];
+    function resourceBenefitsFromPiracy(resourceId3) {
+      const resource = getResources()[resourceId3];
       if (resource?.isUseful() !== true) {
         return false;
       }
-      return resourceId2 === "Knowledge" || Number.isFinite(resource.storageRatio) && resource.storageRatio < 0.99;
+      return resourceId3 === "Knowledge" || Number.isFinite(resource.storageRatio) && resource.storageRatio < 0.99;
     }
     function gorddonTradeTargetsUsefulResource() {
       const trade = getGame().global.galaxy?.trade;
@@ -5695,9 +5695,9 @@
       const buildings2 = getBuildings();
       const instinct = game2.global.race["instinct"];
       const usefulResources = Object.fromEntries(
-        piracyResources.map((resourceId2) => [
-          resourceId2,
-          resourceBenefitsFromPiracy(resourceId2)
+        piracyResources.map((resourceId3) => [
+          resourceId3,
+          resourceBenefitsFromPiracy(resourceId3)
         ])
       );
       const protection = decideGalaxyPiracyProtection({
@@ -13438,7 +13438,7 @@
   function findCostConflict(input) {
     const resourceNames = [];
     const targetNames = [];
-    let resourceId2 = "";
+    let resourceId3 = "";
     let targetName = "";
     let targetCause = "";
     for (const reservedTarget of input.reservedTargets) {
@@ -13458,7 +13458,7 @@
         if (resource === void 0 || reservedCost === void 0 || actionCost === void 0 || reservedResourceId === "Knowledge" && !blockKnowledge || reservedCost <= resource.currentQuantity - actionCost) {
           continue;
         }
-        resourceId2 = reservedResourceId;
+        resourceId3 = reservedResourceId;
         targetName = reservedTarget.name;
         targetCause = reservedTarget.cause;
         if (!resourceNames.includes(resource.name)) {
@@ -13469,10 +13469,10 @@
         }
       }
     }
-    if (resourceId2 === "") return null;
+    if (resourceId3 === "") return null;
     return Object.freeze({
       status: "conflict",
-      resourceId: resourceId2,
+      resourceId: resourceId3,
       targetName,
       targetCause,
       resourceNames: Object.freeze(resourceNames),
@@ -13492,12 +13492,12 @@
   }
   function freezeCostMap(rawCost, allowZero) {
     const entries = [];
-    for (const resourceId2 of Object.keys(rawCost)) {
-      const cost = rawCost[resourceId2];
+    for (const resourceId3 of Object.keys(rawCost)) {
+      const cost = rawCost[resourceId3];
       if (!isFiniteNumber(cost) || (allowZero ? cost < 0 : cost <= 0)) {
         return void 0;
       }
-      entries.push([resourceId2, cost]);
+      entries.push([resourceId3, cost]);
     }
     return Object.freeze(Object.fromEntries(entries));
   }
@@ -13527,16 +13527,16 @@
         if (cost === void 0) {
           return unavailable("invalid-target", { targetIndex });
         }
-        for (const resourceId2 of Object.keys(cost)) {
-          if (resources2[resourceId2] !== void 0) continue;
-          const rawResource = rawResources[resourceId2];
+        for (const resourceId3 of Object.keys(cost)) {
+          if (resources2[resourceId3] !== void 0) continue;
+          const rawResource = rawResources[resourceId3];
           if (!isRecord(rawResource) || typeof rawResource["name"] !== "string" || !isFiniteNumber(rawResource["currentQuantity"])) {
             return unavailable("invalid-resource", {
-              resourceId: resourceId2,
+              resourceId: resourceId3,
               targetIndex
             });
           }
-          resources2[resourceId2] = Object.freeze({
+          resources2[resourceId3] = Object.freeze({
             name: rawResource["name"],
             currentQuantity: rawResource["currentQuantity"]
           });
@@ -13672,9 +13672,9 @@
   function isNonNegativeSafeInteger2(value) {
     return Number.isSafeInteger(value) && value >= 0;
   }
-  function unavailableLimit(reason, resourceId2) {
+  function unavailableLimit(reason, resourceId3) {
     return Object.freeze(
-      resourceId2 === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId: resourceId2 }
+      resourceId3 === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId: resourceId3 }
     );
   }
   function readPlannerLimitInput(rawTarget, rawResources) {
@@ -13696,28 +13696,28 @@
       if (!isRecord3(rawCosts)) return unavailableLimit("invalid-target");
       if (!isRecord3(rawResources)) return unavailableLimit("invalid-resource");
       const requirements = [];
-      for (const resourceId2 of Object.keys(rawCosts)) {
-        const requiredQuantity = rawCosts[resourceId2];
+      for (const resourceId3 of Object.keys(rawCosts)) {
+        const requiredQuantity = rawCosts[resourceId3];
         if (!isFiniteNumber2(requiredQuantity) || requiredQuantity < 0) {
-          return unavailableLimit("invalid-target", resourceId2);
+          return unavailableLimit("invalid-target", resourceId3);
         }
-        const rawResource = rawResources[resourceId2];
+        const rawResource = rawResources[resourceId3];
         if (!isRecord3(rawResource) || typeof rawResource["title"] !== "string" || typeof rawResource["isUnlocked"] !== "function") {
-          return unavailableLimit("invalid-resource", resourceId2);
+          return unavailableLimit("invalid-resource", resourceId3);
         }
         const currentQuantity = rawResource["currentQuantity"];
         const maximumQuantity = rawResource["maxQuantity"];
         const income = rawResource["income"];
         if (!isFiniteNumber2(currentQuantity) || !isFiniteNumber2(maximumQuantity) || !isFiniteNumber2(income)) {
-          return unavailableLimit("invalid-resource", resourceId2);
+          return unavailableLimit("invalid-resource", resourceId3);
         }
         const unlocked = rawResource["isUnlocked"].call(rawResource);
         if (typeof unlocked !== "boolean") {
-          return unavailableLimit("invalid-resource", resourceId2);
+          return unavailableLimit("invalid-resource", resourceId3);
         }
         requirements.push(
           Object.freeze({
-            resourceId: resourceId2,
+            resourceId: resourceId3,
             resourceTitle: rawResource["title"],
             requiredQuantity,
             currentQuantity,
@@ -14141,17 +14141,17 @@
   }
 
   // src/adapters/evolve/storage-expansion-reader.ts
-  function readView(resources2, resourceId2, storagePerUnit) {
-    const view = requireRecord(resources2[resourceId2], `resources.${resourceId2}`);
+  function readView(resources2, resourceId3, storagePerUnit) {
+    const view = requireRecord(resources2[resourceId3], `resources.${resourceId3}`);
     const costRecord = requireRecord(
       view["cost"],
-      `resources.${resourceId2}.cost`
+      `resources.${resourceId3}.cost`
     );
     const costs = [];
     for (const key in costRecord) {
       const costPerUnit = requireNumber(
         costRecord[key],
-        `resources.${resourceId2}.cost.${key}`
+        `resources.${resourceId3}.cost.${key}`
       );
       const costResource = requireRecord(resources2[key], `resources.${key}`);
       const available = requireNumber(
@@ -14161,14 +14161,14 @@
       costs.push(Object.freeze({ resourceId: key, costPerUnit, available }));
     }
     return Object.freeze({
-      resourceId: resourceId2,
+      resourceId: resourceId3,
       maxQuantity: requireNumber(
         view["maxQuantity"],
-        `resources.${resourceId2}.maxQuantity`
+        `resources.${resourceId3}.maxQuantity`
       ),
       currentQuantity: requireNumber(
         view["currentQuantity"],
-        `resources.${resourceId2}.currentQuantity`
+        `resources.${resourceId3}.currentQuantity`
       ),
       storagePerUnit,
       costs: Object.freeze(costs)
@@ -14729,21 +14729,21 @@
       const resource = requireRecord(entry["resource"], `${path}.resource`);
       const cost = requireRecord(resource["cost"], `${path}.resource.cost`);
       const costs = [];
-      for (const resourceId2 in cost) {
+      for (const resourceId3 in cost) {
         const material = requireRecord(
-          resources2[resourceId2],
-          `resources.${resourceId2}`
+          resources2[resourceId3],
+          `resources.${resourceId3}`
         );
         costs.push(
           Object.freeze({
-            resourceId: resourceId2,
+            resourceId: resourceId3,
             amount: requireNumber(
-              cost[resourceId2],
-              `${path}.resource.cost.${resourceId2}`
+              cost[resourceId3],
+              `${path}.resource.cost.${resourceId3}`
             ),
             materialMaxQuantity: requireNumber(
               material["maxQuantity"],
-              `resources.${resourceId2}.maxQuantity`
+              `resources.${resourceId3}.maxQuantity`
             )
           })
         );
@@ -14769,8 +14769,8 @@
       const costPath = Array.isArray(value) ? `${path}[${index}]` : path;
       const cost = requireRecord(entry, costPath);
       const resource = requireRecord(cost["resource"], `${costPath}.resource`);
-      const resourceId2 = resource["id"];
-      if (typeof resourceId2 !== "string") {
+      const resourceId3 = resource["id"];
+      if (typeof resourceId3 !== "string") {
         throw new TypeError(`${costPath}.resource.id must be a string`);
       }
       const minRate = cost["minRateOfChange"];
@@ -14778,7 +14778,7 @@
         quantity: requireNumber(cost["quantity"], `${costPath}.quantity`),
         // Legacy `cost.minRateOfChange ?? 0`.
         minRateOfChange: minRate == null ? 0 : requireNumber(minRate, `${costPath}.minRateOfChange`),
-        resourceId: resourceId2,
+        resourceId: resourceId3,
         resourceMaxQuantity: requireNumber(
           resource["maxQuantity"],
           `${costPath}.resource.maxQuantity`
@@ -14956,8 +14956,8 @@
     const { settings: settings2, consumptionBalanceTarget: balance } = input;
     const requests = [];
     const removedMissionIndices = [];
-    const request = (resourceId2, amount) => {
-      requests.push({ resourceId: resourceId2, amount });
+    const request = (resourceId3, amount) => {
+      requests.push({ resourceId: resourceId3, amount });
     };
     if (input.inflationMoney !== null) {
       request("Money", input.inflationMoney);
@@ -15586,9 +15586,9 @@
   function isFiniteNumber4(value) {
     return typeof value === "number" && Number.isFinite(value);
   }
-  function unavailableCost(reason, resourceId2) {
+  function unavailableCost(reason, resourceId3) {
     return Object.freeze(
-      resourceId2 === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId: resourceId2 }
+      resourceId3 === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId: resourceId3 }
     );
   }
   function unavailableTarget(reason, context = {}) {
@@ -15599,22 +15599,22 @@
       if (!isRecord6(rawCost)) return unavailableCost("invalid-cost");
       if (!isRecord6(rawResources)) return unavailableCost("invalid-resource");
       const requirements = [];
-      for (const resourceId2 in rawCost) {
-        const requiredQuantity = rawCost[resourceId2];
+      for (const resourceId3 in rawCost) {
+        const requiredQuantity = rawCost[resourceId3];
         if (!isFiniteNumber4(requiredQuantity) || requiredQuantity < 0) {
-          return unavailableCost("invalid-cost", resourceId2);
+          return unavailableCost("invalid-cost", resourceId3);
         }
-        const rawResource = rawResources[resourceId2];
+        const rawResource = rawResources[resourceId3];
         if (!isRecord6(rawResource)) {
-          return unavailableCost("invalid-resource", resourceId2);
+          return unavailableCost("invalid-resource", resourceId3);
         }
         const availableQuantity = capacity === "maximum" ? rawResource["maxQuantity"] : rawResource["currentQuantity"];
         if (!isFiniteNumber4(availableQuantity)) {
-          return unavailableCost("invalid-resource", resourceId2);
+          return unavailableCost("invalid-resource", resourceId3);
         }
         requirements.push(
           Object.freeze({
-            resourceId: resourceId2,
+            resourceId: resourceId3,
             requiredQuantity,
             availableQuantity
           })
@@ -15631,12 +15631,12 @@
   function validateCostMap(rawCost, itemId) {
     if (!isRecord6(rawCost)) return unavailableTarget("invalid-cost", { itemId });
     const cost = {};
-    for (const resourceId2 in rawCost) {
-      const quantity = rawCost[resourceId2];
+    for (const resourceId3 in rawCost) {
+      const quantity = rawCost[resourceId3];
       if (!isFiniteNumber4(quantity) || quantity < 0) {
-        return unavailableTarget("invalid-cost", { itemId, resourceId: resourceId2 });
+        return unavailableTarget("invalid-cost", { itemId, resourceId: resourceId3 });
       }
-      cost[resourceId2] = quantity;
+      cost[resourceId3] = quantity;
     }
     return Object.freeze({ status: "ready", cost: Object.freeze(cost) });
   }
@@ -15736,17 +15736,17 @@
 
   // src/domain/target-timing.ts
   function calculateTargetTiming(input) {
-    let resourceId2 = "";
+    let resourceId3 = "";
     let seconds = 0;
     for (const requirement of input.requirements) {
       const totalCost = requirement.costPerSegment * input.remainingSegments;
       const rawSeconds = (totalCost - requirement.currentQuantity) / requirement.rateOfChange;
       if (rawSeconds > seconds && totalCost > requirement.currentQuantity) {
-        resourceId2 = requirement.resourceId;
+        resourceId3 = requirement.resourceId;
         seconds = rawSeconds;
       }
     }
-    return Object.freeze({ resourceId: resourceId2, seconds });
+    return Object.freeze({ resourceId: resourceId3, seconds });
   }
 
   // src/adapters/evolve/target-timing.ts
@@ -15756,9 +15756,9 @@
   function isFiniteNumber5(value) {
     return typeof value === "number" && Number.isFinite(value);
   }
-  function unavailable4(reason, resourceId2) {
+  function unavailable4(reason, resourceId3) {
     return Object.freeze(
-      resourceId2 === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId: resourceId2 }
+      resourceId3 === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, resourceId: resourceId3 }
     );
   }
   function readTargetTimingInput(rawGame, rawTarget, isProject) {
@@ -15778,23 +15778,23 @@
       const costs = rawTarget["cost"];
       const gameResources = global["resource"];
       const requirements = [];
-      for (const resourceId2 of Object.keys(costs)) {
-        const costPerSegment = costs[resourceId2];
+      for (const resourceId3 of Object.keys(costs)) {
+        const costPerSegment = costs[resourceId3];
         if (!isFiniteNumber5(costPerSegment)) {
-          return unavailable4("invalid-target", resourceId2);
+          return unavailable4("invalid-target", resourceId3);
         }
-        const rawResource = gameResources[resourceId2];
+        const rawResource = gameResources[resourceId3];
         if (!isRecord7(rawResource)) {
-          return unavailable4("invalid-resource", resourceId2);
+          return unavailable4("invalid-resource", resourceId3);
         }
         const currentQuantity = rawResource["amount"];
         const rateOfChange = rawResource["diff"];
         if (!isFiniteNumber5(currentQuantity) || !isFiniteNumber5(rateOfChange)) {
-          return unavailable4("invalid-resource", resourceId2);
+          return unavailable4("invalid-resource", resourceId3);
         }
         requirements.push(
           Object.freeze({
-            resourceId: resourceId2,
+            resourceId: resourceId3,
             costPerSegment,
             currentQuantity,
             rateOfChange
@@ -15976,8 +15976,8 @@
       const resources2 = getResources();
       const capped = [];
       const stalled = [];
-      for (const resourceId2 in resources2) {
-        const resource = resources2[resourceId2];
+      for (const resourceId3 in resources2) {
+        const resource = resources2[resourceId3];
         if (!resource.isUnlocked()) {
           continue;
         }
@@ -24100,12 +24100,12 @@
     const currentById = Object.fromEntries(
       input.current.map((entry) => [entry.id, entry.count])
     );
-    const adjustments = Object.keys(consumeAdjustments).map((resourceId2) => {
-      const expectedCurrent = currentById[resourceId2] ?? 0;
+    const adjustments = Object.keys(consumeAdjustments).map((resourceId3) => {
+      const expectedCurrent = currentById[resourceId3] ?? 0;
       return Object.freeze({
-        resourceId: resourceId2,
+        resourceId: resourceId3,
         expectedCurrent,
-        delta: (consumeAdjustments[resourceId2] ?? 0) - expectedCurrent
+        delta: (consumeAdjustments[resourceId3] ?? 0) - expectedCurrent
       });
     });
     return Object.freeze({ adjustments: Object.freeze(adjustments) });
@@ -25210,7 +25210,7 @@
         }
         const path = `MarketManager.priorityList[${index}]`;
         const resource = requireRecord(session.priorityList[index], path);
-        const resourceId2 = readResourceId2(resource, path);
+        const resourceId3 = readResourceId2(resource, path);
         const flags = requireRecord(resource["is"], `${path}.is`);
         let eligible = Boolean(flags["tradable"]);
         if (eligible) {
@@ -25224,7 +25224,7 @@
             resource
           );
         }
-        const candidate = { index, resourceId: resourceId2, resource, eligible };
+        const candidate = { index, resourceId: resourceId3, resource, eligible };
         session.lastCandidate = candidate;
         if (!eligible || !resource["autoSellEnabled"]) {
           return emptySell(candidate, ignoreSellRatio);
@@ -25268,7 +25268,7 @@
         }
         return Object.freeze({
           index,
-          resourceId: resourceId2,
+          resourceId: resourceId3,
           eligible: true,
           autoSellEnabled: true,
           ignoreSellRatio,
@@ -25891,9 +25891,9 @@
         continue;
       }
       const consumed = building.produces.some(
-        (resourceId2) => input.buildings.some(
+        (resourceId3) => input.buildings.some(
           (candidate) => candidate.consumptions.some(
-            (consumption) => consumption.resourceId === resourceId2 && consumption.rate > 0
+            (consumption) => consumption.resourceId === resourceId3 && consumption.rate > 0
           )
         )
       );
@@ -25902,7 +25902,7 @@
       }
       const cap = input.settings.limitPowered ? Math.min(building.count, building.autoMaximum) : building.count;
       const growth = building.produces.some(
-        (resourceId2) => mapValue(resources2, resourceId2, `producer resource ${resourceId2}`).input.useful
+        (resourceId3) => mapValue(resources2, resourceId3, `producer resource ${resourceId3}`).input.useful
       ) ? 1 : 0;
       const reserve = building.powered * Math.min(cap, building.stateOn + growth);
       producerReserve.set(building.binding, reserve);
@@ -25957,10 +25957,10 @@
           resources2
         );
         maximum = result2.maximum;
-        for (const resourceId2 of result2.adjusted) {
+        for (const resourceId3 of result2.adjusted) {
           appendIncomeAdjusted(
             operations,
-            mapValue(resources2, resourceId2, `power resource ${resourceId2}`)
+            mapValue(resources2, resourceId3, `power resource ${resourceId3}`)
           );
         }
         if (input.settings.autoFleet && building.fleetMaximum !== null) {
@@ -27761,6 +27761,931 @@
     });
   }
 
+  // src/domain/storage-allocation.ts
+  var STORAGE_ALLOCATION_DEBOUNCE_TICKS = 3;
+  function mapValue2(map, key, label) {
+    const value = map.get(key);
+    if (value === void 0) {
+      throw new TypeError(`missing ${label}`);
+    }
+    return value;
+  }
+  function sourceEnabled(source2, input) {
+    if (!source2.enabled) return false;
+    if (source2.kind === "safe-current") return input.safeReassign;
+    if (source2.kind === "required") return input.assignPart;
+    return true;
+  }
+  function targetEligible(source2, target) {
+    return source2.kind !== "project" && source2.kind !== "building" ? true : target.unlocked && target.autoBuildEnabled;
+  }
+  function buildAllocationItems(input, managedIds) {
+    const result2 = [];
+    for (const source2 of input.targetSources) {
+      if (!sourceEnabled(source2, input)) continue;
+      const groups = new Map(
+        managedIds.map((id) => [id, []])
+      );
+      for (const target of source2.targets) {
+        if (!targetEligible(source2, target)) continue;
+        const costs = new Map(
+          target.costs.map((cost) => [cost.resourceId, cost.quantity])
+        );
+        for (const resourceId3 of managedIds) {
+          if (costs.get(resourceId3)) {
+            mapValue2(groups, resourceId3, `storage group ${resourceId3}`).push({
+              target,
+              costs
+            });
+            break;
+          }
+        }
+      }
+      for (const resourceId3 of managedIds) {
+        const group = mapValue2(groups, resourceId3, `storage group ${resourceId3}`);
+        group.sort(
+          (left, right) => (right.costs.get(resourceId3) ?? 0) - (left.costs.get(resourceId3) ?? 0)
+        );
+        result2.push(...group);
+      }
+    }
+    return Object.freeze(result2);
+  }
+  function freezeDebounceMap(map) {
+    return Object.freeze(
+      Object.fromEntries(
+        Object.entries(map).map(([key, value]) => [
+          key,
+          Object.freeze({ ...value })
+        ])
+      )
+    );
+  }
+  function debounce(entry, desired, current) {
+    if (entry.locked !== void 0) {
+      if (desired >= entry.locked || desired <= entry.locked - 2) {
+        delete entry.locked;
+      } else {
+        return entry.locked;
+      }
+    }
+    if (desired === current) {
+      entry.direction = 0;
+      entry.ticks = 0;
+      return desired;
+    }
+    const direction = desired > current ? 1 : -1;
+    if (entry.direction === direction) {
+      entry.ticks = (entry.ticks ?? 0) + 1;
+    } else {
+      entry.direction = direction;
+      entry.ticks = 1;
+    }
+    if ((entry.ticks ?? 0) < STORAGE_ALLOCATION_DEBOUNCE_TICKS) {
+      return current;
+    }
+    entry.direction = 0;
+    entry.ticks = 0;
+    if (entry.previous === desired) {
+      entry.locked = Math.max(current, desired);
+      return entry.locked;
+    }
+    entry.previous = current;
+    return desired;
+  }
+  function planStorageAllocation(input) {
+    if (!input.initialized || input.crateValue <= 0 || input.containerValue <= 0) {
+      return null;
+    }
+    const resources2 = new Map(
+      input.resources.map((resource) => [resource.id, resource])
+    );
+    if (resources2.size !== input.resources.length) {
+      throw new TypeError("duplicate storage resource id");
+    }
+    const managedIds = input.priorityResourceIds.filter((id) => {
+      const resource = mapValue2(resources2, id, `storage resource ${id}`);
+      return resource.unlocked && resource.managed;
+    });
+    if (managedIds.length === 0) return null;
+    let totalCrates = input.freeCrates;
+    let totalContainers = input.freeContainers;
+    const adjustments = /* @__PURE__ */ new Map();
+    const modifiers = /* @__PURE__ */ new Map();
+    for (const id of managedIds) {
+      const resource = mapValue2(resources2, id, `storage resource ${id}`);
+      const sellAllowed = !input.noTrade && input.autoMarket && resource.autoSellEnabled && resource.autoSellRatio > 0;
+      modifiers.set(
+        id,
+        input.assignExtra ? sellAllowed ? 1.03 / resource.autoSellRatio : 1.03 : 1
+      );
+      adjustments.set(id, {
+        crate: 0,
+        container: 0,
+        amount: resource.maxQuantity - (resource.currentCrates * input.crateValue + resource.currentContainers * input.containerValue)
+      });
+      totalCrates += resource.currentCrates;
+      totalContainers += resource.currentContainers;
+    }
+    let storageToBuild = 0;
+    const drivers = /* @__PURE__ */ new Map();
+    const items = buildAllocationItems(input, managedIds);
+    nextItem: for (const item of items) {
+      const currentAssignment = /* @__PURE__ */ new Map();
+      let remainingCrates = totalCrates;
+      let remainingContainers = totalContainers;
+      for (const [resourceId3, quantity] of item.costs) {
+        const resource = mapValue2(
+          resources2,
+          resourceId3,
+          `target resource ${resourceId3}`
+        );
+        const adjustment = adjustments.get(resourceId3);
+        const modifier = item.target.isList ? 1 : adjustment === void 0 ? 1 : mapValue2(modifiers, resourceId3, `storage modifier ${resourceId3}`);
+        if (adjustment === void 0) {
+          if (resource.maxQuantity >= quantity) continue;
+          continue nextItem;
+        }
+        if (adjustment.amount >= quantity * modifier) continue;
+        if (!item.target.isList && resource.maxStorage >= 0 && resource.maxStorage < quantity * modifier) {
+          continue nextItem;
+        }
+        let missing = Math.min(
+          resource.maxStorage >= 0 ? resource.maxStorage : Number.MAX_SAFE_INTEGER,
+          quantity * modifier
+        ) - adjustment.amount;
+        const available = remainingCrates * input.crateValue + remainingContainers * input.containerValue;
+        if (item.target.isList || missing <= available) {
+          const assignment = { crate: 0, container: 0 };
+          currentAssignment.set(resourceId3, assignment);
+          if (missing > 0 && remainingCrates > 0) {
+            const count = Math.min(
+              Math.ceil(missing / input.crateValue),
+              remainingCrates
+            );
+            remainingCrates -= count;
+            missing -= count * input.crateValue;
+            assignment.crate = count;
+          }
+          if (missing > 0 && remainingContainers > 0) {
+            const count = Math.min(
+              Math.ceil(missing / input.containerValue),
+              remainingContainers
+            );
+            remainingContainers -= count;
+            missing -= count * input.containerValue;
+            assignment.container = count;
+          }
+          if (missing > 0) {
+            storageToBuild = Math.max(storageToBuild, missing);
+          }
+        } else {
+          storageToBuild = Math.max(storageToBuild, missing - available);
+          continue nextItem;
+        }
+      }
+      for (const [resourceId3, assignment] of currentAssignment) {
+        const adjustment = mapValue2(
+          adjustments,
+          resourceId3,
+          `storage adjustment ${resourceId3}`
+        );
+        if (input.debug && (assignment.crate > 0 || assignment.container > 0)) {
+          const quantity = item.costs.get(resourceId3) ?? 0;
+          drivers.set(
+            resourceId3,
+            `${item.target.label} (qty=${quantity.toFixed(
+              1
+            )}, missing≈${(quantity - adjustment.amount).toFixed(1)})`
+          );
+        }
+        adjustment.crate += assignment.crate;
+        adjustment.container += assignment.container;
+        adjustment.amount += assignment.crate * input.crateValue + assignment.container * input.containerValue;
+      }
+      totalCrates = remainingCrates;
+      totalContainers = remainingContainers;
+    }
+    return Object.freeze({
+      crateValue: input.crateValue,
+      containerValue: input.containerValue,
+      expectedFreeCrates: input.freeCrates,
+      expectedFreeContainers: input.freeContainers,
+      storageToBuild,
+      assignments: Object.freeze(
+        managedIds.map((resourceId3) => {
+          const resource = mapValue2(
+            resources2,
+            resourceId3,
+            `storage resource ${resourceId3}`
+          );
+          const adjustment = mapValue2(
+            adjustments,
+            resourceId3,
+            `storage adjustment ${resourceId3}`
+          );
+          return Object.freeze({
+            resourceId: resourceId3,
+            expectedCrates: resource.currentCrates,
+            expectedContainers: resource.currentContainers,
+            desiredCrates: adjustment.crate,
+            desiredContainers: adjustment.container,
+            expectedMaximum: resource.maxQuantity,
+            currentQuantity: resource.currentQuantity,
+            storageRequired: resource.storageRequired,
+            driver: drivers.get(resourceId3) ?? null
+          });
+        })
+      ),
+      expectedPriorityResourceIds: Object.freeze([...input.priorityResourceIds]),
+      debug: input.debug
+    });
+  }
+  function finalizeStorageAllocation(plan, state2) {
+    const crateState = Object.fromEntries(
+      Object.entries(state2.crates).map(([key, value]) => [key, { ...value }])
+    );
+    const containerState = Object.fromEntries(
+      Object.entries(state2.containers).map(([key, value]) => [
+        key,
+        { ...value }
+      ])
+    );
+    const adjustments = [];
+    const logs = [];
+    for (const assignment of plan.assignments) {
+      const crateEntry = crateState[assignment.resourceId] ?? (crateState[assignment.resourceId] = {});
+      const containerEntry = containerState[assignment.resourceId] ?? (containerState[assignment.resourceId] = {});
+      const targetCrates = debounce(
+        crateEntry,
+        assignment.desiredCrates,
+        assignment.expectedCrates
+      );
+      const targetContainers = debounce(
+        containerEntry,
+        assignment.desiredContainers,
+        assignment.expectedContainers
+      );
+      const crateDelta = targetCrates - assignment.expectedCrates;
+      const containerDelta = targetContainers - assignment.expectedContainers;
+      adjustments.push(
+        Object.freeze({
+          resourceId: assignment.resourceId,
+          expectedCrates: assignment.expectedCrates,
+          expectedContainers: assignment.expectedContainers,
+          crateDelta,
+          containerDelta,
+          expectedMaximum: assignment.expectedMaximum
+        })
+      );
+      if (plan.debug && (crateDelta !== 0 || containerDelta !== 0)) {
+        const base = assignment.expectedMaximum - (assignment.expectedCrates * plan.crateValue + assignment.expectedContainers * plan.containerValue);
+        logs.push(
+          `[storage] ${assignment.resourceId}: crates ${assignment.expectedCrates}→${targetCrates} (Δ${crateDelta >= 0 ? "+" : ""}${crateDelta}), containers ${assignment.expectedContainers}→${targetContainers} (Δ${containerDelta >= 0 ? "+" : ""}${containerDelta}) | currentQty=${assignment.currentQuantity.toFixed(
+            1
+          )}, base=${base.toFixed(1)}, storageRequired=${assignment.storageRequired.toFixed(
+            1
+          )}, driver=${assignment.driver ?? "none"}`
+        );
+      }
+    }
+    return Object.freeze({
+      decision: Object.freeze({
+        kind: "apply-storage-allocation",
+        crateValue: plan.crateValue,
+        containerValue: plan.containerValue,
+        expectedFreeCrates: plan.expectedFreeCrates,
+        expectedFreeContainers: plan.expectedFreeContainers,
+        expectedPriorityResourceIds: plan.expectedPriorityResourceIds,
+        adjustments: Object.freeze(adjustments),
+        logs: Object.freeze(logs)
+      }),
+      nextState: Object.freeze({
+        crates: freezeDebounceMap(crateState),
+        containers: freezeDebounceMap(containerState)
+      })
+    });
+  }
+  var EMPTY_STORAGE_ALLOCATION_STATE = Object.freeze({
+    crates: Object.freeze({}),
+    containers: Object.freeze({})
+  });
+
+  // src/application/storage-allocation.ts
+  var SUCCEEDED8 = Object.freeze({
+    status: "succeeded"
+  });
+  function createStorageAllocationAutomation(dependencies) {
+    let state2 = EMPTY_STORAGE_ALLOCATION_STATE;
+    return Object.freeze({
+      run() {
+        const rawPlan = planStorageAllocation(dependencies.reader.read());
+        if (rawPlan === null) return SUCCEEDED8;
+        if (rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild)) {
+          return SUCCEEDED8;
+        }
+        const finalized = finalizeStorageAllocation(rawPlan, state2);
+        const outcome = dependencies.executor.execute(finalized.decision);
+        if (outcome.status === "succeeded") {
+          state2 = finalized.nextState;
+        }
+        return outcome;
+      },
+      readState() {
+        return state2;
+      }
+    });
+  }
+
+  // src/adapters/evolve/storage-allocation.ts
+  function readString3(value, path) {
+    if (typeof value !== "string" || value.length === 0) {
+      throw new TypeError(`${path} must be a non-empty string`);
+    }
+    return value;
+  }
+  function resourceId2(resource, path) {
+    return readString3(resource["id"], `${path}.id`);
+  }
+  function callBoolean13(record, name, path) {
+    return Boolean(
+      Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
+    );
+  }
+  function finiteProperty2(record, name, path) {
+    return requireNumber(record[name], `${path}.${name}`);
+  }
+  function emptyInput(initialized) {
+    return Object.freeze({
+      initialized,
+      crateValue: 0,
+      containerValue: 0,
+      freeCrates: 0,
+      freeContainers: 0,
+      assignExtra: false,
+      assignPart: false,
+      safeReassign: false,
+      noTrade: false,
+      autoMarket: false,
+      debug: false,
+      resources: Object.freeze([]),
+      priorityResourceIds: Object.freeze([]),
+      targetSources: Object.freeze([])
+    });
+  }
+  function targetLabel(target) {
+    for (const name of ["_dbgLabel", "_originalName", "name", "actionId"]) {
+      const value = target[name];
+      if (value !== void 0 && value !== null) return String(value);
+    }
+    return "?";
+  }
+  function readCosts3(target, path, resources2, register) {
+    const cost = requireRecord(target["cost"], `${path}.cost`);
+    const result2 = [];
+    for (const key in cost) {
+      const quantity = requireNumber(cost[key], `${path}.cost.${key}`);
+      register(resources2[key], `resources.${key}`, false);
+      result2.push(Object.freeze({ resourceId: key, quantity }));
+    }
+    return Object.freeze(result2);
+  }
+  function createStorageAllocationAdapter(dependencies) {
+    let session = null;
+    const reader = Object.freeze({
+      read() {
+        const manager = requireRecord(
+          dependencies.getStorageManager(),
+          "StorageManager"
+        );
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const state2 = requireRecord(dependencies.getState(), "state");
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const buildingManager = requireRecord(
+          dependencies.getBuildingManager(),
+          "BuildingManager"
+        );
+        const projectManager = requireRecord(
+          dependencies.getProjectManager(),
+          "ProjectManager"
+        );
+        const fleet = requireRecord(
+          dependencies.getFleetManagerOuter(),
+          "FleetManagerOuter"
+        );
+        if (!callBoolean13(manager, "initStorage", "StorageManager")) {
+          session = null;
+          return emptyInput(false);
+        }
+        const crateValue = finiteProperty2(
+          manager,
+          "crateValue",
+          "StorageManager"
+        );
+        const containerValue = finiteProperty2(
+          manager,
+          "containerValue",
+          "StorageManager"
+        );
+        if (crateValue <= 0 || containerValue <= 0) {
+          session = null;
+          return Object.freeze({
+            ...emptyInput(true),
+            crateValue,
+            containerValue
+          });
+        }
+        const priorityValue = manager["priorityList"];
+        if (!Array.isArray(priorityValue)) {
+          throw new TypeError("StorageManager.priorityList must be an array");
+        }
+        const priority = priorityValue.map(
+          (value, index) => requireRecord(value, `StorageManager.priorityList[${index}]`)
+        );
+        const records = /* @__PURE__ */ new Map();
+        const inputs = /* @__PURE__ */ new Map();
+        const managedIds = /* @__PURE__ */ new Set();
+        const register = (value, path, managed) => {
+          const resource = requireRecord(value, path);
+          const id = resourceId2(resource, path);
+          const existing = records.get(id);
+          if (existing !== void 0 && existing !== resource) {
+            throw new TypeError(`storage resource ${id} changed identity`);
+          }
+          if (existing === void 0) {
+            const unlocked = managed ? callBoolean13(resource, "isUnlocked", path) : true;
+            const managedStorage = managed && unlocked ? callBoolean13(resource, "isManagedStorage", path) : false;
+            records.set(id, resource);
+            inputs.set(
+              id,
+              managed ? Object.freeze({
+                id,
+                unlocked,
+                managed: managedStorage,
+                currentQuantity: finiteProperty2(
+                  resource,
+                  "currentQuantity",
+                  path
+                ),
+                maxQuantity: finiteProperty2(resource, "maxQuantity", path),
+                maxStorage: finiteProperty2(resource, "maxStorage", path),
+                storageRequired: finiteProperty2(
+                  resource,
+                  "storageRequired",
+                  path
+                ),
+                minStorage: finiteProperty2(resource, "minStorage", path),
+                currentCrates: finiteProperty2(
+                  resource,
+                  "currentCrates",
+                  path
+                ),
+                currentContainers: finiteProperty2(
+                  resource,
+                  "currentContainers",
+                  path
+                ),
+                storeOverflow: Boolean(resource["storeOverflow"]),
+                autoSellEnabled: Boolean(resource["autoSellEnabled"]),
+                autoSellRatio: finiteProperty2(
+                  resource,
+                  "autoSellRatio",
+                  path
+                )
+              }) : Object.freeze({
+                id,
+                unlocked: true,
+                managed: false,
+                currentQuantity: 0,
+                maxQuantity: finiteProperty2(resource, "maxQuantity", path),
+                maxStorage: -1,
+                storageRequired: 0,
+                minStorage: 0,
+                currentCrates: 0,
+                currentContainers: 0,
+                storeOverflow: false,
+                autoSellEnabled: false,
+                autoSellRatio: 0
+              })
+            );
+          }
+          const input = inputs.get(id);
+          if (managed && input?.unlocked && input.managed) managedIds.add(id);
+        };
+        for (let index = 0; index < priority.length; index++) {
+          register(
+            priority[index],
+            `StorageManager.priorityList[${index}]`,
+            true
+          );
+        }
+        const priorityResourceIds = priority.map(
+          (resource, index) => resourceId2(resource, `StorageManager.priorityList[${index}]`)
+        );
+        if (new Set(priorityResourceIds).size !== priorityResourceIds.length) {
+          throw new TypeError("StorageManager.priorityList has duplicate ids");
+        }
+        if (managedIds.size === 0) {
+          session = null;
+          return Object.freeze({
+            ...emptyInput(true),
+            crateValue,
+            containerValue,
+            resources: Object.freeze([...inputs.values()]),
+            priorityResourceIds: Object.freeze(priorityResourceIds)
+          });
+        }
+        const makeSynthetic = (label, select) => Object.freeze({
+          costs: Object.freeze(
+            priorityResourceIds.flatMap((id) => {
+              const resource = inputs.get(id);
+              if (resource === void 0 || !managedIds.has(id)) return [];
+              const quantity = select(resource);
+              return quantity === null ? [] : [Object.freeze({ resourceId: id, quantity })];
+            })
+          ),
+          isList: true,
+          label,
+          unlocked: true,
+          autoBuildEnabled: true
+        });
+        const readTarget2 = (value, path, filterBuildable = false) => {
+          const target = requireRecord(value, path);
+          const unlocked = filterBuildable ? callBoolean13(target, "isUnlocked", path) : true;
+          const autoBuildEnabled = filterBuildable ? unlocked && Boolean(target["autoBuildEnabled"]) : true;
+          return Object.freeze({
+            costs: !filterBuildable || autoBuildEnabled ? readCosts3(target, path, resources2, register) : Object.freeze([]),
+            isList: Boolean(target["isList"]),
+            label: targetLabel(target),
+            unlocked,
+            autoBuildEnabled
+          });
+        };
+        const readArray = (value, path, filterBuildable = false) => {
+          if (!Array.isArray(value)) {
+            throw new TypeError(`${path} must be an array`);
+          }
+          return Object.freeze(
+            value.map(
+              (target, index) => readTarget2(target, `${path}[${index}]`, filterBuildable)
+            )
+          );
+        };
+        const assignExtra = Boolean(settings2["storageAssignExtra"]);
+        const noTrade = assignExtra ? Boolean(
+          requireRecord(
+            requireRecord(game2["global"], "game.global")["race"],
+            "game.global.race"
+          )["no_trade"]
+        ) : false;
+        const sources = [
+          Object.freeze({
+            kind: "safe-current",
+            enabled: Boolean(settings2["storageSafeReassign"]),
+            targets: Object.freeze([
+              makeSynthetic(
+                "safeReassign(currentQty)",
+                (resource) => resource.currentQuantity
+              )
+            ])
+          }),
+          Object.freeze({
+            kind: "minimum",
+            enabled: true,
+            targets: Object.freeze([
+              makeSynthetic("minStorage", (resource) => resource.minStorage)
+            ])
+          }),
+          Object.freeze({
+            kind: "overflow",
+            enabled: true,
+            targets: Object.freeze([
+              makeSynthetic(
+                "overflow(currentQty*1.03)",
+                (resource) => resource.storeOverflow ? resource.currentQuantity * 1.03 : null
+              )
+            ])
+          }),
+          Object.freeze({
+            kind: "queued",
+            enabled: true,
+            targets: readArray(
+              state2["queuedTargetsAll"],
+              "state.queuedTargetsAll"
+            )
+          }),
+          Object.freeze({
+            kind: "triggered",
+            enabled: true,
+            targets: readArray(state2["triggerTargets"], "state.triggerTargets")
+          })
+        ];
+        const fleetEnabled = Boolean(settings2["autoFleet"]) && Boolean(fleet["nextShipExpandable"]) && settings2["prioritizeOuterFleet"] !== "ignore";
+        sources.push(
+          Object.freeze({
+            kind: "fleet",
+            enabled: fleetEnabled,
+            targets: fleetEnabled ? Object.freeze([
+              readTarget2(
+                {
+                  cost: requireRecord(
+                    fleet["nextShipCost"],
+                    "FleetManagerOuter.nextShipCost"
+                  )
+                },
+                "FleetManagerOuter.nextShip"
+              )
+            ]) : Object.freeze([])
+          }),
+          Object.freeze({
+            kind: "technology",
+            enabled: true,
+            targets: readArray(state2["unlockedTechs"], "state.unlockedTechs")
+          }),
+          Object.freeze({
+            kind: "project",
+            enabled: true,
+            targets: readArray(
+              projectManager["priorityList"],
+              "ProjectManager.priorityList",
+              true
+            )
+          }),
+          Object.freeze({
+            kind: "building",
+            enabled: true,
+            targets: readArray(
+              buildingManager["priorityList"],
+              "BuildingManager.priorityList",
+              true
+            )
+          }),
+          Object.freeze({
+            kind: "required",
+            enabled: Boolean(settings2["storageAssignPart"]),
+            targets: Object.freeze([
+              makeSynthetic(
+                "storageRequired",
+                (resource) => resource.storageRequired
+              )
+            ])
+          })
+        );
+        const crates = requireRecord(resources2["Crates"], "resources.Crates");
+        const containers = requireRecord(
+          resources2["Containers"],
+          "resources.Containers"
+        );
+        session = Object.freeze({
+          manager,
+          priority: Object.freeze(priority),
+          resources: records,
+          managedIds,
+          crates,
+          containers,
+          crateValue,
+          containerValue
+        });
+        return Object.freeze({
+          initialized: true,
+          crateValue,
+          containerValue,
+          freeCrates: finiteProperty2(
+            crates,
+            "currentQuantity",
+            "resources.Crates"
+          ),
+          freeContainers: finiteProperty2(
+            containers,
+            "currentQuantity",
+            "resources.Containers"
+          ),
+          assignExtra,
+          assignPart: Boolean(settings2["storageAssignPart"]),
+          safeReassign: Boolean(settings2["storageSafeReassign"]),
+          noTrade,
+          autoMarket: Boolean(settings2["autoMarket"]),
+          debug: dependencies.readDebugEnabled(),
+          resources: Object.freeze([...inputs.values()]),
+          priorityResourceIds: Object.freeze(priorityResourceIds),
+          targetSources: Object.freeze(sources)
+        });
+      }
+    });
+    function validateDecision(decision) {
+      if (decision.kind !== "apply-storage-allocation" || !Number.isFinite(decision.crateValue) || !Number.isFinite(decision.containerValue) || !Number.isFinite(decision.expectedFreeCrates) || !Number.isFinite(decision.expectedFreeContainers)) {
+        return "storage allocation decision contains invalid values";
+      }
+      const ids = /* @__PURE__ */ new Set();
+      for (const adjustment of decision.adjustments) {
+        if (typeof adjustment.resourceId !== "string" || adjustment.resourceId.length === 0 || ids.has(adjustment.resourceId) || !Number.isSafeInteger(adjustment.expectedCrates) || !Number.isSafeInteger(adjustment.expectedContainers) || !Number.isSafeInteger(adjustment.crateDelta) || !Number.isSafeInteger(adjustment.containerDelta) || !Number.isFinite(adjustment.expectedMaximum)) {
+          return "storage allocation adjustments must have unique ids and finite integer counts";
+        }
+        ids.add(adjustment.resourceId);
+      }
+      return null;
+    }
+    const executor = Object.freeze({
+      execute(decision) {
+        const invalid = validateDecision(decision);
+        if (invalid !== null) {
+          return rejected2("invalid-storage-allocation", invalid);
+        }
+        const active = session;
+        if (active === null) {
+          return stale(
+            "storage-allocation-session-missing",
+            "Storage allocation session is missing"
+          );
+        }
+        const priorityValue = active.manager["priorityList"];
+        if (!Array.isArray(priorityValue) || priorityValue.length !== active.priority.length || priorityValue.some(
+          (resource, index) => resource !== active.priority[index]
+        ) || decision.expectedPriorityResourceIds.length !== active.priority.length) {
+          return stale(
+            "storage-priority-changed",
+            "Storage priority list changed"
+          );
+        }
+        for (let index = 0; index < active.priority.length; index++) {
+          const resource = active.priority[index];
+          const expectedId = decision.expectedPriorityResourceIds[index];
+          if (resource === void 0 || expectedId === void 0 || resourceId2(resource, `StorageManager.priorityList[${index}]`) !== expectedId) {
+            return stale(
+              "storage-priority-changed",
+              "Storage priority ids changed"
+            );
+          }
+        }
+        if (finiteProperty2(active.manager, "crateValue", "StorageManager") !== decision.crateValue || finiteProperty2(active.manager, "containerValue", "StorageManager") !== decision.containerValue || finiteProperty2(
+          active.crates,
+          "currentQuantity",
+          "resources.Crates"
+        ) !== decision.expectedFreeCrates || finiteProperty2(
+          active.containers,
+          "currentQuantity",
+          "resources.Containers"
+        ) !== decision.expectedFreeContainers) {
+          return stale(
+            "storage-capacity-changed",
+            "Storage capacities or free counts changed"
+          );
+        }
+        const resolved = [];
+        for (const adjustment of decision.adjustments) {
+          const resource = active.resources.get(adjustment.resourceId);
+          if (resource === void 0 || !active.managedIds.has(adjustment.resourceId)) {
+            return stale(
+              "storage-resource-changed",
+              "Managed storage resource changed",
+              { resourceId: adjustment.resourceId }
+            );
+          }
+          if (finiteProperty2(
+            resource,
+            "currentCrates",
+            `resources.${adjustment.resourceId}`
+          ) !== adjustment.expectedCrates || finiteProperty2(
+            resource,
+            "currentContainers",
+            `resources.${adjustment.resourceId}`
+          ) !== adjustment.expectedContainers || finiteProperty2(
+            resource,
+            "maxQuantity",
+            `resources.${adjustment.resourceId}`
+          ) !== adjustment.expectedMaximum) {
+            return stale(
+              "storage-resource-balance-changed",
+              "Storage resource allocation changed",
+              { resourceId: adjustment.resourceId }
+            );
+          }
+          if (adjustment.crateDelta < 0) {
+            requireFunction(
+              active.manager["unassignCrate"],
+              "StorageManager.unassignCrate"
+            );
+          } else if (adjustment.crateDelta > 0) {
+            requireFunction(
+              active.manager["assignCrate"],
+              "StorageManager.assignCrate"
+            );
+          }
+          if (adjustment.containerDelta < 0) {
+            requireFunction(
+              active.manager["unassignContainer"],
+              "StorageManager.unassignContainer"
+            );
+          } else if (adjustment.containerDelta > 0) {
+            requireFunction(
+              active.manager["assignContainer"],
+              "StorageManager.assignContainer"
+            );
+          }
+          resolved.push({ adjustment, resource });
+        }
+        for (const message of decision.logs) dependencies.log(message);
+        for (const { adjustment, resource } of resolved) {
+          if (adjustment.crateDelta < 0) {
+            Reflect.apply(
+              requireFunction(
+                active.manager["unassignCrate"],
+                "StorageManager.unassignCrate"
+              ),
+              active.manager,
+              [resource, adjustment.crateDelta * -1]
+            );
+            resource["maxQuantity"] = finiteProperty2(
+              resource,
+              "maxQuantity",
+              `resources.${adjustment.resourceId}`
+            ) + adjustment.crateDelta * decision.crateValue;
+            active.crates["currentQuantity"] = finiteProperty2(
+              active.crates,
+              "currentQuantity",
+              "resources.Crates"
+            ) - adjustment.crateDelta;
+          }
+          if (adjustment.containerDelta < 0) {
+            Reflect.apply(
+              requireFunction(
+                active.manager["unassignContainer"],
+                "StorageManager.unassignContainer"
+              ),
+              active.manager,
+              [resource, adjustment.containerDelta * -1]
+            );
+            resource["maxQuantity"] = finiteProperty2(
+              resource,
+              "maxQuantity",
+              `resources.${adjustment.resourceId}`
+            ) + adjustment.containerDelta * decision.containerValue;
+            active.containers["currentQuantity"] = finiteProperty2(
+              active.containers,
+              "currentQuantity",
+              "resources.Containers"
+            ) - adjustment.containerDelta;
+          }
+        }
+        for (const { adjustment, resource } of resolved) {
+          if (adjustment.crateDelta > 0) {
+            Reflect.apply(
+              requireFunction(
+                active.manager["assignCrate"],
+                "StorageManager.assignCrate"
+              ),
+              active.manager,
+              [resource, adjustment.crateDelta]
+            );
+            resource["maxQuantity"] = finiteProperty2(
+              resource,
+              "maxQuantity",
+              `resources.${adjustment.resourceId}`
+            ) + adjustment.crateDelta * decision.crateValue;
+            active.crates["currentQuantity"] = finiteProperty2(
+              active.crates,
+              "currentQuantity",
+              "resources.Crates"
+            ) + adjustment.crateDelta;
+          }
+          if (adjustment.containerDelta > 0) {
+            Reflect.apply(
+              requireFunction(
+                active.manager["assignContainer"],
+                "StorageManager.assignContainer"
+              ),
+              active.manager,
+              [resource, adjustment.containerDelta]
+            );
+            resource["maxQuantity"] = finiteProperty2(
+              resource,
+              "maxQuantity",
+              `resources.${adjustment.resourceId}`
+            ) + adjustment.containerDelta * decision.containerValue;
+            active.containers["currentQuantity"] = finiteProperty2(
+              active.containers,
+              "currentQuantity",
+              "resources.Containers"
+            ) + adjustment.containerDelta;
+          }
+        }
+        return SUCCEEDED;
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
+  // src/adapters/browser/storage-debug.ts
+  function createStorageDebugSource(getWindow) {
+    return Object.freeze({
+      readEnabled() {
+        const value = getWindow();
+        return typeof value === "object" && value !== null && Reflect.get(value, "storageDebug") === true;
+      }
+    });
+  }
+
   // src/automation/economy/galaxy-market.ts
   function createAutoGalaxyMarket({
     getGalaxyTradeManager,
@@ -28298,17 +29223,17 @@
   }
 
   // src/application/craft.ts
-  var SUCCEEDED8 = Object.freeze({
+  var SUCCEEDED9 = Object.freeze({
     status: "succeeded"
   });
   function runCraftAutomation(dependencies) {
     if (!shouldRunCraft(dependencies.reader.readGate())) {
-      return SUCCEEDED8;
+      return SUCCEEDED9;
     }
     for (let index = 0; ; index++) {
       const candidate = dependencies.reader.readCandidate(index);
       if (candidate === null) {
-        return SUCCEEDED8;
+        return SUCCEEDED9;
       }
       const decision = planCraft(candidate);
       if (decision === null) {
@@ -28322,7 +29247,7 @@
   }
 
   // src/adapters/evolve/craft.ts
-  function callBoolean13(record, name, path) {
+  function callBoolean14(record, name, path) {
     return Boolean(
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
     );
@@ -28359,7 +29284,7 @@
           resources2["Population"],
           "resources.Population"
         );
-        const populationUnlocked = callBoolean13(
+        const populationUnlocked = callBoolean14(
           population,
           "isUnlocked",
           "resources.Population"
@@ -28386,7 +29311,7 @@
         }
         const path = `foundryList[${index}]`;
         const craftable = requireRecord(session.foundryList[index], path);
-        const unlocked = callBoolean13(craftable, "isUnlocked", path);
+        const unlocked = callBoolean14(craftable, "isUnlocked", path);
         if (!unlocked) {
           return Object.freeze({
             index,
@@ -28412,58 +29337,58 @@
           throw new TypeError(`${path}.cost must contain at least one material`);
         }
         const materials = [];
-        for (const resourceId2 in cost) {
-          const materialPath = `${path}.cost.${resourceId2}`;
-          const costPerCraft = readPositiveCost(cost[resourceId2], materialPath);
+        for (const resourceId3 in cost) {
+          const materialPath = `${path}.cost.${resourceId3}`;
+          const costPerCraft = readPositiveCost(cost[resourceId3], materialPath);
           const resource = requireRecord(
-            session.resources[resourceId2],
-            `resources.${resourceId2}`
+            session.resources[resourceId3],
+            `resources.${resourceId3}`
           );
           const currentQuantity = requireNumber(
             resource["currentQuantity"],
-            `resources.${resourceId2}.currentQuantity`
+            `resources.${resourceId3}.currentQuantity`
           );
           const maxQuantity = requireNumber(
             resource["maxQuantity"],
-            `resources.${resourceId2}.maxQuantity`
+            `resources.${resourceId3}.maxQuantity`
           );
           const craftPreserve = requireNumber(
             craftable["craftPreserve"],
             `${path}.craftPreserve`
           );
           const base = {
-            resourceId: resourceId2,
+            resourceId: resourceId3,
             costPerCraft,
             currentQuantity,
             maxQuantity,
             craftPreserve
           };
-          if (callBoolean13(craftable, "isDemanded", path)) {
+          if (callBoolean14(craftable, "isDemanded", path)) {
             const thresholdPreserve = requireNumber(
               craftable["craftPreserve"],
               `${path}.craftPreserve`
             );
             const availableQuantity = currentQuantity < maxQuantity * (thresholdPreserve + 0.05) ? currentQuantity : requireNumber(
               resource["spareQuantity"],
-              `resources.${resourceId2}.spareQuantity`
+              `resources.${resourceId3}.spareQuantity`
             );
             materials.push(
               Object.freeze({ ...base, mode: "demanded", availableQuantity })
             );
             continue;
           }
-          if (callBoolean13(resource, "isDemanded", `resources.${resourceId2}`)) {
+          if (callBoolean14(resource, "isDemanded", `resources.${resourceId3}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
-          const cappedForPriority = callBoolean13(
+          const cappedForPriority = callBoolean14(
             resource,
             "isCapped",
-            `resources.${resourceId2}`
+            `resources.${resourceId3}`
           );
           if (!cappedForPriority && requireNumber(
             resource["usefulRatio"],
-            `resources.${resourceId2}.usefulRatio`
+            `resources.${resourceId3}.usefulRatio`
           ) < requireNumber(craftable["usefulRatio"], `${path}.usefulRatio`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
@@ -28478,7 +29403,7 @@
                 mode: "required",
                 availableQuantity: requireNumber(
                   resource["spareQuantity"],
-                  `resources.${resourceId2}.spareQuantity`
+                  `resources.${resourceId3}.spareQuantity`
                 )
               })
             );
@@ -28486,15 +29411,15 @@
           }
           const resourceRequired = requireNumber(
             resource["storageRequired"],
-            `resources.${resourceId2}.storageRequired`
+            `resources.${resourceId3}.storageRequired`
           );
-          if (currentQuantity < resourceRequired && !callBoolean13(resource, "isCapped", `resources.${resourceId2}`)) {
+          if (currentQuantity < resourceRequired && !callBoolean14(resource, "isCapped", `resources.${resourceId3}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
           const rateOfChange = requireNumber(
             resource["rateOfChange"],
-            `resources.${resourceId2}.rateOfChange`
+            `resources.${resourceId3}.rateOfChange`
           );
           const ticks = requireNumber(
             dependencies.ticksPerSecond(),
@@ -29913,7 +30838,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED9 = Object.freeze({
+  var SUCCEEDED10 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -29921,7 +30846,7 @@
     while (true) {
       const decision = planResearch(dependencies.reader.read(startIndex));
       if (decision === null) {
-        return SUCCEEDED9;
+        return SUCCEEDED10;
       }
       const result2 = dependencies.executor.execute(decision);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -30065,12 +30990,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED10 = Object.freeze({
+  var SUCCEEDED11 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision = planMutation(dependencies.reader.read());
-    return decision === null ? SUCCEEDED10 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED11 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -30106,7 +31031,7 @@
     }
     return priorityList;
   }
-  function readString3(record, key, path) {
+  function readString4(record, key, path) {
     const value = record[key];
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -30134,8 +31059,8 @@
       canGain,
       canPurge,
       mutationCost,
-      traitName: readString3(trait, "traitName", `${path}.traitName`),
-      displayName: readString3(trait, "name", `${path}.name`)
+      traitName: readString4(trait, "traitName", `${path}.traitName`),
+      displayName: readString4(trait, "name", `${path}.name`)
     });
   }
   function createMutationReader(dependencies) {
@@ -30272,294 +31197,6 @@
         return SUCCEEDED;
       }
     });
-  }
-
-  // src/automation/economy/storage.ts
-  function createAutoStorage({
-    getStorageManager,
-    getGame,
-    getSettings,
-    getState,
-    getResources,
-    getWindow,
-    getBuildingManager,
-    getProjectManager,
-    getFleetManagerOuter,
-    expandStorage: expandStorage2
-  }) {
-    return function autoStorage2() {
-      const StorageManager2 = getStorageManager();
-      const game2 = getGame();
-      const settings2 = getSettings();
-      const state2 = getState();
-      const resources2 = getResources();
-      const window2 = getWindow();
-      const BuildingManager2 = getBuildingManager();
-      const ProjectManager2 = getProjectManager();
-      const FleetManagerOuter2 = getFleetManagerOuter();
-      let m = StorageManager2;
-      const dbg = window2.storageDebug ?? false;
-      if (!m.initStorage()) {
-        return;
-      }
-      if (m.crateValue <= 0 || m.containerValue <= 0) {
-        return;
-      }
-      let storageList = m.priorityList.filter(
-        (r) => r.isUnlocked() && r.isManagedStorage()
-      );
-      if (storageList.length === 0) {
-        return;
-      }
-      let totalCrates = resources2.Crates.currentQuantity;
-      let totalContainers = resources2.Containers.currentQuantity;
-      let storageAdjustments = {}, resMods = {}, resCurrent = {}, resOverflow = {}, resMin = {}, resRequired = {};
-      for (let resource of storageList) {
-        let res = resource.id;
-        if (!settings2.storageAssignExtra) {
-          resMods[res] = 1;
-        } else {
-          let sellAllowed = !game2.global.race["no_trade"] && settings2.autoMarket && resource.autoSellEnabled && resource.autoSellRatio > 0;
-          resMods[res] = sellAllowed ? 1.03 / resource.autoSellRatio : 1.03;
-        }
-        if (resource.storeOverflow) {
-          resOverflow[res] = resource.currentQuantity * 1.03;
-        }
-        resRequired[res] = resource.storageRequired;
-        resCurrent[res] = resource.currentQuantity;
-        resMin[res] = resource.minStorage;
-        storageAdjustments[res] = {
-          crate: 0,
-          container: 0,
-          amount: resource.maxQuantity - (resource.currentCrates * m.crateValue + resource.currentContainers * m.containerValue)
-        };
-        totalCrates += resource.currentCrates;
-        totalContainers += resource.currentContainers;
-      }
-      let buildingsList = [];
-      let storageEntries = storageList.map((res) => [res.id, []]);
-      const addList = (list) => {
-        let resGroups = Object.fromEntries(storageEntries);
-        list.forEach(
-          (obj) => storageList.find(
-            (res) => obj.cost[res.id] && resGroups[res.id].push(obj)
-          )
-        );
-        Object.entries(resGroups).forEach(
-          ([res, list2]) => list2.sort((a, b) => b.cost[res] - a.cost[res])
-        );
-        buildingsList.push(...Object.values(resGroups).flat());
-      };
-      if (settings2.storageSafeReassign) {
-        addList([
-          {
-            cost: resCurrent,
-            isList: true,
-            _dbgLabel: "safeReassign(currentQty)"
-          }
-        ]);
-      }
-      addList([{ cost: resMin, isList: true, _dbgLabel: "minStorage" }]);
-      addList([
-        {
-          cost: resOverflow,
-          isList: true,
-          _dbgLabel: "overflow(currentQty*1.03)"
-        }
-      ]);
-      addList(state2.queuedTargetsAll);
-      addList(state2.triggerTargets);
-      if (settings2.autoFleet && FleetManagerOuter2.nextShipExpandable && settings2.prioritizeOuterFleet !== "ignore") {
-        addList([{ cost: FleetManagerOuter2.nextShipCost }]);
-      }
-      addList(state2.unlockedTechs);
-      addList(
-        ProjectManager2.priorityList.filter(
-          (b) => b.isUnlocked() && b.autoBuildEnabled
-        )
-      );
-      addList(
-        BuildingManager2.priorityList.filter(
-          (p) => p.isUnlocked() && p.autoBuildEnabled
-        )
-      );
-      if (settings2.storageAssignPart) {
-        addList([
-          { cost: resRequired, isList: true, _dbgLabel: "storageRequired" }
-        ]);
-      }
-      let storageToBuild = 0;
-      let dbgAllocDriver = {};
-      nextBuilding: for (let item of buildingsList) {
-        let currentAssign = {};
-        let remainingCrates = totalCrates;
-        let remainingContainers = totalContainers;
-        for (let res in item.cost) {
-          let resource = resources2[res];
-          let quantity = item.cost[res];
-          let mod = item.isList ? 1 : resMods[res];
-          if (!storageAdjustments[res]) {
-            if (resource.maxQuantity >= quantity) {
-              continue;
-            } else {
-              continue nextBuilding;
-            }
-          } else if (storageAdjustments[res].amount >= quantity * mod) {
-            continue;
-          }
-          if (!item.isList && resource.maxStorage >= 0 && resource.maxStorage < quantity * mod) {
-            continue nextBuilding;
-          }
-          let missingStorage = Math.min(
-            resource.maxStorage >= 0 ? resource.maxStorage : Number.MAX_SAFE_INTEGER,
-            quantity * mod
-          ) - storageAdjustments[res].amount;
-          let availableStorage = remainingCrates * m.crateValue + remainingContainers * m.containerValue;
-          if (item.isList || missingStorage <= availableStorage) {
-            currentAssign[res] = { crate: 0, container: 0 };
-            if (missingStorage > 0 && remainingCrates > 0) {
-              let assignCrates = Math.min(
-                Math.ceil(missingStorage / m.crateValue),
-                remainingCrates
-              );
-              remainingCrates -= assignCrates;
-              missingStorage -= assignCrates * m.crateValue;
-              currentAssign[res].crate = assignCrates;
-            }
-            if (missingStorage > 0 && remainingContainers > 0) {
-              let assignContainer = Math.min(
-                Math.ceil(missingStorage / m.containerValue),
-                remainingContainers
-              );
-              remainingContainers -= assignContainer;
-              missingStorage -= assignContainer * m.containerValue;
-              currentAssign[res].container = assignContainer;
-            }
-            if (missingStorage > 0) {
-              storageToBuild = Math.max(storageToBuild, missingStorage);
-            }
-          } else {
-            storageToBuild = Math.max(
-              storageToBuild,
-              missingStorage - availableStorage
-            );
-            continue nextBuilding;
-          }
-        }
-        for (let id in currentAssign) {
-          if (dbg && (currentAssign[id].crate > 0 || currentAssign[id].container > 0)) {
-            let label = item._dbgLabel ?? item._originalName ?? item.name ?? item.actionId ?? "?";
-            dbgAllocDriver[id] = `${label} (qty=${item.cost[id]?.toFixed?.(1) ?? item.cost[id]}, missing≈${(item.cost[id] - storageAdjustments[id].amount).toFixed(
-              1
-            )})`;
-          }
-          storageAdjustments[id].crate += currentAssign[id].crate;
-          storageAdjustments[id].container += currentAssign[id].container;
-          storageAdjustments[id].amount += currentAssign[id].crate * m.crateValue + currentAssign[id].container * m.containerValue;
-        }
-        totalCrates = remainingCrates;
-        totalContainers = remainingContainers;
-      }
-      if (storageToBuild > 0 && expandStorage2(storageToBuild)) {
-        return;
-      }
-      const STORAGE_DEBOUNCE_TICKS = 3;
-      const debounceField = (map, id, desired, current) => {
-        let d = map[id] ?? (map[id] = {});
-        if (d.locked !== void 0) {
-          if (desired >= d.locked || desired <= d.locked - 2) {
-            delete d.locked;
-          } else {
-            return d.locked;
-          }
-        }
-        if (desired === current) {
-          d.dir = 0;
-          d.ticks = 0;
-          return desired;
-        }
-        let dir = desired > current ? 1 : -1;
-        if (d.dir === dir) {
-          d.ticks++;
-        } else {
-          d.dir = dir;
-          d.ticks = 1;
-        }
-        if (d.ticks < STORAGE_DEBOUNCE_TICKS) {
-          return current;
-        }
-        d.dir = 0;
-        d.ticks = 0;
-        if (d.prev === desired) {
-          d.locked = Math.max(current, desired);
-          return d.locked;
-        }
-        d.prev = current;
-        return desired;
-      };
-      for (let id in storageAdjustments) {
-        let resource = resources2[id];
-        let adj = storageAdjustments[id];
-        adj.crate = debounceField(
-          m._crateDebounce,
-          id,
-          adj.crate,
-          resource.currentCrates
-        );
-        adj.container = debounceField(
-          m._containerDebounce,
-          id,
-          adj.container,
-          resource.currentContainers
-        );
-      }
-      if (dbg) {
-        for (let id in storageAdjustments) {
-          let resource = resources2[id];
-          let adj = storageAdjustments[id];
-          let dCrate = adj.crate - resource.currentCrates;
-          let dCon = adj.container - resource.currentContainers;
-          if (dCrate !== 0 || dCon !== 0) {
-            let baseStorage = resource.maxQuantity - (resource.currentCrates * m.crateValue + resource.currentContainers * m.containerValue);
-            console.log(
-              `[storage] ${id}: crates ${resource.currentCrates}→${adj.crate} (Δ${dCrate >= 0 ? "+" : ""}${dCrate}), containers ${resource.currentContainers}→${adj.container} (Δ${dCon >= 0 ? "+" : ""}${dCon}) | currentQty=${resource.currentQuantity.toFixed(
-                1
-              )}, base=${baseStorage.toFixed(1)}, storageRequired=${resource.storageRequired?.toFixed?.(1) ?? resource.storageRequired}, driver=${dbgAllocDriver[id] ?? "none"}`
-            );
-          }
-        }
-      }
-      for (let id in storageAdjustments) {
-        let resource = resources2[id];
-        let crateDelta = storageAdjustments[id].crate - resource.currentCrates;
-        let containerDelta = storageAdjustments[id].container - resource.currentContainers;
-        if (crateDelta < 0) {
-          m.unassignCrate(resource, crateDelta * -1);
-          resource.maxQuantity += crateDelta * m.crateValue;
-          resources2.Crates.currentQuantity -= crateDelta;
-        }
-        if (containerDelta < 0) {
-          m.unassignContainer(resource, containerDelta * -1);
-          resource.maxQuantity += containerDelta * m.containerValue;
-          resources2.Containers.currentQuantity -= containerDelta;
-        }
-      }
-      for (let id in storageAdjustments) {
-        let resource = resources2[id];
-        let crateDelta = storageAdjustments[id].crate - resource.currentCrates;
-        let containerDelta = storageAdjustments[id].container - resource.currentContainers;
-        if (crateDelta > 0) {
-          m.assignCrate(resource, crateDelta);
-          resource.maxQuantity += crateDelta * m.crateValue;
-          resources2.Crates.currentQuantity += crateDelta;
-        }
-        if (containerDelta > 0) {
-          m.assignContainer(resource, containerDelta);
-          resource.maxQuantity += containerDelta * m.containerValue;
-          resources2.Containers.currentQuantity += containerDelta;
-        }
-      }
-    };
   }
 
   // src/automation/combat/fleet-outer.ts
@@ -44058,18 +44695,25 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const autoStorage = createAutoStorage({
+    const storageDebug = createStorageDebugSource(() => window);
+    const storageAllocationAdapter = createStorageAllocationAdapter({
       getStorageManager: () => StorageManager,
       getGame: () => game,
       getSettings: () => settings,
       getState: () => state,
       getResources: () => resources,
-      getWindow: () => window,
       getBuildingManager: () => BuildingManager,
       getProjectManager: () => ProjectManager,
       getFleetManagerOuter: () => FleetManagerOuter,
-      expandStorage
+      readDebugEnabled: () => storageDebug.readEnabled(),
+      log: (message) => console.log(message)
     });
+    const storageAllocationAutomation = createStorageAllocationAutomation({
+      reader: storageAllocationAdapter.reader,
+      executor: storageAllocationAdapter.executor,
+      expansion: { expand: expandStorage }
+    });
+    const autoStorage = () => storageAllocationAutomation.run();
     const minorTraitReader = createMinorTraitReader({
       getMinorTraitManager: () => MinorTraitManager,
       getResources: () => resources
