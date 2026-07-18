@@ -239,7 +239,11 @@ import {
   planExtractorRatios,
 } from "./domain/resource-ratios.ts";
 import { createAutoFactory } from "./automation/economy/factory.ts";
-import { createAutoMiningDroid } from "./automation/economy/mining-droid.ts";
+import { runMiningDroidAutomation } from "./application/mining-droid.ts";
+import {
+  createMiningDroidCommandExecutor,
+  createMiningDroidReader,
+} from "./adapters/evolve/mining-droid.ts";
 import {
   createGrapheneCommandExecutor,
   readGrapheneInput,
@@ -3157,7 +3161,11 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const autoMiningDroid = createAutoMiningDroid({ DroidManager });
+  const autoMiningDroid = () =>
+    runMiningDroidAutomation({
+      reader: createMiningDroidReader(() => DroidManager),
+      executor: createMiningDroidCommandExecutor(() => DroidManager),
+    });
 
   const grapheneExecutor = createGrapheneCommandExecutor(() => GrapheneManager);
   const autoGraphenePlant = function autoGraphenePlant() {
