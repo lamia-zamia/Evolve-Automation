@@ -28115,6 +28115,10 @@
   function finiteProperty2(record, name, path) {
     return requireNumber(record[name], `${path}.${name}`);
   }
+  function optionalSellRatio(resource, path) {
+    const value = resource["autoSellRatio"];
+    return value === void 0 || value === null ? 0 : requireNumber(value, `${path}.autoSellRatio`);
+  }
   function emptyInput(initialized) {
     return Object.freeze({
       initialized,
@@ -28248,11 +28252,7 @@
                 ),
                 storeOverflow: Boolean(resource["storeOverflow"]),
                 autoSellEnabled: Boolean(resource["autoSellEnabled"]),
-                autoSellRatio: finiteProperty2(
-                  resource,
-                  "autoSellRatio",
-                  path
-                )
+                autoSellRatio: optionalSellRatio(resource, path)
               }) : Object.freeze({
                 id,
                 unlocked: true,

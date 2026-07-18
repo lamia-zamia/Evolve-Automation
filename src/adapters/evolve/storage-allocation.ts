@@ -71,6 +71,13 @@ function finiteProperty(
   return requireNumber(record[name], `${path}.${name}`);
 }
 
+function optionalSellRatio(resource: UnknownRecord, path: string): number {
+  const value = resource["autoSellRatio"];
+  return value === undefined || value === null
+    ? 0
+    : requireNumber(value, `${path}.autoSellRatio`);
+}
+
 function emptyInput(initialized: boolean): StorageAllocationInput {
   return Object.freeze({
     initialized,
@@ -228,11 +235,7 @@ export function createStorageAllocationAdapter(
                   ),
                   storeOverflow: Boolean(resource["storeOverflow"]),
                   autoSellEnabled: Boolean(resource["autoSellEnabled"]),
-                  autoSellRatio: finiteProperty(
-                    resource,
-                    "autoSellRatio",
-                    path,
-                  ),
+                  autoSellRatio: optionalSellRatio(resource, path),
                 })
               : Object.freeze({
                   id,

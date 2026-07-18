@@ -550,6 +550,16 @@ const lockedAdapter = createStorageAllocationAdapter(
 );
 assert.equal(lockedAdapter.reader.read().initialized, false);
 
+const missingSellRatioFixture = liveFixture();
+delete missingSellRatioFixture.resources.Iron.autoSellRatio;
+const missingSellRatioAdapter = createStorageAllocationAdapter(
+  liveDependencies(missingSellRatioFixture),
+);
+assert.equal(
+  missingSellRatioAdapter.reader.read().resources[0].autoSellRatio,
+  0,
+);
+
 const debugSource = createStorageDebugSource(() => ({ storageDebug: true }));
 assert.equal(debugSource.readEnabled(), true);
 assert.equal(createStorageDebugSource(() => null).readEnabled(), false);
