@@ -228,7 +228,7 @@ Object.assign(hooks.automationSettings, {
   foreignHireMercCostLowerThanIncome: 1,
   foreignHireMercMoneyStoragePercent: 0,
   storageAssignExtra: false,
-  psychicPower: "auto",
+  psychicPower: "murder",
   psychicBoostRes: "auto",
   ocularPower_disintegration: true,
   ocularPower_p_disintegration: 10,

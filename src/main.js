@@ -270,7 +270,9 @@ import { runGeneticsAutomation } from "./application/genetics.ts";
 import { createGeneticsAdapter } from "./adapters/evolve/genetics.ts";
 import { createGeneticsControls } from "./adapters/browser/genetics-controls.ts";
 import { createAutoMerc } from "./automation/combat/mercenary.ts";
-import { createAutoPsychic } from "./automation/traits/psychic.ts";
+import { runPsychicAutomation } from "./application/psychic.ts";
+import { createPsychicAdapter } from "./adapters/evolve/psychic.ts";
+import { createPsychicControls } from "./adapters/browser/psychic-controls.ts";
 import { runOcularPowerAutomation } from "./application/ocular-power.ts";
 import { createOcularPowerAdapter } from "./adapters/evolve/ocular-power.ts";
 import { createOcularPowerControls } from "./adapters/browser/ocular-power-controls.ts";
@@ -3447,23 +3449,21 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     );
   };
 
-  var psychicPowerCost = {
-    murder: [10, 8],
-    boost: [75, 60],
-    assault: [45, 36],
-    profit: [65, 52],
-    mind_break: [80, 64],
-    stun: [100, 80],
-  };
-
-  const autoPsychic = createAutoPsychic({
+  const psychicControls = createPsychicControls({
+    getVueById,
+    clickSelector: (selector) => $(selector).click(),
+  });
+  const psychicAdapter = createPsychicAdapter({
     getGame: () => game,
     getSettings: () => settings,
     getResources: () => resources,
-    getVueById,
-    clickSelector: (selector) => $(selector).click(),
-    psychicPowerCost,
+    controls: psychicControls,
   });
+  const autoPsychic = () =>
+    runPsychicAutomation({
+      reader: psychicAdapter.reader,
+      executor: psychicAdapter.executor,
+    });
 
   const ocularPowerData = [
     { key: "d", id: "disintegration", locParam: ["X"] },

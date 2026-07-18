@@ -20391,8 +20391,8 @@
     });
   }
   function createGovernmentCommandExecutor(dependencies) {
-    function execute(decision) {
-      if (decision.government === null && decision.appointCandidate === null) {
+    function execute(decision2) {
+      if (decision2.government === null && decision2.appointCandidate === null) {
         return SUCCEEDED;
       }
       const manager = requireRecord(
@@ -20400,7 +20400,7 @@
         "GovernmentManager"
       );
       let setGovernment;
-      if (decision.government !== null) {
+      if (decision2.government !== null) {
         const isEnabled = requireFunction(
           manager["isEnabled"],
           "GovernmentManager.isEnabled"
@@ -20413,11 +20413,11 @@
         }
         if (!governmentUnlocked(
           manager["Types"],
-          decision.government,
+          decision2.government,
           "GovernmentManager"
         )) {
           return stale("government-locked", "planned government became locked", {
-            government: decision.government
+            government: decision2.government
           });
         }
         setGovernment = requireFunction(
@@ -20425,19 +20425,19 @@
           "GovernmentManager.setGovernment"
         );
       }
-      if (decision.appointCandidate !== null) {
+      if (decision2.appointCandidate !== null) {
         if (dependencies.getGovernor() !== "none") {
           return stale("governor-appointed", "a governor was already appointed");
         }
         const backgrounds = readCandidateBackgrounds(
           requireRecord(dependencies.getGame(), "game")
         );
-        if (backgrounds[decision.appointCandidate] !== decision.appointCandidateBackground) {
+        if (backgrounds[decision2.appointCandidate] !== decision2.appointCandidateBackground) {
           return stale(
             "stale-governor-candidate",
             "governor candidates changed",
             {
-              candidateIndex: decision.appointCandidate
+              candidateIndex: decision2.appointCandidate
             }
           );
         }
@@ -20448,10 +20448,10 @@
           );
         }
       }
-      if (decision.government !== null && setGovernment !== void 0) {
-        Reflect.apply(setGovernment, manager, [decision.government]);
+      if (decision2.government !== null && setGovernment !== void 0) {
+        Reflect.apply(setGovernment, manager, [decision2.government]);
       }
-      if (decision.appointCandidate !== null && !dependencies.controls.appointCandidate(decision.appointCandidate)) {
+      if (decision2.appointCandidate !== null && !dependencies.controls.appointCandidate(decision2.appointCandidate)) {
         return stale(
           "governor-controls-unavailable",
           "governor appointment controls became unavailable"
@@ -21373,8 +21373,8 @@
     });
   }
   function createSmelterCommandExecutor(getSmelterManager) {
-    function execute(decision) {
-      if (decision.fuelAdjustments.length === 0 && decision.smeltAdjustments.length === 0) {
+    function execute(decision2) {
+      if (decision2.fuelAdjustments.length === 0 && decision2.smeltAdjustments.length === 0) {
         return SUCCEEDED;
       }
       const manager = requireRecord(getSmelterManager(), "SmelterManager");
@@ -21408,7 +21408,7 @@
         "SmelterManager.increaseSmelting"
       );
       const resolvedFuels = [];
-      for (const adjustment of decision.fuelAdjustments) {
+      for (const adjustment of decision2.fuelAdjustments) {
         if (!Number.isSafeInteger(adjustment.delta)) {
           return rejected2(
             "invalid-smelter-fuel-adjustment",
@@ -21433,7 +21433,7 @@
         resolvedFuels.push({ fuel, delta: adjustment.delta });
       }
       const resolvedSmelt = [];
-      for (const adjustment of decision.smeltAdjustments) {
+      for (const adjustment of decision2.smeltAdjustments) {
         if (!Number.isSafeInteger(adjustment.delta)) {
           return rejected2(
             "invalid-smelter-smelt-adjustment",
@@ -21861,8 +21861,8 @@
     });
   }
   function createAlchemyCommandExecutor(getAlchemyManager) {
-    function execute(decision) {
-      if (decision.decrease.length === 0 && decision.increase.length === 0) {
+    function execute(decision2) {
+      if (decision2.decrease.length === 0 && decision2.increase.length === 0) {
         return SUCCEEDED;
       }
       const manager = requireRecord(getAlchemyManager(), "AlchemyManager");
@@ -21879,8 +21879,8 @@
         "AlchemyManager.transmuteMore"
       );
       const adjustments = [
-        ...decision.decrease,
-        ...decision.increase
+        ...decision2.decrease,
+        ...decision2.increase
       ];
       for (const adjustment of adjustments) {
         if (!Number.isSafeInteger(adjustment.count) || adjustment.count < 0) {
@@ -21901,10 +21901,10 @@
           });
         }
       }
-      for (const adjustment of decision.decrease) {
+      for (const adjustment of decision2.decrease) {
         Reflect.apply(transmuteLess, manager, [adjustment.id, adjustment.count]);
       }
-      for (const adjustment of decision.increase) {
+      for (const adjustment of decision2.increase) {
         Reflect.apply(transmuteMore, manager, [adjustment.id, adjustment.count]);
       }
       return SUCCEEDED;
@@ -22116,8 +22116,8 @@
     });
   }
   function createPylonCommandExecutor(getRitualManager) {
-    function execute(decision) {
-      if (decision.decrease.length === 0 && decision.increase.length === 0) {
+    function execute(decision2) {
+      if (decision2.decrease.length === 0 && decision2.increase.length === 0) {
         return SUCCEEDED;
       }
       const manager = requireRecord(getRitualManager(), "RitualManager");
@@ -22149,7 +22149,7 @@
         spellsById.set(id, spell);
       }
       const resolved = [];
-      for (const adjustment of [...decision.decrease, ...decision.increase]) {
+      for (const adjustment of [...decision2.decrease, ...decision2.increase]) {
         if (!Number.isSafeInteger(adjustment.count) || adjustment.count < 0) {
           return rejected2(
             "invalid-pylon-adjustment",
@@ -22179,7 +22179,7 @@
         }
         resolved.push({ adjustment, spell });
       }
-      const decreases = new Set(decision.decrease);
+      const decreases = new Set(decision2.decrease);
       for (const { adjustment, spell } of resolved) {
         if (decreases.has(adjustment)) {
           Reflect.apply(decreaseRitual, manager, [spell, adjustment.count]);
@@ -22727,10 +22727,10 @@
     status: "succeeded"
   });
   function runFactoryAutomation(dependencies) {
-    const decision = planFactory(dependencies.reader.read());
-    if (decision === null) return SUCCEEDED2;
-    dependencies.tooltips.publish(decision.tooltips);
-    return dependencies.executor.execute(decision);
+    const decision2 = planFactory(dependencies.reader.read());
+    if (decision2 === null) return SUCCEEDED2;
+    dependencies.tooltips.publish(decision2.tooltips);
+    return dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/factory.ts
@@ -23031,15 +23031,15 @@
       }
     });
     const executor = Object.freeze({
-      execute(decision) {
-        if (!Number.isSafeInteger(decision.expectedMaximum) || decision.expectedMaximum < 0) {
+      execute(decision2) {
+        if (!Number.isSafeInteger(decision2.expectedMaximum) || decision2.expectedMaximum < 0) {
           return rejected2(
             "invalid-factory-maximum",
             "factory maximum must be a non-negative safe integer"
           );
         }
         const ids = /* @__PURE__ */ new Set();
-        for (const adjustment of decision.adjustments) {
+        for (const adjustment of decision2.adjustments) {
           if (typeof adjustment.productionId !== "string" || adjustment.productionId.length === 0 || ids.has(adjustment.productionId) || typeof adjustment.outputResourceId !== "string" || adjustment.outputResourceId.length === 0 || !Number.isSafeInteger(adjustment.expectedCurrent) || adjustment.expectedCurrent < 0 || !Number.isSafeInteger(adjustment.delta) || !Number.isSafeInteger(
             adjustment.expectedCurrent + adjustment.delta
           ) || adjustment.expectedCurrent + adjustment.delta < 0) {
@@ -23067,7 +23067,7 @@
         if (requireCount(
           callNumber4(manager, "maxOperating", "FactoryManager"),
           "FactoryManager.maxOperating()"
-        ) !== decision.expectedMaximum) {
+        ) !== decision2.expectedMaximum) {
           return stale("factory-capacity-changed", "Factory capacity changed");
         }
         const catalog = readCatalog(manager);
@@ -23083,20 +23083,20 @@
           manager["currentProduction"],
           "FactoryManager.currentProduction"
         );
-        const decreaseProduction = decision.adjustments.some(
+        const decreaseProduction = decision2.adjustments.some(
           (adjustment) => adjustment.delta < 0
         ) ? requireFunction(
           manager["decreaseProduction"],
           "FactoryManager.decreaseProduction"
         ) : null;
-        const increaseProduction = decision.adjustments.some(
+        const increaseProduction = decision2.adjustments.some(
           (adjustment) => adjustment.delta > 0
         ) ? requireFunction(
           manager["increaseProduction"],
           "FactoryManager.increaseProduction"
         ) : null;
         const resolved = [];
-        for (const adjustment of decision.adjustments) {
+        for (const adjustment of decision2.adjustments) {
           const identity2 = active.byId.get(adjustment.productionId);
           if (identity2 === void 0 || identity2.outputResourceId !== adjustment.outputResourceId) {
             return stale(
@@ -23439,9 +23439,9 @@
   }
   function createMiningDroidCommandExecutor(getManager) {
     return Object.freeze({
-      execute(decision) {
+      execute(decision2) {
         const decisionIds = /* @__PURE__ */ new Set();
-        for (const adjustment of decision.adjustments) {
+        for (const adjustment of decision2.adjustments) {
           if (typeof adjustment.productionId !== "string" || adjustment.productionId.length === 0 || decisionIds.has(adjustment.productionId) || !Number.isSafeInteger(adjustment.expectedCurrent) || adjustment.expectedCurrent < 0 || !Number.isSafeInteger(adjustment.delta) || !Number.isSafeInteger(
             adjustment.expectedCurrent + adjustment.delta
           ) || adjustment.expectedCurrent + adjustment.delta < 0) {
@@ -23452,7 +23452,7 @@
           }
           decisionIds.add(adjustment.productionId);
         }
-        const active = decision.adjustments.filter(
+        const active = decision2.adjustments.filter(
           (adjustment) => adjustment.delta !== 0
         );
         if (active.length === 0) {
@@ -23900,8 +23900,8 @@
     status: "succeeded"
   });
   function runWishAutomation(dependencies) {
-    for (const decision of planWishes(dependencies.reader.read())) {
-      const outcome = dependencies.executor.execute(decision);
+    for (const decision2 of planWishes(dependencies.reader.read())) {
+      const outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
     return SUCCEEDED4;
@@ -23985,8 +23985,8 @@
   }
   function createWishCommandExecutor(dependencies) {
     return Object.freeze({
-      execute(decision) {
-        if (decision.tier !== "minor" && decision.tier !== "major" || typeof decision.wishId !== "string" || decision.expectedRemaining !== 0) {
+      execute(decision2) {
+        if (decision2.tier !== "minor" && decision2.tier !== "major" || typeof decision2.wishId !== "string" || decision2.expectedRemaining !== 0) {
           return rejected2(
             "invalid-wish-selection",
             "wish selection must identify a tier, setting id, and zero precondition"
@@ -23996,21 +23996,21 @@
         if (!race["wish"] || technologyLevel === 0) {
           return stale("wish-locked", "wish selection became unavailable");
         }
-        if (decision.tier === "major" && technologyLevel < 2) {
+        if (decision2.tier === "major" && technologyLevel < 2) {
           return stale("major-wish-locked", "major wish became unavailable");
         }
-        const actualRemaining = readRemaining(race, decision.tier);
-        if (actualRemaining !== decision.expectedRemaining) {
+        const actualRemaining = readRemaining(race, decision2.tier);
+        if (actualRemaining !== decision2.expectedRemaining) {
           return stale("wish-already-selected", "wish was already selected", {
-            tier: decision.tier,
-            expected: decision.expectedRemaining,
+            tier: decision2.tier,
+            expected: decision2.expectedRemaining,
             actual: actualRemaining
           });
         }
-        if (!dependencies.controls.select(decision.tier, decision.wishId)) {
+        if (!dependencies.controls.select(decision2.tier, decision2.wishId)) {
           return stale(
             "wish-controls-unavailable",
-            `${decision.tier} wish controls became unavailable`
+            `${decision2.tier} wish controls became unavailable`
           );
         }
         return SUCCEEDED;
@@ -24110,8 +24110,8 @@
         }
       };
     }
-    for (const decision of planGenetics(dependencies.reader.readPlan())) {
-      const outcome = dependencies.executor.execute(decision);
+    for (const decision2 of planGenetics(dependencies.reader.readPlan())) {
+      const outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
     return SUCCEEDED5;
@@ -24290,32 +24290,32 @@
         });
       }
     });
-    const executeToggle = (decision, active) => {
+    const executeToggle = (decision2, active) => {
       const propertyByToggle = {
         sequence: "on",
         boost: "boost",
         auto: "auto"
       };
-      const property = propertyByToggle[decision.toggle];
+      const property = propertyByToggle[decision2.toggle];
       const actual = requireBoolean(
         active.sequence[property],
         `game.global.arpa.sequence.${property}`
       );
-      if (actual !== decision.expected) {
+      if (actual !== decision2.expected) {
         return stale("genetics-toggle-changed", "genetics toggle changed", {
-          toggle: decision.toggle,
-          expected: decision.expected,
+          toggle: decision2.toggle,
+          expected: decision2.expected,
           actual
         });
       }
-      if (actual === decision.enabled) return SUCCEEDED;
-      return dependencies.controls.toggle(decision.toggle) ? SUCCEEDED : stale(
+      if (actual === decision2.enabled) return SUCCEEDED;
+      return dependencies.controls.toggle(decision2.toggle) ? SUCCEEDED : stale(
         "genetics-toggle-unavailable",
-        `genetics ${decision.toggle} control became unavailable`
+        `genetics ${decision2.toggle} control became unavailable`
       );
     };
-    const executeAssembly = (decision, active) => {
-      if (!Number.isSafeInteger(decision.count) || decision.count <= 0 || !Number.isFinite(decision.knowledgeAfter) || !Number.isFinite(decision.genesAfter)) {
+    const executeAssembly = (decision2, active) => {
+      if (!Number.isSafeInteger(decision2.count) || decision2.count <= 0 || !Number.isFinite(decision2.knowledgeAfter) || !Number.isFinite(decision2.genesAfter)) {
         return rejected2(
           "invalid-genetics-assembly",
           "genetics assembly must have a positive safe count and finite balances"
@@ -24332,17 +24332,17 @@
         active.genes["currentQuantity"],
         "resources.Genes.currentQuantity"
       );
-      if (actualKnowledge !== decision.expectedKnowledge || actualGenes !== decision.expectedGenes) {
+      if (actualKnowledge !== decision2.expectedKnowledge || actualGenes !== decision2.expectedGenes) {
         return stale("genetics-balances-changed", "genetics balances changed", {
-          expectedKnowledge: decision.expectedKnowledge,
+          expectedKnowledge: decision2.expectedKnowledge,
           actualKnowledge,
-          expectedGenes: decision.expectedGenes,
+          expectedGenes: decision2.expectedGenes,
           actualGenes
         });
       }
-      active.knowledge["currentQuantity"] = decision.knowledgeAfter;
-      active.genes["currentQuantity"] = decision.genesAfter;
-      if (!dependencies.controls.assemble(decision.count)) {
+      active.knowledge["currentQuantity"] = decision2.knowledgeAfter;
+      active.genes["currentQuantity"] = decision2.genesAfter;
+      if (!dependencies.controls.assemble(decision2.count)) {
         return stale(
           "genetics-assembly-unavailable",
           "genetics assembly control became unavailable"
@@ -24351,7 +24351,7 @@
       return SUCCEEDED;
     };
     const executor = Object.freeze({
-      execute(decision) {
+      execute(decision2) {
         const active = session;
         if (active === null) {
           return stale("genetics-session-missing", "genetics session is missing");
@@ -24364,17 +24364,17 @@
         if (arpa["sequence"] !== active.sequence) {
           return stale("genetics-sequence-changed", "genetics sequence changed");
         }
-        if (decision.kind === "set-genetics-toggle") {
-          if (!["sequence", "boost", "auto"].includes(decision.toggle) || typeof decision.expected !== "boolean" || typeof decision.enabled !== "boolean") {
+        if (decision2.kind === "set-genetics-toggle") {
+          if (!["sequence", "boost", "auto"].includes(decision2.toggle) || typeof decision2.expected !== "boolean" || typeof decision2.enabled !== "boolean") {
             return rejected2(
               "invalid-genetics-toggle",
               "genetics toggle decision is invalid"
             );
           }
-          return executeToggle(decision, active);
+          return executeToggle(decision2, active);
         }
-        if (decision.kind === "assemble-genes") {
-          return executeAssembly(decision, active);
+        if (decision2.kind === "assemble-genes") {
+          return executeAssembly(decision2, active);
         }
         return rejected2(
           "invalid-genetics-decision",
@@ -24508,81 +24508,486 @@
     };
   }
 
-  // src/automation/traits/psychic.ts
-  function createAutoPsychic({
-    getGame,
-    getSettings,
-    getResources,
-    getVueById: getVueById2,
-    clickSelector,
-    psychicPowerCost: psychicPowerCost2
-  }) {
-    return function autoPsychic2() {
-      const game2 = getGame();
-      const settings2 = getSettings();
-      const resources2 = getResources();
-      if (settings2.psychicPower === "none" || !game2.global.race["psychic"] || !game2.global.tech["psychic"] || resources2.Energy.storageRatio < 1) {
-        return false;
+  // src/domain/psychic.ts
+  var POWER_COSTS = Object.freeze({
+    murder: [10, 8],
+    boost: [75, 60],
+    assault: [45, 36],
+    profit: [65, 52],
+    mind_break: [80, 64],
+    stun: [100, 80]
+  });
+  function psychicPowerCost(power, technologyLevel) {
+    return POWER_COSTS[power][technologyLevel >= 5 ? 1 : 0];
+  }
+  function hasRoom(resource) {
+    return resource.current + resource.income * 1.5 * 300 < resource.maximum;
+  }
+  function decision(input, power, boostedResourceId = null) {
+    return Object.freeze({
+      kind: "use-psychic-power",
+      power,
+      energyCost: psychicPowerCost(power, input.technologyLevel),
+      expectedEnergy: input.energyCurrent,
+      expectedTechnologyLevel: input.technologyLevel,
+      boostedResourceId
+    });
+  }
+  function canAfford(input, power) {
+    return input.energyCurrent >= psychicPowerCost(power, input.technologyLevel);
+  }
+  function planPsychic(input) {
+    if (!input.available) return Object.freeze([]);
+    const decisions = [];
+    if ((input.mode === "murder" || input.mode !== "boost" && input.killCount < 10) && input.populationCurrent > 0 && canAfford(input, "murder")) {
+      decisions.push(decision(input, "murder"));
+    }
+    if (input.thrallAvailable) {
+      if ((input.mode === "auto" || input.mode === "mind_break") && (input.thrallRate > 1 || input.thrallRate === 1 && input.thrallStorageRatio === 1) && canAfford(input, "mind_break")) {
+        decisions.push(decision(input, "mind_break"));
       }
-      let vue = null;
-      const canAfford = (p) => resources2.Energy.currentQuantity >= psychicPowerCost2[p][game2.global.tech.psychic >= 5 ? 1 : 0];
-      if (settings2.psychicPower === "murder" || settings2.psychicPower !== "boost" && game2.global.stats.psykill < 10) {
-        if (resources2.Population.currentQuantity > 0 && canAfford("murder") && (vue = getVueById2("psychicKill"))) {
-          vue.murder();
-          return;
-        }
+      if ((input.mode === "auto" || input.mode === "stun") && input.thrallTechnologyLevel >= 2 && input.thrallStorageRatio < 1 && canAfford(input, "stun")) {
+        decisions.push(decision(input, "stun"));
       }
-      if (game2.global.tech["psychicthrall"] && game2.global.tech["unfathomable"] && game2.global.race["unfathomable"]) {
-        let jailed = resources2.Thrall.rateOfChange;
-        let cells = resources2.Thrall.storageRatio;
-        if (settings2.psychicPower === "auto" || settings2.psychicPower === "mind_break") {
-          if ((jailed > 1 || jailed === 1 && cells === 1) && canAfford("mind_break") && (vue = getVueById2("psychicMindBreak"))) {
-            vue.breakMind();
-            return;
-          }
-        }
-        if (settings2.psychicPower === "auto" || settings2.psychicPower === "stun") {
-          if (game2.global.tech.psychicthrall >= 2 && cells < 1 && canAfford("stun") && (vue = getVueById2("psychicCapture"))) {
-            vue.stun();
-            return;
-          }
-        }
+    }
+    if ((input.mode === "auto" || input.mode === "profit") && input.technologyLevel >= 3 && input.money !== null && hasRoom(input.money) && !input.cashActive && canAfford(input, "profit")) {
+      decisions.push(decision(input, "profit"));
+    }
+    if ((input.mode === "auto" || input.mode === "boost") && !input.boostActive && canAfford(input, "boost")) {
+      let boostedResourceId = null;
+      if (input.boostResourceMode === "auto") {
+        const boostable = input.boostCandidates.filter(hasRoom).slice().sort((left, right) => right.income - left.income);
+        boostedResourceId = boostable[0]?.id ?? null;
+      } else if (input.boostResourceMode) {
+        boostedResourceId = input.boostResourceMode;
       }
-      const haveRoom = (r) => r.currentQuantity + r.income * 1.5 * 300 < r.maxQuantity;
-      let powers = game2.global.race.psychicPowers;
-      if (settings2.psychicPower === "auto" || settings2.psychicPower === "profit") {
-        if (game2.global.tech.psychic >= 3 && haveRoom(resources2.Money) && !powers.cash && canAfford("profit") && (vue = getVueById2("psychicFinance"))) {
-          vue.boostVal();
-          return;
-        }
+      if (boostedResourceId !== null) {
+        decisions.push(decision(input, "boost", boostedResourceId));
       }
-      if (settings2.psychicPower === "auto" || settings2.psychicPower === "boost") {
-        if (!powers.boostTime && canAfford("boost")) {
-          let boosted = null;
-          if (settings2.psychicBoostRes === "auto") {
-            let boostable = Object.values(resources2).filter((r) => r.isUnlocked() && r.atomicMass > 0 && haveRoom(r)).sort((a, b) => b.income - a.income);
-            if (boostable.length > 0) {
-              boosted = boostable[0].id;
+    }
+    if ((input.mode === "auto" || input.mode === "assault") && input.technologyLevel >= 2 && !input.assaultActive && canAfford(input, "assault")) {
+      decisions.push(decision(input, "assault"));
+    }
+    return Object.freeze(decisions);
+  }
+
+  // src/application/psychic.ts
+  var SUCCEEDED6 = Object.freeze({
+    status: "succeeded"
+  });
+  function runPsychicAutomation(dependencies) {
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED6;
+    for (const decision2 of planPsychic(dependencies.reader.readPlan())) {
+      const outcome = dependencies.executor.execute(decision2);
+      if (outcome.status === "succeeded") return outcome;
+      if (outcome.failure.code !== "psychic-control-unavailable") return outcome;
+    }
+    return SUCCEEDED6;
+  }
+
+  // src/adapters/evolve/psychic.ts
+  function requireMode2(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function readGlobal3(gameValue) {
+    const game2 = requireRecord(gameValue, "game");
+    return requireRecord(game2["global"], "game.global");
+  }
+  function readTechnologyLevel3(tech, key) {
+    const value = tech[key];
+    if (value === void 0 || value === null || value === 0) return 0;
+    return requireNumber(value, `game.global.tech.${key}`);
+  }
+  function readRoom(record, path) {
+    return Object.freeze({
+      current: requireNumber(
+        record["currentQuantity"],
+        `${path}.currentQuantity`
+      ),
+      income: requireNumber(record["income"], `${path}.income`),
+      maximum: requireNumber(record["maxQuantity"], `${path}.maxQuantity`)
+    });
+  }
+  function emptyInput3() {
+    return Object.freeze({
+      available: false,
+      mode: "none",
+      technologyLevel: 0,
+      killCount: 10,
+      energyCurrent: 0,
+      energyStorageRatio: 0,
+      populationCurrent: 0,
+      thrallAvailable: false,
+      thrallTechnologyLevel: 0,
+      thrallRate: 0,
+      thrallStorageRatio: 0,
+      cashActive: false,
+      boostActive: false,
+      assaultActive: false,
+      money: null,
+      boostResourceMode: "none",
+      boostCandidates: Object.freeze([])
+    });
+  }
+  function decisionsMatch(left, right) {
+    return left.kind === right.kind && left.power === right.power && left.energyCost === right.energyCost && left.expectedEnergy === right.expectedEnergy && left.expectedTechnologyLevel === right.expectedTechnologyLevel && left.boostedResourceId === right.boostedResourceId;
+  }
+  function roomMatches(record, expected, path) {
+    const actual = readRoom(record, path);
+    return actual.current === expected.current && actual.income === expected.income && actual.maximum === expected.maximum;
+  }
+  function createPsychicAdapter(dependencies) {
+    let session = null;
+    const reader = Object.freeze({
+      readGate() {
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const mode = requireMode2(
+          settings2["psychicPower"],
+          "settings.psychicPower"
+        );
+        if (mode === "none") {
+          session = null;
+          return Object.freeze({ unlocked: false });
+        }
+        const global = readGlobal3(dependencies.getGame());
+        const race = requireRecord(global["race"], "game.global.race");
+        if (!race["psychic"]) {
+          session = null;
+          return Object.freeze({ unlocked: false });
+        }
+        const tech = requireRecord(global["tech"], "game.global.tech");
+        if (readTechnologyLevel3(tech, "psychic") === 0) {
+          session = null;
+          return Object.freeze({ unlocked: false });
+        }
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const energy = requireRecord(resources2["Energy"], "resources.Energy");
+        const storageRatio = requireNumber(
+          energy["storageRatio"],
+          "resources.Energy.storageRatio"
+        );
+        if (storageRatio < 1) {
+          session = null;
+          return Object.freeze({ unlocked: false });
+        }
+        return Object.freeze({ unlocked: true });
+      },
+      readPlan() {
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const mode = requireMode2(
+          settings2["psychicPower"],
+          "settings.psychicPower"
+        );
+        if (mode === "none") {
+          session = null;
+          return emptyInput3();
+        }
+        const global = readGlobal3(dependencies.getGame());
+        const race = requireRecord(global["race"], "game.global.race");
+        const tech = requireRecord(global["tech"], "game.global.tech");
+        const technologyLevel = readTechnologyLevel3(tech, "psychic");
+        if (!race["psychic"] || technologyLevel === 0) {
+          session = null;
+          return emptyInput3();
+        }
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const energy = requireRecord(resources2["Energy"], "resources.Energy");
+        const energyStorageRatio = requireNumber(
+          energy["storageRatio"],
+          "resources.Energy.storageRatio"
+        );
+        if (energyStorageRatio < 1) {
+          session = null;
+          return emptyInput3();
+        }
+        const energyCurrent = requireNumber(
+          energy["currentQuantity"],
+          "resources.Energy.currentQuantity"
+        );
+        let stats = null;
+        let killCount = 10;
+        if (mode !== "boost" && mode !== "murder") {
+          stats = requireRecord(global["stats"], "game.global.stats");
+          killCount = requireNumber(
+            stats["psykill"],
+            "game.global.stats.psykill"
+          );
+        }
+        const murderEligible = mode === "murder" || mode !== "boost" && killCount < 10;
+        const population = murderEligible ? requireRecord(resources2["Population"], "resources.Population") : null;
+        const populationCurrent = population === null ? 0 : requireNumber(
+          population["currentQuantity"],
+          "resources.Population.currentQuantity"
+        );
+        const thrallTechnologyLevel = readTechnologyLevel3(tech, "psychicthrall");
+        const thrallAvailable = Boolean(
+          thrallTechnologyLevel && tech["unfathomable"] && race["unfathomable"]
+        );
+        const thrall = thrallAvailable ? requireRecord(resources2["Thrall"], "resources.Thrall") : null;
+        const thrallRate = thrall === null ? 0 : requireNumber(
+          thrall["rateOfChange"],
+          "resources.Thrall.rateOfChange"
+        );
+        const thrallStorageRatio = thrall === null ? 0 : requireNumber(
+          thrall["storageRatio"],
+          "resources.Thrall.storageRatio"
+        );
+        const powers = requireRecord(
+          race["psychicPowers"],
+          "game.global.race.psychicPowers"
+        );
+        let money = null;
+        if ((mode === "auto" || mode === "profit") && technologyLevel >= 3) {
+          const record = requireRecord(resources2["Money"], "resources.Money");
+          money = Object.freeze({
+            record,
+            view: readRoom(record, "resources.Money")
+          });
+        }
+        const boostActive = Boolean(powers["boostTime"]);
+        let boostResourceMode = "none";
+        const boostCandidates = [];
+        const boostResources = [];
+        if ((mode === "auto" || mode === "boost") && !boostActive && energyCurrent >= (technologyLevel >= 5 ? 60 : 75)) {
+          boostResourceMode = requireMode2(
+            settings2["psychicBoostRes"],
+            "settings.psychicBoostRes"
+          );
+          if (boostResourceMode === "auto") {
+            for (const [index, rawResource] of Object.values(
+              resources2
+            ).entries()) {
+              const record = requireRecord(rawResource, `resources[${index}]`);
+              const isUnlocked2 = requireFunction(
+                record["isUnlocked"],
+                `resources[${index}].isUnlocked`
+              );
+              if (!Reflect.apply(isUnlocked2, record, [])) continue;
+              const atomicMass = requireNumber(
+                record["atomicMass"],
+                `resources[${index}].atomicMass`
+              );
+              if (atomicMass <= 0) continue;
+              const view = readRoom(record, `resources[${index}]`);
+              const id = record["id"];
+              if (typeof id !== "string") {
+                throw new TypeError(`resources[${index}].id must be a string`);
+              }
+              boostCandidates.push(Object.freeze({ id, ...view }));
+              boostResources.push(Object.freeze({ id, record, view }));
             }
-          } else {
-            boosted = settings2.psychicBoostRes;
           }
-          if (boosted && (vue = getVueById2("psychicBoost"))) {
-            clickSelector(
-              `#psychicBoost #psyhscrolltarget input[value="${boosted}"]`
+        }
+        const input = Object.freeze({
+          available: true,
+          mode,
+          technologyLevel,
+          killCount,
+          energyCurrent,
+          energyStorageRatio,
+          populationCurrent,
+          thrallAvailable,
+          thrallTechnologyLevel,
+          thrallRate,
+          thrallStorageRatio,
+          cashActive: Boolean(powers["cash"]),
+          boostActive,
+          assaultActive: Boolean(powers["assaultTime"]),
+          money: money?.view ?? null,
+          boostResourceMode,
+          boostCandidates: Object.freeze(boostCandidates)
+        });
+        session = Object.freeze({
+          input,
+          resources: resources2,
+          energy,
+          population,
+          thrall,
+          money,
+          powers,
+          stats,
+          boostResources: Object.freeze(boostResources)
+        });
+        return input;
+      }
+    });
+    function validateLiveState(active, decision2) {
+      const global = readGlobal3(dependencies.getGame());
+      const race = requireRecord(global["race"], "game.global.race");
+      const tech = requireRecord(global["tech"], "game.global.tech");
+      const technologyLevel = readTechnologyLevel3(tech, "psychic");
+      if (!race["psychic"] || technologyLevel !== active.input.technologyLevel || race["psychicPowers"] !== active.powers) {
+        return stale("psychic-game-state-changed", "psychic game state changed");
+      }
+      if (dependencies.getResources() !== active.resources) {
+        return stale("psychic-resources-changed", "psychic resources changed");
+      }
+      const energyCurrent = requireNumber(
+        active.energy["currentQuantity"],
+        "resources.Energy.currentQuantity"
+      );
+      const energyStorageRatio = requireNumber(
+        active.energy["storageRatio"],
+        "resources.Energy.storageRatio"
+      );
+      if (energyCurrent !== active.input.energyCurrent || energyStorageRatio !== active.input.energyStorageRatio) {
+        return stale("psychic-energy-changed", "psychic Energy changed", {
+          expectedEnergy: active.input.energyCurrent,
+          actualEnergy: energyCurrent
+        });
+      }
+      if (decision2.power === "murder") {
+        if (active.population === null) {
+          return stale(
+            "psychic-population-missing",
+            "psychic Population snapshot is missing"
+          );
+        }
+        const population = requireNumber(
+          active.population["currentQuantity"],
+          "resources.Population.currentQuantity"
+        );
+        if (population !== active.input.populationCurrent) {
+          return stale(
+            "psychic-population-changed",
+            "psychic Population changed"
+          );
+        }
+        if (active.stats !== null) {
+          const killCount = requireNumber(
+            active.stats["psykill"],
+            "game.global.stats.psykill"
+          );
+          if (killCount !== active.input.killCount) {
+            return stale(
+              "psychic-kill-count-changed",
+              "psychic kill count changed"
             );
-            vue.boostVal();
-            return;
           }
         }
       }
-      if (settings2.psychicPower === "auto" || settings2.psychicPower === "assault") {
-        if (game2.global.tech.psychic >= 2 && !powers.assaultTime && canAfford("assault") && (vue = getVueById2("psychicAssault"))) {
-          vue.boostVal();
-          return;
+      if (decision2.power === "mind_break" || decision2.power === "stun") {
+        const thrallLevel = readTechnologyLevel3(tech, "psychicthrall");
+        if (active.thrall === null || thrallLevel !== active.input.thrallTechnologyLevel || !tech["unfathomable"] || !race["unfathomable"]) {
+          return stale(
+            "psychic-thrall-state-changed",
+            "psychic Thrall state changed"
+          );
+        }
+        const rate = requireNumber(
+          active.thrall["rateOfChange"],
+          "resources.Thrall.rateOfChange"
+        );
+        const ratio = requireNumber(
+          active.thrall["storageRatio"],
+          "resources.Thrall.storageRatio"
+        );
+        if (rate !== active.input.thrallRate || ratio !== active.input.thrallStorageRatio) {
+          return stale("psychic-thrall-changed", "psychic Thrall values changed");
         }
       }
-    };
+      if (decision2.power === "profit" && (active.money === null || !roomMatches(
+        active.money.record,
+        active.money.view,
+        "resources.Money"
+      ) || Boolean(active.powers["cash"]) !== active.input.cashActive)) {
+        return stale(
+          "psychic-profit-state-changed",
+          "psychic profit state changed"
+        );
+      }
+      if (decision2.power === "boost" && Boolean(active.powers["boostTime"]) !== active.input.boostActive) {
+        return stale(
+          "psychic-boost-state-changed",
+          "psychic boost state changed"
+        );
+      }
+      if (decision2.power === "boost" && active.input.boostResourceMode === "auto") {
+        const resource = active.boostResources.find(
+          (candidate) => candidate.id === decision2.boostedResourceId
+        );
+        if (resource === void 0 || !roomMatches(resource.record, resource.view, `resources.${resource.id}`)) {
+          return stale(
+            "psychic-boost-resource-changed",
+            "psychic boost resource changed"
+          );
+        }
+      }
+      if (decision2.power === "assault" && Boolean(active.powers["assaultTime"]) !== active.input.assaultActive) {
+        return stale(
+          "psychic-assault-state-changed",
+          "psychic assault state changed"
+        );
+      }
+      return SUCCEEDED;
+    }
+    const executor = Object.freeze({
+      execute(decision2) {
+        const active = session;
+        if (active === null) {
+          return stale("psychic-session-missing", "psychic session is missing");
+        }
+        const expected = planPsychic(active.input).find(
+          (candidate) => decisionsMatch(candidate, decision2)
+        );
+        if (expected === void 0) {
+          return rejected2(
+            "invalid-psychic-decision",
+            "psychic decision was not present in the sampled plan"
+          );
+        }
+        const liveState = validateLiveState(active, decision2);
+        if (liveState.status !== "succeeded") return liveState;
+        if (!dependencies.controls.activate(decision2)) {
+          return stale(
+            "psychic-control-unavailable",
+            `psychic ${decision2.power} control is unavailable`
+          );
+        }
+        return SUCCEEDED;
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
+  // src/adapters/browser/psychic-controls.ts
+  var CONTROL_BY_POWER = Object.freeze({
+    murder: Object.freeze({ id: "psychicKill", method: "murder" }),
+    mind_break: Object.freeze({
+      id: "psychicMindBreak",
+      method: "breakMind"
+    }),
+    stun: Object.freeze({ id: "psychicCapture", method: "stun" }),
+    profit: Object.freeze({ id: "psychicFinance", method: "boostVal" }),
+    boost: Object.freeze({ id: "psychicBoost", method: "boostVal" }),
+    assault: Object.freeze({ id: "psychicAssault", method: "boostVal" })
+  });
+  function createPsychicControls(dependencies) {
+    return Object.freeze({
+      activate(decision2) {
+        const control = CONTROL_BY_POWER[decision2.power];
+        const rawView = dependencies.getVueById(control.id);
+        if (!rawView) return false;
+        const view = requireRecord(rawView, `${control.id} Vue view`);
+        if (typeof view[control.method] !== "function") return false;
+        const method = requireFunction(
+          view[control.method],
+          `${control.id} Vue view.${control.method}`
+        );
+        if (decision2.power === "boost") {
+          const resourceId3 = decision2.boostedResourceId;
+          if (resourceId3 === null) return false;
+          dependencies.clickSelector(
+            `#psychicBoost #psyhscrolltarget input[value="${resourceId3}"]`
+          );
+        }
+        Reflect.apply(method, view, []);
+        return true;
+      }
+    });
   }
 
   // src/domain/ocular-power.ts
@@ -24599,11 +25004,11 @@
   }
 
   // src/application/ocular-power.ts
-  var SUCCEEDED6 = Object.freeze({
+  var SUCCEEDED7 = Object.freeze({
     status: "succeeded"
   });
   function runOcularPowerAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED6;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED7;
     if (!dependencies.controls.capture()) {
       return {
         status: "stale",
@@ -24613,11 +25018,11 @@
         }
       };
     }
-    for (const decision of planOcularPowers(dependencies.reader.readPlan())) {
-      const outcome = dependencies.executor.execute(decision);
+    for (const decision2 of planOcularPowers(dependencies.reader.readPlan())) {
+      const outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED6;
+    return SUCCEEDED7;
   }
 
   // src/adapters/evolve/ocular-power.ts
@@ -24715,16 +25120,16 @@
       }
     });
     const executor = Object.freeze({
-      execute(decision) {
-        if (typeof decision.key !== "string" || decision.key.length === 0 || typeof decision.id !== "string" || decision.id.length === 0 || typeof decision.enabled !== "boolean") {
+      execute(decision2) {
+        if (typeof decision2.key !== "string" || decision2.key.length === 0 || typeof decision2.id !== "string" || decision2.id.length === 0 || typeof decision2.enabled !== "boolean") {
           return rejected2(
             "invalid-ocular-power-decision",
             "ocular power decisions require a key, id, and boolean state"
           );
         }
         const active = session;
-        const identity2 = active?.byKey.get(decision.key);
-        if (active === null || identity2 === void 0 || identity2.id !== decision.id) {
+        const identity2 = active?.byKey.get(decision2.key);
+        if (active === null || identity2 === void 0 || identity2.id !== decision2.id) {
           return stale(
             "ocular-power-catalog-changed",
             "ocular power catalog changed"
@@ -24733,18 +25138,18 @@
         if (!isUnlocked(readRace(dependencies.getGame()))) {
           return stale("ocular-power-locked", "ocular powers became unavailable");
         }
-        const current = dependencies.controls.current(decision.key);
+        const current = dependencies.controls.current(decision2.key);
         if (current === null) {
           return stale(
             "ocular-controls-unavailable",
             "ocular power controls became unavailable"
           );
         }
-        if (current === decision.enabled) return SUCCEEDED;
-        if (!dependencies.controls.toggle(decision.id)) {
+        if (current === decision2.enabled) return SUCCEEDED;
+        if (!dependencies.controls.toggle(decision2.id)) {
           return stale(
             "ocular-toggle-unavailable",
-            `ocular power ${decision.id} control became unavailable`
+            `ocular power ${decision2.id} control became unavailable`
           );
         }
         return SUCCEEDED;
@@ -24833,7 +25238,7 @@
   }
 
   // src/application/minor-trait.ts
-  var SUCCEEDED7 = Object.freeze({
+  var SUCCEEDED8 = Object.freeze({
     status: "succeeded"
   });
   function staleCandidate(index, expectedTraitName, actualTraitName) {
@@ -24849,7 +25254,7 @@
   function runMinorTraitAutomation(dependencies) {
     const summary = summarizeMinorTraits(dependencies.reader.readSummary());
     if (summary === null) {
-      return SUCCEEDED7;
+      return SUCCEEDED8;
     }
     for (let index = 0; index < summary.traits.length; index++) {
       const expected = summary.traits[index];
@@ -24864,16 +25269,16 @@
           candidate?.traitName ?? null
         );
       }
-      const decision = planMinorTraitPurchase(summary, candidate);
-      if (decision === null) {
+      const decision2 = planMinorTraitPurchase(summary, candidate);
+      if (decision2 === null) {
         continue;
       }
-      const outcome = dependencies.executor.execute(decision);
+      const outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") {
         return outcome;
       }
     }
-    return SUCCEEDED7;
+    return SUCCEEDED8;
   }
 
   // src/adapters/evolve/minor-trait.ts
@@ -24969,8 +25374,8 @@
   }
   function createMinorTraitCommandExecutor(dependencies) {
     return Object.freeze({
-      execute(decision) {
-        if (!Number.isFinite(decision.geneCost) || decision.geneCost < 0) {
+      execute(decision2) {
+        if (!Number.isFinite(decision2.geneCost) || decision2.geneCost < 0) {
           return rejected2(
             "invalid-minor-trait-cost",
             "minor-trait gene cost must be a non-negative finite number"
@@ -24982,10 +25387,10 @@
           genes["currentQuantity"],
           "resources.Genes.currentQuantity"
         );
-        if (actualGenes !== decision.expectedGenes) {
+        if (actualGenes !== decision2.expectedGenes) {
           return stale("stale-minor-trait-genes", "Genes balance changed", {
-            traitName: decision.traitName,
-            expected: decision.expectedGenes,
+            traitName: decision2.traitName,
+            expected: decision2.expectedGenes,
             actual: actualGenes
           });
         }
@@ -24997,8 +25402,8 @@
           manager["buyTrait"],
           "MinorTraitManager.buyTrait"
         );
-        Reflect.apply(buyTrait, manager, [decision.traitName]);
-        genes["currentQuantity"] = actualGenes - decision.geneCost;
+        Reflect.apply(buyTrait, manager, [decision2.traitName]);
+        genes["currentQuantity"] = actualGenes - decision2.geneCost;
         return SUCCEEDED;
       }
     });
@@ -25017,7 +25422,7 @@
   }
 
   // src/application/trigger.ts
-  var SUCCEEDED8 = Object.freeze({
+  var SUCCEEDED9 = Object.freeze({
     status: "succeeded"
   });
   function result(outcome, active) {
@@ -25027,18 +25432,18 @@
     let index = 0;
     let active = false;
     while (true) {
-      const decision = planTrigger(dependencies.reader.read(index));
-      if (decision === null) {
-        return result(SUCCEEDED8, active);
+      const decision2 = planTrigger(dependencies.reader.read(index));
+      if (decision2 === null) {
+        return result(SUCCEEDED9, active);
       }
-      if (decision.kind === "click") {
-        const execution = dependencies.executor.execute(decision);
+      if (decision2.kind === "click") {
+        const execution = dependencies.executor.execute(decision2);
         if (execution.outcome.status !== "succeeded") {
           return result(execution.outcome, active);
         }
         active ||= execution.clicked;
       }
-      index = decision.index + 1;
+      index = decision2.index + 1;
     }
   }
 
@@ -25098,8 +25503,8 @@
   }
   function createTriggerCommandExecutor(dependencies) {
     return Object.freeze({
-      execute(decision) {
-        if (!Number.isSafeInteger(decision.index) || decision.index < 0) {
+      execute(decision2) {
+        if (!Number.isSafeInteger(decision2.index) || decision2.index < 0) {
           return executionResult(
             rejected2(
               "invalid-trigger-index",
@@ -25109,14 +25514,14 @@
           );
         }
         const targets = readTriggerTargets(dependencies.getState);
-        const value = targets[decision.index];
+        const value = targets[decision2.index];
         const target = typeof value === "object" && value !== null ? value : null;
         const actualId = target !== null && typeof target["id"] === "string" ? target["id"] : null;
-        if (target === null || actualId !== decision.targetId) {
+        if (target === null || actualId !== decision2.targetId) {
           return executionResult(
             stale("stale-trigger-target", "trigger target list changed", {
-              targetId: decision.targetId,
-              index: decision.index,
+              targetId: decision2.targetId,
+              index: decision2.index,
               actualTargetId: actualId
             }),
             false
@@ -25124,7 +25529,7 @@
         }
         const click = requireFunction(
           target["click"],
-          `state.triggerTargets[${decision.index}].click`
+          `state.triggerTargets[${decision2.index}].click`
         );
         return executionResult(
           SUCCEEDED,
@@ -25462,8 +25867,8 @@
   }
   function createConsumeCommandExecutor(getManager) {
     return Object.freeze({
-      execute(decision) {
-        const activeAdjustments = decision.adjustments.filter(
+      execute(decision2) {
+        const activeAdjustments = decision2.adjustments.filter(
           (adjustment) => adjustment.delta !== 0
         );
         if (activeAdjustments.length === 0) {
@@ -25638,13 +26043,13 @@
   }
 
   // src/application/replicator.ts
-  var SUCCEEDED9 = Object.freeze({
+  var SUCCEEDED10 = Object.freeze({
     status: "succeeded"
   });
   function runReplicatorAutomation(dependencies) {
     const planningInput = dependencies.selectionReader.readPlanningInput();
     if (!planningInput.initialised) {
-      return SUCCEEDED9;
+      return SUCCEEDED10;
     }
     const priorityPlan = planReplicatorPriority(planningInput);
     if (priorityPlan !== null) {
@@ -25660,18 +26065,18 @@
       }
     }
     if (!planningInput.assignGovernorTask) {
-      return SUCCEEDED9;
+      return SUCCEEDED10;
     }
     if (!shouldConfigureReplicatorGovernor(
       dependencies.governorGameReader.readGate()
     ) || !dependencies.governorOfficeReader.open()) {
-      return SUCCEEDED9;
+      return SUCCEEDED10;
     }
     const taskPlan = planReplicatorGovernorTask(
       dependencies.governorGameReader.readTasks()
     );
     if (taskPlan.status === "unavailable") {
-      return SUCCEEDED9;
+      return SUCCEEDED10;
     }
     if (taskPlan.assignment !== null) {
       const outcome = dependencies.governorExecutor.execute(taskPlan.assignment);
@@ -25681,10 +26086,10 @@
     }
     const settings2 = dependencies.governorOfficeReader.readSettings();
     if (settings2 === null) {
-      return SUCCEEDED9;
+      return SUCCEEDED10;
     }
     const settingsDecision = planReplicatorGovernorSettings(settings2);
-    return settingsDecision === null ? SUCCEEDED9 : dependencies.governorExecutor.execute(settingsDecision);
+    return settingsDecision === null ? SUCCEEDED10 : dependencies.governorExecutor.execute(settingsDecision);
   }
 
   // src/adapters/evolve/replicator.ts
@@ -25868,23 +26273,23 @@
   }
   function createReplicatorSelectionExecutor(getManager) {
     return Object.freeze({
-      execute(decision) {
+      execute(decision2) {
         const manager = requireRecord(getManager(), "ReplicatorManager");
         const production = readProductions2(manager).byId.get(
-          decision.productionId
+          decision2.productionId
         );
         if (production === void 0) {
           return stale(
             "stale-replicator-production",
             "replicator production list changed",
-            { productionId: decision.productionId }
+            { productionId: decision2.productionId }
           );
         }
         const setResource = requireFunction(
           manager["setResource"],
           "ReplicatorManager.setResource"
         );
-        Reflect.apply(setResource, manager, [decision.productionId]);
+        Reflect.apply(setResource, manager, [decision2.productionId]);
         return SUCCEEDED;
       }
     });
@@ -26000,29 +26405,29 @@
         }
       }),
       executor: Object.freeze({
-        execute(decision) {
+        execute(decision2) {
           if (office === null) {
             return rejected2(
               "governor-office-not-open",
               "replicator governor office session is not open"
             );
           }
-          if (decision.kind === "assign-governor-task") {
-            if (!Number.isSafeInteger(decision.taskIndex) || decision.taskIndex < 0) {
+          if (decision2.kind === "assign-governor-task") {
+            if (!Number.isSafeInteger(decision2.taskIndex) || decision2.taskIndex < 0) {
               return rejected2(
                 "invalid-governor-task-index",
                 "governor task index must be a non-negative safe integer"
               );
             }
             const tasks = requireRecord(office["t"], "governorOffice.t");
-            const actual = Object.values(tasks)[decision.taskIndex];
-            if (actual !== decision.expectedTask) {
+            const actual = Object.values(tasks)[decision2.taskIndex];
+            if (actual !== decision2.expectedTask) {
               return stale(
                 "stale-governor-task",
                 "governor task assignments changed",
                 {
-                  taskIndex: decision.taskIndex,
-                  expected: decision.expectedTask,
+                  taskIndex: decision2.taskIndex,
+                  expected: decision2.expectedTask,
                   actual: typeof actual === "string" ? actual : null
                 }
               );
@@ -26031,7 +26436,7 @@
               office["setTask"],
               "governorOffice.setTask"
             );
-            Reflect.apply(setTask, office, ["replicate", decision.taskIndex]);
+            Reflect.apply(setTask, office, ["replicate", decision2.taskIndex]);
             return SUCCEEDED;
           }
           const current = readGovernorSettings(office);
@@ -26041,7 +26446,7 @@
               "replicator governor settings disappeared"
             );
           }
-          if (!settingsMatch(current.input, decision.expected)) {
+          if (!settingsMatch(current.input, decision2.expected)) {
             return stale(
               "stale-replicator-governor-settings",
               "replicator governor settings changed"
@@ -26051,19 +26456,19 @@
             office["$forceUpdate"],
             "governorOffice.$forceUpdate"
           );
-          if (decision.enablePower) {
+          if (decision2.enablePower) {
             current.power["on"] = true;
           }
-          if (decision.disableQueue) {
+          if (decision2.disableQueue) {
             current.resources["que"] = false;
           }
-          if (decision.disableNegative) {
+          if (decision2.disableNegative) {
             current.resources["neg"] = false;
           }
-          if (decision.disableCapSwitch) {
+          if (decision2.disableCapSwitch) {
             current.resources["cap"] = false;
           }
-          if (decision.raisePowerCap) {
+          if (decision2.raisePowerCap) {
             current.power["cap"] = 1e12;
           }
           Reflect.apply(forceUpdate, office, []);
@@ -26133,20 +26538,20 @@
   }
 
   // src/application/market.ts
-  var SUCCEEDED10 = Object.freeze({
+  var SUCCEEDED11 = Object.freeze({
     status: "succeeded"
   });
   function runMarketAutomation(dependencies, bulkSell = false, ignoreSellRatio = false) {
     const gate = dependencies.reader.readGate();
     if (!gate.unlocked) {
-      return SUCCEEDED10;
+      return SUCCEEDED11;
     }
     dependencies.tradeRoutes.adjust();
     if (gate.noTrade) {
-      return SUCCEEDED10;
+      return SUCCEEDED11;
     }
     const session = dependencies.reader.readSession();
-    let outcome = SUCCEEDED10;
+    let outcome = SUCCEEDED11;
     for (let index = 0; ; index++) {
       const sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
       if (sellInput === null) {
@@ -26490,9 +26895,9 @@
   }
   function createMarketCommandExecutor(dependencies) {
     return Object.freeze({
-      execute(decision) {
-        if (decision.kind === "restore-multiplier") {
-          if (!Number.isFinite(decision.multiplier)) {
+      execute(decision2) {
+        if (decision2.kind === "restore-multiplier") {
+          if (!Number.isFinite(decision2.multiplier)) {
             return rejected2(
               "invalid-market-multiplier",
               "market multiplier must be finite"
@@ -26506,10 +26911,10 @@
             manager2["setMultiplier"],
             "MarketManager.setMultiplier"
           );
-          Reflect.apply(setMultiplier2, manager2, [decision.multiplier]);
+          Reflect.apply(setMultiplier2, manager2, [decision2.multiplier]);
           return SUCCEEDED;
         }
-        if (!Number.isSafeInteger(decision.repetitions) || decision.repetitions < 1 || !Number.isSafeInteger(decision.multiplier)) {
+        if (!Number.isSafeInteger(decision2.repetitions) || decision2.repetitions < 1 || !Number.isSafeInteger(decision2.multiplier)) {
           return rejected2(
             "invalid-market-trade",
             "market trade multiplier and repetitions must be safe integers"
@@ -26521,13 +26926,13 @@
           "MarketManager.setMultiplier"
         );
         const list = readPriorityList(manager);
-        const raw = list[decision.index];
+        const raw = list[decision2.index];
         const resource = typeof raw === "object" && raw !== null ? raw : null;
         const actualId = resource !== null && typeof resource["id"] === "string" ? resource["id"] : null;
-        if (resource === null || actualId !== decision.resourceId) {
+        if (resource === null || actualId !== decision2.resourceId) {
           return stale("stale-market-resource", "market priority list changed", {
-            index: decision.index,
-            expectedResourceId: decision.resourceId,
+            index: decision2.index,
+            expectedResourceId: decision2.resourceId,
             actualResourceId: actualId
           });
         }
@@ -26539,26 +26944,26 @@
         );
         const actualResource = requireNumber(
           resource["currentQuantity"],
-          `resources.${decision.resourceId}.currentQuantity`
+          `resources.${decision2.resourceId}.currentQuantity`
         );
-        const priceMethod = decision.side === "sell" ? "getUnitSellPrice" : "getUnitBuyPrice";
+        const priceMethod = decision2.side === "sell" ? "getUnitSellPrice" : "getUnitBuyPrice";
         const actualPrice = callNumber8(
           manager,
           priceMethod,
           "MarketManager",
           resource
         );
-        if (actualMoney !== decision.expectedMoneyCurrent || actualResource !== decision.expectedResourceCurrent || actualPrice !== decision.expectedUnitPrice) {
+        if (actualMoney !== decision2.expectedMoneyCurrent || actualResource !== decision2.expectedResourceCurrent || actualPrice !== decision2.expectedUnitPrice) {
           return stale("stale-market-state", "market inputs changed", {
-            resourceId: decision.resourceId
+            resourceId: decision2.resourceId
           });
         }
         const trade = requireFunction(
-          manager[decision.side],
-          `MarketManager.${decision.side}`
+          manager[decision2.side],
+          `MarketManager.${decision2.side}`
         );
-        Reflect.apply(setMultiplier, manager, [decision.multiplier]);
-        for (let index = 0; index < decision.repetitions; index++) {
+        Reflect.apply(setMultiplier, manager, [decision2.multiplier]);
+        for (let index = 0; index < decision2.repetitions; index++) {
           Reflect.apply(trade, manager, [resource]);
         }
         return SUCCEEDED;
@@ -27378,7 +27783,7 @@
   );
 
   // src/application/power.ts
-  var SUCCEEDED11 = Object.freeze({
+  var SUCCEEDED12 = Object.freeze({
     status: "succeeded"
   });
   function createPowerAutomation(dependencies) {
@@ -27387,7 +27792,7 @@
       run() {
         const plan = planPowerCycle(dependencies.reader.readCycle(), state2);
         if (plan.decision === null) {
-          return SUCCEEDED11;
+          return SUCCEEDED12;
         }
         const cycleOutcome = dependencies.executor.execute(plan.decision);
         if (cycleOutcome.status !== "succeeded") {
@@ -27400,7 +27805,7 @@
           )
         );
         if (warning === null) {
-          return SUCCEEDED11;
+          return SUCCEEDED12;
         }
         const warningOutcome = dependencies.executor.execute(warning);
         if (warningOutcome.status !== "succeeded") {
@@ -27411,7 +27816,7 @@
           warning.binding,
           dependencies.reader.readStateOn(warning.binding)
         );
-        return SUCCEEDED11;
+        return SUCCEEDED12;
       },
       readState() {
         return state2;
@@ -28635,11 +29040,11 @@
         );
       }
     });
-    function validateSession(decision) {
+    function validateSession(decision2) {
       if (session === null) {
         return null;
       }
-      if (decision.expectedBuildings.length !== session.ordered.length) {
+      if (decision2.expectedBuildings.length !== session.ordered.length) {
         return null;
       }
       const currentValue = Reflect.apply(
@@ -28653,8 +29058,8 @@
       if (!Array.isArray(currentValue) || currentValue.length !== session.ordered.length) {
         return null;
       }
-      for (let index = 0; index < decision.expectedBuildings.length; index++) {
-        const expected = decision.expectedBuildings[index];
+      for (let index = 0; index < decision2.expectedBuildings.length; index++) {
+        const expected = decision2.expectedBuildings[index];
         const actual = session.ordered[index];
         const current = currentValue[index];
         if (expected === void 0 || actual === void 0 || current === void 0 || session.buildings.get(actual.id) !== current || expected.id !== actual.id || expected.binding !== actual.binding) {
@@ -28812,45 +29217,45 @@
       }
     }
     const executor = Object.freeze({
-      execute(decision) {
-        if (decision.kind === "apply-power-cycle") {
-          const active = validateSession(decision);
+      execute(decision2) {
+        if (decision2.kind === "apply-power-cycle") {
+          const active = validateSession(decision2);
           if (active === null) {
             return stale(
               "power-session-changed",
               "Power planning session changed"
             );
           }
-          const failure2 = preflightOperations(active, decision.operations);
+          const failure2 = preflightOperations(active, decision2.operations);
           if (failure2 !== null) {
             return stale("power-precondition-changed", failure2);
           }
-          applyOperations(active, decision.operations);
+          applyOperations(active, decision2.operations);
           return SUCCEEDED;
         }
-        if (decision.kind !== "shutdown-warned-building") {
+        if (decision2.kind !== "shutdown-warned-building") {
           return rejected2("invalid-power-decision", "Unsupported power decision");
         }
         const buildingIds2 = requireRecord(
           dependencies.getBuildingIds(),
           "buildingIds"
         );
-        const value = buildingIds2[decision.domId];
+        const value = buildingIds2[decision2.domId];
         if (value === void 0) {
           return stale("warned-building-missing", "Warned building disappeared");
         }
-        const building = requireRecord(value, `buildingIds.${decision.domId}`);
-        if (buildingId(building, `buildingIds.${decision.domId}`) !== decision.buildingId || buildingBinding(building, `buildingIds.${decision.domId}`) !== decision.binding || finiteProperty(
+        const building = requireRecord(value, `buildingIds.${decision2.domId}`);
+        if (buildingId(building, `buildingIds.${decision2.domId}`) !== decision2.buildingId || buildingBinding(building, `buildingIds.${decision2.domId}`) !== decision2.binding || finiteProperty(
           building,
           "stateOnCount",
-          `buildingIds.${decision.domId}`
-        ) !== decision.expectedStateOn) {
+          `buildingIds.${decision2.domId}`
+        ) !== decision2.expectedStateOn) {
           return stale("warned-building-changed", "Warned building changed");
         }
         Reflect.apply(
           requireFunction(
             building["tryAdjustState"],
-            `buildingIds.${decision.domId}.tryAdjustState`
+            `buildingIds.${decision2.domId}.tryAdjustState`
           ),
           building,
           [-1]
@@ -29189,7 +29594,7 @@
   });
 
   // src/application/storage-allocation.ts
-  var SUCCEEDED12 = Object.freeze({
+  var SUCCEEDED13 = Object.freeze({
     status: "succeeded"
   });
   function createStorageAllocationAutomation(dependencies) {
@@ -29197,9 +29602,9 @@
     return Object.freeze({
       run() {
         const rawPlan = planStorageAllocation(dependencies.reader.read());
-        if (rawPlan === null) return SUCCEEDED12;
+        if (rawPlan === null) return SUCCEEDED13;
         if (rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild)) {
-          return SUCCEEDED12;
+          return SUCCEEDED13;
         }
         const finalized = finalizeStorageAllocation(rawPlan, state2);
         const outcome = dependencies.executor.execute(finalized.decision);
@@ -29236,7 +29641,7 @@
     const value = resource["autoSellRatio"];
     return value === void 0 || value === null ? 0 : requireNumber(value, `${path}.autoSellRatio`);
   }
-  function emptyInput3(initialized) {
+  function emptyInput4(initialized) {
     return Object.freeze({
       initialized,
       crateValue: 0,
@@ -29297,7 +29702,7 @@
         );
         if (!callBoolean14(manager, "initStorage", "StorageManager")) {
           session = null;
-          return emptyInput3(false);
+          return emptyInput4(false);
         }
         const crateValue = finiteProperty2(
           manager,
@@ -29312,7 +29717,7 @@
         if (crateValue <= 0 || containerValue <= 0) {
           session = null;
           return Object.freeze({
-            ...emptyInput3(true),
+            ...emptyInput4(true),
             crateValue,
             containerValue
           });
@@ -29406,7 +29811,7 @@
         if (managedIds.size === 0) {
           session = null;
           return Object.freeze({
-            ...emptyInput3(true),
+            ...emptyInput4(true),
             crateValue,
             containerValue,
             resources: Object.freeze([...inputs.values()]),
@@ -29590,12 +29995,12 @@
         });
       }
     });
-    function validateDecision(decision) {
-      if (decision.kind !== "apply-storage-allocation" || !Number.isFinite(decision.crateValue) || !Number.isFinite(decision.containerValue) || !Number.isFinite(decision.expectedFreeCrates) || !Number.isFinite(decision.expectedFreeContainers)) {
+    function validateDecision(decision2) {
+      if (decision2.kind !== "apply-storage-allocation" || !Number.isFinite(decision2.crateValue) || !Number.isFinite(decision2.containerValue) || !Number.isFinite(decision2.expectedFreeCrates) || !Number.isFinite(decision2.expectedFreeContainers)) {
         return "storage allocation decision contains invalid values";
       }
       const ids = /* @__PURE__ */ new Set();
-      for (const adjustment of decision.adjustments) {
+      for (const adjustment of decision2.adjustments) {
         if (typeof adjustment.resourceId !== "string" || adjustment.resourceId.length === 0 || ids.has(adjustment.resourceId) || !Number.isSafeInteger(adjustment.expectedCrates) || !Number.isSafeInteger(adjustment.expectedContainers) || !Number.isSafeInteger(adjustment.crateDelta) || !Number.isSafeInteger(adjustment.containerDelta) || !Number.isFinite(adjustment.expectedMaximum)) {
           return "storage allocation adjustments must have unique ids and finite integer counts";
         }
@@ -29604,8 +30009,8 @@
       return null;
     }
     const executor = Object.freeze({
-      execute(decision) {
-        const invalid = validateDecision(decision);
+      execute(decision2) {
+        const invalid = validateDecision(decision2);
         if (invalid !== null) {
           return rejected2("invalid-storage-allocation", invalid);
         }
@@ -29619,7 +30024,7 @@
         const priorityValue = active.manager["priorityList"];
         if (!Array.isArray(priorityValue) || priorityValue.length !== active.priority.length || priorityValue.some(
           (resource, index) => resource !== active.priority[index]
-        ) || decision.expectedPriorityResourceIds.length !== active.priority.length) {
+        ) || decision2.expectedPriorityResourceIds.length !== active.priority.length) {
           return stale(
             "storage-priority-changed",
             "Storage priority list changed"
@@ -29627,7 +30032,7 @@
         }
         for (let index = 0; index < active.priority.length; index++) {
           const resource = active.priority[index];
-          const expectedId = decision.expectedPriorityResourceIds[index];
+          const expectedId = decision2.expectedPriorityResourceIds[index];
           if (resource === void 0 || expectedId === void 0 || resourceId2(resource, `StorageManager.priorityList[${index}]`) !== expectedId) {
             return stale(
               "storage-priority-changed",
@@ -29635,22 +30040,22 @@
             );
           }
         }
-        if (finiteProperty2(active.manager, "crateValue", "StorageManager") !== decision.crateValue || finiteProperty2(active.manager, "containerValue", "StorageManager") !== decision.containerValue || finiteProperty2(
+        if (finiteProperty2(active.manager, "crateValue", "StorageManager") !== decision2.crateValue || finiteProperty2(active.manager, "containerValue", "StorageManager") !== decision2.containerValue || finiteProperty2(
           active.crates,
           "currentQuantity",
           "resources.Crates"
-        ) !== decision.expectedFreeCrates || finiteProperty2(
+        ) !== decision2.expectedFreeCrates || finiteProperty2(
           active.containers,
           "currentQuantity",
           "resources.Containers"
-        ) !== decision.expectedFreeContainers) {
+        ) !== decision2.expectedFreeContainers) {
           return stale(
             "storage-capacity-changed",
             "Storage capacities or free counts changed"
           );
         }
         const resolved = [];
-        for (const adjustment of decision.adjustments) {
+        for (const adjustment of decision2.adjustments) {
           const resource = active.resources.get(adjustment.resourceId);
           if (resource === void 0 || !active.managedIds.has(adjustment.resourceId)) {
             return stale(
@@ -29702,7 +30107,7 @@
           }
           resolved.push({ adjustment, resource });
         }
-        for (const message of decision.logs) dependencies.log(message);
+        for (const message of decision2.logs) dependencies.log(message);
         for (const { adjustment, resource } of resolved) {
           if (adjustment.crateDelta < 0) {
             Reflect.apply(
@@ -29717,7 +30122,7 @@
               resource,
               "maxQuantity",
               `resources.${adjustment.resourceId}`
-            ) + adjustment.crateDelta * decision.crateValue;
+            ) + adjustment.crateDelta * decision2.crateValue;
             active.crates["currentQuantity"] = finiteProperty2(
               active.crates,
               "currentQuantity",
@@ -29737,7 +30142,7 @@
               resource,
               "maxQuantity",
               `resources.${adjustment.resourceId}`
-            ) + adjustment.containerDelta * decision.containerValue;
+            ) + adjustment.containerDelta * decision2.containerValue;
             active.containers["currentQuantity"] = finiteProperty2(
               active.containers,
               "currentQuantity",
@@ -29759,7 +30164,7 @@
               resource,
               "maxQuantity",
               `resources.${adjustment.resourceId}`
-            ) + adjustment.crateDelta * decision.crateValue;
+            ) + adjustment.crateDelta * decision2.crateValue;
             active.crates["currentQuantity"] = finiteProperty2(
               active.crates,
               "currentQuantity",
@@ -29779,7 +30184,7 @@
               resource,
               "maxQuantity",
               `resources.${adjustment.resourceId}`
-            ) + adjustment.containerDelta * decision.containerValue;
+            ) + adjustment.containerDelta * decision2.containerValue;
             active.containers["currentQuantity"] = finiteProperty2(
               active.containers,
               "currentQuantity",
@@ -29876,12 +30281,12 @@
   }
 
   // src/application/galaxy-market.ts
-  var SUCCEEDED13 = Object.freeze({
+  var SUCCEEDED14 = Object.freeze({
     status: "succeeded"
   });
   function runGalaxyMarketAutomation(dependencies) {
-    const decision = planGalaxyMarket(dependencies.reader.read());
-    return decision === null ? SUCCEEDED13 : dependencies.executor.execute(decision);
+    const decision2 = planGalaxyMarket(dependencies.reader.read());
+    return decision2 === null ? SUCCEEDED14 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/galaxy-market.ts
@@ -29925,7 +30330,7 @@
       sellResourceId: requireId3(sell["res"], `${path}.sell.res`)
     });
   }
-  function emptyInput4() {
+  function emptyInput5() {
     return Object.freeze({
       initialized: false,
       maximum: 0,
@@ -29945,7 +30350,7 @@
         const settings2 = requireRecord(dependencies.getSettings(), "settings");
         if (!callBoolean15(manager, "initIndustry", "GalaxyTradeManager")) {
           session = null;
-          return emptyInput4();
+          return emptyInput5();
         }
         const rawOffers = dependencies.getOffers();
         if (!Array.isArray(rawOffers)) {
@@ -30055,15 +30460,15 @@
       }
     });
     const executor = Object.freeze({
-      execute(decision) {
-        if (!Number.isSafeInteger(decision.expectedMaximum) || decision.expectedMaximum < 0) {
+      execute(decision2) {
+        if (!Number.isSafeInteger(decision2.expectedMaximum) || decision2.expectedMaximum < 0) {
           return rejected2(
             "invalid-galaxy-market-maximum",
             "galaxy-market maximum must be a non-negative safe integer"
           );
         }
         const indices = /* @__PURE__ */ new Set();
-        for (const adjustment of decision.adjustments) {
+        for (const adjustment of decision2.adjustments) {
           if (!Number.isSafeInteger(adjustment.offerIndex) || adjustment.offerIndex < 0 || indices.has(adjustment.offerIndex) || typeof adjustment.buyResourceId !== "string" || adjustment.buyResourceId.length === 0 || typeof adjustment.sellResourceId !== "string" || adjustment.sellResourceId.length === 0 || !Number.isSafeInteger(adjustment.expectedCurrent) || adjustment.expectedCurrent < 0 || !Number.isSafeInteger(adjustment.delta) || !Number.isSafeInteger(
             adjustment.expectedCurrent + adjustment.delta
           ) || adjustment.expectedCurrent + adjustment.delta < 0) {
@@ -30094,14 +30499,14 @@
         if (requireCount3(
           callNumber10(manager, "maxOperating", "GalaxyTradeManager"),
           "GalaxyTradeManager.maxOperating()"
-        ) !== decision.expectedMaximum) {
+        ) !== decision2.expectedMaximum) {
           return stale(
             "galaxy-market-capacity-changed",
             "Galaxy market capacity changed"
           );
         }
         const rawOffers = dependencies.getOffers();
-        if (!Array.isArray(rawOffers) || rawOffers.length !== active.offers.length || decision.adjustments.length !== active.offers.length) {
+        if (!Array.isArray(rawOffers) || rawOffers.length !== active.offers.length || decision2.adjustments.length !== active.offers.length) {
           return stale(
             "galaxy-market-offers-changed",
             "Galaxy market offers changed"
@@ -30111,13 +30516,13 @@
           manager["currentProduction"],
           "GalaxyTradeManager.currentProduction"
         );
-        const decreaseProduction = decision.adjustments.some(
+        const decreaseProduction = decision2.adjustments.some(
           (adjustment) => adjustment.delta < 0
         ) ? requireFunction(
           manager["decreaseProduction"],
           "GalaxyTradeManager.decreaseProduction"
         ) : null;
-        const increaseProduction = decision.adjustments.some(
+        const increaseProduction = decision2.adjustments.some(
           (adjustment) => adjustment.delta > 0
         ) ? requireFunction(
           manager["increaseProduction"],
@@ -30129,7 +30534,7 @@
             `galaxyOffers[${index}]`
           );
           const expectedIdentity = active.offers[index];
-          const adjustment = decision.adjustments[index];
+          const adjustment = decision2.adjustments[index];
           if (expectedIdentity === void 0 || adjustment === void 0 || adjustment.offerIndex !== index || identity2.buyResourceId !== expectedIdentity.buyResourceId || identity2.sellResourceId !== expectedIdentity.sellResourceId || adjustment.buyResourceId !== expectedIdentity.buyResourceId || adjustment.sellResourceId !== expectedIdentity.sellResourceId) {
             return stale(
               "galaxy-market-offers-changed",
@@ -30151,7 +30556,7 @@
             );
           }
         }
-        for (const adjustment of decision.adjustments) {
+        for (const adjustment of decision2.adjustments) {
           if (adjustment.delta < 0 && decreaseProduction !== null) {
             Reflect.apply(decreaseProduction, manager, [
               adjustment.offerIndex,
@@ -30159,7 +30564,7 @@
             ]);
           }
         }
-        for (const adjustment of decision.adjustments) {
+        for (const adjustment of decision2.adjustments) {
           if (adjustment.delta > 0 && increaseProduction !== null) {
             Reflect.apply(increaseProduction, manager, [
               adjustment.offerIndex,
@@ -30297,12 +30702,12 @@
   }
 
   // src/application/gather-resources.ts
-  var SUCCEEDED14 = Object.freeze({
+  var SUCCEEDED15 = Object.freeze({
     status: "succeeded"
   });
   function runGatherResourcesAutomation(dependencies) {
-    const decision = planGatherResources(dependencies.reader.read());
-    return decision === null ? SUCCEEDED14 : dependencies.executor.execute(decision);
+    const decision2 = planGatherResources(dependencies.reader.read());
+    return decision2 === null ? SUCCEEDED15 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/gather-resources.ts
@@ -30339,7 +30744,7 @@
       `resources.${id}.currentQuantity`
     );
   }
-  function emptyInput5() {
+  function emptyInput6() {
     const empty = Object.freeze({ currentQuantity: 0, maxQuantity: 0 });
     return Object.freeze({
       stopped: true,
@@ -30402,7 +30807,7 @@
           );
           if (quarryCount > 0 || Boolean(race["sappy"])) {
             session = null;
-            return emptyInput5();
+            return emptyInput6();
           }
         }
         const resourcesPerClick = requireNumber(
@@ -30518,14 +30923,14 @@
       }
     });
     const executor = Object.freeze({
-      execute(decision) {
-        if (!Array.isArray(decision.operations)) {
+      execute(decision2) {
+        if (!Array.isArray(decision2.operations)) {
           return rejected2(
             "invalid-gather-operations",
             "gather operations must be an array"
           );
         }
-        const operations = decision.operations;
+        const operations = decision2.operations;
         const active = session;
         if (active === null) {
           return stale(
@@ -30923,23 +31328,23 @@
   }
 
   // src/application/craft.ts
-  var SUCCEEDED15 = Object.freeze({
+  var SUCCEEDED16 = Object.freeze({
     status: "succeeded"
   });
   function runCraftAutomation(dependencies) {
     if (!shouldRunCraft(dependencies.reader.readGate())) {
-      return SUCCEEDED15;
+      return SUCCEEDED16;
     }
     for (let index = 0; ; index++) {
       const candidate = dependencies.reader.readCandidate(index);
       if (candidate === null) {
-        return SUCCEEDED15;
+        return SUCCEEDED16;
       }
-      const decision = planCraft(candidate);
-      if (decision === null) {
+      const decision2 = planCraft(candidate);
+      if (decision2 === null) {
         continue;
       }
-      const outcome = dependencies.executor.execute(decision);
+      const outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") {
         return outcome;
       }
@@ -31149,27 +31554,27 @@
   }
   function createCraftCommandExecutor(dependencies) {
     return Object.freeze({
-      execute(decision) {
-        if (!Number.isSafeInteger(decision.count) || decision.count < 1) {
+      execute(decision2) {
+        if (!Number.isSafeInteger(decision2.count) || decision2.count < 1) {
           return rejected2(
             "invalid-craft-count",
             "craft count must be a positive safe integer"
           );
         }
         const list = readFoundryList(dependencies.getFoundryList());
-        const value = list[decision.index];
+        const value = list[decision2.index];
         const craftable = typeof value === "object" && value !== null ? value : null;
         const actualCraftableId = craftable !== null && typeof craftable["id"] === "string" ? craftable["id"] : null;
-        if (craftable === null || actualCraftableId !== decision.craftableId) {
+        if (craftable === null || actualCraftableId !== decision2.craftableId) {
           return stale("stale-craft-candidate", "foundry list changed", {
-            index: decision.index,
-            expectedCraftableId: decision.craftableId,
+            index: decision2.index,
+            expectedCraftableId: decision2.craftableId,
             actualCraftableId
           });
         }
         const resources2 = requireRecord(dependencies.getResources(), "resources");
         const writes = [];
-        for (const spend of decision.spend) {
+        for (const spend of decision2.spend) {
           if (!Number.isFinite(spend.amount) || spend.amount < 0) {
             return rejected2(
               "invalid-craft-spend",
@@ -31199,9 +31604,9 @@
         }
         const tryCraftX = requireFunction(
           craftable["tryCraftX"],
-          `foundryList[${decision.index}].tryCraftX`
+          `foundryList[${decision2.index}].tryCraftX`
         );
-        Reflect.apply(tryCraftX, craftable, [decision.count]);
+        Reflect.apply(tryCraftX, craftable, [decision2.count]);
         for (const write of writes) {
           write.resource["currentQuantity"] = write.nextQuantity;
         }
@@ -32538,21 +32943,21 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED16 = Object.freeze({
+  var SUCCEEDED17 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
     let startIndex = 0;
     while (true) {
-      const decision = planResearch(dependencies.reader.read(startIndex));
-      if (decision === null) {
-        return SUCCEEDED16;
+      const decision2 = planResearch(dependencies.reader.read(startIndex));
+      if (decision2 === null) {
+        return SUCCEEDED17;
       }
-      const result2 = dependencies.executor.execute(decision);
+      const result2 = dependencies.executor.execute(decision2);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
         return result2.outcome;
       }
-      startIndex = decision.index + 1;
+      startIndex = decision2.index + 1;
     }
   }
 
@@ -32612,8 +33017,8 @@
   }
   function createResearchCommandExecutor(dependencies) {
     return Object.freeze({
-      execute(decision) {
-        if (!Number.isSafeInteger(decision.index) || decision.index < 0) {
+      execute(decision2) {
+        if (!Number.isSafeInteger(decision2.index) || decision2.index < 0) {
           return executionResult2(
             rejected2(
               "invalid-research-index",
@@ -32623,14 +33028,14 @@
           );
         }
         const unlockedTechs = readUnlockedTechs(dependencies.getState);
-        const value = unlockedTechs[decision.index];
+        const value = unlockedTechs[decision2.index];
         const tech = typeof value === "object" && value !== null ? value : null;
         const actualId = tech !== null && typeof tech["id"] === "string" ? tech["id"] : null;
-        if (actualId !== decision.techId || tech === null) {
+        if (actualId !== decision2.techId || tech === null) {
           return executionResult2(
             stale("stale-research-target", "unlocked research list changed", {
-              techId: decision.techId,
-              index: decision.index,
+              techId: decision2.techId,
+              index: decision2.index,
               actualTechId: actualId
             }),
             false
@@ -32638,7 +33043,7 @@
         }
         const click = requireFunction(
           tech["click"],
-          `state.unlockedTechs[${decision.index}].click`
+          `state.unlockedTechs[${decision2.index}].click`
         );
         const buildingManager = requireRecord(
           dependencies.getBuildingManager(),
@@ -32690,12 +33095,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED17 = Object.freeze({
+  var SUCCEEDED18 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
-    const decision = planMutation(dependencies.reader.read());
-    return decision === null ? SUCCEEDED17 : dependencies.executor.execute(decision);
+    const decision2 = planMutation(dependencies.reader.read());
+    return decision2 === null ? SUCCEEDED18 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -32829,36 +33234,36 @@
   }
   function createMutationCommandExecutor(dependencies) {
     return Object.freeze({
-      execute(decision) {
-        if (!Number.isFinite(decision.mutationCost) || decision.mutationCost < 0) {
+      execute(decision2) {
+        if (!Number.isFinite(decision2.mutationCost) || decision2.mutationCost < 0) {
           return rejected2(
             "invalid-mutation-cost",
             "mutation cost must be a non-negative finite number"
           );
         }
         const actualCurrencyId = currencyIdFromGame(dependencies.getGame);
-        if (actualCurrencyId !== decision.currencyId) {
+        if (actualCurrencyId !== decision2.currencyId) {
           return stale("stale-mutation-universe", "mutation universe changed", {
-            expectedCurrencyId: decision.currencyId,
+            expectedCurrencyId: decision2.currencyId,
             actualCurrencyId
           });
         }
         const resources2 = requireRecord(dependencies.getResources(), "resources");
         const currency = requireRecord(
-          resources2[decision.currencyId],
-          `resources.${decision.currencyId}`
+          resources2[decision2.currencyId],
+          `resources.${decision2.currencyId}`
         );
         const actualQuantity = requireNumber(
           currency["currentQuantity"],
-          `resources.${decision.currencyId}.currentQuantity`
+          `resources.${decision2.currencyId}.currentQuantity`
         );
-        if (actualQuantity !== decision.expectedCurrencyQuantity) {
+        if (actualQuantity !== decision2.expectedCurrencyQuantity) {
           return stale(
             "stale-mutation-currency",
             "mutation currency balance changed",
             {
-              currencyId: decision.currencyId,
-              expected: decision.expectedCurrencyQuantity,
+              currencyId: decision2.currencyId,
+              expected: decision2.expectedCurrencyQuantity,
               actual: actualQuantity
             }
           );
@@ -32868,16 +33273,16 @@
           "MutableTraitManager"
         );
         const list = readPriorityList2(manager);
-        const trait = typeof list[decision.index] === "object" && list[decision.index] !== null ? list[decision.index] : null;
+        const trait = typeof list[decision2.index] === "object" && list[decision2.index] !== null ? list[decision2.index] : null;
         const actualTraitName = trait !== null && typeof trait["traitName"] === "string" ? trait["traitName"] : null;
-        if (trait === null || actualTraitName !== decision.traitName) {
+        if (trait === null || actualTraitName !== decision2.traitName) {
           return stale("stale-mutation-trait", "mutation trait list changed", {
-            index: decision.index,
-            expectedTraitName: decision.traitName,
+            index: decision2.index,
+            expectedTraitName: decision2.traitName,
             actualTraitName
           });
         }
-        const methodName = decision.kind === "gain" ? "gainTrait" : "purgeTrait";
+        const methodName = decision2.kind === "gain" ? "gainTrait" : "purgeTrait";
         const mutate = requireFunction(
           manager[methodName],
           `MutableTraitManager.${methodName}`
@@ -32887,13 +33292,13 @@
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        Reflect.apply(mutate, manager, [decision.traitName]);
+        Reflect.apply(mutate, manager, [decision2.traitName]);
         Reflect.apply(logSuccess, gameLog, [
           "mutation",
-          `Mutating ${decision.kind === "gain" ? "in" : "out"} ${decision.displayName} for ${decision.mutationCost} ${decision.currencyName}`,
+          `Mutating ${decision2.kind === "gain" ? "in" : "out"} ${decision2.displayName} for ${decision2.mutationCost} ${decision2.currencyName}`,
           ["progress"]
         ]);
-        currency["currentQuantity"] = actualQuantity - decision.mutationCost;
+        currency["currentQuantity"] = actualQuantity - decision2.mutationCost;
         return SUCCEEDED;
       }
     });
@@ -45855,7 +46260,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     }
     const smelterExecutor = createSmelterCommandExecutor(() => SmelterManager);
     const autoSmelter = function autoSmelter2() {
-      const decision = planSmelter(
+      const decision2 = planSmelter(
         readSmelterInput({
           getSmelterManager: () => SmelterManager,
           getGame: () => game,
@@ -45867,10 +46272,10 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           consumptionBalanceMin: CONSUMPTION_BALANCE_MIN
         })
       );
-      for (const tooltip of decision.tooltips) {
+      for (const tooltip of decision2.tooltips) {
         state.tooltips[tooltip.key] = tooltip.value;
       }
-      smelterExecutor.execute(decision);
+      smelterExecutor.execute(decision2);
     };
     const factoryAdapter = createFactoryAdapter({
       getManager: () => FactoryManager,
@@ -46113,21 +46518,19 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         )
       );
     };
-    var psychicPowerCost = {
-      murder: [10, 8],
-      boost: [75, 60],
-      assault: [45, 36],
-      profit: [65, 52],
-      mind_break: [80, 64],
-      stun: [100, 80]
-    };
-    const autoPsychic = createAutoPsychic({
+    const psychicControls = createPsychicControls({
+      getVueById,
+      clickSelector: (selector) => $(selector).click()
+    });
+    const psychicAdapter = createPsychicAdapter({
       getGame: () => game,
       getSettings: () => settings,
       getResources: () => resources,
-      getVueById,
-      clickSelector: (selector) => $(selector).click(),
-      psychicPowerCost
+      controls: psychicControls
+    });
+    const autoPsychic = () => runPsychicAutomation({
+      reader: psychicAdapter.reader,
+      executor: psychicAdapter.executor
     });
     const ocularPowerData = [
       { key: "d", id: "disintegration", locParam: ["X"] },
@@ -46756,8 +47159,8 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       if (read.status !== "ready") {
         return true;
       }
-      const decision = decideEvolutionResult(read.input);
-      for (const event of decision.logs) {
+      const decision2 = decideEvolutionResult(read.input);
+      for (const event of decision2.logs) {
         const { level, message, tags } = formatEvolutionLog(
           event,
           (key) => game.loc(key)
@@ -46770,7 +47173,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           GameLog.logInfo("special", message, [...tags]);
         }
       }
-      if (decision.needReset) {
+      if (decision2.needReset) {
         const resetButton = document.querySelector(".reset .button:not(.right)");
         if (resetButton.innerText === game.loc("reset_soft")) {
           const addEvolutionSettingFn = evolutionResultTestActions?.addEvolutionSetting ?? addEvolutionSetting;
