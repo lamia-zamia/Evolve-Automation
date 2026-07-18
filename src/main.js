@@ -269,7 +269,9 @@ import { createWishControls } from "./adapters/browser/wish-controls.ts";
 import { createAutoGenetics } from "./automation/traits/genetics.ts";
 import { createAutoMerc } from "./automation/combat/mercenary.ts";
 import { createAutoPsychic } from "./automation/traits/psychic.ts";
-import { createAutoOcularPowers } from "./automation/traits/ocular.ts";
+import { runOcularPowerAutomation } from "./application/ocular-power.ts";
+import { createOcularPowerAdapter } from "./adapters/evolve/ocular-power.ts";
+import { createOcularPowerControls } from "./adapters/browser/ocular-power-controls.ts";
 import { runMinorTraitAutomation } from "./application/minor-trait.ts";
 import {
   createMinorTraitCommandExecutor,
@@ -3470,14 +3472,22 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     { key: "c", id: "charm", locParam: ["X"] },
   ];
 
-  const autoOcularPowers = createAutoOcularPowers({
-    getGame: () => game,
-    getSettings: () => settings,
+  const ocularPowerControls = createOcularPowerControls({
     getVueById,
-    traitVal,
-    getOcularPowerData: () => ocularPowerData,
     getDocument: () => document,
   });
+  const ocularPowerAdapter = createOcularPowerAdapter({
+    getGame: () => game,
+    getSettings: () => settings,
+    getPowerData: () => ocularPowerData,
+    controls: ocularPowerControls,
+  });
+  const autoOcularPowers = () =>
+    runOcularPowerAutomation({
+      reader: ocularPowerAdapter.reader,
+      executor: ocularPowerAdapter.executor,
+      controls: ocularPowerControls,
+    });
 
   const wishData = {
     minor: [
