@@ -285,7 +285,11 @@ import {
   createReplicatorSelectionReader,
 } from "./adapters/evolve/replicator.ts";
 import { createReplicatorGovernorOffice } from "./adapters/browser/replicator-governor.ts";
-import { createAutoMarket } from "./automation/economy/market.ts";
+import { runMarketAutomation } from "./application/market.ts";
+import {
+  createMarketCommandExecutor,
+  createMarketReader,
+} from "./adapters/evolve/market.ts";
 import { createAutoGalaxyMarket } from "./automation/economy/galaxy-market.ts";
 import { createAutoGatherResources } from "./automation/economy/gather-resources.ts";
 import { createAutoEvolution } from "./automation/progression/evolution.ts";
@@ -3512,14 +3516,25 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const autoMarket = createAutoMarket({
-    getMarketManager: () => MarketManager,
-    getGame: () => game,
-    getResources: () => resources,
-    getSettings: () => settings,
-    getAdjustTradeRoutes: () => adjustTradeRoutes,
-    ticksPerSecond,
-  });
+  const autoMarket = (bulkSell, ignoreSellRatio) =>
+    runMarketAutomation(
+      {
+        reader: createMarketReader({
+          getManager: () => MarketManager,
+          getGame: () => game,
+          getResources: () => resources,
+          getSettings: () => settings,
+          ticksPerSecond,
+        }),
+        executor: createMarketCommandExecutor({
+          getManager: () => MarketManager,
+          getResources: () => resources,
+        }),
+        tradeRoutes: { adjust: () => adjustTradeRoutes() },
+      },
+      bulkSell,
+      ignoreSellRatio,
+    );
 
   const autoGalaxyMarket = createAutoGalaxyMarket({
     getGalaxyTradeManager: () => GalaxyTradeManager,

@@ -379,6 +379,7 @@ const testReplicatorManager = {
   setResource: (id) => wave2Actions.push(["replicate", id]),
 };
 const marketResource = {
+  id: "Market",
   is: { tradable: true },
   isUnlocked: () => true,
   autoSellEnabled: true,
