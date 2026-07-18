@@ -296,7 +296,8 @@ import { createPowerWarningSource } from "./adapters/browser/power-warnings.ts";
 import { createStorageAllocationAutomation } from "./application/storage-allocation.ts";
 import { createStorageAllocationAdapter } from "./adapters/evolve/storage-allocation.ts";
 import { createStorageDebugSource } from "./adapters/browser/storage-debug.ts";
-import { createAutoGalaxyMarket } from "./automation/economy/galaxy-market.ts";
+import { runGalaxyMarketAutomation } from "./application/galaxy-market.ts";
+import { createGalaxyMarketAdapter } from "./adapters/evolve/galaxy-market.ts";
 import { createAutoGatherResources } from "./automation/economy/gather-resources.ts";
 import { createAutoEvolution } from "./automation/progression/evolution.ts";
 import {
@@ -3540,12 +3541,17 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       ignoreSellRatio,
     );
 
-  const autoGalaxyMarket = createAutoGalaxyMarket({
-    getGalaxyTradeManager: () => GalaxyTradeManager,
-    getPoly: () => poly,
+  const galaxyMarketAdapter = createGalaxyMarketAdapter({
+    getManager: () => GalaxyTradeManager,
+    getOffers: () => poly.galaxyOffers,
     getResources: () => resources,
     getSettings: () => settings,
   });
+  const autoGalaxyMarket = () =>
+    runGalaxyMarketAutomation({
+      reader: galaxyMarketAdapter.reader,
+      executor: galaxyMarketAdapter.executor,
+    });
 
   const autoGatherResources = createAutoGatherResources({
     getGame: () => game,

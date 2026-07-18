@@ -28686,91 +28686,374 @@
     });
   }
 
-  // src/automation/economy/galaxy-market.ts
-  function createAutoGalaxyMarket({
-    getGalaxyTradeManager,
-    getPoly,
-    getResources,
-    getSettings
-  }) {
-    return function autoGalaxyMarket2() {
-      const GalaxyTradeManager2 = getGalaxyTradeManager();
-      const poly2 = getPoly();
-      const resources2 = getResources();
-      const settings2 = getSettings();
-      if (!GalaxyTradeManager2.initIndustry()) {
-        return;
-      }
-      let priorityGroups = {};
-      let tradeAdjustments = {};
-      for (let i = 0; i < poly2.galaxyOffers.length; i++) {
-        let trade = poly2.galaxyOffers[i];
-        let buyResource = resources2[trade.buy.res];
-        if (buyResource.galaxyMarketWeighting > 0) {
-          let priority = buyResource.isDemanded() ? Math.max(buyResource.galaxyMarketPriority, 100) : buyResource.galaxyMarketPriority;
-          if (priority !== 0) {
-            priorityGroups[priority] = priorityGroups[priority] ?? [];
-            priorityGroups[priority].push(trade);
-          }
+  // src/domain/galaxy-market.ts
+  function planGalaxyMarket(input) {
+    if (!input.initialized) return null;
+    const priorityGroups = /* @__PURE__ */ new Map();
+    const targets = /* @__PURE__ */ new Map();
+    for (const offer of input.offers) {
+      if (offer.weighting > 0) {
+        const priority = offer.demanded ? Math.max(offer.priority, 100) : offer.priority;
+        if (priority !== 0) {
+          const group = priorityGroups.get(priority) ?? [];
+          group.push(offer);
+          priorityGroups.set(priority, group);
         }
-        tradeAdjustments[buyResource.id] = 0;
       }
-      let priorityList = Object.keys(priorityGroups).sort((a, b) => b - a).map((key) => priorityGroups[key]);
-      if (priorityGroups["-1"] && priorityList.length > 1) {
-        priorityList.splice(priorityList.indexOf(priorityGroups["-1"], 1));
-        priorityList[0].push(...priorityGroups["-1"]);
-      }
-      let remainingFreighters = GalaxyTradeManager2.maxOperating();
-      for (let i = 0; i < priorityList.length && remainingFreighters > 0; i++) {
-        let trades = priorityList[i].sort(
-          (a, b) => resources2[a.buy.res].galaxyMarketWeighting - resources2[b.buy.res].galaxyMarketWeighting
+      targets.set(offer.buyResourceId, 0);
+    }
+    const priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group);
+    const supplementary = priorityGroups.get(-1);
+    if (supplementary !== void 0 && priorityList.length > 1) {
+      priorityList.splice(priorityList.indexOf(supplementary, 1));
+      priorityList[0]?.push(...supplementary);
+    }
+    let remaining = input.maximum;
+    for (let groupIndex = 0; groupIndex < priorityList.length && remaining > 0; groupIndex++) {
+      const offers = [...priorityList[groupIndex] ?? []].sort(
+        (left, right) => left.weighting - right.weighting
+      );
+      while (remaining > 0) {
+        const beforeDistribution = remaining;
+        const totalWeight = offers.reduce(
+          (sum, offer) => sum + offer.weighting,
+          0
         );
-        while (remainingFreighters > 0) {
-          let freightersToDistribute = remainingFreighters;
-          let totalPriorityWeight = trades.reduce(
-            (sum, trade) => sum + resources2[trade.buy.res].galaxyMarketWeighting,
-            0
+        for (let index = offers.length - 1; index >= 0 && remaining > 0; index--) {
+          const offer = offers[index];
+          if (offer === void 0) continue;
+          const requested = Math.min(
+            remaining,
+            Math.max(
+              1,
+              Math.floor(beforeDistribution / totalWeight * offer.weighting)
+            )
           );
-          for (let j = trades.length - 1; j >= 0 && remainingFreighters > 0; j--) {
-            let trade = trades[j];
-            let buyResource = resources2[trade.buy.res];
-            let sellResource = resources2[trade.sell.res];
-            let calculatedRequiredFreighters = Math.min(
-              remainingFreighters,
-              Math.max(
-                1,
-                Math.floor(
-                  freightersToDistribute / totalPriorityWeight * buyResource.galaxyMarketWeighting
-                )
-              )
+          const assigned = offer.useful && !offer.sellDemanded && offer.sellStorageRatio >= input.minimumIngredientRatio ? requested : 0;
+          if (assigned > 0) {
+            remaining -= assigned;
+            targets.set(
+              offer.buyResourceId,
+              (targets.get(offer.buyResourceId) ?? 0) + assigned
             );
-            let actualRequiredFreighters = calculatedRequiredFreighters;
-            if (!buyResource.isUseful() || sellResource.isDemanded() || sellResource.storageRatio < settings2.marketMinIngredients) {
-              actualRequiredFreighters = 0;
-            }
-            if (actualRequiredFreighters > 0) {
-              remainingFreighters -= actualRequiredFreighters;
-              tradeAdjustments[buyResource.id] += actualRequiredFreighters;
-            }
-            if (actualRequiredFreighters < calculatedRequiredFreighters) {
-              trades.splice(j, 1);
-            }
           }
-          if (freightersToDistribute === remainingFreighters) {
-            break;
+          if (assigned < requested) offers.splice(index, 1);
+        }
+        if (beforeDistribution === remaining) break;
+      }
+    }
+    return Object.freeze({
+      expectedMaximum: input.maximum,
+      adjustments: Object.freeze(
+        input.offers.map(
+          (offer) => Object.freeze({
+            offerIndex: offer.index,
+            buyResourceId: offer.buyResourceId,
+            sellResourceId: offer.sellResourceId,
+            expectedCurrent: offer.current,
+            delta: (targets.get(offer.buyResourceId) ?? 0) - offer.current
+          })
+        )
+      )
+    });
+  }
+
+  // src/application/galaxy-market.ts
+  var SUCCEEDED9 = Object.freeze({
+    status: "succeeded"
+  });
+  function runGalaxyMarketAutomation(dependencies) {
+    const decision = planGalaxyMarket(dependencies.reader.read());
+    return decision === null ? SUCCEEDED9 : dependencies.executor.execute(decision);
+  }
+
+  // src/adapters/evolve/galaxy-market.ts
+  function callBoolean14(record, name, path) {
+    return Boolean(
+      Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
+    );
+  }
+  function callNumber9(record, name, path, ...args) {
+    return requireNumber(
+      Reflect.apply(
+        requireFunction(record[name], `${path}.${name}`),
+        record,
+        args
+      ),
+      `${path}.${name}()`
+    );
+  }
+  function requireId(value, path) {
+    if (typeof value !== "string" || value.length === 0) {
+      throw new TypeError(`${path} must be a non-empty string`);
+    }
+    return value;
+  }
+  function requireCount2(value, path) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new TypeError(`${path} must be a non-negative safe integer`);
+    }
+    return value;
+  }
+  function optionalWeighting(resource, path) {
+    const value = resource["galaxyMarketWeighting"];
+    return value === void 0 || value === null ? 0 : requireNumber(value, `${path}.galaxyMarketWeighting`);
+  }
+  function readOfferIdentity(value, path) {
+    const offer = requireRecord(value, path);
+    const buy = requireRecord(offer["buy"], `${path}.buy`);
+    const sell = requireRecord(offer["sell"], `${path}.sell`);
+    return Object.freeze({
+      buyResourceId: requireId(buy["res"], `${path}.buy.res`),
+      sellResourceId: requireId(sell["res"], `${path}.sell.res`)
+    });
+  }
+  function emptyInput2() {
+    return Object.freeze({
+      initialized: false,
+      maximum: 0,
+      minimumIngredientRatio: 0,
+      offers: Object.freeze([])
+    });
+  }
+  function createGalaxyMarketAdapter(dependencies) {
+    let session = null;
+    const reader = Object.freeze({
+      read() {
+        const manager = requireRecord(
+          dependencies.getManager(),
+          "GalaxyTradeManager"
+        );
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        if (!callBoolean14(manager, "initIndustry", "GalaxyTradeManager")) {
+          session = null;
+          return emptyInput2();
+        }
+        const rawOffers = dependencies.getOffers();
+        if (!Array.isArray(rawOffers)) {
+          throw new TypeError("galaxyOffers must be an array");
+        }
+        const identities = rawOffers.map(
+          (offer, index) => readOfferIdentity(offer, `galaxyOffers[${index}]`)
+        );
+        const partial = identities.map((identity2, index) => {
+          const buy = requireRecord(
+            resources2[identity2.buyResourceId],
+            `resources.${identity2.buyResourceId}`
+          );
+          const sell = requireRecord(
+            resources2[identity2.sellResourceId],
+            `resources.${identity2.sellResourceId}`
+          );
+          const weighting = optionalWeighting(
+            buy,
+            `resources.${identity2.buyResourceId}`
+          );
+          if (weighting <= 0) {
+            return {
+              identity: identity2,
+              index,
+              buy,
+              sell,
+              weighting,
+              priority: 0,
+              demanded: false
+            };
+          }
+          return {
+            identity: identity2,
+            index,
+            buy,
+            sell,
+            weighting,
+            priority: requireNumber(
+              buy["galaxyMarketPriority"],
+              `resources.${identity2.buyResourceId}.galaxyMarketPriority`
+            ),
+            demanded: callBoolean14(
+              buy,
+              "isDemanded",
+              `resources.${identity2.buyResourceId}`
+            )
+          };
+        });
+        const maximum = requireCount2(
+          callNumber9(manager, "maxOperating", "GalaxyTradeManager"),
+          "GalaxyTradeManager.maxOperating()"
+        );
+        const hasActive = maximum > 0 && partial.some((entry) => {
+          const effectivePriority = entry.demanded ? Math.max(entry.priority, 100) : entry.priority;
+          return entry.weighting > 0 && effectivePriority !== 0;
+        });
+        const minimumIngredientRatio = hasActive ? requireNumber(
+          settings2["marketMinIngredients"],
+          "settings.marketMinIngredients"
+        ) : 0;
+        const offers = partial.map((entry) => {
+          const effectivePriority = entry.demanded ? Math.max(entry.priority, 100) : entry.priority;
+          const active = maximum > 0 && entry.weighting > 0 && effectivePriority !== 0;
+          return Object.freeze({
+            index: entry.index,
+            buyResourceId: entry.identity.buyResourceId,
+            sellResourceId: entry.identity.sellResourceId,
+            weighting: entry.weighting,
+            priority: entry.priority,
+            demanded: entry.demanded,
+            useful: active ? callBoolean14(
+              entry.buy,
+              "isUseful",
+              `resources.${entry.identity.buyResourceId}`
+            ) : false,
+            sellDemanded: active ? callBoolean14(
+              entry.sell,
+              "isDemanded",
+              `resources.${entry.identity.sellResourceId}`
+            ) : false,
+            sellStorageRatio: active ? requireNumber(
+              entry.sell["storageRatio"],
+              `resources.${entry.identity.sellResourceId}.storageRatio`
+            ) : 0,
+            current: requireCount2(
+              callNumber9(
+                manager,
+                "currentProduction",
+                "GalaxyTradeManager",
+                entry.index
+              ),
+              `GalaxyTradeManager.currentProduction(${entry.index})`
+            )
+          });
+        });
+        session = Object.freeze({
+          manager,
+          offers: Object.freeze(identities)
+        });
+        return Object.freeze({
+          initialized: true,
+          maximum,
+          minimumIngredientRatio,
+          offers: Object.freeze(offers)
+        });
+      }
+    });
+    const executor = Object.freeze({
+      execute(decision) {
+        if (!Number.isSafeInteger(decision.expectedMaximum) || decision.expectedMaximum < 0) {
+          return rejected2(
+            "invalid-galaxy-market-maximum",
+            "galaxy-market maximum must be a non-negative safe integer"
+          );
+        }
+        const indices = /* @__PURE__ */ new Set();
+        for (const adjustment of decision.adjustments) {
+          if (!Number.isSafeInteger(adjustment.offerIndex) || adjustment.offerIndex < 0 || indices.has(adjustment.offerIndex) || typeof adjustment.buyResourceId !== "string" || adjustment.buyResourceId.length === 0 || typeof adjustment.sellResourceId !== "string" || adjustment.sellResourceId.length === 0 || !Number.isSafeInteger(adjustment.expectedCurrent) || adjustment.expectedCurrent < 0 || !Number.isSafeInteger(adjustment.delta) || !Number.isSafeInteger(
+            adjustment.expectedCurrent + adjustment.delta
+          ) || adjustment.expectedCurrent + adjustment.delta < 0) {
+            return rejected2(
+              "invalid-galaxy-market-adjustment",
+              "galaxy-market adjustments require unique indices and safe non-negative allocations"
+            );
+          }
+          indices.add(adjustment.offerIndex);
+        }
+        const active = session;
+        if (active === null) {
+          return stale(
+            "galaxy-market-session-missing",
+            "Galaxy market read session is missing"
+          );
+        }
+        const manager = requireRecord(
+          dependencies.getManager(),
+          "GalaxyTradeManager"
+        );
+        if (manager !== active.manager) {
+          return stale(
+            "galaxy-market-manager-changed",
+            "Galaxy trade manager changed"
+          );
+        }
+        if (requireCount2(
+          callNumber9(manager, "maxOperating", "GalaxyTradeManager"),
+          "GalaxyTradeManager.maxOperating()"
+        ) !== decision.expectedMaximum) {
+          return stale(
+            "galaxy-market-capacity-changed",
+            "Galaxy market capacity changed"
+          );
+        }
+        const rawOffers = dependencies.getOffers();
+        if (!Array.isArray(rawOffers) || rawOffers.length !== active.offers.length || decision.adjustments.length !== active.offers.length) {
+          return stale(
+            "galaxy-market-offers-changed",
+            "Galaxy market offers changed"
+          );
+        }
+        const currentProduction2 = requireFunction(
+          manager["currentProduction"],
+          "GalaxyTradeManager.currentProduction"
+        );
+        const decreaseProduction = decision.adjustments.some(
+          (adjustment) => adjustment.delta < 0
+        ) ? requireFunction(
+          manager["decreaseProduction"],
+          "GalaxyTradeManager.decreaseProduction"
+        ) : null;
+        const increaseProduction = decision.adjustments.some(
+          (adjustment) => adjustment.delta > 0
+        ) ? requireFunction(
+          manager["increaseProduction"],
+          "GalaxyTradeManager.increaseProduction"
+        ) : null;
+        for (let index = 0; index < rawOffers.length; index++) {
+          const identity2 = readOfferIdentity(
+            rawOffers[index],
+            `galaxyOffers[${index}]`
+          );
+          const expectedIdentity = active.offers[index];
+          const adjustment = decision.adjustments[index];
+          if (expectedIdentity === void 0 || adjustment === void 0 || adjustment.offerIndex !== index || identity2.buyResourceId !== expectedIdentity.buyResourceId || identity2.sellResourceId !== expectedIdentity.sellResourceId || adjustment.buyResourceId !== expectedIdentity.buyResourceId || adjustment.sellResourceId !== expectedIdentity.sellResourceId) {
+            return stale(
+              "galaxy-market-offers-changed",
+              "Galaxy market offer order changed"
+            );
+          }
+          const actual = requireCount2(
+            requireNumber(
+              Reflect.apply(currentProduction2, manager, [index]),
+              `GalaxyTradeManager.currentProduction(${index})`
+            ),
+            `GalaxyTradeManager.currentProduction(${index})`
+          );
+          if (actual !== adjustment.expectedCurrent) {
+            return stale(
+              "galaxy-market-allocation-changed",
+              "Galaxy market allocation changed",
+              { offerIndex: index, expected: adjustment.expectedCurrent, actual }
+            );
           }
         }
+        for (const adjustment of decision.adjustments) {
+          if (adjustment.delta < 0 && decreaseProduction !== null) {
+            Reflect.apply(decreaseProduction, manager, [
+              adjustment.offerIndex,
+              adjustment.delta * -1
+            ]);
+          }
+        }
+        for (const adjustment of decision.adjustments) {
+          if (adjustment.delta > 0 && increaseProduction !== null) {
+            Reflect.apply(increaseProduction, manager, [
+              adjustment.offerIndex,
+              adjustment.delta
+            ]);
+          }
+        }
+        return SUCCEEDED;
       }
-      let tradeDeltas = poly2.galaxyOffers.map(
-        (trade, index) => tradeAdjustments[trade.buy.res] - GalaxyTradeManager2.currentProduction(index)
-      );
-      tradeDeltas.forEach(
-        (value, index) => value < 0 && GalaxyTradeManager2.decreaseProduction(index, value * -1)
-      );
-      tradeDeltas.forEach(
-        (value, index) => value > 0 && GalaxyTradeManager2.increaseProduction(index, value)
-      );
-    };
+    });
+    return Object.freeze({ reader, executor });
   }
 
   // src/automation/economy/gather-resources.ts
@@ -29223,17 +29506,17 @@
   }
 
   // src/application/craft.ts
-  var SUCCEEDED9 = Object.freeze({
+  var SUCCEEDED10 = Object.freeze({
     status: "succeeded"
   });
   function runCraftAutomation(dependencies) {
     if (!shouldRunCraft(dependencies.reader.readGate())) {
-      return SUCCEEDED9;
+      return SUCCEEDED10;
     }
     for (let index = 0; ; index++) {
       const candidate = dependencies.reader.readCandidate(index);
       if (candidate === null) {
-        return SUCCEEDED9;
+        return SUCCEEDED10;
       }
       const decision = planCraft(candidate);
       if (decision === null) {
@@ -29247,7 +29530,7 @@
   }
 
   // src/adapters/evolve/craft.ts
-  function callBoolean14(record, name, path) {
+  function callBoolean15(record, name, path) {
     return Boolean(
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
     );
@@ -29284,7 +29567,7 @@
           resources2["Population"],
           "resources.Population"
         );
-        const populationUnlocked = callBoolean14(
+        const populationUnlocked = callBoolean15(
           population,
           "isUnlocked",
           "resources.Population"
@@ -29311,7 +29594,7 @@
         }
         const path = `foundryList[${index}]`;
         const craftable = requireRecord(session.foundryList[index], path);
-        const unlocked = callBoolean14(craftable, "isUnlocked", path);
+        const unlocked = callBoolean15(craftable, "isUnlocked", path);
         if (!unlocked) {
           return Object.freeze({
             index,
@@ -29363,7 +29646,7 @@
             maxQuantity,
             craftPreserve
           };
-          if (callBoolean14(craftable, "isDemanded", path)) {
+          if (callBoolean15(craftable, "isDemanded", path)) {
             const thresholdPreserve = requireNumber(
               craftable["craftPreserve"],
               `${path}.craftPreserve`
@@ -29377,11 +29660,11 @@
             );
             continue;
           }
-          if (callBoolean14(resource, "isDemanded", `resources.${resourceId3}`)) {
+          if (callBoolean15(resource, "isDemanded", `resources.${resourceId3}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
-          const cappedForPriority = callBoolean14(
+          const cappedForPriority = callBoolean15(
             resource,
             "isCapped",
             `resources.${resourceId3}`
@@ -29413,7 +29696,7 @@
             resource["storageRequired"],
             `resources.${resourceId3}.storageRequired`
           );
-          if (currentQuantity < resourceRequired && !callBoolean14(resource, "isCapped", `resources.${resourceId3}`)) {
+          if (currentQuantity < resourceRequired && !callBoolean15(resource, "isCapped", `resources.${resourceId3}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
@@ -30838,7 +31121,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED10 = Object.freeze({
+  var SUCCEEDED11 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -30846,7 +31129,7 @@
     while (true) {
       const decision = planResearch(dependencies.reader.read(startIndex));
       if (decision === null) {
-        return SUCCEEDED10;
+        return SUCCEEDED11;
       }
       const result2 = dependencies.executor.execute(decision);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -30990,12 +31273,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED11 = Object.freeze({
+  var SUCCEEDED12 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision = planMutation(dependencies.reader.read());
-    return decision === null ? SUCCEEDED11 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED12 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -44511,11 +44794,15 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       bulkSell,
       ignoreSellRatio
     );
-    const autoGalaxyMarket = createAutoGalaxyMarket({
-      getGalaxyTradeManager: () => GalaxyTradeManager,
-      getPoly: () => poly,
+    const galaxyMarketAdapter = createGalaxyMarketAdapter({
+      getManager: () => GalaxyTradeManager,
+      getOffers: () => poly.galaxyOffers,
       getResources: () => resources,
       getSettings: () => settings
+    });
+    const autoGalaxyMarket = () => runGalaxyMarketAutomation({
+      reader: galaxyMarketAdapter.reader,
+      executor: galaxyMarketAdapter.executor
     });
     const autoGatherResources = createAutoGatherResources({
       getGame: () => game,
