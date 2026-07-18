@@ -516,6 +516,7 @@ const wood = {
   usefulRatio: 1,
 };
 const craftable = {
+  id: "Plywood",
   cost: { Wood: 1 },
   craftPreserve: 0,
   currentQuantity: 0,

@@ -24826,66 +24826,345 @@
     return input.targetName;
   }
 
-  // src/automation/economy/craft.ts
-  function createAutoCraft({
-    getResources,
-    getGame,
-    getFoundryList,
-    ticksPerSecond: ticksPerSecond2
-  }) {
-    return function autoCraft2() {
-      const resources2 = getResources();
-      const game2 = getGame();
-      const foundryList2 = getFoundryList();
-      if (!resources2.Population.isUnlocked()) {
-        return;
+  // src/domain/craft.ts
+  function shouldRunCraft(input) {
+    return input.populationUnlocked && !input.noCraft;
+  }
+  function planCraft(input) {
+    if (!input.unlocked || !input.autoCraftEnabled || input.craftableId === null || input.materials.length === 0) {
+      return null;
+    }
+    let affordableAmount = Number.MAX_SAFE_INTEGER;
+    for (const material of input.materials) {
+      affordableAmount = Math.min(
+        affordableAmount,
+        Math.ceil(
+          (material.currentQuantity - material.maxQuantity * material.craftPreserve) / material.costPerCraft
+        )
+      );
+      if (material.mode === "blocked") {
+        return null;
       }
-      if (game2.global.race["no_craft"]) {
-        return;
+      if (material.mode === "demanded" || material.mode === "required") {
+        affordableAmount = Math.min(
+          affordableAmount,
+          material.availableQuantity / material.costPerCraft
+        );
+      } else if (material.mode === "income") {
+        affordableAmount = Math.min(
+          affordableAmount,
+          Math.ceil(
+            material.rateOfChange / material.ticksPerSecond / material.costPerCraft
+          )
+        );
       }
-      craftLoop: for (let i = 0; i < foundryList2.length; i++) {
-        let craftable = foundryList2[i];
-        if (!craftable.isUnlocked() || !craftable.autoCraftEnabled) {
-          continue;
+    }
+    const count = Math.floor(affordableAmount);
+    if (count < 1) {
+      return null;
+    }
+    return Object.freeze({
+      index: input.index,
+      craftableId: input.craftableId,
+      count,
+      spend: Object.freeze(
+        input.materials.map(
+          (material) => Object.freeze({
+            resourceId: material.resourceId,
+            expectedCurrentQuantity: material.currentQuantity,
+            amount: material.costPerCraft * count
+          })
+        )
+      )
+    });
+  }
+
+  // src/application/craft.ts
+  var SUCCEEDED4 = Object.freeze({
+    status: "succeeded"
+  });
+  function runCraftAutomation(dependencies) {
+    if (!shouldRunCraft(dependencies.reader.readGate())) {
+      return SUCCEEDED4;
+    }
+    for (let index = 0; ; index++) {
+      const candidate = dependencies.reader.readCandidate(index);
+      if (candidate === null) {
+        return SUCCEEDED4;
+      }
+      const decision = planCraft(candidate);
+      if (decision === null) {
+        continue;
+      }
+      const outcome = dependencies.executor.execute(decision);
+      if (outcome.status !== "succeeded") {
+        return outcome;
+      }
+    }
+  }
+
+  // src/adapters/evolve/craft.ts
+  function callBoolean9(record, name, path) {
+    return Boolean(
+      Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
+    );
+  }
+  function readFoundryList(value) {
+    if (!Array.isArray(value)) {
+      throw new TypeError("foundryList must be an array");
+    }
+    return value;
+  }
+  function readCraftableId(craftable, path) {
+    const id = craftable["id"];
+    if (typeof id !== "string") {
+      throw new TypeError(`${path}.id must be a string`);
+    }
+    return id;
+  }
+  function readPositiveCost(value, path) {
+    const cost = requireNumber(value, path);
+    if (cost <= 0) {
+      throw new TypeError(`${path} must be positive`);
+    }
+    return cost;
+  }
+  function createCraftReader(dependencies) {
+    let session = null;
+    return Object.freeze({
+      readGate() {
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const foundryList2 = readFoundryList(dependencies.getFoundryList());
+        session = Object.freeze({ resources: resources2, foundryList: foundryList2 });
+        const population = requireRecord(
+          resources2["Population"],
+          "resources.Population"
+        );
+        const populationUnlocked = callBoolean9(
+          population,
+          "isUnlocked",
+          "resources.Population"
+        );
+        if (!populationUnlocked) {
+          return Object.freeze({ populationUnlocked: false, noCraft: false });
         }
-        let affordableAmount = Number.MAX_SAFE_INTEGER;
-        for (let res in craftable.cost) {
-          let resource = resources2[res];
-          let quantity = craftable.cost[res];
-          affordableAmount = Math.min(
-            affordableAmount,
-            Math.ceil(
-              (resource.currentQuantity - resource.maxQuantity * craftable.craftPreserve) / quantity
-            )
+        const global = requireRecord(game2["global"], "game.global");
+        const race = requireRecord(global["race"], "game.global.race");
+        return Object.freeze({
+          populationUnlocked: true,
+          noCraft: Boolean(race["no_craft"])
+        });
+      },
+      readCandidate(index) {
+        if (!Number.isSafeInteger(index) || index < 0) {
+          throw new TypeError("craft index must be a non-negative safe integer");
+        }
+        if (session === null) {
+          throw new Error("craft gate must be read before candidates");
+        }
+        if (index >= session.foundryList.length) {
+          return null;
+        }
+        const path = `foundryList[${index}]`;
+        const craftable = requireRecord(session.foundryList[index], path);
+        const unlocked = callBoolean9(craftable, "isUnlocked", path);
+        if (!unlocked) {
+          return Object.freeze({
+            index,
+            craftableId: null,
+            unlocked: false,
+            autoCraftEnabled: false,
+            materials: Object.freeze([])
+          });
+        }
+        const autoCraftEnabled = Boolean(craftable["autoCraftEnabled"]);
+        if (!autoCraftEnabled) {
+          return Object.freeze({
+            index,
+            craftableId: null,
+            unlocked: true,
+            autoCraftEnabled: false,
+            materials: Object.freeze([])
+          });
+        }
+        const craftableId = readCraftableId(craftable, path);
+        const cost = requireRecord(craftable["cost"], `${path}.cost`);
+        if (Object.keys(cost).length === 0) {
+          throw new TypeError(`${path}.cost must contain at least one material`);
+        }
+        const materials = [];
+        for (const resourceId in cost) {
+          const materialPath = `${path}.cost.${resourceId}`;
+          const costPerCraft = readPositiveCost(cost[resourceId], materialPath);
+          const resource = requireRecord(
+            session.resources[resourceId],
+            `resources.${resourceId}`
           );
-          if (craftable.isDemanded()) {
-            let maxUse = resource.currentQuantity < resource.maxQuantity * (craftable.craftPreserve + 0.05) ? resource.currentQuantity : resource.spareQuantity;
-            affordableAmount = Math.min(affordableAmount, maxUse / quantity);
-          } else if (resource.isDemanded() || !resource.isCapped() && resource.usefulRatio < craftable.usefulRatio) {
-            continue craftLoop;
-          } else if (craftable.currentQuantity < craftable.storageRequired) {
-            affordableAmount = Math.min(
-              affordableAmount,
-              resource.spareQuantity / quantity
+          const currentQuantity = requireNumber(
+            resource["currentQuantity"],
+            `resources.${resourceId}.currentQuantity`
+          );
+          const maxQuantity = requireNumber(
+            resource["maxQuantity"],
+            `resources.${resourceId}.maxQuantity`
+          );
+          const craftPreserve = requireNumber(
+            craftable["craftPreserve"],
+            `${path}.craftPreserve`
+          );
+          const base = {
+            resourceId,
+            costPerCraft,
+            currentQuantity,
+            maxQuantity,
+            craftPreserve
+          };
+          if (callBoolean9(craftable, "isDemanded", path)) {
+            const thresholdPreserve = requireNumber(
+              craftable["craftPreserve"],
+              `${path}.craftPreserve`
             );
-          } else if (resource.currentQuantity >= resource.storageRequired || resource.isCapped()) {
-            affordableAmount = Math.min(
-              affordableAmount,
-              Math.ceil(resource.rateOfChange / ticksPerSecond2() / quantity)
+            const availableQuantity = currentQuantity < maxQuantity * (thresholdPreserve + 0.05) ? currentQuantity : requireNumber(
+              resource["spareQuantity"],
+              `resources.${resourceId}.spareQuantity`
             );
-          } else {
-            continue craftLoop;
+            materials.push(
+              Object.freeze({ ...base, mode: "demanded", availableQuantity })
+            );
+            continue;
           }
-        }
-        affordableAmount = Math.floor(affordableAmount);
-        if (affordableAmount >= 1) {
-          craftable.tryCraftX(affordableAmount);
-          for (let res in craftable.cost) {
-            resources2[res].currentQuantity -= craftable.cost[res] * affordableAmount;
+          if (callBoolean9(resource, "isDemanded", `resources.${resourceId}`)) {
+            materials.push(Object.freeze({ ...base, mode: "blocked" }));
+            break;
           }
+          const cappedForPriority = callBoolean9(
+            resource,
+            "isCapped",
+            `resources.${resourceId}`
+          );
+          if (!cappedForPriority && requireNumber(
+            resource["usefulRatio"],
+            `resources.${resourceId}.usefulRatio`
+          ) < requireNumber(craftable["usefulRatio"], `${path}.usefulRatio`)) {
+            materials.push(Object.freeze({ ...base, mode: "blocked" }));
+            break;
+          }
+          if (requireNumber(
+            craftable["currentQuantity"],
+            `${path}.currentQuantity`
+          ) < requireNumber(craftable["storageRequired"], `${path}.storageRequired`)) {
+            materials.push(
+              Object.freeze({
+                ...base,
+                mode: "required",
+                availableQuantity: requireNumber(
+                  resource["spareQuantity"],
+                  `resources.${resourceId}.spareQuantity`
+                )
+              })
+            );
+            continue;
+          }
+          const resourceRequired = requireNumber(
+            resource["storageRequired"],
+            `resources.${resourceId}.storageRequired`
+          );
+          if (currentQuantity < resourceRequired && !callBoolean9(resource, "isCapped", `resources.${resourceId}`)) {
+            materials.push(Object.freeze({ ...base, mode: "blocked" }));
+            break;
+          }
+          const rateOfChange = requireNumber(
+            resource["rateOfChange"],
+            `resources.${resourceId}.rateOfChange`
+          );
+          const ticks = requireNumber(
+            dependencies.ticksPerSecond(),
+            "ticksPerSecond()"
+          );
+          if (ticks <= 0) {
+            throw new TypeError("ticksPerSecond() must be positive");
+          }
+          materials.push(
+            Object.freeze({
+              ...base,
+              mode: "income",
+              rateOfChange,
+              ticksPerSecond: ticks
+            })
+          );
         }
+        return Object.freeze({
+          index,
+          craftableId,
+          unlocked: true,
+          autoCraftEnabled: true,
+          materials: Object.freeze(materials)
+        });
       }
-    };
+    });
+  }
+  function createCraftCommandExecutor(dependencies) {
+    return Object.freeze({
+      execute(decision) {
+        if (!Number.isSafeInteger(decision.count) || decision.count < 1) {
+          return rejected2(
+            "invalid-craft-count",
+            "craft count must be a positive safe integer"
+          );
+        }
+        const list = readFoundryList(dependencies.getFoundryList());
+        const value = list[decision.index];
+        const craftable = typeof value === "object" && value !== null ? value : null;
+        const actualCraftableId = craftable !== null && typeof craftable["id"] === "string" ? craftable["id"] : null;
+        if (craftable === null || actualCraftableId !== decision.craftableId) {
+          return stale("stale-craft-candidate", "foundry list changed", {
+            index: decision.index,
+            expectedCraftableId: decision.craftableId,
+            actualCraftableId
+          });
+        }
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const writes = [];
+        for (const spend of decision.spend) {
+          if (!Number.isFinite(spend.amount) || spend.amount < 0) {
+            return rejected2(
+              "invalid-craft-spend",
+              "craft spend must be a non-negative finite number"
+            );
+          }
+          const resource = requireRecord(
+            resources2[spend.resourceId],
+            `resources.${spend.resourceId}`
+          );
+          const actual = requireNumber(
+            resource["currentQuantity"],
+            `resources.${spend.resourceId}.currentQuantity`
+          );
+          if (actual !== spend.expectedCurrentQuantity) {
+            return stale(
+              "stale-craft-material",
+              "craft material balance changed",
+              {
+                resourceId: spend.resourceId,
+                expected: spend.expectedCurrentQuantity,
+                actual
+              }
+            );
+          }
+          writes.push({ resource, nextQuantity: actual - spend.amount });
+        }
+        const tryCraftX = requireFunction(
+          craftable["tryCraftX"],
+          `foundryList[${decision.index}].tryCraftX`
+        );
+        Reflect.apply(tryCraftX, craftable, [decision.count]);
+        for (const write of writes) {
+          write.resource["currentQuantity"] = write.nextQuantity;
+        }
+        return SUCCEEDED;
+      }
+    });
   }
 
   // src/automation/combat/spy.ts
@@ -26216,7 +26495,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED4 = Object.freeze({
+  var SUCCEEDED5 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -26224,7 +26503,7 @@
     while (true) {
       const decision = planResearch(dependencies.reader.read(startIndex));
       if (decision === null) {
-        return SUCCEEDED4;
+        return SUCCEEDED5;
       }
       const result2 = dependencies.executor.execute(decision);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -26368,12 +26647,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED5 = Object.freeze({
+  var SUCCEEDED6 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision = planMutation(dependencies.reader.read());
-    return decision === null ? SUCCEEDED5 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED6 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -40443,11 +40722,17 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getDocument: () => document,
       getMouseEvent: () => MouseEvent
     });
-    const autoCraft = createAutoCraft({
-      getResources: () => resources,
-      getGame: () => game,
-      getFoundryList: () => foundryList,
-      ticksPerSecond
+    const autoCraft = () => runCraftAutomation({
+      reader: createCraftReader({
+        getResources: () => resources,
+        getGame: () => game,
+        getFoundryList: () => foundryList,
+        ticksPerSecond
+      }),
+      executor: createCraftCommandExecutor({
+        getResources: () => resources,
+        getFoundryList: () => foundryList
+      })
     });
     const governmentExecutor = createGovernmentCommandExecutor({
       getGovernmentManager: () => GovernmentManager,

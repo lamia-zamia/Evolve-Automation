@@ -284,7 +284,11 @@ import {
   readUniverseSelectionInput,
 } from "./adapters/evolve/universe-selection.ts";
 import { planUniverseSelection } from "./domain/universe-selection.ts";
-import { createAutoCraft } from "./automation/economy/craft.ts";
+import { runCraftAutomation } from "./application/craft.ts";
+import {
+  createCraftCommandExecutor,
+  createCraftReader,
+} from "./adapters/evolve/craft.ts";
 import { createAutoSpy } from "./automation/combat/spy.ts";
 import { createAutoPrestige } from "./automation/progression/prestige.ts";
 import { createAutoPlanetSelection } from "./automation/progression/planet-selection.ts";
@@ -2921,12 +2925,19 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getMouseEvent: () => MouseEvent,
   });
 
-  const autoCraft = createAutoCraft({
-    getResources: () => resources,
-    getGame: () => game,
-    getFoundryList: () => foundryList,
-    ticksPerSecond,
-  });
+  const autoCraft = () =>
+    runCraftAutomation({
+      reader: createCraftReader({
+        getResources: () => resources,
+        getGame: () => game,
+        getFoundryList: () => foundryList,
+        ticksPerSecond,
+      }),
+      executor: createCraftCommandExecutor({
+        getResources: () => resources,
+        getFoundryList: () => foundryList,
+      }),
+    });
 
   const governmentExecutor = createGovernmentCommandExecutor({
     getGovernmentManager: () => GovernmentManager,
