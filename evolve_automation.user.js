@@ -24451,61 +24451,251 @@
     });
   }
 
-  // src/automation/combat/mercenary.ts
-  function createAutoMerc({
-    getWarManager,
-    GameLog: GameLog2,
-    getState,
-    getSettings,
-    getResources,
-    inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2
-  }) {
-    return function autoMerc2() {
-      const WarManager2 = getWarManager();
-      const state2 = getState();
-      const settings2 = getSettings();
-      const resources2 = getResources();
-      let m = WarManager2;
-      if (!m._garrisonVue || !m.isMercenaryUnlocked() || m.maxCityGarrison <= 0) {
-        return;
+  // src/domain/mercenary.ts
+  function planMercenaryCycle(input) {
+    if (!input.available || input.saveInflationMoney && input.goal !== "Reset") {
+      return null;
+    }
+    if (input.goal === "Reset") {
+      return Object.freeze({
+        soldierLimit: input.maxSoldiers,
+        minimumMoney: 0,
+        maximumCheapCost: Number.MAX_SAFE_INTEGER
+      });
+    }
+    const maximumCheapCost = input.moneyMedian * input.costIncomeMultiplier;
+    const minimumMoney = Math.max(
+      input.moneyMaximum * input.moneyStoragePercent / 100,
+      Math.min(
+        input.moneyMaximum - maximumCheapCost,
+        input.storageAssignExtra ? input.moneyStorageRequired / 1.03 : input.moneyStorageRequired
+      )
+    );
+    return Object.freeze({
+      soldierLimit: input.maxSoldiers - input.deadSoldierReserve,
+      minimumMoney,
+      maximumCheapCost
+    });
+  }
+  function planMercenaryHire(cycle, state2) {
+    if (state2.currentSoldiers >= cycle.soldierLimit || state2.moneyCurrent < state2.mercenaryCost || !(state2.moneySpare - state2.mercenaryCost > cycle.minimumMoney || state2.mercenaryCost < cycle.maximumCheapCost)) {
+      return null;
+    }
+    return Object.freeze({
+      kind: "hire-mercenary",
+      expectedSoldiers: state2.currentSoldiers,
+      expectedCost: state2.mercenaryCost,
+      expectedMoneyCurrent: state2.moneyCurrent,
+      expectedMoneySpare: state2.moneySpare
+    });
+  }
+  function planMercenaryLog(count) {
+    if (count <= 0) return null;
+    return Object.freeze({
+      id: "mercenary",
+      message: count === 1 ? "Hired a mercenary to join the garrison." : `Hired ${count} mercenaries to join the garrison.`,
+      categories: Object.freeze(["combat"])
+    });
+  }
+
+  // src/application/mercenary.ts
+  var SUCCEEDED6 = Object.freeze({
+    status: "succeeded"
+  });
+  function runMercenaryAutomation(dependencies) {
+    const cycle = planMercenaryCycle(dependencies.reader.readCycle());
+    if (cycle === null) return SUCCEEDED6;
+    let hired = 0;
+    let outcome = SUCCEEDED6;
+    while (true) {
+      const decision2 = planMercenaryHire(cycle, dependencies.reader.readState());
+      if (decision2 === null) break;
+      const result2 = dependencies.executor.hire(decision2);
+      if (result2.status === "hired") {
+        hired++;
+        continue;
       }
-      if (inflationChallengeShouldSaveMoney2() && state2.goal !== "Reset") {
-        return;
-      }
-      let mercenaryCost = m.mercenaryCost;
-      let mercenariesHired = 0;
-      let mercenaryMax = m.maxSoldiers - settings2.foreignHireMercDeadSoldiers;
-      let maxCost = state2.moneyMedian * settings2.foreignHireMercCostLowerThanIncome;
-      let minMoney = Math.max(
-        resources2.Money.maxQuantity * settings2.foreignHireMercMoneyStoragePercent / 100,
-        Math.min(
-          resources2.Money.maxQuantity - maxCost,
-          settings2.storageAssignExtra ? resources2.Money.storageRequired / 1.03 : resources2.Money.storageRequired
-        )
-      );
-      if (state2.goal === "Reset") {
-        mercenaryMax = m.maxSoldiers;
-        minMoney = 0;
-        maxCost = Number.MAX_SAFE_INTEGER;
-      }
-      while (m.currentSoldiers < mercenaryMax && resources2.Money.currentQuantity >= mercenaryCost && (resources2.Money.spareQuantity - mercenaryCost > minMoney || mercenaryCost < maxCost) && m.hireMercenary()) {
-        mercenariesHired++;
-        mercenaryCost = m.mercenaryCost;
-      }
-      if (mercenariesHired === 1) {
-        GameLog2.logSuccess(
-          "mercenary",
-          `Hired a mercenary to join the garrison.`,
-          ["combat"]
+      if (result2.status !== "not-hired") outcome = result2;
+      break;
+    }
+    const event = planMercenaryLog(hired);
+    if (event !== null) dependencies.logger.write(event);
+    return outcome;
+  }
+
+  // src/adapters/evolve/mercenary.ts
+  function unavailableInput() {
+    return Object.freeze({
+      available: false,
+      saveInflationMoney: false,
+      goal: "Normal",
+      maxSoldiers: 0,
+      deadSoldierReserve: 0,
+      moneyMedian: 0,
+      costIncomeMultiplier: 0,
+      moneyStoragePercent: 0,
+      storageAssignExtra: false,
+      moneyMaximum: 0,
+      moneyStorageRequired: 0
+    });
+  }
+  function requireString(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function readMercenaryState(manager, money) {
+    return Object.freeze({
+      currentSoldiers: requireNumber(
+        manager["currentSoldiers"],
+        "WarManager.currentSoldiers"
+      ),
+      mercenaryCost: requireNumber(
+        manager["mercenaryCost"],
+        "WarManager.mercenaryCost"
+      ),
+      moneyCurrent: requireNumber(
+        money["currentQuantity"],
+        "resources.Money.currentQuantity"
+      ),
+      moneySpare: requireNumber(
+        money["spareQuantity"],
+        "resources.Money.spareQuantity"
+      )
+    });
+  }
+  function decisionMatchesState(decision2, state2) {
+    return decision2.kind === "hire-mercenary" && decision2.expectedSoldiers === state2.currentSoldiers && decision2.expectedCost === state2.mercenaryCost && decision2.expectedMoneyCurrent === state2.moneyCurrent && decision2.expectedMoneySpare === state2.moneySpare;
+  }
+  function createMercenaryAdapter(dependencies) {
+    let session = null;
+    let lastState = null;
+    const reader = Object.freeze({
+      readCycle() {
+        session = null;
+        lastState = null;
+        const manager = requireRecord(dependencies.getWarManager(), "WarManager");
+        if (!manager["_garrisonVue"]) return unavailableInput();
+        const isUnlocked2 = requireFunction(
+          manager["isMercenaryUnlocked"],
+          "WarManager.isMercenaryUnlocked"
         );
-      } else if (mercenariesHired > 1) {
-        GameLog2.logSuccess(
-          "mercenary",
-          `Hired ${mercenariesHired} mercenaries to join the garrison.`,
-          ["combat"]
+        if (!Reflect.apply(isUnlocked2, manager, [])) return unavailableInput();
+        const maxCityGarrison = requireNumber(
+          manager["maxCityGarrison"],
+          "WarManager.maxCityGarrison"
         );
+        if (maxCityGarrison <= 0) return unavailableInput();
+        const state2 = requireRecord(dependencies.getState(), "state");
+        const goal = requireString(state2["goal"], "state.goal");
+        const saveInflationMoney = Boolean(
+          dependencies.shouldSaveInflationMoney()
+        );
+        if (saveInflationMoney && goal !== "Reset") {
+          return Object.freeze({
+            ...unavailableInput(),
+            available: true,
+            saveInflationMoney: true,
+            goal
+          });
+        }
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const money = requireRecord(resources2["Money"], "resources.Money");
+        session = Object.freeze({ manager, resources: resources2, money });
+        return Object.freeze({
+          available: true,
+          saveInflationMoney,
+          goal,
+          maxSoldiers: requireNumber(
+            manager["maxSoldiers"],
+            "WarManager.maxSoldiers"
+          ),
+          deadSoldierReserve: requireNumber(
+            settings2["foreignHireMercDeadSoldiers"],
+            "settings.foreignHireMercDeadSoldiers"
+          ),
+          moneyMedian: requireNumber(state2["moneyMedian"], "state.moneyMedian"),
+          costIncomeMultiplier: requireNumber(
+            settings2["foreignHireMercCostLowerThanIncome"],
+            "settings.foreignHireMercCostLowerThanIncome"
+          ),
+          moneyStoragePercent: requireNumber(
+            settings2["foreignHireMercMoneyStoragePercent"],
+            "settings.foreignHireMercMoneyStoragePercent"
+          ),
+          storageAssignExtra: requireBoolean(
+            settings2["storageAssignExtra"],
+            "settings.storageAssignExtra"
+          ),
+          moneyMaximum: requireNumber(
+            money["maxQuantity"],
+            "resources.Money.maxQuantity"
+          ),
+          moneyStorageRequired: requireNumber(
+            money["storageRequired"],
+            "resources.Money.storageRequired"
+          )
+        });
+      },
+      readState() {
+        if (session === null) {
+          throw new Error("mercenary cycle must be read before mercenary state");
+        }
+        lastState = readMercenaryState(session.manager, session.money);
+        return lastState;
       }
-    };
+    });
+    const executor = Object.freeze({
+      hire(decision2) {
+        const active = session;
+        const sampled = lastState;
+        if (active === null || sampled === null) {
+          return stale(
+            "mercenary-session-missing",
+            "mercenary session is missing"
+          );
+        }
+        if (!Number.isFinite(decision2.expectedSoldiers) || !Number.isFinite(decision2.expectedCost) || !Number.isFinite(decision2.expectedMoneyCurrent) || !Number.isFinite(decision2.expectedMoneySpare) || !decisionMatchesState(decision2, sampled)) {
+          return rejected2(
+            "invalid-mercenary-decision",
+            "mercenary decision does not match the sampled state"
+          );
+        }
+        if (dependencies.getWarManager() !== active.manager || dependencies.getResources() !== active.resources) {
+          return stale(
+            "mercenary-dependencies-changed",
+            "mercenary dependencies changed"
+          );
+        }
+        const actual = readMercenaryState(active.manager, active.money);
+        if (!decisionMatchesState(decision2, actual)) {
+          return stale("mercenary-state-changed", "mercenary state changed");
+        }
+        const hireMercenary = requireFunction(
+          active.manager["hireMercenary"],
+          "WarManager.hireMercenary"
+        );
+        lastState = null;
+        return Reflect.apply(hireMercenary, active.manager, []) ? Object.freeze({ status: "hired" }) : Object.freeze({ status: "not-hired" });
+      }
+    });
+    const logger = Object.freeze({
+      write(event) {
+        const gameLog = requireRecord(dependencies.getGameLog(), "GameLog");
+        const logSuccess = requireFunction(
+          gameLog["logSuccess"],
+          "GameLog.logSuccess"
+        );
+        Reflect.apply(logSuccess, gameLog, [
+          event.id,
+          event.message,
+          event.categories
+        ]);
+      }
+    });
+    return Object.freeze({ reader, executor, logger });
   }
 
   // src/domain/psychic.ts
@@ -24572,17 +24762,17 @@
   }
 
   // src/application/psychic.ts
-  var SUCCEEDED6 = Object.freeze({
+  var SUCCEEDED7 = Object.freeze({
     status: "succeeded"
   });
   function runPsychicAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED6;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED7;
     for (const decision2 of planPsychic(dependencies.reader.readPlan())) {
       const outcome = dependencies.executor.execute(decision2);
       if (outcome.status === "succeeded") return outcome;
       if (outcome.failure.code !== "psychic-control-unavailable") return outcome;
     }
-    return SUCCEEDED6;
+    return SUCCEEDED7;
   }
 
   // src/adapters/evolve/psychic.ts
@@ -25004,11 +25194,11 @@
   }
 
   // src/application/ocular-power.ts
-  var SUCCEEDED7 = Object.freeze({
+  var SUCCEEDED8 = Object.freeze({
     status: "succeeded"
   });
   function runOcularPowerAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED7;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED8;
     if (!dependencies.controls.capture()) {
       return {
         status: "stale",
@@ -25022,7 +25212,7 @@
       const outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED7;
+    return SUCCEEDED8;
   }
 
   // src/adapters/evolve/ocular-power.ts
@@ -25238,7 +25428,7 @@
   }
 
   // src/application/minor-trait.ts
-  var SUCCEEDED8 = Object.freeze({
+  var SUCCEEDED9 = Object.freeze({
     status: "succeeded"
   });
   function staleCandidate(index, expectedTraitName, actualTraitName) {
@@ -25254,7 +25444,7 @@
   function runMinorTraitAutomation(dependencies) {
     const summary = summarizeMinorTraits(dependencies.reader.readSummary());
     if (summary === null) {
-      return SUCCEEDED8;
+      return SUCCEEDED9;
     }
     for (let index = 0; index < summary.traits.length; index++) {
       const expected = summary.traits[index];
@@ -25278,7 +25468,7 @@
         return outcome;
       }
     }
-    return SUCCEEDED8;
+    return SUCCEEDED9;
   }
 
   // src/adapters/evolve/minor-trait.ts
@@ -25422,7 +25612,7 @@
   }
 
   // src/application/trigger.ts
-  var SUCCEEDED9 = Object.freeze({
+  var SUCCEEDED10 = Object.freeze({
     status: "succeeded"
   });
   function result(outcome, active) {
@@ -25434,7 +25624,7 @@
     while (true) {
       const decision2 = planTrigger(dependencies.reader.read(index));
       if (decision2 === null) {
-        return result(SUCCEEDED9, active);
+        return result(SUCCEEDED10, active);
       }
       if (decision2.kind === "click") {
         const execution = dependencies.executor.execute(decision2);
@@ -26043,13 +26233,13 @@
   }
 
   // src/application/replicator.ts
-  var SUCCEEDED10 = Object.freeze({
+  var SUCCEEDED11 = Object.freeze({
     status: "succeeded"
   });
   function runReplicatorAutomation(dependencies) {
     const planningInput = dependencies.selectionReader.readPlanningInput();
     if (!planningInput.initialised) {
-      return SUCCEEDED10;
+      return SUCCEEDED11;
     }
     const priorityPlan = planReplicatorPriority(planningInput);
     if (priorityPlan !== null) {
@@ -26065,18 +26255,18 @@
       }
     }
     if (!planningInput.assignGovernorTask) {
-      return SUCCEEDED10;
+      return SUCCEEDED11;
     }
     if (!shouldConfigureReplicatorGovernor(
       dependencies.governorGameReader.readGate()
     ) || !dependencies.governorOfficeReader.open()) {
-      return SUCCEEDED10;
+      return SUCCEEDED11;
     }
     const taskPlan = planReplicatorGovernorTask(
       dependencies.governorGameReader.readTasks()
     );
     if (taskPlan.status === "unavailable") {
-      return SUCCEEDED10;
+      return SUCCEEDED11;
     }
     if (taskPlan.assignment !== null) {
       const outcome = dependencies.governorExecutor.execute(taskPlan.assignment);
@@ -26086,10 +26276,10 @@
     }
     const settings2 = dependencies.governorOfficeReader.readSettings();
     if (settings2 === null) {
-      return SUCCEEDED10;
+      return SUCCEEDED11;
     }
     const settingsDecision = planReplicatorGovernorSettings(settings2);
-    return settingsDecision === null ? SUCCEEDED10 : dependencies.governorExecutor.execute(settingsDecision);
+    return settingsDecision === null ? SUCCEEDED11 : dependencies.governorExecutor.execute(settingsDecision);
   }
 
   // src/adapters/evolve/replicator.ts
@@ -26538,20 +26728,20 @@
   }
 
   // src/application/market.ts
-  var SUCCEEDED11 = Object.freeze({
+  var SUCCEEDED12 = Object.freeze({
     status: "succeeded"
   });
   function runMarketAutomation(dependencies, bulkSell = false, ignoreSellRatio = false) {
     const gate = dependencies.reader.readGate();
     if (!gate.unlocked) {
-      return SUCCEEDED11;
+      return SUCCEEDED12;
     }
     dependencies.tradeRoutes.adjust();
     if (gate.noTrade) {
-      return SUCCEEDED11;
+      return SUCCEEDED12;
     }
     const session = dependencies.reader.readSession();
-    let outcome = SUCCEEDED11;
+    let outcome = SUCCEEDED12;
     for (let index = 0; ; index++) {
       const sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
       if (sellInput === null) {
@@ -27783,7 +27973,7 @@
   );
 
   // src/application/power.ts
-  var SUCCEEDED12 = Object.freeze({
+  var SUCCEEDED13 = Object.freeze({
     status: "succeeded"
   });
   function createPowerAutomation(dependencies) {
@@ -27792,7 +27982,7 @@
       run() {
         const plan = planPowerCycle(dependencies.reader.readCycle(), state2);
         if (plan.decision === null) {
-          return SUCCEEDED12;
+          return SUCCEEDED13;
         }
         const cycleOutcome = dependencies.executor.execute(plan.decision);
         if (cycleOutcome.status !== "succeeded") {
@@ -27805,7 +27995,7 @@
           )
         );
         if (warning === null) {
-          return SUCCEEDED12;
+          return SUCCEEDED13;
         }
         const warningOutcome = dependencies.executor.execute(warning);
         if (warningOutcome.status !== "succeeded") {
@@ -27816,7 +28006,7 @@
           warning.binding,
           dependencies.reader.readStateOn(warning.binding)
         );
-        return SUCCEEDED12;
+        return SUCCEEDED13;
       },
       readState() {
         return state2;
@@ -29594,7 +29784,7 @@
   });
 
   // src/application/storage-allocation.ts
-  var SUCCEEDED13 = Object.freeze({
+  var SUCCEEDED14 = Object.freeze({
     status: "succeeded"
   });
   function createStorageAllocationAutomation(dependencies) {
@@ -29602,9 +29792,9 @@
     return Object.freeze({
       run() {
         const rawPlan = planStorageAllocation(dependencies.reader.read());
-        if (rawPlan === null) return SUCCEEDED13;
+        if (rawPlan === null) return SUCCEEDED14;
         if (rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild)) {
-          return SUCCEEDED13;
+          return SUCCEEDED14;
         }
         const finalized = finalizeStorageAllocation(rawPlan, state2);
         const outcome = dependencies.executor.execute(finalized.decision);
@@ -30281,12 +30471,12 @@
   }
 
   // src/application/galaxy-market.ts
-  var SUCCEEDED14 = Object.freeze({
+  var SUCCEEDED15 = Object.freeze({
     status: "succeeded"
   });
   function runGalaxyMarketAutomation(dependencies) {
     const decision2 = planGalaxyMarket(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED14 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED15 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/galaxy-market.ts
@@ -30702,12 +30892,12 @@
   }
 
   // src/application/gather-resources.ts
-  var SUCCEEDED15 = Object.freeze({
+  var SUCCEEDED16 = Object.freeze({
     status: "succeeded"
   });
   function runGatherResourcesAutomation(dependencies) {
     const decision2 = planGatherResources(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED15 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED16 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/gather-resources.ts
@@ -31328,17 +31518,17 @@
   }
 
   // src/application/craft.ts
-  var SUCCEEDED16 = Object.freeze({
+  var SUCCEEDED17 = Object.freeze({
     status: "succeeded"
   });
   function runCraftAutomation(dependencies) {
     if (!shouldRunCraft(dependencies.reader.readGate())) {
-      return SUCCEEDED16;
+      return SUCCEEDED17;
     }
     for (let index = 0; ; index++) {
       const candidate = dependencies.reader.readCandidate(index);
       if (candidate === null) {
-        return SUCCEEDED16;
+        return SUCCEEDED17;
       }
       const decision2 = planCraft(candidate);
       if (decision2 === null) {
@@ -32943,7 +33133,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED17 = Object.freeze({
+  var SUCCEEDED18 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -32951,7 +33141,7 @@
     while (true) {
       const decision2 = planResearch(dependencies.reader.read(startIndex));
       if (decision2 === null) {
-        return SUCCEEDED17;
+        return SUCCEEDED18;
       }
       const result2 = dependencies.executor.execute(decision2);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -33095,12 +33285,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED18 = Object.freeze({
+  var SUCCEEDED19 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision2 = planMutation(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED18 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED19 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -46110,14 +46300,15 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         )
       );
     };
-    const autoMerc = createAutoMerc({
+    const mercenaryAdapter = createMercenaryAdapter({
       getWarManager: () => WarManager,
-      GameLog,
       getState: () => state,
       getSettings: () => settings,
       getResources: () => resources,
-      inflationChallengeShouldSaveMoney
+      shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
+      getGameLog: () => GameLog
     });
+    const autoMerc = () => runMercenaryAutomation(mercenaryAdapter);
     const autoSpy = createAutoSpy({
       getSpyManager: () => SpyManager,
       getWarManager: () => WarManager,
