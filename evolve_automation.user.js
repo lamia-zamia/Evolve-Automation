@@ -26037,47 +26037,237 @@
     });
   }
 
-  // src/automation/traits/mutation.ts
-  function createAutoMutateTrait({
-    getMutableTraitManager,
-    getGame,
-    getResources,
-    GameLog: GameLog2
-  }) {
-    return function autoMutateTrait2() {
-      const MutableTraitManager2 = getMutableTraitManager();
-      const game2 = getGame();
-      const resources2 = getResources();
-      let m = MutableTraitManager2;
-      if (!m.isUnlocked()) {
-        return;
+  // src/domain/mutation.ts
+  function planMutation(input) {
+    if (!input.unlocked || input.currency === null) {
+      return null;
+    }
+    for (const trait of input.traits) {
+      const kind = trait.canGain ? "gain" : trait.canPurge ? "purge" : null;
+      if (kind !== null && trait.traitName !== null && trait.displayName !== null && trait.mutationCost !== null) {
+        return Object.freeze({
+          kind,
+          index: trait.index,
+          traitName: trait.traitName,
+          displayName: trait.displayName,
+          mutationCost: trait.mutationCost,
+          currencyId: input.currency.id,
+          currencyName: input.currency.name,
+          expectedCurrencyQuantity: input.currency.currentQuantity
+        });
       }
-      let currency = game2.global.race.universe === "antimatter" ? resources2.AntiPlasmid : resources2.Plasmid;
-      for (let trait of m.priorityList) {
-        if (trait.canGain()) {
-          let mutationCost = trait.mutationCost("gain");
-          m.gainTrait(trait.traitName);
-          GameLog2.logSuccess(
-            "mutation",
-            `Mutating in ${trait.name} for ${mutationCost} ${currency.name}`,
-            ["progress"]
-          );
-          currency.currentQuantity -= mutationCost;
-          return;
+    }
+    return null;
+  }
+
+  // src/application/mutation.ts
+  var SUCCEEDED5 = Object.freeze({
+    status: "succeeded"
+  });
+  function runMutationAutomation(dependencies) {
+    const decision = planMutation(dependencies.reader.read());
+    return decision === null ? SUCCEEDED5 : dependencies.executor.execute(decision);
+  }
+
+  // src/adapters/evolve/mutation.ts
+  function currencyIdFromGame(getGame) {
+    const game2 = requireRecord(getGame(), "game");
+    const global = requireRecord(game2["global"], "game.global");
+    const race = requireRecord(global["race"], "game.global.race");
+    return race["universe"] === "antimatter" ? "AntiPlasmid" : "Plasmid";
+  }
+  function readCurrency(getResources, currencyId) {
+    const resources2 = requireRecord(getResources(), "resources");
+    const currency = requireRecord(
+      resources2[currencyId],
+      `resources.${currencyId}`
+    );
+    const name = currency["name"];
+    if (typeof name !== "string") {
+      throw new TypeError(`resources.${currencyId}.name must be a string`);
+    }
+    return Object.freeze({
+      id: currencyId,
+      name,
+      currentQuantity: requireNumber(
+        currency["currentQuantity"],
+        `resources.${currencyId}.currentQuantity`
+      )
+    });
+  }
+  function readPriorityList(manager) {
+    const priorityList = manager["priorityList"];
+    if (!Array.isArray(priorityList)) {
+      throw new TypeError("MutableTraitManager.priorityList must be an array");
+    }
+    return priorityList;
+  }
+  function readString2(record, key, path) {
+    const value = record[key];
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function readMutationCost(trait, kind, path) {
+    const mutationCost = requireFunction(
+      trait["mutationCost"],
+      `${path}.mutationCost`
+    );
+    const cost = requireNumber(
+      Reflect.apply(mutationCost, trait, [kind]),
+      `${path}.mutationCost(${kind})`
+    );
+    if (cost < 0) {
+      throw new TypeError(`${path}.mutationCost(${kind}) must be non-negative`);
+    }
+    return cost;
+  }
+  function actionableTrait(trait, index, kind, canGain, canPurge, path) {
+    const mutationCost = readMutationCost(trait, kind, path);
+    return Object.freeze({
+      index,
+      canGain,
+      canPurge,
+      mutationCost,
+      traitName: readString2(trait, "traitName", `${path}.traitName`),
+      displayName: readString2(trait, "name", `${path}.name`)
+    });
+  }
+  function createMutationReader(dependencies) {
+    return Object.freeze({
+      read() {
+        const manager = requireRecord(
+          dependencies.getMutableTraitManager(),
+          "MutableTraitManager"
+        );
+        const isUnlocked = requireFunction(
+          manager["isUnlocked"],
+          "MutableTraitManager.isUnlocked"
+        );
+        if (!Reflect.apply(isUnlocked, manager, [])) {
+          return Object.freeze({
+            unlocked: false,
+            currency: null,
+            traits: Object.freeze([])
+          });
         }
-        if (trait.canPurge()) {
-          let mutationCost = trait.mutationCost("purge");
-          m.purgeTrait(trait.traitName);
-          GameLog2.logSuccess(
-            "mutation",
-            `Mutating out ${trait.name} for ${mutationCost} ${currency.name}`,
-            ["progress"]
+        const currencyId = currencyIdFromGame(dependencies.getGame);
+        const views = [];
+        let currency = null;
+        const list = readPriorityList(manager);
+        for (let index = 0; index < list.length; index++) {
+          const path = `MutableTraitManager.priorityList[${index}]`;
+          const trait = requireRecord(list[index], path);
+          const canGainMethod = requireFunction(
+            trait["canGain"],
+            `${path}.canGain`
           );
-          currency.currentQuantity -= mutationCost;
-          return;
+          const canGain = Boolean(Reflect.apply(canGainMethod, trait, []));
+          if (canGain) {
+            views.push(actionableTrait(trait, index, "gain", true, false, path));
+            currency = readCurrency(dependencies.getResources, currencyId);
+            break;
+          }
+          const canPurgeMethod = requireFunction(
+            trait["canPurge"],
+            `${path}.canPurge`
+          );
+          const canPurge = Boolean(Reflect.apply(canPurgeMethod, trait, []));
+          if (canPurge) {
+            views.push(actionableTrait(trait, index, "purge", false, true, path));
+            currency = readCurrency(dependencies.getResources, currencyId);
+            break;
+          }
+          views.push(
+            Object.freeze({
+              index,
+              canGain: false,
+              canPurge: false,
+              traitName: null,
+              displayName: null,
+              mutationCost: null
+            })
+          );
         }
+        return Object.freeze({
+          unlocked: true,
+          currency,
+          traits: Object.freeze(views)
+        });
       }
-    };
+    });
+  }
+  function createMutationCommandExecutor(dependencies) {
+    return Object.freeze({
+      execute(decision) {
+        if (!Number.isFinite(decision.mutationCost) || decision.mutationCost < 0) {
+          return rejected2(
+            "invalid-mutation-cost",
+            "mutation cost must be a non-negative finite number"
+          );
+        }
+        const actualCurrencyId = currencyIdFromGame(dependencies.getGame);
+        if (actualCurrencyId !== decision.currencyId) {
+          return stale("stale-mutation-universe", "mutation universe changed", {
+            expectedCurrencyId: decision.currencyId,
+            actualCurrencyId
+          });
+        }
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const currency = requireRecord(
+          resources2[decision.currencyId],
+          `resources.${decision.currencyId}`
+        );
+        const actualQuantity = requireNumber(
+          currency["currentQuantity"],
+          `resources.${decision.currencyId}.currentQuantity`
+        );
+        if (actualQuantity !== decision.expectedCurrencyQuantity) {
+          return stale(
+            "stale-mutation-currency",
+            "mutation currency balance changed",
+            {
+              currencyId: decision.currencyId,
+              expected: decision.expectedCurrencyQuantity,
+              actual: actualQuantity
+            }
+          );
+        }
+        const manager = requireRecord(
+          dependencies.getMutableTraitManager(),
+          "MutableTraitManager"
+        );
+        const list = readPriorityList(manager);
+        const trait = typeof list[decision.index] === "object" && list[decision.index] !== null ? list[decision.index] : null;
+        const actualTraitName = trait !== null && typeof trait["traitName"] === "string" ? trait["traitName"] : null;
+        if (trait === null || actualTraitName !== decision.traitName) {
+          return stale("stale-mutation-trait", "mutation trait list changed", {
+            index: decision.index,
+            expectedTraitName: decision.traitName,
+            actualTraitName
+          });
+        }
+        const methodName = decision.kind === "gain" ? "gainTrait" : "purgeTrait";
+        const mutate = requireFunction(
+          manager[methodName],
+          `MutableTraitManager.${methodName}`
+        );
+        const gameLog = requireRecord(dependencies.getGameLog(), "GameLog");
+        const logSuccess = requireFunction(
+          gameLog["logSuccess"],
+          "GameLog.logSuccess"
+        );
+        Reflect.apply(mutate, manager, [decision.traitName]);
+        Reflect.apply(logSuccess, gameLog, [
+          "mutation",
+          `Mutating ${decision.kind === "gain" ? "in" : "out"} ${decision.displayName} for ${decision.mutationCost} ${decision.currencyName}`,
+          ["progress"]
+        ]);
+        currency["currentQuantity"] = actualQuantity - decision.mutationCost;
+        return SUCCEEDED;
+      }
+    });
   }
 
   // src/automation/economy/power.ts
@@ -40659,11 +40849,20 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         MinorTraitManager
       });
     }
-    const autoMutateTrait = createAutoMutateTrait({
+    const mutationReader = createMutationReader({
+      getMutableTraitManager: () => MutableTraitManager,
+      getGame: () => game,
+      getResources: () => resources
+    });
+    const mutationExecutor = createMutationCommandExecutor({
       getMutableTraitManager: () => MutableTraitManager,
       getGame: () => game,
       getResources: () => resources,
-      GameLog
+      getGameLog: () => GameLog
+    });
+    const autoMutateTrait = () => runMutationAutomation({
+      reader: mutationReader,
+      executor: mutationExecutor
     });
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {

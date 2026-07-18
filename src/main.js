@@ -291,7 +291,11 @@ import {
   createResearchCommandExecutor,
   createResearchReader,
 } from "./adapters/evolve/research.ts";
-import { createAutoMutateTrait } from "./automation/traits/mutation.ts";
+import { runMutationAutomation } from "./application/mutation.ts";
+import {
+  createMutationCommandExecutor,
+  createMutationReader,
+} from "./adapters/evolve/mutation.ts";
 import { createAutoPower } from "./automation/economy/power.ts";
 import { createAutoStorage } from "./automation/economy/storage.ts";
 import { createAutoFleetOuter } from "./automation/combat/fleet-outer.ts";
@@ -3702,12 +3706,22 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const autoMutateTrait = createAutoMutateTrait({
+  const mutationReader = createMutationReader({
     getMutableTraitManager: () => MutableTraitManager,
     getGame: () => game,
     getResources: () => resources,
-    GameLog,
   });
+  const mutationExecutor = createMutationCommandExecutor({
+    getMutableTraitManager: () => MutableTraitManager,
+    getGame: () => game,
+    getResources: () => resources,
+    getGameLog: () => GameLog,
+  });
+  const autoMutateTrait = () =>
+    runMutationAutomation({
+      reader: mutationReader,
+      executor: mutationExecutor,
+    });
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
