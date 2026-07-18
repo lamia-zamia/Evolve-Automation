@@ -23744,87 +23744,394 @@
     });
   }
 
-  // src/automation/economy/consume.ts
-  function createAutoConsume({
-    getResources,
-    isHungryRace: isHungryRace2
-  }) {
-    return function autoConsume2(m) {
-      const resources2 = getResources();
-      if (!m.initIndustry()) {
-        return;
+  // src/domain/consume.ts
+  function calculateConsumeKeepRatio(baseRatio, resource, storageShift, hungryRace) {
+    let keepRatio = baseRatio;
+    if (keepRatio === -1) {
+      if (resource.storageRequired <= 1) {
+        return null;
       }
-      let consumeList = m.managedPriorityList();
-      let consumeAdjustments = Object.fromEntries(
-        consumeList.map((res) => [res.id, 0])
+      keepRatio = Math.max(
+        keepRatio,
+        resource.storageRequired / resource.maxQuantity * storageShift
       );
-      if (m.isUseful()) {
-        let remaining = m.maxConsume();
-        for (let consumeRatio of m.useRatio()) {
-          for (let resource of consumeList) {
-            if (remaining <= 0) {
-              break;
+    }
+    if (resource.isFood && !hungryRace) {
+      keepRatio = Math.max(keepRatio, 0.25);
+    }
+    return Math.max(
+      keepRatio,
+      resource.requestedQuantity / resource.maxQuantity * storageShift
+    );
+  }
+  function planConsume(input) {
+    if (!input.initialised) {
+      return Object.freeze({ adjustments: Object.freeze([]) });
+    }
+    const consumeAdjustments = Object.fromEntries(
+      input.resources.map((resource) => [resource.id, 0])
+    );
+    if (input.useful) {
+      let remaining = input.maximum;
+      for (let ratioIndex = 0; ratioIndex < input.ratios.length; ratioIndex++) {
+        const consumeRatio = input.ratios[ratioIndex];
+        if (consumeRatio === void 0) {
+          continue;
+        }
+        for (const resource of input.resources) {
+          if (remaining <= 0) {
+            break;
+          }
+          if (!resource.enabled || resource.demanded) {
+            continue;
+          }
+          const keepRatio = calculateConsumeKeepRatio(
+            consumeRatio,
+            resource,
+            input.storageShift,
+            input.hungryRace
+          );
+          if (keepRatio === null) {
+            continue;
+          }
+          let allowedConsume = consumeAdjustments[resource.id] ?? 0;
+          remaining += allowedConsume;
+          if (resource.isCraftable) {
+            if (resource.currentQuantity > resource.storageRequired * input.storageShift && resource.craftableMaximum !== null) {
+              const maxConsume = Math.floor(resource.craftableMaximum);
+              allowedConsume = Math.max(0, allowedConsume, maxConsume);
             }
-            if (!m.resEnabled(resource.id) || resource.isDemanded()) {
-              continue;
-            }
-            let keepRatio = consumeRatio;
-            if (keepRatio === -1) {
-              if (resource.storageRequired <= 1) {
-                continue;
-              }
-              keepRatio = Math.max(
-                keepRatio,
-                resource.storageRequired / resource.maxQuantity * m.storageShift
+          } else {
+            const rawMaximum = resource.ratioMaximums[ratioIndex];
+            if (resource.storageRatio > keepRatio + 0.01 && rawMaximum !== null && rawMaximum !== void 0) {
+              allowedConsume = Math.max(1, allowedConsume, Math.ceil(rawMaximum));
+            } else if (resource.storageRatio > keepRatio && rawMaximum !== null && rawMaximum !== void 0) {
+              allowedConsume = Math.max(
+                0,
+                allowedConsume,
+                Math.floor(rawMaximum)
+              );
+            } else if (resource.storageRatio >= 0.999 && keepRatio >= 1 && rawMaximum !== null && rawMaximum !== void 0) {
+              allowedConsume = Math.max(
+                0,
+                allowedConsume,
+                Math.floor(rawMaximum)
               );
             }
-            if (resource === resources2.Food && !isHungryRace2()) {
-              keepRatio = Math.max(keepRatio, 0.25);
-            }
-            keepRatio = Math.max(
-              keepRatio,
-              resource.requestedQuantity / resource.maxQuantity * m.storageShift
-            );
-            let allowedConsume = consumeAdjustments[resource.id];
-            remaining += consumeAdjustments[resource.id];
-            if (resource.isCraftable()) {
-              if (resource.currentQuantity > resource.storageRequired * m.storageShift) {
-                let maxConsume = Math.floor(m.maxConsumeCraftable(resource));
-                allowedConsume = Math.max(0, allowedConsume, maxConsume);
-              }
-            } else {
-              if (resource.storageRatio > keepRatio + 0.01) {
-                let maxConsume = Math.ceil(
-                  m.maxConsumeForRatio(resource, keepRatio)
-                );
-                allowedConsume = Math.max(1, allowedConsume, maxConsume);
-              } else if (resource.storageRatio > keepRatio) {
-                let maxConsume = Math.floor(
-                  m.maxConsumeForRatio(resource, keepRatio)
-                );
-                allowedConsume = Math.max(0, allowedConsume, maxConsume);
-              } else if (resource.storageRatio >= 0.999 && keepRatio >= 1) {
-                let maxConsume = Math.floor(
-                  m.maxConsumeForRatio(resource, resource.storageRatio)
-                );
-                allowedConsume = Math.max(0, allowedConsume, maxConsume);
-              }
-            }
-            consumeAdjustments[resource.id] = Math.min(remaining, allowedConsume);
-            remaining -= consumeAdjustments[resource.id];
           }
+          consumeAdjustments[resource.id] = Math.min(remaining, allowedConsume);
+          remaining -= consumeAdjustments[resource.id] ?? 0;
         }
       }
-      Object.keys(consumeAdjustments).forEach(
-        (id) => consumeAdjustments[id] -= m.currentConsume(id)
+    }
+    const currentById = Object.fromEntries(
+      input.current.map((entry) => [entry.id, entry.count])
+    );
+    const adjustments = Object.keys(consumeAdjustments).map((resourceId) => {
+      const expectedCurrent = currentById[resourceId] ?? 0;
+      return Object.freeze({
+        resourceId,
+        expectedCurrent,
+        delta: (consumeAdjustments[resourceId] ?? 0) - expectedCurrent
+      });
+    });
+    return Object.freeze({ adjustments: Object.freeze(adjustments) });
+  }
+
+  // src/application/consume.ts
+  function runConsumeAutomation(dependencies) {
+    return dependencies.executor.execute(planConsume(dependencies.reader.read()));
+  }
+
+  // src/adapters/evolve/consume.ts
+  function callBoolean8(record, name, path, ...args) {
+    return Boolean(
+      Reflect.apply(
+        requireFunction(record[name], `${path}.${name}`),
+        record,
+        args
+      )
+    );
+  }
+  function callNumber5(record, name, path, ...args) {
+    return requireNumber(
+      Reflect.apply(
+        requireFunction(record[name], `${path}.${name}`),
+        record,
+        args
+      ),
+      `${path}.${name}()`
+    );
+  }
+  function readList(manager) {
+    const list = Reflect.apply(
+      requireFunction(
+        manager["managedPriorityList"],
+        "ConsumeManager.managedPriorityList"
+      ),
+      manager,
+      []
+    );
+    if (!Array.isArray(list)) {
+      throw new TypeError(
+        "ConsumeManager.managedPriorityList() must return an array"
       );
-      Object.entries(consumeAdjustments).forEach(
-        ([id, delta]) => delta < 0 && m.consumeLess(id, delta * -1)
-      );
-      Object.entries(consumeAdjustments).forEach(
-        ([id, delta]) => delta > 0 && m.consumeMore(id, delta)
-      );
-    };
+    }
+    return list;
+  }
+  function readResourceId(resource, path) {
+    const id = resource["id"];
+    if (typeof id !== "string") {
+      throw new TypeError(`${path}.id must be a string`);
+    }
+    return id;
+  }
+  function minimalResource(id, ratios) {
+    return Object.freeze({
+      id,
+      enabled: false,
+      demanded: false,
+      storageRequired: 0,
+      requestedQuantity: 0,
+      maxQuantity: 0,
+      isFood: false,
+      isCraftable: false,
+      currentQuantity: 0,
+      storageRatio: 0,
+      craftableMaximum: null,
+      ratioMaximums: Object.freeze(ratios.map(() => null))
+    });
+  }
+  function createConsumeReader(dependencies) {
+    return Object.freeze({
+      read() {
+        const manager = requireRecord(
+          dependencies.getManager(),
+          "ConsumeManager"
+        );
+        if (!callBoolean8(manager, "initIndustry", "ConsumeManager")) {
+          return Object.freeze({
+            initialised: false,
+            useful: false,
+            maximum: 0,
+            storageShift: 0,
+            hungryRace: false,
+            ratios: Object.freeze([]),
+            resources: Object.freeze([]),
+            current: Object.freeze([])
+          });
+        }
+        const list = readList(manager);
+        const useful = callBoolean8(manager, "isUseful", "ConsumeManager");
+        const maximum = useful ? callNumber5(manager, "maxConsume", "ConsumeManager") : 0;
+        let ratios = Object.freeze([]);
+        if (useful) {
+          const rawRatios = Reflect.apply(
+            requireFunction(manager["useRatio"], "ConsumeManager.useRatio"),
+            manager,
+            []
+          );
+          if (!Array.isArray(rawRatios)) {
+            throw new TypeError("ConsumeManager.useRatio() must return an array");
+          }
+          ratios = Object.freeze(
+            rawRatios.map(
+              (ratio, index) => requireNumber(ratio, `ConsumeManager.useRatio()[${index}]`)
+            )
+          );
+        }
+        const shouldInspectResources = useful && maximum > 0 && ratios.length > 0 && list.length > 0;
+        const storageShift = shouldInspectResources ? requireNumber(manager["storageShift"], "ConsumeManager.storageShift") : 0;
+        const allResources = shouldInspectResources ? requireRecord(dependencies.getResources(), "resources") : null;
+        const food = allResources?.["Food"];
+        const resources2 = [];
+        let hungryRace = null;
+        for (let index = 0; index < list.length; index++) {
+          const path = `ConsumeManager.managedPriorityList()[${index}]`;
+          const raw = requireRecord(list[index], path);
+          const id = readResourceId(raw, path);
+          if (!shouldInspectResources) {
+            resources2.push(minimalResource(id, ratios));
+            continue;
+          }
+          const enabled = callBoolean8(
+            manager,
+            "resEnabled",
+            "ConsumeManager",
+            id
+          );
+          if (!enabled) {
+            resources2.push(minimalResource(id, ratios));
+            continue;
+          }
+          const demanded = callBoolean8(raw, "isDemanded", path);
+          if (demanded) {
+            resources2.push(
+              Object.freeze({
+                ...minimalResource(id, ratios),
+                enabled,
+                demanded
+              })
+            );
+            continue;
+          }
+          const storageRequired = requireNumber(
+            raw["storageRequired"],
+            `${path}.storageRequired`
+          );
+          const requestedQuantity = requireNumber(
+            raw["requestedQuantity"],
+            `${path}.requestedQuantity`
+          );
+          const maxQuantity = requireNumber(
+            raw["maxQuantity"],
+            `${path}.maxQuantity`
+          );
+          const isFood = raw === food;
+          const needsHunger = isFood && ratios.some((ratio) => ratio !== -1 || storageRequired > 1);
+          if (needsHunger && hungryRace === null) {
+            hungryRace = dependencies.isHungryRace();
+          }
+          const keepView = {
+            storageRequired,
+            requestedQuantity,
+            maxQuantity,
+            isFood
+          };
+          const isCraftable = callBoolean8(raw, "isCraftable", path);
+          const currentQuantity = requireNumber(
+            raw["currentQuantity"],
+            `${path}.currentQuantity`
+          );
+          const storageRatio = requireNumber(
+            raw["storageRatio"],
+            `${path}.storageRatio`
+          );
+          const effectiveHungry = hungryRace ?? true;
+          const craftableMaximum = isCraftable && currentQuantity > storageRequired * storageShift ? callNumber5(manager, "maxConsumeCraftable", "ConsumeManager", raw) : null;
+          const ratioMaximums = ratios.map((ratio) => {
+            if (isCraftable) {
+              return null;
+            }
+            const keepRatio = calculateConsumeKeepRatio(
+              ratio,
+              keepView,
+              storageShift,
+              effectiveHungry
+            );
+            if (keepRatio === null) {
+              return null;
+            }
+            const queryRatio = storageRatio > keepRatio ? keepRatio : storageRatio >= 0.999 && keepRatio >= 1 ? storageRatio : null;
+            if (queryRatio === null) {
+              return null;
+            }
+            return callNumber5(
+              manager,
+              "maxConsumeForRatio",
+              "ConsumeManager",
+              raw,
+              queryRatio
+            );
+          });
+          resources2.push(
+            Object.freeze({
+              id,
+              enabled,
+              demanded,
+              ...keepView,
+              isCraftable,
+              currentQuantity,
+              storageRatio,
+              craftableMaximum,
+              ratioMaximums: Object.freeze(ratioMaximums)
+            })
+          );
+        }
+        const uniqueIds = Object.keys(
+          Object.fromEntries(resources2.map((resource) => [resource.id, 0]))
+        );
+        const current = uniqueIds.map(
+          (id) => Object.freeze({
+            id,
+            count: callNumber5(manager, "currentConsume", "ConsumeManager", id)
+          })
+        );
+        return Object.freeze({
+          initialised: true,
+          useful,
+          maximum,
+          storageShift,
+          hungryRace: hungryRace ?? true,
+          ratios,
+          resources: Object.freeze(resources2),
+          current: Object.freeze(current)
+        });
+      }
+    });
+  }
+  function createConsumeCommandExecutor(getManager) {
+    return Object.freeze({
+      execute(decision) {
+        const activeAdjustments = decision.adjustments.filter(
+          (adjustment) => adjustment.delta !== 0
+        );
+        if (activeAdjustments.length === 0) {
+          return SUCCEEDED;
+        }
+        const manager = requireRecord(getManager(), "ConsumeManager");
+        const currentConsume = requireFunction(
+          manager["currentConsume"],
+          "ConsumeManager.currentConsume"
+        );
+        const consumeLess = activeAdjustments.some(
+          (adjustment) => adjustment.delta < 0
+        ) ? requireFunction(manager["consumeLess"], "ConsumeManager.consumeLess") : null;
+        const consumeMore = activeAdjustments.some(
+          (adjustment) => adjustment.delta > 0
+        ) ? requireFunction(manager["consumeMore"], "ConsumeManager.consumeMore") : null;
+        for (const adjustment of activeAdjustments) {
+          if (!Number.isSafeInteger(adjustment.delta)) {
+            return rejected2(
+              "invalid-consume-adjustment",
+              "consume adjustment must be a safe integer"
+            );
+          }
+          const actual = requireNumber(
+            Reflect.apply(currentConsume, manager, [adjustment.resourceId]),
+            `ConsumeManager.currentConsume(${adjustment.resourceId})`
+          );
+          if (actual !== adjustment.expectedCurrent) {
+            return stale(
+              "stale-consume-allocation",
+              "consume allocation changed",
+              {
+                resourceId: adjustment.resourceId,
+                expected: adjustment.expectedCurrent,
+                actual
+              }
+            );
+          }
+        }
+        for (const adjustment of activeAdjustments) {
+          if (adjustment.delta < 0 && consumeLess !== null) {
+            Reflect.apply(consumeLess, manager, [
+              adjustment.resourceId,
+              adjustment.delta * -1
+            ]);
+          }
+        }
+        for (const adjustment of activeAdjustments) {
+          if (adjustment.delta > 0 && consumeMore !== null) {
+            Reflect.apply(consumeMore, manager, [
+              adjustment.resourceId,
+              adjustment.delta
+            ]);
+          }
+        }
+        return SUCCEEDED;
+      }
+    });
   }
 
   // src/automation/economy/replicator.ts
@@ -40358,9 +40665,13 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         )
       );
     };
-    const autoConsume = createAutoConsume({
-      getResources: () => resources,
-      isHungryRace
+    const autoConsume = (manager) => runConsumeAutomation({
+      reader: createConsumeReader({
+        getManager: () => manager,
+        getResources: () => resources,
+        isHungryRace
+      }),
+      executor: createConsumeCommandExecutor(() => manager)
     });
     const autoReplicator = createAutoReplicator({
       getReplicatorManager: () => ReplicatorManager,

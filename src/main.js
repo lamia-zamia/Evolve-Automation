@@ -269,7 +269,11 @@ import {
   createTriggerCommandExecutor,
   createTriggerReader,
 } from "./adapters/evolve/trigger.ts";
-import { createAutoConsume } from "./automation/economy/consume.ts";
+import { runConsumeAutomation } from "./application/consume.ts";
+import {
+  createConsumeCommandExecutor,
+  createConsumeReader,
+} from "./adapters/evolve/consume.ts";
 import { createAutoReplicator } from "./automation/economy/replicator.ts";
 import { createAutoMarket } from "./automation/economy/market.ts";
 import { createAutoGalaxyMarket } from "./automation/economy/galaxy-market.ts";
@@ -3158,10 +3162,15 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   };
 
   // TODO: Allow configuring priorities between eject\supply\nanite
-  const autoConsume = createAutoConsume({
-    getResources: () => resources,
-    isHungryRace,
-  });
+  const autoConsume = (manager) =>
+    runConsumeAutomation({
+      reader: createConsumeReader({
+        getManager: () => manager,
+        getResources: () => resources,
+        isHungryRace,
+      }),
+      executor: createConsumeCommandExecutor(() => manager),
+    });
 
   const autoReplicator = createAutoReplicator({
     getReplicatorManager: () => ReplicatorManager,
