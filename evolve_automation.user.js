@@ -29498,168 +29498,468 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/automation/economy/gather-resources.ts
-  function createAutoGatherResources({
-    getGame,
-    getSettings,
-    getResources,
-    getBuildings,
-    getResourcesPerClick: getResourcesPerClick2,
-    haveTech: haveTech2
-  }) {
-    return function autoGatherResources2() {
-      const game2 = getGame();
-      const settings2 = getSettings();
-      const resources2 = getResources();
-      const buildings2 = getBuildings();
-      if (!settings2.buildingAlwaysClick && resources2.Population.currentQuantity > 15 && (buildings2.RockQuarry.count > 0 || game2.global.race["sappy"])) {
-        return;
-      }
-      let resPerClick = getResourcesPerClick2();
-      let amount = 0;
-      if (buildings2.Food.isClickable() && !game2.global.race["fasting"]) {
-        if (haveTech2("conjuring", 1)) {
-          amount = Math.floor(
-            Math.min(
-              (resources2.Food.maxQuantity - resources2.Food.currentQuantity) / (resPerClick * 10),
-              resources2.Mana.currentQuantity,
-              settings2.buildingClickPerTick
-            )
-          );
-          resources2.Mana.currentQuantity -= amount;
-          resources2.Food.currentQuantity += amount * resPerClick;
-        } else {
-          amount = Math.ceil(
-            Math.min(
-              (resources2.Food.maxQuantity - resources2.Food.currentQuantity) / resPerClick,
-              settings2.buildingClickPerTick
-            )
-          );
-          resources2.Food.currentQuantity = Math.min(
-            resources2.Food.currentQuantity + amount * resPerClick,
-            resources2.Food.maxQuantity
-          );
-        }
-        let food = game2.actions.city.food;
-        for (let i = 0; i < amount; i++) {
-          food.action();
-        }
-      }
-      if (buildings2.Lumber.isClickable()) {
-        if (haveTech2("conjuring", 2)) {
-          amount = Math.floor(
-            Math.min(
-              (resources2.Lumber.maxQuantity - resources2.Lumber.currentQuantity) / (resPerClick * 10),
-              resources2.Mana.currentQuantity,
-              settings2.buildingClickPerTick
-            )
-          );
-          resources2.Mana.currentQuantity -= amount;
-          resources2.Lumber.currentQuantity += amount * resPerClick;
-        } else {
-          amount = Math.ceil(
-            Math.min(
-              (resources2.Lumber.maxQuantity - resources2.Lumber.currentQuantity) / resPerClick,
-              settings2.buildingClickPerTick
-            )
-          );
-          resources2.Lumber.currentQuantity = Math.min(
-            resources2.Lumber.currentQuantity + amount * resPerClick,
-            resources2.Lumber.maxQuantity
-          );
-        }
-        let lumber = game2.actions.city.lumber;
-        for (let i = 0; i < amount; i++) {
-          lumber.action();
-        }
-      }
-      if (buildings2.Stone.isClickable()) {
-        if (haveTech2("conjuring", 2)) {
-          amount = Math.floor(
-            Math.min(
-              (resources2.Stone.maxQuantity - resources2.Stone.currentQuantity) / (resPerClick * 10),
-              resources2.Mana.currentQuantity,
-              settings2.buildingClickPerTick
-            )
-          );
-          resources2.Mana.currentQuantity -= amount;
-          resources2.Stone.currentQuantity += amount * resPerClick;
-        } else {
-          amount = Math.ceil(
-            Math.min(
-              (resources2.Stone.maxQuantity - resources2.Stone.currentQuantity) / resPerClick,
-              settings2.buildingClickPerTick
-            )
-          );
-          resources2.Stone.currentQuantity = Math.min(
-            resources2.Stone.currentQuantity + amount * resPerClick,
-            resources2.Stone.maxQuantity
-          );
-        }
-        let stone = game2.actions.city.stone;
-        for (let i = 0; i < amount; i++) {
-          stone.action();
-        }
-      }
-      if (buildings2.Chrysotile.isClickable()) {
-        if (haveTech2("conjuring", 2)) {
-          amount = Math.floor(
-            Math.min(
-              (resources2.Chrysotile.maxQuantity - resources2.Chrysotile.currentQuantity) / (resPerClick * 10),
-              resources2.Mana.currentQuantity,
-              settings2.buildingClickPerTick
-            )
-          );
-          resources2.Mana.currentQuantity -= amount;
-          resources2.Chrysotile.currentQuantity += amount * resPerClick;
-        } else {
-          amount = Math.ceil(
-            Math.min(
-              (resources2.Chrysotile.maxQuantity - resources2.Chrysotile.currentQuantity) / resPerClick,
-              settings2.buildingClickPerTick
-            )
-          );
-          resources2.Chrysotile.currentQuantity = Math.min(
-            resources2.Chrysotile.currentQuantity + amount * resPerClick,
-            resources2.Chrysotile.maxQuantity
-          );
-        }
-        let chrysotile = game2.actions.city.chrysotile;
-        for (let i = 0; i < amount; i++) {
-          chrysotile.action();
-        }
-      }
-      if (buildings2.Slaughter.isClickable()) {
-        amount = Math.min(
-          Math.max(
-            resources2.Lumber.maxQuantity - resources2.Lumber.currentQuantity,
-            resources2.Food.maxQuantity - resources2.Food.currentQuantity,
-            resources2.Furs.maxQuantity - resources2.Furs.currentQuantity
-          ) / resPerClick,
-          settings2.buildingClickPerTick
-        );
-        let slaughter = game2.actions.city.slaughter;
-        for (let i = 0; i < amount; i++) {
-          slaughter.action();
-        }
-        resources2.Lumber.currentQuantity = Math.min(
-          resources2.Lumber.currentQuantity + amount * resPerClick,
-          resources2.Lumber.maxQuantity
-        );
-        if (game2.global.race["soul_eater"] && haveTech2("primitive") && !game2.global.race["fasting"]) {
-          resources2.Food.currentQuantity = Math.min(
-            resources2.Food.currentQuantity + amount * resPerClick,
-            resources2.Food.maxQuantity
-          );
-        }
-        if (resources2.Furs.isUnlocked()) {
-          resources2.Furs.currentQuantity = Math.min(
-            resources2.Furs.currentQuantity + amount * resPerClick,
-            resources2.Furs.maxQuantity
-          );
-        }
-      }
+  // src/domain/gather-resources.ts
+  var DIRECT_TARGETS = Object.freeze([
+    Object.freeze({ actionId: "food", resourceId: "Food" }),
+    Object.freeze({ actionId: "lumber", resourceId: "Lumber" }),
+    Object.freeze({ actionId: "stone", resourceId: "Stone" }),
+    Object.freeze({ actionId: "chrysotile", resourceId: "Chrysotile" })
+  ]);
+  function planGatherResources(input) {
+    if (input.stopped) return null;
+    const quantities = {
+      Food: input.resources.Food.currentQuantity,
+      Lumber: input.resources.Lumber.currentQuantity,
+      Stone: input.resources.Stone.currentQuantity,
+      Chrysotile: input.resources.Chrysotile.currentQuantity,
+      Furs: input.resources.Furs.currentQuantity,
+      Mana: input.resources.Mana.currentQuantity
     };
+    const operations = [];
+    for (const target of DIRECT_TARGETS) {
+      if (!input.clickable[target.actionId]) continue;
+      if (target.actionId === "food" && input.fasting) continue;
+      const resource = input.resources[target.resourceId];
+      const current = quantities[target.resourceId];
+      const conjuring = target.actionId === "food" ? input.foodConjuring : input.materialConjuring;
+      let amount;
+      const beforeAction = [];
+      if (conjuring) {
+        amount = Math.floor(
+          Math.min(
+            (resource.maxQuantity - current) / (input.resourcesPerClick * 10),
+            quantities.Mana,
+            input.clickLimit
+          )
+        );
+        const manaQuantity = quantities.Mana - amount;
+        beforeAction.push(
+          Object.freeze({
+            resourceId: "Mana",
+            expectedQuantity: quantities.Mana,
+            quantity: manaQuantity
+          })
+        );
+        quantities.Mana = manaQuantity;
+        const resourceQuantity = current + amount * input.resourcesPerClick;
+        beforeAction.push(
+          Object.freeze({
+            resourceId: target.resourceId,
+            expectedQuantity: current,
+            quantity: resourceQuantity
+          })
+        );
+        quantities[target.resourceId] = resourceQuantity;
+      } else {
+        amount = Math.ceil(
+          Math.min(
+            (resource.maxQuantity - current) / input.resourcesPerClick,
+            input.clickLimit
+          )
+        );
+        const resourceQuantity = Math.min(
+          current + amount * input.resourcesPerClick,
+          resource.maxQuantity
+        );
+        beforeAction.push(
+          Object.freeze({
+            resourceId: target.resourceId,
+            expectedQuantity: current,
+            quantity: resourceQuantity
+          })
+        );
+        quantities[target.resourceId] = resourceQuantity;
+      }
+      operations.push(
+        Object.freeze({
+          actionId: target.actionId,
+          amount,
+          beforeAction: Object.freeze(beforeAction),
+          afterAction: Object.freeze([])
+        })
+      );
+    }
+    if (input.clickable.slaughter) {
+      const amount = Math.min(
+        Math.max(
+          input.resources.Lumber.maxQuantity - quantities.Lumber,
+          input.resources.Food.maxQuantity - quantities.Food,
+          input.resources.Furs.maxQuantity - quantities.Furs
+        ) / input.resourcesPerClick,
+        input.clickLimit
+      );
+      const afterAction = [];
+      const assignCapped = (resourceId3) => {
+        const current = quantities[resourceId3];
+        const quantity = Math.min(
+          current + amount * input.resourcesPerClick,
+          input.resources[resourceId3].maxQuantity
+        );
+        afterAction.push(
+          Object.freeze({
+            resourceId: resourceId3,
+            expectedQuantity: current,
+            quantity
+          })
+        );
+        quantities[resourceId3] = quantity;
+      };
+      assignCapped("Lumber");
+      if (input.soulEater && input.primitive && !input.fasting) {
+        assignCapped("Food");
+      }
+      if (input.fursUnlocked) assignCapped("Furs");
+      operations.push(
+        Object.freeze({
+          actionId: "slaughter",
+          amount,
+          beforeAction: Object.freeze([]),
+          afterAction: Object.freeze(afterAction)
+        })
+      );
+    }
+    return operations.length === 0 ? null : Object.freeze({ operations: Object.freeze(operations) });
+  }
+
+  // src/application/gather-resources.ts
+  var SUCCEEDED11 = Object.freeze({
+    status: "succeeded"
+  });
+  function runGatherResourcesAutomation(dependencies) {
+    const decision = planGatherResources(dependencies.reader.read());
+    return decision === null ? SUCCEEDED11 : dependencies.executor.execute(decision);
+  }
+
+  // src/adapters/evolve/gather-resources.ts
+  var ACTION_ORDER = Object.freeze([
+    "food",
+    "lumber",
+    "stone",
+    "chrysotile",
+    "slaughter"
+  ]);
+  var RESOURCE_IDS = Object.freeze([
+    "Food",
+    "Lumber",
+    "Stone",
+    "Chrysotile",
+    "Furs",
+    "Mana"
+  ]);
+  function callBoolean16(record, name, path) {
+    return Boolean(
+      Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
+    );
+  }
+  function readTechnology(technology, id, level) {
+    const value = technology[id];
+    return value === void 0 || value === null ? false : requireNumber(value, `game.global.tech.${id}`) >= level;
+  }
+  function readResource(registry, id) {
+    return requireRecord(registry[id], `resources.${id}`);
+  }
+  function readQuantity(resource, id) {
+    return requireNumber(
+      resource["currentQuantity"],
+      `resources.${id}.currentQuantity`
+    );
+  }
+  function emptyInput4() {
+    const empty = Object.freeze({ currentQuantity: 0, maxQuantity: 0 });
+    return Object.freeze({
+      stopped: true,
+      resourcesPerClick: 1,
+      clickLimit: 0,
+      fasting: false,
+      soulEater: false,
+      primitive: false,
+      foodConjuring: false,
+      materialConjuring: false,
+      fursUnlocked: false,
+      clickable: Object.freeze({
+        food: false,
+        lumber: false,
+        stone: false,
+        chrysotile: false,
+        slaughter: false
+      }),
+      resources: Object.freeze({
+        Food: empty,
+        Lumber: empty,
+        Stone: empty,
+        Chrysotile: empty,
+        Furs: empty,
+        Mana: empty
+      })
+    });
+  }
+  function createGatherResourcesAdapter(dependencies) {
+    let session = null;
+    const reader = Object.freeze({
+      read() {
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const registry = requireRecord(dependencies.getResources(), "resources");
+        const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
+        const global = requireRecord(game2["global"], "game.global");
+        const race = requireRecord(global["race"], "game.global.race");
+        const technology = requireRecord(global["tech"], "game.global.tech");
+        const population = requireRecord(
+          registry["Population"],
+          "resources.Population"
+        );
+        const alwaysClick = requireBoolean(
+          settings2["buildingAlwaysClick"],
+          "settings.buildingAlwaysClick"
+        );
+        const populationCurrent = requireNumber(
+          population["currentQuantity"],
+          "resources.Population.currentQuantity"
+        );
+        if (!alwaysClick && populationCurrent > 15) {
+          const quarry = requireRecord(
+            buildings2["RockQuarry"],
+            "buildings.RockQuarry"
+          );
+          const quarryCount = requireNumber(
+            quarry["count"],
+            "buildings.RockQuarry.count"
+          );
+          if (quarryCount > 0 || Boolean(race["sappy"])) {
+            session = null;
+            return emptyInput4();
+          }
+        }
+        const resourcesPerClick = requireNumber(
+          dependencies.getResourcesPerClick(),
+          "resourcesPerClick"
+        );
+        if (resourcesPerClick <= 0) {
+          throw new TypeError("resourcesPerClick must be greater than zero");
+        }
+        const clickLimit = requireNumber(
+          settings2["buildingClickPerTick"],
+          "settings.buildingClickPerTick"
+        );
+        if (!Number.isSafeInteger(clickLimit) || clickLimit < 0) {
+          throw new TypeError(
+            "settings.buildingClickPerTick must be a non-negative safe integer"
+          );
+        }
+        const fasting = Boolean(race["fasting"]);
+        const soulEater = Boolean(race["soul_eater"]);
+        const clickable = {
+          food: callBoolean16(
+            requireRecord(buildings2["Food"], "buildings.Food"),
+            "isClickable",
+            "buildings.Food"
+          ),
+          lumber: callBoolean16(
+            requireRecord(buildings2["Lumber"], "buildings.Lumber"),
+            "isClickable",
+            "buildings.Lumber"
+          ),
+          stone: callBoolean16(
+            requireRecord(buildings2["Stone"], "buildings.Stone"),
+            "isClickable",
+            "buildings.Stone"
+          ),
+          chrysotile: callBoolean16(
+            requireRecord(buildings2["Chrysotile"], "buildings.Chrysotile"),
+            "isClickable",
+            "buildings.Chrysotile"
+          ),
+          slaughter: callBoolean16(
+            requireRecord(buildings2["Slaughter"], "buildings.Slaughter"),
+            "isClickable",
+            "buildings.Slaughter"
+          )
+        };
+        const foodConjuring = clickable.food && !fasting ? readTechnology(technology, "conjuring", 1) : false;
+        const materialConjuring = clickable.lumber || clickable.stone || clickable.chrysotile ? readTechnology(technology, "conjuring", 2) : false;
+        const primitive = clickable.slaughter && soulEater ? readTechnology(technology, "primitive", 1) : false;
+        const resourceRecords = {};
+        const initialQuantities = {
+          Food: 0,
+          Lumber: 0,
+          Stone: 0,
+          Chrysotile: 0,
+          Furs: 0,
+          Mana: 0
+        };
+        const emptyResource = Object.freeze({
+          currentQuantity: 0,
+          maxQuantity: 0
+        });
+        const resourceInput = {
+          Food: emptyResource,
+          Lumber: emptyResource,
+          Stone: emptyResource,
+          Chrysotile: emptyResource,
+          Furs: emptyResource,
+          Mana: emptyResource
+        };
+        const readNeededResource = (id) => {
+          const resource = readResource(registry, id);
+          const currentQuantity = readQuantity(resource, id);
+          const maxQuantity = id === "Mana" ? 0 : requireNumber(
+            resource["maxQuantity"],
+            `resources.${id}.maxQuantity`
+          );
+          resourceRecords[id] = resource;
+          initialQuantities[id] = currentQuantity;
+          resourceInput[id] = Object.freeze({ currentQuantity, maxQuantity });
+        };
+        if (clickable.food && !fasting || clickable.slaughter) {
+          readNeededResource("Food");
+        }
+        if (clickable.lumber || clickable.slaughter) {
+          readNeededResource("Lumber");
+        }
+        if (clickable.stone) readNeededResource("Stone");
+        if (clickable.chrysotile) readNeededResource("Chrysotile");
+        if (clickable.slaughter) readNeededResource("Furs");
+        if (foodConjuring || materialConjuring) readNeededResource("Mana");
+        const fursUnlocked = clickable.slaughter && resourceRecords.Furs !== void 0 ? callBoolean16(resourceRecords.Furs, "isUnlocked", "resources.Furs") : false;
+        session = Object.freeze({
+          game: game2,
+          registry,
+          resources: Object.freeze(resourceRecords),
+          initialQuantities: Object.freeze(initialQuantities)
+        });
+        return Object.freeze({
+          stopped: false,
+          resourcesPerClick,
+          clickLimit,
+          fasting,
+          soulEater,
+          primitive,
+          foodConjuring,
+          materialConjuring,
+          fursUnlocked,
+          clickable: Object.freeze(clickable),
+          resources: Object.freeze(resourceInput)
+        });
+      }
+    });
+    const executor = Object.freeze({
+      execute(decision) {
+        if (!Array.isArray(decision.operations)) {
+          return rejected2(
+            "invalid-gather-operations",
+            "gather operations must be an array"
+          );
+        }
+        const operations = decision.operations;
+        const active = session;
+        if (active === null) {
+          return stale(
+            "gather-session-missing",
+            "Gather resources read session is missing"
+          );
+        }
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const registry = requireRecord(dependencies.getResources(), "resources");
+        if (game2 !== active.game || registry !== active.registry) {
+          return stale(
+            "gather-context-changed",
+            "Gather resources context changed"
+          );
+        }
+        for (const id of RESOURCE_IDS) {
+          const resource = active.resources[id];
+          if (resource === void 0) continue;
+          if (registry[id] !== resource) {
+            return stale(
+              "gather-resource-changed",
+              `Gather resource ${id} changed`
+            );
+          }
+          const actual = readQuantity(resource, id);
+          const expected = active.initialQuantities[id];
+          if (actual !== expected) {
+            return stale(
+              "gather-quantity-changed",
+              `Gather resource ${id} quantity changed`,
+              { resourceId: id, expected, actual }
+            );
+          }
+        }
+        const simulated = { ...active.initialQuantities };
+        const prepared = [];
+        let previousActionIndex = -1;
+        for (const operation2 of operations) {
+          const actionIndex = ACTION_ORDER.indexOf(operation2.actionId);
+          if (actionIndex <= previousActionIndex || typeof operation2.amount !== "number" || !Number.isFinite(operation2.amount) || !Array.isArray(operation2.beforeAction) || !Array.isArray(operation2.afterAction)) {
+            return rejected2(
+              "invalid-gather-operation",
+              "gather operations must be finite and follow resource order"
+            );
+          }
+          previousActionIndex = actionIndex;
+          const clickCount = operation2.amount > 0 ? Math.ceil(operation2.amount) : 0;
+          if (!Number.isSafeInteger(clickCount)) {
+            return rejected2(
+              "invalid-gather-click-count",
+              "gather click count must be a safe integer"
+            );
+          }
+          const assignments = [
+            ...operation2.beforeAction,
+            ...operation2.afterAction
+          ];
+          for (const assignment of assignments) {
+            if (!RESOURCE_IDS.includes(assignment.resourceId) || typeof assignment.expectedQuantity !== "number" || !Number.isFinite(assignment.expectedQuantity) || typeof assignment.quantity !== "number" || !Number.isFinite(assignment.quantity) || simulated[assignment.resourceId] !== assignment.expectedQuantity) {
+              return rejected2(
+                "invalid-gather-assignment",
+                "gather assignments must form a finite sequential state"
+              );
+            }
+            if (active.resources[assignment.resourceId] === void 0) {
+              return rejected2(
+                "invalid-gather-assignment",
+                "gather assignments require a sampled resource"
+              );
+            }
+            simulated[assignment.resourceId] = assignment.quantity;
+          }
+          let action = null;
+          let actionFunction = null;
+          if (clickCount > 0) {
+            const actions = requireRecord(game2["actions"], "game.actions");
+            const city = requireRecord(actions["city"], "game.actions.city");
+            action = requireRecord(
+              city[operation2.actionId],
+              `game.actions.city.${operation2.actionId}`
+            );
+            actionFunction = requireFunction(
+              action["action"],
+              `game.actions.city.${operation2.actionId}.action`
+            );
+          }
+          prepared.push({ operation: operation2, action, actionFunction });
+        }
+        const applyAssignments = (assignments) => {
+          for (const assignment of assignments) {
+            const resource = active.resources[assignment.resourceId];
+            if (resource !== void 0) {
+              resource["currentQuantity"] = assignment.quantity;
+            }
+          }
+        };
+        for (const entry of prepared) {
+          applyAssignments(entry.operation.beforeAction);
+          if (entry.action !== null && entry.actionFunction !== null) {
+            for (let index = 0; index < entry.operation.amount; index++) {
+              Reflect.apply(entry.actionFunction, entry.action, []);
+            }
+          }
+          applyAssignments(entry.operation.afterAction);
+        }
+        return SUCCEEDED;
+      }
+    });
+    return Object.freeze({ reader, executor });
   }
 
   // src/automation/progression/evolution.ts
@@ -29948,17 +30248,17 @@
   }
 
   // src/application/craft.ts
-  var SUCCEEDED11 = Object.freeze({
+  var SUCCEEDED12 = Object.freeze({
     status: "succeeded"
   });
   function runCraftAutomation(dependencies) {
     if (!shouldRunCraft(dependencies.reader.readGate())) {
-      return SUCCEEDED11;
+      return SUCCEEDED12;
     }
     for (let index = 0; ; index++) {
       const candidate = dependencies.reader.readCandidate(index);
       if (candidate === null) {
-        return SUCCEEDED11;
+        return SUCCEEDED12;
       }
       const decision = planCraft(candidate);
       if (decision === null) {
@@ -29972,7 +30272,7 @@
   }
 
   // src/adapters/evolve/craft.ts
-  function callBoolean16(record, name, path) {
+  function callBoolean17(record, name, path) {
     return Boolean(
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
     );
@@ -30009,7 +30309,7 @@
           resources2["Population"],
           "resources.Population"
         );
-        const populationUnlocked = callBoolean16(
+        const populationUnlocked = callBoolean17(
           population,
           "isUnlocked",
           "resources.Population"
@@ -30036,7 +30336,7 @@
         }
         const path = `foundryList[${index}]`;
         const craftable = requireRecord(session.foundryList[index], path);
-        const unlocked = callBoolean16(craftable, "isUnlocked", path);
+        const unlocked = callBoolean17(craftable, "isUnlocked", path);
         if (!unlocked) {
           return Object.freeze({
             index,
@@ -30088,7 +30388,7 @@
             maxQuantity,
             craftPreserve
           };
-          if (callBoolean16(craftable, "isDemanded", path)) {
+          if (callBoolean17(craftable, "isDemanded", path)) {
             const thresholdPreserve = requireNumber(
               craftable["craftPreserve"],
               `${path}.craftPreserve`
@@ -30102,11 +30402,11 @@
             );
             continue;
           }
-          if (callBoolean16(resource, "isDemanded", `resources.${resourceId3}`)) {
+          if (callBoolean17(resource, "isDemanded", `resources.${resourceId3}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
-          const cappedForPriority = callBoolean16(
+          const cappedForPriority = callBoolean17(
             resource,
             "isCapped",
             `resources.${resourceId3}`
@@ -30138,7 +30438,7 @@
             resource["storageRequired"],
             `resources.${resourceId3}.storageRequired`
           );
-          if (currentQuantity < resourceRequired && !callBoolean16(resource, "isCapped", `resources.${resourceId3}`)) {
+          if (currentQuantity < resourceRequired && !callBoolean17(resource, "isCapped", `resources.${resourceId3}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
@@ -31563,7 +31863,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED12 = Object.freeze({
+  var SUCCEEDED13 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -31571,7 +31871,7 @@
     while (true) {
       const decision = planResearch(dependencies.reader.read(startIndex));
       if (decision === null) {
-        return SUCCEEDED12;
+        return SUCCEEDED13;
       }
       const result2 = dependencies.executor.execute(decision);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -31715,12 +32015,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED13 = Object.freeze({
+  var SUCCEEDED14 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision = planMutation(dependencies.reader.read());
-    return decision === null ? SUCCEEDED13 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED14 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -45252,13 +45552,16 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       reader: galaxyMarketAdapter.reader,
       executor: galaxyMarketAdapter.executor
     });
-    const autoGatherResources = createAutoGatherResources({
+    const gatherResourcesAdapter = createGatherResourcesAdapter({
       getGame: () => game,
       getSettings: () => settings,
       getResources: () => resources,
       getBuildings: () => buildings,
-      getResourcesPerClick: () => getResourcesPerClick(),
-      haveTech
+      getResourcesPerClick: () => getResourcesPerClick()
+    });
+    const autoGatherResources = () => runGatherResourcesAutomation({
+      reader: gatherResourcesAdapter.reader,
+      executor: gatherResourcesAdapter.executor
     });
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {

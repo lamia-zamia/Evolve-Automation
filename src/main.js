@@ -300,7 +300,8 @@ import { createStorageAllocationAdapter } from "./adapters/evolve/storage-alloca
 import { createStorageDebugSource } from "./adapters/browser/storage-debug.ts";
 import { runGalaxyMarketAutomation } from "./application/galaxy-market.ts";
 import { createGalaxyMarketAdapter } from "./adapters/evolve/galaxy-market.ts";
-import { createAutoGatherResources } from "./automation/economy/gather-resources.ts";
+import { runGatherResourcesAutomation } from "./application/gather-resources.ts";
+import { createGatherResourcesAdapter } from "./adapters/evolve/gather-resources.ts";
 import { createAutoEvolution } from "./automation/progression/evolution.ts";
 import {
   createUniverseSelectionCommandExecutor,
@@ -3562,14 +3563,18 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       executor: galaxyMarketAdapter.executor,
     });
 
-  const autoGatherResources = createAutoGatherResources({
+  const gatherResourcesAdapter = createGatherResourcesAdapter({
     getGame: () => game,
     getSettings: () => settings,
     getResources: () => resources,
     getBuildings: () => buildings,
     getResourcesPerClick: () => getResourcesPerClick(),
-    haveTech,
   });
+  const autoGatherResources = () =>
+    runGatherResourcesAutomation({
+      reader: gatherResourcesAdapter.reader,
+      executor: gatherResourcesAdapter.executor,
+    });
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
