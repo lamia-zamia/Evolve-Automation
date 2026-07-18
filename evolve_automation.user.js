@@ -31805,99 +31805,434 @@
     });
   }
 
-  // src/automation/combat/spy.ts
-  function createAutoSpy({
-    getSpyManager,
-    getWarManager,
-    getHaveTask,
-    getHaveTech,
-    inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2,
-    getResources,
-    getSettings,
-    getPoly,
-    GameLog: GameLog2,
-    getGovName: getGovName2,
-    getGame
-  }) {
-    return function autoSpy2() {
-      const SpyManager2 = getSpyManager();
-      const WarManager2 = getWarManager();
-      const haveTask2 = getHaveTask();
-      const haveTech2 = getHaveTech();
-      const resources2 = getResources();
-      const settings2 = getSettings();
-      const poly2 = getPoly();
-      const game2 = getGame();
-      let m = SpyManager2;
-      if (!m._foreignVue || haveTask2("combo_spy") || haveTask2("spyop") || !haveTech2("spy")) {
-        return;
+  // src/domain/spy.ts
+  function planSpyCycle(input) {
+    if (!input.available) return null;
+    return Object.freeze({
+      trainEnabled: input.trainEnabled,
+      espionageEnabled: input.advancedEspionage,
+      foreignCount: input.foreignCount
+    });
+  }
+  function planSpyTraining(input) {
+    if (input.disabled || input.occupied || input.annexed || input.purchased) {
+      return null;
+    }
+    let spiesRequired = input.spyMaximumSetting >= 0 ? input.spyMaximumSetting : Number.MAX_SAFE_INTEGER;
+    if (spiesRequired < 1 && input.policy !== "Occupy" && input.policy !== "Ignore") {
+      spiesRequired = 1;
+    }
+    if (spiesRequired < 3 && input.policy === "Purchase" && input.purchasePrice !== null && input.moneyMaximum >= input.purchasePrice) {
+      spiesRequired = 3;
+    }
+    if (input.spyCount >= spiesRequired || input.purchaseMoney > 0 && input.policy !== "Purchase" && input.spyCount > 0) {
+      return null;
+    }
+    return Object.freeze({
+      kind: "train-spy",
+      foreignIndex: input.foreignIndex,
+      governmentId: input.governmentId,
+      governmentName: input.governmentName
+    });
+  }
+  function selectMission(input) {
+    if (input.policy === "Betrayal") {
+      return input.military <= 75 || input.hostility <= 0 ? input.missionIds["Sabotage"] ?? null : input.missionIds["Influence"] ?? null;
+    }
+    if (input.policy === "Occupy") {
+      return input.missionIds["Sabotage"] ?? null;
+    }
+    return input.missionIds[input.policy] ?? null;
+  }
+  function planSpyEspionage(input) {
+    if (input.spyCount < 1 || input.sabotageProgress !== 0 || input.policy === "None") {
+      return null;
+    }
+    const missionId = selectMission(input);
+    if (missionId === null) return null;
+    if (input.purchaseMoney > 0 && input.purchaseForeign && missionId === input.missionIds["Purchase"] && input.spyCount < 3 && !input.elusive) {
+      return null;
+    }
+    if (input.annexed && input.policy !== "Annex" || input.purchased && input.policy !== "Purchase" || input.occupied && input.policy !== "Occupy") {
+      return Object.freeze({
+        kind: "release-foreign",
+        foreignIndex: input.foreignIndex,
+        governmentId: input.governmentId,
+        expectedPolicy: input.policy
+      });
+    }
+    if (!input.annexed && !input.purchased && !input.occupied) {
+      return Object.freeze({
+        kind: "perform-espionage",
+        foreignIndex: input.foreignIndex,
+        governmentId: input.governmentId,
+        missionId,
+        secondaryTarget: !input.isPrimaryTarget
+      });
+    }
+    return null;
+  }
+
+  // src/application/spy.ts
+  var SUCCEEDED18 = Object.freeze({
+    status: "succeeded"
+  });
+  function runSpyAutomation(dependencies) {
+    const cycle = planSpyCycle(dependencies.reader.readCycle());
+    if (cycle === null) return SUCCEEDED18;
+    if (cycle.trainEnabled) {
+      for (let index = 0; index < cycle.foreignCount; index++) {
+        const decision2 = planSpyTraining(dependencies.reader.readTraining(index));
+        if (decision2 === null) continue;
+        const outcome = dependencies.executor.execute(decision2);
+        if (outcome.status !== "succeeded") return outcome;
       }
-      if (inflationChallengeShouldSaveMoney2()) {
-        return;
+    }
+    if (!cycle.espionageEnabled) return SUCCEEDED18;
+    for (let index = 0; index < cycle.foreignCount; index++) {
+      const decision2 = planSpyEspionage(dependencies.reader.readEspionage(index));
+      if (decision2 === null) continue;
+      const outcome = dependencies.executor.execute(decision2);
+      if (outcome.status !== "succeeded") return outcome;
+    }
+    return SUCCEEDED18;
+  }
+
+  // src/adapters/evolve/spy.ts
+  function unavailableCycle() {
+    return Object.freeze({
+      available: false,
+      trainEnabled: false,
+      advancedEspionage: false,
+      foreignCount: 0
+    });
+  }
+  function readForeign(foreigns, index) {
+    if (!Number.isSafeInteger(index) || index < 0 || index >= foreigns.length) {
+      throw new RangeError(`foreign index ${index} is out of range`);
+    }
+    const foreign = requireRecord(
+      foreigns[index],
+      `SpyManager.foreignActive[${index}]`
+    );
+    const government = requireRecord(
+      foreign["gov"],
+      `SpyManager.foreignActive[${index}].gov`
+    );
+    return { foreign, government };
+  }
+  function requireString2(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function readMissionIds(manager) {
+    const types = requireRecord(manager["Types"], "SpyManager.Types");
+    const ids = {};
+    for (const [name, rawType] of Object.entries(types)) {
+      const type = requireRecord(rawType, `SpyManager.Types.${name}`);
+      ids[name] = requireString2(type["id"], `SpyManager.Types.${name}.id`);
+    }
+    return Object.freeze(ids);
+  }
+  function readGameRace(getGame) {
+    const game2 = requireRecord(getGame(), "game");
+    const global = requireRecord(game2["global"], "game.global");
+    return requireRecord(global["race"], "game.global.race");
+  }
+  function readGovernmentPrice(dependencies, governmentId) {
+    const poly2 = requireRecord(dependencies.getPoly(), "poly");
+    const govPrice = requireFunction(poly2["govPrice"], "poly.govPrice");
+    return requireNumber(
+      Reflect.apply(govPrice, poly2, [governmentId]),
+      `poly.govPrice(${governmentId})`
+    );
+  }
+  function decisionMatches(expected, actual) {
+    if (expected.kind !== actual.kind || expected.foreignIndex !== actual.foreignIndex || expected.governmentId !== actual.governmentId) {
+      return false;
+    }
+    if (expected.kind === "train-spy" && actual.kind === "train-spy") {
+      return expected.governmentName === actual.governmentName;
+    }
+    if (expected.kind === "release-foreign" && actual.kind === "release-foreign") {
+      return expected.expectedPolicy === actual.expectedPolicy;
+    }
+    return expected.kind === "perform-espionage" && actual.kind === "perform-espionage" && expected.missionId === actual.missionId && expected.secondaryTarget === actual.secondaryTarget;
+  }
+  function governmentMatchesTraining(sample) {
+    const input = sample.input;
+    return sample.foreign["policy"] === input.policy && sample.government["spy"] === input.spyCount && Boolean(sample.government["occ"]) === input.occupied && Boolean(sample.government["anx"]) === input.annexed && Boolean(sample.government["buy"]) === input.purchased;
+  }
+  function governmentMatchesEspionage(sample) {
+    const input = sample.input;
+    return sample.foreign["policy"] === input.policy && sample.government["spy"] === input.spyCount && sample.government["sab"] === input.sabotageProgress && (input.policy !== "Betrayal" || sample.government["mil"] === input.military && sample.government["hstl"] === input.hostility) && Boolean(sample.government["occ"]) === input.occupied && Boolean(sample.government["anx"]) === input.annexed && Boolean(sample.government["buy"]) === input.purchased;
+  }
+  function createSpyAdapter(dependencies) {
+    let session = null;
+    let sample = null;
+    const reader = Object.freeze({
+      readCycle() {
+        session = null;
+        sample = null;
+        const manager = requireRecord(dependencies.getSpyManager(), "SpyManager");
+        const rawView = manager["_foreignVue"];
+        if (!rawView) return unavailableCycle();
+        const view = requireRecord(rawView, "SpyManager._foreignVue");
+        const haveTask2 = requireFunction(dependencies.getHaveTask(), "haveTask");
+        if (Reflect.apply(haveTask2, void 0, ["combo_spy"]) || Reflect.apply(haveTask2, void 0, ["spyop"])) {
+          return unavailableCycle();
+        }
+        const haveTech2 = requireFunction(dependencies.getHaveTech(), "haveTech");
+        if (!Reflect.apply(haveTech2, void 0, ["spy"])) {
+          return unavailableCycle();
+        }
+        if (dependencies.shouldSaveInflationMoney()) return unavailableCycle();
+        const advancedEspionage = Boolean(
+          Reflect.apply(haveTech2, void 0, ["spy", 2])
+        );
+        if (!advancedEspionage) {
+          const resources2 = requireRecord(
+            dependencies.getResources(),
+            "resources"
+          );
+          const money = requireRecord(resources2["Money"], "resources.Money");
+          const storageRatio = requireNumber(
+            money["storageRatio"],
+            "resources.Money.storageRatio"
+          );
+          if (storageRatio < 0.9) return unavailableCycle();
+        }
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const trainEnabled = requireBoolean(
+          settings2["foreignTrainSpy"],
+          "settings.foreignTrainSpy"
+        );
+        const spyMaximumSetting = trainEnabled ? requireNumber(settings2["foreignSpyMax"], "settings.foreignSpyMax") : 0;
+        const rawForeigns = manager["foreignActive"];
+        if (!Array.isArray(rawForeigns)) {
+          throw new TypeError("SpyManager.foreignActive must be an array");
+        }
+        const missionIds = advancedEspionage ? readMissionIds(manager) : Object.freeze({});
+        session = Object.freeze({
+          manager,
+          view,
+          foreigns: rawForeigns,
+          spyMaximumSetting,
+          missionIds
+        });
+        return Object.freeze({
+          available: true,
+          trainEnabled,
+          advancedEspionage,
+          foreignCount: rawForeigns.length
+        });
+      },
+      readTraining(foreignIndex) {
+        const active = session;
+        if (active === null) throw new Error("spy cycle has not been sampled");
+        const { foreign, government } = readForeign(
+          active.foreigns,
+          foreignIndex
+        );
+        const governmentId = requireNumber(
+          foreign["id"],
+          `SpyManager.foreignActive[${foreignIndex}].id`
+        );
+        const policy = requireString2(
+          foreign["policy"],
+          `SpyManager.foreignActive[${foreignIndex}].policy`
+        );
+        const spyDisabled = requireFunction(
+          active.view["spy_disabled"],
+          "SpyManager._foreignVue.spy_disabled"
+        );
+        const purchasePrice = policy === "Purchase" ? readGovernmentPrice(dependencies, governmentId) : null;
+        let moneyMaximum = 0;
+        if (purchasePrice !== null) {
+          const resources2 = requireRecord(
+            dependencies.getResources(),
+            "resources"
+          );
+          const money = requireRecord(resources2["Money"], "resources.Money");
+          moneyMaximum = requireNumber(
+            money["maxQuantity"],
+            "resources.Money.maxQuantity"
+          );
+        }
+        const governmentName = requireString2(
+          dependencies.getGovName(governmentId),
+          `government name ${governmentId}`
+        );
+        const input = Object.freeze({
+          foreignIndex,
+          governmentId,
+          governmentName,
+          disabled: Boolean(
+            Reflect.apply(spyDisabled, active.view, [governmentId])
+          ),
+          occupied: Boolean(government["occ"]),
+          annexed: Boolean(government["anx"]),
+          purchased: Boolean(government["buy"]),
+          policy,
+          spyCount: requireNumber(
+            government["spy"],
+            `SpyManager.foreignActive[${foreignIndex}].gov.spy`
+          ),
+          spyMaximumSetting: active.spyMaximumSetting,
+          purchaseMoney: requireNumber(
+            active.manager["purchaseMoney"],
+            "SpyManager.purchaseMoney"
+          ),
+          moneyMaximum,
+          purchasePrice
+        });
+        sample = Object.freeze({
+          kind: "training",
+          input,
+          foreign,
+          government
+        });
+        return input;
+      },
+      readEspionage(foreignIndex) {
+        const active = session;
+        if (active === null) throw new Error("spy cycle has not been sampled");
+        const { foreign, government } = readForeign(
+          active.foreigns,
+          foreignIndex
+        );
+        const governmentId = requireNumber(
+          foreign["id"],
+          `SpyManager.foreignActive[${foreignIndex}].id`
+        );
+        const policy = requireString2(
+          foreign["policy"],
+          `SpyManager.foreignActive[${foreignIndex}].policy`
+        );
+        const spyCount = requireNumber(
+          government["spy"],
+          `SpyManager.foreignActive[${foreignIndex}].gov.spy`
+        );
+        const sabotageProgress = requireNumber(
+          government["sab"],
+          `SpyManager.foreignActive[${foreignIndex}].gov.sab`
+        );
+        const actionable = spyCount >= 1 && sabotageProgress === 0 && policy !== "None";
+        const purchaseForeigns = actionable ? active.manager["purchaseForeigngs"] : [];
+        if (!Array.isArray(purchaseForeigns)) {
+          throw new TypeError("SpyManager.purchaseForeigngs must be an array");
+        }
+        const input = Object.freeze({
+          foreignIndex,
+          governmentId,
+          policy,
+          spyCount,
+          sabotageProgress,
+          military: actionable && policy === "Betrayal" ? requireNumber(
+            government["mil"],
+            `SpyManager.foreignActive[${foreignIndex}].gov.mil`
+          ) : 0,
+          hostility: actionable && policy === "Betrayal" ? requireNumber(
+            government["hstl"],
+            `SpyManager.foreignActive[${foreignIndex}].gov.hstl`
+          ) : 0,
+          occupied: Boolean(government["occ"]),
+          annexed: Boolean(government["anx"]),
+          purchased: Boolean(government["buy"]),
+          purchaseMoney: actionable ? requireNumber(
+            active.manager["purchaseMoney"],
+            "SpyManager.purchaseMoney"
+          ) : 0,
+          purchaseForeign: purchaseForeigns.includes(governmentId),
+          elusive: actionable ? Boolean(readGameRace(dependencies.getGame)["elusive"]) : false,
+          isPrimaryTarget: foreign === active.manager["foreignTarget"],
+          missionIds: active.missionIds
+        });
+        sample = Object.freeze({
+          kind: "espionage",
+          input,
+          foreign,
+          government
+        });
+        return input;
       }
-      if (!haveTech2("spy", 2) && resources2.Money.storageRatio < 0.9) {
-        return;
-      }
-      if (settings2.foreignTrainSpy) {
-        for (let foreign of m.foreignActive) {
-          if (m._foreignVue.spy_disabled(foreign.id) || foreign.gov.occ || foreign.gov.anx || foreign.gov.buy) {
-            continue;
+    });
+    const executor = Object.freeze({
+      execute(decision2) {
+        const active = session;
+        const sampled = sample;
+        if (active === null || sampled === null) {
+          return stale("spy-session-missing", "spy session is missing");
+        }
+        if (dependencies.getSpyManager() !== active.manager || active.manager["foreignActive"] !== active.foreigns || active.manager["_foreignVue"] !== active.view) {
+          return stale("spy-manager-changed", "spy manager state changed");
+        }
+        const expected = sampled.kind === "training" ? planSpyTraining(sampled.input) : planSpyEspionage(sampled.input);
+        if (expected === null || !decisionMatches(expected, decision2)) {
+          return rejected2(
+            "invalid-spy-decision",
+            "spy decision does not match the sampled plan"
+          );
+        }
+        if (sampled.kind === "training" && !governmentMatchesTraining(sampled) || sampled.kind === "espionage" && !governmentMatchesEspionage(sampled)) {
+          return stale("spy-foreign-changed", "foreign government state changed");
+        }
+        sample = null;
+        if (decision2.kind === "train-spy") {
+          if (sampled.kind !== "training") {
+            return rejected2("invalid-spy-phase", "spy training phase changed");
           }
-          let spiesRequired = settings2.foreignSpyMax >= 0 ? settings2.foreignSpyMax : Number.MAX_SAFE_INTEGER;
-          if (spiesRequired < 1 && foreign.policy !== "Occupy" && foreign.policy !== "Ignore") {
-            spiesRequired = 1;
-          }
-          if (spiesRequired < 3 && foreign.policy === "Purchase" && resources2.Money.maxQuantity >= poly2.govPrice(foreign.id)) {
-            spiesRequired = 3;
-          }
-          if (foreign.gov.spy >= spiesRequired || m.purchaseMoney > 0 && foreign.policy !== "Purchase" && foreign.gov.spy > 0) {
-            continue;
-          }
-          GameLog2.logSuccess(
+          const gameLog = requireRecord(dependencies.getGameLog(), "GameLog");
+          const logSuccess = requireFunction(
+            gameLog["logSuccess"],
+            "GameLog.logSuccess"
+          );
+          const train = requireFunction(
+            active.view["spy"],
+            "SpyManager._foreignVue.spy"
+          );
+          Reflect.apply(logSuccess, gameLog, [
             "spying",
-            `Training a spy to send against ${getGovName2(foreign.id)}.`,
+            `Training a spy to send against ${decision2.governmentName}.`,
             ["spy"]
+          ]);
+          Reflect.apply(train, active.view, [decision2.governmentId]);
+          return SUCCEEDED;
+        }
+        if (sampled.kind !== "espionage") {
+          return rejected2("invalid-spy-phase", "spy espionage phase changed");
+        }
+        if (decision2.kind === "release-foreign") {
+          const warManager = requireRecord(
+            dependencies.getWarManager(),
+            "WarManager"
           );
-          m._foreignVue.spy(foreign.id);
-        }
-      }
-      if (!haveTech2("spy", 2)) {
-        return;
-      }
-      for (let foreign of m.foreignActive) {
-        if (foreign.gov.spy < 1 || foreign.gov.sab !== 0 || foreign.policy === "None") {
-          continue;
-        }
-        let espionageMission = null;
-        if (foreign.policy === "Betrayal") {
-          if (foreign.gov.mil <= 75 || foreign.gov.hstl <= 0) {
-            espionageMission = m.Types.Sabotage;
-          } else {
-            espionageMission = m.Types.Influence;
-          }
-        } else if (foreign.policy === "Occupy") {
-          espionageMission = m.Types.Sabotage;
-        } else {
-          espionageMission = m.Types[foreign.policy];
-        }
-        if (!espionageMission) {
-          continue;
-        }
-        if (m.purchaseMoney > 0 && m.purchaseForeigngs.includes(foreign.id) && espionageMission === m.Types.Purchase && foreign.gov.spy < 3 && !game2.global.race["elusive"]) {
-          continue;
-        }
-        if (foreign.gov.anx && foreign.policy !== "Annex" || foreign.gov.buy && foreign.policy !== "Purchase" || foreign.gov.occ && foreign.policy !== "Occupy") {
-          WarManager2.release(foreign.id);
-          foreign.released = true;
-        } else if (!foreign.gov.anx && !foreign.gov.buy && !foreign.gov.occ) {
-          m.performEspionage(
-            foreign.id,
-            espionageMission.id,
-            foreign !== m.foreignTarget
+          const release = requireFunction(
+            warManager["release"],
+            "WarManager.release"
           );
+          Reflect.apply(release, warManager, [decision2.governmentId]);
+          sampled.foreign["released"] = true;
+          return SUCCEEDED;
         }
+        if (decision2.kind === "perform-espionage") {
+          const performEspionage = requireFunction(
+            active.manager["performEspionage"],
+            "SpyManager.performEspionage"
+          );
+          Reflect.apply(performEspionage, active.manager, [
+            decision2.governmentId,
+            decision2.missionId,
+            decision2.secondaryTarget
+          ]);
+          return SUCCEEDED;
+        }
+        return rejected2("invalid-spy-decision", "spy decision is invalid");
       }
-    };
+    });
+    return Object.freeze({ reader, executor });
   }
 
   // src/automation/progression/prestige.ts
@@ -33133,7 +33468,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED18 = Object.freeze({
+  var SUCCEEDED19 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -33141,7 +33476,7 @@
     while (true) {
       const decision2 = planResearch(dependencies.reader.read(startIndex));
       if (decision2 === null) {
-        return SUCCEEDED18;
+        return SUCCEEDED19;
       }
       const result2 = dependencies.executor.execute(decision2);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -33285,12 +33620,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED19 = Object.freeze({
+  var SUCCEEDED20 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision2 = planMutation(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED19 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED20 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -46309,19 +46644,20 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getGameLog: () => GameLog
     });
     const autoMerc = () => runMercenaryAutomation(mercenaryAdapter);
-    const autoSpy = createAutoSpy({
+    const spyAdapter = createSpyAdapter({
       getSpyManager: () => SpyManager,
       getWarManager: () => WarManager,
       getHaveTask: () => haveTask,
       getHaveTech: () => haveTech,
-      inflationChallengeShouldSaveMoney,
+      shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
       getResources: () => resources,
       getSettings: () => settings,
       getPoly: () => poly,
-      GameLog,
+      getGameLog: () => GameLog,
       getGovName,
       getGame: () => game
     });
+    const autoSpy = () => runSpyAutomation(spyAdapter);
     const autoBattle = createAutoBattle({
       SpyManager,
       WarManager,

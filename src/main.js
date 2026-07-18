@@ -325,7 +325,8 @@ import {
   createCraftCommandExecutor,
   createCraftReader,
 } from "./adapters/evolve/craft.ts";
-import { createAutoSpy } from "./automation/combat/spy.ts";
+import { runSpyAutomation } from "./application/spy.ts";
+import { createSpyAdapter } from "./adapters/evolve/spy.ts";
 import { createAutoPrestige } from "./automation/progression/prestige.ts";
 import { createAutoPlanetSelection } from "./automation/progression/planet-selection.ts";
 import { createAutoJobs } from "./automation/civic/jobs.ts";
@@ -3004,19 +3005,20 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   });
   const autoMerc = () => runMercenaryAutomation(mercenaryAdapter);
 
-  const autoSpy = createAutoSpy({
+  const spyAdapter = createSpyAdapter({
     getSpyManager: () => SpyManager,
     getWarManager: () => WarManager,
     getHaveTask: () => haveTask,
     getHaveTech: () => haveTech,
-    inflationChallengeShouldSaveMoney,
+    shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
     getResources: () => resources,
     getSettings: () => settings,
     getPoly: () => poly,
-    GameLog,
+    getGameLog: () => GameLog,
     getGovName,
     getGame: () => game,
   });
+  const autoSpy = () => runSpyAutomation(spyAdapter);
 
   const autoBattle = createAutoBattle({
     SpyManager,
