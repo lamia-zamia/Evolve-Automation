@@ -260,7 +260,12 @@ import {
   createUniverseSelectionControls,
 } from "./adapters/browser/progression-controls.ts";
 import { planShapeshift } from "./domain/shapeshift.ts";
-import { createAutoWish } from "./automation/traits/wish.ts";
+import { runWishAutomation } from "./application/wish.ts";
+import {
+  createWishCommandExecutor,
+  createWishReader,
+} from "./adapters/evolve/wish.ts";
+import { createWishControls } from "./adapters/browser/wish-controls.ts";
 import { createAutoGenetics } from "./automation/traits/genetics.ts";
 import { createAutoMerc } from "./automation/combat/mercenary.ts";
 import { createAutoPsychic } from "./automation/traits/psychic.ts";
@@ -3496,12 +3501,19 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       { id: "Greatness", loc: "wish_greatness" },
     ],
   };
-  const autoWish = createAutoWish({
+  const wishReader = createWishReader({
     getGame: () => game,
     getSettings: () => settings,
-    getVueById,
-    clickSelector: (selector) => $(selector).click(),
   });
+  const wishExecutor = createWishCommandExecutor({
+    getGame: () => game,
+    controls: createWishControls({
+      getVueById,
+      clickSelector: (selector) => $(selector).click(),
+    }),
+  });
+  const autoWish = () =>
+    runWishAutomation({ reader: wishReader, executor: wishExecutor });
 
   const autoGenetics = createAutoGenetics({
     KeyManager,

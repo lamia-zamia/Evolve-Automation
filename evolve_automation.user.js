@@ -23870,30 +23870,164 @@
     return input.shifterGenus;
   }
 
-  // src/automation/traits/wish.ts
-  function createAutoWish({
-    getGame,
-    getSettings,
-    getVueById: getVueById2,
-    clickSelector
-  }) {
-    return function autoWish2() {
-      const game2 = getGame();
-      const settings2 = getSettings();
-      if (!game2.global.race["wish"] || !game2.global.tech["wish"]) {
-        return false;
+  // src/domain/wish.ts
+  function planWishes(input) {
+    if (!input.unlocked) return Object.freeze([]);
+    const decisions = [];
+    if (input.minorRemaining === 0 && input.minorSelection !== "none") {
+      decisions.push(
+        Object.freeze({
+          tier: "minor",
+          wishId: input.minorSelection,
+          expectedRemaining: 0
+        })
+      );
+    }
+    if (input.technologyLevel >= 2 && input.majorRemaining === 0 && input.majorSelection !== "none") {
+      decisions.push(
+        Object.freeze({
+          tier: "major",
+          wishId: input.majorSelection,
+          expectedRemaining: 0
+        })
+      );
+    }
+    return Object.freeze(decisions);
+  }
+
+  // src/application/wish.ts
+  var SUCCEEDED4 = Object.freeze({
+    status: "succeeded"
+  });
+  function runWishAutomation(dependencies) {
+    for (const decision of planWishes(dependencies.reader.read())) {
+      const outcome = dependencies.executor.execute(decision);
+      if (outcome.status !== "succeeded") return outcome;
+    }
+    return SUCCEEDED4;
+  }
+
+  // src/adapters/evolve/wish.ts
+  function requireSelection(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function readTechnologyLevel(technology) {
+    const value = technology["wish"];
+    if (value === void 0 || value === null || value === 0) return 0;
+    return requireNumber(value, "game.global.tech.wish");
+  }
+  function readWishState(gameValue) {
+    const game2 = requireRecord(gameValue, "game");
+    const global = requireRecord(game2["global"], "game.global");
+    const race = requireRecord(global["race"], "game.global.race");
+    if (!race["wish"]) {
+      return Object.freeze({ race, technologyLevel: 0 });
+    }
+    const technology = requireRecord(global["tech"], "game.global.tech");
+    return Object.freeze({
+      race,
+      technologyLevel: readTechnologyLevel(technology)
+    });
+  }
+  function createWishReader(dependencies) {
+    return Object.freeze({
+      read() {
+        const { race, technologyLevel } = readWishState(dependencies.getGame());
+        if (!race["wish"] || technologyLevel === 0) {
+          return Object.freeze({
+            unlocked: false,
+            technologyLevel,
+            minorRemaining: 0,
+            majorRemaining: 0,
+            minorSelection: "none",
+            majorSelection: "none"
+          });
+        }
+        const wishStats = requireRecord(
+          race["wishStats"],
+          "game.global.race.wishStats"
+        );
+        const minorRemaining = requireNumber(
+          wishStats["minor"],
+          "game.global.race.wishStats.minor"
+        );
+        const majorRemaining = technologyLevel >= 2 ? requireNumber(
+          wishStats["major"],
+          "game.global.race.wishStats.major"
+        ) : 0;
+        let settings2 = null;
+        const getSettings = () => {
+          settings2 ??= requireRecord(dependencies.getSettings(), "settings");
+          return settings2;
+        };
+        const minorSelection = minorRemaining === 0 ? requireSelection(getSettings()["wishMinor"], "settings.wishMinor") : "none";
+        const majorSelection = technologyLevel >= 2 && majorRemaining === 0 ? requireSelection(getSettings()["wishMajor"], "settings.wishMajor") : "none";
+        return Object.freeze({
+          unlocked: true,
+          technologyLevel,
+          minorRemaining,
+          majorRemaining,
+          minorSelection,
+          majorSelection
+        });
       }
-      if (game2.global.race.wishStats.minor === 0 && settings2.wishMinor !== "none") {
-        const vueMinor = getVueById2("minorWish");
-        if (!vueMinor) return false;
-        clickSelector(`#wish${settings2.wishMinor}`);
+    });
+  }
+  function readRemaining(race, tier) {
+    const wishStats = requireRecord(
+      race["wishStats"],
+      "game.global.race.wishStats"
+    );
+    return requireNumber(wishStats[tier], `game.global.race.wishStats.${tier}`);
+  }
+  function createWishCommandExecutor(dependencies) {
+    return Object.freeze({
+      execute(decision) {
+        if (decision.tier !== "minor" && decision.tier !== "major" || typeof decision.wishId !== "string" || decision.expectedRemaining !== 0) {
+          return rejected2(
+            "invalid-wish-selection",
+            "wish selection must identify a tier, setting id, and zero precondition"
+          );
+        }
+        const { race, technologyLevel } = readWishState(dependencies.getGame());
+        if (!race["wish"] || technologyLevel === 0) {
+          return stale("wish-locked", "wish selection became unavailable");
+        }
+        if (decision.tier === "major" && technologyLevel < 2) {
+          return stale("major-wish-locked", "major wish became unavailable");
+        }
+        const actualRemaining = readRemaining(race, decision.tier);
+        if (actualRemaining !== decision.expectedRemaining) {
+          return stale("wish-already-selected", "wish was already selected", {
+            tier: decision.tier,
+            expected: decision.expectedRemaining,
+            actual: actualRemaining
+          });
+        }
+        if (!dependencies.controls.select(decision.tier, decision.wishId)) {
+          return stale(
+            "wish-controls-unavailable",
+            `${decision.tier} wish controls became unavailable`
+          );
+        }
+        return SUCCEEDED;
       }
-      if (game2.global.tech["wish"] >= 2 && game2.global.race.wishStats.major === 0 && settings2.wishMajor !== "none") {
-        const vueMajor = getVueById2("majorWish");
-        if (!vueMajor) return false;
-        clickSelector(`#wish${settings2.wishMajor}`);
+    });
+  }
+
+  // src/adapters/browser/wish-controls.ts
+  function createWishControls(dependencies) {
+    return Object.freeze({
+      select(tier, wishId) {
+        const panelId = tier === "minor" ? "minorWish" : "majorWish";
+        if (!dependencies.getVueById(panelId)) return false;
+        dependencies.clickSelector(`#wish${wishId}`);
+        return true;
       }
-    };
+    });
   }
 
   // src/automation/traits/genetics.ts
@@ -24158,7 +24292,7 @@
   }
 
   // src/application/minor-trait.ts
-  var SUCCEEDED4 = Object.freeze({
+  var SUCCEEDED5 = Object.freeze({
     status: "succeeded"
   });
   function staleCandidate(index, expectedTraitName, actualTraitName) {
@@ -24174,7 +24308,7 @@
   function runMinorTraitAutomation(dependencies) {
     const summary = summarizeMinorTraits(dependencies.reader.readSummary());
     if (summary === null) {
-      return SUCCEEDED4;
+      return SUCCEEDED5;
     }
     for (let index = 0; index < summary.traits.length; index++) {
       const expected = summary.traits[index];
@@ -24198,7 +24332,7 @@
         return outcome;
       }
     }
-    return SUCCEEDED4;
+    return SUCCEEDED5;
   }
 
   // src/adapters/evolve/minor-trait.ts
@@ -24342,7 +24476,7 @@
   }
 
   // src/application/trigger.ts
-  var SUCCEEDED5 = Object.freeze({
+  var SUCCEEDED6 = Object.freeze({
     status: "succeeded"
   });
   function result(outcome, active) {
@@ -24354,7 +24488,7 @@
     while (true) {
       const decision = planTrigger(dependencies.reader.read(index));
       if (decision === null) {
-        return result(SUCCEEDED5, active);
+        return result(SUCCEEDED6, active);
       }
       if (decision.kind === "click") {
         const execution = dependencies.executor.execute(decision);
@@ -24963,13 +25097,13 @@
   }
 
   // src/application/replicator.ts
-  var SUCCEEDED6 = Object.freeze({
+  var SUCCEEDED7 = Object.freeze({
     status: "succeeded"
   });
   function runReplicatorAutomation(dependencies) {
     const planningInput = dependencies.selectionReader.readPlanningInput();
     if (!planningInput.initialised) {
-      return SUCCEEDED6;
+      return SUCCEEDED7;
     }
     const priorityPlan = planReplicatorPriority(planningInput);
     if (priorityPlan !== null) {
@@ -24985,18 +25119,18 @@
       }
     }
     if (!planningInput.assignGovernorTask) {
-      return SUCCEEDED6;
+      return SUCCEEDED7;
     }
     if (!shouldConfigureReplicatorGovernor(
       dependencies.governorGameReader.readGate()
     ) || !dependencies.governorOfficeReader.open()) {
-      return SUCCEEDED6;
+      return SUCCEEDED7;
     }
     const taskPlan = planReplicatorGovernorTask(
       dependencies.governorGameReader.readTasks()
     );
     if (taskPlan.status === "unavailable") {
-      return SUCCEEDED6;
+      return SUCCEEDED7;
     }
     if (taskPlan.assignment !== null) {
       const outcome = dependencies.governorExecutor.execute(taskPlan.assignment);
@@ -25006,10 +25140,10 @@
     }
     const settings2 = dependencies.governorOfficeReader.readSettings();
     if (settings2 === null) {
-      return SUCCEEDED6;
+      return SUCCEEDED7;
     }
     const settingsDecision = planReplicatorGovernorSettings(settings2);
-    return settingsDecision === null ? SUCCEEDED6 : dependencies.governorExecutor.execute(settingsDecision);
+    return settingsDecision === null ? SUCCEEDED7 : dependencies.governorExecutor.execute(settingsDecision);
   }
 
   // src/adapters/evolve/replicator.ts
@@ -25458,20 +25592,20 @@
   }
 
   // src/application/market.ts
-  var SUCCEEDED7 = Object.freeze({
+  var SUCCEEDED8 = Object.freeze({
     status: "succeeded"
   });
   function runMarketAutomation(dependencies, bulkSell = false, ignoreSellRatio = false) {
     const gate = dependencies.reader.readGate();
     if (!gate.unlocked) {
-      return SUCCEEDED7;
+      return SUCCEEDED8;
     }
     dependencies.tradeRoutes.adjust();
     if (gate.noTrade) {
-      return SUCCEEDED7;
+      return SUCCEEDED8;
     }
     const session = dependencies.reader.readSession();
-    let outcome = SUCCEEDED7;
+    let outcome = SUCCEEDED8;
     for (let index = 0; ; index++) {
       const sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
       if (sellInput === null) {
@@ -26703,7 +26837,7 @@
   );
 
   // src/application/power.ts
-  var SUCCEEDED8 = Object.freeze({
+  var SUCCEEDED9 = Object.freeze({
     status: "succeeded"
   });
   function createPowerAutomation(dependencies) {
@@ -26712,7 +26846,7 @@
       run() {
         const plan = planPowerCycle(dependencies.reader.readCycle(), state2);
         if (plan.decision === null) {
-          return SUCCEEDED8;
+          return SUCCEEDED9;
         }
         const cycleOutcome = dependencies.executor.execute(plan.decision);
         if (cycleOutcome.status !== "succeeded") {
@@ -26725,7 +26859,7 @@
           )
         );
         if (warning === null) {
-          return SUCCEEDED8;
+          return SUCCEEDED9;
         }
         const warningOutcome = dependencies.executor.execute(warning);
         if (warningOutcome.status !== "succeeded") {
@@ -26736,7 +26870,7 @@
           warning.binding,
           dependencies.reader.readStateOn(warning.binding)
         );
-        return SUCCEEDED8;
+        return SUCCEEDED9;
       },
       readState() {
         return state2;
@@ -28514,7 +28648,7 @@
   });
 
   // src/application/storage-allocation.ts
-  var SUCCEEDED9 = Object.freeze({
+  var SUCCEEDED10 = Object.freeze({
     status: "succeeded"
   });
   function createStorageAllocationAutomation(dependencies) {
@@ -28522,9 +28656,9 @@
     return Object.freeze({
       run() {
         const rawPlan = planStorageAllocation(dependencies.reader.read());
-        if (rawPlan === null) return SUCCEEDED9;
+        if (rawPlan === null) return SUCCEEDED10;
         if (rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild)) {
-          return SUCCEEDED9;
+          return SUCCEEDED10;
         }
         const finalized = finalizeStorageAllocation(rawPlan, state2);
         const outcome = dependencies.executor.execute(finalized.decision);
@@ -29201,12 +29335,12 @@
   }
 
   // src/application/galaxy-market.ts
-  var SUCCEEDED10 = Object.freeze({
+  var SUCCEEDED11 = Object.freeze({
     status: "succeeded"
   });
   function runGalaxyMarketAutomation(dependencies) {
     const decision = planGalaxyMarket(dependencies.reader.read());
-    return decision === null ? SUCCEEDED10 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED11 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/galaxy-market.ts
@@ -29622,12 +29756,12 @@
   }
 
   // src/application/gather-resources.ts
-  var SUCCEEDED11 = Object.freeze({
+  var SUCCEEDED12 = Object.freeze({
     status: "succeeded"
   });
   function runGatherResourcesAutomation(dependencies) {
     const decision = planGatherResources(dependencies.reader.read());
-    return decision === null ? SUCCEEDED11 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED12 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/gather-resources.ts
@@ -30248,17 +30382,17 @@
   }
 
   // src/application/craft.ts
-  var SUCCEEDED12 = Object.freeze({
+  var SUCCEEDED13 = Object.freeze({
     status: "succeeded"
   });
   function runCraftAutomation(dependencies) {
     if (!shouldRunCraft(dependencies.reader.readGate())) {
-      return SUCCEEDED12;
+      return SUCCEEDED13;
     }
     for (let index = 0; ; index++) {
       const candidate = dependencies.reader.readCandidate(index);
       if (candidate === null) {
-        return SUCCEEDED12;
+        return SUCCEEDED13;
       }
       const decision = planCraft(candidate);
       if (decision === null) {
@@ -31863,7 +31997,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED13 = Object.freeze({
+  var SUCCEEDED14 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -31871,7 +32005,7 @@
     while (true) {
       const decision = planResearch(dependencies.reader.read(startIndex));
       if (decision === null) {
-        return SUCCEEDED13;
+        return SUCCEEDED14;
       }
       const result2 = dependencies.executor.execute(decision);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -32015,12 +32149,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED14 = Object.freeze({
+  var SUCCEEDED15 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision = planMutation(dependencies.reader.read());
-    return decision === null ? SUCCEEDED14 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED15 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -45492,12 +45626,18 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         { id: "Greatness", loc: "wish_greatness" }
       ]
     };
-    const autoWish = createAutoWish({
+    const wishReader = createWishReader({
       getGame: () => game,
-      getSettings: () => settings,
-      getVueById,
-      clickSelector: (selector) => $(selector).click()
+      getSettings: () => settings
     });
+    const wishExecutor = createWishCommandExecutor({
+      getGame: () => game,
+      controls: createWishControls({
+        getVueById,
+        clickSelector: (selector) => $(selector).click()
+      })
+    });
+    const autoWish = () => runWishAutomation({ reader: wishReader, executor: wishExecutor });
     const autoGenetics = createAutoGenetics({
       KeyManager,
       getGame: () => game,
