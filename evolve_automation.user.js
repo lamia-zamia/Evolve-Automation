@@ -35097,308 +35097,748 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/automation/combat/fleet.ts
-  function createAutoFleet({
-    getFleetManager,
-    getGame,
-    getSettings,
-    getState,
-    getResources,
-    getBuildings,
-    getGalaxyRegions: getGalaxyRegions2,
-    guardActive: guardActive2,
-    cartesian: cartesian2,
-    galaxyAssaultPending: galaxyAssaultPending2
-  }) {
-    return function autoFleet2() {
-      const FleetManager2 = getFleetManager();
-      const game2 = getGame();
-      const settings2 = getSettings();
-      const state2 = getState();
-      const resources2 = getResources();
-      const buildings2 = getBuildings();
-      if (!FleetManager2.initFleet()) {
-        return;
+  // src/domain/fleet.ts
+  var GALAXY_SHIP_NAMES = Object.freeze([
+    "scout_ship",
+    "corvette_ship",
+    "frigate_ship",
+    "cruiser_ship",
+    "dreadnought"
+  ]);
+  function emptyShipCounts() {
+    return {
+      scout_ship: 0,
+      corvette_ship: 0,
+      frigate_ship: 0,
+      cruiser_ship: 0,
+      dreadnought: 0
+    };
+  }
+  function cartesianProduct(sets) {
+    let products = [[]];
+    for (const set of sets) {
+      const next = [];
+      for (const product of products) {
+        for (const value of set) next.push([...product, value]);
       }
-      let def = game2.global.galaxy.defense;
-      let allRegions = getGalaxyRegions2();
-      let allFleets = [
-        {
-          name: "scout_ship",
-          building: buildings2.ScoutShip,
-          count: 0,
-          power: game2.actions.galaxy.gxy_gateway.scout_ship.ship.rating()
-        },
-        {
-          name: "corvette_ship",
-          building: buildings2.CorvetteShip,
-          count: 0,
-          power: game2.actions.galaxy.gxy_gateway.corvette_ship.ship.rating()
-        },
-        {
-          name: "frigate_ship",
-          building: buildings2.FrigateShip,
-          count: 0,
-          power: game2.actions.galaxy.gxy_gateway.frigate_ship.ship.rating()
-        },
-        {
-          name: "cruiser_ship",
-          building: buildings2.CruiserShip,
-          count: 0,
-          power: game2.actions.galaxy.gxy_gateway.cruiser_ship.ship.rating()
-        },
-        {
-          name: "dreadnought",
-          building: buildings2.Dreadnought,
-          count: 0,
-          power: game2.actions.galaxy.gxy_gateway.dreadnought.ship.rating()
-        }
-      ];
-      let minPower = allFleets[0].power;
-      let fleetIndex = Object.fromEntries(
-        allFleets.map((ship, index) => [ship.name, index])
+      products = next;
+    }
+    return products;
+  }
+  function freezeCommands(commands) {
+    return Object.freeze(
+      commands.map((command) => Object.freeze({ ...command }))
+    );
+  }
+  function planChthonianAssault(input, ships) {
+    if (!input.chthonianUnlocked || input.chthonianLossMode === "ignore") {
+      return null;
+    }
+    const lossMode = input.chthonianLossMode === "dread" && input.dreadedGuardActive ? "high" : input.chthonianLossMode;
+    let fleetRequirement;
+    let fleetWreck;
+    let assault = null;
+    if (lossMode === "low") {
+      fleetRequirement = 4500;
+      fleetWreck = 80;
+    } else if (lossMode === "avg") {
+      fleetRequirement = 2500;
+      fleetWreck = 160;
+    } else if (lossMode === "high") {
+      fleetRequirement = 1250;
+      fleetWreck = 500;
+    } else if (lossMode === "dread") {
+      if ((ships[4]?.count ?? 0) > 0) {
+        assault = {
+          ships: [0, 0, 0, 0, 1],
+          region: "gxy_chthonian",
+          mission: "chthonian"
+        };
+      }
+    } else if (lossMode === "frigate") {
+      const frigatePower = ships[2]?.power ?? 0;
+      const totalPower = ships.reduce(
+        (sum, ship) => sum + (ship.power >= frigatePower ? ship.power * ship.count : 0),
+        0
       );
-      Object.values(def).forEach(
-        (assigned) => Object.entries(assigned).forEach(
-          ([ship, count]) => allFleets[fleetIndex[ship]].count += Math.floor(count)
-        )
+      if (totalPower >= 4500) {
+        assault = {
+          ships: ships.map((ship, index) => index >= 2 ? ship.count : 0),
+          region: "gxy_chthonian",
+          mission: "chthonian"
+        };
+      }
+    }
+    if (fleetRequirement === void 0 || fleetWreck === void 0) {
+      return assault;
+    }
+    if (input.instinct) fleetWreck /= 2;
+    const availableShips = ships.map((ship) => ship.count);
+    let powerToReserve = fleetRequirement - fleetWreck;
+    for (let index = availableShips.length - 1; index >= 0 && powerToReserve > 0; index--) {
+      const ship = ships[index];
+      if (ship === void 0) continue;
+      const reservedShips = Math.min(
+        availableShips[index] ?? 0,
+        Math.ceil(powerToReserve / ship.power)
       );
-      let assault = null;
-      if (buildings2.ChthonianMission.isUnlocked() && settings2.fleetChthonianLoses !== "ignore") {
-        let chthonianLoses = settings2.fleetChthonianLoses === "dread" && guardActive2("guardDreaded") ? "high" : settings2.fleetChthonianLoses;
-        let fleetReq, fleetWreck;
-        if (chthonianLoses === "low") {
-          fleetReq = 4500;
-          fleetWreck = 80;
-        } else if (chthonianLoses === "avg") {
-          fleetReq = 2500;
-          fleetWreck = 160;
-        } else if (chthonianLoses === "high") {
-          fleetReq = 1250;
-          fleetWreck = 500;
-        } else if (chthonianLoses === "dread") {
-          if (allFleets[4].count > 0) {
-            assault = {
-              ships: [0, 0, 0, 0, 1],
-              region: "gxy_chthonian",
-              mission: buildings2.ChthonianMission
-            };
-          }
-        } else if (chthonianLoses === "frigate") {
-          let totalPower = allFleets.reduce(
-            (sum, ship) => sum + (ship.power >= allFleets[2].power ? ship.power * ship.count : 0),
-            0
-          );
-          if (totalPower >= 4500) {
-            assault = {
-              ships: allFleets.map((ship, idx) => idx >= 2 ? ship.count : 0),
-              region: "gxy_chthonian",
-              mission: buildings2.ChthonianMission
-            };
-          }
-        }
-        if (game2.global.race["instinct"]) {
-          fleetWreck /= 2;
-        }
-        let availableShips = allFleets.map((ship) => ship.count);
-        let powerToReserve = fleetReq - fleetWreck;
-        for (let i = availableShips.length - 1; i >= 0 && powerToReserve > 0; i--) {
-          let reservedShips = Math.min(
-            availableShips[i],
-            Math.ceil(powerToReserve / allFleets[i].power)
-          );
-          availableShips[i] -= reservedShips;
-          powerToReserve -= reservedShips * allFleets[i].power;
-        }
-        if (powerToReserve <= 0) {
-          let sets = availableShips.map((amount, idx) => [
-            ...Array(
-              Math.min(
-                amount,
-                Math.floor(
-                  (fleetWreck + (minPower - 0.1)) / allFleets[idx].power
-                )
-              ) + 1
-            ).keys()
-          ]);
-          for (let set of cartesian2(...sets)) {
-            let powerMissing = fleetWreck - set.reduce((sum, amt, idx) => sum + amt * allFleets[idx].power, 0);
-            if (powerMissing <= 0 && powerMissing > minPower * -1) {
-              let lastShip = set.reduce(
-                (prev, val, cur) => val > 0 ? cur : prev,
-                0
-              );
-              let team = allFleets.map(
-                (ship, idx) => idx >= lastShip ? ship.count : set[idx]
-              );
-              assault = {
-                ships: team,
-                region: "gxy_chthonian",
-                mission: buildings2.ChthonianMission
-              };
-              break;
-            }
-          }
-        }
-      } else if (buildings2.Alien2Mission.isUnlocked() && resources2.Knowledge.maxQuantity >= settings2.fleetAlien2Knowledge) {
-        let totalPower = allFleets.reduce(
-          (sum, ship) => sum + ship.power * ship.count,
+      availableShips[index] = (availableShips[index] ?? 0) - reservedShips;
+      powerToReserve -= reservedShips * ship.power;
+    }
+    if (powerToReserve > 0) return assault;
+    const minimumPower = ships[0]?.power ?? 0;
+    const sets = availableShips.map((amount, index) => {
+      const ship = ships[index];
+      if (ship === void 0) return [];
+      const maximum = Math.min(
+        amount,
+        Math.floor((fleetWreck + (minimumPower - 0.1)) / ship.power)
+      ) + 1;
+      return Array.from({ length: maximum }, (_2, value) => value);
+    });
+    for (const set of cartesianProduct(sets)) {
+      const powerMissing = fleetWreck - set.reduce(
+        (sum, amount, index) => sum + amount * (ships[index]?.power ?? 0),
+        0
+      );
+      if (powerMissing <= 0 && powerMissing > minimumPower * -1) {
+        const lastShip = set.reduce(
+          (previous, value, current) => value > 0 ? current : previous,
           0
         );
-        let doAlien2Assault = false;
-        if (settings2.fleetAlien2Loses === "suicide") {
-          doAlien2Assault = totalPower >= 400;
-        } else {
-          doAlien2Assault = totalPower >= 650;
-        }
-        if (doAlien2Assault) {
-          assault = {
-            ships: allFleets.map((ship) => ship.count),
-            region: "gxy_alien2",
-            mission: buildings2.Alien2Mission
-          };
-        }
+        return {
+          ships: ships.map(
+            (ship, index) => index >= lastShip ? ship.count : set[index] ?? 0
+          ),
+          region: "gxy_chthonian",
+          mission: "chthonian"
+        };
       }
-      if (assault) {
-        Object.entries(def).forEach(
-          ([region, assigned]) => Object.entries(assigned).forEach(
-            ([ship, count]) => FleetManager2.subShip(region, ship, count)
-          )
-        );
-        allFleets.forEach(
-          (ship, idx) => FleetManager2.addShip(assault.region, ship.name, assault.ships[idx])
-        );
-        assault.mission.click();
-        return;
+    }
+    return assault;
+  }
+  function planAlienAssault(input, ships) {
+    if (!input.alien2Unlocked || input.alien2KnowledgeMaximum < input.alien2KnowledgeRequired) {
+      return null;
+    }
+    const totalPower = ships.reduce(
+      (sum, ship) => sum + ship.power * ship.count,
+      0
+    );
+    const requiredPower = input.alien2LossMode === "suicide" ? 400 : 650;
+    return totalPower >= requiredPower ? {
+      ships: ships.map((ship) => ship.count),
+      region: "gxy_alien2",
+      mission: "alien2"
+    } : null;
+  }
+  function assaultDecision(input, assault) {
+    const commands = [];
+    for (const region of input.defenseRegions) {
+      for (const ship of GALAXY_SHIP_NAMES) {
+        commands.push({
+          kind: "remove-ship",
+          region: region.name,
+          ship,
+          count: region.assigned[ship]
+        });
       }
-      let reclaimCrew = settings2.fleetCrewReclaim && !galaxyAssaultPending2();
-      FleetManager2.neededShips = null;
-      if (reclaimCrew) {
-        allFleets.forEach((ship) => ship.count = ship.building.count);
-      }
-      let regionsToProtect = allRegions.filter(
-        (region) => region.useful && region.piracy - region.armada > 0
+    }
+    GALAXY_SHIP_NAMES.forEach((ship, index) => {
+      commands.push({
+        kind: "add-ship",
+        region: assault.region,
+        ship,
+        count: assault.ships[index] ?? 0
+      });
+    });
+    return Object.freeze({
+      kind: "launch-galaxy-assault",
+      mission: assault.mission,
+      commands: freezeCommands(commands)
+    });
+  }
+  function planFleet(input) {
+    if (!input.available) return null;
+    const ships = input.ships.map((ship) => ({
+      name: ship.name,
+      count: ship.assignedCount,
+      builtCount: ship.builtCount,
+      power: ship.power,
+      cover: 0
+    }));
+    const chthonian = planChthonianAssault(input, ships);
+    if (chthonian !== null) return assaultDecision(input, chthonian);
+    if (!input.chthonianUnlocked || input.chthonianLossMode === "ignore") {
+      const alien = planAlienAssault(input, ships);
+      if (alien !== null) return assaultDecision(input, alien);
+    }
+    const reclaimCrew = input.crewReclaim && !input.galaxyAssaultPending;
+    if (reclaimCrew) {
+      ships.forEach((ship) => {
+        ship.count = ship.builtCount;
+      });
+    }
+    const regions = input.regions.map((region) => ({
+      ...region,
+      current: region.assigned,
+      assigned: emptyShipCounts()
+    }));
+    const regionsToProtect = regions.filter(
+      (region) => region.useful && region.piracy - region.armada > 0
+    );
+    const missingDefense = regionsToProtect.map(
+      (region) => region.piracy - region.armada
+    );
+    const minimumPower = ships[0]?.power ?? 0;
+    for (let index = ships.length - 1; index >= 0; index--) {
+      const ship = ships[index];
+      if (ship === void 0) continue;
+      const maximumAllocation = missingDefense.reduce(
+        (sum, defense) => sum + Math.floor(defense / ship.power),
+        0
       );
-      for (let i = 0; i < allRegions.length; i++) {
-        let region = allRegions[i];
-        region.priority = settings2["fleet_pr_" + region.name];
-        region.assigned = {};
-        for (let j = 0; j < allFleets.length; j++) {
-          region.assigned[allFleets[j].name] = 0;
-        }
-      }
-      let missingDef = regionsToProtect.map(
-        (region) => region.piracy - region.armada
-      );
-      for (let i = allFleets.length - 1; i >= 0; i--) {
-        let ship = allFleets[i];
-        let maxAllocate = missingDef.reduce(
-          (sum, def2) => sum + Math.floor(def2 / ship.power),
-          0
-        );
-        if (ship.count > maxAllocate) {
-          if (ship.count >= maxAllocate + missingDef.length) {
-            ship.cover = 0;
-          } else {
-            let overflows = missingDef.map((def2) => def2 % ship.power).sort((a, b) => b - a);
-            ship.cover = overflows[ship.count - maxAllocate - 1];
-          }
+      if (ship.count > maximumAllocation) {
+        if (ship.count >= maximumAllocation + missingDefense.length) {
+          ship.cover = 0;
         } else {
-          ship.cover = ship.power - (minPower - 0.1);
+          const overflows = missingDefense.map((defense) => defense % ship.power).sort((left, right) => right - left);
+          ship.cover = overflows[ship.count - maximumAllocation - 1] ?? 0;
         }
-        if (ship.count >= maxAllocate) {
-          missingDef.forEach((def2, idx, arr) => arr[idx] = def2 % ship.power);
-          if (ship.count > maxAllocate) {
-            missingDef.sort((a, b) => b - a);
-            for (let j = 0; j < ship.count - maxAllocate; j++) {
-              missingDef[j] = 0;
-            }
+      } else {
+        ship.cover = ship.power - (minimumPower - 0.1);
+      }
+      if (ship.count >= maximumAllocation) {
+        missingDefense.forEach((defense, missingIndex, values) => {
+          values[missingIndex] = defense % ship.power;
+        });
+        if (ship.count > maximumAllocation) {
+          missingDefense.sort((left, right) => right - left);
+          for (let missingIndex = 0; missingIndex < ship.count - maximumAllocation; missingIndex++) {
+            missingDefense[missingIndex] = 0;
           }
         }
       }
-      for (let i = 0; i < allFleets.length; i++) {
-        if (allFleets[i].count > 0) {
-          allFleets[i].cover = 0.1;
-          break;
-        }
+    }
+    for (const ship of ships) {
+      if (ship.count > 0) {
+        ship.cover = 0.1;
+        break;
       }
-      let priorityList = regionsToProtect.sort((a, b) => a.priority - b.priority);
-      for (let i = 0; i < priorityList.length; i++) {
-        let region = priorityList[i];
-        let missingDef2 = region.piracy - region.armada;
-        for (let k = allFleets.length - 1; k >= 0 && missingDef2 > 0; k--) {
-          let ship = allFleets[k];
-          if (ship.cover <= missingDef2) {
-            let shipsToAssign = Math.min(
+    }
+    const priorityList = regionsToProtect.sort(
+      (left, right) => left.priority - right.priority
+    );
+    for (const region of priorityList) {
+      let missing = region.piracy - region.armada;
+      for (let shipIndex = ships.length - 1; shipIndex >= 0 && missing > 0; shipIndex--) {
+        const ship = ships[shipIndex];
+        if (ship === void 0 || ship.cover > missing) continue;
+        let shipsToAssign = Math.min(
+          ship.count,
+          Math.floor(missing / ship.power)
+        );
+        if (shipsToAssign < ship.count && shipsToAssign * ship.power + ship.cover <= missing) {
+          shipsToAssign++;
+        }
+        region.assigned[ship.name] += shipsToAssign;
+        ship.count -= shipsToAssign;
+        missing -= shipsToAssign * ship.power;
+      }
+      if (input.maximumCoverage && missing > 0) {
+        let shipIndex = -1;
+        while (missing > 0 && ++shipIndex < ships.length) {
+          const ship = ships[shipIndex];
+          if (ship !== void 0 && ship.count > 0) {
+            const shipsToAssign = Math.min(
               ship.count,
-              Math.floor(missingDef2 / ship.power)
+              Math.ceil(missing / ship.power)
             );
-            if (shipsToAssign < ship.count && shipsToAssign * ship.power + ship.cover <= missingDef2) {
-              shipsToAssign++;
-            }
             region.assigned[ship.name] += shipsToAssign;
             ship.count -= shipsToAssign;
-            missingDef2 -= shipsToAssign * ship.power;
+            missing -= shipsToAssign * ship.power;
           }
         }
-        if (settings2.fleetMaxCover && missingDef2 > 0) {
-          let index = -1;
-          while (missingDef2 > 0 && ++index < allFleets.length) {
-            let ship = allFleets[index];
-            if (ship.count > 0) {
-              let shipsToAssign = Math.min(
-                ship.count,
-                Math.ceil(missingDef2 / ship.power)
-              );
-              region.assigned[ship.name] += shipsToAssign;
-              ship.count -= shipsToAssign;
-              missingDef2 -= shipsToAssign * ship.power;
-            }
-          }
-          if (missingDef2 > 0) {
-            break;
-          }
-          while (--index >= 0) {
-            let ship = allFleets[index];
-            if (region.assigned[ship.name] > 0 && missingDef2 + ship.power <= 0) {
-              let uselesShips = Math.min(
-                region.assigned[ship.name],
-                Math.floor(missingDef2 / ship.power * -1)
-              );
-              if (uselesShips > 0) {
-                region.assigned[ship.name] -= uselesShips;
-                ship.count += uselesShips;
-                missingDef2 += uselesShips * ship.power;
-              }
+        if (missing > 0) break;
+        while (--shipIndex >= 0) {
+          const ship = ships[shipIndex];
+          if (ship !== void 0 && region.assigned[ship.name] > 0 && missing + ship.power <= 0) {
+            const uselessShips = Math.min(
+              region.assigned[ship.name],
+              Math.floor(missing / ship.power * -1)
+            );
+            if (uselessShips > 0) {
+              region.assigned[ship.name] -= uselessShips;
+              ship.count += uselessShips;
+              missing += uselessShips * ship.power;
             }
           }
         }
       }
-      if (reclaimCrew) {
-        FleetManager2.neededShips = Object.fromEntries(
-          allFleets.map((ship) => [ship.name, ship.building.count - ship.count])
-        );
-      } else if (buildings2.GorddonSymposium.stateOnCount > 0) {
-        allFleets.forEach(
-          (ship) => allRegions[2].assigned[ship.name] += ship.count
-        );
+    }
+    let neededShips = null;
+    if (reclaimCrew) {
+      neededShips = Object.freeze(
+        Object.fromEntries(
+          ships.map((ship) => [ship.name, ship.builtCount - ship.count])
+        )
+      );
+    } else if (input.gorddonSymposiumActive) {
+      const gorddon = regions[2];
+      if (gorddon === void 0) {
+        throw new RangeError("Gorddon region is missing");
       }
-      let shipDeltas = allRegions.map(
-        (region) => Object.entries(region.assigned).map(
-          ([ship, count]) => [ship, count - def[region.name][ship]]
-        )
-      );
-      shipDeltas.forEach(
-        (ships, region) => ships.forEach(
-          ([ship, delta]) => delta < 0 && FleetManager2.subShip(allRegions[region].name, ship, delta * -1)
-        )
-      );
-      shipDeltas.forEach(
-        (ships, region) => ships.forEach(
-          ([ship, delta]) => delta > 0 && FleetManager2.addShip(allRegions[region].name, ship, delta)
-        )
-      );
+      ships.forEach((ship) => {
+        gorddon.assigned[ship.name] += ship.count;
+      });
+    }
+    const removals = [];
+    const additions = [];
+    for (const region of regions) {
+      for (const ship of GALAXY_SHIP_NAMES) {
+        const delta = region.assigned[ship] - region.current[ship];
+        if (delta < 0) {
+          removals.push({
+            kind: "remove-ship",
+            region: region.name,
+            ship,
+            count: -delta
+          });
+        } else if (delta > 0) {
+          additions.push({
+            kind: "add-ship",
+            region: region.name,
+            ship,
+            count: delta
+          });
+        }
+      }
+    }
+    return Object.freeze({
+      kind: "manage-galaxy-fleet",
+      clearNeededShips: true,
+      neededShips,
+      commands: freezeCommands([...removals, ...additions])
+    });
+  }
+
+  // src/application/fleet.ts
+  var SUCCEEDED22 = Object.freeze({
+    status: "succeeded"
+  });
+  function runFleetAutomation(dependencies) {
+    const decision2 = planFleet(dependencies.reader.read());
+    return decision2 === null ? SUCCEEDED22 : dependencies.executor.execute(decision2);
+  }
+
+  // src/adapters/evolve/fleet.ts
+  var SHIP_DEFINITIONS = Object.freeze([
+    { name: "scout_ship", building: "ScoutShip" },
+    { name: "corvette_ship", building: "CorvetteShip" },
+    { name: "frigate_ship", building: "FrigateShip" },
+    { name: "cruiser_ship", building: "CruiserShip" },
+    { name: "dreadnought", building: "Dreadnought" }
+  ]);
+  function requireString5(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function emptyCounts() {
+    return {
+      scout_ship: 0,
+      corvette_ship: 0,
+      frigate_ship: 0,
+      cruiser_ship: 0,
+      dreadnought: 0
     };
+  }
+  function isShipName(value) {
+    return GALAXY_SHIP_NAMES.includes(value);
+  }
+  function readDefense(rawDefense) {
+    const totals = emptyCounts();
+    const regions = [];
+    for (const [regionName, rawAssigned] of Object.entries(rawDefense)) {
+      const assignedRecord = requireRecord(
+        rawAssigned,
+        `game.global.galaxy.defense.${regionName}`
+      );
+      const assigned = emptyCounts();
+      for (const [rawShip, rawCount] of Object.entries(assignedRecord)) {
+        if (!isShipName(rawShip)) {
+          throw new TypeError(`unknown galaxy defense ship: ${rawShip}`);
+        }
+        const count = Math.floor(
+          requireNumber(
+            rawCount,
+            `game.global.galaxy.defense.${regionName}.${rawShip}`
+          )
+        );
+        assigned[rawShip] = count;
+        totals[rawShip] += count;
+      }
+      regions.push(
+        Object.freeze({
+          name: regionName,
+          assigned: Object.freeze(assigned)
+        })
+      );
+    }
+    return Object.freeze({
+      regions: Object.freeze(regions),
+      totals: Object.freeze(totals)
+    });
+  }
+  function readShipPower(gateway, ship) {
+    const action = requireRecord(
+      gateway[ship],
+      `game.actions.galaxy.gxy_gateway.${ship}`
+    );
+    const shipDefinition = requireRecord(
+      action["ship"],
+      `game.actions.galaxy.gxy_gateway.${ship}.ship`
+    );
+    const rating = requireFunction(
+      shipDefinition["rating"],
+      `game.actions.galaxy.gxy_gateway.${ship}.ship.rating`
+    );
+    return requireNumber(
+      Reflect.apply(rating, shipDefinition, []),
+      `galaxy ship rating ${ship}`
+    );
+  }
+  function readMission(buildings2, key) {
+    const building = requireRecord(buildings2[key], `buildings.${key}`);
+    const isUnlocked2 = requireFunction(
+      building["isUnlocked"],
+      `buildings.${key}.isUnlocked`
+    );
+    return {
+      building,
+      unlocked: Boolean(Reflect.apply(isUnlocked2, building, []))
+    };
+  }
+  function commandsMatch(expected, actual) {
+    if (expected.kind !== actual.kind) return false;
+    if (expected.kind === "launch-galaxy-assault" && actual.kind === "launch-galaxy-assault" && expected.mission !== actual.mission) {
+      return false;
+    }
+    if (expected.kind === "manage-galaxy-fleet" && actual.kind === "manage-galaxy-fleet") {
+      const expectedNeeded = expected.neededShips;
+      const actualNeeded = actual.neededShips;
+      if (expectedNeeded === null !== (actualNeeded === null)) return false;
+      if (expectedNeeded !== null && actualNeeded !== null && GALAXY_SHIP_NAMES.some(
+        (ship) => expectedNeeded[ship] !== actualNeeded[ship]
+      )) {
+        return false;
+      }
+    }
+    return expected.commands.length === actual.commands.length && expected.commands.every((command, index) => {
+      const candidate = actual.commands[index];
+      return candidate !== void 0 && command.kind === candidate.kind && command.region === candidate.region && command.ship === candidate.ship && command.count === candidate.count;
+    });
+  }
+  function unavailableInput2() {
+    return Object.freeze({
+      available: false,
+      ships: Object.freeze([]),
+      defenseRegions: Object.freeze([]),
+      regions: Object.freeze([]),
+      chthonianUnlocked: false,
+      chthonianLossMode: "ignore",
+      dreadedGuardActive: false,
+      instinct: false,
+      alien2Unlocked: false,
+      alien2KnowledgeMaximum: 0,
+      alien2KnowledgeRequired: 0,
+      alien2LossMode: "normal",
+      crewReclaim: false,
+      galaxyAssaultPending: false,
+      maximumCoverage: false,
+      gorddonSymposiumActive: false
+    });
+  }
+  function createFleetAdapter(dependencies) {
+    let session = null;
+    const reader = Object.freeze({
+      read() {
+        session = null;
+        const manager = requireRecord(
+          dependencies.getFleetManager(),
+          "FleetManager"
+        );
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
+        const initFleet = requireFunction(
+          manager["initFleet"],
+          "FleetManager.initFleet"
+        );
+        if (!Reflect.apply(initFleet, manager, [])) return unavailableInput2();
+        const global = requireRecord(game2["global"], "game.global");
+        const galaxy = requireRecord(global["galaxy"], "game.global.galaxy");
+        const defense = requireRecord(
+          galaxy["defense"],
+          "game.global.galaxy.defense"
+        );
+        const defenseView = readDefense(defense);
+        const actions = requireRecord(game2["actions"], "game.actions");
+        const galaxyActions = requireRecord(
+          actions["galaxy"],
+          "game.actions.galaxy"
+        );
+        const gateway = requireRecord(
+          galaxyActions["gxy_gateway"],
+          "game.actions.galaxy.gxy_gateway"
+        );
+        const shipRecords = SHIP_DEFINITIONS.map((definition) => {
+          const building = requireRecord(
+            buildings2[definition.building],
+            `buildings.${definition.building}`
+          );
+          return Object.freeze({ definition, building });
+        });
+        const preliminaryShips = shipRecords.map(
+          ({ definition }) => Object.freeze({
+            name: definition.name,
+            assignedCount: defenseView.totals[definition.name],
+            builtCount: 0,
+            power: readShipPower(gateway, definition.name)
+          })
+        );
+        const rawRegions = dependencies.getGalaxyRegions();
+        if (!Array.isArray(rawRegions)) {
+          throw new TypeError("galaxy regions must be an array");
+        }
+        const baseRegions = rawRegions.map((rawRegion, index) => {
+          const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
+          const name = requireString5(
+            region["name"],
+            `galaxy regions[${index}].name`
+          );
+          const current = defenseView.regions.find(
+            (candidate) => candidate.name === name
+          );
+          if (current === void 0) {
+            throw new TypeError(`galaxy defense region ${name} is missing`);
+          }
+          return {
+            name,
+            useful: Boolean(region["useful"]),
+            piracy: requireNumber(
+              region["piracy"],
+              `galaxy regions[${index}].piracy`
+            ),
+            armada: requireNumber(
+              region["armada"],
+              `galaxy regions[${index}].armada`
+            ),
+            current
+          };
+        });
+        const chthonian = readMission(buildings2, "ChthonianMission");
+        let chthonianLossMode = "ignore";
+        let dreadedGuardActive = false;
+        if (chthonian.unlocked) {
+          chthonianLossMode = requireString5(
+            settings2["fleetChthonianLoses"],
+            "settings.fleetChthonianLoses"
+          );
+          if (chthonianLossMode === "dread") {
+            dreadedGuardActive = Boolean(
+              dependencies.guardActive("guardDreaded")
+            );
+          }
+        }
+        const considerAlien = !chthonian.unlocked || chthonianLossMode === "ignore";
+        let alien2Unlocked = false;
+        let alien2KnowledgeMaximum = 0;
+        let alien2KnowledgeRequired = 0;
+        let alien2LossMode = "normal";
+        const missions = /* @__PURE__ */ new Map();
+        missions.set("chthonian", chthonian.building);
+        if (considerAlien) {
+          const alien = readMission(buildings2, "Alien2Mission");
+          missions.set("alien2", alien.building);
+          alien2Unlocked = alien.unlocked;
+          if (alien2Unlocked) {
+            const knowledge = requireRecord(
+              resources2["Knowledge"],
+              "resources.Knowledge"
+            );
+            alien2KnowledgeMaximum = requireNumber(
+              knowledge["maxQuantity"],
+              "resources.Knowledge.maxQuantity"
+            );
+            alien2KnowledgeRequired = requireNumber(
+              settings2["fleetAlien2Knowledge"],
+              "settings.fleetAlien2Knowledge"
+            );
+            alien2LossMode = requireString5(
+              settings2["fleetAlien2Loses"],
+              "settings.fleetAlien2Loses"
+            );
+          }
+        }
+        const race = requireRecord(global["race"], "game.global.race");
+        const preliminary = Object.freeze({
+          available: true,
+          ships: Object.freeze(preliminaryShips),
+          defenseRegions: defenseView.regions,
+          regions: Object.freeze(
+            baseRegions.map(
+              ({ current, ...region }) => Object.freeze({
+                ...region,
+                priority: 0,
+                assigned: current.assigned
+              })
+            )
+          ),
+          chthonianUnlocked: chthonian.unlocked,
+          chthonianLossMode,
+          dreadedGuardActive,
+          instinct: Boolean(race["instinct"]),
+          alien2Unlocked,
+          alien2KnowledgeMaximum,
+          alien2KnowledgeRequired,
+          alien2LossMode,
+          crewReclaim: false,
+          galaxyAssaultPending: false,
+          maximumCoverage: false,
+          gorddonSymposiumActive: false
+        });
+        const preliminaryDecision = planFleet(preliminary);
+        let input = preliminary;
+        if (preliminaryDecision?.kind !== "launch-galaxy-assault") {
+          const crewReclaim = requireBoolean(
+            settings2["fleetCrewReclaim"],
+            "settings.fleetCrewReclaim"
+          );
+          const assaultPending = crewReclaim && Boolean(dependencies.galaxyAssaultPending());
+          const reclaimCrew = crewReclaim && !assaultPending;
+          const ships = reclaimCrew ? preliminaryShips.map((ship, index) => {
+            const record = shipRecords[index];
+            if (record === void 0) return ship;
+            return Object.freeze({
+              ...ship,
+              builtCount: requireNumber(
+                record.building["count"],
+                `buildings.${record.definition.building}.count`
+              )
+            });
+          }) : preliminaryShips;
+          let gorddonSymposiumActive = false;
+          if (!reclaimCrew) {
+            const symposium = requireRecord(
+              buildings2["GorddonSymposium"],
+              "buildings.GorddonSymposium"
+            );
+            gorddonSymposiumActive = requireNumber(
+              symposium["stateOnCount"],
+              "buildings.GorddonSymposium.stateOnCount"
+            ) > 0;
+          }
+          input = Object.freeze({
+            ...preliminary,
+            ships: Object.freeze(ships),
+            regions: Object.freeze(
+              baseRegions.map(
+                ({ current, ...region }) => Object.freeze({
+                  ...region,
+                  priority: requireNumber(
+                    settings2[`fleet_pr_${region.name}`],
+                    `settings.fleet_pr_${region.name}`
+                  ),
+                  assigned: current.assigned
+                })
+              )
+            ),
+            crewReclaim,
+            galaxyAssaultPending: assaultPending,
+            maximumCoverage: requireBoolean(
+              settings2["fleetMaxCover"],
+              "settings.fleetMaxCover"
+            ),
+            gorddonSymposiumActive
+          });
+        }
+        session = Object.freeze({
+          manager,
+          game: game2,
+          settings: settings2,
+          resources: resources2,
+          buildings: buildings2,
+          defense,
+          input,
+          missions
+        });
+        return input;
+      }
+    });
+    const executor = Object.freeze({
+      execute(decision2) {
+        const active = session;
+        if (active === null)
+          return stale("fleet-session-missing", "fleet session is missing");
+        if (dependencies.getFleetManager() !== active.manager || dependencies.getGame() !== active.game || dependencies.getSettings() !== active.settings || dependencies.getResources() !== active.resources || dependencies.getBuildings() !== active.buildings) {
+          return stale("fleet-source-changed", "fleet source changed");
+        }
+        const global = requireRecord(active.game["global"], "game.global");
+        const galaxy = requireRecord(global["galaxy"], "game.global.galaxy");
+        if (galaxy["defense"] !== active.defense) {
+          return stale("fleet-defense-changed", "galaxy defense changed");
+        }
+        const expected = planFleet(active.input);
+        if (expected === null || !commandsMatch(expected, decision2)) {
+          return rejected2(
+            "invalid-fleet-decision",
+            "fleet decision does not match the sampled plan"
+          );
+        }
+        const addShip = requireFunction(
+          active.manager["addShip"],
+          "FleetManager.addShip"
+        );
+        const removeShip = requireFunction(
+          active.manager["subShip"],
+          "FleetManager.subShip"
+        );
+        let clickMission = null;
+        let mission = null;
+        if (decision2.kind === "launch-galaxy-assault") {
+          mission = active.missions.get(decision2.mission) ?? null;
+          if (mission === null) {
+            return stale("fleet-mission-changed", "fleet mission changed");
+          }
+          clickMission = requireFunction(
+            mission["click"],
+            `buildings.${decision2.mission}.click`
+          );
+        }
+        session = null;
+        if (decision2.kind === "manage-galaxy-fleet") {
+          active.manager["neededShips"] = null;
+          if (decision2.neededShips !== null) {
+            active.manager["neededShips"] = { ...decision2.neededShips };
+          }
+        }
+        for (const command of decision2.commands) {
+          Reflect.apply(
+            command.kind === "add-ship" ? addShip : removeShip,
+            active.manager,
+            [command.region, command.ship, command.count]
+          );
+        }
+        if (clickMission !== null && mission !== null) {
+          Reflect.apply(clickMission, mission, []);
+        }
+        return SUCCEEDED;
+      }
+    });
+    return Object.freeze({ reader, executor });
   }
 
   // src/automation/combat/mech.ts
@@ -48615,18 +49055,17 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const autoFleet = createAutoFleet({
+    const fleetAdapter = createFleetAdapter({
       getFleetManager: () => FleetManager,
       getGame: () => game,
       getSettings: () => settings,
-      getState: () => state,
       getResources: () => resources,
       getBuildings: () => buildings,
       getGalaxyRegions,
       guardActive,
-      cartesian,
       galaxyAssaultPending
     });
+    const autoFleet = () => runFleetAutomation(fleetAdapter);
     const autoMech = createAutoMech({
       getMechManager: () => MechManager,
       getGame: () => game,

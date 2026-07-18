@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
-import { createAutoFleet } from "../src/automation/combat/fleet.ts";
+import { createFleetAdapter } from "../src/adapters/evolve/fleet.ts";
+import { runFleetAutomation } from "../src/application/fleet.ts";
 
 const shipNames = [
   "scout_ship",
@@ -58,6 +59,7 @@ const settings = {
   fleetChthonianLoses: "ignore",
   fleetMaxCover: true,
 };
+const resources = { Knowledge: { maxQuantity: 0 } };
 for (const [index, regionName] of regionNames.entries()) {
   settings[`fleet_pr_${regionName}`] = index;
 }
@@ -70,12 +72,11 @@ const fleetManager = {
   subShip: (...args) => removals.push(["sub", ...args]),
 };
 let usefulRegion = null;
-const autoFleet = createAutoFleet({
+const fleetAdapter = createFleetAdapter({
   getFleetManager: () => fleetManager,
   getGame: () => game,
   getSettings: () => settings,
-  getState: () => ({}),
-  getResources: () => ({ Knowledge: { maxQuantity: 0 } }),
+  getResources: () => resources,
   getBuildings: () => buildings,
   getGalaxyRegions: () =>
     regionNames.map((name) => ({
@@ -85,11 +86,10 @@ const autoFleet = createAutoFleet({
       useful: name === usefulRegion,
     })),
   guardActive: () => false,
-  cartesian: () => [],
   galaxyAssaultPending: () => false,
 });
 
-autoFleet();
+runFleetAutomation(fleetAdapter);
 assert.deepEqual(fleetManager.neededShips, {
   scout_ship: 0,
   corvette_ship: 0,
@@ -103,7 +103,7 @@ const assignments = [];
 usefulRegion = "gxy_gateway";
 defense.gxy_gateway.scout_ship = 0;
 fleetManager.addShip = (...args) => assignments.push(["add", ...args]);
-autoFleet();
+runFleetAutomation(fleetAdapter);
 assert.deepEqual(fleetManager.neededShips, {
   scout_ship: 1,
   corvette_ship: 0,

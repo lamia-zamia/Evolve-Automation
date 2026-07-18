@@ -344,7 +344,8 @@ import {
 } from "./adapters/evolve/mutation.ts";
 import { runOuterFleetAutomation } from "./application/fleet-outer.ts";
 import { createOuterFleetAdapter } from "./adapters/evolve/fleet-outer.ts";
-import { createAutoFleet } from "./automation/combat/fleet.ts";
+import { runFleetAutomation } from "./application/fleet.ts";
+import { createFleetAdapter } from "./adapters/evolve/fleet.ts";
 import { createAutoMech } from "./automation/combat/mech.ts";
 import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
@@ -3948,18 +3949,17 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const autoFleet = createAutoFleet({
+  const fleetAdapter = createFleetAdapter({
     getFleetManager: () => FleetManager,
     getGame: () => game,
     getSettings: () => settings,
-    getState: () => state,
     getResources: () => resources,
     getBuildings: () => buildings,
     getGalaxyRegions,
     guardActive,
-    cartesian,
     galaxyAssaultPending,
   });
+  const autoFleet = () => runFleetAutomation(fleetAdapter);
 
   const autoMech = createAutoMech({
     getMechManager: () => MechManager,
