@@ -279,8 +279,16 @@ hooks.setWave1TestManagers({
   MinorTraitManager: testMinorTraitManager,
 });
 hooks.automationState.triggerTargets = [
-  { cost: {}, click: () => (waveActions.push(["trigger", "first"]), false) },
-  { cost: {}, click: () => (waveActions.push(["trigger", "second"]), true) },
+  {
+    id: "trigger-first",
+    cost: {},
+    click: () => (waveActions.push(["trigger", "first"]), false),
+  },
+  {
+    id: "trigger-second",
+    cost: {},
+    click: () => (waveActions.push(["trigger", "second"]), true),
+  },
 ];
 
 hooks.autoMerc();

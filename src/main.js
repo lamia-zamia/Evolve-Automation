@@ -260,7 +260,11 @@ import { createAutoMerc } from "./automation/combat/mercenary.ts";
 import { createAutoPsychic } from "./automation/traits/psychic.ts";
 import { createAutoOcularPowers } from "./automation/traits/ocular.ts";
 import { createAutoMinorTrait } from "./automation/traits/minor-trait.ts";
-import { createAutoTrigger } from "./automation/progression/trigger.ts";
+import { runTriggerAutomation } from "./application/trigger.ts";
+import {
+  createTriggerCommandExecutor,
+  createTriggerReader,
+} from "./adapters/evolve/trigger.ts";
 import { createAutoConsume } from "./automation/economy/consume.ts";
 import { createAutoReplicator } from "./automation/economy/replicator.ts";
 import { createAutoMarket } from "./automation/economy/market.ts";
@@ -3547,10 +3551,22 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const autoTrigger = createAutoTrigger({
+  const triggerReader = createTriggerReader({
     getState: () => state,
-    inflationChallengeShouldSaveMoney,
+    shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
   });
+  const triggerExecutor = createTriggerCommandExecutor({
+    getState: () => state,
+  });
+  const autoTrigger = () => {
+    const result = runTriggerAutomation({
+      reader: triggerReader,
+      executor: triggerExecutor,
+    });
+    // A stale/rejected trigger is treated as active so research/build cannot
+    // spend resources after an uncertain trigger phase.
+    return result.outcome.status === "succeeded" ? result.active : true;
+  };
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {

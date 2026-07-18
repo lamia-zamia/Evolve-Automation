@@ -5328,13 +5328,13 @@
         for (let building of this.priorityList) {
           building.weighting = building._weighting;
           for (let j = 0; j < activeRules.length; j++) {
-            let result = activeRules[j][wrIndividualCondition2](building);
-            if (result) {
-              let note = activeRules[j][wrDescription2](result, building);
+            let result2 = activeRules[j][wrIndividualCondition2](building);
+            if (result2) {
+              let note = activeRules[j][wrDescription2](result2, building);
               if (note !== "") {
                 building.extraDescription += note + "<br>";
               }
-              building.weighting *= activeRules[j][wrMultiplier2](result);
+              building.weighting *= activeRules[j][wrMultiplier2](result2);
               if (building.weighting <= 0) {
                 break;
               }
@@ -14029,16 +14029,16 @@
             }
           }
         }
-        const result = {
+        const result2 = {
           ...outcome,
           envelope,
           completedAtMs: dependencies.clock.nowMs()
         };
-        results.push(result);
+        results.push(result2);
         dependencies.logger.record({
           kind: "command-completed",
           cycleId,
-          result
+          result: result2
         });
       });
       const trace = {
@@ -14357,9 +14357,9 @@
       const trace = runner.runCycle();
       lastTrace = trace;
       let storageAdded = 0;
-      for (const result of trace.results) {
-        if (result.status === "succeeded") {
-          storageAdded += result.envelope.command.count * result.envelope.command.storagePerUnit;
+      for (const result2 of trace.results) {
+        if (result2.status === "succeeded") {
+          storageAdded += result2.envelope.command.count * result2.envelope.command.storagePerUnit;
         }
       }
       return storageAdded > 0;
@@ -15080,11 +15080,11 @@
             let obj;
             let maximumAffordable = false;
             if (queue.type === "queue") {
-              const result = readQueuedTarget2(item);
-              if (result.status === "ready") {
-                obj = result.target;
-                maximumAffordable = result.maximumAffordable;
-              } else if (result.status === "unavailable" && !state2.queueDataUnavailable) {
+              const result2 = readQueuedTarget2(item);
+              if (result2.status === "ready") {
+                obj = result2.target;
+                maximumAffordable = result2.maximumAffordable;
+              } else if (result2.status === "unavailable" && !state2.queueDataUnavailable) {
                 state2.queueDataUnavailable = true;
                 state2.conflictTargets.push({
                   name: "Queue data unavailable",
@@ -17647,17 +17647,17 @@
       let pacifist;
       let pacifistActive = false;
       if (requestedGuard === "guardCultOfPersonality") {
-        const result = readAchievementGuardInput(
+        const result2 = readAchievementGuardInput(
           rawSettings,
           rawGame,
           rawPoly,
           rawBuildings,
           "guardPacifist"
         );
-        if (result.status === "ready") {
-          pacifist = result.input;
-          pacifistActive = isAchievementGuardActive(result.input);
-        } else if (result.status === "inactive") {
+        if (result2.status === "ready") {
+          pacifist = result2.input;
+          pacifistActive = isAchievementGuardActive(result2.input);
+        } else if (result2.status === "inactive") {
           pacifist = Object.freeze({
             guard: "guardPacifist",
             enabled: false,
@@ -17665,8 +17665,8 @@
             targetStar: 0,
             attacks: 0
           });
-        } else if (result.status === "unavailable") {
-          pacifistActive = result.fallbackActive;
+        } else if (result2.status === "unavailable") {
+          pacifistActive = result2.fallbackActive;
         }
       }
       const targetStar = readCurrentLevel(rawGame);
@@ -17855,8 +17855,8 @@
     const stats = global?.["stats"];
     return isRecord10(stats) ? stats : void 0;
   }
-  function copyUnavailable(result) {
-    return unavailable6(result.reason, result.field);
+  function copyUnavailable(result2) {
+    return unavailable6(result2.reason, result2.field);
   }
   function readBananaRepublicObjective(rawGame, rawPoly, requestedObjective) {
     if (!isBananaObjectiveId(requestedObjective)) {
@@ -17939,9 +17939,9 @@
   function readBananaRepublicProgress(rawGame, rawPoly) {
     const objectives = {};
     for (const objective of BANANA_OBJECTIVE_IDS) {
-      const result = readBananaRepublicObjective(rawGame, rawPoly, objective);
-      if (result.status !== "ready") return copyUnavailable(result);
-      objectives[objective] = result.complete;
+      const result2 = readBananaRepublicObjective(rawGame, rawPoly, objective);
+      if (result2.status !== "ready") return copyUnavailable(result2);
+      objectives[objective] = result2.complete;
     }
     const smoothie = readBananaRepublicSmoothieInput(rawGame);
     if (smoothie.status !== "ready") return copyUnavailable(smoothie);
@@ -22847,7 +22847,7 @@
         resource
       };
     });
-    const result = rawFuels.map(
+    const result2 = rawFuels.map(
       (fuel) => Object.freeze({
         id: fuel.id,
         storageRatio: fuel.storageRatio,
@@ -22883,7 +22883,7 @@
           );
           usefulnessSampled = true;
         }
-        result[raw.index] = Object.freeze({
+        result2[raw.index] = Object.freeze({
           id: raw.id,
           storageRatio: raw.storageRatio,
           rateOfChange: raw.rateOfChange,
@@ -22909,7 +22909,7 @@
         });
       }
     }
-    return { fuels: result, grapheneUseful };
+    return { fuels: result2, grapheneUseful };
   }
   function readGrapheneInput(dependencies) {
     const resourcesValue = dependencies.getResources();
@@ -23442,24 +23442,134 @@
     };
   }
 
-  // src/automation/progression/trigger.ts
-  function createAutoTrigger({
-    getState,
-    inflationChallengeShouldSaveMoney: inflationChallengeShouldSaveMoney2
-  }) {
-    return function autoTrigger2() {
-      const state2 = getState();
-      let triggerActive = false;
-      for (let trigger of state2.triggerTargets) {
-        if (inflationChallengeShouldSaveMoney2() && (trigger.cost?.Money ?? 0) > 0) {
-          continue;
-        }
-        if (trigger.click()) {
-          triggerActive = true;
-        }
+  // src/domain/trigger.ts
+  function planTrigger(input) {
+    if (input.target === null) {
+      return null;
+    }
+    return Object.freeze({
+      kind: input.target.shouldSaveMoney && input.target.hasPositiveMoneyCost ? "skip" : "click",
+      index: input.target.index,
+      targetId: input.target.id
+    });
+  }
+
+  // src/application/trigger.ts
+  var SUCCEEDED2 = Object.freeze({
+    status: "succeeded"
+  });
+  function result(outcome, active) {
+    return Object.freeze({ outcome, active });
+  }
+  function runTriggerAutomation(dependencies) {
+    let index = 0;
+    let active = false;
+    while (true) {
+      const decision = planTrigger(dependencies.reader.read(index));
+      if (decision === null) {
+        return result(SUCCEEDED2, active);
       }
-      return triggerActive;
-    };
+      if (decision.kind === "click") {
+        const execution = dependencies.executor.execute(decision);
+        if (execution.outcome.status !== "succeeded") {
+          return result(execution.outcome, active);
+        }
+        active ||= execution.clicked;
+      }
+      index = decision.index + 1;
+    }
+  }
+
+  // src/adapters/evolve/trigger.ts
+  function readTriggerTargets(getState) {
+    const state2 = requireRecord(getState(), "state");
+    const targets = state2["triggerTargets"];
+    if (!Array.isArray(targets)) {
+      throw new TypeError("state.triggerTargets must be an array");
+    }
+    return targets;
+  }
+  function readTargetId(target, path) {
+    const id = target["id"];
+    if (typeof id !== "string") {
+      throw new TypeError(`${path}.id must be a string`);
+    }
+    return id;
+  }
+  function hasPositiveMoneyCost(target, path) {
+    const rawCost = target["cost"];
+    if (rawCost === void 0 || rawCost === null) {
+      return false;
+    }
+    const cost = requireRecord(rawCost, `${path}.cost`);
+    const rawMoney = cost["Money"];
+    if (rawMoney === void 0 || rawMoney === null) {
+      return false;
+    }
+    return requireNumber(rawMoney, `${path}.cost.Money`) > 0;
+  }
+  function createTriggerReader(dependencies) {
+    return Object.freeze({
+      read(index) {
+        if (!Number.isSafeInteger(index) || index < 0) {
+          throw new TypeError("trigger index must be a non-negative integer");
+        }
+        const targets = readTriggerTargets(dependencies.getState);
+        if (index >= targets.length) {
+          return Object.freeze({ target: null });
+        }
+        const path = `state.triggerTargets[${index}]`;
+        const target = requireRecord(targets[index], path);
+        const shouldSaveMoney = dependencies.shouldSaveInflationMoney();
+        const view = Object.freeze({
+          index,
+          id: readTargetId(target, path),
+          shouldSaveMoney,
+          hasPositiveMoneyCost: shouldSaveMoney ? hasPositiveMoneyCost(target, path) : false
+        });
+        return Object.freeze({ target: view });
+      }
+    });
+  }
+  function executionResult(outcome, clicked) {
+    return Object.freeze({ outcome, clicked });
+  }
+  function createTriggerCommandExecutor(dependencies) {
+    return Object.freeze({
+      execute(decision) {
+        if (!Number.isSafeInteger(decision.index) || decision.index < 0) {
+          return executionResult(
+            rejected2(
+              "invalid-trigger-index",
+              "trigger index must be a non-negative integer"
+            ),
+            false
+          );
+        }
+        const targets = readTriggerTargets(dependencies.getState);
+        const value = targets[decision.index];
+        const target = typeof value === "object" && value !== null ? value : null;
+        const actualId = target !== null && typeof target["id"] === "string" ? target["id"] : null;
+        if (target === null || actualId !== decision.targetId) {
+          return executionResult(
+            stale("stale-trigger-target", "trigger target list changed", {
+              targetId: decision.targetId,
+              index: decision.index,
+              actualTargetId: actualId
+            }),
+            false
+          );
+        }
+        const click = requireFunction(
+          target["click"],
+          `state.triggerTargets[${decision.index}].click`
+        );
+        return executionResult(
+          SUCCEEDED,
+          Boolean(Reflect.apply(click, target, []))
+        );
+      }
+    });
   }
 
   // src/automation/economy/consume.ts
@@ -25627,7 +25737,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED2 = Object.freeze({
+  var SUCCEEDED3 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -25635,11 +25745,11 @@
     while (true) {
       const decision = planResearch(dependencies.reader.read(startIndex));
       if (decision === null) {
-        return SUCCEEDED2;
+        return SUCCEEDED3;
       }
-      const result = dependencies.executor.execute(decision);
-      if (result.outcome.status !== "succeeded" || result.researched) {
-        return result.outcome;
+      const result2 = dependencies.executor.execute(decision);
+      if (result2.outcome.status !== "succeeded" || result2.researched) {
+        return result2.outcome;
       }
       startIndex = decision.index + 1;
     }
@@ -25696,14 +25806,14 @@
       }
     });
   }
-  function executionResult(outcome, researched) {
+  function executionResult2(outcome, researched) {
     return Object.freeze({ outcome, researched });
   }
   function createResearchCommandExecutor(dependencies) {
     return Object.freeze({
       execute(decision) {
         if (!Number.isSafeInteger(decision.index) || decision.index < 0) {
-          return executionResult(
+          return executionResult2(
             rejected2(
               "invalid-research-index",
               "research index must be a non-negative integer"
@@ -25716,7 +25826,7 @@
         const tech = typeof value === "object" && value !== null ? value : null;
         const actualId = tech !== null && typeof tech["id"] === "string" ? tech["id"] : null;
         if (actualId !== decision.techId || tech === null) {
-          return executionResult(
+          return executionResult2(
             stale("stale-research-target", "unlocked research list changed", {
               techId: decision.techId,
               index: decision.index,
@@ -25746,11 +25856,11 @@
           "ProjectManager.updateProjects"
         );
         if (!Reflect.apply(click, tech, [])) {
-          return executionResult(SUCCEEDED, false);
+          return executionResult2(SUCCEEDED, false);
         }
         Reflect.apply(updateBuildings, buildingManager, []);
         Reflect.apply(updateProjects, projectManager, []);
-        return executionResult(SUCCEEDED, true);
+        return executionResult2(SUCCEEDED, true);
       }
     });
   }
@@ -28488,8 +28598,8 @@
         get: (_target, property) => {
           const value = getValue();
           if (property === Symbol.toPrimitive) return () => value;
-          const result = Reflect.get(Object(value), property);
-          return typeof result === "function" ? result.bind(value) : result;
+          const result2 = Reflect.get(Object(value), property);
+          return typeof result2 === "function" ? result2.bind(value) : result2;
         },
         set: (_target, property, value) => Reflect.set(Object(getValue()), property, value),
         deleteProperty: (_target, property) => Reflect.deleteProperty(Object(getValue()), property),
@@ -30050,8 +30160,8 @@
             check.arg,
             check.options,
             trigger.requirementId,
-            function(result) {
-              trigger.requirementId = result;
+            function(result2) {
+              trigger.requirementId = result2;
               trigger.complete = false;
               updateSettingsFromState2();
             }
@@ -30069,8 +30179,8 @@
             retType,
             null,
             trigger.requirementCount,
-            function(result) {
-              trigger.requirementCount = Number(result);
+            function(result2) {
+              trigger.requirementCount = Number(result2);
               trigger.complete = false;
               updateSettingsFromState2();
             }
@@ -30107,8 +30217,8 @@
             argDef.arg,
             argDef.options,
             trigger.actionId,
-            function(result) {
-              trigger.actionId = result;
+            function(result2) {
+              trigger.actionId = result2;
               trigger.complete = false;
               updateSettingsFromState2();
             }
@@ -30121,8 +30231,8 @@
       triggerElement.empty().off("*");
       if (trigger.actionType === "build" || trigger.actionType === "arpa") {
         triggerElement.append(
-          buildInputNode2("number", null, trigger.actionCount, function(result) {
-            trigger.actionCount = Number(result);
+          buildInputNode2("number", null, trigger.actionCount, function(result2) {
+            trigger.actionCount = Number(result2);
             trigger.complete = false;
             updateSettingsFromState2();
           })
@@ -35399,10 +35509,10 @@
             type,
             options,
             settingsRaw2[settingName],
-            function(result) {
-              settingsRaw2[settingName] = result;
+            function(result2) {
+              settingsRaw2[settingName] = result2;
               updateSettingsFromState2();
-              let retType = typeof result === "boolean" ? "checked" : "value";
+              let retType = typeof result2 === "boolean" ? "checked" : "value";
               $2(".script_" + settingName).prop(retType, settingsRaw2[settingName]);
             }
           )
@@ -35583,8 +35693,8 @@
         check.arg,
         check.options,
         override["arg" + num],
-        function(result) {
-          override["arg" + num] = result;
+        function(result2) {
+          override["arg" + num] = result2;
           updateSettingsFromState2();
         }
       ) : "";
@@ -35652,8 +35762,8 @@
         type,
         options,
         override.ret,
-        function(result) {
-          override.ret = result;
+        function(result2) {
+          override.ret = result2;
           updateSettingsFromState2();
         }
       );
@@ -38383,7 +38493,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       nowMs: () => browserClock.nowMs()
     });
     function calculateRequiredStorages() {
-      const result = planStorageRequirements(
+      const result2 = planStorageRequirements(
         readStorageRequirementsInput({
           getSettings: () => settings,
           getState: () => state,
@@ -38400,17 +38510,17 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           getRetirementGraphene: () => RETIREMENT_PREP.graphene
         })
       );
-      for (const requirement of result.resources) {
+      for (const requirement of result2.resources) {
         const resource = resources[requirement.id];
         resource.maxCost = requirement.maxCost;
         resource.storageRequired = requirement.storageRequired;
       }
-      state.knowledgeRequiredByTechs = result.knowledge.knowledgeRequiredByTechs;
-      state.cheapestTechKnowledge = result.knowledge.cheapestTechKnowledge;
-      state.knowledgeRequiredByBuildTargets = result.knowledge.knowledgeRequiredByBuildTargets;
+      state.knowledgeRequiredByTechs = result2.knowledge.knowledgeRequiredByTechs;
+      state.cheapestTechKnowledge = result2.knowledge.cheapestTechKnowledge;
+      state.knowledgeRequiredByBuildTargets = result2.knowledge.knowledgeRequiredByBuildTargets;
     }
     function prioritizeDemandedResources() {
-      const result = planDemandPrioritization(
+      const result2 = planDemandPrioritization(
         readDemandPrioritizationInput({
           getSettings: () => settings,
           getState: () => state,
@@ -38430,10 +38540,10 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET
         })
       );
-      for (const request of result.requests) {
+      for (const request of result2.requests) {
         resources[request.resourceId].requestQuantity(request.amount);
       }
-      for (const index of result.removedMissionIndices) {
+      for (const index of result2.removedMissionIndices) {
         state.missionBuildingList.splice(index, 1);
       }
     }
@@ -39444,103 +39554,103 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       });
     }
     let getStarLevel = (context) => {
-      const result = readAchievementStarLevelContext(context);
-      return result.status === "ready" ? calculateAchievementStarLevel(result.context) : 1;
+      const result2 = readAchievementStarLevelContext(context);
+      return result2.status === "ready" ? calculateAchievementStarLevel(result2.context) : 1;
     };
     let getAchievementStar = (id, universe) => {
-      const result = readAchievementStar(game, poly, id, universe);
-      return result.status === "ready" ? result.star : 0;
+      const result2 = readAchievementStar(game, poly, id, universe);
+      return result2.status === "ready" ? result2.star : 0;
     };
     let isAchievementUnlocked = (id, level, universe) => {
       if (typeof level !== "number" || !Number.isFinite(level) || level < 0) {
         return false;
       }
-      const result = readAchievementStar(game, poly, id, universe);
-      return result.status === "ready" && isAchievementUnlocked2(result.star, level);
+      const result2 = readAchievementStar(game, poly, id, universe);
+      return result2.status === "ready" && isAchievementUnlocked2(result2.star, level);
     };
     let guardActive = (setting) => {
-      const result = readAchievementGuardInput(
+      const result2 = readAchievementGuardInput(
         settings,
         game,
         poly,
         buildings,
         setting
       );
-      if (result.status === "ready") {
-        return isAchievementGuardActive(result.input);
+      if (result2.status === "ready") {
+        return isAchievementGuardActive(result2.input);
       }
-      return result.status === "unavailable" ? result.fallbackActive : false;
+      return result2.status === "unavailable" ? result2.fallbackActive : false;
     };
     let bananaRepublicObjectiveComplete = (objective) => {
-      const result = readBananaRepublicObjective(game, poly, objective);
-      return result.status === "ready" ? result.complete : false;
+      const result2 = readBananaRepublicObjective(game, poly, objective);
+      return result2.status === "ready" ? result2.complete : false;
     };
     let bananaRepublicSmoothieComplete = () => {
-      const result = readBananaRepublicSmoothieInput(game);
-      return result.status === "ready" ? isBananaRepublicSmoothieComplete(result.input) : false;
+      const result2 = readBananaRepublicSmoothieInput(game);
+      return result2.status === "ready" ? isBananaRepublicSmoothieComplete(result2.input) : false;
     };
     let bananaRepublicReadyForUnification = () => {
-      const result = readBananaRepublicProgress(game, poly);
-      return result.status === "ready" ? isBananaRepublicReadyForUnification(result.progress) : false;
+      const result2 = readBananaRepublicProgress(game, poly);
+      return result2.status === "ready" ? isBananaRepublicReadyForUnification(result2.progress) : false;
     };
     let guardBananaRepublicActive = () => {
-      const result = readBananaRepublicGuardInput(settings, game, poly);
-      if (result.status === "ready") {
-        return isBananaRepublicGuardActive(result.input);
+      const result2 = readBananaRepublicGuardInput(settings, game, poly);
+      if (result2.status === "ready") {
+        return isBananaRepublicGuardActive(result2.input);
       }
-      return result.status === "unavailable" ? result.fallbackActive : false;
+      return result2.status === "unavailable" ? result2.fallbackActive : false;
     };
     let inflationChallengeAssistActive = () => {
-      const result = readInflationAssistInput(
+      const result2 = readInflationAssistInput(
         settings,
         game,
         getAchievementStar("wheelbarrow")
       );
-      return result.status === "ready" ? isInflationAssistActive(result.input) : false;
+      return result2.status === "ready" ? isInflationAssistActive(result2.input) : false;
     };
     let inflationChallengeMoneyReachable = () => {
-      const result = readInflationMoneyInput(
+      const result2 = readInflationMoneyInput(
         resources,
         INFLATION_CHALLENGE_MONEY
       );
-      return result.status === "ready" ? isInflationMoneyReachable(result.input) : false;
+      return result2.status === "ready" ? isInflationMoneyReachable(result2.input) : false;
     };
     let inflationChallengeSecondsToFinish = () => {
-      const result = readInflationMoneyInput(
+      const result2 = readInflationMoneyInput(
         resources,
         INFLATION_CHALLENGE_MONEY
       );
-      return result.status === "ready" ? inflationSecondsToFinish(result.input) : Number.POSITIVE_INFINITY;
+      return result2.status === "ready" ? inflationSecondsToFinish(result2.input) : Number.POSITIVE_INFINITY;
     };
     let inflationChallengeShouldSaveMoney = () => {
-      const result = readInflationSaveInput(
+      const result2 = readInflationSaveInput(
         settings,
         game,
         resources,
         getAchievementStar("wheelbarrow"),
         INFLATION_CHALLENGE_MONEY
       );
-      return result.status === "ready" ? shouldSaveInflationMoney(result.input) : false;
+      return result2.status === "ready" ? shouldSaveInflationMoney(result2.input) : false;
     };
     let retirementChallengeAssistActive = () => {
-      const result = readRetirementAssistInput(
+      const result2 = readRetirementAssistInput(
         settings,
         game,
         haveTech("isolation")
       );
-      return result.status === "ready" ? isRetirementAssistActive(result.input) : false;
+      return result2.status === "ready" ? isRetirementAssistActive(result2.input) : false;
     };
     let retirementPreparationMissing = () => {
       if (!retirementChallengeAssistActive()) {
         return [];
       }
-      const result = readRetirementPreparationInput(
+      const result2 = readRetirementPreparationInput(
         buildings,
         resources,
         RETIREMENT_PREP
       );
-      return result.status === "ready" ? formatRetirementShortfalls(
-        assessRetirementPreparation(result.input),
+      return result2.status === "ready" ? formatRetirementShortfalls(
+        assessRetirementPreparation(result2.input),
         getNumberString
       ) : [];
     };
@@ -39933,37 +40043,37 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       (...args) => isAchievementUnlocked(...args)
     );
     let isPrestigeAllowed = (type) => {
-      const result = readPrestigePermissionView(settings, game);
-      return result.status === "ready" ? isPrestigeAllowed2(result.view, type) : false;
+      const result2 = readPrestigePermissionView(settings, game);
+      return result2.status === "ready" ? isPrestigeAllowed2(result2.view, type) : false;
     };
     let isCataclysmPrestigeAvailable = () => {
-      const result = readPrestigeView();
-      return result.status === "ready" ? isCataclysmPrestigeAvailable2(result.view) : false;
+      const result2 = readPrestigeView();
+      return result2.status === "ready" ? isCataclysmPrestigeAvailable2(result2.view) : false;
     };
     let isBioseederPrestigeAvailable = () => {
-      const result = readPrestigeView();
-      return result.status === "ready" ? isBioseedPrestigeAvailable(result.view) : false;
+      const result2 = readPrestigeView();
+      return result2.status === "ready" ? isBioseedPrestigeAvailable(result2.view) : false;
     };
     let isWhiteholePrestigeAvailable = () => {
-      const result = readPrestigeView();
-      return result.status === "ready" ? isWhiteholePrestigeAvailable2(result.view) : false;
+      const result2 = readPrestigeView();
+      return result2.status === "ready" ? isWhiteholePrestigeAvailable2(result2.view) : false;
     };
     let isApocalypsePrestigeAvailable = () => {
-      const result = readPrestigeView();
-      return result.status === "ready" ? isApocalypsePrestigeAvailable2(result.view) : false;
+      const result2 = readPrestigeView();
+      return result2.status === "ready" ? isApocalypsePrestigeAvailable2(result2.view) : false;
     };
     let isAscensionPrestigeAvailable = () => {
-      const result = readAscensionEligibilityView(
+      const result2 = readAscensionEligibilityView(
         settings,
         game,
         resources,
         buildings
       );
-      return result.status === "ready" ? isAscensionPrestigeAvailable2(result.view) : false;
+      return result2.status === "ready" ? isAscensionPrestigeAvailable2(result2.view) : false;
     };
     let isWitchAscensionPrestigeAvailable = (demonic) => {
       const isDemonic = Boolean(demonic);
-      const result = readWitchAscensionEligibilityView(
+      const result2 = readWitchAscensionEligibilityView(
         settings,
         game,
         resources,
@@ -39971,27 +40081,27 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         isDemonic,
         (...args) => haveTech(...args)
       );
-      return result.status === "ready" ? isWitchAscensionPrestigeAvailable2(result.view, isDemonic) : false;
+      return result2.status === "ready" ? isWitchAscensionPrestigeAvailable2(result2.view, isDemonic) : false;
     };
     let isDemonicPrestigeAvailable = () => {
-      const result = readPrestigeView();
-      return result.status === "ready" ? isDemonicPrestigeAvailable2(result.view) : false;
+      const result2 = readPrestigeView();
+      return result2.status === "ready" ? isDemonicPrestigeAvailable2(result2.view) : false;
     };
     let isPillarFinished = () => {
-      const result = readPillarEligibilityView(settings, game, resources);
-      return result.status === "ready" ? isPillarFinished2(result.view) : false;
+      const result2 = readPillarEligibilityView(settings, game, resources);
+      return result2.status === "ready" ? isPillarFinished2(result2.view) : false;
     };
     let isGECKNeeded = () => {
-      const result = readGeckEligibilityView(
+      const result2 = readGeckEligibilityView(
         settings,
         buildings,
         (...args) => isAchievementUnlocked(...args)
       );
-      return result.status === "ready" ? isGeckNeeded(result.view) : true;
+      return result2.status === "ready" ? isGeckNeeded(result2.view) : true;
     };
     let getBlackholeMass = () => {
-      const result = readPrestigeView();
-      return result.status === "ready" ? getBlackholeMass2(result.view) : 0;
+      const result2 = readPrestigeView();
+      return result2.status === "ready" ? getBlackholeMass2(result2.view) : 0;
     };
     const autoPrestige = createAutoPrestige({
       getState: () => state,
@@ -40244,10 +40354,20 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const autoTrigger = createAutoTrigger({
+    const triggerReader = createTriggerReader({
       getState: () => state,
-      inflationChallengeShouldSaveMoney
+      shouldSaveInflationMoney: inflationChallengeShouldSaveMoney
     });
+    const triggerExecutor = createTriggerCommandExecutor({
+      getState: () => state
+    });
+    const autoTrigger = () => {
+      const result2 = runTriggerAutomation({
+        reader: triggerReader,
+        executor: triggerExecutor
+      });
+      return result2.outcome.status === "succeeded" ? result2.active : true;
+    };
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         autoMerc,
@@ -40386,7 +40506,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       });
     }
     let adjustTradeRoutes = function adjustTradeRoutes2() {
-      const result = planTradeRoutes(
+      const result2 = planTradeRoutes(
         readTradeRoutesInput({
           getSettings: () => settings,
           getGame: () => game,
@@ -40396,7 +40516,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           shouldSaveInflationMoney: () => inflationChallengeShouldSaveMoney()
         })
       );
-      for (const operation2 of result.operations) {
+      for (const operation2 of result2.operations) {
         const resource = resources[operation2.resourceId];
         if (operation2.kind === "zero") {
           MarketManager.zeroTradeRoutes(resource);
@@ -40406,7 +40526,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           MarketManager.removeTradeRoutes(resource, operation2.count);
         }
       }
-      resources.Money.rateOfChange = result.moneyRate;
+      resources.Money.rateOfChange = result2.moneyRate;
     };
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
@@ -40722,10 +40842,10 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           timeLeft: "Never"
         };
       }
-      const result = calculateTargetTiming(readResult.input);
+      const result2 = calculateTargetTiming(readResult.input);
       return {
-        resource: result.resourceId,
-        timeLeft: result.seconds === Infinity ? "Never" : poly.timeFormat(result.seconds)
+        resource: result2.resourceId,
+        timeLeft: result2.seconds === Infinity ? "Never" : poly.timeFormat(result2.seconds)
       };
     };
     if (window.__EA_TEST_HOOKS__) {
