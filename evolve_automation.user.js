@@ -20518,158 +20518,621 @@
     });
   }
 
-  // src/automation/combat/battle.ts
-  function createAutoBattle({
-    SpyManager: SpyManager2,
-    WarManager: WarManager2,
-    GameLog: GameLog2,
-    getState,
-    getSettings,
-    getGame,
-    guardActive: guardActive2,
-    getHealingRate: getHealingRate2,
-    traitVal: traitVal2,
-    getOccCosts: getOccCosts2,
-    getGovName: getGovName2
-  }) {
-    return function autoBattle2() {
-      const state2 = getState();
-      const settings2 = getSettings();
-      const game2 = getGame();
-      let sm = SpyManager2;
-      let m = WarManager2;
-      if (!m._garrisonVue || !sm._foreignVue || m.maxCityGarrison <= 0 || state2.goal === "Reset" || settings2.foreignPacifist || guardActive2("guardPacifist")) {
-        return;
-      }
-      let healthyMin = settings2.foreignAttackHealthySoldiersPercent / 100;
-      let livingMin = settings2.foreignProtect === "auto" && m.wounded <= 0 ? 0 : settings2.foreignAttackLivingSoldiersPercent / 100;
-      if (m.wounded > (1 - healthyMin) * m.maxCityGarrison || m.currentCityGarrison < livingMin * m.maxCityGarrison) {
-        return;
-      }
-      let minAdv = settings2.foreignMinAdvantage;
-      let maxAdv = settings2.foreignMaxAdvantage;
-      let protectSoldiers = settings2.foreignProtect === "always" ? true : false;
-      if (settings2.foreignProtect === "auto") {
-        let garrison = game2.global.civic.garrison;
-        let timeToRecruit = (m.deadSoldiers * 100 - garrison.progress) / (garrison.rate * 4);
-        let timeToHeal = m.wounded / getHealingRate2() * 5;
-        protectSoldiers = timeToRecruit > timeToHeal;
-      }
-      if (protectSoldiers) {
-        minAdv = Math.max(minAdv, 80);
-        maxAdv = Math.max(maxAdv, minAdv);
-      }
-      let maxBattalion = new Array(5).fill(m.availableGarrison);
-      let requiredBattalion = m.maxCityGarrison;
-      if (protectSoldiers) {
-        let armor = (traitVal2("scales", 0) + (game2.global.tech.armor ?? 0)) / traitVal2("armored", 0, "-") - traitVal2("frail", 0);
-        let protectedBattalion = [5, 10, 25, 50, 999].map(
-          (cap, tactic) => armor >= cap * traitVal2("high_pop", 0, 1) ? Number.MAX_SAFE_INTEGER : (5 - tactic) * (armor + (game2.global.city.ptrait.includes("rage") ? 1 : 2)) - 1
-        );
-        maxBattalion = protectedBattalion.map(
-          (soldiers) => Math.min(soldiers, m.availableGarrison)
-        );
-        requiredBattalion = 0;
-      }
-      maxBattalion[4] = Math.min(
-        maxBattalion[4],
-        settings2.foreignMaxSiegeBattalion
+  // src/domain/battle.ts
+  function classifyOccupationCandidate(parameters, foreign) {
+    if (foreign.policy !== "Occupy" || foreign.occupied) return "skip";
+    const capacity = parameters.autoHell && parameters.hellAvailable ? parameters.maximumSoldiers - parameters.hellReservedSoldiers : parameters.maxCityGarrison;
+    if (foreign.minimumSiegeSoldiers > capacity) return "skip";
+    const requiredBattalion = Math.max(
+      foreign.minimumSiegeSoldiers,
+      Math.min(parameters.availableGarrison, foreign.maximumSiegeSoldiers - 1)
+    );
+    return parameters.availableGarrison < requiredBattalion / 2 + parameters.occupationCost && parameters.availableGarrison < parameters.maxCityGarrison ? "wait" : "select";
+  }
+  function canUsePlunderTactic(parameters, tactic, minimumSoldiers) {
+    return minimumSoldiers <= parameters.maximumBattalion[tactic];
+  }
+  var TACTICS = Object.freeze([0, 1, 2, 3, 4]);
+  function unavailableParameters() {
+    return null;
+  }
+  function prepareBattle(input) {
+    if (!input.available) return unavailableParameters();
+    const healthyMinimum = input.healthySoldiersPercent / 100;
+    const livingMinimum = input.protectMode === "auto" && input.wounded <= 0 ? 0 : input.livingSoldiersPercent / 100;
+    if (input.wounded > (1 - healthyMinimum) * input.maxCityGarrison || input.currentCityGarrison < livingMinimum * input.maxCityGarrison) {
+      return null;
+    }
+    let protectSoldiers = input.protectMode === "always";
+    if (input.protectMode === "auto") {
+      const timeToRecruit = (input.deadSoldiers * 100 - input.recruitmentProgress) / (input.recruitmentRate * 4);
+      const timeToHeal = input.wounded / input.healingRate * 5;
+      protectSoldiers = timeToRecruit > timeToHeal;
+    }
+    const minimumAdvantage = protectSoldiers ? Math.max(input.minimumAdvantage, 80) : input.minimumAdvantage;
+    const maximumAdvantage = protectSoldiers ? Math.max(input.maximumAdvantage, minimumAdvantage) : input.maximumAdvantage;
+    let maximumBattalion = TACTICS.map(() => input.availableGarrison);
+    let initialRequiredBattalion = input.maxCityGarrison;
+    if (protectSoldiers) {
+      const armor = (input.scalesArmor + input.armorTechnology) / input.armoredDivisor - input.frailPenalty;
+      const extraProtection = input.ragePlanet ? 1 : 2;
+      maximumBattalion = [5, 10, 25, 50, 999].map((cap, tactic) => {
+        const protectedBattalion = armor >= cap * input.highPopulationMultiplier ? Number.MAX_SAFE_INTEGER : (5 - tactic) * (armor + extraProtection) - 1;
+        return Math.min(protectedBattalion, input.availableGarrison);
+      });
+      initialRequiredBattalion = 0;
+    }
+    maximumBattalion[4] = Math.min(
+      maximumBattalion[4] ?? input.availableGarrison,
+      input.maximumSiegeBattalion
+    );
+    return Object.freeze({
+      minimumAdvantage,
+      maximumAdvantage,
+      maximumBattalion: Object.freeze(maximumBattalion),
+      initialRequiredBattalion,
+      currentCityGarrison: input.currentCityGarrison,
+      maxCityGarrison: input.maxCityGarrison,
+      availableGarrison: input.availableGarrison,
+      autoHell: input.autoHell,
+      hellAvailable: input.hellAvailable,
+      maximumSoldiers: input.maximumSoldiers,
+      hellReservedSoldiers: input.hellReservedSoldiers,
+      hellSoldiers: input.hellSoldiers,
+      hellGarrison: input.hellGarrison,
+      hellPatrolSize: input.hellPatrolSize,
+      occupationCost: input.occupationCost,
+      portalVisible: input.portalVisible,
+      unificationEnabled: input.unificationEnabled,
+      occupyLast: input.occupyLast
+    });
+  }
+  function planBattle(parameters, battlefield) {
+    let currentTarget = battlefield.currentTarget;
+    let requiredBattalion = parameters.initialRequiredBattalion;
+    let requiredTactic = 0;
+    for (const foreign of battlefield.occupationTargets) {
+      const disposition = classifyOccupationCandidate(parameters, foreign);
+      if (disposition === "skip") continue;
+      currentTarget = foreign;
+      requiredBattalion = Math.max(
+        foreign.minimumSiegeSoldiers,
+        Math.min(parameters.availableGarrison, foreign.maximumSiegeSoldiers - 1)
       );
-      let requiredTactic = 0;
-      let currentTarget = sm.foreignTarget;
-      for (let foreign of sm.foreignActive) {
-        if (foreign.policy === "Occupy" && !foreign.gov.occ) {
-          let soldiersMin = m.getSoldiersForAdvantage(
-            settings2.foreignMinAdvantage,
-            4,
-            foreign.id
-          );
-          if (soldiersMin <= (settings2.autoHell && m._hellVue ? m.maxSoldiers - m.hellReservedSoldiers : m.maxCityGarrison)) {
-            currentTarget = foreign;
-            requiredBattalion = Math.max(
-              soldiersMin,
-              Math.min(
-                m.availableGarrison,
-                m.getSoldiersForAdvantage(
-                  settings2.foreignMaxAdvantage,
-                  4,
-                  foreign.id
-                ) - 1
-              )
-            );
-            requiredTactic = 4;
-            if (m.availableGarrison < requiredBattalion / 2 + getOccCosts2() && m.availableGarrison < m.maxCityGarrison) {
-              return;
-            } else {
-              break;
-            }
-          }
+      requiredTactic = 4;
+      if (disposition === "wait") return null;
+      break;
+    }
+    if (currentTarget === null) return null;
+    if (requiredTactic !== 4) {
+      const plunderTarget = battlefield.currentTarget;
+      if (plunderTarget === null) return null;
+      const startingTactic = !parameters.unificationEnabled || parameters.occupyLast ? 4 : 3;
+      for (let rawTactic = startingTactic; rawTactic >= 0; rawTactic--) {
+        const tactic = rawTactic;
+        const soldiersMinimum = plunderTarget.minimumSoldiers[tactic];
+        if (!canUsePlunderTactic(parameters, tactic, soldiersMinimum)) continue;
+        requiredBattalion = Math.max(
+          soldiersMinimum,
+          Math.min(
+            parameters.maximumBattalion[tactic],
+            parameters.availableGarrison,
+            plunderTarget.maximumSoldiers[tactic] - 1
+          )
+        );
+        requiredTactic = tactic;
+        break;
+      }
+      if (!requiredBattalion || requiredBattalion > parameters.availableGarrison) {
+        return null;
+      }
+    }
+    const releaseControl = !currentTarget.released && (currentTarget.annexed || currentTarget.purchased || currentTarget.occupied);
+    let hellPatrolsToRemove = 0;
+    let hellGarrisonToRemove = 0;
+    if (!releaseControl && requiredTactic === 4 && parameters.portalVisible) {
+      const missingSoldiers = parameters.occupationCost - (parameters.currentCityGarrison - requiredBattalion);
+      if (missingSoldiers > 0) {
+        if (!parameters.autoHell || !parameters.hellAvailable || parameters.hellSoldiers - parameters.hellReservedSoldiers < missingSoldiers) {
+          return null;
         }
+        hellPatrolsToRemove = Math.ceil(
+          (missingSoldiers - parameters.hellGarrison) / parameters.hellPatrolSize
+        );
+        hellGarrisonToRemove = missingSoldiers;
       }
-      if (!currentTarget) {
-        return;
-      }
-      if (requiredTactic !== 4) {
-        for (let i = !settings2.foreignUnification || settings2.foreignOccupyLast ? 4 : 3; i >= 0; i--) {
-          let soldiersMin = m.getSoldiersForAdvantage(
-            minAdv,
-            i,
-            currentTarget.id
+    }
+    return Object.freeze({
+      kind: "launch-battle",
+      governmentId: currentTarget.governmentId,
+      expectedReleased: currentTarget.released,
+      expectedOccupied: currentTarget.occupied,
+      expectedAnnexed: currentTarget.annexed,
+      expectedPurchased: currentTarget.purchased,
+      spyCount: currentTarget.spyCount,
+      tactic: requiredTactic,
+      battalionSize: requiredBattalion,
+      releaseControl,
+      hellPatrolsToRemove: Math.max(0, hellPatrolsToRemove),
+      hellGarrisonToRemove
+    });
+  }
+
+  // src/application/battle.ts
+  var SUCCEEDED2 = Object.freeze({
+    status: "succeeded"
+  });
+  function runBattleAutomation(dependencies) {
+    const parameters = prepareBattle(dependencies.reader.readCycle());
+    if (parameters === null) return SUCCEEDED2;
+    const decision2 = planBattle(
+      parameters,
+      dependencies.reader.readBattlefield(parameters)
+    );
+    return decision2 === null ? SUCCEEDED2 : dependencies.executor.execute(decision2);
+  }
+
+  // src/adapters/evolve/battle.ts
+  function requireString(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function readTrait(dependencies, trait, fallback, operation2) {
+    return requireNumber(
+      dependencies.traitVal(trait, fallback, operation2),
+      `traitVal(${trait})`
+    );
+  }
+  function readTarget2(value, path) {
+    const foreign = requireRecord(value, path);
+    const government = requireRecord(foreign["gov"], `${path}.gov`);
+    return {
+      input: Object.freeze({
+        governmentId: requireNumber(foreign["id"], `${path}.id`),
+        policy: requireString(foreign["policy"], `${path}.policy`),
+        released: Boolean(foreign["released"]),
+        occupied: Boolean(government["occ"]),
+        annexed: Boolean(government["anx"]),
+        purchased: Boolean(government["buy"]),
+        spyCount: requireNumber(government["spy"], `${path}.gov.spy`)
+      }),
+      record: Object.freeze({ foreign, government })
+    };
+  }
+  function decisionsMatch(left, right) {
+    return left.kind === right.kind && left.governmentId === right.governmentId && left.expectedReleased === right.expectedReleased && left.expectedOccupied === right.expectedOccupied && left.expectedAnnexed === right.expectedAnnexed && left.expectedPurchased === right.expectedPurchased && left.spyCount === right.spyCount && left.tactic === right.tactic && left.battalionSize === right.battalionSize && left.releaseControl === right.releaseControl && left.hellPatrolsToRemove === right.hellPatrolsToRemove && left.hellGarrisonToRemove === right.hellGarrisonToRemove;
+  }
+  function targetStillMatches(target, decision2) {
+    return Boolean(target.foreign["released"]) === decision2.expectedReleased && Boolean(target.government["occ"]) === decision2.expectedOccupied && Boolean(target.government["anx"]) === decision2.expectedAnnexed && Boolean(target.government["buy"]) === decision2.expectedPurchased && target.government["spy"] === decision2.spyCount;
+  }
+  var EMPTY_TACTICS = Object.freeze([
+    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY,
+    Number.POSITIVE_INFINITY
+  ]);
+  function createBattleAdapter(dependencies) {
+    let cycleManager = null;
+    let cycleSpyManager = null;
+    let cycleGame = null;
+    let cycleMinimumAdvantage = 0;
+    let cycleMaximumAdvantage = 0;
+    let session = null;
+    const reader = Object.freeze({
+      readCycle() {
+        cycleManager = null;
+        cycleSpyManager = null;
+        cycleGame = null;
+        cycleMinimumAdvantage = 0;
+        cycleMaximumAdvantage = 0;
+        session = null;
+        const manager = requireRecord(dependencies.getWarManager(), "WarManager");
+        const spyManager = requireRecord(
+          dependencies.getSpyManager(),
+          "SpyManager"
+        );
+        const state2 = requireRecord(dependencies.getState(), "state");
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const unavailable10 = Object.freeze({
+          available: false,
+          wounded: 0,
+          deadSoldiers: 0,
+          currentCityGarrison: 0,
+          maxCityGarrison: 0,
+          availableGarrison: 0,
+          healthySoldiersPercent: 0,
+          livingSoldiersPercent: 0,
+          protectMode: "never",
+          minimumAdvantage: 0,
+          maximumAdvantage: 0,
+          maximumSiegeBattalion: 0,
+          recruitmentProgress: 0,
+          recruitmentRate: 0,
+          healingRate: 0,
+          scalesArmor: 0,
+          armorTechnology: 0,
+          armoredDivisor: 1,
+          frailPenalty: 0,
+          highPopulationMultiplier: 1,
+          ragePlanet: false,
+          autoHell: false,
+          hellAvailable: false,
+          maximumSoldiers: 0,
+          hellReservedSoldiers: 0,
+          hellSoldiers: 0,
+          hellGarrison: 0,
+          hellPatrolSize: 1,
+          occupationCost: 0,
+          portalVisible: false,
+          unificationEnabled: false,
+          occupyLast: false
+        });
+        if (!manager["_garrisonVue"] || !spyManager["_foreignVue"]) {
+          return unavailable10;
+        }
+        const maxCityGarrison = requireNumber(
+          manager["maxCityGarrison"],
+          "WarManager.maxCityGarrison"
+        );
+        if (maxCityGarrison <= 0 || state2["goal"] === "Reset" || requireBoolean(
+          settings2["foreignPacifist"],
+          "settings.foreignPacifist"
+        ) || dependencies.guardActive("guardPacifist")) {
+          return unavailable10;
+        }
+        const global = requireRecord(game2["global"], "game.global");
+        const civic = requireRecord(global["civic"], "game.global.civic");
+        const garrison = requireRecord(
+          civic["garrison"],
+          "game.global.civic.garrison"
+        );
+        const tech = requireRecord(global["tech"], "game.global.tech");
+        const city = requireRecord(global["city"], "game.global.city");
+        const planetTraits2 = city["ptrait"];
+        if (!Array.isArray(planetTraits2)) {
+          throw new TypeError("game.global.city.ptrait must be an array");
+        }
+        const gameSettings = requireRecord(
+          global["settings"],
+          "game.global.settings"
+        );
+        const autoHell2 = requireBoolean(
+          settings2["autoHell"],
+          "settings.autoHell"
+        );
+        const hellAvailable = Boolean(manager["_hellVue"]);
+        const readHell = autoHell2 && hellAvailable;
+        const protectMode = requireString(
+          settings2["foreignProtect"],
+          "settings.foreignProtect"
+        );
+        const mayProtect = protectMode === "always" || protectMode === "auto";
+        cycleManager = manager;
+        cycleSpyManager = spyManager;
+        cycleGame = game2;
+        cycleMinimumAdvantage = requireNumber(
+          settings2["foreignMinAdvantage"],
+          "settings.foreignMinAdvantage"
+        );
+        cycleMaximumAdvantage = requireNumber(
+          settings2["foreignMaxAdvantage"],
+          "settings.foreignMaxAdvantage"
+        );
+        return Object.freeze({
+          available: true,
+          wounded: requireNumber(manager["wounded"], "WarManager.wounded"),
+          deadSoldiers: requireNumber(
+            manager["deadSoldiers"],
+            "WarManager.deadSoldiers"
+          ),
+          currentCityGarrison: requireNumber(
+            manager["currentCityGarrison"],
+            "WarManager.currentCityGarrison"
+          ),
+          maxCityGarrison,
+          availableGarrison: requireNumber(
+            manager["availableGarrison"],
+            "WarManager.availableGarrison"
+          ),
+          healthySoldiersPercent: requireNumber(
+            settings2["foreignAttackHealthySoldiersPercent"],
+            "settings.foreignAttackHealthySoldiersPercent"
+          ),
+          livingSoldiersPercent: requireNumber(
+            settings2["foreignAttackLivingSoldiersPercent"],
+            "settings.foreignAttackLivingSoldiersPercent"
+          ),
+          protectMode,
+          minimumAdvantage: cycleMinimumAdvantage,
+          maximumAdvantage: cycleMaximumAdvantage,
+          maximumSiegeBattalion: requireNumber(
+            settings2["foreignMaxSiegeBattalion"],
+            "settings.foreignMaxSiegeBattalion"
+          ),
+          recruitmentProgress: requireNumber(
+            garrison["progress"],
+            "game.global.civic.garrison.progress"
+          ),
+          recruitmentRate: requireNumber(
+            garrison["rate"],
+            "game.global.civic.garrison.rate"
+          ),
+          healingRate: protectMode === "auto" ? requireNumber(dependencies.getHealingRate(), "healing rate") : 1,
+          scalesArmor: mayProtect ? readTrait(dependencies, "scales", 0) : 0,
+          armorTechnology: mayProtect ? tech["armor"] === void 0 ? 0 : requireNumber(tech["armor"], "game.global.tech.armor") : 0,
+          armoredDivisor: mayProtect ? readTrait(dependencies, "armored", 0, "-") : 1,
+          frailPenalty: mayProtect ? readTrait(dependencies, "frail", 0) : 0,
+          highPopulationMultiplier: mayProtect ? readTrait(dependencies, "high_pop", 0, 1) : 1,
+          ragePlanet: planetTraits2.includes("rage"),
+          autoHell: autoHell2,
+          hellAvailable,
+          maximumSoldiers: readHell ? requireNumber(manager["maxSoldiers"], "WarManager.maxSoldiers") : 0,
+          hellReservedSoldiers: readHell ? requireNumber(
+            manager["hellReservedSoldiers"],
+            "WarManager.hellReservedSoldiers"
+          ) : 0,
+          hellSoldiers: readHell ? requireNumber(manager["hellSoldiers"], "WarManager.hellSoldiers") : 0,
+          hellGarrison: readHell ? requireNumber(manager["hellGarrison"], "WarManager.hellGarrison") : 0,
+          hellPatrolSize: readHell ? requireNumber(
+            manager["hellPatrolSize"],
+            "WarManager.hellPatrolSize"
+          ) : 1,
+          occupationCost: requireNumber(
+            dependencies.getOccupationCost(),
+            "occupation cost"
+          ),
+          portalVisible: Boolean(gameSettings["showPortal"]),
+          unificationEnabled: requireBoolean(
+            settings2["foreignUnification"],
+            "settings.foreignUnification"
+          ),
+          occupyLast: requireBoolean(
+            settings2["foreignOccupyLast"],
+            "settings.foreignOccupyLast"
+          )
+        });
+      },
+      readBattlefield(parameters) {
+        const manager = cycleManager;
+        const spyManager = cycleSpyManager;
+        const game2 = cycleGame;
+        if (manager === null || spyManager === null || game2 === null) {
+          throw new Error("battle cycle has not been sampled");
+        }
+        const getSoldiers = requireFunction(
+          manager["getSoldiersForAdvantage"],
+          "WarManager.getSoldiersForAdvantage"
+        );
+        const targets = /* @__PURE__ */ new Map();
+        const occupationTargets = [];
+        const rawForeigns = spyManager["foreignActive"];
+        if (!Array.isArray(rawForeigns)) {
+          throw new TypeError("SpyManager.foreignActive must be an array");
+        }
+        for (let index = 0; index < rawForeigns.length; index++) {
+          const path = `SpyManager.foreignActive[${index}]`;
+          const candidate = readTarget2(rawForeigns[index], path);
+          targets.set(candidate.input.governmentId, candidate.record);
+          if (candidate.input.policy !== "Occupy" || candidate.input.occupied) {
+            continue;
+          }
+          const minimumSiegeSoldiers = requireNumber(
+            Reflect.apply(getSoldiers, manager, [
+              cycleMinimumAdvantage,
+              4,
+              candidate.input.governmentId
+            ]),
+            `minimum siege soldiers for ${candidate.input.governmentId}`
           );
-          if (soldiersMin <= maxBattalion[i]) {
-            requiredBattalion = Math.max(
-              soldiersMin,
-              Math.min(
-                maxBattalion[i],
-                m.availableGarrison,
-                m.getSoldiersForAdvantage(maxAdv, i, currentTarget.id) - 1
-              )
+          const capacity = parameters.autoHell && parameters.hellAvailable ? parameters.maximumSoldiers - parameters.hellReservedSoldiers : parameters.maxCityGarrison;
+          if (minimumSiegeSoldiers > capacity) {
+            occupationTargets.push(
+              Object.freeze({
+                ...candidate.input,
+                minimumSiegeSoldiers,
+                maximumSiegeSoldiers: 0
+              })
             );
-            requiredTactic = i;
+            continue;
+          }
+          const maximumSiegeSoldiers = requireNumber(
+            Reflect.apply(getSoldiers, manager, [
+              cycleMaximumAdvantage,
+              4,
+              candidate.input.governmentId
+            ]),
+            `maximum siege soldiers for ${candidate.input.governmentId}`
+          );
+          const occupationTarget = Object.freeze({
+            ...candidate.input,
+            minimumSiegeSoldiers,
+            maximumSiegeSoldiers
+          });
+          occupationTargets.push(occupationTarget);
+          if (classifyOccupationCandidate(parameters, occupationTarget) !== "skip") {
             break;
           }
         }
-        if (!requiredBattalion || requiredBattalion > m.availableGarrison) {
-          return;
-        }
-      }
-      if (!currentTarget.released && (currentTarget.gov.anx || currentTarget.gov.buy || currentTarget.gov.occ)) {
-        m.release(currentTarget.id);
-      } else if (requiredTactic === 4 && game2.global.settings.showPortal) {
-        let missingSoldiers = getOccCosts2() - (m.currentCityGarrison - requiredBattalion);
-        if (missingSoldiers > 0) {
-          if (!settings2.autoHell || !m._hellVue || m.hellSoldiers - m.hellReservedSoldiers < missingSoldiers) {
-            return;
+        let currentTarget = null;
+        const rawCurrentTarget = spyManager["foreignTarget"];
+        const occupationResolved = occupationTargets.some(
+          (target) => classifyOccupationCandidate(parameters, target) !== "skip"
+        );
+        if (rawCurrentTarget && !occupationResolved) {
+          const target = readTarget2(rawCurrentTarget, "SpyManager.foreignTarget");
+          targets.set(target.input.governmentId, target.record);
+          const minimumSoldiers = [...EMPTY_TACTICS];
+          const maximumSoldiers = [...EMPTY_TACTICS];
+          const startingTactic = !parameters.unificationEnabled || parameters.occupyLast ? 4 : 3;
+          for (let rawTactic = startingTactic; rawTactic >= 0; rawTactic--) {
+            const tactic = rawTactic;
+            minimumSoldiers[tactic] = requireNumber(
+              Reflect.apply(getSoldiers, manager, [
+                parameters.minimumAdvantage,
+                tactic,
+                target.input.governmentId
+              ]),
+              `minimum soldiers for tactic ${tactic}`
+            );
+            if (!canUsePlunderTactic(
+              parameters,
+              tactic,
+              minimumSoldiers[tactic] ?? Number.POSITIVE_INFINITY
+            )) {
+              continue;
+            }
+            maximumSoldiers[tactic] = requireNumber(
+              Reflect.apply(getSoldiers, manager, [
+                parameters.maximumAdvantage,
+                tactic,
+                target.input.governmentId
+              ]),
+              `maximum soldiers for tactic ${tactic}`
+            );
+            break;
           }
-          let patrolsToRemove = Math.ceil(
-            (missingSoldiers - m.hellGarrison) / m.hellPatrolSize
+          currentTarget = Object.freeze({
+            ...target.input,
+            minimumSoldiers: Object.freeze(minimumSoldiers),
+            maximumSoldiers: Object.freeze(maximumSoldiers)
+          });
+        }
+        const battlefield = Object.freeze({
+          currentTarget,
+          occupationTargets: Object.freeze(occupationTargets)
+        });
+        session = Object.freeze({
+          manager,
+          spyManager,
+          game: game2,
+          parameters,
+          battlefield,
+          targets,
+          raid: requireNumber(manager["raid"], "WarManager.raid")
+        });
+        return battlefield;
+      }
+    });
+    const executor = Object.freeze({
+      execute(decision2) {
+        const active = session;
+        if (active === null) {
+          return stale("battle-session-missing", "battle session is missing");
+        }
+        if (dependencies.getWarManager() !== active.manager || dependencies.getSpyManager() !== active.spyManager || dependencies.getGame() !== active.game) {
+          return stale("battle-source-changed", "battle source changed");
+        }
+        const expected = planBattle(active.parameters, active.battlefield);
+        if (expected === null || !decisionsMatch(expected, decision2)) {
+          return rejected2(
+            "invalid-battle-decision",
+            "battle decision does not match the sampled plan"
           );
-          if (patrolsToRemove > 0) {
-            m.removeHellPatrol(patrolsToRemove);
-          }
-          m.removeHellGarrison(missingSoldiers);
         }
+        const target = active.targets.get(decision2.governmentId);
+        if (target === void 0 || !targetStillMatches(target, decision2) || active.manager["raid"] !== active.raid) {
+          return stale("battle-state-changed", "battle state changed");
+        }
+        const release = decision2.releaseControl ? requireFunction(active.manager["release"], "WarManager.release") : null;
+        const removeHellPatrol = decision2.hellPatrolsToRemove > 0 ? requireFunction(
+          active.manager["removeHellPatrol"],
+          "WarManager.removeHellPatrol"
+        ) : null;
+        const removeHellGarrison = decision2.hellGarrisonToRemove > 0 ? requireFunction(
+          active.manager["removeHellGarrison"],
+          "WarManager.removeHellGarrison"
+        ) : null;
+        const setTactic = requireFunction(
+          active.manager["setTactic"],
+          "WarManager.setTactic"
+        );
+        const deltaBattalion = decision2.battalionSize - active.raid;
+        const addBattalion = deltaBattalion > 0 ? requireFunction(
+          active.manager["addBattalion"],
+          "WarManager.addBattalion"
+        ) : null;
+        const removeBattalion = deltaBattalion < 0 ? requireFunction(
+          active.manager["removeBattalion"],
+          "WarManager.removeBattalion"
+        ) : null;
+        const getCampaignTitle = requireFunction(
+          active.manager["getCampaignTitle"],
+          "WarManager.getCampaignTitle"
+        );
+        const getAdvantage = requireFunction(
+          active.manager["getAdvantage"],
+          "WarManager.getAdvantage"
+        );
+        const launchCampaign = requireFunction(
+          active.manager["launchCampaign"],
+          "WarManager.launchCampaign"
+        );
+        const armyRating = requireFunction(
+          active.game["armyRating"],
+          "game.armyRating"
+        );
+        const gameLog = requireRecord(dependencies.getGameLog(), "GameLog");
+        const logSuccess = requireFunction(
+          gameLog["logSuccess"],
+          "GameLog.logSuccess"
+        );
+        const governmentName = requireString(
+          dependencies.getGovernmentName(decision2.governmentId),
+          `government name ${decision2.governmentId}`
+        );
+        session = null;
+        if (release !== null) {
+          Reflect.apply(release, active.manager, [decision2.governmentId]);
+        } else {
+          if (removeHellPatrol !== null) {
+            Reflect.apply(removeHellPatrol, active.manager, [
+              decision2.hellPatrolsToRemove
+            ]);
+          }
+          if (removeHellGarrison !== null) {
+            Reflect.apply(removeHellGarrison, active.manager, [
+              decision2.hellGarrisonToRemove
+            ]);
+          }
+        }
+        Reflect.apply(setTactic, active.manager, [decision2.tactic]);
+        if (addBattalion !== null) {
+          Reflect.apply(addBattalion, active.manager, [deltaBattalion]);
+        }
+        if (removeBattalion !== null) {
+          Reflect.apply(removeBattalion, active.manager, [-deltaBattalion]);
+        }
+        const campaignTitle = requireString(
+          Reflect.apply(getCampaignTitle, active.manager, [decision2.tactic]),
+          `campaign title ${decision2.tactic}`
+        );
+        const raid = requireNumber(active.manager["raid"], "WarManager.raid");
+        const battalionRating = requireNumber(
+          Reflect.apply(armyRating, active.game, [raid, "army"]),
+          "game.armyRating"
+        );
+        const advantagePercent = requireNumber(
+          Reflect.apply(getAdvantage, active.manager, [
+            battalionRating,
+            decision2.tactic,
+            decision2.governmentId
+          ]),
+          "WarManager.getAdvantage"
+        ).toFixed(1);
+        Reflect.apply(logSuccess, gameLog, [
+          "attack",
+          `Launching ${campaignTitle} campaign against ${governmentName} with ${decision2.spyCount < 1 ? "~" : ""}${advantagePercent}% advantage.`,
+          ["combat"]
+        ]);
+        Reflect.apply(launchCampaign, active.manager, [decision2.governmentId]);
+        return SUCCEEDED;
       }
-      m.setTactic(requiredTactic);
-      let deltaBattalion = requiredBattalion - m.raid;
-      if (deltaBattalion > 0) {
-        m.addBattalion(deltaBattalion);
-      }
-      if (deltaBattalion < 0) {
-        m.removeBattalion(deltaBattalion * -1);
-      }
-      let campaignTitle = m.getCampaignTitle(requiredTactic);
-      let battalionRating = game2.armyRating(m.raid, "army");
-      let advantagePercent = m.getAdvantage(battalionRating, requiredTactic, currentTarget.id).toFixed(1);
-      GameLog2.logSuccess(
-        "attack",
-        `Launching ${campaignTitle} campaign against ${getGovName2(
-          currentTarget.id
-        )} with ${currentTarget.gov.spy < 1 ? "~" : ""}${advantagePercent}% advantage.`,
-        ["combat"]
-      );
-      m.launchCampaign(currentTarget.id);
-    };
+    });
+    return Object.freeze({ reader, executor });
   }
 
   // src/adapters/browser/tax-controls.ts
@@ -22723,12 +23186,12 @@
   }
 
   // src/application/factory.ts
-  var SUCCEEDED2 = Object.freeze({
+  var SUCCEEDED3 = Object.freeze({
     status: "succeeded"
   });
   function runFactoryAutomation(dependencies) {
     const decision2 = planFactory(dependencies.reader.read());
-    if (decision2 === null) return SUCCEEDED2;
+    if (decision2 === null) return SUCCEEDED3;
     dependencies.tooltips.publish(decision2.tooltips);
     return dependencies.executor.execute(decision2);
   }
@@ -23266,7 +23729,7 @@
   }
 
   // src/application/mining-droid.ts
-  var SUCCEEDED3 = Object.freeze({
+  var SUCCEEDED4 = Object.freeze({
     status: "succeeded"
   });
   function runMiningDroidAutomation(dependencies) {
@@ -23274,7 +23737,7 @@
       dependencies.reader.readPlanningInput()
     );
     if (targets === null) {
-      return SUCCEEDED3;
+      return SUCCEEDED4;
     }
     const current = dependencies.reader.readCurrent(
       targets.map((target) => target.productionId)
@@ -23896,7 +24359,7 @@
   }
 
   // src/application/wish.ts
-  var SUCCEEDED4 = Object.freeze({
+  var SUCCEEDED5 = Object.freeze({
     status: "succeeded"
   });
   function runWishAutomation(dependencies) {
@@ -23904,7 +24367,7 @@
       const outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED4;
+    return SUCCEEDED5;
   }
 
   // src/adapters/evolve/wish.ts
@@ -24096,11 +24559,11 @@
   }
 
   // src/application/genetics.ts
-  var SUCCEEDED5 = Object.freeze({
+  var SUCCEEDED6 = Object.freeze({
     status: "succeeded"
   });
   function runGeneticsAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED5;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED6;
     if (!dependencies.controls.capture()) {
       return {
         status: "stale",
@@ -24114,7 +24577,7 @@
       const outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED5;
+    return SUCCEEDED6;
   }
 
   // src/adapters/evolve/genetics.ts
@@ -24499,14 +24962,14 @@
   }
 
   // src/application/mercenary.ts
-  var SUCCEEDED6 = Object.freeze({
+  var SUCCEEDED7 = Object.freeze({
     status: "succeeded"
   });
   function runMercenaryAutomation(dependencies) {
     const cycle = planMercenaryCycle(dependencies.reader.readCycle());
-    if (cycle === null) return SUCCEEDED6;
+    if (cycle === null) return SUCCEEDED7;
     let hired = 0;
-    let outcome = SUCCEEDED6;
+    let outcome = SUCCEEDED7;
     while (true) {
       const decision2 = planMercenaryHire(cycle, dependencies.reader.readState());
       if (decision2 === null) break;
@@ -24539,7 +25002,7 @@
       moneyStorageRequired: 0
     });
   }
-  function requireString(value, path) {
+  function requireString2(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -24588,7 +25051,7 @@
         );
         if (maxCityGarrison <= 0) return unavailableInput();
         const state2 = requireRecord(dependencies.getState(), "state");
-        const goal = requireString(state2["goal"], "state.goal");
+        const goal = requireString2(state2["goal"], "state.goal");
         const saveInflationMoney = Boolean(
           dependencies.shouldSaveInflationMoney()
         );
@@ -24762,17 +25225,17 @@
   }
 
   // src/application/psychic.ts
-  var SUCCEEDED7 = Object.freeze({
+  var SUCCEEDED8 = Object.freeze({
     status: "succeeded"
   });
   function runPsychicAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED7;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED8;
     for (const decision2 of planPsychic(dependencies.reader.readPlan())) {
       const outcome = dependencies.executor.execute(decision2);
       if (outcome.status === "succeeded") return outcome;
       if (outcome.failure.code !== "psychic-control-unavailable") return outcome;
     }
-    return SUCCEEDED7;
+    return SUCCEEDED8;
   }
 
   // src/adapters/evolve/psychic.ts
@@ -24822,7 +25285,7 @@
       boostCandidates: Object.freeze([])
     });
   }
-  function decisionsMatch(left, right) {
+  function decisionsMatch2(left, right) {
     return left.kind === right.kind && left.power === right.power && left.energyCost === right.energyCost && left.expectedEnergy === right.expectedEnergy && left.expectedTechnologyLevel === right.expectedTechnologyLevel && left.boostedResourceId === right.boostedResourceId;
   }
   function roomMatches(record, expected, path) {
@@ -25121,7 +25584,7 @@
           return stale("psychic-session-missing", "psychic session is missing");
         }
         const expected = planPsychic(active.input).find(
-          (candidate) => decisionsMatch(candidate, decision2)
+          (candidate) => decisionsMatch2(candidate, decision2)
         );
         if (expected === void 0) {
           return rejected2(
@@ -25194,11 +25657,11 @@
   }
 
   // src/application/ocular-power.ts
-  var SUCCEEDED8 = Object.freeze({
+  var SUCCEEDED9 = Object.freeze({
     status: "succeeded"
   });
   function runOcularPowerAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED8;
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED9;
     if (!dependencies.controls.capture()) {
       return {
         status: "stale",
@@ -25212,7 +25675,7 @@
       const outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED8;
+    return SUCCEEDED9;
   }
 
   // src/adapters/evolve/ocular-power.ts
@@ -25428,7 +25891,7 @@
   }
 
   // src/application/minor-trait.ts
-  var SUCCEEDED9 = Object.freeze({
+  var SUCCEEDED10 = Object.freeze({
     status: "succeeded"
   });
   function staleCandidate(index, expectedTraitName, actualTraitName) {
@@ -25444,7 +25907,7 @@
   function runMinorTraitAutomation(dependencies) {
     const summary = summarizeMinorTraits(dependencies.reader.readSummary());
     if (summary === null) {
-      return SUCCEEDED9;
+      return SUCCEEDED10;
     }
     for (let index = 0; index < summary.traits.length; index++) {
       const expected = summary.traits[index];
@@ -25468,7 +25931,7 @@
         return outcome;
       }
     }
-    return SUCCEEDED9;
+    return SUCCEEDED10;
   }
 
   // src/adapters/evolve/minor-trait.ts
@@ -25612,7 +26075,7 @@
   }
 
   // src/application/trigger.ts
-  var SUCCEEDED10 = Object.freeze({
+  var SUCCEEDED11 = Object.freeze({
     status: "succeeded"
   });
   function result(outcome, active) {
@@ -25624,7 +26087,7 @@
     while (true) {
       const decision2 = planTrigger(dependencies.reader.read(index));
       if (decision2 === null) {
-        return result(SUCCEEDED10, active);
+        return result(SUCCEEDED11, active);
       }
       if (decision2.kind === "click") {
         const execution = dependencies.executor.execute(decision2);
@@ -26233,13 +26696,13 @@
   }
 
   // src/application/replicator.ts
-  var SUCCEEDED11 = Object.freeze({
+  var SUCCEEDED12 = Object.freeze({
     status: "succeeded"
   });
   function runReplicatorAutomation(dependencies) {
     const planningInput = dependencies.selectionReader.readPlanningInput();
     if (!planningInput.initialised) {
-      return SUCCEEDED11;
+      return SUCCEEDED12;
     }
     const priorityPlan = planReplicatorPriority(planningInput);
     if (priorityPlan !== null) {
@@ -26255,18 +26718,18 @@
       }
     }
     if (!planningInput.assignGovernorTask) {
-      return SUCCEEDED11;
+      return SUCCEEDED12;
     }
     if (!shouldConfigureReplicatorGovernor(
       dependencies.governorGameReader.readGate()
     ) || !dependencies.governorOfficeReader.open()) {
-      return SUCCEEDED11;
+      return SUCCEEDED12;
     }
     const taskPlan = planReplicatorGovernorTask(
       dependencies.governorGameReader.readTasks()
     );
     if (taskPlan.status === "unavailable") {
-      return SUCCEEDED11;
+      return SUCCEEDED12;
     }
     if (taskPlan.assignment !== null) {
       const outcome = dependencies.governorExecutor.execute(taskPlan.assignment);
@@ -26276,10 +26739,10 @@
     }
     const settings2 = dependencies.governorOfficeReader.readSettings();
     if (settings2 === null) {
-      return SUCCEEDED11;
+      return SUCCEEDED12;
     }
     const settingsDecision = planReplicatorGovernorSettings(settings2);
-    return settingsDecision === null ? SUCCEEDED11 : dependencies.governorExecutor.execute(settingsDecision);
+    return settingsDecision === null ? SUCCEEDED12 : dependencies.governorExecutor.execute(settingsDecision);
   }
 
   // src/adapters/evolve/replicator.ts
@@ -26728,20 +27191,20 @@
   }
 
   // src/application/market.ts
-  var SUCCEEDED12 = Object.freeze({
+  var SUCCEEDED13 = Object.freeze({
     status: "succeeded"
   });
   function runMarketAutomation(dependencies, bulkSell = false, ignoreSellRatio = false) {
     const gate = dependencies.reader.readGate();
     if (!gate.unlocked) {
-      return SUCCEEDED12;
+      return SUCCEEDED13;
     }
     dependencies.tradeRoutes.adjust();
     if (gate.noTrade) {
-      return SUCCEEDED12;
+      return SUCCEEDED13;
     }
     const session = dependencies.reader.readSession();
-    let outcome = SUCCEEDED12;
+    let outcome = SUCCEEDED13;
     for (let index = 0; ; index++) {
       const sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
       if (sellInput === null) {
@@ -27973,7 +28436,7 @@
   );
 
   // src/application/power.ts
-  var SUCCEEDED13 = Object.freeze({
+  var SUCCEEDED14 = Object.freeze({
     status: "succeeded"
   });
   function createPowerAutomation(dependencies) {
@@ -27982,7 +28445,7 @@
       run() {
         const plan = planPowerCycle(dependencies.reader.readCycle(), state2);
         if (plan.decision === null) {
-          return SUCCEEDED13;
+          return SUCCEEDED14;
         }
         const cycleOutcome = dependencies.executor.execute(plan.decision);
         if (cycleOutcome.status !== "succeeded") {
@@ -27995,7 +28458,7 @@
           )
         );
         if (warning === null) {
-          return SUCCEEDED13;
+          return SUCCEEDED14;
         }
         const warningOutcome = dependencies.executor.execute(warning);
         if (warningOutcome.status !== "succeeded") {
@@ -28006,7 +28469,7 @@
           warning.binding,
           dependencies.reader.readStateOn(warning.binding)
         );
-        return SUCCEEDED13;
+        return SUCCEEDED14;
       },
       readState() {
         return state2;
@@ -29784,7 +30247,7 @@
   });
 
   // src/application/storage-allocation.ts
-  var SUCCEEDED14 = Object.freeze({
+  var SUCCEEDED15 = Object.freeze({
     status: "succeeded"
   });
   function createStorageAllocationAutomation(dependencies) {
@@ -29792,9 +30255,9 @@
     return Object.freeze({
       run() {
         const rawPlan = planStorageAllocation(dependencies.reader.read());
-        if (rawPlan === null) return SUCCEEDED14;
+        if (rawPlan === null) return SUCCEEDED15;
         if (rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild)) {
-          return SUCCEEDED14;
+          return SUCCEEDED15;
         }
         const finalized = finalizeStorageAllocation(rawPlan, state2);
         const outcome = dependencies.executor.execute(finalized.decision);
@@ -30022,7 +30485,7 @@
           unlocked: true,
           autoBuildEnabled: true
         });
-        const readTarget2 = (value, path, filterBuildable = false) => {
+        const readTarget3 = (value, path, filterBuildable = false) => {
           const target = requireRecord(value, path);
           const unlocked = filterBuildable ? callBoolean14(target, "isUnlocked", path) : true;
           const autoBuildEnabled = filterBuildable ? unlocked && Boolean(target["autoBuildEnabled"]) : true;
@@ -30040,7 +30503,7 @@
           }
           return Object.freeze(
             value.map(
-              (target, index) => readTarget2(target, `${path}[${index}]`, filterBuildable)
+              (target, index) => readTarget3(target, `${path}[${index}]`, filterBuildable)
             )
           );
         };
@@ -30099,7 +30562,7 @@
             kind: "fleet",
             enabled: fleetEnabled,
             targets: fleetEnabled ? Object.freeze([
-              readTarget2(
+              readTarget3(
                 {
                   cost: requireRecord(
                     fleet["nextShipCost"],
@@ -30471,12 +30934,12 @@
   }
 
   // src/application/galaxy-market.ts
-  var SUCCEEDED15 = Object.freeze({
+  var SUCCEEDED16 = Object.freeze({
     status: "succeeded"
   });
   function runGalaxyMarketAutomation(dependencies) {
     const decision2 = planGalaxyMarket(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED15 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED16 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/galaxy-market.ts
@@ -30892,12 +31355,12 @@
   }
 
   // src/application/gather-resources.ts
-  var SUCCEEDED16 = Object.freeze({
+  var SUCCEEDED17 = Object.freeze({
     status: "succeeded"
   });
   function runGatherResourcesAutomation(dependencies) {
     const decision2 = planGatherResources(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED16 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED17 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/gather-resources.ts
@@ -31518,17 +31981,17 @@
   }
 
   // src/application/craft.ts
-  var SUCCEEDED17 = Object.freeze({
+  var SUCCEEDED18 = Object.freeze({
     status: "succeeded"
   });
   function runCraftAutomation(dependencies) {
     if (!shouldRunCraft(dependencies.reader.readGate())) {
-      return SUCCEEDED17;
+      return SUCCEEDED18;
     }
     for (let index = 0; ; index++) {
       const candidate = dependencies.reader.readCandidate(index);
       if (candidate === null) {
-        return SUCCEEDED17;
+        return SUCCEEDED18;
       }
       const decision2 = planCraft(candidate);
       if (decision2 === null) {
@@ -31874,12 +32337,12 @@
   }
 
   // src/application/spy.ts
-  var SUCCEEDED18 = Object.freeze({
+  var SUCCEEDED19 = Object.freeze({
     status: "succeeded"
   });
   function runSpyAutomation(dependencies) {
     const cycle = planSpyCycle(dependencies.reader.readCycle());
-    if (cycle === null) return SUCCEEDED18;
+    if (cycle === null) return SUCCEEDED19;
     if (cycle.trainEnabled) {
       for (let index = 0; index < cycle.foreignCount; index++) {
         const decision2 = planSpyTraining(dependencies.reader.readTraining(index));
@@ -31888,14 +32351,14 @@
         if (outcome.status !== "succeeded") return outcome;
       }
     }
-    if (!cycle.espionageEnabled) return SUCCEEDED18;
+    if (!cycle.espionageEnabled) return SUCCEEDED19;
     for (let index = 0; index < cycle.foreignCount; index++) {
       const decision2 = planSpyEspionage(dependencies.reader.readEspionage(index));
       if (decision2 === null) continue;
       const outcome = dependencies.executor.execute(decision2);
       if (outcome.status !== "succeeded") return outcome;
     }
-    return SUCCEEDED18;
+    return SUCCEEDED19;
   }
 
   // src/adapters/evolve/spy.ts
@@ -31921,7 +32384,7 @@
     );
     return { foreign, government };
   }
-  function requireString2(value, path) {
+  function requireString3(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -31932,7 +32395,7 @@
     const ids = {};
     for (const [name, rawType] of Object.entries(types)) {
       const type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString2(type["id"], `SpyManager.Types.${name}.id`);
+      ids[name] = requireString3(type["id"], `SpyManager.Types.${name}.id`);
     }
     return Object.freeze(ids);
   }
@@ -32040,7 +32503,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString2(
+        const policy = requireString3(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -32061,7 +32524,7 @@
             "resources.Money.maxQuantity"
           );
         }
-        const governmentName = requireString2(
+        const governmentName = requireString3(
           dependencies.getGovName(governmentId),
           `government name ${governmentId}`
         );
@@ -32107,7 +32570,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString2(
+        const policy = requireString3(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -33468,7 +33931,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED19 = Object.freeze({
+  var SUCCEEDED20 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -33476,7 +33939,7 @@
     while (true) {
       const decision2 = planResearch(dependencies.reader.read(startIndex));
       if (decision2 === null) {
-        return SUCCEEDED19;
+        return SUCCEEDED20;
       }
       const result2 = dependencies.executor.execute(decision2);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -33620,12 +34083,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED20 = Object.freeze({
+  var SUCCEEDED21 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision2 = planMutation(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED20 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED21 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -46658,19 +47121,20 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getGame: () => game
     });
     const autoSpy = () => runSpyAutomation(spyAdapter);
-    const autoBattle = createAutoBattle({
-      SpyManager,
-      WarManager,
-      GameLog,
+    const battleAdapter = createBattleAdapter({
+      getSpyManager: () => SpyManager,
+      getWarManager: () => WarManager,
+      getGameLog: () => GameLog,
       getState: () => state,
       getSettings: () => settings,
       getGame: () => game,
       guardActive,
       getHealingRate,
       traitVal,
-      getOccCosts,
-      getGovName
+      getOccupationCost: getOccCosts,
+      getGovernmentName: getGovName
     });
+    const autoBattle = () => runBattleAutomation(battleAdapter);
     const autoHell = createAutoHell({
       WarManager,
       getGame: () => game,
@@ -46993,6 +47457,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         autoUniverseSelection,
         autoCraft,
         autoSpy,
+        autoBattle,
         autoPrestige,
         setWave3TestContext(context) {
           foundryList = context.foundryList;

@@ -209,7 +209,8 @@ import {
 } from "./adapters/evolve/government.ts";
 import { createGovernmentControls } from "./adapters/browser/government-controls.ts";
 import { planGovernment } from "./domain/government.ts";
-import { createAutoBattle } from "./automation/combat/battle.ts";
+import { runBattleAutomation } from "./application/battle.ts";
+import { createBattleAdapter } from "./adapters/evolve/battle.ts";
 import { createTaxAutomation } from "./bootstrap/tax.ts";
 import { createUserscriptEnvironment } from "./adapters/userscript/environment.ts";
 import {
@@ -3020,19 +3021,20 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   });
   const autoSpy = () => runSpyAutomation(spyAdapter);
 
-  const autoBattle = createAutoBattle({
-    SpyManager,
-    WarManager,
-    GameLog,
+  const battleAdapter = createBattleAdapter({
+    getSpyManager: () => SpyManager,
+    getWarManager: () => WarManager,
+    getGameLog: () => GameLog,
     getState: () => state,
     getSettings: () => settings,
     getGame: () => game,
     guardActive,
     getHealingRate,
     traitVal,
-    getOccCosts,
-    getGovName,
+    getOccupationCost: getOccCosts,
+    getGovernmentName: getGovName,
   });
+  const autoBattle = () => runBattleAutomation(battleAdapter);
 
   const autoHell = createAutoHell({
     WarManager,
@@ -3398,6 +3400,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       autoUniverseSelection,
       autoCraft,
       autoSpy,
+      autoBattle,
       autoPrestige,
       setWave3TestContext(context) {
         foundryList = context.foundryList;
