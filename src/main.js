@@ -278,7 +278,13 @@ import {
   createConsumeCommandExecutor,
   createConsumeReader,
 } from "./adapters/evolve/consume.ts";
-import { createAutoReplicator } from "./automation/economy/replicator.ts";
+import { runReplicatorAutomation } from "./application/replicator.ts";
+import {
+  createReplicatorGovernorGameReader,
+  createReplicatorSelectionExecutor,
+  createReplicatorSelectionReader,
+} from "./adapters/evolve/replicator.ts";
+import { createReplicatorGovernorOffice } from "./adapters/browser/replicator-governor.ts";
 import { createAutoMarket } from "./automation/economy/market.ts";
 import { createAutoGalaxyMarket } from "./automation/economy/galaxy-market.ts";
 import { createAutoGatherResources } from "./automation/economy/gather-resources.ts";
@@ -3191,15 +3197,29 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       executor: createConsumeCommandExecutor(() => manager),
     });
 
-  const autoReplicator = createAutoReplicator({
-    getReplicatorManager: () => ReplicatorManager,
+  const replicatorSelectionReader = createReplicatorSelectionReader({
+    getManager: () => ReplicatorManager,
     getSettings: () => settings,
     getResources: () => resources,
-    getGame: () => game,
-    getGovernor,
-    haveTech,
-    getVueById,
   });
+  const replicatorGovernorGameReader = createReplicatorGovernorGameReader({
+    getGovernor,
+    haveReplicatorTechnology: () => haveTech("replicator"),
+    getGame: () => game,
+  });
+  const replicatorGovernorOffice = createReplicatorGovernorOffice(() =>
+    getVueById("govOffice"),
+  );
+  const autoReplicator = () =>
+    runReplicatorAutomation({
+      selectionReader: replicatorSelectionReader,
+      selectionExecutor: createReplicatorSelectionExecutor(
+        () => ReplicatorManager,
+      ),
+      governorGameReader: replicatorGovernorGameReader,
+      governorOfficeReader: replicatorGovernorOffice.reader,
+      governorExecutor: replicatorGovernorOffice.executor,
+    });
 
   let prestigeLogTestActions;
   const { formatLogString, logPrestige } = createPrestigeLog({

@@ -24407,115 +24407,553 @@
     });
   }
 
-  // src/automation/economy/replicator.ts
-  function createAutoReplicator({
-    getReplicatorManager,
-    getSettings,
-    getResources,
-    getGame,
-    getGovernor: getGovernor2,
-    haveTech: haveTech2,
-    getVueById: getVueById2
-  }) {
-    return function autoReplicator2() {
-      const ReplicatorManager2 = getReplicatorManager();
-      const settings2 = getSettings();
-      const resources2 = getResources();
-      const game2 = getGame();
-      if (!ReplicatorManager2.initIndustry()) {
-        return;
+  // src/domain/replicator.ts
+  function planReplicatorPriority(input) {
+    if (!input.initialised) {
+      return null;
+    }
+    const priorityGroups = /* @__PURE__ */ new Map();
+    for (const production of input.productions) {
+      if (!production.unlocked || !production.enabled || production.weighting <= 0) {
+        continue;
       }
-      let allProducts = Object.values(ReplicatorManager2.Productions);
-      let priorityGroups = {};
-      for (let i = 0; i < allProducts.length; i++) {
-        let production = allProducts[i];
-        if (production.unlocked && production.enabled) {
-          if (production.weighting > 0) {
-            let priority = production.resource.isDemanded() ? Math.max(production.priority, 100) : production.priority;
-            priority *= !production.resource.isUseful() ? 0 : production.priority;
-            if (priority !== 0) {
-              priorityGroups[priority] = priorityGroups[priority] ?? [];
-              priorityGroups[priority].push(production);
-            }
-          }
+      let priority = production.demanded ? Math.max(production.priority, 100) : production.priority;
+      priority *= production.useful ? production.priority : 0;
+      if (priority === 0) {
+        continue;
+      }
+      const group = priorityGroups.get(priority) ?? [];
+      group.push(
+        Object.freeze({
+          productionId: production.id,
+          weighting: production.weighting
+        })
+      );
+      priorityGroups.set(priority, group);
+    }
+    const priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group);
+    const supplementary = priorityGroups.get(-1);
+    if (supplementary !== void 0 && priorityList.length > 1) {
+      priorityList.splice(priorityList.indexOf(supplementary, 1));
+      priorityList[0]?.push(...supplementary);
+    }
+    const candidates = priorityList[0];
+    if (candidates === void 0 || candidates.length === 0) {
+      return null;
+    }
+    return Object.freeze({
+      scoreMode: input.scoreMode,
+      selectHighestScore: input.selectHighestScore,
+      candidates: Object.freeze([...candidates])
+    });
+  }
+  function scoreCandidate(candidate, mode, metric) {
+    if (mode === "weight") {
+      return candidate.weighting;
+    }
+    if (metric === void 0) {
+      return null;
+    }
+    if (mode === "quantity") {
+      return candidate.weighting / metric.currentQuantity;
+    }
+    return candidate.weighting / metric.atomicMass / (metric.exotic ? 4 : 1) / metric.currentQuantity;
+  }
+  function planReplicatorSelection(priorityPlan, metrics) {
+    const metricById = new Map(
+      metrics.map((metric) => [metric.productionId, metric])
+    );
+    const scored = priorityPlan.candidates.map((candidate) => ({
+      candidate,
+      score: scoreCandidate(
+        candidate,
+        priorityPlan.scoreMode,
+        metricById.get(candidate.productionId)
+      )
+    }));
+    if (scored.some((entry) => entry.score === null)) {
+      return null;
+    }
+    scored.sort(
+      (left, right) => left.score - right.score
+    );
+    const selected = priorityPlan.selectHighestScore ? scored.at(-1) : scored[0];
+    return selected === void 0 ? null : Object.freeze({ productionId: selected.candidate.productionId });
+  }
+  function shouldConfigureReplicatorGovernor(input) {
+    return input.governorPresent && input.replicatorTechnology;
+  }
+  function planReplicatorGovernorTask(tasks) {
+    if (tasks.includes("replicate")) {
+      return Object.freeze({ status: "ready", assignment: null });
+    }
+    const taskIndex = tasks.indexOf("none");
+    if (taskIndex === -1) {
+      return Object.freeze({ status: "unavailable" });
+    }
+    return Object.freeze({
+      status: "ready",
+      assignment: Object.freeze({
+        kind: "assign-governor-task",
+        taskIndex,
+        expectedTask: "none"
+      })
+    });
+  }
+  function planReplicatorGovernorSettings(input) {
+    const enablePower = !input.powerOn;
+    const disableQueue = input.focusQueue;
+    const disableNegative = input.focusNegative;
+    const disableCapSwitch = input.switchOnCap;
+    const raisePowerCap = input.powerCap < 1e12;
+    if (!enablePower && !disableQueue && !disableNegative && !disableCapSwitch && !raisePowerCap) {
+      return null;
+    }
+    return Object.freeze({
+      kind: "update-governor-settings",
+      expected: Object.freeze({ ...input }),
+      enablePower,
+      disableQueue,
+      disableNegative,
+      disableCapSwitch,
+      raisePowerCap
+    });
+  }
+
+  // src/application/replicator.ts
+  var SUCCEEDED5 = Object.freeze({
+    status: "succeeded"
+  });
+  function runReplicatorAutomation(dependencies) {
+    const planningInput = dependencies.selectionReader.readPlanningInput();
+    if (!planningInput.initialised) {
+      return SUCCEEDED5;
+    }
+    const priorityPlan = planReplicatorPriority(planningInput);
+    if (priorityPlan !== null) {
+      const selection = planReplicatorSelection(
+        priorityPlan,
+        dependencies.selectionReader.readMetrics(priorityPlan)
+      );
+      if (selection !== null) {
+        const outcome = dependencies.selectionExecutor.execute(selection);
+        if (outcome.status !== "succeeded") {
+          return outcome;
         }
       }
-      let priorityList = Object.keys(priorityGroups).sort((a, b) => b - a).map((key) => priorityGroups[key]);
-      if (priorityGroups["-1"] && priorityList.length > 1) {
-        priorityList.splice(priorityList.indexOf(priorityGroups["-1"], 1));
-        priorityList[0].push(...priorityGroups["-1"]);
+    }
+    if (!planningInput.assignGovernorTask) {
+      return SUCCEEDED5;
+    }
+    if (!shouldConfigureReplicatorGovernor(
+      dependencies.governorGameReader.readGate()
+    ) || !dependencies.governorOfficeReader.open()) {
+      return SUCCEEDED5;
+    }
+    const taskPlan = planReplicatorGovernorTask(
+      dependencies.governorGameReader.readTasks()
+    );
+    if (taskPlan.status === "unavailable") {
+      return SUCCEEDED5;
+    }
+    if (taskPlan.assignment !== null) {
+      const outcome = dependencies.governorExecutor.execute(taskPlan.assignment);
+      if (outcome.status !== "succeeded") {
+        return outcome;
       }
-      let weightFn;
-      switch (settings2.replicatorWeightingMode) {
-        case "mass":
-          weightFn = (production, resource) => production.weighting / resource.atomicMass / (resource === resources2.Elerium || resource === resources2.Infernite ? 4 : 1) / resource.currentQuantity;
-          break;
-        case "quantity":
-          weightFn = (production, resource) => production.weighting / resource.currentQuantity;
-          break;
-        case "legacy":
-        default:
-          weightFn = (production, resource) => production.weighting;
-          break;
-      }
-      if (priorityList.length > 0 && priorityList[0].length > 0) {
-        let list = priorityList[0].sort(
-          (a, b) => weightFn(a, a.resource) - weightFn(b, b.resource)
+    }
+    const settings2 = dependencies.governorOfficeReader.readSettings();
+    if (settings2 === null) {
+      return SUCCEEDED5;
+    }
+    const settingsDecision = planReplicatorGovernorSettings(settings2);
+    return settingsDecision === null ? SUCCEEDED5 : dependencies.governorExecutor.execute(settingsDecision);
+  }
+
+  // src/adapters/evolve/replicator.ts
+  function callBoolean10(record, name, path) {
+    return Boolean(
+      Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
+    );
+  }
+  function readProductionId2(production, path) {
+    const id = production["id"];
+    if (typeof id !== "string" || id.length === 0) {
+      throw new TypeError(`${path}.id must be a non-empty string`);
+    }
+    return id;
+  }
+  function readProductions2(manager) {
+    const productions = requireRecord(
+      manager["Productions"],
+      "ReplicatorManager.Productions"
+    );
+    const values = [];
+    const byId = /* @__PURE__ */ new Map();
+    for (const [key, value] of Object.entries(productions)) {
+      const path = `ReplicatorManager.Productions.${key}`;
+      const production = requireRecord(value, path);
+      const id = readProductionId2(production, path);
+      if (byId.has(id)) {
+        throw new TypeError(
+          `ReplicatorManager.Productions has duplicate id ${id}`
         );
-        let selectedResource = settings2.replicatorWeightingMode !== "legacy" ? list[list.length - 1] : list[0];
-        ReplicatorManager2.setResource(selectedResource.id);
       }
-      if (!settings2.replicatorAssignGovernorTask) {
-        return;
-      }
-      if (getGovernor2() === "none" || !haveTech2("replicator")) {
-        return;
-      }
-      const office = getVueById2("govOffice");
-      if (!office) {
-        return;
-      }
-      var replicatorTaskIndex = Object.values(
-        game2.global.race.governor.tasks
-      ).findIndex((task) => task === "replicate");
-      if (replicatorTaskIndex == -1) {
-        replicatorTaskIndex = Object.values(
-          game2.global.race.governor.tasks
-        ).findIndex((task) => task === "none");
-        if (replicatorTaskIndex == -1) {
-          return;
+      values.push(production);
+      byId.set(id, production);
+    }
+    return Object.freeze({ values: Object.freeze(values), byId });
+  }
+  function requireNonNegative(value, path) {
+    const number = requireNumber(value, path);
+    if (number < 0) {
+      throw new TypeError(`${path} must be non-negative`);
+    }
+    return number;
+  }
+  function requirePositive(value, path) {
+    const number = requireNumber(value, path);
+    if (number <= 0) {
+      throw new TypeError(`${path} must be positive`);
+    }
+    return number;
+  }
+  function createReplicatorSelectionReader(dependencies) {
+    let session = null;
+    return Object.freeze({
+      readPlanningInput() {
+        const manager = requireRecord(
+          dependencies.getManager(),
+          "ReplicatorManager"
+        );
+        if (!callBoolean10(manager, "initIndustry", "ReplicatorManager")) {
+          session = null;
+          return Object.freeze({
+            initialised: false,
+            assignGovernorTask: false,
+            scoreMode: "weight",
+            selectHighestScore: false,
+            productions: Object.freeze([])
+          });
         }
-        office.setTask("replicate", replicatorTaskIndex);
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const rawMode = settings2["replicatorWeightingMode"];
+        const scoreMode = rawMode === "mass" ? "mass" : rawMode === "quantity" ? "quantity" : "weight";
+        const rawProductions = readProductions2(manager);
+        const resourcesById = /* @__PURE__ */ new Map();
+        const productions = rawProductions.values.map((production, index) => {
+          const path = `ReplicatorManager.Productions[${index}]`;
+          const id = readProductionId2(production, path);
+          const unlocked = Boolean(production["unlocked"]);
+          const enabled = Boolean(production["enabled"]);
+          if (!unlocked || !enabled) {
+            return Object.freeze({
+              id,
+              unlocked,
+              enabled,
+              weighting: 0,
+              priority: 0,
+              demanded: false,
+              useful: false
+            });
+          }
+          const weighting = requireNumber(
+            production["weighting"],
+            `${path}.weighting`
+          );
+          if (weighting <= 0) {
+            return Object.freeze({
+              id,
+              unlocked,
+              enabled,
+              weighting,
+              priority: 0,
+              demanded: false,
+              useful: false
+            });
+          }
+          const resource = requireRecord(
+            production["resource"],
+            `${path}.resource`
+          );
+          resourcesById.set(id, resource);
+          return Object.freeze({
+            id,
+            unlocked,
+            enabled,
+            weighting,
+            priority: requireNumber(production["priority"], `${path}.priority`),
+            demanded: callBoolean10(resource, "isDemanded", `${path}.resource`),
+            useful: callBoolean10(resource, "isUseful", `${path}.resource`)
+          });
+        });
+        session = Object.freeze({ resourcesById });
+        return Object.freeze({
+          initialised: true,
+          assignGovernorTask: Boolean(settings2["replicatorAssignGovernorTask"]),
+          scoreMode,
+          // Preserve the legacy split between the switch default and this test:
+          // unknown modes use weight scores but select the final/highest entry.
+          selectHighestScore: rawMode !== "legacy",
+          productions: Object.freeze(productions)
+        });
+      },
+      readMetrics(priorityPlan) {
+        if (session === null) {
+          throw new Error(
+            "replicator planning input must be read before selection metrics"
+          );
+        }
+        const activeSession = session;
+        const allResources = priorityPlan.scoreMode === "mass" ? requireRecord(dependencies.getResources(), "resources") : null;
+        const seen = /* @__PURE__ */ new Set();
+        const metrics = priorityPlan.candidates.map((candidate) => {
+          if (seen.has(candidate.productionId)) {
+            throw new TypeError(
+              `duplicate replicator metric id ${candidate.productionId}`
+            );
+          }
+          seen.add(candidate.productionId);
+          const resource = activeSession.resourcesById.get(
+            candidate.productionId
+          );
+          if (resource === void 0) {
+            throw new TypeError(
+              `unknown replicator metric id ${candidate.productionId}`
+            );
+          }
+          if (priorityPlan.scoreMode === "weight") {
+            return Object.freeze({
+              productionId: candidate.productionId,
+              currentQuantity: 0,
+              atomicMass: 1,
+              exotic: false
+            });
+          }
+          const currentQuantity = requireNonNegative(
+            resource["currentQuantity"],
+            `resources.${candidate.productionId}.currentQuantity`
+          );
+          const atomicMass = priorityPlan.scoreMode === "mass" ? requirePositive(
+            resource["atomicMass"],
+            `resources.${candidate.productionId}.atomicMass`
+          ) : 1;
+          return Object.freeze({
+            productionId: candidate.productionId,
+            currentQuantity,
+            atomicMass,
+            exotic: priorityPlan.scoreMode === "mass" && (resource === allResources?.["Elerium"] || resource === allResources?.["Infernite"])
+          });
+        });
+        return Object.freeze(metrics);
       }
-      const govSettings = office.c?.replicate;
-      if (!govSettings) {
-        return;
+    });
+  }
+  function createReplicatorSelectionExecutor(getManager) {
+    return Object.freeze({
+      execute(decision) {
+        const manager = requireRecord(getManager(), "ReplicatorManager");
+        const production = readProductions2(manager).byId.get(
+          decision.productionId
+        );
+        if (production === void 0) {
+          return stale(
+            "stale-replicator-production",
+            "replicator production list changed",
+            { productionId: decision.productionId }
+          );
+        }
+        const setResource = requireFunction(
+          manager["setResource"],
+          "ReplicatorManager.setResource"
+        );
+        Reflect.apply(setResource, manager, [decision.productionId]);
+        return SUCCEEDED;
       }
-      let changed = false;
-      if (govSettings.pow.on == false) {
-        govSettings.pow.on = true;
-        changed = true;
+    });
+  }
+  function createReplicatorGovernorGameReader(dependencies) {
+    return Object.freeze({
+      readGate() {
+        const governor = dependencies.getGovernor();
+        if (governor === "none") {
+          return Object.freeze({
+            governorPresent: false,
+            replicatorTechnology: false
+          });
+        }
+        return Object.freeze({
+          governorPresent: true,
+          replicatorTechnology: Boolean(dependencies.haveReplicatorTechnology())
+        });
+      },
+      readTasks() {
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const global = requireRecord(game2["global"], "game.global");
+        const race = requireRecord(global["race"], "game.global.race");
+        const governor = requireRecord(
+          race["governor"],
+          "game.global.race.governor"
+        );
+        const tasks = requireRecord(
+          governor["tasks"],
+          "game.global.race.governor.tasks"
+        );
+        return Object.freeze(
+          Object.values(tasks).map((task, index) => {
+            if (typeof task !== "string") {
+              throw new TypeError(
+                `game.global.race.governor.tasks[${index}] must be a string`
+              );
+            }
+            return task;
+          })
+        );
       }
-      if (govSettings.res.que) {
-        govSettings.res.que = false;
-        changed = true;
-      }
-      if (govSettings.res.neg) {
-        govSettings.res.neg = false;
-        changed = true;
-      }
-      if (govSettings.res.cap) {
-        govSettings.res.cap = false;
-        changed = true;
-      }
-      if (govSettings.pow.cap < 1e12) {
-        office.c.replicate.pow.cap = 1e12;
-        changed = true;
-      }
-      if (changed) {
-        office.$forceUpdate();
-      }
-    };
+    });
+  }
+
+  // src/adapters/browser/replicator-governor.ts
+  function readGovernorSettings(office) {
+    const rawConfig = office["c"];
+    if (rawConfig === void 0 || rawConfig === null) {
+      return null;
+    }
+    const config = requireRecord(rawConfig, "governorOffice.c");
+    const rawReplicate = config["replicate"];
+    if (rawReplicate === void 0 || rawReplicate === null) {
+      return null;
+    }
+    const replicate = requireRecord(rawReplicate, "governorOffice.c.replicate");
+    const power = requireRecord(
+      replicate["pow"],
+      "governorOffice.c.replicate.pow"
+    );
+    const resources2 = requireRecord(
+      replicate["res"],
+      "governorOffice.c.replicate.res"
+    );
+    return Object.freeze({
+      input: Object.freeze({
+        powerOn: requireBoolean(power["on"], "governorOffice.c.replicate.pow.on"),
+        focusQueue: requireBoolean(
+          resources2["que"],
+          "governorOffice.c.replicate.res.que"
+        ),
+        focusNegative: requireBoolean(
+          resources2["neg"],
+          "governorOffice.c.replicate.res.neg"
+        ),
+        switchOnCap: requireBoolean(
+          resources2["cap"],
+          "governorOffice.c.replicate.res.cap"
+        ),
+        powerCap: requireNumber(
+          power["cap"],
+          "governorOffice.c.replicate.pow.cap"
+        )
+      }),
+      power,
+      resources: resources2
+    });
+  }
+  function settingsMatch(actual, expected) {
+    return actual.powerOn === expected.powerOn && actual.focusQueue === expected.focusQueue && actual.focusNegative === expected.focusNegative && actual.switchOnCap === expected.switchOnCap && actual.powerCap === expected.powerCap;
+  }
+  function createReplicatorGovernorOffice(getOffice) {
+    let office = null;
+    return Object.freeze({
+      reader: Object.freeze({
+        open() {
+          const value = getOffice();
+          if (!value) {
+            office = null;
+            return false;
+          }
+          office = requireRecord(value, "governorOffice");
+          return true;
+        },
+        readSettings() {
+          if (office === null) {
+            throw new Error(
+              "replicator governor office must be opened before reading settings"
+            );
+          }
+          return readGovernorSettings(office)?.input ?? null;
+        }
+      }),
+      executor: Object.freeze({
+        execute(decision) {
+          if (office === null) {
+            return rejected2(
+              "governor-office-not-open",
+              "replicator governor office session is not open"
+            );
+          }
+          if (decision.kind === "assign-governor-task") {
+            if (!Number.isSafeInteger(decision.taskIndex) || decision.taskIndex < 0) {
+              return rejected2(
+                "invalid-governor-task-index",
+                "governor task index must be a non-negative safe integer"
+              );
+            }
+            const tasks = requireRecord(office["t"], "governorOffice.t");
+            const actual = Object.values(tasks)[decision.taskIndex];
+            if (actual !== decision.expectedTask) {
+              return stale(
+                "stale-governor-task",
+                "governor task assignments changed",
+                {
+                  taskIndex: decision.taskIndex,
+                  expected: decision.expectedTask,
+                  actual: typeof actual === "string" ? actual : null
+                }
+              );
+            }
+            const setTask = requireFunction(
+              office["setTask"],
+              "governorOffice.setTask"
+            );
+            Reflect.apply(setTask, office, ["replicate", decision.taskIndex]);
+            return SUCCEEDED;
+          }
+          const current = readGovernorSettings(office);
+          if (current === null) {
+            return stale(
+              "stale-replicator-governor-settings",
+              "replicator governor settings disappeared"
+            );
+          }
+          if (!settingsMatch(current.input, decision.expected)) {
+            return stale(
+              "stale-replicator-governor-settings",
+              "replicator governor settings changed"
+            );
+          }
+          const forceUpdate = requireFunction(
+            office["$forceUpdate"],
+            "governorOffice.$forceUpdate"
+          );
+          if (decision.enablePower) {
+            current.power["on"] = true;
+          }
+          if (decision.disableQueue) {
+            current.resources["que"] = false;
+          }
+          if (decision.disableNegative) {
+            current.resources["neg"] = false;
+          }
+          if (decision.disableCapSwitch) {
+            current.resources["cap"] = false;
+          }
+          if (decision.raisePowerCap) {
+            current.power["cap"] = 1e12;
+          }
+          Reflect.apply(forceUpdate, office, []);
+          return SUCCEEDED;
+        }
+      })
+    });
   }
 
   // src/automation/economy/market.ts
@@ -25153,17 +25591,17 @@
   }
 
   // src/application/craft.ts
-  var SUCCEEDED5 = Object.freeze({
+  var SUCCEEDED6 = Object.freeze({
     status: "succeeded"
   });
   function runCraftAutomation(dependencies) {
     if (!shouldRunCraft(dependencies.reader.readGate())) {
-      return SUCCEEDED5;
+      return SUCCEEDED6;
     }
     for (let index = 0; ; index++) {
       const candidate = dependencies.reader.readCandidate(index);
       if (candidate === null) {
-        return SUCCEEDED5;
+        return SUCCEEDED6;
       }
       const decision = planCraft(candidate);
       if (decision === null) {
@@ -25177,7 +25615,7 @@
   }
 
   // src/adapters/evolve/craft.ts
-  function callBoolean10(record, name, path) {
+  function callBoolean11(record, name, path) {
     return Boolean(
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
     );
@@ -25214,7 +25652,7 @@
           resources2["Population"],
           "resources.Population"
         );
-        const populationUnlocked = callBoolean10(
+        const populationUnlocked = callBoolean11(
           population,
           "isUnlocked",
           "resources.Population"
@@ -25241,7 +25679,7 @@
         }
         const path = `foundryList[${index}]`;
         const craftable = requireRecord(session.foundryList[index], path);
-        const unlocked = callBoolean10(craftable, "isUnlocked", path);
+        const unlocked = callBoolean11(craftable, "isUnlocked", path);
         if (!unlocked) {
           return Object.freeze({
             index,
@@ -25293,7 +25731,7 @@
             maxQuantity,
             craftPreserve
           };
-          if (callBoolean10(craftable, "isDemanded", path)) {
+          if (callBoolean11(craftable, "isDemanded", path)) {
             const thresholdPreserve = requireNumber(
               craftable["craftPreserve"],
               `${path}.craftPreserve`
@@ -25307,11 +25745,11 @@
             );
             continue;
           }
-          if (callBoolean10(resource, "isDemanded", `resources.${resourceId}`)) {
+          if (callBoolean11(resource, "isDemanded", `resources.${resourceId}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
-          const cappedForPriority = callBoolean10(
+          const cappedForPriority = callBoolean11(
             resource,
             "isCapped",
             `resources.${resourceId}`
@@ -25343,7 +25781,7 @@
             resource["storageRequired"],
             `resources.${resourceId}.storageRequired`
           );
-          if (currentQuantity < resourceRequired && !callBoolean10(resource, "isCapped", `resources.${resourceId}`)) {
+          if (currentQuantity < resourceRequired && !callBoolean11(resource, "isCapped", `resources.${resourceId}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
@@ -26768,7 +27206,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED6 = Object.freeze({
+  var SUCCEEDED7 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -26776,7 +27214,7 @@
     while (true) {
       const decision = planResearch(dependencies.reader.read(startIndex));
       if (decision === null) {
-        return SUCCEEDED6;
+        return SUCCEEDED7;
       }
       const result2 = dependencies.executor.execute(decision);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -26920,12 +27358,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED7 = Object.freeze({
+  var SUCCEEDED8 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision = planMutation(dependencies.reader.read());
-    return decision === null ? SUCCEEDED7 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED8 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -41234,14 +41672,27 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       }),
       executor: createConsumeCommandExecutor(() => manager)
     });
-    const autoReplicator = createAutoReplicator({
-      getReplicatorManager: () => ReplicatorManager,
+    const replicatorSelectionReader = createReplicatorSelectionReader({
+      getManager: () => ReplicatorManager,
       getSettings: () => settings,
-      getResources: () => resources,
-      getGame: () => game,
+      getResources: () => resources
+    });
+    const replicatorGovernorGameReader = createReplicatorGovernorGameReader({
       getGovernor,
-      haveTech,
-      getVueById
+      haveReplicatorTechnology: () => haveTech("replicator"),
+      getGame: () => game
+    });
+    const replicatorGovernorOffice = createReplicatorGovernorOffice(
+      () => getVueById("govOffice")
+    );
+    const autoReplicator = () => runReplicatorAutomation({
+      selectionReader: replicatorSelectionReader,
+      selectionExecutor: createReplicatorSelectionExecutor(
+        () => ReplicatorManager
+      ),
+      governorGameReader: replicatorGovernorGameReader,
+      governorOfficeReader: replicatorGovernorOffice.reader,
+      governorExecutor: replicatorGovernorOffice.executor
     });
     let prestigeLogTestActions;
     const { formatLogString, logPrestige } = createPrestigeLog({
