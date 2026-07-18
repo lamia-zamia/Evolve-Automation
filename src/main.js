@@ -342,7 +342,8 @@ import {
   createMutationCommandExecutor,
   createMutationReader,
 } from "./adapters/evolve/mutation.ts";
-import { createAutoFleetOuter } from "./automation/combat/fleet-outer.ts";
+import { runOuterFleetAutomation } from "./application/fleet-outer.ts";
+import { createOuterFleetAdapter } from "./adapters/evolve/fleet-outer.ts";
 import { createAutoFleet } from "./automation/combat/fleet.ts";
 import { createAutoMech } from "./automation/combat/mech.ts";
 import { createProductionSettings } from "./ui/production-settings.ts";
@@ -3916,7 +3917,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const autoFleetOuter = createAutoFleetOuter({
+  const outerFleetAdapter = createOuterFleetAdapter({
     getFleetManagerOuter: () => FleetManagerOuter,
     getWarManager: () => WarManager,
     getGame: () => game,
@@ -3924,8 +3925,9 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getResources: () => resources,
     traitVal,
     assessAuthorityRemoval,
-    GameLog,
+    getGameLog: () => GameLog,
   });
+  const autoFleetOuter = () => runOuterFleetAutomation(outerFleetAdapter);
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {

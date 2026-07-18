@@ -13865,22 +13865,22 @@
       } else {
         const rows = targets.slice(0, 8).map((target) => {
           const limit = plannerLimitingResource2(target);
-          let status;
+          let status2;
           let statusClass;
           if (!limit) {
-            status = "ready";
+            status2 = "ready";
             statusClass = "has-text-success";
           } else if ("status" in limit) {
-            status = "planner data unavailable";
+            status2 = "planner data unavailable";
             statusClass = "has-text-danger";
           } else if (limit.blocker === "storage") {
-            status = `${limit.resourceTitle} (storage)`;
+            status2 = `${limit.resourceTitle} (storage)`;
             statusClass = "has-text-danger";
           } else if (limit.blocker === "stalled") {
-            status = `${limit.resourceTitle} (no income)`;
+            status2 = `${limit.resourceTitle} (no income)`;
             statusClass = "has-text-danger";
           } else {
-            status = `${getPoly().timeFormat(limit.time)} (${limit.resourceTitle})`;
+            status2 = `${getPoly().timeFormat(limit.time)} (${limit.resourceTitle})`;
             statusClass = "has-text-warning";
           }
           let name = target.title;
@@ -13899,7 +13899,7 @@
                 <span class="planner-weight has-text-advanced">${getNiceNumber2(
             target.weighting
           )}</span>
-                <span class="planner-time ${statusClass}">${status}</span>
+                <span class="planner-time ${statusClass}">${status2}</span>
             </div>
             ${note ? `<div class="planner-note">${note}</div>` : ""}
         </li>`;
@@ -14087,7 +14087,7 @@
     return { status: "rejected", failure: { code, message } };
   }
   function createStorageCommandExecutor(dependencies) {
-    function execute(envelope) {
+    function execute2(envelope) {
       const { command } = envelope;
       if (typeof command.count !== "number" || !Number.isFinite(command.count)) {
         return rejected(
@@ -14126,7 +14126,7 @@
       }
       return { status: "succeeded" };
     }
-    return Object.freeze({ execute });
+    return Object.freeze({ execute: execute2 });
   }
 
   // src/domain/snapshot.ts
@@ -20391,7 +20391,7 @@
     });
   }
   function createGovernmentCommandExecutor(dependencies) {
-    function execute(decision2) {
+    function execute2(decision2) {
       if (decision2.government === null && decision2.appointCandidate === null) {
         return SUCCEEDED;
       }
@@ -20459,7 +20459,7 @@
       }
       return SUCCEEDED;
     }
-    return Object.freeze({ execute });
+    return Object.freeze({ execute: execute2 });
   }
 
   // src/adapters/browser/government-controls.ts
@@ -21166,11 +21166,11 @@
   }
 
   // src/adapters/evolve/tax-command-executor.ts
-  function failure(status, code, message, context) {
-    return context === void 0 ? { status, failure: { code, message } } : { status, failure: { code, message, context } };
+  function failure(status2, code, message, context) {
+    return context === void 0 ? { status: status2, failure: { code, message } } : { status: status2, failure: { code, message, context } };
   }
   function createTaxCommandExecutor(dependencies) {
-    function execute(envelope) {
+    function execute2(envelope) {
       const game2 = requireRecord(dependencies.getGame(), "game");
       const global = requireRecord(game2["global"], "game.global");
       const civic = requireRecord(global["civic"], "game.global.civic");
@@ -21228,7 +21228,7 @@
       }
       return { status: "succeeded" };
     }
-    return Object.freeze({ execute });
+    return Object.freeze({ execute: execute2 });
   }
 
   // src/domain/tax.ts
@@ -21836,7 +21836,7 @@
     });
   }
   function createSmelterCommandExecutor(getSmelterManager) {
-    function execute(decision2) {
+    function execute2(decision2) {
       if (decision2.fuelAdjustments.length === 0 && decision2.smeltAdjustments.length === 0) {
         return SUCCEEDED;
       }
@@ -21949,7 +21949,7 @@
       }
       return SUCCEEDED;
     }
-    return Object.freeze({ execute });
+    return Object.freeze({ execute: execute2 });
   }
 
   // src/domain/smelter.ts
@@ -22324,7 +22324,7 @@
     });
   }
   function createAlchemyCommandExecutor(getAlchemyManager) {
-    function execute(decision2) {
+    function execute2(decision2) {
       if (decision2.decrease.length === 0 && decision2.increase.length === 0) {
         return SUCCEEDED;
       }
@@ -22372,7 +22372,7 @@
       }
       return SUCCEEDED;
     }
-    return Object.freeze({ execute });
+    return Object.freeze({ execute: execute2 });
   }
 
   // src/domain/alchemy.ts
@@ -22579,7 +22579,7 @@
     });
   }
   function createPylonCommandExecutor(getRitualManager) {
-    function execute(decision2) {
+    function execute2(decision2) {
       if (decision2.decrease.length === 0 && decision2.increase.length === 0) {
         return SUCCEEDED;
       }
@@ -22655,7 +22655,7 @@
       }
       return SUCCEEDED;
     }
-    return Object.freeze({ execute });
+    return Object.freeze({ execute: execute2 });
   }
 
   // src/domain/pylon.ts
@@ -22877,7 +22877,7 @@
     });
   }
   function createSingleRatioExecutor(getManager, managerName) {
-    function execute(adjustment) {
+    function execute2(adjustment) {
       if (!Number.isSafeInteger(adjustment.delta)) {
         return rejected2(
           "invalid-production-ratio-adjustment",
@@ -22900,7 +22900,7 @@
       Reflect.apply(increase, manager, [adjustment.delta]);
       return SUCCEEDED;
     }
-    return Object.freeze({ execute });
+    return Object.freeze({ execute: execute2 });
   }
   function createResourceRatioCommandExecutors(dependencies) {
     const quarry = createSingleRatioExecutor(
@@ -24117,7 +24117,7 @@
     });
   }
   function createGrapheneCommandExecutor(getGrapheneManager) {
-    function execute(adjustments) {
+    function execute2(adjustments) {
       if (adjustments.length === 0) {
         return SUCCEEDED;
       }
@@ -24172,7 +24172,7 @@
       }
       return SUCCEEDED;
     }
-    return Object.freeze({ execute });
+    return Object.freeze({ execute: execute2 });
   }
 
   // src/domain/graphene.ts
@@ -34292,153 +34292,809 @@
     });
   }
 
-  // src/automation/combat/fleet-outer.ts
-  function createAutoFleetOuter({
-    getFleetManagerOuter,
-    getWarManager,
-    getGame,
-    getSettings,
-    getResources,
-    traitVal: traitVal2,
-    assessAuthorityRemoval: assessAuthorityRemoval3,
-    GameLog: GameLog2
-  }) {
-    return function autoFleetOuter2() {
-      const FleetManagerOuter2 = getFleetManagerOuter();
-      const WarManager2 = getWarManager();
-      const game2 = getGame();
-      const settings2 = getSettings();
-      const resources2 = getResources();
-      let m = FleetManagerOuter2;
-      if (!m.initFleet()) {
-        m.nextShipMsg = `No ships needed yet`;
-        m.updateNextShip();
-        return;
+  // src/domain/fleet-outer.ts
+  function status(blueprint, messageBeforeUpdate, messageAfterUpdate, nextShipName = null) {
+    return Object.freeze({
+      kind: "outer-fleet-status",
+      blueprint,
+      nextShipName,
+      messageBeforeUpdate,
+      messageAfterUpdate
+    });
+  }
+  function planOuterFleetCycle(input) {
+    if (!input.initialized) {
+      return status(null, "No ships needed yet", null);
+    }
+    if (input.mode === "none") {
+      return status(null, null, "Ship construction is disabled");
+    }
+    if (input.mode === "manual") {
+      return status(
+        input.manualBlueprintAvailable ? "yard" : null,
+        null,
+        "Ships managed manually"
+      );
+    }
+    return Object.freeze({
+      kind: "select-target",
+      mode: input.mode,
+      configuredMinimumCrew: input.configuredMinimumCrew
+    });
+  }
+  function calculateOuterFleetDefenseTarget(region) {
+    if (!region.digsiteIncomplete) return region.maximumDefense;
+    const requestedUnits = region.requestedTroopers + region.requestedTanks;
+    const supportedUnits = region.reportedSupport === null ? requestedUnits : Math.min(requestedUnits, region.reportedSupport);
+    const activeTroopers = Math.min(region.requestedTroopers, supportedUnits);
+    const activeTanks = Math.min(
+      region.requestedTanks,
+      Math.max(0, supportedUnits - activeTroopers)
+    );
+    const conservativeGroundPower = activeTroopers + activeTanks * 100;
+    const digsiteDefense = conservativeGroundPower > 0 ? Math.min(0.9, 350 / conservativeGroundPower) : 0.5;
+    return Math.max(region.maximumDefense, digsiteDefense);
+  }
+  function planOuterFleetTarget(cycle, input) {
+    if (input.exploreTau && input.tauTechnology === 1 && input.explorerAvailable && input.explorerCount < 1) {
+      return Object.freeze({
+        kind: "select-blueprint",
+        mode: cycle.mode,
+        targetRegion: "tauceti",
+        minimumCrew: 0,
+        forcedBlueprint: "explorer"
+      });
+    }
+    if (input.erisTechnology === 1 && input.erisWeighting > 0 && input.erisSensor < 50) {
+      return Object.freeze({
+        kind: "select-blueprint",
+        mode: cycle.mode,
+        targetRegion: "spc_eris",
+        minimumCrew: 0,
+        forcedBlueprint: null
+      });
+    }
+    const regionsToProtect = input.regions.filter(
+      (region) => region.unlocked && region.weighting > 0 && region.syndicateRatio < calculateOuterFleetDefenseTarget(region)
+    ).sort(
+      (left, right) => (1 - right.syndicateRatio) * right.weighting - (1 - left.syndicateRatio) * left.weighting
+    );
+    const target = regionsToProtect[0];
+    if (target === void 0) {
+      return status(null, null, "No more ships currently needed");
+    }
+    return Object.freeze({
+      kind: "select-blueprint",
+      mode: cycle.mode,
+      targetRegion: target.id,
+      minimumCrew: cycle.configuredMinimumCrew,
+      forcedBlueprint: null
+    });
+  }
+  function planOuterFleetBlueprint(input) {
+    let blueprint = input.target.forcedBlueprint;
+    if (blueprint === null && input.target.mode === "user") {
+      blueprint = input.yardAvailable ? "yard" : null;
+    } else if (blueprint === null) {
+      if (input.scoutAvailable && input.scoutCount < input.maximumScouts) {
+        blueprint = "scout";
       }
-      if (settings2.fleetOuterShips === "none") {
-        m.updateNextShip();
-        m.nextShipMsg = `Ship construction is disabled`;
-        return;
+      if (blueprint === null && input.fighterAvailable) {
+        blueprint = "fighter";
       }
-      let yard = game2.global.space.shipyard;
-      if (settings2.fleetOuterShips === "manual") {
-        m.updateNextShip(m.avail(yard.blueprint) ? yard.blueprint : null);
-        m.nextShipMsg = `Ships managed manually`;
-        return;
-      }
-      let targetRegion = null;
-      let newShip = null;
-      let minCrew = settings2.fleetOuterCrew;
-      const getDefenseTarget = (region) => {
-        let target = m.getMaxDefense(region);
-        if (region !== "spc_eris" || game2.global.space.digsite?.count === void 0 || game2.global.space.digsite.count >= 100) {
-          return target;
-        }
-        const requestedTroopers = game2.global.space.shock_trooper?.on ?? 0;
-        const requestedTanks = game2.global.space.tank?.on ?? 0;
-        const requestedUnits = requestedTroopers + requestedTanks;
-        const reportedSupport = resources2.Eris_Support?.currentQuantity;
-        const supportedUnits = Number.isFinite(reportedSupport) ? Math.min(requestedUnits, reportedSupport) : requestedUnits;
-        const activeTroopers = Math.min(requestedTroopers, supportedUnits);
-        const activeTanks = Math.min(
-          requestedTanks,
-          Math.max(0, supportedUnits - activeTroopers)
+    }
+    if (blueprint === null) {
+      return status(
+        null,
+        null,
+        `No suitable blueprint for ship to ${input.targetLocationName}`
+      );
+    }
+    return Object.freeze({
+      kind: "check-candidate",
+      blueprint,
+      targetRegion: input.target.targetRegion,
+      targetLocationName: input.targetLocationName,
+      minimumCrew: input.target.minimumCrew
+    });
+  }
+  function planOuterFleetCandidate(input) {
+    const nextShipName = `${input.shipName} to ${input.candidate.targetLocationName}`;
+    if (input.authority.status === "unavailable") {
+      return status(
+        input.candidate.blueprint,
+        null,
+        "Authority data unavailable; ship construction paused",
+        nextShipName
+      );
+    }
+    if (input.authority.status === "ready" && input.authority.blocksRemoval) {
+      return status(
+        input.candidate.blueprint,
+        null,
+        `Next ship(${nextShipName}) would lower Authority to ${input.authority.predicted}, below the ${input.authority.target} target`,
+        nextShipName
+      );
+    }
+    return Object.freeze({
+      kind: "check-build-readiness",
+      blueprint: input.candidate.blueprint,
+      targetRegion: input.candidate.targetRegion,
+      targetLocationName: input.candidate.targetLocationName,
+      minimumCrew: input.candidate.minimumCrew,
+      shipName: input.shipName,
+      shipCrew: input.shipCrew,
+      nextShipName
+    });
+  }
+  function planOuterFleetBuild(input) {
+    if (input.missingResourceName !== null) {
+      return status(
+        input.plan.blueprint,
+        null,
+        `Next ship(${input.plan.nextShipName}) is missing ${input.missingResourceName}`,
+        input.plan.nextShipName
+      );
+    }
+    if (input.currentCityGarrison - input.plan.shipCrew < input.plan.minimumCrew) {
+      return status(
+        input.plan.blueprint,
+        null,
+        `Next ship(${input.plan.nextShipName}) is missing crew`,
+        input.plan.nextShipName
+      );
+    }
+    return Object.freeze({
+      kind: "build-outer-fleet",
+      blueprint: input.plan.blueprint,
+      targetRegion: input.plan.targetRegion,
+      targetLocationName: input.plan.targetLocationName,
+      shipName: input.plan.shipName,
+      shipCrew: input.plan.shipCrew,
+      nextShipName: input.plan.nextShipName
+    });
+  }
+
+  // src/application/fleet-outer.ts
+  function execute(executor, decision2) {
+    return executor.execute(decision2);
+  }
+  function runOuterFleetAutomation(dependencies) {
+    const cycle = planOuterFleetCycle(dependencies.reader.readCycle());
+    if (cycle.kind === "outer-fleet-status") {
+      return execute(dependencies.executor, cycle);
+    }
+    const target = planOuterFleetTarget(
+      cycle,
+      dependencies.reader.readTargeting(cycle)
+    );
+    if (target.kind === "outer-fleet-status") {
+      return execute(dependencies.executor, target);
+    }
+    const candidate = planOuterFleetBlueprint(
+      dependencies.reader.readBlueprint(target)
+    );
+    if (candidate.kind === "outer-fleet-status") {
+      return execute(dependencies.executor, candidate);
+    }
+    const readiness = planOuterFleetCandidate(
+      dependencies.reader.readCandidate(candidate)
+    );
+    if (readiness.kind === "outer-fleet-status") {
+      return execute(dependencies.executor, readiness);
+    }
+    return execute(
+      dependencies.executor,
+      planOuterFleetBuild(dependencies.reader.readBuildReadiness(readiness))
+    );
+  }
+
+  // src/adapters/evolve/fleet-outer.ts
+  var GRENADIER_CREW = Object.freeze({
+    corvette: 1,
+    frigate: 2,
+    destroyer: 3,
+    cruiser: 4,
+    battlecruiser: 5,
+    dreadnought: 6,
+    explorer: 6
+  });
+  function requireString4(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function decisionMatches2(expected, actual) {
+    if (expected.kind !== actual.kind || expected.blueprint !== actual.blueprint) {
+      return false;
+    }
+    if (expected.kind === "outer-fleet-status" && actual.kind === "outer-fleet-status") {
+      return expected.nextShipName === actual.nextShipName && expected.messageBeforeUpdate === actual.messageBeforeUpdate && expected.messageAfterUpdate === actual.messageAfterUpdate;
+    }
+    return expected.kind === "build-outer-fleet" && actual.kind === "build-outer-fleet" && expected.targetRegion === actual.targetRegion && expected.targetLocationName === actual.targetLocationName && expected.shipName === actual.shipName && expected.shipCrew === actual.shipCrew && expected.nextShipName === actual.nextShipName;
+  }
+  function readAuthorityAssessment(dependencies, shipCrew) {
+    const raw = requireRecord(
+      dependencies.assessAuthorityRemoval(shipCrew),
+      "Authority removal assessment"
+    );
+    const status2 = requireString4(
+      raw["status"],
+      "Authority removal assessment.status"
+    );
+    if (status2 === "unavailable") return Object.freeze({ status: status2 });
+    if (status2 === "unmanaged") return Object.freeze({ status: status2 });
+    if (status2 !== "ready") {
+      throw new TypeError(`unknown Authority removal status: ${status2}`);
+    }
+    return Object.freeze({
+      status: status2,
+      target: requireNumber(raw["target"], "Authority removal assessment.target"),
+      predicted: requireNumber(
+        raw["predicted"],
+        "Authority removal assessment.predicted"
+      ),
+      blocksRemoval: requireBoolean(
+        raw["blocksRemoval"],
+        "Authority removal assessment.blocksRemoval"
+      )
+    });
+  }
+  function createOuterFleetAdapter(dependencies) {
+    let session = null;
+    let expectedDecision = null;
+    const blueprints = /* @__PURE__ */ new Map();
+    function activeSession() {
+      if (session === null)
+        throw new Error("outer fleet cycle has not been sampled");
+      return session;
+    }
+    function storeBlueprint(token, rawBlueprint, path) {
+      const blueprint = requireRecord(rawBlueprint, path);
+      blueprints.set(token, blueprint);
+      return blueprint;
+    }
+    const reader = Object.freeze({
+      readCycle() {
+        session = null;
+        expectedDecision = null;
+        blueprints.clear();
+        const manager = requireRecord(
+          dependencies.getFleetManagerOuter(),
+          "FleetManagerOuter"
         );
-        const conservativeGroundPower = activeTroopers + activeTanks * 100;
-        const digsiteDefense = conservativeGroundPower > 0 ? Math.min(0.9, 350 / conservativeGroundPower) : 0.5;
-        return Math.max(target, digsiteDefense);
-      };
-      if (settings2.fleetExploreTau && game2.global.tech["tauceti"] === 1 && m.avail(m._explorerBlueprint) && m.shipCount("tauceti", m._explorerBlueprint) < 1) {
-        targetRegion = "tauceti";
-        newShip = m._explorerBlueprint;
-        minCrew = 0;
-      } else {
-        let scanEris = game2.global.tech["eris"] === 1 && m.getWeighting("spc_eris") > 0 && m.syndicate("spc_eris", true, true).s < 50;
-        if (scanEris) {
-          targetRegion = "spc_eris";
-          minCrew = 0;
-        } else {
-          let regionsToProtect = m.Regions.filter(
-            (reg) => m.isUnlocked(reg) && m.getWeighting(reg) > 0 && m.syndicate(reg, false, true) < getDefenseTarget(reg)
-          ).sort(
-            (a, b) => (1 - m.syndicate(b, false, true)) * m.getWeighting(b) - (1 - m.syndicate(a, false, true)) * m.getWeighting(a)
+        const warManager = requireRecord(
+          dependencies.getWarManager(),
+          "WarManager"
+        );
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        session = Object.freeze({
+          manager,
+          warManager,
+          game: game2,
+          settings: settings2,
+          resources: resources2,
+          blueprints
+        });
+        const initFleet = requireFunction(
+          manager["initFleet"],
+          "FleetManagerOuter.initFleet"
+        );
+        const initialized = Boolean(Reflect.apply(initFleet, manager, []));
+        let mode = "none";
+        let manualBlueprintAvailable = false;
+        let configuredMinimumCrew = 0;
+        if (initialized) {
+          mode = requireString4(
+            settings2["fleetOuterShips"],
+            "settings.fleetOuterShips"
           );
-          if (regionsToProtect.length < 1) {
-            m.updateNextShip();
-            m.nextShipMsg = `No more ships currently needed`;
-            return;
+          if (mode === "manual") {
+            const global = requireRecord(game2["global"], "game.global");
+            const space = requireRecord(global["space"], "game.global.space");
+            const yard = requireRecord(
+              space["shipyard"],
+              "game.global.space.shipyard"
+            );
+            const yardBlueprint = storeBlueprint(
+              "yard",
+              yard["blueprint"],
+              "game.global.space.shipyard.blueprint"
+            );
+            const avail = requireFunction(
+              manager["avail"],
+              "FleetManagerOuter.avail"
+            );
+            manualBlueprintAvailable = Boolean(
+              Reflect.apply(avail, manager, [yardBlueprint])
+            );
+          } else if (mode !== "none") {
+            configuredMinimumCrew = requireNumber(
+              settings2["fleetOuterCrew"],
+              "settings.fleetOuterCrew"
+            );
           }
-          targetRegion = regionsToProtect[0];
         }
-        if (settings2.fleetOuterShips === "user") {
-          newShip = m.avail(yard.blueprint) ? yard.blueprint : null;
-        } else {
-          let scout = m.getScoutBlueprint();
-          if (m.avail(scout) && m.shipCount(targetRegion, scout) < m.getMaxScouts(targetRegion)) {
-            newShip = scout;
-          }
-          if (!newShip) {
-            let fighter = m.getFighterBlueprint();
-            newShip = m.avail(fighter) ? fighter : null;
-          }
-        }
-      }
-      if (!newShip) {
-        m.updateNextShip();
-        m.nextShipMsg = `No suitable blueprint for ship to ${m.getLocName(
-          targetRegion
-        )}`;
-        return;
-      }
-      m.updateNextShip(newShip);
-      m.nextShipName = `${m.getShipName(newShip)} to ${m.getLocName(
-        targetRegion
-      )}`;
-      const baseCrew = game2.global.race["grenadier"] ? {
-        corvette: 1,
-        frigate: 2,
-        destroyer: 3,
-        cruiser: 4,
-        battlecruiser: 5,
-        dreadnought: 6,
-        explorer: 6
-      }[newShip.class] : m.ClassCrew[newShip.class];
-      const shipCrew = baseCrew * traitVal2("high_pop", 0, 1);
-      if (settings2.authorityManage && settings2.generalMinimumAuthority !== 0 && game2.global.race.universe === "evil" && resources2.Authority.isUnlocked()) {
-        const assessment = assessAuthorityRemoval3(shipCrew);
-        if (assessment.status === "unavailable") {
-          m.nextShipMsg = `Authority data unavailable; ship construction paused`;
-          return;
-        }
-        if (assessment.status === "ready" && assessment.blocksRemoval) {
-          m.nextShipMsg = `Next ship(${m.nextShipName}) would lower Authority to ${assessment.predicted}, below the ${assessment.target} target`;
-          return;
-        }
-      }
-      let missing = m.getMissingResource(newShip);
-      if (missing) {
-        m.nextShipMsg = `Next ship(${m.nextShipName}) is missing ${resources2[missing].name}`;
-        return;
-      }
-      if (WarManager2.currentCityGarrison - shipCrew < minCrew) {
-        m.nextShipMsg = `Next ship(${m.nextShipName}) is missing crew`;
-        return;
-      }
-      if (m.build(newShip, targetRegion)) {
-        GameLog2.logSuccess(
-          "outer_fleet",
-          `${m.getShipName(
-            newShip
-          )} has been assembled, and dispatched to ${m.getLocName(
-            targetRegion
-          )}.`,
-          ["combat"]
+        const input = Object.freeze({
+          initialized,
+          mode,
+          manualBlueprintAvailable,
+          configuredMinimumCrew
+        });
+        const planned = planOuterFleetCycle(input);
+        expectedDecision = planned.kind === "outer-fleet-status" ? planned : null;
+        return input;
+      },
+      readTargeting(cycle) {
+        const active = activeSession();
+        expectedDecision = null;
+        const global = requireRecord(active.game["global"], "game.global");
+        const tech = requireRecord(global["tech"], "game.global.tech");
+        const space = requireRecord(global["space"], "game.global.space");
+        const exploreTau = requireBoolean(
+          active.settings["fleetExploreTau"],
+          "settings.fleetExploreTau"
         );
-      } else {
-        m.nextShipMsg = `Invalid design! Next ship(${m.nextShipName}) is missing power`;
-        return;
+        const tauTechnology = tech["tauceti"] === void 0 ? 0 : requireNumber(tech["tauceti"], "game.global.tech.tauceti");
+        let explorerAvailable = false;
+        let explorerCount = 0;
+        if (exploreTau && tauTechnology === 1) {
+          const explorer = storeBlueprint(
+            "explorer",
+            active.manager["_explorerBlueprint"],
+            "FleetManagerOuter._explorerBlueprint"
+          );
+          explorerAvailable = Boolean(
+            Reflect.apply(
+              requireFunction(active.manager["avail"], "FleetManagerOuter.avail"),
+              active.manager,
+              [explorer]
+            )
+          );
+          if (explorerAvailable) {
+            explorerCount = requireNumber(
+              Reflect.apply(
+                requireFunction(
+                  active.manager["shipCount"],
+                  "FleetManagerOuter.shipCount"
+                ),
+                active.manager,
+                ["tauceti", explorer]
+              ),
+              "Tau explorer count"
+            );
+          }
+        }
+        const tauSelected = exploreTau && tauTechnology === 1 && explorerAvailable && explorerCount < 1;
+        const erisTechnology = tech["eris"] === void 0 ? 0 : requireNumber(tech["eris"], "game.global.tech.eris");
+        let erisWeighting = 0;
+        let erisSensor = 50;
+        if (!tauSelected && erisTechnology === 1) {
+          erisWeighting = requireNumber(
+            Reflect.apply(
+              requireFunction(
+                active.manager["getWeighting"],
+                "FleetManagerOuter.getWeighting"
+              ),
+              active.manager,
+              ["spc_eris"]
+            ),
+            "Eris fleet weighting"
+          );
+          if (erisWeighting > 0) {
+            const assessment = requireRecord(
+              Reflect.apply(
+                requireFunction(
+                  active.manager["syndicate"],
+                  "FleetManagerOuter.syndicate"
+                ),
+                active.manager,
+                ["spc_eris", true, true]
+              ),
+              "Eris syndicate assessment"
+            );
+            erisSensor = requireNumber(
+              assessment["s"],
+              "Eris syndicate assessment.s"
+            );
+          }
+        }
+        const erisSelected = !tauSelected && erisTechnology === 1 && erisWeighting > 0 && erisSensor < 50;
+        const regions = [];
+        if (!tauSelected && !erisSelected) {
+          const rawRegions = active.manager["Regions"];
+          if (!Array.isArray(rawRegions)) {
+            throw new TypeError("FleetManagerOuter.Regions must be an array");
+          }
+          const isUnlocked2 = requireFunction(
+            active.manager["isUnlocked"],
+            "FleetManagerOuter.isUnlocked"
+          );
+          const getWeighting = requireFunction(
+            active.manager["getWeighting"],
+            "FleetManagerOuter.getWeighting"
+          );
+          const syndicate = requireFunction(
+            active.manager["syndicate"],
+            "FleetManagerOuter.syndicate"
+          );
+          const getMaxDefense = requireFunction(
+            active.manager["getMaxDefense"],
+            "FleetManagerOuter.getMaxDefense"
+          );
+          for (let index = 0; index < rawRegions.length; index++) {
+            const id = requireString4(
+              rawRegions[index],
+              `FleetManagerOuter.Regions[${index}]`
+            );
+            const unlocked = Boolean(
+              Reflect.apply(isUnlocked2, active.manager, [id])
+            );
+            const weighting = unlocked ? requireNumber(
+              Reflect.apply(getWeighting, active.manager, [id]),
+              `fleet weighting ${id}`
+            ) : 0;
+            const syndicateRatio = unlocked && weighting > 0 ? requireNumber(
+              Reflect.apply(syndicate, active.manager, [id, false, true]),
+              `syndicate ratio ${id}`
+            ) : 1;
+            const maximumDefense = unlocked && weighting > 0 ? requireNumber(
+              Reflect.apply(getMaxDefense, active.manager, [id]),
+              `maximum fleet defense ${id}`
+            ) : 0;
+            let digsiteIncomplete = false;
+            let requestedTroopers = 0;
+            let requestedTanks = 0;
+            let reportedSupport = null;
+            if (id === "spc_eris") {
+              const rawDigsite = space["digsite"];
+              if (rawDigsite !== void 0) {
+                const digsite = requireRecord(
+                  rawDigsite,
+                  "game.global.space.digsite"
+                );
+                const count = digsite["count"];
+                if (count !== void 0) {
+                  digsiteIncomplete = requireNumber(count, "game.global.space.digsite.count") < 100;
+                }
+              }
+              if (digsiteIncomplete) {
+                const trooper = space["shock_trooper"];
+                const tank = space["tank"];
+                requestedTroopers = trooper === void 0 ? 0 : requireNumber(
+                  requireRecord(trooper, "game.global.space.shock_trooper")["on"] ?? 0,
+                  "game.global.space.shock_trooper.on"
+                );
+                requestedTanks = tank === void 0 ? 0 : requireNumber(
+                  requireRecord(tank, "game.global.space.tank")["on"] ?? 0,
+                  "game.global.space.tank.on"
+                );
+                const support = active.resources["Eris_Support"];
+                if (typeof support === "object" && support !== null) {
+                  const rawSupport = support["currentQuantity"];
+                  reportedSupport = typeof rawSupport === "number" && Number.isFinite(rawSupport) ? rawSupport : null;
+                }
+              }
+            }
+            regions.push(
+              Object.freeze({
+                id,
+                unlocked,
+                weighting,
+                syndicateRatio,
+                maximumDefense,
+                digsiteIncomplete,
+                requestedTroopers,
+                requestedTanks,
+                reportedSupport
+              })
+            );
+          }
+        }
+        const input = Object.freeze({
+          exploreTau,
+          tauTechnology,
+          explorerAvailable,
+          explorerCount,
+          erisTechnology,
+          erisWeighting,
+          erisSensor,
+          regions: Object.freeze(regions)
+        });
+        const planned = planOuterFleetTarget(cycle, input);
+        expectedDecision = planned.kind === "outer-fleet-status" ? planned : null;
+        return input;
+      },
+      readBlueprint(target) {
+        const active = activeSession();
+        expectedDecision = null;
+        const global = requireRecord(active.game["global"], "game.global");
+        const space = requireRecord(global["space"], "game.global.space");
+        const yard = requireRecord(
+          space["shipyard"],
+          "game.global.space.shipyard"
+        );
+        const avail = requireFunction(
+          active.manager["avail"],
+          "FleetManagerOuter.avail"
+        );
+        let yardAvailable = false;
+        let scoutAvailable = false;
+        let scoutCount = 0;
+        let maximumScouts = 0;
+        let fighterAvailable = false;
+        if (target.forcedBlueprint !== "explorer" && target.mode === "user") {
+          const yardBlueprint = storeBlueprint(
+            "yard",
+            yard["blueprint"],
+            "game.global.space.shipyard.blueprint"
+          );
+          yardAvailable = Boolean(
+            Reflect.apply(avail, active.manager, [yardBlueprint])
+          );
+        } else if (target.forcedBlueprint === null) {
+          const getScout = requireFunction(
+            active.manager["getScoutBlueprint"],
+            "FleetManagerOuter.getScoutBlueprint"
+          );
+          const scout = storeBlueprint(
+            "scout",
+            Reflect.apply(getScout, active.manager, []),
+            "scout blueprint"
+          );
+          scoutAvailable = Boolean(Reflect.apply(avail, active.manager, [scout]));
+          if (scoutAvailable) {
+            scoutCount = requireNumber(
+              Reflect.apply(
+                requireFunction(
+                  active.manager["shipCount"],
+                  "FleetManagerOuter.shipCount"
+                ),
+                active.manager,
+                [target.targetRegion, scout]
+              ),
+              `scout count ${target.targetRegion}`
+            );
+            maximumScouts = requireNumber(
+              Reflect.apply(
+                requireFunction(
+                  active.manager["getMaxScouts"],
+                  "FleetManagerOuter.getMaxScouts"
+                ),
+                active.manager,
+                [target.targetRegion]
+              ),
+              `maximum scouts ${target.targetRegion}`
+            );
+          }
+          if (!scoutAvailable || scoutCount >= maximumScouts) {
+            const getFighter = requireFunction(
+              active.manager["getFighterBlueprint"],
+              "FleetManagerOuter.getFighterBlueprint"
+            );
+            const fighter = storeBlueprint(
+              "fighter",
+              Reflect.apply(getFighter, active.manager, []),
+              "fighter blueprint"
+            );
+            fighterAvailable = Boolean(
+              Reflect.apply(avail, active.manager, [fighter])
+            );
+          }
+        }
+        const targetLocationName = requireString4(
+          Reflect.apply(
+            requireFunction(
+              active.manager["getLocName"],
+              "FleetManagerOuter.getLocName"
+            ),
+            active.manager,
+            [target.targetRegion]
+          ),
+          `location name ${target.targetRegion}`
+        );
+        const input = Object.freeze({
+          target,
+          targetLocationName,
+          yardAvailable,
+          scoutAvailable,
+          scoutCount,
+          maximumScouts,
+          fighterAvailable
+        });
+        const planned = planOuterFleetBlueprint(input);
+        expectedDecision = planned.kind === "outer-fleet-status" ? planned : null;
+        return input;
+      },
+      readCandidate(candidate) {
+        const active = activeSession();
+        expectedDecision = null;
+        const blueprint = blueprints.get(candidate.blueprint);
+        if (blueprint === void 0) {
+          throw new Error(
+            `outer fleet blueprint ${candidate.blueprint} is missing`
+          );
+        }
+        const shipName = requireString4(
+          Reflect.apply(
+            requireFunction(
+              active.manager["getShipName"],
+              "FleetManagerOuter.getShipName"
+            ),
+            active.manager,
+            [blueprint]
+          ),
+          `ship name ${candidate.blueprint}`
+        );
+        const shipClass = requireString4(
+          blueprint["class"],
+          `${candidate.blueprint} blueprint.class`
+        );
+        const global = requireRecord(active.game["global"], "game.global");
+        const race = requireRecord(global["race"], "game.global.race");
+        const baseCrew = race["grenadier"] ? requireNumber(
+          GRENADIER_CREW[shipClass],
+          `grenadier crew for ${shipClass}`
+        ) : requireNumber(
+          requireRecord(
+            active.manager["ClassCrew"],
+            "FleetManagerOuter.ClassCrew"
+          )[shipClass],
+          `FleetManagerOuter.ClassCrew.${shipClass}`
+        );
+        const shipCrew = baseCrew * requireNumber(
+          dependencies.traitVal("high_pop", 0, 1),
+          "traitVal(high_pop)"
+        );
+        let authority = Object.freeze({
+          status: "not-required"
+        });
+        const manageAuthority = requireBoolean(
+          active.settings["authorityManage"],
+          "settings.authorityManage"
+        );
+        const minimumAuthority = requireNumber(
+          active.settings["generalMinimumAuthority"],
+          "settings.generalMinimumAuthority"
+        );
+        if (manageAuthority && minimumAuthority !== 0 && race["universe"] === "evil") {
+          const authorityResource = requireRecord(
+            active.resources["Authority"],
+            "resources.Authority"
+          );
+          const isUnlocked2 = requireFunction(
+            authorityResource["isUnlocked"],
+            "resources.Authority.isUnlocked"
+          );
+          if (Reflect.apply(isUnlocked2, authorityResource, [])) {
+            authority = readAuthorityAssessment(dependencies, shipCrew);
+          }
+        }
+        const input = Object.freeze({
+          candidate,
+          shipName,
+          shipCrew,
+          authority
+        });
+        const planned = planOuterFleetCandidate(input);
+        expectedDecision = planned.kind === "outer-fleet-status" ? planned : null;
+        return input;
+      },
+      readBuildReadiness(plan) {
+        const active = activeSession();
+        expectedDecision = null;
+        const blueprint = blueprints.get(plan.blueprint);
+        if (blueprint === void 0) {
+          throw new Error(`outer fleet blueprint ${plan.blueprint} is missing`);
+        }
+        const missingResource = Reflect.apply(
+          requireFunction(
+            active.manager["getMissingResource"],
+            "FleetManagerOuter.getMissingResource"
+          ),
+          active.manager,
+          [blueprint]
+        );
+        let missingResourceName = null;
+        let currentCityGarrison = 0;
+        if (missingResource) {
+          const resourceId3 = requireString4(
+            missingResource,
+            "missing outer-fleet resource id"
+          );
+          const resource = requireRecord(
+            active.resources[resourceId3],
+            `resources.${resourceId3}`
+          );
+          missingResourceName = requireString4(
+            resource["name"],
+            `resources.${resourceId3}.name`
+          );
+        } else {
+          currentCityGarrison = requireNumber(
+            active.warManager["currentCityGarrison"],
+            "WarManager.currentCityGarrison"
+          );
+        }
+        const input = Object.freeze({
+          plan,
+          missingResourceName,
+          currentCityGarrison
+        });
+        expectedDecision = planOuterFleetBuild(input);
+        return input;
       }
-    };
+    });
+    const executor = Object.freeze({
+      execute(decision2) {
+        const active = session;
+        const expected = expectedDecision;
+        if (active === null || expected === null) {
+          return stale(
+            "outer-fleet-session-missing",
+            "outer fleet session is missing"
+          );
+        }
+        if (dependencies.getFleetManagerOuter() !== active.manager || dependencies.getWarManager() !== active.warManager || dependencies.getGame() !== active.game || dependencies.getSettings() !== active.settings || dependencies.getResources() !== active.resources) {
+          return stale(
+            "outer-fleet-source-changed",
+            "outer fleet source changed"
+          );
+        }
+        if (!decisionMatches2(expected, decision2)) {
+          return rejected2(
+            "invalid-outer-fleet-decision",
+            "outer fleet decision does not match the sampled plan"
+          );
+        }
+        const blueprint = decision2.blueprint === null ? null : blueprints.get(decision2.blueprint) ?? null;
+        if (decision2.blueprint !== null && blueprint === null) {
+          return stale(
+            "outer-fleet-blueprint-changed",
+            "outer fleet blueprint changed"
+          );
+        }
+        const updateNextShip = requireFunction(
+          active.manager["updateNextShip"],
+          "FleetManagerOuter.updateNextShip"
+        );
+        const build = decision2.kind === "build-outer-fleet" ? requireFunction(active.manager["build"], "FleetManagerOuter.build") : null;
+        expectedDecision = null;
+        if (decision2.kind === "outer-fleet-status" && decision2.messageBeforeUpdate !== null) {
+          active.manager["nextShipMsg"] = decision2.messageBeforeUpdate;
+        }
+        Reflect.apply(updateNextShip, active.manager, [blueprint]);
+        if (decision2.nextShipName !== null) {
+          active.manager["nextShipName"] = decision2.nextShipName;
+        }
+        if (decision2.kind === "outer-fleet-status" && decision2.messageAfterUpdate !== null) {
+          active.manager["nextShipMsg"] = decision2.messageAfterUpdate;
+        }
+        if (decision2.kind === "outer-fleet-status") return SUCCEEDED;
+        if (!Reflect.apply(build, active.manager, [
+          blueprint,
+          decision2.targetRegion
+        ])) {
+          active.manager["nextShipMsg"] = `Invalid design! Next ship(${decision2.nextShipName}) is missing power`;
+          return SUCCEEDED;
+        }
+        const gameLog = requireRecord(dependencies.getGameLog(), "GameLog");
+        const logSuccess = requireFunction(
+          gameLog["logSuccess"],
+          "GameLog.logSuccess"
+        );
+        Reflect.apply(logSuccess, gameLog, [
+          "outer_fleet",
+          `${decision2.shipName} has been assembled, and dispatched to ${decision2.targetLocationName}.`,
+          ["combat"]
+        ]);
+        return SUCCEEDED;
+      }
+    });
+    return Object.freeze({ reader, executor });
   }
 
   // src/automation/combat/fleet.ts
@@ -41816,12 +42472,12 @@
   function createCustomRaceUI({ getContext }) {
     function showCustomRaceImportStatus2(message, danger = false) {
       const { $: $2 } = getContext();
-      let status = $2("#scriptCustomRaceImportStatus");
-      if (status.length === 0) {
-        status = $2('<p id="scriptCustomRaceImportStatus"></p>');
-        $2("#celestialLab .create").before(status);
+      let status2 = $2("#scriptCustomRaceImportStatus");
+      if (status2.length === 0) {
+        status2 = $2('<p id="scriptCustomRaceImportStatus"></p>');
+        $2("#celestialLab .create").before(status2);
       }
-      status.toggleClass("has-text-danger", danger).toggleClass("has-text-warning", !danger).text(message);
+      status2.toggleClass("has-text-danger", danger).toggleClass("has-text-warning", !danger).text(message);
     }
     function getCustomRacePreset2(raw = false) {
       const { settingsRaw: settingsRaw2, settings: settings2 } = getContext();
@@ -47930,7 +48586,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const autoFleetOuter = createAutoFleetOuter({
+    const outerFleetAdapter = createOuterFleetAdapter({
       getFleetManagerOuter: () => FleetManagerOuter,
       getWarManager: () => WarManager,
       getGame: () => game,
@@ -47938,8 +48594,9 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getResources: () => resources,
       traitVal,
       assessAuthorityRemoval,
-      GameLog
+      getGameLog: () => GameLog
     });
+    const autoFleetOuter = () => runOuterFleetAutomation(outerFleetAdapter);
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         galaxyIntelligence: {
