@@ -238,7 +238,9 @@ import {
   planMineRatio,
   planExtractorRatios,
 } from "./domain/resource-ratios.ts";
-import { createAutoFactory } from "./automation/economy/factory.ts";
+import { runFactoryAutomation } from "./application/factory.ts";
+import { createFactoryAdapter } from "./adapters/evolve/factory.ts";
+import { createFactoryTooltipPublisher } from "./adapters/browser/factory-tooltips.ts";
 import { runMiningDroidAutomation } from "./application/mining-droid.ts";
 import {
   createMiningDroidCommandExecutor,
@@ -3158,14 +3160,21 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     smelterExecutor.execute(decision);
   };
 
-  const autoFactory = createAutoFactory({
-    FactoryManager,
+  const factoryAdapter = createFactoryAdapter({
+    getManager: () => FactoryManager,
     getState: () => state,
     getSettings: () => settings,
     getGame: () => game,
     getResources: () => resources,
-    findRequiredResourceWeight,
+    consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
   });
+  const factoryTooltips = createFactoryTooltipPublisher(() => state);
+  const autoFactory = () =>
+    runFactoryAutomation({
+      reader: factoryAdapter.reader,
+      executor: factoryAdapter.executor,
+      tooltips: factoryTooltips,
+    });
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {

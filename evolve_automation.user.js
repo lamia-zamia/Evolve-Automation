@@ -22567,161 +22567,603 @@
     );
   }
 
-  // src/automation/economy/factory.ts
-  function createAutoFactory({
-    FactoryManager: FactoryManager2,
-    getState,
-    getSettings,
-    getGame,
-    getResources,
-    findRequiredResourceWeight: findRequiredResourceWeight3
-  }) {
-    return function autoFactory2() {
-      const state2 = getState();
-      const settings2 = getSettings();
-      const game2 = getGame();
-      const resources2 = getResources();
-      if (!FactoryManager2.initIndustry()) {
-        return;
-      }
-      let allProducts = Object.values(FactoryManager2.Productions);
-      let priorityGroups = {};
-      let factoryAdjustments = {};
-      for (let i = 0; i < allProducts.length; i++) {
-        let production = allProducts[i];
-        state2.tooltips["iFactory" + production.id] = `Disabled<br>`;
-        if (production.unlocked && production.enabled) {
-          if (production.weighting > 0) {
-            let priority = production.resource.isDemanded() ? Math.max(production.priority, 100) : production.priority;
-            if (priority !== 0) {
-              priorityGroups[priority] = priorityGroups[priority] ?? [];
-              priorityGroups[priority].push(production);
-              state2.tooltips["iFactory" + production.id] = `Low priority<br>`;
-            }
+  // src/domain/factory.ts
+  function setTooltip(tooltips, productionId, value) {
+    tooltips.set(`iFactory${productionId}`, value);
+  }
+  function appendTooltip(tooltips, productionId, value) {
+    const key = `iFactory${productionId}`;
+    tooltips.set(key, (tooltips.get(key) ?? "") + value);
+  }
+  function planFactory(input) {
+    if (!input.initialized) return null;
+    const tooltips = /* @__PURE__ */ new Map();
+    const priorityGroups = /* @__PURE__ */ new Map();
+    const targets = /* @__PURE__ */ new Map();
+    for (const production of input.productions) {
+      setTooltip(tooltips, production.id, "Disabled<br>");
+      if (production.unlocked && production.enabled) {
+        if (production.weighting > 0) {
+          const priority = production.demanded ? Math.max(production.priority, 100) : production.priority;
+          if (priority !== 0) {
+            const group = priorityGroups.get(priority) ?? [];
+            group.push(production);
+            priorityGroups.set(priority, group);
+            setTooltip(tooltips, production.id, "Low priority<br>");
           }
-          factoryAdjustments[production.id] = 0;
         }
+        targets.set(production.id, 0);
       }
-      let priorityList = Object.keys(priorityGroups).sort((a, b) => b - a).map((key) => priorityGroups[key]);
-      if (priorityGroups["-1"] && priorityList.length > 1) {
-        priorityList.splice(priorityList.indexOf(priorityGroups["-1"], 1));
-        priorityList[0].push(...priorityGroups["-1"]);
-      }
-      let onDemand = false;
-      if (settings2.productionFactoryWeighting === "demanded") {
-        let usefulProducts = allProducts.filter(
-          (production) => production.resource.currentQuantity < production.resource.storageRequired
-        );
-        if (usefulProducts.length > 0) {
-          onDemand = true;
-        }
-      }
-      const scalingFactor = settings2.productionFactoryWeighting === "buildings" && state2.unlockedBuildings.length > 0 ? (resource) => findRequiredResourceWeight3(resource) ?? 100 : settings2.productionFactoryWeighting === "demanded" && onDemand ? (resource) => resource.currentQuantity < resource.storageRequired ? 1 : 0 : () => 1;
-      const scaledWeights = Object.fromEntries(
-        allProducts.map((production) => [
-          production.resource.id,
-          production.weighting * scalingFactor(production.resource)
-        ])
+    }
+    const priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group);
+    const supplementary = priorityGroups.get(-1);
+    if (supplementary !== void 0 && priorityList.length > 1) {
+      priorityList.splice(priorityList.indexOf(supplementary, 1));
+      priorityList[0]?.push(...supplementary);
+    }
+    const onDemand = input.weightingMode === "demanded" && input.productions.some(
+      (production) => production.currentQuantity < production.storageRequired
+    );
+    const scaledWeights = /* @__PURE__ */ new Map();
+    for (const production of input.productions) {
+      const scale = input.weightingMode === "buildings" && input.hasUnlockedBuildings ? production.buildingWeight : input.weightingMode === "demanded" && onDemand ? production.currentQuantity < production.storageRequired ? 1 : 0 : 1;
+      scaledWeights.set(
+        production.outputResourceId,
+        production.weighting * scale
       );
-      let remainingFactories = FactoryManager2.maxOperating();
-      for (let i = 0; i < priorityList.length && remainingFactories > 0; i++) {
-        let products = priorityList[i].sort(
-          (a, b) => scaledWeights[a.resource.id] - scaledWeights[b.resource.id]
+    }
+    let remaining = input.maximum;
+    for (let groupIndex = 0; groupIndex < priorityList.length && remaining > 0; groupIndex++) {
+      const products = [...priorityList[groupIndex] ?? []].sort(
+        (left, right) => (scaledWeights.get(left.outputResourceId) ?? 0) - (scaledWeights.get(right.outputResourceId) ?? 0)
+      );
+      while (remaining > 0) {
+        const beforeDistribution = remaining;
+        const totalWeight = products.reduce(
+          (sum, production) => sum + (scaledWeights.get(production.outputResourceId) ?? 0),
+          0
         );
-        while (remainingFactories > 0) {
-          let factoriesToDistribute = remainingFactories;
-          let totalPriorityWeight = products.reduce(
-            (sum, production) => sum + scaledWeights[production.resource.id],
-            0
-          );
-          for (let j = products.length - 1; j >= 0 && remainingFactories > 0; j--) {
-            let production = products[j];
-            state2.tooltips["iFactory" + production.id] = ``;
-            let calculatedRequiredFactories = Math.min(
-              remainingFactories,
-              Math.max(
-                1,
-                Math.floor(
-                  factoriesToDistribute / totalPriorityWeight * scaledWeights[production.resource.id]
-                )
+        for (let index = products.length - 1; index >= 0 && remaining > 0; index--) {
+          const production = products[index];
+          if (production === void 0) continue;
+          setTooltip(tooltips, production.id, "");
+          const calculated = Math.min(
+            remaining,
+            Math.max(
+              1,
+              Math.floor(
+                beforeDistribution / totalWeight * (scaledWeights.get(production.outputResourceId) ?? 0)
               )
-            );
-            let actualRequiredFactories = calculatedRequiredFactories;
-            if (!production.resource.isUseful()) {
-              actualRequiredFactories = 0;
-              state2.tooltips["iFactory" + production.id] += `Resource capped<br>`;
+            )
+          );
+          let actual = calculated;
+          if (!production.useful) {
+            actual = 0;
+            appendTooltip(tooltips, production.id, "Resource capped<br>");
+          }
+          for (const cost of production.costs) {
+            if (!cost.unlocked) continue;
+            if (!production.demanded) {
+              if (!input.useDemandedMaterials && cost.demanded) {
+                actual = 0;
+                appendTooltip(
+                  tooltips,
+                  production.id,
+                  `${cost.name} is demanded<br>`
+                );
+                break;
+              }
+              if (cost.storageRatio < input.minimumIngredientRatio) {
+                actual = 0;
+                appendTooltip(
+                  tooltips,
+                  production.id,
+                  `${cost.name} under min materials ratio<br>`
+                );
+                break;
+              }
             }
-            for (let resourceCost of production.cost) {
-              let usedMaterial = resourceCost.resource;
-              if (!usedMaterial.isUnlocked()) {
-                continue;
-              }
-              if (!production.resource.isDemanded()) {
-                if (!settings2.useDemanded && usedMaterial.isDemanded()) {
-                  actualRequiredFactories = 0;
-                  state2.tooltips["iFactory" + production.id] += `${usedMaterial.name} is demanded<br>`;
-                  break;
-                }
-                if (usedMaterial.storageRatio < settings2.productionFactoryMinIngredients) {
-                  actualRequiredFactories = 0;
-                  state2.tooltips["iFactory" + production.id] += `${usedMaterial.name} under min materials ratio<br>`;
-                  break;
-                }
-              }
-              if (usedMaterial.currentQuantity < actualRequiredFactories * resourceCost.quantity * CONSUMPTION_BALANCE_MIN + resourceCost.minRateOfChange || usedMaterial.isDemanded()) {
-                let previousCost = FactoryManager2.currentProduction(production) * resourceCost.quantity;
-                let currentCost = factoryAdjustments[production.id] * resourceCost.quantity;
-                let rate = usedMaterial.rateOfChange + previousCost - currentCost - resourceCost.minRateOfChange;
-                if (production.resource.isDemanded()) {
-                  rate += usedMaterial.currentQuantity;
-                }
-                let affordableAmount = Math.floor(rate / resourceCost.quantity);
-                if (affordableAmount < 1) {
-                  state2.tooltips["iFactory" + production.id] += `Too low ${usedMaterial.name} income<br>`;
-                }
-                actualRequiredFactories = Math.min(
-                  actualRequiredFactories,
-                  affordableAmount
+            if (cost.currentQuantity < actual * cost.quantity * input.consumptionBalanceMinimum + cost.minRateOfChange || cost.demanded) {
+              const previousCost = production.currentProduction * cost.quantity;
+              const currentCost = (targets.get(production.id) ?? 0) * cost.quantity;
+              let rate = cost.rateOfChange + previousCost - currentCost - cost.minRateOfChange;
+              if (production.demanded) rate += cost.currentQuantity;
+              const affordable = Math.floor(rate / cost.quantity);
+              if (affordable < 1) {
+                appendTooltip(
+                  tooltips,
+                  production.id,
+                  `Too low ${cost.name} income<br>`
                 );
               }
+              actual = Math.min(actual, affordable);
             }
-            if (settings2.prestigeType === "bioseed" && settings2.prestigeBioseedConstruct && production === FactoryManager2.Productions.NanoTube) {
-              let reservedNeutronium = game2.global.race["truepath"] ? 500 : 250;
-              if (resources2.Neutronium.currentQuantity < reservedNeutronium) {
-                state2.tooltips["iFactory" + production.id] += `${reservedNeutronium} ${resources2.Neutronium.name} reserved<br>`;
-                actualRequiredFactories = 0;
+          }
+          if (input.bioseedConstruct && production.isNanoTube && input.neutroniumCurrent < (input.truepath ? 500 : 250)) {
+            const reserved = input.truepath ? 500 : 250;
+            appendTooltip(
+              tooltips,
+              production.id,
+              `${reserved} ${input.neutroniumName} reserved<br>`
+            );
+            actual = 0;
+          }
+          if (actual > 0) {
+            remaining -= actual;
+            targets.set(
+              production.id,
+              (targets.get(production.id) ?? 0) + actual
+            );
+          }
+          if (actual < calculated) products.splice(index, 1);
+        }
+        if (beforeDistribution === remaining) break;
+      }
+    }
+    return Object.freeze({
+      expectedMaximum: input.maximum,
+      adjustments: Object.freeze(
+        input.productions.flatMap(
+          (production) => targets.has(production.id) ? [
+            Object.freeze({
+              productionId: production.id,
+              outputResourceId: production.outputResourceId,
+              expectedCurrent: production.currentProduction,
+              delta: (targets.get(production.id) ?? 0) - production.currentProduction
+            })
+          ] : []
+        )
+      ),
+      tooltips: Object.freeze(
+        [...tooltips.entries()].map(
+          ([key, value]) => Object.freeze({ key, value })
+        )
+      )
+    });
+  }
+
+  // src/application/factory.ts
+  var SUCCEEDED2 = Object.freeze({
+    status: "succeeded"
+  });
+  function runFactoryAutomation(dependencies) {
+    const decision = planFactory(dependencies.reader.read());
+    if (decision === null) return SUCCEEDED2;
+    dependencies.tooltips.publish(decision.tooltips);
+    return dependencies.executor.execute(decision);
+  }
+
+  // src/adapters/evolve/factory.ts
+  function requireId(value, path) {
+    if (typeof value !== "string" || value.length === 0) {
+      throw new TypeError(`${path} must be a non-empty string`);
+    }
+    return value;
+  }
+  function callBoolean7(record, name, path) {
+    return Boolean(
+      Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
+    );
+  }
+  function callNumber4(record, name, path, ...args) {
+    return requireNumber(
+      Reflect.apply(
+        requireFunction(record[name], `${path}.${name}`),
+        record,
+        args
+      ),
+      `${path}.${name}()`
+    );
+  }
+  function requireCount(value, path) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new TypeError(`${path} must be a non-negative safe integer`);
+    }
+    return value;
+  }
+  function optionalWeighting(production, path) {
+    const value = production["weighting"];
+    return value === void 0 || value === null ? 0 : requireNumber(value, `${path}.weighting`);
+  }
+  function readCatalog(manager) {
+    const productions = requireRecord(
+      manager["Productions"],
+      "FactoryManager.Productions"
+    );
+    const values = [];
+    const byId = /* @__PURE__ */ new Map();
+    for (const [key, raw] of Object.entries(productions)) {
+      const path = `FactoryManager.Productions.${key}`;
+      const value = requireRecord(raw, path);
+      const id = requireId(value["id"], `${path}.id`);
+      const resource = requireRecord(value["resource"], `${path}.resource`);
+      const outputResourceId = requireId(resource["id"], `${path}.resource.id`);
+      if (byId.has(id)) {
+        throw new TypeError(`FactoryManager.Productions has duplicate id ${id}`);
+      }
+      const identity2 = Object.freeze({ id, outputResourceId, value });
+      values.push(identity2);
+      byId.set(id, identity2);
+    }
+    return Object.freeze({
+      values: Object.freeze(values),
+      byId,
+      nanoTube: productions["NanoTube"]
+    });
+  }
+  function readBuildingWeight(buildings2, resourceId3, currentQuantity) {
+    for (let index = 0; index < buildings2.length; index++) {
+      const path = `state.unlockedBuildings[${index}]`;
+      const building = requireRecord(buildings2[index], path);
+      const cost = requireRecord(building["cost"], `${path}.cost`);
+      const required = cost[resourceId3];
+      if (required === void 0) continue;
+      const quantity = requireNumber(required, `${path}.cost.${resourceId3}`);
+      if (quantity > currentQuantity) {
+        return requireNumber(building["weighting"], `${path}.weighting`);
+      }
+    }
+    return 100;
+  }
+  function readMaterial(raw, path) {
+    const cost = requireRecord(raw, path);
+    const resource = requireRecord(cost["resource"], `${path}.resource`);
+    const resourceId3 = requireId(resource["id"], `${path}.resource.id`);
+    const unlocked = callBoolean7(resource, "isUnlocked", `${path}.resource`);
+    if (!unlocked) {
+      return Object.freeze({
+        resourceId: resourceId3,
+        name: "",
+        unlocked: false,
+        demanded: false,
+        currentQuantity: 0,
+        rateOfChange: 0,
+        storageRatio: 0,
+        quantity: 0,
+        minRateOfChange: 0
+      });
+    }
+    const name = resource["name"];
+    if (typeof name !== "string") {
+      throw new TypeError(`${path}.resource.name must be a string`);
+    }
+    return Object.freeze({
+      resourceId: resourceId3,
+      name,
+      unlocked: true,
+      demanded: callBoolean7(resource, "isDemanded", `${path}.resource`),
+      currentQuantity: requireNumber(
+        resource["currentQuantity"],
+        `${path}.resource.currentQuantity`
+      ),
+      rateOfChange: requireNumber(
+        resource["rateOfChange"],
+        `${path}.resource.rateOfChange`
+      ),
+      storageRatio: requireNumber(
+        resource["storageRatio"],
+        `${path}.resource.storageRatio`
+      ),
+      quantity: requireNumber(cost["quantity"], `${path}.quantity`),
+      minRateOfChange: requireNumber(
+        cost["minRateOfChange"],
+        `${path}.minRateOfChange`
+      )
+    });
+  }
+  function readCosts3(value, path) {
+    if (!Array.isArray(value)) {
+      throw new TypeError(`${path} must be an array`);
+    }
+    return Object.freeze(
+      value.map((cost, index) => readMaterial(cost, `${path}[${index}]`))
+    );
+  }
+  function emptyInput(balance) {
+    return Object.freeze({
+      initialized: false,
+      maximum: 0,
+      weightingMode: "",
+      hasUnlockedBuildings: false,
+      useDemandedMaterials: false,
+      minimumIngredientRatio: 0,
+      consumptionBalanceMinimum: balance,
+      bioseedConstruct: false,
+      truepath: false,
+      neutroniumCurrent: 0,
+      neutroniumName: "",
+      productions: Object.freeze([])
+    });
+  }
+  function createFactoryAdapter(dependencies) {
+    const balance = requireNumber(
+      dependencies.consumptionBalanceMinimum,
+      "consumptionBalanceMinimum"
+    );
+    let session = null;
+    const reader = Object.freeze({
+      read() {
+        const manager = requireRecord(
+          dependencies.getManager(),
+          "FactoryManager"
+        );
+        if (!callBoolean7(manager, "initIndustry", "FactoryManager")) {
+          session = null;
+          return emptyInput(balance);
+        }
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const weightingValue = settings2["productionFactoryWeighting"];
+        const weightingMode = typeof weightingValue === "string" ? weightingValue : "";
+        const state2 = requireRecord(dependencies.getState(), "state");
+        let unlockedBuildings = Object.freeze([]);
+        if (weightingMode === "buildings") {
+          const value = state2["unlockedBuildings"];
+          if (!Array.isArray(value)) {
+            throw new TypeError("state.unlockedBuildings must be an array");
+          }
+          unlockedBuildings = value;
+        }
+        const catalog = readCatalog(manager);
+        const partial = catalog.values.map((identity2, index) => {
+          const path = `FactoryManager.Productions[${index}]`;
+          const production = identity2.value;
+          const output = requireRecord(
+            production["resource"],
+            `${path}.resource`
+          );
+          const currentQuantity = requireNumber(
+            output["currentQuantity"],
+            `${path}.resource.currentQuantity`
+          );
+          const storageRequired = requireNumber(
+            output["storageRequired"],
+            `${path}.resource.storageRequired`
+          );
+          const unlocked = Boolean(production["unlocked"]);
+          const enabled = Boolean(production["enabled"]);
+          const weighting = optionalWeighting(production, path);
+          const grouped = unlocked && enabled && weighting > 0;
+          return {
+            identity: identity2,
+            path,
+            production,
+            output,
+            currentQuantity,
+            storageRequired,
+            unlocked,
+            enabled,
+            weighting,
+            priority: grouped ? requireNumber(production["priority"], `${path}.priority`) : 0,
+            demanded: grouped ? callBoolean7(output, "isDemanded", `${path}.resource`) : false,
+            buildingWeight: weightingMode === "buildings" && unlockedBuildings.length > 0 ? readBuildingWeight(
+              unlockedBuildings,
+              identity2.outputResourceId,
+              currentQuantity
+            ) : 100
+          };
+        });
+        const maximum = requireCount(
+          callNumber4(manager, "maxOperating", "FactoryManager"),
+          "FactoryManager.maxOperating()"
+        );
+        const active = partial.filter((entry) => {
+          const priority = entry.demanded ? Math.max(entry.priority, 100) : entry.priority;
+          return maximum > 0 && entry.unlocked && entry.enabled && entry.weighting > 0 && priority !== 0;
+        });
+        const minimumIngredientRatio = active.length > 0 ? requireNumber(
+          settings2["productionFactoryMinIngredients"],
+          "settings.productionFactoryMinIngredients"
+        ) : 0;
+        const bioseedConstruct = settings2["prestigeType"] === "bioseed" && Boolean(settings2["prestigeBioseedConstruct"]);
+        const needsNeutronium = bioseedConstruct && active.some((entry) => entry.production === catalog.nanoTube);
+        let truepath = false;
+        let neutroniumCurrent = 0;
+        let neutroniumName = "";
+        if (needsNeutronium) {
+          const game2 = requireRecord(dependencies.getGame(), "game");
+          const global = requireRecord(game2["global"], "game.global");
+          const race = requireRecord(global["race"], "game.global.race");
+          truepath = Boolean(race["truepath"]);
+          const resources2 = requireRecord(
+            dependencies.getResources(),
+            "resources"
+          );
+          const neutronium = requireRecord(
+            resources2["Neutronium"],
+            "resources.Neutronium"
+          );
+          neutroniumCurrent = requireNumber(
+            neutronium["currentQuantity"],
+            "resources.Neutronium.currentQuantity"
+          );
+          const name = neutronium["name"];
+          if (typeof name !== "string") {
+            throw new TypeError("resources.Neutronium.name must be a string");
+          }
+          neutroniumName = name;
+        }
+        const activeIds = new Set(active.map((entry) => entry.identity.id));
+        const productions = partial.map(
+          (entry) => Object.freeze({
+            id: entry.identity.id,
+            outputResourceId: entry.identity.outputResourceId,
+            unlocked: entry.unlocked,
+            enabled: entry.enabled,
+            weighting: entry.weighting,
+            priority: entry.priority,
+            demanded: entry.demanded,
+            useful: activeIds.has(entry.identity.id) ? callBoolean7(entry.output, "isUseful", `${entry.path}.resource`) : false,
+            currentQuantity: entry.currentQuantity,
+            storageRequired: entry.storageRequired,
+            buildingWeight: entry.buildingWeight,
+            currentProduction: entry.unlocked && entry.enabled ? requireCount(
+              callNumber4(
+                manager,
+                "currentProduction",
+                "FactoryManager",
+                entry.production
+              ),
+              `FactoryManager.currentProduction(${entry.identity.id})`
+            ) : 0,
+            isNanoTube: entry.production === catalog.nanoTube,
+            costs: activeIds.has(entry.identity.id) ? readCosts3(entry.production["cost"], `${entry.path}.cost`) : Object.freeze([])
+          })
+        );
+        session = Object.freeze({
+          manager,
+          productions: catalog.values,
+          byId: catalog.byId
+        });
+        return Object.freeze({
+          initialized: true,
+          maximum,
+          weightingMode,
+          hasUnlockedBuildings: unlockedBuildings.length > 0,
+          useDemandedMaterials: Boolean(settings2["useDemanded"]),
+          minimumIngredientRatio,
+          consumptionBalanceMinimum: balance,
+          bioseedConstruct,
+          truepath,
+          neutroniumCurrent,
+          neutroniumName,
+          productions: Object.freeze(productions)
+        });
+      }
+    });
+    const executor = Object.freeze({
+      execute(decision) {
+        if (!Number.isSafeInteger(decision.expectedMaximum) || decision.expectedMaximum < 0) {
+          return rejected2(
+            "invalid-factory-maximum",
+            "factory maximum must be a non-negative safe integer"
+          );
+        }
+        const ids = /* @__PURE__ */ new Set();
+        for (const adjustment of decision.adjustments) {
+          if (typeof adjustment.productionId !== "string" || adjustment.productionId.length === 0 || ids.has(adjustment.productionId) || typeof adjustment.outputResourceId !== "string" || adjustment.outputResourceId.length === 0 || !Number.isSafeInteger(adjustment.expectedCurrent) || adjustment.expectedCurrent < 0 || !Number.isSafeInteger(adjustment.delta) || !Number.isSafeInteger(
+            adjustment.expectedCurrent + adjustment.delta
+          ) || adjustment.expectedCurrent + adjustment.delta < 0) {
+            return rejected2(
+              "invalid-factory-adjustment",
+              "factory adjustments require unique ids and safe non-negative allocations"
+            );
+          }
+          ids.add(adjustment.productionId);
+        }
+        const active = session;
+        if (active === null) {
+          return stale(
+            "factory-session-missing",
+            "Factory read session is missing"
+          );
+        }
+        const manager = requireRecord(
+          dependencies.getManager(),
+          "FactoryManager"
+        );
+        if (manager !== active.manager) {
+          return stale("factory-manager-changed", "Factory manager changed");
+        }
+        if (requireCount(
+          callNumber4(manager, "maxOperating", "FactoryManager"),
+          "FactoryManager.maxOperating()"
+        ) !== decision.expectedMaximum) {
+          return stale("factory-capacity-changed", "Factory capacity changed");
+        }
+        const catalog = readCatalog(manager);
+        if (catalog.values.length !== active.productions.length || catalog.values.some(
+          (identity2, index) => identity2.value !== active.productions[index]?.value || identity2.id !== active.productions[index]?.id || identity2.outputResourceId !== active.productions[index]?.outputResourceId
+        )) {
+          return stale(
+            "factory-productions-changed",
+            "Factory productions changed"
+          );
+        }
+        const currentProduction2 = requireFunction(
+          manager["currentProduction"],
+          "FactoryManager.currentProduction"
+        );
+        const decreaseProduction = decision.adjustments.some(
+          (adjustment) => adjustment.delta < 0
+        ) ? requireFunction(
+          manager["decreaseProduction"],
+          "FactoryManager.decreaseProduction"
+        ) : null;
+        const increaseProduction = decision.adjustments.some(
+          (adjustment) => adjustment.delta > 0
+        ) ? requireFunction(
+          manager["increaseProduction"],
+          "FactoryManager.increaseProduction"
+        ) : null;
+        const resolved = [];
+        for (const adjustment of decision.adjustments) {
+          const identity2 = active.byId.get(adjustment.productionId);
+          if (identity2 === void 0 || identity2.outputResourceId !== adjustment.outputResourceId) {
+            return stale(
+              "factory-productions-changed",
+              "Factory production identity changed"
+            );
+          }
+          const actual = requireCount(
+            requireNumber(
+              Reflect.apply(currentProduction2, manager, [identity2.value]),
+              `FactoryManager.currentProduction(${adjustment.productionId})`
+            ),
+            `FactoryManager.currentProduction(${adjustment.productionId})`
+          );
+          if (actual !== adjustment.expectedCurrent) {
+            return stale(
+              "factory-allocation-changed",
+              "Factory allocation changed",
+              {
+                productionId: adjustment.productionId,
+                expected: adjustment.expectedCurrent,
+                actual
               }
-            }
-            if (actualRequiredFactories > 0) {
-              remainingFactories -= actualRequiredFactories;
-              factoryAdjustments[production.id] += actualRequiredFactories;
-            }
-            if (actualRequiredFactories < calculatedRequiredFactories) {
-              products.splice(j, 1);
-            }
+            );
           }
-          if (factoriesToDistribute === remainingFactories) {
-            break;
+          resolved.push({ adjustment, production: identity2.value });
+        }
+        for (const entry of resolved) {
+          if (entry.adjustment.delta < 0 && decreaseProduction !== null) {
+            Reflect.apply(decreaseProduction, manager, [
+              entry.production,
+              entry.adjustment.delta * -1
+            ]);
           }
         }
-      }
-      for (let production of allProducts) {
-        if (factoryAdjustments[production.id] !== void 0) {
-          let deltaAdjustments = factoryAdjustments[production.id] - FactoryManager2.currentProduction(production);
-          if (deltaAdjustments < 0) {
-            FactoryManager2.decreaseProduction(production, deltaAdjustments * -1);
+        for (const entry of resolved) {
+          if (entry.adjustment.delta > 0 && increaseProduction !== null) {
+            Reflect.apply(increaseProduction, manager, [
+              entry.production,
+              entry.adjustment.delta
+            ]);
           }
         }
+        return SUCCEEDED;
       }
-      for (let production of allProducts) {
-        if (factoryAdjustments[production.id] !== void 0) {
-          let deltaAdjustments = factoryAdjustments[production.id] - FactoryManager2.currentProduction(production);
-          if (deltaAdjustments > 0) {
-            FactoryManager2.increaseProduction(production, deltaAdjustments);
-          }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
+  // src/adapters/browser/factory-tooltips.ts
+  function createFactoryTooltipPublisher(getState) {
+    return Object.freeze({
+      publish(tooltips) {
+        if (tooltips.length === 0) return;
+        const state2 = getState();
+        if (typeof state2 !== "object" || state2 === null) {
+          throw new TypeError("state must be an object");
+        }
+        const values = Reflect.get(state2, "tooltips");
+        if (typeof values !== "object" || values === null) {
+          throw new TypeError("state.tooltips must be an object");
+        }
+        for (const tooltip of tooltips) {
+          Reflect.set(values, tooltip.key, tooltip.value);
         }
       }
-    };
+    });
   }
 
   // src/domain/mining-droid.ts
@@ -22824,7 +23266,7 @@
   }
 
   // src/application/mining-droid.ts
-  var SUCCEEDED2 = Object.freeze({
+  var SUCCEEDED3 = Object.freeze({
     status: "succeeded"
   });
   function runMiningDroidAutomation(dependencies) {
@@ -22832,7 +23274,7 @@
       dependencies.reader.readPlanningInput()
     );
     if (targets === null) {
-      return SUCCEEDED2;
+      return SUCCEEDED3;
     }
     const current = dependencies.reader.readCurrent(
       targets.map((target) => target.productionId)
@@ -22843,12 +23285,12 @@
   }
 
   // src/adapters/evolve/mining-droid.ts
-  function callBoolean7(record, name, path) {
+  function callBoolean8(record, name, path) {
     return Boolean(
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
     );
   }
-  function callNumber4(record, name, path, ...args) {
+  function callNumber5(record, name, path, ...args) {
     return requireNumber(
       Reflect.apply(
         requireFunction(record[name], `${path}.${name}`),
@@ -22865,7 +23307,7 @@
     }
     return id;
   }
-  function requireCount(value, path) {
+  function requireCount2(value, path) {
     if (!Number.isSafeInteger(value) || value < 0) {
       throw new TypeError(`${path} must be a non-negative safe integer`);
     }
@@ -22895,7 +23337,7 @@
     return Object.freeze({
       readPlanningInput() {
         const manager = requireRecord(getManager(), "DroidManager");
-        if (!callBoolean7(manager, "initIndustry", "DroidManager")) {
+        if (!callBoolean8(manager, "initIndustry", "DroidManager")) {
           session = null;
           return Object.freeze({
             initialised: false,
@@ -22928,16 +23370,16 @@
             id,
             weighting,
             priority: requireNumber(production["priority"], `${path}.priority`),
-            demanded: callBoolean7(resource, "isDemanded", `${path}.resource`)
+            demanded: callBoolean8(resource, "isDemanded", `${path}.resource`)
           };
         });
-        const maximum = requireCount(
-          callNumber4(manager, "maxOperating", "DroidManager"),
+        const maximum = requireCount2(
+          callNumber5(manager, "maxOperating", "DroidManager"),
           "DroidManager.maxOperating()"
         );
         const productions = partial.map((entry) => {
           const effectivePriority = entry.demanded ? Math.max(entry.priority, 100) : entry.priority;
-          const useful = maximum > 0 && entry.weighting > 0 && effectivePriority !== 0 ? callBoolean7(
+          const useful = maximum > 0 && entry.weighting > 0 && effectivePriority !== 0 ? callBoolean8(
             requireRecord(
               entry.production["resource"],
               `DroidManager production ${entry.id}.resource`
@@ -22980,8 +23422,8 @@
               `unknown mining-droid production id ${productionId}`
             );
           }
-          const count = requireCount(
-            callNumber4(
+          const count = requireCount2(
+            callNumber5(
               activeSession.manager,
               "currentProduction",
               "DroidManager",
@@ -23040,7 +23482,7 @@
               { productionId: adjustment.productionId }
             );
           }
-          const actual = requireCount(
+          const actual = requireCount2(
             requireNumber(
               Reflect.apply(currentProduction2, manager, [production]),
               `DroidManager.currentProduction(${adjustment.productionId})`
@@ -23082,11 +23524,11 @@
   }
 
   // src/adapters/evolve/graphene.ts
-  function callBoolean8(record, name, path) {
+  function callBoolean9(record, name, path) {
     const method = requireFunction(record[name], `${path}.${name}`);
     return Boolean(Reflect.apply(method, record, []));
   }
-  function callNumber5(record, name, path, ...args) {
+  function callNumber6(record, name, path, ...args) {
     const method = requireFunction(record[name], `${path}.${name}`);
     return requireNumber(
       Reflect.apply(method, record, args),
@@ -23140,7 +23582,7 @@
       );
       for (const raw of sorted) {
         const path = `GrapheneManager.Fuels[${raw.index}]`;
-        const isUnlocked = callBoolean8(
+        const isUnlocked = callBoolean9(
           raw.resource,
           "isUnlocked",
           `${path}.cost.resource`
@@ -23149,7 +23591,7 @@
           continue;
         }
         if (!usefulnessSampled) {
-          grapheneUseful = callBoolean8(
+          grapheneUseful = callBoolean9(
             graphene,
             "isUseful",
             "resources.Graphene"
@@ -23173,7 +23615,7 @@
             raw.cost["minRateOfChange"],
             `${path}.cost.minRateOfChange`
           ),
-          currentFuelCount: callNumber5(
+          currentFuelCount: callNumber6(
             manager,
             "fueledCount",
             "GrapheneManager",
@@ -23190,7 +23632,7 @@
       dependencies.getGrapheneManager(),
       "GrapheneManager"
     );
-    if (!callBoolean8(manager, "initIndustry", "GrapheneManager")) {
+    if (!callBoolean9(manager, "initIndustry", "GrapheneManager")) {
       return Object.freeze({
         initialised: false,
         maxOperating: 0,
@@ -23201,7 +23643,7 @@
     }
     const resources2 = requireRecord(resourcesValue, "resources");
     const graphene = requireRecord(resources2["Graphene"], "resources.Graphene");
-    const maxOperating = callNumber5(manager, "maxOperating", "GrapheneManager");
+    const maxOperating = callNumber6(manager, "maxOperating", "GrapheneManager");
     const fuelSnapshot = readFuels2(manager, graphene, maxOperating);
     return Object.freeze({
       initialised: true,
@@ -23716,7 +24158,7 @@
   }
 
   // src/application/minor-trait.ts
-  var SUCCEEDED3 = Object.freeze({
+  var SUCCEEDED4 = Object.freeze({
     status: "succeeded"
   });
   function staleCandidate(index, expectedTraitName, actualTraitName) {
@@ -23732,7 +24174,7 @@
   function runMinorTraitAutomation(dependencies) {
     const summary = summarizeMinorTraits(dependencies.reader.readSummary());
     if (summary === null) {
-      return SUCCEEDED3;
+      return SUCCEEDED4;
     }
     for (let index = 0; index < summary.traits.length; index++) {
       const expected = summary.traits[index];
@@ -23756,7 +24198,7 @@
         return outcome;
       }
     }
-    return SUCCEEDED3;
+    return SUCCEEDED4;
   }
 
   // src/adapters/evolve/minor-trait.ts
@@ -23900,7 +24342,7 @@
   }
 
   // src/application/trigger.ts
-  var SUCCEEDED4 = Object.freeze({
+  var SUCCEEDED5 = Object.freeze({
     status: "succeeded"
   });
   function result(outcome, active) {
@@ -23912,7 +24354,7 @@
     while (true) {
       const decision = planTrigger(dependencies.reader.read(index));
       if (decision === null) {
-        return result(SUCCEEDED4, active);
+        return result(SUCCEEDED5, active);
       }
       if (decision.kind === "click") {
         const execution = dependencies.executor.execute(decision);
@@ -24117,7 +24559,7 @@
   }
 
   // src/adapters/evolve/consume.ts
-  function callBoolean9(record, name, path, ...args) {
+  function callBoolean10(record, name, path, ...args) {
     return Boolean(
       Reflect.apply(
         requireFunction(record[name], `${path}.${name}`),
@@ -24126,7 +24568,7 @@
       )
     );
   }
-  function callNumber6(record, name, path, ...args) {
+  function callNumber7(record, name, path, ...args) {
     return requireNumber(
       Reflect.apply(
         requireFunction(record[name], `${path}.${name}`),
@@ -24182,7 +24624,7 @@
           dependencies.getManager(),
           "ConsumeManager"
         );
-        if (!callBoolean9(manager, "initIndustry", "ConsumeManager")) {
+        if (!callBoolean10(manager, "initIndustry", "ConsumeManager")) {
           return Object.freeze({
             initialised: false,
             useful: false,
@@ -24195,8 +24637,8 @@
           });
         }
         const list = readList(manager);
-        const useful = callBoolean9(manager, "isUseful", "ConsumeManager");
-        const maximum = useful ? callNumber6(manager, "maxConsume", "ConsumeManager") : 0;
+        const useful = callBoolean10(manager, "isUseful", "ConsumeManager");
+        const maximum = useful ? callNumber7(manager, "maxConsume", "ConsumeManager") : 0;
         let ratios = Object.freeze([]);
         if (useful) {
           const rawRatios = Reflect.apply(
@@ -24227,7 +24669,7 @@
             resources2.push(minimalResource(id, ratios));
             continue;
           }
-          const enabled = callBoolean9(
+          const enabled = callBoolean10(
             manager,
             "resEnabled",
             "ConsumeManager",
@@ -24237,7 +24679,7 @@
             resources2.push(minimalResource(id, ratios));
             continue;
           }
-          const demanded = callBoolean9(raw, "isDemanded", path);
+          const demanded = callBoolean10(raw, "isDemanded", path);
           if (demanded) {
             resources2.push(
               Object.freeze({
@@ -24271,7 +24713,7 @@
             maxQuantity,
             isFood
           };
-          const isCraftable = callBoolean9(raw, "isCraftable", path);
+          const isCraftable = callBoolean10(raw, "isCraftable", path);
           const currentQuantity = requireNumber(
             raw["currentQuantity"],
             `${path}.currentQuantity`
@@ -24281,7 +24723,7 @@
             `${path}.storageRatio`
           );
           const effectiveHungry = hungryRace ?? true;
-          const craftableMaximum = isCraftable && currentQuantity > storageRequired * storageShift ? callNumber6(manager, "maxConsumeCraftable", "ConsumeManager", raw) : null;
+          const craftableMaximum = isCraftable && currentQuantity > storageRequired * storageShift ? callNumber7(manager, "maxConsumeCraftable", "ConsumeManager", raw) : null;
           const ratioMaximums = ratios.map((ratio) => {
             if (isCraftable) {
               return null;
@@ -24299,7 +24741,7 @@
             if (queryRatio === null) {
               return null;
             }
-            return callNumber6(
+            return callNumber7(
               manager,
               "maxConsumeForRatio",
               "ConsumeManager",
@@ -24327,7 +24769,7 @@
         const current = uniqueIds.map(
           (id) => Object.freeze({
             id,
-            count: callNumber6(manager, "currentConsume", "ConsumeManager", id)
+            count: callNumber7(manager, "currentConsume", "ConsumeManager", id)
           })
         );
         return Object.freeze({
@@ -24521,13 +24963,13 @@
   }
 
   // src/application/replicator.ts
-  var SUCCEEDED5 = Object.freeze({
+  var SUCCEEDED6 = Object.freeze({
     status: "succeeded"
   });
   function runReplicatorAutomation(dependencies) {
     const planningInput = dependencies.selectionReader.readPlanningInput();
     if (!planningInput.initialised) {
-      return SUCCEEDED5;
+      return SUCCEEDED6;
     }
     const priorityPlan = planReplicatorPriority(planningInput);
     if (priorityPlan !== null) {
@@ -24543,18 +24985,18 @@
       }
     }
     if (!planningInput.assignGovernorTask) {
-      return SUCCEEDED5;
+      return SUCCEEDED6;
     }
     if (!shouldConfigureReplicatorGovernor(
       dependencies.governorGameReader.readGate()
     ) || !dependencies.governorOfficeReader.open()) {
-      return SUCCEEDED5;
+      return SUCCEEDED6;
     }
     const taskPlan = planReplicatorGovernorTask(
       dependencies.governorGameReader.readTasks()
     );
     if (taskPlan.status === "unavailable") {
-      return SUCCEEDED5;
+      return SUCCEEDED6;
     }
     if (taskPlan.assignment !== null) {
       const outcome = dependencies.governorExecutor.execute(taskPlan.assignment);
@@ -24564,14 +25006,14 @@
     }
     const settings2 = dependencies.governorOfficeReader.readSettings();
     if (settings2 === null) {
-      return SUCCEEDED5;
+      return SUCCEEDED6;
     }
     const settingsDecision = planReplicatorGovernorSettings(settings2);
-    return settingsDecision === null ? SUCCEEDED5 : dependencies.governorExecutor.execute(settingsDecision);
+    return settingsDecision === null ? SUCCEEDED6 : dependencies.governorExecutor.execute(settingsDecision);
   }
 
   // src/adapters/evolve/replicator.ts
-  function callBoolean10(record, name, path) {
+  function callBoolean11(record, name, path) {
     return Boolean(
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
     );
@@ -24626,7 +25068,7 @@
           dependencies.getManager(),
           "ReplicatorManager"
         );
-        if (!callBoolean10(manager, "initIndustry", "ReplicatorManager")) {
+        if (!callBoolean11(manager, "initIndustry", "ReplicatorManager")) {
           session = null;
           return Object.freeze({
             initialised: false,
@@ -24683,8 +25125,8 @@
             enabled,
             weighting,
             priority: requireNumber(production["priority"], `${path}.priority`),
-            demanded: callBoolean10(resource, "isDemanded", `${path}.resource`),
-            useful: callBoolean10(resource, "isUseful", `${path}.resource`)
+            demanded: callBoolean11(resource, "isDemanded", `${path}.resource`),
+            useful: callBoolean11(resource, "isUseful", `${path}.resource`)
           });
         });
         session = Object.freeze({ resourcesById });
@@ -25016,20 +25458,20 @@
   }
 
   // src/application/market.ts
-  var SUCCEEDED6 = Object.freeze({
+  var SUCCEEDED7 = Object.freeze({
     status: "succeeded"
   });
   function runMarketAutomation(dependencies, bulkSell = false, ignoreSellRatio = false) {
     const gate = dependencies.reader.readGate();
     if (!gate.unlocked) {
-      return SUCCEEDED6;
+      return SUCCEEDED7;
     }
     dependencies.tradeRoutes.adjust();
     if (gate.noTrade) {
-      return SUCCEEDED6;
+      return SUCCEEDED7;
     }
     const session = dependencies.reader.readSession();
-    let outcome = SUCCEEDED6;
+    let outcome = SUCCEEDED7;
     for (let index = 0; ; index++) {
       const sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
       if (sellInput === null) {
@@ -25063,7 +25505,7 @@
   }
 
   // src/adapters/evolve/market.ts
-  function callBoolean11(record, name, path, ...args) {
+  function callBoolean12(record, name, path, ...args) {
     return Boolean(
       Reflect.apply(
         requireFunction(record[name], `${path}.${name}`),
@@ -25072,7 +25514,7 @@
       )
     );
   }
-  function callNumber7(record, name, path, ...args) {
+  function callNumber8(record, name, path, ...args) {
     return requireNumber(
       Reflect.apply(
         requireFunction(record[name], `${path}.${name}`),
@@ -25133,7 +25575,7 @@
       readGate() {
         manager = requireRecord(dependencies.getManager(), "MarketManager");
         session = null;
-        if (!callBoolean11(manager, "isUnlocked", "MarketManager")) {
+        if (!callBoolean12(manager, "isUnlocked", "MarketManager")) {
           return Object.freeze({ unlocked: false, noTrade: false });
         }
         const game2 = requireRecord(dependencies.getGame(), "game");
@@ -25171,7 +25613,7 @@
           manager["multiplier"],
           "MarketManager.multiplier"
         );
-        maximumMultiplier = callNumber7(
+        maximumMultiplier = callNumber8(
           manager,
           "getMaxMultiplier",
           "MarketManager"
@@ -25214,10 +25656,10 @@
         const flags = requireRecord(resource["is"], `${path}.is`);
         let eligible = Boolean(flags["tradable"]);
         if (eligible) {
-          eligible = callBoolean11(resource, "isUnlocked", path);
+          eligible = callBoolean12(resource, "isUnlocked", path);
         }
         if (eligible) {
-          eligible = callBoolean11(
+          eligible = callBoolean12(
             session.manager,
             "isBuySellUnlocked",
             "MarketManager",
@@ -25276,7 +25718,7 @@
           autoSellRatio,
           moneyMaximum,
           moneyCurrent,
-          unitPrice: callNumber7(
+          unitPrice: callNumber8(
             session.manager,
             "getUnitSellPrice",
             "MarketManager",
@@ -25315,7 +25757,7 @@
             autoBuyRatio
           });
         }
-        const moneyDemanded = callBoolean11(
+        const moneyDemanded = callBoolean12(
           session.money,
           "isDemanded",
           "resources.Money"
@@ -25345,7 +25787,7 @@
             minimumMoneyAllowed,
             "minimumMoneyAllowed"
           ),
-          unitPrice: callNumber7(
+          unitPrice: callNumber8(
             session.manager,
             "getUnitBuyPrice",
             "MarketManager",
@@ -25425,7 +25867,7 @@
           `resources.${decision.resourceId}.currentQuantity`
         );
         const priceMethod = decision.side === "sell" ? "getUnitSellPrice" : "getUnitBuyPrice";
-        const actualPrice = callNumber7(
+        const actualPrice = callNumber8(
           manager,
           priceMethod,
           "MarketManager",
@@ -26261,7 +26703,7 @@
   );
 
   // src/application/power.ts
-  var SUCCEEDED7 = Object.freeze({
+  var SUCCEEDED8 = Object.freeze({
     status: "succeeded"
   });
   function createPowerAutomation(dependencies) {
@@ -26270,7 +26712,7 @@
       run() {
         const plan = planPowerCycle(dependencies.reader.readCycle(), state2);
         if (plan.decision === null) {
-          return SUCCEEDED7;
+          return SUCCEEDED8;
         }
         const cycleOutcome = dependencies.executor.execute(plan.decision);
         if (cycleOutcome.status !== "succeeded") {
@@ -26283,7 +26725,7 @@
           )
         );
         if (warning === null) {
-          return SUCCEEDED7;
+          return SUCCEEDED8;
         }
         const warningOutcome = dependencies.executor.execute(warning);
         if (warningOutcome.status !== "succeeded") {
@@ -26294,7 +26736,7 @@
           warning.binding,
           dependencies.reader.readStateOn(warning.binding)
         );
-        return SUCCEEDED7;
+        return SUCCEEDED8;
       },
       readState() {
         return state2;
@@ -26315,7 +26757,7 @@
     }
     return value;
   }
-  function callBoolean12(record, name, path, ...args) {
+  function callBoolean13(record, name, path, ...args) {
     return Boolean(
       Reflect.apply(
         requireFunction(record[name], `${path}.${name}`),
@@ -26324,7 +26766,7 @@
       )
     );
   }
-  function callNumber8(record, name, path, ...args) {
+  function callNumber9(record, name, path, ...args) {
     return requireNumber(
       Reflect.apply(
         requireFunction(record[name], `${path}.${name}`),
@@ -26396,8 +26838,8 @@
       maxQuantity: finiteProperty(resource, "maxQuantity", path),
       rateOfChange: finiteProperty(resource, "rateOfChange", path),
       storageRatio: finiteProperty(resource, "storageRatio", path),
-      unlocked: callBoolean12(resource, "isUnlocked", path),
-      useful: callBoolean12(resource, "isUseful", path),
+      unlocked: callBoolean13(resource, "isUnlocked", path),
+      useful: callBoolean13(resource, "isUseful", path),
       income: finiteProperty(resource, "income", path),
       incomeAdjusted: Boolean(resource["incomeAdusted"]),
       supportKind
@@ -26438,7 +26880,7 @@
   function busyObservation(registry, resource, path, source2, locArg) {
     const record = requireRecord(resource, path);
     const input = registry.register(record, path);
-    const production = locArg === void 0 ? callNumber8(record, "getProduction", path, source2) : callNumber8(record, "getProduction", path, source2, locArg);
+    const production = locArg === void 0 ? callNumber9(record, "getProduction", path, source2) : callNumber9(record, "getProduction", path, source2, locArg);
     return Object.freeze({
       resourceId: input.id,
       useful: input.useful,
@@ -26450,7 +26892,7 @@
     const global = requireRecord(game2["global"], "game.global");
     const race = requireRecord(global["race"], "game.global.race");
     const authority = namedRecord(resources2, "Authority", "resources");
-    if (race["universe"] !== "evil" || !callBoolean12(authority, "isUnlocked", "resources.Authority")) {
+    if (race["universe"] !== "evil" || !callBoolean13(authority, "isUnlocked", "resources.Authority")) {
       return 0;
     }
     const currentGarrison = finiteProperty(
@@ -26615,7 +27057,7 @@
         const elerium = namedRecord(resources2, "Elerium", "resources");
         return Object.freeze({
           kind: "busy-resource",
-          active: callBoolean12(elerium, "isUnlocked", "resources.Elerium"),
+          active: callBoolean13(elerium, "isUnlocked", "resources.Elerium"),
           savingOnly: false,
           observation: busyObservation(
             registry,
@@ -26706,7 +27148,7 @@
           "storageRatio",
           "resources.Food"
         ),
-        moneyUseful: callBoolean12(money, "isUseful", "resources.Money"),
+        moneyUseful: callBoolean13(money, "isUseful", "resources.Money"),
         observation: busyObservation(
           registry,
           money,
@@ -26772,7 +27214,7 @@
         ),
         piracy: finiteProperty(region, "piracy", "gxy_chthonian"),
         armada: finiteProperty(region, "armada", "gxy_chthonian"),
-        rating: callNumber8(actions, "rating", "gxy_chthonian.minelayer.ship")
+        rating: callNumber9(actions, "rating", "gxy_chthonian.minelayer.ship")
       });
     }
     if (identity(buildings2, "RuinsGuardPost", building)) {
@@ -26835,7 +27277,7 @@
       return Object.freeze({
         kind: "early-galaxy-ship",
         piracyUnlocked: Boolean(tech["piracy"]),
-        embassyUnlocked: callBoolean12(
+        embassyUnlocked: callBoolean13(
           namedRecord(buildings2, "GorddonEmbassy", "buildings"),
           "isUnlocked",
           "buildings.GorddonEmbassy"
@@ -26865,7 +27307,7 @@
       const resource = namedRecord(resources2, "Bolognium", "resources");
       return Object.freeze({
         kind: "bolognium-ship",
-        missionBuildable: callBoolean12(
+        missionBuildable: callBoolean13(
           namedRecord(buildings2, "GorddonMission", "buildings"),
           "isAutoBuildable",
           "buildings.GorddonMission"
@@ -26949,7 +27391,7 @@
       return Object.freeze({
         kind: "womling-overseer",
         loyaltyBase: race["womling_friend"] ? 25 : race["womling_god"] ? 75 : 0,
-        loyaltyPerBuilding: callNumber8(
+        loyaltyPerBuilding: callNumber9(
           requireRecord(building["definition"], `${path}.definition`),
           "val",
           `${path}.definition`
@@ -26965,7 +27407,7 @@
       return Object.freeze({
         kind: "womling-fun",
         moraleBase: race["womling_friend"] ? 75 : race["womling_god"] ? 40 : race["womling_lord"] ? 30 : 0,
-        moralePerBuilding: callNumber8(
+        moralePerBuilding: callNumber9(
           requireRecord(building["definition"], `${path}.definition`),
           "val",
           `${path}.definition`
@@ -27026,8 +27468,8 @@
       count: finiteProperty(building, "count", path),
       stateOn: finiteProperty(building, "stateOnCount", path),
       autoMaximum: finiteProperty(building, "autoMax", path),
-      autoBuildable: callBoolean12(building, "isAutoBuildable", path),
-      smartManaged: callBoolean12(building, "isSmartManaged", path),
+      autoBuildable: callBoolean13(building, "isAutoBuildable", path),
+      smartManaged: callBoolean13(building, "isSmartManaged", path),
       moneyCost: requireNumber(cost["Money"] ?? 0, `${path}.cost.Money`),
       supplyCost: requireNumber(cost["Supply"] ?? 0, `${path}.cost.Supply`)
     });
@@ -27094,7 +27536,7 @@
         const war = requireRecord(dependencies.getWarManager(), "WarManager");
         const poly2 = requireRecord(dependencies.getPoly(), "poly");
         const power = namedRecord(resources2, "Power", "resources");
-        if (!callBoolean12(power, "isUnlocked", "resources.Power")) {
+        if (!callBoolean13(power, "isUnlocked", "resources.Power")) {
           session = null;
           return Object.freeze({
             powerUnlocked: false,
@@ -27169,20 +27611,20 @@
             spire: EMPTY_SPIRE
           });
         }
-        const manageLake = callBoolean12(
+        const manageLake = callBoolean13(
           namedRecord(buildings2, "LakeTransport", "buildings"),
           "isSmartManaged",
           "buildings.LakeTransport"
-        ) && callBoolean12(
+        ) && callBoolean13(
           namedRecord(buildings2, "LakeBireme", "buildings"),
           "isSmartManaged",
           "buildings.LakeBireme"
         );
-        const manageSpire = callBoolean12(
+        const manageSpire = callBoolean13(
           namedRecord(buildings2, "SpirePort", "buildings"),
           "isSmartManaged",
           "buildings.SpirePort"
-        ) && callBoolean12(
+        ) && callBoolean13(
           namedRecord(buildings2, "SpireBaseCamp", "buildings"),
           "isSmartManaged",
           "buildings.SpireBaseCamp"
@@ -27219,7 +27661,7 @@
                 return Object.freeze({
                   resourceId: resource.id,
                   rate: finiteProperty(consumption, "rate", consumptionPath),
-                  fuelRate: callNumber8(
+                  fuelRate: callNumber9(
                     building,
                     "getFuelRate",
                     path,
@@ -28072,7 +28514,7 @@
   });
 
   // src/application/storage-allocation.ts
-  var SUCCEEDED8 = Object.freeze({
+  var SUCCEEDED9 = Object.freeze({
     status: "succeeded"
   });
   function createStorageAllocationAutomation(dependencies) {
@@ -28080,9 +28522,9 @@
     return Object.freeze({
       run() {
         const rawPlan = planStorageAllocation(dependencies.reader.read());
-        if (rawPlan === null) return SUCCEEDED8;
+        if (rawPlan === null) return SUCCEEDED9;
         if (rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild)) {
-          return SUCCEEDED8;
+          return SUCCEEDED9;
         }
         const finalized = finalizeStorageAllocation(rawPlan, state2);
         const outcome = dependencies.executor.execute(finalized.decision);
@@ -28107,7 +28549,7 @@
   function resourceId2(resource, path) {
     return readString3(resource["id"], `${path}.id`);
   }
-  function callBoolean13(record, name, path) {
+  function callBoolean14(record, name, path) {
     return Boolean(
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
     );
@@ -28119,7 +28561,7 @@
     const value = resource["autoSellRatio"];
     return value === void 0 || value === null ? 0 : requireNumber(value, `${path}.autoSellRatio`);
   }
-  function emptyInput(initialized) {
+  function emptyInput2(initialized) {
     return Object.freeze({
       initialized,
       crateValue: 0,
@@ -28144,7 +28586,7 @@
     }
     return "?";
   }
-  function readCosts3(target, path, resources2, register) {
+  function readCosts4(target, path, resources2, register) {
     const cost = requireRecord(target["cost"], `${path}.cost`);
     const result2 = [];
     for (const key in cost) {
@@ -28178,9 +28620,9 @@
           dependencies.getFleetManagerOuter(),
           "FleetManagerOuter"
         );
-        if (!callBoolean13(manager, "initStorage", "StorageManager")) {
+        if (!callBoolean14(manager, "initStorage", "StorageManager")) {
           session = null;
-          return emptyInput(false);
+          return emptyInput2(false);
         }
         const crateValue = finiteProperty2(
           manager,
@@ -28195,7 +28637,7 @@
         if (crateValue <= 0 || containerValue <= 0) {
           session = null;
           return Object.freeze({
-            ...emptyInput(true),
+            ...emptyInput2(true),
             crateValue,
             containerValue
           });
@@ -28218,8 +28660,8 @@
             throw new TypeError(`storage resource ${id} changed identity`);
           }
           if (existing === void 0) {
-            const unlocked = managed ? callBoolean13(resource, "isUnlocked", path) : true;
-            const managedStorage = managed && unlocked ? callBoolean13(resource, "isManagedStorage", path) : false;
+            const unlocked = managed ? callBoolean14(resource, "isUnlocked", path) : true;
+            const managedStorage = managed && unlocked ? callBoolean14(resource, "isManagedStorage", path) : false;
             records.set(id, resource);
             inputs.set(
               id,
@@ -28289,7 +28731,7 @@
         if (managedIds.size === 0) {
           session = null;
           return Object.freeze({
-            ...emptyInput(true),
+            ...emptyInput2(true),
             crateValue,
             containerValue,
             resources: Object.freeze([...inputs.values()]),
@@ -28312,10 +28754,10 @@
         });
         const readTarget2 = (value, path, filterBuildable = false) => {
           const target = requireRecord(value, path);
-          const unlocked = filterBuildable ? callBoolean13(target, "isUnlocked", path) : true;
+          const unlocked = filterBuildable ? callBoolean14(target, "isUnlocked", path) : true;
           const autoBuildEnabled = filterBuildable ? unlocked && Boolean(target["autoBuildEnabled"]) : true;
           return Object.freeze({
-            costs: !filterBuildable || autoBuildEnabled ? readCosts3(target, path, resources2, register) : Object.freeze([]),
+            costs: !filterBuildable || autoBuildEnabled ? readCosts4(target, path, resources2, register) : Object.freeze([]),
             isList: Boolean(target["isList"]),
             label: targetLabel(target),
             unlocked,
@@ -28759,21 +29201,21 @@
   }
 
   // src/application/galaxy-market.ts
-  var SUCCEEDED9 = Object.freeze({
+  var SUCCEEDED10 = Object.freeze({
     status: "succeeded"
   });
   function runGalaxyMarketAutomation(dependencies) {
     const decision = planGalaxyMarket(dependencies.reader.read());
-    return decision === null ? SUCCEEDED9 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED10 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/galaxy-market.ts
-  function callBoolean14(record, name, path) {
+  function callBoolean15(record, name, path) {
     return Boolean(
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
     );
   }
-  function callNumber9(record, name, path, ...args) {
+  function callNumber10(record, name, path, ...args) {
     return requireNumber(
       Reflect.apply(
         requireFunction(record[name], `${path}.${name}`),
@@ -28783,19 +29225,19 @@
       `${path}.${name}()`
     );
   }
-  function requireId(value, path) {
+  function requireId2(value, path) {
     if (typeof value !== "string" || value.length === 0) {
       throw new TypeError(`${path} must be a non-empty string`);
     }
     return value;
   }
-  function requireCount2(value, path) {
+  function requireCount3(value, path) {
     if (!Number.isSafeInteger(value) || value < 0) {
       throw new TypeError(`${path} must be a non-negative safe integer`);
     }
     return value;
   }
-  function optionalWeighting(resource, path) {
+  function optionalWeighting2(resource, path) {
     const value = resource["galaxyMarketWeighting"];
     return value === void 0 || value === null ? 0 : requireNumber(value, `${path}.galaxyMarketWeighting`);
   }
@@ -28804,11 +29246,11 @@
     const buy = requireRecord(offer["buy"], `${path}.buy`);
     const sell = requireRecord(offer["sell"], `${path}.sell`);
     return Object.freeze({
-      buyResourceId: requireId(buy["res"], `${path}.buy.res`),
-      sellResourceId: requireId(sell["res"], `${path}.sell.res`)
+      buyResourceId: requireId2(buy["res"], `${path}.buy.res`),
+      sellResourceId: requireId2(sell["res"], `${path}.sell.res`)
     });
   }
-  function emptyInput2() {
+  function emptyInput3() {
     return Object.freeze({
       initialized: false,
       maximum: 0,
@@ -28826,9 +29268,9 @@
         );
         const resources2 = requireRecord(dependencies.getResources(), "resources");
         const settings2 = requireRecord(dependencies.getSettings(), "settings");
-        if (!callBoolean14(manager, "initIndustry", "GalaxyTradeManager")) {
+        if (!callBoolean15(manager, "initIndustry", "GalaxyTradeManager")) {
           session = null;
-          return emptyInput2();
+          return emptyInput3();
         }
         const rawOffers = dependencies.getOffers();
         if (!Array.isArray(rawOffers)) {
@@ -28846,7 +29288,7 @@
             resources2[identity2.sellResourceId],
             `resources.${identity2.sellResourceId}`
           );
-          const weighting = optionalWeighting(
+          const weighting = optionalWeighting2(
             buy,
             `resources.${identity2.buyResourceId}`
           );
@@ -28871,15 +29313,15 @@
               buy["galaxyMarketPriority"],
               `resources.${identity2.buyResourceId}.galaxyMarketPriority`
             ),
-            demanded: callBoolean14(
+            demanded: callBoolean15(
               buy,
               "isDemanded",
               `resources.${identity2.buyResourceId}`
             )
           };
         });
-        const maximum = requireCount2(
-          callNumber9(manager, "maxOperating", "GalaxyTradeManager"),
+        const maximum = requireCount3(
+          callNumber10(manager, "maxOperating", "GalaxyTradeManager"),
           "GalaxyTradeManager.maxOperating()"
         );
         const hasActive = maximum > 0 && partial.some((entry) => {
@@ -28900,12 +29342,12 @@
             weighting: entry.weighting,
             priority: entry.priority,
             demanded: entry.demanded,
-            useful: active ? callBoolean14(
+            useful: active ? callBoolean15(
               entry.buy,
               "isUseful",
               `resources.${entry.identity.buyResourceId}`
             ) : false,
-            sellDemanded: active ? callBoolean14(
+            sellDemanded: active ? callBoolean15(
               entry.sell,
               "isDemanded",
               `resources.${entry.identity.sellResourceId}`
@@ -28914,8 +29356,8 @@
               entry.sell["storageRatio"],
               `resources.${entry.identity.sellResourceId}.storageRatio`
             ) : 0,
-            current: requireCount2(
-              callNumber9(
+            current: requireCount3(
+              callNumber10(
                 manager,
                 "currentProduction",
                 "GalaxyTradeManager",
@@ -28974,8 +29416,8 @@
             "Galaxy trade manager changed"
           );
         }
-        if (requireCount2(
-          callNumber9(manager, "maxOperating", "GalaxyTradeManager"),
+        if (requireCount3(
+          callNumber10(manager, "maxOperating", "GalaxyTradeManager"),
           "GalaxyTradeManager.maxOperating()"
         ) !== decision.expectedMaximum) {
           return stale(
@@ -29019,7 +29461,7 @@
               "Galaxy market offer order changed"
             );
           }
-          const actual = requireCount2(
+          const actual = requireCount3(
             requireNumber(
               Reflect.apply(currentProduction2, manager, [index]),
               `GalaxyTradeManager.currentProduction(${index})`
@@ -29506,17 +29948,17 @@
   }
 
   // src/application/craft.ts
-  var SUCCEEDED10 = Object.freeze({
+  var SUCCEEDED11 = Object.freeze({
     status: "succeeded"
   });
   function runCraftAutomation(dependencies) {
     if (!shouldRunCraft(dependencies.reader.readGate())) {
-      return SUCCEEDED10;
+      return SUCCEEDED11;
     }
     for (let index = 0; ; index++) {
       const candidate = dependencies.reader.readCandidate(index);
       if (candidate === null) {
-        return SUCCEEDED10;
+        return SUCCEEDED11;
       }
       const decision = planCraft(candidate);
       if (decision === null) {
@@ -29530,7 +29972,7 @@
   }
 
   // src/adapters/evolve/craft.ts
-  function callBoolean15(record, name, path) {
+  function callBoolean16(record, name, path) {
     return Boolean(
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
     );
@@ -29567,7 +30009,7 @@
           resources2["Population"],
           "resources.Population"
         );
-        const populationUnlocked = callBoolean15(
+        const populationUnlocked = callBoolean16(
           population,
           "isUnlocked",
           "resources.Population"
@@ -29594,7 +30036,7 @@
         }
         const path = `foundryList[${index}]`;
         const craftable = requireRecord(session.foundryList[index], path);
-        const unlocked = callBoolean15(craftable, "isUnlocked", path);
+        const unlocked = callBoolean16(craftable, "isUnlocked", path);
         if (!unlocked) {
           return Object.freeze({
             index,
@@ -29646,7 +30088,7 @@
             maxQuantity,
             craftPreserve
           };
-          if (callBoolean15(craftable, "isDemanded", path)) {
+          if (callBoolean16(craftable, "isDemanded", path)) {
             const thresholdPreserve = requireNumber(
               craftable["craftPreserve"],
               `${path}.craftPreserve`
@@ -29660,11 +30102,11 @@
             );
             continue;
           }
-          if (callBoolean15(resource, "isDemanded", `resources.${resourceId3}`)) {
+          if (callBoolean16(resource, "isDemanded", `resources.${resourceId3}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
-          const cappedForPriority = callBoolean15(
+          const cappedForPriority = callBoolean16(
             resource,
             "isCapped",
             `resources.${resourceId3}`
@@ -29696,7 +30138,7 @@
             resource["storageRequired"],
             `resources.${resourceId3}.storageRequired`
           );
-          if (currentQuantity < resourceRequired && !callBoolean15(resource, "isCapped", `resources.${resourceId3}`)) {
+          if (currentQuantity < resourceRequired && !callBoolean16(resource, "isCapped", `resources.${resourceId3}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
@@ -31121,7 +31563,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED11 = Object.freeze({
+  var SUCCEEDED12 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -31129,7 +31571,7 @@
     while (true) {
       const decision = planResearch(dependencies.reader.read(startIndex));
       if (decision === null) {
-        return SUCCEEDED11;
+        return SUCCEEDED12;
       }
       const result2 = dependencies.executor.execute(decision);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -31273,12 +31715,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED12 = Object.freeze({
+  var SUCCEEDED13 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision = planMutation(dependencies.reader.read());
-    return decision === null ? SUCCEEDED12 : dependencies.executor.execute(decision);
+    return decision === null ? SUCCEEDED13 : dependencies.executor.execute(decision);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -44455,13 +44897,19 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       }
       smelterExecutor.execute(decision);
     };
-    const autoFactory = createAutoFactory({
-      FactoryManager,
+    const factoryAdapter = createFactoryAdapter({
+      getManager: () => FactoryManager,
       getState: () => state,
       getSettings: () => settings,
       getGame: () => game,
       getResources: () => resources,
-      findRequiredResourceWeight
+      consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN
+    });
+    const factoryTooltips = createFactoryTooltipPublisher(() => state);
+    const autoFactory = () => runFactoryAutomation({
+      reader: factoryAdapter.reader,
+      executor: factoryAdapter.executor,
+      tooltips: factoryTooltips
     });
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
