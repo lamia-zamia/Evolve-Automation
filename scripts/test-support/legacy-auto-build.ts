@@ -1,4 +1,8 @@
-import type { AutomationDependencies } from "../dependencies.ts";
+/**
+ * Frozen copy of the legacy createAutoBuild factory, kept only as the parity
+ * oracle for the migrated build slice tests. Do not wire into production.
+ */
+import type { AutomationDependencies } from "../../src/automation/dependencies.ts";
 
 type Dependencies = AutomationDependencies<
   | "getBuildingManager"
@@ -8,7 +12,7 @@ type Dependencies = AutomationDependencies<
   | "getResources"
   | "getGetCostConflict"
 >;
-export function createAutoBuild({
+export function createLegacyAutoBuild({
   getBuildingManager,
   getProjectManager,
   getState,

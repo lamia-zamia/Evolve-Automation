@@ -333,7 +333,8 @@ import { createAutoPrestige } from "./automation/progression/prestige.ts";
 import { createAutoPlanetSelection } from "./automation/progression/planet-selection.ts";
 import { runJobsAutomation } from "./application/jobs.ts";
 import { createJobsAdapter } from "./adapters/evolve/jobs.ts";
-import { createAutoBuild } from "./automation/progression/build.ts";
+import { runBuildAutomation } from "./application/build.ts";
+import { createBuildAdapter } from "./adapters/evolve/build.ts";
 import { runResearchAutomation } from "./application/research.ts";
 import {
   createResearchCommandExecutor,
@@ -3648,14 +3649,17 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const autoBuild = createAutoBuild({
+  const buildAdapter = createBuildAdapter({
     getBuildingManager: () => BuildingManager,
     getProjectManager: () => ProjectManager,
     getState: () => state,
     getSettings: () => settings,
     getResources: () => resources,
-    getGetCostConflict: () => getCostConflict,
+    getCostConflict: (target) => getCostConflict(target),
   });
+  const autoBuild = () => {
+    runBuildAutomation(buildAdapter);
+  };
 
   let techConflictClock = browserClock;
   const getTechConflict = (tech) => {

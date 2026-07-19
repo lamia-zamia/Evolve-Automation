@@ -34866,135 +34866,606 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/automation/progression/build.ts
-  function createAutoBuild({
-    getBuildingManager,
-    getProjectManager,
-    getState,
-    getSettings,
-    getResources,
-    getGetCostConflict
-  }) {
-    return function autoBuild2() {
-      const BuildingManager2 = getBuildingManager();
-      const ProjectManager2 = getProjectManager();
-      const state2 = getState();
-      const settings2 = getSettings();
-      const resources2 = getResources();
-      const getCostConflict2 = getGetCostConflict();
-      BuildingManager2.updateWeighting();
-      ProjectManager2.updateWeighting();
-      let ignoredList = [...state2.queuedTargets, ...state2.triggerTargets];
-      let buildingList = [
-        ...BuildingManager2.managedPriorityList(),
-        ...ProjectManager2.managedPriorityList()
-      ];
-      state2.unlockedBuildings = buildingList.sort(
-        (a, b) => b.weighting - a.weighting
-      );
-      let estimatedTime = {};
-      let affordableCache = {};
-      let consumptionsUsed = {};
-      const isAffordable = (building2) => affordableCache[building2._vueBinding] ?? (affordableCache[building2._vueBinding] = building2.isAffordable());
-      const usesUsedConsumption = settings2.buildingConsumptionCheck === "perResource" ? (building2) => building2.consumption.some(
-        (c) => c.rate >= 0 && consumptionsUsed[c.resource._id]
-      ) : settings2.buildingConsumptionCheck === "unlimited" ? (building2) => false : (
-        // onePerTick or any invalid A?B type override
-        (building2) => Object.keys(consumptionsUsed).length > 0
-      );
-      buildingsLoop: for (let i = 0; i < buildingList.length; i++) {
-        let building2 = buildingList[i];
-        if (ignoredList.includes(building2) || !isAffordable(building2)) {
-          continue;
-        }
-        if (usesUsedConsumption(building2)) {
-          continue;
-        }
-        let conflict2 = getCostConflict2(building2);
-        if (conflict2 && !building2.is.important) {
-          building2.extraDescription += conflict2.status === "unavailable" ? "Cost reservation data unavailable; skipped for safety<br>" : `Conflicts with ${conflict2.targetNames.map((action) => {
-            return `<span class="has-text-info">${action}</span>`;
-          }).join(", ")} for ${conflict2.resourceNames.map((res) => {
-            return `<span class="has-text-info">${res}</span>`;
-          }).join(", ")} (${conflict2.targetCause})<br>`;
-          continue;
-        }
-        if (!settings2.buildingBuildIfStorageFull || !Object.keys(building2.cost).some(
-          (res) => resources2[res].storageRatio > 0.98
-        )) {
-          for (let j = 0; j < buildingList.length; j++) {
-            let other = buildingList[j];
-            let weightDiffRatio = other.weighting / building2.weighting;
-            if (weightDiffRatio <= 1.000001) {
-              break;
-            }
-            if (weightDiffRatio < 10 && isAffordable(other)) {
-              continue;
-            }
-            let estimation = estimatedTime[other._vueBinding];
-            if (!estimation) {
-              estimation = [];
-              for (let res in other.cost) {
-                let resource2 = resources2[res];
-                let quantity = other.cost[res];
-                if (!resource2.isUnlocked()) {
-                  continue;
-                }
-                let totalRateOfCharge = resource2.rateOfChange;
-                if (totalRateOfCharge > 0) {
-                  estimation[resource2.id] = (quantity - resource2.currentQuantity) / totalRateOfCharge;
-                } else if (settings2.buildingsIgnoreZeroRate && resource2.storageRatio < 0.975 && resource2.currentQuantity < quantity) {
-                  estimation[resource2.id] = Number.MAX_SAFE_INTEGER;
-                } else {
-                  estimation[resource2.id] = 0;
-                }
-              }
-              estimation.total = Math.max(
-                0,
-                ...Object.values(estimation)
-              );
-              estimatedTime[other._vueBinding] = estimation;
-            }
-            for (let res in building2.cost) {
-              let resource2 = resources2[res];
-              let thisQuantity = building2.cost[res];
-              if (!resource2.isUnlocked() || resource2.storageRatio > 0.99 && resource2.currentQuantity >= resource2.storageRequired) {
-                continue;
-              }
-              let otherQuantity = other.cost[res];
-              if (otherQuantity === void 0) {
-                continue;
-              }
-              if (resource2.currentQuantity >= otherQuantity + thisQuantity) {
-                continue;
-              }
-              if (thisQuantity <= (estimation.total - estimation[resource2.id]) * resource2.rateOfChange) {
-                continue;
-              }
-              let costDiffRatio = otherQuantity / thisQuantity;
-              if (costDiffRatio >= weightDiffRatio) {
-                continue;
-              }
-              building2.extraDescription += `Conflicts with <span class="has-text-info">${other.title}</span> for <span class="has-text-info">${resource2.name}</span><br>`;
-              continue buildingsLoop;
-            }
+  // src/domain/build.ts
+  var SKIP_NEEDS = Object.freeze({ kind: "skip" });
+  var PROCEED = Object.freeze({ kind: "proceed" });
+  function initialBuildLoopState() {
+    return Object.freeze({
+      affordable: Object.freeze({}),
+      estimations: Object.freeze({}),
+      consumptionsUsed: Object.freeze({})
+    });
+  }
+  function candidateAt(setup, index) {
+    const candidate = setup.candidates[index];
+    if (candidate === void 0) {
+      throw new TypeError(`no build candidate at index ${index}`);
+    }
+    return candidate;
+  }
+  function candidateSampleNeeds(setup, state2, index) {
+    const candidate = candidateAt(setup, index);
+    if (candidate.ignored) {
+      return SKIP_NEEDS;
+    }
+    const cached = state2.affordable[candidate.key];
+    if (cached === false) {
+      return SKIP_NEEDS;
+    }
+    return Object.freeze({
+      kind: "evaluate",
+      request: Object.freeze({
+        needAffordability: cached === void 0,
+        needConsumption: setup.consumptionMode === "perResource" && Object.keys(state2.consumptionsUsed).length > 0
+      })
+    });
+  }
+  function usesUsedConsumption(setup, state2, sample) {
+    switch (setup.consumptionMode) {
+      case "perResource":
+        return (sample.consumption ?? []).some(
+          (entry) => entry.nonNegativeRate && state2.consumptionsUsed[entry.resourceId] === true
+        );
+      case "unlimited":
+        return false;
+      // onePerTick (and any invalid override value) blocks every candidate once
+      // any consumption was used, even candidates without consumption.
+      case "onePerTick":
+        return Object.keys(state2.consumptionsUsed).length > 0;
+    }
+  }
+  function planBuildGate(setup, index, sample, state2) {
+    const candidate = candidateAt(setup, index);
+    let nextState = state2;
+    let affordable = state2.affordable[candidate.key];
+    if (affordable === void 0) {
+      if (sample.affordable === void 0) {
+        throw new TypeError(
+          `affordability sample missing for build candidate ${candidate.key}`
+        );
+      }
+      affordable = sample.affordable;
+      nextState = Object.freeze({
+        ...state2,
+        affordable: Object.freeze({
+          ...state2.affordable,
+          [candidate.key]: affordable
+        })
+      });
+    }
+    if (!affordable || usesUsedConsumption(setup, state2, sample)) {
+      return Object.freeze({ kind: "skip", state: nextState });
+    }
+    return Object.freeze({ kind: "conflict-check", state: nextState });
+  }
+  function highlight(name) {
+    return `<span class="has-text-info">${name}</span>`;
+  }
+  function planBuildConflict(setup, index, sample) {
+    const candidate = candidateAt(setup, index);
+    if (sample.conflict === null || sample.important) {
+      return PROCEED;
+    }
+    const conflict2 = sample.conflict;
+    const text = conflict2.unavailable ? "Cost reservation data unavailable; skipped for safety<br>" : `Conflicts with ${conflict2.targetNames.map(highlight).join(", ")} for ${conflict2.resourceNames.map(highlight).join(", ")} (${conflict2.targetCause})<br>`;
+    return Object.freeze({
+      kind: "skip",
+      annotation: Object.freeze({
+        kind: "text",
+        index,
+        key: candidate.key,
+        text
+      })
+    });
+  }
+  function competitionSampleRequest(setup, state2, index) {
+    const candidate = candidateAt(setup, index);
+    const affordabilityKeys = [];
+    const resourceIds = new Set(Object.keys(candidate.cost));
+    for (const other of setup.candidates) {
+      const weightDiffRatio = other.weighting / candidate.weighting;
+      if (weightDiffRatio <= 1.000001) {
+        break;
+      }
+      for (const resourceId3 of Object.keys(other.cost)) {
+        resourceIds.add(resourceId3);
+      }
+      if (weightDiffRatio < 10 && state2.affordable[other.key] === void 0) {
+        affordabilityKeys.push(other.key);
+      }
+    }
+    return Object.freeze({
+      affordabilityKeys: Object.freeze(affordabilityKeys),
+      resourceIds: Object.freeze([...resourceIds])
+    });
+  }
+  function resourceViewOf(sample, resourceId3) {
+    const view = sample.resources[resourceId3];
+    if (view === void 0) {
+      throw new TypeError(`resource sample missing for ${resourceId3}`);
+    }
+    return view;
+  }
+  function estimateBuildTime(setup, other, sample) {
+    const perResource = {};
+    for (const [resourceId3, quantity] of Object.entries(other.cost)) {
+      const resource2 = resourceViewOf(sample, resourceId3);
+      if (!resource2.unlocked) {
+        continue;
+      }
+      if (resource2.rateOfChange > 0) {
+        perResource[resourceId3] = (quantity - resource2.currentQuantity) / resource2.rateOfChange;
+      } else if (setup.ignoreZeroRate && resource2.storageRatio < 0.975 && resource2.currentQuantity < quantity) {
+        perResource[resourceId3] = Number.MAX_SAFE_INTEGER;
+      } else {
+        perResource[resourceId3] = 0;
+      }
+    }
+    return Object.freeze({
+      perResource: Object.freeze(perResource),
+      total: Math.max(0, ...Object.values(perResource))
+    });
+  }
+  function planBuildCompetition(setup, index, sample, state2) {
+    const candidate = candidateAt(setup, index);
+    const affordable = { ...state2.affordable };
+    const estimations = { ...state2.estimations };
+    const finish = (outcome) => Object.freeze({
+      ...outcome,
+      state: Object.freeze({
+        affordable: Object.freeze(affordable),
+        estimations: Object.freeze(estimations),
+        consumptionsUsed: state2.consumptionsUsed
+      })
+    });
+    const build = () => finish({
+      kind: "build",
+      decision: Object.freeze({ index, key: candidate.key })
+    });
+    if (setup.buildIfStorageFull && Object.keys(candidate.cost).some(
+      (resourceId3) => resourceViewOf(sample, resourceId3).storageRatio > 0.98
+    )) {
+      return build();
+    }
+    for (const other of setup.candidates) {
+      const weightDiffRatio = other.weighting / candidate.weighting;
+      if (weightDiffRatio <= 1.000001) {
+        break;
+      }
+      if (weightDiffRatio < 10) {
+        let otherAffordable = affordable[other.key];
+        if (otherAffordable === void 0) {
+          const sampled = sample.affordability[other.key];
+          if (sampled === void 0) {
+            throw new TypeError(
+              `affordability sample missing for competitor ${other.key}`
+            );
           }
+          otherAffordable = sampled;
+          affordable[other.key] = otherAffordable;
         }
-        if (building2.click()) {
-          if (building2.isMission() || building2.cost["Soul_Gem"] && settings2.prestigeType === "whitehole" && settings2.prestigeWhiteholeSaveGems) {
-            return;
-          }
-          building2.consumption.forEach((c) => {
-            if (c.rate >= 0) {
-              consumptionsUsed[c.resource._id] = true;
-            }
-          });
-          for (let key in affordableCache) {
-            affordableCache[key] = false;
-          }
+        if (otherAffordable) {
+          continue;
         }
       }
-    };
+      let estimation = estimations[other.key];
+      if (estimation === void 0) {
+        estimation = estimateBuildTime(setup, other, sample);
+        estimations[other.key] = estimation;
+      }
+      for (const [resourceId3, thisQuantity] of Object.entries(candidate.cost)) {
+        const resource2 = resourceViewOf(sample, resourceId3);
+        if (!resource2.unlocked || resource2.storageRatio > 0.99 && resource2.currentQuantity >= resource2.storageRequired) {
+          continue;
+        }
+        const otherQuantity = other.cost[resourceId3];
+        if (otherQuantity === void 0) {
+          continue;
+        }
+        if (resource2.currentQuantity >= otherQuantity + thisQuantity) {
+          continue;
+        }
+        const perResource = estimation.perResource[resourceId3];
+        if (thisQuantity <= (estimation.total - (perResource ?? Number.NaN)) * resource2.rateOfChange) {
+          continue;
+        }
+        const costDiffRatio = otherQuantity / thisQuantity;
+        if (costDiffRatio >= weightDiffRatio) {
+          continue;
+        }
+        return finish({
+          kind: "delay",
+          annotation: Object.freeze({
+            kind: "competitor",
+            index,
+            key: candidate.key,
+            otherKey: other.key,
+            resourceId: resourceId3
+          })
+        });
+      }
+    }
+    return build();
+  }
+  function applyBuildClickResult(setup, index, report, state2) {
+    if (!report.clicked) {
+      return Object.freeze({ stop: false, state: state2 });
+    }
+    const candidate = candidateAt(setup, index);
+    if (report.mission || candidate.cost["Soul_Gem"] !== void 0 && setup.saveWhiteholeGems) {
+      return Object.freeze({ stop: true, state: state2 });
+    }
+    const consumptionsUsed = { ...state2.consumptionsUsed };
+    for (const entry of report.consumption) {
+      if (entry.nonNegativeRate) {
+        consumptionsUsed[entry.resourceId] = true;
+      }
+    }
+    const affordable = {};
+    for (const key of Object.keys(state2.affordable)) {
+      affordable[key] = false;
+    }
+    return Object.freeze({
+      stop: false,
+      state: Object.freeze({
+        affordable: Object.freeze(affordable),
+        estimations: state2.estimations,
+        consumptionsUsed: Object.freeze(consumptionsUsed)
+      })
+    });
+  }
+
+  // src/application/build.ts
+  var SUCCEEDED22 = Object.freeze({
+    status: "succeeded"
+  });
+  var EMPTY_SAMPLE = Object.freeze({});
+  function runBuildAutomation(dependencies) {
+    const { reader, executor } = dependencies;
+    const setup = reader.beginCycle();
+    let state2 = initialBuildLoopState();
+    for (let index = 0; index < setup.candidates.length; index++) {
+      const needs = candidateSampleNeeds(setup, state2, index);
+      if (needs.kind === "skip") {
+        continue;
+      }
+      const request = needs.request;
+      const sample = request.needAffordability || request.needConsumption ? reader.sampleCandidate(index, request) : EMPTY_SAMPLE;
+      const gate = planBuildGate(setup, index, sample, state2);
+      state2 = gate.state;
+      if (gate.kind === "skip") {
+        continue;
+      }
+      const conflict2 = planBuildConflict(
+        setup,
+        index,
+        reader.sampleConflict(index)
+      );
+      if (conflict2.kind === "skip") {
+        const outcome = executor.annotate(conflict2.annotation);
+        if (outcome.status !== "succeeded") {
+          return outcome;
+        }
+        continue;
+      }
+      const competition = planBuildCompetition(
+        setup,
+        index,
+        reader.sampleCompetition(
+          index,
+          competitionSampleRequest(setup, state2, index)
+        ),
+        state2
+      );
+      state2 = competition.state;
+      if (competition.kind === "delay") {
+        const outcome = executor.annotate(competition.annotation);
+        if (outcome.status !== "succeeded") {
+          return outcome;
+        }
+        continue;
+      }
+      const result2 = executor.executeClick(competition.decision);
+      if (result2.outcome.status !== "succeeded") {
+        return result2.outcome;
+      }
+      const application = applyBuildClickResult(setup, index, result2, state2);
+      state2 = application.state;
+      if (application.stop) {
+        break;
+      }
+    }
+    return SUCCEEDED22;
+  }
+
+  // src/adapters/evolve/build.ts
+  function requireString6(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function requireArray2(value, path) {
+    if (!Array.isArray(value)) {
+      throw new TypeError(`${path} must be an array`);
+    }
+    return value;
+  }
+  function callMethod(target, name, path) {
+    return requireFunction(target[name], `${path}.${name}`).call(target);
+  }
+  var UNAVAILABLE_CONFLICT = Object.freeze({
+    unavailable: true,
+    targetNames: Object.freeze([]),
+    resourceNames: Object.freeze([]),
+    targetCause: ""
+  });
+  var EMPTY_CONSUMPTION = Object.freeze([]);
+  function sampleConsumption(entity, path) {
+    const list = requireArray2(entity["consumption"], `${path}.consumption`);
+    return Object.freeze(
+      list.map((raw, index) => {
+        const entryPath = `${path}.consumption[${index}]`;
+        const entry = requireRecord(raw, entryPath);
+        const resource2 = requireRecord(
+          entry["resource"],
+          `${entryPath}.resource`
+        );
+        return Object.freeze({
+          resourceId: String(resource2["_id"]),
+          nonNegativeRate: Number(entry["rate"]) >= 0
+        });
+      })
+    );
+  }
+  function createBuildAdapter(dependencies) {
+    let cycle = null;
+    function capturedEntity(index, key) {
+      if (cycle === null) {
+        throw new TypeError("no active build cycle");
+      }
+      const entity = cycle.entities[index];
+      if (entity === void 0) {
+        throw new TypeError(`no build candidate at index ${index}`);
+      }
+      if (key !== void 0 && entity["_vueBinding"] !== key) {
+        throw new TypeError(`build candidate at index ${index} is not ${key}`);
+      }
+      return entity;
+    }
+    const reader = Object.freeze({
+      beginCycle() {
+        const buildingManager = requireRecord(
+          dependencies.getBuildingManager(),
+          "BuildingManager"
+        );
+        const projectManager = requireRecord(
+          dependencies.getProjectManager(),
+          "ProjectManager"
+        );
+        callMethod(buildingManager, "updateWeighting", "BuildingManager");
+        callMethod(projectManager, "updateWeighting", "ProjectManager");
+        const state2 = requireRecord(dependencies.getState(), "state");
+        const queuedTargets = requireArray2(
+          state2["queuedTargets"],
+          "state.queuedTargets"
+        );
+        const triggerTargets = requireArray2(
+          state2["triggerTargets"],
+          "state.triggerTargets"
+        );
+        const entities = [
+          ...requireArray2(
+            callMethod(buildingManager, "managedPriorityList", "BuildingManager"),
+            "BuildingManager.managedPriorityList()"
+          ),
+          ...requireArray2(
+            callMethod(projectManager, "managedPriorityList", "ProjectManager"),
+            "ProjectManager.managedPriorityList()"
+          )
+        ].map((entry, index) => requireRecord(entry, `buildList[${index}]`));
+        entities.sort((a, b) => Number(b["weighting"]) - Number(a["weighting"]));
+        state2["unlockedBuildings"] = entities;
+        const byKey = /* @__PURE__ */ new Map();
+        const candidates = entities.map((entity, index) => {
+          const path = `buildList[${index}]`;
+          const key = requireString6(entity["_vueBinding"], `${path}._vueBinding`);
+          byKey.set(key, entity);
+          const rawCost = requireRecord(entity["cost"], `${path}.cost`);
+          const cost = {};
+          for (const resourceId3 of Object.keys(rawCost)) {
+            cost[resourceId3] = requireNumber(
+              rawCost[resourceId3],
+              `${path}.cost.${resourceId3}`
+            );
+          }
+          return Object.freeze({
+            key,
+            weighting: requireNumber(entity["weighting"], `${path}.weighting`),
+            cost: Object.freeze(cost),
+            ignored: queuedTargets.includes(entity) || triggerTargets.includes(entity)
+          });
+        });
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const rawMode = settings2["buildingConsumptionCheck"];
+        const consumptionMode = rawMode === "perResource" ? "perResource" : rawMode === "unlimited" ? "unlimited" : "onePerTick";
+        cycle = Object.freeze({ entities: Object.freeze(entities), byKey });
+        return Object.freeze({
+          candidates: Object.freeze(candidates),
+          consumptionMode,
+          buildIfStorageFull: Boolean(settings2["buildingBuildIfStorageFull"]),
+          ignoreZeroRate: Boolean(settings2["buildingsIgnoreZeroRate"]),
+          saveWhiteholeGems: settings2["prestigeType"] === "whitehole" && Boolean(settings2["prestigeWhiteholeSaveGems"])
+        });
+      },
+      sampleCandidate(index, request) {
+        const entity = capturedEntity(index);
+        const path = `buildList[${index}]`;
+        const sample = {};
+        if (request.needAffordability) {
+          sample.affordable = Boolean(callMethod(entity, "isAffordable", path));
+        }
+        if (request.needConsumption) {
+          sample.consumption = sampleConsumption(entity, path);
+        }
+        return Object.freeze(sample);
+      },
+      sampleConflict(index) {
+        const entity = capturedEntity(index);
+        const path = `buildList[${index}]`;
+        const raw = dependencies.getCostConflict(entity);
+        let conflict2 = null;
+        if (raw) {
+          const record = requireRecord(raw, "costConflict");
+          conflict2 = record["status"] === "unavailable" ? UNAVAILABLE_CONFLICT : Object.freeze({
+            unavailable: false,
+            targetNames: Object.freeze(
+              requireArray2(
+                record["targetNames"],
+                "costConflict.targetNames"
+              ).map((name) => String(name))
+            ),
+            resourceNames: Object.freeze(
+              requireArray2(
+                record["resourceNames"],
+                "costConflict.resourceNames"
+              ).map((name) => String(name))
+            ),
+            targetCause: String(record["targetCause"])
+          });
+        }
+        return Object.freeze({
+          conflict: conflict2,
+          important: Boolean(
+            requireRecord(entity["is"], `${path}.is`)["important"]
+          )
+        });
+      },
+      sampleCompetition(index, request) {
+        capturedEntity(index);
+        const capture = cycle;
+        const affordability = {};
+        for (const key of request.affordabilityKeys) {
+          const entity = capture.byKey.get(key);
+          if (entity === void 0) {
+            throw new TypeError(`unknown build candidate ${key}`);
+          }
+          affordability[key] = Boolean(
+            callMethod(entity, "isAffordable", `buildList[${key}]`)
+          );
+        }
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const resourceViews = {};
+        for (const resourceId3 of request.resourceIds) {
+          const path = `resources.${resourceId3}`;
+          const resource2 = requireRecord(resources2[resourceId3], path);
+          resourceViews[resourceId3] = Object.freeze({
+            unlocked: Boolean(callMethod(resource2, "isUnlocked", path)),
+            currentQuantity: Number(resource2["currentQuantity"]),
+            rateOfChange: Number(resource2["rateOfChange"]),
+            storageRatio: Number(resource2["storageRatio"]),
+            storageRequired: Number(resource2["storageRequired"])
+          });
+        }
+        return Object.freeze({
+          affordability: Object.freeze(affordability),
+          resources: Object.freeze(resourceViews)
+        });
+      }
+    });
+    function staleTarget(index, key) {
+      return stale("stale-build-target", "build candidate list changed", {
+        key,
+        index
+      });
+    }
+    function candidateFor(index, key) {
+      if (cycle === null) {
+        return null;
+      }
+      const entity = cycle.entities[index];
+      if (entity === void 0 || entity["_vueBinding"] !== key) {
+        return null;
+      }
+      return entity;
+    }
+    const executor = Object.freeze({
+      annotate(annotation) {
+        if (cycle === null) {
+          return rejected2(
+            "no-build-cycle",
+            "annotate requires an active build cycle"
+          );
+        }
+        const entity = candidateFor(annotation.index, annotation.key);
+        if (entity === null) {
+          return staleTarget(annotation.index, annotation.key);
+        }
+        let text;
+        if (annotation.kind === "text") {
+          text = annotation.text;
+        } else {
+          const other = cycle.byKey.get(annotation.otherKey);
+          if (other === void 0) {
+            return staleTarget(annotation.index, annotation.otherKey);
+          }
+          const resources2 = requireRecord(
+            dependencies.getResources(),
+            "resources"
+          );
+          const resource2 = requireRecord(
+            resources2[annotation.resourceId],
+            `resources.${annotation.resourceId}`
+          );
+          text = `Conflicts with <span class="has-text-info">${String(
+            other["title"]
+          )}</span> for <span class="has-text-info">${String(
+            resource2["name"]
+          )}</span><br>`;
+        }
+        entity["extraDescription"] = String(entity["extraDescription"]) + text;
+        return SUCCEEDED2;
+      },
+      executeClick(decision2) {
+        if (cycle === null) {
+          return Object.freeze({
+            outcome: rejected2(
+              "no-build-cycle",
+              "executeClick requires an active build cycle"
+            ),
+            clicked: false,
+            mission: false,
+            consumption: EMPTY_CONSUMPTION
+          });
+        }
+        const entity = candidateFor(decision2.index, decision2.key);
+        if (entity === null) {
+          return Object.freeze({
+            outcome: staleTarget(decision2.index, decision2.key),
+            clicked: false,
+            mission: false,
+            consumption: EMPTY_CONSUMPTION
+          });
+        }
+        const path = `buildList[${decision2.index}]`;
+        const clicked = Boolean(callMethod(entity, "click", path));
+        if (!clicked) {
+          return Object.freeze({
+            outcome: SUCCEEDED2,
+            clicked: false,
+            mission: false,
+            consumption: EMPTY_CONSUMPTION
+          });
+        }
+        return Object.freeze({
+          outcome: SUCCEEDED2,
+          clicked: true,
+          mission: Boolean(callMethod(entity, "isMission", path)),
+          consumption: sampleConsumption(entity, path)
+        });
+      }
+    });
+    return Object.freeze({ reader, executor });
   }
 
   // src/domain/research.ts
@@ -35006,7 +35477,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED22 = Object.freeze({
+  var SUCCEEDED23 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -35014,7 +35485,7 @@
     while (true) {
       const decision2 = planResearch(dependencies.reader.read(startIndex));
       if (decision2 === null) {
-        return SUCCEEDED22;
+        return SUCCEEDED23;
       }
       const result2 = dependencies.executor.execute(decision2);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -35158,12 +35629,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED23 = Object.freeze({
+  var SUCCEEDED24 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision2 = planMutation(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED23 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED24 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -35574,7 +36045,7 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString6(value, path) {
+  function requireString7(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -35594,7 +36065,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString6(
+    const status2 = requireString7(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -35663,7 +36134,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString6(
+          mode = requireString7(
             settings2["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -35801,7 +36272,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString6(
+            const id = requireString7(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -35960,7 +36431,7 @@
             );
           }
         }
-        const targetLocationName = requireString6(
+        const targetLocationName = requireString7(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -35993,7 +36464,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString6(
+        const shipName = requireString7(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -36004,7 +36475,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString6(
+        const shipClass = requireString7(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -36076,7 +36547,7 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString6(
+          const resourceId3 = requireString7(
             missingResource,
             "missing outer-fleet resource id"
           );
@@ -36084,7 +36555,7 @@
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString6(
+          missingResourceName = requireString7(
             resource2["name"],
             `resources.${resourceId3}.name`
           );
@@ -36498,12 +36969,12 @@
   }
 
   // src/application/fleet.ts
-  var SUCCEEDED24 = Object.freeze({
+  var SUCCEEDED25 = Object.freeze({
     status: "succeeded"
   });
   function runFleetAutomation(dependencies) {
     const decision2 = planFleet(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED24 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED25 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/fleet.ts
@@ -36514,7 +36985,7 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString7(value, path) {
+  function requireString8(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -36690,7 +37161,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString7(
+          const name = requireString8(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -36718,7 +37189,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString7(
+          chthonianLossMode = requireString8(
             settings2["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -36752,7 +37223,7 @@
               settings2["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString7(
+            alien2LossMode = requireString8(
               settings2["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -37067,22 +37538,22 @@
   }
 
   // src/application/mech.ts
-  var SUCCEEDED25 = Object.freeze({
+  var SUCCEEDED26 = Object.freeze({
     status: "succeeded"
   });
   function runMechAutomation(dependencies) {
     const cycle = planMechCycle(dependencies.reader.readCycle());
-    if (cycle === null) return SUCCEEDED25;
+    if (cycle === null) return SUCCEEDED26;
     const prepared = dependencies.executor.prepare(cycle);
     if (prepared.status !== "succeeded" || !cycle.proceed) return prepared;
     const planning = dependencies.reader.readPlanning(cycle);
-    if (planning === null) return SUCCEEDED25;
+    if (planning === null) return SUCCEEDED26;
     const continuation = planMechContinuation(planning);
     if (continuation.scrap !== null) {
       const scrapped = dependencies.executor.scrap(continuation.scrap);
       if (scrapped.status !== "succeeded") return scrapped;
     }
-    if (continuation.halt) return SUCCEEDED25;
+    if (continuation.halt) return SUCCEEDED26;
     let design = planning.design;
     let cost = planning.cost;
     if (continuation.trySmaller) {
@@ -37097,11 +37568,11 @@
       }
     }
     const build = planMechBuild(continuation, design, cost);
-    return build === null ? SUCCEEDED25 : dependencies.executor.build(build, continuation);
+    return build === null ? SUCCEEDED26 : dependencies.executor.build(build, continuation);
   }
 
   // src/adapters/evolve/mech.ts
-  function requireString8(value, path) {
+  function requireString9(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -37120,7 +37591,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString8(raw["size"], `${path}.size`),
+        size: requireString9(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -37155,7 +37626,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString8(raw["size"], `${path}.size`),
+      size: requireString9(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -37256,7 +37727,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString8(settings2["mechBuild"], "settings.mechBuild")
+          buildMode: requireString9(settings2["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -37288,7 +37759,7 @@
             call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString8(preferred[0], "preferred mech size");
+          const size = requireString9(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
             call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
@@ -37322,7 +37793,7 @@
           buildings2["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString8(
+        const prestigeType = requireString9(
           settings2["prestigeType"],
           "settings.prestigeType"
         );
@@ -37408,7 +37879,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString8(
+        const configuredScrapMode = requireString9(
           settings2["mechScrap"],
           "settings.mechScrap"
         );
@@ -37437,7 +37908,7 @@
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString8(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString9(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -37612,7 +38083,7 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString8(
+          const description = requireString9(
             call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
@@ -50443,14 +50914,17 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const autoBuild = createAutoBuild({
+    const buildAdapter = createBuildAdapter({
       getBuildingManager: () => BuildingManager,
       getProjectManager: () => ProjectManager,
       getState: () => state,
       getSettings: () => settings,
       getResources: () => resources,
-      getGetCostConflict: () => getCostConflict
+      getCostConflict: (target) => getCostConflict(target)
     });
+    const autoBuild = () => {
+      runBuildAutomation(buildAdapter);
+    };
     let techConflictClock = browserClock;
     const getTechConflict = (tech) => {
       const readResult = readTechConflictInput(
