@@ -689,10 +689,9 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
         const kind = identityKind(job, jobs);
         const flags = requireRecord(job["is"], `jobList[${token}].is`);
         const crafting = Boolean(dependencies.isCraftingJob(job));
-        const smart = requireBoolean(
-          job["isSmartEnabled"],
-          `jobList[${token}].isSmartEnabled`,
-        );
+        // Evolve leaves the per-job smart setting absent until it has been
+        // initialized. Legacy treated that undefined getter as disabled.
+        const smart = Boolean(job["isSmartEnabled"]);
         const demonicLumber = kind === "hunter" && demonLumber;
         const smartMaximum = crafting
           ? { maximum: null, farmerMinimum: null }
@@ -711,28 +710,36 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
               minersDisabled,
               demonicLumber,
             );
-        const breakpoints = [0, 1, 2].map((pass) =>
-          requireNumber(
-            call(
-              job,
-              "breakpointEmployees",
-              `jobList[${token}].breakpointEmployees`,
-              [pass],
-            ),
-            `jobList[${token}] breakpoint ${pass}`,
-          ),
-        ) as [number, number, number];
-        const uncappedBreakpoints = [0, 1, 2].map((pass) =>
-          requireNumber(
-            call(
-              job,
-              "breakpointEmployees",
-              `jobList[${token}].breakpointEmployees`,
-              [pass, true],
-            ),
-            `jobList[${token}] uncapped breakpoint ${pass}`,
-          ),
-        ) as [number, number, number];
+        // Crafting jobs carry no breakpoint settings (migration deletes
+        // job_b1_<crafter>), so breakpointEmployees would yield NaN. planJobs
+        // skips crafting jobs in the assignment loop, so these values are
+        // never read; use placeholders to keep the input well-formed.
+        const breakpoints = crafting
+          ? ([0, 0, 0] as [number, number, number])
+          : ([0, 1, 2].map((pass) =>
+              requireNumber(
+                call(
+                  job,
+                  "breakpointEmployees",
+                  `jobList[${token}].breakpointEmployees`,
+                  [pass],
+                ),
+                `jobList[${token}] breakpoint ${pass}`,
+              ),
+            ) as [number, number, number]);
+        const uncappedBreakpoints = crafting
+          ? ([0, 0, 0] as [number, number, number])
+          : ([0, 1, 2].map((pass) =>
+              requireNumber(
+                call(
+                  job,
+                  "breakpointEmployees",
+                  `jobList[${token}].breakpointEmployees`,
+                  [pass, true],
+                ),
+                `jobList[${token}] uncapped breakpoint ${pass}`,
+              ),
+            ) as [number, number, number]);
         return Object.freeze({
           token,
           id: requireString(job["id"], `jobList[${token}].id`),

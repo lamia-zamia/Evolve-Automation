@@ -34306,10 +34306,7 @@
           const kind = identityKind(job, jobs2);
           const flags = requireRecord(job["is"], `jobList[${token2}].is`);
           const crafting = Boolean(dependencies.isCraftingJob(job));
-          const smart = requireBoolean(
-            job["isSmartEnabled"],
-            `jobList[${token2}].isSmartEnabled`
-          );
+          const smart = Boolean(job["isSmartEnabled"]);
           const demonicLumber = kind === "hunter" && demonLumber;
           const smartMaximum = crafting ? { maximum: null, farmerMinimum: null } : jobSmartMaximum(
             dependencies,
@@ -34326,7 +34323,7 @@
             minersDisabled,
             demonicLumber
           );
-          const breakpoints = [0, 1, 2].map(
+          const breakpoints = crafting ? [0, 0, 0] : [0, 1, 2].map(
             (pass) => requireNumber(
               call2(
                 job,
@@ -34337,7 +34334,7 @@
               `jobList[${token2}] breakpoint ${pass}`
             )
           );
-          const uncappedBreakpoints = [0, 1, 2].map(
+          const uncappedBreakpoints = crafting ? [0, 0, 0] : [0, 1, 2].map(
             (pass) => requireNumber(
               call2(
                 job,

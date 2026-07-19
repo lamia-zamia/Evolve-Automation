@@ -357,7 +357,11 @@ function runCraftDistribution(factory, specialBuilding = false) {
       get count() {
         return this.workers;
       },
-      breakpointEmployees: () => 0,
+      // Real CraftingJob instances have no job_b1_<id> settings, so
+      // breakpointEmployees would return NaN. The adapter must skip crafting
+      // jobs when reading breakpoints, mirroring the legacy assignment loop.
+      breakpointEmployees: () =>
+        assert.fail("crafting job breakpoints must never be read"),
       removeWorkers(count) {
         trace.push(`remove:${id}:${count}`);
         this.workers -= count;
@@ -459,7 +463,11 @@ assert.deepEqual(
   "building-bound crafting does not over-assign beyond the sampled craftsman pool",
 );
 
-function runSplitAllocation(factory, externalDefault = false) {
+function runSplitAllocation(
+  factory,
+  externalDefault = false,
+  smartSetting = false,
+) {
   const trace = [];
   const makeJob = (id, workers, weight) => ({
     id,
@@ -467,7 +475,7 @@ function runSplitAllocation(factory, externalDefault = false) {
     servants: 0,
     max: Number.MAX_SAFE_INTEGER,
     is: { split: true, serve: false },
-    isSmartEnabled: false,
+    isSmartEnabled: smartSetting === null ? undefined : smartSetting,
     isDefault: () => false,
     isManaged: () => !externalDefault,
     isUnlocked: () => true,
@@ -590,6 +598,11 @@ assert.deepEqual(
   runSplitAllocation(createNewAutoJobs, true),
   runSplitAllocation(createLegacyAutoJobs, true),
   "an unlocked unmanaged fallback can become default outside the managed allocation list",
+);
+assert.deepEqual(
+  runSplitAllocation(createNewAutoJobs, false, null),
+  runSplitAllocation(createLegacyAutoJobs, false, null),
+  "an absent smart-job setting is normalized to disabled like the legacy truthiness check",
 );
 
 let staleOutcome;
