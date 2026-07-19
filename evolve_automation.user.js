@@ -538,8 +538,8 @@
         marketMinIngredients: 0
       };
       for (let i = 0; i < MarketManager2.priorityList.length; i++) {
-        let resource = MarketManager2.priorityList[i];
-        let id = resource.id;
+        let resource2 = MarketManager2.priorityList[i];
+        let id = resource2.id;
         def["res_buy_p_" + id] = i;
         def["buy" + id] = false;
         def["res_buy_r_" + id] = 0.5;
@@ -563,8 +563,8 @@
       setTradePriority(10, ["Iridium"]);
       setTradePriority(-1, ["Crystal"]);
       for (let i = 0; i < poly2.galaxyOffers.length; i++) {
-        let resource = resources2[poly2.galaxyOffers[i].buy.res];
-        let id = resource.id;
+        let resource2 = resources2[poly2.galaxyOffers[i].buy.res];
+        let id = resource2.id;
         def["res_galaxy_w_" + id] = 1;
         def["res_galaxy_p_" + id] = i + 1;
       }
@@ -581,8 +581,8 @@
         storageAssignPart: false
       };
       for (let i = 0; i < StorageManager2.priorityList.length; i++) {
-        let resource = StorageManager2.priorityList[i];
-        let id = resource.id;
+        let resource2 = StorageManager2.priorityList[i];
+        let id = resource2.id;
         def["res_storage" + id] = true;
         def["res_storage_p_" + id] = i;
         def["res_storage_o_" + id] = false;
@@ -597,8 +597,8 @@
     }
     function resetMinorTraitSettings2(reset) {
       MinorTraitManager2.priorityList = Object.entries(game2.traits).filter(
-        ([id, trait]) => trait.type === "minor" || id === "mastery" || id === "fortify"
-      ).map(([id, trait]) => new MinorTrait2(id));
+        ([id, trait2]) => trait2.type === "minor" || id === "mastery" || id === "fortify"
+      ).map(([id, trait2]) => new MinorTrait2(id));
       let def = {
         autoMinorTrait: false,
         shifterGenus: "ignore",
@@ -616,8 +616,8 @@
         geneticsAssemble: "auto"
       };
       for (let i = 0; i < MinorTraitManager2.priorityList.length; i++) {
-        let trait = MinorTraitManager2.priorityList[i];
-        let id = trait.traitName;
+        let trait2 = MinorTraitManager2.priorityList[i];
+        let id = trait2.traitName;
         def["mTrait_" + id] = true;
         def["mTrait_p_" + id] = i;
         def["mTrait_w_" + id] = 1;
@@ -632,9 +632,9 @@
     function resetMutableTraitSettings2(reset) {
       let unobtainableTraits = ["xenophobic", "rigid", "soul_eater"];
       MutableTraitManager2.priorityList = Object.entries(game2.traits).filter(
-        ([id, trait]) => (trait.type === "major" || trait.type === "genus") && !unobtainableTraits.includes(id)
+        ([id, trait2]) => (trait2.type === "major" || trait2.type === "genus") && !unobtainableTraits.includes(id)
       ).map(
-        ([id, trait]) => trait.type === "major" ? new MajorTrait2(id) : new GenusTrait2(id)
+        ([id, trait2]) => trait2.type === "major" ? new MajorTrait2(id) : new GenusTrait2(id)
       ).sort(
         (a, b) => Object.keys(poly2.genus_traits).indexOf(a.genus) - Object.keys(poly2.genus_traits).indexOf(b.genus) || a.type < b.type
       );
@@ -644,11 +644,11 @@
         minimumPlasmidsToPreserve: 0
       };
       for (let i = 0; i < MutableTraitManager2.priorityList.length; i++) {
-        let trait = MutableTraitManager2.priorityList[i];
-        let id = trait.traitName;
+        let trait2 = MutableTraitManager2.priorityList[i];
+        let id = trait2.traitName;
         def["mutableTrait_p_" + id] = i;
         def["mutableTrait_purge_" + id] = false;
-        if (trait.isGainable()) {
+        if (trait2.isGainable()) {
           def["mutableTrait_gain_" + id] = false;
         }
         if (poly2.neg_roll_traits.includes(id)) {
@@ -766,16 +766,16 @@
         buildingStateAll: true
       };
       for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
-        let building = BuildingManager2.priorityList[i];
-        let id = building._vueBinding;
+        let building2 = BuildingManager2.priorityList[i];
+        let id = building2._vueBinding;
         def["bat" + id] = true;
         def["bld_p_" + id] = i;
         def["bld_m_" + id] = -1;
         def["bld_w_" + id] = 100;
-        if (building.isSwitchable()) {
+        if (building2.isSwitchable()) {
           def["bld_s_" + id] = true;
         }
-        if (building.is.smart) {
+        if (building2.is.smart) {
           def["bld_s2_" + id] = true;
         }
       }
@@ -856,8 +856,8 @@
         productionRitualSafe: true
       };
       for (let i = 0; i < AlchemyManager2.priorityList.length; i++) {
-        let resource = AlchemyManager2.priorityList[i];
-        let id = resource.id;
+        let resource2 = AlchemyManager2.priorityList[i];
+        let id = resource2.id;
         def["res_alchemy_" + id] = true;
         def["res_alchemy_w_" + id] = 0;
       }
@@ -1000,7 +1000,7 @@
         (biome) => def["biome_w_" + biome] = (planetBiomes2.length - planetBiomes2.indexOf(biome)) * 10
       );
       traitList2.forEach(
-        (trait) => def["trait_w_" + trait] = (planetTraits2.length - planetTraits2.indexOf(trait)) * 10
+        (trait2) => def["trait_w_" + trait2] = (planetTraits2.length - planetTraits2.indexOf(trait2)) * 10
       );
       extraList2.forEach((extra) => def["extra_w_" + extra] = 0);
       def["extra_w_Achievement"] = 1e3;
@@ -1105,14 +1105,14 @@
         prestigeWhiteholeStabiliseMass: true,
         prestigeWhiteholeStabiliseCooldown: 120
       };
-      for (let resource of EjectManager2.priorityList) {
-        def["res_eject" + resource.id] = resource.is.tradable ?? false;
+      for (let resource2 of EjectManager2.priorityList) {
+        def["res_eject" + resource2.id] = resource2.is.tradable ?? false;
       }
-      for (let resource of SupplyManager2.priorityList) {
-        def["res_supply" + resource.id] = resource.is.tradable ?? false;
+      for (let resource2 of SupplyManager2.priorityList) {
+        def["res_supply" + resource2.id] = resource2.is.tradable ?? false;
       }
-      for (let resource of NaniteManager2.priorityList) {
-        def["res_nanite" + resource.id] = resource.is.tradable ?? false;
+      for (let resource2 of NaniteManager2.priorityList) {
+        def["res_nanite" + resource2.id] = resource2.is.tradable ?? false;
       }
       def["res_eject" + resources2.Elerium.id] = true;
       def["res_eject" + resources2.Infernite.id] = true;
@@ -1360,14 +1360,14 @@
       );
       ["res_storage_w_", "res_trade_buy_mtr_", "res_trade_sell_mps_"].forEach(
         (id) => Object.values(resources2).forEach(
-          (resource) => delete settingsRaw2[id + resource.id]
+          (resource2) => delete settingsRaw2[id + resource2.id]
         )
       );
       Object.values(projects2).forEach(
         (project) => delete settingsRaw2["arpa_ignore_money_" + project.id]
       );
-      Object.values(buildings2).filter((building) => !building.isSwitchable()).forEach(
-        (building) => delete settingsRaw2["bld_s_" + building._vueBinding]
+      Object.values(buildings2).filter((building2) => !building2.isSwitchable()).forEach(
+        (building2) => delete settingsRaw2["bld_s_" + building2._vueBinding]
       );
       migrateSetting2("prestigeWhiteholeEjectEnabled", "autoEject", (v) => v);
       migrateSetting2("mechSaveSupply", "mechSaveSupplyRatio", (v) => v ? 1 : 0);
@@ -1732,8 +1732,8 @@
       );
     }
     function haveTech2(research, level = 1) {
-      const technology = getGame().global.tech[research];
-      return technology && technology >= level;
+      const technology2 = getGame().global.tech[research];
+      return technology2 && technology2 >= level;
     }
     function isEarlyGame2() {
       const race = getGame().global.race;
@@ -1767,7 +1767,7 @@
       },
       managedPriorityList() {
         return this.priorityList.filter(
-          (trait) => trait.enabled && trait.isUnlocked()
+          (trait2) => trait2.enabled && trait2.isUnlocked()
         );
       },
       buyTrait(traitName) {
@@ -2159,10 +2159,10 @@
         if (!this.isUnlocked() || !getSettings().autoNanite) {
           return;
         }
-        for (let resource of this.priorityList) {
-          if (resource.isUnlocked()) {
-            resource.rateMods["nanite"] = this.currentConsume(resource.id);
-            resource.rateOfChange += resource.rateMods["nanite"];
+        for (let resource2 of this.priorityList) {
+          if (resource2.isUnlocked()) {
+            resource2.rateMods["nanite"] = this.currentConsume(resource2.id);
+            resource2.rateOfChange += resource2.rateMods["nanite"];
           }
         }
       },
@@ -2191,14 +2191,14 @@
             return [];
         }
       },
-      maxConsumeCraftable(resource) {
-        let extraIncome = resource.rateOfChange;
-        let extraStore = resource.currentQuantity - resource.storageRequired * this.storageShift;
+      maxConsumeCraftable(resource2) {
+        let extraIncome = resource2.rateOfChange;
+        let extraStore = resource2.currentQuantity - resource2.storageRequired * this.storageShift;
         return Math.max(extraIncome, extraStore);
       },
-      maxConsumeForRatio(resource, keepRatio) {
-        let extraIncome = resource.rateOfChange;
-        let extraStore = (resource.storageRatio - keepRatio) * resource.maxQuantity;
+      maxConsumeForRatio(resource2, keepRatio) {
+        let extraIncome = resource2.rateOfChange;
+        let extraStore = (resource2.storageRatio - keepRatio) * resource2.maxQuantity;
         return Math.max(extraIncome, extraStore);
       },
       consumeMore(id, count) {
@@ -2241,10 +2241,10 @@
         if (!this.isUnlocked() || !getSettings().autoSupply) {
           return;
         }
-        for (let resource of this.priorityList) {
-          if (resource.isUnlocked()) {
-            resource.rateMods["supply"] = this.currentConsume(resource.id) * this.supplyOut(resource.id);
-            resource.rateOfChange += resource.rateMods["supply"];
+        for (let resource2 of this.priorityList) {
+          if (resource2.isUnlocked()) {
+            resource2.rateMods["supply"] = this.currentConsume(resource2.id) * this.supplyOut(resource2.id);
+            resource2.rateOfChange += resource2.rateMods["supply"];
           }
         }
       },
@@ -2279,21 +2279,21 @@
             return [];
         }
       },
-      maxConsumeCraftable(resource) {
-        let extraIncome = resource.calculateRateOfChange({
+      maxConsumeCraftable(resource2) {
+        let extraIncome = resource2.calculateRateOfChange({
           buy: false,
           nanite: true
         });
-        let extraStore = resource.currentQuantity - resource.storageRequired * this.storageShift;
-        return Math.max(extraIncome, extraStore) / this.supplyOut(resource.id);
+        let extraStore = resource2.currentQuantity - resource2.storageRequired * this.storageShift;
+        return Math.max(extraIncome, extraStore) / this.supplyOut(resource2.id);
       },
-      maxConsumeForRatio(resource, keepRatio) {
-        let extraIncome = resource.calculateRateOfChange({
+      maxConsumeForRatio(resource2, keepRatio) {
+        let extraIncome = resource2.calculateRateOfChange({
           buy: false,
           nanite: true
         });
-        let extraStore = (resource.storageRatio - keepRatio) * resource.maxQuantity;
-        return Math.max(extraIncome, extraStore) / this.supplyOut(resource.id);
+        let extraStore = (resource2.storageRatio - keepRatio) * resource2.maxQuantity;
+        return Math.max(extraIncome, extraStore) / this.supplyOut(resource2.id);
       },
       consumeMore(id, count) {
         const resources2 = getResources();
@@ -2341,10 +2341,10 @@
         if (!this.isUnlocked() || !getSettings().autoEject && !haveTask2("trash")) {
           return;
         }
-        for (let resource of this.priorityList) {
-          if (resource.isUnlocked()) {
-            resource.rateMods["eject"] = this.currentConsume(resource.id);
-            resource.rateOfChange += resource.rateMods["eject"];
+        for (let resource2 of this.priorityList) {
+          if (resource2.isUnlocked()) {
+            resource2.rateMods["eject"] = this.currentConsume(resource2.id);
+            resource2.rateOfChange += resource2.rateMods["eject"];
           }
         }
       },
@@ -2375,22 +2375,22 @@
             return [];
         }
       },
-      maxConsumeCraftable(resource) {
-        let extraIncome = resource.calculateRateOfChange({
+      maxConsumeCraftable(resource2) {
+        let extraIncome = resource2.calculateRateOfChange({
           buy: false,
           supply: true,
           nanite: true
         });
-        let extraStore = resource.currentQuantity - resource.storageRequired * this.storageShift;
+        let extraStore = resource2.currentQuantity - resource2.storageRequired * this.storageShift;
         return Math.max(extraIncome, extraStore);
       },
-      maxConsumeForRatio(resource, keepRatio) {
-        let extraIncome = resource.calculateRateOfChange({
+      maxConsumeForRatio(resource2, keepRatio) {
+        let extraIncome = resource2.calculateRateOfChange({
           buy: false,
           supply: true,
           nanite: true
         });
-        let extraStore = (resource.storageRatio - keepRatio) * resource.maxQuantity;
+        let extraStore = (resource2.storageRatio - keepRatio) * resource2.maxQuantity;
         return Math.max(extraIncome, extraStore);
       },
       consumeMore(id, count) {
@@ -2732,9 +2732,9 @@
         }
         return true;
       },
-      f_rate(production, resource) {
+      f_rate(production, resource2) {
         const game2 = getGame();
-        return game2.f_rate[production][resource][game2.global.tech["factory"] || 0];
+        return game2.f_rate[production][resource2][game2.global.tech["factory"] || 0];
       },
       currentOperating() {
         const game2 = getGame();
@@ -3103,8 +3103,8 @@
       sortByPriority() {
         this.priorityList.sort((a, b) => a.marketPriority - b.marketPriority);
       },
-      isBuySellUnlocked(resource) {
-        return getDocument().querySelector("#market-" + resource.id + " .order") !== null;
+      isBuySellUnlocked(resource2) {
+        return getDocument().querySelector("#market-" + resource2.id + " .order") !== null;
       },
       setMultiplier(multiplier) {
         this.multiplier = Math.min(
@@ -3116,47 +3116,47 @@
       getMaxMultiplier() {
         return getVueById2("market-qty")?.limit() ?? 1;
       },
-      getUnitBuyPrice(resource) {
+      getUnitBuyPrice(resource2) {
         const game2 = getGame();
-        let price = game2.global.resource[resource.id].value;
+        let price = game2.global.resource[resource2.id].value;
         price *= traitVal2("arrogant", 0, "+");
         price *= traitVal2("conniving", 0, "-");
         return price;
       },
-      getUnitSellPrice(resource) {
+      getUnitSellPrice(resource2) {
         const game2 = getGame();
         let divide = 4;
         divide *= traitVal2("merchant", 0, "-");
         divide *= traitVal2("asymmetrical", 0, "+");
         divide *= traitVal2("conniving", 1, "-");
-        return game2.global.resource[resource.id].value / divide;
+        return game2.global.resource[resource2.id].value / divide;
       },
-      buy(resource) {
+      buy(resource2) {
         const resources2 = getResources();
-        let vue = getVueById2(resource._marketVueBinding);
+        let vue = getVueById2(resource2._marketVueBinding);
         if (vue === void 0) {
           return false;
         }
-        let price = this.getUnitBuyPrice(resource) * this.multiplier;
+        let price = this.getUnitBuyPrice(resource2) * this.multiplier;
         if (resources2.Money.currentQuantity < price) {
           return false;
         }
-        resources2.Money.currentQuantity -= this.multiplier * this.getUnitBuyPrice(resource);
-        resource.currentQuantity += this.multiplier;
-        vue.purchase(resource.id);
+        resources2.Money.currentQuantity -= this.multiplier * this.getUnitBuyPrice(resource2);
+        resource2.currentQuantity += this.multiplier;
+        vue.purchase(resource2.id);
       },
-      sell(resource) {
+      sell(resource2) {
         const resources2 = getResources();
-        let vue = getVueById2(resource._marketVueBinding);
+        let vue = getVueById2(resource2._marketVueBinding);
         if (vue === void 0) {
           return false;
         }
-        if (resource.currentQuantity < this.multiplier) {
+        if (resource2.currentQuantity < this.multiplier) {
           return false;
         }
-        resources2.Money.currentQuantity += this.multiplier * this.getUnitSellPrice(resource);
-        resource.currentQuantity -= this.multiplier;
-        vue.sell(resource.id);
+        resources2.Money.currentQuantity += this.multiplier * this.getUnitSellPrice(resource2);
+        resource2.currentQuantity -= this.multiplier;
+        vue.sell(resource2.id);
       },
       getImportRouteCap() {
         if (haveTech2("currency", 6)) {
@@ -3181,41 +3181,41 @@
       getMaxTradeRoutes() {
         let max = getGame().global.city.market.mtrade;
         let unmanaged = 0;
-        for (let resource of this.priorityList) {
-          if (!resource.autoTradeBuyEnabled && !resource.autoTradeSellEnabled) {
-            max -= Math.abs(resource.tradeRoutes);
-            unmanaged += resource.tradeRoutes;
+        for (let resource2 of this.priorityList) {
+          if (!resource2.autoTradeBuyEnabled && !resource2.autoTradeSellEnabled) {
+            max -= Math.abs(resource2.tradeRoutes);
+            unmanaged += resource2.tradeRoutes;
           }
         }
         return [max, unmanaged];
       },
-      zeroTradeRoutes(resource) {
-        getVueById2(resource._marketVueBinding)?.zero(resource.id);
+      zeroTradeRoutes(resource2) {
+        getVueById2(resource2._marketVueBinding)?.zero(resource2.id);
       },
-      addTradeRoutes(resource, count) {
-        if (!resource.isUnlocked()) {
+      addTradeRoutes(resource2, count) {
+        if (!resource2.isUnlocked()) {
           return false;
         }
-        let vue = getVueById2(resource._marketVueBinding);
+        let vue = getVueById2(resource2._marketVueBinding);
         if (vue === void 0) {
           return false;
         }
         const KeyManager2 = getKeyManager();
         for (let m of KeyManager2.click(count)) {
-          vue.autoBuy(resource.id);
+          vue.autoBuy(resource2.id);
         }
       },
-      removeTradeRoutes(resource, count) {
-        if (!resource.isUnlocked()) {
+      removeTradeRoutes(resource2, count) {
+        if (!resource2.isUnlocked()) {
           return false;
         }
-        let vue = getVueById2(resource._marketVueBinding);
+        let vue = getVueById2(resource2._marketVueBinding);
         if (vue === void 0) {
           return false;
         }
         const KeyManager2 = getKeyManager();
         for (let m of KeyManager2.click(count)) {
-          vue.autoSell(resource.id);
+          vue.autoSell(resource2.id);
         }
       }
     };
@@ -3263,44 +3263,44 @@
           this._storageVue.container();
         }
       },
-      assignCrate(resource, count) {
-        let vue = getVueById2(resource._stackVueBinding);
+      assignCrate(resource2, count) {
+        let vue = getVueById2(resource2._stackVueBinding);
         if (vue === void 0) {
           return false;
         }
         const KeyManager2 = getKeyManager();
         for (let m of KeyManager2.click(count)) {
-          vue.addCrate(resource.id);
+          vue.addCrate(resource2.id);
         }
       },
-      unassignCrate(resource, count) {
-        let vue = getVueById2(resource._stackVueBinding);
+      unassignCrate(resource2, count) {
+        let vue = getVueById2(resource2._stackVueBinding);
         if (vue === void 0) {
           return false;
         }
         const KeyManager2 = getKeyManager();
         for (let m of KeyManager2.click(count)) {
-          vue.subCrate(resource.id);
+          vue.subCrate(resource2.id);
         }
       },
-      assignContainer(resource, count) {
-        let vue = getVueById2(resource._stackVueBinding);
+      assignContainer(resource2, count) {
+        let vue = getVueById2(resource2._stackVueBinding);
         if (vue === void 0) {
           return false;
         }
         const KeyManager2 = getKeyManager();
         for (let m of KeyManager2.click(count)) {
-          vue.addCon(resource.id);
+          vue.addCon(resource2.id);
         }
       },
-      unassignContainer(resource, count) {
-        let vue = getVueById2(resource._stackVueBinding);
+      unassignContainer(resource2, count) {
+        let vue = getVueById2(resource2._stackVueBinding);
         if (vue === void 0) {
           return false;
         }
         const KeyManager2 = getKeyManager();
         for (let m of KeyManager2.click(count)) {
-          vue.subCon(resource.id);
+          vue.subCon(resource2.id);
         }
       }
     };
@@ -5069,10 +5069,10 @@
       for (let [key, action] of Object.entries(game2.actions.tech)) {
         techIds2[action.id] = new Technology2(key);
       }
-      for (let building of Object.values(buildings2)) {
-        buildingIds2[building._vueBinding] = building;
-        if (building.isMission() && building !== buildings2.BlackholeJumpShip && building !== buildings2.PitAssaultForge) {
-          state2.missionBuildingList.push(building);
+      for (let building2 of Object.values(buildings2)) {
+        buildingIds2[building2._vueBinding] = building2;
+        if (building2.isMission() && building2 !== buildings2.BlackholeJumpShip && building2 !== buildings2.PitAssaultForge) {
+          state2.missionBuildingList.push(building2);
         }
       }
       for (let project of Object.values(projects2)) {
@@ -5316,36 +5316,36 @@
       statePriorityList: [],
       updateBuildings() {
         const buildings2 = getBuildings();
-        for (let building of Object.values(buildings2)) {
-          building.updateResourceRequirements();
-          building.extraDescription = "";
+        for (let building2 of Object.values(buildings2)) {
+          building2.updateResourceRequirements();
+          building2.extraDescription = "";
         }
       },
       updateWeighting() {
         let activeRules = weightingRules2.filter(
           (rule) => rule[wrGlobalCondition2]() && rule[wrMultiplier2]() !== 1
         );
-        for (let building of this.priorityList) {
-          building.weighting = building._weighting;
+        for (let building2 of this.priorityList) {
+          building2.weighting = building2._weighting;
           for (let j = 0; j < activeRules.length; j++) {
-            let result2 = activeRules[j][wrIndividualCondition2](building);
+            let result2 = activeRules[j][wrIndividualCondition2](building2);
             if (result2) {
-              let note = activeRules[j][wrDescription2](result2, building);
+              let note = activeRules[j][wrDescription2](result2, building2);
               if (note !== "") {
-                building.extraDescription += note + "<br>";
+                building2.extraDescription += note + "<br>";
               }
-              building.weighting *= activeRules[j][wrMultiplier2](result2);
-              if (building.weighting <= 0) {
+              building2.weighting *= activeRules[j][wrMultiplier2](result2);
+              if (building2.weighting <= 0) {
                 break;
               }
             }
           }
-          if (building.weighting > 0) {
-            building.weighting = Math.max(
+          if (building2.weighting > 0) {
+            building2.weighting = Math.max(
               Number.MIN_VALUE,
-              building.weighting - 1e-7 * building.count
+              building2.weighting - 1e-7 * building2.count
             );
-            building.extraDescription = "AutoBuild weighting: " + getNiceNumber2(building.weighting) + "<br>" + building.extraDescription;
+            building2.extraDescription = "AutoBuild weighting: " + getNiceNumber2(building2.weighting) + "<br>" + building2.extraDescription;
           }
         }
       },
@@ -5354,11 +5354,11 @@
         this.statePriorityList.sort((a, b) => a.priority - b.priority);
       },
       managedPriorityList() {
-        return this.priorityList.filter((building) => building.weighting > 0);
+        return this.priorityList.filter((building2) => building2.weighting > 0);
       },
       managedStatePriorityList() {
         return this.statePriorityList.filter(
-          (building) => building.hasState() && building.autoStateEnabled && building.count > 0
+          (building2) => building2.hasState() && building2.autoStateEnabled && building2.count > 0
         );
       }
     };
@@ -5660,11 +5660,11 @@
       "Vitreloy"
     ];
     function resourceBenefitsFromPiracy(resourceId3) {
-      const resource = getResources()[resourceId3];
-      if (resource?.isUseful() !== true) {
+      const resource2 = getResources()[resourceId3];
+      if (resource2?.isUseful() !== true) {
         return false;
       }
-      return resourceId3 === "Knowledge" || Number.isFinite(resource.storageRatio) && resource.storageRatio < 0.99;
+      return resourceId3 === "Knowledge" || Number.isFinite(resource2.storageRatio) && resource2.storageRatio < 0.99;
     }
     function gorddonTradeTargetsUsefulResource() {
       const trade = getGame().global.galaxy?.trade;
@@ -6225,24 +6225,24 @@
       const genusTraits = { ...poly2.genus_traits[draft.genus] ?? {} };
       if (draft.genus === "fungi") delete genusTraits.spores;
       Object.keys(genusTraits).forEach(
-        (trait) => genes -= game2.traits[trait]?.val ?? 0
+        (trait2) => genes -= game2.traits[trait2]?.val ?? 0
       );
       const categoryPositive = {};
       const categoryNegative = {};
       const opposed = genusOpposition[draft.genus] ?? [];
       for (const id of draft.traitlist) {
-        const trait = game2.traits[id];
-        if (!trait) continue;
-        const positive = trait.val >= 0;
+        const trait2 = game2.traits[id];
+        if (!trait2) continue;
+        const positive = trait2.val >= 0;
         const categoryCounts = positive ? categoryPositive : categoryNegative;
-        const taxonomy = trait.taxonomy ?? "";
+        const taxonomy = trait2.taxonomy ?? "";
         const previous = categoryCounts[taxonomy] ?? 0;
-        let cost = trait.val;
+        let cost = trait2.val;
         if (positive && previous > 1) cost += previous - 1;
         if (!positive && previous >= 1) cost += previous;
         categoryCounts[taxonomy] = previous + 1;
         cost = customRaceRankCost2(cost, draft.ranks[id] ?? 1, positive);
-        const originRace = game2.races[trait.origin];
+        const originRace = game2.races[trait2.origin];
         const originGenera = originRace?.hybrid ?? [originRace?.type];
         if (originGenera.includes(draft.genus)) cost--;
         if (originGenera.some((genus) => genus && opposed.includes(genus)))
@@ -6263,9 +6263,9 @@
       const game2 = getGame();
       const poly2 = getPoly();
       const resources2 = getResources();
-      const trait = game2.traits[id];
-      if (!trait) return "";
-      let vars = trait.vars ? trait.vars(rank) : [];
+      const trait2 = game2.traits[id];
+      if (!trait2) return "";
+      let vars = trait2.vars ? trait2.vars(rank) : [];
       const noVariableEffects = /* @__PURE__ */ new Set([
         "promiscuous",
         "revive",
@@ -6345,7 +6345,7 @@
         const effectType = ["befuddle", "blurry", "ghostly", "playful"].includes(id) && game2.global.race[id] ? "warlord" : "effect";
         return poly2.loc(`wiki_trait_${effectType}_${id}`, vars);
       } catch {
-        return typeof trait.desc === "function" ? trait.desc() : trait.desc;
+        return typeof trait2.desc === "function" ? trait2.desc() : trait2.desc;
       }
     }
     function customRaceEditorTraits2(draft) {
@@ -6354,7 +6354,7 @@
       Object.entries(game2.races).forEach(([id, race]) => {
         const genus = race.type;
         if (game2.global.stats.achieve[`extinct_${id}`]?.l || game2.global.stats.achieve[`genus_${genus}`]?.l) {
-          Object.keys(race.traits ?? {}).forEach((trait) => unlocked.add(trait));
+          Object.keys(race.traits ?? {}).forEach((trait2) => unlocked.add(trait2));
         }
       });
       return Object.entries(game2.traits).filter(
@@ -6412,10 +6412,10 @@
 
   // src/game/trait-value.ts
   function createTraitValue({ getGame }) {
-    function traitVal2(trait, index, operation2) {
+    function traitVal2(trait2, index, operation2) {
       const game2 = getGame();
-      if (game2.global.race[trait]) {
-        const value = game2.traits[trait].vars()[index];
+      if (game2.global.race[trait2]) {
+        const value = game2.traits[trait2].vars()[index];
         if (operation2 === "-") {
           return 1 - value / 100;
         } else if (operation2 === "+") {
@@ -6452,15 +6452,15 @@
       const craftablesList2 = [];
       const foundryList2 = [];
       for (const [name, costs] of Object.entries(game2.craftCost)) {
-        const resource = resources2[name];
-        if (resource) {
-          resource.cost = {};
+        const resource2 = resources2[name];
+        if (resource2) {
+          resource2.cost = {};
           for (const cost of costs) {
-            resource.cost[cost.r] = cost.a;
+            resource2.cost[cost.r] = cost.a;
           }
-          craftablesList2.push(resource);
+          craftablesList2.push(resource2);
           if (name !== "Scarletite" && name !== "Quantium") {
-            foundryList2.push(resource);
+            foundryList2.push(resource2);
           }
         }
       }
@@ -6695,11 +6695,11 @@
       }
     }
     class CraftingJob2 extends Job2 {
-      constructor(id, name, resource) {
+      constructor(id, name, resource2) {
         super(id, name, { serve: true });
         this._crafterBinding = "foundry";
         this._servantBinding = "skilledServants";
-        this.resource = resource;
+        this.resource = resource2;
       }
       get definition() {
         return game2.global.civic["craftsman"];
@@ -7078,16 +7078,16 @@
         if (game2.global.race.powered) {
           this.maxQuantity += (resources2.Population.maxQuantity - resources2.Population.currentQuantity) * traitVal2("powered", 0);
         }
-        for (let building of Object.values(buildings2)) {
-          if (building.stateOffCount > 0) {
-            let missingAmount = building.stateOffCount;
-            if (building.autoMax < building.count && settings2.masterScriptToggle && settings2.autoPower && building.autoStateEnabled && settings2.buildingsLimitPowered) {
-              missingAmount -= building.count - building.autoMax;
+        for (let building2 of Object.values(buildings2)) {
+          if (building2.stateOffCount > 0) {
+            let missingAmount = building2.stateOffCount;
+            if (building2.autoMax < building2.count && settings2.masterScriptToggle && settings2.autoPower && building2.autoStateEnabled && settings2.buildingsLimitPowered) {
+              missingAmount -= building2.count - building2.autoMax;
             }
-            if (building === buildings2.NeutronCitadel) {
-              this.maxQuantity += getCitadelConsumption2(building.stateOnCount + missingAmount) - getCitadelConsumption2(building.stateOnCount);
+            if (building2 === buildings2.NeutronCitadel) {
+              this.maxQuantity += getCitadelConsumption2(building2.stateOnCount + missingAmount) - getCitadelConsumption2(building2.stateOnCount);
             } else {
-              this.maxQuantity += missingAmount * building.powered;
+              this.maxQuantity += missingAmount * building2.powered;
             }
           }
         }
@@ -7210,8 +7210,8 @@
       }
     }
     class ResourceProductionCost2 {
-      constructor(resource, quantity, minRateOfChange) {
-        this.resource = resource;
+      constructor(resource2, quantity, minRateOfChange) {
+        this.resource = resource2;
         this.quantity = quantity;
         this.minRateOfChange = minRateOfChange;
       }
@@ -7411,44 +7411,44 @@
         }
         return true;
       }
-      addSupport(resource) {
+      addSupport(resource2) {
         this.consumption.push(
           normalizeProperties2({
-            resource,
+            resource: resource2,
             rate: () => this.definition.support() * -1
           })
         );
       }
-      addResourceConsumption(resource, rate) {
+      addResourceConsumption(resource2, rate) {
         this.consumption.push(
-          normalizeProperties2({ resource, rate })
+          normalizeProperties2({ resource: resource2, rate })
         );
       }
       getFuelRate(idx) {
         if (!this.consumption[idx]) {
           return 0;
         }
-        let resource = this.consumption[idx].resource;
+        let resource2 = this.consumption[idx].resource;
         let rate = this.consumption[idx].rate;
-        if (this._tab === "space" && (resource === resources2.Oil || resource === resources2.Helium_3)) {
+        if (this._tab === "space" && (resource2 === resources2.Oil || resource2 === resources2.Helium_3)) {
           rate = game2.fuel_adjust(rate, true);
-        } else if ((this._tab === "interstellar" || this._tab === "galaxy" || this._tab === "tauceti") && (resource === resources2.Deuterium || resource === resources2.Helium_3) && this !== buildings2.AlphaFusion) {
+        } else if ((this._tab === "interstellar" || this._tab === "galaxy" || this._tab === "tauceti") && (resource2 === resources2.Deuterium || resource2 === resources2.Helium_3) && this !== buildings2.AlphaFusion) {
           rate = game2.int_fuel_adjust(rate);
         }
         return rate;
       }
       getMissingConsumption() {
         for (let j = 0; j < this.consumption.length; j++) {
-          let resource = this.consumption[j].resource;
-          if (resource instanceof Support2) {
+          let resource2 = this.consumption[j].resource;
+          if (resource2 instanceof Support2) {
             continue;
           }
-          if (resource === resources2.Food && settings2.autoJobs && (jobs2.Farmer.autoJobEnabled || jobs2.Hunter.autoJobEnabled)) {
+          if (resource2 === resources2.Food && settings2.autoJobs && (jobs2.Farmer.autoJobEnabled || jobs2.Hunter.autoJobEnabled)) {
             continue;
           }
           let consumptionRate = this.getFuelRate(j);
-          if (resource.storageRatio < 0.95 && consumptionRate > 0 && resource.calculateRateOfChange({ buy: true }) < consumptionRate) {
-            return resource;
+          if (resource2.storageRatio < 0.95 && consumptionRate > 0 && resource2.calculateRateOfChange({ buy: true }) < consumptionRate) {
+            return resource2;
           }
         }
         return null;
@@ -7458,22 +7458,22 @@
           return null;
         }
         for (let j = 0; j < this.consumption.length; j++) {
-          let resource = this.consumption[j].resource;
-          if (resource === resources2.Spire_Support && this.autoStateSmart) {
+          let resource2 = this.consumption[j].resource;
+          if (resource2 === resources2.Spire_Support && this.autoStateSmart) {
             continue;
           }
-          if (resource === resources2.Tau_Belt_Support) {
+          if (resource2 === resources2.Tau_Belt_Support) {
             continue;
           }
-          if (resource === resources2.Womlings_Support && resource.rateOfChange > 0) {
+          if (resource2 === resources2.Womlings_Support && resource2.rateOfChange > 0) {
             continue;
           }
           let rate = this.consumption[j].rate;
-          if (!(resource instanceof Support2) || rate <= 0) {
+          if (!(resource2 instanceof Support2) || rate <= 0) {
             continue;
           }
-          if (resource.rateOfChange < rate) {
-            return resource;
+          if (resource2.rateOfChange < rate) {
+            return resource2;
           }
         }
         return null;
@@ -7484,14 +7484,14 @@
         }
         let uselessSupports = [];
         for (let j = 0; j < this.consumption.length; j++) {
-          let resource = this.consumption[j].resource;
+          let resource2 = this.consumption[j].resource;
           let rate = this.consumption[j].rate;
-          if (!(resource instanceof Support2) || rate >= 0) {
+          if (!(resource2 instanceof Support2) || rate >= 0) {
             continue;
           }
-          let minSupport = resource === resources2.Belt_Support ? 2 * traitVal2("high_pop", 0, 1) : resource === resources2.Gateway_Support ? 5 : resource === resources2.Womlings_Support ? 6 : 1;
-          if (resource.rateOfChange >= minSupport) {
-            uselessSupports.push(resource);
+          let minSupport = resource2 === resources2.Belt_Support ? 2 * traitVal2("high_pop", 0, 1) : resource2 === resources2.Gateway_Support ? 5 : resource2 === resources2.Womlings_Support ? 6 : 1;
+          if (resource2.rateOfChange >= minSupport) {
+            uselessSupports.push(resource2);
           } else {
             return null;
           }
@@ -13414,11 +13414,11 @@
           )
         )
       );
-      Object.values(buildings2).forEach((building) => {
-        if (building.powered > 0) {
-          let powerId = (building._location || building._tab) + ":" + building.id;
+      Object.values(buildings2).forEach((building2) => {
+        if (building2.powered > 0) {
+          let powerId = (building2._location || building2._tab) + ":" + building2.id;
           if (game2.global.power.indexOf(powerId) === -1) {
-            building.overridePowered = 0;
+            building2.overridePowered = 0;
           }
         }
       });
@@ -13444,25 +13444,25 @@
     for (const reservedTarget of input.reservedTargets) {
       let blockKnowledge = true;
       for (const reservedResourceId of Object.keys(reservedTarget.cost)) {
-        const resource = input.resources[reservedResourceId];
+        const resource2 = input.resources[reservedResourceId];
         const reservedCost = reservedTarget.cost[reservedResourceId];
-        if (reservedResourceId !== "Knowledge" && resource !== void 0 && reservedCost !== void 0 && resource.currentQuantity < reservedCost) {
+        if (reservedResourceId !== "Knowledge" && resource2 !== void 0 && reservedCost !== void 0 && resource2.currentQuantity < reservedCost) {
           blockKnowledge = false;
           break;
         }
       }
       for (const reservedResourceId of Object.keys(reservedTarget.cost)) {
-        const resource = input.resources[reservedResourceId];
+        const resource2 = input.resources[reservedResourceId];
         const reservedCost = reservedTarget.cost[reservedResourceId];
         const actionCost = input.actionCost[reservedResourceId];
-        if (resource === void 0 || reservedCost === void 0 || actionCost === void 0 || reservedResourceId === "Knowledge" && !blockKnowledge || reservedCost <= resource.currentQuantity - actionCost) {
+        if (resource2 === void 0 || reservedCost === void 0 || actionCost === void 0 || reservedResourceId === "Knowledge" && !blockKnowledge || reservedCost <= resource2.currentQuantity - actionCost) {
           continue;
         }
         resourceId3 = reservedResourceId;
         targetName = reservedTarget.name;
         targetCause = reservedTarget.cause;
-        if (!resourceNames.includes(resource.name)) {
-          resourceNames.push(resource.name);
+        if (!resourceNames.includes(resource2.name)) {
+          resourceNames.push(resource2.name);
         }
         if (!targetNames.includes(reservedTarget.name)) {
           targetNames.push(reservedTarget.name);
@@ -13916,7 +13916,7 @@
       const stats = state2.plannerStats;
       if (stats?.total > 0) {
         const shares = Object.entries(stats.samples).sort((a, b) => b[1] - a[1]).slice(0, 5).map(
-          ([resource, samples]) => `${resource} ${Math.round(samples / stats.total * 100)}%`
+          ([resource2, samples]) => `${resource2} ${Math.round(samples / stats.total * 100)}%`
         ).join(" · ");
         jquery("#script_planner-stats-text").html(
           `${shares}<div class="planner-note">Top target blocked by, since day ${stats.startDay} (${stats.total} samples)</div>`
@@ -14115,12 +14115,12 @@
         `resources.${command.producedResourceId}.currentQuantity`
       ) + command.count;
       for (const delta of command.spend) {
-        const resource = requireRecord(
+        const resource2 = requireRecord(
           resources2[delta.resourceId],
           `resources.${delta.resourceId}`
         );
-        resource["currentQuantity"] = requireNumber(
-          resource["currentQuantity"],
+        resource2["currentQuantity"] = requireNumber(
+          resource2["currentQuantity"],
           `resources.${delta.resourceId}.currentQuantity`
         ) - delta.amount;
       }
@@ -14419,24 +14419,24 @@
     const resources2 = requireRecord(resourcesValue, "resources");
     const states = [];
     for (const id in resources2) {
-      const resource = requireRecord(resources2[id], `resources.${id}`);
+      const resource2 = requireRecord(resources2[id], `resources.${id}`);
       const hasStorage = requireFunction(
-        resource["hasStorage"],
+        resource2["hasStorage"],
         `resources.${id}.hasStorage`
       );
       states.push(
         Object.freeze({
           id,
           maxQuantity: requireNumber(
-            resource["maxQuantity"],
+            resource2["maxQuantity"],
             `resources.${id}.maxQuantity`
           ),
-          maxCost: requireNumber(resource["maxCost"], `resources.${id}.maxCost`),
+          maxCost: requireNumber(resource2["maxCost"], `resources.${id}.maxCost`),
           storageRequired: requireNumber(
-            resource["storageRequired"],
+            resource2["storageRequired"],
             `resources.${id}.storageRequired`
           ),
-          hasStorage: Boolean(Reflect.apply(hasStorage, resource, [])),
+          hasStorage: Boolean(Reflect.apply(hasStorage, resource2, [])),
           // TRANSITIONAL: auto-sell fields are settings-backed getters
           // (`settings["sell"+id]` / `["res_sell_r_"+id]`) that are undefined for
           // non-market resources (RNA, DNA, ...). Legacy used them only in
@@ -14445,8 +14445,8 @@
           // market-settings view keyed by sellable-resource id rather than being
           // coerced per resource at this boundary. (The trade-routes slice, already
           // migrated, owns trade-route quantities, not these auto-sell settings.)
-          autoSellEnabled: Boolean(resource["autoSellEnabled"]),
-          autoSellRatio: typeof resource["autoSellRatio"] === "number" && Number.isFinite(resource["autoSellRatio"]) ? resource["autoSellRatio"] : 0
+          autoSellEnabled: Boolean(resource2["autoSellEnabled"]),
+          autoSellRatio: typeof resource2["autoSellRatio"] === "number" && Number.isFinite(resource2["autoSellRatio"]) ? resource2["autoSellRatio"] : 0
         })
       );
     }
@@ -14586,38 +14586,38 @@
   function planStorageRequirements(input) {
     const bufferMult = input.storageAssignExtra ? 1.03 : 1;
     const acc = /* @__PURE__ */ new Map();
-    for (const resource of input.resources) {
-      acc.set(resource.id, {
-        maxCost: resource.maxCost,
-        storageRequired: resource.storageRequired,
-        maxQuantity: resource.maxQuantity,
-        hasStorage: resource.hasStorage,
-        autoSellEnabled: resource.autoSellEnabled,
-        autoSellRatio: resource.autoSellRatio
+    for (const resource2 of input.resources) {
+      acc.set(resource2.id, {
+        maxCost: resource2.maxCost,
+        storageRequired: resource2.storageRequired,
+        maxQuantity: resource2.maxQuantity,
+        hasStorage: resource2.hasStorage,
+        autoSellEnabled: resource2.autoSellEnabled,
+        autoSellRatio: resource2.autoSellRatio
       });
     }
     function requestStorageFor(list) {
       for (const target of list) {
         let storageSuffient = true;
         for (const cost of target.costs) {
-          const resource = acc.get(cost.resourceId);
-          if (resource === void 0) continue;
-          resource.maxCost = Math.max(cost.amount, resource.maxCost);
-          if (resource.maxQuantity < cost.amount && !resource.hasStorage) {
+          const resource2 = acc.get(cost.resourceId);
+          if (resource2 === void 0) continue;
+          resource2.maxCost = Math.max(cost.amount, resource2.maxCost);
+          if (resource2.maxQuantity < cost.amount && !resource2.hasStorage) {
             storageSuffient = false;
           }
         }
         if (!storageSuffient) continue;
         for (const cost of target.costs) {
-          const resource = acc.get(cost.resourceId);
-          if (resource === void 0) continue;
+          const resource2 = acc.get(cost.resourceId);
+          if (resource2 === void 0) continue;
           let assumeCost = cost.amount * bufferMult;
-          if (resource.maxQuantity < assumeCost && !resource.hasStorage) {
-            assumeCost = (cost.amount + resource.maxQuantity) / 2;
+          if (resource2.maxQuantity < assumeCost && !resource2.hasStorage) {
+            assumeCost = (cost.amount + resource2.maxQuantity) / 2;
           }
-          resource.storageRequired = Math.max(
+          resource2.storageRequired = Math.max(
             assumeCost,
-            resource.storageRequired
+            resource2.storageRequired
           );
         }
       }
@@ -14646,18 +14646,18 @@
       }
     }
     if (input.storageAssignExtra && !input.noTrade && input.autoMarket) {
-      for (const resource of acc.values()) {
-        if (resource.autoSellEnabled && resource.autoSellRatio > 0) {
-          resource.storageRequired /= resource.autoSellRatio;
+      for (const resource2 of acc.values()) {
+        if (resource2.autoSellEnabled && resource2.autoSellRatio > 0) {
+          resource2.storageRequired /= resource2.autoSellRatio;
         }
       }
     }
-    const resources2 = input.resources.map((resource) => {
-      const state2 = acc.get(resource.id);
+    const resources2 = input.resources.map((resource2) => {
+      const state2 = acc.get(resource2.id);
       return Object.freeze({
-        id: resource.id,
-        maxCost: state2 === void 0 ? resource.maxCost : state2.maxCost,
-        storageRequired: state2 === void 0 ? resource.storageRequired : state2.storageRequired
+        id: resource2.id,
+        maxCost: state2 === void 0 ? resource2.maxCost : state2.maxCost,
+        storageRequired: state2 === void 0 ? resource2.storageRequired : state2.storageRequired
       });
     });
     return Object.freeze({
@@ -14726,8 +14726,8 @@
     for (const id in crafter2) {
       const path = `crafter.${id}`;
       const entry = requireRecord(crafter2[id], path);
-      const resource = requireRecord(entry["resource"], `${path}.resource`);
-      const cost = requireRecord(resource["cost"], `${path}.resource.cost`);
+      const resource2 = requireRecord(entry["resource"], `${path}.resource`);
+      const cost = requireRecord(resource2["cost"], `${path}.resource.cost`);
       const costs = [];
       for (const resourceId3 in cost) {
         const material = requireRecord(
@@ -14751,10 +14751,10 @@
       crafters.push(
         Object.freeze({
           // isDemanded/isUnlocked are always-present Resource methods (legacy `!`).
-          isDemanded: callBoolean(resource, "isDemanded", `${path}.resource`),
-          isUnlocked: callBoolean(resource, "isUnlocked", `${path}.resource`),
+          isDemanded: callBoolean(resource2, "isDemanded", `${path}.resource`),
+          isUnlocked: callBoolean(resource2, "isUnlocked", `${path}.resource`),
           craftPreserve: requireNumber(
-            resource["craftPreserve"],
+            resource2["craftPreserve"],
             `${path}.resource.craftPreserve`
           ),
           costs: Object.freeze(costs)
@@ -14768,8 +14768,8 @@
     return list.map((entry, index) => {
       const costPath = Array.isArray(value) ? `${path}[${index}]` : path;
       const cost = requireRecord(entry, costPath);
-      const resource = requireRecord(cost["resource"], `${costPath}.resource`);
-      const resourceId3 = resource["id"];
+      const resource2 = requireRecord(cost["resource"], `${costPath}.resource`);
+      const resourceId3 = resource2["id"];
       if (typeof resourceId3 !== "string") {
         throw new TypeError(`${costPath}.resource.id must be a string`);
       }
@@ -14780,7 +14780,7 @@
         minRateOfChange: minRate == null ? 0 : requireNumber(minRate, `${costPath}.minRateOfChange`),
         resourceId: resourceId3,
         resourceMaxQuantity: requireNumber(
-          resource["maxQuantity"],
+          resource2["maxQuantity"],
           `${costPath}.resource.maxQuantity`
         )
       });
@@ -14791,10 +14791,10 @@
     return Object.values(productions).map((entry, index) => {
       const path = `FactoryManager.Productions[${index}]`;
       const production = requireRecord(entry, path);
-      const resource = requireRecord(production["resource"], `${path}.resource`);
+      const resource2 = requireRecord(production["resource"], `${path}.resource`);
       const weighting = production["weighting"];
       return Object.freeze({
-        isDemanded: callBoolean(resource, "isDemanded", `${path}.resource`),
+        isDemanded: callBoolean(resource2, "isDemanded", `${path}.resource`),
         unlocked: Boolean(production["unlocked"]),
         enabled: Boolean(production["enabled"]),
         // Legacy uses `weighting` only as a truthiness gate.
@@ -15250,12 +15250,12 @@
       }
     }
     if (input.autoMutateTraits) {
-      for (const trait of input.traits) {
-        if (trait.resetEnabled && trait.gained && !trait.inheritedFromBase) {
+      for (const trait2 of input.traits) {
+        if (trait2.resetEnabled && trait2.gained && !trait2.inheritedFromBase) {
           logs.push({
             level: "danger",
             code: "gained-trait",
-            traitName: trait.name
+            traitName: trait2.name
           });
           needReset = true;
           break;
@@ -15274,7 +15274,7 @@
   function isRecord4(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
-  function isFinite2(value) {
+  function isFinite(value) {
     return typeof value === "number" && Number.isFinite(value);
   }
   function unavailable2(reason, field) {
@@ -15311,7 +15311,7 @@
         return unavailable2("invalid-race-model", `${species}.name`);
       }
       const speciesWeighting = callWeighting(speciesRace, false);
-      if (!isFinite2(speciesWeighting)) {
+      if (!isFinite(speciesWeighting)) {
         return unavailable2("invalid-race-model", `${species}.weighting`);
       }
       const rawGoals = callWeighting(speciesRace, true);
@@ -15324,7 +15324,7 @@
           return unavailable2("invalid-race-model", id);
         }
         const weighting = callWeighting(candidate, false);
-        if (!isFinite2(weighting)) {
+        if (!isFinite(weighting)) {
           return unavailable2("invalid-race-model", `${id}.weighting`);
         }
         bestWeighting = Math.max(bestWeighting, weighting);
@@ -15340,7 +15340,7 @@
           );
         }
         const habitability = getHabitability.call(targetRace);
-        if (!isFinite2(habitability)) {
+        if (!isFinite(habitability)) {
           return unavailable2(
             "invalid-race-model",
             `${userEvolutionTarget}.habitability`
@@ -15828,10 +15828,10 @@
   }
 
   // src/domain/resource-weighting.ts
-  function findRequiredResourceWeight2(orderedRequirements, resource) {
+  function findRequiredResourceWeight2(orderedRequirements, resource2) {
     return orderedRequirements.find((requirement) => {
-      const requiredQuantity = requirement.cost[resource.id];
-      return requiredQuantity !== void 0 && requiredQuantity > resource.currentQuantity;
+      const requiredQuantity = requirement.cost[resource2.id];
+      return requiredQuantity !== void 0 && requiredQuantity > resource2.currentQuantity;
     })?.weighting;
   }
 
@@ -15977,15 +15977,15 @@
       const capped = [];
       const stalled = [];
       for (const resourceId3 in resources2) {
-        const resource = resources2[resourceId3];
-        if (!resource.isUnlocked()) {
+        const resource2 = resources2[resourceId3];
+        if (!resource2.isUnlocked()) {
           continue;
         }
-        if (resource.storageRatio > 0.98) {
-          capped.push(resource.title);
+        if (resource2.storageRatio > 0.98) {
+          capped.push(resource2.title);
         }
-        if (resource.isDemanded() && resource.income <= 0) {
-          stalled.push(resource.title);
+        if (resource2.isDemanded() && resource2.income <= 0) {
+          stalled.push(resource2.title);
         }
       }
       const [cappedIn, cappedOut] = stateLogDiff2(log.cap, capped);
@@ -17369,10 +17369,10 @@
     }
   }
   function readBuilding(rawBuildings, id) {
-    const building = rawBuildings[id];
-    if (!isRecord8(building)) return void 0;
-    const name = building["name"];
-    const count = building["count"];
+    const building2 = rawBuildings[id];
+    if (!isRecord8(building2)) return void 0;
+    const name = building2["name"];
+    const count = building2["count"];
     if (typeof name !== "string" || !finiteNonNegative(count)) return void 0;
     return { name, count };
   }
@@ -17600,9 +17600,9 @@
   }
   function readBuildingCount(rawBuildings, id) {
     if (!isRecord9(rawBuildings)) return void 0;
-    const building = rawBuildings[id];
-    if (!isRecord9(building)) return void 0;
-    const count = building["count"];
+    const building2 = rawBuildings[id];
+    if (!isRecord9(building2)) return void 0;
+    const count = building2["count"];
     return finiteNonNegative2(count) ? count : void 0;
   }
   function guardStarId(guard) {
@@ -18196,8 +18196,8 @@
     return typeof value === "boolean" ? value : void 0;
   }
   function readBuilding2(buildings2, id) {
-    const building = buildings2[id];
-    return isRecord12(building) ? building : void 0;
+    const building2 = buildings2[id];
+    return isRecord12(building2) ? building2 : void 0;
   }
   function readTechState(techIds2, id, includeAffordable) {
     const rawTech = techIds2[id];
@@ -18460,9 +18460,9 @@
       ];
       const buildingRecords = {};
       for (const id of buildingIds2) {
-        const building = readBuilding2(rawBuildings, id);
-        if (building === void 0) return unavailable8("invalid-building", id);
-        buildingRecords[id] = building;
+        const building2 = readBuilding2(rawBuildings, id);
+        if (building2 === void 0) return unavailable8("invalid-building", id);
+        buildingRecords[id] = building2;
       }
       for (const id of [
         "GasSpaceDock",
@@ -18472,8 +18472,8 @@
         "PitAbsorptionChamber",
         "SpireTower"
       ]) {
-        const building = buildingRecords[id];
-        if (building === void 0 || !finiteNonNegative5(building["count"])) {
+        const building2 = buildingRecords[id];
+        if (building2 === void 0 || !finiteNonNegative5(building2["count"])) {
           return unavailable8("invalid-building", `${id}.count`);
         }
       }
@@ -19087,46 +19087,46 @@
       ],
       [
         () => true,
-        (building) => !building.isUnlocked(),
+        (building2) => !building2.isUnlocked(),
         () => "Locked",
         () => 0
         // Should always be on top, processing locked building may lead to issues
       ],
       [
         () => true,
-        (building) => state2.queuedTargets.includes(building),
+        (building2) => state2.queuedTargets.includes(building2),
         () => "Queued building, processing...",
         () => 0
       ],
       [
         () => true,
-        (building) => state2.triggerTargets.includes(building),
+        (building2) => state2.triggerTargets.includes(building2),
         () => "Active trigger, processing...",
         () => 0
       ],
       [
         () => true,
-        (building) => !building.autoBuildEnabled,
+        (building2) => !building2.autoBuildEnabled,
         () => "AutoBuild disabled",
         () => 0
       ],
       [
         () => true,
-        (building) => building.count >= building.autoMax,
+        (building2) => building2.count >= building2.autoMax,
         () => "Maximum amount reached",
         () => 0
       ],
       [
         () => true,
-        (building) => !building.isAffordable(true),
+        (building2) => !building2.isAffordable(true),
         () => "",
         () => 0
         // Red buildings need to be filtered out, so they won't prevent affordable buildings with lower weight from building
       ],
       [
         () => game2.global.race["truepath"] && buildings2.SpaceTestLaunch.isUnlocked() && !haveTech2("world_control"),
-        (building) => {
-          if (building === buildings2.SpaceTestLaunch) {
+        (building2) => {
+          if (building2 === buildings2.SpaceTestLaunch) {
             let sabotage = 1;
             for (let i = 0; i < 3; i++) {
               let gov = game2.global.civic.foreign[`gov${i}`];
@@ -19142,26 +19142,26 @@
       ],
       [
         () => game2.global.race["truepath"] && buildings2.ErisDigsite.isUnlocked() && buildings2.ErisDigsite.count < 100,
-        (building) => building === buildings2.ErisDrone || building === buildings2.ErisTank || building === buildings2.ErisTrooper,
+        (building2) => building2 === buildings2.ErisDrone || building2 === buildings2.ErisTank || building2 === buildings2.ErisTrooper,
         () => "Eris Digsite is not yet secured",
         () => settings2.buildingWeightingTruepathDigsite
       ],
       [
         () => settings2.jobDisableMiners && buildings2.GatewayStarbase.count > 0,
-        (building) => building === buildings2.CoalMine || building === buildings2.Mine && !(game2.global.race["sappy"] && game2.global.race["smoldering"]),
+        (building2) => building2 === buildings2.CoalMine || building2 === buildings2.Mine && !(game2.global.race["sappy"] && game2.global.race["smoldering"]),
         () => "Miners disabled in Andromeda",
         () => 0
       ],
       [
         () => haveTech2("piracy"),
-        (building) => building === buildings2.StargateDefensePlatform && buildings2.StargateDefensePlatform.count * 20 >= (game2.global.race["instinct"] ? 0.09 : 0.1) * game2.global.tech.piracy * getPiracyMultiplier2(),
+        (building2) => building2 === buildings2.StargateDefensePlatform && buildings2.StargateDefensePlatform.count * 20 >= (game2.global.race["instinct"] ? 0.09 : 0.1) * game2.global.tech.piracy * getPiracyMultiplier2(),
         () => "Piracy fully supressed",
         () => 0
       ],
       [
         () => settings2.autoFleet && game2.global.tech["piracy"] && !galaxyAssaultPending2(),
-        (building) => {
-          if (galaxyCombatShips2.includes(building)) {
+        (building2) => {
+          if (galaxyCombatShips2.includes(building2)) {
             let totalNeed = getGalaxyRegions2().reduce(
               (sum, region) => sum + (region.useful ? Math.max(0, region.piracy - region.armada) : 0),
               0
@@ -19174,8 +19174,8 @@
       ],
       [
         () => settings2.autoMech && settings2.mechBuild !== "none" && settings2.buildingMechsFirst && buildings2.SpireMechBay.count > 0 && buildings2.SpireMechBay.stateOffCount === 0,
-        (building) => {
-          if (building.cost["Supply"]) {
+        (building2) => {
+          if (building2.cost["Supply"]) {
             if (MechManager2.isActive) {
               return "Building mechs...";
             }
@@ -19194,20 +19194,20 @@
       ],
       [
         () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "ascension" && !game2.global.race["witch_hunter"],
-        (building) => building === buildings2.GateEastTower || building === buildings2.GateWestTower,
+        (building2) => building2 === buildings2.GateEastTower || building2 === buildings2.GateWestTower,
         () => "Not needed for Ascension prestige",
         () => 0
       ],
       [
         () => buildings2.GateEastTower.isUnlocked() && buildings2.GateWestTower.isUnlocked() && poly2.hellSupression("gate").supress < settings2.buildingTowerSuppression / 100,
-        (building) => building === buildings2.GateEastTower || building === buildings2.GateWestTower,
+        (building2) => building2 === buildings2.GateEastTower || building2 === buildings2.GateWestTower,
         () => "Too low gate supression",
         () => 0
       ],
       [
         () => settings2.prestigeType === "whitehole" && settings2.prestigeWhiteholeSaveGems,
-        (building) => {
-          if (building.cost["Soul_Gem"] > resources2.Soul_Gem.currentQuantity - 10) {
+        (building2) => {
+          if (building2.cost["Soul_Gem"] > resources2.Soul_Gem.currentQuantity - 10) {
             return true;
           }
         },
@@ -19218,18 +19218,18 @@
         () => {
           return buildings2.GorddonFreighter.isAutoBuildable() && buildings2.GorddonFreighter.isAffordable(true) && buildings2.Alien1SuperFreighter.isAutoBuildable() && buildings2.Alien1SuperFreighter.isAffordable(true);
         },
-        (building) => {
-          if (building === buildings2.GorddonFreighter || building === buildings2.Alien1SuperFreighter) {
+        (building2) => {
+          if (building2 === buildings2.GorddonFreighter || building2 === buildings2.Alien1SuperFreighter) {
             let regCount = buildings2.GorddonFreighter.count;
             let regTotal = (1 + (regCount + 1) * 0.03) / (1 + regCount * 0.03) - 1;
             let regCrew = regTotal / 3;
             let supCount = buildings2.Alien1SuperFreighter.count;
             let supTotal = (1 + (supCount + 1) * 0.08) / (1 + supCount * 0.08) - 1;
             let supCrew = supTotal / 5;
-            if (building === buildings2.GorddonFreighter && regCrew < supCrew) {
+            if (building2 === buildings2.GorddonFreighter && regCrew < supCrew) {
               return buildings2.Alien1SuperFreighter;
             }
-            if (building === buildings2.Alien1SuperFreighter && supCrew < regCrew) {
+            if (building2 === buildings2.Alien1SuperFreighter && supCrew < regCrew) {
               return buildings2.GorddonFreighter;
             }
           }
@@ -19242,8 +19242,8 @@
         () => {
           return buildings2.LakeBireme.isAutoBuildable() && buildings2.LakeBireme.isAffordable(true) && buildings2.LakeTransport.isAutoBuildable() && buildings2.LakeTransport.isAffordable(true) && resources2.Lake_Support.rateOfChange <= 1;
         },
-        (building) => {
-          if (building === buildings2.LakeBireme || building === buildings2.LakeTransport) {
+        (building2) => {
+          if (building2 === buildings2.LakeBireme || building2 === buildings2.LakeTransport) {
             let biremeCount = buildings2.LakeBireme.count;
             let transportCount = buildings2.LakeTransport.count;
             let rating = game2.global.blood["spire"] && game2.global.blood.spire >= 2 ? 0.8 : 0.85;
@@ -19254,10 +19254,10 @@
               nextBireme = (nextBireme - currentSupply) / buildings2.LakeBireme.cost["Soul_Gem"];
               nextTransport = (nextTransport - currentSupply) / buildings2.LakeTransport.cost["Soul_Gem"];
             }
-            if (building === buildings2.LakeBireme && nextBireme < nextTransport) {
+            if (building2 === buildings2.LakeBireme && nextBireme < nextTransport) {
               return buildings2.LakeTransport;
             }
-            if (building === buildings2.LakeTransport && nextTransport < nextBireme) {
+            if (building2 === buildings2.LakeTransport && nextTransport < nextBireme) {
               return buildings2.LakeBireme;
             }
           }
@@ -19270,16 +19270,16 @@
         () => {
           return buildings2.SpirePort.isAutoBuildable() && buildings2.SpirePort.isAffordable(true) && buildings2.SpireBaseCamp.isAutoBuildable() && buildings2.SpireBaseCamp.isAffordable(true);
         },
-        (building) => {
-          if (building === buildings2.SpirePort || building === buildings2.SpireBaseCamp) {
+        (building2) => {
+          if (building2 === buildings2.SpirePort || building2 === buildings2.SpireBaseCamp) {
             let portCount = buildings2.SpirePort.count;
             let baseCount = buildings2.SpireBaseCamp.count;
             let nextPort = (portCount + 1) * (1 + baseCount * 0.4);
             let nextBase = portCount * (1 + (baseCount + 1) * 0.4);
-            if (building === buildings2.SpirePort && nextPort < nextBase) {
+            if (building2 === buildings2.SpirePort && nextPort < nextBase) {
               return buildings2.SpireBaseCamp;
             }
-            if (building === buildings2.SpireBaseCamp && nextBase < nextPort) {
+            if (building2 === buildings2.SpireBaseCamp && nextBase < nextPort) {
               return buildings2.SpirePort;
             }
           }
@@ -19290,26 +19290,26 @@
       ],
       [
         () => haveTech2("waygate", 2),
-        (building) => building === buildings2.SpireWaygate,
+        (building2) => building2 === buildings2.SpireWaygate,
         () => "",
         () => 0
         // We can't limit waygate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
       ],
       [
         () => haveTech2("edenic", 3),
-        (building) => building === buildings2.SpireEdenicGate,
+        (building2) => building2 === buildings2.SpireEdenicGate,
         () => "",
         () => 0
         // We can't limit edenic gate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
       ],
       [
         () => haveTech2("elysium", 8),
-        (building) => {
-          if (building === buildings2.ElysiumFireSupportBase) {
+        (building2) => {
+          if (building2 === buildings2.ElysiumFireSupportBase) {
             if (haveTech2("isle", 2)) {
               return "Garrison is destroyed";
             }
-            if (!haveTech2("elysium", 10) && building.count >= 100) {
+            if (!haveTech2("elysium", 10) && building2.count >= 100) {
               return "Missing Elerium Cannon tech";
             }
           }
@@ -19320,32 +19320,32 @@
       ],
       [
         () => haveTech2("asphodel", 8),
-        (building) => building === buildings2.AsphodelStabilizer && building.count >= buildings2.AsphodelWarehouse.count,
+        (building2) => building2 === buildings2.AsphodelStabilizer && building2.count >= buildings2.AsphodelWarehouse.count,
         () => "Can not exceed amount of Warehouses",
         () => 0
       ],
       [
         () => haveTech2("hell_spire", 8) || game2.global.race["warlord"],
-        (building) => building === buildings2.SpireSphinx,
+        (building2) => building2 === buildings2.SpireSphinx,
         () => "",
         () => 0
         // Sphinx not usable after solving / Harmachis not usable during Warlord
       ],
       [
         () => game2.global.race["artifical"] && haveTech2("focus_cure", 7),
-        (building) => building instanceof ResourceAction2 && building.resource === resources2.Population && building !== buildings2.TauCloning,
+        (building2) => building2 instanceof ResourceAction2 && building2.resource === resources2.Population && building2 !== buildings2.TauCloning,
         () => "Assembling is not possible",
         () => 0
       ],
       [
         () => game2.global.race["artifical"],
-        (building) => building instanceof ResourceAction2 && building.resource === resources2.Population && resources2.Population.storageRatio === 1,
+        (building2) => building2 instanceof ResourceAction2 && building2.resource === resources2.Population && resources2.Population.storageRatio === 1,
         () => "No empty housings",
         () => 0
       ],
       [
         () => buildings2.GorddonEmbassy.count === 0 && resources2.Knowledge.maxQuantity < settings2.fleetEmbassyKnowledge,
-        (building) => building === buildings2.GorddonEmbassy,
+        (building2) => building2 === buildings2.GorddonEmbassy,
         () => `${getNumberString2(
           settings2.fleetEmbassyKnowledge
         )} Max Knowledge required`,
@@ -19353,8 +19353,8 @@
       ],
       [
         () => game2.global.race["magnificent"] && settings2.buildingShrineType !== "any",
-        (building) => {
-          if (building.id && building.id.includes("shrine")) {
+        (building2) => {
+          if (building2.id && building2.id.includes("shrine")) {
             let bonus = null;
             if (game2.global.city.calendar.moon > 0 && game2.global.city.calendar.moon < 7) {
               bonus = "morale";
@@ -19387,8 +19387,8 @@
       ],
       [
         () => game2.global.race["slaver"],
-        (building) => {
-          if (building === buildings2.SlaveMarket) {
+        (building2) => {
+          if (building2 === buildings2.SlaveMarket) {
             if (resources2.Slave.currentQuantity >= resources2.Slave.maxQuantity) {
               return "Slave pens already full";
             }
@@ -19403,8 +19403,8 @@
       ],
       [
         () => game2.global.race["cannibalize"],
-        (building) => {
-          if (building._id === "s_alter" && building.count > 0) {
+        (building2) => {
+          if (building2._id === "s_alter" && building2.count > 0) {
             if (resources2.Population.currentQuantity < 1) {
               return "Too low population";
             }
@@ -19428,26 +19428,26 @@
       ],
       [
         () => true,
-        (building) => building.getMissingConsumption(),
-        (resource) => `Missing ${resource.name} to operate`,
+        (building2) => building2.getMissingConsumption(),
+        (resource2) => `Missing ${resource2.name} to operate`,
         () => settings2.buildingWeightingMissingSupply
       ],
       [
         () => true,
-        (building) => building.getMissingSupport(),
+        (building2) => building2.getMissingSupport(),
         (support) => `Missing ${support.name} to operate`,
         () => settings2.buildingWeightingMissingSupport
       ],
       [
         () => true,
-        (building) => building.getUselessSupport(),
+        (building2) => building2.getUselessSupport(),
         (support) => `Provided ${support.name} not currently needed`,
         () => settings2.buildingWeightingUselessSupport
       ],
       [
         () => game2.global.race["truepath"] && resources2.Tau_Belt_Support.maxQuantity <= resources2.Tau_Belt_Support.currentQuantity,
-        (building) => {
-          if (building === buildings2.TauBeltWhalingShip || building === buildings2.TauBeltMiningShip) {
+        (building2) => {
+          if (building2 === buildings2.TauBeltWhalingShip || building2 === buildings2.TauBeltMiningShip) {
             let s_max = resources2.Tau_Belt_Support.maxQuantity;
             let s_cur = resources2.Tau_Belt_Support.currentQuantity;
             let currentEff = 1 - (1 - s_max / s_cur) ** 1.4;
@@ -19461,8 +19461,8 @@
       [
         () => game2.global.race["truepath"],
         // "&& game.global.tech.tau_red === 4" doesn't want to work for some reason.
-        (building) => {
-          if (building === buildings2.TauRedContact || building === buildings2.TauRedIntroduce || building === buildings2.TauRedSubjugate) {
+        (building2) => {
+          if (building2 === buildings2.TauRedContact || building2 === buildings2.TauRedIntroduce || building2 === buildings2.TauRedSubjugate) {
             let missing = null;
             for (let [id, stat] of Object.entries({
               TauRedContact: "friend",
@@ -19470,7 +19470,7 @@
               TauRedSubjugate: "lord"
             })) {
               if (!game2.global.stats.womling[stat][poly2.universeAffix()]) {
-                if (building === buildings2[id]) {
+                if (building2 === buildings2[id]) {
                   return false;
                 }
                 if (buildings2[id].isAutoBuildable()) {
@@ -19489,23 +19489,23 @@
         // amount of tax/soldier management can fix the production penalty, so prioritize the
         // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
         () => settings2.authorityManage && settings2.generalMinimumAuthority > 0 && resources2.Authority.isUnlocked() && resources2.Authority.maxQuantity < settings2.generalMinimumAuthority,
-        (building) => authorityCapBuildings2.includes(building),
+        (building2) => authorityCapBuildings2.includes(building2),
         () => "Raises Authority cap, currently below target",
         () => settings2.buildingWeightingAuthority
       ],
       [
         () => settings2.achievementGuards && settings2.guardBananaRepublic && game2.global.race["banana"],
-        (building) => building === buildings2.DwarfWorldCollider && !bananaRepublicObjectiveComplete2("b2"),
+        (building2) => building2 === buildings2.DwarfWorldCollider && !bananaRepublicObjectiveComplete2("b2"),
         () => "Banana Republic objective",
         () => settings2.buildingWeightingBananaObjective
       ],
       [
         () => inflationChallengeAssistActive2(),
-        (building) => {
-          if (!inflationChallengeMoneyReachable2() && inflationMoneyStorageBuildings2.includes(building)) {
+        (building2) => {
+          if (!inflationChallengeMoneyReachable2() && inflationMoneyStorageBuildings2.includes(building2)) {
             return "storage";
           }
-          if (inflationChallengeMoneyReachable2() && inflationMoneyIncomeBuildings2.includes(building)) {
+          if (inflationChallengeMoneyReachable2() && inflationMoneyIncomeBuildings2.includes(building2)) {
             return "income";
           }
           return false;
@@ -19515,52 +19515,52 @@
       ],
       [
         () => retirementChallengeAssistActive2() && retirementPreparationMissing2().length > 0,
-        (building) => {
-          if (building === buildings2.TauFusionGenerator && building.count < RETIREMENT_PREP2.fusionGenerators) {
+        (building2) => {
+          if (building2 === buildings2.TauFusionGenerator && building2.count < RETIREMENT_PREP2.fusionGenerators) {
             return RETIREMENT_PREP2.fusionGenerators;
           }
-          if (building === buildings2.TauFactory && building.count < RETIREMENT_PREP2.factories) {
+          if (building2 === buildings2.TauFactory && building2.count < RETIREMENT_PREP2.factories) {
             return RETIREMENT_PREP2.factories;
           }
-          if (building === buildings2.TauDiseaseLab && building.count < RETIREMENT_PREP2.scienceLabs) {
+          if (building2 === buildings2.TauDiseaseLab && building2.count < RETIREMENT_PREP2.scienceLabs) {
             return RETIREMENT_PREP2.scienceLabs;
           }
           return false;
         },
-        (target, building) => `Retirement preparation: build ${target} ${building.name}`,
+        (target, building2) => `Retirement preparation: build ${target} ${building2.name}`,
         () => settings2.buildingWeightingRetirementPrep
       ],
       [
         () => settings2.achievementGuards,
-        (building) => building === buildings2.Dreadnought && guardActive2("guardDreaded") ? "Dreaded" : building === buildings2.SiriusThermalCollector && guardActive2("guardEnergetic") ? "Energetic" : building === buildings2.RedSpaceport && guardActive2("guardRedDead") ? "Red Dead" : false,
+        (building2) => building2 === buildings2.Dreadnought && guardActive2("guardDreaded") ? "Dreaded" : building2 === buildings2.SiriusThermalCollector && guardActive2("guardEnergetic") ? "Energetic" : building2 === buildings2.RedSpaceport && guardActive2("guardRedDead") ? "Red Dead" : false,
         (name) => `${name} achievement guard`,
         () => 0
       ],
       [
         () => true,
-        (building) => building._tab === "city" && building !== buildings2.Mill && building !== buildings2.Banquet && building.stateOffCount > 0,
+        (building2) => building2._tab === "city" && building2 !== buildings2.Mill && building2 !== buildings2.Banquet && building2.stateOffCount > 0,
         () => "Still have some non operating buildings",
         () => settings2.buildingWeightingNonOperatingCity
       ],
       [
         () => true,
-        (building) => {
-          if (building === buildings2.BlackholeStellarEngine) {
+        (building2) => {
+          if (building2 === buildings2.BlackholeStellarEngine) {
             return false;
           }
-          if ((building === buildings2.BadlandsAttractor || building === buildings2.SpireMechBay) && building.isSmartManaged()) {
+          if ((building2 === buildings2.BadlandsAttractor || building2 === buildings2.SpireMechBay) && building2.isSmartManaged()) {
             return false;
           }
-          if (building === buildings2.RuinsGuardPost && building.isSmartManaged() && !isHellSupressUseful2()) {
-            if (building.count < Math.ceil(
+          if (building2 === buildings2.RuinsGuardPost && building2.isSmartManaged() && !isHellSupressUseful2()) {
+            if (building2.count < Math.ceil(
               5e3 / (game2.armyRating(traitVal2("high_pop", 0, 1), "hellArmy", 0) * traitVal2("holy", 1, "+"))
             )) {
               return false;
             }
           }
-          let supplyIndex = building === buildings2.SpirePort ? 1 : building === buildings2.SpireBaseCamp ? 2 : -1;
+          let supplyIndex = building2 === buildings2.SpirePort ? 1 : building2 === buildings2.SpireBaseCamp ? 2 : -1;
           if (supplyIndex > 0 && (buildings2.SpireMechBay.isSmartManaged() || buildings2.SpirePurifier.isSmartManaged())) {
-            if (building.count < getBestSupplyRatio2(
+            if (building2.count < getBestSupplyRatio2(
               resources2.Spire_Support.maxQuantity,
               buildings2.SpirePort.autoMax,
               buildings2.SpireBaseCamp.autoMax
@@ -19568,7 +19568,7 @@
               return false;
             }
           }
-          if (building._tab !== "city" && building.stateOffCount > 0) {
+          if (building2._tab !== "city" && building2.stateOffCount > 0) {
             return true;
           }
         },
@@ -19577,91 +19577,91 @@
       ],
       [
         () => settings2.prestigeType !== "bioseed" || !isGECKNeeded2(),
-        (building) => building === buildings2.GasSpaceDockGECK,
+        (building2) => building2 === buildings2.GasSpaceDockGECK,
         () => "Max allowed amount of G.E.C.K reached",
         () => 0
       ],
       [
         () => game2.global.race["lone_survivor"] && !isPrestigeAllowed3("eden"),
-        (building) => building === buildings2.TauStarEden,
+        (building2) => building2 === buildings2.TauStarEden,
         () => "Prestiging not currently allowed",
         () => 0
       ],
       [
         () => game2.global.race["truepath"] && (!isPrestigeAllowed3("retire") || buildings2.TauGas2MatrioshkaBrain.count < 1e3),
-        (building) => building === buildings2.TauGas2IgniteGasGiant,
+        (building2) => building2 === buildings2.TauGas2IgniteGasGiant,
         () => "Prestiging not currently allowed",
         () => 0
       ],
       [
         () => settings2.prestigeBioseedConstruct && settings2.prestigeType !== "bioseed",
-        (building) => building === buildings2.GasSpaceDock || building === buildings2.GasSpaceDockShipSegment || building === buildings2.GasSpaceDockProbe,
+        (building2) => building2 === buildings2.GasSpaceDock || building2 === buildings2.GasSpaceDockShipSegment || building2 === buildings2.GasSpaceDockProbe,
         () => "Not needed for current prestige",
         () => 0
       ],
       [
         () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "bioseed",
-        (building) => building === buildings2.DwarfWorldCollider || building === buildings2.TitanMission,
+        (building2) => building2 === buildings2.DwarfWorldCollider || building2 === buildings2.TitanMission,
         () => "Not needed for Bioseed prestige",
         () => 0
       ],
       [
         () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "whitehole",
-        (building) => building === buildings2.BlackholeJumpShip,
+        (building2) => building2 === buildings2.BlackholeJumpShip,
         () => "Not needed for Whitehole prestige",
         () => 0
       ],
       [
         () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "vacuum",
-        (building) => building === buildings2.BlackholeStellarEngine,
+        (building2) => building2 === buildings2.BlackholeStellarEngine,
         () => "Not needed for Vacuum Collapse prestige",
         () => 0
       ],
       [
         () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "ascension" && isPillarFinished3() && !game2.global.race["witch_hunter"],
-        (building) => building === buildings2.PitMission || building === buildings2.RuinsMission,
+        (building2) => building2 === buildings2.PitMission || building2 === buildings2.RuinsMission,
         () => "Not needed for Ascension prestige",
         () => 0
       ],
       [
         () => game2.global.race["witch_hunter"] && settings2.prestigeType === "ascension",
-        (building) => building === buildings2.SpireWaygate,
+        (building2) => building2 === buildings2.SpireWaygate,
         () => "Not needed for Witch Hunter's Ascension prestige",
         () => 0
       ],
       [
         () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "terraform",
-        (building) => building === buildings2.PitMission || building === buildings2.RuinsMission,
+        (building2) => building2 === buildings2.PitMission || building2 === buildings2.RuinsMission,
         () => "Not needed for Terraform prestige",
         () => 0
       ],
       [
         () => settings2.autoPrestige && settings2.prestigeType === "mad" && (haveTech2("mad") || techIds2["tech-mad"].isUnlocked() && techIds2["tech-mad"].isAffordable(true)),
-        (building) => !building.is.housing && !building.is.garrison && !building.cost["Knowledge"] && building !== buildings2.OilWell,
+        (building2) => !building2.is.housing && !building2.is.garrison && !building2.cost["Knowledge"] && building2 !== buildings2.OilWell,
         () => "Awaiting MAD prestige",
         () => settings2.buildingWeightingMADUseless
       ],
       [
         () => true,
-        (building) => !(building instanceof ResourceAction2) && building.count === 0,
+        (building2) => !(building2 instanceof ResourceAction2) && building2.count === 0,
         () => "New building",
         () => settings2.buildingWeightingNew
       ],
       [
         () => resources2.Power.isUnlocked() && resources2.Power.currentQuantity < resources2.Power.maxQuantity,
-        (building) => building === buildings2.LakeCoolingTower || building.powered < 0,
+        (building2) => building2 === buildings2.LakeCoolingTower || building2.powered < 0,
         () => "Need more energy",
         () => settings2.buildingWeightingNeedfulPowerPlant
       ],
       [
         () => resources2.Power.isUnlocked() && resources2.Power.currentQuantity > resources2.Power.maxQuantity,
-        (building) => building !== buildings2.Mill && (building === buildings2.LakeCoolingTower || building.powered < 0),
+        (building2) => building2 !== buildings2.Mill && (building2 === buildings2.LakeCoolingTower || building2.powered < 0),
         () => "No need for more energy",
         () => settings2.buildingWeightingUselessPowerPlant
       ],
       [
         () => resources2.Power.isUnlocked(),
-        (building) => building !== buildings2.LakeCoolingTower && building.powered > 0 && (building === buildings2.NeutronCitadel ? getCitadelConsumption2(building.count + 1) - getCitadelConsumption2(building.count) : building.powered) > resources2.Power.currentQuantity,
+        (building2) => building2 !== buildings2.LakeCoolingTower && building2.powered > 0 && (building2 === buildings2.NeutronCitadel ? getCitadelConsumption2(building2.count + 1) - getCitadelConsumption2(building2.count) : building2.powered) > resources2.Power.currentQuantity,
         () => "Not enough energy",
         () => settings2.buildingWeightingUnderpowered
       ],
@@ -19670,88 +19670,88 @@
           state2.knowledgeRequiredByTechs,
           state2.knowledgeRequiredByBuildTargets
         ) <= resources2.Knowledge.maxQuantity,
-        (building) => building.is.knowledge && building !== buildings2.Wardenclyffe && (building !== buildings2.StargateTelemetryBeacon || building.count > 0),
+        (building2) => building2.is.knowledge && building2 !== buildings2.Wardenclyffe && (building2 !== buildings2.StargateTelemetryBeacon || building2.count > 0),
         // We want Wardenclyffe for morale; first beacon required for progress
         () => "No need for more knowledge",
         () => settings2.buildingWeightingUselessKnowledge
       ],
       [
         () => state2.cheapestTechKnowledge > resources2.Knowledge.maxQuantity || state2.knowledgeRequiredByBuildTargets > resources2.Knowledge.maxQuantity,
-        (building) => building.is.knowledge,
+        (building2) => building2.is.knowledge,
         () => "Need more knowledge",
         () => settings2.buildingWeightingNeedfulKnowledge
       ],
       [
         () => buildings2.BlackholeMassEjector.count > 0 && buildings2.BlackholeMassEjector.count * 1e3 - game2.global.interstellar.mass_ejector.total > 100,
-        (building) => building === buildings2.BlackholeMassEjector,
+        (building2) => building2 === buildings2.BlackholeMassEjector,
         () => "Still have some unused ejectors",
         () => settings2.buildingWeightingUnusedEjectors
       ],
       [
         () => resources2.Crates.storageRatio < 1 || resources2.Containers.storageRatio < 1,
-        (building) => building === buildings2.StorageYard || building === buildings2.Warehouse || building === buildings2.EnceladusMunitions,
+        (building2) => building2 === buildings2.StorageYard || building2 === buildings2.Warehouse || building2 === buildings2.EnceladusMunitions,
         () => "Still have some unused storage",
         () => settings2.buildingWeightingCrateUseless
       ],
       [
         () => resources2.Oil.maxQuantity < resources2.Oil.maxCost && buildings2.OilWell.count <= 0 && buildings2.GasMoonOilExtractor.count <= 0,
-        (building) => building === buildings2.OilWell || building === buildings2.GasMoonOilExtractor,
+        (building2) => building2 === buildings2.OilWell || building2 === buildings2.GasMoonOilExtractor,
         () => "Need more fuel",
         () => settings2.buildingWeightingMissingFuel
       ],
       [
         () => resources2.Helium_3.isUnlocked() && resources2.Helium_3.maxQuantity < resources2.Helium_3.maxCost || resources2.Oil.maxQuantity < resources2.Oil.maxCost,
-        (building) => building === buildings2.OilDepot || building === buildings2.SpacePropellantDepot || building === buildings2.GasStorage,
+        (building2) => building2 === buildings2.OilDepot || building2 === buildings2.SpacePropellantDepot || building2 === buildings2.GasStorage,
         () => "Need more fuel",
         () => settings2.buildingWeightingMissingFuel
       ],
       [
         () => game2.global.race.hooved && resources2.Horseshoe.spareQuantity >= resources2.Horseshoe.storageRequired,
-        (building) => building instanceof ResourceAction2 && building.resource === resources2.Horseshoe,
+        (building2) => building2 instanceof ResourceAction2 && building2.resource === resources2.Horseshoe,
         () => `No more ${resources2.Horseshoe.title} needed`,
         () => settings2.buildingWeightingHorseshoeUseless
       ],
       [
         () => game2.global.race.calm && resources2.Zen.currentQuantity < resources2.Zen.maxQuantity,
-        (building) => building.id.includes("meditation"),
+        (building2) => building2.id.includes("meditation"),
         () => "No more Meditation Space needed",
         () => settings2.buildingWeightingZenUseless
       ],
       [
         () => buildings2.GateTurret.isUnlocked() && poly2.hellSupression("gate").rating > 7501 + game2.armyRating(traitVal2("high_pop", 0, 1), "hellArmy", 0) * traitVal2("holy", 1, "+"),
-        (building) => building === buildings2.GateTurret,
+        (building2) => building2 === buildings2.GateTurret,
         () => "Gate demons fully supressed",
         () => settings2.buildingWeightingGateTurret
       ],
       [
         () => (resources2.Containers.isUnlocked() || resources2.Crates.isUnlocked()) && resources2.Containers.storageRatio === 1 && resources2.Crates.storageRatio === 1,
-        (building) => building === buildings2.Shed || building === buildings2.RedGarage || building === buildings2.AlphaWarehouse || building === buildings2.ProximaCargoYard || building === buildings2.TitanStorehouse,
+        (building2) => building2 === buildings2.Shed || building2 === buildings2.RedGarage || building2 === buildings2.AlphaWarehouse || building2 === buildings2.ProximaCargoYard || building2 === buildings2.TitanStorehouse,
         () => "Need more storage",
         () => settings2.buildingWeightingNeedStorage
       ],
       [
         () => resources2.Population.maxQuantity > 50 && resources2.Population.storageRatio < 0.9,
-        (building) => building.is.housing && building !== buildings2.Alien1Consulate && building !== buildings2.Transmitter && !(building instanceof ResourceAction2),
+        (building2) => building2.is.housing && building2 !== buildings2.Alien1Consulate && building2 !== buildings2.Transmitter && !(building2 instanceof ResourceAction2),
         () => "No more houses needed",
         () => settings2.buildingWeightingUselessHousing
       ],
       [
         () => game2.global.race["orbit_decay"] && !game2.global.race["orbit_decayed"],
-        (building) => (building._tab === "city" || building._location === "spc_moon") && !(building instanceof ResourceAction2),
+        (building2) => (building2._tab === "city" || building2._location === "spc_moon") && !(building2 instanceof ResourceAction2),
         () => "Will be destroyed after impact",
         () => settings2.buildingWeightingTemporal
       ],
       [
         () => game2.global.tech.tau_gas === 1,
         // Only used for name contest, no need to check at other game stages
-        (building) => building.is.random,
+        (building2) => building2.is.random,
         () => "Randomized weighting",
         () => 1 + Math.random()
         // Fluctuate weight to pick random item
       ],
       [
         () => game2.global.race["truepath"] && haveTech2("tauceti", 2),
-        (building) => (building._tab === "city" || building._tab === "space" || building._tab === "starDock") && !(building instanceof ResourceAction2),
+        (building2) => (building2._tab === "city" || building2._tab === "space" || building2._tab === "starDock") && !(building2 instanceof ResourceAction2),
         () => "Solar System building",
         () => settings2.buildingWeightingSolar
       ]
@@ -19778,17 +19778,17 @@
   }
   function readResourceView(value, index) {
     const path = `MarketManager.priorityList[${index}]`;
-    const resource = requireRecord(value, path);
-    const id = resource["id"];
+    const resource2 = requireRecord(value, path);
+    const id = resource2["id"];
     if (typeof id !== "string") {
       throw new TypeError(`${path}.id must be a string`);
     }
-    const number = (name) => requireNumber(resource[name], `${path}.${name}`);
+    const number = (name) => requireNumber(resource2[name], `${path}.${name}`);
     return Object.freeze({
       id,
       tradeRoutes: number("tradeRoutes"),
-      autoTradeBuyEnabled: Boolean(resource["autoTradeBuyEnabled"]),
-      autoTradeSellEnabled: Boolean(resource["autoTradeSellEnabled"]),
+      autoTradeBuyEnabled: Boolean(resource2["autoTradeBuyEnabled"]),
+      autoTradeSellEnabled: Boolean(resource2["autoTradeSellEnabled"]),
       usefulRatio: number("usefulRatio"),
       storageRatio: number("storageRatio"),
       tradeSellPrice: number("tradeSellPrice"),
@@ -19797,8 +19797,8 @@
       tradeRouteQuantity: number("tradeRouteQuantity"),
       autoTradeWeighting: number("autoTradeWeighting"),
       autoTradePriority: number("autoTradePriority"),
-      isRoutesUnlocked: callBoolean3(resource, "isRoutesUnlocked", path),
-      isDemanded: callBoolean3(resource, "isDemanded", path)
+      isRoutesUnlocked: callBoolean3(resource2, "isRoutesUnlocked", path),
+      isDemanded: callBoolean3(resource2, "isDemanded", path)
     });
   }
   function readMoney(value) {
@@ -19891,14 +19891,14 @@
     const { settings: settings2 } = input;
     const money = input.money;
     const operations = [];
-    const sellWeight = settings2.tradeRouteSellExcess ? (resource) => resource.usefulRatio >= 1 ? resource.tradeSellPrice * 1e3 : resource.usefulRatio : (resource) => resource.storageRatio >= 0.99 ? resource.tradeSellPrice * 1e3 : resource.usefulRatio;
+    const sellWeight = settings2.tradeRouteSellExcess ? (resource2) => resource2.usefulRatio >= 1 ? resource2.tradeSellPrice * 1e3 : resource2.usefulRatio : (resource2) => resource2.storageRatio >= 0.99 ? resource2.tradeSellPrice * 1e3 : resource2.usefulRatio;
     const tradableResources = input.priorityList.filter(
       (r) => r.isRoutesUnlocked && (r.autoTradeBuyEnabled || r.autoTradeSellEnabled)
     ).sort((a, b) => sellWeight(b) - sellWeight(a));
     const requiredTradeRoutes = /* @__PURE__ */ new Map();
     const viewsById = /* @__PURE__ */ new Map();
-    for (const resource of tradableResources) {
-      viewsById.set(resource.id, resource);
+    for (const resource2 of tradableResources) {
+      viewsById.set(resource2.id, resource2);
     }
     let currentMoneyPerSecond = money.rateOfChange;
     let tradeRoutesUsed = 0;
@@ -19907,34 +19907,34 @@
     const maxTradeRoutes = input.maxTradeRoutes;
     const unmanagedTradeRoutes = input.unmanagedTradeRoutes;
     const saveInflationMoney = input.saveInflationMoney;
-    for (const resource of tradableResources) {
-      if (!resource.autoTradeSellEnabled) {
+    for (const resource2 of tradableResources) {
+      if (!resource2.autoTradeSellEnabled) {
         continue;
       }
-      requiredTradeRoutes.set(resource.id, 0);
-      if (tradeRoutesUsed >= maxTradeRoutes || input.isBanana && tradeRoutesUsed > 0 || (settings2.tradeRouteSellExcess ? resource.usefulRatio < 1 : resource.storageRatio < 0.99)) {
+      requiredTradeRoutes.set(resource2.id, 0);
+      if (tradeRoutesUsed >= maxTradeRoutes || input.isBanana && tradeRoutesUsed > 0 || (settings2.tradeRouteSellExcess ? resource2.usefulRatio < 1 : resource2.storageRatio < 0.99)) {
         continue;
       }
       const routesToAssign = Math.min(
         exportRouteCap,
         maxTradeRoutes - tradeRoutesUsed,
-        Math.floor(resource.rateOfChange / resource.tradeRouteQuantity)
+        Math.floor(resource2.rateOfChange / resource2.tradeRouteQuantity)
       );
       if (routesToAssign > 0) {
         tradeRoutesUsed += routesToAssign;
         requiredTradeRoutes.set(
-          resource.id,
-          (requiredTradeRoutes.get(resource.id) ?? 0) - routesToAssign
+          resource2.id,
+          (requiredTradeRoutes.get(resource2.id) ?? 0) - routesToAssign
         );
-        currentMoneyPerSecond += resource.tradeSellPrice * routesToAssign;
+        currentMoneyPerSecond += resource2.tradeSellPrice * routesToAssign;
       }
     }
     if (saveInflationMoney) {
-      for (const resource of tradableResources) {
-        if (resource.autoTradeBuyEnabled) {
+      for (const resource2 of tradableResources) {
+        if (resource2.autoTradeBuyEnabled) {
           requiredTradeRoutes.set(
-            resource.id,
-            requiredTradeRoutes.get(resource.id) ?? 0
+            resource2.id,
+            requiredTradeRoutes.get(resource2.id) ?? 0
           );
         }
       }
@@ -19947,22 +19947,22 @@
       )
     );
     const priorityGroups = {};
-    for (const resource of tradableResources) {
-      if (!resource.autoTradeBuyEnabled) {
+    for (const resource2 of tradableResources) {
+      if (!resource2.autoTradeBuyEnabled) {
         continue;
       }
       requiredTradeRoutes.set(
-        resource.id,
-        requiredTradeRoutes.get(resource.id) ?? 0
+        resource2.id,
+        requiredTradeRoutes.get(resource2.id) ?? 0
       );
       if (saveInflationMoney) {
         continue;
       }
-      if (resource.autoTradeWeighting <= 0 || (settings2.tradeRouteSellExcess ? resource.usefulRatio > 0.99 : resource.storageRatio > 0.98)) {
+      if (resource2.autoTradeWeighting <= 0 || (settings2.tradeRouteSellExcess ? resource2.usefulRatio > 0.99 : resource2.storageRatio > 0.98)) {
         continue;
       }
-      let priority = resource.autoTradePriority;
-      if (resource.isDemanded) {
+      let priority = resource2.autoTradePriority;
+      if (resource2.isDemanded) {
         priority = Math.max(priority, 100);
         if (!money.isDemanded) {
           minimumAllowedMoneyPerSecond = 0;
@@ -19973,7 +19973,7 @@
       if (priority !== 0) {
         const group = priorityGroups[priority] ?? [];
         priorityGroups[priority] = group;
-        group.push(resource);
+        group.push(resource2);
       }
     }
     const priorityList = Object.keys(priorityGroups).sort((a, b) => Number(b) - Number(a)).map((key) => priorityGroups[key]);
@@ -19998,19 +19998,19 @@
         (a, b) => a.autoTradeWeighting - b.autoTradeWeighting
       );
       assignLoop: while (trades.length > 0 && remainingRoutes > 0) {
-        const resource = trades.sort(resSorter)[0];
-        if (required(resource.id) >= importRouteCap) {
+        const resource2 = trades.sort(resSorter)[0];
+        if (required(resource2.id) >= importRouteCap) {
           trades.shift();
           continue;
         }
-        if (currentMoneyPerSecond - resource.tradeBuyPrice < minimumAllowedMoneyPerSecond) {
+        if (currentMoneyPerSecond - resource2.tradeBuyPrice < minimumAllowedMoneyPerSecond) {
           break outerLoop;
         }
         if (tradeRoutesUsed < maxTradeRoutes) {
-          currentMoneyPerSecond -= resource.tradeBuyPrice;
+          currentMoneyPerSecond -= resource2.tradeBuyPrice;
           tradeRoutesUsed++;
           remainingRoutes--;
-          requiredTradeRoutes.set(resource.id, required(resource.id) + 1);
+          requiredTradeRoutes.set(resource2.id, required(resource2.id) + 1);
         } else {
           let continued = false;
           for (const otherId of requiredTradeRoutes.keys()) {
@@ -20019,14 +20019,14 @@
               continue;
             }
             const otherResource = viewsById.get(otherId);
-            if (currentRequired >= 0 || resource === otherResource) {
+            if (currentRequired >= 0 || resource2 === otherResource) {
               continue;
             }
-            if (currentMoneyPerSecond - otherResource.tradeSellPrice - resource.tradeBuyPrice > minimumAllowedMoneyPerSecond && remainingRoutes >= unassignStep) {
+            if (currentMoneyPerSecond - otherResource.tradeSellPrice - resource2.tradeBuyPrice > minimumAllowedMoneyPerSecond && remainingRoutes >= unassignStep) {
               currentMoneyPerSecond -= otherResource.tradeSellPrice;
-              currentMoneyPerSecond -= resource.tradeBuyPrice;
+              currentMoneyPerSecond -= resource2.tradeBuyPrice;
               requiredTradeRoutes.set(otherId, required(otherId) + 1);
-              requiredTradeRoutes.set(resource.id, required(resource.id) + 1);
+              requiredTradeRoutes.set(resource2.id, required(resource2.id) + 1);
               remainingRoutes -= unassignStep;
               continued = true;
               break;
@@ -20040,46 +20040,46 @@
       }
     }
     const adjustmentTradeRoutes = [];
-    tradableResources.forEach((resource, i) => {
-      if (!requiredTradeRoutes.has(resource.id)) {
+    tradableResources.forEach((resource2, i) => {
+      if (!requiredTradeRoutes.has(resource2.id)) {
         return;
       }
-      const adjustment = required(resource.id) - resource.tradeRoutes;
+      const adjustment = required(resource2.id) - resource2.tradeRoutes;
       adjustmentTradeRoutes[i] = adjustment;
-      if (required(resource.id) === 0 && resource.tradeRoutes !== 0) {
-        operations.push({ kind: "zero", resourceId: resource.id });
+      if (required(resource2.id) === 0 && resource2.tradeRoutes !== 0) {
+        operations.push({ kind: "zero", resourceId: resource2.id });
         adjustmentTradeRoutes[i] = 0;
-      } else if (adjustment > 0 && resource.tradeRoutes < 0) {
+      } else if (adjustment > 0 && resource2.tradeRoutes < 0) {
         operations.push({
           kind: "add",
-          resourceId: resource.id,
+          resourceId: resource2.id,
           count: adjustment
         });
         adjustmentTradeRoutes[i] = 0;
-      } else if (adjustment < 0 && resource.tradeRoutes > 0) {
+      } else if (adjustment < 0 && resource2.tradeRoutes > 0) {
         operations.push({
           kind: "remove",
-          resourceId: resource.id,
+          resourceId: resource2.id,
           count: -1 * adjustment
         });
         adjustmentTradeRoutes[i] = 0;
       }
     });
-    tradableResources.forEach((resource, i) => {
-      if (!requiredTradeRoutes.has(resource.id)) {
+    tradableResources.forEach((resource2, i) => {
+      if (!requiredTradeRoutes.has(resource2.id)) {
         return;
       }
       const adjustment = adjustmentTradeRoutes[i];
       if (adjustment !== void 0 && adjustment > 0) {
         operations.push({
           kind: "add",
-          resourceId: resource.id,
+          resourceId: resource2.id,
           count: adjustment
         });
       } else if (adjustment !== void 0 && adjustment < 0) {
         operations.push({
           kind: "remove",
-          resourceId: resource.id,
+          resourceId: resource2.id,
           count: -1 * adjustment
         });
       }
@@ -20385,8 +20385,8 @@
   function decisionsMatch(left, right) {
     return JSON.stringify(left) === JSON.stringify(right);
   }
-  function readUnlocked(building, path) {
-    return Boolean(call(building, "isUnlocked", `${path}.isUnlocked`));
+  function readUnlocked(building2, path) {
+    return Boolean(call(building2, "isUnlocked", `${path}.isUnlocked`));
   }
   function createHellAdapter(dependencies) {
     let session = null;
@@ -21208,10 +21208,10 @@
     }
     return value;
   }
-  function readTrait(dependencies, trait, fallback, operation2) {
+  function readTrait(dependencies, trait2, fallback, operation2) {
     return requireNumber(
-      dependencies.traitVal(trait, fallback, operation2),
-      `traitVal(${trait})`
+      dependencies.traitVal(trait2, fallback, operation2),
+      `traitVal(${trait2})`
     );
   }
   function readTarget2(value, path) {
@@ -22137,22 +22137,22 @@
   }
   function readCost(value, path) {
     const cost = requireRecord(value, path);
-    const resource = requireRecord(cost["resource"], `${path}.resource`);
-    const name = resource["name"];
+    const resource2 = requireRecord(cost["resource"], `${path}.resource`);
+    const name = resource2["name"];
     if (typeof name !== "string") {
       throw new TypeError(`${path}.resource.name must be a string`);
     }
     return Object.freeze({
       resourceName: name,
       currentQuantity: requireNumber(
-        resource["currentQuantity"],
+        resource2["currentQuantity"],
         `${path}.resource.currentQuantity`
       ),
       rateOfChange: requireNumber(
-        resource["rateOfChange"],
+        resource2["rateOfChange"],
         `${path}.resource.rateOfChange`
       ),
-      isDemanded: callBoolean4(resource, "isDemanded", `${path}.resource`),
+      isDemanded: callBoolean4(resource2, "isDemanded", `${path}.resource`),
       quantity: requireNumber(cost["quantity"], `${path}.quantity`),
       minRateOfChange: requireNumber(
         cost["minRateOfChange"],
@@ -22676,32 +22676,32 @@
     });
   }
   function sampleActiveResources(manager, resources2) {
-    for (const resource of resources2) {
-      resource.weighting = callNumber3(manager, "resWeighting", resource.id);
-      if (resource.weighting > 0) {
-        resource.isUseful = callBoolean5(
-          resource.resource,
+    for (const resource2 of resources2) {
+      resource2.weighting = callNumber3(manager, "resWeighting", resource2.id);
+      if (resource2.weighting > 0) {
+        resource2.isUseful = callBoolean5(
+          resource2.resource,
           "isUseful",
-          `AlchemyManager.managedPriorityList().${resource.id}`
+          `AlchemyManager.managedPriorityList().${resource2.id}`
         );
       }
     }
   }
   function sampleFullmetalResources(manager, resources2) {
-    for (const resource of resources2) {
-      resource.transmuteTier = callNumber3(
+    for (const resource2 of resources2) {
+      resource2.transmuteTier = callNumber3(
         manager,
         "transmuteTier",
-        resource.resource
+        resource2.resource
       );
-      if (resource.transmuteTier <= 1) {
+      if (resource2.transmuteTier <= 1) {
         continue;
       }
-      const instance = resource.resource["instance"];
-      resource.isBasic = Boolean(
+      const instance = resource2.resource["instance"];
+      resource2.isBasic = Boolean(
         typeof instance === "object" && instance !== null ? instance["basic"] : false
       );
-      if (!resource.isBasic) {
+      if (!resource2.isBasic) {
         break;
       }
     }
@@ -23281,17 +23281,17 @@
     );
   }
   function resourceDemanded(resources2, id) {
-    const resource = requireRecord(resources2[id], `resources.${id}`);
+    const resource2 = requireRecord(resources2[id], `resources.${id}`);
     const isDemanded = requireFunction(
-      resource["isDemanded"],
+      resource2["isDemanded"],
       `resources.${id}.isDemanded`
     );
-    return Boolean(Reflect.apply(isDemanded, resource, []));
+    return Boolean(Reflect.apply(isDemanded, resource2, []));
   }
   function resourceStorageRatio(resources2, id) {
-    const resource = requireRecord(resources2[id], `resources.${id}`);
+    const resource2 = requireRecord(resources2[id], `resources.${id}`);
     return requireNumber(
-      resource["storageRatio"],
+      resource2["storageRatio"],
       `resources.${id}.storageRatio`
     );
   }
@@ -23768,8 +23768,8 @@
       const path = `FactoryManager.Productions.${key}`;
       const value = requireRecord(raw, path);
       const id = requireId(value["id"], `${path}.id`);
-      const resource = requireRecord(value["resource"], `${path}.resource`);
-      const outputResourceId = requireId(resource["id"], `${path}.resource.id`);
+      const resource2 = requireRecord(value["resource"], `${path}.resource`);
+      const outputResourceId = requireId(resource2["id"], `${path}.resource.id`);
       if (byId.has(id)) {
         throw new TypeError(`FactoryManager.Productions has duplicate id ${id}`);
       }
@@ -23786,22 +23786,22 @@
   function readBuildingWeight(buildings2, resourceId3, currentQuantity) {
     for (let index = 0; index < buildings2.length; index++) {
       const path = `state.unlockedBuildings[${index}]`;
-      const building = requireRecord(buildings2[index], path);
-      const cost = requireRecord(building["cost"], `${path}.cost`);
+      const building2 = requireRecord(buildings2[index], path);
+      const cost = requireRecord(building2["cost"], `${path}.cost`);
       const required = cost[resourceId3];
       if (required === void 0) continue;
       const quantity = requireNumber(required, `${path}.cost.${resourceId3}`);
       if (quantity > currentQuantity) {
-        return requireNumber(building["weighting"], `${path}.weighting`);
+        return requireNumber(building2["weighting"], `${path}.weighting`);
       }
     }
     return 100;
   }
   function readMaterial(raw, path) {
     const cost = requireRecord(raw, path);
-    const resource = requireRecord(cost["resource"], `${path}.resource`);
-    const resourceId3 = requireId(resource["id"], `${path}.resource.id`);
-    const unlocked = callBoolean7(resource, "isUnlocked", `${path}.resource`);
+    const resource2 = requireRecord(cost["resource"], `${path}.resource`);
+    const resourceId3 = requireId(resource2["id"], `${path}.resource.id`);
+    const unlocked = callBoolean7(resource2, "isUnlocked", `${path}.resource`);
     if (!unlocked) {
       return Object.freeze({
         resourceId: resourceId3,
@@ -23815,7 +23815,7 @@
         minRateOfChange: 0
       });
     }
-    const name = resource["name"];
+    const name = resource2["name"];
     if (typeof name !== "string") {
       throw new TypeError(`${path}.resource.name must be a string`);
     }
@@ -23823,17 +23823,17 @@
       resourceId: resourceId3,
       name,
       unlocked: true,
-      demanded: callBoolean7(resource, "isDemanded", `${path}.resource`),
+      demanded: callBoolean7(resource2, "isDemanded", `${path}.resource`),
       currentQuantity: requireNumber(
-        resource["currentQuantity"],
+        resource2["currentQuantity"],
         `${path}.resource.currentQuantity`
       ),
       rateOfChange: requireNumber(
-        resource["rateOfChange"],
+        resource2["rateOfChange"],
         `${path}.resource.rateOfChange`
       ),
       storageRatio: requireNumber(
-        resource["storageRatio"],
+        resource2["storageRatio"],
         `${path}.resource.storageRatio`
       ),
       quantity: requireNumber(cost["quantity"], `${path}.quantity`),
@@ -24352,17 +24352,17 @@
           if (weighting <= 0) {
             return { production, id, weighting, priority: 0, demanded: false };
           }
-          const resource = requireRecord(
+          const resource2 = requireRecord(
             production["resource"],
             `${path}.resource`
           );
           return {
             production,
-            resource,
+            resource: resource2,
             id,
             weighting,
             priority: requireNumber(production["priority"], `${path}.priority`),
-            demanded: callBoolean8(resource, "isDemanded", `${path}.resource`)
+            demanded: callBoolean8(resource2, "isDemanded", `${path}.resource`)
           };
         });
         const maximum = requireCount2(
@@ -24537,21 +24537,21 @@
         throw new TypeError(`${path}.id must be a string`);
       }
       const cost = requireRecord(fuel["cost"], `${path}.cost`);
-      const resource = requireRecord(cost["resource"], `${path}.cost.resource`);
+      const resource2 = requireRecord(cost["resource"], `${path}.cost.resource`);
       return {
         index,
         id,
         storageRatio: requireNumber(
-          resource["storageRatio"],
+          resource2["storageRatio"],
           `${path}.cost.resource.storageRatio`
         ),
         rateOfChange: requireNumber(
-          resource["rateOfChange"],
+          resource2["rateOfChange"],
           `${path}.cost.resource.rateOfChange`
         ),
         fuel,
         cost,
-        resource
+        resource: resource2
       };
     });
     const result2 = rawFuels.map(
@@ -24906,8 +24906,8 @@
     }
     return value;
   }
-  function readTechnologyLevel(technology) {
-    const value = technology["wish"];
+  function readTechnologyLevel(technology2) {
+    const value = technology2["wish"];
     if (value === void 0 || value === null || value === 0) return 0;
     return requireNumber(value, "game.global.tech.wish");
   }
@@ -24918,10 +24918,10 @@
     if (!race["wish"]) {
       return Object.freeze({ race, technologyLevel: 0 });
     }
-    const technology = requireRecord(global["tech"], "game.global.tech");
+    const technology2 = requireRecord(global["tech"], "game.global.tech");
     return Object.freeze({
       race,
-      technologyLevel: readTechnologyLevel(technology)
+      technologyLevel: readTechnologyLevel(technology2)
     });
   }
   function createWishReader(dependencies) {
@@ -25702,8 +25702,8 @@
   function psychicPowerCost(power, technologyLevel) {
     return POWER_COSTS[power][technologyLevel >= 5 ? 1 : 0];
   }
-  function hasRoom(resource) {
-    return resource.current + resource.income * 1.5 * 300 < resource.maximum;
+  function hasRoom(resource2) {
+    return resource2.current + resource2.income * 1.5 * 300 < resource2.maximum;
   }
   function decision(input, power, boostedResourceId = null) {
     return Object.freeze({
@@ -26088,10 +26088,10 @@
         );
       }
       if (decision2.power === "boost" && active.input.boostResourceMode === "auto") {
-        const resource = active.boostResources.find(
+        const resource2 = active.boostResources.find(
           (candidate) => candidate.id === decision2.boostedResourceId
         );
-        if (resource === void 0 || !roomMatches(resource.record, resource.view, `resources.${resource.id}`)) {
+        if (resource2 === void 0 || !roomMatches(resource2.record, resource2.view, `resources.${resource2.id}`)) {
           return stale(
             "psychic-boost-resource-changed",
             "psychic boost resource changed"
@@ -26246,12 +26246,12 @@
   function readCapacity(gameValue) {
     const game2 = requireRecord(gameValue, "game");
     const traits = requireRecord(game2["traits"], "game.traits");
-    const trait = requireRecord(
+    const trait2 = requireRecord(
       traits["ocular_power"],
       "game.traits.ocular_power"
     );
-    const vars = requireFunction(trait["vars"], "game.traits.ocular_power.vars");
-    const values = Reflect.apply(vars, trait, []);
+    const vars = requireFunction(trait2["vars"], "game.traits.ocular_power.vars");
+    const values = Reflect.apply(vars, trait2, []);
     if (!Array.isArray(values)) {
       throw new TypeError("game.traits.ocular_power.vars() must return an array");
     }
@@ -26395,11 +26395,11 @@
     return Object.freeze({
       traits: input.traits,
       totalWeighting: input.traits.reduce(
-        (total, trait) => total + trait.weighting,
+        (total, trait2) => total + trait2.weighting,
         0
       ),
       totalGeneCost: input.traits.reduce(
-        (total, trait) => total + trait.initialGeneCost,
+        (total, trait2) => total + trait2.initialGeneCost,
         0
       )
     });
@@ -26477,17 +26477,17 @@
     }
     return list;
   }
-  function readTraitName(trait, path) {
-    const traitName = trait["traitName"];
+  function readTraitName(trait2, path) {
+    const traitName = trait2["traitName"];
     if (typeof traitName !== "string") {
       throw new TypeError(`${path}.traitName must be a string`);
     }
     return traitName;
   }
-  function readGeneCost(trait, path) {
-    const geneCost = requireFunction(trait["geneCost"], `${path}.geneCost`);
+  function readGeneCost(trait2, path) {
+    const geneCost = requireFunction(trait2["geneCost"], `${path}.geneCost`);
     const cost = requireNumber(
-      Reflect.apply(geneCost, trait, []),
+      Reflect.apply(geneCost, trait2, []),
       `${path}.geneCost()`
     );
     if (cost < 0) {
@@ -26520,12 +26520,12 @@
         const list = readManagedList(manager);
         const traits = list.map((value, index) => {
           const path = `MinorTraitManager.managedPriorityList()[${index}]`;
-          const trait = requireRecord(value, path);
+          const trait2 = requireRecord(value, path);
           return Object.freeze({
             index,
-            traitName: readTraitName(trait, path),
-            weighting: requireNumber(trait["weighting"], `${path}.weighting`),
-            initialGeneCost: readGeneCost(trait, path)
+            traitName: readTraitName(trait2, path),
+            weighting: requireNumber(trait2["weighting"], `${path}.weighting`),
+            initialGeneCost: readGeneCost(trait2, path)
           });
         });
         return Object.freeze({ unlocked: true, traits: Object.freeze(traits) });
@@ -26543,11 +26543,11 @@
           return null;
         }
         const path = `MinorTraitManager.managedPriorityList()[${index}]`;
-        const trait = requireRecord(list[index], path);
-        const geneCost = readGeneCost(trait, path);
+        const trait2 = requireRecord(list[index], path);
+        const geneCost = readGeneCost(trait2, path);
         return Object.freeze({
           index,
-          traitName: readTraitName(trait, path),
+          traitName: readTraitName(trait2, path),
           geneCost,
           currentGenes: readGenes(dependencies.getResources)
         });
@@ -26722,23 +26722,23 @@
   }
 
   // src/domain/consume.ts
-  function calculateConsumeKeepRatio(baseRatio, resource, storageShift, hungryRace) {
+  function calculateConsumeKeepRatio(baseRatio, resource2, storageShift, hungryRace) {
     let keepRatio = baseRatio;
     if (keepRatio === -1) {
-      if (resource.storageRequired <= 1) {
+      if (resource2.storageRequired <= 1) {
         return null;
       }
       keepRatio = Math.max(
         keepRatio,
-        resource.storageRequired / resource.maxQuantity * storageShift
+        resource2.storageRequired / resource2.maxQuantity * storageShift
       );
     }
-    if (resource.isFood && !hungryRace) {
+    if (resource2.isFood && !hungryRace) {
       keepRatio = Math.max(keepRatio, 0.25);
     }
     return Math.max(
       keepRatio,
-      resource.requestedQuantity / resource.maxQuantity * storageShift
+      resource2.requestedQuantity / resource2.maxQuantity * storageShift
     );
   }
   function planConsume(input) {
@@ -26746,7 +26746,7 @@
       return Object.freeze({ adjustments: Object.freeze([]) });
     }
     const consumeAdjustments = Object.fromEntries(
-      input.resources.map((resource) => [resource.id, 0])
+      input.resources.map((resource2) => [resource2.id, 0])
     );
     if (input.useful) {
       let remaining = input.maximum;
@@ -26755,40 +26755,40 @@
         if (consumeRatio === void 0) {
           continue;
         }
-        for (const resource of input.resources) {
+        for (const resource2 of input.resources) {
           if (remaining <= 0) {
             break;
           }
-          if (!resource.enabled || resource.demanded) {
+          if (!resource2.enabled || resource2.demanded) {
             continue;
           }
           const keepRatio = calculateConsumeKeepRatio(
             consumeRatio,
-            resource,
+            resource2,
             input.storageShift,
             input.hungryRace
           );
           if (keepRatio === null) {
             continue;
           }
-          let allowedConsume = consumeAdjustments[resource.id] ?? 0;
+          let allowedConsume = consumeAdjustments[resource2.id] ?? 0;
           remaining += allowedConsume;
-          if (resource.isCraftable) {
-            if (resource.currentQuantity > resource.storageRequired * input.storageShift && resource.craftableMaximum !== null) {
-              const maxConsume = Math.floor(resource.craftableMaximum);
+          if (resource2.isCraftable) {
+            if (resource2.currentQuantity > resource2.storageRequired * input.storageShift && resource2.craftableMaximum !== null) {
+              const maxConsume = Math.floor(resource2.craftableMaximum);
               allowedConsume = Math.max(0, allowedConsume, maxConsume);
             }
           } else {
-            const rawMaximum = resource.ratioMaximums[ratioIndex];
-            if (resource.storageRatio > keepRatio + 0.01 && rawMaximum !== null && rawMaximum !== void 0) {
+            const rawMaximum = resource2.ratioMaximums[ratioIndex];
+            if (resource2.storageRatio > keepRatio + 0.01 && rawMaximum !== null && rawMaximum !== void 0) {
               allowedConsume = Math.max(1, allowedConsume, Math.ceil(rawMaximum));
-            } else if (resource.storageRatio > keepRatio && rawMaximum !== null && rawMaximum !== void 0) {
+            } else if (resource2.storageRatio > keepRatio && rawMaximum !== null && rawMaximum !== void 0) {
               allowedConsume = Math.max(
                 0,
                 allowedConsume,
                 Math.floor(rawMaximum)
               );
-            } else if (resource.storageRatio >= 0.999 && keepRatio >= 1 && rawMaximum !== null && rawMaximum !== void 0) {
+            } else if (resource2.storageRatio >= 0.999 && keepRatio >= 1 && rawMaximum !== null && rawMaximum !== void 0) {
               allowedConsume = Math.max(
                 0,
                 allowedConsume,
@@ -26796,8 +26796,8 @@
               );
             }
           }
-          consumeAdjustments[resource.id] = Math.min(remaining, allowedConsume);
-          remaining -= consumeAdjustments[resource.id] ?? 0;
+          consumeAdjustments[resource2.id] = Math.min(remaining, allowedConsume);
+          remaining -= consumeAdjustments[resource2.id] ?? 0;
         }
       }
     }
@@ -26856,8 +26856,8 @@
     }
     return list;
   }
-  function readResourceId(resource, path) {
-    const id = resource["id"];
+  function readResourceId(resource2, path) {
+    const id = resource2["id"];
     if (typeof id !== "string") {
       throw new TypeError(`${path}.id must be a string`);
     }
@@ -27026,7 +27026,7 @@
           );
         }
         const uniqueIds = Object.keys(
-          Object.fromEntries(resources2.map((resource) => [resource.id, 0]))
+          Object.fromEntries(resources2.map((resource2) => [resource2.id, 0]))
         );
         const current = uniqueIds.map(
           (id) => Object.freeze({
@@ -27376,19 +27376,19 @@
               useful: false
             });
           }
-          const resource = requireRecord(
+          const resource2 = requireRecord(
             production["resource"],
             `${path}.resource`
           );
-          resourcesById.set(id, resource);
+          resourcesById.set(id, resource2);
           return Object.freeze({
             id,
             unlocked,
             enabled,
             weighting,
             priority: requireNumber(production["priority"], `${path}.priority`),
-            demanded: callBoolean11(resource, "isDemanded", `${path}.resource`),
-            useful: callBoolean11(resource, "isUseful", `${path}.resource`)
+            demanded: callBoolean11(resource2, "isDemanded", `${path}.resource`),
+            useful: callBoolean11(resource2, "isUseful", `${path}.resource`)
           });
         });
         session = Object.freeze({ resourcesById });
@@ -27418,10 +27418,10 @@
             );
           }
           seen.add(candidate.productionId);
-          const resource = activeSession.resourcesById.get(
+          const resource2 = activeSession.resourcesById.get(
             candidate.productionId
           );
-          if (resource === void 0) {
+          if (resource2 === void 0) {
             throw new TypeError(
               `unknown replicator metric id ${candidate.productionId}`
             );
@@ -27435,18 +27435,18 @@
             });
           }
           const currentQuantity = requireNonNegative(
-            resource["currentQuantity"],
+            resource2["currentQuantity"],
             `resources.${candidate.productionId}.currentQuantity`
           );
           const atomicMass = priorityPlan.scoreMode === "mass" ? requirePositive(
-            resource["atomicMass"],
+            resource2["atomicMass"],
             `resources.${candidate.productionId}.atomicMass`
           ) : 1;
           return Object.freeze({
             productionId: candidate.productionId,
             currentQuantity,
             atomicMass,
-            exotic: priorityPlan.scoreMode === "mass" && (resource === allResources?.["Elerium"] || resource === allResources?.["Infernite"])
+            exotic: priorityPlan.scoreMode === "mass" && (resource2 === allResources?.["Elerium"] || resource2 === allResources?.["Infernite"])
           });
         });
         return Object.freeze(metrics);
@@ -27786,8 +27786,8 @@
       `${path}.${name}()`
     );
   }
-  function readResourceId2(resource, path) {
-    const id = resource["id"];
+  function readResourceId2(resource2, path) {
+    const id = resource2["id"];
     if (typeof id !== "string" || id.length === 0) {
       throw new TypeError(`${path}.id must be a non-empty string`);
     }
@@ -27913,32 +27913,32 @@
           return null;
         }
         const path = `MarketManager.priorityList[${index}]`;
-        const resource = requireRecord(session.priorityList[index], path);
-        const resourceId3 = readResourceId2(resource, path);
-        const flags = requireRecord(resource["is"], `${path}.is`);
+        const resource2 = requireRecord(session.priorityList[index], path);
+        const resourceId3 = readResourceId2(resource2, path);
+        const flags = requireRecord(resource2["is"], `${path}.is`);
         let eligible = Boolean(flags["tradable"]);
         if (eligible) {
-          eligible = callBoolean12(resource, "isUnlocked", path);
+          eligible = callBoolean12(resource2, "isUnlocked", path);
         }
         if (eligible) {
           eligible = callBoolean12(
             session.manager,
             "isBuySellUnlocked",
             "MarketManager",
-            resource
+            resource2
           );
         }
-        const candidate = { index, resourceId: resourceId3, resource, eligible };
+        const candidate = { index, resourceId: resourceId3, resource: resource2, eligible };
         session.lastCandidate = candidate;
-        if (!eligible || !resource["autoSellEnabled"]) {
+        if (!eligible || !resource2["autoSellEnabled"]) {
           return emptySell(candidate, ignoreSellRatio);
         }
         const storageRatio = requireNumber(
-          resource["storageRatio"],
+          resource2["storageRatio"],
           `${path}.storageRatio`
         );
         const autoSellRatio = requireNumber(
-          resource["autoSellRatio"],
+          resource2["autoSellRatio"],
           `${path}.autoSellRatio`
         );
         if (!ignoreSellRatio && storageRatio < autoSellRatio) {
@@ -27958,11 +27958,11 @@
           "resources.Money.currentQuantity"
         );
         const currentQuantity = requireNumber(
-          resource["currentQuantity"],
+          resource2["currentQuantity"],
           `${path}.currentQuantity`
         );
         const maxQuantity = requireNumber(
-          resource["maxQuantity"],
+          resource2["maxQuantity"],
           `${path}.maxQuantity`
         );
         const usesIncome = storageRatio <= autoSellRatio;
@@ -27984,11 +27984,11 @@
             session.manager,
             "getUnitSellPrice",
             "MarketManager",
-            resource
+            resource2
           ),
           currentQuantity,
           maxQuantity,
-          income: usesIncome ? requireNumber(resource["income"], `${path}.income`) : 0,
+          income: usesIncome ? requireNumber(resource2["income"], `${path}.income`) : 0,
           ticksPerSecond: ticks,
           maximumMultiplier
         });
@@ -27998,17 +27998,17 @@
           throw new Error("market buy must follow its sell candidate");
         }
         const candidate = session.lastCandidate;
-        const resource = candidate.resource;
-        if (!candidate.eligible || resource["autoBuyEnabled"] !== true) {
+        const resource2 = candidate.resource;
+        if (!candidate.eligible || resource2["autoBuyEnabled"] !== true) {
           return emptyBuy(candidate);
         }
         const path = `MarketManager.priorityList[${index}]`;
         const storageRatio = requireNumber(
-          resource["storageRatio"],
+          resource2["storageRatio"],
           `${path}.storageRatio`
         );
         const autoBuyRatio = requireNumber(
-          resource["autoBuyRatio"],
+          resource2["autoBuyRatio"],
           `${path}.autoBuyRatio`
         );
         if (storageRatio >= autoBuyRatio) {
@@ -28053,14 +28053,14 @@
             session.manager,
             "getUnitBuyPrice",
             "MarketManager",
-            resource
+            resource2
           ),
           currentQuantity: requireNumber(
-            resource["currentQuantity"],
+            resource2["currentQuantity"],
             `${path}.currentQuantity`
           ),
           maxQuantity: requireNumber(
-            resource["maxQuantity"],
+            resource2["maxQuantity"],
             `${path}.maxQuantity`
           ),
           maximumMultiplier
@@ -28109,9 +28109,9 @@
         );
         const list = readPriorityList(manager);
         const raw = list[decision2.index];
-        const resource = typeof raw === "object" && raw !== null ? raw : null;
-        const actualId = resource !== null && typeof resource["id"] === "string" ? resource["id"] : null;
-        if (resource === null || actualId !== decision2.resourceId) {
+        const resource2 = typeof raw === "object" && raw !== null ? raw : null;
+        const actualId = resource2 !== null && typeof resource2["id"] === "string" ? resource2["id"] : null;
+        if (resource2 === null || actualId !== decision2.resourceId) {
           return stale("stale-market-resource", "market priority list changed", {
             index: decision2.index,
             expectedResourceId: decision2.resourceId,
@@ -28125,7 +28125,7 @@
           "resources.Money.currentQuantity"
         );
         const actualResource = requireNumber(
-          resource["currentQuantity"],
+          resource2["currentQuantity"],
           `resources.${decision2.resourceId}.currentQuantity`
         );
         const priceMethod = decision2.side === "sell" ? "getUnitSellPrice" : "getUnitBuyPrice";
@@ -28133,7 +28133,7 @@
           manager,
           priceMethod,
           "MarketManager",
-          resource
+          resource2
         );
         if (actualMoney !== decision2.expectedMoneyCurrent || actualResource !== decision2.expectedResourceCurrent || actualPrice !== decision2.expectedUnitPrice) {
           return stale("stale-market-state", "market inputs changed", {
@@ -28146,7 +28146,7 @@
         );
         Reflect.apply(setMultiplier, manager, [decision2.multiplier]);
         for (let index = 0; index < decision2.repetitions; index++) {
-          Reflect.apply(trade, manager, [resource]);
+          Reflect.apply(trade, manager, [resource2]);
         }
         return SUCCEEDED2;
       }
@@ -28177,22 +28177,22 @@
     if (observation.useful) {
       return { maximum, adjusted: [] };
     }
-    const resource = mapValue(
+    const resource2 = mapValue(
       resources2,
       observation.resourceId,
       `power resource ${observation.resourceId}`
     );
     const next = Math.min(
       maximum,
-      calculateBusyWorkers(observation, current, resource.incomeAdjusted)
+      calculateBusyWorkers(observation, current, resource2.incomeAdjusted)
     );
     return {
       maximum: next,
       adjusted: next === current ? [] : [observation.resourceId]
     };
   }
-  function applySmartRule(building, maximum, current, savingPower, availablePower, resources2) {
-    const rule = building.rule;
+  function applySmartRule(building2, maximum, current, savingPower, availablePower, resources2) {
+    const rule = building2.rule;
     if (savingPower) {
       switch (rule.kind) {
         case "belt-space-station": {
@@ -28214,7 +28214,7 @@
         case "lake-cooling-tower":
           if (rule.harborCount > 0 && // The caller supplies the current available-power cap as maximum.
           maximum > 0) {
-            const needed = building.powered * maximum + Number(
+            const needed = building2.powered * maximum + Number(
               (500 * 0.92 ** maximum * (rule.electromagneticField ? 1.5 : 1)).toFixed(2)
             ) * Math.min(2, rule.harborCount);
             if (availablePower < needed) {
@@ -28223,7 +28223,7 @@
           }
           break;
         case "lake-harbor":
-          if (maximum === 1 && building.count > 1) {
+          if (maximum === 1 && building2.count > 1) {
             maximum = 0;
           }
           break;
@@ -28254,7 +28254,7 @@
         }
         break;
       case "ascension-trigger":
-        if (building.powered > 0 && (!rule.pillarFinished || rule.prestigeType !== "ascension")) {
+        if (building2.powered > 0 && (!rule.pillarFinished || rule.prestigeType !== "ascension")) {
           maximum = 0;
         }
         break;
@@ -28279,10 +28279,10 @@
         }
         break;
       case "mill":
-        if (building.powered !== 0 && rule.foodStorageRatio < 0.7 && rule.foodWorkers > 0) {
+        if (building2.powered !== 0 && rule.foodStorageRatio < 0.7 && rule.foodWorkers > 0) {
           maximum = Math.min(
             maximum,
-            current - (rule.sampledPower - 5) / -building.powered
+            current - (rule.sampledPower - 5) / -building2.powered
           );
         }
         break;
@@ -28328,14 +28328,14 @@
         if (rule.observations.every((entry) => !entry.useful)) {
           let cap = 0;
           for (const observation of rule.observations) {
-            const resource = mapValue(
+            const resource2 = mapValue(
               resources2,
               observation.resourceId,
               `power resource ${observation.resourceId}`
             );
             cap = Math.max(
               cap,
-              calculateBusyWorkers(observation, current, resource.incomeAdjusted)
+              calculateBusyWorkers(observation, current, resource2.incomeAdjusted)
             );
           }
           maximum = Math.min(maximum, cap);
@@ -28369,14 +28369,14 @@
         } else if (rule.observations.every((entry) => !entry.useful)) {
           let cap = 0;
           for (const observation of rule.observations) {
-            const resource = mapValue(
+            const resource2 = mapValue(
               resources2,
               observation.resourceId,
               `power resource ${observation.resourceId}`
             );
             cap = Math.max(
               cap,
-              calculateBusyWorkers(observation, current, resource.incomeAdjusted)
+              calculateBusyWorkers(observation, current, resource2.incomeAdjusted)
             );
           }
           maximum = Math.min(maximum, cap);
@@ -28389,14 +28389,14 @@
         if (rule.observations.every((entry) => !entry.useful)) {
           let cap = 0;
           for (const observation of rule.observations) {
-            const resource = mapValue(
+            const resource2 = mapValue(
               resources2,
               observation.resourceId,
               `power resource ${observation.resourceId}`
             );
             cap = Math.max(
               cap,
-              calculateBusyWorkers(observation, current, resource.incomeAdjusted)
+              calculateBusyWorkers(observation, current, resource2.incomeAdjusted)
             );
           }
           maximum = Math.min(maximum, cap);
@@ -28519,23 +28519,23 @@
       )
     });
   }
-  function appendRateOperation(operations, resource, value) {
+  function appendRateOperation(operations, resource2, value) {
     operations.push({
       kind: "set-resource-rate",
-      resourceId: resource.input.id,
-      expected: resource.rate,
+      resourceId: resource2.input.id,
+      expected: resource2.rate,
       value
     });
-    resource.rate = value;
+    resource2.rate = value;
   }
-  function appendIncomeAdjusted(operations, resource) {
+  function appendIncomeAdjusted(operations, resource2) {
     operations.push({
       kind: "set-income-adjusted",
-      resourceId: resource.input.id,
-      expected: resource.incomeAdjusted,
+      resourceId: resource2.input.id,
+      expected: resource2.incomeAdjusted,
       value: true
     });
-    resource.incomeAdjusted = true;
+    resource2.incomeAdjusted = true;
   }
   function planPowerCycle(input, state2) {
     if (!input.powerUnlocked || input.buildings.length === 0) {
@@ -28543,18 +28543,18 @@
     }
     const operations = [];
     const resources2 = /* @__PURE__ */ new Map();
-    for (const resource of input.resources) {
-      if (resources2.has(resource.id)) {
-        throw new TypeError(`duplicate power resource ${resource.id}`);
+    for (const resource2 of input.resources) {
+      if (resources2.has(resource2.id)) {
+        throw new TypeError(`duplicate power resource ${resource2.id}`);
       }
-      resources2.set(resource.id, {
-        input: resource,
-        rate: resource.rateOfChange,
-        incomeAdjusted: resource.incomeAdjusted
+      resources2.set(resource2.id, {
+        input: resource2,
+        rate: resource2.rateOfChange,
+        incomeAdjusted: resource2.incomeAdjusted
       });
     }
     const buildingById = new Map(
-      input.buildings.map((building) => [building.id, building])
+      input.buildings.map((building2) => [building2.id, building2])
     );
     if (buildingById.size !== input.buildings.length) {
       throw new TypeError("duplicate power building id");
@@ -28573,28 +28573,28 @@
     );
     let availablePower = input.powerCurrent;
     const missingProducer = {};
-    for (const building of input.buildings) {
-      availablePower += building.powered * building.stateOn;
-      for (const consumption of building.consumptions) {
-        const resource = mapValue(
+    for (const building2 of input.buildings) {
+      availablePower += building2.powered * building2.stateOn;
+      for (const consumption of building2.consumptions) {
+        const resource2 = mapValue(
           resources2,
           consumption.resourceId,
           `power resource ${consumption.resourceId}`
         );
-        const value = building.rule.kind === "belt-space-station" && resource.input.supportKind === "support" && resource.input.id === "Belt_Support" ? resource.rate - resource.input.maxQuantity : resource.rate + consumption.fuelRate * building.stateOn;
-        appendRateOperation(operations, resource, value);
-        if (resource.input.supportKind !== "none" && consumption.rate < 0) {
-          missingProducer[resource.input.id] = (missingProducer[resource.input.id] ?? 0) + 1;
+        const value = building2.rule.kind === "belt-space-station" && resource2.input.supportKind === "support" && resource2.input.id === "Belt_Support" ? resource2.rate - resource2.input.maxQuantity : resource2.rate + consumption.fuelRate * building2.stateOn;
+        appendRateOperation(operations, resource2, value);
+        if (resource2.input.supportKind !== "none" && consumption.rate < 0) {
+          missingProducer[resource2.input.id] = (missingProducer[resource2.input.id] ?? 0) + 1;
         }
       }
     }
     let reservedPower = 0;
     const producerReserve = /* @__PURE__ */ new Map();
-    for (const building of input.buildings) {
-      if (building.produces.length === 0 || building.powered <= 0) {
+    for (const building2 of input.buildings) {
+      if (building2.produces.length === 0 || building2.powered <= 0) {
         continue;
       }
-      const consumed = building.produces.some(
+      const consumed = building2.produces.some(
         (resourceId3) => input.buildings.some(
           (candidate) => candidate.consumptions.some(
             (consumption) => consumption.resourceId === resourceId3 && consumption.rate > 0
@@ -28604,56 +28604,56 @@
       if (!consumed) {
         continue;
       }
-      const cap = input.settings.limitPowered ? Math.min(building.count, building.autoMaximum) : building.count;
-      const growth = building.produces.some(
+      const cap = input.settings.limitPowered ? Math.min(building2.count, building2.autoMaximum) : building2.count;
+      const growth = building2.produces.some(
         (resourceId3) => mapValue(resources2, resourceId3, `producer resource ${resourceId3}`).input.useful
       ) ? 1 : 0;
-      const reserve = building.powered * Math.min(cap, building.stateOn + growth);
-      producerReserve.set(building.binding, reserve);
+      const reserve = building2.powered * Math.min(cap, building2.stateOn + growth);
+      producerReserve.set(building2.binding, reserve);
       reservedPower += reserve;
     }
-    for (const building of input.buildings) {
-      let maximum = building.count;
-      const current = building.stateOn;
-      if (!input.settings.showGalactic && building.tab === "galaxy") {
+    for (const building2 of input.buildings) {
+      let maximum = building2.count;
+      const current = building2.stateOn;
+      if (!input.settings.showGalactic && building2.tab === "galaxy") {
         maximum = 0;
       }
       if (input.settings.limitPowered) {
-        maximum = Math.min(maximum, building.autoMaximum);
+        maximum = Math.min(maximum, building2.autoMaximum);
       }
-      if (building.singleState) {
+      if (building2.singleState) {
         maximum = Math.min(maximum, 1);
       }
-      reservedPower -= producerReserve.get(building.binding) ?? 0;
-      if (building.rule.kind === "neutron-citadel") {
+      reservedPower -= producerReserve.get(building2.binding) ?? 0;
+      if (building2.rule.kind === "neutron-citadel") {
         while (maximum > 0 && availablePower - reservedPower < getCitadelPowerConsumption(
           maximum,
-          building.rule.electromagneticField
+          building2.rule.electromagneticField
         )) {
           maximum--;
         }
-      } else if (building.powered > 0 && !building.ignorePositivePowerCap) {
+      } else if (building2.powered > 0 && !building2.ignorePositivePowerCap) {
         maximum = Math.min(
           maximum,
-          (availablePower - reservedPower) / building.powered
+          (availablePower - reservedPower) / building2.powered
         );
       }
-      if ((building.rule.kind === "ascension-trigger" || building.rule.kind === "terraformer") && availablePower < building.powered) {
+      if ((building2.rule.kind === "ascension-trigger" || building2.rule.kind === "terraformer") && availablePower < building2.powered) {
         operations.push({
           kind: "set-description",
-          buildingId: building.id,
-          expected: building.extraDescription,
+          buildingId: building2.id,
+          expected: building2.extraDescription,
           value: `Missing ${Math.ceil(
-            building.powered - availablePower
-          )} MW to power on<br>${building.extraDescription}`
+            building2.powered - availablePower
+          )} MW to power on<br>${building2.extraDescription}`
         });
       }
-      if (building.skipGroup !== "none") {
+      if (building2.skipGroup !== "none") {
         continue;
       }
-      if (building.smartCategory && building.smartEnabled) {
+      if (building2.smartCategory && building2.smartEnabled) {
         const result2 = applySmartRule(
-          building,
+          building2,
           maximum,
           current,
           input.powerCurrent <= input.powerMaximum || input.replicatorAvailable,
@@ -28667,25 +28667,25 @@
             mapValue(resources2, resourceId3, `power resource ${resourceId3}`)
           );
         }
-        if (input.settings.autoFleet && building.fleetMaximum !== null) {
-          maximum = Math.min(maximum, building.fleetMaximum);
+        if (input.settings.autoFleet && building2.fleetMaximum !== null) {
+          maximum = Math.min(maximum, building2.fleetMaximum);
         }
       }
       let description = operations.filter(
-        (operation2) => operation2.kind === "set-description" && operation2.buildingId === building.id
-      ).at(-1)?.value ?? building.extraDescription;
-      for (const consumption of building.consumptions) {
-        const resource = mapValue(
+        (operation2) => operation2.kind === "set-description" && operation2.buildingId === building2.id
+      ).at(-1)?.value ?? building2.extraDescription;
+      for (const consumption of building2.consumptions) {
+        const resource2 = mapValue(
           resources2,
           consumption.resourceId,
           `power resource ${consumption.resourceId}`
         );
         if (consumption.rate > 0) {
-          if (!resource.input.unlocked) {
+          if (!resource2.input.unlocked) {
             maximum = 0;
             break;
           }
-          if (resource.input.id === "Food") {
+          if (resource2.input.id === "Food") {
             if (input.fasting) {
               maximum = 0;
               break;
@@ -28693,90 +28693,90 @@
             if (input.banquetStateOn > 0) {
               continue;
             }
-            if (resource.input.storageRatio > 0.05 || input.hungryRace) {
+            if (resource2.input.storageRatio > 0.05 || input.hungryRace) {
               continue;
             }
-          } else if (current > 0 && resource.input.supportKind === "none" && (building.powered < 0 || resource.input.storageRatio >= 0.95) && resource.input.currentQuantity >= maximum * input.consumptionBalanceMinimum * consumption.rate) {
+          } else if (current > 0 && resource2.input.supportKind === "none" && (building2.powered < 0 || resource2.input.storageRatio >= 0.95) && resource2.input.currentQuantity >= maximum * input.consumptionBalanceMinimum * consumption.rate) {
             continue;
-          } else if (resource.input.supportKind === "tau-belt-support") {
+          } else if (resource2.input.supportKind === "tau-belt-support") {
             continue;
           }
-          let supported = resource.rate / consumption.rate;
-          if (resource.input.supportKind === "womlings-support") {
+          let supported = resource2.rate / consumption.rate;
+          if (resource2.input.supportKind === "womlings-support") {
             supported = Math.ceil(supported);
           }
           maximum = Math.min(maximum, supported);
-          if (missingProducer[resource.input.id]) {
-            const value = `Make sure all ${resource.input.title} producers are above consumers in buildings list!<br>${description}`;
+          if (missingProducer[resource2.input.id]) {
+            const value = `Make sure all ${resource2.input.title} producers are above consumers in buildings list!<br>${description}`;
             operations.push({
               kind: "set-description",
-              buildingId: building.id,
+              buildingId: building2.id,
               expected: description,
               value
             });
             description = value;
           }
-        } else if (missingProducer[resource.input.id] && consumption.rate < 0) {
-          missingProducer[resource.input.id]--;
+        } else if (missingProducer[resource2.input.id] && consumption.rate < 0) {
+          missingProducer[resource2.input.id]--;
         }
       }
-      if (building.powered < 0) {
+      if (building2.powered < 0) {
         maximum = Math.max(maximum, current - 1);
       }
       maximum = Math.max(0, Math.floor(maximum));
-      const oscillation = oscillations[building.binding] ?? (oscillations[building.binding] = {});
+      const oscillation = oscillations[building2.binding] ?? (oscillations[building2.binding] = {});
       maximum = debouncePower(maximum, current, oscillation);
-      const warningCap = warningCaps[building.binding];
+      const warningCap = warningCaps[building2.binding];
       if (warningCap !== void 0) {
         const ticks = warningCap.ticks - 1;
         if (ticks <= 0) {
-          delete warningCaps[building.binding];
+          delete warningCaps[building2.binding];
         } else {
-          warningCaps[building.binding] = { cap: warningCap.cap, ticks };
+          warningCaps[building2.binding] = { cap: warningCap.cap, ticks };
           maximum = Math.min(maximum, warningCap.cap);
         }
       }
       if (input.debug && maximum !== current) {
-        const consumption = building.consumptions.filter((entry) => entry.fuelRate > 0).map((entry) => {
-          const resource = mapValue(
+        const consumption = building2.consumptions.filter((entry) => entry.fuelRate > 0).map((entry) => {
+          const resource2 = mapValue(
             resources2,
             entry.resourceId,
             `power resource ${entry.resourceId}`
           );
-          return `${entry.resourceId}: income=${resource.rate.toFixed(
+          return `${entry.resourceId}: income=${resource2.rate.toFixed(
             2
-          )}, qty=${resource.input.currentQuantity.toFixed(
+          )}, qty=${resource2.input.currentQuantity.toFixed(
             0
           )}, perUnit=${entry.fuelRate.toFixed(2)}, reserveTo=${(maximum * input.consumptionBalanceMinimum * entry.rate).toFixed(0)}`;
         }).join(" | ");
         const delta = maximum - current;
         operations.push({
           kind: "log",
-          message: `[power] ${building.binding}: on ${current}→${maximum} (Δ${delta >= 0 ? "+" : ""}${delta}), powered=${building.powered}, availPower≈${availablePower.toFixed(
+          message: `[power] ${building2.binding}: on ${current}→${maximum} (Δ${delta >= 0 ? "+" : ""}${delta}), powered=${building2.powered}, availPower≈${availablePower.toFixed(
             1
           )}${reservedPower > 0 ? `, reserved≈${reservedPower.toFixed(1)}` : ""}${consumption ? " || " + consumption : ""}`
         });
       }
-      for (const consumption of building.consumptions) {
-        const resource = mapValue(
+      for (const consumption of building2.consumptions) {
+        const resource2 = mapValue(
           resources2,
           consumption.resourceId,
           `power resource ${consumption.resourceId}`
         );
-        const value = building.rule.kind === "belt-space-station" && resource.input.id === "Belt_Support" ? resource.rate + resource.input.maxQuantity : resource.rate - consumption.fuelRate * maximum;
-        appendRateOperation(operations, resource, value);
+        const value = building2.rule.kind === "belt-space-station" && resource2.input.id === "Belt_Support" ? resource2.rate + resource2.input.maxQuantity : resource2.rate - consumption.fuelRate * maximum;
+        appendRateOperation(operations, resource2, value);
       }
       operations.push({
         kind: "adjust-building",
-        buildingId: building.id,
-        binding: building.binding,
+        buildingId: building2.id,
+        binding: building2.binding,
         expectedStateOn: current,
         amount: maximum - current
       });
-      availablePower -= building.rule.kind === "neutron-citadel" ? getCitadelPowerConsumption(
+      availablePower -= building2.rule.kind === "neutron-citadel" ? getCitadelPowerConsumption(
         maximum,
-        building.rule.electromagneticField
-      ) : building.powered * maximum;
+        building2.rule.electromagneticField
+      ) : building2.powered * maximum;
     }
     const lakeSupport = resources2.get("Lake_Support")?.rate ?? 0;
     if (input.lake.enabled && lakeSupport > 0) {
@@ -28823,7 +28823,7 @@
     if (input.spire.enabled && spireSupport > 0) {
       const spire = input.spire;
       const buildAllowed = spire.autoBuild && !(spire.autoMech && spire.mechActive) && !(spire.autoPrestige && spire.prestigeType === "demonic" && spire.prestigeDemonicFloor - spire.towerCount <= spire.mechBay.count);
-      const canBuild = (building, checkSmart = false) => buildAllowed && building.autoBuildable && spire.moneyMaximum >= building.moneyCost && (!checkSmart || building.smartManaged);
+      const canBuild = (building2, checkSmart = false) => buildAllowed && building2.autoBuildable && spire.moneyMaximum >= building2.moneyCost && (!checkSmart || building2.smartManaged);
       const maximumBay = Math.min(spire.mechBay.count, spireSupport);
       const currentPort = spire.port.count;
       const currentCamp = spire.camp.count;
@@ -28853,22 +28853,22 @@
       });
       let assignStorage = spire.mechQueued || spire.purifierQueued;
       const addSpireAdjustments = (mech, port, camp) => {
-        for (const [building, target] of [
+        for (const [building2, target] of [
           [spire.mechBay, mech],
           [spire.port, port],
           [spire.camp, camp]
         ]) {
           const source2 = mapValue(
             buildingById,
-            building.buildingId,
-            `spire building ${building.buildingId}`
+            building2.buildingId,
+            `spire building ${building2.buildingId}`
           );
           operations.push({
             kind: "adjust-building",
             buildingId: source2.id,
             binding: source2.binding,
-            expectedStateOn: building.stateOn,
-            amount: target - building.stateOn
+            expectedStateOn: building2.stateOn,
+            amount: target - building2.stateOn
           });
         }
       };
@@ -28914,7 +28914,7 @@
         kind: "apply-power-cycle",
         expectedBuildings: Object.freeze(
           input.buildings.map(
-            (building) => Object.freeze({ id: building.id, binding: building.binding })
+            (building2) => Object.freeze({ id: building2.id, binding: building2.binding })
           )
         ),
         operations: Object.freeze(operations)
@@ -29053,14 +29053,14 @@
   function finiteProperty(record, name, path) {
     return requireNumber(record[name], `${path}.${name}`);
   }
-  function buildingId(building, path) {
-    return readString2(building["id"], `${path}.id`);
+  function buildingId(building2, path) {
+    return readString2(building2["id"], `${path}.id`);
   }
-  function buildingBinding(building, path) {
-    return readString2(building["_vueBinding"], `${path}._vueBinding`);
+  function buildingBinding(building2, path) {
+    return readString2(building2["_vueBinding"], `${path}._vueBinding`);
   }
-  function resourceId(resource, path) {
-    return readString2(resource["id"], `${path}.id`);
+  function resourceId(resource2, path) {
+    return readString2(resource2["id"], `${path}.id`);
   }
   function identity(catalog, name, value) {
     return catalog[name] === value;
@@ -29086,24 +29086,24 @@
     const parent = recordAt(root, segments.slice(0, -1), path);
     return requireNumber(parent[final], `${path}.${segments.join(".")}`);
   }
-  function readResourceSnapshot(resource, path, namedResources, dependencies) {
-    const id = resourceId(resource, path);
-    const title = resource["title"];
+  function readResourceSnapshot(resource2, path, namedResources, dependencies) {
+    const id = resourceId(resource2, path);
+    const title = resource2["title"];
     if (typeof title !== "string") {
       throw new TypeError(`${path}.title must be a string`);
     }
-    const supportKind = identity(namedResources, "Womlings_Support", resource) ? "womlings-support" : identity(namedResources, "Tau_Belt_Support", resource) ? "tau-belt-support" : dependencies.isSupportResource(resource) ? "support" : "none";
+    const supportKind = identity(namedResources, "Womlings_Support", resource2) ? "womlings-support" : identity(namedResources, "Tau_Belt_Support", resource2) ? "tau-belt-support" : dependencies.isSupportResource(resource2) ? "support" : "none";
     return Object.freeze({
       id,
       title,
-      currentQuantity: finiteProperty(resource, "currentQuantity", path),
-      maxQuantity: finiteProperty(resource, "maxQuantity", path),
-      rateOfChange: finiteProperty(resource, "rateOfChange", path),
-      storageRatio: finiteProperty(resource, "storageRatio", path),
-      unlocked: callBoolean13(resource, "isUnlocked", path),
-      useful: callBoolean13(resource, "isUseful", path),
-      income: finiteProperty(resource, "income", path),
-      incomeAdjusted: Boolean(resource["incomeAdusted"]),
+      currentQuantity: finiteProperty(resource2, "currentQuantity", path),
+      maxQuantity: finiteProperty(resource2, "maxQuantity", path),
+      rateOfChange: finiteProperty(resource2, "rateOfChange", path),
+      storageRatio: finiteProperty(resource2, "storageRatio", path),
+      unlocked: callBoolean13(resource2, "isUnlocked", path),
+      useful: callBoolean13(resource2, "isUseful", path),
+      income: finiteProperty(resource2, "income", path),
+      incomeAdjusted: Boolean(resource2["incomeAdusted"]),
       supportKind
     });
   }
@@ -29114,11 +29114,11 @@
       inputs,
       records,
       register(value, path) {
-        const resource = requireRecord(value, path);
-        const id = resourceId(resource, path);
+        const resource2 = requireRecord(value, path);
+        const id = resourceId(resource2, path);
         const existing = records.get(id);
         if (existing !== void 0) {
-          if (existing !== resource) {
+          if (existing !== resource2) {
             throw new TypeError(`power resource id ${id} changed identity`);
           }
           const input2 = inputs.get(id);
@@ -29128,19 +29128,19 @@
           return input2;
         }
         const input = readResourceSnapshot(
-          resource,
+          resource2,
           path,
           namedResources,
           dependencies
         );
-        records.set(id, resource);
+        records.set(id, resource2);
         inputs.set(id, input);
         return input;
       }
     };
   }
-  function busyObservation(registry, resource, path, source2, locArg) {
-    const record = requireRecord(resource, path);
+  function busyObservation(registry, resource2, path, source2, locArg) {
+    const record = requireRecord(resource2, path);
     const input = registry.register(record, path);
     const production = locArg === void 0 ? callNumber9(record, "getProduction", path, source2) : callNumber9(record, "getProduction", path, source2, locArg);
     return Object.freeze({
@@ -29179,19 +29179,19 @@
       )
     );
   }
-  function readBuildingRule(building, path, catalogs, registry, dependencies) {
+  function readBuildingRule(building2, path, catalogs, registry, dependencies) {
     const { game: game2, settings: settings2, resources: resources2, buildings: buildings2, jobs: jobs2, mech, war, poly: poly2 } = catalogs;
     const global = requireRecord(game2["global"], "game.global");
     const race = requireRecord(global["race"], "game.global.race");
     const tech = requireRecord(global["tech"], "game.global.tech");
-    const stateOn = finiteProperty(building, "stateOnCount", path);
-    if (identity(buildings2, "NeutronCitadel", building)) {
+    const stateOn = finiteProperty(building2, "stateOnCount", path);
+    if (identity(buildings2, "NeutronCitadel", building2)) {
       return Object.freeze({
         kind: "neutron-citadel",
         electromagneticField: Boolean(race["emfield"])
       });
     }
-    if (identity(buildings2, "BeltSpaceStation", building)) {
+    if (identity(buildings2, "BeltSpaceStation", building2)) {
       const breakdown = recordAt(game2, ["breakdown", "c"], "game");
       const eleriumBreakdown = requireRecord(
         breakdown["Elerium"] ?? {},
@@ -29239,7 +29239,7 @@
       ["Mine", "Miner"],
       ["CoalMine", "CoalMiner"]
     ]) {
-      if (identity(buildings2, buildingName, building)) {
+      if (identity(buildings2, buildingName, building2)) {
         return Object.freeze({
           kind: "job-dependent",
           jobCount: finiteProperty(
@@ -29250,7 +29250,7 @@
         });
       }
     }
-    if (identity(buildings2, "LakeCoolingTower", building)) {
+    if (identity(buildings2, "LakeCoolingTower", building2)) {
       return Object.freeze({
         kind: "lake-cooling-tower",
         harborCount: finiteProperty(
@@ -29261,7 +29261,7 @@
         electromagneticField: Boolean(race["emfield"])
       });
     }
-    if (identity(buildings2, "LakeHarbor", building)) {
+    if (identity(buildings2, "LakeHarbor", building2)) {
       return Object.freeze({ kind: "lake-harbor" });
     }
     const busyRules = [
@@ -29269,15 +29269,15 @@
       ["GasMoonOilExtractor", "Oil", "space_gas_moon_oil_extractor_title"]
     ];
     for (const [buildingName, resourceName, source2] of busyRules) {
-      if (identity(buildings2, buildingName, building)) {
-        const resource = namedRecord(resources2, resourceName, "resources");
+      if (identity(buildings2, buildingName, building2)) {
+        const resource2 = namedRecord(resources2, resourceName, "resources");
         return Object.freeze({
           kind: "busy-resource",
           active: true,
           savingOnly: true,
           observation: busyObservation(
             registry,
-            resource,
+            resource2,
             `resources.${resourceName}`,
             source2
           )
@@ -29290,10 +29290,10 @@
       ["KuiperNeutronium", "Neutronium"],
       ["KuiperElerium", "Elerium"]
     ]) {
-      if (identity(buildings2, buildingName, building)) {
-        const resource = namedRecord(resources2, resourceName, "resources");
+      if (identity(buildings2, buildingName, building2)) {
+        const resource2 = namedRecord(resources2, resourceName, "resources");
         const title = registry.register(
-          resource,
+          resource2,
           `resources.${resourceName}`
         ).title;
         return Object.freeze({
@@ -29302,7 +29302,7 @@
           savingOnly: true,
           observation: busyObservation(
             registry,
-            resource,
+            resource2,
             `resources.${resourceName}`,
             "space_kuiper_mine",
             [title]
@@ -29314,8 +29314,8 @@
       ["BeltIridiumShip", "Iridium"],
       ["BeltIronShip", "Iron"]
     ]) {
-      if (identity(buildings2, buildingName, building)) {
-        const resource = namedRecord(resources2, resourceName, "resources");
+      if (identity(buildings2, buildingName, building2)) {
+        const resource2 = namedRecord(resources2, resourceName, "resources");
         const elerium = namedRecord(resources2, "Elerium", "resources");
         return Object.freeze({
           kind: "busy-resource",
@@ -29323,7 +29323,7 @@
           savingOnly: false,
           observation: busyObservation(
             registry,
-            resource,
+            resource2,
             `resources.${resourceName}`,
             "job_space_miner"
           )
@@ -29340,7 +29340,7 @@
       ["AsphodelHarvester", "Asphodel_Powder", "eden_asphodel_harvester_title"]
     ];
     for (const [buildingName, resourceName, source2] of ordinaryBusyRules) {
-      if (identity(buildings2, buildingName, building)) {
+      if (identity(buildings2, buildingName, building2)) {
         return Object.freeze({
           kind: "busy-resource",
           active: true,
@@ -29354,7 +29354,7 @@
         });
       }
     }
-    if (identity(buildings2, "TritonLander", building)) {
+    if (identity(buildings2, "TritonLander", building2)) {
       return Object.freeze({
         kind: "triton-lander",
         fobOn: finiteProperty(
@@ -29374,20 +29374,20 @@
         )
       });
     }
-    if (identity(buildings2, "SiriusAscensionTrigger", building)) {
+    if (identity(buildings2, "SiriusAscensionTrigger", building2)) {
       return Object.freeze({
         kind: "ascension-trigger",
         pillarFinished: dependencies.isPillarFinished(),
         prestigeType: readStringSetting(settings2, "prestigeType")
       });
     }
-    if (identity(buildings2, "RedAtmoTerraformer", building)) {
+    if (identity(buildings2, "RedAtmoTerraformer", building2)) {
       return Object.freeze({
         kind: "terraformer",
         prestigeType: readStringSetting(settings2, "prestigeType")
       });
     }
-    if (identity(buildings2, "BadlandsAttractor", building)) {
+    if (identity(buildings2, "BadlandsAttractor", building2)) {
       return Object.freeze({
         kind: "badlands-attractor",
         threat: readNestedNumber(
@@ -29400,7 +29400,7 @@
         hellAssigned: finiteProperty(war, "hellAssigned", "WarManager")
       });
     }
-    if (identity(buildings2, "TouristCenter", building)) {
+    if (identity(buildings2, "TouristCenter", building2)) {
       const money = namedRecord(resources2, "Money", "resources");
       return Object.freeze({
         kind: "tourist-center",
@@ -29419,7 +29419,7 @@
         )
       });
     }
-    if (identity(buildings2, "Mill", building)) {
+    if (identity(buildings2, "Mill", building2)) {
       return Object.freeze({
         kind: "mill",
         foodStorageRatio: finiteProperty(
@@ -29443,7 +29443,7 @@
         )
       });
     }
-    if (identity(buildings2, "ChthonianMineLayer", building)) {
+    if (identity(buildings2, "ChthonianMineLayer", building2)) {
       const regions = dependencies.getGalaxyRegions();
       if (!Array.isArray(regions)) {
         throw new TypeError("galaxy regions must be an array");
@@ -29479,7 +29479,7 @@
         rating: callNumber9(actions, "rating", "gxy_chthonian.minelayer.ship")
       });
     }
-    if (identity(buildings2, "RuinsGuardPost", building)) {
+    if (identity(buildings2, "RuinsGuardPost", building2)) {
       const armyRating = requireNumber(
         Reflect.apply(
           requireFunction(game2["armyRating"], "game.armyRating"),
@@ -29508,7 +29508,7 @@
         gateRating: suppression("gate")
       });
     }
-    if (identity(buildings2, "SpireWaygate", building)) {
+    if (identity(buildings2, "SpireWaygate", building2)) {
       const prestigeType = readStringSetting(settings2, "prestigeType");
       const universeAffix = Reflect.apply(
         requireFunction(poly2["universeAffix"], "poly.universeAffix"),
@@ -29535,7 +29535,7 @@
         ) >= readNumberSetting(settings2, "prestigeDemonicFloor")
       });
     }
-    if (identity(buildings2, "ScoutShip", building) || identity(buildings2, "CorvetteShip", building)) {
+    if (identity(buildings2, "ScoutShip", building2) || identity(buildings2, "CorvetteShip", building2)) {
       return Object.freeze({
         kind: "early-galaxy-ship",
         piracyUnlocked: Boolean(tech["piracy"]),
@@ -29546,7 +29546,7 @@
         )
       });
     }
-    if (identity(buildings2, "Alien2ArmedMiner", building)) {
+    if (identity(buildings2, "Alien2ArmedMiner", building2)) {
       return Object.freeze({
         kind: "armed-miner",
         observations: Object.freeze(
@@ -29565,8 +29565,8 @@
         )
       });
     }
-    if (identity(buildings2, "BologniumShip", building)) {
-      const resource = namedRecord(resources2, "Bolognium", "resources");
+    if (identity(buildings2, "BologniumShip", building2)) {
+      const resource2 = namedRecord(resources2, "Bolognium", "resources");
       return Object.freeze({
         kind: "bolognium-ship",
         missionBuildable: callBoolean13(
@@ -29591,13 +29591,13 @@
         ),
         observation: busyObservation(
           registry,
-          resource,
+          resource2,
           "resources.Bolognium",
           "galaxy_bolognium_ship"
         )
       });
     }
-    if (identity(buildings2, "ChthonianRaider", building)) {
+    if (identity(buildings2, "ChthonianRaider", building2)) {
       const observations = [
         ["Vitreloy", "galaxy_raider"],
         ["Polymer", "galaxy_raider"],
@@ -29621,7 +29621,7 @@
         observations: Object.freeze(observations)
       });
     }
-    if (identity(buildings2, "NebulaHarvester", building)) {
+    if (identity(buildings2, "NebulaHarvester", building2)) {
       const observations = [
         ["Deuterium", "interstellar_harvester_title"],
         ["Helium_3", "interstellar_harvester_title"]
@@ -29638,7 +29638,7 @@
         observations: Object.freeze(observations)
       });
     }
-    if (identity(buildings2, "TauRedWomlingFarm", building)) {
+    if (identity(buildings2, "TauRedWomlingFarm", building2)) {
       return Object.freeze({
         kind: "womling-farm",
         supportMaximum: finiteProperty(
@@ -29649,12 +29649,12 @@
         cropPerFarm: (dependencies.haveTech("womling_pop") ? 16 : 12) + (dependencies.haveTech("womling_gene") ? 4 : 0)
       });
     }
-    if (identity(buildings2, "TauRedOverseer", building)) {
+    if (identity(buildings2, "TauRedOverseer", building2)) {
       return Object.freeze({
         kind: "womling-overseer",
         loyaltyBase: race["womling_friend"] ? 25 : race["womling_god"] ? 75 : 0,
         loyaltyPerBuilding: callNumber9(
-          requireRecord(building["definition"], `${path}.definition`),
+          requireRecord(building2["definition"], `${path}.definition`),
           "val",
           `${path}.definition`
         ),
@@ -29665,12 +29665,12 @@
         )
       });
     }
-    if (identity(buildings2, "TauRedWomlingFun", building)) {
+    if (identity(buildings2, "TauRedWomlingFun", building2)) {
       return Object.freeze({
         kind: "womling-fun",
         moraleBase: race["womling_friend"] ? 75 : race["womling_god"] ? 40 : race["womling_lord"] ? 30 : 0,
         moralePerBuilding: callNumber9(
-          requireRecord(building["definition"], `${path}.definition`),
+          requireRecord(building2["definition"], `${path}.definition`),
           "val",
           `${path}.definition`
         ),
@@ -29691,7 +29691,7 @@
         )
       });
     }
-    if (identity(buildings2, "TauGasWhalingStation", building)) {
+    if (identity(buildings2, "TauGasWhalingStation", building2)) {
       return Object.freeze({
         kind: "tau-whaling-station",
         supportMaximum: finiteProperty(
@@ -29711,7 +29711,7 @@
         )
       });
     }
-    if (identity(buildings2, "TauMiningPit", building)) {
+    if (identity(buildings2, "TauMiningPit", building2)) {
       return Object.freeze({
         kind: "tau-mining-pit",
         populationMaximum: finiteProperty(
@@ -29723,15 +29723,15 @@
     }
     return Object.freeze({ kind: "ordinary" });
   }
-  function readSpireBuilding(building, path) {
-    const cost = requireRecord(building["cost"], `${path}.cost`);
+  function readSpireBuilding(building2, path) {
+    const cost = requireRecord(building2["cost"], `${path}.cost`);
     return Object.freeze({
-      buildingId: buildingId(building, path),
-      count: finiteProperty(building, "count", path),
-      stateOn: finiteProperty(building, "stateOnCount", path),
-      autoMaximum: finiteProperty(building, "autoMax", path),
-      autoBuildable: callBoolean13(building, "isAutoBuildable", path),
-      smartManaged: callBoolean13(building, "isSmartManaged", path),
+      buildingId: buildingId(building2, path),
+      count: finiteProperty(building2, "count", path),
+      stateOn: finiteProperty(building2, "stateOnCount", path),
+      autoMaximum: finiteProperty(building2, "autoMax", path),
+      autoBuildable: callBoolean13(building2, "isAutoBuildable", path),
+      smartManaged: callBoolean13(building2, "isSmartManaged", path),
       moneyCost: requireNumber(cost["Money"] ?? 0, `${path}.cost.Money`),
       supplyCost: requireNumber(cost["Supply"] ?? 0, `${path}.cost.Supply`)
     });
@@ -29896,19 +29896,19 @@
         const seenBuildings = /* @__PURE__ */ new Map();
         const seenBindings = /* @__PURE__ */ new Set();
         const inputs = managedRecords.map(
-          (building, index) => {
+          (building2, index) => {
             const path = `BuildingManager state list[${index}]`;
-            const id = buildingId(building, path);
-            const binding = buildingBinding(building, path);
+            const id = buildingId(building2, path);
+            const binding = buildingBinding(building2, path);
             if (seenBuildings.has(id)) {
               throw new TypeError(`duplicate managed power building ${id}`);
             }
             if (seenBindings.has(binding)) {
               throw new TypeError(`duplicate managed power binding ${binding}`);
             }
-            seenBuildings.set(id, building);
+            seenBuildings.set(id, building2);
             seenBindings.add(binding);
-            const rawConsumptions = building["consumption"];
+            const rawConsumptions = building2["consumption"];
             if (!Array.isArray(rawConsumptions)) {
               throw new TypeError(`${path}.consumption must be an array`);
             }
@@ -29916,15 +29916,15 @@
               (value, consumptionIndex) => {
                 const consumptionPath = `${path}.consumption[${consumptionIndex}]`;
                 const consumption = requireRecord(value, consumptionPath);
-                const resource = registry.register(
+                const resource2 = registry.register(
                   consumption["resource"],
                   `${consumptionPath}.resource`
                 );
                 return Object.freeze({
-                  resourceId: resource.id,
+                  resourceId: resource2.id,
                   rate: finiteProperty(consumption, "rate", consumptionPath),
                   fuelRate: callNumber9(
-                    building,
+                    building2,
                     "getFuelRate",
                     path,
                     consumptionIndex
@@ -29932,18 +29932,18 @@
                 });
               }
             );
-            const rawProduces = building["produces"];
+            const rawProduces = building2["produces"];
             const produces = rawProduces === void 0 || rawProduces === null ? [] : Array.isArray(rawProduces) ? rawProduces.map(
-              (resource, resourceIndex) => registry.register(
-                resource,
+              (resource2, resourceIndex) => registry.register(
+                resource2,
                 `${path}.produces[${resourceIndex}]`
               ).id
             ) : (() => {
               throw new TypeError(`${path}.produces must be an array`);
             })();
-            const is = requireRecord(building["is"] ?? {}, `${path}.is`);
+            const is = requireRecord(building2["is"] ?? {}, `${path}.is`);
             const rule = readBuildingRule(
-              building,
+              building2,
               path,
               {
                 game: game2,
@@ -29960,28 +29960,28 @@
               dependencies
             );
             const fleetMaximum = readBooleanSetting(settings2, "autoFleet") && neededShips !== null && Object.prototype.hasOwnProperty.call(neededShips, id) ? requireNumber(neededShips[id], `FleetManager.neededShips.${id}`) : null;
-            const skipGroup = manageSpire && (identity(buildings2, "SpirePort", building) || identity(buildings2, "SpireBaseCamp", building) || identity(buildings2, "SpireMechBay", building)) ? "spire" : manageLake && (identity(buildings2, "LakeTransport", building) || identity(buildings2, "LakeBireme", building)) ? "lake" : "none";
+            const skipGroup = manageSpire && (identity(buildings2, "SpirePort", building2) || identity(buildings2, "SpireBaseCamp", building2) || identity(buildings2, "SpireMechBay", building2)) ? "spire" : manageLake && (identity(buildings2, "LakeTransport", building2) || identity(buildings2, "LakeBireme", building2)) ? "lake" : "none";
             return Object.freeze({
               index,
               id,
               binding,
-              count: finiteProperty(building, "count", path),
-              stateOn: finiteProperty(building, "stateOnCount", path),
-              powered: finiteProperty(building, "powered", path),
-              autoMaximum: finiteProperty(building, "autoMax", path),
-              tab: typeof building["_tab"] === "string" ? building["_tab"] : "",
+              count: finiteProperty(building2, "count", path),
+              stateOn: finiteProperty(building2, "stateOnCount", path),
+              powered: finiteProperty(building2, "powered", path),
+              autoMaximum: finiteProperty(building2, "autoMax", path),
+              tab: typeof building2["_tab"] === "string" ? building2["_tab"] : "",
               smartCategory: Boolean(is["smart"]),
-              smartEnabled: Boolean(building["autoStateSmart"]),
+              smartEnabled: Boolean(building2["autoStateSmart"]),
               ship: Boolean(is["ship"]),
-              singleState: identity(buildings2, "Banquet", building),
+              singleState: identity(buildings2, "Banquet", building2),
               ignorePositivePowerCap: identity(
                 buildings2,
                 "RuinsHellForge",
-                building
+                building2
               ),
               skipGroup,
               extraDescription: readOptionalString(
-                building["extraDescription"],
+                building2["extraDescription"],
                 `${path}.extraDescription`
               ),
               consumptions: Object.freeze(consumptions),
@@ -30096,7 +30096,7 @@
           resources: registry.records,
           ordered: Object.freeze(
             inputs.map(
-              (building) => Object.freeze({ id: building.id, binding: building.binding })
+              (building2) => Object.freeze({ id: building2.id, binding: building2.binding })
             )
           )
         });
@@ -30112,7 +30112,7 @@
           replicatorAvailable: finiteProperty(power, "currentQuantity", "resources.Power") > finiteProperty(power, "maxQuantity", "resources.Power") ? dependencies.haveTech("replicator") : false,
           fasting: Boolean(race["fasting"]),
           hungryRace: inputs.some(
-            (building) => building.rule.kind === "tourist-center" || building.consumptions.some(
+            (building2) => building2.rule.kind === "tourist-center" || building2.consumptions.some(
               (consumption) => consumption.resourceId === "Food"
             )
           ) ? dependencies.isHungryRace() : false,
@@ -30172,20 +30172,20 @@
             if (domId.length === 0 || buildingIds2[domId] === void 0) {
               return [];
             }
-            const building = requireRecord(
+            const building2 = requireRecord(
               buildingIds2[domId],
               `buildingIds.${domId}`
             );
             const path = `buildingIds.${domId}`;
-            const is = requireRecord(building["is"] ?? {}, `${path}.is`);
-            const warningKind = identity(buildings2, "BeltEleriumShip", building) ? "belt-elerium" : identity(buildings2, "BeltIridiumShip", building) ? "belt-iridium" : identity(buildings2, "BeltIronShip", building) ? "belt-iron" : identity(buildings2, "LakeBireme", building) ? "lake-bireme" : identity(buildings2, "LakeTransport", building) ? "lake-transport" : identity(buildings2, "TauBeltWhalingShip", building) ? "tau-whaling" : identity(buildings2, "TauBeltMiningShip", building) ? "tau-mining" : "ordinary";
+            const is = requireRecord(building2["is"] ?? {}, `${path}.is`);
+            const warningKind = identity(buildings2, "BeltEleriumShip", building2) ? "belt-elerium" : identity(buildings2, "BeltIridiumShip", building2) ? "belt-iridium" : identity(buildings2, "BeltIronShip", building2) ? "belt-iron" : identity(buildings2, "LakeBireme", building2) ? "lake-bireme" : identity(buildings2, "LakeTransport", building2) ? "lake-transport" : identity(buildings2, "TauBeltWhalingShip", building2) ? "tau-whaling" : identity(buildings2, "TauBeltMiningShip", building2) ? "tau-mining" : "ordinary";
             return [
               Object.freeze({
                 domId,
-                buildingId: buildingId(building, path),
-                binding: buildingBinding(building, path),
-                stateOn: finiteProperty(building, "stateOnCount", path),
-                autoStateEnabled: Boolean(building["autoStateEnabled"]),
+                buildingId: buildingId(building2, path),
+                binding: buildingBinding(building2, path),
+                stateOn: finiteProperty(building2, "stateOnCount", path),
+                autoStateEnabled: Boolean(building2["autoStateEnabled"]),
                 ship: Boolean(is["ship"]),
                 warningKind,
                 beltSupportNeeded: beltNeeded,
@@ -30209,14 +30209,14 @@
         if (session === null) {
           throw new Error("power cycle must be read before state-on resampling");
         }
-        const building = [...session.buildings.values()].find(
+        const building2 = [...session.buildings.values()].find(
           (candidate) => candidate["_vueBinding"] === binding
         );
-        if (building === void 0) {
+        if (building2 === void 0) {
           throw new TypeError(`power building binding ${binding} is missing`);
         }
         return finiteProperty(
-          building,
+          building2,
           "stateOnCount",
           `power building ${binding}`
         );
@@ -30261,11 +30261,11 @@
       for (const operation2 of operations) {
         switch (operation2.kind) {
           case "set-resource-rate": {
-            const resource = active.resources.get(operation2.resourceId);
-            if (resource === void 0)
+            const resource2 = active.resources.get(operation2.resourceId);
+            if (resource2 === void 0)
               return `resource ${operation2.resourceId} missing`;
             const current = resourceRates.get(operation2.resourceId) ?? finiteProperty(
-              resource,
+              resource2,
               "rateOfChange",
               `resource ${operation2.resourceId}`
             );
@@ -30275,21 +30275,21 @@
             break;
           }
           case "set-income-adjusted": {
-            const resource = active.resources.get(operation2.resourceId);
-            if (resource === void 0)
+            const resource2 = active.resources.get(operation2.resourceId);
+            if (resource2 === void 0)
               return `resource ${operation2.resourceId} missing`;
-            const current = resourceAdjusted.get(operation2.resourceId) ?? Boolean(resource["incomeAdusted"]);
+            const current = resourceAdjusted.get(operation2.resourceId) ?? Boolean(resource2["incomeAdusted"]);
             if (current !== operation2.expected)
               return `resource ${operation2.resourceId} adjustment changed`;
             resourceAdjusted.set(operation2.resourceId, operation2.value);
             break;
           }
           case "set-description": {
-            const building = active.buildings.get(operation2.buildingId);
-            if (building === void 0)
+            const building2 = active.buildings.get(operation2.buildingId);
+            if (building2 === void 0)
               return `building ${operation2.buildingId} missing`;
             const current = descriptions.get(operation2.buildingId) ?? readOptionalString(
-              building["extraDescription"],
+              building2["extraDescription"],
               `building ${operation2.buildingId}.extraDescription`
             );
             if (current !== operation2.expected)
@@ -30298,20 +30298,20 @@
             break;
           }
           case "adjust-building": {
-            const building = active.buildings.get(operation2.buildingId);
-            if (building === void 0)
+            const building2 = active.buildings.get(operation2.buildingId);
+            if (building2 === void 0)
               return `building ${operation2.buildingId} missing`;
-            if (buildingBinding(building, `building ${operation2.buildingId}`) !== operation2.binding)
+            if (buildingBinding(building2, `building ${operation2.buildingId}`) !== operation2.binding)
               return `building ${operation2.buildingId} binding changed`;
             const current = buildingStates.get(operation2.buildingId) ?? finiteProperty(
-              building,
+              building2,
               "stateOnCount",
               `building ${operation2.buildingId}`
             );
             if (current !== operation2.expectedStateOn)
               return `building ${operation2.buildingId} state changed`;
             requireFunction(
-              building["tryAdjustState"],
+              building2["tryAdjustState"],
               `building ${operation2.buildingId}.tryAdjustState`
             );
             buildingStates.set(operation2.buildingId, current + operation2.amount);
@@ -30323,16 +30323,16 @@
             saveSupply = operation2.value;
             break;
           case "set-power-model": {
-            const resource = active.resources.get(operation2.resourceId);
-            if (resource === void 0)
+            const resource2 = active.resources.get(operation2.resourceId);
+            if (resource2 === void 0)
               return `resource ${operation2.resourceId} missing`;
             const rate = resourceRates.get(operation2.resourceId) ?? finiteProperty(
-              resource,
+              resource2,
               "rateOfChange",
               `resource ${operation2.resourceId}`
             );
             if (finiteProperty(
-              resource,
+              resource2,
               "currentQuantity",
               `resource ${operation2.resourceId}`
             ) !== operation2.expectedCurrent || rate !== operation2.expectedRate)
@@ -30372,13 +30372,13 @@
             );
             break;
           case "adjust-building": {
-            const building = active.buildings.get(operation2.buildingId);
+            const building2 = active.buildings.get(operation2.buildingId);
             Reflect.apply(
               requireFunction(
-                building["tryAdjustState"],
+                building2["tryAdjustState"],
                 `building ${operation2.buildingId}.tryAdjustState`
               ),
-              building,
+              building2,
               [operation2.amount]
             );
             break;
@@ -30387,9 +30387,9 @@
             Reflect.set(mech, "saveSupply", operation2.value);
             break;
           case "set-power-model": {
-            const resource = active.resources.get(operation2.resourceId);
-            Reflect.set(resource, "currentQuantity", operation2.value);
-            Reflect.set(resource, "rateOfChange", operation2.value);
+            const resource2 = active.resources.get(operation2.resourceId);
+            Reflect.set(resource2, "currentQuantity", operation2.value);
+            Reflect.set(resource2, "rateOfChange", operation2.value);
             break;
           }
           case "log":
@@ -30426,9 +30426,9 @@
         if (value === void 0) {
           return stale("warned-building-missing", "Warned building disappeared");
         }
-        const building = requireRecord(value, `buildingIds.${decision2.domId}`);
-        if (buildingId(building, `buildingIds.${decision2.domId}`) !== decision2.buildingId || buildingBinding(building, `buildingIds.${decision2.domId}`) !== decision2.binding || finiteProperty(
-          building,
+        const building2 = requireRecord(value, `buildingIds.${decision2.domId}`);
+        if (buildingId(building2, `buildingIds.${decision2.domId}`) !== decision2.buildingId || buildingBinding(building2, `buildingIds.${decision2.domId}`) !== decision2.binding || finiteProperty(
+          building2,
           "stateOnCount",
           `buildingIds.${decision2.domId}`
         ) !== decision2.expectedStateOn) {
@@ -30436,10 +30436,10 @@
         }
         Reflect.apply(
           requireFunction(
-            building["tryAdjustState"],
+            building2["tryAdjustState"],
             `buildingIds.${decision2.domId}.tryAdjustState`
           ),
-          building,
+          building2,
           [-1]
         );
         return SUCCEEDED2;
@@ -30562,14 +30562,14 @@
       return null;
     }
     const resources2 = new Map(
-      input.resources.map((resource) => [resource.id, resource])
+      input.resources.map((resource2) => [resource2.id, resource2])
     );
     if (resources2.size !== input.resources.length) {
       throw new TypeError("duplicate storage resource id");
     }
     const managedIds = input.priorityResourceIds.filter((id) => {
-      const resource = mapValue2(resources2, id, `storage resource ${id}`);
-      return resource.unlocked && resource.managed;
+      const resource2 = mapValue2(resources2, id, `storage resource ${id}`);
+      return resource2.unlocked && resource2.managed;
     });
     if (managedIds.length === 0) return null;
     let totalCrates = input.freeCrates;
@@ -30577,19 +30577,19 @@
     const adjustments = /* @__PURE__ */ new Map();
     const modifiers = /* @__PURE__ */ new Map();
     for (const id of managedIds) {
-      const resource = mapValue2(resources2, id, `storage resource ${id}`);
-      const sellAllowed = !input.noTrade && input.autoMarket && resource.autoSellEnabled && resource.autoSellRatio > 0;
+      const resource2 = mapValue2(resources2, id, `storage resource ${id}`);
+      const sellAllowed = !input.noTrade && input.autoMarket && resource2.autoSellEnabled && resource2.autoSellRatio > 0;
       modifiers.set(
         id,
-        input.assignExtra ? sellAllowed ? 1.03 / resource.autoSellRatio : 1.03 : 1
+        input.assignExtra ? sellAllowed ? 1.03 / resource2.autoSellRatio : 1.03 : 1
       );
       adjustments.set(id, {
         crate: 0,
         container: 0,
-        amount: resource.maxQuantity - (resource.currentCrates * input.crateValue + resource.currentContainers * input.containerValue)
+        amount: resource2.maxQuantity - (resource2.currentCrates * input.crateValue + resource2.currentContainers * input.containerValue)
       });
-      totalCrates += resource.currentCrates;
-      totalContainers += resource.currentContainers;
+      totalCrates += resource2.currentCrates;
+      totalContainers += resource2.currentContainers;
     }
     let storageToBuild = 0;
     const drivers = /* @__PURE__ */ new Map();
@@ -30599,7 +30599,7 @@
       let remainingCrates = totalCrates;
       let remainingContainers = totalContainers;
       for (const [resourceId3, quantity] of item.costs) {
-        const resource = mapValue2(
+        const resource2 = mapValue2(
           resources2,
           resourceId3,
           `target resource ${resourceId3}`
@@ -30607,15 +30607,15 @@
         const adjustment = adjustments.get(resourceId3);
         const modifier = item.target.isList ? 1 : adjustment === void 0 ? 1 : mapValue2(modifiers, resourceId3, `storage modifier ${resourceId3}`);
         if (adjustment === void 0) {
-          if (resource.maxQuantity >= quantity) continue;
+          if (resource2.maxQuantity >= quantity) continue;
           continue nextItem;
         }
         if (adjustment.amount >= quantity * modifier) continue;
-        if (!item.target.isList && resource.maxStorage >= 0 && resource.maxStorage < quantity * modifier) {
+        if (!item.target.isList && resource2.maxStorage >= 0 && resource2.maxStorage < quantity * modifier) {
           continue nextItem;
         }
         let missing = Math.min(
-          resource.maxStorage >= 0 ? resource.maxStorage : Number.MAX_SAFE_INTEGER,
+          resource2.maxStorage >= 0 ? resource2.maxStorage : Number.MAX_SAFE_INTEGER,
           quantity * modifier
         ) - adjustment.amount;
         const available = remainingCrates * input.crateValue + remainingContainers * input.containerValue;
@@ -30678,7 +30678,7 @@
       storageToBuild,
       assignments: Object.freeze(
         managedIds.map((resourceId3) => {
-          const resource = mapValue2(
+          const resource2 = mapValue2(
             resources2,
             resourceId3,
             `storage resource ${resourceId3}`
@@ -30690,13 +30690,13 @@
           );
           return Object.freeze({
             resourceId: resourceId3,
-            expectedCrates: resource.currentCrates,
-            expectedContainers: resource.currentContainers,
+            expectedCrates: resource2.currentCrates,
+            expectedContainers: resource2.currentContainers,
             desiredCrates: adjustment.crate,
             desiredContainers: adjustment.container,
-            expectedMaximum: resource.maxQuantity,
-            currentQuantity: resource.currentQuantity,
-            storageRequired: resource.storageRequired,
+            expectedMaximum: resource2.maxQuantity,
+            currentQuantity: resource2.currentQuantity,
+            storageRequired: resource2.storageRequired,
             driver: drivers.get(resourceId3) ?? null
           });
         })
@@ -30808,8 +30808,8 @@
     }
     return value;
   }
-  function resourceId2(resource, path) {
-    return readString3(resource["id"], `${path}.id`);
+  function resourceId2(resource2, path) {
+    return readString3(resource2["id"], `${path}.id`);
   }
   function callBoolean14(record, name, path) {
     return Boolean(
@@ -30819,8 +30819,8 @@
   function finiteProperty2(record, name, path) {
     return requireNumber(record[name], `${path}.${name}`);
   }
-  function optionalSellRatio(resource, path) {
-    const value = resource["autoSellRatio"];
+  function optionalSellRatio(resource2, path) {
+    const value = resource2["autoSellRatio"];
     return value === void 0 || value === null ? 0 : requireNumber(value, `${path}.autoSellRatio`);
   }
   function emptyInput4(initialized) {
@@ -30915,16 +30915,16 @@
         const inputs = /* @__PURE__ */ new Map();
         const managedIds = /* @__PURE__ */ new Set();
         const register = (value, path, managed) => {
-          const resource = requireRecord(value, path);
-          const id = resourceId2(resource, path);
+          const resource2 = requireRecord(value, path);
+          const id = resourceId2(resource2, path);
           const existing = records.get(id);
-          if (existing !== void 0 && existing !== resource) {
+          if (existing !== void 0 && existing !== resource2) {
             throw new TypeError(`storage resource ${id} changed identity`);
           }
           if (existing === void 0) {
-            const unlocked = managed ? callBoolean14(resource, "isUnlocked", path) : true;
-            const managedStorage = managed && unlocked ? callBoolean14(resource, "isManagedStorage", path) : false;
-            records.set(id, resource);
+            const unlocked = managed ? callBoolean14(resource2, "isUnlocked", path) : true;
+            const managedStorage = managed && unlocked ? callBoolean14(resource2, "isManagedStorage", path) : false;
+            records.set(id, resource2);
             inputs.set(
               id,
               managed ? Object.freeze({
@@ -30932,37 +30932,37 @@
                 unlocked,
                 managed: managedStorage,
                 currentQuantity: finiteProperty2(
-                  resource,
+                  resource2,
                   "currentQuantity",
                   path
                 ),
-                maxQuantity: finiteProperty2(resource, "maxQuantity", path),
-                maxStorage: finiteProperty2(resource, "maxStorage", path),
+                maxQuantity: finiteProperty2(resource2, "maxQuantity", path),
+                maxStorage: finiteProperty2(resource2, "maxStorage", path),
                 storageRequired: finiteProperty2(
-                  resource,
+                  resource2,
                   "storageRequired",
                   path
                 ),
-                minStorage: finiteProperty2(resource, "minStorage", path),
+                minStorage: finiteProperty2(resource2, "minStorage", path),
                 currentCrates: finiteProperty2(
-                  resource,
+                  resource2,
                   "currentCrates",
                   path
                 ),
                 currentContainers: finiteProperty2(
-                  resource,
+                  resource2,
                   "currentContainers",
                   path
                 ),
-                storeOverflow: Boolean(resource["storeOverflow"]),
-                autoSellEnabled: Boolean(resource["autoSellEnabled"]),
-                autoSellRatio: optionalSellRatio(resource, path)
+                storeOverflow: Boolean(resource2["storeOverflow"]),
+                autoSellEnabled: Boolean(resource2["autoSellEnabled"]),
+                autoSellRatio: optionalSellRatio(resource2, path)
               }) : Object.freeze({
                 id,
                 unlocked: true,
                 managed: false,
                 currentQuantity: 0,
-                maxQuantity: finiteProperty2(resource, "maxQuantity", path),
+                maxQuantity: finiteProperty2(resource2, "maxQuantity", path),
                 maxStorage: -1,
                 storageRequired: 0,
                 minStorage: 0,
@@ -30985,7 +30985,7 @@
           );
         }
         const priorityResourceIds = priority.map(
-          (resource, index) => resourceId2(resource, `StorageManager.priorityList[${index}]`)
+          (resource2, index) => resourceId2(resource2, `StorageManager.priorityList[${index}]`)
         );
         if (new Set(priorityResourceIds).size !== priorityResourceIds.length) {
           throw new TypeError("StorageManager.priorityList has duplicate ids");
@@ -31003,9 +31003,9 @@
         const makeSynthetic = (label, select) => Object.freeze({
           costs: Object.freeze(
             priorityResourceIds.flatMap((id) => {
-              const resource = inputs.get(id);
-              if (resource === void 0 || !managedIds.has(id)) return [];
-              const quantity = select(resource);
+              const resource2 = inputs.get(id);
+              if (resource2 === void 0 || !managedIds.has(id)) return [];
+              const quantity = select(resource2);
               return quantity === null ? [] : [Object.freeze({ resourceId: id, quantity })];
             })
           ),
@@ -31050,7 +31050,7 @@
             targets: Object.freeze([
               makeSynthetic(
                 "safeReassign(currentQty)",
-                (resource) => resource.currentQuantity
+                (resource2) => resource2.currentQuantity
               )
             ])
           }),
@@ -31058,7 +31058,7 @@
             kind: "minimum",
             enabled: true,
             targets: Object.freeze([
-              makeSynthetic("minStorage", (resource) => resource.minStorage)
+              makeSynthetic("minStorage", (resource2) => resource2.minStorage)
             ])
           }),
           Object.freeze({
@@ -31067,7 +31067,7 @@
             targets: Object.freeze([
               makeSynthetic(
                 "overflow(currentQty*1.03)",
-                (resource) => resource.storeOverflow ? resource.currentQuantity * 1.03 : null
+                (resource2) => resource2.storeOverflow ? resource2.currentQuantity * 1.03 : null
               )
             ])
           }),
@@ -31131,7 +31131,7 @@
             targets: Object.freeze([
               makeSynthetic(
                 "storageRequired",
-                (resource) => resource.storageRequired
+                (resource2) => resource2.storageRequired
               )
             ])
           })
@@ -31205,7 +31205,7 @@
         }
         const priorityValue = active.manager["priorityList"];
         if (!Array.isArray(priorityValue) || priorityValue.length !== active.priority.length || priorityValue.some(
-          (resource, index) => resource !== active.priority[index]
+          (resource2, index) => resource2 !== active.priority[index]
         ) || decision2.expectedPriorityResourceIds.length !== active.priority.length) {
           return stale(
             "storage-priority-changed",
@@ -31213,9 +31213,9 @@
           );
         }
         for (let index = 0; index < active.priority.length; index++) {
-          const resource = active.priority[index];
+          const resource2 = active.priority[index];
           const expectedId = decision2.expectedPriorityResourceIds[index];
-          if (resource === void 0 || expectedId === void 0 || resourceId2(resource, `StorageManager.priorityList[${index}]`) !== expectedId) {
+          if (resource2 === void 0 || expectedId === void 0 || resourceId2(resource2, `StorageManager.priorityList[${index}]`) !== expectedId) {
             return stale(
               "storage-priority-changed",
               "Storage priority ids changed"
@@ -31238,8 +31238,8 @@
         }
         const resolved = [];
         for (const adjustment of decision2.adjustments) {
-          const resource = active.resources.get(adjustment.resourceId);
-          if (resource === void 0 || !active.managedIds.has(adjustment.resourceId)) {
+          const resource2 = active.resources.get(adjustment.resourceId);
+          if (resource2 === void 0 || !active.managedIds.has(adjustment.resourceId)) {
             return stale(
               "storage-resource-changed",
               "Managed storage resource changed",
@@ -31247,15 +31247,15 @@
             );
           }
           if (finiteProperty2(
-            resource,
+            resource2,
             "currentCrates",
             `resources.${adjustment.resourceId}`
           ) !== adjustment.expectedCrates || finiteProperty2(
-            resource,
+            resource2,
             "currentContainers",
             `resources.${adjustment.resourceId}`
           ) !== adjustment.expectedContainers || finiteProperty2(
-            resource,
+            resource2,
             "maxQuantity",
             `resources.${adjustment.resourceId}`
           ) !== adjustment.expectedMaximum) {
@@ -31287,10 +31287,10 @@
               "StorageManager.assignContainer"
             );
           }
-          resolved.push({ adjustment, resource });
+          resolved.push({ adjustment, resource: resource2 });
         }
         for (const message of decision2.logs) dependencies.log(message);
-        for (const { adjustment, resource } of resolved) {
+        for (const { adjustment, resource: resource2 } of resolved) {
           if (adjustment.crateDelta < 0) {
             Reflect.apply(
               requireFunction(
@@ -31298,10 +31298,10 @@
                 "StorageManager.unassignCrate"
               ),
               active.manager,
-              [resource, adjustment.crateDelta * -1]
+              [resource2, adjustment.crateDelta * -1]
             );
-            resource["maxQuantity"] = finiteProperty2(
-              resource,
+            resource2["maxQuantity"] = finiteProperty2(
+              resource2,
               "maxQuantity",
               `resources.${adjustment.resourceId}`
             ) + adjustment.crateDelta * decision2.crateValue;
@@ -31318,10 +31318,10 @@
                 "StorageManager.unassignContainer"
               ),
               active.manager,
-              [resource, adjustment.containerDelta * -1]
+              [resource2, adjustment.containerDelta * -1]
             );
-            resource["maxQuantity"] = finiteProperty2(
-              resource,
+            resource2["maxQuantity"] = finiteProperty2(
+              resource2,
               "maxQuantity",
               `resources.${adjustment.resourceId}`
             ) + adjustment.containerDelta * decision2.containerValue;
@@ -31332,7 +31332,7 @@
             ) - adjustment.containerDelta;
           }
         }
-        for (const { adjustment, resource } of resolved) {
+        for (const { adjustment, resource: resource2 } of resolved) {
           if (adjustment.crateDelta > 0) {
             Reflect.apply(
               requireFunction(
@@ -31340,10 +31340,10 @@
                 "StorageManager.assignCrate"
               ),
               active.manager,
-              [resource, adjustment.crateDelta]
+              [resource2, adjustment.crateDelta]
             );
-            resource["maxQuantity"] = finiteProperty2(
-              resource,
+            resource2["maxQuantity"] = finiteProperty2(
+              resource2,
               "maxQuantity",
               `resources.${adjustment.resourceId}`
             ) + adjustment.crateDelta * decision2.crateValue;
@@ -31360,10 +31360,10 @@
                 "StorageManager.assignContainer"
               ),
               active.manager,
-              [resource, adjustment.containerDelta]
+              [resource2, adjustment.containerDelta]
             );
-            resource["maxQuantity"] = finiteProperty2(
-              resource,
+            resource2["maxQuantity"] = finiteProperty2(
+              resource2,
               "maxQuantity",
               `resources.${adjustment.resourceId}`
             ) + adjustment.containerDelta * decision2.containerValue;
@@ -31499,8 +31499,8 @@
     }
     return value;
   }
-  function optionalWeighting2(resource, path) {
-    const value = resource["galaxyMarketWeighting"];
+  function optionalWeighting2(resource2, path) {
+    const value = resource2["galaxyMarketWeighting"];
     return value === void 0 || value === null ? 0 : requireNumber(value, `${path}.galaxyMarketWeighting`);
   }
   function readOfferIdentity(value, path) {
@@ -31781,7 +31781,7 @@
     for (const target of DIRECT_TARGETS) {
       if (!input.clickable[target.actionId]) continue;
       if (target.actionId === "food" && input.fasting) continue;
-      const resource = input.resources[target.resourceId];
+      const resource2 = input.resources[target.resourceId];
       const current = quantities[target.resourceId];
       const conjuring = target.actionId === "food" ? input.foodConjuring : input.materialConjuring;
       let amount;
@@ -31789,7 +31789,7 @@
       if (conjuring) {
         amount = Math.floor(
           Math.min(
-            (resource.maxQuantity - current) / (input.resourcesPerClick * 10),
+            (resource2.maxQuantity - current) / (input.resourcesPerClick * 10),
             quantities.Mana,
             input.clickLimit
           )
@@ -31815,13 +31815,13 @@
       } else {
         amount = Math.ceil(
           Math.min(
-            (resource.maxQuantity - current) / input.resourcesPerClick,
+            (resource2.maxQuantity - current) / input.resourcesPerClick,
             input.clickLimit
           )
         );
         const resourceQuantity = Math.min(
           current + amount * input.resourcesPerClick,
-          resource.maxQuantity
+          resource2.maxQuantity
         );
         beforeAction.push(
           Object.freeze({
@@ -31913,16 +31913,16 @@
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
     );
   }
-  function readTechnology(technology, id, level) {
-    const value = technology[id];
+  function readTechnology(technology2, id, level) {
+    const value = technology2[id];
     return value === void 0 || value === null ? false : requireNumber(value, `game.global.tech.${id}`) >= level;
   }
   function readResource(registry, id) {
     return requireRecord(registry[id], `resources.${id}`);
   }
-  function readQuantity(resource, id) {
+  function readQuantity(resource2, id) {
     return requireNumber(
-      resource["currentQuantity"],
+      resource2["currentQuantity"],
       `resources.${id}.currentQuantity`
     );
   }
@@ -31965,7 +31965,7 @@
         const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
         const global = requireRecord(game2["global"], "game.global");
         const race = requireRecord(global["race"], "game.global.race");
-        const technology = requireRecord(global["tech"], "game.global.tech");
+        const technology2 = requireRecord(global["tech"], "game.global.tech");
         const population = requireRecord(
           registry["Population"],
           "resources.Population"
@@ -32037,9 +32037,9 @@
             "buildings.Slaughter"
           )
         };
-        const foodConjuring = clickable.food && !fasting ? readTechnology(technology, "conjuring", 1) : false;
-        const materialConjuring = clickable.lumber || clickable.stone || clickable.chrysotile ? readTechnology(technology, "conjuring", 2) : false;
-        const primitive = clickable.slaughter && soulEater ? readTechnology(technology, "primitive", 1) : false;
+        const foodConjuring = clickable.food && !fasting ? readTechnology(technology2, "conjuring", 1) : false;
+        const materialConjuring = clickable.lumber || clickable.stone || clickable.chrysotile ? readTechnology(technology2, "conjuring", 2) : false;
+        const primitive = clickable.slaughter && soulEater ? readTechnology(technology2, "primitive", 1) : false;
         const resourceRecords = {};
         const initialQuantities = {
           Food: 0,
@@ -32062,13 +32062,13 @@
           Mana: emptyResource
         };
         const readNeededResource = (id) => {
-          const resource = readResource(registry, id);
-          const currentQuantity = readQuantity(resource, id);
+          const resource2 = readResource(registry, id);
+          const currentQuantity = readQuantity(resource2, id);
           const maxQuantity = id === "Mana" ? 0 : requireNumber(
-            resource["maxQuantity"],
+            resource2["maxQuantity"],
             `resources.${id}.maxQuantity`
           );
-          resourceRecords[id] = resource;
+          resourceRecords[id] = resource2;
           initialQuantities[id] = currentQuantity;
           resourceInput[id] = Object.freeze({ currentQuantity, maxQuantity });
         };
@@ -32129,15 +32129,15 @@
           );
         }
         for (const id of RESOURCE_IDS) {
-          const resource = active.resources[id];
-          if (resource === void 0) continue;
-          if (registry[id] !== resource) {
+          const resource2 = active.resources[id];
+          if (resource2 === void 0) continue;
+          if (registry[id] !== resource2) {
             return stale(
               "gather-resource-changed",
               `Gather resource ${id} changed`
             );
           }
-          const actual = readQuantity(resource, id);
+          const actual = readQuantity(resource2, id);
           const expected = active.initialQuantities[id];
           if (actual !== expected) {
             return stale(
@@ -32203,9 +32203,9 @@
         }
         const applyAssignments = (assignments) => {
           for (const assignment of assignments) {
-            const resource = active.resources[assignment.resourceId];
-            if (resource !== void 0) {
-              resource["currentQuantity"] = assignment.quantity;
+            const resource2 = active.resources[assignment.resourceId];
+            if (resource2 !== void 0) {
+              resource2["currentQuantity"] = assignment.quantity;
             }
           }
         };
@@ -32303,8 +32303,8 @@
       for (let i = 0; i < challenges2.length; i++) {
         if (settings2["challenge_" + challenges2[i][0].id]) {
           for (let j = 0; j < challenges2[i].length; j++) {
-            let { id, trait } = challenges2[i][j];
-            if (game2.global.race[trait] !== 1 && evolutions2[id].click() && (id === "junker" || id === "sludge" || id === "ultra_sludge" || id === "warlord")) {
+            let { id, trait: trait2 } = challenges2[i][j];
+            if (game2.global.race[trait2] !== 1 && evolutions2[id].click() && (id === "junker" || id === "sludge" || id === "ultra_sludge" || id === "warlord")) {
               return;
             }
           }
@@ -32627,16 +32627,16 @@
         for (const resourceId3 in cost) {
           const materialPath = `${path}.cost.${resourceId3}`;
           const costPerCraft = readPositiveCost(cost[resourceId3], materialPath);
-          const resource = requireRecord(
+          const resource2 = requireRecord(
             session.resources[resourceId3],
             `resources.${resourceId3}`
           );
           const currentQuantity = requireNumber(
-            resource["currentQuantity"],
+            resource2["currentQuantity"],
             `resources.${resourceId3}.currentQuantity`
           );
           const maxQuantity = requireNumber(
-            resource["maxQuantity"],
+            resource2["maxQuantity"],
             `resources.${resourceId3}.maxQuantity`
           );
           const craftPreserve = requireNumber(
@@ -32656,7 +32656,7 @@
               `${path}.craftPreserve`
             );
             const availableQuantity = currentQuantity < maxQuantity * (thresholdPreserve + 0.05) ? currentQuantity : requireNumber(
-              resource["spareQuantity"],
+              resource2["spareQuantity"],
               `resources.${resourceId3}.spareQuantity`
             );
             materials.push(
@@ -32664,17 +32664,17 @@
             );
             continue;
           }
-          if (callBoolean17(resource, "isDemanded", `resources.${resourceId3}`)) {
+          if (callBoolean17(resource2, "isDemanded", `resources.${resourceId3}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
           const cappedForPriority = callBoolean17(
-            resource,
+            resource2,
             "isCapped",
             `resources.${resourceId3}`
           );
           if (!cappedForPriority && requireNumber(
-            resource["usefulRatio"],
+            resource2["usefulRatio"],
             `resources.${resourceId3}.usefulRatio`
           ) < requireNumber(craftable["usefulRatio"], `${path}.usefulRatio`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
@@ -32689,7 +32689,7 @@
                 ...base,
                 mode: "required",
                 availableQuantity: requireNumber(
-                  resource["spareQuantity"],
+                  resource2["spareQuantity"],
                   `resources.${resourceId3}.spareQuantity`
                 )
               })
@@ -32697,15 +32697,15 @@
             continue;
           }
           const resourceRequired = requireNumber(
-            resource["storageRequired"],
+            resource2["storageRequired"],
             `resources.${resourceId3}.storageRequired`
           );
-          if (currentQuantity < resourceRequired && !callBoolean17(resource, "isCapped", `resources.${resourceId3}`)) {
+          if (currentQuantity < resourceRequired && !callBoolean17(resource2, "isCapped", `resources.${resourceId3}`)) {
             materials.push(Object.freeze({ ...base, mode: "blocked" }));
             break;
           }
           const rateOfChange = requireNumber(
-            resource["rateOfChange"],
+            resource2["rateOfChange"],
             `resources.${resourceId3}.rateOfChange`
           );
           const ticks = requireNumber(
@@ -32763,12 +32763,12 @@
               "craft spend must be a non-negative finite number"
             );
           }
-          const resource = requireRecord(
+          const resource2 = requireRecord(
             resources2[spend.resourceId],
             `resources.${spend.resourceId}`
           );
           const actual = requireNumber(
-            resource["currentQuantity"],
+            resource2["currentQuantity"],
             `resources.${spend.resourceId}.currentQuantity`
           );
           if (actual !== spend.expectedCurrentQuantity) {
@@ -32782,7 +32782,7 @@
               }
             );
           }
-          writes.push({ resource, nextQuantity: actual - spend.amount });
+          writes.push({ resource: resource2, nextQuantity: actual - spend.amount });
         }
         const tryCraftX = requireFunction(
           craftable["tryCraftX"],
@@ -33418,8 +33418,8 @@
         if (!isAchievementUnlocked3("biome_" + planet.biome, alevel)) {
           planet.achieve++;
         }
-        for (let trait of planet.traits) {
-          if (trait !== "none" && !isAchievementUnlocked3("atmo_" + trait, alevel)) {
+        for (let trait2 of planet.traits) {
+          if (trait2 !== "none" && !isAchievementUnlocked3("atmo_" + trait2, alevel)) {
             planet.achieve++;
           }
         }
@@ -33444,8 +33444,8 @@
         let planet = planets[i];
         planet.weighting = 0;
         planet.weighting += settings2["biome_w_" + planet.biome];
-        for (let trait of planet.traits) {
-          planet.weighting += settings2["trait_w_" + trait];
+        for (let trait2 of planet.traits) {
+          planet.weighting += settings2["trait_w_" + trait2];
         }
         planet.weighting += planet.achieve * settings2["extra_w_Achievement"];
         planet.weighting += planet.orbit * settings2["extra_w_Orbit"];
@@ -33485,839 +33485,1386 @@
     };
   }
 
-  // src/automation/civic/jobs.ts
-  function createAutoJobs({
-    getJobManager,
-    getGame,
-    getJobs,
-    isDemonRace: isDemonRace2,
-    isLumberRace: isLumberRace2,
-    getSettings,
-    traitVal: traitVal2,
-    getCrafter,
-    getWindow,
-    getBuildings,
-    getHaveTech,
-    getResources,
-    ticksPerSecond: ticksPerSecond2,
-    getState,
-    findRequiredResourceWeight: findRequiredResourceWeight3,
-    getPoly,
-    isCraftingJob,
-    getHaveTask,
-    getFoodConsume: getFoodConsume2
-  }) {
-    return function autoJobs2(craftOnly) {
-      const JobManager2 = getJobManager();
-      const game2 = getGame();
-      const jobs2 = getJobs();
-      const settings2 = getSettings();
-      const crafter2 = getCrafter();
-      const window2 = getWindow();
-      const buildings2 = getBuildings();
-      const haveTech2 = getHaveTech();
-      const resources2 = getResources();
-      const state2 = getState();
-      const poly2 = getPoly();
-      const haveTask2 = getHaveTask();
-      let jobList = JobManager2.managedPriorityList();
-      if (jobList.length === 0) {
-        return;
-      }
-      let farmerIndex = game2.global.race["artifical"] ? -1 : Math.max(jobList.indexOf(jobs2.Hunter), jobList.indexOf(jobs2.Farmer));
-      let lumberjackIndex = isDemonRace2() && isLumberRace2() ? farmerIndex : jobList.indexOf(jobs2.Lumberjack);
-      let quarryWorkerIndex = jobList.indexOf(jobs2.QuarryWorker);
-      let crystalMinerIndex = jobList.indexOf(jobs2.CrystalMiner);
-      let scavengerIndex = jobList.indexOf(jobs2.Scavenger);
-      let foragerIndex = jobList.indexOf(jobs2.Forager);
-      let defaultIndex = jobList.findIndex((job) => job.isDefault());
-      let availableWorkers = jobList.reduce(
-        (total, job) => total + job.workers,
-        0
-      );
-      let availableServants = settings2.jobManageServants ? JobManager2.servantsMax() : 0;
-      let availableSkilledServants = settings2.jobManageServants ? JobManager2.skilledServantsMax() : 0;
-      let availableCraftsmen = JobManager2.craftingMax();
-      let servantMod = traitVal2("high_pop", 0, 1);
-      let crewMissing = game2.global.civic.crew.max - game2.global.civic.crew.workers;
-      let minDefault = crewMissing > 0 ? crewMissing + 1 : 0;
-      let requiredWorkers = new Array(jobList.length).fill(0);
-      let requiredServants = new Array(jobList.length).fill(0);
-      if (craftOnly) {
-        availableCraftsmen = availableWorkers;
-        availableWorkers = 0;
-        availableServants = 0;
-      } else if (settings2.autoCraftsmen && availableWorkers >= availableCraftsmen * (farmerIndex === -1 ? 1 : 2)) {
-        availableWorkers -= availableCraftsmen;
-      } else {
+  // src/domain/jobs.ts
+  function indexOfToken(input, token) {
+    return token === null ? -1 : input.jobs.findIndex((job) => job.token === token);
+  }
+  function craftPlan(input, initialWorkers, initialCraftsmen) {
+    const workers = /* @__PURE__ */ new Map();
+    const servants = /* @__PURE__ */ new Map();
+    let availableWorkers = initialWorkers;
+    let availableCraftsmen = initialCraftsmen;
+    let totalCraftsmen = availableCraftsmen + input.skilledServantsMaximum * input.servantModifier;
+    const available = [];
+    const excluded = [];
+    if (!input.autoCraftsmen) {
+      return {
+        workers,
+        servants,
+        availableWorkers,
+        availableCraftsmen,
+        craftWinner: null,
+        debugMessage: null
+      };
+    }
+    for (const craft of input.crafting) {
+      if (!craft.enabled) continue;
+      if (craft.buildingCapacity === null && !input.autoCraftWithoutBuilding) {
+        if (input.skilledServantsMaximum === 0) break;
+        availableWorkers += availableCraftsmen;
+        totalCraftsmen -= availableCraftsmen;
         availableCraftsmen = 0;
       }
-      if (settings2.autoCraftsmen) {
-        const cdbg = window2.craftDebug ?? false;
-        let craftExcluded = cdbg ? [] : null;
-        let craftFilter = "";
-        let speed = game2.global.genes["crafty"] ? 2 : 1;
-        let costMod = speed * traitVal2("resourceful", 0, "-") / 140;
-        let totalCraftsmen = availableCraftsmen + availableSkilledServants * servantMod;
-        let autoCraft2 = settings2.productionCraftsmen === "always" || settings2.productionCraftsmen === "nocraft" && game2.global.race["no_craft"];
-        let availableJobs = [];
-        for (let job of JobManager2.craftingJobs) {
-          let resource = job.resource;
-          if (!job.isManaged() || !resource.autoCraftEnabled) {
-            continue;
-          }
-          let craftBuilding = job === crafter2.Scarletite ? buildings2.RuinsHellForge : job === crafter2.Quantium ? haveTech2("isolation") ? buildings2.TauDiseaseLab : buildings2.EnceladusZeroGLab : null;
-          if (!craftBuilding && !autoCraft2) {
-            if (!availableSkilledServants) {
-              break;
-            }
-            availableWorkers += availableCraftsmen;
-            totalCraftsmen -= availableCraftsmen;
-            availableCraftsmen = 0;
-          }
-          let affordableAmount = totalCraftsmen;
-          for (let res in resource.cost) {
-            let reqResource = resources2[res];
-            if (!resource.isDemanded() && (!settings2.useDemanded && reqResource.isDemanded() || reqResource.storageRatio < resource.craftPreserve)) {
-              if (cdbg) {
-                craftExcluded.push(`${job.id}(hold:${res})`);
-              }
-              affordableAmount = 0;
-              break;
-            } else {
-              affordableAmount = Math.min(
-                affordableAmount,
-                (resource.rateOfChange + reqResource.currentQuantity) / (resource.cost[res] * costMod) / 2 * ticksPerSecond2()
-              );
-            }
-          }
-          if (craftBuilding) {
-            if (settings2.productionCraftsmen === "servants") {
-              continue;
-            }
-            let craftMax = craftBuilding.stateOnCount * traitVal2("high_pop", 0, 1);
-            if (affordableAmount < craftMax) {
-              requiredWorkers[jobList.indexOf(job)] = 0;
-            } else {
-              requiredWorkers[jobList.indexOf(job)] = craftMax;
-              availableCraftsmen -= craftMax;
-              totalCraftsmen -= craftMax;
-            }
-          } else if (affordableAmount >= totalCraftsmen) {
-            availableJobs.push(job);
-          } else if (cdbg && affordableAmount > 0) {
-            craftExcluded.push(
-              `${job.id}(inputs:${affordableAmount.toFixed(1)}<${totalCraftsmen})`
-            );
-          }
+      const affordableAmount = Math.min(totalCraftsmen, craft.affordability);
+      if (craft.exclusion !== null) excluded.push(craft.exclusion);
+      if (craft.buildingCapacity !== null) {
+        if (input.craftsmenMode === "servants") continue;
+        if (affordableAmount >= craft.buildingCapacity) {
+          workers.set(craft.jobToken, craft.buildingCapacity);
+          availableCraftsmen -= craft.buildingCapacity;
+          totalCraftsmen -= craft.buildingCapacity;
         }
-        let requestedJobs = availableJobs.filter(
-          (job) => job.resource.isDemanded()
+      } else if (affordableAmount >= totalCraftsmen) {
+        available.push(craft);
+      } else if (input.craftDebug && affordableAmount > 0) {
+        const job = input.jobs.find((entry) => entry.token === craft.jobToken);
+        excluded.push(
+          `${job.id}(inputs:${affordableAmount.toFixed(1)}<${totalCraftsmen})`
         );
-        if (requestedJobs.length > 0) {
-          availableJobs = requestedJobs;
-          craftFilter = "demanded";
-        } else if (settings2.productionFoundryWeighting === "demanded") {
-          let usefulJobs = availableJobs.filter(
-            (job) => job.resource.currentQuantity < job.resource.storageRequired
-          );
-          if (usefulJobs.length > 0) {
-            availableJobs = usefulJobs;
-            craftFilter = "useful";
-          }
-        }
-        let scaledWeightings = null;
-        if (settings2.productionFoundryWeighting === "buildings" && state2.unlockedBuildings.length > 0) {
-          scaledWeightings = Object.fromEntries(
-            availableJobs.map((job) => [
-              job.id,
-              (findRequiredResourceWeight3(job.resource) ?? 0) * job.resource.craftWeighting
-            ])
-          );
-          availableJobs.sort(
-            (a, b) => a.resource.currentQuantity / scaledWeightings[a.id] - b.resource.currentQuantity / scaledWeightings[b.id]
-          );
-        } else {
-          availableJobs.sort(
-            (a, b) => a.resource.currentQuantity / a.resource.craftWeighting - b.resource.currentQuantity / b.resource.craftWeighting
-          );
-        }
-        const keyOf = (job) => job.resource.currentQuantity / (scaledWeightings ? scaledWeightings[job.id] : job.resource.craftWeighting);
-        const weightOf = (job) => scaledWeightings ? scaledWeightings[job.id] : job.resource.craftWeighting;
-        let shareWorkers = {};
-        let shareServants = {};
-        if (availableJobs.length > 0) {
-          let winnerKey = keyOf(availableJobs[0]);
-          let group = isFinite(winnerKey) ? availableJobs.filter((job) => keyOf(job) <= winnerKey * 1.1) : [availableJobs[0]];
-          let remWorkers = availableCraftsmen;
-          let remServants = availableSkilledServants;
-          let remWeight = group.reduce((sum, job) => sum + weightOf(job), 0);
-          for (let job of group) {
-            let share = remWeight > 0 ? weightOf(job) / remWeight : 1;
-            shareWorkers[job.id] = Math.round(remWorkers * share);
-            shareServants[job.id] = Math.round(remServants * share);
-            remWorkers -= shareWorkers[job.id];
-            remServants -= shareServants[job.id];
-            remWeight -= weightOf(job);
-          }
-        }
-        if (cdbg) {
-          let focusIds = Object.keys(shareWorkers).join("+") || "none";
-          if (state2.lastCraftWinner !== focusIds) {
-            let detail = availableJobs.map((job) => {
-              let q = job.resource.currentQuantity;
-              let assigned = `→${shareWorkers[job.id] ?? 0}` + (availableSkilledServants > 0 ? `+${shareServants[job.id] ?? 0}s` : "");
-              if (scaledWeightings) {
-                let driver = state2.unlockedBuildings.find(
-                  (b) => b.cost[job.resource.id] > q
-                );
-                return `${job.id} q=${q.toFixed(0)} key=${(q / scaledWeightings[job.id]).toFixed(1)} (${driver ? `${driver._vueBinding}@${driver.weighting.toFixed(1)}` : "no building"}×${job.resource.craftWeighting})${assigned}`;
-              }
-              return `${job.id} q=${q.toFixed(0)} key=${(q / job.resource.craftWeighting).toFixed(1)}${assigned}`;
-            }).join("; ");
-            console.log(
-              `[craft] focus ${state2.lastCraftWinner ?? "none"}⇒${focusIds}` + (craftFilter ? ` filter=${craftFilter}` : "") + ` | ${detail}` + (craftExcluded.length > 0 ? ` | excluded: ${craftExcluded.join(", ")}` : "")
-            );
-            state2.lastCraftWinner = focusIds;
-          }
-        }
-        for (let job of JobManager2.craftingJobs) {
-          let jobIndex = jobList.indexOf(job);
-          if (jobIndex === -1 || job === crafter2.Scarletite && resources2.Scarletite.autoCraftEnabled || job === crafter2.Quantium && resources2.Quantium.autoCraftEnabled) {
-            continue;
-          }
-          requiredWorkers[jobIndex] = shareWorkers[job.id] ?? 0;
-          requiredServants[jobIndex] = shareServants[job.id] ?? 0;
-        }
-        if (availableJobs[0] === void 0) {
-          availableWorkers += availableCraftsmen;
-        }
       }
-      let coalDisabled = settings2.jobDisableMiners && buildings2.GatewayStarbase.count > 0;
-      let minersDisabled = coalDisabled && !(game2.global.race["sappy"] && game2.global.race["smoldering"]);
-      let hoovedMiner = game2.global.race.hooved && resources2.Horseshoe.usefulRatio < 1;
-      let synthMiner = game2.global.race.artifical && !game2.global.race.deconstructor && resources2.Population.storageRatio < 1;
-      let minerIndex = jobList.indexOf(jobs2.Miner);
-      if ((hoovedMiner || synthMiner) && !minersDisabled && availableWorkers > 1 && minerIndex !== -1 && jobs2.Miner.isSmartEnabled) {
-        requiredWorkers[minerIndex] = 1;
-        availableWorkers--;
+    }
+    let filtered = available;
+    let filter = "";
+    const demanded = filtered.filter((craft) => craft.demanded);
+    if (demanded.length > 0) {
+      filtered = demanded;
+      filter = "demanded";
+    } else if (input.foundryWeighting === "demanded") {
+      const useful = filtered.filter((craft) => craft.useful);
+      if (useful.length > 0) {
+        filtered = useful;
+        filter = "useful";
       }
-      let jobMax = {};
-      let minFarmers = 0;
-      let manageAuthorityEntertainers = settings2.authorityManage && settings2.generalMinimumAuthority !== 0 && resources2.Authority.isUnlocked();
-      let authorityMoraleCeiling = null;
-      if (!manageAuthorityEntertainers) {
-        delete state2.authorityEntertainerCap;
-      } else {
-        let authorityPriorityTarget = Math.max(
-          100,
-          settings2.generalMinimumAuthority < 0 ? resources2.Authority.maxQuantity : settings2.generalMinimumAuthority
-        );
-        let authorityTaxLimit = poly2.taxCap(false);
-        let requestedTaxRate = Number(settings2.generalRequestedTaxRate);
-        if (settings2.autoTax && Number.isFinite(requestedTaxRate) && requestedTaxRate >= 0) {
-          authorityTaxLimit = Math.min(
-            Math.max(requestedTaxRate, poly2.taxCap(true)),
-            authorityTaxLimit
-          );
-        }
-        let canIncreaseAuthorityWithTax = game2.global.civic.taxes.display !== false && (settings2.autoTax || haveTask2("tax")) && game2.global.civic.taxes.tax_rate < authorityTaxLimit && resources2.Authority.currentQuantity < authorityPriorityTarget;
-        let soldiersAdjustedThisTick = state2.scriptTick !== void 0 && state2.authoritySoldiersAdjustedTick === state2.scriptTick;
-        if (!canIncreaseAuthorityWithTax && !soldiersAdjustedThisTick) {
-          let moraleAuthorityFactor = game2.global.civic.govern.type === "democracy" ? 0.9 : 1;
-          let authorityAtHundredMorale = resources2.Authority.currentQuantity + Math.max(0, resources2.Morale.currentQuantity - 100) * moraleAuthorityFactor;
-          authorityMoraleCeiling = 100 + Math.max(0, authorityAtHundredMorale - 100) / moraleAuthorityFactor;
-        }
-      }
-      let entertainerMorale = ((game2.global.tech?.["theatre"] ?? 0) + traitVal2("musical", 0)) * traitVal2("emotionless", 0, "-") * traitVal2("high_pop", 1, "=") * (state2.astroSign === "sagittarius" ? 1.05 : 1) * (game2.global.race["lone_survivor"] ? 25 : 1);
-      let superstarMoraleCap = haveTech2("superstar") ? traitVal2("high_pop", 1, "=") : 0;
-      function getAuthorityEntertainerMaximum(job) {
-        if (authorityMoraleCeiling !== null) {
-          let limits = [];
-          if (entertainerMorale > 0) {
-            let potentialWithoutEntertainers = resources2.Morale.rateOfChange - job.count * entertainerMorale;
-            limits.push(
-              Math.floor(
-                (authorityMoraleCeiling - potentialWithoutEntertainers + 1e-9) / entertainerMorale
-              )
-            );
-          }
-          if (superstarMoraleCap > 0) {
-            let capWithoutEntertainers = resources2.Morale.maxQuantity - job.count * superstarMoraleCap;
-            limits.push(
-              Math.floor(
-                (authorityMoraleCeiling - capWithoutEntertainers + 1e-9) / superstarMoraleCap
-              )
-            );
-          }
-          let calculatedCap = limits.length === 0 ? job.count : Math.max(0, ...limits);
-          let previousCap = state2.authorityEntertainerCap;
-          state2.authorityEntertainerCap = resources2.Authority.currentQuantity < 100 && previousCap !== void 0 ? Math.min(previousCap, calculatedCap) : calculatedCap;
-          if (window2.authorityDebug && state2.authorityEntertainerCap !== previousCap) {
-            console.log(
-              `[authority] entertainers cap ${previousCap ?? job.count}→${state2.authorityEntertainerCap} (amount=${resources2.Authority.currentQuantity.toFixed(
-                1
-              )}, morale=${resources2.Morale.currentQuantity.toFixed(
-                1
-              )}→max=${authorityMoraleCeiling.toFixed(1)})`
-            );
-          }
-        }
-        return state2.authorityEntertainerCap ?? Number.MAX_SAFE_INTEGER;
-      }
-      state2.maxSpaceMiners = 0;
-      for (let i = 0; i < 3; i++) {
-        for (let j = 0; j < jobList.length; j++) {
-          let job = jobList[j];
-          if (i === 2 && job.is.split) {
-            continue;
-          }
-          if (isCraftingJob(job)) {
-            continue;
-          }
-          availableWorkers += requiredWorkers[j];
-          let currentEmployees = requiredWorkers[j];
-          let availableEmployees = availableWorkers;
-          requiredWorkers[j] = 0;
-          if (job.is.serve) {
-            currentEmployees += requiredServants[j] * servantMod;
-            availableServants += requiredServants[j];
-            availableEmployees += availableServants * servantMod;
-            requiredServants[j] = 0;
-          }
-          let demonicLumber = job === jobs2.Hunter && isDemonRace2() && isLumberRace2() ? true : false;
-          let jobsToAssign = Math.min(
-            availableEmployees,
-            Math.max(currentEmployees, job.breakpointEmployees(i))
-          );
-          if (job.isSmartEnabled) {
-            if (job === jobs2.Farmer || job === jobs2.Hunter) {
-              if (jobMax[j] === void 0) {
-                if (game2.global.race["artifical"] || game2.global.race["unfathomable"]) {
-                  jobMax[j] = 0;
-                } else {
-                  let foodRateOfChange = resources2.Food.rateOfChange;
-                  let minFoodStorage = resources2.Food.maxQuantity * 0.2;
-                  let maxFoodStorage = resources2.Food.maxQuantity * 0.6;
-                  if (game2.global.race["ravenous"]) {
-                    minFoodStorage = resources2.Population.currentQuantity * 1.5;
-                    maxFoodStorage = resources2.Population.currentQuantity * 3;
-                    foodRateOfChange += Math.max(
-                      resources2.Food.currentQuantity / traitVal2("ravenous", 1),
-                      0
-                    );
-                  }
-                  if (game2.global.race["carnivore"]) {
-                    minFoodStorage = resources2.Population.currentQuantity;
-                    maxFoodStorage = resources2.Population.currentQuantity * 2;
-                    if (resources2.Food.currentQuantity > 10) {
-                      foodRateOfChange += (resources2.Food.currentQuantity - 10) * traitVal2("carnivore", 0, "=") * 0.9 ** buildings2.Smokehouse.count;
-                    }
-                  }
-                  if (resources2.Population.currentQuantity > state2.lastPopulationCount) {
-                    let populationChange = resources2.Population.currentQuantity - state2.lastPopulationCount;
-                    let farmerChange = job.count - state2.lastFarmerCount;
-                    if (populationChange === farmerChange && foodRateOfChange > 0) {
-                      jobMax[j] = job.count - populationChange;
-                    } else {
-                      jobMax[j] = job.count;
-                    }
-                  } else if (resources2.Food.isCapped()) {
-                    jobMax[j] = 0;
-                  } else if (resources2.Food.currentQuantity + foodRateOfChange / ticksPerSecond2() < minFoodStorage) {
-                    if (job.count === 0) {
-                      jobMax[j] = 1;
-                    } else {
-                      let foodPerWorker = resources2.Food.getProduction("job_" + job.id) / job.count;
-                      let missingWorkers = Math.ceil(foodRateOfChange / -foodPerWorker) || 0;
-                      jobMax[j] = Math.max(1, job.count + missingWorkers);
-                    }
-                  } else if (resources2.Food.currentQuantity > maxFoodStorage && foodRateOfChange > 0) {
-                    jobMax[j] = job.count - 1;
-                  } else {
-                    jobMax[j] = job.count;
-                  }
-                  minFarmers = jobMax[j];
-                }
-                if (game2.global.race["unfathomable"]) {
-                  jobMax[j] = Number.MAX_SAFE_INTEGER;
-                } else if (job === jobs2.Hunter) {
-                  if (resources2.Furs.isUnlocked() && (game2.global.race["evil"] || game2.global.race["artifical"])) {
-                    jobMax[j] = resources2.Furs.isUseful() ? Number.MAX_SAFE_INTEGER : Math.max(
-                      jobMax[j],
-                      resources2.Furs.getBusyWorkers(
-                        "job_hunter",
-                        jobs2.Hunter.count
-                      )
-                    );
-                  }
-                  if (demonicLumber) {
-                    jobMax[j] = resources2.Lumber.isUseful() ? Number.MAX_SAFE_INTEGER : Math.max(
-                      jobMax[j],
-                      resources2.Lumber.getBusyWorkers(
-                        "job_hunter",
-                        jobs2.Hunter.count
-                      )
-                    );
-                  }
-                }
-              }
-              if (demonicLumber) {
-                jobsToAssign = Math.min(
-                  availableEmployees,
-                  Math.max(
-                    currentEmployees,
-                    minFarmers,
-                    Math.min(jobMax[j], jobs2.Lumberjack.breakpointEmployees(i))
-                  )
-                );
-              } else {
-                jobsToAssign = Math.min(jobsToAssign, minFarmers);
-              }
-            }
-            if (job === jobs2.Lumberjack) {
-              if (jobMax[j] === void 0) {
-                jobMax[j] = 0;
-                if (!game2.global.race["soul_eater"] && game2.global.race["evil"]) {
-                  jobMax[j] = resources2.Furs.isUseful() ? Number.MAX_SAFE_INTEGER : resources2.Furs.getBusyWorkers(
-                    "job_reclaimer",
-                    jobs2.Lumberjack.count
-                  );
-                }
-                jobMax[j] = resources2.Lumber.isUseful() ? Number.MAX_SAFE_INTEGER : Math.max(
-                  jobMax[j],
-                  resources2.Lumber.getBusyWorkers(
-                    game2.global.race["evil"] ? "job_reclaimer" : "job_lumberjack",
-                    jobs2.Lumberjack.count
-                  )
-                );
-              }
-              jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
-            }
-            if (job === jobs2.QuarryWorker) {
-              if (jobMax[j] === void 0) {
-                jobMax[j] = 0;
-                if (resources2.Aluminium.isUnlocked()) {
-                  jobMax[j] = resources2.Aluminium.isUseful() ? Number.MAX_SAFE_INTEGER : Math.max(
-                    jobMax[j],
-                    resources2.Aluminium.getBusyWorkers(
-                      "workers",
-                      jobs2.QuarryWorker.count
-                    )
-                  );
-                }
-                if (resources2.Chrysotile.isUnlocked()) {
-                  jobMax[j] = resources2.Chrysotile.isUseful() ? Number.MAX_SAFE_INTEGER : Math.max(
-                    jobMax[j],
-                    resources2.Chrysotile.getBusyWorkers(
-                      "workers",
-                      jobs2.QuarryWorker.count
-                    )
-                  );
-                }
-                jobMax[j] = resources2.Stone.isUseful() ? Number.MAX_SAFE_INTEGER : Math.max(
-                  jobMax[j],
-                  resources2.Stone.getBusyWorkers(
-                    "workers",
-                    jobs2.QuarryWorker.count
-                  )
-                );
-              }
-              jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
-            }
-            if (job === jobs2.CrystalMiner) {
-              if (jobMax[j] === void 0) {
-                jobMax[j] = resources2.Crystal.isUseful() ? Number.MAX_SAFE_INTEGER : resources2.Crystal.getBusyWorkers(
-                  "job_crystal_miner",
-                  jobs2.CrystalMiner.count
-                );
-              }
-              jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
-            }
-            if (job === jobs2.Torturer) {
-              if (jobMax[j] === void 0) {
-                let total = 0;
-                for (let i2 = 0; i2 < game2.global.city.surfaceDwellers.length; i2++) {
-                  total += game2.global.city.captive_housing[`race${i2}`];
-                  total += game2.global.city.captive_housing[`jailrace${i2}`];
-                }
-                let rank = game2.global.stats.achieve.nightmare?.mg ?? 0;
-                jobMax[j] = Math.ceil(total / (rank / 2));
-              }
-              jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
-            }
-            if (job === jobs2.Miner && game2.global.race["warlord"]) {
-              jobsToAssign = jobs2.Miner.max;
-            } else if (job === jobs2.Miner) {
-              if (jobMax[j] === void 0) {
-                jobMax[j] = 0;
-                if (!minersDisabled) {
-                  if (game2.global.race["sappy"]) {
-                    if (resources2.Aluminium.isUnlocked()) {
-                      jobMax[j] = resources2.Aluminium.isUseful() ? Number.MAX_SAFE_INTEGER : Math.max(
-                        jobMax[j],
-                        resources2.Aluminium.getBusyWorkers(
-                          game2.global.race["cataclysm"] || game2.global.race["orbit_decayed"] ? "space_red_mine_title" : "job_miner",
-                          jobs2.Miner.count
-                        )
-                      );
-                    }
-                    if (resources2.Chrysotile.isUnlocked()) {
-                      jobMax[j] = resources2.Chrysotile.isUseful() ? Number.MAX_SAFE_INTEGER : Math.max(
-                        jobMax[j],
-                        resources2.Chrysotile.getBusyWorkers(
-                          "job_miner",
-                          jobs2.Miner.count
-                        )
-                      );
-                    }
-                  }
-                  if (game2.global.tech["titanium"] >= 2) {
-                    let shipShift = buildings2.BeltIronShip.stateOnCount * 2;
-                    jobMax[j] = resources2.Titanium.isUseful() ? Number.MAX_SAFE_INTEGER : Math.max(
-                      jobMax[j],
-                      resources2.Titanium.getBusyWorkers(
-                        "resource_Iron_name",
-                        jobs2.Miner.count + shipShift
-                      ) - shipShift
-                    );
-                  }
-                  if (resources2.Iron.isUnlocked()) {
-                    jobMax[j] = resources2.Iron.isUseful() ? Number.MAX_SAFE_INTEGER : Math.max(
-                      jobMax[j],
-                      resources2.Iron.getBusyWorkers(
-                        "job_miner",
-                        jobs2.Miner.count
-                      )
-                    );
-                  }
-                  jobMax[j] = resources2.Copper.isUseful() ? Number.MAX_SAFE_INTEGER : Math.max(
-                    jobMax[j],
-                    resources2.Copper.getBusyWorkers(
-                      "job_miner",
-                      jobs2.Miner.count
-                    )
-                  );
-                }
-              }
-              jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
-            }
-            if (job === jobs2.CoalMiner) {
-              if (jobMax[j] === void 0) {
-                jobMax[j] = 0;
-                if (!coalDisabled) {
-                  if (resources2.Uranium.isUnlocked()) {
-                    jobMax[j] = resources2.Uranium.isUseful() ? Number.MAX_SAFE_INTEGER : resources2.Uranium.getBusyWorkers(
-                      "job_coal_miner",
-                      jobs2.CoalMiner.count
-                    );
-                  }
-                  jobMax[j] = resources2.Coal.isUseful() ? Number.MAX_SAFE_INTEGER : Math.max(
-                    jobMax[j],
-                    resources2.Coal.getBusyWorkers(
-                      "job_coal_miner",
-                      jobs2.CoalMiner.count
-                    )
-                  );
-                }
-              }
-              jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
-            }
-            if (job === jobs2.SpaceMiner) {
-              if (jobMax[j] === void 0) {
-                jobMax[j] = (buildings2.BeltEleriumShip.stateOnCount * 2 + buildings2.BeltIridiumShip.stateOnCount + buildings2.BeltIronShip.stateOnCount) * traitVal2("high_pop", 0, 1);
-              }
-              jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
-              state2.maxSpaceMiners = Math.max(
-                state2.maxSpaceMiners,
-                Math.min(availableEmployees, job.breakpointEmployees(i, true))
-              );
-            }
-            if (job === jobs2.Entertainer && !haveTech2("superstar")) {
-              if (jobMax[j] === void 0) {
-                let taxBuffer = (settings2.autoTax || haveTask2("tax")) && game2.global.civic.taxes.tax_rate < poly2.taxCap(false) ? 1 : 0;
-                let moraleExtra = resources2.Morale.rateOfChange - resources2.Morale.maxQuantity - taxBuffer;
-                jobMax[j] = job.count - Math.floor(moraleExtra / entertainerMorale);
-              }
-              jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
-            }
-            if (job === jobs2.Banker && (resources2.Money.isCapped() || game2.global.civic.taxes.tax_rate <= 0) && !haveTech2("banking", 7)) {
-              jobsToAssign = 0;
-            }
-            if (job === jobs2.Scientist) {
-              if (jobMax[j] === void 0) {
-                jobMax[j] = Number.MAX_SAFE_INTEGER;
-                if (game2.global.race.universe !== "magic" && resources2.Knowledge.isCapped() && !game2.global.race["intelligent"] && !haveTech2("science", 5) && !haveTech2("genetics", 5)) {
-                  jobsToAssign = 0;
-                }
-                if (game2.global.race["witch_hunter"]) {
-                  let SusPerWiz = game2.global.civic.govern.type === "magocracy" ? 0.5 : 1;
-                  jobMax[j] = (99 - resources2.Sus.currentQuantity) / SusPerWiz + job.count * SusPerWiz;
-                }
-              }
-              jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
-            }
-            if (job === jobs2.Professor && !game2.global.race["intelligent"] && resources2.Knowledge.isCapped() && !haveTech2("genetics", 5) && !haveTech2("fanaticism", 2)) {
-              jobsToAssign = 0;
-            }
-            if (job === jobs2.CementWorker) {
-              if (jobMax[j] === void 0) {
-                jobMax[j] = Number.MAX_SAFE_INTEGER;
-                if (resources2.Stone.storageRatio < 0.1) {
-                  let stoneRateOfChange = resources2.Stone.rateOfChange + job.count * 3 - 5;
-                  if (game2.global.race["smoldering"] && settings2.autoQuarry) {
-                    stoneRateOfChange += resources2.Chrysotile.rateOfChange;
-                  }
-                  jobMax[j] = Math.min(
-                    jobMax[j],
-                    Math.floor(stoneRateOfChange / 3)
-                  );
-                }
-                if (!resources2.Cement.isUseful()) {
-                  jobMax[j] = Math.min(
-                    jobMax[j],
-                    resources2.Cement.getBusyWorkers(
-                      "city_cement_plant_bd",
-                      jobs2.CementWorker.count
-                    )
-                  );
-                }
-              }
-              jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
-            }
-            if (job === jobs2.HellSurveyor) {
-              if (jobMax[j] === void 0) {
-                if (game2.global.portal.fortress.threat > 9e3 && resources2.Population.storageRatio < 1) {
-                  jobMax[j] = 0;
-                } else {
-                  jobMax[j] = Number.MAX_SAFE_INTEGER;
-                }
-              }
-              jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
-            }
-            if (job === jobs2.Teamster) {
-              if (jobMax[j] === void 0) {
-                jobMax[j] = Math.round(
-                  game2.global.race.teamster / (game2.global.tech.transport ?? 0) * 1.5
-                );
-                jobMax[j] -= (game2.global.tech["railway"] ?? 0) * 2;
-              }
-              jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
-            }
-            if (job === jobs2.Meditator) {
-              if (jobMax[j] === void 0) {
-                let infusion = 0.95 ** buildings2.LakeLifeInfuser.stateOnCount;
-                let threshold = (1.25 + traitVal2("slow_digestion", 0) + traitVal2("humpback", 0) - traitVal2("atrophy", 0)) * infusion;
-                let meditator = 0.03 * traitVal2("high_pop", 1, "=") * infusion;
-                jobMax[j] = Math.ceil(
-                  (resources2.Population.currentQuantity / 100 * getFoodConsume2() - threshold) / meditator
-                );
-                jobMax[j] += 1;
-              }
-              jobsToAssign = Math.min(jobsToAssign, jobMax[j]);
-            }
-          }
-          if (job === jobs2.Entertainer) {
-            jobsToAssign = Math.min(
-              jobsToAssign,
-              getAuthorityEntertainerMaximum(job)
-            );
-          }
-          if (j === defaultIndex && minDefault > 0) {
-            requiredWorkers[j] += Math.min(availableWorkers, minDefault);
-            availableWorkers -= requiredWorkers[j];
-            jobsToAssign -= requiredWorkers[j];
-          }
-          if (jobsToAssign > 0 && job.is.serve) {
-            let servantsToAssign = Math.min(
-              availableServants,
-              Math.floor(jobsToAssign / servantMod)
-            );
-            requiredServants[j] += servantsToAssign;
-            availableServants -= servantsToAssign;
-            jobsToAssign -= servantsToAssign * servantMod;
-          }
-          if (jobsToAssign > 0) {
-            let workersToAssign = Math.min(jobsToAssign, availableWorkers);
-            requiredWorkers[j] += workersToAssign;
-            availableWorkers -= workersToAssign;
-          }
-        }
-        if (availableWorkers <= 0 && availableServants <= 0) {
-          break;
-        }
-      }
-      let entertainerIndex = jobList.indexOf(jobs2.Entertainer);
-      if (entertainerIndex !== -1 && requiredWorkers[entertainerIndex] !== jobList[entertainerIndex].count) {
-        resources2.Morale.incomeAdusted = true;
-      }
-      if (minerIndex !== -1 && requiredWorkers[minerIndex] !== jobList[minerIndex].count) {
-        resources2.Iron.incomeAdusted = true;
-      }
-      let splitJobs = [];
-      if (game2.global.race["unfathomable"] && farmerIndex !== -1 && settings2.jobRaiderWeighting > 0)
-        splitJobs.push({
-          index: farmerIndex,
-          job: jobs2.Hunter,
-          weighting: settings2.jobRaiderWeighting
-        });
-      if (lumberjackIndex !== -1 && settings2.jobLumberWeighting > 0)
-        splitJobs.push({
-          index: lumberjackIndex,
-          job: jobs2.Lumberjack,
-          weighting: settings2.jobLumberWeighting
-        });
-      if (quarryWorkerIndex !== -1 && settings2.jobQuarryWeighting > 0)
-        splitJobs.push({
-          index: quarryWorkerIndex,
-          job: jobs2.QuarryWorker,
-          weighting: settings2.jobQuarryWeighting
-        });
-      if (crystalMinerIndex !== -1 && settings2.jobCrystalWeighting > 0)
-        splitJobs.push({
-          index: crystalMinerIndex,
-          job: jobs2.CrystalMiner,
-          weighting: settings2.jobCrystalWeighting
-        });
-      if (scavengerIndex !== -1 && settings2.jobScavengerWeighting > 0)
-        splitJobs.push({
-          index: scavengerIndex,
-          job: jobs2.Scavenger,
-          weighting: settings2.jobScavengerWeighting
-        });
-      if (foragerIndex !== -1 && settings2.jobForagerWeighting > 0)
-        splitJobs.push({
-          index: foragerIndex,
-          job: jobs2.Forager,
-          weighting: settings2.jobForagerWeighting
-        });
-      if (splitJobs.length > 0) {
-        splitJobs.forEach((jobDetails) => {
-          availableWorkers += requiredWorkers[jobDetails.index];
-          requiredWorkers[jobDetails.index] = 0;
-          availableServants += requiredServants[jobDetails.index];
-          requiredServants[jobDetails.index] = 0;
-        });
-        if (splitJobs.find((s) => s.index === defaultIndex) && minDefault > requiredWorkers[defaultIndex]) {
-          let restoreDef = Math.min(
-            availableWorkers,
-            minDefault - requiredWorkers[defaultIndex]
-          );
-          requiredWorkers[defaultIndex] += restoreDef;
-          availableWorkers -= restoreDef;
-        }
-        let currentFarmers = requiredWorkers[farmerIndex] + requiredServants[farmerIndex] * servantMod;
-        if (splitJobs.find((s) => s.index === farmerIndex) && minFarmers > currentFarmers) {
-          let missingFarmers = minFarmers - currentFarmers;
-          let servantsToAssign = Math.min(
-            availableServants,
-            Math.floor(missingFarmers / servantMod)
-          );
-          requiredServants[farmerIndex] += servantsToAssign;
-          availableServants -= servantsToAssign;
-          missingFarmers -= servantsToAssign * servantMod;
-          if (missingFarmers > 0) {
-            let workersToAssign = Math.min(availableWorkers, missingFarmers);
-            requiredWorkers[farmerIndex] += workersToAssign;
-            availableWorkers -= workersToAssign;
-            missingFarmers -= workersToAssign;
-          }
-        }
-        let splitSorter = (a, b) => (requiredWorkers[a.index] + requiredServants[a.index] * servantMod) / a.weighting - (requiredWorkers[b.index] + requiredServants[b.index] * servantMod) / b.weighting || a.index - b.index;
-        for (let b = 0; b < 3 && (availableWorkers > 0 || availableServants > 0); b++) {
-          let remainingJobs = splitJobs.slice();
-          while (availableWorkers + availableServants > 0 && remainingJobs.length > 0) {
-            let jobDetails = remainingJobs.sort(splitSorter)[0];
-            let total = requiredWorkers[jobDetails.index] + requiredServants[jobDetails.index] * servantMod;
-            let bp = jobDetails.job.getBreakpoint(b) > 0 ? jobDetails.job.breakpointEmployees(b) : 0;
-            if ((b === 2 || total < bp) && !(total >= jobMax[jobDetails.index])) {
-              if (availableServants > 0) {
-                requiredServants[jobDetails.index]++;
-                availableServants--;
-              } else {
-                requiredWorkers[jobDetails.index]++;
-                availableWorkers--;
-              }
-            } else {
-              remainingJobs.shift();
-            }
-          }
-        }
-      }
-      let fallback = [
-        farmerIndex,
-        lumberjackIndex,
-        quarryWorkerIndex,
-        crystalMinerIndex,
-        scavengerIndex
-      ];
-      while ((availableWorkers > 0 || availableServants > 0) && fallback.length > 0) {
-        let idx = fallback.pop();
-        if (idx !== -1) {
-          requiredWorkers[idx] += availableWorkers;
-          availableWorkers = 0;
-          requiredServants[idx] += availableServants;
-          availableServants = 0;
-        }
-      }
-      let workerDeltas = requiredWorkers.map(
-        (req, index) => req - jobList[index].workers
+    }
+    filtered = [...filtered].sort(
+      (left, right) => left.currentQuantity / left.weighting - right.currentQuantity / right.weighting
+    );
+    const shareWorkers = /* @__PURE__ */ new Map();
+    const shareServants = /* @__PURE__ */ new Map();
+    if (filtered.length > 0) {
+      const winnerKey = filtered[0].currentQuantity / filtered[0].weighting;
+      const group = Number.isFinite(winnerKey) ? filtered.filter(
+        (craft) => craft.currentQuantity / craft.weighting <= winnerKey * 1.1
+      ) : [filtered[0]];
+      let remainingWorkers = availableCraftsmen;
+      let remainingServants = input.skilledServantsMaximum;
+      let remainingWeight = group.reduce(
+        (sum, craft) => sum + craft.weighting,
+        0
       );
-      workerDeltas.forEach(
-        (delta, index) => delta < 0 && jobList[index].removeWorkers(delta * -1)
-      );
-      workerDeltas.forEach(
-        (delta, index) => delta > 0 && jobList[index].addWorkers(delta)
-      );
-      if (settings2.jobManageServants) {
-        let servantDeltas = requiredServants.map(
-          (req, index) => req - jobList[index].servants
-        );
-        servantDeltas.forEach(
-          (delta, index) => delta < 0 && jobList[index].removeServants(delta * -1)
-        );
-        servantDeltas.forEach(
-          (delta, index) => delta > 0 && jobList[index].addServants(delta)
-        );
+      for (const craft of group) {
+        const share = remainingWeight > 0 ? craft.weighting / remainingWeight : 1;
+        const workerShare = Math.round(remainingWorkers * share);
+        const servantShare = Math.round(remainingServants * share);
+        shareWorkers.set(craft.jobToken, workerShare);
+        shareServants.set(craft.jobToken, servantShare);
+        remainingWorkers -= workerShare;
+        remainingServants -= servantShare;
+        remainingWeight -= craft.weighting;
       }
-      state2.lastPopulationCount = resources2.Population.currentQuantity;
-      state2.lastFarmerCount = farmerIndex === -1 ? 0 : requiredWorkers[farmerIndex] + requiredServants[farmerIndex] * servantMod;
-      if (!craftOnly && settings2.jobSetDefault) {
-        if (jobs2.QuarryWorker.isManaged() && requiredWorkers[quarryWorkerIndex] > 0) {
-          jobs2.QuarryWorker.setAsDefault();
-        } else if (jobs2.Lumberjack.isManaged() && requiredWorkers[lumberjackIndex] > 0) {
-          jobs2.Lumberjack.setAsDefault();
-        } else if (jobs2.CrystalMiner.isManaged() && requiredWorkers[crystalMinerIndex] > 0) {
-          jobs2.CrystalMiner.setAsDefault();
-        } else if (jobs2.Scavenger.isManaged() && requiredWorkers[scavengerIndex] > 0) {
-          jobs2.Scavenger.setAsDefault();
-        } else if (jobs2.Forager.isManaged()) {
-          jobs2.Forager.setAsDefault();
-        } else if (jobs2.Hunter.isManaged()) {
-          jobs2.Hunter.setAsDefault();
-        } else if (jobs2.Farmer.isManaged()) {
-          jobs2.Farmer.setAsDefault();
-        } else if (jobs2.Teamster.isManaged()) {
-          jobs2.Teamster.setAsDefault();
-        } else {
-          if (jobs2.Scavenger.isUnlocked()) {
-            jobs2.Scavenger.setAsDefault();
-          } else if (jobs2.CrystalMiner.isUnlocked()) {
-            jobs2.CrystalMiner.setAsDefault();
-          } else if (jobs2.QuarryWorker.isUnlocked()) {
-            jobs2.QuarryWorker.setAsDefault();
-          } else if (jobs2.Lumberjack.isUnlocked()) {
-            jobs2.Lumberjack.setAsDefault();
-          } else if (jobs2.Forager.isUnlocked()) {
-            jobs2.Forager.setAsDefault();
-          } else if (jobs2.Hunter.isManaged()) {
-            jobs2.Hunter.setAsDefault();
-          } else {
-            jobs2.Unemployed.setAsDefault();
-          }
-        }
-      }
+    }
+    for (const craft of input.crafting) {
+      if (craft.buildingCapacity !== null) continue;
+      workers.set(craft.jobToken, shareWorkers.get(craft.jobToken) ?? 0);
+      servants.set(craft.jobToken, shareServants.get(craft.jobToken) ?? 0);
+    }
+    if (filtered.length === 0) availableWorkers += availableCraftsmen;
+    const focus = [...shareWorkers.keys()].map((token) => input.jobs.find((job) => job.token === token).id).join("+") || "none";
+    let debugMessage = null;
+    if (input.craftDebug && input.lastCraftWinner !== focus) {
+      const detail = filtered.map((craft) => {
+        const job = input.jobs.find((entry) => entry.token === craft.jobToken);
+        const assigned = `→${shareWorkers.get(craft.jobToken) ?? 0}` + (input.skilledServantsMaximum > 0 ? `+${shareServants.get(craft.jobToken) ?? 0}s` : "");
+        const key = (craft.currentQuantity / craft.weighting).toFixed(1);
+        return input.foundryWeighting === "buildings" ? `${job.id} q=${craft.currentQuantity.toFixed(0)} key=${key} (${craft.driver ?? "no building"})${assigned}` : `${job.id} q=${craft.currentQuantity.toFixed(0)} key=${key}${assigned}`;
+      }).join("; ");
+      debugMessage = `[craft] focus ${input.lastCraftWinner ?? "none"}⇒${focus}` + (filter ? ` filter=${filter}` : "") + ` | ${detail}` + (excluded.length > 0 ? ` | excluded: ${excluded.join(", ")}` : "");
+    }
+    return {
+      workers,
+      servants,
+      availableWorkers,
+      availableCraftsmen,
+      craftWinner: input.craftDebug ? focus : null,
+      debugMessage
     };
+  }
+  function authorityMaximum(input) {
+    const authority = input.authority;
+    if (!authority.enabled) {
+      return { cap: Number.MAX_SAFE_INTEGER, storedCap: null, debug: null };
+    }
+    let storedCap = authority.previousCap;
+    let debug = null;
+    const entertainerIndex = indexOfToken(input, input.entertainerToken);
+    const entertainer = input.jobs[entertainerIndex];
+    if (authority.moraleCeiling !== null && entertainer !== void 0) {
+      const limits = [];
+      if (authority.entertainerMorale > 0) {
+        const without = authority.moralePotential - entertainer.count * authority.entertainerMorale;
+        limits.push(
+          Math.floor(
+            (authority.moraleCeiling - without + 1e-9) / authority.entertainerMorale
+          )
+        );
+      }
+      if (authority.superstarMorale > 0) {
+        const without = authority.moraleMaximum - entertainer.count * authority.superstarMorale;
+        limits.push(
+          Math.floor(
+            (authority.moraleCeiling - without + 1e-9) / authority.superstarMorale
+          )
+        );
+      }
+      const calculated = limits.length === 0 ? entertainer.count : Math.max(0, ...limits);
+      storedCap = authority.current < 100 && authority.previousCap !== null ? Math.min(authority.previousCap, calculated) : calculated;
+      if (authority.debug && storedCap !== authority.previousCap) {
+        debug = `[authority] entertainers cap ${authority.previousCap ?? entertainer.count}→${storedCap} (amount=${authority.current.toFixed(1)}, morale=${authority.morale.toFixed(1)}→max=${authority.moraleCeiling.toFixed(1)})`;
+      }
+    }
+    return {
+      cap: storedCap ?? Number.MAX_SAFE_INTEGER,
+      storedCap,
+      debug
+    };
+  }
+  function planJobs(input) {
+    if (!input.available || input.jobs.length === 0) return null;
+    const requiredWorkers = input.jobs.map(() => 0);
+    const requiredServants = input.jobs.map(() => 0);
+    let availableWorkers = input.jobs.reduce((sum, job) => sum + job.workers, 0);
+    let availableServants = input.manageServants ? input.servantsMaximum : 0;
+    let availableCraftsmen = input.craftsmenMaximum;
+    const farmerIndex = indexOfToken(input, input.farmerToken);
+    const defaultIndex = indexOfToken(input, input.defaultJobToken);
+    if (input.craftOnly) {
+      availableCraftsmen = availableWorkers;
+      availableWorkers = 0;
+      availableServants = 0;
+    } else if (input.autoCraftsmen && availableWorkers >= availableCraftsmen * (farmerIndex === -1 ? 1 : 2)) {
+      availableWorkers -= availableCraftsmen;
+    } else {
+      availableCraftsmen = 0;
+    }
+    const craft = craftPlan(input, availableWorkers, availableCraftsmen);
+    availableWorkers = craft.availableWorkers;
+    for (const [token, count] of craft.workers) {
+      const index = indexOfToken(input, token);
+      if (index !== -1) requiredWorkers[index] = count;
+    }
+    for (const [token, count] of craft.servants) {
+      const index = indexOfToken(input, token);
+      if (index !== -1) requiredServants[index] = count;
+    }
+    const minerIndex = indexOfToken(input, input.minerToken);
+    if (input.reserveMiner && availableWorkers > 1 && minerIndex !== -1 && input.jobs[minerIndex].smart) {
+      requiredWorkers[minerIndex] = 1;
+      availableWorkers--;
+    }
+    const authority = authorityMaximum(input);
+    let minimumFarmers = 0;
+    let maximumSpaceMiners = 0;
+    const jobMaximums = input.jobs.map((job) => job.smartMaximum);
+    for (let pass = 0; pass < 3; pass++) {
+      for (let index = 0; index < input.jobs.length; index++) {
+        const job = input.jobs[index];
+        if (pass === 2 && job.split || job.crafting) continue;
+        availableWorkers += requiredWorkers[index];
+        let currentEmployees = requiredWorkers[index];
+        let availableEmployees = availableWorkers;
+        requiredWorkers[index] = 0;
+        if (job.serves) {
+          currentEmployees += requiredServants[index] * input.servantModifier;
+          availableServants += requiredServants[index];
+          availableEmployees += availableServants * input.servantModifier;
+          requiredServants[index] = 0;
+        }
+        let jobsToAssign = Math.min(
+          availableEmployees,
+          Math.max(currentEmployees, job.breakpoints[pass])
+        );
+        if (job.smart) {
+          if (job.kind === "farmer" || job.kind === "hunter") {
+            const maximum = jobMaximums[index] ?? Number.MAX_SAFE_INTEGER;
+            minimumFarmers = job.farmerMinimum ?? maximum;
+            if (job.demonicLumber) {
+              const lumberIndex = indexOfToken(input, input.lumberjackToken);
+              const lumberBreakpoint = lumberIndex === -1 ? 0 : input.jobs[lumberIndex].breakpoints[pass];
+              jobsToAssign = Math.min(
+                availableEmployees,
+                Math.max(
+                  currentEmployees,
+                  minimumFarmers,
+                  Math.min(maximum, lumberBreakpoint)
+                )
+              );
+            } else {
+              jobsToAssign = Math.min(jobsToAssign, minimumFarmers);
+            }
+          } else if (job.warlordMiner) {
+            jobsToAssign = job.maximum;
+          } else if (jobMaximums[index] !== null) {
+            jobsToAssign = Math.min(jobsToAssign, jobMaximums[index]);
+          }
+          if (job.kind === "space-miner") {
+            maximumSpaceMiners = Math.max(
+              maximumSpaceMiners,
+              Math.min(availableEmployees, job.uncappedBreakpoints[pass])
+            );
+          }
+        }
+        if (job.kind === "entertainer") {
+          jobsToAssign = Math.min(jobsToAssign, authority.cap);
+        }
+        if (index === defaultIndex && input.minimumDefault > 0) {
+          requiredWorkers[index] = requiredWorkers[index] + Math.min(availableWorkers, input.minimumDefault);
+          availableWorkers -= requiredWorkers[index];
+          jobsToAssign -= requiredWorkers[index];
+        }
+        if (jobsToAssign > 0 && job.serves) {
+          const servants = Math.min(
+            availableServants,
+            Math.floor(jobsToAssign / input.servantModifier)
+          );
+          requiredServants[index] = requiredServants[index] + servants;
+          availableServants -= servants;
+          jobsToAssign -= servants * input.servantModifier;
+        }
+        if (jobsToAssign > 0) {
+          const workers = Math.min(jobsToAssign, availableWorkers);
+          requiredWorkers[index] = requiredWorkers[index] + workers;
+          availableWorkers -= workers;
+        }
+      }
+      if (availableWorkers <= 0 && availableServants <= 0) break;
+    }
+    const splitJobs = input.splitEntries.map((entry) => ({
+      entry,
+      index: indexOfToken(input, entry.jobToken)
+    })).filter(({ index }) => index !== -1);
+    if (splitJobs.length > 0) {
+      for (const { index } of splitJobs) {
+        availableWorkers += requiredWorkers[index];
+        requiredWorkers[index] = 0;
+        availableServants += requiredServants[index];
+        requiredServants[index] = 0;
+      }
+      if (splitJobs.some(({ index }) => index === defaultIndex) && input.minimumDefault > (requiredWorkers[defaultIndex] ?? 0)) {
+        const restored = Math.min(
+          availableWorkers,
+          input.minimumDefault - requiredWorkers[defaultIndex]
+        );
+        requiredWorkers[defaultIndex] += restored;
+        availableWorkers -= restored;
+      }
+      const farmerIsSplit = splitJobs.some(({ index }) => index === farmerIndex);
+      const currentFarmers = (requiredWorkers[farmerIndex] ?? 0) + (requiredServants[farmerIndex] ?? 0) * input.servantModifier;
+      if (farmerIsSplit && minimumFarmers > currentFarmers) {
+        let missing = minimumFarmers - currentFarmers;
+        const servants = Math.min(
+          availableServants,
+          Math.floor(missing / input.servantModifier)
+        );
+        requiredServants[farmerIndex] += servants;
+        availableServants -= servants;
+        missing -= servants * input.servantModifier;
+        const workers = Math.min(availableWorkers, missing);
+        requiredWorkers[farmerIndex] += workers;
+        availableWorkers -= workers;
+      }
+      const compare = (left, right) => (requiredWorkers[left.index] + requiredServants[left.index] * input.servantModifier) / left.entry.weighting - (requiredWorkers[right.index] + requiredServants[right.index] * input.servantModifier) / right.entry.weighting || left.index - right.index;
+      for (let pass = 0; pass < 3 && (availableWorkers > 0 || availableServants > 0); pass++) {
+        const remaining = [...splitJobs];
+        while (availableWorkers + availableServants > 0 && remaining.length > 0) {
+          remaining.sort(compare);
+          const selected = remaining[0];
+          const total = requiredWorkers[selected.index] + requiredServants[selected.index] * input.servantModifier;
+          const breakpoint = selected.entry.breakpoints[pass] > 0 ? selected.entry.breakpoints[pass] : 0;
+          if ((pass === 2 || total < breakpoint) && !(total >= (jobMaximums[selected.index] ?? Number.MAX_SAFE_INTEGER))) {
+            if (availableServants > 0) {
+              requiredServants[selected.index]++;
+              availableServants--;
+            } else {
+              requiredWorkers[selected.index]++;
+              availableWorkers--;
+            }
+          } else {
+            remaining.shift();
+          }
+        }
+      }
+    }
+    const fallback = [
+      input.farmerToken,
+      input.lumberjackToken,
+      input.quarryToken,
+      input.crystalMinerToken,
+      input.scavengerToken
+    ];
+    while ((availableWorkers > 0 || availableServants > 0) && fallback.length > 0) {
+      const index = indexOfToken(input, fallback.pop() ?? null);
+      if (index !== -1) {
+        requiredWorkers[index] += availableWorkers;
+        requiredServants[index] += availableServants;
+        availableWorkers = 0;
+        availableServants = 0;
+      }
+    }
+    const entertainerIndex = indexOfToken(input, input.entertainerToken);
+    let selectedDefaultToken = null;
+    if (!input.craftOnly && input.setDefault) {
+      selectedDefaultToken = input.defaultPreference.find((candidate) => {
+        const index = indexOfToken(input, candidate.allocationToken);
+        if (candidate.requirement === "managed-with-workers") {
+          return candidate.managed && index !== -1 && requiredWorkers[index] > 0;
+        }
+        return candidate.requirement === "managed" ? candidate.managed : candidate.unlocked;
+      })?.jobToken ?? null;
+    }
+    const assignments = input.jobs.map(
+      (job, index) => Object.freeze({
+        jobToken: job.token,
+        workers: requiredWorkers[index],
+        servants: requiredServants[index]
+      })
+    );
+    return Object.freeze({
+      kind: "assign-jobs",
+      assignments: Object.freeze(assignments),
+      selectedDefaultToken,
+      moraleIncomeAdjusted: entertainerIndex !== -1 && requiredWorkers[entertainerIndex] !== input.jobs[entertainerIndex].count,
+      ironIncomeAdjusted: minerIndex !== -1 && requiredWorkers[minerIndex] !== input.jobs[minerIndex].count,
+      maximumSpaceMiners,
+      lastPopulationCount: input.population,
+      lastFarmerCount: farmerIndex === -1 ? 0 : requiredWorkers[farmerIndex] + requiredServants[farmerIndex] * input.servantModifier,
+      authorityEntertainerCap: authority.storedCap,
+      clearAuthorityEntertainerCap: !input.authority.enabled,
+      craftWinner: craft.craftWinner,
+      craftDebugMessage: craft.debugMessage,
+      authorityDebugMessage: authority.debug
+    });
+  }
+
+  // src/application/jobs.ts
+  var SUCCEEDED21 = Object.freeze({
+    status: "succeeded"
+  });
+  function runJobsAutomation(dependencies, craftOnly = false) {
+    const decision2 = planJobs(dependencies.reader.readCycle(craftOnly));
+    return decision2 === null ? SUCCEEDED21 : dependencies.executor.execute(decision2);
+  }
+
+  // src/adapters/evolve/jobs.ts
+  function requireString5(value, path) {
+    if (typeof value !== "string")
+      throw new TypeError(`${path} must be a string`);
+    return value;
+  }
+  function optionalNumber2(value, path, fallback = 0) {
+    return value === void 0 ? fallback : requireNumber(value, path);
+  }
+  function call2(target, key, path, args = []) {
+    return Reflect.apply(requireFunction(target[key], path), target, args);
+  }
+  function booleanSetting2(settings2, key) {
+    return requireBoolean(settings2[key], `settings.${key}`);
+  }
+  function numberSetting2(settings2, key) {
+    return requireNumber(settings2[key], `settings.${key}`);
+  }
+  function trait(dependencies, name, index = 0, operation2) {
+    return requireNumber(
+      dependencies.traitValue(name, index, operation2),
+      `traitVal(${name})`
+    );
+  }
+  function technology(dependencies, name, rank) {
+    return Boolean(dependencies.haveTech(name, rank));
+  }
+  function resource(resources2, name) {
+    return requireRecord(resources2[name], `resources.${name}`);
+  }
+  function building(buildings2, name) {
+    return requireRecord(buildings2[name], `buildings.${name}`);
+  }
+  function resourceNumber(resources2, name, key) {
+    return requireNumber(
+      resource(resources2, name)[key],
+      `resources.${name}.${key}`
+    );
+  }
+  function resourceFlag(resources2, name, method, args = []) {
+    const value = resource(resources2, name);
+    return Boolean(call2(value, method, `resources.${name}.${method}`, args));
+  }
+  function busyWorkers(resources2, name, source2, count) {
+    return requireNumber(
+      call2(
+        resource(resources2, name),
+        "getBusyWorkers",
+        `resources.${name}.getBusyWorkers`,
+        [source2, count]
+      ),
+      `resources.${name} busy workers`
+    );
+  }
+  function identityKind(job, jobs2) {
+    if (job === jobs2["Farmer"]) return "farmer";
+    if (job === jobs2["Hunter"]) return "hunter";
+    if (job === jobs2["Lumberjack"]) return "lumberjack";
+    if (job === jobs2["QuarryWorker"]) return "quarry-worker";
+    if (job === jobs2["CrystalMiner"]) return "crystal-miner";
+    if (job === jobs2["Scavenger"]) return "scavenger";
+    if (job === jobs2["Forager"]) return "forager";
+    if (job === jobs2["Miner"]) return "miner";
+    if (job === jobs2["SpaceMiner"]) return "space-miner";
+    if (job === jobs2["Entertainer"]) return "entertainer";
+    return "other";
+  }
+  function jobCount2(job, path) {
+    return requireNumber(job["count"], `${path}.count`);
+  }
+  function jobSmartMaximum(dependencies, job, kind, jobs2, game2, settings2, buildings2, resources2, state2, smart, coalDisabled, minersDisabled, demonicLumber) {
+    if (!smart) return { maximum: null, farmerMinimum: null };
+    const global = requireRecord(game2["global"], "game.global");
+    const race = requireRecord(global["race"], "game.global.race");
+    const tech = requireRecord(global["tech"], "game.global.tech");
+    const count = jobCount2(job, "job");
+    let maximum = null;
+    let farmerMinimum = null;
+    if (kind === "miner" && race["warlord"]) {
+      return { maximum: null, farmerMinimum: null };
+    }
+    if (kind === "farmer" || kind === "hunter") {
+      if (race["artifical"] || race["unfathomable"]) {
+        maximum = 0;
+        farmerMinimum = 0;
+      } else {
+        let foodRate = resourceNumber(resources2, "Food", "rateOfChange");
+        let minimumFood = resourceNumber(resources2, "Food", "maxQuantity") * 0.2;
+        let maximumFood = resourceNumber(resources2, "Food", "maxQuantity") * 0.6;
+        const population = resourceNumber(
+          resources2,
+          "Population",
+          "currentQuantity"
+        );
+        const foodCurrent = resourceNumber(resources2, "Food", "currentQuantity");
+        if (race["ravenous"]) {
+          minimumFood = population * 1.5;
+          maximumFood = population * 3;
+          foodRate += Math.max(
+            foodCurrent / trait(dependencies, "ravenous", 1),
+            0
+          );
+        }
+        if (race["carnivore"]) {
+          minimumFood = population;
+          maximumFood = population * 2;
+          if (foodCurrent > 10) {
+            foodRate += (foodCurrent - 10) * trait(dependencies, "carnivore", 0, "=") * 0.9 ** requireNumber(
+              building(buildings2, "Smokehouse")["count"],
+              "buildings.Smokehouse.count"
+            );
+          }
+        }
+        const lastPopulation = requireNumber(
+          state2["lastPopulationCount"],
+          "state.lastPopulationCount"
+        );
+        const lastFarmers = requireNumber(
+          state2["lastFarmerCount"],
+          "state.lastFarmerCount"
+        );
+        if (population > lastPopulation) {
+          const populationChange = population - lastPopulation;
+          const farmerChange = count - lastFarmers;
+          maximum = populationChange === farmerChange && foodRate > 0 ? count - populationChange : count;
+        } else if (resourceFlag(resources2, "Food", "isCapped")) {
+          maximum = 0;
+        } else if (foodCurrent + foodRate / requireNumber(dependencies.ticksPerSecond(), "ticksPerSecond") < minimumFood) {
+          if (count === 0) {
+            maximum = 1;
+          } else {
+            const id = requireString5(job["id"], "job.id");
+            const production = requireNumber(
+              call2(
+                resource(resources2, "Food"),
+                "getProduction",
+                "resources.Food.getProduction",
+                [`job_${id}`]
+              ),
+              "food job production"
+            );
+            maximum = Math.max(
+              1,
+              count + (Math.ceil(foodRate / -(production / count)) || 0)
+            );
+          }
+        } else if (foodCurrent > maximumFood && foodRate > 0) {
+          maximum = count - 1;
+        } else {
+          maximum = count;
+        }
+        farmerMinimum = maximum;
+      }
+      if (race["unfathomable"]) {
+        maximum = Number.MAX_SAFE_INTEGER;
+      } else if (kind === "hunter") {
+        if (resourceFlag(resources2, "Furs", "isUnlocked") && (race["evil"] || race["artifical"])) {
+          maximum = resourceFlag(resources2, "Furs", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
+            maximum ?? 0,
+            busyWorkers(resources2, "Furs", "job_hunter", count)
+          );
+        }
+        if (demonicLumber) {
+          maximum = resourceFlag(resources2, "Lumber", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
+            maximum ?? 0,
+            busyWorkers(resources2, "Lumber", "job_hunter", count)
+          );
+        }
+      }
+    } else if (kind === "lumberjack") {
+      maximum = 0;
+      if (!race["soul_eater"] && race["evil"]) {
+        maximum = resourceFlag(resources2, "Furs", "isUseful") ? Number.MAX_SAFE_INTEGER : busyWorkers(resources2, "Furs", "job_reclaimer", count);
+      }
+      maximum = resourceFlag(resources2, "Lumber", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
+        maximum,
+        busyWorkers(
+          resources2,
+          "Lumber",
+          race["evil"] ? "job_reclaimer" : "job_lumberjack",
+          count
+        )
+      );
+    } else if (kind === "quarry-worker") {
+      maximum = 0;
+      for (const name of ["Aluminium", "Chrysotile"]) {
+        if (resourceFlag(resources2, name, "isUnlocked")) {
+          maximum = resourceFlag(resources2, name, "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(maximum, busyWorkers(resources2, name, "workers", count));
+        }
+      }
+      maximum = resourceFlag(resources2, "Stone", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(maximum, busyWorkers(resources2, "Stone", "workers", count));
+    } else if (kind === "crystal-miner") {
+      maximum = resourceFlag(resources2, "Crystal", "isUseful") ? Number.MAX_SAFE_INTEGER : busyWorkers(resources2, "Crystal", "job_crystal_miner", count);
+    } else if (job === jobs2["Torturer"]) {
+      const city = requireRecord(global["city"], "game.global.city");
+      const dwellers = city["surfaceDwellers"];
+      if (!Array.isArray(dwellers))
+        throw new TypeError("surfaceDwellers must be an array");
+      const housing = requireRecord(
+        city["captive_housing"],
+        "game.global.city.captive_housing"
+      );
+      let total = 0;
+      for (let index = 0; index < dwellers.length; index++) {
+        total += requireNumber(
+          housing[`race${index}`],
+          `captive_housing.race${index}`
+        );
+        total += requireNumber(
+          housing[`jailrace${index}`],
+          `captive_housing.jailrace${index}`
+        );
+      }
+      const stats = requireRecord(global["stats"], "game.global.stats");
+      const achieve = requireRecord(
+        stats["achieve"],
+        "game.global.stats.achieve"
+      );
+      const nightmare = achieve["nightmare"] === void 0 ? null : requireRecord(achieve["nightmare"], "nightmare achievement");
+      const rank = nightmare === null ? 0 : optionalNumber2(nightmare["mg"], "nightmare.mg");
+      maximum = Math.ceil(total / (rank / 2));
+    } else if (kind === "miner") {
+      maximum = 0;
+      if (!minersDisabled) {
+        if (race["sappy"]) {
+          for (const name of ["Aluminium", "Chrysotile"]) {
+            if (resourceFlag(resources2, name, "isUnlocked")) {
+              const source2 = name === "Aluminium" && (race["cataclysm"] || race["orbit_decayed"]) ? "space_red_mine_title" : "job_miner";
+              maximum = resourceFlag(resources2, name, "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(maximum, busyWorkers(resources2, name, source2, count));
+            }
+          }
+        }
+        if (optionalNumber2(tech["titanium"], "game.global.tech.titanium") >= 2) {
+          const shipShift = requireNumber(
+            building(buildings2, "BeltIronShip")["stateOnCount"],
+            "BeltIronShip.stateOnCount"
+          ) * 2;
+          maximum = resourceFlag(resources2, "Titanium", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
+            maximum,
+            busyWorkers(
+              resources2,
+              "Titanium",
+              "resource_Iron_name",
+              count + shipShift
+            ) - shipShift
+          );
+        }
+        if (resourceFlag(resources2, "Iron", "isUnlocked")) {
+          maximum = resourceFlag(resources2, "Iron", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
+            maximum,
+            busyWorkers(resources2, "Iron", "job_miner", count)
+          );
+        }
+        maximum = resourceFlag(resources2, "Copper", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
+          maximum,
+          busyWorkers(resources2, "Copper", "job_miner", count)
+        );
+      }
+    } else if (job === jobs2["CoalMiner"]) {
+      maximum = 0;
+      if (!coalDisabled) {
+        if (resourceFlag(resources2, "Uranium", "isUnlocked")) {
+          maximum = resourceFlag(resources2, "Uranium", "isUseful") ? Number.MAX_SAFE_INTEGER : busyWorkers(resources2, "Uranium", "job_coal_miner", count);
+        }
+        maximum = resourceFlag(resources2, "Coal", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
+          maximum,
+          busyWorkers(resources2, "Coal", "job_coal_miner", count)
+        );
+      }
+    } else if (kind === "space-miner") {
+      maximum = (requireNumber(
+        building(buildings2, "BeltEleriumShip")["stateOnCount"],
+        "BeltEleriumShip.stateOnCount"
+      ) * 2 + requireNumber(
+        building(buildings2, "BeltIridiumShip")["stateOnCount"],
+        "BeltIridiumShip.stateOnCount"
+      ) + requireNumber(
+        building(buildings2, "BeltIronShip")["stateOnCount"],
+        "BeltIronShip.stateOnCount"
+      )) * trait(dependencies, "high_pop", 0, 1);
+    } else if (kind === "entertainer" && !technology(dependencies, "superstar")) {
+      const civic = requireRecord(global["civic"], "game.global.civic");
+      const taxes = requireRecord(civic["taxes"], "game.global.civic.taxes");
+      const taxBuffer = (booleanSetting2(settings2, "autoTax") || Boolean(dependencies.haveTask("tax"))) && requireNumber(taxes["tax_rate"], "taxes.tax_rate") < requireNumber(dependencies.taxCap(false), "taxCap") ? 1 : 0;
+      const entertainerMorale = (optionalNumber2(tech["theatre"], "game.global.tech.theatre") + trait(dependencies, "musical")) * trait(dependencies, "emotionless", 0, "-") * trait(dependencies, "high_pop", 1, "=") * (state2["astroSign"] === "sagittarius" ? 1.05 : 1) * (race["lone_survivor"] ? 25 : 1);
+      maximum = count - Math.floor(
+        (resourceNumber(resources2, "Morale", "rateOfChange") - resourceNumber(resources2, "Morale", "maxQuantity") - taxBuffer) / entertainerMorale
+      );
+    } else if (job === jobs2["Banker"]) {
+      const civic = requireRecord(global["civic"], "game.global.civic");
+      const taxes = requireRecord(civic["taxes"], "game.global.civic.taxes");
+      maximum = (resourceFlag(resources2, "Money", "isCapped") || requireNumber(taxes["tax_rate"], "taxes.tax_rate") <= 0) && !technology(dependencies, "banking", 7) ? 0 : null;
+    } else if (job === jobs2["Scientist"]) {
+      maximum = Number.MAX_SAFE_INTEGER;
+      if (race["universe"] !== "magic" && resourceFlag(resources2, "Knowledge", "isCapped") && !race["intelligent"] && !technology(dependencies, "science", 5) && !technology(dependencies, "genetics", 5))
+        maximum = 0;
+      if (race["witch_hunter"]) {
+        const civic = requireRecord(global["civic"], "game.global.civic");
+        const govern = requireRecord(civic["govern"], "game.global.civic.govern");
+        const suspicionPerWizard = govern["type"] === "magocracy" ? 0.5 : 1;
+        maximum = (99 - resourceNumber(resources2, "Sus", "currentQuantity")) / suspicionPerWizard + count * suspicionPerWizard;
+      }
+    } else if (job === jobs2["Professor"]) {
+      maximum = !race["intelligent"] && resourceFlag(resources2, "Knowledge", "isCapped") && !technology(dependencies, "genetics", 5) && !technology(dependencies, "fanaticism", 2) ? 0 : null;
+    } else if (job === jobs2["CementWorker"]) {
+      maximum = Number.MAX_SAFE_INTEGER;
+      if (resourceNumber(resources2, "Stone", "storageRatio") < 0.1) {
+        let stoneRate = resourceNumber(resources2, "Stone", "rateOfChange") + count * 3 - 5;
+        if (race["smoldering"] && booleanSetting2(settings2, "autoQuarry")) {
+          stoneRate += resourceNumber(resources2, "Chrysotile", "rateOfChange");
+        }
+        maximum = Math.min(maximum, Math.floor(stoneRate / 3));
+      }
+      if (!resourceFlag(resources2, "Cement", "isUseful")) {
+        maximum = Math.min(
+          maximum,
+          busyWorkers(resources2, "Cement", "city_cement_plant_bd", count)
+        );
+      }
+    } else if (job === jobs2["HellSurveyor"]) {
+      const portal = requireRecord(global["portal"], "game.global.portal");
+      const fortress = requireRecord(
+        portal["fortress"],
+        "game.global.portal.fortress"
+      );
+      maximum = requireNumber(fortress["threat"], "fortress.threat") > 9e3 && resourceNumber(resources2, "Population", "storageRatio") < 1 ? 0 : Number.MAX_SAFE_INTEGER;
+    } else if (job === jobs2["Teamster"]) {
+      maximum = Math.round(
+        requireNumber(race["teamster"], "race.teamster") / optionalNumber2(tech["transport"], "tech.transport") * 1.5
+      );
+      maximum -= optionalNumber2(tech["railway"], "tech.railway") * 2;
+    } else if (job === jobs2["Meditator"]) {
+      const infusion = 0.95 ** requireNumber(
+        building(buildings2, "LakeLifeInfuser")["stateOnCount"],
+        "LakeLifeInfuser.stateOnCount"
+      );
+      const threshold = (1.25 + trait(dependencies, "slow_digestion") + trait(dependencies, "humpback") - trait(dependencies, "atrophy")) * infusion;
+      const meditator = 0.03 * trait(dependencies, "high_pop", 1, "=") * infusion;
+      maximum = Math.ceil(
+        (resourceNumber(resources2, "Population", "currentQuantity") / 100 * requireNumber(dependencies.getFoodConsume(), "getFoodConsume") - threshold) / meditator
+      ) + 1;
+    }
+    if (maximum !== null && !Number.isFinite(maximum)) {
+      maximum = maximum > 0 ? Number.MAX_SAFE_INTEGER : 0;
+    }
+    return { maximum, farmerMinimum };
+  }
+  function unavailableInput3(craftOnly) {
+    return Object.freeze({
+      available: false,
+      craftOnly,
+      autoCraftsmen: false,
+      autoCraftWithoutBuilding: false,
+      craftsmenMode: "other",
+      foundryWeighting: "other",
+      manageServants: false,
+      setDefault: false,
+      servantModifier: 1,
+      servantsMaximum: 0,
+      skilledServantsMaximum: 0,
+      craftsmenMaximum: 0,
+      minimumDefault: 0,
+      reserveMiner: false,
+      defaultJobToken: null,
+      farmerToken: null,
+      lumberjackToken: null,
+      quarryToken: null,
+      crystalMinerToken: null,
+      scavengerToken: null,
+      foragerToken: null,
+      entertainerToken: null,
+      minerToken: null,
+      population: 0,
+      craftDebug: false,
+      lastCraftWinner: null,
+      authority: Object.freeze({
+        enabled: false,
+        current: 0,
+        morale: 0,
+        moralePotential: 0,
+        moraleMaximum: 0,
+        moraleCeiling: null,
+        entertainerMorale: 0,
+        superstarMorale: 0,
+        previousCap: null,
+        debug: false
+      }),
+      jobs: Object.freeze([]),
+      crafting: Object.freeze([]),
+      splitEntries: Object.freeze([]),
+      defaultPreference: Object.freeze([])
+    });
+  }
+  function decisionsMatch4(left, right) {
+    return JSON.stringify(left) === JSON.stringify(right);
+  }
+  function createJobsAdapter(dependencies) {
+    let session = null;
+    const reader = Object.freeze({
+      readCycle(craftOnly) {
+        session = null;
+        const manager = requireRecord(dependencies.getJobManager(), "JobManager");
+        const listed = call2(
+          manager,
+          "managedPriorityList",
+          "JobManager.managedPriorityList"
+        );
+        if (!Array.isArray(listed))
+          throw new TypeError("managedPriorityList must return an array");
+        if (listed.length === 0) return unavailableInput3(craftOnly);
+        const rawJobs = listed.map(
+          (value, index) => requireRecord(value, `jobList[${index}]`)
+        );
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const jobs2 = requireRecord(dependencies.getJobs(), "jobs");
+        const crafter2 = requireRecord(dependencies.getCrafter(), "crafter");
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const state2 = requireRecord(dependencies.getState(), "state");
+        const debugWindow = requireRecord(
+          dependencies.getDebugWindow(),
+          "debug window"
+        );
+        const global = requireRecord(game2["global"], "game.global");
+        const race = requireRecord(global["race"], "game.global.race");
+        const civic = requireRecord(global["civic"], "game.global.civic");
+        const crew = requireRecord(civic["crew"], "game.global.civic.crew");
+        const coalDisabled = booleanSetting2(settings2, "jobDisableMiners") && requireNumber(
+          building(buildings2, "GatewayStarbase")["count"],
+          "GatewayStarbase.count"
+        ) > 0;
+        const minersDisabled = coalDisabled && !(race["sappy"] && race["smoldering"]);
+        const demonLumber = Boolean(dependencies.isDemonRace()) && Boolean(dependencies.isLumberRace());
+        const servantModifier = trait(dependencies, "high_pop", 0, 1);
+        const rawCrafting = manager["craftingJobs"];
+        if (!Array.isArray(rawCrafting))
+          throw new TypeError("JobManager.craftingJobs must be an array");
+        const jobInputs = rawJobs.map((job, token2) => {
+          const kind = identityKind(job, jobs2);
+          const flags = requireRecord(job["is"], `jobList[${token2}].is`);
+          const crafting = Boolean(dependencies.isCraftingJob(job));
+          const smart = requireBoolean(
+            job["isSmartEnabled"],
+            `jobList[${token2}].isSmartEnabled`
+          );
+          const demonicLumber = kind === "hunter" && demonLumber;
+          const smartMaximum = crafting ? { maximum: null, farmerMinimum: null } : jobSmartMaximum(
+            dependencies,
+            job,
+            kind,
+            jobs2,
+            game2,
+            settings2,
+            buildings2,
+            resources2,
+            state2,
+            smart,
+            coalDisabled,
+            minersDisabled,
+            demonicLumber
+          );
+          const breakpoints = [0, 1, 2].map(
+            (pass) => requireNumber(
+              call2(
+                job,
+                "breakpointEmployees",
+                `jobList[${token2}].breakpointEmployees`,
+                [pass]
+              ),
+              `jobList[${token2}] breakpoint ${pass}`
+            )
+          );
+          const uncappedBreakpoints = [0, 1, 2].map(
+            (pass) => requireNumber(
+              call2(
+                job,
+                "breakpointEmployees",
+                `jobList[${token2}].breakpointEmployees`,
+                [pass, true]
+              ),
+              `jobList[${token2}] uncapped breakpoint ${pass}`
+            )
+          );
+          return Object.freeze({
+            token: token2,
+            id: requireString5(job["id"], `jobList[${token2}].id`),
+            kind,
+            workers: requireNumber(job["workers"], `jobList[${token2}].workers`),
+            servants: requireNumber(
+              job["servants"],
+              `jobList[${token2}].servants`
+            ),
+            count: jobCount2(job, `jobList[${token2}]`),
+            maximum: requireNumber(job["max"], `jobList[${token2}].max`),
+            managed: Boolean(
+              call2(job, "isManaged", `jobList[${token2}].isManaged`)
+            ),
+            unlocked: Boolean(
+              call2(job, "isUnlocked", `jobList[${token2}].isUnlocked`)
+            ),
+            smart,
+            crafting,
+            serves: Boolean(flags["serve"]),
+            split: Boolean(flags["split"]),
+            isDefault: Boolean(
+              call2(job, "isDefault", `jobList[${token2}].isDefault`)
+            ),
+            breakpoints: Object.freeze(breakpoints),
+            uncappedBreakpoints: Object.freeze(uncappedBreakpoints),
+            smartMaximum: smartMaximum.maximum,
+            farmerMinimum: smartMaximum.farmerMinimum,
+            demonicLumber,
+            warlordMiner: kind === "miner" && Boolean(race["warlord"])
+          });
+        });
+        const tokenOf = (value) => {
+          const token2 = rawJobs.indexOf(value);
+          return token2 === -1 ? null : token2;
+        };
+        const craftsmenModeValue = settings2["productionCraftsmen"];
+        const craftsmenMode = craftsmenModeValue === "always" || craftsmenModeValue === "nocraft" || craftsmenModeValue === "servants" ? craftsmenModeValue : "other";
+        const weightingValue = settings2["productionFoundryWeighting"];
+        let foundryWeighting = weightingValue === "buildings" || weightingValue === "demanded" ? weightingValue : "other";
+        if (foundryWeighting === "buildings") {
+          const unlockedBuildings = state2["unlockedBuildings"];
+          if (!Array.isArray(unlockedBuildings)) {
+            throw new TypeError("state.unlockedBuildings must be an array");
+          }
+          if (unlockedBuildings.length === 0) foundryWeighting = "other";
+        }
+        const craftySpeed = requireRecord(global["genes"], "game.global.genes")["crafty"] ? 2 : 1;
+        const costModifier = craftySpeed * trait(dependencies, "resourceful", 0, "-") / 140;
+        const ticks = requireNumber(
+          dependencies.ticksPerSecond(),
+          "ticksPerSecond"
+        );
+        const craftingInputs = rawCrafting.map(
+          (value, index) => {
+            const job = requireRecord(value, `JobManager.craftingJobs[${index}]`);
+            const jobToken = tokenOf(job);
+            const craftResource = requireRecord(
+              job["resource"],
+              `craftingJobs[${index}].resource`
+            );
+            const enabled = jobToken !== null && Boolean(
+              call2(job, "isManaged", `craftingJobs[${index}].isManaged`)
+            ) && requireBoolean(
+              craftResource["autoCraftEnabled"],
+              `craftingJobs[${index}].resource.autoCraftEnabled`
+            );
+            if (!enabled) {
+              return Object.freeze({
+                jobToken: jobToken ?? -1,
+                enabled: false,
+                buildingCapacity: null,
+                affordability: 0,
+                demanded: false,
+                useful: false,
+                currentQuantity: 0,
+                weighting: 1,
+                driver: null,
+                exclusion: null
+              });
+            }
+            let craftBuilding = null;
+            if (job === crafter2["Scarletite"])
+              craftBuilding = building(buildings2, "RuinsHellForge");
+            else if (job === crafter2["Quantium"]) {
+              craftBuilding = technology(dependencies, "isolation") ? building(buildings2, "TauDiseaseLab") : building(buildings2, "EnceladusZeroGLab");
+            }
+            const demanded = Boolean(
+              call2(
+                craftResource,
+                "isDemanded",
+                `craftingJobs[${index}].resource.isDemanded`
+              )
+            );
+            let affordability = Number.MAX_SAFE_INTEGER;
+            let exclusion = null;
+            const costs = requireRecord(
+              craftResource["cost"],
+              `craftingJobs[${index}].resource.cost`
+            );
+            for (const [resourceId3, costValue] of Object.entries(costs)) {
+              const requiredResource = requireRecord(
+                resources2[resourceId3],
+                `resources.${resourceId3}`
+              );
+              if (!demanded && (!booleanSetting2(settings2, "useDemanded") && Boolean(
+                call2(
+                  requiredResource,
+                  "isDemanded",
+                  `resources.${resourceId3}.isDemanded`
+                )
+              ) || requireNumber(
+                requiredResource["storageRatio"],
+                `resources.${resourceId3}.storageRatio`
+              ) < requireNumber(
+                craftResource["craftPreserve"],
+                `craftingJobs[${index}].resource.craftPreserve`
+              ))) {
+                affordability = 0;
+                exclusion = `${requireString5(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
+                break;
+              }
+              affordability = Math.min(
+                affordability,
+                (requireNumber(
+                  craftResource["rateOfChange"],
+                  `craftingJobs[${index}].resource.rateOfChange`
+                ) + requireNumber(
+                  requiredResource["currentQuantity"],
+                  `resources.${resourceId3}.currentQuantity`
+                )) / (requireNumber(costValue, `craft cost ${resourceId3}`) * costModifier) / 2 * ticks
+              );
+            }
+            if (!Number.isFinite(affordability))
+              affordability = Number.MAX_SAFE_INTEGER;
+            const craftWeight = requireNumber(
+              craftResource["craftWeighting"],
+              `craftingJobs[${index}].resource.craftWeighting`
+            );
+            let weighting = craftWeight;
+            let driver = null;
+            if (foundryWeighting === "buildings") {
+              const requiredWeight = dependencies.findRequiredResourceWeight(craftResource);
+              weighting = (requiredWeight === void 0 || requiredWeight === null ? 0 : requireNumber(requiredWeight, "required resource weight")) * craftWeight;
+              const unlocked = state2["unlockedBuildings"];
+              if (!Array.isArray(unlocked))
+                throw new TypeError("state.unlockedBuildings must be an array");
+              const current = requireNumber(
+                craftResource["currentQuantity"],
+                `craftingJobs[${index}].resource.currentQuantity`
+              );
+              const resourceId3 = requireString5(
+                craftResource["id"],
+                `craftingJobs[${index}].resource.id`
+              );
+              const driving = unlocked.find((candidate) => {
+                const record = requireRecord(
+                  candidate,
+                  "state.unlockedBuildings entry"
+                );
+                const cost = requireRecord(
+                  record["cost"],
+                  "unlocked building cost"
+                );
+                const amount = cost[resourceId3];
+                return typeof amount === "number" && amount > current;
+              });
+              if (driving === void 0) {
+                driver = `no building×${craftWeight}`;
+              } else {
+                const record = requireRecord(driving, "driving building");
+                driver = `${requireString5(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
+              }
+            }
+            return Object.freeze({
+              jobToken: jobToken ?? -1,
+              enabled,
+              buildingCapacity: craftBuilding === null ? null : requireNumber(
+                craftBuilding["stateOnCount"],
+                "craft building stateOnCount"
+              ) * servantModifier,
+              affordability,
+              demanded,
+              useful: requireNumber(
+                craftResource["currentQuantity"],
+                `craftingJobs[${index}].resource.currentQuantity`
+              ) < requireNumber(
+                craftResource["storageRequired"],
+                `craftingJobs[${index}].resource.storageRequired`
+              ),
+              currentQuantity: requireNumber(
+                craftResource["currentQuantity"],
+                `craftingJobs[${index}].resource.currentQuantity`
+              ),
+              weighting,
+              driver,
+              exclusion
+            });
+          }
+        );
+        const authorityEnabled = booleanSetting2(settings2, "authorityManage") && numberSetting2(settings2, "generalMinimumAuthority") !== 0 && resourceFlag(resources2, "Authority", "isUnlocked");
+        let moraleCeiling = null;
+        if (authorityEnabled) {
+          const authorityTarget = Math.max(
+            100,
+            numberSetting2(settings2, "generalMinimumAuthority") < 0 ? resourceNumber(resources2, "Authority", "maxQuantity") : numberSetting2(settings2, "generalMinimumAuthority")
+          );
+          let authorityTaxLimit = requireNumber(
+            dependencies.taxCap(false),
+            "taxCap(false)"
+          );
+          const requestedTaxRate = Number(settings2["generalRequestedTaxRate"]);
+          if (booleanSetting2(settings2, "autoTax") && Number.isFinite(requestedTaxRate) && requestedTaxRate >= 0) {
+            authorityTaxLimit = Math.min(
+              Math.max(
+                requestedTaxRate,
+                requireNumber(dependencies.taxCap(true), "taxCap(true)")
+              ),
+              authorityTaxLimit
+            );
+          }
+          const taxes = requireRecord(civic["taxes"], "game.global.civic.taxes");
+          const canTax = taxes["display"] !== false && (booleanSetting2(settings2, "autoTax") || Boolean(dependencies.haveTask("tax"))) && requireNumber(taxes["tax_rate"], "taxes.tax_rate") < authorityTaxLimit && resourceNumber(resources2, "Authority", "currentQuantity") < authorityTarget;
+          const scriptTick = state2["scriptTick"];
+          const soldiersAdjusted = scriptTick !== void 0 && state2["authoritySoldiersAdjustedTick"] === scriptTick;
+          if (!canTax && !soldiersAdjusted) {
+            const govern = requireRecord(
+              civic["govern"],
+              "game.global.civic.govern"
+            );
+            const factor = govern["type"] === "democracy" ? 0.9 : 1;
+            const authorityAtHundred = resourceNumber(resources2, "Authority", "currentQuantity") + Math.max(
+              0,
+              resourceNumber(resources2, "Morale", "currentQuantity") - 100
+            ) * factor;
+            moraleCeiling = 100 + Math.max(0, authorityAtHundred - 100) / factor;
+          }
+        }
+        const tech = requireRecord(global["tech"], "game.global.tech");
+        const entertainerMorale = (optionalNumber2(tech["theatre"], "game.global.tech.theatre") + trait(dependencies, "musical")) * trait(dependencies, "emotionless", 0, "-") * trait(dependencies, "high_pop", 1, "=") * (state2["astroSign"] === "sagittarius" ? 1.05 : 1) * (race["lone_survivor"] ? 25 : 1);
+        const authority = Object.freeze({
+          enabled: authorityEnabled,
+          current: authorityEnabled ? resourceNumber(resources2, "Authority", "currentQuantity") : 0,
+          morale: authorityEnabled ? resourceNumber(resources2, "Morale", "currentQuantity") : 0,
+          moralePotential: authorityEnabled ? resourceNumber(resources2, "Morale", "rateOfChange") : 0,
+          moraleMaximum: authorityEnabled ? resourceNumber(resources2, "Morale", "maxQuantity") : 0,
+          moraleCeiling,
+          entertainerMorale,
+          superstarMorale: technology(dependencies, "superstar") ? trait(dependencies, "high_pop", 1, "=") : 0,
+          previousCap: state2["authorityEntertainerCap"] === void 0 ? null : requireNumber(
+            state2["authorityEntertainerCap"],
+            "state.authorityEntertainerCap"
+          ),
+          debug: Boolean(debugWindow["authorityDebug"])
+        });
+        const token = (name) => tokenOf(jobs2[name]);
+        const defaultCandidates = [];
+        const defaultJobs = /* @__PURE__ */ new Map();
+        let nextDefaultToken = rawJobs.length;
+        const addDefault = (name, requirement) => {
+          const value = jobs2[name];
+          if (typeof value !== "object" || value === null) return;
+          const record = value;
+          const allocationToken = tokenOf(record);
+          const jobToken = allocationToken ?? nextDefaultToken++;
+          defaultJobs.set(jobToken, record);
+          defaultCandidates.push(
+            Object.freeze({
+              jobToken,
+              allocationToken,
+              requirement,
+              managed: Boolean(
+                call2(record, "isManaged", `jobs.${name}.isManaged`)
+              ),
+              unlocked: Boolean(
+                call2(record, "isUnlocked", `jobs.${name}.isUnlocked`)
+              )
+            })
+          );
+        };
+        const setDefault = booleanSetting2(settings2, "jobSetDefault");
+        if (!craftOnly && setDefault) {
+          addDefault("QuarryWorker", "managed-with-workers");
+          addDefault("Lumberjack", "managed-with-workers");
+          addDefault("CrystalMiner", "managed-with-workers");
+          addDefault("Scavenger", "managed-with-workers");
+          addDefault("Forager", "managed");
+          addDefault("Hunter", "managed");
+          addDefault("Farmer", "managed");
+          addDefault("Teamster", "managed");
+          addDefault("Scavenger", "unlocked");
+          addDefault("CrystalMiner", "unlocked");
+          addDefault("QuarryWorker", "unlocked");
+          addDefault("Lumberjack", "unlocked");
+          addDefault("Forager", "unlocked");
+          addDefault("Hunter", "managed");
+          addDefault("Unemployed", "unlocked");
+        }
+        const currentDefault = jobInputs.find((job) => job.isDefault)?.token ?? null;
+        const farmerToken = race["artifical"] ? null : Math.max(token("Hunter") ?? -1, token("Farmer") ?? -1);
+        const normalizedFarmerToken = farmerToken === -1 ? null : farmerToken;
+        const lumberjackToken = demonLumber ? normalizedFarmerToken : token("Lumberjack");
+        const splitEntries = [];
+        const addSplit = (jobToken, name, setting) => {
+          if (jobToken === null) return;
+          const weighting = numberSetting2(settings2, setting);
+          if (weighting <= 0) return;
+          const raw = requireRecord(jobs2[name], `jobs.${name}`);
+          const breakpoints = [0, 1, 2].map((pass) => {
+            const configured = requireNumber(
+              call2(raw, "getBreakpoint", `jobs.${name}.getBreakpoint`, [pass]),
+              `jobs.${name} configured breakpoint ${pass}`
+            );
+            return configured > 0 ? requireNumber(
+              call2(
+                raw,
+                "breakpointEmployees",
+                `jobs.${name}.breakpointEmployees`,
+                [pass]
+              ),
+              `jobs.${name} breakpoint ${pass}`
+            ) : 0;
+          });
+          splitEntries.push(
+            Object.freeze({
+              jobToken,
+              weighting,
+              breakpoints: Object.freeze(breakpoints)
+            })
+          );
+        };
+        if (race["unfathomable"]) {
+          addSplit(normalizedFarmerToken, "Hunter", "jobRaiderWeighting");
+        }
+        addSplit(lumberjackToken, "Lumberjack", "jobLumberWeighting");
+        addSplit(token("QuarryWorker"), "QuarryWorker", "jobQuarryWeighting");
+        addSplit(token("CrystalMiner"), "CrystalMiner", "jobCrystalWeighting");
+        addSplit(token("Scavenger"), "Scavenger", "jobScavengerWeighting");
+        addSplit(token("Forager"), "Forager", "jobForagerWeighting");
+        const input = Object.freeze({
+          available: true,
+          craftOnly,
+          autoCraftsmen: booleanSetting2(settings2, "autoCraftsmen"),
+          autoCraftWithoutBuilding: craftsmenMode === "always" || craftsmenMode === "nocraft" && Boolean(race["no_craft"]),
+          craftsmenMode,
+          foundryWeighting,
+          manageServants: booleanSetting2(settings2, "jobManageServants"),
+          setDefault,
+          servantModifier,
+          servantsMaximum: booleanSetting2(settings2, "jobManageServants") ? requireNumber(
+            call2(manager, "servantsMax", "JobManager.servantsMax"),
+            "servantsMax"
+          ) : 0,
+          skilledServantsMaximum: booleanSetting2(settings2, "jobManageServants") ? requireNumber(
+            call2(
+              manager,
+              "skilledServantsMax",
+              "JobManager.skilledServantsMax"
+            ),
+            "skilledServantsMax"
+          ) : 0,
+          craftsmenMaximum: requireNumber(
+            call2(manager, "craftingMax", "JobManager.craftingMax"),
+            "craftingMax"
+          ),
+          minimumDefault: requireNumber(crew["max"], "crew.max") - requireNumber(crew["workers"], "crew.workers") > 0 ? requireNumber(crew["max"], "crew.max") - requireNumber(crew["workers"], "crew.workers") + 1 : 0,
+          reserveMiner: (Boolean(race["hooved"]) && resourceNumber(resources2, "Horseshoe", "usefulRatio") < 1 || Boolean(race["artifical"]) && !race["deconstructor"] && resourceNumber(resources2, "Population", "storageRatio") < 1) && !minersDisabled,
+          defaultJobToken: currentDefault,
+          farmerToken: normalizedFarmerToken,
+          lumberjackToken,
+          quarryToken: token("QuarryWorker"),
+          crystalMinerToken: token("CrystalMiner"),
+          scavengerToken: token("Scavenger"),
+          foragerToken: token("Forager"),
+          entertainerToken: token("Entertainer"),
+          minerToken: token("Miner"),
+          population: resourceNumber(resources2, "Population", "currentQuantity"),
+          craftDebug: Boolean(debugWindow["craftDebug"]),
+          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString5(state2["lastCraftWinner"], "state.lastCraftWinner"),
+          authority,
+          jobs: Object.freeze(jobInputs),
+          crafting: Object.freeze(craftingInputs),
+          splitEntries: Object.freeze(splitEntries),
+          defaultPreference: Object.freeze(defaultCandidates)
+        });
+        session = {
+          manager,
+          game: game2,
+          jobsCatalog: jobs2,
+          state: state2,
+          resources: resources2,
+          rawJobs,
+          defaultJobs,
+          input
+        };
+        return input;
+      }
+    });
+    const executor = Object.freeze({
+      execute(decision2) {
+        const active = session;
+        if (active === null)
+          return stale("jobs-session-missing", "Jobs session is missing");
+        if (dependencies.getJobManager() !== active.manager || dependencies.getGame() !== active.game || dependencies.getJobs() !== active.jobsCatalog) {
+          return stale("jobs-source-changed", "Jobs source changed");
+        }
+        const expected = planJobs(active.input);
+        if (expected === null || !decisionsMatch4(expected, decision2)) {
+          return rejected2(
+            "invalid-jobs-decision",
+            "Jobs decision does not match the sampled plan"
+          );
+        }
+        const workerRemovals = [];
+        const workerAdditions = [];
+        const servantRemovals = [];
+        const servantAdditions = [];
+        for (const assignment of decision2.assignments) {
+          const job = active.rawJobs[assignment.jobToken];
+          const sampled = active.input.jobs[assignment.jobToken];
+          if (job === void 0 || sampled === void 0)
+            return rejected2(
+              "unknown-job-token",
+              "Jobs decision contains an unknown job token"
+            );
+          const workerDelta = assignment.workers - sampled.workers;
+          if (workerDelta < 0) {
+            requireFunction(
+              job["removeWorkers"],
+              `jobList[${assignment.jobToken}].removeWorkers`
+            );
+            workerRemovals.push([job, -workerDelta]);
+          } else if (workerDelta > 0) {
+            requireFunction(
+              job["addWorkers"],
+              `jobList[${assignment.jobToken}].addWorkers`
+            );
+            workerAdditions.push([job, workerDelta]);
+          }
+          if (active.input.manageServants) {
+            const servantDelta = assignment.servants - sampled.servants;
+            if (servantDelta < 0) {
+              requireFunction(
+                job["removeServants"],
+                `jobList[${assignment.jobToken}].removeServants`
+              );
+              servantRemovals.push([job, -servantDelta]);
+            } else if (servantDelta > 0) {
+              requireFunction(
+                job["addServants"],
+                `jobList[${assignment.jobToken}].addServants`
+              );
+              servantAdditions.push([job, servantDelta]);
+            }
+          }
+        }
+        const defaultJob = decision2.selectedDefaultToken === null ? null : active.defaultJobs.get(decision2.selectedDefaultToken);
+        if (defaultJob !== null && defaultJob !== void 0)
+          requireFunction(
+            defaultJob["setAsDefault"],
+            "selected job.setAsDefault"
+          );
+        const morale = decision2.moraleIncomeAdjusted ? resource(active.resources, "Morale") : null;
+        const iron = decision2.ironIncomeAdjusted ? resource(active.resources, "Iron") : null;
+        session = null;
+        if (decision2.craftDebugMessage !== null)
+          dependencies.log(decision2.craftDebugMessage);
+        if (decision2.craftWinner !== null)
+          active.state["lastCraftWinner"] = decision2.craftWinner;
+        active.state["maxSpaceMiners"] = decision2.maximumSpaceMiners;
+        if (decision2.clearAuthorityEntertainerCap)
+          delete active.state["authorityEntertainerCap"];
+        else if (decision2.authorityEntertainerCap !== null)
+          active.state["authorityEntertainerCap"] = decision2.authorityEntertainerCap;
+        if (decision2.authorityDebugMessage !== null)
+          dependencies.log(decision2.authorityDebugMessage);
+        if (morale !== null) morale["incomeAdusted"] = true;
+        if (iron !== null) iron["incomeAdusted"] = true;
+        for (const [job, count] of workerRemovals)
+          Reflect.apply(
+            requireFunction(job["removeWorkers"], "job.removeWorkers"),
+            job,
+            [count]
+          );
+        for (const [job, count] of workerAdditions)
+          Reflect.apply(
+            requireFunction(job["addWorkers"], "job.addWorkers"),
+            job,
+            [count]
+          );
+        for (const [job, count] of servantRemovals)
+          Reflect.apply(
+            requireFunction(job["removeServants"], "job.removeServants"),
+            job,
+            [count]
+          );
+        for (const [job, count] of servantAdditions)
+          Reflect.apply(
+            requireFunction(job["addServants"], "job.addServants"),
+            job,
+            [count]
+          );
+        active.state["lastPopulationCount"] = decision2.lastPopulationCount;
+        active.state["lastFarmerCount"] = decision2.lastFarmerCount;
+        if (defaultJob !== null && defaultJob !== void 0)
+          Reflect.apply(
+            requireFunction(
+              defaultJob["setAsDefault"],
+              "selected job.setAsDefault"
+            ),
+            defaultJob,
+            []
+          );
+        return SUCCEEDED2;
+      }
+    });
+    return Object.freeze({ reader, executor });
   }
 
   // src/automation/progression/build.ts
@@ -34349,36 +34896,36 @@
       let estimatedTime = {};
       let affordableCache = {};
       let consumptionsUsed = {};
-      const isAffordable = (building) => affordableCache[building._vueBinding] ?? (affordableCache[building._vueBinding] = building.isAffordable());
-      const usesUsedConsumption = settings2.buildingConsumptionCheck === "perResource" ? (building) => building.consumption.some(
+      const isAffordable = (building2) => affordableCache[building2._vueBinding] ?? (affordableCache[building2._vueBinding] = building2.isAffordable());
+      const usesUsedConsumption = settings2.buildingConsumptionCheck === "perResource" ? (building2) => building2.consumption.some(
         (c) => c.rate >= 0 && consumptionsUsed[c.resource._id]
-      ) : settings2.buildingConsumptionCheck === "unlimited" ? (building) => false : (
+      ) : settings2.buildingConsumptionCheck === "unlimited" ? (building2) => false : (
         // onePerTick or any invalid A?B type override
-        (building) => Object.keys(consumptionsUsed).length > 0
+        (building2) => Object.keys(consumptionsUsed).length > 0
       );
       buildingsLoop: for (let i = 0; i < buildingList.length; i++) {
-        let building = buildingList[i];
-        if (ignoredList.includes(building) || !isAffordable(building)) {
+        let building2 = buildingList[i];
+        if (ignoredList.includes(building2) || !isAffordable(building2)) {
           continue;
         }
-        if (usesUsedConsumption(building)) {
+        if (usesUsedConsumption(building2)) {
           continue;
         }
-        let conflict2 = getCostConflict2(building);
-        if (conflict2 && !building.is.important) {
-          building.extraDescription += conflict2.status === "unavailable" ? "Cost reservation data unavailable; skipped for safety<br>" : `Conflicts with ${conflict2.targetNames.map((action) => {
+        let conflict2 = getCostConflict2(building2);
+        if (conflict2 && !building2.is.important) {
+          building2.extraDescription += conflict2.status === "unavailable" ? "Cost reservation data unavailable; skipped for safety<br>" : `Conflicts with ${conflict2.targetNames.map((action) => {
             return `<span class="has-text-info">${action}</span>`;
           }).join(", ")} for ${conflict2.resourceNames.map((res) => {
             return `<span class="has-text-info">${res}</span>`;
           }).join(", ")} (${conflict2.targetCause})<br>`;
           continue;
         }
-        if (!settings2.buildingBuildIfStorageFull || !Object.keys(building.cost).some(
+        if (!settings2.buildingBuildIfStorageFull || !Object.keys(building2.cost).some(
           (res) => resources2[res].storageRatio > 0.98
         )) {
           for (let j = 0; j < buildingList.length; j++) {
             let other = buildingList[j];
-            let weightDiffRatio = other.weighting / building.weighting;
+            let weightDiffRatio = other.weighting / building2.weighting;
             if (weightDiffRatio <= 1.000001) {
               break;
             }
@@ -34389,18 +34936,18 @@
             if (!estimation) {
               estimation = [];
               for (let res in other.cost) {
-                let resource = resources2[res];
+                let resource2 = resources2[res];
                 let quantity = other.cost[res];
-                if (!resource.isUnlocked()) {
+                if (!resource2.isUnlocked()) {
                   continue;
                 }
-                let totalRateOfCharge = resource.rateOfChange;
+                let totalRateOfCharge = resource2.rateOfChange;
                 if (totalRateOfCharge > 0) {
-                  estimation[resource.id] = (quantity - resource.currentQuantity) / totalRateOfCharge;
-                } else if (settings2.buildingsIgnoreZeroRate && resource.storageRatio < 0.975 && resource.currentQuantity < quantity) {
-                  estimation[resource.id] = Number.MAX_SAFE_INTEGER;
+                  estimation[resource2.id] = (quantity - resource2.currentQuantity) / totalRateOfCharge;
+                } else if (settings2.buildingsIgnoreZeroRate && resource2.storageRatio < 0.975 && resource2.currentQuantity < quantity) {
+                  estimation[resource2.id] = Number.MAX_SAFE_INTEGER;
                 } else {
-                  estimation[resource.id] = 0;
+                  estimation[resource2.id] = 0;
                 }
               }
               estimation.total = Math.max(
@@ -34409,36 +34956,36 @@
               );
               estimatedTime[other._vueBinding] = estimation;
             }
-            for (let res in building.cost) {
-              let resource = resources2[res];
-              let thisQuantity = building.cost[res];
-              if (!resource.isUnlocked() || resource.storageRatio > 0.99 && resource.currentQuantity >= resource.storageRequired) {
+            for (let res in building2.cost) {
+              let resource2 = resources2[res];
+              let thisQuantity = building2.cost[res];
+              if (!resource2.isUnlocked() || resource2.storageRatio > 0.99 && resource2.currentQuantity >= resource2.storageRequired) {
                 continue;
               }
               let otherQuantity = other.cost[res];
               if (otherQuantity === void 0) {
                 continue;
               }
-              if (resource.currentQuantity >= otherQuantity + thisQuantity) {
+              if (resource2.currentQuantity >= otherQuantity + thisQuantity) {
                 continue;
               }
-              if (thisQuantity <= (estimation.total - estimation[resource.id]) * resource.rateOfChange) {
+              if (thisQuantity <= (estimation.total - estimation[resource2.id]) * resource2.rateOfChange) {
                 continue;
               }
               let costDiffRatio = otherQuantity / thisQuantity;
               if (costDiffRatio >= weightDiffRatio) {
                 continue;
               }
-              building.extraDescription += `Conflicts with <span class="has-text-info">${other.title}</span> for <span class="has-text-info">${resource.name}</span><br>`;
+              building2.extraDescription += `Conflicts with <span class="has-text-info">${other.title}</span> for <span class="has-text-info">${resource2.name}</span><br>`;
               continue buildingsLoop;
             }
           }
         }
-        if (building.click()) {
-          if (building.isMission() || building.cost["Soul_Gem"] && settings2.prestigeType === "whitehole" && settings2.prestigeWhiteholeSaveGems) {
+        if (building2.click()) {
+          if (building2.isMission() || building2.cost["Soul_Gem"] && settings2.prestigeType === "whitehole" && settings2.prestigeWhiteholeSaveGems) {
             return;
           }
-          building.consumption.forEach((c) => {
+          building2.consumption.forEach((c) => {
             if (c.rate >= 0) {
               consumptionsUsed[c.resource._id] = true;
             }
@@ -34460,7 +35007,7 @@
   }
 
   // src/application/research.ts
-  var SUCCEEDED21 = Object.freeze({
+  var SUCCEEDED22 = Object.freeze({
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
@@ -34468,7 +35015,7 @@
     while (true) {
       const decision2 = planResearch(dependencies.reader.read(startIndex));
       if (decision2 === null) {
-        return SUCCEEDED21;
+        return SUCCEEDED22;
       }
       const result2 = dependencies.executor.execute(decision2);
       if (result2.outcome.status !== "succeeded" || result2.researched) {
@@ -34593,15 +35140,15 @@
     if (!input.unlocked || input.currency === null) {
       return null;
     }
-    for (const trait of input.traits) {
-      const kind = trait.canGain ? "gain" : trait.canPurge ? "purge" : null;
-      if (kind !== null && trait.traitName !== null && trait.displayName !== null && trait.mutationCost !== null) {
+    for (const trait2 of input.traits) {
+      const kind = trait2.canGain ? "gain" : trait2.canPurge ? "purge" : null;
+      if (kind !== null && trait2.traitName !== null && trait2.displayName !== null && trait2.mutationCost !== null) {
         return Object.freeze({
           kind,
-          index: trait.index,
-          traitName: trait.traitName,
-          displayName: trait.displayName,
-          mutationCost: trait.mutationCost,
+          index: trait2.index,
+          traitName: trait2.traitName,
+          displayName: trait2.displayName,
+          mutationCost: trait2.mutationCost,
           currencyId: input.currency.id,
           currencyName: input.currency.name,
           expectedCurrencyQuantity: input.currency.currentQuantity
@@ -34612,12 +35159,12 @@
   }
 
   // src/application/mutation.ts
-  var SUCCEEDED22 = Object.freeze({
+  var SUCCEEDED23 = Object.freeze({
     status: "succeeded"
   });
   function runMutationAutomation(dependencies) {
     const decision2 = planMutation(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED22 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED23 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/mutation.ts
@@ -34660,13 +35207,13 @@
     }
     return value;
   }
-  function readMutationCost(trait, kind, path) {
+  function readMutationCost(trait2, kind, path) {
     const mutationCost = requireFunction(
-      trait["mutationCost"],
+      trait2["mutationCost"],
       `${path}.mutationCost`
     );
     const cost = requireNumber(
-      Reflect.apply(mutationCost, trait, [kind]),
+      Reflect.apply(mutationCost, trait2, [kind]),
       `${path}.mutationCost(${kind})`
     );
     if (cost < 0) {
@@ -34674,15 +35221,15 @@
     }
     return cost;
   }
-  function actionableTrait(trait, index, kind, canGain, canPurge, path) {
-    const mutationCost = readMutationCost(trait, kind, path);
+  function actionableTrait(trait2, index, kind, canGain, canPurge, path) {
+    const mutationCost = readMutationCost(trait2, kind, path);
     return Object.freeze({
       index,
       canGain,
       canPurge,
       mutationCost,
-      traitName: readString4(trait, "traitName", `${path}.traitName`),
-      displayName: readString4(trait, "name", `${path}.name`)
+      traitName: readString4(trait2, "traitName", `${path}.traitName`),
+      displayName: readString4(trait2, "name", `${path}.name`)
     });
   }
   function createMutationReader(dependencies) {
@@ -34709,24 +35256,24 @@
         const list = readPriorityList2(manager);
         for (let index = 0; index < list.length; index++) {
           const path = `MutableTraitManager.priorityList[${index}]`;
-          const trait = requireRecord(list[index], path);
+          const trait2 = requireRecord(list[index], path);
           const canGainMethod = requireFunction(
-            trait["canGain"],
+            trait2["canGain"],
             `${path}.canGain`
           );
-          const canGain = Boolean(Reflect.apply(canGainMethod, trait, []));
+          const canGain = Boolean(Reflect.apply(canGainMethod, trait2, []));
           if (canGain) {
-            views.push(actionableTrait(trait, index, "gain", true, false, path));
+            views.push(actionableTrait(trait2, index, "gain", true, false, path));
             currency = readCurrency(dependencies.getResources, currencyId);
             break;
           }
           const canPurgeMethod = requireFunction(
-            trait["canPurge"],
+            trait2["canPurge"],
             `${path}.canPurge`
           );
-          const canPurge = Boolean(Reflect.apply(canPurgeMethod, trait, []));
+          const canPurge = Boolean(Reflect.apply(canPurgeMethod, trait2, []));
           if (canPurge) {
-            views.push(actionableTrait(trait, index, "purge", false, true, path));
+            views.push(actionableTrait(trait2, index, "purge", false, true, path));
             currency = readCurrency(dependencies.getResources, currencyId);
             break;
           }
@@ -34790,9 +35337,9 @@
           "MutableTraitManager"
         );
         const list = readPriorityList2(manager);
-        const trait = typeof list[decision2.index] === "object" && list[decision2.index] !== null ? list[decision2.index] : null;
-        const actualTraitName = trait !== null && typeof trait["traitName"] === "string" ? trait["traitName"] : null;
-        if (trait === null || actualTraitName !== decision2.traitName) {
+        const trait2 = typeof list[decision2.index] === "object" && list[decision2.index] !== null ? list[decision2.index] : null;
+        const actualTraitName = trait2 !== null && typeof trait2["traitName"] === "string" ? trait2["traitName"] : null;
+        if (trait2 === null || actualTraitName !== decision2.traitName) {
           return stale("stale-mutation-trait", "mutation trait list changed", {
             index: decision2.index,
             expectedTraitName: decision2.traitName,
@@ -35028,7 +35575,7 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString5(value, path) {
+  function requireString6(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -35048,7 +35595,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString5(
+    const status2 = requireString6(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -35117,7 +35664,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString5(
+          mode = requireString6(
             settings2["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -35255,7 +35802,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString5(
+            const id = requireString6(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -35414,7 +35961,7 @@
             );
           }
         }
-        const targetLocationName = requireString5(
+        const targetLocationName = requireString6(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -35447,7 +35994,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString5(
+        const shipName = requireString6(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -35458,7 +36005,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString5(
+        const shipClass = requireString6(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -35530,16 +36077,16 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString5(
+          const resourceId3 = requireString6(
             missingResource,
             "missing outer-fleet resource id"
           );
-          const resource = requireRecord(
+          const resource2 = requireRecord(
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString5(
-            resource["name"],
+          missingResourceName = requireString6(
+            resource2["name"],
             `resources.${resourceId3}.name`
           );
         } else {
@@ -35952,12 +36499,12 @@
   }
 
   // src/application/fleet.ts
-  var SUCCEEDED23 = Object.freeze({
+  var SUCCEEDED24 = Object.freeze({
     status: "succeeded"
   });
   function runFleetAutomation(dependencies) {
     const decision2 = planFleet(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED23 : dependencies.executor.execute(decision2);
+    return decision2 === null ? SUCCEEDED24 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/fleet.ts
@@ -35968,7 +36515,7 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString6(value, path) {
+  function requireString7(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -36039,14 +36586,14 @@
     );
   }
   function readMission(buildings2, key) {
-    const building = requireRecord(buildings2[key], `buildings.${key}`);
+    const building2 = requireRecord(buildings2[key], `buildings.${key}`);
     const isUnlocked2 = requireFunction(
-      building["isUnlocked"],
+      building2["isUnlocked"],
       `buildings.${key}.isUnlocked`
     );
     return {
-      building,
-      unlocked: Boolean(Reflect.apply(isUnlocked2, building, []))
+      building: building2,
+      unlocked: Boolean(Reflect.apply(isUnlocked2, building2, []))
     };
   }
   function commandsMatch(expected, actual) {
@@ -36069,7 +36616,7 @@
       return candidate !== void 0 && command.kind === candidate.kind && command.region === candidate.region && command.ship === candidate.ship && command.count === candidate.count;
     });
   }
-  function unavailableInput3() {
+  function unavailableInput4() {
     return Object.freeze({
       available: false,
       ships: Object.freeze([]),
@@ -36106,7 +36653,7 @@
           manager["initFleet"],
           "FleetManager.initFleet"
         );
-        if (!Reflect.apply(initFleet, manager, [])) return unavailableInput3();
+        if (!Reflect.apply(initFleet, manager, [])) return unavailableInput4();
         const global = requireRecord(game2["global"], "game.global");
         const galaxy = requireRecord(global["galaxy"], "game.global.galaxy");
         const defense = requireRecord(
@@ -36124,11 +36671,11 @@
           "game.actions.galaxy.gxy_gateway"
         );
         const shipRecords = SHIP_DEFINITIONS.map((definition) => {
-          const building = requireRecord(
+          const building2 = requireRecord(
             buildings2[definition.building],
             `buildings.${definition.building}`
           );
-          return Object.freeze({ definition, building });
+          return Object.freeze({ definition, building: building2 });
         });
         const preliminaryShips = shipRecords.map(
           ({ definition }) => Object.freeze({
@@ -36144,7 +36691,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString6(
+          const name = requireString7(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -36172,7 +36719,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString6(
+          chthonianLossMode = requireString7(
             settings2["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -36206,7 +36753,7 @@
               settings2["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString6(
+            alien2LossMode = requireString7(
               settings2["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -36521,22 +37068,22 @@
   }
 
   // src/application/mech.ts
-  var SUCCEEDED24 = Object.freeze({
+  var SUCCEEDED25 = Object.freeze({
     status: "succeeded"
   });
   function runMechAutomation(dependencies) {
     const cycle = planMechCycle(dependencies.reader.readCycle());
-    if (cycle === null) return SUCCEEDED24;
+    if (cycle === null) return SUCCEEDED25;
     const prepared = dependencies.executor.prepare(cycle);
     if (prepared.status !== "succeeded" || !cycle.proceed) return prepared;
     const planning = dependencies.reader.readPlanning(cycle);
-    if (planning === null) return SUCCEEDED24;
+    if (planning === null) return SUCCEEDED25;
     const continuation = planMechContinuation(planning);
     if (continuation.scrap !== null) {
       const scrapped = dependencies.executor.scrap(continuation.scrap);
       if (scrapped.status !== "succeeded") return scrapped;
     }
-    if (continuation.halt) return SUCCEEDED24;
+    if (continuation.halt) return SUCCEEDED25;
     let design = planning.design;
     let cost = planning.cost;
     if (continuation.trySmaller) {
@@ -36551,17 +37098,17 @@
       }
     }
     const build = planMechBuild(continuation, design, cost);
-    return build === null ? SUCCEEDED24 : dependencies.executor.build(build, continuation);
+    return build === null ? SUCCEEDED25 : dependencies.executor.build(build, continuation);
   }
 
   // src/adapters/evolve/mech.ts
-  function requireString7(value, path) {
+  function requireString8(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
     return value;
   }
-  function call2(target, key, path, args = []) {
+  function call3(target, key, path, args = []) {
     return Reflect.apply(requireFunction(target[key], path), target, args);
   }
   function readArray(value, path) {
@@ -36574,7 +37121,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString7(raw["size"], `${path}.size`),
+        size: requireString8(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -36609,7 +37156,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString7(raw["size"], `${path}.size`),
+      size: requireString8(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -36645,7 +37192,7 @@
         const global = requireRecord(game2["global"], "game.global");
         const race = requireRecord(global["race"], "game.global.race");
         if (race["warlord"]) return unavailableCycle2();
-        if (!call2(manager, "initLab", "MechManager.initLab")) {
+        if (!call3(manager, "initLab", "MechManager.initLab")) {
           return unavailableCycle2();
         }
         const jquery = dependencies.getJQuery();
@@ -36710,7 +37257,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString7(settings2["mechBuild"], "settings.mechBuild")
+          buildMode: requireString8(settings2["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -36739,19 +37286,19 @@
         let forceBuild = false;
         if (active.cycleInput.buildMode === "random") {
           const preferred = readArray(
-            call2(manager, "getPreferredSize", "MechManager.getPreferredSize"),
+            call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString7(preferred[0], "preferred mech size");
+          const size = requireString8(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
-            call2(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
+            call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
             "random mech"
           );
         } else {
           const blueprint = requireRecord(bay["blueprint"], "mechbay.blueprint");
           const statistics = requireRecord(
-            call2(manager, "getMechStats", "MechManager.getMechStats", [
+            call3(manager, "getMechStats", "MechManager.getMechStats", [
               blueprint
             ]),
             "blueprint mech statistics"
@@ -36761,7 +37308,7 @@
         const design = readDesign(rawDesign, "primary", "selected mech");
         active.designs.set(design.token, rawDesign);
         const cost = readCost2(
-          call2(manager, "getMechCost", "MechManager.getMechCost", [rawDesign]),
+          call3(manager, "getMechCost", "MechManager.getMechCost", [rawDesign]),
           "selected mech cost"
         );
         const fillBay = requireBoolean(
@@ -36776,7 +37323,7 @@
           buildings2["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString7(
+        const prestigeType = requireString8(
           settings2["prestigeType"],
           "settings.prestigeType"
         );
@@ -36794,14 +37341,14 @@
         if (saveSupplyRatio > 0 && !lastFloor && !forceBuild) {
           if (baySpace < cost.space) {
             titanSupplyRefund = readCostLikeRefund(
-              call2(manager, "getMechRefund", "MechManager.getMechRefund", [
+              call3(manager, "getMechRefund", "MechManager.getMechRefund", [
                 { size: "titan" }
               ]),
               "titan mech refund"
             ).supply;
           }
           saveTimeToClear = requireNumber(
-            call2(manager, "getTimeToClear", "MechManager.getTimeToClear"),
+            call3(manager, "getTimeToClear", "MechManager.getTimeToClear"),
             "MechManager.getTimeToClear result"
           );
         }
@@ -36837,23 +37384,23 @@
         );
         let canExpandBay = false;
         if (autoBuild2 && baysFirst && Boolean(
-          call2(
+          call3(
             mechBayBuilding,
             "isAutoBuildable",
             "SpireMechBay.isAutoBuildable"
           )
         )) {
           canExpandBay = Boolean(
-            call2(mechBayBuilding, "isAffordable", "SpireMechBay.isAffordable", [
+            call3(mechBayBuilding, "isAffordable", "SpireMechBay.isAffordable", [
               true
             ])
           );
           if (!canExpandBay) {
             const purifierAuto = Boolean(
-              call2(purifier, "isAutoBuildable", "SpirePurifier.isAutoBuildable")
+              call3(purifier, "isAutoBuildable", "SpirePurifier.isAutoBuildable")
             );
             canExpandBay = purifierAuto && Boolean(
-              call2(purifier, "isAffordable", "SpirePurifier.isAffordable", [
+              call3(purifier, "isAffordable", "SpirePurifier.isAffordable", [
                 true
               ])
             ) && requireNumber(
@@ -36862,7 +37409,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString7(
+        const configuredScrapMode = requireString8(
           settings2["mechScrap"],
           "settings.mechScrap"
         );
@@ -36886,12 +37433,12 @@
         const suppressMixed = canExpandBay && supply.input.current < supply.input.maximum && !decision2.prolongActive && supply.input.rate >= minimumSupplyRate;
         if (configuredScrapMode === "mixed" && !suppressMixed && waygateActiveCount !== 1) {
           timeToClear = requireNumber(
-            call2(manager, "getTimeToClear", "MechManager.getTimeToClear"),
+            call3(manager, "getTimeToClear", "MechManager.getTimeToClear"),
             "MechManager.getTimeToClear result"
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString7(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString8(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -36954,7 +37501,7 @@
                 let space = 0;
                 if (!(summary.infernal && summary.size !== "collector" || summary.power >= bestPower)) {
                   const refund = readCostLikeRefund(
-                    call2(manager, "getMechRefund", "MechManager.getMechRefund", [
+                    call3(manager, "getMechRefund", "MechManager.getMechRefund", [
                       raw
                     ]),
                     `${path} refund`
@@ -36962,7 +37509,7 @@
                   gemRefund = refund.gems;
                   supplyRefund = refund.supply;
                   space = requireNumber(
-                    call2(manager, "getMechSpace", "MechManager.getMechSpace", [
+                    call3(manager, "getMechSpace", "MechManager.getMechSpace", [
                       raw
                     ]),
                     `${path} space`
@@ -36989,7 +37536,7 @@
           throw new Error("mech planning has not been sampled");
         }
         return readCost2(
-          call2(active.manager, "getMechCost", "MechManager.getMechCost", [
+          call3(active.manager, "getMechCost", "MechManager.getMechCost", [
             { size }
           ]),
           `mech cost for ${size}`
@@ -37001,7 +37548,7 @@
           throw new Error("mech planning has not been sampled");
         }
         const raw = requireRecord(
-          call2(active.manager, "getRandomMech", "MechManager.getRandomMech", [
+          call3(active.manager, "getRandomMech", "MechManager.getRandomMech", [
             size
           ]),
           `random ${size} mech`
@@ -37030,7 +37577,7 @@
         active.manager["isActive"] = false;
         active.manager["saveSupply"] = false;
         if (decision2.drag !== null) {
-          call2(active.manager, "dragMech", "MechManager.dragMech", [
+          call3(active.manager, "dragMech", "MechManager.dragMech", [
             decision2.drag.oldId,
             decision2.drag.newId
           ]);
@@ -37066,8 +37613,8 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString7(
-            call2(active.manager, "mechDesc", "MechManager.mechDesc", [
+          const description = requireString8(
+            call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
             "mech description"
@@ -37079,7 +37626,7 @@
           ]);
         }
         for (const mech of rawMechs) {
-          call2(active.manager, "scrapMech", "MechManager.scrapMech", [mech]);
+          call3(active.manager, "scrapMech", "MechManager.scrapMech", [mech]);
         }
         const supply = requireRecord(
           active.resources["Supply"],
@@ -37128,7 +37675,7 @@
         ) !== continuation.gemsCurrent) {
           return stale("mech-resources-changed", "mech resources changed");
         }
-        call2(active.manager, "buildMech", "MechManager.buildMech", [rawDesign]);
+        call3(active.manager, "buildMech", "MechManager.buildMech", [rawDesign]);
         supply["currentQuantity"] = continuation.supplyCurrent - decision2.cost.supply;
         gems["currentQuantity"] = continuation.gemsCurrent - decision2.cost.gems;
         active.manager["isActive"] = decision2.prolongActive;
@@ -37456,26 +38003,26 @@
       const craftablesList2 = getCraftablesList();
       const resources2 = getResources();
       for (let i = 0; i < craftablesList2.length; i++) {
-        const resource = craftablesList2[i];
-        newTableBodyText += `<tr><td id="script_foundry_${resource.id}" style="width:21%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
+        const resource2 = craftablesList2[i];
+        newTableBodyText += `<tr><td id="script_foundry_${resource2.id}" style="width:21%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
       }
       tableBodyNode.append($2(newTableBodyText));
       for (let i = 0; i < craftablesList2.length; i++) {
-        const resource = craftablesList2[i];
-        let productionElement = $2("#script_foundry_" + resource.id);
-        productionElement.append(buildTableLabel2(resource.name));
+        const resource2 = craftablesList2[i];
+        let productionElement = $2("#script_foundry_" + resource2.id);
+        productionElement.append(buildTableLabel2(resource2.name));
         productionElement = productionElement.next();
-        addTableToggle2(productionElement, "craft" + resource.id);
+        addTableToggle2(productionElement, "craft" + resource2.id);
         productionElement = productionElement.next();
-        addTableToggle2(productionElement, "job_" + resource.id);
+        addTableToggle2(productionElement, "job_" + resource2.id);
         productionElement = productionElement.next();
-        if (resource === resources2.Scarletite || resource === resources2.Quantium) {
+        if (resource2 === resources2.Scarletite || resource2 === resources2.Quantium) {
           productionElement.append("<span>Managed</span>");
         } else {
-          addTableInput2(productionElement, "foundry_w_" + resource.id);
+          addTableInput2(productionElement, "foundry_w_" + resource2.id);
         }
         productionElement = productionElement.next();
-        addTableInput2(productionElement, "foundry_p_" + resource.id);
+        addTableInput2(productionElement, "foundry_p_" + resource2.id);
       }
     }
     function updateProductionTableMiningDrone2(currentNode) {
@@ -37920,23 +38467,23 @@
       let tableBodyNode = $2("#script_minorTraitTableBody");
       let newTableBodyText = "";
       for (let i = 0; i < MinorTraitManager2.priorityList.length; i++) {
-        const trait = MinorTraitManager2.priorityList[i];
-        newTableBodyText += `<tr value="${trait.traitName}" class="script-draggable"><td id="script_minorTrait_${trait.traitName}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"><span class="script-lastcolumn"></span></td></tr>`;
+        const trait2 = MinorTraitManager2.priorityList[i];
+        newTableBodyText += `<tr value="${trait2.traitName}" class="script-draggable"><td id="script_minorTrait_${trait2.traitName}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"><span class="script-lastcolumn"></span></td></tr>`;
       }
       tableBodyNode.append($2(newTableBodyText));
       for (let i = 0; i < MinorTraitManager2.priorityList.length; i++) {
-        const trait = MinorTraitManager2.priorityList[i];
-        let minorTraitElement = $2("#script_minorTrait_" + trait.traitName);
+        const trait2 = MinorTraitManager2.priorityList[i];
+        let minorTraitElement = $2("#script_minorTrait_" + trait2.traitName);
         minorTraitElement.append(
           buildTableLabel2(
-            game2.loc("trait_" + trait.traitName + "_name"),
-            game2.loc("trait_" + trait.traitName)
+            game2.loc("trait_" + trait2.traitName + "_name"),
+            game2.loc("trait_" + trait2.traitName)
           )
         );
         minorTraitElement = minorTraitElement.next();
-        addTableToggle2(minorTraitElement, "mTrait_" + trait.traitName);
+        addTableToggle2(minorTraitElement, "mTrait_" + trait2.traitName);
         minorTraitElement = minorTraitElement.next();
-        addTableInput2(minorTraitElement, "mTrait_w_" + trait.traitName);
+        addTableInput2(minorTraitElement, "mTrait_w_" + trait2.traitName);
       }
       tableBodyNode.sortable({
         items: "tr:not(.unsortable)",
@@ -37982,62 +38529,62 @@
       let mutateTraitTableBodyNode = $2("#script_mutateTraitTableBody");
       newTableBodyText = "";
       for (let i = 0; i < MutableTraitManager2.priorityList.length; i++) {
-        const trait = MutableTraitManager2.priorityList[i];
-        newTableBodyText += `<tr value="${trait.traitName}" class="script-draggable"><td id="script_mutableTrait_${trait.traitName}" style="width:30%"></td><td style="width:25%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+        const trait2 = MutableTraitManager2.priorityList[i];
+        newTableBodyText += `<tr value="${trait2.traitName}" class="script-draggable"><td id="script_mutableTrait_${trait2.traitName}" style="width:30%"></td><td style="width:25%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
       }
       mutateTraitTableBodyNode.append($2(newTableBodyText));
       for (let i = 0; i < MutableTraitManager2.priorityList.length; i++) {
-        const trait = MutableTraitManager2.priorityList[i];
-        let mutableTraitElement = $2("#script_mutableTrait_" + trait.traitName);
+        const trait2 = MutableTraitManager2.priorityList[i];
+        let mutableTraitElement = $2("#script_mutableTrait_" + trait2.traitName);
         mutableTraitElement.append(
           buildTableLabel2(
-            trait.source === "" ? "-" : game2.loc(
-              (trait.type === "major" ? "race_" : "genelab_genus_") + trait.source
+            trait2.source === "" ? "-" : game2.loc(
+              (trait2.type === "major" ? "race_" : "genelab_genus_") + trait2.source
             ),
-            trait.type === "major" ? "Major" : "Genus",
-            trait.type === "genus" ? "has-text-special" : "has-text"
+            trait2.type === "major" ? "Major" : "Genus",
+            trait2.type === "genus" ? "has-text-special" : "has-text"
           )
         );
         mutableTraitElement = mutableTraitElement.next();
         mutableTraitElement.append(
           buildTableLabel2(
-            trait.name,
-            game2.loc("trait_" + trait.traitName),
-            trait.isPositive ? "has-text-success" : "has-text-danger"
+            trait2.name,
+            game2.loc("trait_" + trait2.traitName),
+            trait2.isPositive ? "has-text-success" : "has-text-danger"
           )
         );
         mutableTraitElement = mutableTraitElement.next();
         mutableTraitElement.append(
           buildTableLabel2(
-            `${trait.baseCost * 5}`,
-            `${trait.baseCost * 5 * mutationCostMultipliers2["custom"]["gain"]} for Custom${trait.traitName !== "ooze" ? " and Sludge" : ""}`
+            `${trait2.baseCost * 5}`,
+            `${trait2.baseCost * 5 * mutationCostMultipliers2["custom"]["gain"]} for Custom${trait2.traitName !== "ooze" ? " and Sludge" : ""}`
           )
         );
         mutableTraitElement = mutableTraitElement.next();
-        if (trait.isGainable()) {
+        if (trait2.isGainable()) {
           addTableToggle2(
             mutableTraitElement,
-            "mutableTrait_gain_" + trait.traitName
+            "mutableTrait_gain_" + trait2.traitName
           );
         }
         mutableTraitElement = mutableTraitElement.next();
         addTableToggle2(
           mutableTraitElement,
-          "mutableTrait_purge_" + trait.traitName
+          "mutableTrait_purge_" + trait2.traitName
         );
-        if (trait.isGainable()) {
+        if (trait2.isGainable()) {
           makeToggleSwitchesMutuallyExclusive2(
-            $2(".script_mutableTrait_gain_" + trait.traitName),
-            "mutableTrait_gain_" + trait.traitName,
-            $2(".script_mutableTrait_purge_" + trait.traitName),
-            "mutableTrait_purge_" + trait.traitName
+            $2(".script_mutableTrait_gain_" + trait2.traitName),
+            "mutableTrait_gain_" + trait2.traitName,
+            $2(".script_mutableTrait_purge_" + trait2.traitName),
+            "mutableTrait_purge_" + trait2.traitName
           );
         }
         mutableTraitElement = mutableTraitElement.next();
-        if (poly2.neg_roll_traits.includes(trait.traitName)) {
+        if (poly2.neg_roll_traits.includes(trait2.traitName)) {
           addTableToggle2(
             mutableTraitElement,
-            "mutableTrait_reset_" + trait.traitName
+            "mutableTrait_reset_" + trait2.traitName
           );
         }
       }
@@ -41116,43 +41663,43 @@
       let newTableBodyText = "";
       let tabResources = [];
       for (let id in resources2) {
-        let resource = resources2[id];
-        if (EjectManager2.isConsumable(resource) || SupplyManager2.isConsumable(resource) || NaniteManager2.isConsumable(resource)) {
-          tabResources.push(resource);
-          newTableBodyText += `<tr><td id="script_eject_${resource.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:30%"></td><td style="width:10%"></td></tr>`;
+        let resource2 = resources2[id];
+        if (EjectManager2.isConsumable(resource2) || SupplyManager2.isConsumable(resource2) || NaniteManager2.isConsumable(resource2)) {
+          tabResources.push(resource2);
+          newTableBodyText += `<tr><td id="script_eject_${resource2.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:30%"></td><td style="width:10%"></td></tr>`;
         }
       }
       tableBodyNode.append($2(newTableBodyText));
       for (let i = 0; i < tabResources.length; i++) {
-        let resource = tabResources[i];
-        let ejectElement = $2("#script_eject_" + resource.id);
-        let color = resource === resources2.Elerium || resource === resources2.Infernite ? "has-text-caution" : resource.isCraftable() ? "has-text-danger" : !resource.is.tradable ? "has-text-advanced" : "has-text-info";
-        ejectElement.append(buildTableLabel2(resource.name, "", color));
+        let resource2 = tabResources[i];
+        let ejectElement = $2("#script_eject_" + resource2.id);
+        let color = resource2 === resources2.Elerium || resource2 === resources2.Infernite ? "has-text-caution" : resource2.isCraftable() ? "has-text-danger" : !resource2.is.tradable ? "has-text-advanced" : "has-text-info";
+        ejectElement.append(buildTableLabel2(resource2.name, "", color));
         ejectElement = ejectElement.next();
-        if (resource.atomicMass > 0) {
+        if (resource2.atomicMass > 0) {
           ejectElement.append(
-            `<span class="mass"><span class="has-text-warning">${resource.atomicMass}</span> kt</span>`
+            `<span class="mass"><span class="has-text-warning">${resource2.atomicMass}</span> kt</span>`
           );
         }
         ejectElement = ejectElement.next();
-        if (EjectManager2.isConsumable(resource)) {
-          addTableToggle2(ejectElement, "res_eject" + resource.id);
+        if (EjectManager2.isConsumable(resource2)) {
+          addTableToggle2(ejectElement, "res_eject" + resource2.id);
         }
         ejectElement = ejectElement.next();
-        if (NaniteManager2.isConsumable(resource)) {
-          addTableToggle2(ejectElement, "res_nanite" + resource.id);
+        if (NaniteManager2.isConsumable(resource2)) {
+          addTableToggle2(ejectElement, "res_nanite" + resource2.id);
         }
-        if (SupplyManager2.isConsumable(resource)) {
+        if (SupplyManager2.isConsumable(resource2)) {
           ejectElement = ejectElement.next();
           ejectElement.append(
             `<span class="mass">Export <span class="has-text-caution">${SupplyManager2.supplyOut(
-              resource.id
+              resource2.id
             )}</span>, Gain <span class="has-text-success">${SupplyManager2.supplyIn(
-              resource.id
+              resource2.id
             )}</span></span>`
           );
           ejectElement = ejectElement.next();
-          addTableToggle2(ejectElement, "res_supply" + resource.id);
+          addTableToggle2(ejectElement, "res_supply" + resource2.id);
         }
       }
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
@@ -41281,30 +41828,30 @@
       let tableBodyNode = $2("#script_marketTableBody");
       let newTableBodyText = "";
       for (let i = 0; i < MarketManager2.priorityList.length; i++) {
-        const resource = MarketManager2.priorityList[i];
-        newTableBodyText += `<tr value="${resource.id}" class="script-draggable"><td id="script_market_${resource.id}" style="width:15%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%;border-right-width:1px"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+        const resource2 = MarketManager2.priorityList[i];
+        newTableBodyText += `<tr value="${resource2.id}" class="script-draggable"><td id="script_market_${resource2.id}" style="width:15%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%;border-right-width:1px"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
       }
       tableBodyNode.append($2(newTableBodyText));
       for (let i = 0; i < MarketManager2.priorityList.length; i++) {
-        const resource = MarketManager2.priorityList[i];
-        let marketElement = $2("#script_market_" + resource.id);
-        marketElement.append(buildTableLabel2(resource.name));
+        const resource2 = MarketManager2.priorityList[i];
+        let marketElement = $2("#script_market_" + resource2.id);
+        marketElement.append(buildTableLabel2(resource2.name));
         marketElement = marketElement.next();
-        addTableToggle2(marketElement, "buy" + resource.id);
+        addTableToggle2(marketElement, "buy" + resource2.id);
         marketElement = marketElement.next();
-        addTableInput2(marketElement, "res_buy_r_" + resource.id);
+        addTableInput2(marketElement, "res_buy_r_" + resource2.id);
         marketElement = marketElement.next();
-        addTableToggle2(marketElement, "sell" + resource.id);
+        addTableToggle2(marketElement, "sell" + resource2.id);
         marketElement = marketElement.next();
-        addTableInput2(marketElement, "res_sell_r_" + resource.id);
+        addTableInput2(marketElement, "res_sell_r_" + resource2.id);
         marketElement = marketElement.next();
-        addTableToggle2(marketElement, "res_trade_buy_" + resource.id);
+        addTableToggle2(marketElement, "res_trade_buy_" + resource2.id);
         marketElement = marketElement.next();
-        addTableToggle2(marketElement, "res_trade_sell_" + resource.id);
+        addTableToggle2(marketElement, "res_trade_sell_" + resource2.id);
         marketElement = marketElement.next();
-        addTableInput2(marketElement, "res_trade_w_" + resource.id);
+        addTableInput2(marketElement, "res_trade_w_" + resource2.id);
         marketElement = marketElement.next();
-        addTableInput2(marketElement, "res_trade_p_" + resource.id);
+        addTableInput2(marketElement, "res_trade_p_" + resource2.id);
       }
       tableBodyNode.sortable({
         items: "tr:not(.unsortable)",
@@ -41462,22 +42009,22 @@
       let tableBodyNode = $2("#script_storageTableBody");
       let newTableBodyText = "";
       for (let i = 0; i < StorageManager2.priorityList.length; i++) {
-        const resource = StorageManager2.priorityList[i];
-        newTableBodyText += `<tr value="${resource.id}" class="script-draggable"><td id="script_storage_${resource.id}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+        const resource2 = StorageManager2.priorityList[i];
+        newTableBodyText += `<tr value="${resource2.id}" class="script-draggable"><td id="script_storage_${resource2.id}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
       }
       tableBodyNode.append($2(newTableBodyText));
       for (let i = 0; i < StorageManager2.priorityList.length; i++) {
-        const resource = StorageManager2.priorityList[i];
-        let storageElement = $2("#script_storage_" + resource.id);
-        storageElement.append(buildTableLabel2(resource.name));
+        const resource2 = StorageManager2.priorityList[i];
+        let storageElement = $2("#script_storage_" + resource2.id);
+        storageElement.append(buildTableLabel2(resource2.name));
         storageElement = storageElement.next();
-        addTableToggle2(storageElement, "res_storage" + resource.id);
+        addTableToggle2(storageElement, "res_storage" + resource2.id);
         storageElement = storageElement.next();
-        addTableToggle2(storageElement, "res_storage_o_" + resource.id);
+        addTableToggle2(storageElement, "res_storage_o_" + resource2.id);
         storageElement = storageElement.next();
-        addTableInput2(storageElement, "res_min_store" + resource.id);
+        addTableInput2(storageElement, "res_min_store" + resource2.id);
         storageElement = storageElement.next();
-        addTableInput2(storageElement, "res_max_store" + resource.id);
+        addTableInput2(storageElement, "res_max_store" + resource2.id);
       }
       tableBodyNode.sortable({
         items: "tr:not(.unsortable)",
@@ -41588,18 +42135,18 @@
           </table>`);
       let tableBodyNode = $2("#script_alchemyTableBody");
       let newTableBodyText = "";
-      for (let resource of AlchemyManager2.priorityList) {
-        newTableBodyText += `<tr><td id="script_alchemy_${resource.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"></td></tr>`;
+      for (let resource2 of AlchemyManager2.priorityList) {
+        newTableBodyText += `<tr><td id="script_alchemy_${resource2.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"></td></tr>`;
       }
       tableBodyNode.append($2(newTableBodyText));
-      for (let resource of AlchemyManager2.priorityList) {
-        let node = $2("#script_alchemy_" + resource.id);
-        let color = AlchemyManager2.transmuteTier(resource) > 1 ? "has-text-advanced" : "has-text-info";
-        node.append(buildTableLabel2(resource.name, "", color));
+      for (let resource2 of AlchemyManager2.priorityList) {
+        let node = $2("#script_alchemy_" + resource2.id);
+        let color = AlchemyManager2.transmuteTier(resource2) > 1 ? "has-text-advanced" : "has-text-info";
+        node.append(buildTableLabel2(resource2.name, "", color));
         node = node.next();
-        addTableToggle2(node, "res_alchemy_" + resource.id);
+        addTableToggle2(node, "res_alchemy_" + resource2.id);
         node = node.next();
-        addTableInput2(node, "res_alchemy_w_" + resource.id);
+        addTableInput2(node, "res_alchemy_w_" + resource2.id);
       }
     }
     function updateMagicPylonImpl(currentNode) {
@@ -42282,8 +42829,8 @@
       $2("#script_buildingSearch").on("keyup", filterBuildingSettingsTable2);
       let newTableBodyText = '<tr value="All" class="unsortable"><td id="script_bldallToggle" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:20%"><span id="script_resetBuildingsPriority" class="script-refresh"></span></td></tr>';
       for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
-        let building = BuildingManager2.priorityList[i];
-        newTableBodyText += `<tr value="${building._vueBinding}" class="script-draggable"><td id="script_${building._vueBinding}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:20%"></td></tr>`;
+        let building2 = BuildingManager2.priorityList[i];
+        newTableBodyText += `<tr value="${building2._vueBinding}" class="script-draggable"><td id="script_${building2._vueBinding}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:20%"></td></tr>`;
       }
       tableBodyNode.append($2(newTableBodyText));
       let buildingElement = $2("#script_bldallToggle");
@@ -42306,18 +42853,18 @@
         }
       });
       for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
-        let building = BuildingManager2.priorityList[i];
-        let buildingElement2 = $2("#script_" + building._vueBinding);
-        let color = building._tab === "space" || building._tab === "starDock" ? "has-text-danger" : building._tab === "galaxy" || building._tab === "eden" ? "has-text-advanced" : building._tab === "interstellar" ? "has-text-special" : building._tab === "portal" || building._tab === "tauceti" ? "has-text-warning" : "has-text-info";
-        buildingElement2.append(buildTableLabel2(building.name, "", color));
+        let building2 = BuildingManager2.priorityList[i];
+        let buildingElement2 = $2("#script_" + building2._vueBinding);
+        let color = building2._tab === "space" || building2._tab === "starDock" ? "has-text-danger" : building2._tab === "galaxy" || building2._tab === "eden" ? "has-text-advanced" : building2._tab === "interstellar" ? "has-text-special" : building2._tab === "portal" || building2._tab === "tauceti" ? "has-text-warning" : "has-text-info";
+        buildingElement2.append(buildTableLabel2(building2.name, "", color));
         buildingElement2 = buildingElement2.next();
-        addTableToggle2(buildingElement2, "bat" + building._vueBinding);
+        addTableToggle2(buildingElement2, "bat" + building2._vueBinding);
         buildingElement2 = buildingElement2.next();
-        addTableInput2(buildingElement2, "bld_m_" + building._vueBinding);
+        addTableInput2(buildingElement2, "bld_m_" + building2._vueBinding);
         buildingElement2 = buildingElement2.next();
-        addTableInput2(buildingElement2, "bld_w_" + building._vueBinding);
+        addTableInput2(buildingElement2, "bld_w_" + building2._vueBinding);
         buildingElement2 = buildingElement2.next();
-        buildBuildingStateSettingsToggle2(buildingElement2, building);
+        buildBuildingStateSettingsToggle2(buildingElement2, building2);
       }
       tableBodyNode.sortable({
         items: "tr:not(.unsortable)",
@@ -42385,14 +42932,14 @@
             testValue = getRealNumber2(reg[3].trim());
             break;
         }
-        filterChecker = (building) => checkCompare2[reg[2]](buildingValue(building), testValue);
+        filterChecker = (building2) => checkCompare2[reg[2]](buildingValue(building2), testValue);
       }
       for (let i = 0; i < trs.length; i++) {
         let td = trs[i].getElementsByTagName("td")[0];
         if (td) {
           if (filterChecker) {
-            let building = buildingIds2[td.id.match(/^script_(.*)$/)[1]];
-            if (building && filterChecker(building)) {
+            let building2 = buildingIds2[td.id.match(/^script_(.*)$/)[1]];
+            if (building2 && filterChecker(building2)) {
               trs[i].style.display = "";
             } else {
               trs[i].style.display = "none";
@@ -42430,10 +42977,10 @@
         }
       });
     }
-    function buildBuildingStateSettingsToggleImpl(node, building) {
-      let stateKey = "bld_s_" + building._vueBinding;
-      let smartKey = "bld_s2_" + building._vueBinding;
-      if (building.isSwitchable()) {
+    function buildBuildingStateSettingsToggleImpl(node, building2) {
+      let stateKey = "bld_s_" + building2._vueBinding;
+      let smartKey = "bld_s2_" + building2._vueBinding;
+      if (building2.isSwitchable()) {
         addToggleCallbacks2(
           $2(`
               <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
@@ -42445,18 +42992,18 @@
         ).appendTo(node);
         node.addClass("script_bg_" + stateKey);
       }
-      if (building.is.smart) {
+      if (building2.is.smart) {
         let smartNode = $2(`
               <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 35px;">
                 <input class="script_${smartKey}" type="checkbox"${settingsRaw2[smartKey] ? " checked" : ""}>
                 <span class="check" style="height:5px; max-width:15px"></span>
                 <span style="margin-left: 20px;"></span>
               </label>`);
-        let set = linkedBuildings2.find((set2) => set2.includes(building));
+        let set = linkedBuildings2.find((set2) => set2.includes(building2));
         if (set) {
           smartNode.on("change", "input", function() {
-            set.forEach((building2) => {
-              let linkedId = "bld_s2_" + building2._vueBinding;
+            set.forEach((building3) => {
+              let linkedId = "bld_s2_" + building3._vueBinding;
               settingsRaw2[linkedId] = this.checked;
               $2(".script_" + linkedId).prop("checked", this.checked);
             });
@@ -43172,10 +43719,10 @@
       removeBuildingToggles2();
       if (!settings2.showSettings) return;
       for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
-        let building = BuildingManager2.priorityList[i];
-        let buildingElement = $2("#" + building._vueBinding);
+        let building2 = BuildingManager2.priorityList[i];
+        let buildingElement = $2("#" + building2._vueBinding);
         if (buildingElement.length) {
-          let settingKey = "bat" + building._vueBinding;
+          let settingKey = "bat" + building2._vueBinding;
           buildingElement.append(
             addToggleCallbacks2(
               $2(`
@@ -43221,10 +43768,10 @@
       $2("#eject").append(
         '<span id="script_eject_top_row" style="margin-left: auto; margin-right: 0.2rem; float: right;" class="has-text-danger">Auto Eject</span>'
       );
-      for (let resource of EjectManager2.priorityList) {
-        let ejectElement = $2("#eject" + resource.id);
+      for (let resource2 of EjectManager2.priorityList) {
+        let ejectElement = $2("#eject" + resource2.id);
         if (ejectElement.length) {
-          let settingKey = "res_eject" + resource.id;
+          let settingKey = "res_eject" + resource2.id;
           ejectElement.append(
             addToggleCallbacks2(
               $2(`
@@ -43270,10 +43817,10 @@
       $2("#spireSupply").append(
         '<span id="script_supply_top_row" style="margin-left: auto; margin-right: 0.2rem; float: right;" class="has-text-danger">Auto Supply</span>'
       );
-      for (let resource of SupplyManager2.priorityList) {
-        let supplyElement = $2("#supply" + resource.id);
+      for (let resource2 of SupplyManager2.priorityList) {
+        let supplyElement = $2("#supply" + resource2.id);
         if (supplyElement.length) {
-          let settingKey = "res_supply" + resource.id;
+          let settingKey = "res_supply" + resource2.id;
           supplyElement.append(
             addToggleCallbacks2(
               $2(`
@@ -43366,13 +43913,13 @@
             const segmentedTimeLeft = dependencies.getMultiSegmentedTimeLeft(target);
             targetTimeLeft = `${segmentedTimeLeft.timeLeft}</span> <span class="has-text-danger">(${segmentedTimeLeft.resource})</span>`;
           }
-          const costsHTML = Object.keys(costs).map((resource) => {
-            let res = resources2[resource], className = "has-text-success", resourceTimeLeft = "";
-            let resourceCost = costs[resource];
+          const costsHTML = Object.keys(costs).map((resource2) => {
+            let res = resources2[resource2], className = "has-text-success", resourceTimeLeft = "";
+            let resourceCost = costs[resource2];
             if (isArpaProject) {
-              resourceCost = costs[resource] * ((100 - target.progress) / target.currentStep);
+              resourceCost = costs[resource2] * ((100 - target.progress) / target.currentStep);
             } else if (isMultiSegmented) {
-              resourceCost = costs[resource] * (target.gameMax - target.count);
+              resourceCost = costs[resource2] * (target.gameMax - target.count);
             }
             if (res.currentQuantity < resourceCost) {
               className = "has-text-danger";
@@ -43394,7 +43941,7 @@
               }
             }
             const progressBarWidth = res.currentQuantity / resourceCost * 100;
-            const isReplicatingClassName = game2.global.race.replicator && game2.global.race.replicator.res === resource ? "is-replicating" : "";
+            const isReplicatingClassName = game2.global.race.replicator && game2.global.race.replicator.res === resource2 ? "is-replicating" : "";
             return `
                     <li>
                         <div class='active_targets-resource-row'>
@@ -43624,18 +44171,18 @@
               <span class="has-text-warning" style="width: 2.75rem; display: inline-block; text-align: center;">Away</span>
             </span>
           </div>`);
-      for (const resource of dependencies.getMarketManager().priorityList) {
-        if (resource === resources2.Food && (game2.global.race["artifical"] || game2.global.race["fasting"])) {
+      for (const resource2 of dependencies.getMarketManager().priorityList) {
+        if (resource2 === resources2.Food && (game2.global.race["artifical"] || game2.global.race["fasting"])) {
           continue;
         }
-        const marketElement = $2("#market-" + resource.id);
+        const marketElement = $2("#market-" + resource2.id);
         if (marketElement.length > 0) {
           const marketRow = $2(
             '<span class="ea-market-toggle" style="margin-left: auto; margin-right: 0.2rem; float:right;"></span>'
           );
           if (!game2.global.race["no_trade"]) {
-            const buyKey = "buy" + resource.id;
-            const sellKey = "sell" + resource.id;
+            const buyKey = "buy" + resource2.id;
+            const sellKey = "sell" + resource2.id;
             marketRow.append(
               dependencies.addToggleCallbacks(
                 $2(
@@ -43651,8 +44198,8 @@
               )
             );
           }
-          const tradeBuyKey = "res_trade_buy_" + resource.id;
-          const tradeSellKey = "res_trade_sell_" + resource.id;
+          const tradeBuyKey = "res_trade_buy_" + resource2.id;
+          const tradeSellKey = "res_trade_sell_" + resource2.id;
           marketRow.append(
             dependencies.addToggleCallbacks(
               $2(
@@ -43703,11 +44250,11 @@
               <span class="has-text-warning" style="width: 2.75rem; display: inline-block; text-align: center;">Over</span>
             </span>
           </div>`);
-      for (const resource of dependencies.getStorageManager().priorityList) {
-        const storageElement = $2("#stack-" + resource.id);
+      for (const resource2 of dependencies.getStorageManager().priorityList) {
+        const storageElement = $2("#stack-" + resource2.id);
         if (storageElement.length > 0) {
-          const storeKey = "res_storage" + resource.id;
-          const overKey = "res_storage_o_" + resource.id;
+          const storeKey = "res_storage" + resource2.id;
+          const overKey = "res_storage_o_" + resource2.id;
           $2(
             `<span class="ea-storage-toggle" style="margin-left: auto; margin-right: 0.2rem; float:right;"></span>`
           ).append(
@@ -44230,13 +44777,13 @@
       let activeTrait = null;
       const showTraitEffect = (id) => {
         activeTrait = id;
-        let trait = game2.traits[id];
+        let trait2 = game2.traits[id];
         let rank = draft.ranks[id] ?? 1;
         effectPanel.empty();
-        $2("<strong class='has-text-warning'></strong>").text(`${trait.name} · r${rank}`).appendTo(effectPanel);
-        $2("<div class='desc'></div>").html(typeof trait.desc === "function" ? trait.desc() : trait.desc).appendTo(effectPanel);
+        $2("<strong class='has-text-warning'></strong>").text(`${trait2.name} · r${rank}`).appendTo(effectPanel);
+        $2("<div class='desc'></div>").html(typeof trait2.desc === "function" ? trait2.desc() : trait2.desc).appendTo(effectPanel);
         $2(
-          `<div class="effect ${trait.val >= 0 ? "has-text-success" : "has-text-danger"}"></div>`
+          `<div class="effect ${trait2.val >= 0 ? "has-text-success" : "has-text-danger"}"></div>`
         ).html(customRaceTraitEffect2(id, rank)).appendTo(effectPanel);
       };
       effectPanel.text("Hover or select a trait to see its current-rank effect.");
@@ -44254,27 +44801,27 @@
       ).appendTo(traitsArea);
       let traitRows = [];
       let lastCategory = { positive: null, negative: null };
-      for (let [id, trait] of customRaceEditorTraits2(draft)) {
-        let side = trait.val >= 0 ? "positive" : "negative";
-        let targetArea = trait.val >= 0 ? positiveArea : negativeArea;
-        if (lastCategory[side] !== trait.taxonomy) {
-          lastCategory[side] = trait.taxonomy;
-          $2("<h5 class='has-text-caution'></h5>").text(game2.loc(`genelab_traits_${trait.taxonomy}`) ?? trait.taxonomy).appendTo(targetArea);
+      for (let [id, trait2] of customRaceEditorTraits2(draft)) {
+        let side = trait2.val >= 0 ? "positive" : "negative";
+        let targetArea = trait2.val >= 0 ? positiveArea : negativeArea;
+        if (lastCategory[side] !== trait2.taxonomy) {
+          lastCategory[side] = trait2.taxonomy;
+          $2("<h5 class='has-text-caution'></h5>").text(game2.loc(`genelab_traits_${trait2.taxonomy}`) ?? trait2.taxonomy).appendTo(targetArea);
         }
         let row = $2(
           `<div class="script-custom-trait field t${id}" style="display:flex; align-items:center; gap:5px; padding:2px 0;"></div>`
         ).appendTo(targetArea);
         row.attr(
           "data-search",
-          `${trait.name} ${id} ${trait.taxonomy}`.toLowerCase()
+          `${trait2.name} ${id} ${trait2.taxonomy}`.toLowerCase()
         );
         row.on("mouseenter click", () => showTraitEffect(id));
         let checkbox = $2('<input type="checkbox" />').prop("checked", draft.traitlist.includes(id)).appendTo(row);
         $2(
-          `<span class="${trait.val >= 0 ? "has-text-success" : "has-text-danger"}" style="flex:1;"></span>`
-        ).text(`${trait.name} [${trait.val >= 0 ? "+" : ""}${trait.val}]`).attr(
+          `<span class="${trait2.val >= 0 ? "has-text-success" : "has-text-danger"}" style="flex:1;"></span>`
+        ).text(`${trait2.name} [${trait2.val >= 0 ? "+" : ""}${trait2.val}]`).attr(
           "title",
-          typeof trait.desc === "function" ? trait.desc() : trait.desc
+          typeof trait2.desc === "function" ? trait2.desc() : trait2.desc
         ).appendTo(row);
         let ranks = customRaceRankOptions2(id);
         let currentRank = draft.ranks[id] ?? 1;
@@ -44528,7 +45075,7 @@
         return false;
       }
       let unavailableTraits = traits.filter(
-        (trait) => typeof trait !== "string" || !/^[a-z0-9_]+$/.test(trait) || document2.querySelector(`#celestialLab .t${trait}`) === null
+        (trait2) => typeof trait2 !== "string" || !/^[a-z0-9_]+$/.test(trait2) || document2.querySelector(`#celestialLab .t${trait2}`) === null
       );
       if (unavailableTraits.length > 0) {
         showCustomRaceImportStatus2(
@@ -44539,7 +45086,7 @@
       }
       let ranks = template.ranks ?? {};
       if (typeof ranks !== "object" || Array.isArray(ranks) || Object.entries(ranks).some(
-        ([trait, rank]) => !traits.includes(trait) || typeof rank !== "number" || !Number.isFinite(rank) || rank <= 0 || !customRaceRankOptions2(trait).includes(rank)
+        ([trait2, rank]) => !traits.includes(trait2) || typeof rank !== "number" || !Number.isFinite(rank) || rank <= 0 || !customRaceRankOptions2(trait2).includes(rank)
       )) {
         showCustomRaceImportStatus2(
           "Automatic custom-race import paused: ranks must contain positive numeric values for selected traits only.",
@@ -44578,7 +45125,7 @@
       lab.g.traitlist = traits.slice();
       lab.g.fanaticism = fanaticism;
       lab.g.ranks ??= {};
-      Object.keys(lab.g.ranks).forEach((trait) => delete lab.g.ranks[trait]);
+      Object.keys(lab.g.ranks).forEach((trait2) => delete lab.g.ranks[trait2]);
       Object.assign(lab.g.ranks, ranks);
       lab.geneEdit();
       if (lab.g.genes < 0) {
@@ -45778,7 +46325,7 @@
         arg: "list_cb",
         options: () => Object.fromEntries(
           Object.entries(game2.traits).map(
-            ([id, trait]) => [id, { name: trait.name, id }]
+            ([id, trait2]) => [id, { name: trait2.name, id }]
           )
         )
       },
@@ -48021,9 +48568,9 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         })
       );
       for (const requirement of result2.resources) {
-        const resource = resources[requirement.id];
-        resource.maxCost = requirement.maxCost;
-        resource.storageRequired = requirement.storageRequired;
+        const resource2 = resources[requirement.id];
+        resource2.maxCost = requirement.maxCost;
+        resource2.storageRequired = requirement.storageRequired;
       }
       state.knowledgeRequiredByTechs = result2.knowledge.knowledgeRequiredByTechs;
       state.cheapestTechKnowledge = result2.knowledge.cheapestTechKnowledge;
@@ -49216,7 +49763,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const findRequiredResourceWeight = (resource) => findRequiredResourceWeight2(state.unlockedBuildings, resource);
+    const findRequiredResourceWeight = (resource2) => findRequiredResourceWeight2(state.unlockedBuildings, resource2);
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         findRequiredResourceWeight,
@@ -49367,27 +49914,29 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, { autoHell });
     }
-    const autoJobs = createAutoJobs({
+    const jobsAdapter = createJobsAdapter({
       getJobManager: () => JobManager,
       getGame: () => game,
       getJobs: () => jobs,
+      getCrafter: () => crafter,
+      getSettings: () => settings,
+      getBuildings: () => buildings,
+      getResources: () => resources,
+      getState: () => state,
+      getDebugWindow: () => window,
       isDemonRace,
       isLumberRace,
-      getSettings: () => settings,
-      traitVal,
-      getCrafter: () => crafter,
-      getWindow: () => window,
-      getBuildings: () => buildings,
-      getHaveTech: () => haveTech,
-      getResources: () => resources,
+      traitValue: traitVal,
+      haveTech,
+      haveTask,
       ticksPerSecond,
-      getState: () => state,
       findRequiredResourceWeight,
-      getPoly: () => poly,
+      taxCap: (minimum) => poly.taxCap(minimum),
       isCraftingJob: (job) => job instanceof CraftingJob,
-      getHaveTask: () => haveTask,
-      getFoodConsume
+      getFoodConsume,
+      log: (message) => console.log(message)
     });
+    const autoJobs = (craftOnly = false) => runJobsAutomation(jobsAdapter, craftOnly);
     const { autoTax } = createTaxAutomation({
       getPoly: () => poly,
       getResources: () => resources,
@@ -50131,13 +50680,13 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         })
       );
       for (const operation2 of result2.operations) {
-        const resource = resources[operation2.resourceId];
+        const resource2 = resources[operation2.resourceId];
         if (operation2.kind === "zero") {
-          MarketManager.zeroTradeRoutes(resource);
+          MarketManager.zeroTradeRoutes(resource2);
         } else if (operation2.kind === "add") {
-          MarketManager.addTradeRoutes(resource, operation2.count);
+          MarketManager.addTradeRoutes(resource2, operation2.count);
         } else {
-          MarketManager.removeTradeRoutes(resource, operation2.count);
+          MarketManager.removeTradeRoutes(resource2, operation2.count);
         }
       }
       resources.Money.rateOfChange = result2.moneyRate;

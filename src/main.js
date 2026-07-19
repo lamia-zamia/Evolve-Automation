@@ -331,7 +331,8 @@ import { runSpyAutomation } from "./application/spy.ts";
 import { createSpyAdapter } from "./adapters/evolve/spy.ts";
 import { createAutoPrestige } from "./automation/progression/prestige.ts";
 import { createAutoPlanetSelection } from "./automation/progression/planet-selection.ts";
-import { createAutoJobs } from "./automation/civic/jobs.ts";
+import { runJobsAutomation } from "./application/jobs.ts";
+import { createJobsAdapter } from "./adapters/evolve/jobs.ts";
 import { createAutoBuild } from "./automation/progression/build.ts";
 import { runResearchAutomation } from "./application/research.ts";
 import {
@@ -3056,28 +3057,30 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     Object.assign(window.__EA_TEST_HOOKS__, { autoHell });
   }
 
-  // TODO: Some way to use servant crafters only
-  const autoJobs = createAutoJobs({
+  const jobsAdapter = createJobsAdapter({
     getJobManager: () => JobManager,
     getGame: () => game,
     getJobs: () => jobs,
+    getCrafter: () => crafter,
+    getSettings: () => settings,
+    getBuildings: () => buildings,
+    getResources: () => resources,
+    getState: () => state,
+    getDebugWindow: () => window,
     isDemonRace,
     isLumberRace,
-    getSettings: () => settings,
-    traitVal,
-    getCrafter: () => crafter,
-    getWindow: () => window,
-    getBuildings: () => buildings,
-    getHaveTech: () => haveTech,
-    getResources: () => resources,
+    traitValue: traitVal,
+    haveTech,
+    haveTask,
     ticksPerSecond,
-    getState: () => state,
     findRequiredResourceWeight,
-    getPoly: () => poly,
+    taxCap: (minimum) => poly.taxCap(minimum),
     isCraftingJob: (job) => job instanceof CraftingJob,
-    getHaveTask: () => haveTask,
     getFoodConsume,
+    log: (message) => console.log(message),
   });
+  const autoJobs = (craftOnly = false) =>
+    runJobsAutomation(jobsAdapter, craftOnly);
 
   const { autoTax } = createTaxAutomation({
     getPoly: () => poly,

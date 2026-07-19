@@ -1,4 +1,4 @@
-import type { AutomationDependencies } from "../dependencies.ts";
+import type { AutomationDependencies } from "../../src/automation/dependencies.ts";
 
 type Dependencies = AutomationDependencies<
   | "getJobManager"
@@ -21,7 +21,7 @@ type Dependencies = AutomationDependencies<
   | "getHaveTask"
   | "getFoodConsume"
 >;
-export function createAutoJobs({
+export function createLegacyAutoJobs({
   getJobManager,
   getGame,
   getJobs,
@@ -539,6 +539,8 @@ export function createAutoJobs({
                   maxFoodStorage = resources.Population.currentQuantity * 2;
                   if (resources.Food.currentQuantity > 10) {
                     foodRateOfChange +=
+                      (resources.Food.currentQuantity - 10) *
+                      traitVal("carnivore", 0, "=") *
                       (resources.Food.currentQuantity - 10) *
                       traitVal("carnivore", 0, "=") *
                       0.9 ** buildings.Smokehouse.count;

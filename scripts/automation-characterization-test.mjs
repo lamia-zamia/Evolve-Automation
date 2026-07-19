@@ -670,12 +670,42 @@ const testMutableTraitManager = {
   priorityList: [mutationTrait],
   gainTrait: (name) => wave4Actions.push(["mutate", name]),
 };
+const makeWave4Job = (id, workers, breakpoint) => ({
+  id,
+  workers,
+  servants: 0,
+  max: 10,
+  is: { split: false, serve: false },
+  isSmartEnabled: false,
+  isDefault: () => false,
+  isManaged: () => true,
+  isUnlocked: () => true,
+  get count() {
+    return this.workers;
+  },
+  breakpointEmployees: () => breakpoint,
+  removeWorkers(count) {
+    wave4Actions.push(["jobRemove", id, count]);
+    this.workers -= count;
+  },
+  addWorkers(count) {
+    wave4Actions.push(["jobAdd", id, count]);
+    this.workers += count;
+  },
+});
+const firstWave4Job = makeWave4Job("first-job", 3, 1);
+const secondWave4Job = makeWave4Job("second-job", 0, 2);
+const testJobManager = {
+  craftingJobs: [],
+  craftingMax: () => 0,
+  managedPriorityList: () => [firstWave4Job, secondWave4Job],
+};
 hooks.setWave4TestContext({
   generatePlanets: () => [planet],
   getStarLevel: () => 1,
   isAchievementUnlocked: () => true,
   races: {},
-  JobManager: { managedPriorityList: () => [] },
+  JobManager: testJobManager,
   BuildingManager: testBuildingManager,
   ProjectManager: testProjectManager,
   MutableTraitManager: testMutableTraitManager,
@@ -689,14 +719,29 @@ Object.assign(hooks.automationSettings, {
   extra_w_Orbit: 0,
   buildingConsumptionCheck: "unlimited",
   buildingBuildIfStorageFull: false,
+  autoCraftsmen: false,
+  authorityManage: false,
+  generalMinimumAuthority: 0,
+  jobDisableMiners: false,
+  jobManageServants: false,
+  jobSetDefault: false,
 });
 hooks.automationState.queuedTargets = [];
 hooks.automationState.triggerTargets = [];
 hooks.automationState.unlockedTechs = [testTech];
 hooks.automationResources.Plasmid = { name: "Plasmid", currentQuantity: 20 };
+hooks.automationResources.Population = {
+  currentQuantity: 3,
+  isUnlocked: () => true,
+  storageRatio: 1,
+};
+hooks.automationResources.Horseshoe = { usefulRatio: 1 };
 const wave4Game = {
   global: {
     race: { universe: "standard", seeded: true, chose: false, gods: "human" },
+    civic: { crew: { max: 0, workers: 0 } },
+    genes: {},
+    tech: {},
     stats: { achieve: {} },
     settings: { at: false },
   },
@@ -717,6 +762,8 @@ hooks.autoMutateTrait();
 assert.deepEqual(wave4Actions, [
   ["planetHover", "mouseover"],
   ["planetClick"],
+  ["jobRemove", "first-job", 2],
+  ["jobAdd", "second-job", 2],
   ["buildingWeights"],
   ["projectWeights"],
   ["build"],
