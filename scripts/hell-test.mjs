@@ -14,7 +14,8 @@ function createFixture(scenario = {}) {
   let hellSoldiers = scenario.hellSoldiers ?? 0;
   let hellPatrols = scenario.hellPatrols ?? 0;
   let hellPatrolSize = scenario.hellPatrolSize ?? 1;
-  let hellAssigned = scenario.hellAssigned ?? hellSoldiers;
+  let hellAssigned =
+    "hellAssigned" in scenario ? scenario.hellAssigned : hellSoldiers;
   const reserved = scenario.hellReservedSoldiers ?? 0;
   const manager = {
     _garrisonVue: scenario.garrisonAvailable === false ? null : {},
@@ -326,6 +327,19 @@ const scenarios = [
     government: "autocracy",
     authorityDebug: true,
     soldierPower: 1,
+  },
+  {
+    // A freshly unlocked fortress has no `assigned` property yet; the game only
+    // writes it once garrison controls are used. The Hell panel is already
+    // available, so the adapter must tolerate the missing value as zero.
+    name: "fortress just unlocked has no assigned",
+    hellAssigned: undefined,
+    hellSoldiers: 0,
+    hellPatrols: 0,
+    hellPatrolSize: 10,
+    maximumSoldiers: 100,
+    currentSoldiers: 0,
+    minimumSoldierPercent: 90,
   },
   {
     name: "negative Authority target reserves patrol percentage",

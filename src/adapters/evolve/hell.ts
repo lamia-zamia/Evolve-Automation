@@ -264,7 +264,9 @@ export function createHellAdapter(dependencies: HellAdapterDependencies): {
           manager["hellPatrolSize"],
           "WarManager.hellPatrolSize",
         ),
-        hellAssigned: requireNumber(
+        // A freshly unlocked fortress has no `assigned` property until the game
+        // first writes it; treat the absent value as zero as legacy did.
+        hellAssigned: optionalNumber(
           manager["hellAssigned"],
           "WarManager.hellAssigned",
         ),
