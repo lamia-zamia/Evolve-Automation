@@ -10,6 +10,7 @@ import {
 } from "../src/adapters/evolve/prestige-eligibility.ts";
 import {
   isAscensionPrestigeAvailable,
+  isDemonicPrestigeAvailable,
   isWitchAscensionPrestigeAvailable,
 } from "../src/domain/prestige-eligibility.ts";
 
@@ -161,6 +162,28 @@ const witchAscension = readWitchAscensionEligibilityView(
 assert.equal(witchAscension.status, "ready");
 assert.equal(isWitchAscensionPrestigeAvailable(witchAscension.view), true);
 
+// Regression: a demonic-infusion run never builds the Soul Capacitor (game
+// tech reqs `forbidden:2`, witch-hunter only, while demonic_infusion is
+// not_trait witch_hunter), so PitSoulCapacitor has no live instance. The
+// monolithic read must still succeed — no monolith consumer reads
+// soulCapacitorEnergy — so demonic eligibility can be evaluated.
+input = makeInput();
+input.settings.prestigeType = "demonic";
+delete input.buildings.PitSoulCapacitor.instance;
+const demonicNoCapacitor = readPrestigeEligibilityView(
+  input.settings,
+  input.game,
+  input.resources,
+  input.buildings,
+  input.techIds,
+  input.mech,
+  () => false,
+  () => false,
+);
+assert.equal(demonicNoCapacitor.status, "ready");
+assert.equal(demonicNoCapacitor.view.buildings.soulCapacitorEnergy, 0);
+assert.equal(isDemonicPrestigeAvailable(demonicNoCapacitor.view), true);
+
 input = makeInput();
 input.game.global.interstellar.stellar_engine = { mass: undefined, exotic: 2 };
 assert.deepEqual(
@@ -217,20 +240,25 @@ assert.deepEqual(
   },
 );
 
+// External legacy queries return falsy non-booleans (haveTech gives `undefined`
+// when a tech tree was never touched — a demonic-infusion run has no
+// forbidden/dish techs). The reader coerces them the way legacy consumed them
+// truthily instead of failing the whole read.
 input = makeInput();
-assert.deepEqual(
-  readPrestigeEligibilityView(
-    input.settings,
-    input.game,
-    input.resources,
-    input.buildings,
-    input.techIds,
-    input.mech,
-    () => "yes",
-    () => false,
-  ),
-  { status: "unavailable", reason: "invalid-external-result" },
+const coercedExternals = readPrestigeEligibilityView(
+  input.settings,
+  input.game,
+  input.resources,
+  input.buildings,
+  input.techIds,
+  input.mech,
+  () => undefined,
+  () => undefined,
 );
+assert.equal(coercedExternals.status, "ready");
+assert.equal(coercedExternals.view.tech.forbiddenLevelFive, false);
+assert.equal(coercedExternals.view.tech.dishLevelTwo, false);
+assert.equal(coercedExternals.view.achievement.lamentisStandardFive, false);
 
 input = makeInput();
 const hostile = new Proxy(input.game, {

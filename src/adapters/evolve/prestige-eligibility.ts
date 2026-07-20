@@ -306,16 +306,10 @@ export function readWitchAscensionEligibilityView(
     let forbiddenLevelFive = false;
     let dishLevelTwo = false;
     if (demonic) {
-      const rawForbiddenLevelFive = haveTech("forbidden", 5);
-      const rawDishLevelTwo = haveTech("dish", 2);
-      if (
-        typeof rawForbiddenLevelFive !== "boolean" ||
-        typeof rawDishLevelTwo !== "boolean"
-      ) {
-        return unavailable("invalid-external-result");
-      }
-      forbiddenLevelFive = rawForbiddenLevelFive;
-      dishLevelTwo = rawDishLevelTwo;
+      // Legacy consumed these truthily; haveTech returns a falsy non-boolean
+      // (undefined) when the tech tree is absent. Coerce rather than reject.
+      forbiddenLevelFive = Boolean(haveTech("forbidden", 5));
+      dishLevelTwo = Boolean(haveTech("dish", 2));
     }
 
     return Object.freeze({
@@ -352,14 +346,11 @@ export function readGeckEligibilityView(
     if (geck === undefined || !finiteNonNegative(geck["count"])) {
       return unavailable("invalid-building", "GasSpaceDockGECK.count");
     }
-    const lamentisStandardFive = isAchievementUnlocked(
-      "lamentis",
-      5,
-      "standard",
+    // Legacy used this achievement result truthily (`ach && ...`); coerce a
+    // falsy non-boolean rather than reject.
+    const lamentisStandardFive = Boolean(
+      isAchievementUnlocked("lamentis", 5, "standard"),
     );
-    if (typeof lamentisStandardFive !== "boolean") {
-      return unavailable("invalid-external-result");
-    }
     return Object.freeze({
       status: "ready",
       view: Object.freeze({
@@ -491,14 +482,25 @@ export function readPrestigeEligibilityView(
       buildingRecords["SiriusAscend"]!,
       "isUnlocked",
     );
-    const capacitorInstance = buildingRecords["PitSoulCapacitor"]!["instance"];
-    if (
-      siriusAscendUnlocked === undefined ||
-      !isRecord(capacitorInstance) ||
-      !finiteNonNegative(capacitorInstance["energy"])
-    ) {
+    if (siriusAscendUnlocked === undefined) {
       return unavailable("invalid-building");
     }
+    // TRANSITIONAL: This aggregate reader feeds cataclysm/bioseed/whitehole/
+    // apocalypse/demonic eligibility, none of which consume soulCapacitorEnergy
+    // — only witch-ascension does, via its own narrow
+    // readWitchAscensionEligibilityView. The Soul Capacitor (game tech reqs
+    // `forbidden:2`, witch-hunter only) never exists on a demonic-infusion,
+    // bioseed, or whitehole run, so hard-requiring its live instance here
+    // silently failed the whole read for every non-witch prestige. Coerce the
+    // absent lazily-initialized building to 0, the way legacy per-type
+    // eligibility did (it never read it). Remove when this monolith is split
+    // into narrow per-type readers.
+    const capacitorInstance = buildingRecords["PitSoulCapacitor"]!["instance"];
+    const soulCapacitorEnergy =
+      isRecord(capacitorInstance) &&
+      finiteNonNegative(capacitorInstance["energy"])
+        ? capacitorInstance["energy"]
+        : 0;
 
     if (!isRecord(rawTechIds)) return unavailable("invalid-tech");
     const techIds = [
@@ -532,20 +534,18 @@ export function readPrestigeEligibilityView(
       return unavailable("invalid-mech-state");
     }
 
-    const forbiddenLevelFive = haveTech("forbidden", 5);
-    const dishLevelTwo = haveTech("dish", 2);
-    const lamentisStandardFive = isAchievementUnlocked(
-      "lamentis",
-      5,
-      "standard",
+    // TRANSITIONAL: Legacy `haveTech`/achievement queries return a falsy
+    // non-boolean (e.g. `undefined` when a tech tree was never touched — a
+    // demonic-infusion run has no `forbidden`/`dish` techs) and legacy consumed
+    // them truthily (`if (haveTech(...))`, `!haveTech(...)`, `ach && ...`).
+    // Coerce to match rather than rejecting the whole aggregate read; the
+    // demonic/whitehole/apocalypse/cataclysm consumers do not even read
+    // forbidden/dish. Remove when this monolith is split into narrow readers.
+    const forbiddenLevelFive = Boolean(haveTech("forbidden", 5));
+    const dishLevelTwo = Boolean(haveTech("dish", 2));
+    const lamentisStandardFive = Boolean(
+      isAchievementUnlocked("lamentis", 5, "standard"),
     );
-    if (
-      typeof forbiddenLevelFive !== "boolean" ||
-      typeof dishLevelTwo !== "boolean" ||
-      typeof lamentisStandardFive !== "boolean"
-    ) {
-      return unavailable("invalid-external-result");
-    }
 
     const view: PrestigeEligibilityView = {
       settings: Object.freeze(settings as PrestigeEligibilityView["settings"]),
@@ -573,7 +573,7 @@ export function readPrestigeEligibilityView(
         absorptionChambers: buildingRecords["PitAbsorptionChamber"]![
           "count"
         ] as number,
-        soulCapacitorEnergy: capacitorInstance["energy"],
+        soulCapacitorEnergy,
         spireFloor: buildingRecords["SpireTower"]!["count"] as number,
       }),
       tech: Object.freeze({

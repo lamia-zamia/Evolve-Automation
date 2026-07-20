@@ -18337,13 +18337,8 @@
       let forbiddenLevelFive = false;
       let dishLevelTwo = false;
       if (demonic) {
-        const rawForbiddenLevelFive = haveTech2("forbidden", 5);
-        const rawDishLevelTwo = haveTech2("dish", 2);
-        if (typeof rawForbiddenLevelFive !== "boolean" || typeof rawDishLevelTwo !== "boolean") {
-          return unavailable8("invalid-external-result");
-        }
-        forbiddenLevelFive = rawForbiddenLevelFive;
-        dishLevelTwo = rawDishLevelTwo;
+        forbiddenLevelFive = Boolean(haveTech2("forbidden", 5));
+        dishLevelTwo = Boolean(haveTech2("dish", 2));
       }
       return Object.freeze({
         status: "ready",
@@ -18374,14 +18369,9 @@
       if (geck === void 0 || !finiteNonNegative5(geck["count"])) {
         return unavailable8("invalid-building", "GasSpaceDockGECK.count");
       }
-      const lamentisStandardFive = isAchievementUnlocked3(
-        "lamentis",
-        5,
-        "standard"
+      const lamentisStandardFive = Boolean(
+        isAchievementUnlocked3("lamentis", 5, "standard")
       );
-      if (typeof lamentisStandardFive !== "boolean") {
-        return unavailable8("invalid-external-result");
-      }
       return Object.freeze({
         status: "ready",
         view: Object.freeze({
@@ -18484,10 +18474,11 @@
         buildingRecords["SiriusAscend"],
         "isUnlocked"
       );
-      const capacitorInstance = buildingRecords["PitSoulCapacitor"]["instance"];
-      if (siriusAscendUnlocked === void 0 || !isRecord12(capacitorInstance) || !finiteNonNegative5(capacitorInstance["energy"])) {
+      if (siriusAscendUnlocked === void 0) {
         return unavailable8("invalid-building");
       }
+      const capacitorInstance = buildingRecords["PitSoulCapacitor"]["instance"];
+      const soulCapacitorEnergy = isRecord12(capacitorInstance) && finiteNonNegative5(capacitorInstance["energy"]) ? capacitorInstance["energy"] : 0;
       if (!isRecord12(rawTechIds)) return unavailable8("invalid-tech");
       const techIds2 = [
         "tech-dial_it_to_11",
@@ -18515,16 +18506,11 @@
       if (typeof mechActive !== "boolean" || !finiteNonNegative5(mechPotential)) {
         return unavailable8("invalid-mech-state");
       }
-      const forbiddenLevelFive = haveTech2("forbidden", 5);
-      const dishLevelTwo = haveTech2("dish", 2);
-      const lamentisStandardFive = isAchievementUnlocked3(
-        "lamentis",
-        5,
-        "standard"
+      const forbiddenLevelFive = Boolean(haveTech2("forbidden", 5));
+      const dishLevelTwo = Boolean(haveTech2("dish", 2));
+      const lamentisStandardFive = Boolean(
+        isAchievementUnlocked3("lamentis", 5, "standard")
       );
-      if (typeof forbiddenLevelFive !== "boolean" || typeof dishLevelTwo !== "boolean" || typeof lamentisStandardFive !== "boolean") {
-        return unavailable8("invalid-external-result");
-      }
       const view = {
         settings: Object.freeze(settings2),
         game: Object.freeze({
@@ -18545,7 +18531,7 @@
           gecks: buildingRecords["GasSpaceDockGECK"]["count"],
           siriusAscendUnlocked,
           absorptionChambers: buildingRecords["PitAbsorptionChamber"]["count"],
-          soulCapacitorEnergy: capacitorInstance["energy"],
+          soulCapacitorEnergy,
           spireFloor: buildingRecords["SpireTower"]["count"]
         }),
         tech: Object.freeze({
