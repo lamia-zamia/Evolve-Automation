@@ -334,7 +334,11 @@ import {
 } from "./adapters/evolve/craft.ts";
 import { runSpyAutomation } from "./application/spy.ts";
 import { createSpyAdapter } from "./adapters/evolve/spy.ts";
-import { createAutoPrestige } from "./automation/progression/prestige.ts";
+import {
+  createPrestigeReader,
+  createPrestigeCommandExecutor,
+} from "./adapters/evolve/prestige.ts";
+import { runPrestige } from "./application/prestige.ts";
 import {
   createPlanetSelectionCommandExecutor,
   createPlanetSelectionReader,
@@ -3418,27 +3422,38 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     return result.status === "ready" ? getBlackholeMassPolicy(result.view) : 0;
   };
 
-  const autoPrestige = createAutoPrestige({
+  const prestigeReader = createPrestigeReader({
     getState: () => state,
     getSettings: () => settings,
     getGame: () => game,
     getResources: () => resources,
     getBuildings: () => buildings,
+    getTechIds: () => techIds,
     getWarManager: () => WarManager,
     getHaveTech: () => haveTech,
     getVueById,
-    logPrestige,
-    getIsBioseederPrestigeAvailable: () => isBioseederPrestigeAvailable,
-    isCataclysmPrestigeAvailable,
-    loadQueuedSettings,
-    getTechIds: () => techIds,
-    isWhiteholePrestigeAvailable,
-    isApocalypsePrestigeAvailable,
-    isWitchAscensionPrestigeAvailable,
-    isAscensionPrestigeAvailable,
-    KeyManager,
-    isDemonicPrestigeAvailable,
+    eligibility: {
+      isBioseederPrestigeAvailable: () => isBioseederPrestigeAvailable(),
+      isCataclysmPrestigeAvailable: () => isCataclysmPrestigeAvailable(),
+      isWhiteholePrestigeAvailable: () => isWhiteholePrestigeAvailable(),
+      isApocalypsePrestigeAvailable: () => isApocalypsePrestigeAvailable(),
+      isAscensionPrestigeAvailable: () => isAscensionPrestigeAvailable(),
+      isWitchAscensionPrestigeAvailable: (demonic) =>
+        isWitchAscensionPrestigeAvailable(demonic),
+      isDemonicPrestigeAvailable: () => isDemonicPrestigeAvailable(),
+    },
   });
+  const prestigeExecutor = createPrestigeCommandExecutor({
+    getState: () => state,
+    getBuildings: () => buildings,
+    getTechIds: () => techIds,
+    getVueById,
+    getKeyManager: () => KeyManager,
+    logPrestige,
+    loadQueuedSettings,
+  });
+  const autoPrestige = () =>
+    runPrestige({ reader: prestigeReader, executor: prestigeExecutor });
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {

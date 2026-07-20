@@ -1,4 +1,8 @@
-import type { AutomationDependencies } from "../dependencies.ts";
+/**
+ * Frozen copy of the legacy createAutoPrestige factory, kept only as the parity
+ * oracle for the migrated prestige slice tests. Do not wire into production.
+ */
+import type { AutomationDependencies } from "../../src/automation/dependencies.ts";
 
 type Dependencies = AutomationDependencies<
   | "getState"
@@ -21,7 +25,7 @@ type Dependencies = AutomationDependencies<
   | "KeyManager"
   | "isDemonicPrestigeAvailable"
 >;
-export function createAutoPrestige({
+export function createLegacyAutoPrestige({
   getState,
   getSettings,
   getGame,
