@@ -4416,7 +4416,10 @@
       }),
       updateSpire() {
         let oldHash = this.stateHash;
-        this.stateHash = 0 + game2.global.portal.spire.count + game2.global.blood.prepared + game2.global.blood.wrath + game2.global.portal.mechbay.scouts * 1e7 + (settings2.mechSpecial ? 1e14 : 0) + (settings2.mechInfernalCollector ? 1e15 : 0) + settings2.mechCollectorValue;
+        this.stateHash = 0 + game2.global.portal.spire.count + // blood is `{}` until the player buys Prepared/Wrath boons, so these are
+        // undefined and would poison the sum to NaN, making `!== oldHash` always
+        // true and pinning isActive on. The game reads them leniently (`|| 0`).
+        (game2.global.blood.prepared ?? 0) + (game2.global.blood.wrath ?? 0) + game2.global.portal.mechbay.scouts * 1e7 + (settings2.mechSpecial ? 1e14 : 0) + (settings2.mechInfernalCollector ? 1e15 : 0) + settings2.mechCollectorValue;
         return this.stateHash !== oldHash;
       },
       initLab() {
@@ -37906,6 +37909,11 @@
   }
   function createMechAdapter(dependencies) {
     let session = null;
+    const debug = (message) => {
+      if (dependencies.readDebugEnabled?.() === true && dependencies.debugLog) {
+        dependencies.debugLog(`[mech] ${message()}`);
+      }
+    };
     const reader = Object.freeze({
       readCycle() {
         session = null;
@@ -37919,8 +37927,14 @@
         const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
         const global = requireRecord(game2["global"], "game.global");
         const race = requireRecord(global["race"], "game.global.race");
-        if (race["warlord"]) return unavailableCycle2();
+        if (race["warlord"]) {
+          debug(() => "cycle: unavailable (warlord race)");
+          return unavailableCycle2();
+        }
         if (!call3(manager, "initLab", "MechManager.initLab")) {
+          debug(
+            () => "cycle: unavailable (initLab failed, mech lab Vue missing)"
+          );
           return unavailableCycle2();
         }
         const jquery = dependencies.getJQuery();
@@ -37933,7 +37947,12 @@
           ]),
           "mech draggable rows"
         );
-        if (requireNumber(dragged["length"], "mech draggable rows.length") > 0) {
+        const draggableRows = requireNumber(
+          dragged["length"],
+          "mech draggable rows.length"
+        );
+        if (draggableRows > 0) {
+          debug(() => `cycle: unavailable (${draggableRows} rows mid-drag)`);
           return unavailableCycle2();
         }
         const portal = requireRecord(global["portal"], "game.global.portal");
@@ -38000,6 +38019,9 @@
           planningInput: null,
           nextToken: 1
         };
+        debug(
+          () => `cycle: mechs=${input.totalMechs} active=${activeMechs.length} inactive=${inactiveMechs.length} isActive=${String(input.prolongActive)} saveSupply=${String(manager["saveSupply"])} savingSupply=${String(input.savingSupply)} hasTask=${String(input.hasTask)} buildMode=${input.buildMode}`
+        );
         return input;
       },
       readPlanning(decision2) {
@@ -38045,7 +38067,12 @@
         );
         const supply = readResource2(resources2["Supply"], "resources.Supply");
         const gems = readResource2(resources2["Soul_Gem"], "resources.Soul_Gem");
-        if (!fillBay && supply.input.spareMaximum < cost.supply) return null;
+        if (!fillBay && supply.input.spareMaximum < cost.supply) {
+          debug(
+            () => `planning: stop, fillBay off and supply capacity ${supply.input.spareMaximum} < cost ${cost.supply}`
+          );
+          return null;
+        }
         const baySpace = requireNumber(bay["max"], "mechbay.max") - requireNumber(bay["bay"], "mechbay.bay");
         const tower = requireRecord(
           buildings2["SpireTower"],
@@ -38092,6 +38119,9 @@
           titanSupplyRefund,
           timeToClear: saveTimeToClear
         })) {
+          debug(
+            () => `planning: stop, saving supply for next floor (ratio=${saveSupplyRatio} supply=${supply.input.current}/${supply.input.maximum} rate=${supply.input.rate} timeToClear=${saveTimeToClear} titanRefund=${titanSupplyRefund})`
+          );
           return null;
         }
         const mechBayBuilding = requireRecord(
@@ -38203,7 +38233,7 @@
           timeToClear,
           activeMechs: Object.freeze([])
         };
-        resolveMechScrapMode(base);
+        const resolvedScrapMode = resolveMechScrapMode(base);
         let candidates = Object.freeze([]);
         if (shouldReadMechScrapCandidates(base)) {
           const bestMech = requireRecord(
@@ -38256,6 +38286,9 @@
         }
         const input = Object.freeze({ ...base, activeMechs: candidates });
         active.planningInput = input;
+        debug(
+          () => `planning: size=${design.size} forceBuild=${String(forceBuild)} cost={gems:${cost.gems},supply:${cost.supply},space:${cost.space}} bay=${base.bayMaximum - baySpace}/${base.bayMaximum} scouts=${base.scouts} supply={cur:${Math.round(supply.input.current)},max:${supply.input.maximum},spare:${Math.round(supply.input.spare)},spareMax:${supply.input.spareMaximum},rate:${Math.round(supply.input.rate)},ratio:${supply.input.storageRatio.toFixed(3)}} gems={cur:${gems.input.current},spare:${gems.input.spare}} lastFloor=${String(lastFloor)} savingSupply=${String(savingSupply)} canExpandBay=${String(canExpandBay)} scrapMode=${resolvedScrapMode} scrapCandidates=${candidates.length} mechsPower=${mechsPower} timeToClear=${timeToClear}`
+        );
         return input;
       },
       readSmallerCost(size) {
@@ -38263,12 +38296,16 @@
         if (active === null || active.planningInput === null) {
           throw new Error("mech planning has not been sampled");
         }
-        return readCost2(
+        const cost = readCost2(
           call3(active.manager, "getMechCost", "MechManager.getMechCost", [
             { size }
           ]),
           `mech cost for ${size}`
         );
+        debug(
+          () => `planning: trying smaller size=${size} cost={gems:${cost.gems},supply:${cost.supply},space:${cost.space}}`
+        );
+        return cost;
       },
       readSmallerDesign(size) {
         const active = session;
@@ -38302,6 +38339,9 @@
             "mech cycle decision does not match the sampled plan"
           );
         }
+        debug(
+          () => `prepare: isActive ${String(active.manager["isActive"])} -> false, proceed=${String(decision2.proceed)} drag=${decision2.drag === null ? "none" : `${decision2.drag.oldId}->${decision2.drag.newId}`}`
+        );
         active.manager["isActive"] = false;
         active.manager["saveSupply"] = false;
         if (decision2.drag !== null) {
@@ -38353,6 +38393,9 @@
             ["hell"]
           ]);
         }
+        debug(
+          () => `scrap: ids=[${decision2.ids.join(",")}] gained={supply:${Math.round(decision2.supplyGained)},gems:${decision2.gemsGained},space:${decision2.spaceGained}}`
+        );
         for (const mech of rawMechs) {
           call3(active.manager, "scrapMech", "MechManager.scrapMech", [mech]);
         }
@@ -38401,8 +38444,14 @@
           gems["currentQuantity"],
           "resources.Soul_Gem.currentQuantity"
         ) !== continuation.gemsCurrent) {
+          debug(
+            () => `build: stale, supply ${String(supply["currentQuantity"])} vs ${continuation.supplyCurrent}, gems ${String(gems["currentQuantity"])} vs ${continuation.gemsCurrent}`
+          );
           return stale("mech-resources-changed", "mech resources changed");
         }
+        debug(
+          () => `build: size=${String(rawDesign["size"])} cost={gems:${decision2.cost.gems},supply:${decision2.cost.supply}} restoring isActive=${String(decision2.prolongActive)}`
+        );
         call3(active.manager, "buildMech", "MechManager.buildMech", [rawDesign]);
         supply["currentQuantity"] = continuation.supplyCurrent - decision2.cost.supply;
         gems["currentQuantity"] = continuation.gemsCurrent - decision2.cost.gems;
@@ -51490,9 +51539,17 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       haveTech,
       haveTask,
       getGameLog: () => GameLog,
-      getJQuery: () => $
+      getJQuery: () => $,
+      readDebugEnabled: () => window.mechDebug === true,
+      debugLog: (message) => console.log(message)
     });
-    const autoMech = () => runMechAutomation(mechAdapter);
+    const autoMech = () => {
+      const outcome = runMechAutomation(mechAdapter);
+      if (window.mechDebug === true && outcome.status !== "succeeded") {
+        console.log("[mech] outcome:", outcome);
+      }
+      return outcome;
+    };
     let scriptDataTestActions;
     const { updateScriptData, finalizeScriptData } = createScriptDataLifecycle({
       getSettings: () => settings,

@@ -38,6 +38,8 @@ export interface MechAdapterDependencies {
   readonly haveTask: (task: string) => unknown;
   readonly getGameLog: () => unknown;
   readonly getJQuery: () => unknown;
+  readonly readDebugEnabled?: () => boolean;
+  readonly debugLog?: (message: string) => void;
 }
 
 interface MechSession {
@@ -173,6 +175,12 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
 } {
   let session: MechSession | null = null;
 
+  const debug = (message: () => string): void => {
+    if (dependencies.readDebugEnabled?.() === true && dependencies.debugLog) {
+      dependencies.debugLog(`[mech] ${message()}`);
+    }
+  };
+
   const reader: MechReader = Object.freeze({
     readCycle() {
       session = null;
@@ -186,8 +194,14 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
       const buildings = requireRecord(dependencies.getBuildings(), "buildings");
       const global = requireRecord(game["global"], "game.global");
       const race = requireRecord(global["race"], "game.global.race");
-      if (race["warlord"]) return unavailableCycle();
+      if (race["warlord"]) {
+        debug(() => "cycle: unavailable (warlord race)");
+        return unavailableCycle();
+      }
       if (!call(manager, "initLab", "MechManager.initLab")) {
+        debug(
+          () => "cycle: unavailable (initLab failed, mech lab Vue missing)",
+        );
         return unavailableCycle();
       }
       const jquery = dependencies.getJQuery();
@@ -200,7 +214,12 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
         ]),
         "mech draggable rows",
       );
-      if (requireNumber(dragged["length"], "mech draggable rows.length") > 0) {
+      const draggableRows = requireNumber(
+        dragged["length"],
+        "mech draggable rows.length",
+      );
+      if (draggableRows > 0) {
+        debug(() => `cycle: unavailable (${draggableRows} rows mid-drag)`);
         return unavailableCycle();
       }
 
@@ -277,6 +296,12 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
         planningInput: null,
         nextToken: 1,
       };
+      debug(
+        () =>
+          `cycle: mechs=${input.totalMechs} active=${activeMechs.length} inactive=${inactiveMechs.length}` +
+          ` isActive=${String(input.prolongActive)} saveSupply=${String(manager["saveSupply"])}` +
+          ` savingSupply=${String(input.savingSupply)} hasTask=${String(input.hasTask)} buildMode=${input.buildMode}`,
+      );
       return input;
     },
 
@@ -323,7 +348,13 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
       );
       const supply = readResource(resources["Supply"], "resources.Supply");
       const gems = readResource(resources["Soul_Gem"], "resources.Soul_Gem");
-      if (!fillBay && supply.input.spareMaximum < cost.supply) return null;
+      if (!fillBay && supply.input.spareMaximum < cost.supply) {
+        debug(
+          () =>
+            `planning: stop, fillBay off and supply capacity ${supply.input.spareMaximum} < cost ${cost.supply}`,
+        );
+        return null;
+      }
 
       const baySpace =
         requireNumber(bay["max"], "mechbay.max") -
@@ -380,6 +411,12 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
           timeToClear: saveTimeToClear,
         })
       ) {
+        debug(
+          () =>
+            `planning: stop, saving supply for next floor (ratio=${saveSupplyRatio}` +
+            ` supply=${supply.input.current}/${supply.input.maximum} rate=${supply.input.rate}` +
+            ` timeToClear=${saveTimeToClear} titanRefund=${titanSupplyRefund})`,
+        );
         return null;
       }
 
@@ -509,7 +546,7 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
       };
       // Calling this pure helper here controls which live manager values are
       // sampled; locked branches remain just as lazy as in the legacy path.
-      resolveMechScrapMode(base);
+      const resolvedScrapMode = resolveMechScrapMode(base);
       let candidates: readonly MechScrapCandidate[] = Object.freeze([]);
       if (shouldReadMechScrapCandidates(base)) {
         const bestMech = requireRecord(
@@ -565,6 +602,17 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
       }
       const input = Object.freeze({ ...base, activeMechs: candidates });
       active.planningInput = input;
+      debug(
+        () =>
+          `planning: size=${design.size} forceBuild=${String(forceBuild)}` +
+          ` cost={gems:${cost.gems},supply:${cost.supply},space:${cost.space}}` +
+          ` bay=${base.bayMaximum - baySpace}/${base.bayMaximum} scouts=${base.scouts}` +
+          ` supply={cur:${Math.round(supply.input.current)},max:${supply.input.maximum},spare:${Math.round(supply.input.spare)},spareMax:${supply.input.spareMaximum},rate:${Math.round(supply.input.rate)},ratio:${supply.input.storageRatio.toFixed(3)}}` +
+          ` gems={cur:${gems.input.current},spare:${gems.input.spare}}` +
+          ` lastFloor=${String(lastFloor)} savingSupply=${String(savingSupply)} canExpandBay=${String(canExpandBay)}` +
+          ` scrapMode=${resolvedScrapMode} scrapCandidates=${candidates.length}` +
+          ` mechsPower=${mechsPower} timeToClear=${timeToClear}`,
+      );
       return input;
     },
 
@@ -573,12 +621,17 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
       if (active === null || active.planningInput === null) {
         throw new Error("mech planning has not been sampled");
       }
-      return readCost(
+      const cost = readCost(
         call(active.manager, "getMechCost", "MechManager.getMechCost", [
           { size },
         ]),
         `mech cost for ${size}`,
       );
+      debug(
+        () =>
+          `planning: trying smaller size=${size} cost={gems:${cost.gems},supply:${cost.supply},space:${cost.space}}`,
+      );
+      return cost;
     },
 
     readSmallerDesign(size: string) {
@@ -617,6 +670,11 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
           "mech cycle decision does not match the sampled plan",
         );
       }
+      debug(
+        () =>
+          `prepare: isActive ${String(active.manager["isActive"])} -> false, proceed=${String(decision.proceed)}` +
+          ` drag=${decision.drag === null ? "none" : `${decision.drag.oldId}->${decision.drag.newId}`}`,
+      );
       active.manager["isActive"] = false;
       active.manager["saveSupply"] = false;
       if (decision.drag !== null) {
@@ -669,6 +727,10 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
           ["hell"],
         ]);
       }
+      debug(
+        () =>
+          `scrap: ids=[${decision.ids.join(",")}] gained={supply:${Math.round(decision.supplyGained)},gems:${decision.gemsGained},space:${decision.spaceGained}}`,
+      );
       for (const mech of rawMechs) {
         call(active.manager, "scrapMech", "MechManager.scrapMech", [mech]);
       }
@@ -725,8 +787,18 @@ export function createMechAdapter(dependencies: MechAdapterDependencies): {
           "resources.Soul_Gem.currentQuantity",
         ) !== continuation.gemsCurrent
       ) {
+        debug(
+          () =>
+            `build: stale, supply ${String(supply["currentQuantity"])} vs ${continuation.supplyCurrent},` +
+            ` gems ${String(gems["currentQuantity"])} vs ${continuation.gemsCurrent}`,
+        );
         return stale("mech-resources-changed", "mech resources changed");
       }
+      debug(
+        () =>
+          `build: size=${String(rawDesign["size"])} cost={gems:${decision.cost.gems},supply:${decision.cost.supply}}` +
+          ` restoring isActive=${String(decision.prolongActive)}`,
+      );
       call(active.manager, "buildMech", "MechManager.buildMech", [rawDesign]);
       supply["currentQuantity"] =
         continuation.supplyCurrent - decision.cost.supply;

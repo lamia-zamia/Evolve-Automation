@@ -182,4 +182,24 @@ assert.deepEqual(trace, [
   ["drag", 4, 2],
 ]);
 
+// Regression: the game leaves `blood` as `{}` until Prepared/Wrath boons are
+// bought, so blood.prepared/wrath are undefined. The hash must still be a stable
+// finite number across ticks; if it becomes NaN, `!== oldHash` is always true and
+// initLab pins isActive on every tick, which freezes the "Building mechs..."
+// weighting and blocks every Supply-cost spire building.
+game.global.blood = {};
+MechManager.updateSpire();
+assert.ok(Number.isFinite(MechManager.stateHash), "hash must be finite");
+assert.equal(
+  MechManager.updateSpire(),
+  false,
+  "unchanged spire config must report no change",
+);
+game.global.blood.prepared = 1;
+assert.equal(
+  MechManager.updateSpire(),
+  true,
+  "buying a blood boon must register as a change",
+);
+
 console.log("Mech manager tests passed");

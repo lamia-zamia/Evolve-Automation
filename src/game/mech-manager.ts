@@ -327,8 +327,11 @@ export function createMechManager({
       this.stateHash =
         0 +
         game.global.portal.spire.count +
-        game.global.blood.prepared +
-        game.global.blood.wrath +
+        // blood is `{}` until the player buys Prepared/Wrath boons, so these are
+        // undefined and would poison the sum to NaN, making `!== oldHash` always
+        // true and pinning isActive on. The game reads them leniently (`|| 0`).
+        (game.global.blood.prepared ?? 0) +
+        (game.global.blood.wrath ?? 0) +
         game.global.portal.mechbay.scouts * 1e7 +
         (settings.mechSpecial ? 1e14 : 0) +
         (settings.mechInfernalCollector ? 1e15 : 0) +

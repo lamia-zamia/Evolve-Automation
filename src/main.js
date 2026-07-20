@@ -4000,8 +4000,16 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     haveTask,
     getGameLog: () => GameLog,
     getJQuery: () => $,
+    readDebugEnabled: () => window.mechDebug === true,
+    debugLog: (message) => console.log(message),
   });
-  const autoMech = () => runMechAutomation(mechAdapter);
+  const autoMech = () => {
+    const outcome = runMechAutomation(mechAdapter);
+    if (window.mechDebug === true && outcome.status !== "succeeded") {
+      console.log("[mech] outcome:", outcome);
+    }
+    return outcome;
+  };
 
   let scriptDataTestActions;
   const { updateScriptData, finalizeScriptData } = createScriptDataLifecycle({
