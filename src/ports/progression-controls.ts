@@ -5,3 +5,7 @@ export interface ShapeshiftControls {
 export interface UniverseSelectionControls {
   selectUniverse(name: string): boolean;
 }
+
+export interface PlanetSelectionControls {
+  selectPlanet(elementId: string): boolean;
+}

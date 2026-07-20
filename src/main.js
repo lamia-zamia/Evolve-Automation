@@ -258,6 +258,7 @@ import {
   readShapeshiftInput,
 } from "./adapters/evolve/shapeshift.ts";
 import {
+  createPlanetSelectionControls,
   createShapeshiftControls,
   createUniverseSelectionControls,
 } from "./adapters/browser/progression-controls.ts";
@@ -330,7 +331,11 @@ import {
 import { runSpyAutomation } from "./application/spy.ts";
 import { createSpyAdapter } from "./adapters/evolve/spy.ts";
 import { createAutoPrestige } from "./automation/progression/prestige.ts";
-import { createAutoPlanetSelection } from "./automation/progression/planet-selection.ts";
+import {
+  createPlanetSelectionCommandExecutor,
+  createPlanetSelectionReader,
+} from "./adapters/evolve/planet-selection.ts";
+import { runPlanetSelection } from "./application/planet-selection.ts";
 import { runJobsAutomation } from "./application/jobs.ts";
 import { createJobsAdapter } from "./adapters/evolve/jobs.ts";
 import { runBuildAutomation } from "./application/build.ts";
@@ -2953,19 +2958,28 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const autoPlanetSelection = createAutoPlanetSelection({
+  const planetSelectionReader = createPlanetSelectionReader({
     getGame: () => game,
     getSettings: () => settings,
     getGeneratePlanets: () => generatePlanets,
-    getStarLevel,
+    getStarLevel: () => getStarLevel,
     getIsAchievementUnlocked: () => isAchievementUnlocked,
-    getPlanetBiomeGenus: () => planetBiomeGenus,
     getRaces: () => races,
-    getPlanetBiomes: () => planetBiomes,
-    getPlanetTraits: () => planetTraits,
-    getDocument: () => document,
-    getMouseEvent: () => MouseEvent,
+    biomeGenus: planetBiomeGenus,
+    biomeOrder: planetBiomes,
   });
+  const planetSelectionExecutor = createPlanetSelectionCommandExecutor({
+    getGame: () => game,
+    controls: createPlanetSelectionControls(
+      () => document,
+      () => MouseEvent,
+    ),
+  });
+  const autoPlanetSelection = () =>
+    runPlanetSelection({
+      reader: planetSelectionReader,
+      executor: planetSelectionExecutor,
+    });
 
   const autoCraft = () =>
     runCraftAutomation({

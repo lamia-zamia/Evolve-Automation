@@ -1,4 +1,9 @@
-import type { AutomationDependencies } from "../dependencies.ts";
+/**
+ * Frozen copy of the legacy createAutoPlanetSelection factory, kept only as
+ * the parity oracle for the migrated planet-selection slice tests. Do not wire
+ * into production.
+ */
+import type { AutomationDependencies } from "../../src/automation/dependencies.ts";
 
 type Dependencies = AutomationDependencies<
   | "getGame"
@@ -13,7 +18,7 @@ type Dependencies = AutomationDependencies<
   | "getDocument"
   | "getMouseEvent"
 >;
-export function createAutoPlanetSelection({
+export function createLegacyAutoPlanetSelection({
   getGame,
   getSettings,
   getGeneratePlanets,

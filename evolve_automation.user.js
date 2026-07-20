@@ -18046,8 +18046,8 @@
       if (typeof alevel !== "function") {
         return unavailable7("invalid-game-state", "alevel");
       }
-      const achievementLevel = alevel.call(rawGame);
-      if (!finiteNonNegative4(achievementLevel)) {
+      const achievementLevel2 = alevel.call(rawGame);
+      if (!finiteNonNegative4(achievementLevel2)) {
         return unavailable7("invalid-game-state", "alevel");
       }
       if (!finiteNonNegative4(rawWheelbarrowStar)) {
@@ -18059,7 +18059,7 @@
           assistEnabled: assist === true,
           inflationRun,
           wheelbarrowStar: rawWheelbarrowStar,
-          achievementLevel
+          achievementLevel: achievementLevel2
         })
       });
     } catch {
@@ -18790,8 +18790,8 @@
       if (!isRecord13(race) || typeof race["species"] !== "string" || typeof race["gods"] !== "string" || typeof alevel !== "function") {
         return unavailable9("invalid-game-state");
       }
-      const achievementLevel = alevel.call(rawGame);
-      if (!finiteNonNegative6(achievementLevel)) {
+      const achievementLevel2 = alevel.call(rawGame);
+      if (!finiteNonNegative6(achievementLevel2)) {
         return unavailable9("invalid-game-state", "alevel");
       }
       const nowMs = itemId === "tech-stabilize_blackhole" ? dependencies.clock.nowMs() : 0;
@@ -18854,7 +18854,7 @@
             }
             const unlocked = dependencies.isAchievementUnlocked(
               rawCombination["achieve"],
-              achievementLevel
+              achievementLevel2
             );
             if (typeof unlocked !== "boolean") {
               return unavailable9("invalid-external-result", "achievement");
@@ -18883,7 +18883,7 @@
         race: Object.freeze({
           species: race["species"],
           gods: race["gods"],
-          achievementLevel
+          achievementLevel: achievementLevel2
         }),
         guards: Object.freeze({
           bananaRepublic,
@@ -22795,7 +22795,7 @@
     let universeMagic = false;
     let alchemyTech = 0;
     let fullmetalStar = 0;
-    let achievementLevel = 0;
+    let achievementLevel2 = 0;
     let fullmetalEnabled = false;
     if (magicFullmetalHelper) {
       const race = requireRecord(
@@ -22811,11 +22811,11 @@
             "fullmetal achievement star"
           );
           const alevel = requireFunction(game2["alevel"], "game.alevel");
-          achievementLevel = requireNumber(
+          achievementLevel2 = requireNumber(
             Reflect.apply(alevel, game2, []),
             "game.alevel()"
           );
-          if (fullmetalStar < achievementLevel) {
+          if (fullmetalStar < achievementLevel2) {
             manaCurrentQuantity = requireNumber(
               mana["currentQuantity"],
               "resources.Mana.currentQuantity"
@@ -22850,7 +22850,7 @@
       universeMagic,
       alchemyTech,
       fullmetalStar,
-      achievementLevel,
+      achievementLevel: achievementLevel2,
       resources: freezeResources(sampledResources)
     });
   }
@@ -24849,6 +24849,57 @@
         const click = requireFunction(
           child["click"],
           `document#uni-${name}.children[0].click`
+        );
+        Reflect.apply(click, child, []);
+        return true;
+      }
+    });
+  }
+  function createPlanetSelectionControls(getDocument, getMouseEventConstructor) {
+    return Object.freeze({
+      selectPlanet(elementId) {
+        const document2 = requireRecord(getDocument(), "document");
+        const getElementById = requireFunction(
+          document2["getElementById"],
+          "document.getElementById"
+        );
+        const value = Reflect.apply(getElementById, document2, [elementId]);
+        if (typeof value !== "object" || value === null) {
+          return false;
+        }
+        const element = requireRecord(value, `document#${elementId}`);
+        if (typeof element["dispatchEvent"] !== "function") {
+          return false;
+        }
+        const children = element["children"];
+        if (typeof children !== "object" && !Array.isArray(children) || children === null) {
+          return false;
+        }
+        const first = children[0];
+        if (typeof first !== "object" || first === null) {
+          return false;
+        }
+        const child = requireRecord(first, `document#${elementId}.children[0]`);
+        if (typeof child["click"] !== "function") {
+          return false;
+        }
+        const MouseEventConstructor = getMouseEventConstructor();
+        if (typeof MouseEventConstructor !== "function") {
+          return false;
+        }
+        const dispatchEvent = requireFunction(
+          element["dispatchEvent"],
+          `document#${elementId}.dispatchEvent`
+        );
+        Reflect.apply(dispatchEvent, element, [
+          Reflect.construct(
+            MouseEventConstructor,
+            ["mouseover", {}]
+          )
+        ]);
+        const click = requireFunction(
+          child["click"],
+          `document#${elementId}.children[0].click`
         );
         Reflect.apply(click, child, []);
         return true;
@@ -33378,113 +33429,320 @@
     };
   }
 
-  // src/automation/progression/planet-selection.ts
-  function createAutoPlanetSelection({
-    getGame,
-    getSettings,
-    getGeneratePlanets,
-    getStarLevel: getStarLevel2,
-    getIsAchievementUnlocked,
-    getPlanetBiomeGenus,
-    getRaces,
-    getPlanetBiomes,
-    getPlanetTraits,
-    getDocument,
-    getMouseEvent
-  }) {
-    return function autoPlanetSelection2() {
-      const game2 = getGame();
-      const settings2 = getSettings();
-      const generatePlanets2 = getGeneratePlanets();
-      const isAchievementUnlocked3 = getIsAchievementUnlocked();
-      const planetBiomeGenus2 = getPlanetBiomeGenus();
-      const races2 = getRaces();
-      const planetBiomes2 = getPlanetBiomes();
-      const planetTraits2 = getPlanetTraits();
-      const document2 = getDocument();
-      const MouseEvent2 = getMouseEvent();
-      if (game2.global.race.universe === "bigbang") {
-        return;
-      }
-      if (!game2.global.race.seeded || game2.global.race["chose"]) {
-        return;
-      }
-      if (settings2.userPlanetTargetName === "none") {
-        return;
-      }
-      let planets = generatePlanets2();
-      let alevel = getStarLevel2(settings2);
-      for (let i = 0; i < planets.length; i++) {
-        let planet = planets[i];
-        planet.achieve = 0;
-        if (!isAchievementUnlocked3("biome_" + planet.biome, alevel)) {
-          planet.achieve++;
+  // src/adapters/evolve/planet-selection.ts
+  function requireRace(game2) {
+    return requireRecord(
+      requireRecord(requireRecord(game2, "game")["global"], "game.global")["race"],
+      "game.global.race"
+    );
+  }
+  function achievementLevel(value) {
+    if (!value) {
+      return null;
+    }
+    const level = typeof value === "object" ? value["l"] : void 0;
+    return typeof level === "number" ? level : NaN;
+  }
+  function createPlanetSelectionReader(dependencies) {
+    return Object.freeze({
+      sampleGate() {
+        const race = requireRace(dependencies.getGame());
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const targetName = settings2["userPlanetTargetName"];
+        const universe = race["universe"];
+        return Object.freeze({
+          universe: typeof universe === "string" ? universe : null,
+          seeded: Boolean(race["seeded"]),
+          chose: Boolean(race["chose"]),
+          // Legacy only ever compared this setting with ===; a non-string value
+          // matched neither "none" nor a sort mode, so it stays lenient as null.
+          targetName: typeof targetName === "string" ? targetName : null
+        });
+      },
+      sampleCandidates() {
+        const race = requireRace(dependencies.getGame());
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const stats = requireRecord(
+          requireRecord(
+            requireRecord(dependencies.getGame(), "game")["global"],
+            "game.global"
+          )["stats"],
+          "game.global.stats"
+        );
+        const achieve = requireRecord(
+          stats["achieve"],
+          "game.global.stats.achieve"
+        );
+        const generate = requireFunction(
+          dependencies.getGeneratePlanets(),
+          "generatePlanets"
+        );
+        const generated = generate();
+        if (!Array.isArray(generated) || generated.length === 0) {
+          throw new TypeError(
+            "generatePlanets must return at least one candidate"
+          );
         }
-        for (let trait2 of planet.traits) {
-          if (trait2 !== "none" && !isAchievementUnlocked3("atmo_" + trait2, alevel)) {
-            planet.achieve++;
+        const planets = generated.map((value, index) => {
+          const planet = requireRecord(value, `planets[${index}]`);
+          const id = planet["id"];
+          if (typeof id !== "string") {
+            throw new TypeError(`planets[${index}].id must be a string`);
           }
-        }
-        if (planetBiomeGenus2[planet.biome]) {
-          for (let id in races2) {
-            if (races2[id].genus === planetBiomeGenus2[planet.biome] && !isAchievementUnlocked3("extinct_" + id, alevel)) {
-              planet.achieve++;
+          const biome = planet["biome"];
+          if (typeof biome !== "string") {
+            throw new TypeError(`planets[${index}].biome must be a string`);
+          }
+          const rawTraits = planet["traits"];
+          if (!Array.isArray(rawTraits)) {
+            throw new TypeError(`planets[${index}].traits must be an array`);
+          }
+          const traits = rawTraits.map((trait2, traitIndex) => {
+            if (typeof trait2 !== "string") {
+              throw new TypeError(
+                `planets[${index}].traits[${traitIndex}] must be a string`
+              );
             }
+            return trait2;
+          });
+          const rawGeology = requireRecord(
+            planet["geology"],
+            `planets[${index}].geology`
+          );
+          const geology = {};
+          for (const key of Object.keys(rawGeology)) {
+            geology[key] = requireNumber(
+              rawGeology[key],
+              `planets[${index}].geology.${key}`
+            );
           }
-          if (!isAchievementUnlocked3(
-            "genus_" + planetBiomeGenus2[planet.biome],
-            alevel
-          )) {
-            planet.achieve++;
+          return Object.freeze({
+            id,
+            biome,
+            traits: Object.freeze(traits),
+            orbit: requireNumber(planet["orbit"], `planets[${index}].orbit`),
+            geology: Object.freeze(geology)
+          });
+        });
+        const weightOf = (key) => {
+          const value = settings2[key];
+          return typeof value === "number" ? value : void 0;
+        };
+        const biomeWeights = {};
+        const traitWeights = {};
+        const geologyWeights = {};
+        for (const planet of planets) {
+          biomeWeights[planet.biome] = weightOf(`biome_w_${planet.biome}`);
+          for (const trait2 of planet.traits) {
+            traitWeights[trait2] = weightOf(`trait_w_${trait2}`);
+          }
+          for (const id of Object.keys(planet.geology)) {
+            geologyWeights[id] = weightOf(`extra_w_${id}`);
           }
         }
-        if (!isAchievementUnlocked3("madagascar_tree", alevel) && planet.biome === "oceanic" && game2.global.race.gods !== "sharkin") {
-          planet.achieve++;
+        const races2 = requireRecord(dependencies.getRaces(), "races");
+        const raceGenusById = {};
+        for (const raceId of Object.keys(races2)) {
+          const value = races2[raceId];
+          const genus = typeof value === "object" && value !== null ? value["genus"] : void 0;
+          raceGenusById[raceId] = typeof genus === "string" ? genus : null;
         }
-      }
-      for (let i = 0; i < planets.length; i++) {
-        let planet = planets[i];
-        planet.weighting = 0;
-        planet.weighting += settings2["biome_w_" + planet.biome];
-        for (let trait2 of planet.traits) {
-          planet.weighting += settings2["trait_w_" + trait2];
-        }
-        planet.weighting += planet.achieve * settings2["extra_w_Achievement"];
-        planet.weighting += planet.orbit * settings2["extra_w_Orbit"];
-        let numShow = game2.global.stats.achieve["miners_dream"] ? game2.global.stats.achieve["miners_dream"].l >= 4 ? game2.global.stats.achieve["miners_dream"].l * 2 - 3 : game2.global.stats.achieve["miners_dream"].l : 0;
-        if (game2.global.stats.achieve.lamentis?.l >= 0) {
-          numShow++;
-        }
-        for (let id in planet.geology) {
-          if (planet.geology[id] === 0) {
-            continue;
-          }
-          if (numShow-- > 0) {
-            planet.weighting += planet.geology[id] / 0.01 * settings2["extra_w_" + id];
-          } else {
-            planet.weighting += (planet.geology[id] > 0 ? 1 : -1) * settings2["extra_w_" + id];
-          }
-        }
-      }
-      if (settings2.userPlanetTargetName === "weighting") {
-        planets.sort((a, b) => b.weighting - a.weighting);
-      }
-      if (settings2.userPlanetTargetName === "habitable") {
-        planets.sort(
-          (a, b) => planetBiomes2.indexOf(a.biome) + planetTraits2.indexOf(a.trait) - (planetBiomes2.indexOf(b.biome) + planetTraits2.indexOf(b.trait))
+        const getStarLevel2 = requireFunction(
+          dependencies.getStarLevel(),
+          "getStarLevel"
         );
-      }
-      if (settings2.userPlanetTargetName === "achieve") {
-        planets.sort(
-          (a, b) => a.achieve !== b.achieve ? b.achieve - a.achieve : planetBiomes2.indexOf(a.biome) + planetTraits2.indexOf(a.trait) - (planetBiomes2.indexOf(b.biome) + planetTraits2.indexOf(b.trait))
+        const gods = race["gods"];
+        return Object.freeze({
+          planets: Object.freeze(planets),
+          gods: typeof gods === "string" ? gods : null,
+          starLevel: requireNumber(getStarLevel2(settings2), "starLevel"),
+          raceGenusById: Object.freeze(raceGenusById),
+          biomeGenus: dependencies.biomeGenus,
+          minersDreamLevel: achievementLevel(achieve["miners_dream"]),
+          lamentisLevel: achievementLevel(achieve["lamentis"]),
+          biomeWeights: Object.freeze(biomeWeights),
+          traitWeights: Object.freeze(traitWeights),
+          achievementWeight: weightOf("extra_w_Achievement"),
+          orbitWeight: weightOf("extra_w_Orbit"),
+          geologyWeights: Object.freeze(geologyWeights),
+          biomeOrder: dependencies.biomeOrder
+        });
+      },
+      achievementsUnlocked(ids, starLevel) {
+        const isUnlocked2 = requireFunction(
+          dependencies.getIsAchievementUnlocked(),
+          "isAchievementUnlocked"
         );
+        const unlocked = {};
+        for (const id of ids) {
+          unlocked[id] = Boolean(isUnlocked2(id, starLevel));
+        }
+        return Object.freeze(unlocked);
       }
-      let selectedPlanet = document2.getElementById(planets[0].id);
-      if (selectedPlanet) {
-        selectedPlanet.dispatchEvent(new MouseEvent2("mouseover", {}));
-        selectedPlanet.children[0].click();
+    });
+  }
+  function createPlanetSelectionCommandExecutor(dependencies) {
+    return Object.freeze({
+      execute(decision2) {
+        const race = requireRace(dependencies.getGame());
+        if (race["universe"] === "bigbang" || !race["seeded"] || Boolean(race["chose"])) {
+          return stale(
+            "planet-selection-unavailable",
+            "planet selection became unavailable"
+          );
+        }
+        if (!dependencies.controls.selectPlanet(decision2.elementId)) {
+          return stale(
+            "planet-control-unavailable",
+            "planet selection control became unavailable"
+          );
+        }
+        return SUCCEEDED2;
       }
-    };
+    });
+  }
+
+  // src/domain/planet-selection.ts
+  function shouldSelectPlanet(gate) {
+    if (gate.universe === "bigbang") {
+      return false;
+    }
+    if (!gate.seeded || gate.chose) {
+      return false;
+    }
+    if (gate.targetName === "none") {
+      return false;
+    }
+    return true;
+  }
+  function planetSelectionAchievementIds(planets, raceGenusById, biomeGenus) {
+    const ids = /* @__PURE__ */ new Set();
+    for (const planet of planets) {
+      ids.add(`biome_${planet.biome}`);
+      for (const trait2 of planet.traits) {
+        if (trait2 !== "none") {
+          ids.add(`atmo_${trait2}`);
+        }
+      }
+      const genus = biomeGenus[planet.biome];
+      if (genus) {
+        for (const raceId of Object.keys(raceGenusById)) {
+          if (raceGenusById[raceId] === genus) {
+            ids.add(`extinct_${raceId}`);
+          }
+        }
+        ids.add(`genus_${genus}`);
+      }
+      ids.add("madagascar_tree");
+    }
+    return Object.freeze([...ids]);
+  }
+  function planPlanetSelection(input) {
+    if (input.planets.length === 0) {
+      throw new TypeError("planet selection requires at least one candidate");
+    }
+    const unlocked = (id) => input.achievementUnlocked[id] === true;
+    const weightOf = (value) => value ?? NaN;
+    const scored = input.planets.map((planet) => {
+      let achieve = 0;
+      if (!unlocked(`biome_${planet.biome}`)) {
+        achieve++;
+      }
+      for (const trait2 of planet.traits) {
+        if (trait2 !== "none" && !unlocked(`atmo_${trait2}`)) {
+          achieve++;
+        }
+      }
+      const genus = input.biomeGenus[planet.biome];
+      if (genus) {
+        for (const raceId of Object.keys(input.raceGenusById)) {
+          if (input.raceGenusById[raceId] === genus && !unlocked(`extinct_${raceId}`)) {
+            achieve++;
+          }
+        }
+        if (!unlocked(`genus_${genus}`)) {
+          achieve++;
+        }
+      }
+      if (!unlocked("madagascar_tree") && planet.biome === "oceanic" && input.gods !== "sharkin") {
+        achieve++;
+      }
+      let weighting = 0;
+      weighting += weightOf(input.biomeWeights[planet.biome]);
+      for (const trait2 of planet.traits) {
+        weighting += weightOf(input.traitWeights[trait2]);
+      }
+      weighting += achieve * weightOf(input.achievementWeight);
+      weighting += planet.orbit * weightOf(input.orbitWeight);
+      let numShow = input.minersDreamLevel !== null ? input.minersDreamLevel >= 4 ? input.minersDreamLevel * 2 - 3 : input.minersDreamLevel : 0;
+      if ((input.lamentisLevel ?? NaN) >= 0) {
+        numShow++;
+      }
+      for (const id of Object.keys(planet.geology)) {
+        const deposit = planet.geology[id];
+        if (deposit === 0) {
+          continue;
+        }
+        if (numShow-- > 0) {
+          weighting += deposit / 0.01 * weightOf(input.geologyWeights[id]);
+        } else {
+          weighting += (deposit > 0 ? 1 : -1) * weightOf(input.geologyWeights[id]);
+        }
+      }
+      return { planet, achieve, weighting };
+    });
+    const habitability = (entry) => input.biomeOrder.indexOf(entry.planet.biome);
+    const ordered = [...scored];
+    if (input.targetName === "weighting") {
+      ordered.sort((a, b) => b.weighting - a.weighting);
+    }
+    if (input.targetName === "habitable") {
+      ordered.sort((a, b) => habitability(a) - habitability(b));
+    }
+    if (input.targetName === "achieve") {
+      ordered.sort(
+        (a, b) => a.achieve !== b.achieve ? b.achieve - a.achieve : habitability(a) - habitability(b)
+      );
+    }
+    return Object.freeze({ elementId: ordered[0].planet.id });
+  }
+
+  // src/application/planet-selection.ts
+  function runPlanetSelection({
+    reader,
+    executor
+  }) {
+    const gate = reader.sampleGate();
+    if (!shouldSelectPlanet(gate)) {
+      return;
+    }
+    const sample = reader.sampleCandidates();
+    const achievementUnlocked = reader.achievementsUnlocked(
+      planetSelectionAchievementIds(
+        sample.planets,
+        sample.raceGenusById,
+        sample.biomeGenus
+      ),
+      sample.starLevel
+    );
+    executor.execute(
+      planPlanetSelection({
+        planets: sample.planets,
+        targetName: gate.targetName,
+        gods: sample.gods,
+        raceGenusById: sample.raceGenusById,
+        biomeGenus: sample.biomeGenus,
+        achievementUnlocked,
+        minersDreamLevel: sample.minersDreamLevel,
+        lamentisLevel: sample.lamentisLevel,
+        biomeWeights: sample.biomeWeights,
+        traitWeights: sample.traitWeights,
+        achievementWeight: sample.achievementWeight,
+        orbitWeight: sample.orbitWeight,
+        geologyWeights: sample.geologyWeights,
+        biomeOrder: sample.biomeOrder
+      })
+    );
   }
 
   // src/domain/jobs.ts
@@ -50288,18 +50546,26 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const autoPlanetSelection = createAutoPlanetSelection({
+    const planetSelectionReader = createPlanetSelectionReader({
       getGame: () => game,
       getSettings: () => settings,
       getGeneratePlanets: () => generatePlanets,
-      getStarLevel,
+      getStarLevel: () => getStarLevel,
       getIsAchievementUnlocked: () => isAchievementUnlocked,
-      getPlanetBiomeGenus: () => planetBiomeGenus,
       getRaces: () => races,
-      getPlanetBiomes: () => planetBiomes,
-      getPlanetTraits: () => planetTraits,
-      getDocument: () => document,
-      getMouseEvent: () => MouseEvent
+      biomeGenus: planetBiomeGenus,
+      biomeOrder: planetBiomes
+    });
+    const planetSelectionExecutor = createPlanetSelectionCommandExecutor({
+      getGame: () => game,
+      controls: createPlanetSelectionControls(
+        () => document,
+        () => MouseEvent
+      )
+    });
+    const autoPlanetSelection = () => runPlanetSelection({
+      reader: planetSelectionReader,
+      executor: planetSelectionExecutor
     });
     const autoCraft = () => runCraftAutomation({
       reader: createCraftReader({
