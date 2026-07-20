@@ -317,7 +317,11 @@ import { runGalaxyMarketAutomation } from "./application/galaxy-market.ts";
 import { createGalaxyMarketAdapter } from "./adapters/evolve/galaxy-market.ts";
 import { runGatherResourcesAutomation } from "./application/gather-resources.ts";
 import { createGatherResourcesAdapter } from "./adapters/evolve/gather-resources.ts";
-import { createAutoEvolution } from "./automation/progression/evolution.ts";
+import {
+  createEvolutionReader,
+  createEvolutionCommandExecutor,
+} from "./adapters/evolve/evolution.ts";
+import { runEvolution } from "./application/evolution.ts";
 import {
   createUniverseSelectionCommandExecutor,
   readUniverseSelectionInput,
@@ -2906,22 +2910,36 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const autoEvolution = createAutoEvolution({
+  const challengeGroups = challenges.map((members) => ({ members }));
+  const evolutionReader = createEvolutionReader({
     getGame: () => game,
-    getState: () => state,
     getSettings: () => settings,
     getSettingsRaw: () => settingsRaw,
+    getState: () => state,
     getRaces: () => races,
-    loadQueuedSettings,
-    GameLog,
-    getChallenges: () => challenges,
     getEvolutions: () => evolutions,
-    getPoly: () => poly,
-    getResources: () => resources,
     getImitations: () => imitations,
-    getAutoUniverseSelection: () => autoUniverseSelection,
-    getAutoPlanetSelection: () => autoPlanetSelection,
+    getResources: () => resources,
+    getPoly: () => poly,
+    challengeGroups,
   });
+  const evolutionExecutor = createEvolutionCommandExecutor({
+    getGame: () => game,
+    getState: () => state,
+    getResources: () => resources,
+    getEvolutions: () => evolutions,
+    getImitations: () => imitations,
+    loadQueuedSettings,
+    gameLog: GameLog,
+  });
+  const autoEvolution = () =>
+    runEvolution({
+      reader: evolutionReader,
+      executor: evolutionExecutor,
+      runUniverseSelection: autoUniverseSelection,
+      runPlanetSelection: autoPlanetSelection,
+      challengeGroups,
+    });
 
   const universeSelectionExecutor = createUniverseSelectionCommandExecutor({
     getGame: () => game,

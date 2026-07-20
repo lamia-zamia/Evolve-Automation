@@ -1736,10 +1736,10 @@
       return technology2 && technology2 >= level;
     }
     function isEarlyGame2() {
-      const race = getGame().global.race;
-      if (race["cataclysm"] || race["orbit_decayed"] || race["lone_survivor"] || race["warlord"]) {
+      const race2 = getGame().global.race;
+      if (race2["cataclysm"] || race2["orbit_decayed"] || race2["lone_survivor"] || race2["warlord"]) {
         return false;
-      } else if (race["truepath"] || race["sludge"] || race["ultra_sludge"]) {
+      } else if (race2["truepath"] || race2["sludge"] || race2["ultra_sludge"]) {
         return !haveTech2("high_tech", 7);
       } else {
         return !haveTech2("mad");
@@ -5570,16 +5570,16 @@
     getTraitVal
   }) {
     function isHungryRace2() {
-      const race = getGame().global.race;
-      return race["carnivore"] && !race["herbivore"] && !race["artifical"] || race["ravenous"];
+      const race2 = getGame().global.race;
+      return race2["carnivore"] && !race2["herbivore"] && !race2["artifical"] || race2["ravenous"];
     }
     function isDemonRace2() {
-      const race = getGame().global.race;
-      return race["soul_eater"] && race["evil"] && race.species !== "wendigo";
+      const race2 = getGame().global.race;
+      return race2["soul_eater"] && race2["evil"] && race2.species !== "wendigo";
     }
     function isLumberRace2() {
-      const race = getGame().global.race;
-      return !race["kindling_kindred"] && !race["smoldering"];
+      const race2 = getGame().global.race;
+      return !race2["kindling_kindred"] && !race2["smoldering"];
     }
     function getOccCosts2() {
       return getTraitVal()("high_pop", 0, 1) * (getGame().global.civic.govern.type === "federation" ? 15 : 20);
@@ -5685,9 +5685,9 @@
       return buildings2.ScoutShip.count * gateway.scout_ship.ship.rating() + buildings2.CorvetteShip.count * gateway.corvette_ship.ship.rating() + buildings2.FrigateShip.count * gateway.frigate_ship.ship.rating() + buildings2.CruiserShip.count * gateway.cruiser_ship.ship.rating() + buildings2.Dreadnought.count * gateway.dreadnought.ship.rating();
     }
     function getPiracyMultiplier2() {
-      const race = getGame().global.race;
+      const race2 = getGame().global.race;
       const traitVal2 = getTraitVal();
-      return 1 * (race.chicken ? traitVal2("chicken", 1, "+") : 1) * (race["ocular_power"] && race.ocularPowerConfig?.f ? 1 - traitVal2("ocular_power", 1) / 500 : 1);
+      return 1 * (race2.chicken ? traitVal2("chicken", 1, "+") : 1) * (race2["ocular_power"] && race2.ocularPowerConfig?.f ? 1 - traitVal2("ocular_power", 1) / 500 : 1);
     }
     function galaxyAssaultPending2() {
       const buildings2 = getBuildings();
@@ -5838,15 +5838,15 @@
     function getHealingRate2() {
       const game2 = getGame();
       const buildings2 = getBuildings();
-      const race = game2.global.race;
+      const race2 = game2.global.race;
       const traitVal2 = getTraitVal();
-      let healingCount = race["orbit_decayed"] && race["truepath"] ? buildings2.EnceladusBase.stateOnCount : race["artifical"] ? buildings2.BootCamp.count : buildings2.Hospital.count;
-      if (race["rejuvenated"] && game2.global.stats.achieve["lamentis"]) {
+      let healingCount = race2["orbit_decayed"] && race2["truepath"] ? buildings2.EnceladusBase.stateOnCount : race2["artifical"] ? buildings2.BootCamp.count : buildings2.Hospital.count;
+      if (race2["rejuvenated"] && game2.global.stats.achieve["lamentis"]) {
         healingCount += Math.min(game2.global.stats.achieve.lamentis.l, 5);
       }
       healingCount *= getState().astroSign === "cancer" ? 1.05 : 1;
       healingCount *= game2.global.tech["medic"] || 1;
-      healingCount += race["fibroblast"] * 2 || 0;
+      healingCount += race2["fibroblast"] * 2 || 0;
       if ((game2.global.city.s_alter?.regen ?? 0) > 0) {
         if (healingCount >= 20) {
           healingCount *= traitVal2("cannibalize", 0, "+");
@@ -5905,8 +5905,8 @@
     }
     function getGrowthRate2() {
       const game2 = getGame();
-      const race = game2.global.race;
-      if (race["artifical"] || race["spongy"] && game2.global.city.calendar.weather === 0 || race["parasite"] && game2.global.city.calendar.wind === 0 && !race["cataclysm"]) {
+      const race2 = game2.global.race;
+      if (race2["artifical"] || race2["spongy"] && game2.global.city.calendar.weather === 0 || race2["parasite"] && game2.global.city.calendar.wind === 0 && !race2["cataclysm"]) {
         return 0;
       }
       const traitVal2 = getTraitVal();
@@ -5918,8 +5918,8 @@
       }
       lifeBirth *= traitVal2("fast_growth", 0, 1);
       lifeBirth += traitVal2("fast_growth", 1, 0);
-      if (race["spores"] && game2.global.city.calendar.wind === 1) {
-        if (race["parasite"]) {
+      if (race2["spores"] && game2.global.city.calendar.wind === 1) {
+        if (race2["parasite"]) {
           lifeBirth += traitVal2("spores", 2);
         } else {
           lifeBirth += traitVal2("spores", 0);
@@ -5928,15 +5928,15 @@
       }
       lifeBirth += getBuildings().Hospital.count * (haveTech2("reproduction", 2) ? 1 : 0);
       lifeBirth += game2.global.genes["birth"] ?? 0;
-      lifeBirth += race["promiscuous"] ?? 0;
-      lifeBirth += race["fasting"] ? getJobs().Meditator.count * traitVal2("high_pop", 1, "=") * 0.15 : 0;
+      lifeBirth += race2["promiscuous"] ?? 0;
+      lifeBirth += race2["fasting"] ? getJobs().Meditator.count * traitVal2("high_pop", 1, "=") * 0.15 : 0;
       const buildings2 = getBuildings();
       lifeBirth *= buildings2.Banquet.stateOnCount > 0 && buildings2.Banquet.count >= 1 ? 1 + game2.global.city.banquet.strength ** 0.75 / 100 : 1;
       lifeBirth *= getState().astroSign === "libra" ? 1.25 : 1;
       lifeBirth *= traitVal2("high_pop", 2, 1);
       lifeBirth *= game2.global.city.biome === "taiga" ? 1.5 : 1;
       let base = getResources().Population.currentQuantity * (game2.global.city.ptrait.includes("toxic") ? 1.25 : 1);
-      if (race["parasite"] && race["cataclysm"]) {
+      if (race2["parasite"] && race2["cataclysm"]) {
         lifeBirth = Math.round(lifeBirth / 5);
         base *= 3;
       }
@@ -6354,10 +6354,10 @@
     function customRaceEditorTraits2(draft) {
       const game2 = getGame();
       const unlocked = new Set(draft.traitlist);
-      Object.entries(game2.races).forEach(([id, race]) => {
-        const genus = race.type;
+      Object.entries(game2.races).forEach(([id, race2]) => {
+        const genus = race2.type;
         if (game2.global.stats.achieve[`extinct_${id}`]?.l || game2.global.stats.achieve[`genus_${genus}`]?.l) {
-          Object.keys(race.traits ?? {}).forEach((trait2) => unlocked.add(trait2));
+          Object.keys(race2.traits ?? {}).forEach((trait2) => unlocked.add(trait2));
         }
       });
       return Object.entries(game2.traits).filter(
@@ -8382,12 +8382,12 @@
         super(traitName);
         this.type = "major";
         let ownerRace = Object.entries(game2.races).filter(
-          ([id, race]) => id !== "custom" && id !== "hybrid" && race.traits[traitName] !== void 0
-        ).map(([id, race]) => ({ id, genus: race.type }))[0] ?? {};
+          ([id, race2]) => id !== "custom" && id !== "hybrid" && race2.traits[traitName] !== void 0
+        ).map(([id, race2]) => ({ id, genus: race2.type }))[0] ?? {};
         this.source = ownerRace.id ?? specialRaceTraits2[traitName] ?? "";
         this.racesThatCanGain = Object.entries(game2.races).filter(
-          ([id, race]) => id == ownerRace.id || (race?.type == "hybrid" ? race?.hybrid?.includes(ownerRace.genus) : race?.type === ownerRace.genus)
-        ).map(([id, race]) => id).flat();
+          ([id, race2]) => id == ownerRace.id || (race2?.type == "hybrid" ? race2?.hybrid?.includes(ownerRace.genus) : race2?.type === ownerRace.genus)
+        ).map(([id, race2]) => id).flat();
         this.genus = this.source === "reindeer" ? "herbivore" : ownerRace.genus;
       }
       isGainable() {
@@ -14531,7 +14531,7 @@
         autoBuildable: optionalPredicate(object, "isAutoBuildable")
       }))
     };
-    const race = requireRecord(
+    const race2 = requireRecord(
       requireRecord(game2["global"], "game.global")["race"],
       "game.global.race"
     );
@@ -14541,7 +14541,7 @@
         "settings.storageAssignExtra"
       ),
       autoMarket: Boolean(settings2["autoMarket"]),
-      noTrade: Boolean(race["no_trade"]),
+      noTrade: Boolean(race2["no_trade"]),
       requestLists: Object.freeze(requestLists),
       knowledge,
       resources: Object.freeze(readResources(dependencies.getResources())),
@@ -15285,10 +15285,10 @@
       field === void 0 ? { status: "unavailable", reason } : { status: "unavailable", reason, field }
     );
   }
-  function callWeighting(race, returnGoals) {
-    const getWeighting = race["getWeighting"];
+  function callWeighting(race2, returnGoals) {
+    const getWeighting = race2["getWeighting"];
     if (typeof getWeighting !== "function") return void 0;
-    return returnGoals ? getWeighting.call(race, true) : getWeighting.call(race);
+    return returnGoals ? getWeighting.call(race2, true) : getWeighting.call(race2);
   }
   function readEvolutionResultInput(rawSettings, rawGame, rawRaces, rawTraitManager) {
     try {
@@ -15298,9 +15298,9 @@
         return unavailable2("invalid-settings", "userEvolutionTarget");
       }
       const global = isRecord4(rawGame) ? rawGame["global"] : void 0;
-      const race = isRecord4(global) ? global["race"] : void 0;
-      if (!isRecord4(race)) return unavailable2("invalid-game-state", "race");
-      const species = race["species"];
+      const race2 = isRecord4(global) ? global["race"] : void 0;
+      if (!isRecord4(race2)) return unavailable2("invalid-game-state", "race");
+      const species = race2["species"];
       if (typeof species !== "string") {
         return unavailable2("invalid-game-state", "race.species");
       }
@@ -15374,7 +15374,7 @@
           traits.push({
             name,
             resetEnabled: Boolean(rawTrait["resetEnabled"]),
-            gained: Boolean(race[traitName]),
+            gained: Boolean(race2[traitName]),
             inheritedFromBase: Boolean(baseTraits[traitName])
           });
         }
@@ -17356,13 +17356,13 @@
       if (!isRecord8(rawGame)) return unavailable5("invalid-game-state");
       const global = rawGame["global"];
       if (!isRecord8(global)) return unavailable5("invalid-game-state");
-      const race = global["race"];
-      if (!isRecord8(race)) return unavailable5("invalid-game-state", "race");
+      const race2 = global["race"];
+      if (!isRecord8(race2)) return unavailable5("invalid-game-state", "race");
       return Object.freeze({
         status: "ready",
         input: Object.freeze({
           assistEnabled: assist === true,
-          truepath: Boolean(race["truepath"]),
+          truepath: Boolean(race2["truepath"]),
           retirePrestige: rawSettings["prestigeType"] === "retire",
           isolationResearched
         })
@@ -17792,9 +17792,9 @@
           break;
         }
         case "guardSecondEvolution": {
-          const race = parts.global["race"];
-          const species = isRecord9(race) ? race["species"] : void 0;
-          const gods = isRecord9(race) ? race["gods"] : void 0;
+          const race2 = parts.global["race"];
+          const species = isRecord9(race2) ? race2["species"] : void 0;
+          const gods = isRecord9(race2) ? race2["gods"] : void 0;
           if (typeof species !== "string" || typeof gods !== "string") {
             return guardUnavailable("invalid-game-state", fallback, "race");
           }
@@ -17971,8 +17971,8 @@
         return guardUnavailable2("invalid-settings", fallbackConfigured);
       }
       const global = readGlobal(rawGame);
-      const race = global?.["race"];
-      const bananaRace = isRecord10(race) ? race["banana"] : void 0;
+      const race2 = global?.["race"];
+      const bananaRace = isRecord10(race2) ? race2["banana"] : void 0;
       if (bananaRace === false || bananaRace === void 0) {
         return Object.freeze({ status: "inactive" });
       }
@@ -18042,9 +18042,9 @@
       if (!isRecord11(rawGame)) return unavailable7("invalid-game-state");
       const global = rawGame["global"];
       if (!isRecord11(global)) return unavailable7("invalid-game-state");
-      const race = global["race"];
-      if (!isRecord11(race)) return unavailable7("invalid-game-state", "race");
-      const inflationRun = Object.hasOwn(race, "inflation") && race["inflation"] !== false;
+      const race2 = global["race"];
+      if (!isRecord11(race2)) return unavailable7("invalid-game-state", "race");
+      const inflationRun = Object.hasOwn(race2, "inflation") && race2["inflation"] !== false;
       const alevel = rawGame["alevel"];
       if (typeof alevel !== "function") {
         return unavailable7("invalid-game-state", "alevel");
@@ -18246,13 +18246,13 @@
       if (!isRecord12(global) || typeof alevel !== "function") {
         return unavailable8("invalid-game-state");
       }
-      const race = global["race"];
+      const race2 = global["race"];
       const pillars = global["pillars"];
-      if (!isRecord12(race) || !isRecord12(pillars) || typeof race["species"] !== "string" || typeof race["universe"] !== "string") {
+      if (!isRecord12(race2) || !isRecord12(pillars) || typeof race2["species"] !== "string" || typeof race2["universe"] !== "string") {
         return unavailable8("invalid-game-state");
       }
       const ascensionLevel = alevel.call(rawGame);
-      const rawPillarLevel = pillars[race["species"]];
+      const rawPillarLevel = pillars[race2["species"]];
       if (!finiteNonNegative5(ascensionLevel) || rawPillarLevel !== void 0 && !finiteNonNegative5(rawPillarLevel)) {
         return unavailable8("invalid-game-state");
       }
@@ -18267,7 +18267,7 @@
         view: Object.freeze({
           settings: Object.freeze({ requirePillar }),
           game: Object.freeze({
-            universe: race["universe"],
+            universe: race2["universe"],
             ascensionLevel,
             ...pillarLevel === void 0 ? {} : { speciesPillarLevel: pillarLevel }
           }),
@@ -18316,8 +18316,8 @@
       if (pillar.status === "unavailable") return pillar;
       if (!isRecord12(rawGame)) return unavailable8("invalid-game-state");
       const global = rawGame["global"];
-      const race = isRecord12(global) ? global["race"] : void 0;
-      if (!isRecord12(race)) return unavailable8("invalid-game-state", "race");
+      const race2 = isRecord12(global) ? global["race"] : void 0;
+      if (!isRecord12(race2)) return unavailable8("invalid-game-state", "race");
       if (!isRecord12(rawBuildings)) return unavailable8("invalid-building");
       const absorptionChamber = readBuilding2(
         rawBuildings,
@@ -18351,7 +18351,7 @@
           ...pillar.view,
           game: Object.freeze({
             ...pillar.view.game,
-            fasting: Boolean(race["fasting"])
+            fasting: Boolean(race2["fasting"])
           }),
           buildings: Object.freeze({
             absorptionChambers: absorptionChamber["count"],
@@ -18416,10 +18416,10 @@
       const global = rawGame["global"];
       if (!isRecord12(global)) return unavailable8("invalid-game-state", "global");
       const gameSettings = global["settings"];
-      const race = global["race"];
+      const race2 = global["race"];
       const pillars = global["pillars"];
       const interstellar = global["interstellar"];
-      if (!isRecord12(gameSettings) || !isRecord12(race) || !isRecord12(pillars) || !isRecord12(interstellar) || typeof race["species"] !== "string" || typeof race["universe"] !== "string" || !finiteNonNegative5(gameSettings["at"])) {
+      if (!isRecord12(gameSettings) || !isRecord12(race2) || !isRecord12(pillars) || !isRecord12(interstellar) || typeof race2["species"] !== "string" || typeof race2["universe"] !== "string" || !finiteNonNegative5(gameSettings["at"])) {
         return unavailable8("invalid-game-state");
       }
       const alevel = rawGame["alevel"];
@@ -18430,7 +18430,7 @@
       if (!finiteNonNegative5(ascensionLevel)) {
         return unavailable8("invalid-game-state", "alevel");
       }
-      const rawPillarLevel = pillars[race["species"]];
+      const rawPillarLevel = pillars[race2["species"]];
       if (rawPillarLevel !== void 0 && !finiteNonNegative5(rawPillarLevel)) {
         return unavailable8("invalid-game-state", "pillarLevel");
       }
@@ -18529,9 +18529,9 @@
         settings: Object.freeze(settings2),
         game: Object.freeze({
           activeArpaProjects: gameSettings["at"],
-          species: race["species"],
-          universe: race["universe"],
-          fasting: Boolean(race["fasting"]),
+          species: race2["species"],
+          universe: race2["universe"],
+          fasting: Boolean(race2["fasting"]),
           ascensionLevel,
           ...pillarLevel === void 0 ? {} : { speciesPillarLevel: pillarLevel },
           blackholeMass,
@@ -18789,8 +18789,8 @@
       if (!isRecord13(rawGame)) return unavailable9("invalid-game-state");
       const global = rawGame["global"];
       const alevel = rawGame["alevel"];
-      const race = isRecord13(global) ? global["race"] : void 0;
-      if (!isRecord13(race) || typeof race["species"] !== "string" || typeof race["gods"] !== "string" || typeof alevel !== "function") {
+      const race2 = isRecord13(global) ? global["race"] : void 0;
+      if (!isRecord13(race2) || typeof race2["species"] !== "string" || typeof race2["gods"] !== "string" || typeof alevel !== "function") {
         return unavailable9("invalid-game-state");
       }
       const achievementLevel2 = alevel.call(rawGame);
@@ -18884,8 +18884,8 @@
         }),
         stabilization: Object.freeze({ lastAtMs, nowMs }),
         race: Object.freeze({
-          species: race["species"],
-          gods: race["gods"],
+          species: race2["species"],
+          gods: race2["gods"],
           achievementLevel: achievementLevel2
         }),
         guards: Object.freeze({
@@ -19866,7 +19866,7 @@
       "MarketManager"
     );
     const game2 = requireRecord(dependencies.getGame(), "game");
-    const race = requireRecord(
+    const race2 = requireRecord(
       requireRecord(game2["global"], "game.global")["race"],
       "game.global.race"
     );
@@ -19883,7 +19883,7 @@
       exportRouteCap: callNumber(manager, "getExportRouteCap"),
       maxTradeRoutes,
       unmanagedTradeRoutes,
-      isBanana: Boolean(race["banana"]),
+      isBanana: Boolean(race2["banana"]),
       isEntrepreneur: dependencies.getGovernor() === "entrepreneur",
       saveInflationMoney: dependencies.shouldSaveInflationMoney()
     });
@@ -20410,8 +20410,8 @@
           return unavailableInput();
         }
         const global = requireRecord(game2["global"], "game.global");
-        const race = requireRecord(global["race"], "game.global.race");
-        const warlord = Boolean(race["warlord"]);
+        const race2 = requireRecord(global["race"], "game.global.race");
+        const warlord = Boolean(race2["warlord"]);
         if (warlord) {
           const input2 = Object.freeze({
             ...unavailableInput(),
@@ -20615,7 +20615,7 @@
             "settings.generalAuthorityMinPatrolPercent"
           ),
           evilTechnology: optionalNumber(tech["evil"], "game.global.tech.evil"),
-          grenadier: Boolean(race["grenadier"]),
+          grenadier: Boolean(race2["grenadier"]),
           government: requireString(
             govern["type"],
             "game.global.civic.govern.type"
@@ -20828,8 +20828,8 @@
   }
   function readCandidateBackgrounds(game2) {
     const global = requireRecord(game2["global"], "game.global");
-    const race = requireRecord(global["race"], "game.global.race");
-    const governor = race["governor"];
+    const race2 = requireRecord(global["race"], "game.global.race");
+    const governor = race2["governor"];
     if (typeof governor !== "object" || governor === null) {
       return [];
     }
@@ -21898,8 +21898,8 @@
         resources2["Authority"],
         "resources.Authority"
       );
-      const race = requireRecord(global["race"], "game.global.race");
-      const banana = Boolean(race["banana"]);
+      const race2 = requireRecord(global["race"], "game.global.race");
+      const banana = Boolean(race2["banana"]);
       const isDemanded = requireFunction(
         money["isDemanded"],
         "resources.Money.isDemanded"
@@ -22255,8 +22255,8 @@
     }
     const game2 = requireRecord(dependencies.getGame(), "game");
     const global = requireRecord(game2["global"], "game.global");
-    const race = requireRecord(global["race"], "game.global.race");
-    const hasForge = Boolean(race["forge"]);
+    const race2 = requireRecord(global["race"], "game.global.race");
+    const hasForge = Boolean(race2["forge"]);
     const totalSmelters = callNumber2(manager, "maxOperating", "SmelterManager");
     const fuels = hasForge ? [] : readFuels(manager);
     const extraOperating = callNumber2(
@@ -22801,11 +22801,11 @@
     let achievementLevel2 = 0;
     let fullmetalEnabled = false;
     if (magicFullmetalHelper) {
-      const race = requireRecord(
+      const race2 = requireRecord(
         requireRecord(game2["global"], "game.global")["race"],
         "game.global.race"
       );
-      universeMagic = race["universe"] === "magic";
+      universeMagic = race2["universe"] === "magic";
       if (universeMagic) {
         alchemyTech = techLevel(game2, "alchemy");
         if (alchemyTech >= 2) {
@@ -23070,11 +23070,11 @@
     let witchHunter = false;
     if (ritualSafe) {
       const game2 = requireRecord(gameValue, "game");
-      const race = requireRecord(
+      const race2 = requireRecord(
         requireRecord(game2["global"], "game.global")["race"],
         "game.global.race"
       );
-      witchHunter = Boolean(race["witch_hunter"]);
+      witchHunter = Boolean(race2["witch_hunter"]);
     }
     let priestCount = 0;
     let haveRoguemagic4 = false;
@@ -23959,8 +23959,8 @@
         if (needsNeutronium) {
           const game2 = requireRecord(dependencies.getGame(), "game");
           const global = requireRecord(game2["global"], "game.global");
-          const race = requireRecord(global["race"], "game.global.race");
-          truepath = Boolean(race["truepath"]);
+          const race2 = requireRecord(global["race"], "game.global.race");
+          truepath = Boolean(race2["truepath"]);
           const resources2 = requireRecord(
             dependencies.getResources(),
             "resources"
@@ -24757,7 +24757,7 @@
   function readShapeshiftInput(dependencies) {
     const game2 = requireRecord(dependencies.getGame(), "game");
     const settings2 = requireRecord(dependencies.getSettings(), "settings");
-    const race = requireRecord(
+    const race2 = requireRecord(
       requireRecord(game2["global"], "game.global")["race"],
       "game.global.race"
     );
@@ -24765,9 +24765,9 @@
     if (typeof shifterGenus !== "string") {
       throw new TypeError("settings.shifterGenus must be a string");
     }
-    const currentGenus = race["ss_genus"];
+    const currentGenus = race2["ss_genus"];
     return Object.freeze({
-      isShapeshifter: Boolean(race["shapeshifter"]),
+      isShapeshifter: Boolean(race2["shapeshifter"]),
       shifterGenus,
       currentGenus: typeof currentGenus === "string" ? currentGenus : null
     });
@@ -24779,14 +24779,14 @@
           return SUCCEEDED2;
         }
         const game2 = requireRecord(dependencies.getGame(), "game");
-        const race = requireRecord(
+        const race2 = requireRecord(
           requireRecord(game2["global"], "game.global")["race"],
           "game.global.race"
         );
-        if (!race["shapeshifter"]) {
+        if (!race2["shapeshifter"]) {
           return stale("shapeshift-locked", "shapeshifting became unavailable");
         }
-        if (race["ss_genus"] === targetGenus) {
+        if (race2["ss_genus"] === targetGenus) {
           return stale(
             "shape-already-selected",
             "target shape is already active"
@@ -24970,21 +24970,21 @@
   function readWishState(gameValue) {
     const game2 = requireRecord(gameValue, "game");
     const global = requireRecord(game2["global"], "game.global");
-    const race = requireRecord(global["race"], "game.global.race");
-    if (!race["wish"]) {
-      return Object.freeze({ race, technologyLevel: 0 });
+    const race2 = requireRecord(global["race"], "game.global.race");
+    if (!race2["wish"]) {
+      return Object.freeze({ race: race2, technologyLevel: 0 });
     }
     const technology2 = requireRecord(global["tech"], "game.global.tech");
     return Object.freeze({
-      race,
+      race: race2,
       technologyLevel: readTechnologyLevel(technology2)
     });
   }
   function createWishReader(dependencies) {
     return Object.freeze({
       read() {
-        const { race, technologyLevel } = readWishState(dependencies.getGame());
-        if (!race["wish"] || technologyLevel === 0) {
+        const { race: race2, technologyLevel } = readWishState(dependencies.getGame());
+        if (!race2["wish"] || technologyLevel === 0) {
           return Object.freeze({
             unlocked: false,
             technologyLevel,
@@ -24995,7 +24995,7 @@
           });
         }
         const wishStats = requireRecord(
-          race["wishStats"],
+          race2["wishStats"],
           "game.global.race.wishStats"
         );
         const minorRemaining = requireNumber(
@@ -25024,9 +25024,9 @@
       }
     });
   }
-  function readRemaining(race, tier) {
+  function readRemaining(race2, tier) {
     const wishStats = requireRecord(
-      race["wishStats"],
+      race2["wishStats"],
       "game.global.race.wishStats"
     );
     return requireNumber(wishStats[tier], `game.global.race.wishStats.${tier}`);
@@ -25040,14 +25040,14 @@
             "wish selection must identify a tier, setting id, and zero precondition"
           );
         }
-        const { race, technologyLevel } = readWishState(dependencies.getGame());
-        if (!race["wish"] || technologyLevel === 0) {
+        const { race: race2, technologyLevel } = readWishState(dependencies.getGame());
+        if (!race2["wish"] || technologyLevel === 0) {
           return stale("wish-locked", "wish selection became unavailable");
         }
         if (decision2.tier === "major" && technologyLevel < 2) {
           return stale("major-wish-locked", "major wish became unavailable");
         }
-        const actualRemaining = readRemaining(race, decision2.tier);
+        const actualRemaining = readRemaining(race2, decision2.tier);
         if (actualRemaining !== decision2.expectedRemaining) {
           return stale("wish-already-selected", "wish was already selected", {
             tier: decision2.tier,
@@ -25304,9 +25304,9 @@
         );
         let mutationCount = 0;
         if (sequenceMode === "decode") {
-          const race = requireRecord(global["race"], "game.global.race");
+          const race2 = requireRecord(global["race"], "game.global.race");
           mutationCount = requireNumber(
-            race["mutation"],
+            race2["mutation"],
             "game.global.race.mutation"
           );
         }
@@ -25891,8 +25891,8 @@
           return Object.freeze({ unlocked: false });
         }
         const global = readGlobal3(dependencies.getGame());
-        const race = requireRecord(global["race"], "game.global.race");
-        if (!race["psychic"]) {
+        const race2 = requireRecord(global["race"], "game.global.race");
+        if (!race2["psychic"]) {
           session = null;
           return Object.freeze({ unlocked: false });
         }
@@ -25924,10 +25924,10 @@
           return emptyInput3();
         }
         const global = readGlobal3(dependencies.getGame());
-        const race = requireRecord(global["race"], "game.global.race");
+        const race2 = requireRecord(global["race"], "game.global.race");
         const tech = requireRecord(global["tech"], "game.global.tech");
         const technologyLevel = readTechnologyLevel3(tech, "psychic");
-        if (!race["psychic"] || technologyLevel === 0) {
+        if (!race2["psychic"] || technologyLevel === 0) {
           session = null;
           return emptyInput3();
         }
@@ -25962,7 +25962,7 @@
         );
         const thrallTechnologyLevel = readTechnologyLevel3(tech, "psychicthrall");
         const thrallAvailable = Boolean(
-          thrallTechnologyLevel && tech["unfathomable"] && race["unfathomable"]
+          thrallTechnologyLevel && tech["unfathomable"] && race2["unfathomable"]
         );
         const thrall = thrallAvailable ? requireRecord(resources2["Thrall"], "resources.Thrall") : null;
         const thrallRate = thrall === null ? 0 : requireNumber(
@@ -25974,7 +25974,7 @@
           "resources.Thrall.storageRatio"
         );
         const powers = requireRecord(
-          race["psychicPowers"],
+          race2["psychicPowers"],
           "game.global.race.psychicPowers"
         );
         let money = null;
@@ -26054,10 +26054,10 @@
     });
     function validateLiveState(active, decision2) {
       const global = readGlobal3(dependencies.getGame());
-      const race = requireRecord(global["race"], "game.global.race");
+      const race2 = requireRecord(global["race"], "game.global.race");
       const tech = requireRecord(global["tech"], "game.global.tech");
       const technologyLevel = readTechnologyLevel3(tech, "psychic");
-      if (!race["psychic"] || technologyLevel !== active.input.technologyLevel || race["psychicPowers"] !== active.powers) {
+      if (!race2["psychic"] || technologyLevel !== active.input.technologyLevel || race2["psychicPowers"] !== active.powers) {
         return stale("psychic-game-state-changed", "psychic game state changed");
       }
       if (dependencies.getResources() !== active.resources) {
@@ -26109,7 +26109,7 @@
       }
       if (decision2.power === "mind_break" || decision2.power === "stun") {
         const thrallLevel = readTechnologyLevel3(tech, "psychicthrall");
-        if (active.thrall === null || thrallLevel !== active.input.thrallTechnologyLevel || !tech["unfathomable"] || !race["unfathomable"]) {
+        if (active.thrall === null || thrallLevel !== active.input.thrallTechnologyLevel || !tech["unfathomable"] || !race2["unfathomable"]) {
           return stale(
             "psychic-thrall-state-changed",
             "psychic Thrall state changed"
@@ -26269,8 +26269,8 @@
     const global = requireRecord(game2["global"], "game.global");
     return requireRecord(global["race"], "game.global.race");
   }
-  function isUnlocked(race) {
-    return Boolean(race["ocular_power"] && race["ocularPowerConfig"]);
+  function isUnlocked(race2) {
+    return Boolean(race2["ocular_power"] && race2["ocularPowerConfig"]);
   }
   function requireId2(value, path) {
     if (typeof value !== "string" || value.length === 0) {
@@ -26327,8 +26327,8 @@
       },
       readPlan() {
         const game2 = dependencies.getGame();
-        const race = readRace(game2);
-        if (!isUnlocked(race)) {
+        const race2 = readRace(game2);
+        if (!isUnlocked(race2)) {
           session = null;
           return Object.freeze({ capacity: 0, powers: Object.freeze([]) });
         }
@@ -27550,9 +27550,9 @@
       readTasks() {
         const game2 = requireRecord(dependencies.getGame(), "game");
         const global = requireRecord(game2["global"], "game.global");
-        const race = requireRecord(global["race"], "game.global.race");
+        const race2 = requireRecord(global["race"], "game.global.race");
         const governor = requireRecord(
-          race["governor"],
+          race2["governor"],
           "game.global.race.governor"
         );
         const tasks = requireRecord(
@@ -27898,10 +27898,10 @@
         }
         const game2 = requireRecord(dependencies.getGame(), "game");
         const global = requireRecord(game2["global"], "game.global");
-        const race = requireRecord(global["race"], "game.global.race");
+        const race2 = requireRecord(global["race"], "game.global.race");
         return Object.freeze({
           unlocked: true,
-          noTrade: Boolean(race["no_trade"])
+          noTrade: Boolean(race2["no_trade"])
         });
       },
       readSession() {
@@ -29208,9 +29208,9 @@
   }
   function readAuthorityReserve(game2, resources2, war, dependencies) {
     const global = requireRecord(game2["global"], "game.global");
-    const race = requireRecord(global["race"], "game.global.race");
+    const race2 = requireRecord(global["race"], "game.global.race");
     const authority = namedRecord(resources2, "Authority", "resources");
-    if (race["universe"] !== "evil" || !callBoolean13(authority, "isUnlocked", "resources.Authority")) {
+    if (race2["universe"] !== "evil" || !callBoolean13(authority, "isUnlocked", "resources.Authority")) {
       return 0;
     }
     const currentGarrison = finiteProperty(
@@ -29238,13 +29238,13 @@
   function readBuildingRule(building2, path, catalogs, registry, dependencies) {
     const { game: game2, settings: settings2, resources: resources2, buildings: buildings2, jobs: jobs2, mech, war, poly: poly2 } = catalogs;
     const global = requireRecord(game2["global"], "game.global");
-    const race = requireRecord(global["race"], "game.global.race");
+    const race2 = requireRecord(global["race"], "game.global.race");
     const tech = requireRecord(global["tech"], "game.global.tech");
     const stateOn = finiteProperty(building2, "stateOnCount", path);
     if (identity(buildings2, "NeutronCitadel", building2)) {
       return Object.freeze({
         kind: "neutron-citadel",
-        electromagneticField: Boolean(race["emfield"])
+        electromagneticField: Boolean(race2["emfield"])
       });
     }
     if (identity(buildings2, "BeltSpaceStation", building2)) {
@@ -29314,7 +29314,7 @@
           "count",
           "buildings.LakeHarbor"
         ),
-        electromagneticField: Boolean(race["emfield"])
+        electromagneticField: Boolean(race2["emfield"])
       });
     }
     if (identity(buildings2, "LakeHarbor", building2)) {
@@ -29708,7 +29708,7 @@
     if (identity(buildings2, "TauRedOverseer", building2)) {
       return Object.freeze({
         kind: "womling-overseer",
-        loyaltyBase: race["womling_friend"] ? 25 : race["womling_god"] ? 75 : 0,
+        loyaltyBase: race2["womling_friend"] ? 25 : race2["womling_god"] ? 75 : 0,
         loyaltyPerBuilding: callNumber9(
           requireRecord(building2["definition"], `${path}.definition`),
           "val",
@@ -29724,7 +29724,7 @@
     if (identity(buildings2, "TauRedWomlingFun", building2)) {
       return Object.freeze({
         kind: "womling-fun",
-        moraleBase: race["womling_friend"] ? 75 : race["womling_god"] ? 40 : race["womling_lord"] ? 30 : 0,
+        moraleBase: race2["womling_friend"] ? 75 : race2["womling_god"] ? 40 : race2["womling_lord"] ? 30 : 0,
         moralePerBuilding: callNumber9(
           requireRecord(building2["definition"], `${path}.definition`),
           "val",
@@ -30141,7 +30141,7 @@
           }
         }
         const global = requireRecord(game2["global"], "game.global");
-        const race = requireRecord(global["race"], "game.global.race");
+        const race2 = requireRecord(global["race"], "game.global.race");
         const gameSettings = requireRecord(
           global["settings"],
           "game.global.settings"
@@ -30166,7 +30166,7 @@
           ),
           powerMaximum: finiteProperty(power, "maxQuantity", "resources.Power"),
           replicatorAvailable: finiteProperty(power, "currentQuantity", "resources.Power") > finiteProperty(power, "maxQuantity", "resources.Power") ? dependencies.haveTech("replicator") : false,
-          fasting: Boolean(race["fasting"]),
+          fasting: Boolean(race2["fasting"]),
           hungryRace: inputs.some(
             (building2) => building2.rule.kind === "tourist-center" || building2.consumptions.some(
               (consumption) => consumption.resourceId === "Food"
@@ -32020,7 +32020,7 @@
         const registry = requireRecord(dependencies.getResources(), "resources");
         const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
         const global = requireRecord(game2["global"], "game.global");
-        const race = requireRecord(global["race"], "game.global.race");
+        const race2 = requireRecord(global["race"], "game.global.race");
         const technology2 = requireRecord(global["tech"], "game.global.tech");
         const population = requireRecord(
           registry["Population"],
@@ -32043,7 +32043,7 @@
             quarry["count"],
             "buildings.RockQuarry.count"
           );
-          if (quarryCount > 0 || Boolean(race["sappy"])) {
+          if (quarryCount > 0 || Boolean(race2["sappy"])) {
             session = null;
             return emptyInput6();
           }
@@ -32064,8 +32064,8 @@
             "settings.buildingClickPerTick must be a non-negative safe integer"
           );
         }
-        const fasting = Boolean(race["fasting"]);
-        const soulEater = Boolean(race["soul_eater"]);
+        const fasting = Boolean(race2["fasting"]);
+        const soulEater = Boolean(race2["soul_eater"]);
         const clickable = {
           food: callBoolean16(
             requireRecord(buildings2["Food"], "buildings.Food"),
@@ -32280,188 +32280,538 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/automation/progression/evolution.ts
-  function createAutoEvolution({
-    getGame,
-    getState,
-    getSettings,
-    getSettingsRaw,
-    getRaces,
-    loadQueuedSettings: loadQueuedSettings2,
-    GameLog: GameLog2,
-    getChallenges,
-    getEvolutions,
-    getPoly,
-    getResources,
-    getImitations,
-    getAutoUniverseSelection,
-    getAutoPlanetSelection
-  }) {
-    return function autoEvolution2() {
-      const game2 = getGame();
-      const state2 = getState();
-      const settings2 = getSettings();
-      const settingsRaw2 = getSettingsRaw();
-      const races2 = getRaces();
-      const challenges2 = getChallenges();
-      const evolutions2 = getEvolutions();
-      const poly2 = getPoly();
-      const resources2 = getResources();
-      const imitations2 = getImitations();
-      const autoUniverseSelection2 = getAutoUniverseSelection();
-      const autoPlanetSelection2 = getAutoPlanetSelection();
-      if (game2.global.race.species !== "protoplasm") {
-        return;
+  // src/adapters/evolve/evolution.ts
+  function race(game2) {
+    return requireRecord(
+      requireRecord(requireRecord(game2, "game")["global"], "game.global")["race"],
+      "game.global.race"
+    );
+  }
+  function globalStats(game2) {
+    return requireRecord(
+      requireRecord(requireRecord(game2, "game")["global"], "game.global")["stats"],
+      "game.global.stats"
+    );
+  }
+  function toNumber(value) {
+    return Number(value);
+  }
+  function raceObjects(getRaces) {
+    const races2 = requireRecord(getRaces(), "races");
+    return Object.values(races2).map(
+      (value) => (
+        // Adapter edge: the game's Race instances are opaque; the reader only
+        // reads documented getters/methods and never mutates them.
+        value
+      )
+    );
+  }
+  function evolutionActions(getEvolutions) {
+    return requireRecord(getEvolutions(), "evolutions");
+  }
+  function resolveEvolutionTree(getRaces, getSettings, targetId) {
+    const races2 = requireRecord(getRaces(), "races");
+    const target = requireRecord(races2[targetId], `races.${targetId}`);
+    const tree = requireRecord(
+      target["evolutionTree"],
+      `races.${targetId}.evolutionTree`
+    );
+    const settings2 = requireRecord(getSettings(), "settings");
+    const genus = settings2["userEvolutionGenus"];
+    const branch = (typeof genus === "string" ? tree[genus] : void 0) ?? tree[Object.keys(tree)[0]];
+    if (!Array.isArray(branch)) {
+      throw new TypeError(
+        `races.${targetId}.evolutionTree branch is not an array`
+      );
+    }
+    return branch;
+  }
+  function createEvolutionReader(dependencies) {
+    const challengeTraitById = /* @__PURE__ */ new Map();
+    for (const group of dependencies.challengeGroups) {
+      for (const member of group.members) {
+        challengeTraitById.set(member.id, member.trait);
       }
-      autoUniverseSelection2();
-      autoPlanetSelection2();
-      if (game2.global.race.universe === "bigbang" || game2.global.race.seeded && !game2.global.race["chose"]) {
-        return;
-      }
-      if (state2.evolutionTarget === null) {
-        loadQueuedSettings2();
-        if (settings2.userEvolutionTarget === "auto") {
-          let raceByWeighting = Object.values(races2).sort(
-            (a, b) => b.getWeighting() - a.getWeighting()
+    }
+    const resourceLevel = (id) => {
+      const resources2 = requireRecord(dependencies.getResources(), "resources");
+      const resource2 = requireRecord(resources2[id], `resources.${id}`);
+      return {
+        current: toNumber(resource2["currentQuantity"]),
+        max: toNumber(resource2["maxQuantity"])
+      };
+    };
+    return Object.freeze({
+      sampleSpecies() {
+        const species = race(dependencies.getGame())["species"];
+        return typeof species === "string" ? species : "";
+      },
+      sampleLandingGate() {
+        const current = race(dependencies.getGame());
+        const universe = current["universe"];
+        return Object.freeze({
+          universe: typeof universe === "string" ? universe : null,
+          seeded: Boolean(current["seeded"]),
+          chose: Boolean(current["chose"])
+        });
+      },
+      hasStoredTarget() {
+        const state2 = requireRecord(dependencies.getState(), "state");
+        return state2["evolutionTarget"] !== null;
+      },
+      storedTargetId() {
+        const state2 = requireRecord(dependencies.getState(), "state");
+        const target = state2["evolutionTarget"];
+        return typeof target === "string" ? target : null;
+      },
+      sampleTargetSelection() {
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const settingsRaw2 = requireRecord(
+          dependencies.getSettingsRaw(),
+          "settingsRaw"
+        );
+        const state2 = requireRecord(dependencies.getState(), "state");
+        const stats = globalStats(dependencies.getGame());
+        const achieve = requireRecord(
+          stats["achieve"],
+          "game.global.stats.achieve"
+        );
+        const races2 = raceObjects(dependencies.getRaces).map(
+          (r) => Object.freeze({
+            id: r.id,
+            weighting: toNumber(r.getWeighting()),
+            habitability: toNumber(r.getHabitability()),
+            genus: String(r.genus),
+            name: String(r.name)
+          })
+        );
+        const queue = settingsRaw2["evolutionQueue"];
+        const userTarget = settings2["userEvolutionTarget"];
+        return Object.freeze({
+          races: Object.freeze(races2),
+          userEvolutionTarget: typeof userTarget === "string" ? userTarget : String(userTarget),
+          massExtinction: Boolean(achieve["mass_extinction"]),
+          queueEnabled: Boolean(settings2["evolutionQueueEnabled"]),
+          queueLength: Array.isArray(queue) ? queue.length : 0,
+          queueRepeat: Boolean(settings2["evolutionQueueRepeat"]),
+          evolutionAttempts: toNumber(state2["evolutionAttempts"])
+        });
+      },
+      sampleRaceTrait(trait2) {
+        const value = race(dependencies.getGame())[trait2];
+        return typeof value === "number" ? value : NaN;
+      },
+      sampleCosts(targetId) {
+        const tree = resolveEvolutionTree(
+          dependencies.getRaces,
+          dependencies.getSettings,
+          targetId
+        );
+        const poly2 = requireRecord(dependencies.getPoly(), "poly");
+        const adjustCosts = requireFunction(
+          poly2["adjustCosts"],
+          "poly.adjustCosts"
+        );
+        let maxRna = 0;
+        let maxDna = 0;
+        for (const action of tree) {
+          const costs = requireRecord(
+            adjustCosts(action.definition),
+            "adjustedCosts"
           );
-          if (game2.global.stats.achieve["mass_extinction"]) {
-            state2.evolutionTarget = raceByWeighting[0];
-          } else {
-            let genusList = Object.values(races2).map((r) => r.genus).filter((v, i, a) => a.indexOf(v) === i);
-            let genusWeights = genusList.map((g) => [
-              g,
-              Object.values(races2).filter((r) => r.genus === g).map((r) => r.getWeighting()).reduce((sum, next) => sum + next)
-            ]);
-            let bestGenus = genusWeights.sort((a, b) => b[1] - a[1])[0][0];
-            state2.evolutionTarget = raceByWeighting.find(
-              (r) => r.genus === bestGenus
-            );
+          const rnaCost = costs["RNA"];
+          const dnaCost = costs["DNA"];
+          maxRna = Math.max(
+            maxRna,
+            Number(typeof rnaCost === "function" ? rnaCost() : 0)
+          );
+          maxDna = Math.max(
+            maxDna,
+            Number(typeof dnaCost === "function" ? dnaCost() : 0)
+          );
+        }
+        const rna = resourceLevel("RNA");
+        const dna = resourceLevel("DNA");
+        return Object.freeze({
+          maxRna,
+          maxDna,
+          rnaCurrent: rna.current,
+          rnaMax: rna.max,
+          dnaCurrent: dna.current,
+          dnaMax: dna.max
+        });
+      },
+      sampleEvolutionTree(targetId) {
+        const tree = resolveEvolutionTree(
+          dependencies.getRaces,
+          dependencies.getSettings,
+          targetId
+        );
+        const current = race(dependencies.getGame());
+        return Object.freeze(
+          tree.map((action) => {
+            const trait2 = challengeTraitById.get(action.id);
+            return Object.freeze({
+              id: action.id,
+              unlocked: Boolean(action.isUnlocked()),
+              activeChallenge: trait2 !== void 0 && Boolean(current[trait2])
+            });
+          })
+        );
+      },
+      sampleCells() {
+        const evolutions2 = evolutionActions(dependencies.getEvolutions);
+        const rna = resourceLevel("RNA");
+        const dna = resourceLevel("DNA");
+        const countOf = (id) => {
+          const action = evolutions2[id];
+          if (action === void 0) {
+            throw new TypeError(`evolutions.${id} is missing`);
           }
+          return toNumber(action.count);
+        };
+        return Object.freeze({
+          mitochondriaCount: countOf("mitochondria"),
+          eukaryoticCellCount: countOf("eukaryotic_cell"),
+          nucleusCount: countOf("nucleus"),
+          organellesCount: countOf("organelles"),
+          rnaMax: rna.max,
+          dnaMax: dna.max
+        });
+      },
+      sampleImitation() {
+        const current = race(dependencies.getGame());
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const imitateRaceValue = settings2["imitateRace"];
+        const imitateRace = typeof imitateRaceValue === "string" ? imitateRaceValue : String(imitateRaceValue);
+        const imitations2 = requireRecord(
+          dependencies.getImitations(),
+          "imitations"
+        );
+        const wanted = `s-${imitateRace}`;
+        const imitationExists = Object.values(imitations2).some((value) => {
+          return typeof value === "object" && value !== null && value["id"] === wanted;
+        });
+        return Object.freeze({
+          evoFinalMenu: Boolean(current["evoFinalMenu"]),
+          imitationExists,
+          imitateRace
+        });
+      },
+      sampleChallengeEnabled(groupIds) {
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const enabled = {};
+        for (const id of groupIds) {
+          enabled[id] = Boolean(settings2[`challenge_${id}`]);
         }
-        if (settings2.userEvolutionTarget !== "auto") {
-          let userRace = races2[settings2.userEvolutionTarget];
-          if (userRace && userRace.getHabitability() > 0) {
-            state2.evolutionTarget = userRace;
-          }
-        }
-        if (state2.evolutionTarget === null && settings2.evolutionQueueEnabled && settingsRaw2.evolutionQueue.length > 0 && (!settings2.evolutionQueueRepeat || state2.evolutionAttempts < settingsRaw2.evolutionQueue.length)) {
-          return;
-        }
-        if (state2.evolutionTarget === null) {
-          state2.evolutionTarget = races2.custom.getHabitability() > 0 ? races2.custom : races2.entish;
-        }
-        GameLog2.logSuccess(
+        return Object.freeze(enabled);
+      }
+    });
+  }
+  function createEvolutionCommandExecutor(dependencies) {
+    const setResourceCurrent = (id, value) => {
+      const resources2 = requireRecord(dependencies.getResources(), "resources");
+      const resource2 = requireRecord(resources2[id], `resources.${id}`);
+      resource2["currentQuantity"] = value;
+    };
+    return Object.freeze({
+      loadQueuedSettings() {
+        dependencies.loadQueuedSettings();
+      },
+      commitTarget(id, name) {
+        const state2 = requireRecord(dependencies.getState(), "state");
+        state2["evolutionTarget"] = id;
+        dependencies.gameLog.logSuccess(
           "special",
-          `Attempting evolution of ${state2.evolutionTarget.name}.`,
+          `Attempting evolution of ${name}.`,
           ["progress"]
         );
+      },
+      clickEvolution(id) {
+        const evolutions2 = evolutionActions(dependencies.getEvolutions);
+        const action = evolutions2[id];
+        if (action === void 0) {
+          throw new TypeError(`evolutions.${id} is missing`);
+        }
+        return Boolean(action.click());
+      },
+      accumulateResources(command) {
+        const evolution = requireRecord(
+          requireRecord(
+            requireRecord(dependencies.getGame(), "game")["actions"],
+            "game.actions"
+          )["evolution"],
+          "game.actions.evolution"
+        );
+        const rna = requireRecord(evolution["rna"], "game.actions.evolution.rna");
+        const dna = requireRecord(evolution["dna"], "game.actions.evolution.dna");
+        const rnaAction = requireFunction(
+          rna["action"],
+          "game.actions.evolution.rna.action"
+        );
+        const dnaAction = requireFunction(
+          dna["action"],
+          "game.actions.evolution.dna.action"
+        );
+        for (let i = 0; i < command.rnaForDna; i++) {
+          rnaAction();
+        }
+        for (let i = 0; i < command.dnaForEvolution; i++) {
+          dnaAction();
+        }
+        for (let i = 0; i < command.rnaForEvolution; i++) {
+          rnaAction();
+        }
+        setResourceCurrent("RNA", command.newRna);
+        setResourceCurrent("DNA", command.newDna);
+      },
+      clickImitation(imitateRace) {
+        const imitations2 = requireRecord(
+          dependencies.getImitations(),
+          "imitations"
+        );
+        const wanted = `s-${imitateRace}`;
+        const target = Object.values(imitations2).find(
+          (value) => typeof value === "object" && value !== null && value["id"] === wanted
+        );
+        return target !== void 0 ? Boolean(target.click()) : false;
+      },
+      logImitationUnavailable(imitateRace) {
+        dependencies.gameLog.logDanger(
+          "special",
+          `${imitateRace} not avaialble for imitation. Please select an available race.`,
+          ["progress", "achievements"]
+        );
+      },
+      logImitationNoRace() {
+        dependencies.gameLog.logDanger(
+          "special",
+          `No race selected for imitation. Please select an available race to continue.`,
+          ["progress", "achievements"]
+        );
       }
-      for (let i = 0; i < challenges2.length; i++) {
-        if (settings2["challenge_" + challenges2[i][0].id]) {
-          for (let j = 0; j < challenges2[i].length; j++) {
-            let { id, trait: trait2 } = challenges2[i][j];
-            if (game2.global.race[trait2] !== 1 && evolutions2[id].click() && (id === "junker" || id === "sludge" || id === "ultra_sludge" || id === "warlord")) {
-              return;
-            }
-          }
+    });
+  }
+
+  // src/domain/evolution.ts
+  var CYCLE_ENDING_CHALLENGES = Object.freeze([
+    "junker",
+    "sludge",
+    "ultra_sludge",
+    "warlord"
+  ]);
+  function shouldEvolve(species) {
+    return species === "protoplasm";
+  }
+  function hasLandedSomewhere(gate) {
+    if (gate.universe === "bigbang") {
+      return false;
+    }
+    if (gate.seeded && !gate.chose) {
+      return false;
+    }
+    return true;
+  }
+  function raceById(races2, id) {
+    return races2.find((race2) => race2.id === id);
+  }
+  function planEvolutionTarget(input) {
+    let target;
+    if (input.userEvolutionTarget === "auto") {
+      const byWeighting = [...input.races].sort(
+        (a, b) => b.weighting - a.weighting
+      );
+      if (input.massExtinction) {
+        target = byWeighting[0];
+      } else {
+        const genusList = input.races.map((race2) => race2.genus).filter((genus, index, all) => all.indexOf(genus) === index);
+        const genusWeights = genusList.map(
+          (genus) => [
+            genus,
+            input.races.filter((race2) => race2.genus === genus).map((race2) => race2.weighting).reduce((sum, next) => sum + next)
+          ]
+        );
+        const bestGenus = [...genusWeights].sort((a, b) => b[1] - a[1])[0][0];
+        target = byWeighting.find((race2) => race2.genus === bestGenus);
+      }
+    } else {
+      const userRace = raceById(input.races, input.userEvolutionTarget);
+      if (userRace && userRace.habitability > 0) {
+        target = userRace;
+      }
+    }
+    if (target === void 0 && input.queueEnabled && input.queueLength > 0 && (!input.queueRepeat || input.evolutionAttempts < input.queueLength)) {
+      return Object.freeze({ kind: "wait" });
+    }
+    if (target === void 0) {
+      const custom = raceById(input.races, "custom");
+      target = custom && custom.habitability > 0 ? custom : raceById(input.races, "entish");
+    }
+    if (target === void 0) {
+      throw new TypeError("evolution target fallback race is unavailable");
+    }
+    return Object.freeze({ kind: "target", id: target.id, name: target.name });
+  }
+  function evolutionChallengeCandidates(groups, enabled) {
+    const candidates = [];
+    for (const group of groups) {
+      const groupId = group.members[0]?.id;
+      if (groupId === void 0 || enabled[groupId] !== true) {
+        continue;
+      }
+      for (const member of group.members) {
+        candidates.push(
+          Object.freeze({
+            id: member.id,
+            trait: member.trait,
+            cycleEnding: CYCLE_ENDING_CHALLENGES.includes(member.id)
+          })
+        );
+      }
+    }
+    return Object.freeze(candidates);
+  }
+  function planResourceAccumulation(maxRna, maxDna, levels) {
+    const dnaForEvolution = Math.min(
+      maxDna - levels.dnaCurrent,
+      levels.dnaMax - levels.dnaCurrent,
+      levels.rnaMax / 2
+    );
+    const rnaForDna = Math.min(
+      dnaForEvolution * 2 - levels.rnaCurrent,
+      levels.rnaMax - levels.rnaCurrent
+    );
+    const rnaRemaining = levels.rnaCurrent + rnaForDna - dnaForEvolution * 2;
+    const rnaForEvolution = Math.min(
+      maxRna - rnaRemaining,
+      levels.rnaMax - rnaRemaining
+    );
+    return Object.freeze({
+      rnaForDna,
+      dnaForEvolution,
+      rnaForEvolution,
+      newRna: rnaRemaining + rnaForEvolution,
+      newDna: levels.dnaCurrent + dnaForEvolution
+    });
+  }
+  function planEvolutionTreeClick(tree) {
+    for (const action of tree) {
+      if (!action.unlocked) {
+        continue;
+      }
+      if (action.activeChallenge) {
+        continue;
+      }
+      return Object.freeze({ kind: "click", id: action.id });
+    }
+    return Object.freeze({ kind: "none" });
+  }
+  function planEvolutionCells(input, maxRna, maxDna) {
+    const clicks = [];
+    if (input.mitochondriaCount < 1 || input.rnaMax < maxRna || input.dnaMax < maxDna) {
+      clicks.push("mitochondria");
+    }
+    if (input.eukaryoticCellCount < 1 || input.dnaMax < maxDna) {
+      clicks.push("eukaryotic_cell");
+    }
+    if (input.rnaMax < maxRna) {
+      clicks.push("membrane");
+    }
+    if (input.nucleusCount < 10) {
+      clicks.push("nucleus");
+    }
+    if (input.organellesCount < 10) {
+      clicks.push("organelles");
+    }
+    return Object.freeze(clicks);
+  }
+  function planImitation(input) {
+    if (!input.evoFinalMenu) {
+      return Object.freeze({ kind: "skip" });
+    }
+    if (!input.imitationExists) {
+      return Object.freeze({ kind: "log-no-race" });
+    }
+    return Object.freeze({ kind: "click", imitateRace: input.imitateRace });
+  }
+
+  // src/application/evolution.ts
+  function runEvolution(dependencies) {
+    const {
+      reader,
+      executor,
+      runUniverseSelection,
+      runPlanetSelection: runPlanetSelection2,
+      challengeGroups: challengeGroups2
+    } = dependencies;
+    if (!shouldEvolve(reader.sampleSpecies())) {
+      return;
+    }
+    runUniverseSelection();
+    runPlanetSelection2();
+    if (!hasLandedSomewhere(reader.sampleLandingGate())) {
+      return;
+    }
+    if (!reader.hasStoredTarget()) {
+      executor.loadQueuedSettings();
+      const decision2 = planEvolutionTarget(reader.sampleTargetSelection());
+      if (decision2.kind === "wait") {
+        return;
+      }
+      executor.commitTarget(decision2.id, decision2.name);
+    }
+    const groupIds = challengeGroups2.map((group) => group.members[0]?.id).filter((id) => id !== void 0);
+    const enabled = reader.sampleChallengeEnabled(groupIds);
+    for (const candidate of evolutionChallengeCandidates(
+      challengeGroups2,
+      enabled
+    )) {
+      if (reader.sampleRaceTrait(candidate.trait) !== 1) {
+        const clicked = executor.clickEvolution(candidate.id);
+        if (clicked && candidate.cycleEnding) {
+          return;
         }
       }
-      let maxRNA = 0;
-      let maxDNA = 0;
-      let evolutionTree = state2.evolutionTarget.evolutionTree[settings2.userEvolutionGenus] ?? state2.evolutionTarget.evolutionTree[Object.keys(state2.evolutionTarget.evolutionTree)[0]];
-      for (let i = 0; i < evolutionTree.length; i++) {
-        let evolution = evolutionTree[i];
-        let costs = poly2.adjustCosts(evolution.definition);
-        maxRNA = Math.max(maxRNA, Number(costs["RNA"]?.() ?? 0));
-        maxDNA = Math.max(maxDNA, Number(costs["DNA"]?.() ?? 0));
+    }
+    const targetId = reader.storedTargetId();
+    if (targetId === null) {
+      throw new TypeError("evolution target missing after selection phase");
+    }
+    const costs = reader.sampleCosts(targetId);
+    executor.accumulateResources(
+      planResourceAccumulation(costs.maxRna, costs.maxDna, {
+        rnaCurrent: costs.rnaCurrent,
+        rnaMax: costs.rnaMax,
+        dnaCurrent: costs.dnaCurrent,
+        dnaMax: costs.dnaMax
+      })
+    );
+    const treePlan = planEvolutionTreeClick(reader.sampleEvolutionTree(targetId));
+    if (treePlan.kind === "click" && executor.clickEvolution(treePlan.id)) {
+      return;
+    }
+    for (const id of planEvolutionCells(
+      reader.sampleCells(),
+      costs.maxRna,
+      costs.maxDna
+    )) {
+      executor.clickEvolution(id);
+    }
+    const imitation = planImitation(reader.sampleImitation());
+    if (imitation.kind === "click") {
+      if (!executor.clickImitation(imitation.imitateRace)) {
+        executor.logImitationUnavailable(imitation.imitateRace);
       }
-      let DNAForEvolution = Math.min(
-        maxDNA - resources2.DNA.currentQuantity,
-        resources2.DNA.maxQuantity - resources2.DNA.currentQuantity,
-        resources2.RNA.maxQuantity / 2
-      );
-      let RNAForDNA = Math.min(
-        DNAForEvolution * 2 - resources2.RNA.currentQuantity,
-        resources2.RNA.maxQuantity - resources2.RNA.currentQuantity
-      );
-      let RNARemaining = resources2.RNA.currentQuantity + RNAForDNA - DNAForEvolution * 2;
-      let RNAForEvolution = Math.min(
-        maxRNA - RNARemaining,
-        resources2.RNA.maxQuantity - RNARemaining
-      );
-      let rna = game2.actions.evolution.rna;
-      let dna = game2.actions.evolution.dna;
-      for (let i = 0; i < RNAForDNA; i++) {
-        rna.action();
-      }
-      for (let i = 0; i < DNAForEvolution; i++) {
-        dna.action();
-      }
-      for (let i = 0; i < RNAForEvolution; i++) {
-        rna.action();
-      }
-      resources2.RNA.currentQuantity = RNARemaining + RNAForEvolution;
-      resources2.DNA.currentQuantity = resources2.DNA.currentQuantity + DNAForEvolution;
-      for (let i = 0; i < evolutionTree.length; i++) {
-        let action = evolutionTree[i];
-        if (action.isUnlocked()) {
-          let challenge = challenges2.flat().find((c) => c.id === action.id);
-          if (challenge && game2.global.race[challenge.trait]) {
-            continue;
-          }
-          if (action.click()) {
-            return;
-          } else {
-            break;
-          }
-        }
-      }
-      if (evolutions2.mitochondria.count < 1 || resources2.RNA.maxQuantity < maxRNA || resources2.DNA.maxQuantity < maxDNA) {
-        evolutions2.mitochondria.click();
-      }
-      if (evolutions2.eukaryotic_cell.count < 1 || resources2.DNA.maxQuantity < maxDNA) {
-        evolutions2.eukaryotic_cell.click();
-      }
-      if (resources2.RNA.maxQuantity < maxRNA) {
-        evolutions2.membrane.click();
-      }
-      if (evolutions2.nucleus.count < 10) {
-        evolutions2.nucleus.click();
-      }
-      if (evolutions2.organelles.count < 10) {
-        evolutions2.organelles.click();
-      }
-      const userImitateRace = Object.values(imitations2).find(
-        (race) => {
-          return race.id === `s-${settings2.imitateRace}`;
-        }
-      );
-      if (game2.global.race.evoFinalMenu) {
-        if (userImitateRace) {
-          const selectImitateRace = userImitateRace.click();
-          if (!selectImitateRace) {
-            GameLog2.logDanger(
-              "special",
-              `${settings2.imitateRace} not avaialble for imitation. Please select an available race.`,
-              ["progress", "achievements"]
-            );
-          }
-        } else {
-          GameLog2.logDanger(
-            "special",
-            `No race selected for imitation. Please select an available race to continue.`,
-            ["progress", "achievements"]
-          );
-        }
-      }
-    };
+    } else if (imitation.kind === "log-no-race") {
+      executor.logImitationNoRace();
+    }
   }
 
   // src/adapters/evolve/universe-selection.ts
   function readUniverseSelectionInput(dependencies) {
     const game2 = requireRecord(dependencies.getGame(), "game");
     const settings2 = requireRecord(dependencies.getSettings(), "settings");
-    const race = requireRecord(
+    const race2 = requireRecord(
       requireRecord(game2["global"], "game.global")["race"],
       "game.global.race"
     );
@@ -32469,9 +32819,9 @@
     if (typeof targetName !== "string") {
       throw new TypeError("settings.userUniverseTargetName must be a string");
     }
-    const universe = race["universe"];
+    const universe = race2["universe"];
     return Object.freeze({
-      hasBigbang: Boolean(race["bigbang"]),
+      hasBigbang: Boolean(race2["bigbang"]),
       universe: typeof universe === "string" ? universe : null,
       targetName
     });
@@ -32483,11 +32833,11 @@
           return SUCCEEDED2;
         }
         const game2 = requireRecord(dependencies.getGame(), "game");
-        const race = requireRecord(
+        const race2 = requireRecord(
           requireRecord(game2["global"], "game.global")["race"],
           "game.global.race"
         );
-        if (!race["bigbang"] || race["universe"] !== "bigbang") {
+        if (!race2["bigbang"] || race2["universe"] !== "bigbang") {
           return stale(
             "universe-selection-unavailable",
             "universe selection became unavailable"
@@ -32636,10 +32986,10 @@
           return Object.freeze({ populationUnlocked: false, noCraft: false });
         }
         const global = requireRecord(game2["global"], "game.global");
-        const race = requireRecord(global["race"], "game.global.race");
+        const race2 = requireRecord(global["race"], "game.global.race");
         return Object.freeze({
           populationUnlocked: true,
-          noCraft: Boolean(race["no_craft"])
+          noCraft: Boolean(race2["no_craft"])
         });
       },
       readCandidate(index) {
@@ -33449,21 +33799,21 @@
   function createPlanetSelectionReader(dependencies) {
     return Object.freeze({
       sampleGate() {
-        const race = requireRace(dependencies.getGame());
+        const race2 = requireRace(dependencies.getGame());
         const settings2 = requireRecord(dependencies.getSettings(), "settings");
         const targetName = settings2["userPlanetTargetName"];
-        const universe = race["universe"];
+        const universe = race2["universe"];
         return Object.freeze({
           universe: typeof universe === "string" ? universe : null,
-          seeded: Boolean(race["seeded"]),
-          chose: Boolean(race["chose"]),
+          seeded: Boolean(race2["seeded"]),
+          chose: Boolean(race2["chose"]),
           // Legacy only ever compared this setting with ===; a non-string value
           // matched neither "none" nor a sort mode, so it stays lenient as null.
           targetName: typeof targetName === "string" ? targetName : null
         });
       },
       sampleCandidates() {
-        const race = requireRace(dependencies.getGame());
+        const race2 = requireRace(dependencies.getGame());
         const settings2 = requireRecord(dependencies.getSettings(), "settings");
         const stats = requireRecord(
           requireRecord(
@@ -33554,7 +33904,7 @@
           dependencies.getStarLevel(),
           "getStarLevel"
         );
-        const gods = race["gods"];
+        const gods = race2["gods"];
         return Object.freeze({
           planets: Object.freeze(planets),
           gods: typeof gods === "string" ? gods : null,
@@ -33587,8 +33937,8 @@
   function createPlanetSelectionCommandExecutor(dependencies) {
     return Object.freeze({
       execute(decision2) {
-        const race = requireRace(dependencies.getGame());
-        if (race["universe"] === "bigbang" || !race["seeded"] || Boolean(race["chose"])) {
+        const race2 = requireRace(dependencies.getGame());
+        if (race2["universe"] === "bigbang" || !race2["seeded"] || Boolean(race2["chose"])) {
           return stale(
             "planet-selection-unavailable",
             "planet selection became unavailable"
@@ -34200,16 +34550,16 @@
   function jobSmartMaximum(dependencies, job, kind, jobs2, game2, settings2, buildings2, resources2, state2, smart, coalDisabled, minersDisabled, demonicLumber) {
     if (!smart) return { maximum: null, farmerMinimum: null };
     const global = requireRecord(game2["global"], "game.global");
-    const race = requireRecord(global["race"], "game.global.race");
+    const race2 = requireRecord(global["race"], "game.global.race");
     const tech = requireRecord(global["tech"], "game.global.tech");
     const count = jobCount2(job, "job");
     let maximum = null;
     let farmerMinimum = null;
-    if (kind === "miner" && race["warlord"]) {
+    if (kind === "miner" && race2["warlord"]) {
       return { maximum: null, farmerMinimum: null };
     }
     if (kind === "farmer" || kind === "hunter") {
-      if (race["artifical"] || race["unfathomable"]) {
+      if (race2["artifical"] || race2["unfathomable"]) {
         maximum = 0;
         farmerMinimum = 0;
       } else {
@@ -34222,7 +34572,7 @@
           "currentQuantity"
         );
         const foodCurrent = resourceNumber(resources2, "Food", "currentQuantity");
-        if (race["ravenous"]) {
+        if (race2["ravenous"]) {
           minimumFood = population * 1.5;
           maximumFood = population * 3;
           foodRate += Math.max(
@@ -34230,7 +34580,7 @@
             0
           );
         }
-        if (race["carnivore"]) {
+        if (race2["carnivore"]) {
           minimumFood = population;
           maximumFood = population * 2;
           if (foodCurrent > 10) {
@@ -34280,10 +34630,10 @@
         }
         farmerMinimum = maximum;
       }
-      if (race["unfathomable"]) {
+      if (race2["unfathomable"]) {
         maximum = Number.MAX_SAFE_INTEGER;
       } else if (kind === "hunter") {
-        if (resourceFlag(resources2, "Furs", "isUnlocked") && (race["evil"] || race["artifical"])) {
+        if (resourceFlag(resources2, "Furs", "isUnlocked") && (race2["evil"] || race2["artifical"])) {
           maximum = resourceFlag(resources2, "Furs", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
             maximum ?? 0,
             busyWorkers(resources2, "Furs", "job_hunter", count)
@@ -34298,7 +34648,7 @@
       }
     } else if (kind === "lumberjack") {
       maximum = 0;
-      if (!race["soul_eater"] && race["evil"]) {
+      if (!race2["soul_eater"] && race2["evil"]) {
         maximum = resourceFlag(resources2, "Furs", "isUseful") ? Number.MAX_SAFE_INTEGER : busyWorkers(resources2, "Furs", "job_reclaimer", count);
       }
       maximum = resourceFlag(resources2, "Lumber", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
@@ -34306,7 +34656,7 @@
         busyWorkers(
           resources2,
           "Lumber",
-          race["evil"] ? "job_reclaimer" : "job_lumberjack",
+          race2["evil"] ? "job_reclaimer" : "job_lumberjack",
           count
         )
       );
@@ -34351,10 +34701,10 @@
     } else if (kind === "miner") {
       maximum = 0;
       if (!minersDisabled) {
-        if (race["sappy"]) {
+        if (race2["sappy"]) {
           for (const name of ["Aluminium", "Chrysotile"]) {
             if (resourceFlag(resources2, name, "isUnlocked")) {
-              const source2 = name === "Aluminium" && (race["cataclysm"] || race["orbit_decayed"]) ? "space_red_mine_title" : "job_miner";
+              const source2 = name === "Aluminium" && (race2["cataclysm"] || race2["orbit_decayed"]) ? "space_red_mine_title" : "job_miner";
               maximum = resourceFlag(resources2, name, "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(maximum, busyWorkers(resources2, name, source2, count));
             }
           }
@@ -34411,7 +34761,7 @@
       const civic = requireRecord(global["civic"], "game.global.civic");
       const taxes = requireRecord(civic["taxes"], "game.global.civic.taxes");
       const taxBuffer = (booleanSetting2(settings2, "autoTax") || Boolean(dependencies.haveTask("tax"))) && requireNumber(taxes["tax_rate"], "taxes.tax_rate") < requireNumber(dependencies.taxCap(false), "taxCap") ? 1 : 0;
-      const entertainerMorale = (optionalNumber2(tech["theatre"], "game.global.tech.theatre") + trait(dependencies, "musical")) * trait(dependencies, "emotionless", 0, "-") * trait(dependencies, "high_pop", 1, "=") * (state2["astroSign"] === "sagittarius" ? 1.05 : 1) * (race["lone_survivor"] ? 25 : 1);
+      const entertainerMorale = (optionalNumber2(tech["theatre"], "game.global.tech.theatre") + trait(dependencies, "musical")) * trait(dependencies, "emotionless", 0, "-") * trait(dependencies, "high_pop", 1, "=") * (state2["astroSign"] === "sagittarius" ? 1.05 : 1) * (race2["lone_survivor"] ? 25 : 1);
       maximum = count - Math.floor(
         (resourceNumber(resources2, "Morale", "rateOfChange") - resourceNumber(resources2, "Morale", "maxQuantity") - taxBuffer) / entertainerMorale
       );
@@ -34421,21 +34771,21 @@
       maximum = (resourceFlag(resources2, "Money", "isCapped") || requireNumber(taxes["tax_rate"], "taxes.tax_rate") <= 0) && !technology(dependencies, "banking", 7) ? 0 : null;
     } else if (job === jobs2["Scientist"]) {
       maximum = Number.MAX_SAFE_INTEGER;
-      if (race["universe"] !== "magic" && resourceFlag(resources2, "Knowledge", "isCapped") && !race["intelligent"] && !technology(dependencies, "science", 5) && !technology(dependencies, "genetics", 5))
+      if (race2["universe"] !== "magic" && resourceFlag(resources2, "Knowledge", "isCapped") && !race2["intelligent"] && !technology(dependencies, "science", 5) && !technology(dependencies, "genetics", 5))
         maximum = 0;
-      if (race["witch_hunter"]) {
+      if (race2["witch_hunter"]) {
         const civic = requireRecord(global["civic"], "game.global.civic");
         const govern = requireRecord(civic["govern"], "game.global.civic.govern");
         const suspicionPerWizard = govern["type"] === "magocracy" ? 0.5 : 1;
         maximum = (99 - resourceNumber(resources2, "Sus", "currentQuantity")) / suspicionPerWizard + count * suspicionPerWizard;
       }
     } else if (job === jobs2["Professor"]) {
-      maximum = !race["intelligent"] && resourceFlag(resources2, "Knowledge", "isCapped") && !technology(dependencies, "genetics", 5) && !technology(dependencies, "fanaticism", 2) ? 0 : null;
+      maximum = !race2["intelligent"] && resourceFlag(resources2, "Knowledge", "isCapped") && !technology(dependencies, "genetics", 5) && !technology(dependencies, "fanaticism", 2) ? 0 : null;
     } else if (job === jobs2["CementWorker"]) {
       maximum = Number.MAX_SAFE_INTEGER;
       if (resourceNumber(resources2, "Stone", "storageRatio") < 0.1) {
         let stoneRate = resourceNumber(resources2, "Stone", "rateOfChange") + count * 3 - 5;
-        if (race["smoldering"] && booleanSetting2(settings2, "autoQuarry")) {
+        if (race2["smoldering"] && booleanSetting2(settings2, "autoQuarry")) {
           stoneRate += resourceNumber(resources2, "Chrysotile", "rateOfChange");
         }
         maximum = Math.min(maximum, Math.floor(stoneRate / 3));
@@ -34455,7 +34805,7 @@
       maximum = requireNumber(fortress["threat"], "fortress.threat") > 9e3 && resourceNumber(resources2, "Population", "storageRatio") < 1 ? 0 : Number.MAX_SAFE_INTEGER;
     } else if (job === jobs2["Teamster"]) {
       maximum = Math.round(
-        requireNumber(race["teamster"], "race.teamster") / optionalNumber2(tech["transport"], "tech.transport") * 1.5
+        requireNumber(race2["teamster"], "race.teamster") / optionalNumber2(tech["transport"], "tech.transport") * 1.5
       );
       maximum -= optionalNumber2(tech["railway"], "tech.railway") * 2;
     } else if (job === jobs2["Meditator"]) {
@@ -34552,14 +34902,14 @@
           "debug window"
         );
         const global = requireRecord(game2["global"], "game.global");
-        const race = requireRecord(global["race"], "game.global.race");
+        const race2 = requireRecord(global["race"], "game.global.race");
         const civic = requireRecord(global["civic"], "game.global.civic");
         const crew = requireRecord(civic["crew"], "game.global.civic.crew");
         const coalDisabled = booleanSetting2(settings2, "jobDisableMiners") && requireNumber(
           building(buildings2, "GatewayStarbase")["count"],
           "GatewayStarbase.count"
         ) > 0;
-        const minersDisabled = coalDisabled && !(race["sappy"] && race["smoldering"]);
+        const minersDisabled = coalDisabled && !(race2["sappy"] && race2["smoldering"]);
         const demonLumber = Boolean(dependencies.isDemonRace()) && Boolean(dependencies.isLumberRace());
         const servantModifier = trait(dependencies, "high_pop", 0, 1);
         const rawCrafting = manager["craftingJobs"];
@@ -34637,7 +34987,7 @@
             smartMaximum: smartMaximum.maximum,
             farmerMinimum: smartMaximum.farmerMinimum,
             demonicLumber,
-            warlordMiner: kind === "miner" && Boolean(race["warlord"])
+            warlordMiner: kind === "miner" && Boolean(race2["warlord"])
           });
         });
         const tokenOf = (value) => {
@@ -34847,7 +35197,7 @@
           }
         }
         const tech = requireRecord(global["tech"], "game.global.tech");
-        const entertainerMorale = (optionalNumber2(tech["theatre"], "game.global.tech.theatre") + trait(dependencies, "musical")) * trait(dependencies, "emotionless", 0, "-") * trait(dependencies, "high_pop", 1, "=") * (state2["astroSign"] === "sagittarius" ? 1.05 : 1) * (race["lone_survivor"] ? 25 : 1);
+        const entertainerMorale = (optionalNumber2(tech["theatre"], "game.global.tech.theatre") + trait(dependencies, "musical")) * trait(dependencies, "emotionless", 0, "-") * trait(dependencies, "high_pop", 1, "=") * (state2["astroSign"] === "sagittarius" ? 1.05 : 1) * (race2["lone_survivor"] ? 25 : 1);
         const authority = Object.freeze({
           enabled: authorityEnabled,
           current: authorityEnabled ? resourceNumber(resources2, "Authority", "currentQuantity") : 0,
@@ -34907,7 +35257,7 @@
           addDefault("Unemployed", "unlocked");
         }
         const currentDefault = jobInputs.find((job) => job.isDefault)?.token ?? null;
-        const farmerToken = race["artifical"] ? null : Math.max(token("Hunter") ?? -1, token("Farmer") ?? -1);
+        const farmerToken = race2["artifical"] ? null : Math.max(token("Hunter") ?? -1, token("Farmer") ?? -1);
         const normalizedFarmerToken = farmerToken === -1 ? null : farmerToken;
         const lumberjackToken = demonLumber ? normalizedFarmerToken : token("Lumberjack");
         const splitEntries = [];
@@ -34939,7 +35289,7 @@
             })
           );
         };
-        if (race["unfathomable"]) {
+        if (race2["unfathomable"]) {
           addSplit(normalizedFarmerToken, "Hunter", "jobRaiderWeighting");
         }
         addSplit(lumberjackToken, "Lumberjack", "jobLumberWeighting");
@@ -34951,7 +35301,7 @@
           available: true,
           craftOnly,
           autoCraftsmen: booleanSetting2(settings2, "autoCraftsmen"),
-          autoCraftWithoutBuilding: craftsmenMode === "always" || craftsmenMode === "nocraft" && Boolean(race["no_craft"]),
+          autoCraftWithoutBuilding: craftsmenMode === "always" || craftsmenMode === "nocraft" && Boolean(race2["no_craft"]),
           craftsmenMode,
           foundryWeighting,
           manageServants: booleanSetting2(settings2, "jobManageServants"),
@@ -34974,7 +35324,7 @@
             "craftingMax"
           ),
           minimumDefault: requireNumber(crew["max"], "crew.max") - requireNumber(crew["workers"], "crew.workers") > 0 ? requireNumber(crew["max"], "crew.max") - requireNumber(crew["workers"], "crew.workers") + 1 : 0,
-          reserveMiner: (Boolean(race["hooved"]) && resourceNumber(resources2, "Horseshoe", "usefulRatio") < 1 || Boolean(race["artifical"]) && !race["deconstructor"] && resourceNumber(resources2, "Population", "storageRatio") < 1) && !minersDisabled,
+          reserveMiner: (Boolean(race2["hooved"]) && resourceNumber(resources2, "Horseshoe", "usefulRatio") < 1 || Boolean(race2["artifical"]) && !race2["deconstructor"] && resourceNumber(resources2, "Population", "storageRatio") < 1) && !minersDisabled,
           defaultJobToken: currentDefault,
           farmerToken: normalizedFarmerToken,
           lumberjackToken,
@@ -35902,8 +36252,8 @@
   function currencyIdFromGame(getGame) {
     const game2 = requireRecord(getGame(), "game");
     const global = requireRecord(game2["global"], "game.global");
-    const race = requireRecord(global["race"], "game.global.race");
-    return race["universe"] === "antimatter" ? "AntiPlasmid" : "Plasmid";
+    const race2 = requireRecord(global["race"], "game.global.race");
+    return race2["universe"] === "antimatter" ? "AntiPlasmid" : "Plasmid";
   }
   function readCurrency(getResources, currencyId) {
     const resources2 = requireRecord(getResources(), "resources");
@@ -36741,8 +37091,8 @@
           `${candidate.blueprint} blueprint.class`
         );
         const global = requireRecord(active.game["global"], "game.global");
-        const race = requireRecord(global["race"], "game.global.race");
-        const baseCrew = race["grenadier"] ? requireNumber(
+        const race2 = requireRecord(global["race"], "game.global.race");
+        const baseCrew = race2["grenadier"] ? requireNumber(
           GRENADIER_CREW[shipClass],
           `grenadier crew for ${shipClass}`
         ) : requireNumber(
@@ -36767,7 +37117,7 @@
           active.settings["generalMinimumAuthority"],
           "settings.generalMinimumAuthority"
         );
-        if (manageAuthority && minimumAuthority !== 0 && race["universe"] === "evil") {
+        if (manageAuthority && minimumAuthority !== 0 && race2["universe"] === "evil") {
           const authorityResource = requireRecord(
             active.resources["Authority"],
             "resources.Authority"
@@ -37490,7 +37840,7 @@
             );
           }
         }
-        const race = requireRecord(global["race"], "game.global.race");
+        const race2 = requireRecord(global["race"], "game.global.race");
         const preliminary = Object.freeze({
           available: true,
           ships: Object.freeze(preliminaryShips),
@@ -37507,7 +37857,7 @@
           chthonianUnlocked: chthonian.unlocked,
           chthonianLossMode,
           dreadedGuardActive,
-          instinct: Boolean(race["instinct"]),
+          instinct: Boolean(race2["instinct"]),
           alien2Unlocked,
           alien2KnowledgeMaximum,
           alien2KnowledgeRequired,
@@ -37926,8 +38276,8 @@
         const resources2 = requireRecord(dependencies.getResources(), "resources");
         const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
         const global = requireRecord(game2["global"], "game.global");
-        const race = requireRecord(global["race"], "game.global.race");
-        if (race["warlord"]) {
+        const race2 = requireRecord(global["race"], "game.global.race");
+        if (race2["warlord"]) {
           debug(() => "cycle: unavailable (warlord race)");
           return unavailableCycle2();
         }
@@ -38967,9 +39317,9 @@
       const races2 = getRaces();
       const game2 = getGame();
       const $2 = getJQuery();
-      let race = races2[settingsRaw2.imitateRace];
-      if (race) {
-        const raceAvaialableForImitate = race && game2.global.stats.synth[race.id];
+      let race2 = races2[settingsRaw2.imitateRace];
+      if (race2) {
+        const raceAvaialableForImitate = race2 && game2.global.stats.synth[race2.id];
         if (raceAvaialableForImitate) {
           $2("#script_imitate_warning").html(
             `<span class="has-text-success">You have completed an AI Apocalypse with this race and can imitate it.</span>`
@@ -39019,12 +39369,12 @@
           label: "Ignore",
           hint: "Do not imitate race. IMPORTANT: script will stall at evolution if none selected"
         },
-        ...Object.values(races2).map((race) => {
-          const label = game2.global.stats.synth[race.id] ? race.name : `--${race.name}--`;
+        ...Object.values(races2).map((race2) => {
+          const label = game2.global.stats.synth[race2.id] ? race2.name : `--${race2.name}--`;
           return {
-            val: race.id,
+            val: race2.id,
             label,
-            hint: race.desc
+            hint: race2.desc
           };
         })
       ];
@@ -40392,20 +40742,20 @@
       );
     }
     function updateRaceWarningImpl() {
-      let race = races2[settingsRaw2.userEvolutionTarget];
-      if (race && race.getCondition() !== "") {
-        let suited = race.getHabitability();
+      let race2 = races2[settingsRaw2.userEvolutionTarget];
+      if (race2 && race2.getCondition() !== "") {
+        let suited = race2.getHabitability();
         if (suited === 1) {
           $2("#script_race_warning").html(
-            `<span class="has-text-success">This race have special requirements: ${race.getCondition()} This condition is met.</span>`
+            `<span class="has-text-success">This race have special requirements: ${race2.getCondition()} This condition is met.</span>`
           );
         } else if (suited === 0) {
           $2("#script_race_warning").html(
-            `<span class="has-text-danger">Warning! This race have special requirements: ${race.getCondition()} This condition is not met.</span>`
+            `<span class="has-text-danger">Warning! This race have special requirements: ${race2.getCondition()} This condition is not met.</span>`
           );
         } else {
           $2("#script_race_warning").html(
-            `<span class="has-text-warning">Warning! This race have special requirements: ${race.getCondition()} This condition is bypassed. Race will have ${100 - suited * 100}% penalty.</span>`
+            `<span class="has-text-warning">Warning! This race have special requirements: ${race2.getCondition()} This condition is bypassed. Race will have ${100 - suited * 100}% penalty.</span>`
           );
         }
       } else {
@@ -40462,10 +40812,10 @@
           label: "Auto Achievements",
           hint: "Picks race giving most achievements upon completing run. Tracks all achievements limited to specific races and resets. Races unique to current planet biome are prioritized, when available."
         },
-        ...Object.values(races2).map((race) => ({
-          val: race.id,
-          label: race.name,
-          hint: race.desc
+        ...Object.values(races2).map((race2) => ({
+          val: race2.id,
+          label: race2.name,
+          hint: race2.desc
         }))
       ];
       addSettingsSelect2(
@@ -40574,13 +40924,13 @@
       let raceClass = "";
       let prestigeName = "";
       let prestigeClass = "";
-      let race = races2[queuedEvolution.userEvolutionTarget];
-      let isValdi = queuedEvolution.challenge_junker || race === races2.junker;
-      let isSludge = queuedEvolution.challenge_sludge || race === races2.sludge;
-      let isUltraSludge = queuedEvolution.challenge_ultra_sludge || race === races2.ultra_sludge;
-      let isHellspawn = queuedEvolution.challenge_warlord || race === races2.hellspawn;
-      const getRaceColor = (race2) => {
-        let suited = race2.getHabitability();
+      let race2 = races2[queuedEvolution.userEvolutionTarget];
+      let isValdi = queuedEvolution.challenge_junker || race2 === races2.junker;
+      let isSludge = queuedEvolution.challenge_sludge || race2 === races2.sludge;
+      let isUltraSludge = queuedEvolution.challenge_ultra_sludge || race2 === races2.ultra_sludge;
+      let isHellspawn = queuedEvolution.challenge_warlord || race2 === races2.hellspawn;
+      const getRaceColor = (race3) => {
+        let suited = race3.getHabitability();
         if (suited === 1) {
           return "has-text-info";
         } else if (suited === 0) {
@@ -40595,9 +40945,9 @@
         raceClass = "has-text-danger";
       } else if (uniqPicked === 1) {
         let name = isValdi ? races2.junker.name : isSludge ? races2.sludge.name : isUltraSludge ? races2.ultra_sludge.name : isHellspawn ? races2.hellspawn.name : "???";
-        if (race && race !== races2.junker && race !== races2.sludge && race !== races2.ultra_sludge) {
-          raceName = name + ", " + game2.loc(`genelab_genus_${race.genus}`);
-          raceClass = getRaceColor(race);
+        if (race2 && race2 !== races2.junker && race2 !== races2.sludge && race2 !== races2.ultra_sludge) {
+          raceName = name + ", " + game2.loc(`genelab_genus_${race2.genus}`);
+          raceClass = getRaceColor(race2);
         } else {
           raceName = name + ", " + game2.loc(`genelab_genus_${queuedEvolution.userEvolutionGenus}`);
           raceClass = getRaceColor(
@@ -40609,16 +40959,16 @@
       } else if (queuedEvolution.userEvolutionTarget === "auto") {
         raceName = "Auto Achievements";
         raceClass = "has-text-advanced";
-      } else if (race) {
-        raceName = race.name;
-        raceClass = getRaceColor(race);
-        if (race.genus == "hybrid") {
-          if (game2.races[race.id].hybrid.includes(
+      } else if (race2) {
+        raceName = race2.name;
+        raceClass = getRaceColor(race2);
+        if (race2.genus == "hybrid") {
+          if (game2.races[race2.id].hybrid.includes(
             queuedEvolution.userEvolutionGenus
           )) {
             raceName += ", " + game2.loc(`genelab_genus_${queuedEvolution.userEvolutionGenus}`);
           } else {
-            raceName += ", " + game2.loc(`genelab_genus_${game2.races[race.id].hybrid[0]}`);
+            raceName += ", " + game2.loc(`genelab_genus_${game2.races[race2.id].hybrid[0]}`);
           }
         }
       } else {
@@ -47163,10 +47513,10 @@
             label: "Protoplasm",
             hint: "Race is not chosen yet"
           },
-          ...Object.values(races2).map((race) => ({
-            val: race.id,
-            label: race.name,
-            hint: race.desc
+          ...Object.values(races2).map((race2) => ({
+            val: race2.id,
+            label: race2.name,
+            hint: race2.desc
           }))
         ]
       },
@@ -50549,21 +50899,34 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const autoEvolution = createAutoEvolution({
+    const challengeGroups = challenges.map((members) => ({ members }));
+    const evolutionReader = createEvolutionReader({
       getGame: () => game,
-      getState: () => state,
       getSettings: () => settings,
       getSettingsRaw: () => settingsRaw,
+      getState: () => state,
       getRaces: () => races,
-      loadQueuedSettings,
-      GameLog,
-      getChallenges: () => challenges,
       getEvolutions: () => evolutions,
-      getPoly: () => poly,
-      getResources: () => resources,
       getImitations: () => imitations,
-      getAutoUniverseSelection: () => autoUniverseSelection,
-      getAutoPlanetSelection: () => autoPlanetSelection
+      getResources: () => resources,
+      getPoly: () => poly,
+      challengeGroups
+    });
+    const evolutionExecutor = createEvolutionCommandExecutor({
+      getGame: () => game,
+      getState: () => state,
+      getResources: () => resources,
+      getEvolutions: () => evolutions,
+      getImitations: () => imitations,
+      loadQueuedSettings,
+      gameLog: GameLog
+    });
+    const autoEvolution = () => runEvolution({
+      reader: evolutionReader,
+      executor: evolutionExecutor,
+      runUniverseSelection: autoUniverseSelection,
+      runPlanetSelection: autoPlanetSelection,
+      challengeGroups
     });
     const universeSelectionExecutor = createUniverseSelectionCommandExecutor({
       getGame: () => game,

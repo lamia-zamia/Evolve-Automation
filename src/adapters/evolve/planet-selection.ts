@@ -21,9 +21,11 @@ export interface PlanetSelectionReaderDependencies {
   readonly getSettings: () => unknown;
   /**
    * TRANSITIONAL: planet candidates still come from the script-owned
-   * `generatePlanets` replica of the game's `setPlanet`; the evolution slice
-   * owns replacing that surface with a validated game read if upstream ever
-   * exposes one.
+   * `generatePlanets` replica of the game's `setPlanet`. Replacing that replica
+   * with a validated game read is a Milestone 5 / upstream-Vue3 concern if the
+   * game ever exposes the generated list directly; the migrated autoEvolution
+   * decision slice only consumes this reader through `runPlanetSelection` and
+   * does not own the planet-generation surface.
    */
   readonly getGeneratePlanets: () => unknown;
   readonly getStarLevel: () => unknown;

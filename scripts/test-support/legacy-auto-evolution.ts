@@ -1,4 +1,9 @@
-import type { AutomationDependencies } from "../dependencies.ts";
+/**
+ * Frozen copy of the legacy createAutoEvolution factory, kept only as the
+ * parity oracle for the migrated evolution slice tests. Do not wire into
+ * production.
+ */
+import type { AutomationDependencies } from "../../src/automation/dependencies.ts";
 
 type Dependencies = AutomationDependencies<
   | "getGame"
@@ -16,7 +21,7 @@ type Dependencies = AutomationDependencies<
   | "getAutoUniverseSelection"
   | "getAutoPlanetSelection"
 >;
-export function createAutoEvolution({
+export function createLegacyAutoEvolution({
   getGame,
   getState,
   getSettings,
