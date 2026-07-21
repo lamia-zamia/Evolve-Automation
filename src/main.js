@@ -169,6 +169,9 @@ import { createStorageSettingsEvolveAdapter } from "./adapters/evolve/storage-se
 import { createMagicSettingsIntentHandler } from "./application/magic-settings.ts";
 import { createMagicSettingsBrowserAdapter } from "./adapters/browser/magic-settings.ts";
 import { createMagicSettingsEvolveAdapter } from "./adapters/evolve/magic-settings.ts";
+import { createJobSettingsIntentHandler } from "./application/job-settings.ts";
+import { createJobSettingsBrowserAdapter } from "./adapters/browser/job-settings.ts";
+import { createJobSettingsEvolveAdapter } from "./adapters/evolve/job-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -422,7 +425,6 @@ import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createMechSettings } from "./ui/mech-settings.ts";
 import { createEjectorSettings } from "./ui/ejector-settings.ts";
 import { createMarketSettings } from "./ui/market-settings.ts";
-import { createJobSettings } from "./ui/job-settings.ts";
 import { createWeightingSettings } from "./ui/weighting-settings.ts";
 import { createBuildingSettings } from "./ui/building-settings.ts";
 import { createOptionsModalUI } from "./ui/options-modal.ts";
@@ -817,40 +819,58 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildMagicSettings, updateMagicSettingsContent } =
     magicSettingsBrowserAdapter;
 
-  const jobsBoundaryOverrides = {};
-  const getJobsBoundaryDependency = createDependencyResolver(
-    jobsBoundaryOverrides,
-    {
-      $: () => $,
-      BasicJob: () => BasicJob,
-      CraftingJob: () => CraftingJob,
-      JobManager: () => JobManager,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsToggle: () => addSettingsToggle,
-      addTableInput: () => addTableInput,
-      addTableToggle: () => addTableToggle,
-      addToggleCallbacks: () => addToggleCallbacks,
-      buildSettingsSection: () => buildSettingsSection,
-      confirm: () => confirm,
-      document: () => document,
-      jobs: () => jobs,
-      resetCheckbox: () => resetCheckbox,
-      resetJobSettings: () => resetJobSettings,
-      settingsRaw: () => settingsRaw,
-      sorterHelper: () => sorterHelper,
-      updateSettingsFromState: () => updateSettingsFromState,
-    },
-  );
-  const jobsBoundary = createJobSettings({
-    getDependency: getJobsBoundaryDependency,
-    getOverride: (name) => jobsBoundaryOverrides[name],
+  let jobSettingsTestContext;
+  const jobSettingsActions = {
+    buildSettingsSection,
+    addSettingsNumber,
+    addSettingsToggle,
+    addTableInput,
+    addTableToggle,
+    addToggleCallbacks,
+    getSorterHelper: () => sorterHelper,
+    confirm: (...args) => confirm(...args),
+  };
+  const jobSettingsEvolveAdapter = createJobSettingsEvolveAdapter({
+    getBasicJob: () => jobSettingsTestContext?.BasicJob ?? BasicJob,
+    getCraftingJob: () => jobSettingsTestContext?.CraftingJob ?? CraftingJob,
+    getJobManager: () => jobSettingsTestContext?.JobManager ?? JobManager,
+    getJobs: () => jobSettingsTestContext?.jobs ?? jobs,
+    getSettingsRaw: () => jobSettingsTestContext?.settingsRaw ?? settingsRaw,
   });
-  const {
-    buildJobSettings,
-    updateJobSettingsContent,
-    buildJobSettingsToggle,
-    buildJobSettingsInput,
-  } = jobsBoundary;
+  let jobSettingsIntentHandler;
+  const jobSettingsBrowserAdapter = createJobSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    getReadModel: () => jobSettingsEvolveAdapter.readJobSettingsReadModel(),
+    intents: {
+      handle: (intent) => jobSettingsIntentHandler.handle(intent),
+    },
+    getActions: () => jobSettingsTestContext?.actions ?? jobSettingsActions,
+  });
+  jobSettingsIntentHandler = createJobSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (jobSettingsTestContext?.resetJobSettings ?? resetJobSettings)(true),
+      persist: () =>
+        (
+          jobSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+      resetPriorities: () => jobSettingsEvolveAdapter.resetPriorities(),
+      reorderJobs: (jobIds) => jobSettingsEvolveAdapter.reorderJobs(jobIds),
+    },
+    renderSettingsContent: () =>
+      jobSettingsBrowserAdapter.updateJobSettingsContent(),
+    effects: {
+      resetCheckboxes: () =>
+        (jobSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoJobs",
+          "autoCraftsmen",
+        ),
+    },
+  });
+  const { buildJobSettings, updateJobSettingsContent } =
+    jobSettingsBrowserAdapter;
 
   const weightingBoundaryOverrides = {};
   const getWeightingBoundaryDependency = createDependencyResolver(
@@ -5584,6 +5604,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {
+      jobSettings: jobSettingsBrowserAdapter,
+      setJobSettingsTestContext(context) {
+        jobSettingsTestContext = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
       achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
       setAchievementGuardSettingsTestContext(context) {
         achievementGuardSettingsTestActions = context;
@@ -5762,7 +5788,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
       remainingUiBoundaries: {
-        jobs: jobsBoundary,
         weighting: weightingBoundary,
         building: buildingBoundary,
         options: optionsBoundary,
@@ -5780,19 +5805,16 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         if ("game" in context) game = context.game;
         if ("state" in context) state = context.state;
         if ("resources" in context) resources = context.resources;
-        if ("jobs" in context) jobs = context.jobs;
         if ("craftablesList" in context)
           craftablesList = context.craftablesList;
         if ("StorageManager" in context)
           StorageManager = context.StorageManager;
-        if ("JobManager" in context) JobManager = context.JobManager;
         if ("BuildingManager" in context)
           BuildingManager = context.BuildingManager;
         if ("ProjectManager" in context)
           ProjectManager = context.ProjectManager;
         if ("EjectManager" in context) EjectManager = context.EjectManager;
         if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-        Object.assign(jobsBoundaryOverrides, context);
         Object.assign(weightingBoundaryOverrides, context);
         Object.assign(buildingBoundaryOverrides, context);
         Object.assign(optionsBoundaryOverrides, context);

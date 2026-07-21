@@ -19279,6 +19279,343 @@
     return Object.freeze({ readMagicSettingsReadModel });
   }
 
+  // src/application/job-settings.ts
+  function createJobSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-job-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            effects.resetCheckboxes();
+            return;
+          case "reset-job-priorities":
+            writer.resetPriorities();
+            writer.persist();
+            renderSettingsContent();
+            return;
+          case "reorder-jobs":
+            writer.reorderJobs(intent.jobIds);
+            writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/job-settings.ts
+  function freezeBreakpoint(breakpoint) {
+    return Object.freeze({ ...breakpoint });
+  }
+  function freezeRow3(row) {
+    return Object.freeze({
+      ...row,
+      breakpoints: Object.freeze(
+        row.breakpoints.map(freezeBreakpoint)
+      )
+    });
+  }
+  function createJobSettingsReadModel({
+    rows
+  }) {
+    return Object.freeze({
+      sectionId: "job",
+      sectionName: "Job",
+      controls: Object.freeze([
+        Object.freeze({
+          kind: "toggle",
+          settingName: "jobSetDefault",
+          label: "Set default job",
+          hint: "Automatically sets the default job in order of Quarry Worker -> Lumberjack -> Crystal Miner -> Scavenger -> Hunter -> Farmer -> Unemployed"
+        }),
+        Object.freeze({
+          kind: "toggle",
+          settingName: "jobManageServants",
+          label: "Manage Servants",
+          hint: "Automatically manage servants, they will be used as substitute of regular workers, sharing same breakpoints and priorities, i.e. for breakpoint 10 script might assign 8 workers and 2 servants, and such."
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "jobLumberWeighting",
+          label: "Final Lumberjack Weighting",
+          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "jobQuarryWeighting",
+          label: "Final Quarry Worker Weighting",
+          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "jobCrystalWeighting",
+          label: "Final Crystal Miner Weighting",
+          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "jobScavengerWeighting",
+          label: "Final Scavenger Weighting",
+          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "jobRaiderWeighting",
+          label: "Final Raider Weighting",
+          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "jobForagerWeighting",
+          label: "Final Forager Weighting",
+          hint: "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
+        }),
+        Object.freeze({
+          kind: "toggle",
+          settingName: "jobDisableMiners",
+          label: "Disable miners in Andromeda",
+          hint: "Disable Miners and Coal Miners after reaching Andromeda"
+        })
+      ]),
+      rows: Object.freeze(rows.map(freezeRow3))
+    });
+  }
+
+  // src/adapters/browser/job-settings.ts
+  function createJobSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function buildJobSettings2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      actions.buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-job-settings" }),
+        updateJobSettingsContent2
+      );
+    }
+    function updateJobSettingsContent2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const jquery = getJQuery();
+      const currentNode = jquery("#script_jobContent");
+      currentNode.empty().off("*");
+      for (const control of readModel.controls) {
+        renderControl(currentNode, control, actions);
+      }
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:35%">Job</th>
+              <th class="has-text-warning" style="width:17%">1st Pass</th>
+              <th class="has-text-warning" style="width:17%">2nd Pass</th>
+              <th class="has-text-warning" style="width:17%">3rd Pass</th>
+              <th class="has-text-warning" style="width:9%" title="When enabled script will limit amount of assigned workers down to maximum useful quantity, moving idling workers to other jobs">Smart</th>
+              <td style="width:5%"><span id="script_resetJobsPriority" class="script-refresh"></span></td>
+            </tr>
+            <tbody id="script_jobTableBody"></tbody>
+          </table>`);
+      jquery("#script_resetJobsPriority").on("click", () => {
+        if (actions.confirm("Are you sure you wish to reset jobs priority?")) {
+          intents.handle({ type: "reset-job-priorities" });
+        }
+      });
+      const tableBodyNode = jquery("#script_jobTableBody");
+      let newTableBodyText = "";
+      for (const row of readModel.rows) {
+        newTableBodyText += `<tr value="${row.id}" class="script-draggable"><td id="script_${row.id}" style="width:35%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:9%"></td><td style="width:5%"></td></tr>`;
+      }
+      tableBodyNode.append(jquery(newTableBodyText));
+      for (const row of readModel.rows) {
+        let jobElement = jquery(`#script_${row.id}`);
+        renderJobToggle(jobElement, row, actions, jquery);
+        for (const breakpoint of row.breakpoints) {
+          jobElement = jobElement.next();
+          renderBreakpoint(jobElement, breakpoint, actions);
+        }
+        jobElement = jobElement.next();
+        if (row.smartSettingName !== void 0) {
+          actions.addTableToggle(jobElement, row.smartSettingName);
+        }
+        jobElement = jobElement.next();
+        jobElement.append(jquery('<span class="script-lastcolumn"></span>'));
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: actions.getSorterHelper(),
+        update: () => {
+          const sortedIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          intents.handle({ type: "reorder-jobs", jobIds: sortedIds });
+        }
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function renderControl(node, control, actions) {
+      if (control.kind === "number") {
+        actions.addSettingsNumber(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    function renderJobToggle(node, row, actions, jquery) {
+      const settingKey = row.enabledSettingName;
+      node.addClass(
+        `script_bg_${settingKey}${row.hasOverride ? " inactive-row" : ""}`
+      ).append(
+        actions.addToggleCallbacks(
+          jquery(`
+          <label tabindex="0" class="switch" style="margin-top:4px; margin-left:10px;">
+            <input class="script_${settingKey}" type="checkbox"${row.enabled ? " checked" : ""}>
+            <span class="check" style="height:5px; max-width:15px"></span>
+            <span class="has-text-${row.color}" style="margin-left: 20px;">${row.label}</span>
+          </label>`),
+          settingKey
+        )
+      );
+    }
+    function renderBreakpoint(node, breakpoint, actions) {
+      if (breakpoint.kind === "managed") {
+        node.append("<span>Managed</span>");
+      } else if (breakpoint.kind === "weighted") {
+        node.append("<span>Weighted</span>");
+      } else {
+        actions.addTableInput(node, breakpoint.settingName);
+      }
+    }
+    return Object.freeze({ buildJobSettings: buildJobSettings2, updateJobSettingsContent: updateJobSettingsContent2 });
+  }
+
+  // src/adapters/evolve/job-settings.ts
+  function requireString8(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function readPriorityList4(manager) {
+    const priorityList = manager["priorityList"];
+    if (!Array.isArray(priorityList)) {
+      throw new TypeError("JobManager.priorityList must be an array");
+    }
+    return priorityList.map(
+      (job, index) => requireRecord(job, `JobManager.priorityList[${index}]`)
+    );
+  }
+  function readJobId(job, path) {
+    return requireString8(job["_originalId"], `${path}._originalId`);
+  }
+  function readJobRows(manager, jobs2, settingsRaw2, BasicJob2, CraftingJob2) {
+    const overrides = requireRecord(
+      settingsRaw2["overrides"],
+      "settingsRaw.overrides"
+    );
+    return readPriorityList4(manager).map((job, index) => {
+      const path = `JobManager.priorityList[${index}]`;
+      const id = readJobId(job, path);
+      const flags = requireRecord(job["is"], `${path}.is`);
+      const settingName = `job_${id}`;
+      const breakpoint = (number) => {
+        if (job instanceof CraftingJob2) {
+          return { kind: "managed" };
+        }
+        if (number === 3 && Boolean(flags["split"])) {
+          return { kind: "weighted" };
+        }
+        return { kind: "input", settingName: `job_b${number}_${id}` };
+      };
+      const color = job === jobs2["Unemployed"] ? "warning" : job instanceof CraftingJob2 ? "danger" : job instanceof BasicJob2 ? "info" : "advanced";
+      return {
+        id,
+        label: requireString8(job["_originalName"], `${path}._originalName`),
+        color,
+        enabledSettingName: settingName,
+        enabled: Boolean(settingsRaw2[settingName]),
+        hasOverride: Boolean(overrides[settingName]),
+        breakpoints: [breakpoint(1), breakpoint(2), breakpoint(3)],
+        ...flags["smart"] ? { smartSettingName: `job_s_${id}` } : {}
+      };
+    });
+  }
+  function createJobSettingsEvolveAdapter({
+    getBasicJob,
+    getCraftingJob,
+    getJobManager,
+    getJobs,
+    getSettingsRaw
+  }) {
+    function readJobSettingsReadModel() {
+      const BasicJob2 = requireFunction(getBasicJob(), "BasicJob");
+      const CraftingJob2 = requireFunction(getCraftingJob(), "CraftingJob");
+      return createJobSettingsReadModel({
+        rows: readJobRows(
+          requireRecord(getJobManager(), "JobManager"),
+          requireRecord(getJobs(), "jobs"),
+          requireRecord(getSettingsRaw(), "settingsRaw"),
+          BasicJob2,
+          CraftingJob2
+        )
+      });
+    }
+    function resetPriorities() {
+      const manager = requireRecord(getJobManager(), "JobManager");
+      const jobs2 = requireRecord(getJobs(), "jobs");
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      const priorityList = Object.values(jobs2).map(
+        (job, index) => requireRecord(job, `jobs[${index}]`)
+      );
+      manager["priorityList"] = priorityList;
+      for (let index = 0; index < priorityList.length; index += 1) {
+        const id = readJobId(
+          requireRecord(priorityList[index], `JobManager.priorityList[${index}]`),
+          `JobManager.priorityList[${index}]`
+        );
+        settingsRaw2[`job_p_${id}`] = index;
+      }
+    }
+    function reorderJobs(jobIds2) {
+      const manager = requireRecord(getJobManager(), "JobManager");
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      const sortByPriority = requireFunction(
+        manager["sortByPriority"],
+        "JobManager.sortByPriority"
+      );
+      jobIds2.forEach((jobId, index) => {
+        const id = requireString8(jobId, `jobIds[${index}]`);
+        settingsRaw2[`job_p_${id}`] = index;
+      });
+      Reflect.apply(sortByPriority, manager, []);
+    }
+    return Object.freeze({
+      readJobSettingsReadModel,
+      resetPriorities,
+      reorderJobs
+    });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -22904,7 +23241,7 @@
   }
 
   // src/adapters/evolve/hell.ts
-  function requireString8(value, path) {
+  function requireString9(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -23201,7 +23538,7 @@
           ),
           evilTechnology: optionalNumber(tech["evil"], "game.global.tech.evil"),
           grenadier: Boolean(race2["grenadier"]),
-          government: requireString8(
+          government: requireString9(
             govern["type"],
             "game.global.civic.govern.type"
           )
@@ -23792,7 +24129,7 @@
   }
 
   // src/adapters/evolve/battle.ts
-  function requireString9(value, path) {
+  function requireString10(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -23810,7 +24147,7 @@
     return {
       input: Object.freeze({
         governmentId: requireNumber(foreign["id"], `${path}.id`),
-        policy: requireString9(foreign["policy"], `${path}.policy`),
+        policy: requireString10(foreign["policy"], `${path}.policy`),
         released: Boolean(foreign["released"]),
         occupied: Boolean(government["occ"]),
         annexed: Boolean(government["anx"]),
@@ -23925,7 +24262,7 @@
         );
         const hellAvailable = Boolean(manager["_hellVue"]);
         const readHell = autoHell2 && hellAvailable;
-        const protectMode = requireString9(
+        const protectMode = requireString10(
           settings2["foreignProtect"],
           "settings.foreignProtect"
         );
@@ -24199,7 +24536,7 @@
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        const governmentName = requireString9(
+        const governmentName = requireString10(
           dependencies.getGovernmentName(decision2.governmentId),
           `government name ${decision2.governmentId}`
         );
@@ -24225,7 +24562,7 @@
         if (removeBattalion !== null) {
           Reflect.apply(removeBattalion, active.manager, [-deltaBattalion]);
         }
-        const campaignTitle = requireString9(
+        const campaignTitle = requireString10(
           Reflect.apply(getCampaignTitle, active.manager, [decision2.tactic]),
           `campaign title ${decision2.tactic}`
         );
@@ -28172,7 +28509,7 @@
       moneyStorageRequired: 0
     });
   }
-  function requireString10(value, path) {
+  function requireString11(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -28221,7 +28558,7 @@
         );
         if (maxCityGarrison <= 0) return unavailableInput2();
         const state2 = requireRecord(dependencies.getState(), "state");
-        const goal = requireString10(state2["goal"], "state.goal");
+        const goal = requireString11(state2["goal"], "state.goal");
         const saveInflationMoney = Boolean(
           dependencies.shouldSaveInflationMoney()
         );
@@ -30709,7 +31046,7 @@
       }
     });
   }
-  function readPriorityList4(manager) {
+  function readPriorityList5(manager) {
     const list = manager["priorityList"];
     if (!Array.isArray(list)) {
       throw new TypeError("MarketManager.priorityList must be an array");
@@ -30748,7 +31085,7 @@
           manager["setMultiplier"],
           "MarketManager.setMultiplier"
         );
-        const list = readPriorityList4(manager);
+        const list = readPriorityList5(manager);
         const raw = list[decision2.index];
         const resource2 = typeof raw === "object" && raw !== null ? raw : null;
         const actualId = resource2 !== null && typeof resource2["id"] === "string" ? resource2["id"] : null;
@@ -35926,7 +36263,7 @@
     );
     return { foreign, government };
   }
-  function requireString11(value, path) {
+  function requireString12(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -35937,7 +36274,7 @@
     const ids = {};
     for (const [name, rawType] of Object.entries(types)) {
       const type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString11(type["id"], `SpyManager.Types.${name}.id`);
+      ids[name] = requireString12(type["id"], `SpyManager.Types.${name}.id`);
     }
     return Object.freeze(ids);
   }
@@ -36045,7 +36382,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString11(
+        const policy = requireString12(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -36066,7 +36403,7 @@
             "resources.Money.maxQuantity"
           );
         }
-        const governmentName = requireString11(
+        const governmentName = requireString12(
           dependencies.getGovName(governmentId),
           `government name ${governmentId}`
         );
@@ -36112,7 +36449,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString11(
+        const policy = requireString12(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -37262,7 +37599,7 @@
   }
 
   // src/adapters/evolve/jobs.ts
-  function requireString12(value, path) {
+  function requireString13(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
     return value;
@@ -37392,7 +37729,7 @@
           if (count === 0) {
             maximum = 1;
           } else {
-            const id = requireString12(job["id"], "job.id");
+            const id = requireString13(job["id"], "job.id");
             const production = requireNumber(
               call2(
                 resource(resources2, "Food"),
@@ -37744,7 +38081,7 @@
           );
           return Object.freeze({
             token: token2,
-            id: requireString12(job["id"], `jobList[${token2}].id`),
+            id: requireString13(job["id"], `jobList[${token2}].id`),
             kind,
             workers: requireNumber(job["workers"], `jobList[${token2}].workers`),
             servants: requireNumber(
@@ -37861,7 +38198,7 @@
                 `craftingJobs[${index}].resource.craftPreserve`
               ))) {
                 affordability = 0;
-                exclusion = `${requireString12(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
+                exclusion = `${requireString13(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
                 break;
               }
               affordability = Math.min(
@@ -37893,7 +38230,7 @@
                 craftResource["currentQuantity"],
                 `craftingJobs[${index}].resource.currentQuantity`
               );
-              const resourceId3 = requireString12(
+              const resourceId3 = requireString13(
                 craftResource["id"],
                 `craftingJobs[${index}].resource.id`
               );
@@ -37913,7 +38250,7 @@
                 driver = `no building×${craftWeight}`;
               } else {
                 const record = requireRecord(driving, "driving building");
-                driver = `${requireString12(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
+                driver = `${requireString13(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
               }
             }
             return Object.freeze({
@@ -38120,7 +38457,7 @@
           minerToken: token("Miner"),
           population: resourceNumber(resources2, "Population", "currentQuantity"),
           craftDebug: Boolean(debugWindow["craftDebug"]),
-          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString12(state2["lastCraftWinner"], "state.lastCraftWinner"),
+          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString13(state2["lastCraftWinner"], "state.lastCraftWinner"),
           authority,
           jobs: Object.freeze(jobInputs),
           crafting: Object.freeze(craftingInputs),
@@ -38574,7 +38911,7 @@
   }
 
   // src/adapters/evolve/build.ts
-  function requireString13(value, path) {
+  function requireString14(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -38664,7 +39001,7 @@
         const byKey = /* @__PURE__ */ new Map();
         const candidates = entities.map((entity, index) => {
           const path = `buildList[${index}]`;
-          const key = requireString13(entity["_vueBinding"], `${path}._vueBinding`);
+          const key = requireString14(entity["_vueBinding"], `${path}._vueBinding`);
           byKey.set(key, entity);
           const rawCost = requireRecord(entity["cost"], `${path}.cost`);
           const cost = {};
@@ -39058,7 +39395,7 @@
       )
     });
   }
-  function readPriorityList5(manager) {
+  function readPriorityList6(manager) {
     const priorityList = manager["priorityList"];
     if (!Array.isArray(priorityList)) {
       throw new TypeError("MutableTraitManager.priorityList must be an array");
@@ -39118,7 +39455,7 @@
         const currencyId = currencyIdFromGame(dependencies.getGame);
         const views = [];
         let currency = null;
-        const list = readPriorityList5(manager);
+        const list = readPriorityList6(manager);
         for (let index = 0; index < list.length; index++) {
           const path = `MutableTraitManager.priorityList[${index}]`;
           const trait2 = requireRecord(list[index], path);
@@ -39201,7 +39538,7 @@
           dependencies.getMutableTraitManager(),
           "MutableTraitManager"
         );
-        const list = readPriorityList5(manager);
+        const list = readPriorityList6(manager);
         const trait2 = typeof list[decision2.index] === "object" && list[decision2.index] !== null ? list[decision2.index] : null;
         const actualTraitName = trait2 !== null && typeof trait2["traitName"] === "string" ? trait2["traitName"] : null;
         if (trait2 === null || actualTraitName !== decision2.traitName) {
@@ -39440,7 +39777,7 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString14(value, path) {
+  function requireString15(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -39460,7 +39797,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString14(
+    const status2 = requireString15(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -39529,7 +39866,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString14(
+          mode = requireString15(
             settings2["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -39667,7 +40004,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString14(
+            const id = requireString15(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -39826,7 +40163,7 @@
             );
           }
         }
-        const targetLocationName = requireString14(
+        const targetLocationName = requireString15(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -39859,7 +40196,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString14(
+        const shipName = requireString15(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -39870,7 +40207,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString14(
+        const shipClass = requireString15(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -39942,7 +40279,7 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString14(
+          const resourceId3 = requireString15(
             missingResource,
             "missing outer-fleet resource id"
           );
@@ -39950,7 +40287,7 @@
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString14(
+          missingResourceName = requireString15(
             resource2["name"],
             `resources.${resourceId3}.name`
           );
@@ -40380,7 +40717,7 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString15(value, path) {
+  function requireString16(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -40556,7 +40893,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString15(
+          const name = requireString16(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -40584,7 +40921,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString15(
+          chthonianLossMode = requireString16(
             settings2["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -40618,7 +40955,7 @@
               settings2["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString15(
+            alien2LossMode = requireString16(
               settings2["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -40967,7 +41304,7 @@
   }
 
   // src/adapters/evolve/mech.ts
-  function requireString16(value, path) {
+  function requireString17(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -40986,7 +41323,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString16(raw["size"], `${path}.size`),
+        size: requireString17(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -41021,7 +41358,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString16(raw["size"], `${path}.size`),
+      size: requireString17(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -41138,7 +41475,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString16(settings2["mechBuild"], "settings.mechBuild")
+          buildMode: requireString17(settings2["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -41173,7 +41510,7 @@
             call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString16(preferred[0], "preferred mech size");
+          const size = requireString17(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
             call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
@@ -41212,7 +41549,7 @@
           buildings2["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString16(
+        const prestigeType = requireString17(
           settings2["prestigeType"],
           "settings.prestigeType"
         );
@@ -41301,7 +41638,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString16(
+        const configuredScrapMode = requireString17(
           settings2["mechScrap"],
           "settings.mechScrap"
         );
@@ -41330,7 +41667,7 @@
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString16(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString17(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -41515,7 +41852,7 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString16(
+          const description = requireString17(
             call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
@@ -45057,228 +45394,6 @@
       return implementation.apply(this, args);
     }
     return { buildMarketSettings: buildMarketSettings2, updateMarketSettingsContent: updateMarketSettingsContent2 };
-  }
-
-  // src/ui/job-settings.ts
-  function createJobSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const BasicJob2 = liveFunction(() => getDependency("BasicJob"));
-    const CraftingJob2 = liveFunction(() => getDependency("CraftingJob"));
-    const JobManager2 = liveObject4(() => getDependency("JobManager"));
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
-    const addTableToggle2 = liveFunction(() => getDependency("addTableToggle"));
-    const addToggleCallbacks2 = liveFunction(
-      () => getDependency("addToggleCallbacks")
-    );
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const confirm2 = liveFunction(() => getDependency("confirm"));
-    const document2 = liveObject4(() => getDependency("document"));
-    const jobs2 = liveObject4(() => getDependency("jobs"));
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetJobSettings2 = liveFunction(
-      () => getDependency("resetJobSettings")
-    );
-    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
-    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildJobSettingsImpl() {
-      let sectionId = "job";
-      let sectionName = "Job";
-      let resetFunction = function() {
-        resetJobSettings2(true);
-        updateSettingsFromState2();
-        updateJobSettingsContent2();
-        resetCheckbox2("autoJobs", "autoCraftsmen");
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateJobSettingsContent2
-      );
-    }
-    function updateJobSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_jobContent");
-      currentNode.empty().off("*");
-      addSettingsToggle2(
-        currentNode,
-        "jobSetDefault",
-        "Set default job",
-        "Automatically sets the default job in order of Quarry Worker -> Lumberjack -> Crystal Miner -> Scavenger -> Hunter -> Farmer -> Unemployed"
-      );
-      addSettingsToggle2(
-        currentNode,
-        "jobManageServants",
-        "Manage Servants",
-        "Automatically manage servants, they will be used as substitute of regular workers, sharing same breakpoints and priorities, i.e. for breakpoint 10 script might assign 8 workers and 2 servants, and such."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "jobLumberWeighting",
-        "Final Lumberjack Weighting",
-        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "jobQuarryWeighting",
-        "Final Quarry Worker Weighting",
-        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "jobCrystalWeighting",
-        "Final Crystal Miner Weighting",
-        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "jobScavengerWeighting",
-        "Final Scavenger Weighting",
-        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "jobRaiderWeighting",
-        "Final Raider Weighting",
-        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "jobForagerWeighting",
-        "Final Forager Weighting",
-        "AFTER allocating breakpoints this weighting will be used to split weighted jobs"
-      );
-      addSettingsToggle2(
-        currentNode,
-        "jobDisableMiners",
-        "Disable miners in Andromeda",
-        "Disable Miners and Coal Miners after reaching Andromeda"
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:35%">Job</th>
-              <th class="has-text-warning" style="width:17%">1st Pass</th>
-              <th class="has-text-warning" style="width:17%">2nd Pass</th>
-              <th class="has-text-warning" style="width:17%">3rd Pass</th>
-              <th class="has-text-warning" style="width:9%" title="When enabled script will limit amount of assigned workers down to maximum useful quantity, moving idling workers to other jobs">Smart</th>
-              <td style="width:5%"><span id="script_resetJobsPriority" class="script-refresh"></span></td>
-            </tr>
-            <tbody id="script_jobTableBody"></tbody>
-          </table>`);
-      $2("#script_resetJobsPriority").on("click", function() {
-        if (confirm2("Are you sure you wish to reset jobs priority?")) {
-          JobManager2.priorityList = Object.values(jobs2);
-          for (let i = 0; i < JobManager2.priorityList.length; i++) {
-            let id = JobManager2.priorityList[i]._originalId;
-            settingsRaw2["job_p_" + id] = i;
-          }
-          updateSettingsFromState2();
-          updateJobSettingsContent2();
-        }
-      });
-      let tableBodyNode = $2("#script_jobTableBody");
-      let newTableBodyText = "";
-      for (let i = 0; i < JobManager2.priorityList.length; i++) {
-        const job = JobManager2.priorityList[i];
-        newTableBodyText += `<tr value="${job._originalId}" class="script-draggable"><td id="script_${job._originalId}" style="width:35%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:9%"></td><td style="width:5%"></td></tr>`;
-      }
-      tableBodyNode.append($2(newTableBodyText));
-      for (let i = 0; i < JobManager2.priorityList.length; i++) {
-        const job = JobManager2.priorityList[i];
-        let jobElement = $2("#script_" + job._originalId);
-        buildJobSettingsToggle2(jobElement, job);
-        jobElement = jobElement.next();
-        buildJobSettingsInput2(jobElement, job, 1);
-        jobElement = jobElement.next();
-        buildJobSettingsInput2(jobElement, job, 2);
-        jobElement = jobElement.next();
-        buildJobSettingsInput2(jobElement, job, 3);
-        jobElement = jobElement.next();
-        if (job.is.smart) {
-          addTableToggle2(jobElement, "job_s_" + job._originalId);
-        }
-        jobElement = jobElement.next();
-        jobElement.append($2('<span class="script-lastcolumn"></span>'));
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper2,
-        update: function() {
-          let sortedIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < sortedIds.length; i++) {
-            settingsRaw2["job_p_" + sortedIds[i]] = i;
-          }
-          JobManager2.sortByPriority();
-          updateSettingsFromState2();
-        }
-      });
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildJobSettingsToggleImpl(node, job) {
-      let settingKey = "job_" + job._originalId;
-      let color = job === jobs2.Unemployed ? "warning" : job instanceof CraftingJob2 ? "danger" : job instanceof BasicJob2 ? "info" : "advanced";
-      node.addClass(
-        "script_bg_" + settingKey + (settingsRaw2.overrides[settingKey] ? " inactive-row" : "")
-      ).append(
-        addToggleCallbacks2(
-          $2(`
-          <label tabindex="0" class="switch" style="margin-top:4px; margin-left:10px;">
-            <input class="script_${settingKey}" type="checkbox"${settingsRaw2[settingKey] ? " checked" : ""}>
-            <span class="check" style="height:5px; max-width:15px"></span>
-            <span class="has-text-${color}" style="margin-left: 20px;">${job._originalName}</span>
-          </label>`),
-          settingKey
-        )
-      );
-    }
-    function buildJobSettingsInputImpl(node, job, breakpoint) {
-      if (job instanceof CraftingJob2) {
-        node.append(`<span>Managed</span>`);
-      } else if (breakpoint === 3 && job.is.split) {
-        node.append(`<span>Weighted</span>`);
-      } else {
-        addTableInput2(node, `job_b${breakpoint}_${job._originalId}`);
-      }
-    }
-    function buildJobSettings2(...args) {
-      const implementation = getOverride("buildJobSettings") ?? buildJobSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateJobSettingsContent2(...args) {
-      const implementation = getOverride("updateJobSettingsContent") ?? updateJobSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    function buildJobSettingsToggle2(...args) {
-      const implementation = getOverride("buildJobSettingsToggle") ?? buildJobSettingsToggleImpl;
-      return implementation.apply(this, args);
-    }
-    function buildJobSettingsInput2(...args) {
-      const implementation = getOverride("buildJobSettingsInput") ?? buildJobSettingsInputImpl;
-      return implementation.apply(this, args);
-    }
-    return {
-      buildJobSettings: buildJobSettings2,
-      updateJobSettingsContent: updateJobSettingsContent2,
-      buildJobSettingsToggle: buildJobSettingsToggle2,
-      buildJobSettingsInput: buildJobSettingsInput2
-    };
   }
 
   // src/ui/weighting-settings.ts
@@ -50412,40 +50527,50 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       }
     });
     const { buildMagicSettings, updateMagicSettingsContent } = magicSettingsBrowserAdapter;
-    const jobsBoundaryOverrides = {};
-    const getJobsBoundaryDependency = createDependencyResolver(
-      jobsBoundaryOverrides,
-      {
-        $: () => $,
-        BasicJob: () => BasicJob,
-        CraftingJob: () => CraftingJob,
-        JobManager: () => JobManager,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsToggle: () => addSettingsToggle,
-        addTableInput: () => addTableInput,
-        addTableToggle: () => addTableToggle,
-        addToggleCallbacks: () => addToggleCallbacks,
-        buildSettingsSection: () => buildSettingsSection,
-        confirm: () => confirm,
-        document: () => document,
-        jobs: () => jobs,
-        resetCheckbox: () => resetCheckbox,
-        resetJobSettings: () => resetJobSettings,
-        settingsRaw: () => settingsRaw,
-        sorterHelper: () => sorterHelper,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const jobsBoundary = createJobSettings({
-      getDependency: getJobsBoundaryDependency,
-      getOverride: (name) => jobsBoundaryOverrides[name]
+    let jobSettingsTestContext;
+    const jobSettingsActions = {
+      buildSettingsSection,
+      addSettingsNumber,
+      addSettingsToggle,
+      addTableInput,
+      addTableToggle,
+      addToggleCallbacks,
+      getSorterHelper: () => sorterHelper,
+      confirm: (...args) => confirm(...args)
+    };
+    const jobSettingsEvolveAdapter = createJobSettingsEvolveAdapter({
+      getBasicJob: () => jobSettingsTestContext?.BasicJob ?? BasicJob,
+      getCraftingJob: () => jobSettingsTestContext?.CraftingJob ?? CraftingJob,
+      getJobManager: () => jobSettingsTestContext?.JobManager ?? JobManager,
+      getJobs: () => jobSettingsTestContext?.jobs ?? jobs,
+      getSettingsRaw: () => jobSettingsTestContext?.settingsRaw ?? settingsRaw
     });
-    const {
-      buildJobSettings,
-      updateJobSettingsContent,
-      buildJobSettingsToggle,
-      buildJobSettingsInput
-    } = jobsBoundary;
+    let jobSettingsIntentHandler;
+    const jobSettingsBrowserAdapter = createJobSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getReadModel: () => jobSettingsEvolveAdapter.readJobSettingsReadModel(),
+      intents: {
+        handle: (intent) => jobSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => jobSettingsTestContext?.actions ?? jobSettingsActions
+    });
+    jobSettingsIntentHandler = createJobSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (jobSettingsTestContext?.resetJobSettings ?? resetJobSettings)(true),
+        persist: () => (jobSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)(),
+        resetPriorities: () => jobSettingsEvolveAdapter.resetPriorities(),
+        reorderJobs: (jobIds2) => jobSettingsEvolveAdapter.reorderJobs(jobIds2)
+      },
+      renderSettingsContent: () => jobSettingsBrowserAdapter.updateJobSettingsContent(),
+      effects: {
+        resetCheckboxes: () => (jobSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoJobs",
+          "autoCraftsmen"
+        )
+      }
+    });
+    const { buildJobSettings, updateJobSettingsContent } = jobSettingsBrowserAdapter;
     const weightingBoundaryOverrides = {};
     const getWeightingBoundaryDependency = createDependencyResolver(
       weightingBoundaryOverrides,
@@ -54660,6 +54785,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
+        jobSettings: jobSettingsBrowserAdapter,
+        setJobSettingsTestContext(context) {
+          jobSettingsTestContext = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
         achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
         setAchievementGuardSettingsTestContext(context) {
           achievementGuardSettingsTestActions = context;
@@ -54827,7 +54958,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         remainingUiBoundaries: {
-          jobs: jobsBoundary,
           weighting: weightingBoundary,
           building: buildingBoundary,
           options: optionsBoundary,
@@ -54845,19 +54975,16 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           if ("game" in context) game = context.game;
           if ("state" in context) state = context.state;
           if ("resources" in context) resources = context.resources;
-          if ("jobs" in context) jobs = context.jobs;
           if ("craftablesList" in context)
             craftablesList = context.craftablesList;
           if ("StorageManager" in context)
             StorageManager = context.StorageManager;
-          if ("JobManager" in context) JobManager = context.JobManager;
           if ("BuildingManager" in context)
             BuildingManager = context.BuildingManager;
           if ("ProjectManager" in context)
             ProjectManager = context.ProjectManager;
           if ("EjectManager" in context) EjectManager = context.EjectManager;
           if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-          Object.assign(jobsBoundaryOverrides, context);
           Object.assign(weightingBoundaryOverrides, context);
           Object.assign(buildingBoundaryOverrides, context);
           Object.assign(optionsBoundaryOverrides, context);
