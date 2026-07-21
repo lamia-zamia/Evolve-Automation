@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 
-import { createGeneralSettings } from "../src/ui/general-settings.ts";
 import { createPrestigeSettings } from "../src/ui/prestige-settings.ts";
 import { createGovernmentSettings } from "../src/ui/government-settings.ts";
 import { createEvolutionSettings } from "../src/ui/evolution-settings.ts";
@@ -15,16 +14,6 @@ import { createEjectorSettings } from "../src/ui/ejector-settings.ts";
 import { createMarketSettings } from "../src/ui/market-settings.ts";
 
 const specs = [
-  [
-    "general",
-    createGeneralSettings,
-    "buildGeneralSettings",
-    "updateGeneralSettingsContent",
-    "general",
-    "General",
-    false,
-    ["checkbox:masterScriptToggle|showSettings|autoPrestige"],
-  ],
   [
     "prestige",
     createPrestigeSettings,
@@ -154,7 +143,6 @@ const specs = [
 const resetName = (name) =>
   `reset${name[0].toUpperCase() + name.slice(1)}Settings`;
 
-let generalFixture;
 for (const [
   name,
   factory,
@@ -206,69 +194,6 @@ for (const [
     "update:",
     ...cleanup,
   ]);
-
-  if (name === "general") {
-    generalFixture = { boundary, context, overrides };
-  }
 }
 
-const renderTrace = [];
-delete generalFixture.overrides.updateGeneralSettingsContent;
-generalFixture.context.document = {
-  documentElement: { scrollTop: 0 },
-  body: { scrollTop: 19 },
-};
-generalFixture.context.$ = (selector) => ({
-  empty() {
-    renderTrace.push(`first:empty:${selector}`);
-    return this;
-  },
-  off(events) {
-    renderTrace.push(`first:off:${events}`);
-    return this;
-  },
-});
-for (const helper of [
-  "addSettingsHeader1",
-  "addSettingsNumber",
-  "addSettingsSelect",
-  "addSettingsString",
-  "addSettingsToggle",
-]) {
-  generalFixture.context[helper] = (_node, key) =>
-    renderTrace.push(`first:${helper}:${key}`);
-}
-generalFixture.boundary.updateGeneralSettingsContent();
-assert.ok(renderTrace.includes("first:addSettingsNumber:tickRate"));
-assert.equal(generalFixture.context.document.documentElement.scrollTop, 19);
-
-renderTrace.length = 0;
-generalFixture.context.document = {
-  documentElement: { scrollTop: 27 },
-  body: { scrollTop: 3 },
-};
-generalFixture.context.$ = (selector) => ({
-  empty() {
-    renderTrace.push(`second:empty:${selector}`);
-    return this;
-  },
-  off(events) {
-    renderTrace.push(`second:off:${events}`);
-    return this;
-  },
-});
-for (const helper of [
-  "addSettingsHeader1",
-  "addSettingsNumber",
-  "addSettingsSelect",
-  "addSettingsString",
-  "addSettingsToggle",
-]) {
-  generalFixture.context[helper] = (_node, key) =>
-    renderTrace.push(`second:${helper}:${key}`);
-}
-generalFixture.boundary.updateGeneralSettingsContent();
-assert.ok(renderTrace.every((entry) => entry.startsWith("second:")));
-assert.equal(generalFixture.context.document.body.scrollTop, 27);
-
-console.log("13 settings-boundary module tests passed");
+console.log("12 settings-boundary module tests passed");

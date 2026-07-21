@@ -76,7 +76,6 @@ vm.runInNewContext(source, sandbox, {
 
 const boundaries = hooks.settingsBoundaries;
 assert.deepEqual(Object.keys(boundaries), [
-  "general",
   "prestige",
   "government",
   "evolution",
@@ -176,7 +175,6 @@ assert.deepEqual(
     label,
   })),
   [
-    { kind: "primary", id: "general", label: "General" },
     { kind: "secondary", prefix: "", id: "prestige", label: "Prestige" },
     {
       kind: "secondary",
@@ -216,9 +214,6 @@ const behavioralTrace = trace.filter(
     entry.startsWith("remove:"),
 );
 assert.deepEqual(behavioralTrace, [
-  "reset:general:true",
-  "update:general:",
-  "checkbox:masterScriptToggle|showSettings|autoPrestige",
   "reset:prestige:true",
   "update:prestige:",
   "reset:government:true",
@@ -259,5 +254,5 @@ assert.deepEqual(behavioralTrace, [
   "remove:marketToggles",
 ]);
 
-assert.ok(storageTrace.length >= 13);
-console.log("13 settings-boundary bundled characterization tests passed");
+assert.ok(storageTrace.length >= 12);
+console.log("12 settings-boundary bundled characterization tests passed");

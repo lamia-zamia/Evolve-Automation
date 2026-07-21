@@ -146,6 +146,8 @@ import { createAchievementGuardSettingsIntentHandler } from "./application/achie
 import { createAchievementGuardSettingsBrowserAdapter } from "./adapters/browser/achievement-guard-settings.ts";
 import { createAuthoritySettingsIntentHandler } from "./application/authority-settings.ts";
 import { createAuthoritySettingsBrowserAdapter } from "./adapters/browser/authority-settings.ts";
+import { createGeneralSettingsIntentHandler } from "./application/general-settings.ts";
+import { createGeneralSettingsBrowserAdapter } from "./adapters/browser/general-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -390,7 +392,6 @@ import { runMechAutomation } from "./application/mech.ts";
 import { createMechAdapter } from "./adapters/evolve/mech.ts";
 import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
-import { createGeneralSettings } from "./ui/general-settings.ts";
 import { createPrestigeSettings } from "./ui/prestige-settings.ts";
 import { createGovernmentSettings } from "./ui/government-settings.ts";
 import { createEvolutionSettings } from "./ui/evolution-settings.ts";
@@ -1052,29 +1053,50 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   });
   const { createSupplyToggles, removeSupplyToggles } = supplyTogglesBoundary;
 
-  const generalSettingsOverrides = {};
-  const getGeneralSettingsDependency = createDependencyResolver(
-    generalSettingsOverrides,
-    {
-      $: () => $,
-      addSettingsHeader1: () => addSettingsHeader1,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsSelect: () => addSettingsSelect,
-      addSettingsString: () => addSettingsString,
-      addSettingsToggle: () => addSettingsToggle,
-      buildSettingsSection: () => buildSettingsSection,
-      document: () => document,
-      resetCheckbox: () => resetCheckbox,
-      resetGeneralSettings: () => resetGeneralSettings,
-      updateSettingsFromState: () => updateSettingsFromState,
+  let generalSettingsTestActions;
+  const generalSettingsActions = {
+    buildSettingsSection,
+    addSettingsHeader1,
+    addSettingsNumber,
+    addSettingsSelect,
+    addSettingsString,
+    addSettingsToggle,
+  };
+  let generalSettingsIntentHandler;
+  const generalSettingsBrowserAdapter = createGeneralSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    intents: {
+      handle: (intent) => generalSettingsIntentHandler.handle(intent),
     },
-  );
-  const generalSettings = createGeneralSettings({
-    getDependency: getGeneralSettingsDependency,
-    getOverride: (name) => generalSettingsOverrides[name],
+    getActions: () => generalSettingsTestActions ?? generalSettingsActions,
+  });
+  generalSettingsIntentHandler = createGeneralSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          generalSettingsTestActions?.resetGeneralSettings ??
+          resetGeneralSettings
+        )(true),
+      persist: () =>
+        (
+          generalSettingsTestActions?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    },
+    renderSettingsContent: () =>
+      generalSettingsBrowserAdapter.updateGeneralSettingsContent(),
+    effects: {
+      resetCheckboxes: () =>
+        (generalSettingsTestActions?.resetCheckbox ?? resetCheckbox)(
+          "masterScriptToggle",
+          "showSettings",
+          "autoPrestige",
+        ),
+    },
   });
   const { buildGeneralSettings, updateGeneralSettingsContent } =
-    generalSettings;
+    generalSettingsBrowserAdapter;
 
   let achievementGuardSettingsTestActions;
   const achievementGuardSettingsActions = {
@@ -5305,7 +5327,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
       settingsBoundaries: {
-        general: generalSettings,
         prestige: prestigeSettings,
         government: governmentSettings,
         evolution: evolutionSettings,
@@ -5320,7 +5341,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         market: marketSettings,
       },
       setSettingsBoundariesTestContext(context) {
-        Object.assign(generalSettingsOverrides, context);
         Object.assign(prestigeSettingsOverrides, context);
         Object.assign(governmentSettingsOverrides, context);
         Object.assign(evolutionSettingsOverrides, context);
@@ -5351,6 +5371,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       authoritySettings: authoritySettingsBrowserAdapter,
       setAuthoritySettingsTestContext(context) {
         authoritySettingsTestActions = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      generalSettings: generalSettingsBrowserAdapter,
+      setGeneralSettingsTestContext(context) {
+        generalSettingsTestActions = context;
       },
     });
   }

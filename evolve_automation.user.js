@@ -17599,6 +17599,216 @@
     });
   }
 
+  // src/application/general-settings.ts
+  function createGeneralSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-general-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            effects.resetCheckboxes();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/general-settings.ts
+  var priorityOptions = Object.freeze([
+    Object.freeze({ val: "ignore", label: "Ignore", hint: "Does nothing" }),
+    Object.freeze({
+      val: "save",
+      label: "Save",
+      hint: "Missing resources preserved from using."
+    }),
+    Object.freeze({
+      val: "req",
+      label: "Request",
+      hint: "Production and buying of missing resources will be prioritized."
+    }),
+    Object.freeze({
+      val: "savereq",
+      label: "Request & Save",
+      hint: "Missing resources will be prioritized, and preserved from using."
+    })
+  ]);
+  var generalSettingsReadModel = Object.freeze({
+    sectionId: "general",
+    sectionName: "General",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "number",
+        settingName: "tickRate",
+        label: "Script tick rate",
+        hint: "Script runs once per this amount of game ticks. Game tick every 250ms, thus with rate 4 script will run once per second. You can set it lower to make script act faster, or increase it if you have performance issues. Tick rate should be a positive integer."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "tickSchedule",
+        label: "Schedule script ticks",
+        hint: "When enabled script will schedule its ticks to run after game ticks, instead of executing both at once. Splitting of long task allows browser to update UI in between of game and script ticks, making game run smoother, but less throttling-proof - that can make tick rate float inconsistently."
+      }),
+      Object.freeze({ kind: "header", label: "Prioritization" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "useDemanded",
+        label: "Allow using prioritized resources for crafting",
+        hint: "When disabled script won't make craftables out of prioritized resources in foundry and factory."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "researchRequest",
+        label: "Prioritize resources for Pre-MAD researches",
+        hint: "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "researchRequestSpace",
+        label: "Prioritize resources for Space+ researches",
+        hint: "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "missionRequest",
+        label: "Prioritize resources for missions",
+        hint: "Readjust trade routes and production to resources required for unlocked and affordable missions. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeQueue",
+        label: "Queue",
+        hint: "Alter script behaviour to speed up queued items, prioritizing missing resources.",
+        options: priorityOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeTriggers",
+        label: "Triggers",
+        hint: "Alter script behaviour to speed up triggers, prioritizing missing resources.",
+        options: priorityOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeUnify",
+        label: "Unification",
+        hint: "Alter script behaviour to speed up unification, prioritizing money required to purchase foreign cities.",
+        options: priorityOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "prioritizeOuterFleet",
+        label: "Ship Yard Blueprint (The True Path)",
+        hint: "Alter script behaviour to assist fleet building, prioritizing resources required for current design of ship.",
+        options: priorityOptions
+      }),
+      Object.freeze({ kind: "header", label: "Auto clicker" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "buildingAlwaysClick",
+        label: "Always autoclick resources",
+        hint: "By default script will click only during early stage of autoBuild, to bootstrap production. With this toggled on it will continue clicking forever"
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "buildingClickPerTick",
+        label: "Maximum clicks per tick",
+        hint: "Number of clicks performed at once, each script tick. Will not ever click more than needed to fill storage."
+      }),
+      Object.freeze({ kind: "header", label: "Misc" }),
+      Object.freeze({
+        kind: "string",
+        settingName: "scriptSettingsExportFilename",
+        label: "Export Filename",
+        hint: "Configures the filename used when using the 'Script Settings as File' button. This is useful if you keep multiple different profiles around."
+      })
+    ])
+  });
+  function getGeneralSettingsReadModel() {
+    return generalSettingsReadModel;
+  }
+
+  // src/adapters/browser/general-settings.ts
+  function createGeneralSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    getActions
+  }) {
+    const readModel = getGeneralSettingsReadModel();
+    function renderControl(node, control, actions) {
+      switch (control.kind) {
+        case "header":
+          actions.addSettingsHeader1(node, control.label);
+          return;
+        case "number":
+          actions.addSettingsNumber(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+        case "select":
+          actions.addSettingsSelect(
+            node,
+            control.settingName,
+            control.label,
+            control.hint,
+            control.options
+          );
+          return;
+        case "string":
+          actions.addSettingsString(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+        case "toggle":
+          actions.addSettingsToggle(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+      }
+    }
+    function buildGeneralSettings2() {
+      const actions = getActions();
+      actions.buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-general-settings" });
+        },
+        updateGeneralSettingsContent2
+      );
+    }
+    function updateGeneralSettingsContent2() {
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
+      currentNode.empty().off("*");
+      for (const control of readModel.controls) {
+        renderControl(currentNode, control, actions);
+      }
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    return Object.freeze({
+      buildGeneralSettings: buildGeneralSettings2,
+      updateGeneralSettingsContent: updateGeneralSettingsContent2
+    });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -40917,174 +41127,6 @@
     });
   }
 
-  // src/ui/general-settings.ts
-  function createGeneralSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const addSettingsHeader12 = liveFunction(
-      () => getDependency("addSettingsHeader1")
-    );
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsSelect2 = liveFunction(
-      () => getDependency("addSettingsSelect")
-    );
-    const addSettingsString2 = liveFunction(
-      () => getDependency("addSettingsString")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const document2 = liveObject4(() => getDependency("document"));
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetGeneralSettings2 = liveFunction(
-      () => getDependency("resetGeneralSettings")
-    );
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildGeneralSettingsImpl() {
-      let sectionId = "general";
-      let sectionName = "General";
-      let resetFunction = function() {
-        resetGeneralSettings2(true);
-        updateSettingsFromState2();
-        updateGeneralSettingsContent2();
-        resetCheckbox2("masterScriptToggle", "showSettings", "autoPrestige");
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateGeneralSettingsContent2
-      );
-    }
-    function updateGeneralSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_generalContent");
-      currentNode.empty().off("*");
-      addSettingsNumber2(
-        currentNode,
-        "tickRate",
-        "Script tick rate",
-        "Script runs once per this amount of game ticks. Game tick every 250ms, thus with rate 4 script will run once per second. You can set it lower to make script act faster, or increase it if you have performance issues. Tick rate should be a positive integer."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "tickSchedule",
-        "Schedule script ticks",
-        "When enabled script will schedule its ticks to run after game ticks, instead of executing both at once. Splitting of long task allows browser to update UI in between of game and script ticks, making game run smoother, but less throttling-proof - that can make tick rate float inconsistently."
-      );
-      addSettingsHeader12(currentNode, "Prioritization");
-      let priority = [
-        { val: "ignore", label: "Ignore", hint: "Does nothing" },
-        {
-          val: "save",
-          label: "Save",
-          hint: "Missing resources preserved from using."
-        },
-        {
-          val: "req",
-          label: "Request",
-          hint: "Production and buying of missing resources will be prioritized."
-        },
-        {
-          val: "savereq",
-          label: "Request & Save",
-          hint: "Missing resources will be prioritized, and preserved from using."
-        }
-      ];
-      addSettingsToggle2(
-        currentNode,
-        "useDemanded",
-        "Allow using prioritized resources for crafting",
-        "When disabled script won't make craftables out of prioritized resources in foundry and factory."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "researchRequest",
-        "Prioritize resources for Pre-MAD researches",
-        "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "researchRequestSpace",
-        "Prioritize resources for Space+ researches",
-        "Readjust trade routes and production to resources required for unlocked and affordable researches. Works only with no active triggers, or queue. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "missionRequest",
-        "Prioritize resources for missions",
-        "Readjust trade routes and production to resources required for unlocked and affordable missions. Missing resources will have 100 priority where applicable(autoMarket, autoGalaxyMarket, autoFactory, autoMiningDroid), or just 'top priority' where not(autoTax, autoCraft, autoCraftsmen, autoQuarry, autoMine, autoExtractor, autoSmelter)."
-      );
-      addSettingsSelect2(
-        currentNode,
-        "prioritizeQueue",
-        "Queue",
-        "Alter script behaviour to speed up queued items, prioritizing missing resources.",
-        priority
-      );
-      addSettingsSelect2(
-        currentNode,
-        "prioritizeTriggers",
-        "Triggers",
-        "Alter script behaviour to speed up triggers, prioritizing missing resources.",
-        priority
-      );
-      addSettingsSelect2(
-        currentNode,
-        "prioritizeUnify",
-        "Unification",
-        "Alter script behaviour to speed up unification, prioritizing money required to purchase foreign cities.",
-        priority
-      );
-      addSettingsSelect2(
-        currentNode,
-        "prioritizeOuterFleet",
-        "Ship Yard Blueprint (The True Path)",
-        "Alter script behaviour to assist fleet building, prioritizing resources required for current design of ship.",
-        priority
-      );
-      addSettingsHeader12(currentNode, "Auto clicker");
-      addSettingsToggle2(
-        currentNode,
-        "buildingAlwaysClick",
-        "Always autoclick resources",
-        "By default script will click only during early stage of autoBuild, to bootstrap production. With this toggled on it will continue clicking forever"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "buildingClickPerTick",
-        "Maximum clicks per tick",
-        "Number of clicks performed at once, each script tick. Will not ever click more than needed to fill storage."
-      );
-      addSettingsHeader12(currentNode, "Misc");
-      addSettingsString2(
-        currentNode,
-        "scriptSettingsExportFilename",
-        "Export Filename",
-        "Configures the filename used when using the 'Script Settings as File' button. This is useful if you keep multiple different profiles around."
-      );
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildGeneralSettings2(...args) {
-      const implementation = getOverride("buildGeneralSettings") ?? buildGeneralSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateGeneralSettingsContent2(...args) {
-      const implementation = getOverride("updateGeneralSettingsContent") ?? updateGeneralSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildGeneralSettings: buildGeneralSettings2, updateGeneralSettingsContent: updateGeneralSettingsContent2 };
-  }
-
   // src/ui/prestige-settings.ts
   function createPrestigeSettings({
     getDependency,
@@ -50026,28 +50068,39 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getOverride: (name) => supplyTogglesBoundaryOverrides[name]
     });
     const { createSupplyToggles, removeSupplyToggles } = supplyTogglesBoundary;
-    const generalSettingsOverrides = {};
-    const getGeneralSettingsDependency = createDependencyResolver(
-      generalSettingsOverrides,
-      {
-        $: () => $,
-        addSettingsHeader1: () => addSettingsHeader1,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsSelect: () => addSettingsSelect,
-        addSettingsString: () => addSettingsString,
-        addSettingsToggle: () => addSettingsToggle,
-        buildSettingsSection: () => buildSettingsSection,
-        document: () => document,
-        resetCheckbox: () => resetCheckbox,
-        resetGeneralSettings: () => resetGeneralSettings,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const generalSettings = createGeneralSettings({
-      getDependency: getGeneralSettingsDependency,
-      getOverride: (name) => generalSettingsOverrides[name]
+    let generalSettingsTestActions;
+    const generalSettingsActions = {
+      buildSettingsSection,
+      addSettingsHeader1,
+      addSettingsNumber,
+      addSettingsSelect,
+      addSettingsString,
+      addSettingsToggle
+    };
+    let generalSettingsIntentHandler;
+    const generalSettingsBrowserAdapter = createGeneralSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      intents: {
+        handle: (intent) => generalSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => generalSettingsTestActions ?? generalSettingsActions
     });
-    const { buildGeneralSettings, updateGeneralSettingsContent } = generalSettings;
+    generalSettingsIntentHandler = createGeneralSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (generalSettingsTestActions?.resetGeneralSettings ?? resetGeneralSettings)(true),
+        persist: () => (generalSettingsTestActions?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      renderSettingsContent: () => generalSettingsBrowserAdapter.updateGeneralSettingsContent(),
+      effects: {
+        resetCheckboxes: () => (generalSettingsTestActions?.resetCheckbox ?? resetCheckbox)(
+          "masterScriptToggle",
+          "showSettings",
+          "autoPrestige"
+        )
+      }
+    });
+    const { buildGeneralSettings, updateGeneralSettingsContent } = generalSettingsBrowserAdapter;
     let achievementGuardSettingsTestActions;
     const achievementGuardSettingsActions = {
       buildSettingsSection,
@@ -53850,7 +53903,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         settingsBoundaries: {
-          general: generalSettings,
           prestige: prestigeSettings,
           government: governmentSettings,
           evolution: evolutionSettings,
@@ -53865,7 +53917,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           market: marketSettings
         },
         setSettingsBoundariesTestContext(context) {
-          Object.assign(generalSettingsOverrides, context);
           Object.assign(prestigeSettingsOverrides, context);
           Object.assign(governmentSettingsOverrides, context);
           Object.assign(evolutionSettingsOverrides, context);
@@ -53896,6 +53947,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         authoritySettings: authoritySettingsBrowserAdapter,
         setAuthoritySettingsTestContext(context) {
           authoritySettingsTestActions = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        generalSettings: generalSettingsBrowserAdapter,
+        setGeneralSettingsTestContext(context) {
+          generalSettingsTestActions = context;
         }
       });
     }
