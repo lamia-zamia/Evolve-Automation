@@ -45,7 +45,11 @@ import { createFastEvaluator } from "./utils/fast-evaluator.ts";
 import { createNumberFormatting } from "./formatting/numbers.ts";
 import { createSettingsState } from "./settings/state.ts";
 import { createResetSettings } from "./settings/reset-settings.ts";
-import { createSettingsMigration } from "./settings/migration.ts";
+import {
+  applySettings as applySettingsRecord,
+  migrateSetting as migrateSettingRecord,
+  migrateSettingsRecord,
+} from "./domain/settings-migration.ts";
 import { createOverrideEvaluation } from "./settings/override-evaluation.ts";
 import { createQueuedSettings } from "./settings/queued-settings.ts";
 import { createSettingsTransfer } from "./settings/transfer.ts";
@@ -2619,60 +2623,74 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const {
-    updateStateFromSettings,
-    updateSettingsFromState,
-    applySettings,
-    migrateSetting,
-  } = createSettingsState({
-    getSettingsRaw: () => settingsRaw,
-    getTriggerManager: () => TriggerManager,
-    settingsStore,
-  });
+  const { updateStateFromSettings, updateSettingsFromState } =
+    createSettingsState({
+      getSettingsRaw: () => settingsRaw,
+      getTriggerManager: () => TriggerManager,
+      settingsStore,
+    });
 
-  const { updateStandAloneSettings } = createSettingsMigration({
-    getSettingsRaw: () => settingsRaw,
-    getSettings: () => settings,
-    settingsSections,
-    applySettings,
-    migrateSetting,
-    getResetSettings: () => ({
-      resetEvolutionSettings,
-      resetWarSettings,
-      resetHellSettings,
-      resetMechSettings,
-      resetFleetSettings,
-      resetGovernmentSettings,
-      resetAuthoritySettings,
-      resetBuildingSettings,
-      resetWeightingSettings,
-      resetMarketSettings,
-      resetResearchSettings,
-      resetProjectSettings,
-      resetJobSettings,
-      resetMagicSettings,
-      resetProductionSettings,
-      resetStorageSettings,
-      resetGeneralSettings,
-      resetInterfaceSettings,
-      resetStateLogSettings,
-      resetAchievementGuardSettings,
-      resetChallengeHelperSettings,
-      resetPrestigeSettings,
-      resetEjectorSettings,
-      resetPlanetSettings,
-      resetLoggingSettings,
-      resetTriggerSettings,
-      resetMinorTraitSettings,
-      resetMutableTraitSettings,
-    }),
-    getTechIds: () => techIds,
-    getMarketManager: () => MarketManager,
-    getResources: () => resources,
-    getProjects: () => projects,
-    getBuildings: () => buildings,
-    getCrafter: () => crafter,
-  });
+  // Pure record primitives bound to the live settingsRaw. reset-settings consumes
+  // `applySettings` through its injected dependency, so binding here keeps that file
+  // untouched while the schema/migration logic itself stays pure.
+  const applySettings = (def, reset) =>
+    applySettingsRecord(settingsRaw, def, reset);
+  const migrateSetting = (oldSetting, newSetting, mapCb, keepOldValue) =>
+    migrateSettingRecord(
+      settingsRaw,
+      oldSetting,
+      newSetting,
+      mapCb,
+      keepOldValue,
+    );
+
+  const updateStandAloneSettings = () =>
+    migrateSettingsRecord(settingsRaw, {
+      settingsSections,
+      // The 28 default-reset builders, in their load-bearing order.
+      defaultResets: [
+        resetEvolutionSettings,
+        resetWarSettings,
+        resetHellSettings,
+        resetMechSettings,
+        resetFleetSettings,
+        resetGovernmentSettings,
+        resetAuthoritySettings,
+        resetBuildingSettings,
+        resetWeightingSettings,
+        resetMarketSettings,
+        resetResearchSettings,
+        resetProjectSettings,
+        resetJobSettings,
+        resetMagicSettings,
+        resetProductionSettings,
+        resetStorageSettings,
+        resetGeneralSettings,
+        resetInterfaceSettings,
+        resetStateLogSettings,
+        resetAchievementGuardSettings,
+        resetChallengeHelperSettings,
+        resetPrestigeSettings,
+        resetEjectorSettings,
+        resetPlanetSettings,
+        resetLoggingSettings,
+        resetTriggerSettings,
+        resetMinorTraitSettings,
+        resetMutableTraitSettings,
+      ],
+      prestigeAscensionSkipCustom: Boolean(
+        settings.prestigeAscensionSkipCustom,
+      ),
+      techIds,
+      marketPriorityIds: MarketManager.priorityList.map((res) => res.id),
+      resourceIds: Object.values(resources).map((res) => res.id),
+      projectIds: Object.values(projects).map((project) => project.id),
+      buildings: Object.values(buildings).map((building) => ({
+        vueBinding: building._vueBinding,
+        switchable: building.isSwitchable(),
+      })),
+      crafterOriginalIds: Object.values(crafter).map((job) => job._originalId),
+    });
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {

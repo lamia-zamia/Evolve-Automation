@@ -1,3 +1,7 @@
+// Verbatim copy of the legacy getter-bag settings migration (src/settings/migration.ts +
+// the applySettings/migrateSetting primitives from src/settings/state.ts) preserved as the
+// dual-run parity oracle for the pure src/domain/settings-migration.ts port.
+
 interface SettingOverride extends Record<string, unknown> {
   ret: unknown;
 }
@@ -16,51 +20,72 @@ type SettingsRecord = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } & Record<string, any>;
 
-type ResetFunction = (reset: boolean) => void;
+function makePrimitives(getSettingsRaw: () => SettingsRecord) {
+  function applySettings(def: Record<string, unknown>, reset: boolean) {
+    const settingsRaw = getSettingsRaw();
+    if (reset) {
+      for (const key in def) {
+        delete settingsRaw.overrides[key];
+      }
+      Object.assign(settingsRaw, def);
+    } else {
+      for (const key in def) {
+        if (!Object.prototype.hasOwnProperty.call(settingsRaw, key)) {
+          settingsRaw[key] = def[key];
+        } else {
+          if (
+            typeof settingsRaw[key] === "string" &&
+            typeof def[key] === "number"
+          ) {
+            settingsRaw[key] = Number(settingsRaw[key]);
+          }
+          if (
+            typeof settingsRaw[key] === "number" &&
+            typeof def[key] === "string"
+          ) {
+            settingsRaw[key] = String(settingsRaw[key]);
+          }
+        }
+      }
+    }
+  }
 
-interface ResetSettingsMap {
-  resetEvolutionSettings: ResetFunction;
-  resetWarSettings: ResetFunction;
-  resetHellSettings: ResetFunction;
-  resetMechSettings: ResetFunction;
-  resetFleetSettings: ResetFunction;
-  resetGovernmentSettings: ResetFunction;
-  resetAuthoritySettings: ResetFunction;
-  resetBuildingSettings: ResetFunction;
-  resetWeightingSettings: ResetFunction;
-  resetMarketSettings: ResetFunction;
-  resetResearchSettings: ResetFunction;
-  resetProjectSettings: ResetFunction;
-  resetJobSettings: ResetFunction;
-  resetMagicSettings: ResetFunction;
-  resetProductionSettings: ResetFunction;
-  resetStorageSettings: ResetFunction;
-  resetGeneralSettings: ResetFunction;
-  resetInterfaceSettings: ResetFunction;
-  resetStateLogSettings: ResetFunction;
-  resetAchievementGuardSettings: ResetFunction;
-  resetChallengeHelperSettings: ResetFunction;
-  resetPrestigeSettings: ResetFunction;
-  resetEjectorSettings: ResetFunction;
-  resetPlanetSettings: ResetFunction;
-  resetLoggingSettings: ResetFunction;
-  resetTriggerSettings: ResetFunction;
-  resetMinorTraitSettings: ResetFunction;
-  resetMutableTraitSettings: ResetFunction;
-}
-
-interface SettingsMigrationDependencies {
-  getSettingsRaw: () => SettingsRecord;
-  getSettings: () => Record<string, unknown>;
-  settingsSections: readonly string[];
-  applySettings: (def: Record<string, unknown>, reset: boolean) => void;
-  migrateSetting: (
+  function migrateSetting(
     oldSetting: string,
     newSetting: string,
     mapCb: (value: unknown) => unknown,
     keepOldValue?: boolean,
-  ) => void;
-  getResetSettings: () => ResetSettingsMap;
+  ) {
+    const settingsRaw = getSettingsRaw();
+    if (Object.prototype.hasOwnProperty.call(settingsRaw, oldSetting)) {
+      if (!keepOldValue) {
+        settingsRaw[newSetting] = mapCb(settingsRaw[oldSetting]);
+      }
+      delete settingsRaw[oldSetting];
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(settingsRaw.overrides, oldSetting)
+    ) {
+      settingsRaw.overrides[oldSetting].forEach(
+        (override) => (override.ret = mapCb(override.ret)),
+      );
+      settingsRaw.overrides[newSetting] = (
+        settingsRaw.overrides[newSetting] ?? []
+      ).concat(settingsRaw.overrides[oldSetting]);
+      delete settingsRaw.overrides[oldSetting];
+    }
+  }
+
+  return { applySettings, migrateSetting };
+}
+
+type ResetFunction = (reset: boolean) => void;
+
+interface LegacySettingsMigrationDependencies {
+  getSettingsRaw: () => SettingsRecord;
+  getSettings: () => Record<string, unknown>;
+  settingsSections: readonly string[];
+  getResetSettings: () => Record<string, ResetFunction>;
   getTechIds: () => Record<string, unknown>;
   getMarketManager: () => { priorityList: { id: string }[] };
   getResources: () => Record<string, { id: string }>;
@@ -72,12 +97,42 @@ interface SettingsMigrationDependencies {
   getCrafter: () => Record<string, { _originalId: string }>;
 }
 
-export function createSettingsMigration({
+// The 28 default-reset builders, in their load-bearing order.
+const resetNames = [
+  "resetEvolutionSettings",
+  "resetWarSettings",
+  "resetHellSettings",
+  "resetMechSettings",
+  "resetFleetSettings",
+  "resetGovernmentSettings",
+  "resetAuthoritySettings",
+  "resetBuildingSettings",
+  "resetWeightingSettings",
+  "resetMarketSettings",
+  "resetResearchSettings",
+  "resetProjectSettings",
+  "resetJobSettings",
+  "resetMagicSettings",
+  "resetProductionSettings",
+  "resetStorageSettings",
+  "resetGeneralSettings",
+  "resetInterfaceSettings",
+  "resetStateLogSettings",
+  "resetAchievementGuardSettings",
+  "resetChallengeHelperSettings",
+  "resetPrestigeSettings",
+  "resetEjectorSettings",
+  "resetPlanetSettings",
+  "resetLoggingSettings",
+  "resetTriggerSettings",
+  "resetMinorTraitSettings",
+  "resetMutableTraitSettings",
+] as const;
+
+export function createLegacySettingsMigration({
   getSettingsRaw,
   getSettings,
   settingsSections,
-  applySettings,
-  migrateSetting,
   getResetSettings,
   getTechIds,
   getMarketManager,
@@ -85,7 +140,9 @@ export function createSettingsMigration({
   getProjects,
   getBuildings,
   getCrafter,
-}: SettingsMigrationDependencies) {
+}: LegacySettingsMigrationDependencies) {
+  const { applySettings, migrateSetting } = makePrimitives(getSettingsRaw);
+
   function updateStandAloneSettings() {
     const settingsRaw = getSettingsRaw();
     const settings = getSettings();
@@ -95,38 +152,9 @@ export function createSettingsMigration({
     const projects = getProjects();
     const buildings = getBuildings();
     const crafter = getCrafter();
-    const {
-      resetEvolutionSettings,
-      resetWarSettings,
-      resetHellSettings,
-      resetMechSettings,
-      resetFleetSettings,
-      resetGovernmentSettings,
-      resetAuthoritySettings,
-      resetBuildingSettings,
-      resetWeightingSettings,
-      resetMarketSettings,
-      resetResearchSettings,
-      resetProjectSettings,
-      resetJobSettings,
-      resetMagicSettings,
-      resetProductionSettings,
-      resetStorageSettings,
-      resetGeneralSettings,
-      resetInterfaceSettings,
-      resetStateLogSettings,
-      resetAchievementGuardSettings,
-      resetChallengeHelperSettings,
-      resetPrestigeSettings,
-      resetEjectorSettings,
-      resetPlanetSettings,
-      resetLoggingSettings,
-      resetTriggerSettings,
-      resetMinorTraitSettings,
-      resetMutableTraitSettings,
-    } = getResetSettings();
+    const resetSettings = getResetSettings();
 
-    let def = {
+    let def: Record<string, unknown> = {
       scriptName: "TMVictor",
       overrides: {},
       triggers: [],
@@ -154,8 +182,6 @@ export function createSettingsMigration({
 
     // Specific migrations that should only be executed once
     if (!settingsRaw.migrationVersion || settingsRaw.migrationVersion < 1) {
-      // Moved upwards in default priority list, needs to be executed before resetting building settings
-      // Settings may not exist yet here
       if (
         settingsRaw["bld_p_eden-bliss_den"] &&
         settingsRaw["bld_p_eden-rectory"] &&
@@ -169,34 +195,7 @@ export function createSettingsMigration({
     }
 
     // Apply default settings
-    resetEvolutionSettings(false);
-    resetWarSettings(false);
-    resetHellSettings(false);
-    resetMechSettings(false);
-    resetFleetSettings(false);
-    resetGovernmentSettings(false);
-    resetAuthoritySettings(false);
-    resetBuildingSettings(false);
-    resetWeightingSettings(false);
-    resetMarketSettings(false);
-    resetResearchSettings(false);
-    resetProjectSettings(false);
-    resetJobSettings(false);
-    resetMagicSettings(false);
-    resetProductionSettings(false);
-    resetStorageSettings(false);
-    resetGeneralSettings(false);
-    resetInterfaceSettings(false);
-    resetStateLogSettings(false);
-    resetAchievementGuardSettings(false);
-    resetChallengeHelperSettings(false);
-    resetPrestigeSettings(false);
-    resetEjectorSettings(false);
-    resetPlanetSettings(false);
-    resetLoggingSettings(false);
-    resetTriggerSettings(false);
-    resetMinorTraitSettings(false);
-    resetMutableTraitSettings(false);
+    resetNames.forEach((name) => resetSettings[name](false));
 
     // Validate overrides types, and fix if needed
     for (let key in settingsRaw.overrides) {
@@ -218,14 +217,12 @@ export function createSettingsMigration({
     }
     // Migrate pre-overrides settings
     settingsRaw.triggers.forEach((t) => {
-      // Normalize manually-added boolean triggers to match UI
       if (t.requirementType == "Boolean" && t.requirementCount !== 1) {
         t.requirementId = t.requirementCount
           ? t.requirementId
           : !t.requirementId;
         t.requirementCount = 1;
       }
-      // Migrate old trigger IDs
       if (
         (t.requirementType === "unlocked" ||
           t.requirementType === "researched") &&
@@ -236,7 +233,6 @@ export function createSettingsMigration({
       if (t.actionType === "research" && techIds["tech-" + t.actionId]) {
         t.actionId = "tech-" + t.actionId;
       }
-      // Migrate old trigger checks to overrides
       if (t.requirementType === "unlocked") {
         t.requirementType = "ResearchUnlocked";
         t.requirementCount = 1;
@@ -250,20 +246,17 @@ export function createSettingsMigration({
       }
     });
     if (settingsRaw.hasOwnProperty("productionPrioritizeDemanded")) {
-      // Replace checkbox with list
       settingsRaw.productionFoundryWeighting =
         settingsRaw.productionPrioritizeDemanded ? "demanded" : "none";
     }
     settingsRaw.challenge_plasmid =
-      settingsRaw.challenge_mastery || settingsRaw.challenge_plasmid; // Merge challenge settings
+      settingsRaw.challenge_mastery || settingsRaw.challenge_plasmid;
     if (settingsRaw.hasOwnProperty("res_trade_buy_mtr_Food")) {
-      // Reset default market settings for pre-rework configs
       MarketManager.priorityList.forEach(
         (res) => (settingsRaw["res_trade_buy_" + res.id] = true),
       );
     }
     if (settingsRaw.hasOwnProperty("arpa")) {
-      // Move arpa from object to strings
       Object.entries(settingsRaw.arpa).forEach(
         ([id, enabled]) => (settingsRaw["arpa_" + id] = enabled),
       );
@@ -361,14 +354,12 @@ export function createSettingsMigration({
     );
     migrateSetting("activeTriggerUI", "activeTargetsUI", (v) => v);
     migrateSetting("autoAssembleGene", "autoGenetics", (v) => v);
-    // Handle ingame ID change
     migrateSetting("batportal-harbour", "batportal-harbor", (v) => v);
     migrateSetting("bld_p_portal-harbour", "bld_p_portal-harbor", (v) => v);
     migrateSetting("bld_s_portal-harbour", "bld_s_portal-harbor", (v) => v);
     migrateSetting("bld_s2_portal-harbour", "bld_s2_portal-harbor", (v) => v);
     migrateSetting("bld_m_portal-harbour", "bld_m_portal-harbor", (v) => v);
     migrateSetting("bld_w_portal-harbour", "bld_w_portal-harbor", (v) => v);
-    // Migrate setting as override, in case if someone actualy use it
     if (settingsRaw.hasOwnProperty("genesAssembleGeneAlways")) {
       if (settingsRaw.overrides.genesAssembleGeneAlways) {
         settingsRaw.overrides.geneticsAssemble =
@@ -455,5 +446,7 @@ export function createSettingsMigration({
     });
   }
 
-  return { updateStandAloneSettings };
+  return { updateStandAloneSettings, applySettings, migrateSetting };
 }
+
+export { resetNames };

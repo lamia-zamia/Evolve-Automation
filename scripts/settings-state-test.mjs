@@ -24,16 +24,12 @@ const state = createSettingsState({
   },
 });
 
-state.applySettings({ count: 0, enabled: true }, false);
-assert.equal(settingsRaw.count, 2);
-assert.equal(settingsRaw.enabled, true);
 state.updateStateFromSettings();
 assert.deepEqual(loaded, ["first"]);
 
 settingsRaw = {
-  overrides: { old: [{ ret: 4 }] },
+  overrides: {},
   triggers: [{ id: "replacement" }],
-  old: 3,
 };
 loaded = [];
 triggerManager = {
@@ -43,9 +39,6 @@ triggerManager = {
     this.priorityList.push({ copied: trigger.id });
   },
 };
-state.migrateSetting("old", "new", (value) => Number(value) + 1);
-assert.equal(settingsRaw.new, 4);
-assert.equal(settingsRaw.overrides.new[0].ret, 5);
 state.updateStateFromSettings();
 assert.deepEqual(loaded, ["replacement"]);
 state.updateSettingsFromState();

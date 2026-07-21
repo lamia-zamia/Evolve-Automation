@@ -186,49 +186,9 @@
       );
       settingsStore2.save(settingsRaw2);
     }
-    function applySettings2(def, reset) {
-      const settingsRaw2 = getSettingsRaw();
-      if (reset) {
-        for (const key in def) {
-          delete settingsRaw2.overrides[key];
-        }
-        Object.assign(settingsRaw2, def);
-      } else {
-        for (const key in def) {
-          if (!Object.prototype.hasOwnProperty.call(settingsRaw2, key)) {
-            settingsRaw2[key] = def[key];
-          } else {
-            if (typeof settingsRaw2[key] === "string" && typeof def[key] === "number") {
-              settingsRaw2[key] = Number(settingsRaw2[key]);
-            }
-            if (typeof settingsRaw2[key] === "number" && typeof def[key] === "string") {
-              settingsRaw2[key] = String(settingsRaw2[key]);
-            }
-          }
-        }
-      }
-    }
-    function migrateSetting2(oldSetting, newSetting, mapCb, keepOldValue) {
-      const settingsRaw2 = getSettingsRaw();
-      if (Object.prototype.hasOwnProperty.call(settingsRaw2, oldSetting)) {
-        if (!keepOldValue) {
-          settingsRaw2[newSetting] = mapCb(settingsRaw2[oldSetting]);
-        }
-        delete settingsRaw2[oldSetting];
-      }
-      if (Object.prototype.hasOwnProperty.call(settingsRaw2.overrides, oldSetting)) {
-        settingsRaw2.overrides[oldSetting].forEach(
-          (override) => override.ret = mapCb(override.ret)
-        );
-        settingsRaw2.overrides[newSetting] = (settingsRaw2.overrides[newSetting] ?? []).concat(settingsRaw2.overrides[oldSetting]);
-        delete settingsRaw2.overrides[oldSetting];
-      }
-    }
     return {
       updateStateFromSettings: updateStateFromSettings2,
-      updateSettingsFromState: updateSettingsFromState2,
-      applySettings: applySettings2,
-      migrateSetting: migrateSetting2
+      updateSettingsFromState: updateSettingsFromState2
     };
   }
 
@@ -300,7 +260,7 @@
       }
     });
     const AlchemyManager2 = liveObject5("AlchemyManager");
-    const applySettings2 = liveFunction2("applySettings");
+    const applySettings3 = liveFunction2("applySettings");
     const biomeList2 = liveObject5("biomeList");
     const BuildingManager2 = liveObject5("BuildingManager");
     const buildings2 = liveObject5("buildings");
@@ -360,7 +320,7 @@
         foreignPolicySuperior: "Sabotage",
         foreignPolicyRival: "Influence"
       };
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetHellSettings2(reset) {
       let def = {
@@ -385,7 +345,7 @@
         warlordHandleFortress: true,
         warlordMinimumMinions: 1e3
       };
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetGeneralSettings2(reset) {
       let def = {
@@ -406,7 +366,7 @@
         buildingClickPerTick: 50,
         scriptSettingsExportFilename: "evolve-script-settings.json"
       };
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetInterfaceSettings2(reset) {
       let def = {
@@ -417,7 +377,7 @@
         displayTotalDaysTypeInTopBar: false,
         performanceHackAvoidDrawTech: false
       };
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetStateLogSettings2(reset) {
       let def = {
@@ -425,7 +385,7 @@
         stateLogAutoDownload: false,
         stateLogInterval: 20
       };
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetAchievementGuardSettings2(reset) {
       let def = {
@@ -439,7 +399,7 @@
         guardSecondEvolution: true,
         guardBananaRepublic: true
       };
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetChallengeHelperSettings2(reset) {
       let def = {
@@ -447,7 +407,7 @@
         inflationChallengeSaveMinutes: 30,
         retirementChallengeAssist: true
       };
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetPrestigeSettings2(reset) {
       let def = {
@@ -474,7 +434,7 @@
         prestigeDemonicBomb: false,
         prestigeVaxStrat: "none"
       };
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetGovernmentSettings2(reset) {
       let def = {
@@ -489,7 +449,7 @@
         govSpace: GovernmentManager2.Types.corpocracy.id,
         govGovernor: "none"
       };
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetAuthoritySettings2(reset) {
       const def = {
@@ -498,7 +458,7 @@
         generalAuthorityMinPatrolPercent: 40,
         buildingWeightingAuthority: 10
       };
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetEvolutionSettings2(reset) {
       let def = {
@@ -514,7 +474,7 @@
         evolutionBackup: false
       };
       challenges2.forEach((set) => def["challenge_" + set[0].id] = false);
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetResearchSettings2(reset) {
       let def = {
@@ -523,7 +483,7 @@
         userResearchTheology_2: "auto",
         researchIgnore: ["tech-purify"]
       };
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetMarketSettings2(reset) {
       MarketManager2.priorityList = Object.values(resources2).filter((r) => r.is.tradable).reverse();
@@ -568,7 +528,7 @@
         def["res_galaxy_w_" + id] = 1;
         def["res_galaxy_p_" + id] = i + 1;
       }
-      applySettings2(def, reset);
+      applySettings3(def, reset);
       MarketManager2.sortByPriority();
     }
     function resetStorageSettings2(reset) {
@@ -592,7 +552,7 @@
       def["res_storage_o_" + resources2.Orichalcum.id] = true;
       def["res_storage_o_" + resources2.Vitreloy.id] = true;
       def["res_storage_o_" + resources2.Bolognium.id] = true;
-      applySettings2(def, reset);
+      applySettings3(def, reset);
       StorageManager2.sortByPriority();
     }
     function resetMinorTraitSettings2(reset) {
@@ -626,7 +586,7 @@
         def["ocularPower_" + v.id] = true;
         def["ocularPower_p_" + v.id] = 100;
       });
-      applySettings2(def, reset);
+      applySettings3(def, reset);
       MinorTraitManager2.sortByPriority();
     }
     function resetMutableTraitSettings2(reset) {
@@ -655,7 +615,7 @@
           def["mutableTrait_reset_" + id] = false;
         }
       }
-      applySettings2(def, reset);
+      applySettings3(def, reset);
       MutableTraitManager2.sortByPriority();
     }
     function resetJobSettings2(reset) {
@@ -714,7 +674,7 @@
       setBreakpoints(jobs2.Banker, 3, 5, -1);
       setBreakpoints(jobs2.Priest, 0, 0, -1);
       setBreakpoints(jobs2.Unemployed, 0, 0, 0);
-      applySettings2(def, reset);
+      applySettings3(def, reset);
       JobManager2.sortByPriority();
     }
     function resetWeightingSettings2(reset) {
@@ -748,7 +708,7 @@
         buildingWeightingRetirementPrep: 10,
         buildingWeightingTruepathDigsite: 10
       };
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetBuildingSettings2(reset) {
       initBuildingState2();
@@ -813,7 +773,7 @@
       def["bld_m_" + buildings2.TauForgeHorseshoe._vueBinding] = 20;
       def["bld_m_" + buildings2.BeltEleriumShip._vueBinding] = 15;
       def["bld_m_" + buildings2.BeltIridiumShip._vueBinding] = 15;
-      applySettings2(def, reset);
+      applySettings3(def, reset);
       BuildingManager2.sortByPriority();
     }
     function resetProjectSettings2(reset) {
@@ -840,7 +800,7 @@
       setProject("RoidEject", true, -1, 1);
       setProject("ManaSyphon", false, 79, 1);
       setProject("Depot", true, -1, 1);
-      applySettings2(def, reset);
+      applySettings3(def, reset);
       ProjectManager2.sortByPriority();
     }
     function resetMagicSettings2(reset) {
@@ -866,7 +826,7 @@
       }
       def["spell_w_hunting"] = 10;
       def["spell_w_farmer"] = 1;
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetProductionSettings2(reset) {
       let def = {
@@ -943,7 +903,7 @@
       Object.values(ReplicatorManager2.Productions).forEach(
         (production) => setReplicatorProduct(production.id, true, 1, 1)
       );
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetTriggerSettings2(reset) {
       let def = {
@@ -979,7 +939,7 @@
           JSON.stringify(TriggerManager2.priorityList)
         );
       }
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetLoggingSettings2(reset) {
       let def = {
@@ -992,7 +952,7 @@
       def["log_multi_construction"] = false;
       def["log_prestige"] = false;
       def["log_prestige_format"] = "Reset: {resetType}, Species: {species}, Duration: {timeStamp} days";
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetPlanetSettings2(reset) {
       let def = {};
@@ -1004,7 +964,7 @@
       );
       extraList2.forEach((extra) => def["extra_w_" + extra] = 0);
       def["extra_w_Achievement"] = 1e3;
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetFleetSettings2(reset) {
       let def = {
@@ -1056,7 +1016,7 @@
       setOuterRegion("spc_triton", 10, 0.95, 2);
       setOuterRegion("spc_kuiper", 5, 0.9, 2);
       setOuterRegion("spc_eris", 100, 0.01, 1);
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetMechSettings2(reset) {
       let def = {
@@ -1079,7 +1039,7 @@
         mechBaysFirst: true,
         mechWaygatePotential: 0.4
       };
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     function resetEjectorSettings2(reset) {
       if (game2.global.race.universe === "magic") {
@@ -1116,7 +1076,7 @@
       }
       def["res_eject" + resources2.Elerium.id] = true;
       def["res_eject" + resources2.Infernite.id] = true;
-      applySettings2(def, reset);
+      applySettings3(def, reset);
     }
     return {
       resetWarSettings: resetWarSettings2,
@@ -1150,344 +1110,367 @@
     };
   }
 
-  // src/settings/migration.ts
-  function createSettingsMigration({
-    getSettingsRaw,
-    getSettings,
-    settingsSections: settingsSections2,
-    applySettings: applySettings2,
-    migrateSetting: migrateSetting2,
-    getResetSettings,
-    getTechIds,
-    getMarketManager,
-    getResources,
-    getProjects,
-    getBuildings,
-    getCrafter
-  }) {
-    function updateStandAloneSettings2() {
-      const settingsRaw2 = getSettingsRaw();
-      const settings2 = getSettings();
-      const techIds2 = getTechIds();
-      const MarketManager2 = getMarketManager();
-      const resources2 = getResources();
-      const projects2 = getProjects();
-      const buildings2 = getBuildings();
-      const crafter2 = getCrafter();
-      const {
-        resetEvolutionSettings: resetEvolutionSettings2,
-        resetWarSettings: resetWarSettings2,
-        resetHellSettings: resetHellSettings2,
-        resetMechSettings: resetMechSettings2,
-        resetFleetSettings: resetFleetSettings2,
-        resetGovernmentSettings: resetGovernmentSettings2,
-        resetAuthoritySettings: resetAuthoritySettings2,
-        resetBuildingSettings: resetBuildingSettings2,
-        resetWeightingSettings: resetWeightingSettings2,
-        resetMarketSettings: resetMarketSettings2,
-        resetResearchSettings: resetResearchSettings2,
-        resetProjectSettings: resetProjectSettings2,
-        resetJobSettings: resetJobSettings2,
-        resetMagicSettings: resetMagicSettings2,
-        resetProductionSettings: resetProductionSettings2,
-        resetStorageSettings: resetStorageSettings2,
-        resetGeneralSettings: resetGeneralSettings2,
-        resetInterfaceSettings: resetInterfaceSettings2,
-        resetStateLogSettings: resetStateLogSettings2,
-        resetAchievementGuardSettings: resetAchievementGuardSettings2,
-        resetChallengeHelperSettings: resetChallengeHelperSettings2,
-        resetPrestigeSettings: resetPrestigeSettings2,
-        resetEjectorSettings: resetEjectorSettings2,
-        resetPlanetSettings: resetPlanetSettings2,
-        resetLoggingSettings: resetLoggingSettings2,
-        resetTriggerSettings: resetTriggerSettings2,
-        resetMinorTraitSettings: resetMinorTraitSettings2,
-        resetMutableTraitSettings: resetMutableTraitSettings2
-      } = getResetSettings();
-      let def = {
-        scriptName: "TMVictor",
-        overrides: {},
-        triggers: []
-      };
-      settingsSections2.forEach((id) => def[id + "SettingsCollapsed"] = true);
-      applySettings2(def, false);
-      if (settingsRaw2.hasOwnProperty("masterScriptToggle")) {
-        if (!settingsRaw2.hasOwnProperty("autoPrestige")) {
-          settingsRaw2.autoPrestige = true;
-          [
-            "job_b1_farmer",
-            "job_b2_farmer",
-            "job_b3_farmer",
-            "job_b1_hunter",
-            "job_b2_hunter",
-            "job_b3_hunter"
-          ].forEach((id) => delete settingsRaw2[id]);
-        }
-        if (!settingsRaw2.hasOwnProperty("buildingsLimitPowered")) {
-          settingsRaw2.buildingsLimitPowered = false;
-        }
+  // src/domain/settings-migration.ts
+  function has(record, key) {
+    return Object.prototype.hasOwnProperty.call(record, key);
+  }
+  function applySettings2(settingsRaw2, def, reset) {
+    if (reset) {
+      for (const key in def) {
+        delete settingsRaw2.overrides[key];
       }
-      if (!settingsRaw2.migrationVersion || settingsRaw2.migrationVersion < 1) {
-        if (settingsRaw2["bld_p_eden-bliss_den"] && settingsRaw2["bld_p_eden-rectory"] && settingsRaw2["bld_p_eden-encampment"] && settingsRaw2["bld_p_eden-bliss_den"] < settingsRaw2["bld_p_eden-rectory"]) {
-          settingsRaw2["bld_p_eden-rectory"] = settingsRaw2["bld_p_eden-encampment"] + 1;
-        }
-        settingsRaw2.migrationVersion = 1;
-      }
-      resetEvolutionSettings2(false);
-      resetWarSettings2(false);
-      resetHellSettings2(false);
-      resetMechSettings2(false);
-      resetFleetSettings2(false);
-      resetGovernmentSettings2(false);
-      resetAuthoritySettings2(false);
-      resetBuildingSettings2(false);
-      resetWeightingSettings2(false);
-      resetMarketSettings2(false);
-      resetResearchSettings2(false);
-      resetProjectSettings2(false);
-      resetJobSettings2(false);
-      resetMagicSettings2(false);
-      resetProductionSettings2(false);
-      resetStorageSettings2(false);
-      resetGeneralSettings2(false);
-      resetInterfaceSettings2(false);
-      resetStateLogSettings2(false);
-      resetAchievementGuardSettings2(false);
-      resetChallengeHelperSettings2(false);
-      resetPrestigeSettings2(false);
-      resetEjectorSettings2(false);
-      resetPlanetSettings2(false);
-      resetLoggingSettings2(false);
-      resetTriggerSettings2(false);
-      resetMinorTraitSettings2(false);
-      resetMutableTraitSettings2(false);
-      for (let key in settingsRaw2.overrides) {
-        for (let i = 0; i < settingsRaw2.overrides[key].length; i++) {
-          let override = settingsRaw2.overrides[key][i];
-          if (typeof settingsRaw2[key] === "string" && typeof override.ret === "number") {
-            override.ret = String(override.ret);
+      Object.assign(settingsRaw2, def);
+    } else {
+      for (const key in def) {
+        if (!has(settingsRaw2, key)) {
+          settingsRaw2[key] = def[key];
+        } else {
+          if (typeof settingsRaw2[key] === "string" && typeof def[key] === "number") {
+            settingsRaw2[key] = Number(settingsRaw2[key]);
           }
-          if (typeof settingsRaw2[key] === "number" && typeof override.ret === "string") {
-            override.ret = Number(override.ret);
+          if (typeof settingsRaw2[key] === "number" && typeof def[key] === "string") {
+            settingsRaw2[key] = String(settingsRaw2[key]);
           }
         }
       }
-      settingsRaw2.triggers.forEach((t) => {
-        if (t.requirementType == "Boolean" && t.requirementCount !== 1) {
-          t.requirementId = t.requirementCount ? t.requirementId : !t.requirementId;
-          t.requirementCount = 1;
-        }
-        if ((t.requirementType === "unlocked" || t.requirementType === "researched") && techIds2["tech-" + t.requirementId]) {
-          t.requirementId = "tech-" + t.requirementId;
-        }
-        if (t.actionType === "research" && techIds2["tech-" + t.actionId]) {
-          t.actionId = "tech-" + t.actionId;
-        }
-        if (t.requirementType === "unlocked") {
-          t.requirementType = "ResearchUnlocked";
-          t.requirementCount = 1;
-        }
-        if (t.requirementType === "researched") {
-          t.requirementType = "ResearchComplete";
-          t.requirementCount = 1;
-        }
-        if (t.requirementType === "built") {
-          t.requirementType = "BuildingCount";
-        }
-      });
-      if (settingsRaw2.hasOwnProperty("productionPrioritizeDemanded")) {
-        settingsRaw2.productionFoundryWeighting = settingsRaw2.productionPrioritizeDemanded ? "demanded" : "none";
+    }
+  }
+  function migrateSetting2(settingsRaw2, oldSetting, newSetting, mapCb, keepOldValue) {
+    if (has(settingsRaw2, oldSetting)) {
+      if (!keepOldValue) {
+        settingsRaw2[newSetting] = mapCb(settingsRaw2[oldSetting]);
       }
-      settingsRaw2.challenge_plasmid = settingsRaw2.challenge_mastery || settingsRaw2.challenge_plasmid;
-      if (settingsRaw2.hasOwnProperty("res_trade_buy_mtr_Food")) {
-        MarketManager2.priorityList.forEach(
-          (res) => settingsRaw2["res_trade_buy_" + res.id] = true
+      delete settingsRaw2[oldSetting];
+    }
+    if (has(settingsRaw2.overrides, oldSetting)) {
+      const oldOverrides = settingsRaw2.overrides[oldSetting];
+      oldOverrides.forEach((override) => override.ret = mapCb(override.ret));
+      settingsRaw2.overrides[newSetting] = (settingsRaw2.overrides[newSetting] ?? []).concat(oldOverrides);
+      delete settingsRaw2.overrides[oldSetting];
+    }
+  }
+  function migrateSettingsRecord(settingsRaw2, context) {
+    const {
+      settingsSections: settingsSections2,
+      defaultResets,
+      prestigeAscensionSkipCustom,
+      techIds: techIds2,
+      marketPriorityIds,
+      resourceIds,
+      projectIds,
+      buildings: buildings2,
+      crafterOriginalIds
+    } = context;
+    const def = {
+      scriptName: "TMVictor",
+      overrides: {},
+      triggers: []
+    };
+    settingsSections2.forEach((id) => def[id + "SettingsCollapsed"] = true);
+    applySettings2(settingsRaw2, def, false);
+    if (has(settingsRaw2, "masterScriptToggle")) {
+      if (!has(settingsRaw2, "autoPrestige")) {
+        settingsRaw2.autoPrestige = true;
+        [
+          "job_b1_farmer",
+          "job_b2_farmer",
+          "job_b3_farmer",
+          "job_b1_hunter",
+          "job_b2_hunter",
+          "job_b3_hunter"
+        ].forEach((id) => delete settingsRaw2[id]);
+      }
+      if (!has(settingsRaw2, "buildingsLimitPowered")) {
+        settingsRaw2.buildingsLimitPowered = false;
+      }
+    }
+    if (!settingsRaw2.migrationVersion || settingsRaw2.migrationVersion < 1) {
+      if (settingsRaw2["bld_p_eden-bliss_den"] && settingsRaw2["bld_p_eden-rectory"] && settingsRaw2["bld_p_eden-encampment"] && settingsRaw2["bld_p_eden-bliss_den"] < settingsRaw2["bld_p_eden-rectory"]) {
+        settingsRaw2["bld_p_eden-rectory"] = settingsRaw2["bld_p_eden-encampment"] + 1;
+      }
+      settingsRaw2.migrationVersion = 1;
+    }
+    defaultResets.forEach((reset) => reset(false));
+    for (const key in settingsRaw2.overrides) {
+      const overrides = settingsRaw2.overrides[key];
+      for (let i = 0; i < overrides.length; i++) {
+        const override = overrides[i];
+        if (typeof settingsRaw2[key] === "string" && typeof override.ret === "number") {
+          override.ret = String(override.ret);
+        }
+        if (typeof settingsRaw2[key] === "number" && typeof override.ret === "string") {
+          override.ret = Number(override.ret);
+        }
+      }
+    }
+    settingsRaw2.triggers.forEach((t) => {
+      if (t.requirementType === "Boolean" && t.requirementCount !== 1) {
+        t.requirementId = t.requirementCount ? t.requirementId : !t.requirementId;
+        t.requirementCount = 1;
+      }
+      if ((t.requirementType === "unlocked" || t.requirementType === "researched") && techIds2["tech-" + t.requirementId]) {
+        t.requirementId = "tech-" + t.requirementId;
+      }
+      if (t.actionType === "research" && techIds2["tech-" + t.actionId]) {
+        t.actionId = "tech-" + t.actionId;
+      }
+      if (t.requirementType === "unlocked") {
+        t.requirementType = "ResearchUnlocked";
+        t.requirementCount = 1;
+      }
+      if (t.requirementType === "researched") {
+        t.requirementType = "ResearchComplete";
+        t.requirementCount = 1;
+      }
+      if (t.requirementType === "built") {
+        t.requirementType = "BuildingCount";
+      }
+    });
+    if (has(settingsRaw2, "productionPrioritizeDemanded")) {
+      settingsRaw2.productionFoundryWeighting = settingsRaw2.productionPrioritizeDemanded ? "demanded" : "none";
+    }
+    settingsRaw2.challenge_plasmid = settingsRaw2.challenge_mastery || settingsRaw2.challenge_plasmid;
+    if (has(settingsRaw2, "res_trade_buy_mtr_Food")) {
+      marketPriorityIds.forEach(
+        (id) => settingsRaw2["res_trade_buy_" + id] = true
+      );
+    }
+    if (has(settingsRaw2, "arpa")) {
+      Object.entries(settingsRaw2.arpa).forEach(
+        ([id, enabled]) => settingsRaw2["arpa_" + id] = enabled
+      );
+    }
+    [
+      "buildingWeightingTriggerConflict",
+      "researchAlienGift",
+      "arpaBuildIfStorageFullCraftableMin",
+      "arpaBuildIfStorageFullResourceMaxPercent",
+      "arpaBuildIfStorageFull",
+      "productionMoneyIfOnly",
+      "autoAchievements",
+      "autoChallenge",
+      "autoMAD",
+      "autoSpace",
+      "autoSeeder",
+      "foreignSpyManage",
+      "foreignHireMercCostLowerThan",
+      "userResearchUnification",
+      "btl_Ambush",
+      "btl_max_Ambush",
+      "btl_Raid",
+      "btl_max_Raid",
+      "btl_Pillage",
+      "btl_max_Pillage",
+      "btl_Assault",
+      "btl_max_Assault",
+      "btl_Siege",
+      "btl_max_Siege",
+      "smelter_fuel_Oil",
+      "smelter_fuel_Coal",
+      "smelter_fuel_Lumber",
+      "planetSettingsCollapser",
+      "buildingManageSpire",
+      "hellHandleAttractors",
+      "researchFilter",
+      "challenge_mastery",
+      "hellCountGems",
+      "productionPrioritizeDemanded",
+      "fleetChthonianPower",
+      "productionWaitMana",
+      "arpa",
+      "autoLogging"
+    ].forEach((id) => delete settingsRaw2[id]);
+    [
+      "foreignAttack",
+      "foreignOccupy",
+      "foreignSpy",
+      "foreignSpyMax",
+      "foreignSpyOp"
+    ].forEach(
+      (id) => [0, 1, 2].forEach((index) => delete settingsRaw2[id + index])
+    );
+    ["res_storage_w_", "res_trade_buy_mtr_", "res_trade_sell_mps_"].forEach(
+      (id) => resourceIds.forEach((resourceId3) => delete settingsRaw2[id + resourceId3])
+    );
+    projectIds.forEach(
+      (projectId) => delete settingsRaw2["arpa_ignore_money_" + projectId]
+    );
+    buildings2.filter((building2) => !building2.switchable).forEach((building2) => delete settingsRaw2["bld_s_" + building2.vueBinding]);
+    migrateSetting2(
+      settingsRaw2,
+      "prestigeWhiteholeEjectEnabled",
+      "autoEject",
+      (v) => v
+    );
+    migrateSetting2(
+      settingsRaw2,
+      "mechSaveSupply",
+      "mechSaveSupplyRatio",
+      (v) => v ? 1 : 0
+    );
+    migrateSetting2(
+      settingsRaw2,
+      "foreignProtectSoldiers",
+      "foreignProtect",
+      (v) => v ? "always" : "never"
+    );
+    migrateSetting2(
+      settingsRaw2,
+      "prestigeWhiteholeEjectExcess",
+      "ejectMode",
+      (v) => v ? "mixed" : "cap"
+    );
+    migrateSetting2(
+      settingsRaw2,
+      "hellHandlePatrolCount",
+      "autoHell",
+      (v) => v,
+      true
+    );
+    migrateSetting2(
+      settingsRaw2,
+      "unificationRequest",
+      "prioritizeUnify",
+      (v) => v ? "savereq" : "ignore"
+    );
+    migrateSetting2(
+      settingsRaw2,
+      "queueRequest",
+      "prioritizeQueue",
+      (v) => v ? "savereq" : "ignore"
+    );
+    migrateSetting2(
+      settingsRaw2,
+      "triggerRequest",
+      "prioritizeTriggers",
+      (v) => v ? "savereq" : "ignore"
+    );
+    migrateSetting2(settingsRaw2, "govManage", "autoGovernment", (v) => v);
+    migrateSetting2(
+      settingsRaw2,
+      "storagePrioritizedOnly",
+      "storageAssignPart",
+      (v) => !v
+    );
+    migrateSetting2(
+      settingsRaw2,
+      "fleetScanEris",
+      "fleet_outer_pr_spc_eris",
+      (v) => v ? 100 : 0
+    );
+    migrateSetting2(
+      settingsRaw2,
+      "jobDisableCraftsmans",
+      "productionCraftsmen",
+      (v) => v ? "nocraft" : "always"
+    );
+    migrateSetting2(settingsRaw2, "activeTriggerUI", "activeTargetsUI", (v) => v);
+    migrateSetting2(settingsRaw2, "autoAssembleGene", "autoGenetics", (v) => v);
+    migrateSetting2(
+      settingsRaw2,
+      "batportal-harbour",
+      "batportal-harbor",
+      (v) => v
+    );
+    migrateSetting2(
+      settingsRaw2,
+      "bld_p_portal-harbour",
+      "bld_p_portal-harbor",
+      (v) => v
+    );
+    migrateSetting2(
+      settingsRaw2,
+      "bld_s_portal-harbour",
+      "bld_s_portal-harbor",
+      (v) => v
+    );
+    migrateSetting2(
+      settingsRaw2,
+      "bld_s2_portal-harbour",
+      "bld_s2_portal-harbor",
+      (v) => v
+    );
+    migrateSetting2(
+      settingsRaw2,
+      "bld_m_portal-harbour",
+      "bld_m_portal-harbor",
+      (v) => v
+    );
+    migrateSetting2(
+      settingsRaw2,
+      "bld_w_portal-harbour",
+      "bld_w_portal-harbor",
+      (v) => v
+    );
+    if (has(settingsRaw2, "genesAssembleGeneAlways")) {
+      if (settingsRaw2.overrides.genesAssembleGeneAlways) {
+        settingsRaw2.overrides.geneticsAssemble = settingsRaw2.overrides.genesAssembleGeneAlways.concat(
+          settingsRaw2.overrides.geneticsAssemble ?? []
         );
       }
-      if (settingsRaw2.hasOwnProperty("arpa")) {
-        Object.entries(settingsRaw2.arpa).forEach(
-          ([id, enabled]) => settingsRaw2["arpa_" + id] = enabled
-        );
-      }
-      [
-        "buildingWeightingTriggerConflict",
-        "researchAlienGift",
-        "arpaBuildIfStorageFullCraftableMin",
-        "arpaBuildIfStorageFullResourceMaxPercent",
-        "arpaBuildIfStorageFull",
-        "productionMoneyIfOnly",
-        "autoAchievements",
-        "autoChallenge",
-        "autoMAD",
-        "autoSpace",
-        "autoSeeder",
-        "foreignSpyManage",
-        "foreignHireMercCostLowerThan",
-        "userResearchUnification",
-        "btl_Ambush",
-        "btl_max_Ambush",
-        "btl_Raid",
-        "btl_max_Raid",
-        "btl_Pillage",
-        "btl_max_Pillage",
-        "btl_Assault",
-        "btl_max_Assault",
-        "btl_Siege",
-        "btl_max_Siege",
-        "smelter_fuel_Oil",
-        "smelter_fuel_Coal",
-        "smelter_fuel_Lumber",
-        "planetSettingsCollapser",
-        "buildingManageSpire",
-        "hellHandleAttractors",
-        "researchFilter",
-        "challenge_mastery",
-        "hellCountGems",
-        "productionPrioritizeDemanded",
-        "fleetChthonianPower",
-        "productionWaitMana",
-        "arpa",
-        "autoLogging"
-      ].forEach((id) => delete settingsRaw2[id]);
-      [
-        "foreignAttack",
-        "foreignOccupy",
-        "foreignSpy",
-        "foreignSpyMax",
-        "foreignSpyOp"
-      ].forEach(
-        (id) => [0, 1, 2].forEach((index) => delete settingsRaw2[id + index])
-      );
-      ["res_storage_w_", "res_trade_buy_mtr_", "res_trade_sell_mps_"].forEach(
-        (id) => Object.values(resources2).forEach(
-          (resource2) => delete settingsRaw2[id + resource2.id]
-        )
-      );
-      Object.values(projects2).forEach(
-        (project) => delete settingsRaw2["arpa_ignore_money_" + project.id]
-      );
-      Object.values(buildings2).filter((building2) => !building2.isSwitchable()).forEach(
-        (building2) => delete settingsRaw2["bld_s_" + building2._vueBinding]
-      );
-      migrateSetting2("prestigeWhiteholeEjectEnabled", "autoEject", (v) => v);
-      migrateSetting2("mechSaveSupply", "mechSaveSupplyRatio", (v) => v ? 1 : 0);
-      migrateSetting2(
-        "foreignProtectSoldiers",
-        "foreignProtect",
-        (v) => v ? "always" : "never"
-      );
-      migrateSetting2(
-        "prestigeWhiteholeEjectExcess",
-        "ejectMode",
-        (v) => v ? "mixed" : "cap"
-      );
-      migrateSetting2("hellHandlePatrolCount", "autoHell", (v) => v, true);
-      migrateSetting2(
-        "unificationRequest",
-        "prioritizeUnify",
-        (v) => v ? "savereq" : "ignore"
-      );
-      migrateSetting2(
-        "queueRequest",
-        "prioritizeQueue",
-        (v) => v ? "savereq" : "ignore"
-      );
-      migrateSetting2(
-        "triggerRequest",
-        "prioritizeTriggers",
-        (v) => v ? "savereq" : "ignore"
-      );
-      migrateSetting2("govManage", "autoGovernment", (v) => v);
-      migrateSetting2("storagePrioritizedOnly", "storageAssignPart", (v) => !v);
-      migrateSetting2(
-        "fleetScanEris",
-        "fleet_outer_pr_spc_eris",
-        (v) => v ? 100 : 0
-      );
-      migrateSetting2(
-        "jobDisableCraftsmans",
-        "productionCraftsmen",
-        (v) => v ? "nocraft" : "always"
-      );
-      migrateSetting2("activeTriggerUI", "activeTargetsUI", (v) => v);
-      migrateSetting2("autoAssembleGene", "autoGenetics", (v) => v);
-      migrateSetting2("batportal-harbour", "batportal-harbor", (v) => v);
-      migrateSetting2("bld_p_portal-harbour", "bld_p_portal-harbor", (v) => v);
-      migrateSetting2("bld_s_portal-harbour", "bld_s_portal-harbor", (v) => v);
-      migrateSetting2("bld_s2_portal-harbour", "bld_s2_portal-harbor", (v) => v);
-      migrateSetting2("bld_m_portal-harbour", "bld_m_portal-harbor", (v) => v);
-      migrateSetting2("bld_w_portal-harbour", "bld_w_portal-harbor", (v) => v);
-      if (settingsRaw2.hasOwnProperty("genesAssembleGeneAlways")) {
-        if (settingsRaw2.overrides.genesAssembleGeneAlways) {
-          settingsRaw2.overrides.geneticsAssemble = settingsRaw2.overrides.genesAssembleGeneAlways.concat(
-            settingsRaw2.overrides.geneticsAssemble ?? []
-          );
-        }
-        if (!settingsRaw2.genesAssembleGeneAlways) {
-          settingsRaw2.overrides.geneticsAssemble = settingsRaw2.overrides.geneticsAssemble ?? [];
-          settingsRaw2.overrides.geneticsAssemble.push({
-            type1: "ResearchComplete",
-            arg1: "tech-dna_sequencer",
-            type2: "Boolean",
-            arg2: true,
-            cmp: "==",
-            ret: "none"
-          });
-        }
-      }
-      if (settingsRaw2.hasOwnProperty("prestigeWhiteholeEjectAllCount") && settingsRaw2.prestigeWhiteholeEjectAllCount <= 20) {
-        settingsRaw2.overrides.ejectMode = settingsRaw2.overrides.ejectMode ?? [];
-        settingsRaw2.overrides.ejectMode.push({
-          type1: "BuildingCount",
-          arg1: "interstellar-mass_ejector",
-          type2: "Number",
-          arg2: settingsRaw2.prestigeWhiteholeEjectAllCount,
-          cmp: ">=",
-          ret: "all"
-        });
-      }
-      if (settingsRaw2.hasOwnProperty("prestigeAscensionSkipCustom") && !settings2.prestigeAscensionSkipCustom) {
-        settingsRaw2.overrides.autoPrestige = settingsRaw2.overrides.autoPrestige ?? [];
-        settingsRaw2.overrides.autoPrestige.push({
-          type1: "ResetType",
-          arg1: "ascension",
+      if (!settingsRaw2.genesAssembleGeneAlways) {
+        settingsRaw2.overrides.geneticsAssemble = settingsRaw2.overrides.geneticsAssemble ?? [];
+        settingsRaw2.overrides.geneticsAssemble.push({
+          type1: "ResearchComplete",
+          arg1: "tech-dna_sequencer",
           type2: "Boolean",
           arg2: true,
           cmp: "==",
-          ret: false
+          ret: "none"
         });
       }
-      Object.values(crafter2).forEach((job) => {
-        delete settingsRaw2["job_p_" + job._originalId], delete settingsRaw2["job_b1_" + job._originalId], delete settingsRaw2["job_b2_" + job._originalId], delete settingsRaw2["job_b3_" + job._originalId];
-      });
-      ["res_containers_m_", "res_crates_m_"].forEach(
-        (id) => Object.values(resources2).forEach((res) => {
-          delete settingsRaw2[id + res.id], delete settingsRaw2.overrides[id + res.id];
-        })
-      );
-      [
-        "prestigeWhiteholeEjectAllCount",
-        "prestigeWhiteholeDecayRate",
-        "genesAssembleGeneAlways",
-        "buildingsConflictQueue",
-        "buildingsConflictRQueue",
-        "buildingsConflictPQueue",
-        "fleet_outer_pr_spc_hell",
-        "fleet_outer_pr_spc_dwarf",
-        "prestigeEnabledBarracks",
-        "bld_s2_city-garrison",
-        "prestigeAscensionSkipCustom",
-        "prestigeBioseedGECK",
-        "tickTimeout",
-        "minorTraitSettingsCollapsed",
-        "fleetOuterMinSyndicate",
-        "smelter_fuel_p_Star",
-        "replicatorResource"
-      ].forEach((id) => {
-        delete settingsRaw2[id], delete settingsRaw2.overrides[id];
+    }
+    if (has(settingsRaw2, "prestigeWhiteholeEjectAllCount") && settingsRaw2.prestigeWhiteholeEjectAllCount <= 20) {
+      settingsRaw2.overrides.ejectMode = settingsRaw2.overrides.ejectMode ?? [];
+      settingsRaw2.overrides.ejectMode.push({
+        type1: "BuildingCount",
+        arg1: "interstellar-mass_ejector",
+        type2: "Number",
+        arg2: settingsRaw2.prestigeWhiteholeEjectAllCount,
+        cmp: ">=",
+        ret: "all"
       });
     }
-    return { updateStandAloneSettings: updateStandAloneSettings2 };
+    if (has(settingsRaw2, "prestigeAscensionSkipCustom") && !prestigeAscensionSkipCustom) {
+      settingsRaw2.overrides.autoPrestige = settingsRaw2.overrides.autoPrestige ?? [];
+      settingsRaw2.overrides.autoPrestige.push({
+        type1: "ResetType",
+        arg1: "ascension",
+        type2: "Boolean",
+        arg2: true,
+        cmp: "==",
+        ret: false
+      });
+    }
+    crafterOriginalIds.forEach((originalId) => {
+      delete settingsRaw2["job_p_" + originalId], delete settingsRaw2["job_b1_" + originalId], delete settingsRaw2["job_b2_" + originalId], delete settingsRaw2["job_b3_" + originalId];
+    });
+    ["res_containers_m_", "res_crates_m_"].forEach(
+      (id) => resourceIds.forEach((resourceId3) => {
+        delete settingsRaw2[id + resourceId3], delete settingsRaw2.overrides[id + resourceId3];
+      })
+    );
+    [
+      "prestigeWhiteholeEjectAllCount",
+      "prestigeWhiteholeDecayRate",
+      "genesAssembleGeneAlways",
+      "buildingsConflictQueue",
+      "buildingsConflictRQueue",
+      "buildingsConflictPQueue",
+      "fleet_outer_pr_spc_hell",
+      "fleet_outer_pr_spc_dwarf",
+      "prestigeEnabledBarracks",
+      "bld_s2_city-garrison",
+      "prestigeAscensionSkipCustom",
+      "prestigeBioseedGECK",
+      "tickTimeout",
+      "minorTraitSettingsCollapsed",
+      "fleetOuterMinSyndicate",
+      "smelter_fuel_p_Star",
+      "replicatorResource"
+    ].forEach((id) => {
+      delete settingsRaw2[id], delete settingsRaw2.overrides[id];
+    });
   }
 
   // src/settings/override-evaluation.ts
@@ -51155,23 +51138,23 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const {
-      updateStateFromSettings,
-      updateSettingsFromState,
-      applySettings,
-      migrateSetting
-    } = createSettingsState({
+    const { updateStateFromSettings, updateSettingsFromState } = createSettingsState({
       getSettingsRaw: () => settingsRaw,
       getTriggerManager: () => TriggerManager,
       settingsStore
     });
-    const { updateStandAloneSettings } = createSettingsMigration({
-      getSettingsRaw: () => settingsRaw,
-      getSettings: () => settings,
+    const applySettings = (def, reset) => applySettings2(settingsRaw, def, reset);
+    const migrateSetting = (oldSetting, newSetting, mapCb, keepOldValue) => migrateSetting2(
+      settingsRaw,
+      oldSetting,
+      newSetting,
+      mapCb,
+      keepOldValue
+    );
+    const updateStandAloneSettings = () => migrateSettingsRecord(settingsRaw, {
       settingsSections,
-      applySettings,
-      migrateSetting,
-      getResetSettings: () => ({
+      // The 28 default-reset builders, in their load-bearing order.
+      defaultResets: [
         resetEvolutionSettings,
         resetWarSettings,
         resetHellSettings,
@@ -51200,13 +51183,19 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         resetTriggerSettings,
         resetMinorTraitSettings,
         resetMutableTraitSettings
-      }),
-      getTechIds: () => techIds,
-      getMarketManager: () => MarketManager,
-      getResources: () => resources,
-      getProjects: () => projects,
-      getBuildings: () => buildings,
-      getCrafter: () => crafter
+      ],
+      prestigeAscensionSkipCustom: Boolean(
+        settings.prestigeAscensionSkipCustom
+      ),
+      techIds,
+      marketPriorityIds: MarketManager.priorityList.map((res) => res.id),
+      resourceIds: Object.values(resources).map((res) => res.id),
+      projectIds: Object.values(projects).map((project) => project.id),
+      buildings: Object.values(buildings).map((building2) => ({
+        vueBinding: building2._vueBinding,
+        switchable: building2.isSwitchable()
+      })),
+      crafterOriginalIds: Object.values(crafter).map((job) => job._originalId)
     });
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
