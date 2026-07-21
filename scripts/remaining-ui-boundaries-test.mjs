@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import { liveFunction } from "../src/ui/dependencies.ts";
 import { createArpaToggleUI } from "../src/ui/arpa-toggles.ts";
-import { createCraftToggleUI } from "../src/ui/craft-toggles.ts";
 import { createBuildingToggleUI } from "../src/ui/building-toggles.ts";
 
 function makeFactory(factory, context = {}, overrides = {}) {
@@ -54,12 +53,6 @@ toggleFixture(
   "createArpaToggles",
   "removeArpaToggles",
 );
-const craftFixture = toggleFixture(
-  createCraftToggleUI,
-  { craftablesList: [{ id: "Plywood" }], settingsRaw: {} },
-  "createCraftToggles",
-  "removeCraftToggles",
-);
 const buildingState = { buildingToggles: 0 };
 toggleFixture(
   createBuildingToggleUI,
@@ -75,24 +68,10 @@ toggleFixture(
 assert.deepEqual(toggleTrace, [
   "remove:removeArpaToggles",
   "toggle:arpa_Physics",
-  "remove:removeCraftToggles",
-  "toggle:craftPlywood",
   "remove:removeBuildingToggles",
   "toggle:batcity1",
 ]);
 assert.equal(buildingState.buildingToggles, 1);
-
-toggleTrace.length = 0;
-craftFixture.context.craftablesList = [{ id: "Brick" }];
-craftFixture.context.addToggleCallbacks = (node, key) => {
-  toggleTrace.push(`replacement:${key}`);
-  return node;
-};
-craftFixture.boundary.createCraftToggles();
-assert.deepEqual(toggleTrace, [
-  "remove:removeCraftToggles",
-  "replacement:craftBrick",
-]);
 
 class FirstClass {}
 let currentClass = FirstClass;
@@ -103,4 +82,4 @@ currentClass = SecondClass;
 assert.equal(new FirstClass() instanceof liveClass, false);
 assert.equal(new SecondClass() instanceof liveClass, true);
 
-console.log("Next 3 UI-boundary module tests passed");
+console.log("Next 2 UI-boundary module tests passed");

@@ -82,11 +82,7 @@ vm.runInNewContext(source, sandbox, {
 });
 
 const boundaries = hooks.remainingUiBoundaries;
-assert.deepEqual(Object.keys(boundaries), [
-  "arpaToggles",
-  "craftToggles",
-  "buildingToggles",
-]);
+assert.deepEqual(Object.keys(boundaries), ["arpaToggles", "buildingToggles"]);
 
 const trace = [];
 const registrations = [];
@@ -117,7 +113,6 @@ hooks.setRemainingUiBoundariesTestContext({
   game: { global: { stats: { days: 123 } } },
   state,
   resources: {},
-  craftablesList: [{ id: "Plywood" }],
   BuildingManager: { priorityList: [{ _vueBinding: "city1" }] },
   ProjectManager: { priorityList: [{ id: "Physics" }] },
   buildSettingsSection,
@@ -125,7 +120,6 @@ hooks.setRemainingUiBoundariesTestContext({
   resetCheckbox: (...keys) => trace.push(`checkbox:${keys.join("|")}`),
   removeBuildingToggles: () => trace.push("cleanup:building"),
   removeArpaToggles: () => trace.push("cleanup:arpa"),
-  removeCraftToggles: () => trace.push("cleanup:craft"),
   addToggleCallbacks: (node, key) => {
     trace.push(`toggle:${key}`);
     return node;
@@ -155,13 +149,10 @@ assert.deepEqual(
 
 trace.length = 0;
 boundaries.arpaToggles.createArpaToggles();
-boundaries.craftToggles.createCraftToggles();
 boundaries.buildingToggles.createBuildingToggles();
 assert.deepEqual(trace, [
   "cleanup:arpa",
   "toggle:arpa_Physics",
-  "cleanup:craft",
-  "toggle:craftPlywood",
   "cleanup:building",
   "toggle:batcity1",
 ]);
@@ -170,14 +161,11 @@ assert.equal(state.buildingToggles, 1);
 domTrace.length = 0;
 hooks.setRemainingUiBoundariesTestContext({
   removeArpaToggles: undefined,
-  removeCraftToggles: undefined,
   removeBuildingToggles: undefined,
 });
 boundaries.arpaToggles.removeArpaToggles();
-boundaries.craftToggles.removeCraftToggles();
 boundaries.buildingToggles.removeBuildingToggles();
 assert.ok(domTrace.includes("remove:#arpaPhysics .ea-arpa-toggle"));
-assert.ok(domTrace.includes("remove:#resources .ea-craft-toggle"));
 assert.ok(domTrace.includes("remove:#mTabCivil .ea-building-toggle"));
 
 const inline = hooks.finalInlineUiBoundaries;
@@ -264,4 +252,4 @@ assert.ok(domTrace.includes("remove:#script_market_top_row"));
 assert.ok(domTrace.includes("remove:#resStorage .ea-storage-toggle"));
 assert.ok(domTrace.includes("remove:#script_storage_top_row"));
 
-console.log("Next 3 UI-boundary bundled characterization tests passed");
+console.log("Next 2 UI-boundary bundled characterization tests passed");
