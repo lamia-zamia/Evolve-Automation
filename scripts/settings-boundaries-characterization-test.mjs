@@ -77,7 +77,6 @@ vm.runInNewContext(source, sandbox, {
 const boundaries = hooks.settingsBoundaries;
 assert.deepEqual(Object.keys(boundaries), [
   "prestige",
-  "government",
   "evolution",
   "planet",
   "trigger",
@@ -175,12 +174,6 @@ assert.deepEqual(
   })),
   [
     { kind: "secondary", prefix: "", id: "prestige", label: "Prestige" },
-    {
-      kind: "secondary",
-      prefix: "",
-      id: "government",
-      label: "Government",
-    },
     { kind: "primary", id: "evolution", label: "Evolution" },
     { kind: "primary", id: "planet", label: "Planet Weighting" },
     { kind: "primary", id: "trigger", label: "Trigger" },
@@ -214,9 +207,6 @@ const behavioralTrace = trace.filter(
 assert.deepEqual(behavioralTrace, [
   "reset:prestige:true",
   "update:prestige:",
-  "reset:government:true",
-  "update:government:",
-  "checkbox:autoTax|autoGovernment",
   "reset:evolution:true",
   "update:evolution:",
   "checkbox:autoEvolution",
@@ -249,5 +239,5 @@ assert.deepEqual(behavioralTrace, [
   "remove:marketToggles",
 ]);
 
-assert.ok(storageTrace.length >= 11);
-console.log("11 settings-boundary bundled characterization tests passed");
+assert.ok(storageTrace.length >= 10);
+console.log("10 settings-boundary bundled characterization tests passed");

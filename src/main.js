@@ -154,6 +154,9 @@ import { createResearchSettingsEvolveAdapter } from "./adapters/evolve/research-
 import { createLoggingSettingsIntentHandler } from "./application/logging-settings.ts";
 import { createLoggingSettingsBrowserAdapter } from "./adapters/browser/logging-settings.ts";
 import { createLoggingSettingsEvolveAdapter } from "./adapters/evolve/logging-settings.ts";
+import { createGovernmentSettingsIntentHandler } from "./application/government-settings.ts";
+import { createGovernmentSettingsBrowserAdapter } from "./adapters/browser/government-settings.ts";
+import { createGovernmentSettingsEvolveAdapter } from "./adapters/evolve/government-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -399,7 +402,6 @@ import { createMechAdapter } from "./adapters/evolve/mech.ts";
 import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
 import { createPrestigeSettings } from "./ui/prestige-settings.ts";
-import { createGovernmentSettings } from "./ui/government-settings.ts";
 import { createEvolutionSettings } from "./ui/evolution-settings.ts";
 import { createPlanetSettings } from "./ui/planet-settings.ts";
 import { createTriggerSettings } from "./ui/trigger-settings.ts";
@@ -1248,29 +1250,60 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildPrestigeSettings, updatePrestigeSettingsContent } =
     prestigeSettings;
 
-  const governmentSettingsOverrides = {};
-  const getGovernmentSettingsDependency = createDependencyResolver(
-    governmentSettingsOverrides,
+  let governmentSettingsTestContext;
+  const governmentSettingsActions = {
+    buildSettingsSection2,
+    addSettingsNumber,
+    addSettingsSelect,
+  };
+  const governmentSettingsEvolveAdapter = createGovernmentSettingsEvolveAdapter(
     {
-      $: () => $,
-      GovernmentManager: () => GovernmentManager,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsSelect: () => addSettingsSelect,
-      buildSettingsSection2: () => buildSettingsSection2,
-      document: () => document,
-      game: () => game,
-      governors: () => governors,
-      resetCheckbox: () => resetCheckbox,
-      resetGovernmentSettings: () => resetGovernmentSettings,
-      updateSettingsFromState: () => updateSettingsFromState,
+      getGame: () => governmentSettingsTestContext?.game ?? game,
+      getGovernmentManager: () =>
+        governmentSettingsTestContext?.GovernmentManager ?? GovernmentManager,
+      getGovernors: () => governmentSettingsTestContext?.governors ?? governors,
     },
   );
-  const governmentSettings = createGovernmentSettings({
-    getDependency: getGovernmentSettingsDependency,
-    getOverride: (name) => governmentSettingsOverrides[name],
+  let governmentSettingsIntentHandler;
+  const governmentSettingsBrowserAdapter =
+    createGovernmentSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getReadModel: () =>
+        governmentSettingsEvolveAdapter.readGovernmentSettingsReadModel(),
+      intents: {
+        handle: (intent) => governmentSettingsIntentHandler.handle(intent),
+      },
+      getActions: () =>
+        governmentSettingsTestContext?.actions ?? governmentSettingsActions,
+    });
+  governmentSettingsIntentHandler = createGovernmentSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          governmentSettingsTestContext?.resetGovernmentSettings ??
+          resetGovernmentSettings
+        )(true),
+      persist: () =>
+        (
+          governmentSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    },
+    renderSettingsContent: (secondaryPrefix) =>
+      governmentSettingsBrowserAdapter.updateGovernmentSettingsContent(
+        secondaryPrefix,
+      ),
+    effects: {
+      resetCheckboxes: () =>
+        (governmentSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoTax",
+          "autoGovernment",
+        ),
+    },
   });
   const { buildGovernmentSettings, updateGovernmentSettingsContent } =
-    governmentSettings;
+    governmentSettingsBrowserAdapter;
 
   let authoritySettingsTestActions;
   const authoritySettingsActions = {
@@ -5385,7 +5418,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     Object.assign(window.__EA_TEST_HOOKS__, {
       settingsBoundaries: {
         prestige: prestigeSettings,
-        government: governmentSettings,
         evolution: evolutionSettings,
         planet: planetSettings,
         trigger: triggerSettings,
@@ -5398,7 +5430,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       },
       setSettingsBoundariesTestContext(context) {
         Object.assign(prestigeSettingsOverrides, context);
-        Object.assign(governmentSettingsOverrides, context);
         Object.assign(evolutionSettingsOverrides, context);
         Object.assign(planetSettingsOverrides, context);
         Object.assign(triggerSettingsOverrides, context);
@@ -5414,6 +5445,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       challengeHelperSettings: challengeHelperSettingsBrowserAdapter,
       setChallengeHelperSettingsTestContext(context) {
         challengeHelperSettingsTestActions = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      governmentSettings: governmentSettingsBrowserAdapter,
+      setGovernmentSettingsTestContext(context) {
+        governmentSettingsTestContext = context;
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {

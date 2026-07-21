@@ -18220,6 +18220,249 @@
     return Object.freeze({ readLoggingSettingsReadModel });
   }
 
+  // src/application/government-settings.ts
+  function createGovernmentSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-government-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent(intent.secondaryPrefix);
+            effects.resetCheckboxes();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/government-settings.ts
+  function freezeOption2(option) {
+    return Object.freeze({ ...option });
+  }
+  function freezeOptions(options) {
+    return Object.freeze(options.map(freezeOption2));
+  }
+  function createGovernmentSettingsReadModel({
+    governmentOptions,
+    governorOptions
+  }) {
+    const frozenGovernmentOptions = freezeOptions(governmentOptions);
+    const frozenGovernorOptions = freezeOptions(governorOptions);
+    return Object.freeze({
+      sectionId: "government",
+      sectionName: "Government",
+      controls: Object.freeze([
+        Object.freeze({
+          kind: "number",
+          settingName: "generalRequestedTaxRate",
+          label: "Forced tax rate",
+          hint: "Set tax rate as close to this value as possible, ignores morale. Set to -1 to disable this option"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "generalMinimumTaxRate",
+          label: "Minimum allowed tax rate",
+          hint: "Minimum tax rate for autoTax. Will still go below this amount if money storage is full"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "generalMinimumMorale",
+          label: "Minimum allowed morale",
+          hint: "Use this to set a minimum allowed morale. Remember that less than 100% can cause riots and weather can cause sudden swings"
+        }),
+        Object.freeze({
+          kind: "number",
+          settingName: "generalMaximumMorale",
+          label: "Maximum allowed morale",
+          hint: "Use this to set a maximum allowed morale. The tax rate will be raised to lower morale to this maximum"
+        }),
+        Object.freeze({
+          kind: "select",
+          settingName: "govInterim",
+          label: "Interim Government",
+          hint: "Temporary low tier government until you research other governments",
+          options: frozenGovernmentOptions
+        }),
+        Object.freeze({
+          kind: "select",
+          settingName: "govFinal",
+          label: "Second Government",
+          hint: "Second government choice, chosen once becomes available. Can be the same as above",
+          options: frozenGovernmentOptions
+        }),
+        Object.freeze({
+          kind: "select",
+          settingName: "govSpace",
+          label: "Space Government",
+          hint: "Government for bioseed+. Chosen once you researched Quantum Manufacturing. Can be the same as above",
+          options: frozenGovernmentOptions
+        }),
+        Object.freeze({
+          kind: "select",
+          settingName: "govGovernor",
+          label: "Governor",
+          hint: "Chosen governor will be appointed.",
+          options: frozenGovernorOptions
+        })
+      ])
+    });
+  }
+
+  // src/adapters/browser/government-settings.ts
+  function createGovernmentSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function renderControl(node, control, actions) {
+      if (control.kind === "number") {
+        actions.addSettingsNumber(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      actions.addSettingsSelect(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        control.options
+      );
+    }
+    function buildGovernmentSettings2(parentNode, secondaryPrefix) {
+      const readModel = getReadModel();
+      const actions = getActions();
+      actions.buildSettingsSection2(
+        parentNode,
+        secondaryPrefix,
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({
+            type: "reset-government-settings",
+            secondaryPrefix
+          });
+        },
+        updateGovernmentSettingsContent2
+      );
+    }
+    function updateGovernmentSettingsContent2(secondaryPrefix) {
+      const readModel = getReadModel();
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentNode = getJQuery()(
+        `#script_${secondaryPrefix}${readModel.sectionId}Content`
+      );
+      currentNode.empty().off("*");
+      for (const control of readModel.controls) {
+        renderControl(currentNode, control, actions);
+      }
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    return Object.freeze({
+      buildGovernmentSettings: buildGovernmentSettings2,
+      updateGovernmentSettingsContent: updateGovernmentSettingsContent2
+    });
+  }
+
+  // src/adapters/evolve/government-settings.ts
+  function requireObjectRecord3(value, path) {
+    if (Array.isArray(value)) {
+      throw new TypeError(`${path} must be an object`);
+    }
+    return requireRecord(value, path);
+  }
+  function requireString3(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function readLocalizedOption(id, localize, game2) {
+    return {
+      val: id,
+      label: requireString3(
+        Reflect.apply(localize, game2, [`govern_${id}`]),
+        `game.loc(govern_${id}) result`
+      ),
+      hint: requireString3(
+        Reflect.apply(localize, game2, [`govern_${id}_desc`]),
+        `game.loc(govern_${id}_desc) result`
+      )
+    };
+  }
+  function createGovernmentSettingsEvolveAdapter({
+    getGame,
+    getGovernmentManager,
+    getGovernors
+  }) {
+    function readGovernmentSettingsReadModel() {
+      const game2 = requireObjectRecord3(getGame(), "game");
+      const rawLocalize = game2["loc"];
+      if (typeof rawLocalize !== "function") {
+        throw new TypeError("game.loc must be a function");
+      }
+      const localize = (key) => Reflect.apply(rawLocalize, game2, [key]);
+      const manager = requireObjectRecord3(
+        getGovernmentManager(),
+        "GovernmentManager"
+      );
+      const rawTypes = requireObjectRecord3(
+        manager["Types"],
+        "GovernmentManager.Types"
+      );
+      const governmentOptions = [
+        { val: "none", label: "None", hint: "Do not select government" }
+      ];
+      for (const [key, rawType] of Object.entries(rawTypes)) {
+        const type = requireObjectRecord3(
+          rawType,
+          `GovernmentManager.Types.${key}`
+        );
+        if (type["selectable"] === false) continue;
+        const id = requireString3(type["id"], `GovernmentManager.Types.${key}.id`);
+        governmentOptions.push(readLocalizedOption(id, localize, game2));
+      }
+      const rawGovernors = getGovernors();
+      if (!Array.isArray(rawGovernors)) {
+        throw new TypeError("governors must be an array");
+      }
+      const governorOptions = [
+        { val: "none", label: "None", hint: "Do not select governor" }
+      ];
+      rawGovernors.forEach((rawGovernor, index) => {
+        const id = requireString3(rawGovernor, `governors[${index}]`);
+        governorOptions.push({
+          val: id,
+          label: requireString3(
+            localize(`governor_${id}`),
+            `game.loc(governor_${id}) result`
+          ),
+          hint: requireString3(
+            localize(`governor_${id}_desc`),
+            `game.loc(governor_${id}_desc) result`
+          )
+        });
+      });
+      return createGovernmentSettingsReadModel({
+        governmentOptions,
+        governorOptions
+      });
+    }
+    return Object.freeze({ readGovernmentSettingsReadModel });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -21845,7 +22088,7 @@
   }
 
   // src/adapters/evolve/hell.ts
-  function requireString3(value, path) {
+  function requireString4(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -22142,7 +22385,7 @@
           ),
           evilTechnology: optionalNumber(tech["evil"], "game.global.tech.evil"),
           grenadier: Boolean(race2["grenadier"]),
-          government: requireString3(
+          government: requireString4(
             govern["type"],
             "game.global.civic.govern.type"
           )
@@ -22733,7 +22976,7 @@
   }
 
   // src/adapters/evolve/battle.ts
-  function requireString4(value, path) {
+  function requireString5(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -22751,7 +22994,7 @@
     return {
       input: Object.freeze({
         governmentId: requireNumber(foreign["id"], `${path}.id`),
-        policy: requireString4(foreign["policy"], `${path}.policy`),
+        policy: requireString5(foreign["policy"], `${path}.policy`),
         released: Boolean(foreign["released"]),
         occupied: Boolean(government["occ"]),
         annexed: Boolean(government["anx"]),
@@ -22866,7 +23109,7 @@
         );
         const hellAvailable = Boolean(manager["_hellVue"]);
         const readHell = autoHell2 && hellAvailable;
-        const protectMode = requireString4(
+        const protectMode = requireString5(
           settings2["foreignProtect"],
           "settings.foreignProtect"
         );
@@ -23140,7 +23383,7 @@
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        const governmentName = requireString4(
+        const governmentName = requireString5(
           dependencies.getGovernmentName(decision2.governmentId),
           `government name ${decision2.governmentId}`
         );
@@ -23166,7 +23409,7 @@
         if (removeBattalion !== null) {
           Reflect.apply(removeBattalion, active.manager, [-deltaBattalion]);
         }
-        const campaignTitle = requireString4(
+        const campaignTitle = requireString5(
           Reflect.apply(getCampaignTitle, active.manager, [decision2.tactic]),
           `campaign title ${decision2.tactic}`
         );
@@ -27113,7 +27356,7 @@
       moneyStorageRequired: 0
     });
   }
-  function requireString5(value, path) {
+  function requireString6(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -27162,7 +27405,7 @@
         );
         if (maxCityGarrison <= 0) return unavailableInput2();
         const state2 = requireRecord(dependencies.getState(), "state");
-        const goal = requireString5(state2["goal"], "state.goal");
+        const goal = requireString6(state2["goal"], "state.goal");
         const saveInflationMoney = Boolean(
           dependencies.shouldSaveInflationMoney()
         );
@@ -34867,7 +35110,7 @@
     );
     return { foreign, government };
   }
-  function requireString6(value, path) {
+  function requireString7(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -34878,7 +35121,7 @@
     const ids = {};
     for (const [name, rawType] of Object.entries(types)) {
       const type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString6(type["id"], `SpyManager.Types.${name}.id`);
+      ids[name] = requireString7(type["id"], `SpyManager.Types.${name}.id`);
     }
     return Object.freeze(ids);
   }
@@ -34986,7 +35229,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString6(
+        const policy = requireString7(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -35007,7 +35250,7 @@
             "resources.Money.maxQuantity"
           );
         }
-        const governmentName = requireString6(
+        const governmentName = requireString7(
           dependencies.getGovName(governmentId),
           `government name ${governmentId}`
         );
@@ -35053,7 +35296,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString6(
+        const policy = requireString7(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -36203,7 +36446,7 @@
   }
 
   // src/adapters/evolve/jobs.ts
-  function requireString7(value, path) {
+  function requireString8(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
     return value;
@@ -36333,7 +36576,7 @@
           if (count === 0) {
             maximum = 1;
           } else {
-            const id = requireString7(job["id"], "job.id");
+            const id = requireString8(job["id"], "job.id");
             const production = requireNumber(
               call2(
                 resource(resources2, "Food"),
@@ -36685,7 +36928,7 @@
           );
           return Object.freeze({
             token: token2,
-            id: requireString7(job["id"], `jobList[${token2}].id`),
+            id: requireString8(job["id"], `jobList[${token2}].id`),
             kind,
             workers: requireNumber(job["workers"], `jobList[${token2}].workers`),
             servants: requireNumber(
@@ -36802,7 +37045,7 @@
                 `craftingJobs[${index}].resource.craftPreserve`
               ))) {
                 affordability = 0;
-                exclusion = `${requireString7(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
+                exclusion = `${requireString8(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
                 break;
               }
               affordability = Math.min(
@@ -36834,7 +37077,7 @@
                 craftResource["currentQuantity"],
                 `craftingJobs[${index}].resource.currentQuantity`
               );
-              const resourceId3 = requireString7(
+              const resourceId3 = requireString8(
                 craftResource["id"],
                 `craftingJobs[${index}].resource.id`
               );
@@ -36854,7 +37097,7 @@
                 driver = `no building×${craftWeight}`;
               } else {
                 const record = requireRecord(driving, "driving building");
-                driver = `${requireString7(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
+                driver = `${requireString8(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
               }
             }
             return Object.freeze({
@@ -37061,7 +37304,7 @@
           minerToken: token("Miner"),
           population: resourceNumber(resources2, "Population", "currentQuantity"),
           craftDebug: Boolean(debugWindow["craftDebug"]),
-          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString7(state2["lastCraftWinner"], "state.lastCraftWinner"),
+          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString8(state2["lastCraftWinner"], "state.lastCraftWinner"),
           authority,
           jobs: Object.freeze(jobInputs),
           crafting: Object.freeze(craftingInputs),
@@ -37515,7 +37758,7 @@
   }
 
   // src/adapters/evolve/build.ts
-  function requireString8(value, path) {
+  function requireString9(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -37605,7 +37848,7 @@
         const byKey = /* @__PURE__ */ new Map();
         const candidates = entities.map((entity, index) => {
           const path = `buildList[${index}]`;
-          const key = requireString8(entity["_vueBinding"], `${path}._vueBinding`);
+          const key = requireString9(entity["_vueBinding"], `${path}._vueBinding`);
           byKey.set(key, entity);
           const rawCost = requireRecord(entity["cost"], `${path}.cost`);
           const cost = {};
@@ -38381,7 +38624,7 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString9(value, path) {
+  function requireString10(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -38401,7 +38644,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString9(
+    const status2 = requireString10(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -38470,7 +38713,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString9(
+          mode = requireString10(
             settings2["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -38608,7 +38851,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString9(
+            const id = requireString10(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -38767,7 +39010,7 @@
             );
           }
         }
-        const targetLocationName = requireString9(
+        const targetLocationName = requireString10(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -38800,7 +39043,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString9(
+        const shipName = requireString10(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -38811,7 +39054,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString9(
+        const shipClass = requireString10(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -38883,7 +39126,7 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString9(
+          const resourceId3 = requireString10(
             missingResource,
             "missing outer-fleet resource id"
           );
@@ -38891,7 +39134,7 @@
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString9(
+          missingResourceName = requireString10(
             resource2["name"],
             `resources.${resourceId3}.name`
           );
@@ -39321,7 +39564,7 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString10(value, path) {
+  function requireString11(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -39497,7 +39740,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString10(
+          const name = requireString11(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -39525,7 +39768,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString10(
+          chthonianLossMode = requireString11(
             settings2["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -39559,7 +39802,7 @@
               settings2["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString10(
+            alien2LossMode = requireString11(
               settings2["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -39908,7 +40151,7 @@
   }
 
   // src/adapters/evolve/mech.ts
-  function requireString11(value, path) {
+  function requireString12(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -39927,7 +40170,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString11(raw["size"], `${path}.size`),
+        size: requireString12(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -39962,7 +40205,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString11(raw["size"], `${path}.size`),
+      size: requireString12(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -40079,7 +40322,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString11(settings2["mechBuild"], "settings.mechBuild")
+          buildMode: requireString12(settings2["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -40114,7 +40357,7 @@
             call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString11(preferred[0], "preferred mech size");
+          const size = requireString12(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
             call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
@@ -40153,7 +40396,7 @@
           buildings2["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString11(
+        const prestigeType = requireString12(
           settings2["prestigeType"],
           "settings.prestigeType"
         );
@@ -40242,7 +40485,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString11(
+        const configuredScrapMode = requireString12(
           settings2["mechScrap"],
           "settings.mechScrap"
         );
@@ -40271,7 +40514,7 @@
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString11(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString12(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -40456,7 +40699,7 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString11(
+          const description = requireString12(
             call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
@@ -41853,137 +42096,6 @@
       return implementation.apply(this, args);
     }
     return { buildPrestigeSettings: buildPrestigeSettings2, updatePrestigeSettingsContent: updatePrestigeSettingsContent2 };
-  }
-
-  // src/ui/government-settings.ts
-  function createGovernmentSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const GovernmentManager2 = liveObject4(
-      () => getDependency("GovernmentManager")
-    );
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsSelect2 = liveFunction(
-      () => getDependency("addSettingsSelect")
-    );
-    const buildSettingsSection22 = liveFunction(
-      () => getDependency("buildSettingsSection2")
-    );
-    const document2 = liveObject4(() => getDependency("document"));
-    const game2 = liveObject4(() => getDependency("game"));
-    const governors2 = liveObject4(() => getDependency("governors"));
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetGovernmentSettings2 = liveFunction(
-      () => getDependency("resetGovernmentSettings")
-    );
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildGovernmentSettingsImpl(parentNode, secondaryPrefix) {
-      let sectionId = "government";
-      let sectionName = "Government";
-      let resetFunction = function() {
-        resetGovernmentSettings2(true);
-        updateSettingsFromState2();
-        updateGovernmentSettingsContent2(secondaryPrefix);
-        resetCheckbox2("autoTax", "autoGovernment");
-      };
-      buildSettingsSection22(
-        parentNode,
-        secondaryPrefix,
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateGovernmentSettingsContent2
-      );
-    }
-    function updateGovernmentSettingsContentImpl(secondaryPrefix) {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2(`#script_${secondaryPrefix}governmentContent`);
-      currentNode.empty().off("*");
-      addSettingsNumber2(
-        currentNode,
-        "generalRequestedTaxRate",
-        "Forced tax rate",
-        "Set tax rate as close to this value as possible, ignores morale. Set to -1 to disable this option"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "generalMinimumTaxRate",
-        "Minimum allowed tax rate",
-        "Minimum tax rate for autoTax. Will still go below this amount if money storage is full"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "generalMinimumMorale",
-        "Minimum allowed morale",
-        "Use this to set a minimum allowed morale. Remember that less than 100% can cause riots and weather can cause sudden swings"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "generalMaximumMorale",
-        "Maximum allowed morale",
-        "Use this to set a maximum allowed morale. The tax rate will be raised to lower morale to this maximum"
-      );
-      let governmentOptions = [
-        { val: "none", label: "None", hint: "Do not select government" },
-        ...Object.values(GovernmentManager2.Types).filter((g) => g.selectable !== false).map((g) => ({
-          val: g.id,
-          label: game2.loc(`govern_${g.id}`),
-          hint: game2.loc(`govern_${g.id}_desc`)
-        }))
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "govInterim",
-        "Interim Government",
-        "Temporary low tier government until you research other governments",
-        governmentOptions
-      );
-      addSettingsSelect2(
-        currentNode,
-        "govFinal",
-        "Second Government",
-        "Second government choice, chosen once becomes available. Can be the same as above",
-        governmentOptions
-      );
-      addSettingsSelect2(
-        currentNode,
-        "govSpace",
-        "Space Government",
-        "Government for bioseed+. Chosen once you researched Quantum Manufacturing. Can be the same as above",
-        governmentOptions
-      );
-      let governorsOptions = [
-        { val: "none", label: "None", hint: "Do not select governor" },
-        ...governors2.map((id) => ({
-          val: id,
-          label: game2.loc(`governor_${id}`),
-          hint: game2.loc(`governor_${id}_desc`)
-        }))
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "govGovernor",
-        "Governor",
-        "Chosen governor will be appointed.",
-        governorsOptions
-      );
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildGovernmentSettings2(...args) {
-      const implementation = getOverride("buildGovernmentSettings") ?? buildGovernmentSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateGovernmentSettingsContent2(...args) {
-      const implementation = getOverride("updateGovernmentSettingsContent") ?? updateGovernmentSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildGovernmentSettings: buildGovernmentSettings2, updateGovernmentSettingsContent: updateGovernmentSettingsContent2 };
   }
 
   // src/ui/evolution-settings.ts
@@ -50397,28 +50509,45 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getOverride: (name) => prestigeSettingsOverrides[name]
     });
     const { buildPrestigeSettings, updatePrestigeSettingsContent } = prestigeSettings;
-    const governmentSettingsOverrides = {};
-    const getGovernmentSettingsDependency = createDependencyResolver(
-      governmentSettingsOverrides,
+    let governmentSettingsTestContext;
+    const governmentSettingsActions = {
+      buildSettingsSection2,
+      addSettingsNumber,
+      addSettingsSelect
+    };
+    const governmentSettingsEvolveAdapter = createGovernmentSettingsEvolveAdapter(
       {
-        $: () => $,
-        GovernmentManager: () => GovernmentManager,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsSelect: () => addSettingsSelect,
-        buildSettingsSection2: () => buildSettingsSection2,
-        document: () => document,
-        game: () => game,
-        governors: () => governors,
-        resetCheckbox: () => resetCheckbox,
-        resetGovernmentSettings: () => resetGovernmentSettings,
-        updateSettingsFromState: () => updateSettingsFromState
+        getGame: () => governmentSettingsTestContext?.game ?? game,
+        getGovernmentManager: () => governmentSettingsTestContext?.GovernmentManager ?? GovernmentManager,
+        getGovernors: () => governmentSettingsTestContext?.governors ?? governors
       }
     );
-    const governmentSettings = createGovernmentSettings({
-      getDependency: getGovernmentSettingsDependency,
-      getOverride: (name) => governmentSettingsOverrides[name]
+    let governmentSettingsIntentHandler;
+    const governmentSettingsBrowserAdapter = createGovernmentSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getReadModel: () => governmentSettingsEvolveAdapter.readGovernmentSettingsReadModel(),
+      intents: {
+        handle: (intent) => governmentSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => governmentSettingsTestContext?.actions ?? governmentSettingsActions
     });
-    const { buildGovernmentSettings, updateGovernmentSettingsContent } = governmentSettings;
+    governmentSettingsIntentHandler = createGovernmentSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (governmentSettingsTestContext?.resetGovernmentSettings ?? resetGovernmentSettings)(true),
+        persist: () => (governmentSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      renderSettingsContent: (secondaryPrefix) => governmentSettingsBrowserAdapter.updateGovernmentSettingsContent(
+        secondaryPrefix
+      ),
+      effects: {
+        resetCheckboxes: () => (governmentSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoTax",
+          "autoGovernment"
+        )
+      }
+    });
+    const { buildGovernmentSettings, updateGovernmentSettingsContent } = governmentSettingsBrowserAdapter;
     let authoritySettingsTestActions;
     const authoritySettingsActions = {
       buildSettingsSection,
@@ -54126,7 +54255,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       Object.assign(window.__EA_TEST_HOOKS__, {
         settingsBoundaries: {
           prestige: prestigeSettings,
-          government: governmentSettings,
           evolution: evolutionSettings,
           planet: planetSettings,
           trigger: triggerSettings,
@@ -54139,7 +54267,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         },
         setSettingsBoundariesTestContext(context) {
           Object.assign(prestigeSettingsOverrides, context);
-          Object.assign(governmentSettingsOverrides, context);
           Object.assign(evolutionSettingsOverrides, context);
           Object.assign(planetSettingsOverrides, context);
           Object.assign(triggerSettingsOverrides, context);
@@ -54155,6 +54282,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         challengeHelperSettings: challengeHelperSettingsBrowserAdapter,
         setChallengeHelperSettingsTestContext(context) {
           challengeHelperSettingsTestActions = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        governmentSettings: governmentSettingsBrowserAdapter,
+        setGovernmentSettingsTestContext(context) {
+          governmentSettingsTestContext = context;
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {

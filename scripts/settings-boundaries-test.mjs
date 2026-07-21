@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import { createPrestigeSettings } from "../src/ui/prestige-settings.ts";
-import { createGovernmentSettings } from "../src/ui/government-settings.ts";
 import { createEvolutionSettings } from "../src/ui/evolution-settings.ts";
 import { createPlanetSettings } from "../src/ui/planet-settings.ts";
 import { createTriggerSettings } from "../src/ui/trigger-settings.ts";
@@ -22,16 +21,6 @@ const specs = [
     "Prestige",
     true,
     [],
-  ],
-  [
-    "government",
-    createGovernmentSettings,
-    "buildGovernmentSettings",
-    "updateGovernmentSettingsContent",
-    "government",
-    "Government",
-    true,
-    ["checkbox:autoTax|autoGovernment"],
   ],
   [
     "evolution",
@@ -185,4 +174,4 @@ for (const [
   ]);
 }
 
-console.log("11 settings-boundary module tests passed");
+console.log("10 settings-boundary module tests passed");
