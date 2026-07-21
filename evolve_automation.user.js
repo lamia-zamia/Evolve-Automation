@@ -20467,6 +20467,172 @@
     });
   }
 
+  // src/domain/options-modal.ts
+  var optionButtons = Object.freeze([
+    Object.freeze({
+      id: "s-government-options",
+      selector: "#government .tabs ul",
+      title: "Government",
+      builder: "government"
+    }),
+    Object.freeze({
+      id: "s-foreign-options",
+      selector: "#garrison div h2",
+      title: "Foreign Affairs",
+      builder: "war"
+    }),
+    Object.freeze({
+      id: "s-foreign-options2",
+      selector: "#c_garrison div h2",
+      title: "Foreign Affairs",
+      builder: "war"
+    }),
+    Object.freeze({
+      id: "s-hell-options",
+      selector: "#gFort div h3",
+      title: "Hell",
+      builder: "hell"
+    }),
+    Object.freeze({
+      id: "s-hell-options2",
+      selector: "#prtl_fortress div h3",
+      title: "Hell",
+      builder: "hell"
+    }),
+    Object.freeze({
+      id: "s-fleet-options",
+      selector: "#hfleet h3",
+      title: "Fleet",
+      builder: "fleet"
+    })
+  ]);
+  function getOptionsModalButtonDefinitions() {
+    return optionButtons;
+  }
+
+  // src/adapters/browser/options-modal.ts
+  function getBuilder(builders, key) {
+    return builders[key];
+  }
+  function createOptionsModalBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getWindow,
+    getSettingsReader,
+    getSettingsWriter,
+    getBuilders,
+    openOverrideModal: openOverrideModal2
+  }) {
+    function createSettingToggle2(node, settingName, title, enabledCallback, disabledCallback) {
+      const state2 = getSettingsReader().readToggle(settingName);
+      const toggle = getJQuery()(
+        `
+          <label class="switch script_bg_${settingName}" tabindex="0" title="${title}">
+            <input class="script_${settingName}" type="checkbox"${state2.checked ? " checked" : ""}/>
+            <span class="check"></span><span>${settingName}</span>
+          </label><br>`
+      ).toggleClass("inactive-row", state2.inactive);
+      if (state2.checked && enabledCallback) enabledCallback();
+      toggle.on("change", "input", function() {
+        const writer = getSettingsWriter();
+        writer.setToggle(settingName, this.checked);
+        writer.persist();
+        if (this.checked && enabledCallback) enabledCallback();
+        if (!this.checked && disabledCallback) disabledCallback();
+      });
+      toggle.on(
+        "click",
+        { label: `Toggle (${settingName})`, name: settingName, type: "boolean" },
+        openOverrideModal2
+      );
+      node.append(toggle);
+    }
+    function updateOptionsUI2() {
+      const builders = getBuilders();
+      for (const definition of getOptionsModalButtonDefinitions()) {
+        addOptionDefinition(definition, getBuilder(builders, definition.builder));
+      }
+    }
+    function addOptionUI2(optionsId, querySelectorText, modalTitle, buildOptionsFunction) {
+      addOptionDefinition(
+        {
+          id: optionsId,
+          selector: querySelectorText,
+          title: modalTitle,
+          builder: "government"
+        },
+        buildOptionsFunction
+      );
+    }
+    function addOptionDefinition(definition, buildOptionsFunction) {
+      const document2 = getDocument();
+      if (document2.getElementById(definition.id) !== null) return;
+      const sectionNode = getJQuery()(definition.selector);
+      if (sectionNode.length === 0) return;
+      const newOptionNode = getJQuery()(
+        `<span id="${definition.id}" class="s-options-button has-text-success" style="margin-right:0px">+</span>`
+      );
+      sectionNode.prepend(newOptionNode);
+      newOptionNode.on(
+        "click",
+        () => openOptionsModal2(definition.title, buildOptionsFunction)
+      );
+    }
+    function openOptionsModal2(modalTitle, buildOptionsFunction) {
+      const jquery = getJQuery();
+      const modalHeader = jquery("#scriptModalHeader");
+      modalHeader.empty().off("*");
+      modalHeader.append(`<span style="user-select: text">${modalTitle}</span>`);
+      jquery(".script-modal-content").removeClass("custom-race-modal");
+      const modalBody = jquery("#scriptModalBody");
+      modalBody.empty().off("*").removeClass("celestialLab");
+      buildOptionsFunction(modalBody, "c_");
+      const modal = getDocument().getElementById("scriptModal");
+      if (!modal) return;
+      jquery("html").css("overflow", "hidden");
+      modal.style.display = "block";
+    }
+    function createOptionsModal2() {
+      const document2 = getDocument();
+      if (document2.getElementById("scriptModal") !== null) return;
+      const jquery = getJQuery();
+      jquery(document2.body).append(`
+          <div id="scriptModal" class="script-modal content">
+            <span id="scriptModalClose" class="script-modal-close">&times;</span>
+            <div class="script-modal-content">
+              <div id="scriptModalHeader" class="script-modal-header has-text-warning">
+                <p>You should never see this modal header...</p>
+              </div>
+              <div id="scriptModalBody" class="script-modal-body">
+                <p>You should never see this modal body...</p>
+              </div>
+            </div>
+          </div>`);
+      jquery("#scriptModalClose").on("click", () => {
+        jquery("#scriptModal").css("display", "none");
+        jquery(".script-modal-content").removeClass(
+          "override-modal custom-race-modal"
+        );
+        jquery("html").css("overflow-y", "scroll");
+      });
+      jquery(getWindow()).on("click", (event) => {
+        if (event.target?.id !== "scriptModal") return;
+        jquery("#scriptModal").css("display", "none");
+        jquery(".script-modal-content").removeClass(
+          "override-modal custom-race-modal"
+        );
+        jquery("html").css("overflow-y", "scroll");
+      });
+    }
+    return Object.freeze({
+      createSettingToggle: createSettingToggle2,
+      updateOptionsUI: updateOptionsUI2,
+      addOptionUI: addOptionUI2,
+      openOptionsModal: openOptionsModal2,
+      createOptionsModal: createOptionsModal2
+    });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -46247,180 +46413,6 @@
     return { buildMarketSettings: buildMarketSettings2, updateMarketSettingsContent: updateMarketSettingsContent2 };
   }
 
-  // src/ui/options-modal.ts
-  function createOptionsModalUI({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const buildFleetSettings2 = liveFunction(
-      () => getDependency("buildFleetSettings")
-    );
-    const buildGovernmentSettings2 = liveFunction(
-      () => getDependency("buildGovernmentSettings")
-    );
-    const buildHellSettings2 = liveFunction(
-      () => getDependency("buildHellSettings")
-    );
-    const buildWarSettings2 = liveFunction(
-      () => getDependency("buildWarSettings")
-    );
-    const document2 = liveObject4(() => getDependency("document"));
-    const openOverrideModal2 = liveFunction(
-      () => getDependency("openOverrideModal")
-    );
-    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    const window2 = liveObject4(() => getDependency("window"));
-    function createSettingToggleImpl(node, settingKey, title, enabledCallBack, disabledCallBack) {
-      let toggle = $2(`
-          <label class="switch script_bg_${settingKey}" tabindex="0" title="${title}">
-            <input class="script_${settingKey}" type="checkbox"${settingsRaw2[settingKey] ? " checked" : ""}/>
-            <span class="check"></span><span>${settingKey}</span>
-          </label><br>`).toggleClass(
-        "inactive-row",
-        Boolean(settingsRaw2.overrides[settingKey])
-      );
-      if (settingsRaw2[settingKey] && enabledCallBack) {
-        enabledCallBack();
-      }
-      toggle.on("change", "input", function() {
-        settingsRaw2[settingKey] = this.checked;
-        updateSettingsFromState2();
-        if (settingsRaw2[settingKey] && enabledCallBack) {
-          enabledCallBack();
-        }
-        if (!settingsRaw2[settingKey] && disabledCallBack) {
-          disabledCallBack();
-        }
-      });
-      toggle.on(
-        "click",
-        { label: `Toggle (${settingKey})`, name: settingKey, type: "boolean" },
-        openOverrideModal2
-      );
-      node.append(toggle);
-    }
-    function updateOptionsUIImpl() {
-      addOptionUI2(
-        "s-government-options",
-        "#government .tabs ul",
-        "Government",
-        buildGovernmentSettings2
-      );
-      addOptionUI2(
-        "s-foreign-options",
-        "#garrison div h2",
-        "Foreign Affairs",
-        buildWarSettings2
-      );
-      addOptionUI2(
-        "s-foreign-options2",
-        "#c_garrison div h2",
-        "Foreign Affairs",
-        buildWarSettings2
-      );
-      addOptionUI2("s-hell-options", "#gFort div h3", "Hell", buildHellSettings2);
-      addOptionUI2(
-        "s-hell-options2",
-        "#prtl_fortress div h3",
-        "Hell",
-        buildHellSettings2
-      );
-      addOptionUI2("s-fleet-options", "#hfleet h3", "Fleet", buildFleetSettings2);
-    }
-    function addOptionUIImpl(optionsId, querySelectorText, modalTitle, buildOptionsFunction) {
-      if (document2.getElementById(optionsId) !== null) {
-        return;
-      }
-      let sectionNode = $2(querySelectorText);
-      if (sectionNode.length === 0) {
-        return;
-      }
-      let newOptionNode = $2(
-        `<span id="${optionsId}" class="s-options-button has-text-success" style="margin-right:0px">+</span>`
-      );
-      sectionNode.prepend(newOptionNode);
-      newOptionNode.on("click", function() {
-        openOptionsModal2(modalTitle, buildOptionsFunction);
-      });
-    }
-    function openOptionsModalImpl(modalTitle, buildOptionsFunction) {
-      let modalHeader = $2("#scriptModalHeader");
-      modalHeader.empty().off("*");
-      modalHeader.append(`<span style="user-select: text">${modalTitle}</span>`);
-      $2(".script-modal-content").removeClass("custom-race-modal");
-      let modalBody = $2("#scriptModalBody");
-      modalBody.empty().off("*").removeClass("celestialLab");
-      buildOptionsFunction(modalBody, "c_");
-      let modal = document2.getElementById("scriptModal");
-      $2("html").css("overflow", "hidden");
-      modal.style.display = "block";
-    }
-    function createOptionsModalImpl() {
-      if (document2.getElementById("scriptModal") !== null) {
-        return;
-      }
-      $2(document2.body).append(`
-          <div id="scriptModal" class="script-modal content">
-            <span id="scriptModalClose" class="script-modal-close">&times;</span>
-            <div class="script-modal-content">
-              <div id="scriptModalHeader" class="script-modal-header has-text-warning">
-                <p>You should never see this modal header...</p>
-              </div>
-              <div id="scriptModalBody" class="script-modal-body">
-                <p>You should never see this modal body...</p>
-              </div>
-            </div>
-          </div>`);
-      $2("#scriptModalClose").on("click", function() {
-        $2("#scriptModal").css("display", "none");
-        $2(".script-modal-content").removeClass(
-          "override-modal custom-race-modal"
-        );
-        $2("html").css("overflow-y", "scroll");
-      });
-      $2(window2).on("click", function(event) {
-        if (event.target.id === "scriptModal") {
-          $2("#scriptModal").css("display", "none");
-          $2(".script-modal-content").removeClass(
-            "override-modal custom-race-modal"
-          );
-          $2("html").css("overflow-y", "scroll");
-        }
-      });
-    }
-    function createSettingToggle2(...args) {
-      const implementation = getOverride("createSettingToggle") ?? createSettingToggleImpl;
-      return implementation.apply(this, args);
-    }
-    function updateOptionsUI2(...args) {
-      const implementation = getOverride("updateOptionsUI") ?? updateOptionsUIImpl;
-      return implementation.apply(this, args);
-    }
-    function addOptionUI2(...args) {
-      const implementation = getOverride("addOptionUI") ?? addOptionUIImpl;
-      return implementation.apply(this, args);
-    }
-    function openOptionsModal2(...args) {
-      const implementation = getOverride("openOptionsModal") ?? openOptionsModalImpl;
-      return implementation.apply(this, args);
-    }
-    function createOptionsModal2(...args) {
-      const implementation = getOverride("createOptionsModal") ?? createOptionsModalImpl;
-      return implementation.apply(this, args);
-    }
-    return {
-      createSettingToggle: createSettingToggle2,
-      updateOptionsUI: updateOptionsUI2,
-      addOptionUI: addOptionUI2,
-      openOptionsModal: openOptionsModal2,
-      createOptionsModal: createOptionsModal2
-    };
-  }
-
   // src/ui/prestige-top-bar.ts
   function createPrestigeTopBar({
     getDependency,
@@ -50937,25 +50929,35 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       }
     });
     const { buildLoggingSettings, updateLoggingSettingsContent } = loggingSettingsBrowserAdapter;
-    const optionsBoundaryOverrides = {};
-    const getOptionsBoundaryDependency = createDependencyResolver(
-      optionsBoundaryOverrides,
-      {
-        $: () => $,
-        buildFleetSettings: () => buildFleetSettings,
-        buildGovernmentSettings: () => buildGovernmentSettings,
-        buildHellSettings: () => buildHellSettings,
-        buildWarSettings: () => buildWarSettings,
-        document: () => document,
-        openOverrideModal: () => openOverrideModal,
-        settingsRaw: () => settingsRaw,
-        updateSettingsFromState: () => updateSettingsFromState,
-        window: () => window
-      }
-    );
-    const optionsBoundary = createOptionsModalUI({
-      getDependency: getOptionsBoundaryDependency,
-      getOverride: (name) => optionsBoundaryOverrides[name]
+    let optionsModalTestContext;
+    const optionsModalBrowserAdapter = createOptionsModalBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getWindow: () => window,
+      getSettingsReader: () => ({
+        readToggle: (settingName) => {
+          const raw = optionsModalTestContext?.settingsRaw ?? settingsRaw;
+          const overrides = raw.overrides ?? {};
+          return {
+            checked: Boolean(raw[settingName]),
+            inactive: Boolean(overrides[settingName])
+          };
+        }
+      }),
+      getSettingsWriter: () => ({
+        setToggle: (settingName, checked) => {
+          const raw = optionsModalTestContext?.settingsRaw ?? settingsRaw;
+          raw[settingName] = checked;
+        },
+        persist: () => (optionsModalTestContext?.updateSettingsFromState ?? updateSettingsFromState)()
+      }),
+      getBuilders: () => optionsModalTestContext?.builders ?? {
+        government: buildGovernmentSettings,
+        war: buildWarSettings,
+        hell: buildHellSettings,
+        fleet: buildFleetSettings
+      },
+      openOverrideModal: (event) => (optionsModalTestContext?.openOverrideModal ?? openOverrideModal)(event)
     });
     const {
       createSettingToggle,
@@ -50963,7 +50965,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       addOptionUI,
       openOptionsModal,
       createOptionsModal
-    } = optionsBoundary;
+    } = optionsModalBrowserAdapter;
     const prestigeTopBarBoundaryOverrides = {};
     const getPrestigeTopBarBoundaryDependency = createDependencyResolver(
       prestigeTopBarBoundaryOverrides,
@@ -55027,6 +55029,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
+        optionsModal: optionsModalBrowserAdapter,
+        setOptionsModalTestContext(context) {
+          optionsModalTestContext = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
         achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
         setAchievementGuardSettingsTestContext(context) {
           achievementGuardSettingsTestActions = context;
@@ -55194,7 +55202,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         remainingUiBoundaries: {
-          options: optionsBoundary,
           prestigeTopBar: prestigeTopBarBoundary,
           totalDaysTopBar: totalDaysTopBarBoundary,
           arpaToggles: arpaTogglesBoundary,
@@ -55219,7 +55226,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
             ProjectManager = context.ProjectManager;
           if ("EjectManager" in context) EjectManager = context.EjectManager;
           if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-          Object.assign(optionsBoundaryOverrides, context);
           Object.assign(prestigeTopBarBoundaryOverrides, context);
           Object.assign(totalDaysTopBarBoundaryOverrides, context);
           Object.assign(arpaTogglesBoundaryOverrides, context);

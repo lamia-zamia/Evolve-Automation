@@ -83,7 +83,6 @@ vm.runInNewContext(source, sandbox, {
 
 const boundaries = hooks.remainingUiBoundaries;
 assert.deepEqual(Object.keys(boundaries), [
-  "options",
   "prestigeTopBar",
   "totalDaysTopBar",
   "arpaToggles",
@@ -139,8 +138,6 @@ hooks.setRemainingUiBoundariesTestContext({
     trace.push(`toggle:${key}`);
     return node;
   },
-  addOptionUI: (id, selector, title) =>
-    trace.push(`option:${id}:${selector}:${title}`),
   ...resetStubs,
   ...updateStubs,
 });
@@ -163,17 +160,6 @@ assert.deepEqual(
   trace.filter((entry) => /^(reset|update|checkbox|cleanup):/.test(entry)),
   [],
 );
-
-trace.length = 0;
-boundaries.options.updateOptionsUI();
-assert.deepEqual(trace, [
-  "option:s-government-options:#government .tabs ul:Government",
-  "option:s-foreign-options:#garrison div h2:Foreign Affairs",
-  "option:s-foreign-options2:#c_garrison div h2:Foreign Affairs",
-  "option:s-hell-options:#gFort div h3:Hell",
-  "option:s-hell-options2:#prtl_fortress div h3:Hell",
-  "option:s-fleet-options:#hfleet h3:Fleet",
-]);
 
 trace.length = 0;
 boundaries.arpaToggles.createArpaToggles();
@@ -310,4 +296,4 @@ assert.ok(domTrace.includes("remove:#script_market_top_row"));
 assert.ok(domTrace.includes("remove:#resStorage .ea-storage-toggle"));
 assert.ok(domTrace.includes("remove:#script_storage_top_row"));
 
-console.log("Next 8 UI-boundary bundled characterization tests passed");
+console.log("Next 7 UI-boundary bundled characterization tests passed");

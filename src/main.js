@@ -177,6 +177,7 @@ import { createWeightingSettingsBrowserAdapter } from "./adapters/browser/weight
 import { createBuildingSettingsIntentHandler } from "./application/building-settings.ts";
 import { createBuildingSettingsBrowserAdapter } from "./adapters/browser/building-settings.ts";
 import { createBuildingSettingsEvolveAdapter } from "./adapters/evolve/building-settings.ts";
+import { createOptionsModalBrowserAdapter } from "./adapters/browser/options-modal.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -430,7 +431,6 @@ import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createMechSettings } from "./ui/mech-settings.ts";
 import { createEjectorSettings } from "./ui/ejector-settings.ts";
 import { createMarketSettings } from "./ui/market-settings.ts";
-import { createOptionsModalUI } from "./ui/options-modal.ts";
 import { createPrestigeTopBar } from "./ui/prestige-top-bar.ts";
 import { createTotalDaysTopBar } from "./ui/total-days-top-bar.ts";
 import { createArpaToggleUI } from "./ui/arpa-toggles.ts";
@@ -1110,25 +1110,41 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildLoggingSettings, updateLoggingSettingsContent } =
     loggingSettingsBrowserAdapter;
 
-  const optionsBoundaryOverrides = {};
-  const getOptionsBoundaryDependency = createDependencyResolver(
-    optionsBoundaryOverrides,
-    {
-      $: () => $,
-      buildFleetSettings: () => buildFleetSettings,
-      buildGovernmentSettings: () => buildGovernmentSettings,
-      buildHellSettings: () => buildHellSettings,
-      buildWarSettings: () => buildWarSettings,
-      document: () => document,
-      openOverrideModal: () => openOverrideModal,
-      settingsRaw: () => settingsRaw,
-      updateSettingsFromState: () => updateSettingsFromState,
-      window: () => window,
-    },
-  );
-  const optionsBoundary = createOptionsModalUI({
-    getDependency: getOptionsBoundaryDependency,
-    getOverride: (name) => optionsBoundaryOverrides[name],
+  let optionsModalTestContext;
+  const optionsModalBrowserAdapter = createOptionsModalBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    getWindow: () => window,
+    getSettingsReader: () => ({
+      readToggle: (settingName) => {
+        const raw = optionsModalTestContext?.settingsRaw ?? settingsRaw;
+        const overrides = raw.overrides ?? {};
+        return {
+          checked: Boolean(raw[settingName]),
+          inactive: Boolean(overrides[settingName]),
+        };
+      },
+    }),
+    getSettingsWriter: () => ({
+      setToggle: (settingName, checked) => {
+        const raw = optionsModalTestContext?.settingsRaw ?? settingsRaw;
+        raw[settingName] = checked;
+      },
+      persist: () =>
+        (
+          optionsModalTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    }),
+    getBuilders: () =>
+      optionsModalTestContext?.builders ?? {
+        government: buildGovernmentSettings,
+        war: buildWarSettings,
+        hell: buildHellSettings,
+        fleet: buildFleetSettings,
+      },
+    openOverrideModal: (event) =>
+      (optionsModalTestContext?.openOverrideModal ?? openOverrideModal)(event),
   });
   const {
     createSettingToggle,
@@ -1136,7 +1152,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     addOptionUI,
     openOptionsModal,
     createOptionsModal,
-  } = optionsBoundary;
+  } = optionsModalBrowserAdapter;
 
   const prestigeTopBarBoundaryOverrides = {};
   const getPrestigeTopBarBoundaryDependency = createDependencyResolver(
@@ -5684,6 +5700,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {
+      optionsModal: optionsModalBrowserAdapter,
+      setOptionsModalTestContext(context) {
+        optionsModalTestContext = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
       achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
       setAchievementGuardSettingsTestContext(context) {
         achievementGuardSettingsTestActions = context;
@@ -5862,7 +5884,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
       remainingUiBoundaries: {
-        options: optionsBoundary,
         prestigeTopBar: prestigeTopBarBoundary,
         totalDaysTopBar: totalDaysTopBarBoundary,
         arpaToggles: arpaTogglesBoundary,
@@ -5887,7 +5908,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
           ProjectManager = context.ProjectManager;
         if ("EjectManager" in context) EjectManager = context.EjectManager;
         if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-        Object.assign(optionsBoundaryOverrides, context);
         Object.assign(prestigeTopBarBoundaryOverrides, context);
         Object.assign(totalDaysTopBarBoundaryOverrides, context);
         Object.assign(arpaTogglesBoundaryOverrides, context);

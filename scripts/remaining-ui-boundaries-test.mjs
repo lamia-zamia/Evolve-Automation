@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import { liveFunction } from "../src/ui/dependencies.ts";
-import { createOptionsModalUI } from "../src/ui/options-modal.ts";
 import { createPrestigeTopBar } from "../src/ui/prestige-top-bar.ts";
 import { createTotalDaysTopBar } from "../src/ui/total-days-top-bar.ts";
 import { createArpaToggleUI } from "../src/ui/arpa-toggles.ts";
@@ -16,27 +15,6 @@ function makeFactory(factory, context = {}, overrides = {}) {
     getOverride: (name) => overrides[name],
   });
 }
-
-const optionTrace = [];
-const optionContext = {};
-const optionOverrides = {
-  addOptionUI: (id, selector, title) =>
-    optionTrace.push(`${id}:${selector}:${title}`),
-};
-const options = makeFactory(
-  createOptionsModalUI,
-  optionContext,
-  optionOverrides,
-);
-options.updateOptionsUI();
-assert.deepEqual(optionTrace, [
-  "s-government-options:#government .tabs ul:Government",
-  "s-foreign-options:#garrison div h2:Foreign Affairs",
-  "s-foreign-options2:#c_garrison div h2:Foreign Affairs",
-  "s-hell-options:#gFort div h3:Hell",
-  "s-hell-options2:#prtl_fortress div h3:Hell",
-  "s-fleet-options:#hfleet h3:Fleet",
-]);
 
 function jqueryNode() {
   return {
@@ -168,4 +146,4 @@ currentClass = SecondClass;
 assert.equal(new FirstClass() instanceof liveClass, false);
 assert.equal(new SecondClass() instanceof liveClass, true);
 
-console.log("Next 8 UI-boundary module tests passed");
+console.log("Next 7 UI-boundary module tests passed");
