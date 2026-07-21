@@ -184,6 +184,8 @@ import { createPrestigeTopBarBrowserAdapter } from "./adapters/browser/prestige-
 import { createPrestigeTopBarEvolveAdapter } from "./adapters/evolve/prestige-top-bar.ts";
 import { createEjectToggleBrowserAdapter } from "./adapters/browser/eject-toggles.ts";
 import { createEjectToggleEvolveAdapter } from "./adapters/evolve/eject-toggles.ts";
+import { createSupplyToggleBrowserAdapter } from "./adapters/browser/supply-toggles.ts";
+import { createSupplyToggleEvolveAdapter } from "./adapters/evolve/supply-toggles.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -440,7 +442,6 @@ import { createMarketSettings } from "./ui/market-settings.ts";
 import { createArpaToggleUI } from "./ui/arpa-toggles.ts";
 import { createCraftToggleUI } from "./ui/craft-toggles.ts";
 import { createBuildingToggleUI } from "./ui/building-toggles.ts";
-import { createSupplyToggleUI } from "./ui/supply-toggles.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoUI } from "./ui/mech-info.ts";
 import { createResourceToggleUI } from "./ui/resource-toggles.ts";
@@ -1262,21 +1263,22 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   });
   const { createEjectToggles, removeEjectToggles } = ejectToggleBrowserAdapter;
 
-  const supplyTogglesBoundaryOverrides = {};
-  const getSupplyTogglesBoundaryDependency = createDependencyResolver(
-    supplyTogglesBoundaryOverrides,
-    {
-      $: () => $,
-      SupplyManager: () => SupplyManager,
-      addToggleCallbacks: () => addToggleCallbacks,
-      settingsRaw: () => settingsRaw,
-    },
-  );
-  const supplyTogglesBoundary = createSupplyToggleUI({
-    getDependency: getSupplyTogglesBoundaryDependency,
-    getOverride: (name) => supplyTogglesBoundaryOverrides[name],
+  let supplyTogglesTestContext;
+  const supplyToggleReader = createSupplyToggleEvolveAdapter({
+    getSupplyManager: () =>
+      supplyTogglesTestContext?.SupplyManager ?? SupplyManager,
+    getSettingsRaw: () => supplyTogglesTestContext?.settingsRaw ?? settingsRaw,
   });
-  const { createSupplyToggles, removeSupplyToggles } = supplyTogglesBoundary;
+  const supplyToggleBrowserAdapter = createSupplyToggleBrowserAdapter({
+    getJQuery: () => $,
+    reader: supplyToggleReader,
+    addToggleCallbacks: (...args) =>
+      (supplyTogglesTestContext?.addToggleCallbacks ?? addToggleCallbacks)(
+        ...args,
+      ),
+  });
+  const { createSupplyToggles, removeSupplyToggles } =
+    supplyToggleBrowserAdapter;
 
   let generalSettingsTestActions;
   const generalSettingsActions = {
@@ -5898,6 +5900,10 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       setEjectTogglesTestContext(context) {
         ejectTogglesTestContext = context;
       },
+      supplyToggles: supplyToggleBrowserAdapter,
+      setSupplyTogglesTestContext(context) {
+        supplyTogglesTestContext = context;
+      },
     });
   }
 
@@ -5907,7 +5913,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         arpaToggles: arpaTogglesBoundary,
         craftToggles: craftTogglesBoundary,
         buildingToggles: buildingTogglesBoundary,
-        supplyToggles: supplyTogglesBoundary,
       },
       setRemainingUiBoundariesTestContext(context) {
         if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
@@ -5928,7 +5933,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         Object.assign(arpaTogglesBoundaryOverrides, context);
         Object.assign(craftTogglesBoundaryOverrides, context);
         Object.assign(buildingTogglesBoundaryOverrides, context);
-        Object.assign(supplyTogglesBoundaryOverrides, context);
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {

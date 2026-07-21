@@ -4,7 +4,6 @@ import { liveFunction } from "../src/ui/dependencies.ts";
 import { createArpaToggleUI } from "../src/ui/arpa-toggles.ts";
 import { createCraftToggleUI } from "../src/ui/craft-toggles.ts";
 import { createBuildingToggleUI } from "../src/ui/building-toggles.ts";
-import { createSupplyToggleUI } from "../src/ui/supply-toggles.ts";
 
 function makeFactory(factory, context = {}, overrides = {}) {
   return factory({
@@ -73,12 +72,6 @@ toggleFixture(
   "createBuildingToggles",
   "removeBuildingToggles",
 );
-toggleFixture(
-  createSupplyToggleUI,
-  { SupplyManager: { priorityList: [{ id: "Coal" }] }, settingsRaw: {} },
-  "createSupplyToggles",
-  "removeSupplyToggles",
-);
 assert.deepEqual(toggleTrace, [
   "remove:removeArpaToggles",
   "toggle:arpa_Physics",
@@ -86,8 +79,6 @@ assert.deepEqual(toggleTrace, [
   "toggle:craftPlywood",
   "remove:removeBuildingToggles",
   "toggle:batcity1",
-  "remove:removeSupplyToggles",
-  "toggle:res_supplyCoal",
 ]);
 assert.equal(buildingState.buildingToggles, 1);
 
@@ -112,4 +103,4 @@ currentClass = SecondClass;
 assert.equal(new FirstClass() instanceof liveClass, false);
 assert.equal(new SecondClass() instanceof liveClass, true);
 
-console.log("Next 4 UI-boundary module tests passed");
+console.log("Next 3 UI-boundary module tests passed");
