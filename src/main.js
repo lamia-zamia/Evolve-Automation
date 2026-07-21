@@ -157,6 +157,9 @@ import { createLoggingSettingsEvolveAdapter } from "./adapters/evolve/logging-se
 import { createGovernmentSettingsIntentHandler } from "./application/government-settings.ts";
 import { createGovernmentSettingsBrowserAdapter } from "./adapters/browser/government-settings.ts";
 import { createGovernmentSettingsEvolveAdapter } from "./adapters/evolve/government-settings.ts";
+import { createPlanetSettingsIntentHandler } from "./application/planet-settings.ts";
+import { createPlanetSettingsBrowserAdapter } from "./adapters/browser/planet-settings.ts";
+import { createPlanetSettingsEvolveAdapter } from "./adapters/evolve/planet-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -403,7 +406,6 @@ import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
 import { createPrestigeSettings } from "./ui/prestige-settings.ts";
 import { createEvolutionSettings } from "./ui/evolution-settings.ts";
-import { createPlanetSettings } from "./ui/planet-settings.ts";
 import { createTriggerSettings } from "./ui/trigger-settings.ts";
 import { createWarSettings } from "./ui/war-settings.ts";
 import { createHellSettings } from "./ui/hell-settings.ts";
@@ -1381,28 +1383,47 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     addEvolutionSetting,
   } = evolutionSettings;
 
-  const planetSettingsOverrides = {};
-  const getPlanetSettingsDependency = createDependencyResolver(
-    planetSettingsOverrides,
-    {
-      $: () => $,
-      addTableInput: () => addTableInput,
-      biomeList: () => biomeList,
-      buildSettingsSection: () => buildSettingsSection,
-      buildTableLabel: () => buildTableLabel,
-      document: () => document,
-      extraList: () => extraList,
-      game: () => game,
-      resetPlanetSettings: () => resetPlanetSettings,
-      traitList: () => traitList,
-      updateSettingsFromState: () => updateSettingsFromState,
-    },
-  );
-  const planetSettings = createPlanetSettings({
-    getDependency: getPlanetSettingsDependency,
-    getOverride: (name) => planetSettingsOverrides[name],
+  let planetSettingsTestContext;
+  const planetSettingsActions = {
+    buildSettingsSection,
+    addTableInput,
+    buildTableLabel,
+  };
+  const planetSettingsEvolveAdapter = createPlanetSettingsEvolveAdapter({
+    getGame: () => planetSettingsTestContext?.game ?? game,
+    getBiomeList: () => planetSettingsTestContext?.biomeList ?? biomeList,
+    getTraitList: () => planetSettingsTestContext?.traitList ?? traitList,
+    getExtraList: () => planetSettingsTestContext?.extraList ?? extraList,
   });
-  const { buildPlanetSettings, updatePlanetSettingsContent } = planetSettings;
+  let planetSettingsIntentHandler;
+  const planetSettingsBrowserAdapter = createPlanetSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    getReadModel: () =>
+      planetSettingsEvolveAdapter.readPlanetSettingsReadModel(),
+    intents: {
+      handle: (intent) => planetSettingsIntentHandler.handle(intent),
+    },
+    getActions: () =>
+      planetSettingsTestContext?.actions ?? planetSettingsActions,
+  });
+  planetSettingsIntentHandler = createPlanetSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (planetSettingsTestContext?.resetPlanetSettings ?? resetPlanetSettings)(
+          true,
+        ),
+      persist: () =>
+        (
+          planetSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    },
+    renderSettingsContent: () =>
+      planetSettingsBrowserAdapter.updatePlanetSettingsContent(),
+  });
+  const { buildPlanetSettings, updatePlanetSettingsContent } =
+    planetSettingsBrowserAdapter;
 
   const triggerSettingsOverrides = {};
   const getTriggerSettingsDependency = createDependencyResolver(
@@ -5419,7 +5440,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       settingsBoundaries: {
         prestige: prestigeSettings,
         evolution: evolutionSettings,
-        planet: planetSettings,
         trigger: triggerSettings,
         war: warSettings,
         hell: hellSettings,
@@ -5431,7 +5451,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       setSettingsBoundariesTestContext(context) {
         Object.assign(prestigeSettingsOverrides, context);
         Object.assign(evolutionSettingsOverrides, context);
-        Object.assign(planetSettingsOverrides, context);
         Object.assign(triggerSettingsOverrides, context);
         Object.assign(warSettingsOverrides, context);
         Object.assign(hellSettingsOverrides, context);
@@ -5451,6 +5470,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       governmentSettings: governmentSettingsBrowserAdapter,
       setGovernmentSettingsTestContext(context) {
         governmentSettingsTestContext = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      planetSettings: planetSettingsBrowserAdapter,
+      setPlanetSettingsTestContext(context) {
+        planetSettingsTestContext = context;
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import { createPrestigeSettings } from "../src/ui/prestige-settings.ts";
 import { createEvolutionSettings } from "../src/ui/evolution-settings.ts";
-import { createPlanetSettings } from "../src/ui/planet-settings.ts";
 import { createTriggerSettings } from "../src/ui/trigger-settings.ts";
 import { createWarSettings } from "../src/ui/war-settings.ts";
 import { createHellSettings } from "../src/ui/hell-settings.ts";
@@ -31,16 +30,6 @@ const specs = [
     "Evolution",
     false,
     ["checkbox:autoEvolution"],
-  ],
-  [
-    "planet",
-    createPlanetSettings,
-    "buildPlanetSettings",
-    "updatePlanetSettingsContent",
-    "planet",
-    "Planet Weighting",
-    false,
-    [],
   ],
   [
     "trigger",
@@ -174,4 +163,4 @@ for (const [
   ]);
 }
 
-console.log("10 settings-boundary module tests passed");
+console.log("9 settings-boundary module tests passed");

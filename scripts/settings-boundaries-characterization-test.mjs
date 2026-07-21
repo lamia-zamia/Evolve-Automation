@@ -78,7 +78,6 @@ const boundaries = hooks.settingsBoundaries;
 assert.deepEqual(Object.keys(boundaries), [
   "prestige",
   "evolution",
-  "planet",
   "trigger",
   "war",
   "hell",
@@ -175,7 +174,6 @@ assert.deepEqual(
   [
     { kind: "secondary", prefix: "", id: "prestige", label: "Prestige" },
     { kind: "primary", id: "evolution", label: "Evolution" },
-    { kind: "primary", id: "planet", label: "Planet Weighting" },
     { kind: "primary", id: "trigger", label: "Trigger" },
     {
       kind: "secondary",
@@ -210,8 +208,6 @@ assert.deepEqual(behavioralTrace, [
   "reset:evolution:true",
   "update:evolution:",
   "checkbox:autoEvolution",
-  "reset:planet:true",
-  "update:planet:",
   "reset:trigger:true",
   "update:trigger:",
   "checkbox:autoTrigger",
@@ -239,5 +235,5 @@ assert.deepEqual(behavioralTrace, [
   "remove:marketToggles",
 ]);
 
-assert.ok(storageTrace.length >= 10);
-console.log("10 settings-boundary bundled characterization tests passed");
+assert.ok(storageTrace.length >= 9);
+console.log("9 settings-boundary bundled characterization tests passed");

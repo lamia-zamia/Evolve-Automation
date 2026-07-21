@@ -18463,6 +18463,184 @@
     return Object.freeze({ readGovernmentSettingsReadModel });
   }
 
+  // src/application/planet-settings.ts
+  function createPlanetSettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-planet-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/planet-settings.ts
+  function freezeCell(cell) {
+    return Object.freeze({ ...cell });
+  }
+  function freezeCells(cells) {
+    return Object.freeze(cells.map(freezeCell));
+  }
+  function createPlanetSettingsReadModel({
+    biomes,
+    traits,
+    extras
+  }) {
+    const frozenBiomes = freezeCells(biomes);
+    const frozenTraits = freezeCells(traits);
+    const frozenExtras = freezeCells(extras);
+    const rowCount = Math.max(
+      frozenBiomes.length,
+      frozenTraits.length,
+      frozenExtras.length
+    );
+    const rows = [];
+    for (let index = 0; index < rowCount; index += 1) {
+      rows.push(
+        Object.freeze({
+          ...frozenBiomes[index] === void 0 ? {} : { biome: frozenBiomes[index] },
+          ...frozenTraits[index] === void 0 ? {} : { trait: frozenTraits[index] },
+          ...frozenExtras[index] === void 0 ? {} : { extra: frozenExtras[index] }
+        })
+      );
+    }
+    return Object.freeze({
+      sectionId: "planet",
+      sectionName: "Planet Weighting",
+      rows: Object.freeze(rows)
+    });
+  }
+
+  // src/adapters/browser/planet-settings.ts
+  function createPlanetSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function renderCell(tableElement, cell, actions, hasFollowingCell) {
+      const inputElement = tableElement.next();
+      if (cell === void 0) {
+        return hasFollowingCell ? inputElement.next() : inputElement;
+      }
+      tableElement.append(actions.buildTableLabel(cell.label));
+      actions.addTableInput(inputElement, cell.settingName);
+      return hasFollowingCell ? inputElement.next() : inputElement;
+    }
+    function buildPlanetSettings2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      actions.buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-planet-settings" });
+        },
+        updatePlanetSettingsContent2
+      );
+    }
+    function updatePlanetSettingsContent2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
+      currentNode.empty().off("*");
+      currentNode.append(`
+          <span>Planet Weighting = Biome Weighting + Trait Weighting + (Extras Intensity * Extras Weightings)</span>
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:20%">Biome</th>
+              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
+              <th class="has-text-warning" style="width:20%">Trait</th>
+              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
+              <th class="has-text-warning" style="width:20%">Extra</th>
+              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
+            </tr>
+            <tbody id="script_planetTableBody"></tbody>
+          </table>`);
+      const tableBodyNode = getJQuery()("#script_planetTableBody");
+      let newTableBodyText = "";
+      for (let index = 0; index < readModel.rows.length; index += 1) {
+        newTableBodyText += `<tr><td id="script_planet_${index}" style="width:20%"></td><td style="width:calc(40% / 3);border-right-width:1px"></td><td style="width:20%"></td><td style="width:calc(40% / 3);border-right-width:1px"></td><td style="width:20%"></td><td style="width:calc(40% / 3)"></td>/tr>`;
+      }
+      tableBodyNode.append(getJQuery()(newTableBodyText));
+      readModel.rows.forEach((row, index) => {
+        renderRow(getJQuery()(`#script_planet_${index}`), row, actions);
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function renderRow(tableElement, row, actions) {
+      tableElement = renderCell(tableElement, row.biome, actions, true);
+      tableElement = renderCell(tableElement, row.trait, actions, true);
+      renderCell(tableElement, row.extra, actions, false);
+    }
+    return Object.freeze({
+      buildPlanetSettings: buildPlanetSettings2,
+      updatePlanetSettingsContent: updatePlanetSettingsContent2
+    });
+  }
+
+  // src/adapters/evolve/planet-settings.ts
+  function requireString4(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function requireStringArray(value, path) {
+    if (!Array.isArray(value)) {
+      throw new TypeError(`${path} must be an array`);
+    }
+    return value.map((item, index) => requireString4(item, `${path}[${index}]`));
+  }
+  function createPlanetSettingsEvolveAdapter({
+    getGame,
+    getBiomeList,
+    getTraitList,
+    getExtraList
+  }) {
+    function readPlanetSettingsReadModel() {
+      const game2 = requireRecord(getGame(), "game");
+      const rawLocalize = game2["loc"];
+      if (typeof rawLocalize !== "function") {
+        throw new TypeError("game.loc must be a function");
+      }
+      const localize = (key) => Reflect.apply(rawLocalize, game2, [key]);
+      const biomeIds = requireStringArray(getBiomeList(), "biomeList");
+      const traitIds = requireStringArray(getTraitList(), "traitList");
+      const extraIds = requireStringArray(getExtraList(), "extraList");
+      const biomes = biomeIds.map((id) => ({
+        label: requireString4(
+          localize(`biome_${id}_name`),
+          `game.loc(biome_${id}_name) result`
+        ),
+        settingName: `biome_w_${id}`
+      }));
+      const traits = traitIds.map((id, index) => ({
+        label: index === 0 ? "None" : requireString4(
+          localize(`planet_${id}`),
+          `game.loc(planet_${id}) result`
+        ),
+        settingName: `trait_w_${id}`
+      }));
+      const extras = extraIds.map((id) => ({
+        label: id,
+        settingName: `extra_w_${id}`
+      }));
+      return createPlanetSettingsReadModel({ biomes, traits, extras });
+    }
+    return Object.freeze({ readPlanetSettingsReadModel });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -22088,7 +22266,7 @@
   }
 
   // src/adapters/evolve/hell.ts
-  function requireString4(value, path) {
+  function requireString5(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -22385,7 +22563,7 @@
           ),
           evilTechnology: optionalNumber(tech["evil"], "game.global.tech.evil"),
           grenadier: Boolean(race2["grenadier"]),
-          government: requireString4(
+          government: requireString5(
             govern["type"],
             "game.global.civic.govern.type"
           )
@@ -22976,7 +23154,7 @@
   }
 
   // src/adapters/evolve/battle.ts
-  function requireString5(value, path) {
+  function requireString6(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -22994,7 +23172,7 @@
     return {
       input: Object.freeze({
         governmentId: requireNumber(foreign["id"], `${path}.id`),
-        policy: requireString5(foreign["policy"], `${path}.policy`),
+        policy: requireString6(foreign["policy"], `${path}.policy`),
         released: Boolean(foreign["released"]),
         occupied: Boolean(government["occ"]),
         annexed: Boolean(government["anx"]),
@@ -23109,7 +23287,7 @@
         );
         const hellAvailable = Boolean(manager["_hellVue"]);
         const readHell = autoHell2 && hellAvailable;
-        const protectMode = requireString5(
+        const protectMode = requireString6(
           settings2["foreignProtect"],
           "settings.foreignProtect"
         );
@@ -23383,7 +23561,7 @@
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        const governmentName = requireString5(
+        const governmentName = requireString6(
           dependencies.getGovernmentName(decision2.governmentId),
           `government name ${decision2.governmentId}`
         );
@@ -23409,7 +23587,7 @@
         if (removeBattalion !== null) {
           Reflect.apply(removeBattalion, active.manager, [-deltaBattalion]);
         }
-        const campaignTitle = requireString5(
+        const campaignTitle = requireString6(
           Reflect.apply(getCampaignTitle, active.manager, [decision2.tactic]),
           `campaign title ${decision2.tactic}`
         );
@@ -27356,7 +27534,7 @@
       moneyStorageRequired: 0
     });
   }
-  function requireString6(value, path) {
+  function requireString7(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -27405,7 +27583,7 @@
         );
         if (maxCityGarrison <= 0) return unavailableInput2();
         const state2 = requireRecord(dependencies.getState(), "state");
-        const goal = requireString6(state2["goal"], "state.goal");
+        const goal = requireString7(state2["goal"], "state.goal");
         const saveInflationMoney = Boolean(
           dependencies.shouldSaveInflationMoney()
         );
@@ -35110,7 +35288,7 @@
     );
     return { foreign, government };
   }
-  function requireString7(value, path) {
+  function requireString8(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -35121,7 +35299,7 @@
     const ids = {};
     for (const [name, rawType] of Object.entries(types)) {
       const type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString7(type["id"], `SpyManager.Types.${name}.id`);
+      ids[name] = requireString8(type["id"], `SpyManager.Types.${name}.id`);
     }
     return Object.freeze(ids);
   }
@@ -35229,7 +35407,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString7(
+        const policy = requireString8(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -35250,7 +35428,7 @@
             "resources.Money.maxQuantity"
           );
         }
-        const governmentName = requireString7(
+        const governmentName = requireString8(
           dependencies.getGovName(governmentId),
           `government name ${governmentId}`
         );
@@ -35296,7 +35474,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString7(
+        const policy = requireString8(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -36446,7 +36624,7 @@
   }
 
   // src/adapters/evolve/jobs.ts
-  function requireString8(value, path) {
+  function requireString9(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
     return value;
@@ -36576,7 +36754,7 @@
           if (count === 0) {
             maximum = 1;
           } else {
-            const id = requireString8(job["id"], "job.id");
+            const id = requireString9(job["id"], "job.id");
             const production = requireNumber(
               call2(
                 resource(resources2, "Food"),
@@ -36928,7 +37106,7 @@
           );
           return Object.freeze({
             token: token2,
-            id: requireString8(job["id"], `jobList[${token2}].id`),
+            id: requireString9(job["id"], `jobList[${token2}].id`),
             kind,
             workers: requireNumber(job["workers"], `jobList[${token2}].workers`),
             servants: requireNumber(
@@ -37045,7 +37223,7 @@
                 `craftingJobs[${index}].resource.craftPreserve`
               ))) {
                 affordability = 0;
-                exclusion = `${requireString8(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
+                exclusion = `${requireString9(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
                 break;
               }
               affordability = Math.min(
@@ -37077,7 +37255,7 @@
                 craftResource["currentQuantity"],
                 `craftingJobs[${index}].resource.currentQuantity`
               );
-              const resourceId3 = requireString8(
+              const resourceId3 = requireString9(
                 craftResource["id"],
                 `craftingJobs[${index}].resource.id`
               );
@@ -37097,7 +37275,7 @@
                 driver = `no building×${craftWeight}`;
               } else {
                 const record = requireRecord(driving, "driving building");
-                driver = `${requireString8(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
+                driver = `${requireString9(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
               }
             }
             return Object.freeze({
@@ -37304,7 +37482,7 @@
           minerToken: token("Miner"),
           population: resourceNumber(resources2, "Population", "currentQuantity"),
           craftDebug: Boolean(debugWindow["craftDebug"]),
-          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString8(state2["lastCraftWinner"], "state.lastCraftWinner"),
+          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString9(state2["lastCraftWinner"], "state.lastCraftWinner"),
           authority,
           jobs: Object.freeze(jobInputs),
           crafting: Object.freeze(craftingInputs),
@@ -37758,7 +37936,7 @@
   }
 
   // src/adapters/evolve/build.ts
-  function requireString9(value, path) {
+  function requireString10(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -37848,7 +38026,7 @@
         const byKey = /* @__PURE__ */ new Map();
         const candidates = entities.map((entity, index) => {
           const path = `buildList[${index}]`;
-          const key = requireString9(entity["_vueBinding"], `${path}._vueBinding`);
+          const key = requireString10(entity["_vueBinding"], `${path}._vueBinding`);
           byKey.set(key, entity);
           const rawCost = requireRecord(entity["cost"], `${path}.cost`);
           const cost = {};
@@ -38624,7 +38802,7 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString10(value, path) {
+  function requireString11(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -38644,7 +38822,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString10(
+    const status2 = requireString11(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -38713,7 +38891,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString10(
+          mode = requireString11(
             settings2["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -38851,7 +39029,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString10(
+            const id = requireString11(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -39010,7 +39188,7 @@
             );
           }
         }
-        const targetLocationName = requireString10(
+        const targetLocationName = requireString11(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -39043,7 +39221,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString10(
+        const shipName = requireString11(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -39054,7 +39232,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString10(
+        const shipClass = requireString11(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -39126,7 +39304,7 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString10(
+          const resourceId3 = requireString11(
             missingResource,
             "missing outer-fleet resource id"
           );
@@ -39134,7 +39312,7 @@
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString10(
+          missingResourceName = requireString11(
             resource2["name"],
             `resources.${resourceId3}.name`
           );
@@ -39564,7 +39742,7 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString11(value, path) {
+  function requireString12(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -39740,7 +39918,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString11(
+          const name = requireString12(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -39768,7 +39946,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString11(
+          chthonianLossMode = requireString12(
             settings2["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -39802,7 +39980,7 @@
               settings2["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString11(
+            alien2LossMode = requireString12(
               settings2["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -40151,7 +40329,7 @@
   }
 
   // src/adapters/evolve/mech.ts
-  function requireString12(value, path) {
+  function requireString13(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -40170,7 +40348,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString12(raw["size"], `${path}.size`),
+        size: requireString13(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -40205,7 +40383,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString12(raw["size"], `${path}.size`),
+      size: requireString13(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -40322,7 +40500,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString12(settings2["mechBuild"], "settings.mechBuild")
+          buildMode: requireString13(settings2["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -40357,7 +40535,7 @@
             call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString12(preferred[0], "preferred mech size");
+          const size = requireString13(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
             call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
@@ -40396,7 +40574,7 @@
           buildings2["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString12(
+        const prestigeType = requireString13(
           settings2["prestigeType"],
           "settings.prestigeType"
         );
@@ -40485,7 +40663,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString12(
+        const configuredScrapMode = requireString13(
           settings2["mechScrap"],
           "settings.mechScrap"
         );
@@ -40514,7 +40692,7 @@
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString12(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString13(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -40699,7 +40877,7 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString12(
+          const description = requireString13(
             call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
@@ -42476,112 +42654,6 @@
       buildEvolutionQueueItem: buildEvolutionQueueItem2,
       addEvolutionSetting: addEvolutionSetting2
     };
-  }
-
-  // src/ui/planet-settings.ts
-  function createPlanetSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
-    const biomeList2 = liveObject4(() => getDependency("biomeList"));
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject4(() => getDependency("document"));
-    const extraList2 = liveObject4(() => getDependency("extraList"));
-    const game2 = liveObject4(() => getDependency("game"));
-    const resetPlanetSettings2 = liveFunction(
-      () => getDependency("resetPlanetSettings")
-    );
-    const traitList2 = liveObject4(() => getDependency("traitList"));
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildPlanetSettingsImpl() {
-      let sectionId = "planet";
-      let sectionName = "Planet Weighting";
-      let resetFunction = function() {
-        resetPlanetSettings2(true);
-        updateSettingsFromState2();
-        updatePlanetSettingsContent2();
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updatePlanetSettingsContent2
-      );
-    }
-    function updatePlanetSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_planetContent");
-      currentNode.empty().off("*");
-      currentNode.append(`
-          <span>Planet Weighting = Biome Weighting + Trait Weighting + (Extras Intensity * Extras Weightings)</span>
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:20%">Biome</th>
-              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
-              <th class="has-text-warning" style="width:20%">Trait</th>
-              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
-              <th class="has-text-warning" style="width:20%">Extra</th>
-              <th class="has-text-warning" style="width:calc(40% / 3)">Weighting</th>
-            </tr>
-            <tbody id="script_planetTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $2("#script_planetTableBody");
-      let newTableBodyText = "";
-      let tableSize = Math.max(
-        biomeList2.length,
-        traitList2.length,
-        extraList2.length
-      );
-      for (let i = 0; i < tableSize; i++) {
-        newTableBodyText += `<tr><td id="script_planet_${i}" style="width:20%"></td><td style="width:calc(40% / 3);border-right-width:1px"></td><td style="width:20%"></td><td style="width:calc(40% / 3);border-right-width:1px"></td><td style="width:20%"></td><td style="width:calc(40% / 3)"></td>/tr>`;
-      }
-      tableBodyNode.append($2(newTableBodyText));
-      for (let i = 0; i < tableSize; i++) {
-        let tableElement = $2("#script_planet_" + i);
-        if (i < biomeList2.length) {
-          tableElement.append(
-            buildTableLabel2(game2.loc("biome_" + biomeList2[i] + "_name"))
-          );
-          tableElement = tableElement.next();
-          addTableInput2(tableElement, "biome_w_" + biomeList2[i]);
-        } else {
-          tableElement = tableElement.next();
-        }
-        tableElement = tableElement.next();
-        if (i < traitList2.length) {
-          tableElement.append(
-            buildTableLabel2(i == 0 ? "None" : game2.loc("planet_" + traitList2[i]))
-          );
-          tableElement = tableElement.next();
-          addTableInput2(tableElement, "trait_w_" + traitList2[i]);
-        } else {
-          tableElement = tableElement.next();
-        }
-        tableElement = tableElement.next();
-        if (i < extraList2.length) {
-          tableElement.append(buildTableLabel2(extraList2[i]));
-          tableElement = tableElement.next();
-          addTableInput2(tableElement, "extra_w_" + extraList2[i]);
-        }
-      }
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildPlanetSettings2(...args) {
-      const implementation = getOverride("buildPlanetSettings") ?? buildPlanetSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updatePlanetSettingsContent2(...args) {
-      const implementation = getOverride("updatePlanetSettingsContent") ?? updatePlanetSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildPlanetSettings: buildPlanetSettings2, updatePlanetSettingsContent: updatePlanetSettingsContent2 };
   }
 
   // src/ui/trigger-settings.ts
@@ -50611,28 +50683,38 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       buildEvolutionQueueItem,
       addEvolutionSetting
     } = evolutionSettings;
-    const planetSettingsOverrides = {};
-    const getPlanetSettingsDependency = createDependencyResolver(
-      planetSettingsOverrides,
-      {
-        $: () => $,
-        addTableInput: () => addTableInput,
-        biomeList: () => biomeList,
-        buildSettingsSection: () => buildSettingsSection,
-        buildTableLabel: () => buildTableLabel,
-        document: () => document,
-        extraList: () => extraList,
-        game: () => game,
-        resetPlanetSettings: () => resetPlanetSettings,
-        traitList: () => traitList,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const planetSettings = createPlanetSettings({
-      getDependency: getPlanetSettingsDependency,
-      getOverride: (name) => planetSettingsOverrides[name]
+    let planetSettingsTestContext;
+    const planetSettingsActions = {
+      buildSettingsSection,
+      addTableInput,
+      buildTableLabel
+    };
+    const planetSettingsEvolveAdapter = createPlanetSettingsEvolveAdapter({
+      getGame: () => planetSettingsTestContext?.game ?? game,
+      getBiomeList: () => planetSettingsTestContext?.biomeList ?? biomeList,
+      getTraitList: () => planetSettingsTestContext?.traitList ?? traitList,
+      getExtraList: () => planetSettingsTestContext?.extraList ?? extraList
     });
-    const { buildPlanetSettings, updatePlanetSettingsContent } = planetSettings;
+    let planetSettingsIntentHandler;
+    const planetSettingsBrowserAdapter = createPlanetSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getReadModel: () => planetSettingsEvolveAdapter.readPlanetSettingsReadModel(),
+      intents: {
+        handle: (intent) => planetSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => planetSettingsTestContext?.actions ?? planetSettingsActions
+    });
+    planetSettingsIntentHandler = createPlanetSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (planetSettingsTestContext?.resetPlanetSettings ?? resetPlanetSettings)(
+          true
+        ),
+        persist: () => (planetSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      renderSettingsContent: () => planetSettingsBrowserAdapter.updatePlanetSettingsContent()
+    });
+    const { buildPlanetSettings, updatePlanetSettingsContent } = planetSettingsBrowserAdapter;
     const triggerSettingsOverrides = {};
     const getTriggerSettingsDependency = createDependencyResolver(
       triggerSettingsOverrides,
@@ -54256,7 +54338,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         settingsBoundaries: {
           prestige: prestigeSettings,
           evolution: evolutionSettings,
-          planet: planetSettings,
           trigger: triggerSettings,
           war: warSettings,
           hell: hellSettings,
@@ -54268,7 +54349,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         setSettingsBoundariesTestContext(context) {
           Object.assign(prestigeSettingsOverrides, context);
           Object.assign(evolutionSettingsOverrides, context);
-          Object.assign(planetSettingsOverrides, context);
           Object.assign(triggerSettingsOverrides, context);
           Object.assign(warSettingsOverrides, context);
           Object.assign(hellSettingsOverrides, context);
@@ -54288,6 +54368,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         governmentSettings: governmentSettingsBrowserAdapter,
         setGovernmentSettingsTestContext(context) {
           governmentSettingsTestContext = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        planetSettings: planetSettingsBrowserAdapter,
+        setPlanetSettingsTestContext(context) {
+          planetSettingsTestContext = context;
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
