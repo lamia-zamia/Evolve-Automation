@@ -21114,6 +21114,89 @@
     });
   }
 
+  // src/adapters/browser/building-toggles.ts
+  function createToggleMarkup5(item) {
+    return `
+                  <label tabindex="0" class="switch ea-building-toggle" style="position:absolute; margin-top: 24px; left:10%;">
+                    <input class="script_${item.settingKey}" type="checkbox"${item.enabled ? " checked" : ""}/>
+                    <span class="check" style="height:5px; max-width:15px"></span>
+                  </label>`;
+  }
+  function createBuildingToggleBrowserAdapter({
+    getJQuery,
+    reader,
+    getCountWriter,
+    addToggleCallbacks: addToggleCallbacks2
+  }) {
+    function createBuildingToggles2() {
+      removeBuildingToggles2();
+      if (!reader.readVisible()) return;
+      const $2 = getJQuery();
+      let count = 0;
+      for (const item of reader.readItems()) {
+        const buildingElement = $2("#" + item.binding);
+        if (buildingElement.length === 0) continue;
+        buildingElement.append(
+          addToggleCallbacks2($2(createToggleMarkup5(item)), item.settingKey)
+        );
+        count++;
+      }
+      getCountWriter().setCount(count);
+    }
+    function removeBuildingToggles2() {
+      getJQuery()("#mTabCivil .ea-building-toggle").remove();
+      getCountWriter().setCount(0);
+    }
+    return Object.freeze({ createBuildingToggles: createBuildingToggles2, removeBuildingToggles: removeBuildingToggles2 });
+  }
+
+  // src/adapters/evolve/building-toggles.ts
+  function requireString15(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function createBuildingToggleEvolveAdapter({
+    getBuildingManager,
+    getSettings,
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      readVisible() {
+        const settings2 = requireRecord(getSettings(), "settings");
+        return Boolean(settings2["showSettings"]);
+      },
+      readItems() {
+        const manager = requireRecord(getBuildingManager(), "BuildingManager");
+        const priorityList = manager["priorityList"];
+        if (!Array.isArray(priorityList)) {
+          throw new TypeError("BuildingManager.priorityList must be an array");
+        }
+        const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+        return Object.freeze(
+          priorityList.map((rawBuilding, index) => {
+            const building2 = requireRecord(
+              rawBuilding,
+              `BuildingManager.priorityList[${index}]`
+            );
+            const binding = requireString15(
+              building2["_vueBinding"],
+              `BuildingManager.priorityList[${index}]._vueBinding`
+            );
+            const settingKey = `bat${binding}`;
+            return Object.freeze({
+              binding,
+              settingKey,
+              // Evolve leaves per-building toggles absent until first written; legacy treated absence as disabled.
+              enabled: Boolean(settingsRaw2[settingKey])
+            });
+          })
+        );
+      }
+    });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -24739,7 +24822,7 @@
   }
 
   // src/adapters/evolve/hell.ts
-  function requireString15(value, path) {
+  function requireString16(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -25036,7 +25119,7 @@
           ),
           evilTechnology: optionalNumber(tech["evil"], "game.global.tech.evil"),
           grenadier: Boolean(race2["grenadier"]),
-          government: requireString15(
+          government: requireString16(
             govern["type"],
             "game.global.civic.govern.type"
           )
@@ -25627,7 +25710,7 @@
   }
 
   // src/adapters/evolve/battle.ts
-  function requireString16(value, path) {
+  function requireString17(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -25645,7 +25728,7 @@
     return {
       input: Object.freeze({
         governmentId: requireNumber(foreign["id"], `${path}.id`),
-        policy: requireString16(foreign["policy"], `${path}.policy`),
+        policy: requireString17(foreign["policy"], `${path}.policy`),
         released: Boolean(foreign["released"]),
         occupied: Boolean(government["occ"]),
         annexed: Boolean(government["anx"]),
@@ -25760,7 +25843,7 @@
         );
         const hellAvailable = Boolean(manager["_hellVue"]);
         const readHell = autoHell2 && hellAvailable;
-        const protectMode = requireString16(
+        const protectMode = requireString17(
           settings2["foreignProtect"],
           "settings.foreignProtect"
         );
@@ -26034,7 +26117,7 @@
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        const governmentName = requireString16(
+        const governmentName = requireString17(
           dependencies.getGovernmentName(decision2.governmentId),
           `government name ${decision2.governmentId}`
         );
@@ -26060,7 +26143,7 @@
         if (removeBattalion !== null) {
           Reflect.apply(removeBattalion, active.manager, [-deltaBattalion]);
         }
-        const campaignTitle = requireString16(
+        const campaignTitle = requireString17(
           Reflect.apply(getCampaignTitle, active.manager, [decision2.tactic]),
           `campaign title ${decision2.tactic}`
         );
@@ -30007,7 +30090,7 @@
       moneyStorageRequired: 0
     });
   }
-  function requireString17(value, path) {
+  function requireString18(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -30056,7 +30139,7 @@
         );
         if (maxCityGarrison <= 0) return unavailableInput2();
         const state2 = requireRecord(dependencies.getState(), "state");
-        const goal = requireString17(state2["goal"], "state.goal");
+        const goal = requireString18(state2["goal"], "state.goal");
         const saveInflationMoney = Boolean(
           dependencies.shouldSaveInflationMoney()
         );
@@ -37761,7 +37844,7 @@
     );
     return { foreign, government };
   }
-  function requireString18(value, path) {
+  function requireString19(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -37772,7 +37855,7 @@
     const ids = {};
     for (const [name, rawType] of Object.entries(types)) {
       const type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString18(type["id"], `SpyManager.Types.${name}.id`);
+      ids[name] = requireString19(type["id"], `SpyManager.Types.${name}.id`);
     }
     return Object.freeze(ids);
   }
@@ -37880,7 +37963,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString18(
+        const policy = requireString19(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -37901,7 +37984,7 @@
             "resources.Money.maxQuantity"
           );
         }
-        const governmentName = requireString18(
+        const governmentName = requireString19(
           dependencies.getGovName(governmentId),
           `government name ${governmentId}`
         );
@@ -37947,7 +38030,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString18(
+        const policy = requireString19(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -39097,7 +39180,7 @@
   }
 
   // src/adapters/evolve/jobs.ts
-  function requireString19(value, path) {
+  function requireString20(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
     return value;
@@ -39227,7 +39310,7 @@
           if (count === 0) {
             maximum = 1;
           } else {
-            const id = requireString19(job["id"], "job.id");
+            const id = requireString20(job["id"], "job.id");
             const production = requireNumber(
               call2(
                 resource(resources2, "Food"),
@@ -39579,7 +39662,7 @@
           );
           return Object.freeze({
             token: token2,
-            id: requireString19(job["id"], `jobList[${token2}].id`),
+            id: requireString20(job["id"], `jobList[${token2}].id`),
             kind,
             workers: requireNumber(job["workers"], `jobList[${token2}].workers`),
             servants: requireNumber(
@@ -39696,7 +39779,7 @@
                 `craftingJobs[${index}].resource.craftPreserve`
               ))) {
                 affordability = 0;
-                exclusion = `${requireString19(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
+                exclusion = `${requireString20(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
                 break;
               }
               affordability = Math.min(
@@ -39728,7 +39811,7 @@
                 craftResource["currentQuantity"],
                 `craftingJobs[${index}].resource.currentQuantity`
               );
-              const resourceId3 = requireString19(
+              const resourceId3 = requireString20(
                 craftResource["id"],
                 `craftingJobs[${index}].resource.id`
               );
@@ -39748,7 +39831,7 @@
                 driver = `no building×${craftWeight}`;
               } else {
                 const record = requireRecord(driving, "driving building");
-                driver = `${requireString19(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
+                driver = `${requireString20(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
               }
             }
             return Object.freeze({
@@ -39955,7 +40038,7 @@
           minerToken: token("Miner"),
           population: resourceNumber(resources2, "Population", "currentQuantity"),
           craftDebug: Boolean(debugWindow["craftDebug"]),
-          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString19(state2["lastCraftWinner"], "state.lastCraftWinner"),
+          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString20(state2["lastCraftWinner"], "state.lastCraftWinner"),
           authority,
           jobs: Object.freeze(jobInputs),
           crafting: Object.freeze(craftingInputs),
@@ -40409,7 +40492,7 @@
   }
 
   // src/adapters/evolve/build.ts
-  function requireString20(value, path) {
+  function requireString21(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -40499,7 +40582,7 @@
         const byKey = /* @__PURE__ */ new Map();
         const candidates = entities.map((entity, index) => {
           const path = `buildList[${index}]`;
-          const key = requireString20(entity["_vueBinding"], `${path}._vueBinding`);
+          const key = requireString21(entity["_vueBinding"], `${path}._vueBinding`);
           byKey.set(key, entity);
           const rawCost = requireRecord(entity["cost"], `${path}.cost`);
           const cost = {};
@@ -41275,7 +41358,7 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString21(value, path) {
+  function requireString22(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -41295,7 +41378,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString21(
+    const status2 = requireString22(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -41364,7 +41447,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString21(
+          mode = requireString22(
             settings2["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -41502,7 +41585,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString21(
+            const id = requireString22(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -41661,7 +41744,7 @@
             );
           }
         }
-        const targetLocationName = requireString21(
+        const targetLocationName = requireString22(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -41694,7 +41777,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString21(
+        const shipName = requireString22(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -41705,7 +41788,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString21(
+        const shipClass = requireString22(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -41777,7 +41860,7 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString21(
+          const resourceId3 = requireString22(
             missingResource,
             "missing outer-fleet resource id"
           );
@@ -41785,7 +41868,7 @@
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString21(
+          missingResourceName = requireString22(
             resource2["name"],
             `resources.${resourceId3}.name`
           );
@@ -42215,7 +42298,7 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString22(value, path) {
+  function requireString23(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -42391,7 +42474,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString22(
+          const name = requireString23(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -42419,7 +42502,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString22(
+          chthonianLossMode = requireString23(
             settings2["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -42453,7 +42536,7 @@
               settings2["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString22(
+            alien2LossMode = requireString23(
               settings2["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -42802,7 +42885,7 @@
   }
 
   // src/adapters/evolve/mech.ts
-  function requireString23(value, path) {
+  function requireString24(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -42821,7 +42904,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString23(raw["size"], `${path}.size`),
+        size: requireString24(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -42856,7 +42939,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString23(raw["size"], `${path}.size`),
+      size: requireString24(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -42973,7 +43056,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString23(settings2["mechBuild"], "settings.mechBuild")
+          buildMode: requireString24(settings2["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -43008,7 +43091,7 @@
             call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString23(preferred[0], "preferred mech size");
+          const size = requireString24(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
             call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
@@ -43047,7 +43130,7 @@
           buildings2["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString23(
+        const prestigeType = requireString24(
           settings2["prestigeType"],
           "settings.prestigeType"
         );
@@ -43136,7 +43219,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString23(
+        const configuredScrapMode = requireString24(
           settings2["mechScrap"],
           "settings.mechScrap"
         );
@@ -43165,7 +43248,7 @@
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString23(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString24(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -43350,7 +43433,7 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString23(
+          const description = requireString24(
             call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
@@ -46892,56 +46975,6 @@
       return implementation.apply(this, args);
     }
     return { buildMarketSettings: buildMarketSettings2, updateMarketSettingsContent: updateMarketSettingsContent2 };
-  }
-
-  // src/ui/building-toggles.ts
-  function createBuildingToggleUI({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const BuildingManager2 = liveObject4(() => getDependency("BuildingManager"));
-    const addToggleCallbacks2 = liveFunction(
-      () => getDependency("addToggleCallbacks")
-    );
-    const settings2 = liveObject4(() => getDependency("settings"));
-    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
-    const state2 = liveObject4(() => getDependency("state"));
-    function createBuildingTogglesImpl() {
-      removeBuildingToggles2();
-      if (!settings2.showSettings) return;
-      for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
-        let building2 = BuildingManager2.priorityList[i];
-        let buildingElement = $2("#" + building2._vueBinding);
-        if (buildingElement.length) {
-          let settingKey = "bat" + building2._vueBinding;
-          buildingElement.append(
-            addToggleCallbacks2(
-              $2(`
-                  <label tabindex="0" class="switch ea-building-toggle" style="position:absolute; margin-top: 24px; left:10%;">
-                    <input class="script_${settingKey}" type="checkbox"${settingsRaw2[settingKey] ? " checked" : ""}/>
-                    <span class="check" style="height:5px; max-width:15px"></span>
-                  </label>`),
-              settingKey
-            )
-          );
-          state2.buildingToggles++;
-        }
-      }
-    }
-    function removeBuildingTogglesImpl() {
-      $2("#mTabCivil .ea-building-toggle").remove();
-      state2.buildingToggles = 0;
-    }
-    function createBuildingToggles2(...args) {
-      const implementation = getOverride("createBuildingToggles") ?? createBuildingTogglesImpl;
-      return implementation.apply(this, args);
-    }
-    function removeBuildingToggles2(...args) {
-      const implementation = getOverride("removeBuildingToggles") ?? removeBuildingTogglesImpl;
-      return implementation.apply(this, args);
-    }
-    return { createBuildingToggles: createBuildingToggles2, removeBuildingToggles: removeBuildingToggles2 };
   }
 
   // src/ui/queue-panels.ts
@@ -51180,23 +51213,26 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       )
     });
     const { createCraftToggles, removeCraftToggles } = craftToggleBrowserAdapter;
-    const buildingTogglesBoundaryOverrides = {};
-    const getBuildingTogglesBoundaryDependency = createDependencyResolver(
-      buildingTogglesBoundaryOverrides,
-      {
-        $: () => $,
-        BuildingManager: () => BuildingManager,
-        addToggleCallbacks: () => addToggleCallbacks,
-        settings: () => settings,
-        settingsRaw: () => settingsRaw,
-        state: () => state
-      }
-    );
-    const buildingTogglesBoundary = createBuildingToggleUI({
-      getDependency: getBuildingTogglesBoundaryDependency,
-      getOverride: (name) => buildingTogglesBoundaryOverrides[name]
+    let buildingTogglesTestContext;
+    const buildingToggleReader = createBuildingToggleEvolveAdapter({
+      getBuildingManager: () => buildingTogglesTestContext?.BuildingManager ?? BuildingManager,
+      getSettings: () => buildingTogglesTestContext?.settings ?? settings,
+      getSettingsRaw: () => buildingTogglesTestContext?.settingsRaw ?? settingsRaw
     });
-    const { createBuildingToggles, removeBuildingToggles } = buildingTogglesBoundary;
+    const buildingToggleBrowserAdapter = createBuildingToggleBrowserAdapter({
+      getJQuery: () => $,
+      reader: buildingToggleReader,
+      getCountWriter: () => ({
+        setCount: (count) => {
+          const targetState = buildingTogglesTestContext?.state ?? state;
+          targetState.buildingToggles = count;
+        }
+      }),
+      addToggleCallbacks: (...args) => (buildingTogglesTestContext?.addToggleCallbacks ?? addToggleCallbacks)(
+        ...args
+      )
+    });
+    const { createBuildingToggles, removeBuildingToggles } = buildingToggleBrowserAdapter;
     let ejectTogglesTestContext;
     const ejectToggleReader = createEjectToggleEvolveAdapter({
       getEjectManager: () => ejectTogglesTestContext?.EjectManager ?? EjectManager,
@@ -55369,33 +55405,14 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         arpaToggles: arpaToggleBrowserAdapter,
         setArpaTogglesTestContext(context) {
           arpaTogglesTestContext = context;
+        },
+        buildingToggles: buildingToggleBrowserAdapter,
+        setBuildingTogglesTestContext(context) {
+          buildingTogglesTestContext = context;
         }
       });
     }
     if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
-        remainingUiBoundaries: {
-          buildingToggles: buildingTogglesBoundary
-        },
-        setRemainingUiBoundariesTestContext(context) {
-          if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
-          if ("settings" in context) settings = context.settings;
-          if ("game" in context) game = context.game;
-          if ("state" in context) state = context.state;
-          if ("resources" in context) resources = context.resources;
-          if ("craftablesList" in context)
-            craftablesList = context.craftablesList;
-          if ("StorageManager" in context)
-            StorageManager = context.StorageManager;
-          if ("BuildingManager" in context)
-            BuildingManager = context.BuildingManager;
-          if ("ProjectManager" in context)
-            ProjectManager = context.ProjectManager;
-          if ("EjectManager" in context) EjectManager = context.EjectManager;
-          if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-          Object.assign(buildingTogglesBoundaryOverrides, context);
-        }
-      });
       Object.assign(window.__EA_TEST_HOOKS__, {
         loggingSettings: loggingSettingsBrowserAdapter,
         setLoggingSettingsTestContext(context) {

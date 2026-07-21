@@ -190,6 +190,8 @@ import { createCraftToggleBrowserAdapter } from "./adapters/browser/craft-toggle
 import { createCraftToggleEvolveAdapter } from "./adapters/evolve/craft-toggles.ts";
 import { createArpaToggleBrowserAdapter } from "./adapters/browser/arpa-toggles.ts";
 import { createArpaToggleEvolveAdapter } from "./adapters/evolve/arpa-toggles.ts";
+import { createBuildingToggleBrowserAdapter } from "./adapters/browser/building-toggles.ts";
+import { createBuildingToggleEvolveAdapter } from "./adapters/evolve/building-toggles.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -443,7 +445,6 @@ import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createMechSettings } from "./ui/mech-settings.ts";
 import { createEjectorSettings } from "./ui/ejector-settings.ts";
 import { createMarketSettings } from "./ui/market-settings.ts";
-import { createBuildingToggleUI } from "./ui/building-toggles.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoUI } from "./ui/mech-info.ts";
 import { createResourceToggleUI } from "./ui/resource-toggles.ts";
@@ -1230,24 +1231,30 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   });
   const { createCraftToggles, removeCraftToggles } = craftToggleBrowserAdapter;
 
-  const buildingTogglesBoundaryOverrides = {};
-  const getBuildingTogglesBoundaryDependency = createDependencyResolver(
-    buildingTogglesBoundaryOverrides,
-    {
-      $: () => $,
-      BuildingManager: () => BuildingManager,
-      addToggleCallbacks: () => addToggleCallbacks,
-      settings: () => settings,
-      settingsRaw: () => settingsRaw,
-      state: () => state,
-    },
-  );
-  const buildingTogglesBoundary = createBuildingToggleUI({
-    getDependency: getBuildingTogglesBoundaryDependency,
-    getOverride: (name) => buildingTogglesBoundaryOverrides[name],
+  let buildingTogglesTestContext;
+  const buildingToggleReader = createBuildingToggleEvolveAdapter({
+    getBuildingManager: () =>
+      buildingTogglesTestContext?.BuildingManager ?? BuildingManager,
+    getSettings: () => buildingTogglesTestContext?.settings ?? settings,
+    getSettingsRaw: () =>
+      buildingTogglesTestContext?.settingsRaw ?? settingsRaw,
+  });
+  const buildingToggleBrowserAdapter = createBuildingToggleBrowserAdapter({
+    getJQuery: () => $,
+    reader: buildingToggleReader,
+    getCountWriter: () => ({
+      setCount: (count) => {
+        const targetState = buildingTogglesTestContext?.state ?? state;
+        targetState.buildingToggles = count;
+      },
+    }),
+    addToggleCallbacks: (...args) =>
+      (buildingTogglesTestContext?.addToggleCallbacks ?? addToggleCallbacks)(
+        ...args,
+      ),
   });
   const { createBuildingToggles, removeBuildingToggles } =
-    buildingTogglesBoundary;
+    buildingToggleBrowserAdapter;
 
   let ejectTogglesTestContext;
   const ejectToggleReader = createEjectToggleEvolveAdapter({
@@ -5914,33 +5921,14 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       setArpaTogglesTestContext(context) {
         arpaTogglesTestContext = context;
       },
+      buildingToggles: buildingToggleBrowserAdapter,
+      setBuildingTogglesTestContext(context) {
+        buildingTogglesTestContext = context;
+      },
     });
   }
 
   if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
-      remainingUiBoundaries: {
-        buildingToggles: buildingTogglesBoundary,
-      },
-      setRemainingUiBoundariesTestContext(context) {
-        if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
-        if ("settings" in context) settings = context.settings;
-        if ("game" in context) game = context.game;
-        if ("state" in context) state = context.state;
-        if ("resources" in context) resources = context.resources;
-        if ("craftablesList" in context)
-          craftablesList = context.craftablesList;
-        if ("StorageManager" in context)
-          StorageManager = context.StorageManager;
-        if ("BuildingManager" in context)
-          BuildingManager = context.BuildingManager;
-        if ("ProjectManager" in context)
-          ProjectManager = context.ProjectManager;
-        if ("EjectManager" in context) EjectManager = context.EjectManager;
-        if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-        Object.assign(buildingTogglesBoundaryOverrides, context);
-      },
-    });
     Object.assign(window.__EA_TEST_HOOKS__, {
       loggingSettings: loggingSettingsBrowserAdapter,
       setLoggingSettingsTestContext(context) {
