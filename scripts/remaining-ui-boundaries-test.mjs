@@ -6,7 +6,6 @@ import { createMagicSettings } from "../src/ui/magic-settings.ts";
 import { createJobSettings } from "../src/ui/job-settings.ts";
 import { createWeightingSettings } from "../src/ui/weighting-settings.ts";
 import { createBuildingSettings } from "../src/ui/building-settings.ts";
-import { createProjectSettings } from "../src/ui/project-settings.ts";
 import { createOptionsModalUI } from "../src/ui/options-modal.ts";
 import { createPrestigeTopBar } from "../src/ui/prestige-top-bar.ts";
 import { createTotalDaysTopBar } from "../src/ui/total-days-top-bar.ts";
@@ -73,16 +72,6 @@ const settingsSpecs = [
     "Building",
     false,
     ["checkbox:autoBuild|autoPower", "cleanup:building"],
-  ],
-  [
-    "project",
-    createProjectSettings,
-    "buildProjectSettings",
-    "updateProjectSettingsContent",
-    "project",
-    "A.R.P.A.",
-    false,
-    ["checkbox:autoARPA"],
   ],
 ];
 
@@ -280,4 +269,4 @@ currentClass = SecondClass;
 assert.equal(new FirstClass() instanceof liveClass, false);
 assert.equal(new SecondClass() instanceof liveClass, true);
 
-console.log("Next 14 UI-boundary module tests passed");
+console.log("Next 13 UI-boundary module tests passed");

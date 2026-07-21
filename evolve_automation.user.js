@@ -18641,6 +18641,181 @@
     return Object.freeze({ readPlanetSettingsReadModel });
   }
 
+  // src/application/project-settings.ts
+  function createProjectSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-project-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            effects.resetCheckbox();
+            return;
+          case "reorder-projects":
+            writer.reorderProjects(intent.projectIds);
+            writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/project-settings.ts
+  function freezeRow(row) {
+    return Object.freeze({ ...row });
+  }
+  function createProjectSettingsReadModel(rows) {
+    return Object.freeze({
+      sectionId: "project",
+      sectionName: "A.R.P.A.",
+      rows: Object.freeze(rows.map(freezeRow))
+    });
+  }
+
+  // src/adapters/browser/project-settings.ts
+  function createProjectSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function buildProjectSettings2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      actions.buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-project-settings" }),
+        updateProjectSettingsContent2
+      );
+    }
+    function updateProjectSettingsContent2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
+      currentNode.empty().off("*");
+      actions.addSettingsToggle(
+        currentNode,
+        "arpaScaleWeighting",
+        "Scale weighting with progress",
+        "Projects weighting scales  with current progress, making script more eager to spend resources on finishing nearly constructed projects."
+      );
+      actions.addSettingsNumber(
+        currentNode,
+        "arpaStep",
+        "Preferred progress step",
+        "Projects will be weighted and build in this steps. Increasing number can speed up constructing. Step will be adjusted down when preferred step above remaining amount, or surpass storage caps. Weightings below will be multiplied by current step. Projects builded by triggers will always have maximum possible step."
+      );
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:25%">Project</th>
+              <th class="has-text-warning" style="width:25%">Auto Build</th>
+              <th class="has-text-warning" style="width:25%">Max Build</th>
+              <th class="has-text-warning" style="width:25%">Weighting</th>
+            </tr>
+            <tbody id="script_projectTableBody"></tbody>
+          </table>`);
+      const tableBodyNode = getJQuery()("#script_projectTableBody");
+      let newTableBodyText = "";
+      for (const row of readModel.rows) {
+        newTableBodyText += `<tr value="${row.id}" class="script-draggable"><td id="script_${row.id}" style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td></tr>`;
+      }
+      tableBodyNode.append(getJQuery()(newTableBodyText));
+      for (const row of readModel.rows) {
+        let projectElement = getJQuery()(`#script_${row.id}`);
+        projectElement.append(actions.buildTableLabel(row.label));
+        projectElement = projectElement.next();
+        actions.addTableToggle(projectElement, row.enabledSettingName);
+        projectElement = projectElement.next();
+        actions.addTableInput(projectElement, row.maximumSettingName);
+        projectElement = projectElement.next();
+        actions.addTableInput(projectElement, row.weightingSettingName);
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: actions.getSorterHelper(),
+        update: () => {
+          const projectIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          intents.handle({ type: "reorder-projects", projectIds });
+        }
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    return Object.freeze({
+      buildProjectSettings: buildProjectSettings2,
+      updateProjectSettingsContent: updateProjectSettingsContent2
+    });
+  }
+
+  // src/adapters/evolve/project-settings.ts
+  function requireString5(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function readPriorityList(manager) {
+    const priorityList = manager["priorityList"];
+    if (!Array.isArray(priorityList)) {
+      throw new TypeError("ProjectManager.priorityList must be an array");
+    }
+    return priorityList.map(
+      (project, index) => requireRecord(project, `ProjectManager.priorityList[${index}]`)
+    );
+  }
+  function createProjectSettingsEvolveAdapter({
+    getProjectManager,
+    getSettingsRaw
+  }) {
+    function readProjectSettingsReadModel() {
+      const manager = requireRecord(getProjectManager(), "ProjectManager");
+      const rows = readPriorityList(manager).map(
+        (project, index) => {
+          const id = requireString5(
+            project["id"],
+            `ProjectManager.priorityList[${index}].id`
+          );
+          return {
+            id,
+            label: requireString5(
+              project["name"],
+              `ProjectManager.priorityList[${index}].name`
+            ),
+            enabledSettingName: `arpa_${id}`,
+            maximumSettingName: `arpa_m_${id}`,
+            weightingSettingName: `arpa_w_${id}`
+          };
+        }
+      );
+      return createProjectSettingsReadModel(rows);
+    }
+    function reorderProjects(projectIds) {
+      const manager = requireRecord(getProjectManager(), "ProjectManager");
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      const sortByPriority = requireFunction(
+        manager["sortByPriority"],
+        "ProjectManager.sortByPriority"
+      );
+      projectIds.forEach((projectId, index) => {
+        const id = requireString5(projectId, `projectIds[${index}]`);
+        settingsRaw2[`arpa_p_${id}`] = index;
+      });
+      Reflect.apply(sortByPriority, manager, []);
+    }
+    return Object.freeze({ readProjectSettingsReadModel, reorderProjects });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -22266,7 +22441,7 @@
   }
 
   // src/adapters/evolve/hell.ts
-  function requireString5(value, path) {
+  function requireString6(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -22563,7 +22738,7 @@
           ),
           evilTechnology: optionalNumber(tech["evil"], "game.global.tech.evil"),
           grenadier: Boolean(race2["grenadier"]),
-          government: requireString5(
+          government: requireString6(
             govern["type"],
             "game.global.civic.govern.type"
           )
@@ -23154,7 +23329,7 @@
   }
 
   // src/adapters/evolve/battle.ts
-  function requireString6(value, path) {
+  function requireString7(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -23172,7 +23347,7 @@
     return {
       input: Object.freeze({
         governmentId: requireNumber(foreign["id"], `${path}.id`),
-        policy: requireString6(foreign["policy"], `${path}.policy`),
+        policy: requireString7(foreign["policy"], `${path}.policy`),
         released: Boolean(foreign["released"]),
         occupied: Boolean(government["occ"]),
         annexed: Boolean(government["anx"]),
@@ -23287,7 +23462,7 @@
         );
         const hellAvailable = Boolean(manager["_hellVue"]);
         const readHell = autoHell2 && hellAvailable;
-        const protectMode = requireString6(
+        const protectMode = requireString7(
           settings2["foreignProtect"],
           "settings.foreignProtect"
         );
@@ -23561,7 +23736,7 @@
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        const governmentName = requireString6(
+        const governmentName = requireString7(
           dependencies.getGovernmentName(decision2.governmentId),
           `government name ${decision2.governmentId}`
         );
@@ -23587,7 +23762,7 @@
         if (removeBattalion !== null) {
           Reflect.apply(removeBattalion, active.manager, [-deltaBattalion]);
         }
-        const campaignTitle = requireString6(
+        const campaignTitle = requireString7(
           Reflect.apply(getCampaignTitle, active.manager, [decision2.tactic]),
           `campaign title ${decision2.tactic}`
         );
@@ -27534,7 +27709,7 @@
       moneyStorageRequired: 0
     });
   }
-  function requireString7(value, path) {
+  function requireString8(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -27583,7 +27758,7 @@
         );
         if (maxCityGarrison <= 0) return unavailableInput2();
         const state2 = requireRecord(dependencies.getState(), "state");
-        const goal = requireString7(state2["goal"], "state.goal");
+        const goal = requireString8(state2["goal"], "state.goal");
         const saveInflationMoney = Boolean(
           dependencies.shouldSaveInflationMoney()
         );
@@ -30071,7 +30246,7 @@
       }
     });
   }
-  function readPriorityList(manager) {
+  function readPriorityList2(manager) {
     const list = manager["priorityList"];
     if (!Array.isArray(list)) {
       throw new TypeError("MarketManager.priorityList must be an array");
@@ -30110,7 +30285,7 @@
           manager["setMultiplier"],
           "MarketManager.setMultiplier"
         );
-        const list = readPriorityList(manager);
+        const list = readPriorityList2(manager);
         const raw = list[decision2.index];
         const resource2 = typeof raw === "object" && raw !== null ? raw : null;
         const actualId = resource2 !== null && typeof resource2["id"] === "string" ? resource2["id"] : null;
@@ -35288,7 +35463,7 @@
     );
     return { foreign, government };
   }
-  function requireString8(value, path) {
+  function requireString9(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -35299,7 +35474,7 @@
     const ids = {};
     for (const [name, rawType] of Object.entries(types)) {
       const type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString8(type["id"], `SpyManager.Types.${name}.id`);
+      ids[name] = requireString9(type["id"], `SpyManager.Types.${name}.id`);
     }
     return Object.freeze(ids);
   }
@@ -35407,7 +35582,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString8(
+        const policy = requireString9(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -35428,7 +35603,7 @@
             "resources.Money.maxQuantity"
           );
         }
-        const governmentName = requireString8(
+        const governmentName = requireString9(
           dependencies.getGovName(governmentId),
           `government name ${governmentId}`
         );
@@ -35474,7 +35649,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString8(
+        const policy = requireString9(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -36624,7 +36799,7 @@
   }
 
   // src/adapters/evolve/jobs.ts
-  function requireString9(value, path) {
+  function requireString10(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
     return value;
@@ -36754,7 +36929,7 @@
           if (count === 0) {
             maximum = 1;
           } else {
-            const id = requireString9(job["id"], "job.id");
+            const id = requireString10(job["id"], "job.id");
             const production = requireNumber(
               call2(
                 resource(resources2, "Food"),
@@ -37106,7 +37281,7 @@
           );
           return Object.freeze({
             token: token2,
-            id: requireString9(job["id"], `jobList[${token2}].id`),
+            id: requireString10(job["id"], `jobList[${token2}].id`),
             kind,
             workers: requireNumber(job["workers"], `jobList[${token2}].workers`),
             servants: requireNumber(
@@ -37223,7 +37398,7 @@
                 `craftingJobs[${index}].resource.craftPreserve`
               ))) {
                 affordability = 0;
-                exclusion = `${requireString9(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
+                exclusion = `${requireString10(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
                 break;
               }
               affordability = Math.min(
@@ -37255,7 +37430,7 @@
                 craftResource["currentQuantity"],
                 `craftingJobs[${index}].resource.currentQuantity`
               );
-              const resourceId3 = requireString9(
+              const resourceId3 = requireString10(
                 craftResource["id"],
                 `craftingJobs[${index}].resource.id`
               );
@@ -37275,7 +37450,7 @@
                 driver = `no building×${craftWeight}`;
               } else {
                 const record = requireRecord(driving, "driving building");
-                driver = `${requireString9(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
+                driver = `${requireString10(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
               }
             }
             return Object.freeze({
@@ -37482,7 +37657,7 @@
           minerToken: token("Miner"),
           population: resourceNumber(resources2, "Population", "currentQuantity"),
           craftDebug: Boolean(debugWindow["craftDebug"]),
-          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString9(state2["lastCraftWinner"], "state.lastCraftWinner"),
+          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString10(state2["lastCraftWinner"], "state.lastCraftWinner"),
           authority,
           jobs: Object.freeze(jobInputs),
           crafting: Object.freeze(craftingInputs),
@@ -37936,7 +38111,7 @@
   }
 
   // src/adapters/evolve/build.ts
-  function requireString10(value, path) {
+  function requireString11(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -38026,7 +38201,7 @@
         const byKey = /* @__PURE__ */ new Map();
         const candidates = entities.map((entity, index) => {
           const path = `buildList[${index}]`;
-          const key = requireString10(entity["_vueBinding"], `${path}._vueBinding`);
+          const key = requireString11(entity["_vueBinding"], `${path}._vueBinding`);
           byKey.set(key, entity);
           const rawCost = requireRecord(entity["cost"], `${path}.cost`);
           const cost = {};
@@ -38420,7 +38595,7 @@
       )
     });
   }
-  function readPriorityList2(manager) {
+  function readPriorityList3(manager) {
     const priorityList = manager["priorityList"];
     if (!Array.isArray(priorityList)) {
       throw new TypeError("MutableTraitManager.priorityList must be an array");
@@ -38480,7 +38655,7 @@
         const currencyId = currencyIdFromGame(dependencies.getGame);
         const views = [];
         let currency = null;
-        const list = readPriorityList2(manager);
+        const list = readPriorityList3(manager);
         for (let index = 0; index < list.length; index++) {
           const path = `MutableTraitManager.priorityList[${index}]`;
           const trait2 = requireRecord(list[index], path);
@@ -38563,7 +38738,7 @@
           dependencies.getMutableTraitManager(),
           "MutableTraitManager"
         );
-        const list = readPriorityList2(manager);
+        const list = readPriorityList3(manager);
         const trait2 = typeof list[decision2.index] === "object" && list[decision2.index] !== null ? list[decision2.index] : null;
         const actualTraitName = trait2 !== null && typeof trait2["traitName"] === "string" ? trait2["traitName"] : null;
         if (trait2 === null || actualTraitName !== decision2.traitName) {
@@ -38802,7 +38977,7 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString11(value, path) {
+  function requireString12(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -38822,7 +38997,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString11(
+    const status2 = requireString12(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -38891,7 +39066,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString11(
+          mode = requireString12(
             settings2["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -39029,7 +39204,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString11(
+            const id = requireString12(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -39188,7 +39363,7 @@
             );
           }
         }
-        const targetLocationName = requireString11(
+        const targetLocationName = requireString12(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -39221,7 +39396,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString11(
+        const shipName = requireString12(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -39232,7 +39407,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString11(
+        const shipClass = requireString12(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -39304,7 +39479,7 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString11(
+          const resourceId3 = requireString12(
             missingResource,
             "missing outer-fleet resource id"
           );
@@ -39312,7 +39487,7 @@
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString11(
+          missingResourceName = requireString12(
             resource2["name"],
             `resources.${resourceId3}.name`
           );
@@ -39742,7 +39917,7 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString12(value, path) {
+  function requireString13(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -39918,7 +40093,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString12(
+          const name = requireString13(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -39946,7 +40121,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString12(
+          chthonianLossMode = requireString13(
             settings2["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -39980,7 +40155,7 @@
               settings2["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString12(
+            alien2LossMode = requireString13(
               settings2["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -40329,7 +40504,7 @@
   }
 
   // src/adapters/evolve/mech.ts
-  function requireString13(value, path) {
+  function requireString14(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -40348,7 +40523,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString13(raw["size"], `${path}.size`),
+        size: requireString14(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -40383,7 +40558,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString13(raw["size"], `${path}.size`),
+      size: requireString14(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -40500,7 +40675,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString13(settings2["mechBuild"], "settings.mechBuild")
+          buildMode: requireString14(settings2["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -40535,7 +40710,7 @@
             call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString13(preferred[0], "preferred mech size");
+          const size = requireString14(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
             call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
@@ -40574,7 +40749,7 @@
           buildings2["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString13(
+        const prestigeType = requireString14(
           settings2["prestigeType"],
           "settings.prestigeType"
         );
@@ -40663,7 +40838,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString13(
+        const configuredScrapMode = requireString14(
           settings2["mechScrap"],
           "settings.mechScrap"
         );
@@ -40692,7 +40867,7 @@
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString13(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString14(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -40877,7 +41052,7 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString13(
+          const description = requireString14(
             call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
@@ -45583,122 +45758,6 @@
     };
   }
 
-  // src/ui/project-settings.ts
-  function createProjectSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const ProjectManager2 = liveObject4(() => getDependency("ProjectManager"));
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
-    const addTableToggle2 = liveFunction(() => getDependency("addTableToggle"));
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject4(() => getDependency("document"));
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetProjectSettings2 = liveFunction(
-      () => getDependency("resetProjectSettings")
-    );
-    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
-    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildProjectSettingsImpl() {
-      let sectionId = "project";
-      let sectionName = "A.R.P.A.";
-      let resetFunction = function() {
-        resetProjectSettings2(true);
-        updateSettingsFromState2();
-        updateProjectSettingsContent2();
-        resetCheckbox2("autoARPA");
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateProjectSettingsContent2
-      );
-    }
-    function updateProjectSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_projectContent");
-      currentNode.empty().off("*");
-      addSettingsToggle2(
-        currentNode,
-        "arpaScaleWeighting",
-        "Scale weighting with progress",
-        "Projects weighting scales  with current progress, making script more eager to spend resources on finishing nearly constructed projects."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "arpaStep",
-        "Preferred progress step",
-        "Projects will be weighted and build in this steps. Increasing number can speed up constructing. Step will be adjusted down when preferred step above remaining amount, or surpass storage caps. Weightings below will be multiplied by current step. Projects builded by triggers will always have maximum possible step."
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:25%">Project</th>
-              <th class="has-text-warning" style="width:25%">Auto Build</th>
-              <th class="has-text-warning" style="width:25%">Max Build</th>
-              <th class="has-text-warning" style="width:25%">Weighting</th>
-            </tr>
-            <tbody id="script_projectTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $2("#script_projectTableBody");
-      let newTableBodyText = "";
-      for (let i = 0; i < ProjectManager2.priorityList.length; i++) {
-        const project = ProjectManager2.priorityList[i];
-        newTableBodyText += `<tr value="${project.id}" class="script-draggable"><td id="script_${project.id}" style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td><td style="width:25%"></td></tr>`;
-      }
-      tableBodyNode.append($2(newTableBodyText));
-      for (let i = 0; i < ProjectManager2.priorityList.length; i++) {
-        const project = ProjectManager2.priorityList[i];
-        let projectElement = $2("#script_" + project.id);
-        projectElement.append(buildTableLabel2(project.name));
-        projectElement = projectElement.next();
-        addTableToggle2(projectElement, "arpa_" + project.id);
-        projectElement = projectElement.next();
-        addTableInput2(projectElement, "arpa_m_" + project.id);
-        projectElement = projectElement.next();
-        addTableInput2(projectElement, "arpa_w_" + project.id);
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper2,
-        update: function() {
-          let projectIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < projectIds.length; i++) {
-            settingsRaw2["arpa_p_" + projectIds[i]] = i;
-          }
-          ProjectManager2.sortByPriority();
-          updateSettingsFromState2();
-        }
-      });
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildProjectSettings2(...args) {
-      const implementation = getOverride("buildProjectSettings") ?? buildProjectSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateProjectSettingsContent2(...args) {
-      const implementation = getOverride("updateProjectSettingsContent") ?? updateProjectSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildProjectSettings: buildProjectSettings2, updateProjectSettingsContent: updateProjectSettingsContent2 };
-  }
-
   // src/ui/options-modal.ts
   function createOptionsModalUI({
     getDependency,
@@ -50259,31 +50318,44 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       buildBuildingStateSettingsToggle,
       buildAllBuildingStateSettingsToggle
     } = buildingBoundary;
-    const projectBoundaryOverrides = {};
-    const getProjectBoundaryDependency = createDependencyResolver(
-      projectBoundaryOverrides,
-      {
-        $: () => $,
-        ProjectManager: () => ProjectManager,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsToggle: () => addSettingsToggle,
-        addTableInput: () => addTableInput,
-        addTableToggle: () => addTableToggle,
-        buildSettingsSection: () => buildSettingsSection,
-        buildTableLabel: () => buildTableLabel,
-        document: () => document,
-        resetCheckbox: () => resetCheckbox,
-        resetProjectSettings: () => resetProjectSettings,
-        settingsRaw: () => settingsRaw,
-        sorterHelper: () => sorterHelper,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const projectBoundary = createProjectSettings({
-      getDependency: getProjectBoundaryDependency,
-      getOverride: (name) => projectBoundaryOverrides[name]
+    let projectSettingsTestContext;
+    const projectSettingsActions = {
+      buildSettingsSection,
+      addSettingsNumber,
+      addSettingsToggle,
+      addTableInput,
+      addTableToggle,
+      buildTableLabel,
+      getSorterHelper: () => sorterHelper
+    };
+    const projectSettingsEvolveAdapter = createProjectSettingsEvolveAdapter({
+      getProjectManager: () => projectSettingsTestContext?.ProjectManager ?? ProjectManager,
+      getSettingsRaw: () => projectSettingsTestContext?.settingsRaw ?? settingsRaw
     });
-    const { buildProjectSettings, updateProjectSettingsContent } = projectBoundary;
+    let projectSettingsIntentHandler;
+    const projectSettingsBrowserAdapter = createProjectSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getReadModel: () => projectSettingsEvolveAdapter.readProjectSettingsReadModel(),
+      intents: {
+        handle: (intent) => projectSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => projectSettingsTestContext?.actions ?? projectSettingsActions
+    });
+    projectSettingsIntentHandler = createProjectSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (projectSettingsTestContext?.resetProjectSettings ?? resetProjectSettings)(true),
+        persist: () => (projectSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)(),
+        reorderProjects: (projectIds) => projectSettingsEvolveAdapter.reorderProjects(projectIds)
+      },
+      renderSettingsContent: () => projectSettingsBrowserAdapter.updateProjectSettingsContent(),
+      effects: {
+        resetCheckbox: () => (projectSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoARPA"
+        )
+      }
+    });
+    const { buildProjectSettings, updateProjectSettingsContent } = projectSettingsBrowserAdapter;
     let loggingSettingsTestContext;
     const loggingSettingsActions = {
       buildSettingsSection2,
@@ -54377,6 +54449,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
+        projectSettings: projectSettingsBrowserAdapter,
+        setProjectSettingsTestContext(context) {
+          projectSettingsTestContext = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
         achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
         setAchievementGuardSettingsTestContext(context) {
           achievementGuardSettingsTestActions = context;
@@ -54549,7 +54627,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           jobs: jobsBoundary,
           weighting: weightingBoundary,
           building: buildingBoundary,
-          project: projectBoundary,
           options: optionsBoundary,
           prestigeTopBar: prestigeTopBarBoundary,
           totalDaysTopBar: totalDaysTopBarBoundary,
@@ -54585,7 +54662,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           Object.assign(jobsBoundaryOverrides, context);
           Object.assign(weightingBoundaryOverrides, context);
           Object.assign(buildingBoundaryOverrides, context);
-          Object.assign(projectBoundaryOverrides, context);
           Object.assign(optionsBoundaryOverrides, context);
           Object.assign(prestigeTopBarBoundaryOverrides, context);
           Object.assign(totalDaysTopBarBoundaryOverrides, context);

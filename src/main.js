@@ -160,6 +160,9 @@ import { createGovernmentSettingsEvolveAdapter } from "./adapters/evolve/governm
 import { createPlanetSettingsIntentHandler } from "./application/planet-settings.ts";
 import { createPlanetSettingsBrowserAdapter } from "./adapters/browser/planet-settings.ts";
 import { createPlanetSettingsEvolveAdapter } from "./adapters/evolve/planet-settings.ts";
+import { createProjectSettingsIntentHandler } from "./application/project-settings.ts";
+import { createProjectSettingsBrowserAdapter } from "./adapters/browser/project-settings.ts";
+import { createProjectSettingsEvolveAdapter } from "./adapters/evolve/project-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -418,7 +421,6 @@ import { createMagicSettings } from "./ui/magic-settings.ts";
 import { createJobSettings } from "./ui/job-settings.ts";
 import { createWeightingSettings } from "./ui/weighting-settings.ts";
 import { createBuildingSettings } from "./ui/building-settings.ts";
-import { createProjectSettings } from "./ui/project-settings.ts";
 import { createOptionsModalUI } from "./ui/options-modal.ts";
 import { createPrestigeTopBar } from "./ui/prestige-top-bar.ts";
 import { createTotalDaysTopBar } from "./ui/total-days-top-bar.ts";
@@ -860,32 +862,60 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     buildAllBuildingStateSettingsToggle,
   } = buildingBoundary;
 
-  const projectBoundaryOverrides = {};
-  const getProjectBoundaryDependency = createDependencyResolver(
-    projectBoundaryOverrides,
-    {
-      $: () => $,
-      ProjectManager: () => ProjectManager,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsToggle: () => addSettingsToggle,
-      addTableInput: () => addTableInput,
-      addTableToggle: () => addTableToggle,
-      buildSettingsSection: () => buildSettingsSection,
-      buildTableLabel: () => buildTableLabel,
-      document: () => document,
-      resetCheckbox: () => resetCheckbox,
-      resetProjectSettings: () => resetProjectSettings,
-      settingsRaw: () => settingsRaw,
-      sorterHelper: () => sorterHelper,
-      updateSettingsFromState: () => updateSettingsFromState,
+  let projectSettingsTestContext;
+  const projectSettingsActions = {
+    buildSettingsSection,
+    addSettingsNumber,
+    addSettingsToggle,
+    addTableInput,
+    addTableToggle,
+    buildTableLabel,
+    getSorterHelper: () => sorterHelper,
+  };
+  const projectSettingsEvolveAdapter = createProjectSettingsEvolveAdapter({
+    getProjectManager: () =>
+      projectSettingsTestContext?.ProjectManager ?? ProjectManager,
+    getSettingsRaw: () =>
+      projectSettingsTestContext?.settingsRaw ?? settingsRaw,
+  });
+  let projectSettingsIntentHandler;
+  const projectSettingsBrowserAdapter = createProjectSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    getReadModel: () =>
+      projectSettingsEvolveAdapter.readProjectSettingsReadModel(),
+    intents: {
+      handle: (intent) => projectSettingsIntentHandler.handle(intent),
     },
-  );
-  const projectBoundary = createProjectSettings({
-    getDependency: getProjectBoundaryDependency,
-    getOverride: (name) => projectBoundaryOverrides[name],
+    getActions: () =>
+      projectSettingsTestContext?.actions ?? projectSettingsActions,
+  });
+  projectSettingsIntentHandler = createProjectSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          projectSettingsTestContext?.resetProjectSettings ??
+          resetProjectSettings
+        )(true),
+      persist: () =>
+        (
+          projectSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+      reorderProjects: (projectIds) =>
+        projectSettingsEvolveAdapter.reorderProjects(projectIds),
+    },
+    renderSettingsContent: () =>
+      projectSettingsBrowserAdapter.updateProjectSettingsContent(),
+    effects: {
+      resetCheckbox: () =>
+        (projectSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoARPA",
+        ),
+    },
   });
   const { buildProjectSettings, updateProjectSettingsContent } =
-    projectBoundary;
+    projectSettingsBrowserAdapter;
 
   let loggingSettingsTestContext;
   const loggingSettingsActions = {
@@ -5479,6 +5509,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {
+      projectSettings: projectSettingsBrowserAdapter,
+      setProjectSettingsTestContext(context) {
+        projectSettingsTestContext = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
       achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
       setAchievementGuardSettingsTestContext(context) {
         achievementGuardSettingsTestActions = context;
@@ -5662,7 +5698,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         jobs: jobsBoundary,
         weighting: weightingBoundary,
         building: buildingBoundary,
-        project: projectBoundary,
         options: optionsBoundary,
         prestigeTopBar: prestigeTopBarBoundary,
         totalDaysTopBar: totalDaysTopBarBoundary,
@@ -5698,7 +5733,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         Object.assign(jobsBoundaryOverrides, context);
         Object.assign(weightingBoundaryOverrides, context);
         Object.assign(buildingBoundaryOverrides, context);
-        Object.assign(projectBoundaryOverrides, context);
         Object.assign(optionsBoundaryOverrides, context);
         Object.assign(prestigeTopBarBoundaryOverrides, context);
         Object.assign(totalDaysTopBarBoundaryOverrides, context);
