@@ -16990,178 +16990,338 @@
     return { buildInterfaceSettings: buildInterfaceSettings2, updateInterfaceSettingsContent: updateInterfaceSettingsContent2 };
   }
 
-  // src/automation/tick.ts
-  function createTickOrchestration({
-    getSettings,
-    getState,
-    getGame,
-    getResources,
-    getKeyManager,
-    getNaniteManager,
-    getSupplyManager,
-    getEjectManager,
-    getControllers
-  }) {
-    function automate2() {
-      const state2 = getState();
-      const settings2 = getSettings();
-      const game2 = getGame();
-      if (state2.goal === "GameOverMan" || state2.forcedUpdate || !state2.gameTicked) {
-        return;
-      }
-      state2.gameTicked = false;
-      if (state2.scriptTick < Number.MAX_SAFE_INTEGER) {
-        state2.scriptTick++;
-      } else {
-        state2.scriptTick = 1;
-      }
-      if (state2.scriptTick % (game2.global.settings.at ? settings2.tickRate * 2 : settings2.tickRate) !== 0) {
-        return;
-      }
-      const c = getControllers();
-      const KeyManager2 = getKeyManager();
-      c.updateScriptData();
-      c.updateOverrides();
-      c.finalizeScriptData();
-      if (c.updateTabs(true)) {
-        return;
-      }
-      c.updateState();
-      c.updateUI();
-      KeyManager2.reset();
-      if (!settings2.masterScriptToggle) {
-        return;
-      }
-      if (state2.goal === "Evolution") {
-        if (settings2.autoEvolution) {
-          c.autoEvolution();
-        }
-        return;
-      }
-      if (settings2.buildingAlwaysClick || settings2.autoBuild) {
-        c.autoGatherResources();
-      }
-      if (settings2.autoMarket) {
-        c.autoMarket();
-      }
-      if (settings2.autoHell) {
-        c.autoHell();
-      }
-      if (settings2.autoGalaxyMarket) {
-        c.autoGalaxyMarket();
-      }
-      if (settings2.autoMiningDroid) {
-        c.autoMiningDroid();
-      }
-      if (settings2.autoGraphenePlant) {
-        c.autoGraphenePlant();
-      }
-      if (settings2.autoAlchemy) {
-        c.autoAlchemy();
-      }
-      if (settings2.autoPylon) {
-        c.autoPylon();
-      }
-      if (settings2.autoQuarry) {
-        c.autoQuarry();
-      }
-      if (settings2.autoMine) {
-        c.autoMine();
-      }
-      if (settings2.autoExtractor) {
-        c.autoExtractor();
-      }
-      if (settings2.autoSmelter) {
-        c.autoSmelter();
-      }
-      if (settings2.autoStorage) {
-        c.autoStorage();
-      }
-      if (settings2.autoReplicator) {
-        c.autoReplicator();
-      }
-      if (!settings2.autoTrigger || !c.autoTrigger()) {
-        if (settings2.autoResearch) {
-          c.autoResearch();
-        }
-        if (settings2.autoBuild || settings2.autoARPA) {
-          c.autoBuild();
-          state2.plannerFreshTick = state2.scriptTick;
-        }
-      }
-      if (settings2.autoFactory) {
-        c.autoFactory();
-      }
-      if (settings2.autoJobs) {
-        c.autoJobs();
-      } else if (settings2.autoCraftsmen) {
-        c.autoJobs(true);
-      }
-      if (settings2.autoFleet) {
-        if (game2.global.race["truepath"]) {
-          c.autoFleetOuter();
-        } else {
-          c.autoFleet();
-        }
-      }
-      if (settings2.autoMech) {
-        c.autoMech();
-      }
-      if (settings2.autoGenetics) {
-        c.autoGenetics();
-      }
-      if (settings2.autoMinorTrait) {
-        c.autoMinorTrait();
-      }
-      if (settings2.autoCraft) {
-        c.autoCraft();
-      }
-      if (settings2.autoFight) {
-        c.autoMerc();
-        c.autoSpy();
-        c.autoBattle();
-      }
-      if (settings2.autoTax) {
-        c.autoTax();
-      }
-      if (settings2.autoGovernment) {
-        c.autoGovernment();
-      }
-      if (settings2.autoNanite) {
-        c.autoConsume(getNaniteManager());
-      }
-      if (settings2.autoSupply) {
-        c.autoConsume(getSupplyManager());
-      }
-      if (settings2.autoEject) {
-        c.autoConsume(getEjectManager());
-      }
-      if (settings2.autoPower) {
-        c.autoPower();
-      }
-      if (c.isPrestigeAllowed()) {
-        c.autoPrestige();
-      }
-      if (settings2.autoMinorTrait) {
-        c.autoShapeshift();
-        c.autoPsychic();
-        c.autoOcularPowers();
-        c.autoWish();
-      }
-      if (settings2.autoMutateTraits) {
-        c.autoMutateTrait();
-      }
-      c.updateBuildPlanner();
-      if (settings2.stateLogEnabled) {
-        state2.stateLogTick = (state2.stateLogTick ?? 0) + 1;
-        if (state2.stateLogTick % settings2.stateLogInterval === 0) {
-          c.recordStateSnapshot();
-        }
-      }
-      KeyManager2.finish();
-      state2.soulGemLast = getResources().Soul_Gem.currentQuantity;
+  // src/domain/tick.ts
+  function shouldStartTick(snapshot) {
+    return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
+  }
+  function advanceScriptTick(current) {
+    return current < Number.MAX_SAFE_INTEGER ? current + 1 : 1;
+  }
+  function isThrottledTick(scriptTick, tickRate, accelerated) {
+    return scriptTick % (accelerated ? tickRate * 2 : tickRate) !== 0;
+  }
+  function advanceStateLog(current, interval) {
+    const next = current + 1;
+    return { next, record: next % interval === 0 };
+  }
+
+  // src/application/tick.ts
+  function runTick({ reader, controls }) {
+    const preamble = reader.samplePreamble();
+    if (!shouldStartTick(preamble)) {
+      return;
     }
-    return { automate: automate2 };
+    controls.markGameTickConsumed();
+    const scriptTick = advanceScriptTick(preamble.scriptTick);
+    controls.setScriptTick(scriptTick);
+    if (isThrottledTick(scriptTick, preamble.tickRate, preamble.accelerated)) {
+      return;
+    }
+    controls.updateScriptData();
+    controls.updateOverrides();
+    controls.finalizeScriptData();
+    if (controls.updateTabs()) {
+      return;
+    }
+    controls.updateState();
+    controls.updateUI();
+    controls.keyManagerReset();
+    const s = reader.sampleAutomation();
+    if (!s.masterScriptToggle) {
+      return;
+    }
+    if (s.goal === "Evolution") {
+      if (s.autoEvolution) {
+        controls.autoEvolution();
+      }
+      return;
+    }
+    if (s.buildingAlwaysClick || s.autoBuild) {
+      controls.autoGatherResources();
+    }
+    if (s.autoMarket) {
+      controls.autoMarket();
+    }
+    if (s.autoHell) {
+      controls.autoHell();
+    }
+    if (s.autoGalaxyMarket) {
+      controls.autoGalaxyMarket();
+    }
+    if (s.autoMiningDroid) {
+      controls.autoMiningDroid();
+    }
+    if (s.autoGraphenePlant) {
+      controls.autoGraphenePlant();
+    }
+    if (s.autoAlchemy) {
+      controls.autoAlchemy();
+    }
+    if (s.autoPylon) {
+      controls.autoPylon();
+    }
+    if (s.autoQuarry) {
+      controls.autoQuarry();
+    }
+    if (s.autoMine) {
+      controls.autoMine();
+    }
+    if (s.autoExtractor) {
+      controls.autoExtractor();
+    }
+    if (s.autoSmelter) {
+      controls.autoSmelter();
+    }
+    if (s.autoStorage) {
+      controls.autoStorage();
+    }
+    if (s.autoReplicator) {
+      controls.autoReplicator();
+    }
+    if (!s.autoTrigger || !controls.autoTrigger()) {
+      if (s.autoResearch) {
+        controls.autoResearch();
+      }
+      if (s.autoBuild || s.autoARPA) {
+        controls.autoBuild();
+        controls.setPlannerFreshTick(scriptTick);
+      }
+    }
+    if (s.autoFactory) {
+      controls.autoFactory();
+    }
+    if (s.autoJobs) {
+      controls.autoJobs();
+    } else if (s.autoCraftsmen) {
+      controls.autoJobs(true);
+    }
+    if (s.autoFleet) {
+      if (s.truepath) {
+        controls.autoFleetOuter();
+      } else {
+        controls.autoFleet();
+      }
+    }
+    if (s.autoMech) {
+      controls.autoMech();
+    }
+    if (s.autoGenetics) {
+      controls.autoGenetics();
+    }
+    if (s.autoMinorTrait) {
+      controls.autoMinorTrait();
+    }
+    if (s.autoCraft) {
+      controls.autoCraft();
+    }
+    if (s.autoFight) {
+      controls.autoMerc();
+      controls.autoSpy();
+      controls.autoBattle();
+    }
+    if (s.autoTax) {
+      controls.autoTax();
+    }
+    if (s.autoGovernment) {
+      controls.autoGovernment();
+    }
+    if (s.autoNanite) {
+      controls.consumeNanite();
+    }
+    if (s.autoSupply) {
+      controls.consumeSupply();
+    }
+    if (s.autoEject) {
+      controls.consumeEject();
+    }
+    if (s.autoPower) {
+      controls.autoPower();
+    }
+    if (controls.isPrestigeAllowed()) {
+      controls.autoPrestige();
+    }
+    if (s.autoMinorTrait) {
+      controls.autoShapeshift();
+      controls.autoPsychic();
+      controls.autoOcularPowers();
+      controls.autoWish();
+    }
+    if (s.autoMutateTraits) {
+      controls.autoMutateTrait();
+    }
+    controls.updateBuildPlanner();
+    if (s.stateLogEnabled) {
+      const { next, record } = advanceStateLog(
+        s.stateLogTick,
+        s.stateLogInterval
+      );
+      controls.setStateLogTick(next);
+      if (record) {
+        controls.recordStateSnapshot();
+      }
+    }
+    controls.keyManagerFinish();
+    controls.recordSoulGem();
+  }
+
+  // src/adapters/evolve/tick.ts
+  function toNumber(value) {
+    return Number(value);
+  }
+  function createTickReader(dependencies) {
+    return Object.freeze({
+      samplePreamble() {
+        const state2 = requireRecord(dependencies.getState(), "state");
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const global = requireRecord(game2["global"], "game.global");
+        const gameSettings = requireRecord(
+          global["settings"],
+          "game.global.settings"
+        );
+        const goal = state2["goal"];
+        return {
+          goal: typeof goal === "string" ? goal : "",
+          forcedUpdate: Boolean(state2["forcedUpdate"]),
+          gameTicked: Boolean(state2["gameTicked"]),
+          scriptTick: toNumber(state2["scriptTick"]),
+          tickRate: toNumber(settings2["tickRate"]),
+          accelerated: Boolean(gameSettings["at"])
+        };
+      },
+      sampleAutomation() {
+        const state2 = requireRecord(dependencies.getState(), "state");
+        const settings2 = requireRecord(dependencies.getSettings(), "settings");
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const global = requireRecord(game2["global"], "game.global");
+        const race2 = requireRecord(global["race"], "game.global.race");
+        const flag = (key) => Boolean(settings2[key]);
+        const goal = state2["goal"];
+        const stateLogTick = state2["stateLogTick"];
+        return {
+          goal: typeof goal === "string" ? goal : "",
+          masterScriptToggle: flag("masterScriptToggle"),
+          truepath: Boolean(race2["truepath"]),
+          buildingAlwaysClick: flag("buildingAlwaysClick"),
+          autoEvolution: flag("autoEvolution"),
+          autoBuild: flag("autoBuild"),
+          autoARPA: flag("autoARPA"),
+          autoMarket: flag("autoMarket"),
+          autoHell: flag("autoHell"),
+          autoGalaxyMarket: flag("autoGalaxyMarket"),
+          autoMiningDroid: flag("autoMiningDroid"),
+          autoGraphenePlant: flag("autoGraphenePlant"),
+          autoAlchemy: flag("autoAlchemy"),
+          autoPylon: flag("autoPylon"),
+          autoQuarry: flag("autoQuarry"),
+          autoMine: flag("autoMine"),
+          autoExtractor: flag("autoExtractor"),
+          autoSmelter: flag("autoSmelter"),
+          autoStorage: flag("autoStorage"),
+          autoReplicator: flag("autoReplicator"),
+          autoTrigger: flag("autoTrigger"),
+          autoResearch: flag("autoResearch"),
+          autoFactory: flag("autoFactory"),
+          autoJobs: flag("autoJobs"),
+          autoCraftsmen: flag("autoCraftsmen"),
+          autoFleet: flag("autoFleet"),
+          autoMech: flag("autoMech"),
+          autoGenetics: flag("autoGenetics"),
+          autoMinorTrait: flag("autoMinorTrait"),
+          autoCraft: flag("autoCraft"),
+          autoFight: flag("autoFight"),
+          autoTax: flag("autoTax"),
+          autoGovernment: flag("autoGovernment"),
+          autoNanite: flag("autoNanite"),
+          autoSupply: flag("autoSupply"),
+          autoEject: flag("autoEject"),
+          autoPower: flag("autoPower"),
+          autoMutateTraits: flag("autoMutateTraits"),
+          stateLogEnabled: flag("stateLogEnabled"),
+          stateLogInterval: toNumber(settings2["stateLogInterval"]),
+          // Legacy defaulted an absent counter to 0 (`state.stateLogTick ?? 0`).
+          stateLogTick: stateLogTick == null ? 0 : toNumber(stateLogTick)
+        };
+      }
+    });
+  }
+  function createTickControls(dependencies) {
+    const c = () => dependencies.getControllers();
+    return Object.freeze({
+      markGameTickConsumed() {
+        dependencies.getState().gameTicked = false;
+      },
+      setScriptTick(scriptTick) {
+        dependencies.getState().scriptTick = scriptTick;
+      },
+      setPlannerFreshTick(scriptTick) {
+        dependencies.getState().plannerFreshTick = scriptTick;
+      },
+      setStateLogTick(stateLogTick) {
+        dependencies.getState().stateLogTick = stateLogTick;
+      },
+      recordSoulGem() {
+        dependencies.getState().soulGemLast = dependencies.getResources().Soul_Gem.currentQuantity;
+      },
+      updateScriptData: () => c().updateScriptData(),
+      updateOverrides: () => c().updateOverrides(),
+      finalizeScriptData: () => c().finalizeScriptData(),
+      updateTabs: () => c().updateTabs(true),
+      updateState: () => c().updateState(),
+      updateUI: () => c().updateUI(),
+      keyManagerReset: () => dependencies.getKeyManager().reset(),
+      keyManagerFinish: () => dependencies.getKeyManager().finish(),
+      autoEvolution: () => c().autoEvolution(),
+      autoGatherResources: () => c().autoGatherResources(),
+      autoMarket: () => c().autoMarket(),
+      autoHell: () => c().autoHell(),
+      autoGalaxyMarket: () => c().autoGalaxyMarket(),
+      autoMiningDroid: () => c().autoMiningDroid(),
+      autoGraphenePlant: () => c().autoGraphenePlant(),
+      autoAlchemy: () => c().autoAlchemy(),
+      autoPylon: () => c().autoPylon(),
+      autoQuarry: () => c().autoQuarry(),
+      autoMine: () => c().autoMine(),
+      autoExtractor: () => c().autoExtractor(),
+      autoSmelter: () => c().autoSmelter(),
+      autoStorage: () => c().autoStorage(),
+      autoReplicator: () => c().autoReplicator(),
+      autoTrigger: () => c().autoTrigger(),
+      autoResearch: () => c().autoResearch(),
+      autoBuild: () => c().autoBuild(),
+      autoFactory: () => c().autoFactory(),
+      autoJobs(craftsmenOnly) {
+        if (craftsmenOnly === void 0) {
+          c().autoJobs();
+        } else {
+          c().autoJobs(craftsmenOnly);
+        }
+      },
+      autoFleetOuter: () => c().autoFleetOuter(),
+      autoFleet: () => c().autoFleet(),
+      autoMech: () => c().autoMech(),
+      autoGenetics: () => c().autoGenetics(),
+      autoMinorTrait: () => c().autoMinorTrait(),
+      autoCraft: () => c().autoCraft(),
+      autoMerc: () => c().autoMerc(),
+      autoSpy: () => c().autoSpy(),
+      autoBattle: () => c().autoBattle(),
+      autoTax: () => c().autoTax(),
+      autoGovernment: () => c().autoGovernment(),
+      consumeNanite: () => c().autoConsume(dependencies.getNaniteManager()),
+      consumeSupply: () => c().autoConsume(dependencies.getSupplyManager()),
+      consumeEject: () => c().autoConsume(dependencies.getEjectManager()),
+      autoPower: () => c().autoPower(),
+      isPrestigeAllowed: () => c().isPrestigeAllowed(),
+      autoPrestige: () => c().autoPrestige(),
+      autoShapeshift: () => c().autoShapeshift(),
+      autoPsychic: () => c().autoPsychic(),
+      autoOcularPowers: () => c().autoOcularPowers(),
+      autoWish: () => c().autoWish(),
+      autoMutateTrait: () => c().autoMutateTrait(),
+      updateBuildPlanner: () => c().updateBuildPlanner(),
+      recordStateSnapshot: () => c().recordStateSnapshot()
+    });
   }
 
   // src/domain/state-update.ts
@@ -17254,7 +17414,7 @@
   }
 
   // src/adapters/evolve/state-update.ts
-  function toNumber(value) {
+  function toNumber2(value) {
     return Number(value);
   }
   function createStateUpdateReader(dependencies) {
@@ -17291,7 +17451,7 @@
         const resources2 = requireRecord(dependencies.getResources(), "resources");
         const money = requireRecord(resources2["Money"], "resources.Money");
         const rawIncomes = state2["moneyIncomes"];
-        const moneyIncomes = Array.isArray(rawIncomes) ? rawIncomes.map(toNumber) : [];
+        const moneyIncomes = Array.isArray(rawIncomes) ? rawIncomes.map(toNumber2) : [];
         let pillars;
         if (Object.prototype.hasOwnProperty.call(global, "pillars")) {
           const rawPillars = requireRecord(
@@ -17300,7 +17460,7 @@
           );
           pillars = {};
           for (const key in rawPillars) {
-            pillars[key] = toNumber(rawPillars[key]);
+            pillars[key] = toNumber2(rawPillars[key]);
           }
         }
         const interstellar = global["interstellar"];
@@ -17313,10 +17473,10 @@
         }
         return {
           moneyIncomes,
-          moneyRate: toNumber(money["rateOfChange"]),
+          moneyRate: toNumber2(money["rateOfChange"]),
           pillars,
-          currentExotic: toNumber(exotic ?? 0),
-          lastExoticMass: toNumber(state2["whiteholeLastExoticMass"])
+          currentExotic: toNumber2(exotic ?? 0),
+          lastExoticMass: toNumber2(state2["whiteholeLastExoticMass"])
         };
       }
     });
@@ -32429,7 +32589,7 @@
       "game.global.stats"
     );
   }
-  function toNumber2(value) {
+  function toNumber3(value) {
     return Number(value);
   }
   function raceObjects(getRaces) {
@@ -32473,8 +32633,8 @@
       const resources2 = requireRecord(dependencies.getResources(), "resources");
       const resource2 = requireRecord(resources2[id], `resources.${id}`);
       return {
-        current: toNumber2(resource2["currentQuantity"]),
-        max: toNumber2(resource2["maxQuantity"])
+        current: toNumber3(resource2["currentQuantity"]),
+        max: toNumber3(resource2["maxQuantity"])
       };
     };
     return Object.freeze({
@@ -32515,8 +32675,8 @@
         const races2 = raceObjects(dependencies.getRaces).map(
           (r) => Object.freeze({
             id: r.id,
-            weighting: toNumber2(r.getWeighting()),
-            habitability: toNumber2(r.getHabitability()),
+            weighting: toNumber3(r.getWeighting()),
+            habitability: toNumber3(r.getHabitability()),
             genus: String(r.genus),
             name: String(r.name)
           })
@@ -32530,7 +32690,7 @@
           queueEnabled: Boolean(settings2["evolutionQueueEnabled"]),
           queueLength: Array.isArray(queue) ? queue.length : 0,
           queueRepeat: Boolean(settings2["evolutionQueueRepeat"]),
-          evolutionAttempts: toNumber2(state2["evolutionAttempts"])
+          evolutionAttempts: toNumber3(state2["evolutionAttempts"])
         });
       },
       sampleRaceTrait(trait2) {
@@ -32604,7 +32764,7 @@
           if (action === void 0) {
             throw new TypeError(`evolutions.${id} is missing`);
           }
-          return toNumber2(action.count);
+          return toNumber3(action.count);
         };
         return Object.freeze({
           mitochondriaCount: countOf("mitochondria"),
@@ -33770,7 +33930,7 @@
   }
 
   // src/adapters/evolve/prestige.ts
-  function toNumber3(value) {
+  function toNumber4(value) {
     return Number(value);
   }
   function callBool(owner, path, method) {
@@ -33810,11 +33970,11 @@
         eligible,
         armed,
         waitForPopulation: Boolean(settings2["prestigeMADWait"]),
-        currentSoldiers: toNumber3(war["currentSoldiers"]),
-        maxSoldiers: toNumber3(war["maxSoldiers"]),
-        currentPopulation: toNumber3(population["currentQuantity"]),
-        maxPopulation: toNumber3(population["maxQuantity"]),
-        requiredPopulation: toNumber3(settings2["prestigeMADPopulation"])
+        currentSoldiers: toNumber4(war["currentSoldiers"]),
+        maxSoldiers: toNumber4(war["maxSoldiers"]),
+        currentPopulation: toNumber4(population["currentQuantity"]),
+        maxPopulation: toNumber4(population["maxQuantity"]),
+        requiredPopulation: toNumber4(settings2["prestigeMADPopulation"])
       };
     };
     return Object.freeze({
@@ -52996,17 +53156,21 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       updateBuildPlanner,
       recordStateSnapshot
     };
-    const { automate } = createTickOrchestration({
+    const tickReader = createTickReader({
       getSettings: () => settings,
       getState: () => state,
-      getGame: () => game,
-      getResources: () => resources,
+      getGame: () => game
+    });
+    const tickControls = createTickControls({
+      getControllers: () => tickTestControllers ?? tickControllers,
       getKeyManager: () => KeyManager,
+      getState: () => state,
+      getResources: () => resources,
       getNaniteManager: () => NaniteManager,
       getSupplyManager: () => SupplyManager,
-      getEjectManager: () => EjectManager,
-      getControllers: () => tickTestControllers ?? tickControllers
+      getEjectManager: () => EjectManager
     });
+    const automate = () => runTick({ reader: tickReader, controls: tickControls });
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         automate: () => automate(),

@@ -131,7 +131,11 @@ import { createAutomationContainer } from "./ui/automation-container.ts";
 import { createUIRefresh } from "./ui/ui-refresh.ts";
 import { createStateLogSettings } from "./ui/state-log-settings.ts";
 import { createInterfaceSettings } from "./ui/interface-settings.ts";
-import { createTickOrchestration } from "./automation/tick.ts";
+import { runTick } from "./application/tick.ts";
+import {
+  createTickReader,
+  createTickControls,
+} from "./adapters/evolve/tick.ts";
 import { runStateUpdate } from "./application/state-update.ts";
 import {
   createStateUpdateReader,
@@ -4881,17 +4885,24 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     recordStateSnapshot,
   };
 
-  const { automate } = createTickOrchestration({
+  const tickReader = createTickReader({
     getSettings: () => settings,
     getState: () => state,
     getGame: () => game,
-    getResources: () => resources,
+  });
+
+  const tickControls = createTickControls({
+    getControllers: () => tickTestControllers ?? tickControllers,
     getKeyManager: () => KeyManager,
+    getState: () => state,
+    getResources: () => resources,
     getNaniteManager: () => NaniteManager,
     getSupplyManager: () => SupplyManager,
     getEjectManager: () => EjectManager,
-    getControllers: () => tickTestControllers ?? tickControllers,
   });
+
+  const automate = () =>
+    runTick({ reader: tickReader, controls: tickControls });
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {

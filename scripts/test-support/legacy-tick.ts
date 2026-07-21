@@ -1,3 +1,7 @@
+/**
+ * Frozen copy of the legacy createTickOrchestration factory, kept only as the parity oracle for the
+ * migrated tick slice tests. Do not wire into production.
+ */
 export interface TickSettings {
   masterScriptToggle: boolean;
   tickRate: number;
