@@ -141,6 +141,24 @@ const iron = input.resources.find((r) => r.id === "Iron");
 assert.equal(iron.autoSellEnabled, true);
 assert.equal(iron.autoSellRatio, 0.5);
 
+// Regression: Troops (and garrison/fortress support pseudo-resources) derive
+// maxQuantity from lazily-initialized game fields (fortress.garrison), so it can be
+// NaN. Legacy tolerated it; the reader must pass a non-finite number through instead
+// of throwing. These resources never appear as a cost, so the planner never compares
+// their maxQuantity.
+input = readStorageRequirementsInput(
+  deps({
+    getResources: () => ({
+      Troops: resource(NaN),
+      Iron: resource(1000),
+      Money: resource(1),
+      Graphene: resource(1),
+    }),
+  }),
+);
+const troops = input.resources.find((r) => r.id === "Troops");
+assert.ok(Number.isNaN(troops.maxQuantity));
+
 // Malformed boundaries throw.
 assert.throws(() =>
   readStorageRequirementsInput(

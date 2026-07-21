@@ -14611,6 +14611,12 @@
     }
     return value;
   }
+  function readMaxQuantity(value, path) {
+    if (typeof value !== "number") {
+      throw new TypeError(`${path} must be a number`);
+    }
+    return value;
+  }
   function targetList(value, path) {
     return requireArray(value, path).map(
       (entry, index) => requireRecord(entry, `${path}[${index}]`)
@@ -14633,7 +14639,7 @@
       states.push(
         Object.freeze({
           id,
-          maxQuantity: requireNumber(
+          maxQuantity: readMaxQuantity(
             resource2["maxQuantity"],
             `resources.${id}.maxQuantity`
           ),

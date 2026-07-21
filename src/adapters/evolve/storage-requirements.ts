@@ -78,6 +78,24 @@ function requireArray(value: unknown, path: string): readonly unknown[] {
   return value;
 }
 
+/**
+ * Lenient maxQuantity read. WarManager-backed special resources (Troops and the
+ * garrison/fortress supports) derive maxQuantity from lazily-initialized game
+ * fields — e.g. Troops = `WarManager.maxCityGarrison` = `maxSoldiers - hellSoldiers`,
+ * and `hellSoldiers` reads `fortress.garrison`, which is absent until first written —
+ * so the value can be non-finite (NaN). Legacy read the raw numeric property here and
+ * never compared these non-cost resources' maxQuantity (the planner only reads
+ * maxQuantity for resources that appear as a cost, and these never do), so a
+ * non-finite value was harmless. Require a number but not finiteness to preserve that;
+ * real cost resources always report a finite maxQuantity.
+ */
+function readMaxQuantity(value: unknown, path: string): number {
+  if (typeof value !== "number") {
+    throw new TypeError(`${path} must be a number`);
+  }
+  return value;
+}
+
 function targetList(value: unknown, path: string): UnknownRecord[] {
   return requireArray(value, path).map((entry, index) =>
     requireRecord(entry, `${path}[${index}]`),
@@ -102,7 +120,7 @@ function readResources(resourcesValue: unknown): StorageResourceState[] {
     states.push(
       Object.freeze({
         id,
-        maxQuantity: requireNumber(
+        maxQuantity: readMaxQuantity(
           resource["maxQuantity"],
           `resources.${id}.maxQuantity`,
         ),
