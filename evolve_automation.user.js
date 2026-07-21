@@ -19856,6 +19856,617 @@
     });
   }
 
+  // src/application/building-settings.ts
+  function createBuildingSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-building-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            effects.resetCheckboxes();
+            effects.removeBuildingToggles();
+            return;
+          case "reset-building-priorities":
+            writer.resetPriorities();
+            writer.persist();
+            renderSettingsContent();
+            return;
+          case "reorder-buildings":
+            writer.reorderBuildings(intent.buildingIds);
+            writer.persist();
+            return;
+          case "set-all-autobuild":
+            writer.setAllAutoBuild(intent.enabled);
+            writer.persist();
+            return;
+          case "set-all-autopower":
+            writer.setAllAutoPower(intent.enabled);
+            writer.persist();
+            return;
+          case "set-linked-smart-state":
+            writer.setLinkedSmartState(intent.buildingIds, intent.enabled);
+            writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/building-settings.ts
+  function freezeRow4(row) {
+    return Object.freeze({
+      ...row,
+      ...row.smartLinkedIds ? { smartLinkedIds: Object.freeze([...row.smartLinkedIds]) } : {}
+    });
+  }
+  var buildingSettingsControls = Object.freeze([
+    Object.freeze({
+      kind: "toggle",
+      settingName: "buildingsIgnoreZeroRate",
+      label: "Do not wait for resources without income",
+      hint: "Weighting checks will ignore resources without positive income(craftables, inactive factory goods, etc), buildings with such resources will not delay other buildings."
+    }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "buildingsLimitPowered",
+      label: "Limit amount of powered buildings",
+      hint: "With this option enabled Max Build will prevent powering extra building. Can be useful to disable buildings with overrided settings."
+    }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "buildingsTransportGem",
+      label: "Build cheapest Supplies transport",
+      hint: "By default script chooses between Lake Transport and Lake Bireme Warship comparing their 'Supplies Per Support', with this option enabled it will compare 'Supplies Per Soulgems' instead."
+    }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "buildingsBestFreighter",
+      label: "Build most efficient freighters",
+      hint: "With this option enabled the script will compare 'Money Storage per Crew' of Freighter and Super Freighter, and only build the best one. Without this option no restrictions will be applied. Works only when both ships are buildable."
+    }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "buildingsUseMultiClick",
+      label: "Bulk build multi-segmented buildings",
+      hint: "With this option enabled, the script will build as many segments as are affordable at once, instead of one per tick."
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "buildingTowerSuppression",
+      label: "Minimum suppression for Towers",
+      hint: "East Tower and West Tower won't be built until minimum suppression is reached"
+    }),
+    Object.freeze({
+      kind: "select",
+      settingName: "buildingConsumptionCheck",
+      label: "Behavior when building support/upkeep-using building",
+      hint: "By default, the script only buys one building with support or upkeep requirement per tick, to allow automatic weightings to work optimally.",
+      options: Object.freeze([
+        Object.freeze({
+          val: "onePerTick",
+          label: "Default",
+          hint: "Script will stop building buildings for one tick after buying building with support/upkeep. (Example: 1 Living Quarters stops processing of all buildings until next script tick.)"
+        }),
+        Object.freeze({
+          val: "perResource",
+          label: "Non-conflicting only",
+          hint: "During a tick, the script will only buy at most one building using a given support/upkeep type, but non-conflicting ones are allowed. Should be safe in most cases. (Example: 1 Living Quarters stops building the other buildings using Red Planet support for that tick, but it can still build on other planets.)"
+        }),
+        Object.freeze({
+          val: "unlimited",
+          label: "Unlimited",
+          hint: "Do not pay attention to support/upkeep requirements. This will cause bugs and undesirable behavior as it can easily exceed the maximum support. But, at extremely high prestige levels, this may be required. (Example: Can buy 1 Living Quarters + 1 Mine + 1 Fabrication + 1 Biodome in a single tick even if there is only 2 support left.)"
+        })
+      ])
+    })
+  ]);
+  function createBuildingSettingsReadModel({
+    rows,
+    allEnabled,
+    allState,
+    overrideKey: overrideKey2
+  }) {
+    return Object.freeze({
+      sectionId: "building",
+      sectionName: "Building",
+      controls: buildingSettingsControls,
+      rows: Object.freeze(rows.map(freezeRow4)),
+      allEnabled,
+      allState,
+      overrideKey: overrideKey2
+    });
+  }
+
+  // src/adapters/browser/building-settings.ts
+  function createBuildingSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    getFilterMatches,
+    intents,
+    getActions
+  }) {
+    function buildBuildingSettings2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      actions.buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-building-settings" }),
+        updateBuildingSettingsContent2
+      );
+    }
+    function updateBuildingSettingsContent2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const jquery = getJQuery();
+      const currentNode = jquery(`#script_${readModel.sectionId}Content`);
+      currentNode.empty().off("*");
+      for (const control of readModel.controls) {
+        renderControl(currentNode, control, actions);
+      }
+      currentNode.append(`
+          <div><input id="script_buildingSearch" class="script-searchsettings" type="text" placeholder="Search for buildings..."></div>
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:35%">Building</th>
+              <th class="has-text-warning" style="width:15%" title="Enables auto building. Triggers ignores this option, allowing to build disabled things.">Auto Build</th>
+              <th class="has-text-warning" style="width:15%" title="Maximum amount of buildings to build. Triggers ignores this option, allowing to build above limit. Can be also used to limit amount of enabled buildings, with respective option above.">Max Build</th>
+              <th class="has-text-warning" style="width:15%" title="Script will try to spend 2x amount of resources on building having 2x weighting, and such.">Weighting</th>
+              <th class="has-text-warning" style="width:20%" title="First toggle enables basic automation based on priority, power, support, and consumption. Second enables logic made specially for particlular building, their effects are different, but generally it tries to behave smarter than just staying enabled all the time.">Auto Power</th>
+            </tr>
+            <tbody id="script_buildingTableBody"></tbody>
+          </table>`);
+      jquery("#script_buildingSearch").on(
+        "keyup",
+        () => filterBuildingSettingsTable2()
+      );
+      const tableBodyNode = jquery("#script_buildingTableBody");
+      let newTableBodyText = '<tr value="All" class="unsortable"><td id="script_bldallToggle" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:20%"><span id="script_resetBuildingsPriority" class="script-refresh"></span></td></tr>';
+      for (const row of readModel.rows) {
+        newTableBodyText += `<tr value="${row.id}" class="script-draggable"><td id="script_${row.id}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:20%"></td></tr>`;
+      }
+      tableBodyNode.append(jquery(newTableBodyText));
+      let buildingElement = jquery("#script_bldallToggle");
+      buildingElement.append(
+        '<span class="has-text-warning" style="margin-left: 20px;">All Buildings</span>'
+      );
+      buildingElement = buildingElement.next();
+      buildingElement.append(buildAllToggle(readModel, actions, jquery, true));
+      buildingElement = buildingElement.next().next().next();
+      buildingElement.append(buildAllToggle(readModel, actions, jquery, false));
+      jquery("#script_resetBuildingsPriority").on("click", () => {
+        if (actions.confirm("Are you sure you wish to reset buildings priority?")) {
+          intents.handle({ type: "reset-building-priorities" });
+        }
+      });
+      for (const row of readModel.rows) {
+        let rowNode = jquery(`#script_${row.id}`);
+        rowNode.append(actions.buildTableLabel(row.label, "", row.color));
+        rowNode = rowNode.next();
+        actions.addTableToggle(rowNode, row.autoBuildSettingName);
+        rowNode = rowNode.next();
+        actions.addTableInput(rowNode, row.maximumSettingName);
+        rowNode = rowNode.next();
+        actions.addTableInput(rowNode, row.weightingSettingName);
+        rowNode = rowNode.next();
+        renderBuildingState(rowNode, row, actions, jquery);
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: actions.getSorterHelper(),
+        update: () => {
+          const sortedIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          intents.handle({ type: "reorder-buildings", buildingIds: sortedIds });
+        }
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function filterBuildingSettingsTable2() {
+      const document2 = getDocument();
+      const searchNode = document2.getElementById("script_buildingSearch");
+      const tableNode = document2.getElementById("script_buildingTableBody");
+      if (!searchNode || !tableNode) return;
+      const filter = searchNode.value.toUpperCase();
+      const rows = tableNode.getElementsByTagName("tr");
+      const matchingIds = getFilterMatches(filter);
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index];
+        if (!row) continue;
+        const firstCell = row.getElementsByTagName("td")[0];
+        if (!firstCell) continue;
+        if (matchingIds !== void 0) {
+          const match = firstCell.id.match(/^script_(.*)$/);
+          const id = match?.[1];
+          row.style.display = id && matchingIds.includes(id) ? "" : "none";
+        } else if (firstCell.textContent.toUpperCase().includes(filter)) {
+          row.style.display = "";
+        } else {
+          row.style.display = "none";
+        }
+      }
+    }
+    function renderControl(node, control, actions) {
+      if (control.kind === "toggle") {
+        actions.addSettingsToggle(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+      } else if (control.kind === "number") {
+        actions.addSettingsNumber(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+      } else if (control.kind === "select") {
+        actions.addSettingsSelect(
+          node,
+          control.settingName,
+          control.label,
+          control.hint,
+          control.options
+        );
+      }
+    }
+    function buildAllToggle(readModel, actions, jquery, enabledToggle) {
+      const settingName = enabledToggle ? "buildingEnabledAll" : "buildingStateAll";
+      const inputClass = enabledToggle ? "script_buildingEnabledAll" : "script_buildingStateAll";
+      const checked = enabledToggle ? readModel.allEnabled : readModel.allState;
+      const label = enabledToggle ? `<label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
+            <input class="${inputClass}" type="checkbox"${checked ? " checked" : ""}>
+            <span class="check" style="height:5px; max-width:15px"></span>
+            <span style="margin-left: 20px;"></span>
+          </label>` : `<label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
+            <input class="${inputClass}" type="checkbox"${checked ? " checked" : ""}>
+            <span class="check" style="height:5px; max-width:15px"></span>
+            <span style="margin-left: 20px;"></span>
+          </label>`;
+      return jquery(label).on("change", "input", function() {
+        intents.handle({
+          type: enabledToggle ? "set-all-autobuild" : "set-all-autopower",
+          enabled: this.checked
+        });
+        jquery(
+          enabledToggle ? '[class^="script_bat"]' : '[class^="script_bld_s_"]'
+        ).prop("checked", this.checked);
+      }).on("click", (event) => {
+        if (event[readModel.overrideKey]) event.preventDefault?.();
+        if (event.target?.nodeName === "INPUT" && !actions.confirm(
+          enabledToggle ? "Are you sure you wish to change the Auto Build state of ALL buildings?" : "Are you sure you wish to change the Auto Power state of ALL buildings?"
+        )) {
+          event.preventDefault?.();
+        }
+      });
+    }
+    function renderBuildingState(node, row, actions, jquery) {
+      if (row.stateSettingName) {
+        actions.addToggleCallbacks(
+          jquery(`
+              <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
+                <input class="script_${row.stateSettingName}" type="checkbox"${row.stateEnabled ? " checked" : ""}>
+                <span class="check" style="height:5px; max-width:15px"></span>
+                <span style="margin-left: 20px;"></span>
+              </label>`),
+          row.stateSettingName
+        ).appendTo(node);
+        node.addClass(`script_bg_${row.stateSettingName}`);
+      }
+      if (row.smartSettingName) {
+        const smartNode = jquery(`
+              <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 35px;">
+                <input class="script_${row.smartSettingName}" type="checkbox"${row.smartEnabled ? " checked" : ""}>
+                <span class="check" style="height:5px; max-width:15px"></span>
+                <span style="margin-left: 20px;"></span>
+              </label>`);
+        if (row.smartLinkedIds) {
+          const linkedIds = row.smartLinkedIds;
+          smartNode.on("change", "input", function() {
+            intents.handle({
+              type: "set-linked-smart-state",
+              buildingIds: linkedIds,
+              enabled: this.checked
+            });
+            for (const id of linkedIds) {
+              jquery(`.script_bld_s2_${id}`).prop("checked", this.checked);
+            }
+          });
+        } else {
+          actions.addToggleCallbacks(smartNode, row.smartSettingName);
+        }
+        node.append(smartNode).addClass(`script_bg_${row.smartSettingName}`);
+      }
+      node.append('<span class="script-lastcolumn"></span>');
+      node.toggleClass(
+        "inactive-row",
+        row.hasStateOverride || row.hasSmartOverride
+      );
+    }
+    return Object.freeze({
+      buildBuildingSettings: buildBuildingSettings2,
+      updateBuildingSettingsContent: updateBuildingSettingsContent2,
+      filterBuildingSettingsTable: filterBuildingSettingsTable2
+    });
+  }
+
+  // src/adapters/evolve/building-settings.ts
+  function requireString9(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function readPriorityList5(manager) {
+    const priorityList = manager["priorityList"];
+    if (!Array.isArray(priorityList)) {
+      throw new TypeError("BuildingManager.priorityList must be an array");
+    }
+    return priorityList.map(
+      (building2, index) => requireRecord(building2, `BuildingManager.priorityList[${index}]`)
+    );
+  }
+  function readOptionalString(value) {
+    return typeof value === "string" ? value : "";
+  }
+  function readColor(tab) {
+    if (tab === "space" || tab === "starDock") return "has-text-danger";
+    if (tab === "galaxy" || tab === "eden") return "has-text-advanced";
+    if (tab === "interstellar") return "has-text-special";
+    if (tab === "portal" || tab === "tauceti") return "has-text-warning";
+    return "has-text-info";
+  }
+  function readLinkedIds(building2, linkedBuildings2, path) {
+    for (let setIndex = 0; setIndex < linkedBuildings2.length; setIndex += 1) {
+      const rawSet = linkedBuildings2[setIndex];
+      if (!Array.isArray(rawSet)) {
+        throw new TypeError(`linkedBuildings[${setIndex}] must be an array`);
+      }
+      const set = rawSet.map(
+        (item, itemIndex) => requireRecord(item, `linkedBuildings[${setIndex}][${itemIndex}]`)
+      );
+      if (set.some((item) => item === building2)) {
+        return set.map(
+          (item, itemIndex) => requireString9(
+            item["_vueBinding"],
+            `${path}.linkedBuildings[${setIndex}][${itemIndex}]._vueBinding`
+          )
+        );
+      }
+    }
+    return void 0;
+  }
+  function readRows(manager, settingsRaw2, linkedBuildings2) {
+    const overrides = requireRecord(
+      settingsRaw2["overrides"],
+      "settingsRaw.overrides"
+    );
+    return readPriorityList5(manager).map((building2, index) => {
+      const path = `BuildingManager.priorityList[${index}]`;
+      const id = requireString9(building2["_vueBinding"], `${path}._vueBinding`);
+      const flags = requireRecord(building2["is"], `${path}.is`);
+      const stateSettingName = Reflect.apply(
+        requireFunction(building2["isSwitchable"], `${path}.isSwitchable`),
+        building2,
+        []
+      ) ? `bld_s_${id}` : void 0;
+      const smartSettingName = flags["smart"] ? `bld_s2_${id}` : void 0;
+      const linkedIds = smartSettingName ? readLinkedIds(building2, linkedBuildings2, path) : void 0;
+      return {
+        id,
+        label: requireString9(building2["name"], `${path}.name`),
+        color: readColor(readOptionalString(building2["_tab"])),
+        autoBuildSettingName: `bat${id}`,
+        maximumSettingName: `bld_m_${id}`,
+        weightingSettingName: `bld_w_${id}`,
+        ...stateSettingName ? { stateSettingName } : {},
+        ...stateSettingName ? { stateEnabled: Boolean(settingsRaw2[stateSettingName]) } : {},
+        ...smartSettingName ? { smartSettingName } : {},
+        ...smartSettingName ? { smartEnabled: Boolean(settingsRaw2[smartSettingName]) } : {},
+        ...linkedIds ? { smartLinkedIds: linkedIds } : {},
+        hasStateOverride: stateSettingName ? Boolean(overrides[stateSettingName]) : false,
+        hasSmartOverride: smartSettingName ? Boolean(overrides[smartSettingName]) : false
+      };
+    });
+  }
+  function requireBoolean2(value, path) {
+    if (typeof value !== "boolean") {
+      throw new TypeError(`${path} must be a boolean`);
+    }
+    return value;
+  }
+  function createBuildingSettingsEvolveAdapter({
+    getBuildingManager,
+    getBuildingIds,
+    getResources,
+    getLinkedBuildings,
+    getCheckCompare,
+    getOverrideKey,
+    getRealNumber: getRealNumber2,
+    getInitBuildingState,
+    getSettingsRaw
+  }) {
+    function readBuildingSettingsReadModel() {
+      const manager = requireRecord(getBuildingManager(), "BuildingManager");
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      return createBuildingSettingsReadModel({
+        rows: readRows(
+          manager,
+          settingsRaw2,
+          (() => {
+            const value = getLinkedBuildings();
+            if (!Array.isArray(value)) {
+              throw new TypeError("linkedBuildings must be an array");
+            }
+            return value;
+          })()
+        ),
+        allEnabled: Boolean(settingsRaw2["buildingEnabledAll"]),
+        allState: Boolean(settingsRaw2["buildingStateAll"]),
+        overrideKey: requireString9(getOverrideKey(), "overrideKey")
+      });
+    }
+    function filterBuildingSettings(query) {
+      const filter = query.toUpperCase();
+      const reg = filter.match(/^(.+)(<=|>=|===|==|<|>|!==|!=)(.+)$/);
+      if (!reg) return void 0;
+      const leftOperand = reg[1] ?? "";
+      const operator = reg[2] ?? "";
+      const rightOperand = reg[3] ?? "";
+      const buildingValue = (building2) => {
+        switch (leftOperand.trim()) {
+          case "BUILD":
+          case "AUTOBUILD":
+            return building2["autoBuildEnabled"];
+          case "POWER":
+          case "AUTOPOWER":
+            return building2["autoStateEnabled"];
+          case "WEIGHT":
+          case "WEIGHTING":
+            return building2["_weighting"];
+          case "MAX":
+          case "MAXBUILD":
+            return building2["_autoMax"];
+          case "POWERED":
+            return building2["powered"];
+          case "KNOW":
+          case "KNOWLEDGE":
+            return requireRecord(building2["is"], "building.is")["knowledge"];
+          default: {
+            const cost = requireRecord(building2["cost"], "building.cost");
+            const resources2 = requireRecord(getResources(), "resources");
+            const match = Object.entries(cost).find(([resourceId3]) => {
+              const resource2 = requireRecord(
+                resources2[resourceId3],
+                `resources.${resourceId3}`
+              );
+              return requireString9(
+                resource2["title"],
+                `resources.${resourceId3}.title`
+              ).toUpperCase().includes(leftOperand.trim());
+            });
+            return match?.[1] ?? 0;
+          }
+        }
+      };
+      const testValue = (() => {
+        switch (rightOperand.trim()) {
+          case "ON":
+          case "TRUE":
+            return true;
+          case "OFF":
+          case "FALSE":
+            return false;
+          default:
+            return Reflect.apply(
+              requireFunction(getRealNumber2(), "getRealNumber"),
+              void 0,
+              [rightOperand.trim()]
+            );
+        }
+      })();
+      const comparisons = requireRecord(getCheckCompare(), "checkCompare");
+      const compare = requireFunction(
+        comparisons[operator],
+        `checkCompare.${operator}`
+      );
+      const buildingIds2 = requireRecord(getBuildingIds(), "buildingIds");
+      const matchingIds = [];
+      for (const [id, rawBuilding] of Object.entries(buildingIds2)) {
+        const building2 = requireRecord(rawBuilding, `buildingIds.${id}`);
+        if (Reflect.apply(compare, comparisons, [
+          buildingValue(building2),
+          testValue
+        ])) {
+          matchingIds.push(id);
+        }
+      }
+      return matchingIds;
+    }
+    function resetPriorities() {
+      const manager = requireRecord(getBuildingManager(), "BuildingManager");
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      Reflect.apply(
+        requireFunction(getInitBuildingState(), "initBuildingState"),
+        void 0,
+        []
+      );
+      const priorityList = readPriorityList5(manager);
+      for (let index = 0; index < priorityList.length; index += 1) {
+        const id = requireString9(
+          priorityList[index]?.["_vueBinding"],
+          `BuildingManager.priorityList[${index}]._vueBinding`
+        );
+        settingsRaw2[`bld_p_${id}`] = index;
+      }
+    }
+    function reorderBuildings(buildingIds2) {
+      const manager = requireRecord(getBuildingManager(), "BuildingManager");
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      const sortByPriority = requireFunction(
+        manager["sortByPriority"],
+        "BuildingManager.sortByPriority"
+      );
+      buildingIds2.forEach((buildingId2, index) => {
+        const id = requireString9(buildingId2, `buildingIds[${index}]`);
+        settingsRaw2[`bld_p_${id}`] = index;
+      });
+      Reflect.apply(sortByPriority, manager, []);
+    }
+    function setAllAutoBuild(enabled) {
+      const manager = requireRecord(getBuildingManager(), "BuildingManager");
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      settingsRaw2["buildingEnabledAll"] = requireBoolean2(enabled, "enabled");
+      for (const [index, building2] of readPriorityList5(manager).entries()) {
+        const id = requireString9(
+          building2["_vueBinding"],
+          `BuildingManager.priorityList[${index}]._vueBinding`
+        );
+        settingsRaw2[`bat${id}`] = enabled;
+      }
+    }
+    function setAllAutoPower(enabled) {
+      const manager = requireRecord(getBuildingManager(), "BuildingManager");
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      settingsRaw2["buildingStateAll"] = requireBoolean2(enabled, "enabled");
+      for (const [index, building2] of readPriorityList5(manager).entries()) {
+        const id = requireString9(
+          building2["_vueBinding"],
+          `BuildingManager.priorityList[${index}]._vueBinding`
+        );
+        settingsRaw2[`bld_s_${id}`] = enabled;
+      }
+    }
+    function setLinkedSmartState(buildingIds2, enabled) {
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      const value = requireBoolean2(enabled, "enabled");
+      buildingIds2.forEach((buildingId2, index) => {
+        const id = requireString9(buildingId2, `buildingIds[${index}]`);
+        settingsRaw2[`bld_s2_${id}`] = value;
+      });
+    }
+    return Object.freeze({
+      readBuildingSettingsReadModel,
+      filterBuildingSettings,
+      resetPriorities,
+      reorderBuildings,
+      setAllAutoBuild,
+      setAllAutoPower,
+      setLinkedSmartState
+    });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -23481,7 +24092,7 @@
   }
 
   // src/adapters/evolve/hell.ts
-  function requireString9(value, path) {
+  function requireString10(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -23778,7 +24389,7 @@
           ),
           evilTechnology: optionalNumber(tech["evil"], "game.global.tech.evil"),
           grenadier: Boolean(race2["grenadier"]),
-          government: requireString9(
+          government: requireString10(
             govern["type"],
             "game.global.civic.govern.type"
           )
@@ -24369,7 +24980,7 @@
   }
 
   // src/adapters/evolve/battle.ts
-  function requireString10(value, path) {
+  function requireString11(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -24387,7 +24998,7 @@
     return {
       input: Object.freeze({
         governmentId: requireNumber(foreign["id"], `${path}.id`),
-        policy: requireString10(foreign["policy"], `${path}.policy`),
+        policy: requireString11(foreign["policy"], `${path}.policy`),
         released: Boolean(foreign["released"]),
         occupied: Boolean(government["occ"]),
         annexed: Boolean(government["anx"]),
@@ -24502,7 +25113,7 @@
         );
         const hellAvailable = Boolean(manager["_hellVue"]);
         const readHell = autoHell2 && hellAvailable;
-        const protectMode = requireString10(
+        const protectMode = requireString11(
           settings2["foreignProtect"],
           "settings.foreignProtect"
         );
@@ -24776,7 +25387,7 @@
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        const governmentName = requireString10(
+        const governmentName = requireString11(
           dependencies.getGovernmentName(decision2.governmentId),
           `government name ${decision2.governmentId}`
         );
@@ -24802,7 +25413,7 @@
         if (removeBattalion !== null) {
           Reflect.apply(removeBattalion, active.manager, [-deltaBattalion]);
         }
-        const campaignTitle = requireString10(
+        const campaignTitle = requireString11(
           Reflect.apply(getCampaignTitle, active.manager, [decision2.tactic]),
           `campaign title ${decision2.tactic}`
         );
@@ -28749,7 +29360,7 @@
       moneyStorageRequired: 0
     });
   }
-  function requireString11(value, path) {
+  function requireString12(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -28798,7 +29409,7 @@
         );
         if (maxCityGarrison <= 0) return unavailableInput2();
         const state2 = requireRecord(dependencies.getState(), "state");
-        const goal = requireString11(state2["goal"], "state.goal");
+        const goal = requireString12(state2["goal"], "state.goal");
         const saveInflationMoney = Boolean(
           dependencies.shouldSaveInflationMoney()
         );
@@ -31286,7 +31897,7 @@
       }
     });
   }
-  function readPriorityList5(manager) {
+  function readPriorityList6(manager) {
     const list = manager["priorityList"];
     if (!Array.isArray(list)) {
       throw new TypeError("MarketManager.priorityList must be an array");
@@ -31325,7 +31936,7 @@
           manager["setMultiplier"],
           "MarketManager.setMultiplier"
         );
-        const list = readPriorityList5(manager);
+        const list = readPriorityList6(manager);
         const raw = list[decision2.index];
         const resource2 = typeof raw === "object" && raw !== null ? raw : null;
         const actualId = resource2 !== null && typeof resource2["id"] === "string" ? resource2["id"] : null;
@@ -32214,7 +32825,7 @@
     }
     return value;
   }
-  function readOptionalString(value, path) {
+  function readOptionalString2(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -33192,7 +33803,7 @@
                 building2
               ),
               skipGroup,
-              extraDescription: readOptionalString(
+              extraDescription: readOptionalString2(
                 building2["extraDescription"],
                 `${path}.extraDescription`
               ),
@@ -33297,7 +33908,7 @@
             ),
             mechQueued: queued.includes(spireMech),
             purifierQueued: queued.includes(purifier),
-            purifierDescription: readOptionalString(
+            purifierDescription: readOptionalString2(
               purifier["extraDescription"],
               "buildings.SpirePurifier.extraDescription"
             ),
@@ -33528,7 +34139,7 @@
             const building2 = active.buildings.get(operation2.buildingId);
             if (building2 === void 0)
               return `building ${operation2.buildingId} missing`;
-            const current = descriptions.get(operation2.buildingId) ?? readOptionalString(
+            const current = descriptions.get(operation2.buildingId) ?? readOptionalString2(
               building2["extraDescription"],
               `building ${operation2.buildingId}.extraDescription`
             );
@@ -36503,7 +37114,7 @@
     );
     return { foreign, government };
   }
-  function requireString12(value, path) {
+  function requireString13(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -36514,7 +37125,7 @@
     const ids = {};
     for (const [name, rawType] of Object.entries(types)) {
       const type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString12(type["id"], `SpyManager.Types.${name}.id`);
+      ids[name] = requireString13(type["id"], `SpyManager.Types.${name}.id`);
     }
     return Object.freeze(ids);
   }
@@ -36622,7 +37233,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString12(
+        const policy = requireString13(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -36643,7 +37254,7 @@
             "resources.Money.maxQuantity"
           );
         }
-        const governmentName = requireString12(
+        const governmentName = requireString13(
           dependencies.getGovName(governmentId),
           `government name ${governmentId}`
         );
@@ -36689,7 +37300,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString12(
+        const policy = requireString13(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -37839,7 +38450,7 @@
   }
 
   // src/adapters/evolve/jobs.ts
-  function requireString13(value, path) {
+  function requireString14(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
     return value;
@@ -37969,7 +38580,7 @@
           if (count === 0) {
             maximum = 1;
           } else {
-            const id = requireString13(job["id"], "job.id");
+            const id = requireString14(job["id"], "job.id");
             const production = requireNumber(
               call2(
                 resource(resources2, "Food"),
@@ -38321,7 +38932,7 @@
           );
           return Object.freeze({
             token: token2,
-            id: requireString13(job["id"], `jobList[${token2}].id`),
+            id: requireString14(job["id"], `jobList[${token2}].id`),
             kind,
             workers: requireNumber(job["workers"], `jobList[${token2}].workers`),
             servants: requireNumber(
@@ -38438,7 +39049,7 @@
                 `craftingJobs[${index}].resource.craftPreserve`
               ))) {
                 affordability = 0;
-                exclusion = `${requireString13(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
+                exclusion = `${requireString14(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
                 break;
               }
               affordability = Math.min(
@@ -38470,7 +39081,7 @@
                 craftResource["currentQuantity"],
                 `craftingJobs[${index}].resource.currentQuantity`
               );
-              const resourceId3 = requireString13(
+              const resourceId3 = requireString14(
                 craftResource["id"],
                 `craftingJobs[${index}].resource.id`
               );
@@ -38490,7 +39101,7 @@
                 driver = `no building×${craftWeight}`;
               } else {
                 const record = requireRecord(driving, "driving building");
-                driver = `${requireString13(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
+                driver = `${requireString14(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
               }
             }
             return Object.freeze({
@@ -38697,7 +39308,7 @@
           minerToken: token("Miner"),
           population: resourceNumber(resources2, "Population", "currentQuantity"),
           craftDebug: Boolean(debugWindow["craftDebug"]),
-          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString13(state2["lastCraftWinner"], "state.lastCraftWinner"),
+          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString14(state2["lastCraftWinner"], "state.lastCraftWinner"),
           authority,
           jobs: Object.freeze(jobInputs),
           crafting: Object.freeze(craftingInputs),
@@ -39151,7 +39762,7 @@
   }
 
   // src/adapters/evolve/build.ts
-  function requireString14(value, path) {
+  function requireString15(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -39241,7 +39852,7 @@
         const byKey = /* @__PURE__ */ new Map();
         const candidates = entities.map((entity, index) => {
           const path = `buildList[${index}]`;
-          const key = requireString14(entity["_vueBinding"], `${path}._vueBinding`);
+          const key = requireString15(entity["_vueBinding"], `${path}._vueBinding`);
           byKey.set(key, entity);
           const rawCost = requireRecord(entity["cost"], `${path}.cost`);
           const cost = {};
@@ -39635,7 +40246,7 @@
       )
     });
   }
-  function readPriorityList6(manager) {
+  function readPriorityList7(manager) {
     const priorityList = manager["priorityList"];
     if (!Array.isArray(priorityList)) {
       throw new TypeError("MutableTraitManager.priorityList must be an array");
@@ -39695,7 +40306,7 @@
         const currencyId = currencyIdFromGame(dependencies.getGame);
         const views = [];
         let currency = null;
-        const list = readPriorityList6(manager);
+        const list = readPriorityList7(manager);
         for (let index = 0; index < list.length; index++) {
           const path = `MutableTraitManager.priorityList[${index}]`;
           const trait2 = requireRecord(list[index], path);
@@ -39778,7 +40389,7 @@
           dependencies.getMutableTraitManager(),
           "MutableTraitManager"
         );
-        const list = readPriorityList6(manager);
+        const list = readPriorityList7(manager);
         const trait2 = typeof list[decision2.index] === "object" && list[decision2.index] !== null ? list[decision2.index] : null;
         const actualTraitName = trait2 !== null && typeof trait2["traitName"] === "string" ? trait2["traitName"] : null;
         if (trait2 === null || actualTraitName !== decision2.traitName) {
@@ -40017,7 +40628,7 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString15(value, path) {
+  function requireString16(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -40037,7 +40648,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString15(
+    const status2 = requireString16(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -40106,7 +40717,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString15(
+          mode = requireString16(
             settings2["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -40244,7 +40855,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString15(
+            const id = requireString16(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -40403,7 +41014,7 @@
             );
           }
         }
-        const targetLocationName = requireString15(
+        const targetLocationName = requireString16(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -40436,7 +41047,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString15(
+        const shipName = requireString16(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -40447,7 +41058,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString15(
+        const shipClass = requireString16(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -40519,7 +41130,7 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString15(
+          const resourceId3 = requireString16(
             missingResource,
             "missing outer-fleet resource id"
           );
@@ -40527,7 +41138,7 @@
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString15(
+          missingResourceName = requireString16(
             resource2["name"],
             `resources.${resourceId3}.name`
           );
@@ -40957,7 +41568,7 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString16(value, path) {
+  function requireString17(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -41133,7 +41744,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString16(
+          const name = requireString17(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -41161,7 +41772,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString16(
+          chthonianLossMode = requireString17(
             settings2["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -41195,7 +41806,7 @@
               settings2["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString16(
+            alien2LossMode = requireString17(
               settings2["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -41544,7 +42155,7 @@
   }
 
   // src/adapters/evolve/mech.ts
-  function requireString17(value, path) {
+  function requireString18(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -41563,7 +42174,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString17(raw["size"], `${path}.size`),
+        size: requireString18(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -41598,7 +42209,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString17(raw["size"], `${path}.size`),
+      size: requireString18(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -41715,7 +42326,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString17(settings2["mechBuild"], "settings.mechBuild")
+          buildMode: requireString18(settings2["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -41750,7 +42361,7 @@
             call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString17(preferred[0], "preferred mech size");
+          const size = requireString18(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
             call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
@@ -41789,7 +42400,7 @@
           buildings2["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString17(
+        const prestigeType = requireString18(
           settings2["prestigeType"],
           "settings.prestigeType"
         );
@@ -41878,7 +42489,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString17(
+        const configuredScrapMode = requireString18(
           settings2["mechScrap"],
           "settings.mechScrap"
         );
@@ -41907,7 +42518,7 @@
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString17(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString18(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -42092,7 +42703,7 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString17(
+          const description = requireString18(
             call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
@@ -45634,404 +46245,6 @@
       return implementation.apply(this, args);
     }
     return { buildMarketSettings: buildMarketSettings2, updateMarketSettingsContent: updateMarketSettingsContent2 };
-  }
-
-  // src/ui/building-settings.ts
-  function createBuildingSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const BuildingManager2 = liveObject4(() => getDependency("BuildingManager"));
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsSelect2 = liveFunction(
-      () => getDependency("addSettingsSelect")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
-    const addTableToggle2 = liveFunction(() => getDependency("addTableToggle"));
-    const addToggleCallbacks2 = liveFunction(
-      () => getDependency("addToggleCallbacks")
-    );
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const buildingIds2 = liveObject4(() => getDependency("buildingIds"));
-    const checkCompare2 = liveObject4(() => getDependency("checkCompare"));
-    const confirm2 = liveFunction(() => getDependency("confirm"));
-    const document2 = liveObject4(() => getDependency("document"));
-    const getRealNumber2 = liveFunction(() => getDependency("getRealNumber"));
-    const initBuildingState2 = liveFunction(
-      () => getDependency("initBuildingState")
-    );
-    const linkedBuildings2 = liveObject4(() => getDependency("linkedBuildings"));
-    const overrideKey2 = liveObject4(() => getDependency("overrideKey"));
-    const removeBuildingToggles2 = liveFunction(
-      () => getDependency("removeBuildingToggles")
-    );
-    const resetBuildingSettings2 = liveFunction(
-      () => getDependency("resetBuildingSettings")
-    );
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resources2 = liveObject4(() => getDependency("resources"));
-    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
-    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildBuildingSettingsImpl() {
-      let sectionId = "building";
-      let sectionName = "Building";
-      let resetFunction = function() {
-        resetBuildingSettings2(true);
-        updateSettingsFromState2();
-        updateBuildingSettingsContent2();
-        resetCheckbox2("autoBuild", "autoPower");
-        removeBuildingToggles2();
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateBuildingSettingsContent2
-      );
-    }
-    function updateBuildingSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_buildingContent");
-      currentNode.empty().off("*");
-      addSettingsToggle2(
-        currentNode,
-        "buildingsIgnoreZeroRate",
-        "Do not wait for resources without income",
-        "Weighting checks will ignore resources without positive income(craftables, inactive factory goods, etc), buildings with such resources will not delay other buildings."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "buildingsLimitPowered",
-        "Limit amount of powered buildings",
-        "With this option enabled Max Build will prevent powering extra building. Can be useful to disable buildings with overrided settings."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "buildingsTransportGem",
-        "Build cheapest Supplies transport",
-        "By default script chooses between Lake Transport and Lake Bireme Warship comparing their 'Supplies Per Support', with this option enabled it will compare 'Supplies Per Soulgems' instead."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "buildingsBestFreighter",
-        "Build most efficient freighters",
-        "With this option enabled script will compare 'Money Storage per Crew' of Freighter and Super Freighter, and only build the best one. Without this option no restrictions will be applied. Works only when both ships are buildable."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "buildingsUseMultiClick",
-        "Bulk build multi-segmented buildings",
-        "With this option enabled, the script will build as many segments as are affordable at once, instead of one per tick."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "buildingTowerSuppression",
-        "Minimum suppression for Towers",
-        "East Tower and West Tower won't be built until minimum suppression is reached"
-      );
-      const consumptionOptions = [
-        {
-          val: "onePerTick",
-          label: "Default",
-          hint: "Script will stop building buildings for one tick after buying building with support/upkeep. (Example: 1 Living Quarters stops processing of all buildings until next script tick.)"
-        },
-        {
-          val: "perResource",
-          label: "Non-conflicting only",
-          hint: "During a tick, the script will only buy at most one building using a given support/upkeep type, but non-conflicting ones are allowed. Should be safe in most cases. (Example: 1 Living Quarters stops building the other buildings using Red Planet support for that tick, but it can still build on other planets.)"
-        },
-        {
-          val: "unlimited",
-          label: "Unlimited",
-          hint: "Do not pay attention to support/upkeep requirements. This will cause bugs and undesirable behavior as it can easily exceed the maximum support. But, at extremely high prestige levels, this may be required. (Example: Can buy 1 Living Quarters + 1 Mine + 1 Fabrication + 1 Biodome in a single tick even if there is only 2 support left.)"
-        }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "buildingConsumptionCheck",
-        "Behavior when building support/upkeep-using building",
-        "By default, the script only buys one building with support or upkeep requirement per tick, to allow automatic weightings to work optimally.",
-        consumptionOptions
-      );
-      currentNode.append(`
-          <div><input id="script_buildingSearch" class="script-searchsettings" type="text" placeholder="Search for buildings..."></div>
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:35%">Building</th>
-              <th class="has-text-warning" style="width:15%" title="Enables auto building. Triggers ignores this option, allowing to build disabled things.">Auto Build</th>
-              <th class="has-text-warning" style="width:15%" title="Maximum amount of buildings to build. Triggers ignores this option, allowing to build above limit. Can be also used to limit amount of enabled buildings, with respective option above.">Max Build</th>
-              <th class="has-text-warning" style="width:15%" title="Script will try to spend 2x amount of resources on building having 2x weighting, and such.">Weighting</th>
-              <th class="has-text-warning" style="width:20%" title="First toggle enables basic automation based on priority, power, support, and consumption. Second enables logic made specially for particlular building, their effects are different, but generally it tries to behave smarter than just staying enabled all the time.">Auto Power</th>
-            </tr>
-            <tbody id="script_buildingTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $2("#script_buildingTableBody");
-      $2("#script_buildingSearch").on("keyup", filterBuildingSettingsTable2);
-      let newTableBodyText = '<tr value="All" class="unsortable"><td id="script_bldallToggle" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:20%"><span id="script_resetBuildingsPriority" class="script-refresh"></span></td></tr>';
-      for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
-        let building2 = BuildingManager2.priorityList[i];
-        newTableBodyText += `<tr value="${building2._vueBinding}" class="script-draggable"><td id="script_${building2._vueBinding}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:20%"></td></tr>`;
-      }
-      tableBodyNode.append($2(newTableBodyText));
-      let buildingElement = $2("#script_bldallToggle");
-      buildingElement.append(
-        '<span class="has-text-warning" style="margin-left: 20px;">All Buildings</span>'
-      );
-      buildingElement = buildingElement.next();
-      buildingElement.append(buildAllBuildingEnabledSettingsToggle2());
-      buildingElement = buildingElement.next().next().next();
-      buildingElement.append(buildAllBuildingStateSettingsToggle2());
-      $2("#script_resetBuildingsPriority").on("click", function() {
-        if (confirm2("Are you sure you wish to reset buildings priority?")) {
-          initBuildingState2();
-          for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
-            let id = BuildingManager2.priorityList[i]._vueBinding;
-            settingsRaw2["bld_p_" + id] = i;
-          }
-          updateSettingsFromState2();
-          updateBuildingSettingsContent2();
-        }
-      });
-      for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
-        let building2 = BuildingManager2.priorityList[i];
-        let buildingElement2 = $2("#script_" + building2._vueBinding);
-        let color = building2._tab === "space" || building2._tab === "starDock" ? "has-text-danger" : building2._tab === "galaxy" || building2._tab === "eden" ? "has-text-advanced" : building2._tab === "interstellar" ? "has-text-special" : building2._tab === "portal" || building2._tab === "tauceti" ? "has-text-warning" : "has-text-info";
-        buildingElement2.append(buildTableLabel2(building2.name, "", color));
-        buildingElement2 = buildingElement2.next();
-        addTableToggle2(buildingElement2, "bat" + building2._vueBinding);
-        buildingElement2 = buildingElement2.next();
-        addTableInput2(buildingElement2, "bld_m_" + building2._vueBinding);
-        buildingElement2 = buildingElement2.next();
-        addTableInput2(buildingElement2, "bld_w_" + building2._vueBinding);
-        buildingElement2 = buildingElement2.next();
-        buildBuildingStateSettingsToggle2(buildingElement2, building2);
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper2,
-        update: function() {
-          let buildingElements = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < buildingElements.length; i++) {
-            settingsRaw2["bld_p_" + buildingElements[i]] = i;
-          }
-          BuildingManager2.sortByPriority();
-          updateSettingsFromState2();
-        }
-      });
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function filterBuildingSettingsTableImpl() {
-      let filter = document2.getElementById("script_buildingSearch").value.toUpperCase();
-      let trs = document2.getElementById("script_buildingTableBody").getElementsByTagName("tr");
-      let filterChecker = null;
-      let reg = filter.match(/^(.+)(<=|>=|===|==|<|>|!==|!=)(.+)$/);
-      if (reg?.length === 4) {
-        let buildingValue = null;
-        switch (reg[1].trim()) {
-          case "BUILD":
-          case "AUTOBUILD":
-            buildingValue = (b) => b.autoBuildEnabled;
-            break;
-          case "POWER":
-          case "AUTOPOWER":
-            buildingValue = (b) => b.autoStateEnabled;
-            break;
-          case "WEIGHT":
-          case "WEIGHTING":
-            buildingValue = (b) => b._weighting;
-            break;
-          case "MAX":
-          case "MAXBUILD":
-            buildingValue = (b) => b._autoMax;
-            break;
-          case "POWERED":
-            buildingValue = (b) => b.powered;
-            break;
-          case "KNOW":
-          case "KNOWLEDGE":
-            buildingValue = (b) => b.is.knowledge;
-            break;
-          default:
-            buildingValue = (b) => Object.entries(b.cost).find(
-              ([res, qnt]) => resources2[res].title.toUpperCase().indexOf(reg[1].trim()) > -1
-            )?.[1] ?? 0;
-        }
-        let testValue = null;
-        switch (reg[3].trim()) {
-          case "ON":
-          case "TRUE":
-            testValue = true;
-            break;
-          case "OFF":
-          case "FALSE":
-            testValue = false;
-            break;
-          default:
-            testValue = getRealNumber2(reg[3].trim());
-            break;
-        }
-        filterChecker = (building2) => checkCompare2[reg[2]](buildingValue(building2), testValue);
-      }
-      for (let i = 0; i < trs.length; i++) {
-        let td = trs[i].getElementsByTagName("td")[0];
-        if (td) {
-          if (filterChecker) {
-            let building2 = buildingIds2[td.id.match(/^script_(.*)$/)[1]];
-            if (building2 && filterChecker(building2)) {
-              trs[i].style.display = "";
-            } else {
-              trs[i].style.display = "none";
-            }
-          } else if (td.textContent.toUpperCase().indexOf(filter) > -1) {
-            trs[i].style.display = "";
-          } else {
-            trs[i].style.display = "none";
-          }
-        }
-      }
-    }
-    function buildAllBuildingEnabledSettingsToggleImpl() {
-      return $2(`
-          <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
-            <input class="script_buildingEnabledAll" type="checkbox"${settingsRaw2.buildingEnabledAll ? " checked" : ""}>
-            <span class="check" style="height:5px; max-width:15px"></span>
-            <span style="margin-left: 20px;"></span>
-          </label>`).on("change", "input", function() {
-        settingsRaw2.buildingEnabledAll = this.checked;
-        for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
-          let id = BuildingManager2.priorityList[i]._vueBinding;
-          settingsRaw2["bat" + id] = this.checked;
-        }
-        $2('[class^="script_bat"]').prop("checked", this.checked);
-        updateSettingsFromState2();
-      }).on("click", function(event) {
-        if (event[overrideKey2]) {
-          event.preventDefault();
-        }
-        if (event.target.nodeName === "INPUT" && !confirm2(
-          "Are you sure you wish to change the Auto Build state of ALL buildings?"
-        )) {
-          event.preventDefault();
-        }
-      });
-    }
-    function buildBuildingStateSettingsToggleImpl(node, building2) {
-      let stateKey = "bld_s_" + building2._vueBinding;
-      let smartKey = "bld_s2_" + building2._vueBinding;
-      if (building2.isSwitchable()) {
-        addToggleCallbacks2(
-          $2(`
-              <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
-                <input class="script_${stateKey}" type="checkbox"${settingsRaw2[stateKey] ? " checked" : ""}>
-                <span class="check" style="height:5px; max-width:15px"></span>
-                <span style="margin-left: 20px;"></span>
-              </label>`),
-          stateKey
-        ).appendTo(node);
-        node.addClass("script_bg_" + stateKey);
-      }
-      if (building2.is.smart) {
-        let smartNode = $2(`
-              <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 35px;">
-                <input class="script_${smartKey}" type="checkbox"${settingsRaw2[smartKey] ? " checked" : ""}>
-                <span class="check" style="height:5px; max-width:15px"></span>
-                <span style="margin-left: 20px;"></span>
-              </label>`);
-        let set = linkedBuildings2.find((set2) => set2.includes(building2));
-        if (set) {
-          smartNode.on("change", "input", function() {
-            set.forEach((building3) => {
-              let linkedId = "bld_s2_" + building3._vueBinding;
-              settingsRaw2[linkedId] = this.checked;
-              $2(".script_" + linkedId).prop("checked", this.checked);
-            });
-            updateSettingsFromState2();
-          });
-        } else {
-          addToggleCallbacks2(smartNode, smartKey);
-        }
-        node.append(smartNode);
-        node.addClass("script_bg_" + smartKey);
-      }
-      node.append(`<span class="script-lastcolumn"></span>`);
-      node.toggleClass(
-        "inactive-row",
-        Boolean(
-          settingsRaw2.overrides[stateKey] || settingsRaw2.overrides[smartKey]
-        )
-      );
-    }
-    function buildAllBuildingStateSettingsToggleImpl() {
-      return $2(`
-          <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
-            <input class="script_buildingStateAll" type="checkbox"${settingsRaw2.buildingStateAll ? " checked" : ""}>
-            <span class="check" style="height:5px; max-width:15px"></span>
-            <span style="margin-left: 20px;"></span>
-          </label>`).on("change", "input", function(e) {
-        settingsRaw2.buildingStateAll = this.checked;
-        for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
-          let id = BuildingManager2.priorityList[i]._vueBinding;
-          settingsRaw2["bld_s_" + id] = this.checked;
-        }
-        $2('[class^="script_bld_s_"]').prop("checked", this.checked);
-        updateSettingsFromState2();
-      }).on("click", function(event) {
-        if (event[overrideKey2]) {
-          event.preventDefault();
-        }
-        if (event.target.nodeName === "INPUT" && !confirm2(
-          "Are you sure you wish to change the Auto Power state of ALL buildings?"
-        )) {
-          event.preventDefault();
-        }
-      });
-    }
-    function buildBuildingSettings2(...args) {
-      const implementation = getOverride("buildBuildingSettings") ?? buildBuildingSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateBuildingSettingsContent2(...args) {
-      const implementation = getOverride("updateBuildingSettingsContent") ?? updateBuildingSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    function filterBuildingSettingsTable2(...args) {
-      const implementation = getOverride("filterBuildingSettingsTable") ?? filterBuildingSettingsTableImpl;
-      return implementation.apply(this, args);
-    }
-    function buildAllBuildingEnabledSettingsToggle2(...args) {
-      const implementation = getOverride("buildAllBuildingEnabledSettingsToggle") ?? buildAllBuildingEnabledSettingsToggleImpl;
-      return implementation.apply(this, args);
-    }
-    function buildBuildingStateSettingsToggle2(...args) {
-      const implementation = getOverride("buildBuildingStateSettingsToggle") ?? buildBuildingStateSettingsToggleImpl;
-      return implementation.apply(this, args);
-    }
-    function buildAllBuildingStateSettingsToggle2(...args) {
-      const implementation = getOverride("buildAllBuildingStateSettingsToggle") ?? buildAllBuildingStateSettingsToggleImpl;
-      return implementation.apply(this, args);
-    }
-    return {
-      buildBuildingSettings: buildBuildingSettings2,
-      updateBuildingSettingsContent: updateBuildingSettingsContent2,
-      filterBuildingSettingsTable: filterBuildingSettingsTable2,
-      buildAllBuildingEnabledSettingsToggle: buildAllBuildingEnabledSettingsToggle2,
-      buildBuildingStateSettingsToggle: buildBuildingStateSettingsToggle2,
-      buildAllBuildingStateSettingsToggle: buildAllBuildingStateSettingsToggle2
-    };
   }
 
   // src/ui/options-modal.ts
@@ -50588,49 +50801,65 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       renderSettingsContent: () => weightingSettingsBrowserAdapter.updateWeightingSettingsContent()
     });
     const { buildWeightingSettings, updateWeightingSettingsContent } = weightingSettingsBrowserAdapter;
-    const buildingBoundaryOverrides = {};
-    const getBuildingBoundaryDependency = createDependencyResolver(
-      buildingBoundaryOverrides,
-      {
-        $: () => $,
-        BuildingManager: () => BuildingManager,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsSelect: () => addSettingsSelect,
-        addSettingsToggle: () => addSettingsToggle,
-        addTableInput: () => addTableInput,
-        addTableToggle: () => addTableToggle,
-        addToggleCallbacks: () => addToggleCallbacks,
-        buildSettingsSection: () => buildSettingsSection,
-        buildTableLabel: () => buildTableLabel,
-        buildingIds: () => buildingIds,
-        checkCompare: () => checkCompare,
-        confirm: () => confirm,
-        document: () => document,
-        getRealNumber: () => getRealNumber,
-        initBuildingState: () => initBuildingState,
-        linkedBuildings: () => linkedBuildings,
-        overrideKey: () => overrideKey,
-        removeBuildingToggles: () => removeBuildingToggles,
-        resetBuildingSettings: () => resetBuildingSettings,
-        resetCheckbox: () => resetCheckbox,
-        resources: () => resources,
-        settingsRaw: () => settingsRaw,
-        sorterHelper: () => sorterHelper,
-        updateSettingsFromState: () => updateSettingsFromState
+    let buildingSettingsTestContext;
+    const buildingSettingsActions = {
+      buildSettingsSection,
+      addSettingsNumber,
+      addSettingsSelect,
+      addSettingsToggle,
+      addTableInput,
+      addTableToggle,
+      addToggleCallbacks,
+      buildTableLabel,
+      confirm: (...args) => confirm(...args),
+      getSorterHelper: () => sorterHelper
+    };
+    const buildingSettingsEvolveAdapter = createBuildingSettingsEvolveAdapter({
+      getBuildingManager: () => buildingSettingsTestContext?.BuildingManager ?? BuildingManager,
+      getBuildingIds: () => buildingSettingsTestContext?.buildingIds ?? buildingIds,
+      getResources: () => buildingSettingsTestContext?.resources ?? resources,
+      getLinkedBuildings: () => buildingSettingsTestContext?.linkedBuildings ?? linkedBuildings,
+      getCheckCompare: () => buildingSettingsTestContext?.checkCompare ?? checkCompare,
+      getOverrideKey: () => buildingSettingsTestContext?.overrideKey ?? overrideKey,
+      getRealNumber: () => buildingSettingsTestContext?.getRealNumber ?? getRealNumber,
+      getInitBuildingState: () => buildingSettingsTestContext?.initBuildingState ?? initBuildingState,
+      getSettingsRaw: () => buildingSettingsTestContext?.settingsRaw ?? settingsRaw
+    });
+    let buildingSettingsIntentHandler;
+    const buildingSettingsBrowserAdapter = createBuildingSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getReadModel: () => buildingSettingsEvolveAdapter.readBuildingSettingsReadModel(),
+      getFilterMatches: (query) => buildingSettingsEvolveAdapter.filterBuildingSettings(query),
+      intents: {
+        handle: (intent) => buildingSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => buildingSettingsTestContext?.actions ?? buildingSettingsActions
+    });
+    buildingSettingsIntentHandler = createBuildingSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (buildingSettingsTestContext?.resetBuildingSettings ?? resetBuildingSettings)(true),
+        persist: () => (buildingSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)(),
+        resetPriorities: () => buildingSettingsEvolveAdapter.resetPriorities(),
+        reorderBuildings: (buildingIds2) => buildingSettingsEvolveAdapter.reorderBuildings(buildingIds2),
+        setAllAutoBuild: (enabled) => buildingSettingsEvolveAdapter.setAllAutoBuild(enabled),
+        setAllAutoPower: (enabled) => buildingSettingsEvolveAdapter.setAllAutoPower(enabled),
+        setLinkedSmartState: (buildingIds2, enabled) => buildingSettingsEvolveAdapter.setLinkedSmartState(buildingIds2, enabled)
+      },
+      renderSettingsContent: () => buildingSettingsBrowserAdapter.updateBuildingSettingsContent(),
+      effects: {
+        resetCheckboxes: () => (buildingSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoBuild",
+          "autoPower"
+        ),
+        removeBuildingToggles: () => (buildingSettingsTestContext?.removeBuildingToggles ?? removeBuildingToggles)()
       }
-    );
-    const buildingBoundary = createBuildingSettings({
-      getDependency: getBuildingBoundaryDependency,
-      getOverride: (name) => buildingBoundaryOverrides[name]
     });
     const {
       buildBuildingSettings,
       updateBuildingSettingsContent,
-      filterBuildingSettingsTable,
-      buildAllBuildingEnabledSettingsToggle,
-      buildBuildingStateSettingsToggle,
-      buildAllBuildingStateSettingsToggle
-    } = buildingBoundary;
+      filterBuildingSettingsTable
+    } = buildingSettingsBrowserAdapter;
     let projectSettingsTestContext;
     const projectSettingsActions = {
       buildSettingsSection,
@@ -54792,6 +55021,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
+        buildingSettings: buildingSettingsBrowserAdapter,
+        setBuildingSettingsTestContext(context) {
+          buildingSettingsTestContext = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
         achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
         setAchievementGuardSettingsTestContext(context) {
           achievementGuardSettingsTestActions = context;
@@ -54959,7 +55194,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         remainingUiBoundaries: {
-          building: buildingBoundary,
           options: optionsBoundary,
           prestigeTopBar: prestigeTopBarBoundary,
           totalDaysTopBar: totalDaysTopBarBoundary,
@@ -54985,7 +55219,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
             ProjectManager = context.ProjectManager;
           if ("EjectManager" in context) EjectManager = context.EjectManager;
           if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-          Object.assign(buildingBoundaryOverrides, context);
           Object.assign(optionsBoundaryOverrides, context);
           Object.assign(prestigeTopBarBoundaryOverrides, context);
           Object.assign(totalDaysTopBarBoundaryOverrides, context);

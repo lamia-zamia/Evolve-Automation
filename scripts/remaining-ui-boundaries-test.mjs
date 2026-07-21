@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import { liveFunction } from "../src/ui/dependencies.ts";
-import { createBuildingSettings } from "../src/ui/building-settings.ts";
 import { createOptionsModalUI } from "../src/ui/options-modal.ts";
 import { createPrestigeTopBar } from "../src/ui/prestige-top-bar.ts";
 import { createTotalDaysTopBar } from "../src/ui/total-days-top-bar.ts";
@@ -16,61 +15,6 @@ function makeFactory(factory, context = {}, overrides = {}) {
     getDependency: (name) => context[name],
     getOverride: (name) => overrides[name],
   });
-}
-
-const settingsSpecs = [
-  [
-    "building",
-    createBuildingSettings,
-    "buildBuildingSettings",
-    "updateBuildingSettingsContent",
-    "building",
-    "Building",
-    false,
-    ["checkbox:autoBuild|autoPower", "cleanup:building"],
-  ],
-];
-
-for (const [
-  name,
-  factory,
-  buildName,
-  updateName,
-  id,
-  label,
-  secondary,
-  cleanup,
-] of settingsSpecs) {
-  const trace = [];
-  const resetName = `reset${name[0].toUpperCase() + name.slice(1)}Settings`;
-  const context = {
-    [resetName]: (value) => trace.push(`reset:first:${value}`),
-    updateSettingsFromState: () => trace.push("persist"),
-    resetCheckbox: (...keys) => trace.push(`checkbox:${keys.join("|")}`),
-    removeBuildingToggles: () => trace.push("cleanup:building"),
-    buildFilterRegExp: () => trace.push("filter"),
-  };
-  let registration;
-  context.buildSettingsSection = (...args) => (registration = args);
-  context.buildSettingsSection2 = (...args) => (registration = args);
-  const overrides = {
-    [updateName]: (...args) => trace.push(`update:${args.join("|")}`),
-  };
-  const boundary = makeFactory(factory, context, overrides);
-  if (secondary) boundary[buildName]({}, "");
-  else boundary[buildName]();
-  assert.equal(registration[secondary ? 2 : 0], id);
-  assert.equal(registration[secondary ? 3 : 1], label);
-  assert.equal(registration[secondary ? 5 : 3], boundary[updateName]);
-
-  context[resetName] = (value) => trace.push(`reset:second:${value}`);
-  registration[secondary ? 4 : 2]();
-  assert.deepEqual(trace, [
-    "reset:second:true",
-    "persist",
-    "update:",
-    ...cleanup,
-  ]);
 }
 
 const optionTrace = [];
@@ -224,4 +168,4 @@ currentClass = SecondClass;
 assert.equal(new FirstClass() instanceof liveClass, false);
 assert.equal(new SecondClass() instanceof liveClass, true);
 
-console.log("Next 9 UI-boundary module tests passed");
+console.log("Next 8 UI-boundary module tests passed");

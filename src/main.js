@@ -174,6 +174,9 @@ import { createJobSettingsBrowserAdapter } from "./adapters/browser/job-settings
 import { createJobSettingsEvolveAdapter } from "./adapters/evolve/job-settings.ts";
 import { createWeightingSettingsIntentHandler } from "./application/weighting-settings.ts";
 import { createWeightingSettingsBrowserAdapter } from "./adapters/browser/weighting-settings.ts";
+import { createBuildingSettingsIntentHandler } from "./application/building-settings.ts";
+import { createBuildingSettingsBrowserAdapter } from "./adapters/browser/building-settings.ts";
+import { createBuildingSettingsEvolveAdapter } from "./adapters/evolve/building-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -427,7 +430,6 @@ import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createMechSettings } from "./ui/mech-settings.ts";
 import { createEjectorSettings } from "./ui/ejector-settings.ts";
 import { createMarketSettings } from "./ui/market-settings.ts";
-import { createBuildingSettings } from "./ui/building-settings.ts";
 import { createOptionsModalUI } from "./ui/options-modal.ts";
 import { createPrestigeTopBar } from "./ui/prestige-top-bar.ts";
 import { createTotalDaysTopBar } from "./ui/total-days-top-bar.ts";
@@ -910,49 +912,94 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildWeightingSettings, updateWeightingSettingsContent } =
     weightingSettingsBrowserAdapter;
 
-  const buildingBoundaryOverrides = {};
-  const getBuildingBoundaryDependency = createDependencyResolver(
-    buildingBoundaryOverrides,
-    {
-      $: () => $,
-      BuildingManager: () => BuildingManager,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsSelect: () => addSettingsSelect,
-      addSettingsToggle: () => addSettingsToggle,
-      addTableInput: () => addTableInput,
-      addTableToggle: () => addTableToggle,
-      addToggleCallbacks: () => addToggleCallbacks,
-      buildSettingsSection: () => buildSettingsSection,
-      buildTableLabel: () => buildTableLabel,
-      buildingIds: () => buildingIds,
-      checkCompare: () => checkCompare,
-      confirm: () => confirm,
-      document: () => document,
-      getRealNumber: () => getRealNumber,
-      initBuildingState: () => initBuildingState,
-      linkedBuildings: () => linkedBuildings,
-      overrideKey: () => overrideKey,
-      removeBuildingToggles: () => removeBuildingToggles,
-      resetBuildingSettings: () => resetBuildingSettings,
-      resetCheckbox: () => resetCheckbox,
-      resources: () => resources,
-      settingsRaw: () => settingsRaw,
-      sorterHelper: () => sorterHelper,
-      updateSettingsFromState: () => updateSettingsFromState,
+  let buildingSettingsTestContext;
+  const buildingSettingsActions = {
+    buildSettingsSection,
+    addSettingsNumber,
+    addSettingsSelect,
+    addSettingsToggle,
+    addTableInput,
+    addTableToggle,
+    addToggleCallbacks,
+    buildTableLabel,
+    confirm: (...args) => confirm(...args),
+    getSorterHelper: () => sorterHelper,
+  };
+  const buildingSettingsEvolveAdapter = createBuildingSettingsEvolveAdapter({
+    getBuildingManager: () =>
+      buildingSettingsTestContext?.BuildingManager ?? BuildingManager,
+    getBuildingIds: () =>
+      buildingSettingsTestContext?.buildingIds ?? buildingIds,
+    getResources: () => buildingSettingsTestContext?.resources ?? resources,
+    getLinkedBuildings: () =>
+      buildingSettingsTestContext?.linkedBuildings ?? linkedBuildings,
+    getCheckCompare: () =>
+      buildingSettingsTestContext?.checkCompare ?? checkCompare,
+    getOverrideKey: () =>
+      buildingSettingsTestContext?.overrideKey ?? overrideKey,
+    getRealNumber: () =>
+      buildingSettingsTestContext?.getRealNumber ?? getRealNumber,
+    getInitBuildingState: () =>
+      buildingSettingsTestContext?.initBuildingState ?? initBuildingState,
+    getSettingsRaw: () =>
+      buildingSettingsTestContext?.settingsRaw ?? settingsRaw,
+  });
+  let buildingSettingsIntentHandler;
+  const buildingSettingsBrowserAdapter = createBuildingSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    getReadModel: () =>
+      buildingSettingsEvolveAdapter.readBuildingSettingsReadModel(),
+    getFilterMatches: (query) =>
+      buildingSettingsEvolveAdapter.filterBuildingSettings(query),
+    intents: {
+      handle: (intent) => buildingSettingsIntentHandler.handle(intent),
     },
-  );
-  const buildingBoundary = createBuildingSettings({
-    getDependency: getBuildingBoundaryDependency,
-    getOverride: (name) => buildingBoundaryOverrides[name],
+    getActions: () =>
+      buildingSettingsTestContext?.actions ?? buildingSettingsActions,
+  });
+  buildingSettingsIntentHandler = createBuildingSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          buildingSettingsTestContext?.resetBuildingSettings ??
+          resetBuildingSettings
+        )(true),
+      persist: () =>
+        (
+          buildingSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+      resetPriorities: () => buildingSettingsEvolveAdapter.resetPriorities(),
+      reorderBuildings: (buildingIds) =>
+        buildingSettingsEvolveAdapter.reorderBuildings(buildingIds),
+      setAllAutoBuild: (enabled) =>
+        buildingSettingsEvolveAdapter.setAllAutoBuild(enabled),
+      setAllAutoPower: (enabled) =>
+        buildingSettingsEvolveAdapter.setAllAutoPower(enabled),
+      setLinkedSmartState: (buildingIds, enabled) =>
+        buildingSettingsEvolveAdapter.setLinkedSmartState(buildingIds, enabled),
+    },
+    renderSettingsContent: () =>
+      buildingSettingsBrowserAdapter.updateBuildingSettingsContent(),
+    effects: {
+      resetCheckboxes: () =>
+        (buildingSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoBuild",
+          "autoPower",
+        ),
+      removeBuildingToggles: () =>
+        (
+          buildingSettingsTestContext?.removeBuildingToggles ??
+          removeBuildingToggles
+        )(),
+    },
   });
   const {
     buildBuildingSettings,
     updateBuildingSettingsContent,
     filterBuildingSettingsTable,
-    buildAllBuildingEnabledSettingsToggle,
-    buildBuildingStateSettingsToggle,
-    buildAllBuildingStateSettingsToggle,
-  } = buildingBoundary;
+  } = buildingSettingsBrowserAdapter;
 
   let projectSettingsTestContext;
   const projectSettingsActions = {
@@ -5631,6 +5678,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {
+      buildingSettings: buildingSettingsBrowserAdapter,
+      setBuildingSettingsTestContext(context) {
+        buildingSettingsTestContext = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
       achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
       setAchievementGuardSettingsTestContext(context) {
         achievementGuardSettingsTestActions = context;
@@ -5809,7 +5862,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
       remainingUiBoundaries: {
-        building: buildingBoundary,
         options: optionsBoundary,
         prestigeTopBar: prestigeTopBarBoundary,
         totalDaysTopBar: totalDaysTopBarBoundary,
@@ -5835,7 +5887,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
           ProjectManager = context.ProjectManager;
         if ("EjectManager" in context) EjectManager = context.EjectManager;
         if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-        Object.assign(buildingBoundaryOverrides, context);
         Object.assign(optionsBoundaryOverrides, context);
         Object.assign(prestigeTopBarBoundaryOverrides, context);
         Object.assign(totalDaysTopBarBoundaryOverrides, context);
