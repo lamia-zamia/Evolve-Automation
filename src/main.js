@@ -151,6 +151,9 @@ import { createGeneralSettingsBrowserAdapter } from "./adapters/browser/general-
 import { createResearchSettingsIntentHandler } from "./application/research-settings.ts";
 import { createResearchSettingsBrowserAdapter } from "./adapters/browser/research-settings.ts";
 import { createResearchSettingsEvolveAdapter } from "./adapters/evolve/research-settings.ts";
+import { createLoggingSettingsIntentHandler } from "./application/logging-settings.ts";
+import { createLoggingSettingsBrowserAdapter } from "./adapters/browser/logging-settings.ts";
+import { createLoggingSettingsEvolveAdapter } from "./adapters/evolve/logging-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -412,7 +415,6 @@ import { createJobSettings } from "./ui/job-settings.ts";
 import { createWeightingSettings } from "./ui/weighting-settings.ts";
 import { createBuildingSettings } from "./ui/building-settings.ts";
 import { createProjectSettings } from "./ui/project-settings.ts";
-import { createLoggingSettings } from "./ui/logging-settings.ts";
 import { createOptionsModalUI } from "./ui/options-modal.ts";
 import { createPrestigeTopBar } from "./ui/prestige-top-bar.ts";
 import { createTotalDaysTopBar } from "./ui/total-days-top-bar.ts";
@@ -881,30 +883,59 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildProjectSettings, updateProjectSettingsContent } =
     projectBoundary;
 
-  const loggingBoundaryOverrides = {};
-  const getLoggingBoundaryDependency = createDependencyResolver(
-    loggingBoundaryOverrides,
-    {
-      $: () => $,
-      GameLog: () => GameLog,
-      addSettingsHeader1: () => addSettingsHeader1,
-      addSettingsString: () => addSettingsString,
-      addSettingsToggle: () => addSettingsToggle,
-      buildFilterRegExp: () => buildFilterRegExp,
-      buildSettingsSection2: () => buildSettingsSection2,
-      document: () => document,
-      game: () => game,
-      resetLoggingSettings: () => resetLoggingSettings,
-      settingsRaw: () => settingsRaw,
-      updateSettingsFromState: () => updateSettingsFromState,
+  let loggingSettingsTestContext;
+  const loggingSettingsActions = {
+    buildSettingsSection2,
+    addSettingsHeader1,
+    addSettingsString,
+    addSettingsToggle,
+  };
+  const loggingSettingsEvolveAdapter = createLoggingSettingsEvolveAdapter({
+    getGame: () => loggingSettingsTestContext?.game ?? game,
+    getGameLog: () => loggingSettingsTestContext?.GameLog ?? GameLog,
+    getSettingsRaw: () =>
+      loggingSettingsTestContext?.settingsRaw ?? settingsRaw,
+  });
+  let loggingSettingsIntentHandler;
+  const loggingSettingsBrowserAdapter = createLoggingSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    getReadModel: () =>
+      loggingSettingsEvolveAdapter.readLoggingSettingsReadModel(),
+    intents: {
+      handle: (intent) => loggingSettingsIntentHandler.handle(intent),
     },
-  );
-  const loggingBoundary = createLoggingSettings({
-    getDependency: getLoggingBoundaryDependency,
-    getOverride: (name) => loggingBoundaryOverrides[name],
+    getActions: () =>
+      loggingSettingsTestContext?.actions ?? loggingSettingsActions,
+  });
+  loggingSettingsIntentHandler = createLoggingSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          loggingSettingsTestContext?.resetLoggingSettings ??
+          resetLoggingSettings
+        )(true),
+      persist: () =>
+        (
+          loggingSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+      setLogFilter: (value) => {
+        const target = loggingSettingsTestContext?.settingsRaw ?? settingsRaw;
+        target.logFilter = value;
+      },
+    },
+    renderSettingsContent: (secondaryPrefix) =>
+      loggingSettingsBrowserAdapter.updateLoggingSettingsContent(
+        secondaryPrefix,
+      ),
+    effects: {
+      buildFilterRegExp: () =>
+        (loggingSettingsTestContext?.buildFilterRegExp ?? buildFilterRegExp)(),
+    },
   });
   const { buildLoggingSettings, updateLoggingSettingsContent } =
-    loggingBoundary;
+    loggingSettingsBrowserAdapter;
 
   const optionsBoundaryOverrides = {};
   const getOptionsBoundaryDependency = createDependencyResolver(
@@ -5570,7 +5601,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         weighting: weightingBoundary,
         building: buildingBoundary,
         project: projectBoundary,
-        logging: loggingBoundary,
         options: optionsBoundary,
         prestigeTopBar: prestigeTopBarBoundary,
         totalDaysTopBar: totalDaysTopBarBoundary,
@@ -5607,7 +5637,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         Object.assign(weightingBoundaryOverrides, context);
         Object.assign(buildingBoundaryOverrides, context);
         Object.assign(projectBoundaryOverrides, context);
-        Object.assign(loggingBoundaryOverrides, context);
         Object.assign(optionsBoundaryOverrides, context);
         Object.assign(prestigeTopBarBoundaryOverrides, context);
         Object.assign(totalDaysTopBarBoundaryOverrides, context);
@@ -5616,6 +5645,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         Object.assign(buildingTogglesBoundaryOverrides, context);
         Object.assign(ejectTogglesBoundaryOverrides, context);
         Object.assign(supplyTogglesBoundaryOverrides, context);
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      loggingSettings: loggingSettingsBrowserAdapter,
+      setLoggingSettingsTestContext(context) {
+        loggingSettingsTestContext = context;
       },
     });
   }

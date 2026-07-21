@@ -18012,6 +18012,214 @@
     return Object.freeze({ readResearchSettingsReadModel });
   }
 
+  // src/application/logging-settings.ts
+  function createLoggingSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-logging-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent(intent.secondaryPrefix);
+            effects.buildFilterRegExp();
+            return;
+          case "set-log-filter":
+            writer.setLogFilter(intent.value);
+            effects.buildFilterRegExp();
+            writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/logging-settings.ts
+  function freezeMessageType(messageType) {
+    return Object.freeze({ ...messageType });
+  }
+  function createLoggingSettingsReadModel({
+    messageTypes,
+    locale,
+    logFilter
+  }) {
+    const frozenMessageTypes = Object.freeze(messageTypes.map(freezeMessageType));
+    const controls = [
+      Object.freeze({ kind: "header", label: "Script Messages" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "logEnabled",
+        label: "Enable logging",
+        hint: "Master switch to enable logging of script actions in the game message queue"
+      })
+    ];
+    for (const { id, label } of frozenMessageTypes) {
+      controls.push(
+        Object.freeze({
+          kind: "toggle",
+          settingName: "log_" + id,
+          label,
+          hint: `If logging is enabled then logs ${label} actions`
+        })
+      );
+    }
+    controls.push(
+      Object.freeze({
+        kind: "string",
+        settingName: "log_prestige_format",
+        label: "Prestige Log Format",
+        hint: "Available placeholders: {resetType}, {species}, {timestamp} (in game days). Use {eval: XXX } to log custom information"
+      }),
+      Object.freeze({ kind: "header", label: "Game Messages" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "hellTurnOffLogMessages",
+        label: "Turn off patrol and surveyor log messages",
+        hint: "Automatically turns off the hell patrol and surveyor log messages"
+      })
+    );
+    return Object.freeze({
+      sectionId: "logging",
+      sectionName: "Logging",
+      locale,
+      logFilter,
+      controls: Object.freeze(controls)
+    });
+  }
+
+  // src/adapters/browser/logging-settings.ts
+  function createLoggingSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function renderControl(node, control, actions) {
+      switch (control.kind) {
+        case "header":
+          actions.addSettingsHeader1(node, control.label);
+          return;
+        case "string":
+          actions.addSettingsString(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+        case "toggle":
+          actions.addSettingsToggle(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+      }
+    }
+    function buildLoggingSettings2(parentNode, secondaryPrefix) {
+      const readModel = getReadModel();
+      const actions = getActions();
+      actions.buildSettingsSection2(
+        parentNode,
+        secondaryPrefix,
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({
+            type: "reset-logging-settings",
+            secondaryPrefix
+          });
+        },
+        updateLoggingSettingsContent2
+      );
+    }
+    function updateLoggingSettingsContent2(secondaryPrefix) {
+      const readModel = getReadModel();
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentNode = getJQuery()(
+        `#script_${secondaryPrefix}${readModel.sectionId}Content`
+      );
+      currentNode.empty().off("*");
+      for (const control of readModel.controls) {
+        renderControl(currentNode, control, actions);
+      }
+      const stringsUrl = `strings/strings${readModel.locale === "en-US" ? "" : "." + readModel.locale}.json`;
+      currentNode.append(`
+          <div>
+            <span>List of message IDs to filter, all game messages can be found <a href="${stringsUrl}" target="_blank">here</a>.</span><br>
+            <textarea id="script_logFilter" class="textarea" style="margin-top: 4px;">${readModel.logFilter}</textarea>
+          </div>`);
+      getJQuery()("#script_logFilter").on("change", function() {
+        intents.handle({ type: "set-log-filter", value: this.value });
+        this.value = getReadModel().logFilter;
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    return Object.freeze({
+      buildLoggingSettings: buildLoggingSettings2,
+      updateLoggingSettingsContent: updateLoggingSettingsContent2
+    });
+  }
+
+  // src/adapters/evolve/logging-settings.ts
+  function requireObjectRecord2(value, path) {
+    if (Array.isArray(value)) {
+      throw new TypeError(`${path} must be an object`);
+    }
+    return requireRecord(value, path);
+  }
+  function requireString2(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function createLoggingSettingsEvolveAdapter({
+    getGame,
+    getGameLog,
+    getSettingsRaw
+  }) {
+    function readLoggingSettingsReadModel() {
+      const game2 = requireObjectRecord2(getGame(), "game");
+      const global = requireObjectRecord2(game2["global"], "game.global");
+      const gameSettings = requireObjectRecord2(
+        global["settings"],
+        "game.global.settings"
+      );
+      const locale = requireString2(
+        gameSettings["locale"],
+        "game.global.settings.locale"
+      );
+      const gameLog = requireObjectRecord2(getGameLog(), "GameLog");
+      const rawTypes = requireObjectRecord2(gameLog["Types"], "GameLog.Types");
+      const messageTypes = [];
+      for (const [id, rawLabel] of Object.entries(rawTypes)) {
+        messageTypes.push({
+          id,
+          label: requireString2(rawLabel, `GameLog.Types.${id}`)
+        });
+      }
+      const settingsRaw2 = requireObjectRecord2(getSettingsRaw(), "settingsRaw");
+      const logFilter = requireString2(
+        settingsRaw2["logFilter"],
+        "settingsRaw.logFilter"
+      );
+      return createLoggingSettingsReadModel({
+        messageTypes,
+        locale,
+        logFilter
+      });
+    }
+    return Object.freeze({ readLoggingSettingsReadModel });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -21637,7 +21845,7 @@
   }
 
   // src/adapters/evolve/hell.ts
-  function requireString2(value, path) {
+  function requireString3(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -21934,7 +22142,7 @@
           ),
           evilTechnology: optionalNumber(tech["evil"], "game.global.tech.evil"),
           grenadier: Boolean(race2["grenadier"]),
-          government: requireString2(
+          government: requireString3(
             govern["type"],
             "game.global.civic.govern.type"
           )
@@ -22525,7 +22733,7 @@
   }
 
   // src/adapters/evolve/battle.ts
-  function requireString3(value, path) {
+  function requireString4(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -22543,7 +22751,7 @@
     return {
       input: Object.freeze({
         governmentId: requireNumber(foreign["id"], `${path}.id`),
-        policy: requireString3(foreign["policy"], `${path}.policy`),
+        policy: requireString4(foreign["policy"], `${path}.policy`),
         released: Boolean(foreign["released"]),
         occupied: Boolean(government["occ"]),
         annexed: Boolean(government["anx"]),
@@ -22658,7 +22866,7 @@
         );
         const hellAvailable = Boolean(manager["_hellVue"]);
         const readHell = autoHell2 && hellAvailable;
-        const protectMode = requireString3(
+        const protectMode = requireString4(
           settings2["foreignProtect"],
           "settings.foreignProtect"
         );
@@ -22932,7 +23140,7 @@
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        const governmentName = requireString3(
+        const governmentName = requireString4(
           dependencies.getGovernmentName(decision2.governmentId),
           `government name ${decision2.governmentId}`
         );
@@ -22958,7 +23166,7 @@
         if (removeBattalion !== null) {
           Reflect.apply(removeBattalion, active.manager, [-deltaBattalion]);
         }
-        const campaignTitle = requireString3(
+        const campaignTitle = requireString4(
           Reflect.apply(getCampaignTitle, active.manager, [decision2.tactic]),
           `campaign title ${decision2.tactic}`
         );
@@ -26905,7 +27113,7 @@
       moneyStorageRequired: 0
     });
   }
-  function requireString4(value, path) {
+  function requireString5(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -26954,7 +27162,7 @@
         );
         if (maxCityGarrison <= 0) return unavailableInput2();
         const state2 = requireRecord(dependencies.getState(), "state");
-        const goal = requireString4(state2["goal"], "state.goal");
+        const goal = requireString5(state2["goal"], "state.goal");
         const saveInflationMoney = Boolean(
           dependencies.shouldSaveInflationMoney()
         );
@@ -34659,7 +34867,7 @@
     );
     return { foreign, government };
   }
-  function requireString5(value, path) {
+  function requireString6(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -34670,7 +34878,7 @@
     const ids = {};
     for (const [name, rawType] of Object.entries(types)) {
       const type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString5(type["id"], `SpyManager.Types.${name}.id`);
+      ids[name] = requireString6(type["id"], `SpyManager.Types.${name}.id`);
     }
     return Object.freeze(ids);
   }
@@ -34778,7 +34986,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString5(
+        const policy = requireString6(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -34799,7 +35007,7 @@
             "resources.Money.maxQuantity"
           );
         }
-        const governmentName = requireString5(
+        const governmentName = requireString6(
           dependencies.getGovName(governmentId),
           `government name ${governmentId}`
         );
@@ -34845,7 +35053,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString5(
+        const policy = requireString6(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -35995,7 +36203,7 @@
   }
 
   // src/adapters/evolve/jobs.ts
-  function requireString6(value, path) {
+  function requireString7(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
     return value;
@@ -36125,7 +36333,7 @@
           if (count === 0) {
             maximum = 1;
           } else {
-            const id = requireString6(job["id"], "job.id");
+            const id = requireString7(job["id"], "job.id");
             const production = requireNumber(
               call2(
                 resource(resources2, "Food"),
@@ -36477,7 +36685,7 @@
           );
           return Object.freeze({
             token: token2,
-            id: requireString6(job["id"], `jobList[${token2}].id`),
+            id: requireString7(job["id"], `jobList[${token2}].id`),
             kind,
             workers: requireNumber(job["workers"], `jobList[${token2}].workers`),
             servants: requireNumber(
@@ -36594,7 +36802,7 @@
                 `craftingJobs[${index}].resource.craftPreserve`
               ))) {
                 affordability = 0;
-                exclusion = `${requireString6(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
+                exclusion = `${requireString7(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
                 break;
               }
               affordability = Math.min(
@@ -36626,7 +36834,7 @@
                 craftResource["currentQuantity"],
                 `craftingJobs[${index}].resource.currentQuantity`
               );
-              const resourceId3 = requireString6(
+              const resourceId3 = requireString7(
                 craftResource["id"],
                 `craftingJobs[${index}].resource.id`
               );
@@ -36646,7 +36854,7 @@
                 driver = `no building×${craftWeight}`;
               } else {
                 const record = requireRecord(driving, "driving building");
-                driver = `${requireString6(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
+                driver = `${requireString7(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
               }
             }
             return Object.freeze({
@@ -36853,7 +37061,7 @@
           minerToken: token("Miner"),
           population: resourceNumber(resources2, "Population", "currentQuantity"),
           craftDebug: Boolean(debugWindow["craftDebug"]),
-          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString6(state2["lastCraftWinner"], "state.lastCraftWinner"),
+          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString7(state2["lastCraftWinner"], "state.lastCraftWinner"),
           authority,
           jobs: Object.freeze(jobInputs),
           crafting: Object.freeze(craftingInputs),
@@ -37307,7 +37515,7 @@
   }
 
   // src/adapters/evolve/build.ts
-  function requireString7(value, path) {
+  function requireString8(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -37397,7 +37605,7 @@
         const byKey = /* @__PURE__ */ new Map();
         const candidates = entities.map((entity, index) => {
           const path = `buildList[${index}]`;
-          const key = requireString7(entity["_vueBinding"], `${path}._vueBinding`);
+          const key = requireString8(entity["_vueBinding"], `${path}._vueBinding`);
           byKey.set(key, entity);
           const rawCost = requireRecord(entity["cost"], `${path}.cost`);
           const cost = {};
@@ -38173,7 +38381,7 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString8(value, path) {
+  function requireString9(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -38193,7 +38401,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString8(
+    const status2 = requireString9(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -38262,7 +38470,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString8(
+          mode = requireString9(
             settings2["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -38400,7 +38608,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString8(
+            const id = requireString9(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -38559,7 +38767,7 @@
             );
           }
         }
-        const targetLocationName = requireString8(
+        const targetLocationName = requireString9(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -38592,7 +38800,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString8(
+        const shipName = requireString9(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -38603,7 +38811,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString8(
+        const shipClass = requireString9(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -38675,7 +38883,7 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString8(
+          const resourceId3 = requireString9(
             missingResource,
             "missing outer-fleet resource id"
           );
@@ -38683,7 +38891,7 @@
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString8(
+          missingResourceName = requireString9(
             resource2["name"],
             `resources.${resourceId3}.name`
           );
@@ -39113,7 +39321,7 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString9(value, path) {
+  function requireString10(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -39289,7 +39497,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString9(
+          const name = requireString10(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -39317,7 +39525,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString9(
+          chthonianLossMode = requireString10(
             settings2["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -39351,7 +39559,7 @@
               settings2["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString9(
+            alien2LossMode = requireString10(
               settings2["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -39700,7 +39908,7 @@
   }
 
   // src/adapters/evolve/mech.ts
-  function requireString10(value, path) {
+  function requireString11(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -39719,7 +39927,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString10(raw["size"], `${path}.size`),
+        size: requireString11(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -39754,7 +39962,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString10(raw["size"], `${path}.size`),
+      size: requireString11(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -39871,7 +40079,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString10(settings2["mechBuild"], "settings.mechBuild")
+          buildMode: requireString11(settings2["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -39906,7 +40114,7 @@
             call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString10(preferred[0], "preferred mech size");
+          const size = requireString11(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
             call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
@@ -39945,7 +40153,7 @@
           buildings2["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString10(
+        const prestigeType = requireString11(
           settings2["prestigeType"],
           "settings.prestigeType"
         );
@@ -40034,7 +40242,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString10(
+        const configuredScrapMode = requireString11(
           settings2["mechScrap"],
           "settings.mechScrap"
         );
@@ -40063,7 +40271,7 @@
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString10(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString11(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -40248,7 +40456,7 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString10(
+          const description = requireString11(
             call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
@@ -45307,112 +45515,6 @@
     return { buildProjectSettings: buildProjectSettings2, updateProjectSettingsContent: updateProjectSettingsContent2 };
   }
 
-  // src/ui/logging-settings.ts
-  function createLoggingSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const GameLog2 = liveFunction(() => getDependency("GameLog"));
-    const addSettingsHeader12 = liveFunction(
-      () => getDependency("addSettingsHeader1")
-    );
-    const addSettingsString2 = liveFunction(
-      () => getDependency("addSettingsString")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const buildFilterRegExp2 = liveFunction(
-      () => getDependency("buildFilterRegExp")
-    );
-    const buildSettingsSection22 = liveFunction(
-      () => getDependency("buildSettingsSection2")
-    );
-    const document2 = liveObject4(() => getDependency("document"));
-    const game2 = liveObject4(() => getDependency("game"));
-    const resetLoggingSettings2 = liveFunction(
-      () => getDependency("resetLoggingSettings")
-    );
-    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildLoggingSettingsImpl(parentNode, secondaryPrefix) {
-      let sectionId = "logging";
-      let sectionName = "Logging";
-      let resetFunction = function() {
-        resetLoggingSettings2(true);
-        updateSettingsFromState2();
-        updateLoggingSettingsContent2(secondaryPrefix);
-        buildFilterRegExp2();
-      };
-      buildSettingsSection22(
-        parentNode,
-        secondaryPrefix,
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateLoggingSettingsContent2
-      );
-    }
-    function updateLoggingSettingsContentImpl(secondaryPrefix) {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2(`#script_${secondaryPrefix}loggingContent`);
-      currentNode.empty().off("*");
-      addSettingsHeader12(currentNode, "Script Messages");
-      addSettingsToggle2(
-        currentNode,
-        "logEnabled",
-        "Enable logging",
-        "Master switch to enable logging of script actions in the game message queue"
-      );
-      Object.entries(GameLog2.Types).forEach(
-        ([id, label]) => addSettingsToggle2(
-          currentNode,
-          "log_" + id,
-          label,
-          `If logging is enabled then logs ${label} actions`
-        )
-      );
-      addSettingsString2(
-        currentNode,
-        "log_prestige_format",
-        "Prestige Log Format",
-        "Available placeholders: {resetType}, {species}, {timestamp} (in game days). Use {eval: XXX } to log custom information"
-      );
-      addSettingsHeader12(currentNode, "Game Messages");
-      addSettingsToggle2(
-        currentNode,
-        "hellTurnOffLogMessages",
-        "Turn off patrol and surveyor log messages",
-        "Automatically turns off the hell patrol and surveyor log messages"
-      );
-      let stringsUrl = `strings/strings${game2.global.settings.locale === "en-US" ? "" : "." + game2.global.settings.locale}.json`;
-      currentNode.append(`
-          <div>
-            <span>List of message IDs to filter, all game messages can be found <a href="${stringsUrl}" target="_blank">here</a>.</span><br>
-            <textarea id="script_logFilter" class="textarea" style="margin-top: 4px;">${settingsRaw2.logFilter}</textarea>
-          </div>`);
-      $2("#script_logFilter").on("change", function() {
-        settingsRaw2.logFilter = this.value;
-        buildFilterRegExp2();
-        this.value = settingsRaw2.logFilter;
-        updateSettingsFromState2();
-      });
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildLoggingSettings2(...args) {
-      const implementation = getOverride("buildLoggingSettings") ?? buildLoggingSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateLoggingSettingsContent2(...args) {
-      const implementation = getOverride("updateLoggingSettingsContent") ?? updateLoggingSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildLoggingSettings: buildLoggingSettings2, updateLoggingSettingsContent: updateLoggingSettingsContent2 };
-  }
-
   // src/ui/options-modal.ts
   function createOptionsModalUI({
     getDependency,
@@ -49998,29 +50100,45 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getOverride: (name) => projectBoundaryOverrides[name]
     });
     const { buildProjectSettings, updateProjectSettingsContent } = projectBoundary;
-    const loggingBoundaryOverrides = {};
-    const getLoggingBoundaryDependency = createDependencyResolver(
-      loggingBoundaryOverrides,
-      {
-        $: () => $,
-        GameLog: () => GameLog,
-        addSettingsHeader1: () => addSettingsHeader1,
-        addSettingsString: () => addSettingsString,
-        addSettingsToggle: () => addSettingsToggle,
-        buildFilterRegExp: () => buildFilterRegExp,
-        buildSettingsSection2: () => buildSettingsSection2,
-        document: () => document,
-        game: () => game,
-        resetLoggingSettings: () => resetLoggingSettings,
-        settingsRaw: () => settingsRaw,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const loggingBoundary = createLoggingSettings({
-      getDependency: getLoggingBoundaryDependency,
-      getOverride: (name) => loggingBoundaryOverrides[name]
+    let loggingSettingsTestContext;
+    const loggingSettingsActions = {
+      buildSettingsSection2,
+      addSettingsHeader1,
+      addSettingsString,
+      addSettingsToggle
+    };
+    const loggingSettingsEvolveAdapter = createLoggingSettingsEvolveAdapter({
+      getGame: () => loggingSettingsTestContext?.game ?? game,
+      getGameLog: () => loggingSettingsTestContext?.GameLog ?? GameLog,
+      getSettingsRaw: () => loggingSettingsTestContext?.settingsRaw ?? settingsRaw
     });
-    const { buildLoggingSettings, updateLoggingSettingsContent } = loggingBoundary;
+    let loggingSettingsIntentHandler;
+    const loggingSettingsBrowserAdapter = createLoggingSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getReadModel: () => loggingSettingsEvolveAdapter.readLoggingSettingsReadModel(),
+      intents: {
+        handle: (intent) => loggingSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => loggingSettingsTestContext?.actions ?? loggingSettingsActions
+    });
+    loggingSettingsIntentHandler = createLoggingSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (loggingSettingsTestContext?.resetLoggingSettings ?? resetLoggingSettings)(true),
+        persist: () => (loggingSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)(),
+        setLogFilter: (value) => {
+          const target = loggingSettingsTestContext?.settingsRaw ?? settingsRaw;
+          target.logFilter = value;
+        }
+      },
+      renderSettingsContent: (secondaryPrefix) => loggingSettingsBrowserAdapter.updateLoggingSettingsContent(
+        secondaryPrefix
+      ),
+      effects: {
+        buildFilterRegExp: () => (loggingSettingsTestContext?.buildFilterRegExp ?? buildFilterRegExp)()
+      }
+    });
+    const { buildLoggingSettings, updateLoggingSettingsContent } = loggingSettingsBrowserAdapter;
     const optionsBoundaryOverrides = {};
     const getOptionsBoundaryDependency = createDependencyResolver(
       optionsBoundaryOverrides,
@@ -54213,7 +54331,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           weighting: weightingBoundary,
           building: buildingBoundary,
           project: projectBoundary,
-          logging: loggingBoundary,
           options: optionsBoundary,
           prestigeTopBar: prestigeTopBarBoundary,
           totalDaysTopBar: totalDaysTopBarBoundary,
@@ -54250,7 +54367,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           Object.assign(weightingBoundaryOverrides, context);
           Object.assign(buildingBoundaryOverrides, context);
           Object.assign(projectBoundaryOverrides, context);
-          Object.assign(loggingBoundaryOverrides, context);
           Object.assign(optionsBoundaryOverrides, context);
           Object.assign(prestigeTopBarBoundaryOverrides, context);
           Object.assign(totalDaysTopBarBoundaryOverrides, context);
@@ -54259,6 +54375,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           Object.assign(buildingTogglesBoundaryOverrides, context);
           Object.assign(ejectTogglesBoundaryOverrides, context);
           Object.assign(supplyTogglesBoundaryOverrides, context);
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        loggingSettings: loggingSettingsBrowserAdapter,
+        setLoggingSettingsTestContext(context) {
+          loggingSettingsTestContext = context;
         }
       });
     }

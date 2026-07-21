@@ -89,7 +89,6 @@ assert.deepEqual(Object.keys(boundaries), [
   "weighting",
   "building",
   "project",
-  "logging",
   "options",
   "prestigeTopBar",
   "totalDaysTopBar",
@@ -115,7 +114,6 @@ for (const name of [
   "Weighting",
   "Building",
   "Project",
-  "Logging",
 ]) {
   resetStubs[`reset${name}Settings`] = (reset) =>
     trace.push(`reset:${name.toLowerCase()}:${reset}`);
@@ -179,7 +177,6 @@ const settingsSpecs = [
   ],
   ["building", "buildBuildingSettings", "building", "Building", false],
   ["project", "buildProjectSettings", "project", "A.R.P.A.", false],
-  ["logging", "buildLoggingSettings", "logging", "Logging", true],
 ];
 const parentNode = makeNode("parent");
 for (const [boundaryName, buildName, id, label, secondary] of settingsSpecs) {
@@ -216,8 +213,6 @@ assert.deepEqual(
     "reset:project:true",
     "update:project:",
     "checkbox:autoARPA",
-    "reset:logging:true",
-    "update:logging:",
   ],
 );
 
@@ -367,4 +362,4 @@ assert.ok(domTrace.includes("remove:#script_market_top_row"));
 assert.ok(domTrace.includes("remove:#resStorage .ea-storage-toggle"));
 assert.ok(domTrace.includes("remove:#script_storage_top_row"));
 
-console.log("Next 15 UI-boundary bundled characterization tests passed");
+console.log("Next 14 UI-boundary bundled characterization tests passed");
