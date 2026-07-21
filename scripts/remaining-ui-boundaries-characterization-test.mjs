@@ -82,7 +82,7 @@ vm.runInNewContext(source, sandbox, {
 });
 
 const boundaries = hooks.remainingUiBoundaries;
-assert.deepEqual(Object.keys(boundaries), ["arpaToggles", "buildingToggles"]);
+assert.deepEqual(Object.keys(boundaries), ["buildingToggles"]);
 
 const trace = [];
 const registrations = [];
@@ -114,12 +114,10 @@ hooks.setRemainingUiBoundariesTestContext({
   state,
   resources: {},
   BuildingManager: { priorityList: [{ _vueBinding: "city1" }] },
-  ProjectManager: { priorityList: [{ id: "Physics" }] },
   buildSettingsSection,
   buildSettingsSection2,
   resetCheckbox: (...keys) => trace.push(`checkbox:${keys.join("|")}`),
   removeBuildingToggles: () => trace.push("cleanup:building"),
-  removeArpaToggles: () => trace.push("cleanup:arpa"),
   addToggleCallbacks: (node, key) => {
     trace.push(`toggle:${key}`);
     return node;
@@ -148,24 +146,15 @@ assert.deepEqual(
 );
 
 trace.length = 0;
-boundaries.arpaToggles.createArpaToggles();
 boundaries.buildingToggles.createBuildingToggles();
-assert.deepEqual(trace, [
-  "cleanup:arpa",
-  "toggle:arpa_Physics",
-  "cleanup:building",
-  "toggle:batcity1",
-]);
+assert.deepEqual(trace, ["cleanup:building", "toggle:batcity1"]);
 assert.equal(state.buildingToggles, 1);
 
 domTrace.length = 0;
 hooks.setRemainingUiBoundariesTestContext({
-  removeArpaToggles: undefined,
   removeBuildingToggles: undefined,
 });
-boundaries.arpaToggles.removeArpaToggles();
 boundaries.buildingToggles.removeBuildingToggles();
-assert.ok(domTrace.includes("remove:#arpaPhysics .ea-arpa-toggle"));
 assert.ok(domTrace.includes("remove:#mTabCivil .ea-building-toggle"));
 
 const inline = hooks.finalInlineUiBoundaries;
@@ -252,4 +241,4 @@ assert.ok(domTrace.includes("remove:#script_market_top_row"));
 assert.ok(domTrace.includes("remove:#resStorage .ea-storage-toggle"));
 assert.ok(domTrace.includes("remove:#script_storage_top_row"));
 
-console.log("Next 2 UI-boundary bundled characterization tests passed");
+console.log("Next 1 UI-boundary bundled characterization tests passed");

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import { liveFunction } from "../src/ui/dependencies.ts";
-import { createArpaToggleUI } from "../src/ui/arpa-toggles.ts";
 import { createBuildingToggleUI } from "../src/ui/building-toggles.ts";
 
 function makeFactory(factory, context = {}, overrides = {}) {
@@ -47,12 +46,6 @@ function toggleFixture(factory, context, createName, removeName) {
   return { boundary, context, overrides };
 }
 
-toggleFixture(
-  createArpaToggleUI,
-  { ProjectManager: { priorityList: [{ id: "Physics" }] }, settingsRaw: {} },
-  "createArpaToggles",
-  "removeArpaToggles",
-);
 const buildingState = { buildingToggles: 0 };
 toggleFixture(
   createBuildingToggleUI,
@@ -66,8 +59,6 @@ toggleFixture(
   "removeBuildingToggles",
 );
 assert.deepEqual(toggleTrace, [
-  "remove:removeArpaToggles",
-  "toggle:arpa_Physics",
   "remove:removeBuildingToggles",
   "toggle:batcity1",
 ]);
@@ -82,4 +73,4 @@ currentClass = SecondClass;
 assert.equal(new FirstClass() instanceof liveClass, false);
 assert.equal(new SecondClass() instanceof liveClass, true);
 
-console.log("Next 2 UI-boundary module tests passed");
+console.log("Next 1 UI-boundary module tests passed");

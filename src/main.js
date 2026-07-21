@@ -188,6 +188,8 @@ import { createSupplyToggleBrowserAdapter } from "./adapters/browser/supply-togg
 import { createSupplyToggleEvolveAdapter } from "./adapters/evolve/supply-toggles.ts";
 import { createCraftToggleBrowserAdapter } from "./adapters/browser/craft-toggles.ts";
 import { createCraftToggleEvolveAdapter } from "./adapters/evolve/craft-toggles.ts";
+import { createArpaToggleBrowserAdapter } from "./adapters/browser/arpa-toggles.ts";
+import { createArpaToggleEvolveAdapter } from "./adapters/evolve/arpa-toggles.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -441,7 +443,6 @@ import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createMechSettings } from "./ui/mech-settings.ts";
 import { createEjectorSettings } from "./ui/ejector-settings.ts";
 import { createMarketSettings } from "./ui/market-settings.ts";
-import { createArpaToggleUI } from "./ui/arpa-toggles.ts";
 import { createBuildingToggleUI } from "./ui/building-toggles.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoUI } from "./ui/mech-info.ts";
@@ -1197,21 +1198,21 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     removeTotalDaysFromTopBar,
   } = totalDaysTopBarBrowserAdapter;
 
-  const arpaTogglesBoundaryOverrides = {};
-  const getArpaTogglesBoundaryDependency = createDependencyResolver(
-    arpaTogglesBoundaryOverrides,
-    {
-      $: () => $,
-      ProjectManager: () => ProjectManager,
-      addToggleCallbacks: () => addToggleCallbacks,
-      settingsRaw: () => settingsRaw,
-    },
-  );
-  const arpaTogglesBoundary = createArpaToggleUI({
-    getDependency: getArpaTogglesBoundaryDependency,
-    getOverride: (name) => arpaTogglesBoundaryOverrides[name],
+  let arpaTogglesTestContext;
+  const arpaToggleReader = createArpaToggleEvolveAdapter({
+    getProjectManager: () =>
+      arpaTogglesTestContext?.ProjectManager ?? ProjectManager,
+    getSettingsRaw: () => arpaTogglesTestContext?.settingsRaw ?? settingsRaw,
   });
-  const { createArpaToggles, removeArpaToggles } = arpaTogglesBoundary;
+  const arpaToggleBrowserAdapter = createArpaToggleBrowserAdapter({
+    getJQuery: () => $,
+    reader: arpaToggleReader,
+    addToggleCallbacks: (...args) =>
+      (arpaTogglesTestContext?.addToggleCallbacks ?? addToggleCallbacks)(
+        ...args,
+      ),
+  });
+  const { createArpaToggles, removeArpaToggles } = arpaToggleBrowserAdapter;
 
   let craftTogglesTestContext;
   const craftToggleReader = createCraftToggleEvolveAdapter({
@@ -5909,13 +5910,16 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       setCraftTogglesTestContext(context) {
         craftTogglesTestContext = context;
       },
+      arpaToggles: arpaToggleBrowserAdapter,
+      setArpaTogglesTestContext(context) {
+        arpaTogglesTestContext = context;
+      },
     });
   }
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
       remainingUiBoundaries: {
-        arpaToggles: arpaTogglesBoundary,
         buildingToggles: buildingTogglesBoundary,
       },
       setRemainingUiBoundariesTestContext(context) {
@@ -5934,7 +5938,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
           ProjectManager = context.ProjectManager;
         if ("EjectManager" in context) EjectManager = context.EjectManager;
         if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-        Object.assign(arpaTogglesBoundaryOverrides, context);
         Object.assign(buildingTogglesBoundaryOverrides, context);
       },
     });
