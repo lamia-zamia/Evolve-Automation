@@ -28918,10 +28918,8 @@
         incomeAdjusted: resource2.incomeAdjusted
       });
     }
-    const buildingById = new Map(
-      input.buildings.map((building2) => [building2.id, building2])
-    );
-    if (buildingById.size !== input.buildings.length) {
+    const buildingIds2 = new Set(input.buildings.map((building2) => building2.id));
+    if (buildingIds2.size !== input.buildings.length) {
       throw new TypeError("duplicate power building id");
     }
     const oscillations = Object.fromEntries(
@@ -29157,28 +29155,18 @@
           transport--;
         }
       }
-      const biremeBuilding = mapValue(
-        buildingById,
-        input.lake.biremeId,
-        "lake bireme"
-      );
-      const transportBuilding = mapValue(
-        buildingById,
-        input.lake.transportId,
-        "lake transport"
-      );
       operations.push(
         {
           kind: "adjust-building",
-          buildingId: biremeBuilding.id,
-          binding: biremeBuilding.binding,
+          buildingId: input.lake.biremeId,
+          binding: input.lake.biremeBinding,
           expectedStateOn: input.lake.biremeStateOn,
           amount: bireme - input.lake.biremeStateOn
         },
         {
           kind: "adjust-building",
-          buildingId: transportBuilding.id,
-          binding: transportBuilding.binding,
+          buildingId: input.lake.transportId,
+          binding: input.lake.transportBinding,
           expectedStateOn: input.lake.transportStateOn,
           amount: transport - input.lake.transportStateOn
         }
@@ -29223,15 +29211,10 @@
           [spire.port, port],
           [spire.camp, camp]
         ]) {
-          const source2 = mapValue(
-            buildingById,
-            building2.buildingId,
-            `spire building ${building2.buildingId}`
-          );
           operations.push({
             kind: "adjust-building",
-            buildingId: source2.id,
-            binding: source2.binding,
+            buildingId: building2.buildingId,
+            binding: building2.binding,
             expectedStateOn: building2.stateOn,
             amount: target - building2.stateOn
           });
@@ -30088,10 +30071,13 @@
     }
     return Object.freeze({ kind: "ordinary" });
   }
-  function readSpireBuilding(building2, path) {
+  function readSpireBuilding(building2, path, register) {
     const cost = requireRecord(building2["cost"], `${path}.cost`);
+    const id = buildingId(building2, path);
+    register(id, building2);
     return Object.freeze({
-      buildingId: buildingId(building2, path),
+      buildingId: id,
+      binding: buildingBinding(building2, path),
       count: finiteProperty(building2, "count", path),
       stateOn: finiteProperty(building2, "stateOnCount", path),
       autoMaximum: finiteProperty(building2, "autoMax", path),
@@ -30103,6 +30089,7 @@
   }
   var EMPTY_SPIRE_BUILDING = Object.freeze({
     buildingId: "",
+    binding: "",
     count: 0,
     stateOn: 0,
     autoMaximum: 0,
@@ -30115,9 +30102,11 @@
     enabled: false,
     bloodSpireLevel: 0,
     biremeId: "",
+    biremeBinding: "",
     biremeCount: 0,
     biremeStateOn: 0,
     transportId: "",
+    transportBinding: "",
     transportCount: 0,
     transportStateOn: 0
   });
@@ -30260,6 +30249,11 @@
         const neededShips = typeof neededShipsValue === "object" && neededShipsValue !== null ? requireRecord(neededShipsValue, "FleetManager.neededShips") : null;
         const seenBuildings = /* @__PURE__ */ new Map();
         const seenBindings = /* @__PURE__ */ new Set();
+        const registerCommandable = (id, building2) => {
+          if (!seenBuildings.has(id)) {
+            seenBuildings.set(id, building2);
+          }
+        };
         const inputs = managedRecords.map(
           (building2, index) => {
             const path = `BuildingManager state list[${index}]`;
@@ -30367,10 +30361,24 @@
             requireRecord(game2["global"], "game.global")["blood"] ?? {},
             "game.global.blood"
           );
+          const biremeIdValue = buildingId(
+            lakeBireme,
+            "buildings.LakeBireme"
+          );
+          const transportIdValue = buildingId(
+            lakeTransport,
+            "buildings.LakeTransport"
+          );
+          registerCommandable(biremeIdValue, lakeBireme);
+          registerCommandable(transportIdValue, lakeTransport);
           return Object.freeze({
             enabled: true,
             bloodSpireLevel: blood["spire"] === void 0 ? 0 : requireNumber(blood["spire"], "game.global.blood.spire"),
-            biremeId: buildingId(lakeBireme, "buildings.LakeBireme"),
+            biremeId: biremeIdValue,
+            biremeBinding: buildingBinding(
+              lakeBireme,
+              "buildings.LakeBireme"
+            ),
             biremeCount: finiteProperty(
               lakeBireme,
               "count",
@@ -30381,7 +30389,11 @@
               "stateOnCount",
               "buildings.LakeBireme"
             ),
-            transportId: buildingId(lakeTransport, "buildings.LakeTransport"),
+            transportId: transportIdValue,
+            transportBinding: buildingBinding(
+              lakeTransport,
+              "buildings.LakeTransport"
+            ),
             transportCount: finiteProperty(
               lakeTransport,
               "count",
@@ -30437,17 +30449,27 @@
               "buildings.SpirePurifier.extraDescription"
             ),
             expectedSaveSupply: Boolean(mech["saveSupply"]),
-            mechBay: readSpireBuilding(spireMech, "buildings.SpireMechBay"),
-            port: readSpireBuilding(spirePort, "buildings.SpirePort"),
-            camp: readSpireBuilding(spireCamp, "buildings.SpireBaseCamp"),
-            purifier: readSpireBuilding(purifier, "buildings.SpirePurifier")
+            mechBay: readSpireBuilding(
+              spireMech,
+              "buildings.SpireMechBay",
+              registerCommandable
+            ),
+            port: readSpireBuilding(
+              spirePort,
+              "buildings.SpirePort",
+              registerCommandable
+            ),
+            camp: readSpireBuilding(
+              spireCamp,
+              "buildings.SpireBaseCamp",
+              registerCommandable
+            ),
+            purifier: readSpireBuilding(
+              purifier,
+              "buildings.SpirePurifier",
+              registerCommandable
+            )
           });
-          if (!seenBuildings.has(buildingId(purifier, "buildings.SpirePurifier"))) {
-            seenBuildings.set(
-              buildingId(purifier, "buildings.SpirePurifier"),
-              purifier
-            );
-          }
         }
         const global = requireRecord(game2["global"], "game.global");
         const race2 = requireRecord(global["race"], "game.global.race");

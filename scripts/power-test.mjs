@@ -511,9 +511,11 @@ function domainCycle(overrides = {}) {
       enabled: false,
       bloodSpireLevel: 0,
       biremeId: "",
+      biremeBinding: "",
       biremeCount: 0,
       biremeStateOn: 0,
       transportId: "",
+      transportBinding: "",
       transportCount: 0,
       transportStateOn: 0,
     }),
@@ -534,6 +536,7 @@ function domainCycle(overrides = {}) {
       expectedSaveSupply: false,
       mechBay: Object.freeze({
         buildingId: "",
+        binding: "",
         count: 0,
         stateOn: 0,
         autoMaximum: 0,
@@ -544,6 +547,7 @@ function domainCycle(overrides = {}) {
       }),
       port: Object.freeze({
         buildingId: "",
+        binding: "",
         count: 0,
         stateOn: 0,
         autoMaximum: 0,
@@ -554,6 +558,7 @@ function domainCycle(overrides = {}) {
       }),
       camp: Object.freeze({
         buildingId: "",
+        binding: "",
         count: 0,
         stateOn: 0,
         autoMaximum: 0,
@@ -564,6 +569,7 @@ function domainCycle(overrides = {}) {
       }),
       purifier: Object.freeze({
         buildingId: "",
+        binding: "",
         count: 0,
         stateOn: 0,
         autoMaximum: 0,
@@ -603,6 +609,119 @@ assert.equal(
     (operation) => operation.kind === "adjust-building",
   ).amount,
   -1,
+);
+
+// Regression: lake bireme/transport are adjusted directly (legacy parity) and
+// must not be required to appear in the managed building list. A smart-managed
+// bireme with count 0 is absent from managedStatePriorityList, so it never
+// reaches buildingById; planning must still emit its command instead of
+// throwing "missing lake bireme".
+const lakeUnmanagedPlan = planPowerCycle(
+  domainCycle({
+    resources: Object.freeze([
+      domainResource("Power", { currentQuantity: 10, rateOfChange: 10 }),
+      domainResource("Lake_Support", { rateOfChange: 2 }),
+    ]),
+    buildings: Object.freeze([
+      domainBuilding("Filler", { count: 1, stateOn: 1 }),
+    ]),
+    lake: Object.freeze({
+      enabled: true,
+      bloodSpireLevel: 0,
+      biremeId: "LakeBireme",
+      biremeBinding: "bind-LakeBireme",
+      biremeCount: 0,
+      biremeStateOn: 0,
+      transportId: "LakeTransport",
+      transportBinding: "bind-LakeTransport",
+      transportCount: 3,
+      transportStateOn: 3,
+    }),
+  }),
+  EMPTY_POWER_AUTOMATION_STATE,
+);
+assert.deepEqual(
+  lakeUnmanagedPlan.decision.operations
+    .filter(
+      (operation) =>
+        operation.kind === "adjust-building" &&
+        (operation.buildingId === "LakeBireme" ||
+          operation.buildingId === "LakeTransport"),
+    )
+    .map((operation) => [
+      operation.buildingId,
+      operation.binding,
+      operation.amount,
+    ]),
+  [
+    ["LakeBireme", "bind-LakeBireme", 0],
+    ["LakeTransport", "bind-LakeTransport", -1],
+  ],
+  "lake plan adjusts bireme/transport without requiring them in buildingById",
+);
+
+// Regression: spire mech/port/camp are adjusted directly as well. A smart-managed
+// mech bay with count 0 is absent from managedStatePriorityList and never reaches
+// buildingById; planning must not throw "missing spire building mechbay".
+const spireBuilding = (id, overrides = {}) =>
+  Object.freeze({
+    buildingId: id,
+    binding: `bind-${id}`,
+    count: 0,
+    stateOn: 0,
+    autoMaximum: 0,
+    autoBuildable: false,
+    smartManaged: false,
+    moneyCost: 0,
+    supplyCost: 0,
+    ...overrides,
+  });
+const spireUnmanagedPlan = planPowerCycle(
+  domainCycle({
+    resources: Object.freeze([
+      domainResource("Power", { currentQuantity: 10, rateOfChange: 10 }),
+      domainResource("Spire_Support", { rateOfChange: 1 }),
+    ]),
+    buildings: Object.freeze([
+      domainBuilding("Filler", { count: 1, stateOn: 1 }),
+    ]),
+    spire: Object.freeze({
+      enabled: true,
+      autoBuild: false,
+      autoMech: false,
+      mechActive: false,
+      autoPrestige: false,
+      prestigeType: "",
+      prestigeDemonicFloor: 0,
+      towerCount: 0,
+      moneyMaximum: 0,
+      supplyCurrent: 0,
+      mechQueued: false,
+      purifierQueued: false,
+      purifierDescription: "",
+      expectedSaveSupply: false,
+      mechBay: spireBuilding("SpireMechBay", { count: 1 }),
+      port: spireBuilding("SpirePort"),
+      camp: spireBuilding("SpireBaseCamp"),
+      purifier: spireBuilding("SpirePurifier"),
+    }),
+  }),
+  EMPTY_POWER_AUTOMATION_STATE,
+);
+assert.deepEqual(
+  spireUnmanagedPlan.decision.operations
+    .filter(
+      (operation) =>
+        operation.kind === "adjust-building" &&
+        operation.buildingId.startsWith("Spire"),
+    )
+    .map((operation) => [operation.buildingId, operation.binding]),
+  [
+    ["SpireMechBay", "bind-SpireMechBay"],
+    ["SpirePort", "bind-SpirePort"],
+    ["SpireBaseCamp", "bind-SpireBaseCamp"],
+  ],
+  "spire plan adjusts mech/port/camp without requiring them in buildingById",
 );
 
 const busyResource = domainResource("Ore", {

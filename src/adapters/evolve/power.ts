@@ -934,10 +934,14 @@ function readBuildingRule(
 function readSpireBuilding(
   building: UnknownRecord,
   path: string,
+  register: (id: string, building: UnknownRecord) => void,
 ): PowerSpireBuildingInput {
   const cost = requireRecord(building["cost"], `${path}.cost`);
+  const id = buildingId(building, path);
+  register(id, building);
   return Object.freeze({
-    buildingId: buildingId(building, path),
+    buildingId: id,
+    binding: buildingBinding(building, path),
     count: finiteProperty(building, "count", path),
     stateOn: finiteProperty(building, "stateOnCount", path),
     autoMaximum: finiteProperty(building, "autoMax", path),
@@ -950,6 +954,7 @@ function readSpireBuilding(
 
 const EMPTY_SPIRE_BUILDING: PowerSpireBuildingInput = Object.freeze({
   buildingId: "",
+  binding: "",
   count: 0,
   stateOn: 0,
   autoMaximum: 0,
@@ -963,9 +968,11 @@ const EMPTY_LAKE: PowerLakeInput = Object.freeze({
   enabled: false,
   bloodSpireLevel: 0,
   biremeId: "",
+  biremeBinding: "",
   biremeCount: 0,
   biremeStateOn: 0,
   transportId: "",
+  transportBinding: "",
   transportCount: 0,
   transportStateOn: 0,
 });
@@ -1122,6 +1129,15 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
           : null;
       const seenBuildings = new Map<string, UnknownRecord>();
       const seenBindings = new Set<string>();
+      // Buildings the domain adjusts directly (lake bireme/transport, spire
+      // mech/port/camp/purifier) may be absent from managedStatePriorityList
+      // (e.g. count 0 while still smart-managed). Register each so the command
+      // executor can resolve it by id even though it is not in the managed list.
+      const registerCommandable = (id: string, building: UnknownRecord) => {
+        if (!seenBuildings.has(id)) {
+          seenBuildings.set(id, building);
+        }
+      };
       const inputs: PowerBuildingInput[] = managedRecords.map(
         (building, index) => {
           const path = `BuildingManager state list[${index}]`;
@@ -1252,13 +1268,27 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
               requireRecord(game["global"], "game.global")["blood"] ?? {},
               "game.global.blood",
             );
+            const biremeIdValue = buildingId(
+              lakeBireme,
+              "buildings.LakeBireme",
+            );
+            const transportIdValue = buildingId(
+              lakeTransport,
+              "buildings.LakeTransport",
+            );
+            registerCommandable(biremeIdValue, lakeBireme);
+            registerCommandable(transportIdValue, lakeTransport);
             return Object.freeze({
               enabled: true,
               bloodSpireLevel:
                 blood["spire"] === undefined
                   ? 0
                   : requireNumber(blood["spire"], "game.global.blood.spire"),
-              biremeId: buildingId(lakeBireme, "buildings.LakeBireme"),
+              biremeId: biremeIdValue,
+              biremeBinding: buildingBinding(
+                lakeBireme,
+                "buildings.LakeBireme",
+              ),
               biremeCount: finiteProperty(
                 lakeBireme,
                 "count",
@@ -1269,7 +1299,11 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
                 "stateOnCount",
                 "buildings.LakeBireme",
               ),
-              transportId: buildingId(lakeTransport, "buildings.LakeTransport"),
+              transportId: transportIdValue,
+              transportBinding: buildingBinding(
+                lakeTransport,
+                "buildings.LakeTransport",
+              ),
               transportCount: finiteProperty(
                 lakeTransport,
                 "count",
@@ -1327,19 +1361,27 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
             "buildings.SpirePurifier.extraDescription",
           ),
           expectedSaveSupply: Boolean(mech["saveSupply"]),
-          mechBay: readSpireBuilding(spireMech, "buildings.SpireMechBay"),
-          port: readSpireBuilding(spirePort, "buildings.SpirePort"),
-          camp: readSpireBuilding(spireCamp, "buildings.SpireBaseCamp"),
-          purifier: readSpireBuilding(purifier, "buildings.SpirePurifier"),
-        });
-        if (
-          !seenBuildings.has(buildingId(purifier, "buildings.SpirePurifier"))
-        ) {
-          seenBuildings.set(
-            buildingId(purifier, "buildings.SpirePurifier"),
+          mechBay: readSpireBuilding(
+            spireMech,
+            "buildings.SpireMechBay",
+            registerCommandable,
+          ),
+          port: readSpireBuilding(
+            spirePort,
+            "buildings.SpirePort",
+            registerCommandable,
+          ),
+          camp: readSpireBuilding(
+            spireCamp,
+            "buildings.SpireBaseCamp",
+            registerCommandable,
+          ),
+          purifier: readSpireBuilding(
             purifier,
-          );
-        }
+            "buildings.SpirePurifier",
+            registerCommandable,
+          ),
+        });
       }
 
       const global = requireRecord(game["global"], "game.global");

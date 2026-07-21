@@ -209,6 +209,7 @@ export interface PowerSettingsInput {
 
 export interface PowerSpireBuildingInput {
   readonly buildingId: string;
+  readonly binding: string;
   readonly count: number;
   readonly stateOn: number;
   readonly autoMaximum: number;
@@ -243,9 +244,11 @@ export interface PowerLakeInput {
   readonly enabled: boolean;
   readonly bloodSpireLevel: number;
   readonly biremeId: string;
+  readonly biremeBinding: string;
   readonly biremeCount: number;
   readonly biremeStateOn: number;
   readonly transportId: string;
+  readonly transportBinding: string;
   readonly transportCount: number;
   readonly transportStateOn: number;
 }
@@ -892,10 +895,8 @@ export function planPowerCycle(
       incomeAdjusted: resource.incomeAdjusted,
     });
   }
-  const buildingById = new Map(
-    input.buildings.map((building) => [building.id, building]),
-  );
-  if (buildingById.size !== input.buildings.length) {
+  const buildingIds = new Set(input.buildings.map((building) => building.id));
+  if (buildingIds.size !== input.buildings.length) {
     throw new TypeError("duplicate power building id");
   }
   const oscillations: Record<string, MutableOscillationEntry> =
@@ -1199,28 +1200,21 @@ export function planPowerCycle(
         transport--;
       }
     }
-    const biremeBuilding = mapValue(
-      buildingById,
-      input.lake.biremeId,
-      "lake bireme",
-    );
-    const transportBuilding = mapValue(
-      buildingById,
-      input.lake.transportId,
-      "lake transport",
-    );
+    // Legacy called tryAdjustState directly on buildings.LakeBireme/LakeTransport,
+    // so these may not appear in managedStatePriorityList (e.g. count 0 while still
+    // smart-managed). Source id/binding from the lake input rather than buildingById.
     operations.push(
       {
         kind: "adjust-building",
-        buildingId: biremeBuilding.id,
-        binding: biremeBuilding.binding,
+        buildingId: input.lake.biremeId,
+        binding: input.lake.biremeBinding,
         expectedStateOn: input.lake.biremeStateOn,
         amount: bireme - input.lake.biremeStateOn,
       },
       {
         kind: "adjust-building",
-        buildingId: transportBuilding.id,
-        binding: transportBuilding.binding,
+        buildingId: input.lake.transportId,
+        binding: input.lake.transportBinding,
         expectedStateOn: input.lake.transportStateOn,
         amount: transport - input.lake.transportStateOn,
       },
@@ -1305,15 +1299,13 @@ export function planPowerCycle(
         [spire.port, port],
         [spire.camp, camp],
       ] as const) {
-        const source = mapValue(
-          buildingById,
-          building.buildingId,
-          `spire building ${building.buildingId}`,
-        );
+        // Spire mech/port/camp are adjusted directly and may be absent from the
+        // managed building list, so use the binding carried on the input rather
+        // than resolving through buildingById.
         operations.push({
           kind: "adjust-building",
-          buildingId: source.id,
-          binding: source.binding,
+          buildingId: building.buildingId,
+          binding: building.binding,
           expectedStateOn: building.stateOn,
           amount: target - building.stateOn,
         });
