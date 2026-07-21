@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import { createGeneralSettings } from "../src/ui/general-settings.ts";
 import { createAchievementGuardSettings } from "../src/ui/achievement-guard-settings.ts";
-import { createChallengeHelperSettings } from "../src/ui/challenge-helper-settings.ts";
 import { createPrestigeSettings } from "../src/ui/prestige-settings.ts";
 import { createGovernmentSettings } from "../src/ui/government-settings.ts";
 import { createAuthoritySettings } from "../src/ui/authority-settings.ts";
@@ -35,16 +34,6 @@ const specs = [
     "updateAchievementGuardSettingsContent",
     "achievementGuard",
     "Achievement Guard",
-    false,
-    [],
-  ],
-  [
-    "challengeHelper",
-    createChallengeHelperSettings,
-    "buildChallengeHelperSettings",
-    "updateChallengeHelperSettingsContent",
-    "challengeHelper",
-    "Challenge Helper",
     false,
     [],
   ],
@@ -188,9 +177,7 @@ const resetName = (name) =>
   `reset${
     name === "achievementGuard"
       ? "AchievementGuard"
-      : name === "challengeHelper"
-        ? "ChallengeHelper"
-        : name[0].toUpperCase() + name.slice(1)
+      : name[0].toUpperCase() + name.slice(1)
   }Settings`;
 
 let generalFixture;
@@ -310,4 +297,4 @@ generalFixture.boundary.updateGeneralSettingsContent();
 assert.ok(renderTrace.every((entry) => entry.startsWith("second:")));
 assert.equal(generalFixture.context.document.body.scrollTop, 27);
 
-console.log("16 settings-boundary module tests passed");
+console.log("15 settings-boundary module tests passed");

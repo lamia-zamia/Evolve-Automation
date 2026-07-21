@@ -140,6 +140,8 @@ import { createStateLogSettingsIntentHandler } from "./application/state-log-set
 import { createStateLogSettingsBrowserAdapter } from "./adapters/browser/state-log-settings.ts";
 import { createInterfaceSettingsIntentHandler } from "./application/interface-settings.ts";
 import { createInterfaceSettingsBrowserAdapter } from "./adapters/browser/interface-settings.ts";
+import { createChallengeHelperSettingsIntentHandler } from "./application/challenge-helper-settings.ts";
+import { createChallengeHelperSettingsBrowserAdapter } from "./adapters/browser/challenge-helper-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -386,7 +388,6 @@ import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
 import { createGeneralSettings } from "./ui/general-settings.ts";
 import { createAchievementGuardSettings } from "./ui/achievement-guard-settings.ts";
-import { createChallengeHelperSettings } from "./ui/challenge-helper-settings.ts";
 import { createPrestigeSettings } from "./ui/prestige-settings.ts";
 import { createGovernmentSettings } from "./ui/government-settings.ts";
 import { createAuthoritySettings } from "./ui/authority-settings.ts";
@@ -1094,25 +1095,42 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     updateAchievementGuardSettingsContent,
   } = achievementGuardSettings;
 
-  const challengeHelperSettingsOverrides = {};
-  const getChallengeHelperSettingsDependency = createDependencyResolver(
-    challengeHelperSettingsOverrides,
-    {
-      $: () => $,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsToggle: () => addSettingsToggle,
-      buildSettingsSection: () => buildSettingsSection,
-      document: () => document,
-      resetChallengeHelperSettings: () => resetChallengeHelperSettings,
-      updateSettingsFromState: () => updateSettingsFromState,
-    },
-  );
-  const challengeHelperSettings = createChallengeHelperSettings({
-    getDependency: getChallengeHelperSettingsDependency,
-    getOverride: (name) => challengeHelperSettingsOverrides[name],
-  });
+  let challengeHelperSettingsTestActions;
+  const challengeHelperSettingsActions = {
+    buildSettingsSection,
+    addSettingsToggle,
+    addSettingsNumber,
+  };
+  let challengeHelperSettingsIntentHandler;
+  const challengeHelperSettingsBrowserAdapter =
+    createChallengeHelperSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      intents: {
+        handle: (intent) => challengeHelperSettingsIntentHandler.handle(intent),
+      },
+      getActions: () =>
+        challengeHelperSettingsTestActions ?? challengeHelperSettingsActions,
+    });
+  challengeHelperSettingsIntentHandler =
+    createChallengeHelperSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () =>
+          (
+            challengeHelperSettingsTestActions?.resetChallengeHelperSettings ??
+            resetChallengeHelperSettings
+          )(true),
+        persist: () =>
+          (
+            challengeHelperSettingsTestActions?.updateSettingsFromState ??
+            updateSettingsFromState
+          )(),
+      },
+      renderSettingsContent: () =>
+        challengeHelperSettingsBrowserAdapter.updateChallengeHelperSettingsContent(),
+    });
   const { buildChallengeHelperSettings, updateChallengeHelperSettingsContent } =
-    challengeHelperSettings;
+    challengeHelperSettingsBrowserAdapter;
 
   const prestigeSettingsOverrides = {};
   const getPrestigeSettingsDependency = createDependencyResolver(
@@ -5252,7 +5270,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       settingsBoundaries: {
         general: generalSettings,
         achievementGuard: achievementGuardSettings,
-        challengeHelper: challengeHelperSettings,
         prestige: prestigeSettings,
         government: governmentSettings,
         authority: authoritySettings,
@@ -5270,7 +5287,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       setSettingsBoundariesTestContext(context) {
         Object.assign(generalSettingsOverrides, context);
         Object.assign(achievementGuardSettingsOverrides, context);
-        Object.assign(challengeHelperSettingsOverrides, context);
         Object.assign(prestigeSettingsOverrides, context);
         Object.assign(governmentSettingsOverrides, context);
         Object.assign(authoritySettingsOverrides, context);
@@ -5284,6 +5300,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         Object.assign(mechSettingsOverrides, context);
         Object.assign(ejectorSettingsOverrides, context);
         Object.assign(marketSettingsOverrides, context);
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      challengeHelperSettings: challengeHelperSettingsBrowserAdapter,
+      setChallengeHelperSettingsTestContext(context) {
+        challengeHelperSettingsTestActions = context;
       },
     });
   }

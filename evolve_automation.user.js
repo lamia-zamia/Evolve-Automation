@@ -17266,6 +17266,106 @@
     });
   }
 
+  // src/application/challenge-helper-settings.ts
+  function createChallengeHelperSettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-challenge-helper-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/challenge-helper-settings.ts
+  var challengeHelperSettingsReadModel = Object.freeze({
+    sectionId: "challengeHelper",
+    sectionName: "Challenge Helper",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "toggle",
+        settingName: "inflationChallengeAssist",
+        label: "Inflation challenge",
+        hint: "During Inflation, demand the $250B Wheelbarrow target, boost Money storage or income buildings as appropriate, and stop optional Money spending once the target can be reached soon."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "inflationChallengeSaveMinutes",
+        label: "Inflation save-up minutes",
+        hint: "When the $250B target is reachable within this many real-time minutes at current Money income, stop optional Money spending and imports until Wheelbarrow is earned. Set negative to disable the final save-up freeze while keeping the helper's weighting and demand."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "retirementChallengeAssist",
+        label: "Retirement preparation",
+        hint: "When the selected prestige is Retirement, boost the recommended pre-Isolation Tau buildings, reserve and stockpile 200M Graphene, and block Isolation Protocol until there are 20 Fusion Generators, 18 Factories, 11 Disease Labs, and the Graphene stockpile. Disable this to manage the irreversible transition manually."
+      })
+    ])
+  });
+  function getChallengeHelperSettingsReadModel() {
+    return challengeHelperSettingsReadModel;
+  }
+
+  // src/adapters/browser/challenge-helper-settings.ts
+  function createChallengeHelperSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    getActions
+  }) {
+    const readModel = getChallengeHelperSettingsReadModel();
+    function renderControl(node, control, actions) {
+      if (control.kind === "toggle") {
+        actions.addSettingsToggle(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      actions.addSettingsNumber(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    function buildChallengeHelperSettings2() {
+      const actions = getActions();
+      actions.buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-challenge-helper-settings" });
+        },
+        updateChallengeHelperSettingsContent2
+      );
+    }
+    function updateChallengeHelperSettingsContent2() {
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
+      currentNode.empty().off("*");
+      for (const control of readModel.controls) {
+        renderControl(currentNode, control, actions);
+      }
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    return Object.freeze({
+      buildChallengeHelperSettings: buildChallengeHelperSettings2,
+      updateChallengeHelperSettingsContent: updateChallengeHelperSettingsContent2
+    });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -40860,78 +40960,6 @@
     };
   }
 
-  // src/ui/challenge-helper-settings.ts
-  function createChallengeHelperSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const document2 = liveObject4(() => getDependency("document"));
-    const resetChallengeHelperSettings2 = liveFunction(
-      () => getDependency("resetChallengeHelperSettings")
-    );
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildChallengeHelperSettingsImpl() {
-      let sectionId = "challengeHelper";
-      let sectionName = "Challenge Helper";
-      let resetFunction = function() {
-        resetChallengeHelperSettings2(true);
-        updateSettingsFromState2();
-        updateChallengeHelperSettingsContent2();
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateChallengeHelperSettingsContent2
-      );
-    }
-    function updateChallengeHelperSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_challengeHelperContent");
-      currentNode.empty().off("*");
-      addSettingsToggle2(
-        currentNode,
-        "inflationChallengeAssist",
-        "Inflation challenge",
-        "During Inflation, demand the $250B Wheelbarrow target, boost Money storage or income buildings as appropriate, and stop optional Money spending once the target can be reached soon."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "inflationChallengeSaveMinutes",
-        "Inflation save-up minutes",
-        "When the $250B target is reachable within this many real-time minutes at current Money income, stop optional Money spending and imports until Wheelbarrow is earned. Set negative to disable the final save-up freeze while keeping the helper's weighting and demand."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "retirementChallengeAssist",
-        "Retirement preparation",
-        "When the selected prestige is Retirement, boost the recommended pre-Isolation Tau buildings, reserve and stockpile 200M Graphene, and block Isolation Protocol until there are 20 Fusion Generators, 18 Factories, 11 Disease Labs, and the Graphene stockpile. Disable this to manage the irreversible transition manually."
-      );
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildChallengeHelperSettings2(...args) {
-      const implementation = getOverride("buildChallengeHelperSettings") ?? buildChallengeHelperSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateChallengeHelperSettingsContent2(...args) {
-      const implementation = getOverride("updateChallengeHelperSettingsContent") ?? updateChallengeHelperSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildChallengeHelperSettings: buildChallengeHelperSettings2, updateChallengeHelperSettingsContent: updateChallengeHelperSettingsContent2 };
-  }
-
   // src/ui/prestige-settings.ts
   function createPrestigeSettings({
     getDependency,
@@ -49991,24 +50019,29 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       buildAchievementGuardSettings,
       updateAchievementGuardSettingsContent
     } = achievementGuardSettings;
-    const challengeHelperSettingsOverrides = {};
-    const getChallengeHelperSettingsDependency = createDependencyResolver(
-      challengeHelperSettingsOverrides,
-      {
-        $: () => $,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsToggle: () => addSettingsToggle,
-        buildSettingsSection: () => buildSettingsSection,
-        document: () => document,
-        resetChallengeHelperSettings: () => resetChallengeHelperSettings,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const challengeHelperSettings = createChallengeHelperSettings({
-      getDependency: getChallengeHelperSettingsDependency,
-      getOverride: (name) => challengeHelperSettingsOverrides[name]
+    let challengeHelperSettingsTestActions;
+    const challengeHelperSettingsActions = {
+      buildSettingsSection,
+      addSettingsToggle,
+      addSettingsNumber
+    };
+    let challengeHelperSettingsIntentHandler;
+    const challengeHelperSettingsBrowserAdapter = createChallengeHelperSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      intents: {
+        handle: (intent) => challengeHelperSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => challengeHelperSettingsTestActions ?? challengeHelperSettingsActions
     });
-    const { buildChallengeHelperSettings, updateChallengeHelperSettingsContent } = challengeHelperSettings;
+    challengeHelperSettingsIntentHandler = createChallengeHelperSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (challengeHelperSettingsTestActions?.resetChallengeHelperSettings ?? resetChallengeHelperSettings)(true),
+        persist: () => (challengeHelperSettingsTestActions?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      renderSettingsContent: () => challengeHelperSettingsBrowserAdapter.updateChallengeHelperSettingsContent()
+    });
+    const { buildChallengeHelperSettings, updateChallengeHelperSettingsContent } = challengeHelperSettingsBrowserAdapter;
     const prestigeSettingsOverrides = {};
     const getPrestigeSettingsDependency = createDependencyResolver(
       prestigeSettingsOverrides,
@@ -53758,7 +53791,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         settingsBoundaries: {
           general: generalSettings,
           achievementGuard: achievementGuardSettings,
-          challengeHelper: challengeHelperSettings,
           prestige: prestigeSettings,
           government: governmentSettings,
           authority: authoritySettings,
@@ -53776,7 +53808,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         setSettingsBoundariesTestContext(context) {
           Object.assign(generalSettingsOverrides, context);
           Object.assign(achievementGuardSettingsOverrides, context);
-          Object.assign(challengeHelperSettingsOverrides, context);
           Object.assign(prestigeSettingsOverrides, context);
           Object.assign(governmentSettingsOverrides, context);
           Object.assign(authoritySettingsOverrides, context);
@@ -53790,6 +53821,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           Object.assign(mechSettingsOverrides, context);
           Object.assign(ejectorSettingsOverrides, context);
           Object.assign(marketSettingsOverrides, context);
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        challengeHelperSettings: challengeHelperSettingsBrowserAdapter,
+        setChallengeHelperSettingsTestContext(context) {
+          challengeHelperSettingsTestActions = context;
         }
       });
     }

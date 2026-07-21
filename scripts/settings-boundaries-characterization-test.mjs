@@ -78,7 +78,6 @@ const boundaries = hooks.settingsBoundaries;
 assert.deepEqual(Object.keys(boundaries), [
   "general",
   "achievementGuard",
-  "challengeHelper",
   "prestige",
   "government",
   "authority",
@@ -108,9 +107,7 @@ for (const name of Object.keys(boundaries)) {
   const resetName = `reset${
     name === "achievementGuard"
       ? "AchievementGuard"
-      : name === "challengeHelper"
-        ? "ChallengeHelper"
-        : name[0].toUpperCase() + name.slice(1)
+      : name[0].toUpperCase() + name.slice(1)
   }Settings`;
   resetStubs[resetName] = (reset) => trace.push(`reset:${name}:${reset}`);
 }
@@ -191,11 +188,6 @@ assert.deepEqual(
       id: "achievementGuard",
       label: "Achievement Guard",
     },
-    {
-      kind: "primary",
-      id: "challengeHelper",
-      label: "Challenge Helper",
-    },
     { kind: "secondary", prefix: "", id: "prestige", label: "Prestige" },
     {
       kind: "secondary",
@@ -241,8 +233,6 @@ assert.deepEqual(behavioralTrace, [
   "checkbox:masterScriptToggle|showSettings|autoPrestige",
   "reset:achievementGuard:true",
   "update:achievementGuard:",
-  "reset:challengeHelper:true",
-  "update:challengeHelper:",
   "reset:prestige:true",
   "update:prestige:",
   "reset:government:true",
@@ -285,5 +275,5 @@ assert.deepEqual(behavioralTrace, [
   "remove:marketToggles",
 ]);
 
-assert.ok(storageTrace.length >= 16);
-console.log("16 settings-boundary bundled characterization tests passed");
+assert.ok(storageTrace.length >= 15);
+console.log("15 settings-boundary bundled characterization tests passed");
