@@ -17493,6 +17493,112 @@
     });
   }
 
+  // src/application/authority-settings.ts
+  function createAuthoritySettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-authority-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/authority-settings.ts
+  var authoritySettingsReadModel = Object.freeze({
+    sectionId: "authority",
+    sectionName: "Authority",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "toggle",
+        settingName: "authorityManage",
+        label: "Manage Authority",
+        hint: "Global switch for Authority automation. Controls morale capping, home and Hell soldier reserves, outer-fleet crew protection, and Authority-cap building weighting."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "generalMinimumAuthority",
+        label: "Target Authority",
+        hint: "Evil universe only. Authority below 100 causes a global production penalty of 0.35% per point. Set to -1 to target the current Authority maximum, or 0 to disable target-based management while leaving the global switch on."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "generalAuthorityMinPatrolPercent",
+        label: "Minimum Hell patrol percentage",
+        hint: "Only applies when Target Authority is -1. Reserves at least this percentage of available Hell soldiers for patrols and Soul Gem income before stationing the rest for Authority."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "buildingWeightingAuthority",
+        label: "Authority-cap building multiplier",
+        hint: "AutoBuild weighting multiplier for buildings that raise the Authority cap while it is below the configured target."
+      })
+    ])
+  });
+  function getAuthoritySettingsReadModel() {
+    return authoritySettingsReadModel;
+  }
+
+  // src/adapters/browser/authority-settings.ts
+  function createAuthoritySettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    getActions
+  }) {
+    const readModel = getAuthoritySettingsReadModel();
+    function renderControl(node, control, actions) {
+      if (control.kind === "toggle") {
+        actions.addSettingsToggle(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      actions.addSettingsNumber(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    function buildAuthoritySettings2() {
+      const actions = getActions();
+      actions.buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-authority-settings" });
+        },
+        updateAuthoritySettingsContent2
+      );
+    }
+    function updateAuthoritySettingsContent2() {
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
+      currentNode.empty().off("*");
+      for (const control of readModel.controls) {
+        renderControl(currentNode, control, actions);
+      }
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    return Object.freeze({
+      buildAuthoritySettings: buildAuthoritySettings2,
+      updateAuthoritySettingsContent: updateAuthoritySettingsContent2
+    });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -41427,82 +41533,6 @@
     return { buildGovernmentSettings: buildGovernmentSettings2, updateGovernmentSettingsContent: updateGovernmentSettingsContent2 };
   }
 
-  // src/ui/authority-settings.ts
-  function createAuthoritySettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const document2 = liveObject4(() => getDependency("document"));
-    const resetAuthoritySettings2 = liveFunction(
-      () => getDependency("resetAuthoritySettings")
-    );
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildAuthoritySettingsImpl() {
-      const resetFunction = function() {
-        resetAuthoritySettings2(true);
-        updateSettingsFromState2();
-        updateAuthoritySettingsContent2();
-      };
-      buildSettingsSection3(
-        "authority",
-        "Authority",
-        resetFunction,
-        updateAuthoritySettingsContent2
-      );
-    }
-    function updateAuthoritySettingsContentImpl() {
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      const currentNode = $2("#script_authorityContent");
-      currentNode.empty().off("*");
-      addSettingsToggle2(
-        currentNode,
-        "authorityManage",
-        "Manage Authority",
-        "Global switch for Authority automation. Controls morale capping, home and Hell soldier reserves, outer-fleet crew protection, and Authority-cap building weighting."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "generalMinimumAuthority",
-        "Target Authority",
-        "Evil universe only. Authority below 100 causes a global production penalty of 0.35% per point. Set to -1 to target the current Authority maximum, or 0 to disable target-based management while leaving the global switch on."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "generalAuthorityMinPatrolPercent",
-        "Minimum Hell patrol percentage",
-        "Only applies when Target Authority is -1. Reserves at least this percentage of available Hell soldiers for patrols and Soul Gem income before stationing the rest for Authority."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "buildingWeightingAuthority",
-        "Authority-cap building multiplier",
-        "AutoBuild weighting multiplier for buildings that raise the Authority cap while it is below the configured target."
-      );
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildAuthoritySettings2(...args) {
-      const implementation = getOverride("buildAuthoritySettings") ?? buildAuthoritySettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateAuthoritySettingsContent2(...args) {
-      const implementation = getOverride("updateAuthoritySettingsContent") ?? updateAuthoritySettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildAuthoritySettings: buildAuthoritySettings2, updateAuthoritySettingsContent: updateAuthoritySettingsContent2 };
-  }
-
   // src/ui/evolution-settings.ts
   function createEvolutionSettings({
     getDependency,
@@ -50126,24 +50156,31 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getOverride: (name) => governmentSettingsOverrides[name]
     });
     const { buildGovernmentSettings, updateGovernmentSettingsContent } = governmentSettings;
-    const authoritySettingsOverrides = {};
-    const getAuthoritySettingsDependency = createDependencyResolver(
-      authoritySettingsOverrides,
+    let authoritySettingsTestActions;
+    const authoritySettingsActions = {
+      buildSettingsSection,
+      addSettingsToggle,
+      addSettingsNumber
+    };
+    let authoritySettingsIntentHandler;
+    const authoritySettingsBrowserAdapter = createAuthoritySettingsBrowserAdapter(
       {
-        $: () => $,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsToggle: () => addSettingsToggle,
-        buildSettingsSection: () => buildSettingsSection,
-        document: () => document,
-        resetAuthoritySettings: () => resetAuthoritySettings,
-        updateSettingsFromState: () => updateSettingsFromState
+        getDocument: () => document,
+        getJQuery: () => $,
+        intents: {
+          handle: (intent) => authoritySettingsIntentHandler.handle(intent)
+        },
+        getActions: () => authoritySettingsTestActions ?? authoritySettingsActions
       }
     );
-    const authoritySettings = createAuthoritySettings({
-      getDependency: getAuthoritySettingsDependency,
-      getOverride: (name) => authoritySettingsOverrides[name]
+    authoritySettingsIntentHandler = createAuthoritySettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (authoritySettingsTestActions?.resetAuthoritySettings ?? resetAuthoritySettings)(true),
+        persist: () => (authoritySettingsTestActions?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      renderSettingsContent: () => authoritySettingsBrowserAdapter.updateAuthoritySettingsContent()
     });
-    const { buildAuthoritySettings, updateAuthoritySettingsContent } = authoritySettings;
+    const { buildAuthoritySettings, updateAuthoritySettingsContent } = authoritySettingsBrowserAdapter;
     const evolutionSettingsOverrides = {};
     const getEvolutionSettingsDependency = createDependencyResolver(
       evolutionSettingsOverrides,
@@ -53816,7 +53853,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           general: generalSettings,
           prestige: prestigeSettings,
           government: governmentSettings,
-          authority: authoritySettings,
           evolution: evolutionSettings,
           planet: planetSettings,
           trigger: triggerSettings,
@@ -53832,7 +53868,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           Object.assign(generalSettingsOverrides, context);
           Object.assign(prestigeSettingsOverrides, context);
           Object.assign(governmentSettingsOverrides, context);
-          Object.assign(authoritySettingsOverrides, context);
           Object.assign(evolutionSettingsOverrides, context);
           Object.assign(planetSettingsOverrides, context);
           Object.assign(triggerSettingsOverrides, context);
@@ -53855,6 +53890,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
         setAchievementGuardSettingsTestContext(context) {
           achievementGuardSettingsTestActions = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        authoritySettings: authoritySettingsBrowserAdapter,
+        setAuthoritySettingsTestContext(context) {
+          authoritySettingsTestActions = context;
         }
       });
     }

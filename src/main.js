@@ -144,6 +144,8 @@ import { createChallengeHelperSettingsIntentHandler } from "./application/challe
 import { createChallengeHelperSettingsBrowserAdapter } from "./adapters/browser/challenge-helper-settings.ts";
 import { createAchievementGuardSettingsIntentHandler } from "./application/achievement-guard-settings.ts";
 import { createAchievementGuardSettingsBrowserAdapter } from "./adapters/browser/achievement-guard-settings.ts";
+import { createAuthoritySettingsIntentHandler } from "./application/authority-settings.ts";
+import { createAuthoritySettingsBrowserAdapter } from "./adapters/browser/authority-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -391,7 +393,6 @@ import { createTraitSettings } from "./ui/trait-settings.ts";
 import { createGeneralSettings } from "./ui/general-settings.ts";
 import { createPrestigeSettings } from "./ui/prestige-settings.ts";
 import { createGovernmentSettings } from "./ui/government-settings.ts";
-import { createAuthoritySettings } from "./ui/authority-settings.ts";
 import { createEvolutionSettings } from "./ui/evolution-settings.ts";
 import { createPlanetSettings } from "./ui/planet-settings.ts";
 import { createTriggerSettings } from "./ui/trigger-settings.ts";
@@ -1216,25 +1217,42 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildGovernmentSettings, updateGovernmentSettingsContent } =
     governmentSettings;
 
-  const authoritySettingsOverrides = {};
-  const getAuthoritySettingsDependency = createDependencyResolver(
-    authoritySettingsOverrides,
+  let authoritySettingsTestActions;
+  const authoritySettingsActions = {
+    buildSettingsSection,
+    addSettingsToggle,
+    addSettingsNumber,
+  };
+  let authoritySettingsIntentHandler;
+  const authoritySettingsBrowserAdapter = createAuthoritySettingsBrowserAdapter(
     {
-      $: () => $,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsToggle: () => addSettingsToggle,
-      buildSettingsSection: () => buildSettingsSection,
-      document: () => document,
-      resetAuthoritySettings: () => resetAuthoritySettings,
-      updateSettingsFromState: () => updateSettingsFromState,
+      getDocument: () => document,
+      getJQuery: () => $,
+      intents: {
+        handle: (intent) => authoritySettingsIntentHandler.handle(intent),
+      },
+      getActions: () =>
+        authoritySettingsTestActions ?? authoritySettingsActions,
     },
   );
-  const authoritySettings = createAuthoritySettings({
-    getDependency: getAuthoritySettingsDependency,
-    getOverride: (name) => authoritySettingsOverrides[name],
+  authoritySettingsIntentHandler = createAuthoritySettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          authoritySettingsTestActions?.resetAuthoritySettings ??
+          resetAuthoritySettings
+        )(true),
+      persist: () =>
+        (
+          authoritySettingsTestActions?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    },
+    renderSettingsContent: () =>
+      authoritySettingsBrowserAdapter.updateAuthoritySettingsContent(),
   });
   const { buildAuthoritySettings, updateAuthoritySettingsContent } =
-    authoritySettings;
+    authoritySettingsBrowserAdapter;
 
   const evolutionSettingsOverrides = {};
   const getEvolutionSettingsDependency = createDependencyResolver(
@@ -5290,7 +5308,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         general: generalSettings,
         prestige: prestigeSettings,
         government: governmentSettings,
-        authority: authoritySettings,
         evolution: evolutionSettings,
         planet: planetSettings,
         trigger: triggerSettings,
@@ -5306,7 +5323,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         Object.assign(generalSettingsOverrides, context);
         Object.assign(prestigeSettingsOverrides, context);
         Object.assign(governmentSettingsOverrides, context);
-        Object.assign(authoritySettingsOverrides, context);
         Object.assign(evolutionSettingsOverrides, context);
         Object.assign(planetSettingsOverrides, context);
         Object.assign(triggerSettingsOverrides, context);
@@ -5329,6 +5345,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
       setAchievementGuardSettingsTestContext(context) {
         achievementGuardSettingsTestActions = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      authoritySettings: authoritySettingsBrowserAdapter,
+      setAuthoritySettingsTestContext(context) {
+        authoritySettingsTestActions = context;
       },
     });
   }

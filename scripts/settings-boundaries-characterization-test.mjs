@@ -79,7 +79,6 @@ assert.deepEqual(Object.keys(boundaries), [
   "general",
   "prestige",
   "government",
-  "authority",
   "evolution",
   "planet",
   "trigger",
@@ -185,7 +184,6 @@ assert.deepEqual(
       id: "government",
       label: "Government",
     },
-    { kind: "primary", id: "authority", label: "Authority" },
     { kind: "primary", id: "evolution", label: "Evolution" },
     { kind: "primary", id: "planet", label: "Planet Weighting" },
     { kind: "primary", id: "trigger", label: "Trigger" },
@@ -226,8 +224,6 @@ assert.deepEqual(behavioralTrace, [
   "reset:government:true",
   "update:government:",
   "checkbox:autoTax|autoGovernment",
-  "reset:authority:true",
-  "update:authority:",
   "reset:evolution:true",
   "update:evolution:",
   "checkbox:autoEvolution",
@@ -263,5 +259,5 @@ assert.deepEqual(behavioralTrace, [
   "remove:marketToggles",
 ]);
 
-assert.ok(storageTrace.length >= 14);
-console.log("14 settings-boundary bundled characterization tests passed");
+assert.ok(storageTrace.length >= 13);
+console.log("13 settings-boundary bundled characterization tests passed");
