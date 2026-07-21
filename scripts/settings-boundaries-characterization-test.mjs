@@ -77,7 +77,6 @@ vm.runInNewContext(source, sandbox, {
 const boundaries = hooks.settingsBoundaries;
 assert.deepEqual(Object.keys(boundaries), [
   "general",
-  "achievementGuard",
   "prestige",
   "government",
   "authority",
@@ -104,11 +103,7 @@ for (const name of Object.keys(boundaries)) {
   );
   updateStubs[updateName] = (...args) =>
     trace.push(`update:${name}:${args.join("|")}`);
-  const resetName = `reset${
-    name === "achievementGuard"
-      ? "AchievementGuard"
-      : name[0].toUpperCase() + name.slice(1)
-  }Settings`;
+  const resetName = `reset${name[0].toUpperCase() + name.slice(1)}Settings`;
   resetStubs[resetName] = (reset) => trace.push(`reset:${name}:${reset}`);
 }
 
@@ -183,11 +178,6 @@ assert.deepEqual(
   })),
   [
     { kind: "primary", id: "general", label: "General" },
-    {
-      kind: "primary",
-      id: "achievementGuard",
-      label: "Achievement Guard",
-    },
     { kind: "secondary", prefix: "", id: "prestige", label: "Prestige" },
     {
       kind: "secondary",
@@ -231,8 +221,6 @@ assert.deepEqual(behavioralTrace, [
   "reset:general:true",
   "update:general:",
   "checkbox:masterScriptToggle|showSettings|autoPrestige",
-  "reset:achievementGuard:true",
-  "update:achievementGuard:",
   "reset:prestige:true",
   "update:prestige:",
   "reset:government:true",
@@ -275,5 +263,5 @@ assert.deepEqual(behavioralTrace, [
   "remove:marketToggles",
 ]);
 
-assert.ok(storageTrace.length >= 15);
-console.log("15 settings-boundary bundled characterization tests passed");
+assert.ok(storageTrace.length >= 14);
+console.log("14 settings-boundary bundled characterization tests passed");

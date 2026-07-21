@@ -17366,6 +17366,133 @@
     });
   }
 
+  // src/application/achievement-guard-settings.ts
+  function createAchievementGuardSettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-achievement-guard-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/achievement-guard-settings.ts
+  var achievementGuardSettingsReadModel = Object.freeze({
+    sectionId: "achievementGuard",
+    sectionName: "Achievement Guard",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "toggle",
+        settingName: "achievementGuards",
+        label: "Enable achievement guards",
+        hint: "Constrain automation so the current run stays eligible for the guarded achievements below. Each guard arms only while its achievement is still unearned at the current star level in the current universe, and releases as soon as it's earned, already lost this run, or out of scope for the current prestige type."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardPacifist",
+        label: "Pacifist",
+        hint: "Never attack foreign powers. Also allows unification researches regardless of the 'Perform unification' toggle. Foreign policies must be set to Annex/Purchase for unification to actually happen without attacking."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardDreaded",
+        label: "Dreaded",
+        hint: "Never build a Dreadnought during ascension runs. If the Chthonian Mission outcome is set to Dreadnought, it will be executed as High losses instead."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardCultOfPersonality",
+        label: "Cult of Personality",
+        hint: "Never unify - blocks unification researches. Yields to the Pacifist guard while both are armed, since Pacifist requires unification."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardAnarchist",
+        label: "Anarchist",
+        hint: "Never set a government during MAD runs, staying in Anarchy until reset."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardEnergetic",
+        label: "Energetic",
+        hint: "Never build a Thermal Collector during ascension runs."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardRedDead",
+        label: "Red Dead",
+        hint: "Never build a Spaceport during MAD runs (Cataclysm scenario)."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardSecondEvolution",
+        label: "Second Evolution",
+        hint: "Research Fanaticism instead of Anthropology while worshipping own species as gods."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardBananaRepublic",
+        label: "Banana Republic",
+        hint: "Block unification while the Banana Republic scenario still has unfinished objectives in the current universe, or while the 500 import and 500 export feat condition is still unmet. Also boosts World Collider and Monument weighting for unfinished Banana objectives."
+      })
+    ])
+  });
+  function getAchievementGuardSettingsReadModel() {
+    return achievementGuardSettingsReadModel;
+  }
+
+  // src/adapters/browser/achievement-guard-settings.ts
+  function createAchievementGuardSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    getActions
+  }) {
+    const readModel = getAchievementGuardSettingsReadModel();
+    function renderControl(node, control, actions) {
+      actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    function buildAchievementGuardSettings2() {
+      const actions = getActions();
+      actions.buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-achievement-guard-settings" });
+        },
+        updateAchievementGuardSettingsContent2
+      );
+    }
+    function updateAchievementGuardSettingsContent2() {
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
+      currentNode.empty().off("*");
+      for (const control of readModel.controls) {
+        renderControl(currentNode, control, actions);
+      }
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    return Object.freeze({
+      buildAchievementGuardSettings: buildAchievementGuardSettings2,
+      updateAchievementGuardSettingsContent: updateAchievementGuardSettingsContent2
+    });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -40852,114 +40979,6 @@
     return { buildGeneralSettings: buildGeneralSettings2, updateGeneralSettingsContent: updateGeneralSettingsContent2 };
   }
 
-  // src/ui/achievement-guard-settings.ts
-  function createAchievementGuardSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const document2 = liveObject4(() => getDependency("document"));
-    const resetAchievementGuardSettings2 = liveFunction(
-      () => getDependency("resetAchievementGuardSettings")
-    );
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildAchievementGuardSettingsImpl() {
-      let sectionId = "achievementGuard";
-      let sectionName = "Achievement Guard";
-      let resetFunction = function() {
-        resetAchievementGuardSettings2(true);
-        updateSettingsFromState2();
-        updateAchievementGuardSettingsContent2();
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateAchievementGuardSettingsContent2
-      );
-    }
-    function updateAchievementGuardSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_achievementGuardContent");
-      currentNode.empty().off("*");
-      addSettingsToggle2(
-        currentNode,
-        "achievementGuards",
-        "Enable achievement guards",
-        "Constrain automation so the current run stays eligible for the guarded achievements below. Each guard arms only while its achievement is still unearned at the current star level in the current universe, and releases as soon as it's earned, already lost this run, or out of scope for the current prestige type."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "guardPacifist",
-        "Pacifist",
-        "Never attack foreign powers. Also allows unification researches regardless of the 'Perform unification' toggle. Foreign policies must be set to Annex/Purchase for unification to actually happen without attacking."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "guardDreaded",
-        "Dreaded",
-        "Never build a Dreadnought during ascension runs. If the Chthonian Mission outcome is set to Dreadnought, it will be executed as High losses instead."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "guardCultOfPersonality",
-        "Cult of Personality",
-        "Never unify - blocks unification researches. Yields to the Pacifist guard while both are armed, since Pacifist requires unification."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "guardAnarchist",
-        "Anarchist",
-        "Never set a government during MAD runs, staying in Anarchy until reset."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "guardEnergetic",
-        "Energetic",
-        "Never build a Thermal Collector during ascension runs."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "guardRedDead",
-        "Red Dead",
-        "Never build a Spaceport during MAD runs (Cataclysm scenario)."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "guardSecondEvolution",
-        "Second Evolution",
-        "Research Fanaticism instead of Anthropology while worshipping own species as gods."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "guardBananaRepublic",
-        "Banana Republic",
-        "Block unification while the Banana Republic scenario still has unfinished objectives in the current universe, or while the 500 import and 500 export feat condition is still unmet. Also boosts World Collider and Monument weighting for unfinished Banana objectives."
-      );
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildAchievementGuardSettings2(...args) {
-      const implementation = getOverride("buildAchievementGuardSettings") ?? buildAchievementGuardSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateAchievementGuardSettingsContent2(...args) {
-      const implementation = getOverride("updateAchievementGuardSettingsContent") ?? updateAchievementGuardSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return {
-      buildAchievementGuardSettings: buildAchievementGuardSettings2,
-      updateAchievementGuardSettingsContent: updateAchievementGuardSettingsContent2
-    };
-  }
-
   // src/ui/prestige-settings.ts
   function createPrestigeSettings({
     getDependency,
@@ -49999,26 +50018,31 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getOverride: (name) => generalSettingsOverrides[name]
     });
     const { buildGeneralSettings, updateGeneralSettingsContent } = generalSettings;
-    const achievementGuardSettingsOverrides = {};
-    const getAchievementGuardSettingsDependency = createDependencyResolver(
-      achievementGuardSettingsOverrides,
-      {
-        $: () => $,
-        addSettingsToggle: () => addSettingsToggle,
-        buildSettingsSection: () => buildSettingsSection,
-        document: () => document,
-        resetAchievementGuardSettings: () => resetAchievementGuardSettings,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const achievementGuardSettings = createAchievementGuardSettings({
-      getDependency: getAchievementGuardSettingsDependency,
-      getOverride: (name) => achievementGuardSettingsOverrides[name]
+    let achievementGuardSettingsTestActions;
+    const achievementGuardSettingsActions = {
+      buildSettingsSection,
+      addSettingsToggle
+    };
+    let achievementGuardSettingsIntentHandler;
+    const achievementGuardSettingsBrowserAdapter = createAchievementGuardSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      intents: {
+        handle: (intent) => achievementGuardSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => achievementGuardSettingsTestActions ?? achievementGuardSettingsActions
+    });
+    achievementGuardSettingsIntentHandler = createAchievementGuardSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (achievementGuardSettingsTestActions?.resetAchievementGuardSettings ?? resetAchievementGuardSettings)(true),
+        persist: () => (achievementGuardSettingsTestActions?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      renderSettingsContent: () => achievementGuardSettingsBrowserAdapter.updateAchievementGuardSettingsContent()
     });
     const {
       buildAchievementGuardSettings,
       updateAchievementGuardSettingsContent
-    } = achievementGuardSettings;
+    } = achievementGuardSettingsBrowserAdapter;
     let challengeHelperSettingsTestActions;
     const challengeHelperSettingsActions = {
       buildSettingsSection,
@@ -53790,7 +53814,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       Object.assign(window.__EA_TEST_HOOKS__, {
         settingsBoundaries: {
           general: generalSettings,
-          achievementGuard: achievementGuardSettings,
           prestige: prestigeSettings,
           government: governmentSettings,
           authority: authoritySettings,
@@ -53807,7 +53830,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         },
         setSettingsBoundariesTestContext(context) {
           Object.assign(generalSettingsOverrides, context);
-          Object.assign(achievementGuardSettingsOverrides, context);
           Object.assign(prestigeSettingsOverrides, context);
           Object.assign(governmentSettingsOverrides, context);
           Object.assign(authoritySettingsOverrides, context);
@@ -53827,6 +53849,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         challengeHelperSettings: challengeHelperSettingsBrowserAdapter,
         setChallengeHelperSettingsTestContext(context) {
           challengeHelperSettingsTestActions = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
+        setAchievementGuardSettingsTestContext(context) {
+          achievementGuardSettingsTestActions = context;
         }
       });
     }
