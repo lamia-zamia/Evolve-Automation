@@ -83,7 +83,6 @@ vm.runInNewContext(source, sandbox, {
 
 const boundaries = hooks.remainingUiBoundaries;
 assert.deepEqual(Object.keys(boundaries), [
-  "weighting",
   "building",
   "options",
   "prestigeTopBar",
@@ -103,7 +102,7 @@ const state = { buildingToggles: 0 };
 
 const resetStubs = {};
 const updateStubs = {};
-for (const name of ["Weighting", "Building"]) {
+for (const name of ["Building"]) {
   resetStubs[`reset${name}Settings`] = (reset) =>
     trace.push(`reset:${name.toLowerCase()}:${reset}`);
   updateStubs[`update${name}SettingsContent`] = (...args) =>
@@ -148,13 +147,6 @@ hooks.setRemainingUiBoundariesTestContext({
 });
 
 const settingsSpecs = [
-  [
-    "weighting",
-    "buildWeightingSettings",
-    "weighting",
-    "AutoBuild Weighting",
-    false,
-  ],
   ["building", "buildBuildingSettings", "building", "Building", false],
 ];
 const parentNode = makeNode("parent");
@@ -173,8 +165,6 @@ for (const registration of registrations) {
 assert.deepEqual(
   trace.filter((entry) => /^(reset|update|checkbox|cleanup):/.test(entry)),
   [
-    "reset:weighting:true",
-    "update:weighting:",
     "reset:building:true",
     "update:building:",
     "checkbox:autoBuild|autoPower",
@@ -328,4 +318,4 @@ assert.ok(domTrace.includes("remove:#script_market_top_row"));
 assert.ok(domTrace.includes("remove:#resStorage .ea-storage-toggle"));
 assert.ok(domTrace.includes("remove:#script_storage_top_row"));
 
-console.log("Next 10 UI-boundary bundled characterization tests passed");
+console.log("Next 9 UI-boundary bundled characterization tests passed");

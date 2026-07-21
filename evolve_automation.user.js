@@ -19616,6 +19616,246 @@
     });
   }
 
+  // src/application/weighting-settings.ts
+  function createWeightingSettingsIntentHandler({
+    writer,
+    renderSettingsContent
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-weighting-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/weighting-settings.ts
+  var weightingSettingsReadModel = Object.freeze({
+    sectionId: "weighting",
+    sectionName: "AutoBuild Weighting",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "toggle",
+        settingName: "buildingBuildIfStorageFull",
+        label: "Ignore weighting and build if any storage is full",
+        hint: "Ignore weighting and immediately construct building if it uses any capped resource, preventing wasting them by overflowing. Weight still need to be positive(above zero) for this to happen."
+      })
+    ]),
+    rules: Object.freeze([
+      Object.freeze({
+        target: "Any",
+        condition: "New building",
+        settingName: "buildingWeightingNew"
+      }),
+      Object.freeze({
+        target: "Powered building",
+        condition: "Low available energy",
+        settingName: "buildingWeightingUnderpowered"
+      }),
+      Object.freeze({
+        target: "Power plant",
+        condition: "Low available energy",
+        settingName: "buildingWeightingNeedfulPowerPlant"
+      }),
+      Object.freeze({
+        target: "Power plant",
+        condition: "Producing more energy than required",
+        settingName: "buildingWeightingUselessPowerPlant"
+      }),
+      Object.freeze({
+        target: "Knowledge storage",
+        condition: "Have unaffordable researches or build targets",
+        settingName: "buildingWeightingNeedfulKnowledge"
+      }),
+      Object.freeze({
+        target: "Knowledge storage",
+        condition: "All researches and build targets already affordable",
+        settingName: "buildingWeightingUselessKnowledge"
+      }),
+      Object.freeze({
+        target: "Building with state (city)",
+        condition: "Some instances of this building are not working",
+        settingName: "buildingWeightingNonOperatingCity"
+      }),
+      Object.freeze({
+        target: "Building with state (space)",
+        condition: "Some instances of this building are not working",
+        settingName: "buildingWeightingNonOperating"
+      }),
+      Object.freeze({
+        target: "Building with consumption",
+        condition: "Missing consumables to operate",
+        settingName: "buildingWeightingMissingSupply"
+      }),
+      Object.freeze({
+        target: "Support consumer",
+        condition: "Missing support to operate",
+        settingName: "buildingWeightingMissingSupport"
+      }),
+      Object.freeze({
+        target: "Support provider",
+        condition: "Provided support not currently needed",
+        settingName: "buildingWeightingUselessSupport"
+      }),
+      Object.freeze({
+        target: "All fuel depots",
+        condition: "Missing Oil or Helium for techs and missions",
+        settingName: "buildingWeightingMissingFuel"
+      }),
+      Object.freeze({
+        target: "Not housing, barrack, oil derrick, or knowledge building",
+        condition: "MAD prestige enabled, and affordable",
+        settingName: "buildingWeightingMADUseless"
+      }),
+      Object.freeze({
+        target: "Mass Ejector",
+        condition: "Existed ejectors not fully utilized",
+        settingName: "buildingWeightingUnusedEjectors"
+      }),
+      Object.freeze({
+        target: "Freight Yard, Container Port, Munitions Depot",
+        condition: "Have unused crates or containers",
+        settingName: "buildingWeightingCrateUseless"
+      }),
+      Object.freeze({
+        target: "Horseshoes",
+        condition: "No more Horseshoes needed",
+        settingName: "buildingWeightingHorseshoeUseless"
+      }),
+      Object.freeze({
+        target: "Meditation Chamber",
+        condition: "No more Meditation Space needed",
+        settingName: "buildingWeightingZenUseless"
+      }),
+      Object.freeze({
+        target: "Gate Turret",
+        condition: "Gate demons fully supressed",
+        settingName: "buildingWeightingGateTurret"
+      }),
+      Object.freeze({
+        target: "Warehouses, Garage, Cargo Yard, Storehouse",
+        condition: "Need more storage",
+        settingName: "buildingWeightingNeedStorage"
+      }),
+      Object.freeze({
+        target: "Housing",
+        condition: "Less than 90% of houses are used",
+        settingName: "buildingWeightingUselessHousing"
+      }),
+      Object.freeze({
+        target: "Orbital Decay",
+        condition: "City and Moon buildings",
+        settingName: "buildingWeightingTemporal"
+      }),
+      Object.freeze({
+        target: "The True Path",
+        condition: "Solar buildings after reaching Tau Ceti",
+        settingName: "buildingWeightingSolar"
+      }),
+      Object.freeze({
+        target: "Eris Control Relays, Tanks, and Android Troopers",
+        condition: "The True Path Digsite is not yet secured",
+        settingName: "buildingWeightingTruepathDigsite"
+      }),
+      Object.freeze({
+        target: "Womlings Missions",
+        condition: "Womlings unlock actions conflicting with Overlord",
+        settingName: "buildingWeightingOverlord"
+      }),
+      Object.freeze({
+        target: "Banana Republic objectives",
+        condition: "World Collider and Monuments while their objectives are unfinished",
+        settingName: "buildingWeightingBananaObjective"
+      }),
+      Object.freeze({
+        target: "Inflation Money helpers",
+        condition: "Money storage until $250B cap is reachable, then Money income",
+        settingName: "buildingWeightingInflationMoney"
+      }),
+      Object.freeze({
+        target: "Retirement preparation",
+        condition: "Tau Fusion Generators, Factories, and Disease Labs below the pre-Isolation targets",
+        settingName: "buildingWeightingRetirementPrep"
+      })
+    ])
+  });
+  function getWeightingSettingsReadModel() {
+    return weightingSettingsReadModel;
+  }
+
+  // src/adapters/browser/weighting-settings.ts
+  function createWeightingSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    intents,
+    getActions,
+    getReadModel = getWeightingSettingsReadModel
+  }) {
+    function buildWeightingSettings2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      actions.buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-weighting-settings" }),
+        updateWeightingSettingsContent2
+      );
+    }
+    function updateWeightingSettingsContent2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const jquery = getJQuery();
+      const currentNode = jquery(`#script_${readModel.sectionId}Content`);
+      currentNode.empty().off("*");
+      for (const control of readModel.controls) {
+        renderControl(currentNode, control, actions);
+      }
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:30%">Target</th>
+              <th class="has-text-warning" style="width:60%">Condition</th>
+              <th class="has-text-warning" style="width:10%">Multiplier</th>
+            </tr>
+            <tbody id="script_weightingTableBody"></tbody>
+          </table>`);
+      const tableBodyNode = jquery("#script_weightingTableBody");
+      for (const rule of readModel.rules) {
+        renderRule(tableBodyNode, rule, actions, jquery);
+      }
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function renderControl(node, control, actions) {
+      actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    function renderRule(table, rule, actions, jquery) {
+      const ruleNode = jquery(`
+          <tr>
+            <td style="width:30%"><span class="has-text-info">${rule.target}</span></td>
+            <td style="width:60%"><span class="has-text-info">${rule.condition}</span></td>
+            <td style="width:10%"></td>
+          </tr>`);
+      actions.addTableInput(ruleNode.find("td:eq(2)"), rule.settingName);
+      table.append(ruleNode);
+    }
+    return Object.freeze({
+      buildWeightingSettings: buildWeightingSettings2,
+      updateWeightingSettingsContent: updateWeightingSettingsContent2
+    });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -45396,254 +45636,6 @@
     return { buildMarketSettings: buildMarketSettings2, updateMarketSettingsContent: updateMarketSettingsContent2 };
   }
 
-  // src/ui/weighting-settings.ts
-  function createWeightingSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const document2 = liveObject4(() => getDependency("document"));
-    const resetWeightingSettings2 = liveFunction(
-      () => getDependency("resetWeightingSettings")
-    );
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildWeightingSettingsImpl() {
-      let sectionId = "weighting";
-      let sectionName = "AutoBuild Weighting";
-      let resetFunction = function() {
-        resetWeightingSettings2(true);
-        updateSettingsFromState2();
-        updateWeightingSettingsContent2();
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateWeightingSettingsContent2
-      );
-    }
-    function updateWeightingSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_weightingContent");
-      currentNode.empty().off("*");
-      addSettingsToggle2(
-        currentNode,
-        "buildingBuildIfStorageFull",
-        "Ignore weighting and build if any storage is full",
-        "Ignore weighting and immediately construct building if it uses any capped resource, preventing wasting them by overflowing. Weight still need to be positive(above zero) for this to happen."
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:30%">Target</th>
-              <th class="has-text-warning" style="width:60%">Condition</th>
-              <th class="has-text-warning" style="width:10%">Multiplier</th>
-            </tr>
-            <tbody id="script_weightingTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $2("#script_weightingTableBody");
-      addWeightingRule2(
-        tableBodyNode,
-        "Any",
-        "New building",
-        "buildingWeightingNew"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Powered building",
-        "Low available energy",
-        "buildingWeightingUnderpowered"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Power plant",
-        "Low available energy",
-        "buildingWeightingNeedfulPowerPlant"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Power plant",
-        "Producing more energy than required",
-        "buildingWeightingUselessPowerPlant"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Knowledge storage",
-        "Have unaffordable researches or build targets",
-        "buildingWeightingNeedfulKnowledge"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Knowledge storage",
-        "All researches and build targets already affordable",
-        "buildingWeightingUselessKnowledge"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Building with state (city)",
-        "Some instances of this building are not working",
-        "buildingWeightingNonOperatingCity"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Building with state (space)",
-        "Some instances of this building are not working",
-        "buildingWeightingNonOperating"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Building with consumption",
-        "Missing consumables to operate",
-        "buildingWeightingMissingSupply"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Support consumer",
-        "Missing support to operate",
-        "buildingWeightingMissingSupport"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Support provider",
-        "Provided support not currently needed",
-        "buildingWeightingUselessSupport"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "All fuel depots",
-        "Missing Oil or Helium for techs and missions",
-        "buildingWeightingMissingFuel"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Not housing, barrack, oil derrick, or knowledge building",
-        "MAD prestige enabled, and affordable",
-        "buildingWeightingMADUseless"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Mass Ejector",
-        "Existed ejectors not fully utilized",
-        "buildingWeightingUnusedEjectors"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Freight Yard, Container Port, Munitions Depot",
-        "Have unused crates or containers",
-        "buildingWeightingCrateUseless"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Horseshoes",
-        "No more Horseshoes needed",
-        "buildingWeightingHorseshoeUseless"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Meditation Chamber",
-        "No more Meditation Space needed",
-        "buildingWeightingZenUseless"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Gate Turret",
-        "Gate demons fully supressed",
-        "buildingWeightingGateTurret"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Warehouses, Garage, Cargo Yard, Storehouse",
-        "Need more storage",
-        "buildingWeightingNeedStorage"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Housing",
-        "Less than 90% of houses are used",
-        "buildingWeightingUselessHousing"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Orbital Decay",
-        "City and Moon buildings",
-        "buildingWeightingTemporal"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "The True Path",
-        "Solar buildings after reaching Tau Ceti",
-        "buildingWeightingSolar"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Eris Control Relays, Tanks, and Android Troopers",
-        "The True Path Digsite is not yet secured",
-        "buildingWeightingTruepathDigsite"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Womlings Missions",
-        "Womlings unlock actions conflicting with Overlord",
-        "buildingWeightingOverlord"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Banana Republic objectives",
-        "World Collider and Monuments while their objectives are unfinished",
-        "buildingWeightingBananaObjective"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Inflation Money helpers",
-        "Money storage until $250B cap is reachable, then Money income",
-        "buildingWeightingInflationMoney"
-      );
-      addWeightingRule2(
-        tableBodyNode,
-        "Retirement preparation",
-        "Tau Fusion Generators, Factories, and Disease Labs below the pre-Isolation targets",
-        "buildingWeightingRetirementPrep"
-      );
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function addWeightingRuleImpl(table, targetName, conditionDesc, settingKey) {
-      let ruleNode = $2(`
-          <tr>
-            <td style="width:30%"><span class="has-text-info">${targetName}</span></td>
-            <td style="width:60%"><span class="has-text-info">${conditionDesc}</span></td>
-            <td style="width:10%"></td>
-          </tr>`);
-      addTableInput2(ruleNode.find("td:eq(2)"), settingKey);
-      table.append(ruleNode);
-    }
-    function buildWeightingSettings2(...args) {
-      const implementation = getOverride("buildWeightingSettings") ?? buildWeightingSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateWeightingSettingsContent2(...args) {
-      const implementation = getOverride("updateWeightingSettingsContent") ?? updateWeightingSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    function addWeightingRule2(...args) {
-      const implementation = getOverride("addWeightingRule") ?? addWeightingRuleImpl;
-      return implementation.apply(this, args);
-    }
-    return {
-      buildWeightingSettings: buildWeightingSettings2,
-      updateWeightingSettingsContent: updateWeightingSettingsContent2,
-      addWeightingRule: addWeightingRule2
-    };
-  }
-
   // src/ui/building-settings.ts
   function createBuildingSettings({
     getDependency,
@@ -50571,28 +50563,31 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       }
     });
     const { buildJobSettings, updateJobSettingsContent } = jobSettingsBrowserAdapter;
-    const weightingBoundaryOverrides = {};
-    const getWeightingBoundaryDependency = createDependencyResolver(
-      weightingBoundaryOverrides,
+    let weightingSettingsTestContext;
+    const weightingSettingsActions = {
+      buildSettingsSection,
+      addSettingsToggle,
+      addTableInput
+    };
+    let weightingSettingsIntentHandler;
+    const weightingSettingsBrowserAdapter = createWeightingSettingsBrowserAdapter(
       {
-        $: () => $,
-        addSettingsToggle: () => addSettingsToggle,
-        addTableInput: () => addTableInput,
-        buildSettingsSection: () => buildSettingsSection,
-        document: () => document,
-        resetWeightingSettings: () => resetWeightingSettings,
-        updateSettingsFromState: () => updateSettingsFromState
+        getDocument: () => document,
+        getJQuery: () => $,
+        intents: {
+          handle: (intent) => weightingSettingsIntentHandler.handle(intent)
+        },
+        getActions: () => weightingSettingsTestContext?.actions ?? weightingSettingsActions
       }
     );
-    const weightingBoundary = createWeightingSettings({
-      getDependency: getWeightingBoundaryDependency,
-      getOverride: (name) => weightingBoundaryOverrides[name]
+    weightingSettingsIntentHandler = createWeightingSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (weightingSettingsTestContext?.resetWeightingSettings ?? resetWeightingSettings)(true),
+        persist: () => (weightingSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      renderSettingsContent: () => weightingSettingsBrowserAdapter.updateWeightingSettingsContent()
     });
-    const {
-      buildWeightingSettings,
-      updateWeightingSettingsContent,
-      addWeightingRule
-    } = weightingBoundary;
+    const { buildWeightingSettings, updateWeightingSettingsContent } = weightingSettingsBrowserAdapter;
     const buildingBoundaryOverrides = {};
     const getBuildingBoundaryDependency = createDependencyResolver(
       buildingBoundaryOverrides,
@@ -54791,6 +54786,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
+        weightingSettings: weightingSettingsBrowserAdapter,
+        setWeightingSettingsTestContext(context) {
+          weightingSettingsTestContext = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
         achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
         setAchievementGuardSettingsTestContext(context) {
           achievementGuardSettingsTestActions = context;
@@ -54958,7 +54959,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         remainingUiBoundaries: {
-          weighting: weightingBoundary,
           building: buildingBoundary,
           options: optionsBoundary,
           prestigeTopBar: prestigeTopBarBoundary,
@@ -54985,7 +54985,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
             ProjectManager = context.ProjectManager;
           if ("EjectManager" in context) EjectManager = context.EjectManager;
           if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-          Object.assign(weightingBoundaryOverrides, context);
           Object.assign(buildingBoundaryOverrides, context);
           Object.assign(optionsBoundaryOverrides, context);
           Object.assign(prestigeTopBarBoundaryOverrides, context);

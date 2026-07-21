@@ -172,6 +172,8 @@ import { createMagicSettingsEvolveAdapter } from "./adapters/evolve/magic-settin
 import { createJobSettingsIntentHandler } from "./application/job-settings.ts";
 import { createJobSettingsBrowserAdapter } from "./adapters/browser/job-settings.ts";
 import { createJobSettingsEvolveAdapter } from "./adapters/evolve/job-settings.ts";
+import { createWeightingSettingsIntentHandler } from "./application/weighting-settings.ts";
+import { createWeightingSettingsBrowserAdapter } from "./adapters/browser/weighting-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -425,7 +427,6 @@ import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createMechSettings } from "./ui/mech-settings.ts";
 import { createEjectorSettings } from "./ui/ejector-settings.ts";
 import { createMarketSettings } from "./ui/market-settings.ts";
-import { createWeightingSettings } from "./ui/weighting-settings.ts";
 import { createBuildingSettings } from "./ui/building-settings.ts";
 import { createOptionsModalUI } from "./ui/options-modal.ts";
 import { createPrestigeTopBar } from "./ui/prestige-top-bar.ts";
@@ -872,28 +873,42 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildJobSettings, updateJobSettingsContent } =
     jobSettingsBrowserAdapter;
 
-  const weightingBoundaryOverrides = {};
-  const getWeightingBoundaryDependency = createDependencyResolver(
-    weightingBoundaryOverrides,
+  let weightingSettingsTestContext;
+  const weightingSettingsActions = {
+    buildSettingsSection,
+    addSettingsToggle,
+    addTableInput,
+  };
+  let weightingSettingsIntentHandler;
+  const weightingSettingsBrowserAdapter = createWeightingSettingsBrowserAdapter(
     {
-      $: () => $,
-      addSettingsToggle: () => addSettingsToggle,
-      addTableInput: () => addTableInput,
-      buildSettingsSection: () => buildSettingsSection,
-      document: () => document,
-      resetWeightingSettings: () => resetWeightingSettings,
-      updateSettingsFromState: () => updateSettingsFromState,
+      getDocument: () => document,
+      getJQuery: () => $,
+      intents: {
+        handle: (intent) => weightingSettingsIntentHandler.handle(intent),
+      },
+      getActions: () =>
+        weightingSettingsTestContext?.actions ?? weightingSettingsActions,
     },
   );
-  const weightingBoundary = createWeightingSettings({
-    getDependency: getWeightingBoundaryDependency,
-    getOverride: (name) => weightingBoundaryOverrides[name],
+  weightingSettingsIntentHandler = createWeightingSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          weightingSettingsTestContext?.resetWeightingSettings ??
+          resetWeightingSettings
+        )(true),
+      persist: () =>
+        (
+          weightingSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    },
+    renderSettingsContent: () =>
+      weightingSettingsBrowserAdapter.updateWeightingSettingsContent(),
   });
-  const {
-    buildWeightingSettings,
-    updateWeightingSettingsContent,
-    addWeightingRule,
-  } = weightingBoundary;
+  const { buildWeightingSettings, updateWeightingSettingsContent } =
+    weightingSettingsBrowserAdapter;
 
   const buildingBoundaryOverrides = {};
   const getBuildingBoundaryDependency = createDependencyResolver(
@@ -5610,6 +5625,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {
+      weightingSettings: weightingSettingsBrowserAdapter,
+      setWeightingSettingsTestContext(context) {
+        weightingSettingsTestContext = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
       achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
       setAchievementGuardSettingsTestContext(context) {
         achievementGuardSettingsTestActions = context;
@@ -5788,7 +5809,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
       remainingUiBoundaries: {
-        weighting: weightingBoundary,
         building: buildingBoundary,
         options: optionsBoundary,
         prestigeTopBar: prestigeTopBarBoundary,
@@ -5815,7 +5835,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
           ProjectManager = context.ProjectManager;
         if ("EjectManager" in context) EjectManager = context.EjectManager;
         if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-        Object.assign(weightingBoundaryOverrides, context);
         Object.assign(buildingBoundaryOverrides, context);
         Object.assign(optionsBoundaryOverrides, context);
         Object.assign(prestigeTopBarBoundaryOverrides, context);

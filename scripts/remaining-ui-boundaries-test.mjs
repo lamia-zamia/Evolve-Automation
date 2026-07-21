@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import { liveFunction } from "../src/ui/dependencies.ts";
-import { createWeightingSettings } from "../src/ui/weighting-settings.ts";
 import { createBuildingSettings } from "../src/ui/building-settings.ts";
 import { createOptionsModalUI } from "../src/ui/options-modal.ts";
 import { createPrestigeTopBar } from "../src/ui/prestige-top-bar.ts";
@@ -20,16 +19,6 @@ function makeFactory(factory, context = {}, overrides = {}) {
 }
 
 const settingsSpecs = [
-  [
-    "weighting",
-    createWeightingSettings,
-    "buildWeightingSettings",
-    "updateWeightingSettingsContent",
-    "weighting",
-    "AutoBuild Weighting",
-    false,
-    [],
-  ],
   [
     "building",
     createBuildingSettings,
@@ -235,4 +224,4 @@ currentClass = SecondClass;
 assert.equal(new FirstClass() instanceof liveClass, false);
 assert.equal(new SecondClass() instanceof liveClass, true);
 
-console.log("Next 10 UI-boundary module tests passed");
+console.log("Next 9 UI-boundary module tests passed");
