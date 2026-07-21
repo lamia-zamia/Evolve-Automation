@@ -1,3 +1,7 @@
+// Verbatim copy of the legacy getter-bag `src/settings/reset-settings.ts`, preserved as the
+// dual-run parity oracle for the pure `src/domain/settings-defaults.ts` +
+// `src/adapters/evolve/settings-reset.ts` + `src/application/settings-reset.ts` port.
+/* eslint-disable */
 type Loose = any;
 type LooseRecord = Record<string, Loose>;
 type LooseFunction = (...args: Loose[]) => Loose;

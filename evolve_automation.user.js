@@ -192,113 +192,288 @@
     };
   }
 
-  // src/settings/reset-settings.ts
-  function createResetSettings({
-    dependencies
-  }) {
-    const liveObject5 = (key) => new Proxy(
-      {},
-      {
-        get(_target, property) {
-          const current = dependencies[key]();
-          const value = Reflect.get(current, property);
-          return typeof value === "function" ? value.bind(current) : value;
-        },
-        set(_target, property, value) {
-          return Reflect.set(
-            dependencies[key](),
-            property,
-            value
-          );
-        },
-        deleteProperty(_target, property) {
-          return Reflect.deleteProperty(
-            dependencies[key](),
-            property
-          );
-        },
-        has(_target, property) {
-          return Reflect.has(dependencies[key](), property);
-        },
-        ownKeys() {
-          return Reflect.ownKeys(dependencies[key]());
-        },
-        getOwnPropertyDescriptor(_target, property) {
-          const current = dependencies[key]();
-          const descriptor = Object.getOwnPropertyDescriptor(current, property);
+  // src/adapters/evolve/settings-reset.ts
+  function createEvolveSettingsResetAdapter(dependencies) {
+    const d = dependencies;
+    const reader = {
+      readGovernment() {
+        const types = d.GovernmentManager().Types;
+        return {
+          democracyId: types.democracy.id,
+          technocracyId: types.technocracy.id,
+          corpocracyId: types.corpocracy.id
+        };
+      },
+      readEvolution() {
+        return { challengeIds: d.challenges().map((set) => set[0].id) };
+      },
+      readLogging() {
+        return { gameLogTypeIds: Object.keys(d.GameLog().Types) };
+      },
+      readPlanet() {
+        return {
+          biomeList: d.biomeList(),
+          planetBiomes: d.planetBiomes(),
+          traitList: d.traitList(),
+          planetTraits: d.planetTraits(),
+          extraList: d.extraList()
+        };
+      },
+      readMarket() {
+        const resources2 = d.resources();
+        const poly2 = d.poly();
+        return {
+          tradableResourceIds: Object.values(resources2).filter((r) => r.is.tradable).map((r) => r.id),
+          galaxyOfferResourceIds: poly2.galaxyOffers.map(
+            (offer) => resources2[offer.buy.res].id
+          )
+        };
+      },
+      readStorage() {
+        const resources2 = d.resources();
+        return {
+          storableResourceIds: Object.values(resources2).filter((r) => r.hasStorage()).map((r) => r.id),
+          orichalcumId: resources2.Orichalcum.id,
+          vitreloyId: resources2.Vitreloy.id,
+          bolognumId: resources2.Bolognium.id
+        };
+      },
+      readMinorTrait() {
+        const game2 = d.game();
+        const traitNames = Object.entries(game2.traits).filter(
+          ([id, trait2]) => trait2.type === "minor" || id === "mastery" || id === "fortify"
+        ).map(([id]) => id);
+        const ocularPowerIds = Object.values(d.ocularPowerData()).map(
+          (v) => v.id
+        );
+        return { traitNames, ocularPowerIds };
+      },
+      readMutableTrait() {
+        const game2 = d.game();
+        const poly2 = d.poly();
+        const MajorTrait2 = d.MajorTrait();
+        const GenusTrait2 = d.GenusTrait();
+        const unobtainableTraits = ["xenophobic", "rigid", "soul_eater"];
+        const traits = Object.entries(game2.traits).filter(
+          ([id, trait2]) => (trait2.type === "major" || trait2.type === "genus") && !unobtainableTraits.includes(id)
+        ).map(([id, trait2]) => {
+          const built = trait2.type === "major" ? new MajorTrait2(id) : new GenusTrait2(id);
           return {
-            configurable: true,
-            enumerable: descriptor?.enumerable ?? true,
-            writable: true,
-            value: Reflect.get(current, property)
+            traitName: built.traitName,
+            type: built.type,
+            genus: built.genus,
+            isGainable: built.isGainable(),
+            isNegRoll: poly2.neg_roll_traits.includes(id)
           };
-        }
-      }
-    );
-    const liveFunction2 = (key) => new Proxy(function() {
-    }, {
-      apply(_target, thisArg, argumentsList) {
-        return Reflect.apply(
-          dependencies[key](),
-          thisArg,
-          argumentsList
-        );
+        });
+        return { traits, genusOrder: Object.keys(poly2.genus_traits) };
       },
-      construct(_target, argumentsList, newTarget) {
-        return Reflect.construct(
-          dependencies[key](),
-          argumentsList,
-          newTarget
-        );
+      readJob() {
+        const jobs2 = Object.entries(d.jobs()).map(([key, job]) => ({
+          key,
+          originalId: job._originalId,
+          isSmart: Boolean(job.is.smart)
+        }));
+        return { jobs: jobs2 };
       },
-      get(_target, property) {
-        const current = dependencies[key]();
-        if (property === Symbol.hasInstance) {
-          return (value) => value instanceof current;
-        }
-        return Reflect.get(current, property);
+      readBuilding() {
+        const buildingsMap = d.buildings();
+        const buildings2 = d.BuildingManager().priorityList.map((building2) => ({
+          binding: building2._vueBinding,
+          switchable: building2.isSwitchable(),
+          smart: Boolean(building2.is.smart)
+        }));
+        const bindingByKey = {};
+        Object.entries(buildingsMap).forEach(
+          ([key, building2]) => bindingByKey[key] = building2._vueBinding
+        );
+        return { buildings: buildings2, bindingByKey };
+      },
+      readProject() {
+        const projectsMap = d.projects();
+        const idByKey = {};
+        Object.entries(projectsMap).forEach(
+          ([key, project]) => idByKey[key] = project.id
+        );
+        return {
+          projectIds: Object.values(projectsMap).map((p) => p.id),
+          idByKey
+        };
+      },
+      readMagic() {
+        const AlchemyManager2 = d.AlchemyManager();
+        return {
+          alchemyResourceIds: Object.values(d.resources()).filter((r) => AlchemyManager2.transmuteTier(r) > 0).map((r) => r.id),
+          ritualProductionIds: Object.values(d.RitualManager().Productions).map(
+            (spell) => spell.id
+          )
+        };
+      },
+      readProduction() {
+        const foundryResourceIdByKey = {};
+        Object.entries(d.resources()).forEach(
+          ([key, resource2]) => foundryResourceIdByKey[key] = resource2.id
+        );
+        const factoryResourceIdByKey = {};
+        Object.entries(d.FactoryManager().Productions).forEach(
+          ([key, production]) => factoryResourceIdByKey[key] = production.resource.id
+        );
+        const droidResourceIdByKey = {};
+        Object.entries(d.DroidManager().Productions).forEach(
+          ([key, production]) => droidResourceIdByKey[key] = production.resource.id
+        );
+        return {
+          foundryResourceIdByKey,
+          smelterFuelIds: Object.values(d.SmelterManager().Fuels).map(
+            (fuel) => fuel.id
+          ),
+          factoryResourceIdByKey,
+          droidResourceIdByKey,
+          replicatorProductionIds: Object.values(
+            d.ReplicatorManager().Productions
+          ).map((production) => production.id)
+        };
+      },
+      readEjector() {
+        const resources2 = d.resources();
+        const EjectManager2 = d.EjectManager();
+        const SupplyManager2 = d.SupplyManager();
+        const NaniteManager2 = d.NaniteManager();
+        const descriptors = Object.values(resources2).map((r) => {
+          const supplyConsumable = SupplyManager2.isConsumable(r);
+          return {
+            id: r.id,
+            isTradable: r.is.tradable ?? false,
+            atomicMass: r.atomicMass,
+            ejectConsumable: EjectManager2.isConsumable(r),
+            supplyConsumable,
+            naniteConsumable: NaniteManager2.isConsumable(r),
+            // supplyIn is only consulted for the supply list; guard non-supply resources.
+            supplyIn: supplyConsumable ? SupplyManager2.supplyIn(r.id) : 0
+          };
+        });
+        return {
+          universe: d.game().global.race.universe,
+          resources: descriptors,
+          eleriumId: resources2.Elerium.id,
+          inferniteId: resources2.Infernite.id
+        };
       }
-    });
-    const AlchemyManager2 = liveObject5("AlchemyManager");
-    const applySettings3 = liveFunction2("applySettings");
-    const biomeList2 = liveObject5("biomeList");
-    const BuildingManager2 = liveObject5("BuildingManager");
-    const buildings2 = liveObject5("buildings");
-    const challenges2 = liveObject5("challenges");
-    const DroidManager2 = liveObject5("DroidManager");
-    const EjectManager2 = liveObject5("EjectManager");
-    const extraList2 = liveObject5("extraList");
-    const FactoryManager2 = liveObject5("FactoryManager");
-    const game2 = liveObject5("game");
-    const GameLog2 = liveObject5("GameLog");
-    const GenusTrait2 = liveFunction2("GenusTrait");
-    const GovernmentManager2 = liveObject5("GovernmentManager");
-    const initBuildingState2 = liveFunction2("initBuildingState");
-    const JobManager2 = liveObject5("JobManager");
-    const jobs2 = liveObject5("jobs");
-    const MajorTrait2 = liveFunction2("MajorTrait");
-    const MarketManager2 = liveObject5("MarketManager");
-    const MinorTrait2 = liveFunction2("MinorTrait");
-    const MinorTraitManager2 = liveObject5("MinorTraitManager");
-    const MutableTraitManager2 = liveObject5("MutableTraitManager");
-    const NaniteManager2 = liveObject5("NaniteManager");
-    const ocularPowerData2 = liveObject5("ocularPowerData");
-    const planetBiomes2 = liveObject5("planetBiomes");
-    const planetTraits2 = liveObject5("planetTraits");
-    const poly2 = liveObject5("poly");
-    const ProjectManager2 = liveObject5("ProjectManager");
-    const projects2 = liveObject5("projects");
-    const ReplicatorManager2 = liveObject5("ReplicatorManager");
-    const resources2 = liveObject5("resources");
-    const RitualManager2 = liveObject5("RitualManager");
-    const settingsRaw2 = liveObject5("settingsRaw");
-    const SmelterManager2 = liveObject5("SmelterManager");
-    const StorageManager2 = liveObject5("StorageManager");
-    const SupplyManager2 = liveObject5("SupplyManager");
-    const traitList2 = liveObject5("traitList");
-    const TriggerManager2 = liveObject5("TriggerManager");
-    function resetWarSettings2(reset) {
-      let def = {
+    };
+    const managerFor = (manager) => {
+      switch (manager) {
+        case "market":
+          return d.MarketManager();
+        case "storage":
+          return d.StorageManager();
+        case "job":
+          return d.JobManager();
+        case "building":
+          return d.BuildingManager();
+        case "minorTrait":
+          return d.MinorTraitManager();
+        case "mutableTrait":
+          return d.MutableTraitManager();
+        case "project":
+          return d.ProjectManager();
+        case "alchemy":
+          return d.AlchemyManager();
+        case "eject":
+          return d.EjectManager();
+        case "supply":
+          return d.SupplyManager();
+        case "nanite":
+          return d.NaniteManager();
+      }
+    };
+    const reconstruct = (manager, ids) => {
+      switch (manager) {
+        case "market":
+        case "storage":
+        case "alchemy":
+        case "eject":
+        case "supply":
+        case "nanite": {
+          const byId = new Map(
+            Object.values(d.resources()).map((r) => [r.id, r])
+          );
+          return ids.map((id) => byId.get(id));
+        }
+        case "job": {
+          const byId = new Map(
+            Object.values(d.jobs()).map((job) => [job._originalId, job])
+          );
+          return ids.map((id) => byId.get(id));
+        }
+        case "project": {
+          const byId = new Map(
+            Object.values(d.projects()).map((p) => [p.id, p])
+          );
+          return ids.map((id) => byId.get(id));
+        }
+        case "minorTrait": {
+          const MinorTrait2 = d.MinorTrait();
+          return ids.map((id) => new MinorTrait2(id));
+        }
+        case "mutableTrait": {
+          const game2 = d.game();
+          const MajorTrait2 = d.MajorTrait();
+          const GenusTrait2 = d.GenusTrait();
+          return ids.map(
+            (id) => game2.traits[id].type === "major" ? new MajorTrait2(id) : new GenusTrait2(id)
+          );
+        }
+        case "building":
+          return [];
+      }
+    };
+    const effects = {
+      setPriorityList(manager, orderedIds) {
+        managerFor(manager).priorityList = reconstruct(manager, orderedIds);
+      },
+      sortByPriority(manager) {
+        managerFor(manager).sortByPriority();
+      },
+      initBuildingState() {
+        d.initBuildingState()();
+      },
+      rebuildDefaultTriggers() {
+        const TriggerManager2 = d.TriggerManager();
+        TriggerManager2.priorityList = [];
+        TriggerManager2.AddTrigger(
+          "BuildingCount",
+          "space-moon_mission",
+          1,
+          "build",
+          "space-moon_base",
+          1
+        );
+        TriggerManager2.AddTrigger(
+          "BuildingCount",
+          "space-moon_base",
+          1,
+          "build",
+          "space-iridium_mine",
+          1
+        );
+        TriggerManager2.AddTrigger(
+          "BuildingCount",
+          "space-moon_base",
+          1,
+          "build",
+          "space-helium_mine",
+          1
+        );
+        return JSON.parse(JSON.stringify(TriggerManager2.priorityList));
+      }
+    };
+    return { reader, effects };
+  }
+
+  // src/domain/settings-defaults.ts
+  function computeWarDefaults() {
+    return {
+      def: {
         autoFight: false,
         foreignAttackLivingSoldiersPercent: 90,
         foreignAttackHealthySoldiersPercent: 90,
@@ -319,11 +494,12 @@
         foreignPolicyInferior: "Annex",
         foreignPolicySuperior: "Sabotage",
         foreignPolicyRival: "Influence"
-      };
-      applySettings3(def, reset);
-    }
-    function resetHellSettings2(reset) {
-      let def = {
+      }
+    };
+  }
+  function computeHellDefaults() {
+    return {
+      def: {
         autoHell: false,
         hellHomeGarrison: 10,
         hellMinSoldiers: 20,
@@ -344,11 +520,12 @@
         hellAttractorBottomThreat: 6e3,
         warlordHandleFortress: true,
         warlordMinimumMinions: 1e3
-      };
-      applySettings3(def, reset);
-    }
-    function resetGeneralSettings2(reset) {
-      let def = {
+      }
+    };
+  }
+  function computeGeneralDefaults() {
+    return {
+      def: {
         masterScriptToggle: true,
         showSettings: true,
         autoPrestige: false,
@@ -365,30 +542,33 @@
         buildingAlwaysClick: false,
         buildingClickPerTick: 50,
         scriptSettingsExportFilename: "evolve-script-settings.json"
-      };
-      applySettings3(def, reset);
-    }
-    function resetInterfaceSettings2(reset) {
-      let def = {
+      }
+    };
+  }
+  function computeInterfaceDefaults() {
+    return {
+      def: {
         activeTargetsUI: false,
         buildPlannerUI: true,
         buildPlannerCollapsed: false,
         displayPrestigeTypeInTopBar: true,
         displayTotalDaysTypeInTopBar: false,
         performanceHackAvoidDrawTech: false
-      };
-      applySettings3(def, reset);
-    }
-    function resetStateLogSettings2(reset) {
-      let def = {
+      }
+    };
+  }
+  function computeStateLogDefaults() {
+    return {
+      def: {
         stateLogEnabled: false,
         stateLogAutoDownload: false,
         stateLogInterval: 20
-      };
-      applySettings3(def, reset);
-    }
-    function resetAchievementGuardSettings2(reset) {
-      let def = {
+      }
+    };
+  }
+  function computeAchievementGuardDefaults() {
+    return {
+      def: {
         achievementGuards: false,
         guardPacifist: true,
         guardDreaded: true,
@@ -398,19 +578,21 @@
         guardRedDead: true,
         guardSecondEvolution: true,
         guardBananaRepublic: true
-      };
-      applySettings3(def, reset);
-    }
-    function resetChallengeHelperSettings2(reset) {
-      let def = {
+      }
+    };
+  }
+  function computeChallengeHelperDefaults() {
+    return {
+      def: {
         inflationChallengeAssist: true,
         inflationChallengeSaveMinutes: 30,
         retirementChallengeAssist: true
-      };
-      applySettings3(def, reset);
-    }
-    function resetPrestigeSettings2(reset) {
-      let def = {
+      }
+    };
+  }
+  function computePrestigeDefaults() {
+    return {
+      def: {
         prestigeType: "none",
         prestigeMADIgnoreArpa: true,
         prestigeMADWait: true,
@@ -433,252 +615,32 @@
         prestigeDemonicPotential: 0.6,
         prestigeDemonicBomb: false,
         prestigeVaxStrat: "none"
-      };
-      applySettings3(def, reset);
-    }
-    function resetGovernmentSettings2(reset) {
-      let def = {
-        autoTax: false,
-        autoGovernment: false,
-        generalRequestedTaxRate: -1,
-        generalMinimumTaxRate: 20,
-        generalMinimumMorale: 105,
-        generalMaximumMorale: 500,
-        govInterim: GovernmentManager2.Types.democracy.id,
-        govFinal: GovernmentManager2.Types.technocracy.id,
-        govSpace: GovernmentManager2.Types.corpocracy.id,
-        govGovernor: "none"
-      };
-      applySettings3(def, reset);
-    }
-    function resetAuthoritySettings2(reset) {
-      const def = {
+      }
+    };
+  }
+  function computeAuthorityDefaults() {
+    return {
+      def: {
         authorityManage: true,
         generalMinimumAuthority: 100,
         generalAuthorityMinPatrolPercent: 40,
         buildingWeightingAuthority: 10
-      };
-      applySettings3(def, reset);
-    }
-    function resetEvolutionSettings2(reset) {
-      let def = {
-        autoEvolution: false,
-        userUniverseTargetName: "none",
-        userPlanetTargetName: "none",
-        userEvolutionTarget: "auto",
-        userEvolutionGenus: "fungi",
-        evolutionQueue: [],
-        evolutionQueueEnabled: false,
-        evolutionQueueRepeat: false,
-        evolutionAutoUnbound: true,
-        evolutionBackup: false
-      };
-      challenges2.forEach((set) => def["challenge_" + set[0].id] = false);
-      applySettings3(def, reset);
-    }
-    function resetResearchSettings2(reset) {
-      let def = {
+      }
+    };
+  }
+  function computeResearchDefaults() {
+    return {
+      def: {
         autoResearch: false,
         userResearchTheology_1: "auto",
         userResearchTheology_2: "auto",
         researchIgnore: ["tech-purify"]
-      };
-      applySettings3(def, reset);
-    }
-    function resetMarketSettings2(reset) {
-      MarketManager2.priorityList = Object.values(resources2).filter((r) => r.is.tradable).reverse();
-      let def = {
-        autoMarket: false,
-        autoGalaxyMarket: false,
-        tradeRouteMinimumMoneyPerSecond: 500,
-        tradeRouteMinimumMoneyPercentage: 50,
-        tradeRouteSellExcess: true,
-        minimumMoney: 0,
-        minimumMoneyPercentage: 0,
-        marketMinIngredients: 0
-      };
-      for (let i = 0; i < MarketManager2.priorityList.length; i++) {
-        let resource2 = MarketManager2.priorityList[i];
-        let id = resource2.id;
-        def["res_buy_p_" + id] = i;
-        def["buy" + id] = false;
-        def["res_buy_r_" + id] = 0.5;
-        def["sell" + id] = false;
-        def["res_sell_r_" + id] = 0.9;
-        def["res_trade_buy_" + id] = true;
-        def["res_trade_sell_" + id] = true;
-        def["res_trade_w_" + id] = 1;
-        def["res_trade_p_" + id] = 1;
       }
-      const setTradePriority = (priority, items) => items.forEach((id) => def["res_trade_p_" + id] = priority);
-      setTradePriority(1, ["Food"]);
-      setTradePriority(2, ["Helium_3", "Uranium", "Oil", "Coal"]);
-      setTradePriority(3, ["Stone", "Chrysotile", "Lumber"]);
-      setTradePriority(4, ["Aluminium", "Iron", "Copper"]);
-      setTradePriority(5, ["Furs"]);
-      setTradePriority(6, ["Cement"]);
-      setTradePriority(7, ["Steel"]);
-      setTradePriority(8, ["Titanium"]);
-      setTradePriority(9, ["Polymer", "Alloy"]);
-      setTradePriority(10, ["Iridium"]);
-      setTradePriority(-1, ["Crystal"]);
-      for (let i = 0; i < poly2.galaxyOffers.length; i++) {
-        let resource2 = resources2[poly2.galaxyOffers[i].buy.res];
-        let id = resource2.id;
-        def["res_galaxy_w_" + id] = 1;
-        def["res_galaxy_p_" + id] = i + 1;
-      }
-      applySettings3(def, reset);
-      MarketManager2.sortByPriority();
-    }
-    function resetStorageSettings2(reset) {
-      StorageManager2.priorityList = Object.values(resources2).filter((r) => r.hasStorage()).reverse();
-      let def = {
-        autoStorage: false,
-        storageLimitPreMad: true,
-        storageSafeReassign: true,
-        storageAssignExtra: true,
-        storageAssignPart: false
-      };
-      for (let i = 0; i < StorageManager2.priorityList.length; i++) {
-        let resource2 = StorageManager2.priorityList[i];
-        let id = resource2.id;
-        def["res_storage" + id] = true;
-        def["res_storage_p_" + id] = i;
-        def["res_storage_o_" + id] = false;
-        def["res_min_store" + id] = 1;
-        def["res_max_store" + id] = -1;
-      }
-      def["res_storage_o_" + resources2.Orichalcum.id] = true;
-      def["res_storage_o_" + resources2.Vitreloy.id] = true;
-      def["res_storage_o_" + resources2.Bolognium.id] = true;
-      applySettings3(def, reset);
-      StorageManager2.sortByPriority();
-    }
-    function resetMinorTraitSettings2(reset) {
-      MinorTraitManager2.priorityList = Object.entries(game2.traits).filter(
-        ([id, trait2]) => trait2.type === "minor" || id === "mastery" || id === "fortify"
-      ).map(([id, trait2]) => new MinorTrait2(id));
-      let def = {
-        autoMinorTrait: false,
-        shifterGenus: "ignore",
-        imitateRace: "ignore",
-        buildingShrineType: "know",
-        slaveIncome: 25e3,
-        jobScalePop: true,
-        psychicPower: "auto",
-        psychicBoostRes: "auto",
-        wishMinor: "none",
-        wishMajor: "none",
-        autoGenetics: false,
-        geneticsSequence: "none",
-        geneticsBoost: "none",
-        geneticsAssemble: "auto"
-      };
-      for (let i = 0; i < MinorTraitManager2.priorityList.length; i++) {
-        let trait2 = MinorTraitManager2.priorityList[i];
-        let id = trait2.traitName;
-        def["mTrait_" + id] = true;
-        def["mTrait_p_" + id] = i;
-        def["mTrait_w_" + id] = 1;
-      }
-      Object.values(ocularPowerData2).forEach((v) => {
-        def["ocularPower_" + v.id] = true;
-        def["ocularPower_p_" + v.id] = 100;
-      });
-      applySettings3(def, reset);
-      MinorTraitManager2.sortByPriority();
-    }
-    function resetMutableTraitSettings2(reset) {
-      let unobtainableTraits = ["xenophobic", "rigid", "soul_eater"];
-      MutableTraitManager2.priorityList = Object.entries(game2.traits).filter(
-        ([id, trait2]) => (trait2.type === "major" || trait2.type === "genus") && !unobtainableTraits.includes(id)
-      ).map(
-        ([id, trait2]) => trait2.type === "major" ? new MajorTrait2(id) : new GenusTrait2(id)
-      ).sort(
-        (a, b) => Object.keys(poly2.genus_traits).indexOf(a.genus) - Object.keys(poly2.genus_traits).indexOf(b.genus) || a.type < b.type
-      );
-      let def = {
-        autoMutateTraits: false,
-        doNotGoBelowPlasmidSoftcap: true,
-        minimumPlasmidsToPreserve: 0
-      };
-      for (let i = 0; i < MutableTraitManager2.priorityList.length; i++) {
-        let trait2 = MutableTraitManager2.priorityList[i];
-        let id = trait2.traitName;
-        def["mutableTrait_p_" + id] = i;
-        def["mutableTrait_purge_" + id] = false;
-        if (trait2.isGainable()) {
-          def["mutableTrait_gain_" + id] = false;
-        }
-        if (poly2.neg_roll_traits.includes(id)) {
-          def["mutableTrait_reset_" + id] = false;
-        }
-      }
-      applySettings3(def, reset);
-      MutableTraitManager2.sortByPriority();
-    }
-    function resetJobSettings2(reset) {
-      JobManager2.priorityList = Object.values(jobs2);
-      let def = {
-        autoJobs: false,
-        autoCraftsmen: false,
-        jobSetDefault: true,
-        jobManageServants: true,
-        jobLumberWeighting: 50,
-        jobQuarryWeighting: 50,
-        jobCrystalWeighting: 50,
-        jobScavengerWeighting: 5,
-        jobRaiderWeighting: 20,
-        jobForagerWeighting: 50,
-        jobDisableMiners: true
-      };
-      for (let i = 0; i < JobManager2.priorityList.length; i++) {
-        let job = JobManager2.priorityList[i];
-        let id = job._originalId;
-        def["job_" + id] = true;
-        def["job_p_" + id] = i;
-        if (job.is.smart) {
-          def["job_s_" + id] = true;
-        }
-      }
-      const setBreakpoints = (job, b1, b2, b3) => {
-        def["job_b1_" + job._originalId] = b1;
-        def["job_b2_" + job._originalId] = b2;
-        def["job_b3_" + job._originalId] = b3;
-      };
-      setBreakpoints(jobs2.Colonist, -1, -1, -1);
-      setBreakpoints(jobs2.Teamster, 10, -1, -1);
-      setBreakpoints(jobs2.Meditator, -1, -1, -1);
-      setBreakpoints(jobs2.Hunter, -1, -1, -1);
-      setBreakpoints(jobs2.Farmer, -1, -1, -1);
-      setBreakpoints(jobs2.Forager, 4, 10, 0);
-      setBreakpoints(jobs2.Lumberjack, 4, 10, 0);
-      setBreakpoints(jobs2.QuarryWorker, 4, 10, 0);
-      setBreakpoints(jobs2.CrystalMiner, 2, 5, 0);
-      setBreakpoints(jobs2.Scavenger, 0, 0, 0);
-      setBreakpoints(jobs2.TitanColonist, -1, -1, -1);
-      setBreakpoints(jobs2.PitMiner, 1, 12, -1);
-      setBreakpoints(jobs2.Miner, 3, 5, -1);
-      setBreakpoints(jobs2.CoalMiner, 2, 4, -1);
-      setBreakpoints(jobs2.CementWorker, 4, 8, -1);
-      setBreakpoints(jobs2.Professor, 6, 10, -1);
-      setBreakpoints(jobs2.Scientist, 3, 6, -1);
-      setBreakpoints(jobs2.Entertainer, 2, 5, -1);
-      setBreakpoints(jobs2.HellSurveyor, 1, 1, -1);
-      setBreakpoints(jobs2.SpaceMiner, 1, 3, -1);
-      setBreakpoints(jobs2.Torturer, 1, 1, -1);
-      setBreakpoints(jobs2.Archaeologist, 1, 1, -1);
-      setBreakpoints(jobs2.GhostTrapper, 1, 1, -1);
-      setBreakpoints(jobs2.ElysiumMiner, 1, 1, -1);
-      setBreakpoints(jobs2.Banker, 3, 5, -1);
-      setBreakpoints(jobs2.Priest, 0, 0, -1);
-      setBreakpoints(jobs2.Unemployed, 0, 0, 0);
-      applySettings3(def, reset);
-      JobManager2.sortByPriority();
-    }
-    function resetWeightingSettings2(reset) {
-      let def = {
+    };
+  }
+  function computeWeightingDefaults() {
+    return {
+      def: {
         buildingBuildIfStorageFull: false,
         buildingWeightingNew: 3,
         buildingWeightingUselessPowerPlant: 0.01,
@@ -707,319 +669,64 @@
         buildingWeightingInflationMoney: 2,
         buildingWeightingRetirementPrep: 10,
         buildingWeightingTruepathDigsite: 10
-      };
-      applySettings3(def, reset);
-    }
-    function resetBuildingSettings2(reset) {
-      initBuildingState2();
-      let def = {
-        autoBuild: false,
-        autoPower: false,
-        buildingsIgnoreZeroRate: false,
-        buildingsLimitPowered: true,
-        buildingTowerSuppression: 100,
-        buildingConsumptionCheck: "perResource",
-        buildingsTransportGem: false,
-        buildingsBestFreighter: false,
-        buildingsUseMultiClick: false,
-        buildingEnabledAll: true,
-        buildingStateAll: true
-      };
-      for (let i = 0; i < BuildingManager2.priorityList.length; i++) {
-        let building2 = BuildingManager2.priorityList[i];
-        let id = building2._vueBinding;
-        def["bat" + id] = true;
-        def["bld_p_" + id] = i;
-        def["bld_m_" + id] = -1;
-        def["bld_w_" + id] = 100;
-        if (building2.isSwitchable()) {
-          def["bld_s_" + id] = true;
-        }
-        if (building2.is.smart) {
-          def["bld_s2_" + id] = true;
-        }
       }
-      def["bld_s2_space-iridium_mine"] = false;
-      def["bld_s2_space-helium_mine"] = false;
-      [
-        "RedVrCenter",
-        "NeutronCitadel",
-        "PortalWarDroid",
-        "BadlandsPredatorDrone",
-        "PortalRepairDroid",
-        "SpireWaygate",
-        "TauRedContact",
-        "TauRedIntroduce",
-        "TauRedSubjugate",
-        "TauGasName1",
-        "TauGasName2",
-        "TauGasName3",
-        "TauGasName4",
-        "TauGasName5",
-        "TauGasName6",
-        "TauGasName7",
-        "TauGasName8",
-        "TauGas2Name1",
-        "TauGas2Name2",
-        "TauGas2Name3",
-        "TauGas2Name4",
-        "TauGas2Name5",
-        "TauGas2Name6",
-        "TauGas2Name7",
-        "TauGas2Name8"
-      ].forEach((b) => def["bat" + buildings2[b]._vueBinding] = false);
-      def["bld_m_" + buildings2.ForgeHorseshoe._vueBinding] = 20;
-      def["bld_m_" + buildings2.RedForgeHorseshoe._vueBinding] = 20;
-      def["bld_m_" + buildings2.TauForgeHorseshoe._vueBinding] = 20;
-      def["bld_m_" + buildings2.BeltEleriumShip._vueBinding] = 15;
-      def["bld_m_" + buildings2.BeltIridiumShip._vueBinding] = 15;
-      applySettings3(def, reset);
-      BuildingManager2.sortByPriority();
-    }
-    function resetProjectSettings2(reset) {
-      ProjectManager2.priorityList = Object.values(projects2);
-      let def = {
-        autoARPA: false,
-        arpaScaleWeighting: true,
-        arpaStep: 5
-      };
-      let projectPriority = 0;
-      const setProject = (item, autoBuildEnabled, _autoMax, _weighting) => {
-        let id = projects2[item].id;
-        def["arpa_" + id] = autoBuildEnabled;
-        def["arpa_p_" + id] = projectPriority++;
-        def["arpa_m_" + id] = _autoMax;
-        def["arpa_w_" + id] = _weighting;
-      };
-      setProject("LaunchFacility", true, -1, 100);
-      setProject("SuperCollider", true, -1, 5);
-      setProject("StockExchange", true, -1, 0.5);
-      setProject("Monument", true, -1, 1);
-      setProject("Railway", true, -1, 0.1);
-      setProject("Nexus", true, -1, 1);
-      setProject("RoidEject", true, -1, 1);
-      setProject("ManaSyphon", false, 79, 1);
-      setProject("Depot", true, -1, 1);
-      applySettings3(def, reset);
-      ProjectManager2.sortByPriority();
-    }
-    function resetMagicSettings2(reset) {
-      AlchemyManager2.priorityList = Object.values(resources2).filter(
-        (r) => AlchemyManager2.transmuteTier(r) > 0
-      );
-      let def = {
-        autoAlchemy: false,
-        autoPylon: false,
-        magicFullmetalHelper: true,
-        magicAlchemyManaUse: 0.5,
-        productionRitualManaUse: 0.5,
-        productionRitualSafe: true
-      };
-      for (let i = 0; i < AlchemyManager2.priorityList.length; i++) {
-        let resource2 = AlchemyManager2.priorityList[i];
-        let id = resource2.id;
-        def["res_alchemy_" + id] = true;
-        def["res_alchemy_w_" + id] = 0;
-      }
-      for (let spell of Object.values(RitualManager2.Productions)) {
-        def["spell_w_" + spell.id] = 100;
-      }
-      def["spell_w_hunting"] = 10;
-      def["spell_w_farmer"] = 1;
-      applySettings3(def, reset);
-    }
-    function resetProductionSettings2(reset) {
-      let def = {
-        autoQuarry: false,
-        autoMine: false,
-        autoExtractor: false,
-        autoGraphenePlant: false,
-        autoSmelter: false,
-        autoCraft: false,
-        autoFactory: false,
-        autoMiningDroid: false,
-        autoReplicator: false,
-        productionChrysotileWeight: 2,
-        productionAdamantiteWeight: 1,
-        productionExtWeight_common: 1,
-        productionExtWeight_uncommon: 1,
-        productionExtWeight_rare: 1,
-        productionFoundryWeighting: "demanded",
-        productionCraftsmen: "nocraft",
-        productionSmelting: "required",
-        productionSmeltingIridium: 0.5,
-        productionFactoryWeighting: "none",
-        productionFactoryMinIngredients: 0,
-        productionFactoryFocusMaterials: false,
-        replicatorAssignGovernorTask: true,
-        replicatorWeightingMode: "mass"
-      };
-      const setFoundryProduct = (item, autoCraftEnabled, crafterEnabled, craftWeighting, craftPreserve) => {
-        let id = resources2[item].id;
-        def["craft" + id] = autoCraftEnabled;
-        def["job_" + id] = crafterEnabled;
-        def["foundry_w_" + id] = craftWeighting;
-        def["foundry_p_" + id] = craftPreserve;
-      };
-      setFoundryProduct("Plywood", true, true, 1, 0);
-      setFoundryProduct("Brick", true, true, 1, 0);
-      setFoundryProduct("Wrought_Iron", true, true, 1, 0);
-      setFoundryProduct("Sheet_Metal", true, true, 2, 0);
-      setFoundryProduct("Mythril", true, true, 3, 0);
-      setFoundryProduct("Aerogel", true, true, 3, 0);
-      setFoundryProduct("Nanoweave", true, true, 10, 0);
-      setFoundryProduct("Scarletite", true, true, 1, 0);
-      setFoundryProduct("Quantium", true, true, 1, 0);
-      Object.values(SmelterManager2.Fuels).forEach((fuel, i) => {
-        def["smelter_fuel_p_" + fuel.id] = i;
-      });
-      const setFactoryProduct = (item, enabled, weighting, priority) => {
-        let id = FactoryManager2.Productions[item].resource.id;
-        def["production_" + id] = enabled;
-        def["production_w_" + id] = weighting;
-        def["production_p_" + id] = priority;
-      };
-      setFactoryProduct("LuxuryGoods", true, 1, 2);
-      setFactoryProduct("Furs", true, 1, 1);
-      setFactoryProduct("Alloy", true, 1, 3);
-      setFactoryProduct("Polymer", true, 1, 3);
-      setFactoryProduct("NanoTube", true, 4, 3);
-      setFactoryProduct("Stanene", true, 4, 3);
-      const setDroidProduct = (item, weighting, priority) => {
-        let id = DroidManager2.Productions[item].resource.id;
-        def["droid_w_" + id] = weighting;
-        def["droid_pr_" + id] = priority;
-      };
-      setDroidProduct("Adamantite", 15, 1);
-      setDroidProduct("Aluminium", 1, 1);
-      setDroidProduct("Uranium", 5, -1);
-      setDroidProduct("Coal", 5, -1);
-      const setReplicatorProduct = (item, enabled, weighting, priority) => {
-        let id = ReplicatorManager2.Productions[item].id;
-        def["replicator_" + id] = enabled;
-        def["replicator_w_" + id] = weighting;
-        def["replicator_p_" + id] = priority;
-      };
-      Object.values(ReplicatorManager2.Productions).forEach(
-        (production) => setReplicatorProduct(production.id, true, 1, 1)
-      );
-      applySettings3(def, reset);
-    }
-    function resetTriggerSettings2(reset) {
-      let def = {
-        autoTrigger: false
-      };
-      if (reset || !settingsRaw2.hasOwnProperty("autoTrigger")) {
-        TriggerManager2.priorityList = [];
-        TriggerManager2.AddTrigger(
-          "BuildingCount",
-          "space-moon_mission",
-          1,
-          "build",
-          "space-moon_base",
-          1
-        );
-        TriggerManager2.AddTrigger(
-          "BuildingCount",
-          "space-moon_base",
-          1,
-          "build",
-          "space-iridium_mine",
-          1
-        );
-        TriggerManager2.AddTrigger(
-          "BuildingCount",
-          "space-moon_base",
-          1,
-          "build",
-          "space-helium_mine",
-          1
-        );
-        settingsRaw2.triggers = JSON.parse(
-          JSON.stringify(TriggerManager2.priorityList)
-        );
-      }
-      applySettings3(def, reset);
-    }
-    function resetLoggingSettings2(reset) {
-      let def = {
-        hellTurnOffLogMessages: true,
-        logFilter: "",
-        logEnabled: true
-      };
-      Object.keys(GameLog2.Types).forEach((id) => def["log_" + id] = true);
-      def["log_mercenary"] = false;
-      def["log_multi_construction"] = false;
-      def["log_prestige"] = false;
-      def["log_prestige_format"] = "Reset: {resetType}, Species: {species}, Duration: {timeStamp} days";
-      applySettings3(def, reset);
-    }
-    function resetPlanetSettings2(reset) {
-      let def = {};
-      biomeList2.forEach(
-        (biome) => def["biome_w_" + biome] = (planetBiomes2.length - planetBiomes2.indexOf(biome)) * 10
-      );
-      traitList2.forEach(
-        (trait2) => def["trait_w_" + trait2] = (planetTraits2.length - planetTraits2.indexOf(trait2)) * 10
-      );
-      extraList2.forEach((extra) => def["extra_w_" + extra] = 0);
-      def["extra_w_Achievement"] = 1e3;
-      applySettings3(def, reset);
-    }
-    function resetFleetSettings2(reset) {
-      let def = {
-        autoFleet: false,
-        fleetOuterCrew: 30,
-        fleetOuterShips: "custom",
-        fleetExploreTau: true,
-        fleetMaxCover: true,
-        fleetCrewReclaim: true,
-        fleetEmbassyKnowledge: 6e6,
-        fleetAlienGiftKnowledge: 65e5,
-        fleetAlien2Knowledge: 8e6,
-        fleetAlien2Loses: "none",
-        fleetChthonianLoses: "low",
-        // Default combat ship
-        fleet_outer_class: "destroyer",
-        fleet_outer_armor: "neutronium",
-        fleet_outer_weapon: "plasma",
-        fleet_outer_engine: "ion",
-        fleet_outer_power: "fission",
-        fleet_outer_sensor: "lidar",
-        // Default scout ship
-        fleet_scout_class: "corvette",
-        fleet_scout_armor: "neutronium",
-        fleet_scout_weapon: "plasma",
-        fleet_scout_engine: "tie",
-        fleet_scout_power: "fusion",
-        fleet_scout_sensor: "quantum",
-        // Default andromeda regions priority
-        fleet_pr_gxy_stargate: 0,
-        fleet_pr_gxy_alien2: 1,
-        fleet_pr_gxy_alien1: 2,
-        fleet_pr_gxy_chthonian: 3,
-        fleet_pr_gxy_gateway: 4,
-        fleet_pr_gxy_gorddon: 5
-      };
-      const setOuterRegion = (id, weighting, protect, scouts) => {
-        def["fleet_outer_pr_" + id] = weighting;
-        def["fleet_outer_def_" + id] = protect;
-        def["fleet_outer_sc_" + id] = scouts;
-      };
-      setOuterRegion("spc_moon", 1, 0.9, 0);
-      setOuterRegion("spc_red", 3, 0.9, 0);
-      setOuterRegion("spc_gas", 0, 0.9, 0);
-      setOuterRegion("spc_gas_moon", 0, 0.9, 0);
-      setOuterRegion("spc_belt", 1, 0.9, 0);
-      setOuterRegion("spc_titan", 5, 0.9, 1);
-      setOuterRegion("spc_enceladus", 3, 0.9, 1);
-      setOuterRegion("spc_triton", 10, 0.95, 2);
-      setOuterRegion("spc_kuiper", 5, 0.9, 2);
-      setOuterRegion("spc_eris", 100, 0.01, 1);
-      applySettings3(def, reset);
-    }
-    function resetMechSettings2(reset) {
-      let def = {
+    };
+  }
+  function computeFleetDefaults() {
+    const def = {
+      autoFleet: false,
+      fleetOuterCrew: 30,
+      fleetOuterShips: "custom",
+      fleetExploreTau: true,
+      fleetMaxCover: true,
+      fleetCrewReclaim: true,
+      fleetEmbassyKnowledge: 6e6,
+      fleetAlienGiftKnowledge: 65e5,
+      fleetAlien2Knowledge: 8e6,
+      fleetAlien2Loses: "none",
+      fleetChthonianLoses: "low",
+      // Default combat ship
+      fleet_outer_class: "destroyer",
+      fleet_outer_armor: "neutronium",
+      fleet_outer_weapon: "plasma",
+      fleet_outer_engine: "ion",
+      fleet_outer_power: "fission",
+      fleet_outer_sensor: "lidar",
+      // Default scout ship
+      fleet_scout_class: "corvette",
+      fleet_scout_armor: "neutronium",
+      fleet_scout_weapon: "plasma",
+      fleet_scout_engine: "tie",
+      fleet_scout_power: "fusion",
+      fleet_scout_sensor: "quantum",
+      // Default andromeda regions priority
+      fleet_pr_gxy_stargate: 0,
+      fleet_pr_gxy_alien2: 1,
+      fleet_pr_gxy_alien1: 2,
+      fleet_pr_gxy_chthonian: 3,
+      fleet_pr_gxy_gateway: 4,
+      fleet_pr_gxy_gorddon: 5
+    };
+    const setOuterRegion = (id, weighting, protect, scouts) => {
+      def["fleet_outer_pr_" + id] = weighting;
+      def["fleet_outer_def_" + id] = protect;
+      def["fleet_outer_sc_" + id] = scouts;
+    };
+    setOuterRegion("spc_moon", 1, 0.9, 0);
+    setOuterRegion("spc_red", 3, 0.9, 0);
+    setOuterRegion("spc_gas", 0, 0.9, 0);
+    setOuterRegion("spc_gas_moon", 0, 0.9, 0);
+    setOuterRegion("spc_belt", 1, 0.9, 0);
+    setOuterRegion("spc_titan", 5, 0.9, 1);
+    setOuterRegion("spc_enceladus", 3, 0.9, 1);
+    setOuterRegion("spc_triton", 10, 0.95, 2);
+    setOuterRegion("spc_kuiper", 5, 0.9, 2);
+    setOuterRegion("spc_eris", 100, 0.01, 1);
+    return { def };
+  }
+  function computeMechDefaults() {
+    return {
+      def: {
         autoMech: false,
         mechScrap: "mixed",
         mechScrapEfficiency: 1.5,
@@ -1038,75 +745,496 @@
         buildingMechsFirst: true,
         mechBaysFirst: true,
         mechWaygatePotential: 0.4
-      };
-      applySettings3(def, reset);
-    }
-    function resetEjectorSettings2(reset) {
-      if (game2.global.race.universe === "magic") {
-        EjectManager2.priorityList = Object.values(resources2).filter((r) => EjectManager2.isConsumable(r)).sort((a, b) => b.atomicMass - a.atomicMass);
-      } else {
-        EjectManager2.priorityList = Object.values(resources2).filter(
-          (r) => EjectManager2.isConsumable(r) && r !== resources2.Elerium && r !== resources2.Infernite
-        ).sort((a, b) => b.atomicMass - a.atomicMass);
-        EjectManager2.priorityList.unshift(resources2.Infernite);
-        EjectManager2.priorityList.unshift(resources2.Elerium);
       }
-      SupplyManager2.priorityList = Object.values(resources2).filter((r) => SupplyManager2.isConsumable(r)).sort(
-        (a, b) => SupplyManager2.supplyIn(b.id) - SupplyManager2.supplyIn(a.id)
-      );
-      NaniteManager2.priorityList = Object.values(resources2).filter((r) => NaniteManager2.isConsumable(r)).sort((a, b) => b.atomicMass - a.atomicMass);
-      let def = {
-        autoEject: false,
-        autoSupply: false,
-        autoNanite: false,
-        ejectMode: "cap",
-        supplyMode: "mixed",
-        naniteMode: "full",
-        prestigeWhiteholeStabiliseMass: true,
-        prestigeWhiteholeStabiliseCooldown: 120
-      };
-      for (let resource2 of EjectManager2.priorityList) {
-        def["res_eject" + resource2.id] = resource2.is.tradable ?? false;
-      }
-      for (let resource2 of SupplyManager2.priorityList) {
-        def["res_supply" + resource2.id] = resource2.is.tradable ?? false;
-      }
-      for (let resource2 of NaniteManager2.priorityList) {
-        def["res_nanite" + resource2.id] = resource2.is.tradable ?? false;
-      }
-      def["res_eject" + resources2.Elerium.id] = true;
-      def["res_eject" + resources2.Infernite.id] = true;
-      applySettings3(def, reset);
-    }
+    };
+  }
+  function computeGovernmentDefaults(context) {
     return {
-      resetWarSettings: resetWarSettings2,
-      resetHellSettings: resetHellSettings2,
-      resetGeneralSettings: resetGeneralSettings2,
-      resetInterfaceSettings: resetInterfaceSettings2,
-      resetStateLogSettings: resetStateLogSettings2,
-      resetAchievementGuardSettings: resetAchievementGuardSettings2,
-      resetChallengeHelperSettings: resetChallengeHelperSettings2,
-      resetPrestigeSettings: resetPrestigeSettings2,
-      resetGovernmentSettings: resetGovernmentSettings2,
-      resetAuthoritySettings: resetAuthoritySettings2,
-      resetEvolutionSettings: resetEvolutionSettings2,
-      resetResearchSettings: resetResearchSettings2,
-      resetMarketSettings: resetMarketSettings2,
-      resetStorageSettings: resetStorageSettings2,
-      resetMinorTraitSettings: resetMinorTraitSettings2,
-      resetMutableTraitSettings: resetMutableTraitSettings2,
-      resetJobSettings: resetJobSettings2,
-      resetWeightingSettings: resetWeightingSettings2,
-      resetBuildingSettings: resetBuildingSettings2,
-      resetProjectSettings: resetProjectSettings2,
-      resetMagicSettings: resetMagicSettings2,
-      resetProductionSettings: resetProductionSettings2,
-      resetTriggerSettings: resetTriggerSettings2,
-      resetLoggingSettings: resetLoggingSettings2,
-      resetPlanetSettings: resetPlanetSettings2,
-      resetFleetSettings: resetFleetSettings2,
-      resetMechSettings: resetMechSettings2,
-      resetEjectorSettings: resetEjectorSettings2
+      def: {
+        autoTax: false,
+        autoGovernment: false,
+        generalRequestedTaxRate: -1,
+        generalMinimumTaxRate: 20,
+        generalMinimumMorale: 105,
+        generalMaximumMorale: 500,
+        govInterim: context.democracyId,
+        govFinal: context.technocracyId,
+        govSpace: context.corpocracyId,
+        govGovernor: "none"
+      }
+    };
+  }
+  function computeEvolutionDefaults(context) {
+    const def = {
+      autoEvolution: false,
+      userUniverseTargetName: "none",
+      userPlanetTargetName: "none",
+      userEvolutionTarget: "auto",
+      userEvolutionGenus: "fungi",
+      evolutionQueue: [],
+      evolutionQueueEnabled: false,
+      evolutionQueueRepeat: false,
+      evolutionAutoUnbound: true,
+      evolutionBackup: false
+    };
+    context.challengeIds.forEach((id) => def["challenge_" + id] = false);
+    return { def };
+  }
+  function computeLoggingDefaults(context) {
+    const def = {
+      hellTurnOffLogMessages: true,
+      logFilter: "",
+      logEnabled: true
+    };
+    context.gameLogTypeIds.forEach((id) => def["log_" + id] = true);
+    def["log_mercenary"] = false;
+    def["log_multi_construction"] = false;
+    def["log_prestige"] = false;
+    def["log_prestige_format"] = "Reset: {resetType}, Species: {species}, Duration: {timeStamp} days";
+    return { def };
+  }
+  function computePlanetDefaults(context) {
+    const { biomeList: biomeList2, planetBiomes: planetBiomes2, traitList: traitList2, planetTraits: planetTraits2, extraList: extraList2 } = context;
+    const def = {};
+    biomeList2.forEach(
+      (biome) => def["biome_w_" + biome] = (planetBiomes2.length - planetBiomes2.indexOf(biome)) * 10
+    );
+    traitList2.forEach(
+      (trait2) => def["trait_w_" + trait2] = (planetTraits2.length - planetTraits2.indexOf(trait2)) * 10
+    );
+    extraList2.forEach((extra) => def["extra_w_" + extra] = 0);
+    def["extra_w_Achievement"] = 1e3;
+    return { def };
+  }
+  function computeMarketDefaults(context) {
+    const priorityIds = [...context.tradableResourceIds].reverse();
+    const def = {
+      autoMarket: false,
+      autoGalaxyMarket: false,
+      tradeRouteMinimumMoneyPerSecond: 500,
+      tradeRouteMinimumMoneyPercentage: 50,
+      tradeRouteSellExcess: true,
+      minimumMoney: 0,
+      minimumMoneyPercentage: 0,
+      marketMinIngredients: 0
+    };
+    priorityIds.forEach((id, i) => {
+      def["res_buy_p_" + id] = i;
+      def["buy" + id] = false;
+      def["res_buy_r_" + id] = 0.5;
+      def["sell" + id] = false;
+      def["res_sell_r_" + id] = 0.9;
+      def["res_trade_buy_" + id] = true;
+      def["res_trade_sell_" + id] = true;
+      def["res_trade_w_" + id] = 1;
+      def["res_trade_p_" + id] = 1;
+    });
+    const setTradePriority = (priority, items) => items.forEach((id) => def["res_trade_p_" + id] = priority);
+    setTradePriority(1, ["Food"]);
+    setTradePriority(2, ["Helium_3", "Uranium", "Oil", "Coal"]);
+    setTradePriority(3, ["Stone", "Chrysotile", "Lumber"]);
+    setTradePriority(4, ["Aluminium", "Iron", "Copper"]);
+    setTradePriority(5, ["Furs"]);
+    setTradePriority(6, ["Cement"]);
+    setTradePriority(7, ["Steel"]);
+    setTradePriority(8, ["Titanium"]);
+    setTradePriority(9, ["Polymer", "Alloy"]);
+    setTradePriority(10, ["Iridium"]);
+    setTradePriority(-1, ["Crystal"]);
+    context.galaxyOfferResourceIds.forEach((id, i) => {
+      def["res_galaxy_w_" + id] = 1;
+      def["res_galaxy_p_" + id] = i + 1;
+    });
+    return {
+      def,
+      priorityOrders: [{ manager: "market", ids: priorityIds, sort: true }]
+    };
+  }
+  function computeStorageDefaults(context) {
+    const priorityIds = [...context.storableResourceIds].reverse();
+    const def = {
+      autoStorage: false,
+      storageLimitPreMad: true,
+      storageSafeReassign: true,
+      storageAssignExtra: true,
+      storageAssignPart: false
+    };
+    priorityIds.forEach((id, i) => {
+      def["res_storage" + id] = true;
+      def["res_storage_p_" + id] = i;
+      def["res_storage_o_" + id] = false;
+      def["res_min_store" + id] = 1;
+      def["res_max_store" + id] = -1;
+    });
+    def["res_storage_o_" + context.orichalcumId] = true;
+    def["res_storage_o_" + context.vitreloyId] = true;
+    def["res_storage_o_" + context.bolognumId] = true;
+    return {
+      def,
+      priorityOrders: [{ manager: "storage", ids: priorityIds, sort: true }]
+    };
+  }
+  function computeMinorTraitDefaults(context) {
+    const def = {
+      autoMinorTrait: false,
+      shifterGenus: "ignore",
+      imitateRace: "ignore",
+      buildingShrineType: "know",
+      slaveIncome: 25e3,
+      jobScalePop: true,
+      psychicPower: "auto",
+      psychicBoostRes: "auto",
+      wishMinor: "none",
+      wishMajor: "none",
+      autoGenetics: false,
+      geneticsSequence: "none",
+      geneticsBoost: "none",
+      geneticsAssemble: "auto"
+    };
+    context.traitNames.forEach((id, i) => {
+      def["mTrait_" + id] = true;
+      def["mTrait_p_" + id] = i;
+      def["mTrait_w_" + id] = 1;
+    });
+    context.ocularPowerIds.forEach((id) => {
+      def["ocularPower_" + id] = true;
+      def["ocularPower_p_" + id] = 100;
+    });
+    return {
+      def,
+      priorityOrders: [
+        { manager: "minorTrait", ids: context.traitNames, sort: true }
+      ]
+    };
+  }
+  function computeMutableTraitDefaults(context) {
+    const { genusOrder } = context;
+    const sorted = [...context.traits].sort((a, b) => {
+      const byGenus = genusOrder.indexOf(a.genus) - genusOrder.indexOf(b.genus);
+      return byGenus || (a.type < b.type ? 1 : 0);
+    });
+    const def = {
+      autoMutateTraits: false,
+      doNotGoBelowPlasmidSoftcap: true,
+      minimumPlasmidsToPreserve: 0
+    };
+    sorted.forEach((trait2, i) => {
+      const id = trait2.traitName;
+      def["mutableTrait_p_" + id] = i;
+      def["mutableTrait_purge_" + id] = false;
+      if (trait2.isGainable) {
+        def["mutableTrait_gain_" + id] = false;
+      }
+      if (trait2.isNegRoll) {
+        def["mutableTrait_reset_" + id] = false;
+      }
+    });
+    return {
+      def,
+      priorityOrders: [
+        {
+          manager: "mutableTrait",
+          ids: sorted.map((trait2) => trait2.traitName),
+          sort: true
+        }
+      ]
+    };
+  }
+  function computeJobDefaults(context) {
+    const priorityIds = context.jobs.map((job) => job.originalId);
+    const originalIdByKey = {};
+    context.jobs.forEach((job) => originalIdByKey[job.key] = job.originalId);
+    const def = {
+      autoJobs: false,
+      autoCraftsmen: false,
+      jobSetDefault: true,
+      jobManageServants: true,
+      jobLumberWeighting: 50,
+      jobQuarryWeighting: 50,
+      jobCrystalWeighting: 50,
+      jobScavengerWeighting: 5,
+      jobRaiderWeighting: 20,
+      jobForagerWeighting: 50,
+      jobDisableMiners: true
+    };
+    context.jobs.forEach((job, i) => {
+      const id = job.originalId;
+      def["job_" + id] = true;
+      def["job_p_" + id] = i;
+      if (job.isSmart) {
+        def["job_s_" + id] = true;
+      }
+    });
+    const setBreakpoints = (key, b1, b2, b3) => {
+      const originalId = originalIdByKey[key];
+      def["job_b1_" + originalId] = b1;
+      def["job_b2_" + originalId] = b2;
+      def["job_b3_" + originalId] = b3;
+    };
+    setBreakpoints("Colonist", -1, -1, -1);
+    setBreakpoints("Teamster", 10, -1, -1);
+    setBreakpoints("Meditator", -1, -1, -1);
+    setBreakpoints("Hunter", -1, -1, -1);
+    setBreakpoints("Farmer", -1, -1, -1);
+    setBreakpoints("Forager", 4, 10, 0);
+    setBreakpoints("Lumberjack", 4, 10, 0);
+    setBreakpoints("QuarryWorker", 4, 10, 0);
+    setBreakpoints("CrystalMiner", 2, 5, 0);
+    setBreakpoints("Scavenger", 0, 0, 0);
+    setBreakpoints("TitanColonist", -1, -1, -1);
+    setBreakpoints("PitMiner", 1, 12, -1);
+    setBreakpoints("Miner", 3, 5, -1);
+    setBreakpoints("CoalMiner", 2, 4, -1);
+    setBreakpoints("CementWorker", 4, 8, -1);
+    setBreakpoints("Professor", 6, 10, -1);
+    setBreakpoints("Scientist", 3, 6, -1);
+    setBreakpoints("Entertainer", 2, 5, -1);
+    setBreakpoints("HellSurveyor", 1, 1, -1);
+    setBreakpoints("SpaceMiner", 1, 3, -1);
+    setBreakpoints("Torturer", 1, 1, -1);
+    setBreakpoints("Archaeologist", 1, 1, -1);
+    setBreakpoints("GhostTrapper", 1, 1, -1);
+    setBreakpoints("ElysiumMiner", 1, 1, -1);
+    setBreakpoints("Banker", 3, 5, -1);
+    setBreakpoints("Priest", 0, 0, -1);
+    setBreakpoints("Unemployed", 0, 0, 0);
+    return {
+      def,
+      priorityOrders: [{ manager: "job", ids: priorityIds, sort: true }]
+    };
+  }
+  function computeBuildingDefaults(context) {
+    const { bindingByKey } = context;
+    const def = {
+      autoBuild: false,
+      autoPower: false,
+      buildingsIgnoreZeroRate: false,
+      buildingsLimitPowered: true,
+      buildingTowerSuppression: 100,
+      buildingConsumptionCheck: "perResource",
+      buildingsTransportGem: false,
+      buildingsBestFreighter: false,
+      buildingsUseMultiClick: false,
+      buildingEnabledAll: true,
+      buildingStateAll: true
+    };
+    context.buildings.forEach((building2, i) => {
+      const id = building2.binding;
+      def["bat" + id] = true;
+      def["bld_p_" + id] = i;
+      def["bld_m_" + id] = -1;
+      def["bld_w_" + id] = 100;
+      if (building2.switchable) {
+        def["bld_s_" + id] = true;
+      }
+      if (building2.smart) {
+        def["bld_s2_" + id] = true;
+      }
+    });
+    def["bld_s2_space-iridium_mine"] = false;
+    def["bld_s2_space-helium_mine"] = false;
+    [
+      "RedVrCenter",
+      "NeutronCitadel",
+      "PortalWarDroid",
+      "BadlandsPredatorDrone",
+      "PortalRepairDroid",
+      "SpireWaygate",
+      "TauRedContact",
+      "TauRedIntroduce",
+      "TauRedSubjugate",
+      "TauGasName1",
+      "TauGasName2",
+      "TauGasName3",
+      "TauGasName4",
+      "TauGasName5",
+      "TauGasName6",
+      "TauGasName7",
+      "TauGasName8",
+      "TauGas2Name1",
+      "TauGas2Name2",
+      "TauGas2Name3",
+      "TauGas2Name4",
+      "TauGas2Name5",
+      "TauGas2Name6",
+      "TauGas2Name7",
+      "TauGas2Name8"
+    ].forEach((b) => def["bat" + bindingByKey[b]] = false);
+    def["bld_m_" + bindingByKey.ForgeHorseshoe] = 20;
+    def["bld_m_" + bindingByKey.RedForgeHorseshoe] = 20;
+    def["bld_m_" + bindingByKey.TauForgeHorseshoe] = 20;
+    def["bld_m_" + bindingByKey.BeltEleriumShip] = 15;
+    def["bld_m_" + bindingByKey.BeltIridiumShip] = 15;
+    return { def };
+  }
+  function computeProjectDefaults(context) {
+    const { idByKey } = context;
+    const def = {
+      autoARPA: false,
+      arpaScaleWeighting: true,
+      arpaStep: 5
+    };
+    let projectPriority = 0;
+    const setProject = (key, autoBuildEnabled, autoMax, weighting) => {
+      const id = idByKey[key];
+      def["arpa_" + id] = autoBuildEnabled;
+      def["arpa_p_" + id] = projectPriority++;
+      def["arpa_m_" + id] = autoMax;
+      def["arpa_w_" + id] = weighting;
+    };
+    setProject("LaunchFacility", true, -1, 100);
+    setProject("SuperCollider", true, -1, 5);
+    setProject("StockExchange", true, -1, 0.5);
+    setProject("Monument", true, -1, 1);
+    setProject("Railway", true, -1, 0.1);
+    setProject("Nexus", true, -1, 1);
+    setProject("RoidEject", true, -1, 1);
+    setProject("ManaSyphon", false, 79, 1);
+    setProject("Depot", true, -1, 1);
+    return {
+      def,
+      priorityOrders: [
+        { manager: "project", ids: context.projectIds, sort: true }
+      ]
+    };
+  }
+  function computeMagicDefaults(context) {
+    const def = {
+      autoAlchemy: false,
+      autoPylon: false,
+      magicFullmetalHelper: true,
+      magicAlchemyManaUse: 0.5,
+      productionRitualManaUse: 0.5,
+      productionRitualSafe: true
+    };
+    context.alchemyResourceIds.forEach((id) => {
+      def["res_alchemy_" + id] = true;
+      def["res_alchemy_w_" + id] = 0;
+    });
+    context.ritualProductionIds.forEach((id) => {
+      def["spell_w_" + id] = 100;
+    });
+    def["spell_w_hunting"] = 10;
+    def["spell_w_farmer"] = 1;
+    return {
+      def,
+      priorityOrders: [
+        { manager: "alchemy", ids: context.alchemyResourceIds, sort: false }
+      ]
+    };
+  }
+  function computeProductionDefaults(context) {
+    const def = {
+      autoQuarry: false,
+      autoMine: false,
+      autoExtractor: false,
+      autoGraphenePlant: false,
+      autoSmelter: false,
+      autoCraft: false,
+      autoFactory: false,
+      autoMiningDroid: false,
+      autoReplicator: false,
+      productionChrysotileWeight: 2,
+      productionAdamantiteWeight: 1,
+      productionExtWeight_common: 1,
+      productionExtWeight_uncommon: 1,
+      productionExtWeight_rare: 1,
+      productionFoundryWeighting: "demanded",
+      productionCraftsmen: "nocraft",
+      productionSmelting: "required",
+      productionSmeltingIridium: 0.5,
+      productionFactoryWeighting: "none",
+      productionFactoryMinIngredients: 0,
+      productionFactoryFocusMaterials: false,
+      replicatorAssignGovernorTask: true,
+      replicatorWeightingMode: "mass"
+    };
+    const setFoundryProduct = (key, autoCraftEnabled, crafterEnabled, craftWeighting, craftPreserve) => {
+      const id = context.foundryResourceIdByKey[key];
+      def["craft" + id] = autoCraftEnabled;
+      def["job_" + id] = crafterEnabled;
+      def["foundry_w_" + id] = craftWeighting;
+      def["foundry_p_" + id] = craftPreserve;
+    };
+    setFoundryProduct("Plywood", true, true, 1, 0);
+    setFoundryProduct("Brick", true, true, 1, 0);
+    setFoundryProduct("Wrought_Iron", true, true, 1, 0);
+    setFoundryProduct("Sheet_Metal", true, true, 2, 0);
+    setFoundryProduct("Mythril", true, true, 3, 0);
+    setFoundryProduct("Aerogel", true, true, 3, 0);
+    setFoundryProduct("Nanoweave", true, true, 10, 0);
+    setFoundryProduct("Scarletite", true, true, 1, 0);
+    setFoundryProduct("Quantium", true, true, 1, 0);
+    context.smelterFuelIds.forEach((id, i) => {
+      def["smelter_fuel_p_" + id] = i;
+    });
+    const setFactoryProduct = (key, enabled, weighting, priority) => {
+      const id = context.factoryResourceIdByKey[key];
+      def["production_" + id] = enabled;
+      def["production_w_" + id] = weighting;
+      def["production_p_" + id] = priority;
+    };
+    setFactoryProduct("LuxuryGoods", true, 1, 2);
+    setFactoryProduct("Furs", true, 1, 1);
+    setFactoryProduct("Alloy", true, 1, 3);
+    setFactoryProduct("Polymer", true, 1, 3);
+    setFactoryProduct("NanoTube", true, 4, 3);
+    setFactoryProduct("Stanene", true, 4, 3);
+    const setDroidProduct = (key, weighting, priority) => {
+      const id = context.droidResourceIdByKey[key];
+      def["droid_w_" + id] = weighting;
+      def["droid_pr_" + id] = priority;
+    };
+    setDroidProduct("Adamantite", 15, 1);
+    setDroidProduct("Aluminium", 1, 1);
+    setDroidProduct("Uranium", 5, -1);
+    setDroidProduct("Coal", 5, -1);
+    context.replicatorProductionIds.forEach((id) => {
+      def["replicator_" + id] = true;
+      def["replicator_w_" + id] = 1;
+      def["replicator_p_" + id] = 1;
+    });
+    return { def };
+  }
+  function computeEjectorDefaults(context) {
+    const { resources: resources2, eleriumId, inferniteId } = context;
+    const byId = new Map(resources2.map((r) => [r.id, r]));
+    const elerium = byId.get(eleriumId);
+    const infernite = byId.get(inferniteId);
+    let ejectList;
+    if (context.universe === "magic") {
+      ejectList = resources2.filter((r) => r.ejectConsumable).sort((a, b) => b.atomicMass - a.atomicMass);
+    } else {
+      ejectList = resources2.filter(
+        (r) => r.ejectConsumable && r.id !== eleriumId && r.id !== inferniteId
+      ).sort((a, b) => b.atomicMass - a.atomicMass);
+      if (infernite) ejectList.unshift(infernite);
+      if (elerium) ejectList.unshift(elerium);
+    }
+    const supplyList = resources2.filter((r) => r.supplyConsumable).sort((a, b) => b.supplyIn - a.supplyIn);
+    const naniteList = resources2.filter((r) => r.naniteConsumable).sort((a, b) => b.atomicMass - a.atomicMass);
+    const def = {
+      autoEject: false,
+      autoSupply: false,
+      autoNanite: false,
+      ejectMode: "cap",
+      supplyMode: "mixed",
+      naniteMode: "full",
+      prestigeWhiteholeStabiliseMass: true,
+      prestigeWhiteholeStabiliseCooldown: 120
+    };
+    ejectList.forEach((r) => def["res_eject" + r.id] = r.isTradable);
+    supplyList.forEach((r) => def["res_supply" + r.id] = r.isTradable);
+    naniteList.forEach((r) => def["res_nanite" + r.id] = r.isTradable);
+    def["res_eject" + eleriumId] = true;
+    def["res_eject" + inferniteId] = true;
+    return {
+      def,
+      priorityOrders: [
+        { manager: "eject", ids: ejectList.map((r) => r.id), sort: false },
+        { manager: "supply", ids: supplyList.map((r) => r.id), sort: false },
+        { manager: "nanite", ids: naniteList.map((r) => r.id), sort: false }
+      ]
     };
   }
 
@@ -1471,6 +1599,72 @@
     ].forEach((id) => {
       delete settingsRaw2[id], delete settingsRaw2.overrides[id];
     });
+  }
+
+  // src/application/settings-reset.ts
+  function createSettingsResets({
+    getSettingsRaw,
+    reader,
+    effects
+  }) {
+    const applyPlan = (plan, reset) => {
+      const orders = plan.priorityOrders ?? [];
+      for (const order of orders) {
+        effects.setPriorityList(order.manager, order.ids);
+      }
+      applySettings2(getSettingsRaw(), plan.def, reset);
+      for (const order of orders) {
+        if (order.sort) {
+          effects.sortByPriority(order.manager);
+        }
+      }
+    };
+    return {
+      // Pure record-only sections.
+      resetWarSettings: (reset) => applyPlan(computeWarDefaults(), reset),
+      resetHellSettings: (reset) => applyPlan(computeHellDefaults(), reset),
+      resetGeneralSettings: (reset) => applyPlan(computeGeneralDefaults(), reset),
+      resetInterfaceSettings: (reset) => applyPlan(computeInterfaceDefaults(), reset),
+      resetStateLogSettings: (reset) => applyPlan(computeStateLogDefaults(), reset),
+      resetAchievementGuardSettings: (reset) => applyPlan(computeAchievementGuardDefaults(), reset),
+      resetChallengeHelperSettings: (reset) => applyPlan(computeChallengeHelperDefaults(), reset),
+      resetPrestigeSettings: (reset) => applyPlan(computePrestigeDefaults(), reset),
+      resetAuthoritySettings: (reset) => applyPlan(computeAuthorityDefaults(), reset),
+      resetResearchSettings: (reset) => applyPlan(computeResearchDefaults(), reset),
+      resetWeightingSettings: (reset) => applyPlan(computeWeightingDefaults(), reset),
+      resetFleetSettings: (reset) => applyPlan(computeFleetDefaults(), reset),
+      resetMechSettings: (reset) => applyPlan(computeMechDefaults(), reset),
+      // Sections reading a narrow live catalog.
+      resetGovernmentSettings: (reset) => applyPlan(computeGovernmentDefaults(reader.readGovernment()), reset),
+      resetEvolutionSettings: (reset) => applyPlan(computeEvolutionDefaults(reader.readEvolution()), reset),
+      resetLoggingSettings: (reset) => applyPlan(computeLoggingDefaults(reader.readLogging()), reset),
+      resetPlanetSettings: (reset) => applyPlan(computePlanetDefaults(reader.readPlanet()), reset),
+      resetProductionSettings: (reset) => applyPlan(computeProductionDefaults(reader.readProduction()), reset),
+      // Sections owning a manager priority list.
+      resetMarketSettings: (reset) => applyPlan(computeMarketDefaults(reader.readMarket()), reset),
+      resetStorageSettings: (reset) => applyPlan(computeStorageDefaults(reader.readStorage()), reset),
+      resetMinorTraitSettings: (reset) => applyPlan(computeMinorTraitDefaults(reader.readMinorTrait()), reset),
+      resetMutableTraitSettings: (reset) => applyPlan(computeMutableTraitDefaults(reader.readMutableTrait()), reset),
+      resetJobSettings: (reset) => applyPlan(computeJobDefaults(reader.readJob()), reset),
+      resetProjectSettings: (reset) => applyPlan(computeProjectDefaults(reader.readProject()), reset),
+      resetMagicSettings: (reset) => applyPlan(computeMagicDefaults(reader.readMagic()), reset),
+      resetEjectorSettings: (reset) => applyPlan(computeEjectorDefaults(reader.readEjector()), reset),
+      // Building: initBuildingState runs before the priority list is read; sort after.
+      resetBuildingSettings: (reset) => {
+        effects.initBuildingState();
+        const plan = computeBuildingDefaults(reader.readBuilding());
+        applySettings2(getSettingsRaw(), plan.def, reset);
+        effects.sortByPriority("building");
+      },
+      // Trigger: rebuild the default triggers (on reset or first run) before applying defaults.
+      resetTriggerSettings: (reset) => {
+        const settingsRaw2 = getSettingsRaw();
+        if (reset || !Object.prototype.hasOwnProperty.call(settingsRaw2, "autoTrigger")) {
+          settingsRaw2.triggers = effects.rebuildDefaultTriggers();
+        }
+        applySettings2(settingsRaw2, { autoTrigger: false }, reset);
+      }
+    };
   }
 
   // src/settings/override-evaluation.ts
@@ -49123,10 +49317,10 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       resetFleetSettings,
       resetMechSettings,
       resetEjectorSettings
-    } = createResetSettings({
-      dependencies: {
+    } = createSettingsResets({
+      getSettingsRaw: () => settingsRaw,
+      ...createEvolveSettingsResetAdapter({
         AlchemyManager: () => AlchemyManager,
-        applySettings: () => applySettings,
         biomeList: () => biomeList,
         BuildingManager: () => BuildingManager,
         buildings: () => buildings,
@@ -49157,13 +49351,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         ReplicatorManager: () => ReplicatorManager,
         resources: () => resources,
         RitualManager: () => RitualManager,
-        settingsRaw: () => settingsRaw,
         SmelterManager: () => SmelterManager,
         StorageManager: () => StorageManager,
         SupplyManager: () => SupplyManager,
         traitList: () => traitList,
         TriggerManager: () => TriggerManager
-      }
+      })
     });
     const {
       removeScriptSettings,

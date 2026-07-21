@@ -44,7 +44,8 @@ import { createPropertyHelpers } from "./utils/properties.ts";
 import { createFastEvaluator } from "./utils/fast-evaluator.ts";
 import { createNumberFormatting } from "./formatting/numbers.ts";
 import { createSettingsState } from "./settings/state.ts";
-import { createResetSettings } from "./settings/reset-settings.ts";
+import { createEvolveSettingsResetAdapter } from "./adapters/evolve/settings-reset.ts";
+import { createSettingsResets } from "./application/settings-reset.ts";
 import {
   applySettings as applySettingsRecord,
   migrateSetting as migrateSettingRecord,
@@ -466,10 +467,10 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     resetFleetSettings,
     resetMechSettings,
     resetEjectorSettings,
-  } = createResetSettings({
-    dependencies: {
+  } = createSettingsResets({
+    getSettingsRaw: () => settingsRaw,
+    ...createEvolveSettingsResetAdapter({
       AlchemyManager: () => AlchemyManager,
-      applySettings: () => applySettings,
       biomeList: () => biomeList,
       BuildingManager: () => BuildingManager,
       buildings: () => buildings,
@@ -500,13 +501,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       ReplicatorManager: () => ReplicatorManager,
       resources: () => resources,
       RitualManager: () => RitualManager,
-      settingsRaw: () => settingsRaw,
       SmelterManager: () => SmelterManager,
       StorageManager: () => StorageManager,
       SupplyManager: () => SupplyManager,
       traitList: () => traitList,
       TriggerManager: () => TriggerManager,
-    },
+    }),
   });
   const {
     removeScriptSettings,
@@ -2630,9 +2630,8 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       settingsStore,
     });
 
-  // Pure record primitives bound to the live settingsRaw. reset-settings consumes
-  // `applySettings` through its injected dependency, so binding here keeps that file
-  // untouched while the schema/migration logic itself stays pure.
+  // Pure record primitives bound to the live settingsRaw, exposed to the settingsState
+  // test hook below. Production reset/migration call the pure record functions directly.
   const applySettings = (def, reset) =>
     applySettingsRecord(settingsRaw, def, reset);
   const migrateSetting = (oldSetting, newSetting, mapCb, keepOldValue) =>
