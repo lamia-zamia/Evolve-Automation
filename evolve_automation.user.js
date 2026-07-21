@@ -17058,57 +17058,91 @@
     return { updateUI: updateUI2 };
   }
 
-  // src/ui/state-log-settings.ts
-  function createStateLogSettings({
+  // src/application/state-log-settings.ts
+  function createStateLogSettingsIntentHandler(writer) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-state-log-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/state-log-settings.ts
+  var stateLogSettingsReadModel = Object.freeze({
+    sectionId: "stateLog",
+    sectionName: "State Log",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "toggle",
+        settingName: "stateLogEnabled",
+        label: "Record state log",
+        hint: "Record compact bottleneck-focused snapshots of game state over the run into localStorage (key ea_state_log), for offline analysis. Retrieve via window.eaExportStateLog() in the console."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "stateLogAutoDownload",
+        label: "Auto-download log on reset",
+        hint: "When a reset (prestige) commits, automatically download the recorded state log as a JSON file."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "stateLogInterval",
+        label: "Sample every N ticks",
+        hint: "How often to record a state snapshot, counted in processed script ticks. A full run stays well under the 20000-sample cap at the default."
+      })
+    ])
+  });
+  function getStateLogSettingsReadModel() {
+    return stateLogSettingsReadModel;
+  }
+
+  // src/adapters/browser/state-log-settings.ts
+  function createStateLogSettingsBrowserAdapter({
     getDocument,
     getJQuery,
-    resetStateLogSettings: resetStateLogSettings2,
-    updateSettingsFromState: updateSettingsFromState2,
+    intents,
     buildSettingsSection: buildSettingsSection3,
     addSettingsToggle: addSettingsToggle2,
     addSettingsNumber: addSettingsNumber2
   }) {
+    const readModel = getStateLogSettingsReadModel();
+    function renderControl(node, control) {
+      if (control.kind === "toggle") {
+        addSettingsToggle2(node, control.settingName, control.label, control.hint);
+        return;
+      }
+      addSettingsNumber2(node, control.settingName, control.label, control.hint);
+    }
     function buildStateLogSettings2() {
-      const sectionId = "stateLog";
-      const sectionName = "State Log";
-      const resetFunction = function() {
-        resetStateLogSettings2(true);
-        updateSettingsFromState2();
-        updateStateLogSettingsContent2();
-      };
       buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-state-log-settings" });
+          updateStateLogSettingsContent2();
+        },
         updateStateLogSettingsContent2
       );
     }
     function updateStateLogSettingsContent2() {
       const document2 = getDocument();
       const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      const currentNode = getJQuery()("#script_stateLogContent");
+      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
-      addSettingsToggle2(
-        currentNode,
-        "stateLogEnabled",
-        "Record state log",
-        "Record compact bottleneck-focused snapshots of game state over the run into localStorage (key ea_state_log), for offline analysis. Retrieve via window.eaExportStateLog() in the console."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "stateLogAutoDownload",
-        "Auto-download log on reset",
-        "When a reset (prestige) commits, automatically download the recorded state log as a JSON file."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "stateLogInterval",
-        "Sample every N ticks",
-        "How often to record a state snapshot, counted in processed script ticks. A full run stays well under the 20000-sample cap at the default."
-      );
+      for (const control of readModel.controls) {
+        renderControl(currentNode, control);
+      }
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
-    return { buildStateLogSettings: buildStateLogSettings2, updateStateLogSettingsContent: updateStateLogSettingsContent2 };
+    return Object.freeze({
+      buildStateLogSettings: buildStateLogSettings2,
+      updateStateLogSettingsContent: updateStateLogSettingsContent2
+    });
   }
 
   // src/ui/interface-settings.ts
@@ -53580,11 +53614,14 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const { buildStateLogSettings, updateStateLogSettingsContent } = createStateLogSettings({
+    const stateLogSettingsIntents = createStateLogSettingsIntentHandler({
+      resetToDefaults: () => resetStateLogSettings(true),
+      persist: () => updateSettingsFromState()
+    });
+    const { buildStateLogSettings, updateStateLogSettingsContent } = createStateLogSettingsBrowserAdapter({
       getDocument: () => document,
       getJQuery: () => $,
-      resetStateLogSettings,
-      updateSettingsFromState,
+      intents: stateLogSettingsIntents,
       buildSettingsSection,
       addSettingsToggle,
       addSettingsNumber

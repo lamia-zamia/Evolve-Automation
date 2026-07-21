@@ -136,7 +136,8 @@ import { createPreviousGameStats } from "./ui/previous-game-stats.ts";
 import { createRuntimeAdapters } from "./ui/runtime-adapters.ts";
 import { createAutomationContainer } from "./ui/automation-container.ts";
 import { createUIRefresh } from "./ui/ui-refresh.ts";
-import { createStateLogSettings } from "./ui/state-log-settings.ts";
+import { createStateLogSettingsIntentHandler } from "./application/state-log-settings.ts";
+import { createStateLogSettingsBrowserAdapter } from "./adapters/browser/state-log-settings.ts";
 import { createInterfaceSettings } from "./ui/interface-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
@@ -5106,12 +5107,15 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
+  const stateLogSettingsIntents = createStateLogSettingsIntentHandler({
+    resetToDefaults: () => resetStateLogSettings(true),
+    persist: () => updateSettingsFromState(),
+  });
   const { buildStateLogSettings, updateStateLogSettingsContent } =
-    createStateLogSettings({
+    createStateLogSettingsBrowserAdapter({
       getDocument: () => document,
       getJQuery: () => $,
-      resetStateLogSettings,
-      updateSettingsFromState,
+      intents: stateLogSettingsIntents,
       buildSettingsSection,
       addSettingsToggle,
       addSettingsNumber,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createStateLogSettings } from "../src/ui/state-log-settings.ts";
+import { createStateLogSettingsBrowserAdapter } from "../src/adapters/browser/state-log-settings.ts";
 
 let document = {
   documentElement: { scrollTop: 0 },
@@ -23,14 +23,13 @@ function makeNode(selector) {
   };
 }
 
-const settings = createStateLogSettings({
+const settings = createStateLogSettingsBrowserAdapter({
   getDocument: () => document,
   getJQuery: () => (selector) => {
     trace.push(`select:${jqueryContext}:${selector}`);
     return makeNode(selector);
   },
-  resetStateLogSettings: (reset) => trace.push(`reset:${reset}`),
-  updateSettingsFromState: () => trace.push("persist"),
+  intents: { handle: (intent) => trace.push(`intent:${intent.type}`) },
   buildSettingsSection: (...args) => {
     sectionRegistration = args;
     trace.push(`section:${args[0]}:${args[1]}`);
@@ -47,10 +46,9 @@ assert.equal(sectionRegistration[3], settings.updateStateLogSettingsContent);
 
 trace = [];
 sectionRegistration[2]();
-assert.equal(trace[0], "reset:true");
-assert.equal(trace[1], "persist");
+assert.equal(trace[0], "intent:reset-state-log-settings");
 assert.deepEqual(
-  trace.slice(2).map((entry) => entry.split(":").slice(0, 2).join(":")),
+  trace.slice(1).map((entry) => entry.split(":").slice(0, 2).join(":")),
   [
     "select:first",
     "empty:first",
