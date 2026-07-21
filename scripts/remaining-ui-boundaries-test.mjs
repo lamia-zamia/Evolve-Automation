@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import { liveFunction } from "../src/ui/dependencies.ts";
-import { createMagicSettings } from "../src/ui/magic-settings.ts";
 import { createJobSettings } from "../src/ui/job-settings.ts";
 import { createWeightingSettings } from "../src/ui/weighting-settings.ts";
 import { createBuildingSettings } from "../src/ui/building-settings.ts";
@@ -22,16 +21,6 @@ function makeFactory(factory, context = {}, overrides = {}) {
 }
 
 const settingsSpecs = [
-  [
-    "magic",
-    createMagicSettings,
-    "buildMagicSettings",
-    "updateMagicSettingsContent",
-    "magic",
-    "Magic",
-    false,
-    ["checkbox:autoAlchemy|autoPylon|magicFullmetalHelper"],
-  ],
   [
     "job",
     createJobSettings,
@@ -257,4 +246,4 @@ currentClass = SecondClass;
 assert.equal(new FirstClass() instanceof liveClass, false);
 assert.equal(new SecondClass() instanceof liveClass, true);
 
-console.log("Next 12 UI-boundary module tests passed");
+console.log("Next 11 UI-boundary module tests passed");

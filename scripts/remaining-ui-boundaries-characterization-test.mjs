@@ -83,7 +83,6 @@ vm.runInNewContext(source, sandbox, {
 
 const boundaries = hooks.remainingUiBoundaries;
 assert.deepEqual(Object.keys(boundaries), [
-  "magic",
   "jobs",
   "weighting",
   "building",
@@ -128,8 +127,6 @@ hooks.setRemainingUiBoundariesTestContext({
   resources: {},
   jobs: {},
   craftablesList: [{ id: "Plywood" }],
-  AlchemyManager: { priorityList: [] },
-  RitualManager: { priorityList: [] },
   JobManager: { priorityList: [] },
   BuildingManager: { priorityList: [{ _vueBinding: "city1" }] },
   ProjectManager: { priorityList: [{ id: "Physics" }] },
@@ -154,7 +151,6 @@ hooks.setRemainingUiBoundariesTestContext({
 });
 
 const settingsSpecs = [
-  ["magic", "buildMagicSettings", "magic", "Magic", false],
   ["jobs", "buildJobSettings", "job", "Job", false],
   [
     "weighting",
@@ -181,9 +177,6 @@ for (const registration of registrations) {
 assert.deepEqual(
   trace.filter((entry) => /^(reset|update|checkbox|cleanup):/.test(entry)),
   [
-    "reset:magic:true",
-    "update:magic:",
-    "checkbox:autoAlchemy|autoPylon|magicFullmetalHelper",
     "reset:job:true",
     "update:job:",
     "checkbox:autoJobs|autoCraftsmen",
@@ -342,4 +335,4 @@ assert.ok(domTrace.includes("remove:#script_market_top_row"));
 assert.ok(domTrace.includes("remove:#resStorage .ea-storage-toggle"));
 assert.ok(domTrace.includes("remove:#script_storage_top_row"));
 
-console.log("Next 12 UI-boundary bundled characterization tests passed");
+console.log("Next 11 UI-boundary bundled characterization tests passed");

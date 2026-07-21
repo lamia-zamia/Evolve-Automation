@@ -19021,6 +19021,264 @@
     });
   }
 
+  // src/application/magic-settings.ts
+  function createMagicSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-magic-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            effects.resetCheckboxes();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/magic-settings.ts
+  function freezeAlchemyRow(row) {
+    return Object.freeze({ ...row });
+  }
+  function freezePylonRow(row) {
+    return Object.freeze({ ...row });
+  }
+  function createMagicSettingsReadModel({
+    alchemyRows,
+    pylonRows
+  }) {
+    return Object.freeze({
+      sectionId: "magic",
+      sectionName: "Magic",
+      alchemyControls: Object.freeze([
+        Object.freeze({ kind: "heading", label: "Alchemy" }),
+        Object.freeze({
+          kind: "number",
+          settingName: "magicAlchemyManaUse",
+          label: "Mana income used",
+          hint: "Income portion to use on alchemy. Setting to 1 is not recommended, leftover mana will be used for rituals."
+        }),
+        Object.freeze({
+          kind: "toggle",
+          settingName: "magicFullmetalHelper",
+          label: "Fullmetal helper",
+          hint: "In Magic universe with Alchemy II, keep one non-basic alchemy transmutation active long enough to claim Fullmetal if the achievement is still below the current star level. Requires autoAlchemy."
+        })
+      ]),
+      pylonControls: Object.freeze([
+        Object.freeze({ kind: "heading", label: "Pylon" }),
+        Object.freeze({
+          kind: "number",
+          settingName: "productionRitualManaUse",
+          label: "Mana income used",
+          hint: "Income portion to use on rituals. Setting to 1 is not recommended, as it will halt mana regeneration. Applied only when mana not capped - with capped mana script will always use all income."
+        }),
+        Object.freeze({
+          kind: "toggle",
+          settingName: "productionRitualSafe",
+          label: "Safe rituals",
+          hint: "Limit max rituals to safe, unsuspicious amount. Have no effect out of Witch Hunter scenario."
+        })
+      ]),
+      alchemyRows: Object.freeze(alchemyRows.map(freezeAlchemyRow)),
+      pylonRows: Object.freeze(pylonRows.map(freezePylonRow))
+    });
+  }
+
+  // src/adapters/browser/magic-settings.ts
+  function createMagicSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function buildMagicSettings2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      actions.buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-magic-settings" }),
+        updateMagicSettingsContent2
+      );
+    }
+    function updateMagicSettingsContent2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
+      currentNode.empty().off("*");
+      const jquery = getJQuery();
+      for (const control of readModel.alchemyControls) {
+        renderControl(currentNode, control, actions);
+      }
+      renderAlchemy(currentNode, readModel.alchemyRows, actions, jquery);
+      for (const control of readModel.pylonControls) {
+        renderControl(currentNode, control, actions);
+      }
+      renderPylon(currentNode, readModel.pylonRows, actions, jquery);
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function renderControl(node, control, actions) {
+      switch (control.kind) {
+        case "heading":
+          actions.addStandardHeading(node, control.label);
+          return;
+        case "number":
+          actions.addSettingsNumber(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+        case "toggle":
+          actions.addSettingsToggle(
+            node,
+            control.settingName,
+            control.label,
+            control.hint
+          );
+          return;
+      }
+    }
+    function renderAlchemy(currentNode, rows, actions, getJQuery2) {
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:20%">Resource</th>
+              <th class="has-text-warning" style="width:20%">Enabled</th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th class="has-text-warning" style="width:40%"></th>
+            </tr>
+            <tbody id="script_alchemyTableBody"></tbody>
+          </table>`);
+      const tableBodyNode = getJQuery2("#script_alchemyTableBody");
+      let newTableBodyText = "";
+      for (const row of rows) {
+        newTableBodyText += `<tr><td id="script_alchemy_${row.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"></td></tr>`;
+      }
+      tableBodyNode.append(getJQuery2(newTableBodyText));
+      for (const row of rows) {
+        let node = getJQuery2(`#script_alchemy_${row.id}`);
+        node.append(actions.buildTableLabel(row.label, "", row.color));
+        node = node.next();
+        actions.addTableToggle(node, row.enabledSettingName);
+        node = node.next();
+        actions.addTableInput(node, row.weightingSettingName);
+      }
+    }
+    function renderPylon(currentNode, rows, actions, getJQuery2) {
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:55%">Ritual</th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th style="width:25%"></th>
+            </tr>
+            <tbody id="script_magicTableBodyPylon"></tbody>
+          </table>`);
+      const tableBodyNode = getJQuery2("#script_magicTableBodyPylon");
+      let newTableBodyText = "";
+      for (const row of rows) {
+        newTableBodyText += `<tr><td id="script_pylon_${row.id}" style="width:55%"></td><td style="width:20%"></td><td style="width:25%"></td></tr>`;
+      }
+      tableBodyNode.append(getJQuery2(newTableBodyText));
+      for (const row of rows) {
+        let node = getJQuery2(`#script_pylon_${row.id}`);
+        node.append(actions.buildTableLabel(row.label));
+        node = node.next();
+        actions.addTableInput(node, row.weightingSettingName);
+      }
+    }
+    return Object.freeze({
+      buildMagicSettings: buildMagicSettings2,
+      updateMagicSettingsContent: updateMagicSettingsContent2
+    });
+  }
+
+  // src/adapters/evolve/magic-settings.ts
+  function requireString7(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function readPriorityList3(manager) {
+    const priorityList = manager["priorityList"];
+    if (!Array.isArray(priorityList)) {
+      throw new TypeError("AlchemyManager.priorityList must be an array");
+    }
+    return priorityList.map(
+      (resource2, index) => requireRecord(resource2, `AlchemyManager.priorityList[${index}]`)
+    );
+  }
+  function createMagicSettingsEvolveAdapter({
+    getGame,
+    getAlchemyManager,
+    getRitualManager
+  }) {
+    function readMagicSettingsReadModel() {
+      const game2 = requireRecord(getGame(), "game");
+      const localize = requireFunction(game2["loc"], "game.loc");
+      const alchemyManager = requireRecord(getAlchemyManager(), "AlchemyManager");
+      const resources2 = readPriorityList3(alchemyManager);
+      const transmuteTier = requireFunction(
+        alchemyManager["transmuteTier"],
+        "AlchemyManager.transmuteTier"
+      );
+      const alchemyRows = resources2.map((resource2, index) => {
+        const path = `AlchemyManager.priorityList[${index}]`;
+        const id = requireString7(resource2["id"], `${path}.id`);
+        const tier = requireNumber(
+          Reflect.apply(transmuteTier, alchemyManager, [resource2]),
+          `${path}.transmuteTier result`
+        );
+        return {
+          id,
+          label: requireString7(resource2["name"], `${path}.name`),
+          color: tier > 1 ? "has-text-advanced" : "has-text-info",
+          enabledSettingName: `res_alchemy_${id}`,
+          weightingSettingName: `res_alchemy_w_${id}`
+        };
+      });
+      const ritualManager = requireRecord(getRitualManager(), "RitualManager");
+      const productions = requireRecord(
+        ritualManager["Productions"],
+        "RitualManager.Productions"
+      );
+      const pylonRows = Object.entries(productions).map(
+        ([key, rawProduction]) => {
+          const production = requireRecord(
+            rawProduction,
+            `RitualManager.Productions.${key}`
+          );
+          const id = requireString7(
+            production["id"],
+            `RitualManager.Productions.${key}.id`
+          );
+          return {
+            id,
+            label: requireString7(
+              Reflect.apply(localize, game2, [`modal_pylon_spell_${id}`]),
+              `game.loc(modal_pylon_spell_${id}) result`
+            ),
+            weightingSettingName: `spell_w_${id}`
+          };
+        }
+      );
+      return createMagicSettingsReadModel({ alchemyRows, pylonRows });
+    }
+    return Object.freeze({ readMagicSettingsReadModel });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -22646,7 +22904,7 @@
   }
 
   // src/adapters/evolve/hell.ts
-  function requireString7(value, path) {
+  function requireString8(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -22943,7 +23201,7 @@
           ),
           evilTechnology: optionalNumber(tech["evil"], "game.global.tech.evil"),
           grenadier: Boolean(race2["grenadier"]),
-          government: requireString7(
+          government: requireString8(
             govern["type"],
             "game.global.civic.govern.type"
           )
@@ -23534,7 +23792,7 @@
   }
 
   // src/adapters/evolve/battle.ts
-  function requireString8(value, path) {
+  function requireString9(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -23552,7 +23810,7 @@
     return {
       input: Object.freeze({
         governmentId: requireNumber(foreign["id"], `${path}.id`),
-        policy: requireString8(foreign["policy"], `${path}.policy`),
+        policy: requireString9(foreign["policy"], `${path}.policy`),
         released: Boolean(foreign["released"]),
         occupied: Boolean(government["occ"]),
         annexed: Boolean(government["anx"]),
@@ -23667,7 +23925,7 @@
         );
         const hellAvailable = Boolean(manager["_hellVue"]);
         const readHell = autoHell2 && hellAvailable;
-        const protectMode = requireString8(
+        const protectMode = requireString9(
           settings2["foreignProtect"],
           "settings.foreignProtect"
         );
@@ -23941,7 +24199,7 @@
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        const governmentName = requireString8(
+        const governmentName = requireString9(
           dependencies.getGovernmentName(decision2.governmentId),
           `government name ${decision2.governmentId}`
         );
@@ -23967,7 +24225,7 @@
         if (removeBattalion !== null) {
           Reflect.apply(removeBattalion, active.manager, [-deltaBattalion]);
         }
-        const campaignTitle = requireString8(
+        const campaignTitle = requireString9(
           Reflect.apply(getCampaignTitle, active.manager, [decision2.tactic]),
           `campaign title ${decision2.tactic}`
         );
@@ -27914,7 +28172,7 @@
       moneyStorageRequired: 0
     });
   }
-  function requireString9(value, path) {
+  function requireString10(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -27963,7 +28221,7 @@
         );
         if (maxCityGarrison <= 0) return unavailableInput2();
         const state2 = requireRecord(dependencies.getState(), "state");
-        const goal = requireString9(state2["goal"], "state.goal");
+        const goal = requireString10(state2["goal"], "state.goal");
         const saveInflationMoney = Boolean(
           dependencies.shouldSaveInflationMoney()
         );
@@ -30451,7 +30709,7 @@
       }
     });
   }
-  function readPriorityList3(manager) {
+  function readPriorityList4(manager) {
     const list = manager["priorityList"];
     if (!Array.isArray(list)) {
       throw new TypeError("MarketManager.priorityList must be an array");
@@ -30490,7 +30748,7 @@
           manager["setMultiplier"],
           "MarketManager.setMultiplier"
         );
-        const list = readPriorityList3(manager);
+        const list = readPriorityList4(manager);
         const raw = list[decision2.index];
         const resource2 = typeof raw === "object" && raw !== null ? raw : null;
         const actualId = resource2 !== null && typeof resource2["id"] === "string" ? resource2["id"] : null;
@@ -35668,7 +35926,7 @@
     );
     return { foreign, government };
   }
-  function requireString10(value, path) {
+  function requireString11(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -35679,7 +35937,7 @@
     const ids = {};
     for (const [name, rawType] of Object.entries(types)) {
       const type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString10(type["id"], `SpyManager.Types.${name}.id`);
+      ids[name] = requireString11(type["id"], `SpyManager.Types.${name}.id`);
     }
     return Object.freeze(ids);
   }
@@ -35787,7 +36045,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString10(
+        const policy = requireString11(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -35808,7 +36066,7 @@
             "resources.Money.maxQuantity"
           );
         }
-        const governmentName = requireString10(
+        const governmentName = requireString11(
           dependencies.getGovName(governmentId),
           `government name ${governmentId}`
         );
@@ -35854,7 +36112,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString10(
+        const policy = requireString11(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -37004,7 +37262,7 @@
   }
 
   // src/adapters/evolve/jobs.ts
-  function requireString11(value, path) {
+  function requireString12(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
     return value;
@@ -37134,7 +37392,7 @@
           if (count === 0) {
             maximum = 1;
           } else {
-            const id = requireString11(job["id"], "job.id");
+            const id = requireString12(job["id"], "job.id");
             const production = requireNumber(
               call2(
                 resource(resources2, "Food"),
@@ -37486,7 +37744,7 @@
           );
           return Object.freeze({
             token: token2,
-            id: requireString11(job["id"], `jobList[${token2}].id`),
+            id: requireString12(job["id"], `jobList[${token2}].id`),
             kind,
             workers: requireNumber(job["workers"], `jobList[${token2}].workers`),
             servants: requireNumber(
@@ -37603,7 +37861,7 @@
                 `craftingJobs[${index}].resource.craftPreserve`
               ))) {
                 affordability = 0;
-                exclusion = `${requireString11(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
+                exclusion = `${requireString12(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
                 break;
               }
               affordability = Math.min(
@@ -37635,7 +37893,7 @@
                 craftResource["currentQuantity"],
                 `craftingJobs[${index}].resource.currentQuantity`
               );
-              const resourceId3 = requireString11(
+              const resourceId3 = requireString12(
                 craftResource["id"],
                 `craftingJobs[${index}].resource.id`
               );
@@ -37655,7 +37913,7 @@
                 driver = `no building×${craftWeight}`;
               } else {
                 const record = requireRecord(driving, "driving building");
-                driver = `${requireString11(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
+                driver = `${requireString12(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
               }
             }
             return Object.freeze({
@@ -37862,7 +38120,7 @@
           minerToken: token("Miner"),
           population: resourceNumber(resources2, "Population", "currentQuantity"),
           craftDebug: Boolean(debugWindow["craftDebug"]),
-          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString11(state2["lastCraftWinner"], "state.lastCraftWinner"),
+          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString12(state2["lastCraftWinner"], "state.lastCraftWinner"),
           authority,
           jobs: Object.freeze(jobInputs),
           crafting: Object.freeze(craftingInputs),
@@ -38316,7 +38574,7 @@
   }
 
   // src/adapters/evolve/build.ts
-  function requireString12(value, path) {
+  function requireString13(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -38406,7 +38664,7 @@
         const byKey = /* @__PURE__ */ new Map();
         const candidates = entities.map((entity, index) => {
           const path = `buildList[${index}]`;
-          const key = requireString12(entity["_vueBinding"], `${path}._vueBinding`);
+          const key = requireString13(entity["_vueBinding"], `${path}._vueBinding`);
           byKey.set(key, entity);
           const rawCost = requireRecord(entity["cost"], `${path}.cost`);
           const cost = {};
@@ -38800,7 +39058,7 @@
       )
     });
   }
-  function readPriorityList4(manager) {
+  function readPriorityList5(manager) {
     const priorityList = manager["priorityList"];
     if (!Array.isArray(priorityList)) {
       throw new TypeError("MutableTraitManager.priorityList must be an array");
@@ -38860,7 +39118,7 @@
         const currencyId = currencyIdFromGame(dependencies.getGame);
         const views = [];
         let currency = null;
-        const list = readPriorityList4(manager);
+        const list = readPriorityList5(manager);
         for (let index = 0; index < list.length; index++) {
           const path = `MutableTraitManager.priorityList[${index}]`;
           const trait2 = requireRecord(list[index], path);
@@ -38943,7 +39201,7 @@
           dependencies.getMutableTraitManager(),
           "MutableTraitManager"
         );
-        const list = readPriorityList4(manager);
+        const list = readPriorityList5(manager);
         const trait2 = typeof list[decision2.index] === "object" && list[decision2.index] !== null ? list[decision2.index] : null;
         const actualTraitName = trait2 !== null && typeof trait2["traitName"] === "string" ? trait2["traitName"] : null;
         if (trait2 === null || actualTraitName !== decision2.traitName) {
@@ -39182,7 +39440,7 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString13(value, path) {
+  function requireString14(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -39202,7 +39460,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString13(
+    const status2 = requireString14(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -39271,7 +39529,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString13(
+          mode = requireString14(
             settings2["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -39409,7 +39667,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString13(
+            const id = requireString14(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -39568,7 +39826,7 @@
             );
           }
         }
-        const targetLocationName = requireString13(
+        const targetLocationName = requireString14(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -39601,7 +39859,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString13(
+        const shipName = requireString14(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -39612,7 +39870,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString13(
+        const shipClass = requireString14(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -39684,7 +39942,7 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString13(
+          const resourceId3 = requireString14(
             missingResource,
             "missing outer-fleet resource id"
           );
@@ -39692,7 +39950,7 @@
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString13(
+          missingResourceName = requireString14(
             resource2["name"],
             `resources.${resourceId3}.name`
           );
@@ -40122,7 +40380,7 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString14(value, path) {
+  function requireString15(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -40298,7 +40556,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString14(
+          const name = requireString15(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -40326,7 +40584,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString14(
+          chthonianLossMode = requireString15(
             settings2["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -40360,7 +40618,7 @@
               settings2["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString14(
+            alien2LossMode = requireString15(
               settings2["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -40709,7 +40967,7 @@
   }
 
   // src/adapters/evolve/mech.ts
-  function requireString15(value, path) {
+  function requireString16(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -40728,7 +40986,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString15(raw["size"], `${path}.size`),
+        size: requireString16(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -40763,7 +41021,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString15(raw["size"], `${path}.size`),
+      size: requireString16(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -40880,7 +41138,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString15(settings2["mechBuild"], "settings.mechBuild")
+          buildMode: requireString16(settings2["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -40915,7 +41173,7 @@
             call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString15(preferred[0], "preferred mech size");
+          const size = requireString16(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
             call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
@@ -40954,7 +41212,7 @@
           buildings2["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString15(
+        const prestigeType = requireString16(
           settings2["prestigeType"],
           "settings.prestigeType"
         );
@@ -41043,7 +41301,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString15(
+        const configuredScrapMode = requireString16(
           settings2["mechScrap"],
           "settings.mechScrap"
         );
@@ -41072,7 +41330,7 @@
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString15(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString16(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -41257,7 +41515,7 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString15(
+          const description = requireString16(
             call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
@@ -44799,167 +45057,6 @@
       return implementation.apply(this, args);
     }
     return { buildMarketSettings: buildMarketSettings2, updateMarketSettingsContent: updateMarketSettingsContent2 };
-  }
-
-  // src/ui/magic-settings.ts
-  function createMagicSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const AlchemyManager2 = liveObject4(() => getDependency("AlchemyManager"));
-    const RitualManager2 = liveObject4(() => getDependency("RitualManager"));
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const addStandardHeading2 = liveFunction(
-      () => getDependency("addStandardHeading")
-    );
-    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
-    const addTableToggle2 = liveFunction(() => getDependency("addTableToggle"));
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject4(() => getDependency("document"));
-    const game2 = liveObject4(() => getDependency("game"));
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetMagicSettings2 = liveFunction(
-      () => getDependency("resetMagicSettings")
-    );
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildMagicSettingsImpl() {
-      let sectionId = "magic";
-      let sectionName = "Magic";
-      let resetFunction = function() {
-        resetMagicSettings2(true);
-        updateSettingsFromState2();
-        updateMagicSettingsContent2();
-        resetCheckbox2("autoAlchemy", "autoPylon", "magicFullmetalHelper");
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateMagicSettingsContent2
-      );
-    }
-    function updateMagicSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_magicContent");
-      currentNode.empty().off("*");
-      updateMagicAlchemy2(currentNode);
-      updateMagicPylon2(currentNode);
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function updateMagicAlchemyImpl(currentNode) {
-      addStandardHeading2(currentNode, "Alchemy");
-      addSettingsNumber2(
-        currentNode,
-        "magicAlchemyManaUse",
-        "Mana income used",
-        "Income portion to use on alchemy. Setting to 1 is not recommended, leftover mana will be used for rituals."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "magicFullmetalHelper",
-        "Fullmetal helper",
-        "In Magic universe with Alchemy II, keep one non-basic alchemy transmutation active long enough to claim Fullmetal if the achievement is still below the current star level. Requires autoAlchemy."
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:20%">Resource</th>
-              <th class="has-text-warning" style="width:20%">Enabled</th>
-              <th class="has-text-warning" style="width:20%">Weighting</th>
-              <th class="has-text-warning" style="width:40%"></th>
-            </tr>
-            <tbody id="script_alchemyTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $2("#script_alchemyTableBody");
-      let newTableBodyText = "";
-      for (let resource2 of AlchemyManager2.priorityList) {
-        newTableBodyText += `<tr><td id="script_alchemy_${resource2.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"></td></tr>`;
-      }
-      tableBodyNode.append($2(newTableBodyText));
-      for (let resource2 of AlchemyManager2.priorityList) {
-        let node = $2("#script_alchemy_" + resource2.id);
-        let color = AlchemyManager2.transmuteTier(resource2) > 1 ? "has-text-advanced" : "has-text-info";
-        node.append(buildTableLabel2(resource2.name, "", color));
-        node = node.next();
-        addTableToggle2(node, "res_alchemy_" + resource2.id);
-        node = node.next();
-        addTableInput2(node, "res_alchemy_w_" + resource2.id);
-      }
-    }
-    function updateMagicPylonImpl(currentNode) {
-      addStandardHeading2(currentNode, "Pylon");
-      addSettingsNumber2(
-        currentNode,
-        "productionRitualManaUse",
-        "Mana income used",
-        "Income portion to use on rituals. Setting to 1 is not recommended, as it will halt mana regeneration. Applied only when mana not capped - with capped mana script will always use all income."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "productionRitualSafe",
-        "Safe rituals",
-        "Limit max rituals to safe, unsuspicious amount. Have no effect out of Witch Hunter scenario."
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:55%">Ritual</th>
-              <th class="has-text-warning" style="width:20%">Weighting</th>
-              <th style="width:25%"></th>
-            </tr>
-            <tbody id="script_magicTableBodyPylon"></tbody>
-          </table>`);
-      let tableBodyNode = $2("#script_magicTableBodyPylon");
-      let newTableBodyText = "";
-      let pylonProducts = Object.values(RitualManager2.Productions);
-      for (let i = 0; i < pylonProducts.length; i++) {
-        let production = pylonProducts[i];
-        newTableBodyText += `<tr><td id="script_pylon_${production.id}" style="width:55%"></td><td style="width:20%"></td><td style="width:25%"></td></tr>`;
-      }
-      tableBodyNode.append($2(newTableBodyText));
-      for (let i = 0; i < pylonProducts.length; i++) {
-        let production = pylonProducts[i];
-        let productionElement = $2("#script_pylon_" + production.id);
-        productionElement.append(
-          buildTableLabel2(game2.loc(`modal_pylon_spell_${production.id}`))
-        );
-        productionElement = productionElement.next();
-        addTableInput2(productionElement, "spell_w_" + production.id);
-      }
-    }
-    function buildMagicSettings2(...args) {
-      const implementation = getOverride("buildMagicSettings") ?? buildMagicSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateMagicSettingsContent2(...args) {
-      const implementation = getOverride("updateMagicSettingsContent") ?? updateMagicSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    function updateMagicAlchemy2(...args) {
-      const implementation = getOverride("updateMagicAlchemy") ?? updateMagicAlchemyImpl;
-      return implementation.apply(this, args);
-    }
-    function updateMagicPylon2(...args) {
-      const implementation = getOverride("updateMagicPylon") ?? updateMagicPylonImpl;
-      return implementation.apply(this, args);
-    }
-    return {
-      buildMagicSettings: buildMagicSettings2,
-      updateMagicSettingsContent: updateMagicSettingsContent2,
-      updateMagicAlchemy: updateMagicAlchemy2,
-      updateMagicPylon: updateMagicPylon2
-    };
   }
 
   // src/ui/job-settings.ts
@@ -50273,37 +50370,48 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       }
     });
     const { buildStorageSettings, updateStorageSettingsContent } = storageSettingsBrowserAdapter;
-    const magicBoundaryOverrides = {};
-    const getMagicBoundaryDependency = createDependencyResolver(
-      magicBoundaryOverrides,
-      {
-        $: () => $,
-        AlchemyManager: () => AlchemyManager,
-        RitualManager: () => RitualManager,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsToggle: () => addSettingsToggle,
-        addStandardHeading: () => addStandardHeading,
-        addTableInput: () => addTableInput,
-        addTableToggle: () => addTableToggle,
-        buildSettingsSection: () => buildSettingsSection,
-        buildTableLabel: () => buildTableLabel,
-        document: () => document,
-        game: () => game,
-        resetCheckbox: () => resetCheckbox,
-        resetMagicSettings: () => resetMagicSettings,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const magicBoundary = createMagicSettings({
-      getDependency: getMagicBoundaryDependency,
-      getOverride: (name) => magicBoundaryOverrides[name]
+    let magicSettingsTestContext;
+    const magicSettingsActions = {
+      buildSettingsSection,
+      addStandardHeading,
+      addSettingsNumber,
+      addSettingsToggle,
+      addTableInput,
+      addTableToggle,
+      buildTableLabel
+    };
+    const magicSettingsEvolveAdapter = createMagicSettingsEvolveAdapter({
+      getGame: () => magicSettingsTestContext?.game ?? game,
+      getAlchemyManager: () => magicSettingsTestContext?.AlchemyManager ?? AlchemyManager,
+      getRitualManager: () => magicSettingsTestContext?.RitualManager ?? RitualManager
     });
-    const {
-      buildMagicSettings,
-      updateMagicSettingsContent,
-      updateMagicAlchemy,
-      updateMagicPylon
-    } = magicBoundary;
+    let magicSettingsIntentHandler;
+    const magicSettingsBrowserAdapter = createMagicSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getReadModel: () => magicSettingsEvolveAdapter.readMagicSettingsReadModel(),
+      intents: {
+        handle: (intent) => magicSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => magicSettingsTestContext?.actions ?? magicSettingsActions
+    });
+    magicSettingsIntentHandler = createMagicSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (magicSettingsTestContext?.resetMagicSettings ?? resetMagicSettings)(
+          true
+        ),
+        persist: () => (magicSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      renderSettingsContent: () => magicSettingsBrowserAdapter.updateMagicSettingsContent(),
+      effects: {
+        resetCheckboxes: () => (magicSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoAlchemy",
+          "autoPylon",
+          "magicFullmetalHelper"
+        )
+      }
+    });
+    const { buildMagicSettings, updateMagicSettingsContent } = magicSettingsBrowserAdapter;
     const jobsBoundaryOverrides = {};
     const getJobsBoundaryDependency = createDependencyResolver(
       jobsBoundaryOverrides,
@@ -54546,6 +54654,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
+        magicSettings: magicSettingsBrowserAdapter,
+        setMagicSettingsTestContext(context) {
+          magicSettingsTestContext = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
         achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
         setAchievementGuardSettingsTestContext(context) {
           achievementGuardSettingsTestActions = context;
@@ -54713,7 +54827,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         remainingUiBoundaries: {
-          magic: magicBoundary,
           jobs: jobsBoundary,
           weighting: weightingBoundary,
           building: buildingBoundary,
@@ -54737,9 +54850,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
             craftablesList = context.craftablesList;
           if ("StorageManager" in context)
             StorageManager = context.StorageManager;
-          if ("AlchemyManager" in context)
-            AlchemyManager = context.AlchemyManager;
-          if ("RitualManager" in context) RitualManager = context.RitualManager;
           if ("JobManager" in context) JobManager = context.JobManager;
           if ("BuildingManager" in context)
             BuildingManager = context.BuildingManager;
@@ -54747,7 +54857,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
             ProjectManager = context.ProjectManager;
           if ("EjectManager" in context) EjectManager = context.EjectManager;
           if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-          Object.assign(magicBoundaryOverrides, context);
           Object.assign(jobsBoundaryOverrides, context);
           Object.assign(weightingBoundaryOverrides, context);
           Object.assign(buildingBoundaryOverrides, context);

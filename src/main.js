@@ -166,6 +166,9 @@ import { createProjectSettingsEvolveAdapter } from "./adapters/evolve/project-se
 import { createStorageSettingsIntentHandler } from "./application/storage-settings.ts";
 import { createStorageSettingsBrowserAdapter } from "./adapters/browser/storage-settings.ts";
 import { createStorageSettingsEvolveAdapter } from "./adapters/evolve/storage-settings.ts";
+import { createMagicSettingsIntentHandler } from "./application/magic-settings.ts";
+import { createMagicSettingsBrowserAdapter } from "./adapters/browser/magic-settings.ts";
+import { createMagicSettingsEvolveAdapter } from "./adapters/evolve/magic-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -419,7 +422,6 @@ import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createMechSettings } from "./ui/mech-settings.ts";
 import { createEjectorSettings } from "./ui/ejector-settings.ts";
 import { createMarketSettings } from "./ui/market-settings.ts";
-import { createMagicSettings } from "./ui/magic-settings.ts";
 import { createJobSettings } from "./ui/job-settings.ts";
 import { createWeightingSettings } from "./ui/weighting-settings.ts";
 import { createBuildingSettings } from "./ui/building-settings.ts";
@@ -762,37 +764,58 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildStorageSettings, updateStorageSettingsContent } =
     storageSettingsBrowserAdapter;
 
-  const magicBoundaryOverrides = {};
-  const getMagicBoundaryDependency = createDependencyResolver(
-    magicBoundaryOverrides,
-    {
-      $: () => $,
-      AlchemyManager: () => AlchemyManager,
-      RitualManager: () => RitualManager,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsToggle: () => addSettingsToggle,
-      addStandardHeading: () => addStandardHeading,
-      addTableInput: () => addTableInput,
-      addTableToggle: () => addTableToggle,
-      buildSettingsSection: () => buildSettingsSection,
-      buildTableLabel: () => buildTableLabel,
-      document: () => document,
-      game: () => game,
-      resetCheckbox: () => resetCheckbox,
-      resetMagicSettings: () => resetMagicSettings,
-      updateSettingsFromState: () => updateSettingsFromState,
-    },
-  );
-  const magicBoundary = createMagicSettings({
-    getDependency: getMagicBoundaryDependency,
-    getOverride: (name) => magicBoundaryOverrides[name],
+  let magicSettingsTestContext;
+  const magicSettingsActions = {
+    buildSettingsSection,
+    addStandardHeading,
+    addSettingsNumber,
+    addSettingsToggle,
+    addTableInput,
+    addTableToggle,
+    buildTableLabel,
+  };
+  const magicSettingsEvolveAdapter = createMagicSettingsEvolveAdapter({
+    getGame: () => magicSettingsTestContext?.game ?? game,
+    getAlchemyManager: () =>
+      magicSettingsTestContext?.AlchemyManager ?? AlchemyManager,
+    getRitualManager: () =>
+      magicSettingsTestContext?.RitualManager ?? RitualManager,
   });
-  const {
-    buildMagicSettings,
-    updateMagicSettingsContent,
-    updateMagicAlchemy,
-    updateMagicPylon,
-  } = magicBoundary;
+  let magicSettingsIntentHandler;
+  const magicSettingsBrowserAdapter = createMagicSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    getReadModel: () => magicSettingsEvolveAdapter.readMagicSettingsReadModel(),
+    intents: {
+      handle: (intent) => magicSettingsIntentHandler.handle(intent),
+    },
+    getActions: () => magicSettingsTestContext?.actions ?? magicSettingsActions,
+  });
+  magicSettingsIntentHandler = createMagicSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (magicSettingsTestContext?.resetMagicSettings ?? resetMagicSettings)(
+          true,
+        ),
+      persist: () =>
+        (
+          magicSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    },
+    renderSettingsContent: () =>
+      magicSettingsBrowserAdapter.updateMagicSettingsContent(),
+    effects: {
+      resetCheckboxes: () =>
+        (magicSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoAlchemy",
+          "autoPylon",
+          "magicFullmetalHelper",
+        ),
+    },
+  });
+  const { buildMagicSettings, updateMagicSettingsContent } =
+    magicSettingsBrowserAdapter;
 
   const jobsBoundaryOverrides = {};
   const getJobsBoundaryDependency = createDependencyResolver(
@@ -5555,6 +5578,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {
+      magicSettings: magicSettingsBrowserAdapter,
+      setMagicSettingsTestContext(context) {
+        magicSettingsTestContext = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
       achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
       setAchievementGuardSettingsTestContext(context) {
         achievementGuardSettingsTestActions = context;
@@ -5733,7 +5762,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
       remainingUiBoundaries: {
-        magic: magicBoundary,
         jobs: jobsBoundary,
         weighting: weightingBoundary,
         building: buildingBoundary,
@@ -5757,9 +5785,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
           craftablesList = context.craftablesList;
         if ("StorageManager" in context)
           StorageManager = context.StorageManager;
-        if ("AlchemyManager" in context)
-          AlchemyManager = context.AlchemyManager;
-        if ("RitualManager" in context) RitualManager = context.RitualManager;
         if ("JobManager" in context) JobManager = context.JobManager;
         if ("BuildingManager" in context)
           BuildingManager = context.BuildingManager;
@@ -5767,7 +5792,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
           ProjectManager = context.ProjectManager;
         if ("EjectManager" in context) EjectManager = context.EjectManager;
         if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-        Object.assign(magicBoundaryOverrides, context);
         Object.assign(jobsBoundaryOverrides, context);
         Object.assign(weightingBoundaryOverrides, context);
         Object.assign(buildingBoundaryOverrides, context);
