@@ -180,6 +180,8 @@ import { createBuildingSettingsEvolveAdapter } from "./adapters/evolve/building-
 import { createOptionsModalBrowserAdapter } from "./adapters/browser/options-modal.ts";
 import { createTotalDaysTopBarBrowserAdapter } from "./adapters/browser/total-days-top-bar.ts";
 import { createTotalDaysTopBarEvolveAdapter } from "./adapters/evolve/total-days-top-bar.ts";
+import { createPrestigeTopBarBrowserAdapter } from "./adapters/browser/prestige-top-bar.ts";
+import { createPrestigeTopBarEvolveAdapter } from "./adapters/evolve/prestige-top-bar.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -433,7 +435,6 @@ import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createMechSettings } from "./ui/mech-settings.ts";
 import { createEjectorSettings } from "./ui/ejector-settings.ts";
 import { createMarketSettings } from "./ui/market-settings.ts";
-import { createPrestigeTopBar } from "./ui/prestige-top-bar.ts";
 import { createArpaToggleUI } from "./ui/arpa-toggles.ts";
 import { createCraftToggleUI } from "./ui/craft-toggles.ts";
 import { createBuildingToggleUI } from "./ui/building-toggles.ts";
@@ -1155,23 +1156,27 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     createOptionsModal,
   } = optionsModalBrowserAdapter;
 
-  const prestigeTopBarBoundaryOverrides = {};
-  const getPrestigeTopBarBoundaryDependency = createDependencyResolver(
-    prestigeTopBarBoundaryOverrides,
-    {
-      addOptionUI: () => addOptionUI,
-      buildPrestigeSettings: () => buildPrestigeSettings,
-      document: () => document,
-      prestigeTypes: () => prestigeTypes,
-      settings: () => settings,
+  let prestigeTopBarTestContext;
+  const prestigeTopBarReader = createPrestigeTopBarEvolveAdapter({
+    getSettings: () => prestigeTopBarTestContext?.settings ?? settings,
+    getPrestigeTypes: () =>
+      prestigeTopBarTestContext?.prestigeTypes ?? prestigeTypes,
+  });
+  const prestigeTopBarBrowserAdapter = createPrestigeTopBarBrowserAdapter({
+    getDocument: () => document,
+    reader: prestigeTopBarReader,
+    options: {
+      addOptionUI: (...args) =>
+        (prestigeTopBarTestContext?.addOptionUI ?? addOptionUI)(...args),
     },
-  );
-  const prestigeTopBarBoundary = createPrestigeTopBar({
-    getDependency: getPrestigeTopBarBoundaryDependency,
-    getOverride: (name) => prestigeTopBarBoundaryOverrides[name],
+    buildPrestigeSettings: (...args) =>
+      (
+        prestigeTopBarTestContext?.buildPrestigeSettings ??
+        buildPrestigeSettings
+      )(...args),
   });
   const { updatePrestigeInTopBar, removePrestigeFromTopBar } =
-    prestigeTopBarBoundary;
+    prestigeTopBarBrowserAdapter;
 
   let totalDaysTopBarTestContext;
   const totalDaysTopBarReader = createTotalDaysTopBarEvolveAdapter({
@@ -5880,6 +5885,10 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
+      prestigeTopBar: prestigeTopBarBrowserAdapter,
+      setPrestigeTopBarTestContext(context) {
+        prestigeTopBarTestContext = context;
+      },
       totalDaysTopBar: totalDaysTopBarBrowserAdapter,
       setTotalDaysTopBarTestContext(context) {
         totalDaysTopBarTestContext = context;
@@ -5890,7 +5899,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
       remainingUiBoundaries: {
-        prestigeTopBar: prestigeTopBarBoundary,
         arpaToggles: arpaTogglesBoundary,
         craftToggles: craftTogglesBoundary,
         buildingToggles: buildingTogglesBoundary,
@@ -5913,7 +5921,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
           ProjectManager = context.ProjectManager;
         if ("EjectManager" in context) EjectManager = context.EjectManager;
         if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-        Object.assign(prestigeTopBarBoundaryOverrides, context);
         Object.assign(arpaTogglesBoundaryOverrides, context);
         Object.assign(craftTogglesBoundaryOverrides, context);
         Object.assign(buildingTogglesBoundaryOverrides, context);

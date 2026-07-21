@@ -20699,6 +20699,119 @@
     });
   }
 
+  // src/domain/prestige-top-bar.ts
+  function selectPrestigeTopBarType(options, selectedValue) {
+    const selected = options.find((option) => option.value === selectedValue);
+    return selected ?? {
+      value: selectedValue,
+      label: selectedValue,
+      hint: ""
+    };
+  }
+
+  // src/adapters/browser/prestige-top-bar.ts
+  function createPrestigeTopBarBrowserAdapter({
+    getDocument,
+    reader,
+    options,
+    buildPrestigeSettings: buildPrestigeSettings2
+  }) {
+    function updatePrestigeInTopBar2() {
+      const document2 = getDocument();
+      const parentId = "s-prestige-type";
+      let parentNode = document2.getElementById(parentId);
+      if (!reader.readDisplayEnabled()) {
+        removePrestigeFromTopBar2();
+        return;
+      }
+      if (parentNode === null) {
+        const planetWrap = document2.querySelector(".planetWrap");
+        if (planetWrap === null) return;
+        parentNode = document2.createElement("span");
+        parentNode.setAttribute("id", parentId);
+        parentNode.setAttribute(
+          "style",
+          "border-left: 1px solid; margin-left: 0.75rem; padding-left: 0.75rem;"
+        );
+        planetWrap.append(parentNode);
+        options.addOptionUI(
+          "s-prestige-type-helper-btn",
+          `#${parentId}`,
+          "Prestige",
+          buildPrestigeSettings2
+        );
+      }
+      const selectedValue = reader.readSelectedValue();
+      if (parentNode.getAttribute("data-prestige") === selectedValue) {
+        return;
+      }
+      let infoNode = parentNode.querySelector(".info");
+      if (infoNode === null) {
+        infoNode = document2.createElement("span");
+        infoNode.setAttribute("class", "info");
+        parentNode.append(infoNode);
+      }
+      const selection = selectPrestigeTopBarType(
+        reader.readTypeOptions(),
+        selectedValue
+      );
+      infoNode.title = selection.hint;
+      infoNode.textContent = selection.label;
+      parentNode.setAttribute("data-prestige", selection.value);
+    }
+    function removePrestigeFromTopBar2() {
+      const prestigeNode = getDocument().getElementById("s-prestige-type");
+      if (prestigeNode === null) return;
+      prestigeNode.remove();
+    }
+    return Object.freeze({
+      updatePrestigeInTopBar: updatePrestigeInTopBar2,
+      removePrestigeFromTopBar: removePrestigeFromTopBar2
+    });
+  }
+
+  // src/adapters/evolve/prestige-top-bar.ts
+  function requireString10(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function createPrestigeTopBarEvolveAdapter({
+    getSettings,
+    getPrestigeTypes
+  }) {
+    return Object.freeze({
+      readDisplayEnabled() {
+        const settings2 = requireRecord(getSettings(), "settings");
+        return Boolean(settings2["displayPrestigeTypeInTopBar"]);
+      },
+      readSelectedValue() {
+        const settings2 = requireRecord(getSettings(), "settings");
+        return requireString10(settings2["prestigeType"], "settings.prestigeType");
+      },
+      readTypeOptions() {
+        const rawOptions = getPrestigeTypes();
+        if (!Array.isArray(rawOptions)) {
+          throw new TypeError("prestigeTypes must be an array");
+        }
+        return Object.freeze(
+          rawOptions.map((rawOption, index) => {
+            const option = requireRecord(rawOption, `prestigeTypes[${index}]`);
+            return Object.freeze({
+              value: requireString10(option["val"], `prestigeTypes[${index}].val`),
+              label: requireString10(
+                option["label"],
+                `prestigeTypes[${index}].label`
+              ),
+              hint: requireString10(option["hint"], `prestigeTypes[${index}].hint`)
+            });
+          })
+        );
+      }
+    });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -24324,7 +24437,7 @@
   }
 
   // src/adapters/evolve/hell.ts
-  function requireString10(value, path) {
+  function requireString11(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -24621,7 +24734,7 @@
           ),
           evilTechnology: optionalNumber(tech["evil"], "game.global.tech.evil"),
           grenadier: Boolean(race2["grenadier"]),
-          government: requireString10(
+          government: requireString11(
             govern["type"],
             "game.global.civic.govern.type"
           )
@@ -25212,7 +25325,7 @@
   }
 
   // src/adapters/evolve/battle.ts
-  function requireString11(value, path) {
+  function requireString12(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -25230,7 +25343,7 @@
     return {
       input: Object.freeze({
         governmentId: requireNumber(foreign["id"], `${path}.id`),
-        policy: requireString11(foreign["policy"], `${path}.policy`),
+        policy: requireString12(foreign["policy"], `${path}.policy`),
         released: Boolean(foreign["released"]),
         occupied: Boolean(government["occ"]),
         annexed: Boolean(government["anx"]),
@@ -25345,7 +25458,7 @@
         );
         const hellAvailable = Boolean(manager["_hellVue"]);
         const readHell = autoHell2 && hellAvailable;
-        const protectMode = requireString11(
+        const protectMode = requireString12(
           settings2["foreignProtect"],
           "settings.foreignProtect"
         );
@@ -25619,7 +25732,7 @@
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        const governmentName = requireString11(
+        const governmentName = requireString12(
           dependencies.getGovernmentName(decision2.governmentId),
           `government name ${decision2.governmentId}`
         );
@@ -25645,7 +25758,7 @@
         if (removeBattalion !== null) {
           Reflect.apply(removeBattalion, active.manager, [-deltaBattalion]);
         }
-        const campaignTitle = requireString11(
+        const campaignTitle = requireString12(
           Reflect.apply(getCampaignTitle, active.manager, [decision2.tactic]),
           `campaign title ${decision2.tactic}`
         );
@@ -29592,7 +29705,7 @@
       moneyStorageRequired: 0
     });
   }
-  function requireString12(value, path) {
+  function requireString13(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -29641,7 +29754,7 @@
         );
         if (maxCityGarrison <= 0) return unavailableInput2();
         const state2 = requireRecord(dependencies.getState(), "state");
-        const goal = requireString12(state2["goal"], "state.goal");
+        const goal = requireString13(state2["goal"], "state.goal");
         const saveInflationMoney = Boolean(
           dependencies.shouldSaveInflationMoney()
         );
@@ -37346,7 +37459,7 @@
     );
     return { foreign, government };
   }
-  function requireString13(value, path) {
+  function requireString14(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -37357,7 +37470,7 @@
     const ids = {};
     for (const [name, rawType] of Object.entries(types)) {
       const type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString13(type["id"], `SpyManager.Types.${name}.id`);
+      ids[name] = requireString14(type["id"], `SpyManager.Types.${name}.id`);
     }
     return Object.freeze(ids);
   }
@@ -37465,7 +37578,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString13(
+        const policy = requireString14(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -37486,7 +37599,7 @@
             "resources.Money.maxQuantity"
           );
         }
-        const governmentName = requireString13(
+        const governmentName = requireString14(
           dependencies.getGovName(governmentId),
           `government name ${governmentId}`
         );
@@ -37532,7 +37645,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString13(
+        const policy = requireString14(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -38682,7 +38795,7 @@
   }
 
   // src/adapters/evolve/jobs.ts
-  function requireString14(value, path) {
+  function requireString15(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
     return value;
@@ -38812,7 +38925,7 @@
           if (count === 0) {
             maximum = 1;
           } else {
-            const id = requireString14(job["id"], "job.id");
+            const id = requireString15(job["id"], "job.id");
             const production = requireNumber(
               call2(
                 resource(resources2, "Food"),
@@ -39164,7 +39277,7 @@
           );
           return Object.freeze({
             token: token2,
-            id: requireString14(job["id"], `jobList[${token2}].id`),
+            id: requireString15(job["id"], `jobList[${token2}].id`),
             kind,
             workers: requireNumber(job["workers"], `jobList[${token2}].workers`),
             servants: requireNumber(
@@ -39281,7 +39394,7 @@
                 `craftingJobs[${index}].resource.craftPreserve`
               ))) {
                 affordability = 0;
-                exclusion = `${requireString14(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
+                exclusion = `${requireString15(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
                 break;
               }
               affordability = Math.min(
@@ -39313,7 +39426,7 @@
                 craftResource["currentQuantity"],
                 `craftingJobs[${index}].resource.currentQuantity`
               );
-              const resourceId3 = requireString14(
+              const resourceId3 = requireString15(
                 craftResource["id"],
                 `craftingJobs[${index}].resource.id`
               );
@@ -39333,7 +39446,7 @@
                 driver = `no building×${craftWeight}`;
               } else {
                 const record = requireRecord(driving, "driving building");
-                driver = `${requireString14(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
+                driver = `${requireString15(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
               }
             }
             return Object.freeze({
@@ -39540,7 +39653,7 @@
           minerToken: token("Miner"),
           population: resourceNumber(resources2, "Population", "currentQuantity"),
           craftDebug: Boolean(debugWindow["craftDebug"]),
-          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString14(state2["lastCraftWinner"], "state.lastCraftWinner"),
+          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString15(state2["lastCraftWinner"], "state.lastCraftWinner"),
           authority,
           jobs: Object.freeze(jobInputs),
           crafting: Object.freeze(craftingInputs),
@@ -39994,7 +40107,7 @@
   }
 
   // src/adapters/evolve/build.ts
-  function requireString15(value, path) {
+  function requireString16(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -40084,7 +40197,7 @@
         const byKey = /* @__PURE__ */ new Map();
         const candidates = entities.map((entity, index) => {
           const path = `buildList[${index}]`;
-          const key = requireString15(entity["_vueBinding"], `${path}._vueBinding`);
+          const key = requireString16(entity["_vueBinding"], `${path}._vueBinding`);
           byKey.set(key, entity);
           const rawCost = requireRecord(entity["cost"], `${path}.cost`);
           const cost = {};
@@ -40860,7 +40973,7 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString16(value, path) {
+  function requireString17(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -40880,7 +40993,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString16(
+    const status2 = requireString17(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -40949,7 +41062,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString16(
+          mode = requireString17(
             settings2["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -41087,7 +41200,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString16(
+            const id = requireString17(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -41246,7 +41359,7 @@
             );
           }
         }
-        const targetLocationName = requireString16(
+        const targetLocationName = requireString17(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -41279,7 +41392,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString16(
+        const shipName = requireString17(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -41290,7 +41403,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString16(
+        const shipClass = requireString17(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -41362,7 +41475,7 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString16(
+          const resourceId3 = requireString17(
             missingResource,
             "missing outer-fleet resource id"
           );
@@ -41370,7 +41483,7 @@
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString16(
+          missingResourceName = requireString17(
             resource2["name"],
             `resources.${resourceId3}.name`
           );
@@ -41800,7 +41913,7 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString17(value, path) {
+  function requireString18(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -41976,7 +42089,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString17(
+          const name = requireString18(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -42004,7 +42117,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString17(
+          chthonianLossMode = requireString18(
             settings2["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -42038,7 +42151,7 @@
               settings2["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString17(
+            alien2LossMode = requireString18(
               settings2["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -42387,7 +42500,7 @@
   }
 
   // src/adapters/evolve/mech.ts
-  function requireString18(value, path) {
+  function requireString19(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -42406,7 +42519,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString18(raw["size"], `${path}.size`),
+        size: requireString19(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -42441,7 +42554,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString18(raw["size"], `${path}.size`),
+      size: requireString19(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -42558,7 +42671,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString18(settings2["mechBuild"], "settings.mechBuild")
+          buildMode: requireString19(settings2["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -42593,7 +42706,7 @@
             call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString18(preferred[0], "preferred mech size");
+          const size = requireString19(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
             call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
@@ -42632,7 +42745,7 @@
           buildings2["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString18(
+        const prestigeType = requireString19(
           settings2["prestigeType"],
           "settings.prestigeType"
         );
@@ -42721,7 +42834,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString18(
+        const configuredScrapMode = requireString19(
           settings2["mechScrap"],
           "settings.mechScrap"
         );
@@ -42750,7 +42863,7 @@
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString18(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString19(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -42935,7 +43048,7 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString18(
+          const description = requireString19(
             call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
@@ -46477,79 +46590,6 @@
       return implementation.apply(this, args);
     }
     return { buildMarketSettings: buildMarketSettings2, updateMarketSettingsContent: updateMarketSettingsContent2 };
-  }
-
-  // src/ui/prestige-top-bar.ts
-  function createPrestigeTopBar({
-    getDependency,
-    getOverride
-  }) {
-    const addOptionUI2 = liveFunction(() => getDependency("addOptionUI"));
-    const buildPrestigeSettings2 = liveFunction(
-      () => getDependency("buildPrestigeSettings")
-    );
-    const document2 = liveObject4(() => getDependency("document"));
-    const prestigeTypes2 = liveObject4(() => getDependency("prestigeTypes"));
-    const settings2 = liveObject4(() => getDependency("settings"));
-    function updatePrestigeInTopBarImpl() {
-      const parentId = "s-prestige-type";
-      let parentNode = document2.getElementById(parentId);
-      if (settings2.displayPrestigeTypeInTopBar) {
-        if (parentNode === null) {
-          const planetWrap = document2.querySelector(".planetWrap");
-          if (planetWrap === null) return;
-          parentNode = document2.createElement("span");
-          parentNode.setAttribute("id", parentId);
-          parentNode.setAttribute(
-            "style",
-            "border-left: 1px solid; margin-left: 0.75rem; padding-left: 0.75rem;"
-          );
-          planetWrap.append(parentNode);
-          addOptionUI2(
-            "s-prestige-type-helper-btn",
-            `#${parentId}`,
-            "Prestige",
-            buildPrestigeSettings2
-          );
-        }
-      } else {
-        removePrestigeFromTopBar2();
-        return;
-      }
-      if (parentNode.getAttribute("data-prestige") !== settings2.prestigeType) {
-        let infoNode = parentNode.querySelector(".info");
-        if (infoNode === null) {
-          infoNode = document2.createElement("span");
-          infoNode.setAttribute("class", "info");
-          parentNode.append(infoNode);
-        }
-        let prestige = prestigeTypes2.find(
-          (entry) => entry.val === settings2.prestigeType
-        );
-        if (prestige === void 0) {
-          prestige = { label: settings2.prestigeType, hint: "" };
-        }
-        infoNode.title = prestige.hint;
-        infoNode.textContent = prestige.label;
-        parentNode.setAttribute("data-prestige", settings2.prestigeType);
-      }
-    }
-    function removePrestigeFromTopBarImpl() {
-      let prestigeNode = document2.getElementById("s-prestige-type");
-      if (prestigeNode == null) {
-        return;
-      }
-      prestigeNode.remove();
-    }
-    function updatePrestigeInTopBar2(...args) {
-      const implementation = getOverride("updatePrestigeInTopBar") ?? updatePrestigeInTopBarImpl;
-      return implementation.apply(this, args);
-    }
-    function removePrestigeFromTopBar2(...args) {
-      const implementation = getOverride("removePrestigeFromTopBar") ?? removePrestigeFromTopBarImpl;
-      return implementation.apply(this, args);
-    }
-    return { updatePrestigeInTopBar: updatePrestigeInTopBar2, removePrestigeFromTopBar: removePrestigeFromTopBar2 };
   }
 
   // src/ui/arpa-toggles.ts
@@ -50970,22 +51010,20 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       openOptionsModal,
       createOptionsModal
     } = optionsModalBrowserAdapter;
-    const prestigeTopBarBoundaryOverrides = {};
-    const getPrestigeTopBarBoundaryDependency = createDependencyResolver(
-      prestigeTopBarBoundaryOverrides,
-      {
-        addOptionUI: () => addOptionUI,
-        buildPrestigeSettings: () => buildPrestigeSettings,
-        document: () => document,
-        prestigeTypes: () => prestigeTypes,
-        settings: () => settings
-      }
-    );
-    const prestigeTopBarBoundary = createPrestigeTopBar({
-      getDependency: getPrestigeTopBarBoundaryDependency,
-      getOverride: (name) => prestigeTopBarBoundaryOverrides[name]
+    let prestigeTopBarTestContext;
+    const prestigeTopBarReader = createPrestigeTopBarEvolveAdapter({
+      getSettings: () => prestigeTopBarTestContext?.settings ?? settings,
+      getPrestigeTypes: () => prestigeTopBarTestContext?.prestigeTypes ?? prestigeTypes
     });
-    const { updatePrestigeInTopBar, removePrestigeFromTopBar } = prestigeTopBarBoundary;
+    const prestigeTopBarBrowserAdapter = createPrestigeTopBarBrowserAdapter({
+      getDocument: () => document,
+      reader: prestigeTopBarReader,
+      options: {
+        addOptionUI: (...args) => (prestigeTopBarTestContext?.addOptionUI ?? addOptionUI)(...args)
+      },
+      buildPrestigeSettings: (...args) => (prestigeTopBarTestContext?.buildPrestigeSettings ?? buildPrestigeSettings)(...args)
+    });
+    const { updatePrestigeInTopBar, removePrestigeFromTopBar } = prestigeTopBarBrowserAdapter;
     let totalDaysTopBarTestContext;
     const totalDaysTopBarReader = createTotalDaysTopBarEvolveAdapter({
       getSettings: () => totalDaysTopBarTestContext?.settings ?? settings,
@@ -55201,6 +55239,10 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     }
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
+        prestigeTopBar: prestigeTopBarBrowserAdapter,
+        setPrestigeTopBarTestContext(context) {
+          prestigeTopBarTestContext = context;
+        },
         totalDaysTopBar: totalDaysTopBarBrowserAdapter,
         setTotalDaysTopBarTestContext(context) {
           totalDaysTopBarTestContext = context;
@@ -55210,7 +55252,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         remainingUiBoundaries: {
-          prestigeTopBar: prestigeTopBarBoundary,
           arpaToggles: arpaTogglesBoundary,
           craftToggles: craftTogglesBoundary,
           buildingToggles: buildingTogglesBoundary,
@@ -55233,7 +55274,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
             ProjectManager = context.ProjectManager;
           if ("EjectManager" in context) EjectManager = context.EjectManager;
           if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-          Object.assign(prestigeTopBarBoundaryOverrides, context);
           Object.assign(arpaTogglesBoundaryOverrides, context);
           Object.assign(craftTogglesBoundaryOverrides, context);
           Object.assign(buildingTogglesBoundaryOverrides, context);

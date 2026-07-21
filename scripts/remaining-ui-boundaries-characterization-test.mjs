@@ -83,7 +83,6 @@ vm.runInNewContext(source, sandbox, {
 
 const boundaries = hooks.remainingUiBoundaries;
 assert.deepEqual(Object.keys(boundaries), [
-  "prestigeTopBar",
   "arpaToggles",
   "craftToggles",
   "buildingToggles",
@@ -179,12 +178,6 @@ assert.deepEqual(trace, [
   "toggle:res_supplyCoal",
 ]);
 assert.equal(state.buildingToggles, 1);
-
-const prestigeNode = { remove: () => trace.push("topbar:removePrestige") };
-domElements.set("s-prestige-type", prestigeNode);
-trace.length = 0;
-boundaries.prestigeTopBar.removePrestigeFromTopBar();
-assert.deepEqual(trace, ["topbar:removePrestige"]);
 
 domTrace.length = 0;
 hooks.setRemainingUiBoundariesTestContext({
@@ -289,4 +282,4 @@ assert.ok(domTrace.includes("remove:#script_market_top_row"));
 assert.ok(domTrace.includes("remove:#resStorage .ea-storage-toggle"));
 assert.ok(domTrace.includes("remove:#script_storage_top_row"));
 
-console.log("Next 6 UI-boundary bundled characterization tests passed");
+console.log("Next 5 UI-boundary bundled characterization tests passed");

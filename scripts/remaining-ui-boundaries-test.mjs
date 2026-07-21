@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import { liveFunction } from "../src/ui/dependencies.ts";
-import { createPrestigeTopBar } from "../src/ui/prestige-top-bar.ts";
 import { createArpaToggleUI } from "../src/ui/arpa-toggles.ts";
 import { createCraftToggleUI } from "../src/ui/craft-toggles.ts";
 import { createBuildingToggleUI } from "../src/ui/building-toggles.ts";
@@ -113,16 +112,6 @@ assert.deepEqual(toggleTrace, [
   "replacement:craftBrick",
 ]);
 
-const elements = new Map();
-const topBarTrace = [];
-elements.set("s-prestige-type", {
-  remove: () => topBarTrace.push("prestige:remove"),
-});
-const document = { getElementById: (id) => elements.get(id) ?? null };
-const prestigeTopBar = makeFactory(createPrestigeTopBar, { document });
-prestigeTopBar.removePrestigeFromTopBar();
-assert.deepEqual(topBarTrace, ["prestige:remove"]);
-
 class FirstClass {}
 let currentClass = FirstClass;
 const liveClass = liveFunction(() => currentClass);
@@ -132,4 +121,4 @@ currentClass = SecondClass;
 assert.equal(new FirstClass() instanceof liveClass, false);
 assert.equal(new SecondClass() instanceof liveClass, true);
 
-console.log("Next 6 UI-boundary module tests passed");
+console.log("Next 5 UI-boundary module tests passed");
