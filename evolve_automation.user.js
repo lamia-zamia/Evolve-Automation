@@ -169,7 +169,7 @@
   function createSettingsState({
     getSettingsRaw,
     getTriggerManager,
-    storage
+    settingsStore: settingsStore2
   }) {
     function updateStateFromSettings2() {
       const settingsRaw2 = getSettingsRaw();
@@ -184,7 +184,7 @@
       settingsRaw2.triggers = JSON.parse(
         JSON.stringify(getTriggerManager().priorityList)
       );
-      storage.setItem("settings", JSON.stringify(settingsRaw2));
+      settingsStore2.save(settingsRaw2);
     }
     function applySettings2(def, reset) {
       const settingsRaw2 = getSettingsRaw();
@@ -13796,6 +13796,19 @@
         } catch {
           return false;
         }
+      }
+    });
+  }
+
+  // src/adapters/storage/settings-store.ts
+  var SETTINGS_KEY = "settings";
+  function createSettingsStore(storage) {
+    return Object.freeze({
+      load() {
+        return JSON.parse(storage.getItem(SETTINGS_KEY) ?? "null") ?? {};
+      },
+      save(record) {
+        storage.setItem(SETTINGS_KEY, JSON.stringify(record));
       }
     });
   }
@@ -49058,7 +49071,8 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     "use strict";
     const { getRealNumber, getNumberString, getNiceNumber } = createNumberFormatting({ numberSuffix });
     const browserClock = createBrowserClock();
-    var settingsRaw = JSON.parse(localStorage.getItem("settings")) ?? {};
+    const settingsStore = createSettingsStore(localStorage);
+    var settingsRaw = settingsStore.load();
     var settings = {};
     var game = null;
     const { fastEval, cacheSize: fastEvalCacheSize } = createFastEvaluator({
@@ -51116,7 +51130,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     } = createSettingsState({
       getSettingsRaw: () => settingsRaw,
       getTriggerManager: () => TriggerManager,
-      storage: localStorage
+      settingsStore
     });
     const { updateStandAloneSettings } = createSettingsMigration({
       getSettingsRaw: () => settingsRaw,

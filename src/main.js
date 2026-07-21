@@ -86,6 +86,7 @@ import {
   readPlannerRun,
 } from "./adapters/evolve/planner-analysis.ts";
 import { createPlannerStatsStore } from "./adapters/storage/planner-stats.ts";
+import { createSettingsStore } from "./adapters/storage/settings-store.ts";
 import { createPlannerStatsLifecycle } from "./application/planner-stats.ts";
 import { createBuildPlanner } from "./planning/build-planner.ts";
 import { createStorageExpansion } from "./bootstrap/storage-expansion.ts";
@@ -422,7 +423,8 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { getRealNumber, getNumberString, getNiceNumber } =
     createNumberFormatting({ numberSuffix });
   const browserClock = createBrowserClock();
-  var settingsRaw = JSON.parse(localStorage.getItem("settings")) ?? {};
+  const settingsStore = createSettingsStore(localStorage);
+  var settingsRaw = settingsStore.load();
   var settings = {};
   var game = null;
   // Keep direct eval in the composition-root scope: custom expressions rely on
@@ -2624,7 +2626,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   } = createSettingsState({
     getSettingsRaw: () => settingsRaw,
     getTriggerManager: () => TriggerManager,
-    storage: localStorage,
+    settingsStore,
   });
 
   const { updateStandAloneSettings } = createSettingsMigration({

@@ -19,7 +19,9 @@ let triggerManager = {
 const state = createSettingsState({
   getSettingsRaw: () => settingsRaw,
   getTriggerManager: () => triggerManager,
-  storage: { setItem: (key, value) => writes.push([key, value]) },
+  settingsStore: {
+    save: (record) => writes.push(["settings", JSON.stringify(record)]),
+  },
 });
 
 state.applySettings({ count: 0, enabled: true }, false);

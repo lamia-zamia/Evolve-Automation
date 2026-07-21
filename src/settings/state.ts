@@ -12,20 +12,20 @@ interface TriggerManagerContract {
   AddTriggerFromSetting(trigger: unknown): void;
 }
 
-interface StorageContract {
-  setItem(key: string, value: string): void;
+interface SettingsStoreContract {
+  save(record: unknown): void;
 }
 
 interface SettingsStateDependencies {
   getSettingsRaw: () => SettingsRecord;
   getTriggerManager: () => TriggerManagerContract;
-  storage: StorageContract;
+  settingsStore: SettingsStoreContract;
 }
 
 export function createSettingsState({
   getSettingsRaw,
   getTriggerManager,
-  storage,
+  settingsStore,
 }: SettingsStateDependencies) {
   function updateStateFromSettings() {
     const settingsRaw = getSettingsRaw();
@@ -41,7 +41,7 @@ export function createSettingsState({
     settingsRaw.triggers = JSON.parse(
       JSON.stringify(getTriggerManager().priorityList),
     );
-    storage.setItem("settings", JSON.stringify(settingsRaw));
+    settingsStore.save(settingsRaw);
   }
 
   function applySettings(def: Record<string, unknown>, reset: boolean) {
