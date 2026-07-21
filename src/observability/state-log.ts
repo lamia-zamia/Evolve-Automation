@@ -83,9 +83,9 @@ type StateLogDependencies = {
         resourceId?: string;
       }
     | null;
-  storage: {
-    getItem: (key: string) => string | null;
-    setItem: (key: string, value: string) => void;
+  stateLogStore: {
+    load: () => unknown;
+    save: (record: unknown) => void;
   };
 };
 
@@ -98,7 +98,7 @@ export function createStateLogLifecycle({
   getResources,
   getState,
   plannerLimitingResource,
-  storage,
+  stateLogStore,
 }: StateLogDependencies) {
   function makeStateLog(): StateLog {
     const game = getGame();
@@ -115,9 +115,7 @@ export function createStateLogLifecycle({
 
   function loadStateLog() {
     try {
-      const saved = JSON.parse(
-        storage.getItem("ea_state_log") as string,
-      ) as StateLog | null;
+      const saved = stateLogStore.load() as StateLog | null;
       if (
         saved &&
         saved.v === 2 &&
@@ -134,7 +132,7 @@ export function createStateLogLifecycle({
   function saveStateLog() {
     const stateLog = getState().stateLog;
     if (stateLog) {
-      storage.setItem("ea_state_log", JSON.stringify(stateLog));
+      stateLogStore.save(stateLog);
     }
   }
 

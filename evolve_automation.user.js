@@ -13813,6 +13813,19 @@
     });
   }
 
+  // src/adapters/storage/state-log-store.ts
+  var STATE_LOG_KEY = "ea_state_log";
+  function createStateLogStore(storage) {
+    return Object.freeze({
+      load() {
+        return JSON.parse(storage.getItem(STATE_LOG_KEY) ?? "null");
+      },
+      save(record) {
+        storage.setItem(STATE_LOG_KEY, JSON.stringify(record));
+      }
+    });
+  }
+
   // src/application/planner-stats.ts
   function createPlannerStatsLifecycle(store) {
     return Object.freeze({
@@ -15926,7 +15939,7 @@
     getResources,
     getState,
     plannerLimitingResource: plannerLimitingResource2,
-    storage
+    stateLogStore
   }) {
     function makeStateLog2() {
       const game2 = getGame();
@@ -15942,9 +15955,7 @@
     }
     function loadStateLog2() {
       try {
-        const saved = JSON.parse(
-          storage.getItem("ea_state_log")
-        );
+        const saved = stateLogStore.load();
         if (saved && saved.v === 2 && saved.reset === getGame().global.stats.reset) {
           return saved;
         }
@@ -15956,7 +15967,7 @@
     function saveStateLog2() {
       const stateLog = getState().stateLog;
       if (stateLog) {
-        storage.setItem("ea_state_log", JSON.stringify(stateLog));
+        stateLogStore.save(stateLog);
       }
     }
     function stateLogDiff2(previous, current) {
@@ -50252,7 +50263,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getResources: () => resources,
       getState: () => state,
       plannerLimitingResource,
-      storage: localStorage
+      stateLogStore: createStateLogStore(localStorage)
     });
     const { verifyGameActions, verifyGameActionsExist, verifyGameActionExists } = createGameActionVerification({
       getGame: () => game,

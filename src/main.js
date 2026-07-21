@@ -87,6 +87,7 @@ import {
 } from "./adapters/evolve/planner-analysis.ts";
 import { createPlannerStatsStore } from "./adapters/storage/planner-stats.ts";
 import { createSettingsStore } from "./adapters/storage/settings-store.ts";
+import { createStateLogStore } from "./adapters/storage/state-log-store.ts";
 import { createPlannerStatsLifecycle } from "./application/planner-stats.ts";
 import { createBuildPlanner } from "./planning/build-planner.ts";
 import { createStorageExpansion } from "./bootstrap/storage-expansion.ts";
@@ -1650,7 +1651,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getResources: () => resources,
     getState: () => state,
     plannerLimitingResource,
-    storage: localStorage,
+    stateLogStore: createStateLogStore(localStorage),
   });
   const { verifyGameActions, verifyGameActionsExist, verifyGameActionExists } =
     createGameActionVerification({
