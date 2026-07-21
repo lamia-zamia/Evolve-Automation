@@ -447,7 +447,8 @@ import { createEjectorSettings } from "./ui/ejector-settings.ts";
 import { createMarketSettings } from "./ui/market-settings.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoUI } from "./ui/mech-info.ts";
-import { createResourceToggleUI } from "./ui/resource-toggles.ts";
+import { createResourceToggleEvolveAdapter } from "./adapters/evolve/resource-toggles.ts";
+import { createResourceToggleBrowserAdapter } from "./adapters/browser/resource-toggles.ts";
 import { createTooltipUI } from "./ui/tooltips.ts";
 import { createCustomRaceUI } from "./ui/custom-race-ui.ts";
 import { createSettingsShell } from "./ui/settings-shell.ts";
@@ -646,21 +647,29 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getVueById: (id) => getVueById(id),
     getNiceNumber: (value) => getNiceNumber(value),
   });
+  let resourceToggleTestContext;
+  const resourceToggleReader = createResourceToggleEvolveAdapter({
+    getGame: () => resourceToggleTestContext?.game ?? game,
+    getSettingsRaw: () => resourceToggleTestContext?.settingsRaw ?? settingsRaw,
+    getMarketManager: () =>
+      resourceToggleTestContext?.MarketManager ?? MarketManager,
+    getStorageManager: () =>
+      resourceToggleTestContext?.StorageManager ?? StorageManager,
+  });
+  const resourceToggleBrowserAdapter = createResourceToggleBrowserAdapter({
+    getJQuery: () => $,
+    reader: resourceToggleReader,
+    addToggleCallbacks: (...args) =>
+      (resourceToggleTestContext?.addToggleCallbacks ?? addToggleCallbacks)(
+        ...args,
+      ),
+  });
   const {
     createMarketToggles,
     removeMarketToggles,
     createStorageToggles,
     removeStorageToggles,
-  } = createResourceToggleUI({
-    getJQuery: () => $,
-    getGame: () => game,
-    getSettingsRaw: () => settingsRaw,
-    getResources: () => resources,
-    getMarketManager: () => MarketManager,
-    getStorageManager: () => StorageManager,
-    addToggleCallbacks: (node, settingKey) =>
-      addToggleCallbacks(node, settingKey),
-  });
+  } = resourceToggleBrowserAdapter;
   const {
     buildProductionSettings,
     updateProductionSettingsContent,
@@ -5924,6 +5933,10 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       buildingToggles: buildingToggleBrowserAdapter,
       setBuildingTogglesTestContext(context) {
         buildingTogglesTestContext = context;
+      },
+      resourceToggles: resourceToggleBrowserAdapter,
+      setResourceTogglesTestContext(context) {
+        resourceToggleTestContext = context;
       },
     });
   }

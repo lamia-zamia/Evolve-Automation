@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 
+import { createResourceToggleBrowserAdapter } from "../src/adapters/browser/resource-toggles.ts";
+import { createResourceToggleEvolveAdapter } from "../src/adapters/evolve/resource-toggles.ts";
 import { createMechInfoUI } from "../src/ui/mech-info.ts";
 import { createQueuePanels } from "../src/ui/queue-panels.ts";
-import { createResourceToggleUI } from "../src/ui/resource-toggles.ts";
 
 const trace = [];
 const handlers = new Map();
@@ -182,13 +183,15 @@ let liveGame = {
   global: { race: {} },
   loc: (key) => `loc:${key}`,
 };
-const toggleUI = createResourceToggleUI({
-  getJQuery: () => jquery,
+const toggleReader = createResourceToggleEvolveAdapter({
   getGame: () => liveGame,
   getSettingsRaw: () => ({ buyIron: true, res_storageIron: true }),
-  getResources: () => ({ Food: { id: "Food" } }),
   getMarketManager: () => ({ priorityList: [{ id: "Iron" }] }),
   getStorageManager: () => ({ priorityList: [{ id: "Iron" }] }),
+});
+const toggleUI = createResourceToggleBrowserAdapter({
+  getJQuery: () => jquery,
+  reader: toggleReader,
   addToggleCallbacks: (node, key) => {
     toggleKeys.push(key);
     return node;

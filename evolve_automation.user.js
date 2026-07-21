@@ -47256,162 +47256,288 @@
     return { createMechInfo: createMechInfo2, removeMechInfo: removeMechInfo2 };
   }
 
-  // src/ui/resource-toggles.ts
-  function createResourceToggleUI({
-    getJQuery,
+  // src/adapters/evolve/resource-toggles.ts
+  function requireString25(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function requireFunction2(value, path) {
+    if (typeof value !== "function") {
+      throw new TypeError(`${path} must be a function`);
+    }
+    return value;
+  }
+  function readPriorityList8(value, path) {
+    const manager = requireRecord(value, path);
+    const priorityList = manager["priorityList"];
+    if (!Array.isArray(priorityList)) {
+      throw new TypeError(`${path}.priorityList must be an array`);
+    }
+    return priorityList;
+  }
+  function readResourceId3(value, path) {
+    return requireString25(requireRecord(value, path)["id"], `${path}.id`);
+  }
+  function createResourceToggleEvolveAdapter({
     getGame,
     getSettingsRaw,
-    getResources,
     getMarketManager,
-    getStorageManager,
-    addToggleCallbacks: addToggleCallbacks2
+    getStorageManager
   }) {
-    const dependencies = {
-      getJQuery,
-      getGame,
-      getSettingsRaw,
-      getResources,
-      getMarketManager,
-      getStorageManager,
-      addToggleCallbacks: addToggleCallbacks2
-    };
-    function createMarketToggles2() {
-      const $2 = dependencies.getJQuery();
-      const game2 = dependencies.getGame();
-      const settingsRaw2 = dependencies.getSettingsRaw();
-      const resources2 = dependencies.getResources();
-      removeMarketToggles2();
-      if (!game2.global.race["no_trade"]) {
-        $2("#market .market-item[id] .res").width("5rem");
-        $2("#market .market-item[id] .buy span").text("B");
-        $2("#market .market-item[id] .sell span").text("S");
-        $2("#market .market-item[id] .trade > :first-child").text("R");
-        $2("#market .market-item[id] .trade .zero").text("×");
+    function readMarket() {
+      const game2 = requireRecord(getGame(), "game");
+      const global = requireRecord(game2["global"], "game.global");
+      const race2 = requireRecord(global["race"], "game.global.race");
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      const noTrade = Boolean(race2["no_trade"]);
+      const loc = requireFunction2(game2["loc"], "game.loc");
+      const labels = noTrade ? Object.freeze({ buy: "", sell: "", routes: "", cancelRoutes: "" }) : Object.freeze({
+        buy: requireString25(loc("resource_market_buy"), "game.loc(buy)"),
+        sell: requireString25(loc("resource_market_sell"), "game.loc(sell)"),
+        routes: requireString25(
+          loc("resource_market_routes"),
+          "game.loc(routes)"
+        ),
+        cancelRoutes: requireString25(
+          loc("cancel_routes"),
+          "game.loc(cancel_routes)"
+        )
+      });
+      const items = [];
+      for (const [index, rawResource] of readPriorityList8(
+        getMarketManager(),
+        "MarketManager"
+      ).entries()) {
+        const resourceId3 = readResourceId3(
+          rawResource,
+          `MarketManager.priorityList[${index}]`
+        );
+        if (resourceId3 === "Food" && (Boolean(race2["artifical"]) || Boolean(race2["fasting"]))) {
+          continue;
+        }
+        const buyKey = `buy${resourceId3}`;
+        const sellKey = `sell${resourceId3}`;
+        const tradeBuyKey = `res_trade_buy_${resourceId3}`;
+        const tradeSellKey = `res_trade_sell_${resourceId3}`;
+        items.push(
+          Object.freeze({
+            resourceId: resourceId3,
+            buyKey,
+            sellKey,
+            tradeBuyKey,
+            tradeSellKey,
+            buyEnabled: Boolean(settingsRaw2[buyKey]),
+            sellEnabled: Boolean(settingsRaw2[sellKey]),
+            tradeBuyEnabled: Boolean(settingsRaw2[tradeBuyKey]),
+            tradeSellEnabled: Boolean(settingsRaw2[tradeSellKey])
+          })
+        );
       }
-      $2("#market-qty").after(`
+      return Object.freeze({
+        noTrade,
+        labels,
+        items: Object.freeze(items)
+      });
+    }
+    function readStorage() {
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      const items = [];
+      for (const [index, rawResource] of readPriorityList8(
+        getStorageManager(),
+        "StorageManager"
+      ).entries()) {
+        const resourceId3 = readResourceId3(
+          rawResource,
+          `StorageManager.priorityList[${index}]`
+        );
+        const storeKey = `res_storage${resourceId3}`;
+        const overKey = `res_storage_o_${resourceId3}`;
+        items.push(
+          Object.freeze({
+            resourceId: resourceId3,
+            storeKey,
+            overKey,
+            storeEnabled: Boolean(settingsRaw2[storeKey]),
+            overEnabled: Boolean(settingsRaw2[overKey])
+          })
+        );
+      }
+      return Object.freeze({ items: Object.freeze(items) });
+    }
+    return Object.freeze({ readMarket, readStorage });
+  }
+
+  // src/adapters/browser/resource-toggles.ts
+  function createMarketHeader(view) {
+    return `
           <div class="market-item vb" id="script_market_top_row" style="overflow:hidden">
             <span style="margin-left: auto; margin-right: 0.2rem; float:right;">
-              ${!game2.global.race["no_trade"] ? `
+              ${!view.noTrade ? `
               <span class="has-text-success" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">Buy</span>
               <span class="has-text-danger" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">Sell</span>` : ""}
               <span class="has-text-warning" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">In</span>
               <span class="has-text-warning" style="width: 2.75rem; display: inline-block; text-align: center;">Away</span>
             </span>
-          </div>`);
-      for (const resource2 of dependencies.getMarketManager().priorityList) {
-        if (resource2 === resources2.Food && (game2.global.race["artifical"] || game2.global.race["fasting"])) {
-          continue;
-        }
-        const marketElement = $2("#market-" + resource2.id);
-        if (marketElement.length > 0) {
-          const marketRow = $2(
-            '<span class="ea-market-toggle" style="margin-left: auto; margin-right: 0.2rem; float:right;"></span>'
-          );
-          if (!game2.global.race["no_trade"]) {
-            const buyKey = "buy" + resource2.id;
-            const sellKey = "sell" + resource2.id;
-            marketRow.append(
-              dependencies.addToggleCallbacks(
-                $2(
-                  `<label tabindex="0" title="Enable buying of this resource." class="switch"><input class="script_${buyKey}" type="checkbox"${settingsRaw2[buyKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
-                ),
-                buyKey
-              ),
-              dependencies.addToggleCallbacks(
-                $2(
-                  `<label tabindex="0" title="Enable selling of this resource." class="switch"><input class="script_${sellKey}" type="checkbox"${settingsRaw2[sellKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
-                ),
-                sellKey
-              )
-            );
-          }
-          const tradeBuyKey = "res_trade_buy_" + resource2.id;
-          const tradeSellKey = "res_trade_sell_" + resource2.id;
-          marketRow.append(
-            dependencies.addToggleCallbacks(
-              $2(
-                `<label tabindex="0" title="Enable trading for this resource." class="switch"><input class="script_${tradeBuyKey}" type="checkbox"${settingsRaw2[tradeBuyKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
-              ),
-              tradeBuyKey
-            ),
-            dependencies.addToggleCallbacks(
-              $2(
-                `<label tabindex="0" title="Enable trading this resource away." class="switch"><input class="script_${tradeSellKey}" type="checkbox"${settingsRaw2[tradeSellKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
-              ),
-              tradeSellKey
+          </div>`;
+  }
+  function createMarketToggleMarkup(title, settingKey, enabled) {
+    return `<label tabindex="0" title="${title}" class="switch"><input class="script_${settingKey}" type="checkbox"${enabled ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`;
+  }
+  function createStorageToggleMarkup(title, settingKey, enabled) {
+    return createMarketToggleMarkup(title, settingKey, enabled);
+  }
+  function createMarketRow(view, item, jquery, addToggleCallbacks2) {
+    const marketRow = jquery(
+      '<span class="ea-market-toggle" style="margin-left: auto; margin-right: 0.2rem; float:right;"></span>'
+    );
+    if (!view.noTrade) {
+      marketRow.append(
+        addToggleCallbacks2(
+          jquery(
+            createMarketToggleMarkup(
+              "Enable buying of this resource.",
+              item.buyKey,
+              item.buyEnabled
             )
-          );
-          marketRow.appendTo(marketElement);
-        }
+          ),
+          item.buyKey
+        ),
+        addToggleCallbacks2(
+          jquery(
+            createMarketToggleMarkup(
+              "Enable selling of this resource.",
+              item.sellKey,
+              item.sellEnabled
+            )
+          ),
+          item.sellKey
+        )
+      );
+    }
+    marketRow.append(
+      addToggleCallbacks2(
+        jquery(
+          createMarketToggleMarkup(
+            "Enable trading for this resource.",
+            item.tradeBuyKey,
+            item.tradeBuyEnabled
+          )
+        ),
+        item.tradeBuyKey
+      ),
+      addToggleCallbacks2(
+        jquery(
+          createMarketToggleMarkup(
+            "Enable trading this resource away.",
+            item.tradeSellKey,
+            item.tradeSellEnabled
+          )
+        ),
+        item.tradeSellKey
+      )
+    );
+    return marketRow;
+  }
+  function createStorageRow(item, jquery, addToggleCallbacks2) {
+    return jquery(
+      '<span class="ea-storage-toggle" style="margin-left: auto; margin-right: 0.2rem; float:right;"></span>'
+    ).append(
+      addToggleCallbacks2(
+        jquery(
+          createStorageToggleMarkup(
+            "Enable storing of this resource.",
+            item.storeKey,
+            item.storeEnabled
+          )
+        ),
+        item.storeKey
+      ),
+      addToggleCallbacks2(
+        jquery(
+          createStorageToggleMarkup(
+            "Enable storing overflow of this resource.",
+            item.overKey,
+            item.overEnabled
+          )
+        ),
+        item.overKey
+      )
+    );
+  }
+  function createResourceToggleBrowserAdapter({
+    getJQuery,
+    reader,
+    addToggleCallbacks: addToggleCallbacks2
+  }) {
+    function createMarketToggles2() {
+      removeMarketToggles2();
+      const jquery = getJQuery();
+      const view = reader.readMarket();
+      if (!view.noTrade) {
+        jquery("#market .market-item[id] .res").width("5rem");
+        jquery("#market .market-item[id] .buy span").text("B");
+        jquery("#market .market-item[id] .sell span").text("S");
+        jquery("#market .market-item[id] .trade > :first-child").text("R");
+        jquery("#market .market-item[id] .trade .zero").text("×");
+      }
+      jquery("#market-qty").after(createMarketHeader(view));
+      for (const item of view.items) {
+        const marketElement = jquery(`#market-${item.resourceId}`);
+        if (marketElement.length === 0) continue;
+        createMarketRow(view, item, jquery, addToggleCallbacks2).appendTo(
+          marketElement
+        );
       }
     }
     function removeMarketToggles2() {
-      const $2 = dependencies.getJQuery();
-      const game2 = dependencies.getGame();
-      $2("#market .ea-market-toggle").remove();
-      $2("#script_market_top_row").remove();
-      if (!game2.global.race["no_trade"]) {
-        $2("#market .market-item[id] .res").width("7.5rem");
-        $2("#market .market-item[id] .buy span").text(
-          game2.loc("resource_market_buy")
+      const jquery = getJQuery();
+      const view = reader.readMarket();
+      jquery("#market .ea-market-toggle").remove();
+      jquery("#script_market_top_row").remove();
+      if (!view.noTrade) {
+        jquery("#market .market-item[id] .res").width("7.5rem");
+        jquery("#market .market-item[id] .buy span").text(view.labels.buy);
+        jquery("#market .market-item[id] .sell span").text(view.labels.sell);
+        jquery("#market .market-item[id] .trade > :first-child").text(
+          view.labels.routes
         );
-        $2("#market .market-item[id] .sell span").text(
-          game2.loc("resource_market_sell")
-        );
-        $2("#market .market-item[id] .trade > :first-child").text(
-          game2.loc("resource_market_routes")
-        );
-        $2("#market .market-item[id] .trade .zero").text(
-          game2.loc("cancel_routes")
+        jquery("#market .market-item[id] .trade .zero").text(
+          view.labels.cancelRoutes
         );
       }
     }
     function createStorageToggles2() {
-      const $2 = dependencies.getJQuery();
-      const settingsRaw2 = dependencies.getSettingsRaw();
       removeStorageToggles2();
-      $2("#createHead").after(`
+      const jquery = getJQuery();
+      const view = reader.readStorage();
+      jquery("#createHead").after(`
           <div class="market-item vb" id="script_storage_top_row" style="overflow:hidden">
             <span style="margin-left: auto; margin-right: 0.2rem; float:right;">
               <span class="has-text-warning" style="width: 2.75rem; margin-right: 0.3em; display: inline-block; text-align: center;">Auto</span>
               <span class="has-text-warning" style="width: 2.75rem; display: inline-block; text-align: center;">Over</span>
             </span>
           </div>`);
-      for (const resource2 of dependencies.getStorageManager().priorityList) {
-        const storageElement = $2("#stack-" + resource2.id);
-        if (storageElement.length > 0) {
-          const storeKey = "res_storage" + resource2.id;
-          const overKey = "res_storage_o_" + resource2.id;
-          $2(
-            `<span class="ea-storage-toggle" style="margin-left: auto; margin-right: 0.2rem; float:right;"></span>`
-          ).append(
-            dependencies.addToggleCallbacks(
-              $2(
-                `<label tabindex="0" title="Enable storing of this resource." class="switch"><input class="script_${storeKey}" type="checkbox"${settingsRaw2[storeKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
-              ),
-              storeKey
-            ),
-            dependencies.addToggleCallbacks(
-              $2(
-                `<label tabindex="0" title="Enable storing overflow of this resource." class="switch"><input class="script_${overKey}" type="checkbox"${settingsRaw2[overKey] ? " checked" : ""}><span class="check" style="height:5px;"></span><span class="state"></span></label>`
-              ),
-              overKey
-            )
-          ).appendTo(storageElement);
-        }
+      for (const item of view.items) {
+        const storageElement = jquery(`#stack-${item.resourceId}`);
+        if (storageElement.length === 0) continue;
+        createStorageRow(item, jquery, addToggleCallbacks2).appendTo(
+          storageElement
+        );
       }
     }
     function removeStorageToggles2() {
-      const $2 = dependencies.getJQuery();
-      $2("#resStorage .ea-storage-toggle").remove();
-      $2("#script_storage_top_row").remove();
+      const jquery = getJQuery();
+      jquery("#resStorage .ea-storage-toggle").remove();
+      jquery("#script_storage_top_row").remove();
     }
-    return {
+    return Object.freeze({
       createMarketToggles: createMarketToggles2,
       removeMarketToggles: removeMarketToggles2,
       createStorageToggles: createStorageToggles2,
       removeStorageToggles: removeStorageToggles2
-    };
+    });
   }
 
   // src/ui/tooltips.ts
@@ -50767,20 +50893,26 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getVueById: (id) => getVueById(id),
       getNiceNumber: (value) => getNiceNumber(value)
     });
+    let resourceToggleTestContext;
+    const resourceToggleReader = createResourceToggleEvolveAdapter({
+      getGame: () => resourceToggleTestContext?.game ?? game,
+      getSettingsRaw: () => resourceToggleTestContext?.settingsRaw ?? settingsRaw,
+      getMarketManager: () => resourceToggleTestContext?.MarketManager ?? MarketManager,
+      getStorageManager: () => resourceToggleTestContext?.StorageManager ?? StorageManager
+    });
+    const resourceToggleBrowserAdapter = createResourceToggleBrowserAdapter({
+      getJQuery: () => $,
+      reader: resourceToggleReader,
+      addToggleCallbacks: (...args) => (resourceToggleTestContext?.addToggleCallbacks ?? addToggleCallbacks)(
+        ...args
+      )
+    });
     const {
       createMarketToggles,
       removeMarketToggles,
       createStorageToggles,
       removeStorageToggles
-    } = createResourceToggleUI({
-      getJQuery: () => $,
-      getGame: () => game,
-      getSettingsRaw: () => settingsRaw,
-      getResources: () => resources,
-      getMarketManager: () => MarketManager,
-      getStorageManager: () => StorageManager,
-      addToggleCallbacks: (node, settingKey) => addToggleCallbacks(node, settingKey)
-    });
+    } = resourceToggleBrowserAdapter;
     const {
       buildProductionSettings,
       updateProductionSettingsContent,
@@ -55409,6 +55541,10 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         buildingToggles: buildingToggleBrowserAdapter,
         setBuildingTogglesTestContext(context) {
           buildingTogglesTestContext = context;
+        },
+        resourceToggles: resourceToggleBrowserAdapter,
+        setResourceTogglesTestContext(context) {
+          resourceToggleTestContext = context;
         }
       });
     }
