@@ -20633,6 +20633,72 @@
     });
   }
 
+  // src/adapters/browser/total-days-top-bar.ts
+  function createTotalDaysTopBarBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader
+  }) {
+    function updateTotalDaysInTopBar2() {
+      if (reader.readDisplayEnabled()) {
+        addTotalDaysToTopBar2();
+      } else {
+        removeTotalDaysFromTopBar2();
+      }
+      const totalDaysNode = getDocument().getElementById("s-total-days-count");
+      if (totalDaysNode === null) {
+        return;
+      }
+      totalDaysNode.textContent = reader.readTotalDays();
+    }
+    function addTotalDaysToTopBar2() {
+      const document2 = getDocument();
+      if (document2.getElementById("s-total-days") !== null) {
+        return;
+      }
+      const calendarNode = getJQuery()("#topBar .calendar");
+      if (calendarNode.length === 0) {
+        return;
+      }
+      calendarNode.find(".day").after(
+        getJQuery()(
+          '<span id="s-total-days" class="has-text-warning" style="padding-left: 3px;">(<span id="s-total-days-count"></span>)</span>'
+        )
+      );
+    }
+    function removeTotalDaysFromTopBar2() {
+      const totalDaysNode = getDocument().getElementById("s-total-days");
+      if (totalDaysNode === null) {
+        return;
+      }
+      totalDaysNode.remove();
+    }
+    return Object.freeze({
+      updateTotalDaysInTopBar: updateTotalDaysInTopBar2,
+      addTotalDaysToTopBar: addTotalDaysToTopBar2,
+      removeTotalDaysFromTopBar: removeTotalDaysFromTopBar2
+    });
+  }
+
+  // src/adapters/evolve/total-days-top-bar.ts
+  function createTotalDaysTopBarEvolveAdapter({
+    getSettings,
+    getGame
+  }) {
+    return Object.freeze({
+      readDisplayEnabled() {
+        const settings2 = requireRecord(getSettings(), "settings");
+        return Boolean(settings2["displayTotalDaysTypeInTopBar"]);
+      },
+      readTotalDays() {
+        const game2 = requireRecord(getGame(), "game");
+        const global = requireRecord(game2["global"], "game.global");
+        const stats = requireRecord(global["stats"], "game.global.stats");
+        return requireNumber(stats["days"], "game.global.stats.days");
+      }
+    });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -46486,68 +46552,6 @@
     return { updatePrestigeInTopBar: updatePrestigeInTopBar2, removePrestigeFromTopBar: removePrestigeFromTopBar2 };
   }
 
-  // src/ui/total-days-top-bar.ts
-  function createTotalDaysTopBar({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const document2 = liveObject4(() => getDependency("document"));
-    const game2 = liveObject4(() => getDependency("game"));
-    const settings2 = liveObject4(() => getDependency("settings"));
-    function updateTotalDaysInTopBarImpl() {
-      if (settings2.displayTotalDaysTypeInTopBar) {
-        addTotalDaysToTopBar2();
-      } else {
-        removeTotalDaysFromTopBar2();
-      }
-      const totalDaysNode = document2.getElementById("s-total-days-count");
-      if (totalDaysNode == null) {
-        return;
-      }
-      totalDaysNode.textContent = game2.global.stats.days;
-    }
-    function addTotalDaysToTopBarImpl() {
-      const nodeId = "s-total-days";
-      if (document2.getElementById(nodeId) !== null) {
-        return;
-      }
-      const calendarNode = $2("#topBar .calendar");
-      if (calendarNode.length === 0) {
-        return;
-      }
-      calendarNode.find(".day").after(
-        $2(
-          `<span id="s-total-days" class="has-text-warning" style="padding-left: 3px;">(<span id="s-total-days-count"></span>)</span>`
-        )
-      );
-    }
-    function removeTotalDaysFromTopBarImpl() {
-      let totalDaysNode = document2.getElementById("s-total-days");
-      if (totalDaysNode == null) {
-        return;
-      }
-      totalDaysNode.remove();
-    }
-    function updateTotalDaysInTopBar2(...args) {
-      const implementation = getOverride("updateTotalDaysInTopBar") ?? updateTotalDaysInTopBarImpl;
-      return implementation.apply(this, args);
-    }
-    function addTotalDaysToTopBar2(...args) {
-      const implementation = getOverride("addTotalDaysToTopBar") ?? addTotalDaysToTopBarImpl;
-      return implementation.apply(this, args);
-    }
-    function removeTotalDaysFromTopBar2(...args) {
-      const implementation = getOverride("removeTotalDaysFromTopBar") ?? removeTotalDaysFromTopBarImpl;
-      return implementation.apply(this, args);
-    }
-    return {
-      updateTotalDaysInTopBar: updateTotalDaysInTopBar2,
-      addTotalDaysToTopBar: addTotalDaysToTopBar2,
-      removeTotalDaysFromTopBar: removeTotalDaysFromTopBar2
-    };
-  }
-
   // src/ui/arpa-toggles.ts
   function createArpaToggleUI({
     getDependency,
@@ -50982,25 +50986,21 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getOverride: (name) => prestigeTopBarBoundaryOverrides[name]
     });
     const { updatePrestigeInTopBar, removePrestigeFromTopBar } = prestigeTopBarBoundary;
-    const totalDaysTopBarBoundaryOverrides = {};
-    const getTotalDaysTopBarBoundaryDependency = createDependencyResolver(
-      totalDaysTopBarBoundaryOverrides,
-      {
-        $: () => $,
-        document: () => document,
-        game: () => game,
-        settings: () => settings
-      }
-    );
-    const totalDaysTopBarBoundary = createTotalDaysTopBar({
-      getDependency: getTotalDaysTopBarBoundaryDependency,
-      getOverride: (name) => totalDaysTopBarBoundaryOverrides[name]
+    let totalDaysTopBarTestContext;
+    const totalDaysTopBarReader = createTotalDaysTopBarEvolveAdapter({
+      getSettings: () => totalDaysTopBarTestContext?.settings ?? settings,
+      getGame: () => totalDaysTopBarTestContext?.game ?? game
+    });
+    const totalDaysTopBarBrowserAdapter = createTotalDaysTopBarBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      reader: totalDaysTopBarReader
     });
     const {
       updateTotalDaysInTopBar,
       addTotalDaysToTopBar,
       removeTotalDaysFromTopBar
-    } = totalDaysTopBarBoundary;
+    } = totalDaysTopBarBrowserAdapter;
     const arpaTogglesBoundaryOverrides = {};
     const getArpaTogglesBoundaryDependency = createDependencyResolver(
       arpaTogglesBoundaryOverrides,
@@ -55201,9 +55201,16 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     }
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
+        totalDaysTopBar: totalDaysTopBarBrowserAdapter,
+        setTotalDaysTopBarTestContext(context) {
+          totalDaysTopBarTestContext = context;
+        }
+      });
+    }
+    if (window.__EA_TEST_HOOKS__) {
+      Object.assign(window.__EA_TEST_HOOKS__, {
         remainingUiBoundaries: {
           prestigeTopBar: prestigeTopBarBoundary,
-          totalDaysTopBar: totalDaysTopBarBoundary,
           arpaToggles: arpaTogglesBoundary,
           craftToggles: craftTogglesBoundary,
           buildingToggles: buildingTogglesBoundary,
@@ -55227,7 +55234,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           if ("EjectManager" in context) EjectManager = context.EjectManager;
           if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
           Object.assign(prestigeTopBarBoundaryOverrides, context);
-          Object.assign(totalDaysTopBarBoundaryOverrides, context);
           Object.assign(arpaTogglesBoundaryOverrides, context);
           Object.assign(craftTogglesBoundaryOverrides, context);
           Object.assign(buildingTogglesBoundaryOverrides, context);

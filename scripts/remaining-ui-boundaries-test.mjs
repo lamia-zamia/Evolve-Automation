@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import { liveFunction } from "../src/ui/dependencies.ts";
 import { createPrestigeTopBar } from "../src/ui/prestige-top-bar.ts";
-import { createTotalDaysTopBar } from "../src/ui/total-days-top-bar.ts";
 import { createArpaToggleUI } from "../src/ui/arpa-toggles.ts";
 import { createCraftToggleUI } from "../src/ui/craft-toggles.ts";
 import { createBuildingToggleUI } from "../src/ui/building-toggles.ts";
@@ -119,23 +118,10 @@ const topBarTrace = [];
 elements.set("s-prestige-type", {
   remove: () => topBarTrace.push("prestige:remove"),
 });
-elements.set("s-total-days", {
-  remove: () => topBarTrace.push("days:remove"),
-});
-const countNode = { textContent: "" };
-elements.set("s-total-days-count", countNode);
 const document = { getElementById: (id) => elements.get(id) ?? null };
 const prestigeTopBar = makeFactory(createPrestigeTopBar, { document });
 prestigeTopBar.removePrestigeFromTopBar();
-const totalDaysTopBar = makeFactory(createTotalDaysTopBar, {
-  $: () => jqueryNode(),
-  document,
-  game: { global: { stats: { days: 456 } } },
-  settings: { displayTotalDaysTypeInTopBar: false },
-});
-totalDaysTopBar.updateTotalDaysInTopBar();
-assert.deepEqual(topBarTrace, ["prestige:remove", "days:remove"]);
-assert.equal(countNode.textContent, 456);
+assert.deepEqual(topBarTrace, ["prestige:remove"]);
 
 class FirstClass {}
 let currentClass = FirstClass;
@@ -146,4 +132,4 @@ currentClass = SecondClass;
 assert.equal(new FirstClass() instanceof liveClass, false);
 assert.equal(new SecondClass() instanceof liveClass, true);
 
-console.log("Next 7 UI-boundary module tests passed");
+console.log("Next 6 UI-boundary module tests passed");

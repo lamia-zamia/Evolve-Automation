@@ -178,6 +178,8 @@ import { createBuildingSettingsIntentHandler } from "./application/building-sett
 import { createBuildingSettingsBrowserAdapter } from "./adapters/browser/building-settings.ts";
 import { createBuildingSettingsEvolveAdapter } from "./adapters/evolve/building-settings.ts";
 import { createOptionsModalBrowserAdapter } from "./adapters/browser/options-modal.ts";
+import { createTotalDaysTopBarBrowserAdapter } from "./adapters/browser/total-days-top-bar.ts";
+import { createTotalDaysTopBarEvolveAdapter } from "./adapters/evolve/total-days-top-bar.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -432,7 +434,6 @@ import { createMechSettings } from "./ui/mech-settings.ts";
 import { createEjectorSettings } from "./ui/ejector-settings.ts";
 import { createMarketSettings } from "./ui/market-settings.ts";
 import { createPrestigeTopBar } from "./ui/prestige-top-bar.ts";
-import { createTotalDaysTopBar } from "./ui/total-days-top-bar.ts";
 import { createArpaToggleUI } from "./ui/arpa-toggles.ts";
 import { createCraftToggleUI } from "./ui/craft-toggles.ts";
 import { createBuildingToggleUI } from "./ui/building-toggles.ts";
@@ -1172,25 +1173,21 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { updatePrestigeInTopBar, removePrestigeFromTopBar } =
     prestigeTopBarBoundary;
 
-  const totalDaysTopBarBoundaryOverrides = {};
-  const getTotalDaysTopBarBoundaryDependency = createDependencyResolver(
-    totalDaysTopBarBoundaryOverrides,
-    {
-      $: () => $,
-      document: () => document,
-      game: () => game,
-      settings: () => settings,
-    },
-  );
-  const totalDaysTopBarBoundary = createTotalDaysTopBar({
-    getDependency: getTotalDaysTopBarBoundaryDependency,
-    getOverride: (name) => totalDaysTopBarBoundaryOverrides[name],
+  let totalDaysTopBarTestContext;
+  const totalDaysTopBarReader = createTotalDaysTopBarEvolveAdapter({
+    getSettings: () => totalDaysTopBarTestContext?.settings ?? settings,
+    getGame: () => totalDaysTopBarTestContext?.game ?? game,
+  });
+  const totalDaysTopBarBrowserAdapter = createTotalDaysTopBarBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    reader: totalDaysTopBarReader,
   });
   const {
     updateTotalDaysInTopBar,
     addTotalDaysToTopBar,
     removeTotalDaysFromTopBar,
-  } = totalDaysTopBarBoundary;
+  } = totalDaysTopBarBrowserAdapter;
 
   const arpaTogglesBoundaryOverrides = {};
   const getArpaTogglesBoundaryDependency = createDependencyResolver(
@@ -5883,9 +5880,17 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
+      totalDaysTopBar: totalDaysTopBarBrowserAdapter,
+      setTotalDaysTopBarTestContext(context) {
+        totalDaysTopBarTestContext = context;
+      },
+    });
+  }
+
+  if (window.__EA_TEST_HOOKS__) {
+    Object.assign(window.__EA_TEST_HOOKS__, {
       remainingUiBoundaries: {
         prestigeTopBar: prestigeTopBarBoundary,
-        totalDaysTopBar: totalDaysTopBarBoundary,
         arpaToggles: arpaTogglesBoundary,
         craftToggles: craftTogglesBoundary,
         buildingToggles: buildingTogglesBoundary,
@@ -5909,7 +5914,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         if ("EjectManager" in context) EjectManager = context.EjectManager;
         if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
         Object.assign(prestigeTopBarBoundaryOverrides, context);
-        Object.assign(totalDaysTopBarBoundaryOverrides, context);
         Object.assign(arpaTogglesBoundaryOverrides, context);
         Object.assign(craftTogglesBoundaryOverrides, context);
         Object.assign(buildingTogglesBoundaryOverrides, context);

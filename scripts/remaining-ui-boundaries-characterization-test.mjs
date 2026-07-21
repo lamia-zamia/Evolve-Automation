@@ -84,7 +84,6 @@ vm.runInNewContext(source, sandbox, {
 const boundaries = hooks.remainingUiBoundaries;
 assert.deepEqual(Object.keys(boundaries), [
   "prestigeTopBar",
-  "totalDaysTopBar",
   "arpaToggles",
   "craftToggles",
   "buildingToggles",
@@ -95,7 +94,7 @@ assert.deepEqual(Object.keys(boundaries), [
 const trace = [];
 const registrations = [];
 const settingsRaw = { overrides: {}, triggers: [], logFilter: "" };
-const settings = { showSettings: true, displayTotalDaysTypeInTopBar: false };
+const settings = { showSettings: true };
 const state = { buildingToggles: 0 };
 
 const resetStubs = {};
@@ -182,16 +181,10 @@ assert.deepEqual(trace, [
 assert.equal(state.buildingToggles, 1);
 
 const prestigeNode = { remove: () => trace.push("topbar:removePrestige") };
-const totalDaysNode = { remove: () => trace.push("topbar:removeDays") };
-const totalDaysCount = { textContent: "" };
 domElements.set("s-prestige-type", prestigeNode);
-domElements.set("s-total-days", totalDaysNode);
-domElements.set("s-total-days-count", totalDaysCount);
 trace.length = 0;
 boundaries.prestigeTopBar.removePrestigeFromTopBar();
-boundaries.totalDaysTopBar.updateTotalDaysInTopBar();
-assert.deepEqual(trace, ["topbar:removePrestige", "topbar:removeDays"]);
-assert.equal(totalDaysCount.textContent, 123);
+assert.deepEqual(trace, ["topbar:removePrestige"]);
 
 domTrace.length = 0;
 hooks.setRemainingUiBoundariesTestContext({
@@ -296,4 +289,4 @@ assert.ok(domTrace.includes("remove:#script_market_top_row"));
 assert.ok(domTrace.includes("remove:#resStorage .ea-storage-toggle"));
 assert.ok(domTrace.includes("remove:#script_storage_top_row"));
 
-console.log("Next 7 UI-boundary bundled characterization tests passed");
+console.log("Next 6 UI-boundary bundled characterization tests passed");
