@@ -148,6 +148,9 @@ import { createAuthoritySettingsIntentHandler } from "./application/authority-se
 import { createAuthoritySettingsBrowserAdapter } from "./adapters/browser/authority-settings.ts";
 import { createGeneralSettingsIntentHandler } from "./application/general-settings.ts";
 import { createGeneralSettingsBrowserAdapter } from "./adapters/browser/general-settings.ts";
+import { createResearchSettingsIntentHandler } from "./application/research-settings.ts";
+import { createResearchSettingsBrowserAdapter } from "./adapters/browser/research-settings.ts";
+import { createResearchSettingsEvolveAdapter } from "./adapters/evolve/research-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -397,7 +400,6 @@ import { createGovernmentSettings } from "./ui/government-settings.ts";
 import { createEvolutionSettings } from "./ui/evolution-settings.ts";
 import { createPlanetSettings } from "./ui/planet-settings.ts";
 import { createTriggerSettings } from "./ui/trigger-settings.ts";
-import { createResearchSettings } from "./ui/research-settings.ts";
 import { createWarSettings } from "./ui/war-settings.ts";
 import { createHellSettings } from "./ui/hell-settings.ts";
 import { createFleetSettings } from "./ui/fleet-settings.ts";
@@ -1374,28 +1376,52 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     buildTriggerSettingsColumn,
   } = triggerSettings;
 
-  const researchSettingsOverrides = {};
-  const getResearchSettingsDependency = createDependencyResolver(
-    researchSettingsOverrides,
-    {
-      $: () => $,
-      addSettingsList: () => addSettingsList,
-      addSettingsSelect: () => addSettingsSelect,
-      buildSettingsSection: () => buildSettingsSection,
-      document: () => document,
-      game: () => game,
-      resetCheckbox: () => resetCheckbox,
-      resetResearchSettings: () => resetResearchSettings,
-      techIds: () => techIds,
-      updateSettingsFromState: () => updateSettingsFromState,
+  let researchSettingsTestContext;
+  const researchSettingsActions = {
+    buildSettingsSection,
+    addSettingsList,
+    addSettingsSelect,
+  };
+  const researchSettingsEvolveAdapter = createResearchSettingsEvolveAdapter({
+    getGame: () => researchSettingsTestContext?.game ?? game,
+    getTechIds: () => researchSettingsTestContext?.techIds ?? techIds,
+  });
+  let researchSettingsIntentHandler;
+  const researchSettingsBrowserAdapter = createResearchSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    getReadModel: () =>
+      researchSettingsEvolveAdapter.readResearchSettingsReadModel(),
+    intents: {
+      handle: (intent) => researchSettingsIntentHandler.handle(intent),
     },
-  );
-  const researchSettings = createResearchSettings({
-    getDependency: getResearchSettingsDependency,
-    getOverride: (name) => researchSettingsOverrides[name],
+    getActions: () =>
+      researchSettingsTestContext?.actions ?? researchSettingsActions,
+  });
+  researchSettingsIntentHandler = createResearchSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          researchSettingsTestContext?.resetResearchSettings ??
+          resetResearchSettings
+        )(true),
+      persist: () =>
+        (
+          researchSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    },
+    renderSettingsContent: () =>
+      researchSettingsBrowserAdapter.updateResearchSettingsContent(),
+    effects: {
+      resetCheckbox: () =>
+        (researchSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoResearch",
+        ),
+    },
   });
   const { buildResearchSettings, updateResearchSettingsContent } =
-    researchSettings;
+    researchSettingsBrowserAdapter;
 
   const warSettingsOverrides = {};
   const getWarSettingsDependency = createDependencyResolver(
@@ -5332,7 +5358,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         evolution: evolutionSettings,
         planet: planetSettings,
         trigger: triggerSettings,
-        research: researchSettings,
         war: warSettings,
         hell: hellSettings,
         fleet: fleetSettings,
@@ -5346,7 +5371,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         Object.assign(evolutionSettingsOverrides, context);
         Object.assign(planetSettingsOverrides, context);
         Object.assign(triggerSettingsOverrides, context);
-        Object.assign(researchSettingsOverrides, context);
         Object.assign(warSettingsOverrides, context);
         Object.assign(hellSettingsOverrides, context);
         Object.assign(fleetSettingsOverrides, context);
@@ -5377,6 +5401,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       generalSettings: generalSettingsBrowserAdapter,
       setGeneralSettingsTestContext(context) {
         generalSettingsTestActions = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      researchSettings: researchSettingsBrowserAdapter,
+      setResearchSettingsTestContext(context) {
+        researchSettingsTestContext = context;
       },
     });
   }

@@ -81,7 +81,6 @@ assert.deepEqual(Object.keys(boundaries), [
   "evolution",
   "planet",
   "trigger",
-  "research",
   "war",
   "hell",
   "fleet",
@@ -185,7 +184,6 @@ assert.deepEqual(
     { kind: "primary", id: "evolution", label: "Evolution" },
     { kind: "primary", id: "planet", label: "Planet Weighting" },
     { kind: "primary", id: "trigger", label: "Trigger" },
-    { kind: "primary", id: "research", label: "Research" },
     {
       kind: "secondary",
       prefix: "",
@@ -227,9 +225,6 @@ assert.deepEqual(behavioralTrace, [
   "reset:trigger:true",
   "update:trigger:",
   "checkbox:autoTrigger",
-  "reset:research:true",
-  "update:research:",
-  "checkbox:autoResearch",
   "reset:war:true",
   "update:war:",
   "checkbox:autoFight",
@@ -254,5 +249,5 @@ assert.deepEqual(behavioralTrace, [
   "remove:marketToggles",
 ]);
 
-assert.ok(storageTrace.length >= 12);
-console.log("12 settings-boundary bundled characterization tests passed");
+assert.ok(storageTrace.length >= 11);
+console.log("11 settings-boundary bundled characterization tests passed");

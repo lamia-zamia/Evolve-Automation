@@ -5,7 +5,6 @@ import { createGovernmentSettings } from "../src/ui/government-settings.ts";
 import { createEvolutionSettings } from "../src/ui/evolution-settings.ts";
 import { createPlanetSettings } from "../src/ui/planet-settings.ts";
 import { createTriggerSettings } from "../src/ui/trigger-settings.ts";
-import { createResearchSettings } from "../src/ui/research-settings.ts";
 import { createWarSettings } from "../src/ui/war-settings.ts";
 import { createHellSettings } from "../src/ui/hell-settings.ts";
 import { createFleetSettings } from "../src/ui/fleet-settings.ts";
@@ -63,16 +62,6 @@ const specs = [
     "Trigger",
     false,
     ["checkbox:autoTrigger"],
-  ],
-  [
-    "research",
-    createResearchSettings,
-    "buildResearchSettings",
-    "updateResearchSettingsContent",
-    "research",
-    "Research",
-    false,
-    ["checkbox:autoResearch"],
   ],
   [
     "war",
@@ -196,4 +185,4 @@ for (const [
   ]);
 }
 
-console.log("12 settings-boundary module tests passed");
+console.log("11 settings-boundary module tests passed");

@@ -17809,6 +17809,209 @@
     });
   }
 
+  // src/application/research-settings.ts
+  function createResearchSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-research-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            effects.resetCheckbox();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/research-settings.ts
+  function freezeOption(option) {
+    return Object.freeze({ ...option });
+  }
+  function freezeTechnologyCatalog(technologies) {
+    const frozen = {};
+    for (const [key, technology2] of Object.entries(technologies)) {
+      frozen[key] = Object.freeze({ ...technology2 });
+    }
+    return Object.freeze(frozen);
+  }
+  function createResearchSettingsReadModel({
+    localize,
+    technologies
+  }) {
+    const technologyCatalog = freezeTechnologyCatalog(technologies);
+    const theologyOneOptions = Object.freeze([
+      freezeOption({
+        val: "auto",
+        label: "Script Managed",
+        hint: "Picks Anthropology for MAD prestige, and Fanaticism for others. Achieve-worthy combos are exception, on such runs Fanaticism will be always picked."
+      }),
+      freezeOption({
+        val: "tech-anthropology",
+        label: localize("tech_anthropology"),
+        hint: localize("tech_anthropology_effect")
+      }),
+      freezeOption({
+        val: "tech-fanaticism",
+        label: localize("tech_fanaticism"),
+        hint: localize("tech_fanaticism_effect")
+      })
+    ]);
+    const theologyTwoOptions = Object.freeze([
+      freezeOption({
+        val: "auto",
+        label: "Script Managed",
+        hint: "Picks Deify for Ascension, Demonic Infusion, Apotheosis, AI Apocalypse, Terraform, Matrix, Retirement and Eden prestiges, or Study for others prestiges"
+      }),
+      freezeOption({
+        val: "tech-study",
+        label: localize("tech_study"),
+        hint: localize("tech_study_desc")
+      }),
+      freezeOption({
+        val: "tech-deify",
+        label: localize("tech_deify"),
+        hint: localize("tech_deify_desc")
+      })
+    ]);
+    return Object.freeze({
+      sectionId: "research",
+      sectionName: "Research",
+      controls: Object.freeze([
+        Object.freeze({
+          kind: "select",
+          settingName: "userResearchTheology_1",
+          label: "Target Theology 1",
+          hint: "Theology 1 technology to research, have no effect after getting Transcendence perk",
+          options: theologyOneOptions
+        }),
+        Object.freeze({
+          kind: "select",
+          settingName: "userResearchTheology_2",
+          label: "Target Theology 2",
+          hint: "Theology 2 technology to research",
+          options: theologyTwoOptions
+        }),
+        Object.freeze({
+          kind: "list",
+          settingName: "researchIgnore",
+          label: "Ignored researches",
+          hint: "Listed researches won't be purchased without manual input, or user defined trigger. On top of this list script will also ignore some other special techs, such as Limit Collider, Dark Energy Bomb, Exotic Infusion, etc.",
+          list: technologyCatalog
+        })
+      ])
+    });
+  }
+
+  // src/adapters/browser/research-settings.ts
+  function createResearchSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function renderControl(node, control, actions) {
+      if (control.kind === "select") {
+        actions.addSettingsSelect(
+          node,
+          control.settingName,
+          control.label,
+          control.hint,
+          control.options
+        );
+        return;
+      }
+      actions.addSettingsList(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        control.list
+      );
+    }
+    function buildResearchSettings2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      actions.buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-research-settings" });
+        },
+        updateResearchSettingsContent2
+      );
+    }
+    function updateResearchSettingsContent2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
+      currentNode.empty().off("*");
+      for (const control of readModel.controls) {
+        renderControl(currentNode, control, actions);
+      }
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    return Object.freeze({
+      buildResearchSettings: buildResearchSettings2,
+      updateResearchSettingsContent: updateResearchSettingsContent2
+    });
+  }
+
+  // src/adapters/evolve/research-settings.ts
+  function requireObjectRecord(value, path) {
+    if (Array.isArray(value)) {
+      throw new TypeError(`${path} must be an object`);
+    }
+    return requireRecord(value, path);
+  }
+  function requireString(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function createResearchSettingsEvolveAdapter({
+    getGame,
+    getTechIds
+  }) {
+    function readResearchSettingsReadModel() {
+      const game2 = requireObjectRecord(getGame(), "game");
+      const localize = requireFunction(game2["loc"], "game.loc");
+      const rawTechIds = requireObjectRecord(getTechIds(), "techIds");
+      const technologies = {};
+      for (const [key, rawTechnology] of Object.entries(rawTechIds)) {
+        const technology2 = requireObjectRecord(rawTechnology, `techIds.${key}`);
+        const binding = requireString(
+          technology2["_vueBinding"],
+          `techIds.${key}._vueBinding`
+        );
+        if (binding !== key) {
+          throw new TypeError(`techIds.${key}._vueBinding must match its key`);
+        }
+        technologies[key] = Object.freeze({
+          _vueBinding: binding,
+          name: requireString(technology2["name"], `techIds.${key}.name`)
+        });
+      }
+      return createResearchSettingsReadModel({
+        localize: (key) => requireString(
+          Reflect.apply(localize, game2, [key]),
+          `game.loc(${key}) result`
+        ),
+        technologies
+      });
+    }
+    return Object.freeze({ readResearchSettingsReadModel });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -21434,7 +21637,7 @@
   }
 
   // src/adapters/evolve/hell.ts
-  function requireString(value, path) {
+  function requireString2(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -21731,7 +21934,7 @@
           ),
           evilTechnology: optionalNumber(tech["evil"], "game.global.tech.evil"),
           grenadier: Boolean(race2["grenadier"]),
-          government: requireString(
+          government: requireString2(
             govern["type"],
             "game.global.civic.govern.type"
           )
@@ -22322,7 +22525,7 @@
   }
 
   // src/adapters/evolve/battle.ts
-  function requireString2(value, path) {
+  function requireString3(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -22340,7 +22543,7 @@
     return {
       input: Object.freeze({
         governmentId: requireNumber(foreign["id"], `${path}.id`),
-        policy: requireString2(foreign["policy"], `${path}.policy`),
+        policy: requireString3(foreign["policy"], `${path}.policy`),
         released: Boolean(foreign["released"]),
         occupied: Boolean(government["occ"]),
         annexed: Boolean(government["anx"]),
@@ -22455,7 +22658,7 @@
         );
         const hellAvailable = Boolean(manager["_hellVue"]);
         const readHell = autoHell2 && hellAvailable;
-        const protectMode = requireString2(
+        const protectMode = requireString3(
           settings2["foreignProtect"],
           "settings.foreignProtect"
         );
@@ -22729,7 +22932,7 @@
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        const governmentName = requireString2(
+        const governmentName = requireString3(
           dependencies.getGovernmentName(decision2.governmentId),
           `government name ${decision2.governmentId}`
         );
@@ -22755,7 +22958,7 @@
         if (removeBattalion !== null) {
           Reflect.apply(removeBattalion, active.manager, [-deltaBattalion]);
         }
-        const campaignTitle = requireString2(
+        const campaignTitle = requireString3(
           Reflect.apply(getCampaignTitle, active.manager, [decision2.tactic]),
           `campaign title ${decision2.tactic}`
         );
@@ -26702,7 +26905,7 @@
       moneyStorageRequired: 0
     });
   }
-  function requireString3(value, path) {
+  function requireString4(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -26751,7 +26954,7 @@
         );
         if (maxCityGarrison <= 0) return unavailableInput2();
         const state2 = requireRecord(dependencies.getState(), "state");
-        const goal = requireString3(state2["goal"], "state.goal");
+        const goal = requireString4(state2["goal"], "state.goal");
         const saveInflationMoney = Boolean(
           dependencies.shouldSaveInflationMoney()
         );
@@ -34456,7 +34659,7 @@
     );
     return { foreign, government };
   }
-  function requireString4(value, path) {
+  function requireString5(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -34467,7 +34670,7 @@
     const ids = {};
     for (const [name, rawType] of Object.entries(types)) {
       const type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString4(type["id"], `SpyManager.Types.${name}.id`);
+      ids[name] = requireString5(type["id"], `SpyManager.Types.${name}.id`);
     }
     return Object.freeze(ids);
   }
@@ -34575,7 +34778,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString4(
+        const policy = requireString5(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -34596,7 +34799,7 @@
             "resources.Money.maxQuantity"
           );
         }
-        const governmentName = requireString4(
+        const governmentName = requireString5(
           dependencies.getGovName(governmentId),
           `government name ${governmentId}`
         );
@@ -34642,7 +34845,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString4(
+        const policy = requireString5(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -35792,7 +35995,7 @@
   }
 
   // src/adapters/evolve/jobs.ts
-  function requireString5(value, path) {
+  function requireString6(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
     return value;
@@ -35922,7 +36125,7 @@
           if (count === 0) {
             maximum = 1;
           } else {
-            const id = requireString5(job["id"], "job.id");
+            const id = requireString6(job["id"], "job.id");
             const production = requireNumber(
               call2(
                 resource(resources2, "Food"),
@@ -36274,7 +36477,7 @@
           );
           return Object.freeze({
             token: token2,
-            id: requireString5(job["id"], `jobList[${token2}].id`),
+            id: requireString6(job["id"], `jobList[${token2}].id`),
             kind,
             workers: requireNumber(job["workers"], `jobList[${token2}].workers`),
             servants: requireNumber(
@@ -36391,7 +36594,7 @@
                 `craftingJobs[${index}].resource.craftPreserve`
               ))) {
                 affordability = 0;
-                exclusion = `${requireString5(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
+                exclusion = `${requireString6(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
                 break;
               }
               affordability = Math.min(
@@ -36423,7 +36626,7 @@
                 craftResource["currentQuantity"],
                 `craftingJobs[${index}].resource.currentQuantity`
               );
-              const resourceId3 = requireString5(
+              const resourceId3 = requireString6(
                 craftResource["id"],
                 `craftingJobs[${index}].resource.id`
               );
@@ -36443,7 +36646,7 @@
                 driver = `no building×${craftWeight}`;
               } else {
                 const record = requireRecord(driving, "driving building");
-                driver = `${requireString5(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
+                driver = `${requireString6(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
               }
             }
             return Object.freeze({
@@ -36650,7 +36853,7 @@
           minerToken: token("Miner"),
           population: resourceNumber(resources2, "Population", "currentQuantity"),
           craftDebug: Boolean(debugWindow["craftDebug"]),
-          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString5(state2["lastCraftWinner"], "state.lastCraftWinner"),
+          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString6(state2["lastCraftWinner"], "state.lastCraftWinner"),
           authority,
           jobs: Object.freeze(jobInputs),
           crafting: Object.freeze(craftingInputs),
@@ -37104,7 +37307,7 @@
   }
 
   // src/adapters/evolve/build.ts
-  function requireString6(value, path) {
+  function requireString7(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -37194,7 +37397,7 @@
         const byKey = /* @__PURE__ */ new Map();
         const candidates = entities.map((entity, index) => {
           const path = `buildList[${index}]`;
-          const key = requireString6(entity["_vueBinding"], `${path}._vueBinding`);
+          const key = requireString7(entity["_vueBinding"], `${path}._vueBinding`);
           byKey.set(key, entity);
           const rawCost = requireRecord(entity["cost"], `${path}.cost`);
           const cost = {};
@@ -37970,7 +38173,7 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString7(value, path) {
+  function requireString8(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -37990,7 +38193,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString7(
+    const status2 = requireString8(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -38059,7 +38262,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString7(
+          mode = requireString8(
             settings2["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -38197,7 +38400,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString7(
+            const id = requireString8(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -38356,7 +38559,7 @@
             );
           }
         }
-        const targetLocationName = requireString7(
+        const targetLocationName = requireString8(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -38389,7 +38592,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString7(
+        const shipName = requireString8(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -38400,7 +38603,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString7(
+        const shipClass = requireString8(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -38472,7 +38675,7 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString7(
+          const resourceId3 = requireString8(
             missingResource,
             "missing outer-fleet resource id"
           );
@@ -38480,7 +38683,7 @@
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString7(
+          missingResourceName = requireString8(
             resource2["name"],
             `resources.${resourceId3}.name`
           );
@@ -38910,7 +39113,7 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString8(value, path) {
+  function requireString9(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -39086,7 +39289,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString8(
+          const name = requireString9(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -39114,7 +39317,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString8(
+          chthonianLossMode = requireString9(
             settings2["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -39148,7 +39351,7 @@
               settings2["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString8(
+            alien2LossMode = requireString9(
               settings2["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -39497,7 +39700,7 @@
   }
 
   // src/adapters/evolve/mech.ts
-  function requireString9(value, path) {
+  function requireString10(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -39516,7 +39719,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString9(raw["size"], `${path}.size`),
+        size: requireString10(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -39551,7 +39754,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString9(raw["size"], `${path}.size`),
+      size: requireString10(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -39668,7 +39871,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString9(settings2["mechBuild"], "settings.mechBuild")
+          buildMode: requireString10(settings2["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -39703,7 +39906,7 @@
             call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString9(preferred[0], "preferred mech size");
+          const size = requireString10(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
             call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
@@ -39742,7 +39945,7 @@
           buildings2["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString9(
+        const prestigeType = requireString10(
           settings2["prestigeType"],
           "settings.prestigeType"
         );
@@ -39831,7 +40034,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString9(
+        const configuredScrapMode = requireString10(
           settings2["mechScrap"],
           "settings.mechScrap"
         );
@@ -39860,7 +40063,7 @@
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString9(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString10(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -40045,7 +40248,7 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString9(
+          const description = requireString10(
             call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
@@ -42394,117 +42597,6 @@
       buildTriggerActionCount: buildTriggerActionCount2,
       buildTriggerSettingsColumn: buildTriggerSettingsColumn2
     };
-  }
-
-  // src/ui/research-settings.ts
-  function createResearchSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const addSettingsList2 = liveFunction(() => getDependency("addSettingsList"));
-    const addSettingsSelect2 = liveFunction(
-      () => getDependency("addSettingsSelect")
-    );
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const document2 = liveObject4(() => getDependency("document"));
-    const game2 = liveObject4(() => getDependency("game"));
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetResearchSettings2 = liveFunction(
-      () => getDependency("resetResearchSettings")
-    );
-    const techIds2 = liveObject4(() => getDependency("techIds"));
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildResearchSettingsImpl() {
-      let sectionId = "research";
-      let sectionName = "Research";
-      let resetFunction = function() {
-        resetResearchSettings2(true);
-        updateSettingsFromState2();
-        updateResearchSettingsContent2();
-        resetCheckbox2("autoResearch");
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateResearchSettingsContent2
-      );
-    }
-    function updateResearchSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_researchContent");
-      currentNode.empty().off("*");
-      let theology1Options = [
-        {
-          val: "auto",
-          label: "Script Managed",
-          hint: "Picks Anthropology for MAD prestige, and Fanaticism for others. Achieve-worthy combos are exception, on such runs Fanaticism will be always picked."
-        },
-        {
-          val: "tech-anthropology",
-          label: game2.loc("tech_anthropology"),
-          hint: game2.loc("tech_anthropology_effect")
-        },
-        {
-          val: "tech-fanaticism",
-          label: game2.loc("tech_fanaticism"),
-          hint: game2.loc("tech_fanaticism_effect")
-        }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "userResearchTheology_1",
-        "Target Theology 1",
-        "Theology 1 technology to research, have no effect after getting Transcendence perk",
-        theology1Options
-      );
-      let theology2Options = [
-        {
-          val: "auto",
-          label: "Script Managed",
-          hint: "Picks Deify for Ascension, Demonic Infusion, Apotheosis, AI Apocalypse, Terraform, Matrix, Retirement and Eden prestiges, or Study for others prestiges"
-        },
-        {
-          val: "tech-study",
-          label: game2.loc("tech_study"),
-          hint: game2.loc("tech_study_desc")
-        },
-        {
-          val: "tech-deify",
-          label: game2.loc("tech_deify"),
-          hint: game2.loc("tech_deify_desc")
-        }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "userResearchTheology_2",
-        "Target Theology 2",
-        "Theology 2 technology to research",
-        theology2Options
-      );
-      addSettingsList2(
-        currentNode,
-        "researchIgnore",
-        "Ignored researches",
-        "Listed researches won't be purchased without manual input, or user defined trigger. On top of this list script will also ignore some other special techs, such as Limit Collider, Dark Energy Bomb, Exotic Infusion, etc.",
-        techIds2
-      );
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildResearchSettings2(...args) {
-      const implementation = getOverride("buildResearchSettings") ?? buildResearchSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateResearchSettingsContent2(...args) {
-      const implementation = getOverride("updateResearchSettingsContent") ?? updateResearchSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildResearchSettings: buildResearchSettings2, updateResearchSettingsContent: updateResearchSettingsContent2 };
   }
 
   // src/ui/war-settings.ts
@@ -50329,27 +50421,39 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       buildTriggerActionCount,
       buildTriggerSettingsColumn
     } = triggerSettings;
-    const researchSettingsOverrides = {};
-    const getResearchSettingsDependency = createDependencyResolver(
-      researchSettingsOverrides,
-      {
-        $: () => $,
-        addSettingsList: () => addSettingsList,
-        addSettingsSelect: () => addSettingsSelect,
-        buildSettingsSection: () => buildSettingsSection,
-        document: () => document,
-        game: () => game,
-        resetCheckbox: () => resetCheckbox,
-        resetResearchSettings: () => resetResearchSettings,
-        techIds: () => techIds,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const researchSettings = createResearchSettings({
-      getDependency: getResearchSettingsDependency,
-      getOverride: (name) => researchSettingsOverrides[name]
+    let researchSettingsTestContext;
+    const researchSettingsActions = {
+      buildSettingsSection,
+      addSettingsList,
+      addSettingsSelect
+    };
+    const researchSettingsEvolveAdapter = createResearchSettingsEvolveAdapter({
+      getGame: () => researchSettingsTestContext?.game ?? game,
+      getTechIds: () => researchSettingsTestContext?.techIds ?? techIds
     });
-    const { buildResearchSettings, updateResearchSettingsContent } = researchSettings;
+    let researchSettingsIntentHandler;
+    const researchSettingsBrowserAdapter = createResearchSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getReadModel: () => researchSettingsEvolveAdapter.readResearchSettingsReadModel(),
+      intents: {
+        handle: (intent) => researchSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => researchSettingsTestContext?.actions ?? researchSettingsActions
+    });
+    researchSettingsIntentHandler = createResearchSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (researchSettingsTestContext?.resetResearchSettings ?? resetResearchSettings)(true),
+        persist: () => (researchSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      renderSettingsContent: () => researchSettingsBrowserAdapter.updateResearchSettingsContent(),
+      effects: {
+        resetCheckbox: () => (researchSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoResearch"
+        )
+      }
+    });
+    const { buildResearchSettings, updateResearchSettingsContent } = researchSettingsBrowserAdapter;
     const warSettingsOverrides = {};
     const getWarSettingsDependency = createDependencyResolver(
       warSettingsOverrides,
@@ -53908,7 +54012,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           evolution: evolutionSettings,
           planet: planetSettings,
           trigger: triggerSettings,
-          research: researchSettings,
           war: warSettings,
           hell: hellSettings,
           fleet: fleetSettings,
@@ -53922,7 +54025,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           Object.assign(evolutionSettingsOverrides, context);
           Object.assign(planetSettingsOverrides, context);
           Object.assign(triggerSettingsOverrides, context);
-          Object.assign(researchSettingsOverrides, context);
           Object.assign(warSettingsOverrides, context);
           Object.assign(hellSettingsOverrides, context);
           Object.assign(fleetSettingsOverrides, context);
@@ -53953,6 +54055,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         generalSettings: generalSettingsBrowserAdapter,
         setGeneralSettingsTestContext(context) {
           generalSettingsTestActions = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        researchSettings: researchSettingsBrowserAdapter,
+        setResearchSettingsTestContext(context) {
+          researchSettingsTestContext = context;
         }
       });
     }
