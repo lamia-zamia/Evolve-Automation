@@ -1,3 +1,7 @@
+/**
+ * Frozen copy of the legacy createStateUpdate factory, kept only as the parity oracle for the
+ * migrated state-update slice tests. Do not wire into production.
+ */
 export interface StateUpdateSettings {
   activeTargetsUI: boolean;
   [key: string]: unknown;

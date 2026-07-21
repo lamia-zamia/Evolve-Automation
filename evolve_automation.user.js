@@ -17164,125 +17164,275 @@
     return { automate: automate2 };
   }
 
-  // src/automation/state-update.ts
-  function createStateUpdate({
-    getSettings,
-    getSettingsRaw,
-    getState,
-    getGame,
-    getResources,
-    getBuildings,
-    getStorageManager,
-    getProjectManager,
-    getTriggerManager,
-    getPoly,
-    getJQuery,
-    getHelpers,
-    isTechnology,
-    isProject
+  // src/domain/state-update.ts
+  function planGoalTransition(snapshot) {
+    if (snapshot.species === "protoplasm") {
+      return { kind: "force-evolution" };
+    }
+    if (snapshot.goal === "Evolution") {
+      return {
+        kind: "resolve-leaving",
+        rebuildTriggers: snapshot.triggerCount > 0
+      };
+    }
+    if (snapshot.day === 1 && (snapshot.slow || snapshot.hyper || snapshot.species === "junker")) {
+      return { kind: "day1-fallback" };
+    }
+    return { kind: "proceed" };
+  }
+  function computeMoneyWindow(incomes, rate) {
+    const next = incomes.slice(1);
+    for (let i = next.length; i < 11; i++) {
+      next.push(rate);
+    }
+    const median = [...next].sort((a, b) => a - b)[5] ?? 0;
+    return { incomes: next, median };
+  }
+  function computeTowerSize(pillars) {
+    let towerSize = 1e3;
+    if (pillars) {
+      for (const pillar in pillars) {
+        if (pillars[pillar]) {
+          towerSize -= pillars[pillar] * 2 + 2;
+        }
+      }
+    }
+    return towerSize < 250 ? 250 : towerSize;
+  }
+  function evaluateStabilise(current, lastExoticMass) {
+    return { stabilised: current < lastExoticMass, lastExoticMass: current };
+  }
+
+  // src/application/state-update.ts
+  function runStateUpdate({
+    reader,
+    controls,
+    clock
   }) {
-    function updateState2() {
-      const h = getHelpers();
-      const settings2 = getSettings();
-      const settingsRaw2 = getSettingsRaw();
-      const state2 = getState();
-      const game2 = getGame();
-      const resources2 = getResources();
-      const buildings2 = getBuildings();
-      const poly2 = getPoly();
-      const $2 = getJQuery();
-      if (game2.global.race.species === "protoplasm") {
-        state2.goal = "Evolution";
-      } else if (state2.goal === "Evolution") {
-        if (!h.checkEvolutionResult()) {
+    const goalSnapshot = reader.sampleGoalTransition();
+    const transition = planGoalTransition(goalSnapshot);
+    switch (transition.kind) {
+      case "force-evolution":
+        controls.setGoal("Evolution");
+        break;
+      case "resolve-leaving":
+        if (!controls.checkEvolutionResult()) {
           return;
         }
-        state2.goal = "Standard";
-        if (settingsRaw2.triggers.length > 0) {
-          h.updateTriggerSettingsContent();
+        controls.setGoal("Standard");
+        if (transition.rebuildTriggers) {
+          controls.rebuildTriggerContent();
         }
-      } else if (game2.global.stats.days === 1 && (game2.global.race.slow || game2.global.race.hyper || game2.global.race.species === "junker")) {
-        if (!h.checkEvolutionResult()) {
+        break;
+      case "day1-fallback":
+        if (!controls.checkEvolutionResult()) {
           return;
         }
-      }
-      for (const id in resources2) {
-        resources2[id].maxCost = 0;
-        resources2[id].storageRequired = 1;
-        resources2[id].requestedQuantity = 0;
-      }
-      const StorageManager2 = getStorageManager();
-      StorageManager2.crateValue = poly2.crateValue();
-      StorageManager2.containerValue = poly2.containerValue();
-      h.updatePriorityTargets();
-      getProjectManager().updateProjects();
-      h.calculateRequiredStorages();
-      h.prioritizeDemandedResources();
-      state2.tooltips = {};
-      state2.moneyIncomes.shift();
-      for (let i = state2.moneyIncomes.length; i < 11; i++) {
-        state2.moneyIncomes.push(resources2.Money.rateOfChange);
-      }
-      state2.moneyMedian = [...state2.moneyIncomes].sort((a, b) => a - b)[5];
-      let towerSize = 1e3;
-      if (Object.prototype.hasOwnProperty.call(game2.global, "pillars")) {
-        for (const pillar in game2.global.pillars) {
-          if (game2.global.pillars[pillar]) {
-            towerSize -= game2.global.pillars[pillar] * 2 + 2;
+        break;
+      case "proceed":
+        break;
+    }
+    controls.resetResourceAccumulators();
+    controls.applyStorageUnitValues();
+    controls.runPlanningPasses();
+    controls.resetTooltips();
+    const refresh = reader.sampleRefresh();
+    const money = computeMoneyWindow(refresh.moneyIncomes, refresh.moneyRate);
+    controls.applyMoneyWindow(money.incomes, money.median);
+    controls.applyAstroSign();
+    controls.applyTowerSize(computeTowerSize(refresh.pillars));
+    const stabilise = evaluateStabilise(
+      refresh.currentExotic,
+      refresh.lastExoticMass
+    );
+    controls.applyStabilise(
+      stabilise.stabilised ? clock.nowMs() : void 0,
+      stabilise.lastExoticMass
+    );
+    controls.cacheSpaceDockOptions();
+    controls.updateActiveTargets();
+  }
+
+  // src/adapters/evolve/state-update.ts
+  function toNumber(value) {
+    return Number(value);
+  }
+  function createStateUpdateReader(dependencies) {
+    return Object.freeze({
+      sampleGoalTransition() {
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const global = requireRecord(game2["global"], "game.global");
+        const race2 = requireRecord(global["race"], "game.global.race");
+        const stats = requireRecord(global["stats"], "game.global.stats");
+        const state2 = requireRecord(dependencies.getState(), "state");
+        const settingsRaw2 = requireRecord(
+          dependencies.getSettingsRaw(),
+          "settingsRaw"
+        );
+        const triggers = settingsRaw2["triggers"];
+        const species = race2["species"];
+        const goal = state2["goal"];
+        const days = stats["days"];
+        return {
+          // Legacy compared these with === against fixed strings/1; a non-match is preserved by
+          // collapsing non-string species/goal and non-number days to values that never match.
+          species: typeof species === "string" ? species : void 0,
+          goal: typeof goal === "string" ? goal : "",
+          day: typeof days === "number" ? days : Number.NaN,
+          slow: Boolean(race2["slow"]),
+          hyper: Boolean(race2["hyper"]),
+          triggerCount: Array.isArray(triggers) ? triggers.length : 0
+        };
+      },
+      sampleRefresh() {
+        const game2 = requireRecord(dependencies.getGame(), "game");
+        const global = requireRecord(game2["global"], "game.global");
+        const state2 = requireRecord(dependencies.getState(), "state");
+        const resources2 = requireRecord(dependencies.getResources(), "resources");
+        const money = requireRecord(resources2["Money"], "resources.Money");
+        const rawIncomes = state2["moneyIncomes"];
+        const moneyIncomes = Array.isArray(rawIncomes) ? rawIncomes.map(toNumber) : [];
+        let pillars;
+        if (Object.prototype.hasOwnProperty.call(global, "pillars")) {
+          const rawPillars = requireRecord(
+            global["pillars"],
+            "game.global.pillars"
+          );
+          pillars = {};
+          for (const key in rawPillars) {
+            pillars[key] = toNumber(rawPillars[key]);
           }
         }
+        const interstellar = global["interstellar"];
+        let exotic;
+        if (typeof interstellar === "object" && interstellar !== null) {
+          const engine = interstellar["stellar_engine"];
+          if (typeof engine === "object" && engine !== null) {
+            exotic = engine["exotic"];
+          }
+        }
+        return {
+          moneyIncomes,
+          moneyRate: toNumber(money["rateOfChange"]),
+          pillars,
+          currentExotic: toNumber(exotic ?? 0),
+          lastExoticMass: toNumber(state2["whiteholeLastExoticMass"])
+        };
       }
-      if (towerSize < 250) {
-        towerSize = 250;
+    });
+  }
+  function createStateUpdateControls(dependencies) {
+    return Object.freeze({
+      checkEvolutionResult() {
+        return dependencies.checkEvolutionResult();
+      },
+      setGoal(goal) {
+        dependencies.getState().goal = goal;
+      },
+      rebuildTriggerContent() {
+        dependencies.updateTriggerSettingsContent();
+      },
+      resetResourceAccumulators() {
+        for (const resource2 of Object.values(dependencies.getResources())) {
+          resource2.maxCost = 0;
+          resource2.storageRequired = 1;
+          resource2.requestedQuantity = 0;
+        }
+      },
+      applyStorageUnitValues() {
+        const storage = dependencies.getStorageManager();
+        const poly2 = dependencies.getPoly();
+        storage.crateValue = poly2.crateValue();
+        storage.containerValue = poly2.containerValue();
+      },
+      runPlanningPasses() {
+        dependencies.updatePriorityTargets();
+        dependencies.updateProjects();
+        dependencies.calculateRequiredStorages();
+        dependencies.prioritizeDemandedResources();
+      },
+      resetTooltips() {
+        dependencies.getState().tooltips = {};
+      },
+      applyMoneyWindow(incomes, median) {
+        const state2 = dependencies.getState();
+        state2.moneyIncomes.splice(0, state2.moneyIncomes.length, ...incomes);
+        state2.moneyMedian = median;
+      },
+      applyAstroSign() {
+        dependencies.getState().astroSign = dependencies.getPoly().astrologySign();
+      },
+      applyTowerSize(towerSize) {
+        const buildings2 = dependencies.getBuildings();
+        buildings2.GateEastTower.gameMax = towerSize;
+        buildings2.GateWestTower.gameMax = towerSize;
+      },
+      applyStabilise(stabilisedAt, lastExoticMass) {
+        const state2 = dependencies.getState();
+        if (stabilisedAt !== void 0) {
+          state2.whiteholeLastStabilise = stabilisedAt;
+        }
+        state2.whiteholeLastExoticMass = lastExoticMass;
+      },
+      cacheSpaceDockOptions() {
+        const dock = dependencies.getBuildings().GasSpaceDock;
+        if (!dock.isOptionsCached()) {
+          dock.cacheOptions();
+        }
+      },
+      updateActiveTargets() {
+        dependencies.updateActiveTargets();
       }
-      state2.astroSign = poly2.astrologySign();
-      buildings2.GateEastTower.gameMax = towerSize;
-      buildings2.GateWestTower.gameMax = towerSize;
-      if ((game2.global.interstellar?.stellar_engine?.exotic ?? 0) < state2.whiteholeLastExoticMass) {
-        state2.whiteholeLastStabilise = Date.now();
-      }
-      state2.whiteholeLastExoticMass = game2.global.interstellar?.stellar_engine?.exotic ?? 0;
-      if (!buildings2.GasSpaceDock.isOptionsCached()) {
-        buildings2.GasSpaceDock.cacheOptions();
-      }
-      if (settings2.activeTargetsUI) {
-        const queuedTargets = state2.queuedTargetsAll;
-        const triggersList = state2.triggerTargets, buildingsList = [], researchList = [], arpaList = [];
-        queuedTargets.forEach((target) => {
-          if (isTechnology(target)) {
+    });
+  }
+
+  // src/adapters/browser/active-targets.ts
+  function createActiveTargetsControls(dependencies) {
+    return Object.freeze({
+      updateActiveTargets() {
+        const $2 = dependencies.getJQuery();
+        if (!dependencies.getSettings().activeTargetsUI) {
+          $2(".active-target-remove-x").off("click");
+          return;
+        }
+        const state2 = dependencies.getState();
+        const triggersList = state2.triggerTargets;
+        const buildingsList = [];
+        const researchList = [];
+        const arpaList = [];
+        state2.queuedTargetsAll.forEach((target) => {
+          if (dependencies.isTechnology(target)) {
             researchList.push(target);
-          } else if (isProject(target)) {
+          } else if (dependencies.isProject(target)) {
             arpaList.push(target);
           } else {
             buildingsList.push(target);
           }
         });
-        h.updateActiveTargetsUI(triggersList, "triggers");
-        h.updateActiveTargetsUI(buildingsList, "buildings");
-        h.updateActiveTargetsUI(researchList, "research");
-        h.updateActiveTargetsUI(arpaList, "arpa");
+        dependencies.updateActiveTargetsUI(triggersList, "triggers");
+        dependencies.updateActiveTargetsUI(buildingsList, "buildings");
+        dependencies.updateActiveTargetsUI(researchList, "research");
+        dependencies.updateActiveTargetsUI(arpaList, "arpa");
         $2(".active-target-remove-x").click(function() {
-          const queueId = $2(this).data("queueid"), type = $2(this).data("type");
-          const $queuedItem = $2(".queued").filter((id, el) => {
-            return el.id.indexOf(queueId) > -1;
+          const queueId = $2(this).data("queueid");
+          const type = $2(this).data("type");
+          const $queuedItem = $2(".queued").filter((_index, element) => {
+            return element.id.indexOf(queueId) > -1;
           });
           if (type === "triggers") {
-            const clickedTrigger = getTriggerManager().targetTriggers.find(
+            const clickedTrigger = dependencies.getTriggerManager().targetTriggers.find(
               (trigger) => trigger.actionId.includes(queueId)
             );
             if (clickedTrigger !== void 0 && clickedTrigger !== null) {
               clickedTrigger.complete = true;
             }
-          } else if ($queuedItem?.length) {
-            $queuedItem[0].click();
+          } else if ($queuedItem.length) {
+            $queuedItem[0]?.click();
           }
           $2("#active_targets-wrapper").css("height", "auto");
         });
-      } else {
-        $2(".active-target-remove-x").off("click");
       }
-    }
-    return { updateState: updateState2 };
+    });
   }
 
   // src/domain/retirement-prep.ts
@@ -32279,7 +32429,7 @@
       "game.global.stats"
     );
   }
-  function toNumber(value) {
+  function toNumber2(value) {
     return Number(value);
   }
   function raceObjects(getRaces) {
@@ -32323,8 +32473,8 @@
       const resources2 = requireRecord(dependencies.getResources(), "resources");
       const resource2 = requireRecord(resources2[id], `resources.${id}`);
       return {
-        current: toNumber(resource2["currentQuantity"]),
-        max: toNumber(resource2["maxQuantity"])
+        current: toNumber2(resource2["currentQuantity"]),
+        max: toNumber2(resource2["maxQuantity"])
       };
     };
     return Object.freeze({
@@ -32365,8 +32515,8 @@
         const races2 = raceObjects(dependencies.getRaces).map(
           (r) => Object.freeze({
             id: r.id,
-            weighting: toNumber(r.getWeighting()),
-            habitability: toNumber(r.getHabitability()),
+            weighting: toNumber2(r.getWeighting()),
+            habitability: toNumber2(r.getHabitability()),
             genus: String(r.genus),
             name: String(r.name)
           })
@@ -32380,7 +32530,7 @@
           queueEnabled: Boolean(settings2["evolutionQueueEnabled"]),
           queueLength: Array.isArray(queue) ? queue.length : 0,
           queueRepeat: Boolean(settings2["evolutionQueueRepeat"]),
-          evolutionAttempts: toNumber(state2["evolutionAttempts"])
+          evolutionAttempts: toNumber2(state2["evolutionAttempts"])
         });
       },
       sampleRaceTrait(trait2) {
@@ -32454,7 +32604,7 @@
           if (action === void 0) {
             throw new TypeError(`evolutions.${id} is missing`);
           }
-          return toNumber(action.count);
+          return toNumber2(action.count);
         };
         return Object.freeze({
           mitochondriaCount: countOf("mitochondria"),
@@ -33620,7 +33770,7 @@
   }
 
   // src/adapters/evolve/prestige.ts
-  function toNumber2(value) {
+  function toNumber3(value) {
     return Number(value);
   }
   function callBool(owner, path, method) {
@@ -33660,11 +33810,11 @@
         eligible,
         armed,
         waitForPopulation: Boolean(settings2["prestigeMADWait"]),
-        currentSoldiers: toNumber2(war["currentSoldiers"]),
-        maxSoldiers: toNumber2(war["maxSoldiers"]),
-        currentPopulation: toNumber2(population["currentQuantity"]),
-        maxPopulation: toNumber2(population["maxQuantity"]),
-        requiredPopulation: toNumber2(settings2["prestigeMADPopulation"])
+        currentSoldiers: toNumber3(war["currentSoldiers"]),
+        maxSoldiers: toNumber3(war["maxSoldiers"]),
+        currentPopulation: toNumber3(population["currentQuantity"]),
+        maxPopulation: toNumber3(population["maxQuantity"]),
+        requiredPopulation: toNumber3(settings2["prestigeMADPopulation"])
       };
     };
     return Object.freeze({
@@ -52448,21 +52598,40 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       prioritizeDemandedResources,
       updateActiveTargetsUI
     };
-    const { updateState } = createStateUpdate({
-      getSettings: () => settings,
-      getSettingsRaw: () => settingsRaw,
-      getState: () => state,
+    const stateUpdateActiveHelpers = () => stateUpdateTestHelpers ?? stateUpdateHelpers;
+    const stateUpdateReader = createStateUpdateReader({
       getGame: () => game,
+      getState: () => state,
+      getSettingsRaw: () => settingsRaw,
+      getResources: () => resources
+    });
+    const activeTargetsControls = createActiveTargetsControls({
+      getJQuery: () => $,
+      getSettings: () => settings,
+      getState: () => state,
+      getTriggerManager: () => TriggerManager,
+      updateActiveTargetsUI: (targets, type) => stateUpdateActiveHelpers().updateActiveTargetsUI(targets, type),
+      isTechnology: (target) => target instanceof Technology,
+      isProject: (target) => target instanceof Project
+    });
+    const stateUpdateControls = createStateUpdateControls({
+      getState: () => state,
       getResources: () => resources,
       getBuildings: () => buildings,
       getStorageManager: () => StorageManager,
-      getProjectManager: () => ProjectManager,
-      getTriggerManager: () => TriggerManager,
       getPoly: () => poly,
-      getJQuery: () => $,
-      getHelpers: () => stateUpdateTestHelpers ?? stateUpdateHelpers,
-      isTechnology: (target) => target instanceof Technology,
-      isProject: (target) => target instanceof Project
+      checkEvolutionResult: () => stateUpdateActiveHelpers().checkEvolutionResult(),
+      updateTriggerSettingsContent: () => stateUpdateActiveHelpers().updateTriggerSettingsContent(),
+      updatePriorityTargets: () => stateUpdateActiveHelpers().updatePriorityTargets(),
+      updateProjects: () => ProjectManager.updateProjects(),
+      calculateRequiredStorages: () => stateUpdateActiveHelpers().calculateRequiredStorages(),
+      prioritizeDemandedResources: () => stateUpdateActiveHelpers().prioritizeDemandedResources(),
+      updateActiveTargets: () => activeTargetsControls.updateActiveTargets()
+    });
+    const updateState = () => runStateUpdate({
+      reader: stateUpdateReader,
+      controls: stateUpdateControls,
+      clock: browserClock
     });
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {

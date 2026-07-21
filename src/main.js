@@ -132,7 +132,12 @@ import { createUIRefresh } from "./ui/ui-refresh.ts";
 import { createStateLogSettings } from "./ui/state-log-settings.ts";
 import { createInterfaceSettings } from "./ui/interface-settings.ts";
 import { createTickOrchestration } from "./automation/tick.ts";
-import { createStateUpdate } from "./automation/state-update.ts";
+import { runStateUpdate } from "./application/state-update.ts";
+import {
+  createStateUpdateReader,
+  createStateUpdateControls,
+} from "./adapters/evolve/state-update.ts";
+import { createActiveTargetsControls } from "./adapters/browser/active-targets.ts";
 import {
   assessRetirementPreparation as assessRetirementPreparationPolicy,
   isRetirementAssistActive as isRetirementAssistActivePolicy,
@@ -4448,22 +4453,54 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     updateActiveTargetsUI,
   };
 
-  const { updateState } = createStateUpdate({
-    getSettings: () => settings,
-    getSettingsRaw: () => settingsRaw,
-    getState: () => state,
+  // Helpers are resolved through this getter so the state-update test hook can swap them wholesale.
+  const stateUpdateActiveHelpers = () =>
+    stateUpdateTestHelpers ?? stateUpdateHelpers;
+
+  const stateUpdateReader = createStateUpdateReader({
     getGame: () => game,
+    getState: () => state,
+    getSettingsRaw: () => settingsRaw,
     getResources: () => resources,
-    getBuildings: () => buildings,
-    getStorageManager: () => StorageManager,
-    getProjectManager: () => ProjectManager,
-    getTriggerManager: () => TriggerManager,
-    getPoly: () => poly,
+  });
+
+  const activeTargetsControls = createActiveTargetsControls({
     getJQuery: () => $,
-    getHelpers: () => stateUpdateTestHelpers ?? stateUpdateHelpers,
+    getSettings: () => settings,
+    getState: () => state,
+    getTriggerManager: () => TriggerManager,
+    updateActiveTargetsUI: (targets, type) =>
+      stateUpdateActiveHelpers().updateActiveTargetsUI(targets, type),
     isTechnology: (target) => target instanceof Technology,
     isProject: (target) => target instanceof Project,
   });
+
+  const stateUpdateControls = createStateUpdateControls({
+    getState: () => state,
+    getResources: () => resources,
+    getBuildings: () => buildings,
+    getStorageManager: () => StorageManager,
+    getPoly: () => poly,
+    checkEvolutionResult: () =>
+      stateUpdateActiveHelpers().checkEvolutionResult(),
+    updateTriggerSettingsContent: () =>
+      stateUpdateActiveHelpers().updateTriggerSettingsContent(),
+    updatePriorityTargets: () =>
+      stateUpdateActiveHelpers().updatePriorityTargets(),
+    updateProjects: () => ProjectManager.updateProjects(),
+    calculateRequiredStorages: () =>
+      stateUpdateActiveHelpers().calculateRequiredStorages(),
+    prioritizeDemandedResources: () =>
+      stateUpdateActiveHelpers().prioritizeDemandedResources(),
+    updateActiveTargets: () => activeTargetsControls.updateActiveTargets(),
+  });
+
+  const updateState = () =>
+    runStateUpdate({
+      reader: stateUpdateReader,
+      controls: stateUpdateControls,
+      clock: browserClock,
+    });
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
