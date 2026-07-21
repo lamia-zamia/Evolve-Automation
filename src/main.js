@@ -138,7 +138,8 @@ import { createAutomationContainer } from "./ui/automation-container.ts";
 import { createUIRefresh } from "./ui/ui-refresh.ts";
 import { createStateLogSettingsIntentHandler } from "./application/state-log-settings.ts";
 import { createStateLogSettingsBrowserAdapter } from "./adapters/browser/state-log-settings.ts";
-import { createInterfaceSettings } from "./ui/interface-settings.ts";
+import { createInterfaceSettingsIntentHandler } from "./application/interface-settings.ts";
+import { createInterfaceSettingsBrowserAdapter } from "./adapters/browser/interface-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -5072,27 +5073,120 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
 
   let interfaceSettingsTestActions;
   const interfaceSettingsActions = {
-    resetInterfaceSettings,
-    updateSettingsFromState,
     buildSettingsSection,
     addSettingsToggle,
     addSettingsHeader1,
-    buildActiveTargetsUI,
-    removeActiveTargetsUI,
-    buildBuildPlannerUI,
-    removeBuildPlannerUI,
-    updatePrestigeInTopBar,
-    updateTotalDaysInTopBar,
+    controlEffects: {
+      activeTargetsUI: {
+        enabled: buildActiveTargetsUI,
+        disabled: removeActiveTargetsUI,
+      },
+      buildPlannerUI: {
+        enabled: buildBuildPlannerUI,
+        disabled: removeBuildPlannerUI,
+      },
+      displayPrestigeTypeInTopBar: {
+        enabled: updatePrestigeInTopBar,
+        disabled: updatePrestigeInTopBar,
+      },
+      displayTotalDaysTypeInTopBar: {
+        enabled: updateTotalDaysInTopBar,
+        disabled: updateTotalDaysInTopBar,
+      },
+    },
   };
 
-  const { buildInterfaceSettings, updateInterfaceSettingsContent } =
-    createInterfaceSettings({
-      getSettingsRaw: () => settingsRaw,
+  const getInterfaceSettingsActions = () => {
+    if (!interfaceSettingsTestActions) {
+      return interfaceSettingsActions;
+    }
+
+    return {
+      buildSettingsSection: interfaceSettingsTestActions.buildSettingsSection,
+      addSettingsToggle: interfaceSettingsTestActions.addSettingsToggle,
+      addSettingsHeader1: interfaceSettingsTestActions.addSettingsHeader1,
+      controlEffects: {
+        activeTargetsUI: {
+          enabled: interfaceSettingsTestActions.buildActiveTargetsUI,
+          disabled: interfaceSettingsTestActions.removeActiveTargetsUI,
+        },
+        buildPlannerUI: {
+          enabled: interfaceSettingsTestActions.buildBuildPlannerUI,
+          disabled: interfaceSettingsTestActions.removeBuildPlannerUI,
+        },
+        displayPrestigeTypeInTopBar: {
+          enabled: interfaceSettingsTestActions.updatePrestigeInTopBar,
+          disabled: interfaceSettingsTestActions.updatePrestigeInTopBar,
+        },
+        displayTotalDaysTypeInTopBar: {
+          enabled: interfaceSettingsTestActions.updateTotalDaysInTopBar,
+          disabled: interfaceSettingsTestActions.updateTotalDaysInTopBar,
+        },
+      },
+    };
+  };
+
+  let interfaceSettingsIntentHandler;
+  const interfaceSettingsBrowserAdapter = createInterfaceSettingsBrowserAdapter(
+    {
       getDocument: () => document,
       getJQuery: () => $,
-      getActions: () =>
-        interfaceSettingsTestActions ?? interfaceSettingsActions,
-    });
+      intents: {
+        handle: (intent) => interfaceSettingsIntentHandler.handle(intent),
+      },
+      getActions: getInterfaceSettingsActions,
+    },
+  );
+
+  interfaceSettingsIntentHandler = createInterfaceSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          interfaceSettingsTestActions?.resetInterfaceSettings ??
+          resetInterfaceSettings
+        )(true),
+      persist: () =>
+        (
+          interfaceSettingsTestActions?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    },
+    reader: {
+      read: () => ({
+        activeTargetsUI: Boolean(settingsRaw.activeTargetsUI),
+        buildPlannerUI: Boolean(settingsRaw.buildPlannerUI),
+      }),
+    },
+    effects: {
+      renderSettingsContent: () =>
+        interfaceSettingsBrowserAdapter.updateInterfaceSettingsContent(),
+      syncActiveTargetsUI: (enabled) =>
+        (enabled
+          ? (interfaceSettingsTestActions?.buildActiveTargetsUI ??
+              buildActiveTargetsUI)
+          : (interfaceSettingsTestActions?.removeActiveTargetsUI ??
+              removeActiveTargetsUI))(),
+      syncBuildPlannerUI: (enabled) =>
+        (enabled
+          ? (interfaceSettingsTestActions?.buildBuildPlannerUI ??
+              buildBuildPlannerUI)
+          : (interfaceSettingsTestActions?.removeBuildPlannerUI ??
+              removeBuildPlannerUI))(),
+      updatePrestigeInTopBar: () =>
+        (
+          interfaceSettingsTestActions?.updatePrestigeInTopBar ??
+          updatePrestigeInTopBar
+        )(),
+      updateTotalDaysInTopBar: () =>
+        (
+          interfaceSettingsTestActions?.updateTotalDaysInTopBar ??
+          updateTotalDaysInTopBar
+        )(),
+    },
+  });
+
+  const { buildInterfaceSettings, updateInterfaceSettingsContent } =
+    interfaceSettingsBrowserAdapter;
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {

@@ -1,14 +1,12 @@
 import assert from "node:assert/strict";
 
-import { createInterfaceSettings } from "../src/ui/interface-settings.ts";
+import { createInterfaceSettingsBrowserAdapter } from "../src/adapters/browser/interface-settings.ts";
 
-let settingsRaw = { activeTargetsUI: false, buildPlannerUI: true };
 let document = {
   documentElement: { scrollTop: 0 },
   body: { scrollTop: 12 },
 };
 let jqueryContext = "first";
-let actions;
 let trace = [];
 let controls = [];
 let sectionRegistration;
@@ -20,17 +18,7 @@ function action(name, context) {
 }
 
 function makeActions(context) {
-  const result = {
-    buildActiveTargetsUI: action("buildActiveTargetsUI", context),
-    removeActiveTargetsUI: action("removeActiveTargetsUI", context),
-    buildBuildPlannerUI: action("buildBuildPlannerUI", context),
-    removeBuildPlannerUI: action("removeBuildPlannerUI", context),
-    updatePrestigeInTopBar: action("updatePrestigeInTopBar", context),
-    updateTotalDaysInTopBar: action("updateTotalDaysInTopBar", context),
-    resetInterfaceSettings: (reset) =>
-      trace.push(`${context}:resetInterfaceSettings:${reset}`),
-    updateSettingsFromState: () =>
-      trace.push(`${context}:updateSettingsFromState`),
+  return {
     buildSettingsSection(...args) {
       sectionRegistration = args;
       trace.push(`${context}:section:${args[0]}:${args[1]}`);
@@ -49,13 +37,29 @@ function makeActions(context) {
     addSettingsHeader1(_node, label) {
       trace.push(`${context}:header:${label}`);
     },
+    controlEffects: {
+      activeTargetsUI: {
+        enabled: action("buildActiveTargetsUI", context),
+        disabled: action("removeActiveTargetsUI", context),
+      },
+      buildPlannerUI: {
+        enabled: action("buildBuildPlannerUI", context),
+        disabled: action("removeBuildPlannerUI", context),
+      },
+      displayPrestigeTypeInTopBar: {
+        enabled: action("updatePrestigeInTopBar", context),
+        disabled: action("updatePrestigeInTopBar", context),
+      },
+      displayTotalDaysTypeInTopBar: {
+        enabled: action("updateTotalDaysInTopBar", context),
+        disabled: action("updateTotalDaysInTopBar", context),
+      },
+    },
   };
-  return result;
 }
 
-actions = makeActions("first");
-const interfaceSettings = createInterfaceSettings({
-  getSettingsRaw: () => settingsRaw,
+let actions = makeActions("first");
+const settings = createInterfaceSettingsBrowserAdapter({
   getDocument: () => document,
   getJQuery: () => (selector) => ({
     empty() {
@@ -67,10 +71,11 @@ const interfaceSettings = createInterfaceSettings({
       return this;
     },
   }),
+  intents: { handle: (intent) => trace.push(`intent:${intent.type}`) },
   getActions: () => actions,
 });
 
-interfaceSettings.updateInterfaceSettingsContent();
+settings.updateInterfaceSettingsContent();
 assert.deepEqual(
   controls.map(({ key, enabled, disabled }) => ({ key, enabled, disabled })),
   [
@@ -112,33 +117,20 @@ jqueryContext = "second";
 actions = makeActions("second");
 trace = [];
 controls = [];
-interfaceSettings.updateInterfaceSettingsContent();
+settings.updateInterfaceSettingsContent();
 assert.ok(trace.every((entry) => entry.startsWith("second:")));
 assert.equal(controls[0].context, "second");
 assert.equal(document.documentElement.scrollTop, 29);
 assert.equal(document.body.scrollTop, 29);
 
 trace = [];
-interfaceSettings.buildInterfaceSettings();
+settings.buildInterfaceSettings();
 assert.deepEqual(trace, ["second:section:interface:Interface"]);
-assert.equal(
-  sectionRegistration[3],
-  interfaceSettings.updateInterfaceSettingsContent,
-);
+assert.equal(sectionRegistration[3], settings.updateInterfaceSettingsContent);
 
-settingsRaw = { activeTargetsUI: true, buildPlannerUI: false };
 trace = [];
 sectionRegistration[2]();
-assert.deepEqual(trace.slice(0, 2), [
-  "second:resetInterfaceSettings:true",
-  "second:updateSettingsFromState",
-]);
-assert.deepEqual(trace.slice(-4), [
-  "second:buildActiveTargetsUI",
-  "second:removeBuildPlannerUI",
-  "second:updatePrestigeInTopBar",
-  "second:updateTotalDaysInTopBar",
-]);
+assert.deepEqual(trace, ["intent:reset-interface-settings"]);
 
 assert.equal(controls[0].label, "Display detailed queue");
 assert.equal(
@@ -146,4 +138,4 @@ assert.equal(
   "Add UI in right column to display currently active queued buildings, technologies, and triggers and their resources.",
 );
 
-console.log("Interface settings module tests passed");
+console.log("Interface settings browser adapter tests passed");

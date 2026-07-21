@@ -17145,39 +17145,107 @@
     });
   }
 
-  // src/ui/interface-settings.ts
-  function createInterfaceSettings({
-    getSettingsRaw,
+  // src/application/interface-settings.ts
+  function createInterfaceSettingsIntentHandler({
+    writer,
+    reader,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-interface-settings": {
+            writer.resetToDefaults();
+            writer.persist();
+            effects.renderSettingsContent();
+            const state2 = reader.read();
+            effects.syncActiveTargetsUI(state2.activeTargetsUI);
+            effects.syncBuildPlannerUI(state2.buildPlannerUI);
+            effects.updatePrestigeInTopBar();
+            effects.updateTotalDaysInTopBar();
+            return;
+          }
+        }
+      }
+    });
+  }
+
+  // src/domain/interface-settings.ts
+  var interfaceSettingsReadModel = Object.freeze({
+    sectionId: "interface",
+    sectionName: "Interface",
+    controls: Object.freeze([
+      Object.freeze({
+        kind: "toggle",
+        settingName: "activeTargetsUI",
+        label: "Display detailed queue",
+        hint: "Add UI in right column to display currently active queued buildings, technologies, and triggers and their resources."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "buildPlannerUI",
+        label: "Display script planner",
+        hint: "Add UI below the message log showing the top buildings/projects autoBuild wants next, their weights, what's blocking them, and cumulative bottleneck statistics for the current run."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "displayPrestigeTypeInTopBar",
+        label: "Display prestige type in top bar",
+        hint: "Show the currently selected prestige type in the top bar"
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "displayTotalDaysTypeInTopBar",
+        label: "Display total days in top bar",
+        hint: "Show the total days next to this year's days"
+      }),
+      Object.freeze({
+        kind: "header",
+        label: "Experimental"
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "performanceHackAvoidDrawTech",
+        label: "Enable performance hack: drawTech avoidance",
+        hint: "Enables experimental performance hacks designed to avoid excessive redraws of expensive game tabs. The ARPA path preserves game behaviour; the repeat-building path is narrowly guarded but may still be risky if game internals change."
+      })
+    ])
+  });
+  function getInterfaceSettingsReadModel() {
+    return interfaceSettingsReadModel;
+  }
+
+  // src/adapters/browser/interface-settings.ts
+  function createInterfaceSettingsBrowserAdapter({
     getDocument,
     getJQuery,
+    intents,
     getActions
   }) {
+    const readModel = getInterfaceSettingsReadModel();
+    function renderControl(node, control, actions) {
+      if (control.kind === "header") {
+        actions.addSettingsHeader1(node, control.label);
+        return;
+      }
+      const callbacks = actions.controlEffects[control.settingName];
+      actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        callbacks?.enabled,
+        callbacks?.disabled
+      );
+    }
     function buildInterfaceSettings2() {
       const actions = getActions();
-      const sectionId = "interface";
-      const sectionName = "Interface";
-      const resetFunction = function() {
-        actions.resetInterfaceSettings(true);
-        actions.updateSettingsFromState();
-        updateInterfaceSettingsContent2();
-        const settingsRaw2 = getSettingsRaw();
-        if (settingsRaw2.activeTargetsUI) {
-          actions.buildActiveTargetsUI();
-        } else {
-          actions.removeActiveTargetsUI();
-        }
-        if (settingsRaw2.buildPlannerUI) {
-          actions.buildBuildPlannerUI();
-        } else {
-          actions.removeBuildPlannerUI();
-        }
-        actions.updatePrestigeInTopBar();
-        actions.updateTotalDaysInTopBar();
-      };
       actions.buildSettingsSection(
-        sectionId,
-        sectionName,
-        resetFunction,
+        readModel.sectionId,
+        readModel.sectionName,
+        () => {
+          intents.handle({ type: "reset-interface-settings" });
+        },
         updateInterfaceSettingsContent2
       );
     }
@@ -17185,50 +17253,17 @@
       const actions = getActions();
       const document2 = getDocument();
       const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      const currentNode = getJQuery()("#script_interfaceContent");
+      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
-      actions.addSettingsToggle(
-        currentNode,
-        "activeTargetsUI",
-        "Display detailed queue",
-        "Add UI in right column to display currently active queued buildings, technologies, and triggers and their resources.",
-        actions.buildActiveTargetsUI,
-        actions.removeActiveTargetsUI
-      );
-      actions.addSettingsToggle(
-        currentNode,
-        "buildPlannerUI",
-        "Display script planner",
-        "Add UI below the message log showing the top buildings/projects autoBuild wants next, their weights, what's blocking them, and cumulative bottleneck statistics for the current run.",
-        actions.buildBuildPlannerUI,
-        actions.removeBuildPlannerUI
-      );
-      actions.addSettingsToggle(
-        currentNode,
-        "displayPrestigeTypeInTopBar",
-        "Display prestige type in top bar",
-        "Show the currently selected prestige type in the top bar",
-        actions.updatePrestigeInTopBar,
-        actions.updatePrestigeInTopBar
-      );
-      actions.addSettingsToggle(
-        currentNode,
-        "displayTotalDaysTypeInTopBar",
-        "Display total days in top bar",
-        "Show the total days next to this year's days",
-        actions.updateTotalDaysInTopBar,
-        actions.updateTotalDaysInTopBar
-      );
-      actions.addSettingsHeader1(currentNode, "Experimental");
-      actions.addSettingsToggle(
-        currentNode,
-        "performanceHackAvoidDrawTech",
-        "Enable performance hack: drawTech avoidance",
-        "Enables experimental performance hacks designed to avoid excessive redraws of expensive game tabs. The ARPA path preserves game behaviour; the repeat-building path is narrowly guarded but may still be risky if game internals change."
-      );
+      for (const control of readModel.controls) {
+        renderControl(currentNode, control, actions);
+      }
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
-    return { buildInterfaceSettings: buildInterfaceSettings2, updateInterfaceSettingsContent: updateInterfaceSettingsContent2 };
+    return Object.freeze({
+      buildInterfaceSettings: buildInterfaceSettings2,
+      updateInterfaceSettingsContent: updateInterfaceSettingsContent2
+    });
   }
 
   // src/domain/tick.ts
@@ -53584,24 +53619,87 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     }
     let interfaceSettingsTestActions;
     const interfaceSettingsActions = {
-      resetInterfaceSettings,
-      updateSettingsFromState,
       buildSettingsSection,
       addSettingsToggle,
       addSettingsHeader1,
-      buildActiveTargetsUI,
-      removeActiveTargetsUI,
-      buildBuildPlannerUI,
-      removeBuildPlannerUI,
-      updatePrestigeInTopBar,
-      updateTotalDaysInTopBar
+      controlEffects: {
+        activeTargetsUI: {
+          enabled: buildActiveTargetsUI,
+          disabled: removeActiveTargetsUI
+        },
+        buildPlannerUI: {
+          enabled: buildBuildPlannerUI,
+          disabled: removeBuildPlannerUI
+        },
+        displayPrestigeTypeInTopBar: {
+          enabled: updatePrestigeInTopBar,
+          disabled: updatePrestigeInTopBar
+        },
+        displayTotalDaysTypeInTopBar: {
+          enabled: updateTotalDaysInTopBar,
+          disabled: updateTotalDaysInTopBar
+        }
+      }
     };
-    const { buildInterfaceSettings, updateInterfaceSettingsContent } = createInterfaceSettings({
-      getSettingsRaw: () => settingsRaw,
-      getDocument: () => document,
-      getJQuery: () => $,
-      getActions: () => interfaceSettingsTestActions ?? interfaceSettingsActions
+    const getInterfaceSettingsActions = () => {
+      if (!interfaceSettingsTestActions) {
+        return interfaceSettingsActions;
+      }
+      return {
+        buildSettingsSection: interfaceSettingsTestActions.buildSettingsSection,
+        addSettingsToggle: interfaceSettingsTestActions.addSettingsToggle,
+        addSettingsHeader1: interfaceSettingsTestActions.addSettingsHeader1,
+        controlEffects: {
+          activeTargetsUI: {
+            enabled: interfaceSettingsTestActions.buildActiveTargetsUI,
+            disabled: interfaceSettingsTestActions.removeActiveTargetsUI
+          },
+          buildPlannerUI: {
+            enabled: interfaceSettingsTestActions.buildBuildPlannerUI,
+            disabled: interfaceSettingsTestActions.removeBuildPlannerUI
+          },
+          displayPrestigeTypeInTopBar: {
+            enabled: interfaceSettingsTestActions.updatePrestigeInTopBar,
+            disabled: interfaceSettingsTestActions.updatePrestigeInTopBar
+          },
+          displayTotalDaysTypeInTopBar: {
+            enabled: interfaceSettingsTestActions.updateTotalDaysInTopBar,
+            disabled: interfaceSettingsTestActions.updateTotalDaysInTopBar
+          }
+        }
+      };
+    };
+    let interfaceSettingsIntentHandler;
+    const interfaceSettingsBrowserAdapter = createInterfaceSettingsBrowserAdapter(
+      {
+        getDocument: () => document,
+        getJQuery: () => $,
+        intents: {
+          handle: (intent) => interfaceSettingsIntentHandler.handle(intent)
+        },
+        getActions: getInterfaceSettingsActions
+      }
+    );
+    interfaceSettingsIntentHandler = createInterfaceSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (interfaceSettingsTestActions?.resetInterfaceSettings ?? resetInterfaceSettings)(true),
+        persist: () => (interfaceSettingsTestActions?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      reader: {
+        read: () => ({
+          activeTargetsUI: Boolean(settingsRaw.activeTargetsUI),
+          buildPlannerUI: Boolean(settingsRaw.buildPlannerUI)
+        })
+      },
+      effects: {
+        renderSettingsContent: () => interfaceSettingsBrowserAdapter.updateInterfaceSettingsContent(),
+        syncActiveTargetsUI: (enabled) => (enabled ? interfaceSettingsTestActions?.buildActiveTargetsUI ?? buildActiveTargetsUI : interfaceSettingsTestActions?.removeActiveTargetsUI ?? removeActiveTargetsUI)(),
+        syncBuildPlannerUI: (enabled) => (enabled ? interfaceSettingsTestActions?.buildBuildPlannerUI ?? buildBuildPlannerUI : interfaceSettingsTestActions?.removeBuildPlannerUI ?? removeBuildPlannerUI)(),
+        updatePrestigeInTopBar: () => (interfaceSettingsTestActions?.updatePrestigeInTopBar ?? updatePrestigeInTopBar)(),
+        updateTotalDaysInTopBar: () => (interfaceSettingsTestActions?.updateTotalDaysInTopBar ?? updateTotalDaysInTopBar)()
+      }
     });
+    const { buildInterfaceSettings, updateInterfaceSettingsContent } = interfaceSettingsBrowserAdapter;
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         interfaceSettings: {
