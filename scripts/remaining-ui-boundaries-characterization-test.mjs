@@ -86,7 +86,6 @@ assert.deepEqual(Object.keys(boundaries), [
   "arpaToggles",
   "craftToggles",
   "buildingToggles",
-  "ejectToggles",
   "supplyToggles",
 ]);
 
@@ -122,7 +121,6 @@ hooks.setRemainingUiBoundariesTestContext({
   craftablesList: [{ id: "Plywood" }],
   BuildingManager: { priorityList: [{ _vueBinding: "city1" }] },
   ProjectManager: { priorityList: [{ id: "Physics" }] },
-  EjectManager: { priorityList: [{ id: "Iron" }] },
   SupplyManager: { priorityList: [{ id: "Coal" }] },
   buildSettingsSection,
   buildSettingsSection2,
@@ -130,7 +128,6 @@ hooks.setRemainingUiBoundariesTestContext({
   removeBuildingToggles: () => trace.push("cleanup:building"),
   removeArpaToggles: () => trace.push("cleanup:arpa"),
   removeCraftToggles: () => trace.push("cleanup:craft"),
-  removeEjectToggles: () => trace.push("cleanup:eject"),
   removeSupplyToggles: () => trace.push("cleanup:supply"),
   addToggleCallbacks: (node, key) => {
     trace.push(`toggle:${key}`);
@@ -163,7 +160,6 @@ trace.length = 0;
 boundaries.arpaToggles.createArpaToggles();
 boundaries.craftToggles.createCraftToggles();
 boundaries.buildingToggles.createBuildingToggles();
-boundaries.ejectToggles.createEjectToggles();
 boundaries.supplyToggles.createSupplyToggles();
 assert.deepEqual(trace, [
   "cleanup:arpa",
@@ -172,8 +168,6 @@ assert.deepEqual(trace, [
   "toggle:craftPlywood",
   "cleanup:building",
   "toggle:batcity1",
-  "cleanup:eject",
-  "toggle:res_ejectIron",
   "cleanup:supply",
   "toggle:res_supplyCoal",
 ]);
@@ -184,18 +178,15 @@ hooks.setRemainingUiBoundariesTestContext({
   removeArpaToggles: undefined,
   removeCraftToggles: undefined,
   removeBuildingToggles: undefined,
-  removeEjectToggles: undefined,
   removeSupplyToggles: undefined,
 });
 boundaries.arpaToggles.removeArpaToggles();
 boundaries.craftToggles.removeCraftToggles();
 boundaries.buildingToggles.removeBuildingToggles();
-boundaries.ejectToggles.removeEjectToggles();
 boundaries.supplyToggles.removeSupplyToggles();
 assert.ok(domTrace.includes("remove:#arpaPhysics .ea-arpa-toggle"));
 assert.ok(domTrace.includes("remove:#resources .ea-craft-toggle"));
 assert.ok(domTrace.includes("remove:#mTabCivil .ea-building-toggle"));
-assert.ok(domTrace.includes("remove:#resEjector .ea-eject-toggle"));
 assert.ok(domTrace.includes("remove:#resCargo .ea-supply-toggle"));
 
 const inline = hooks.finalInlineUiBoundaries;
@@ -282,4 +273,4 @@ assert.ok(domTrace.includes("remove:#script_market_top_row"));
 assert.ok(domTrace.includes("remove:#resStorage .ea-storage-toggle"));
 assert.ok(domTrace.includes("remove:#script_storage_top_row"));
 
-console.log("Next 5 UI-boundary bundled characterization tests passed");
+console.log("Next 4 UI-boundary bundled characterization tests passed");

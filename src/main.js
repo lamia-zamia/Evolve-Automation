@@ -182,6 +182,8 @@ import { createTotalDaysTopBarBrowserAdapter } from "./adapters/browser/total-da
 import { createTotalDaysTopBarEvolveAdapter } from "./adapters/evolve/total-days-top-bar.ts";
 import { createPrestigeTopBarBrowserAdapter } from "./adapters/browser/prestige-top-bar.ts";
 import { createPrestigeTopBarEvolveAdapter } from "./adapters/evolve/prestige-top-bar.ts";
+import { createEjectToggleBrowserAdapter } from "./adapters/browser/eject-toggles.ts";
+import { createEjectToggleEvolveAdapter } from "./adapters/evolve/eject-toggles.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -438,7 +440,6 @@ import { createMarketSettings } from "./ui/market-settings.ts";
 import { createArpaToggleUI } from "./ui/arpa-toggles.ts";
 import { createCraftToggleUI } from "./ui/craft-toggles.ts";
 import { createBuildingToggleUI } from "./ui/building-toggles.ts";
-import { createEjectToggleUI } from "./ui/eject-toggles.ts";
 import { createSupplyToggleUI } from "./ui/supply-toggles.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoUI } from "./ui/mech-info.ts";
@@ -1245,21 +1246,21 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { createBuildingToggles, removeBuildingToggles } =
     buildingTogglesBoundary;
 
-  const ejectTogglesBoundaryOverrides = {};
-  const getEjectTogglesBoundaryDependency = createDependencyResolver(
-    ejectTogglesBoundaryOverrides,
-    {
-      $: () => $,
-      EjectManager: () => EjectManager,
-      addToggleCallbacks: () => addToggleCallbacks,
-      settingsRaw: () => settingsRaw,
-    },
-  );
-  const ejectTogglesBoundary = createEjectToggleUI({
-    getDependency: getEjectTogglesBoundaryDependency,
-    getOverride: (name) => ejectTogglesBoundaryOverrides[name],
+  let ejectTogglesTestContext;
+  const ejectToggleReader = createEjectToggleEvolveAdapter({
+    getEjectManager: () =>
+      ejectTogglesTestContext?.EjectManager ?? EjectManager,
+    getSettingsRaw: () => ejectTogglesTestContext?.settingsRaw ?? settingsRaw,
   });
-  const { createEjectToggles, removeEjectToggles } = ejectTogglesBoundary;
+  const ejectToggleBrowserAdapter = createEjectToggleBrowserAdapter({
+    getJQuery: () => $,
+    reader: ejectToggleReader,
+    addToggleCallbacks: (...args) =>
+      (ejectTogglesTestContext?.addToggleCallbacks ?? addToggleCallbacks)(
+        ...args,
+      ),
+  });
+  const { createEjectToggles, removeEjectToggles } = ejectToggleBrowserAdapter;
 
   const supplyTogglesBoundaryOverrides = {};
   const getSupplyTogglesBoundaryDependency = createDependencyResolver(
@@ -5893,6 +5894,10 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       setTotalDaysTopBarTestContext(context) {
         totalDaysTopBarTestContext = context;
       },
+      ejectToggles: ejectToggleBrowserAdapter,
+      setEjectTogglesTestContext(context) {
+        ejectTogglesTestContext = context;
+      },
     });
   }
 
@@ -5902,7 +5907,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         arpaToggles: arpaTogglesBoundary,
         craftToggles: craftTogglesBoundary,
         buildingToggles: buildingTogglesBoundary,
-        ejectToggles: ejectTogglesBoundary,
         supplyToggles: supplyTogglesBoundary,
       },
       setRemainingUiBoundariesTestContext(context) {
@@ -5924,7 +5928,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         Object.assign(arpaTogglesBoundaryOverrides, context);
         Object.assign(craftTogglesBoundaryOverrides, context);
         Object.assign(buildingTogglesBoundaryOverrides, context);
-        Object.assign(ejectTogglesBoundaryOverrides, context);
         Object.assign(supplyTogglesBoundaryOverrides, context);
       },
     });
