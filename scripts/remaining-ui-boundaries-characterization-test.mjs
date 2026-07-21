@@ -83,7 +83,6 @@ vm.runInNewContext(source, sandbox, {
 
 const boundaries = hooks.remainingUiBoundaries;
 assert.deepEqual(Object.keys(boundaries), [
-  "storage",
   "magic",
   "jobs",
   "weighting",
@@ -106,7 +105,7 @@ const state = { buildingToggles: 0 };
 
 const resetStubs = {};
 const updateStubs = {};
-for (const name of ["Storage", "Magic", "Job", "Weighting", "Building"]) {
+for (const name of ["Magic", "Job", "Weighting", "Building"]) {
   resetStubs[`reset${name}Settings`] = (reset) =>
     trace.push(`reset:${name.toLowerCase()}:${reset}`);
   updateStubs[`update${name}SettingsContent`] = (...args) =>
@@ -129,7 +128,6 @@ hooks.setRemainingUiBoundariesTestContext({
   resources: {},
   jobs: {},
   craftablesList: [{ id: "Plywood" }],
-  StorageManager: { priorityList: [] },
   AlchemyManager: { priorityList: [] },
   RitualManager: { priorityList: [] },
   JobManager: { priorityList: [] },
@@ -140,7 +138,6 @@ hooks.setRemainingUiBoundariesTestContext({
   buildSettingsSection,
   buildSettingsSection2,
   resetCheckbox: (...keys) => trace.push(`checkbox:${keys.join("|")}`),
-  removeStorageToggles: () => trace.push("cleanup:storage"),
   removeBuildingToggles: () => trace.push("cleanup:building"),
   removeArpaToggles: () => trace.push("cleanup:arpa"),
   removeCraftToggles: () => trace.push("cleanup:craft"),
@@ -157,7 +154,6 @@ hooks.setRemainingUiBoundariesTestContext({
 });
 
 const settingsSpecs = [
-  ["storage", "buildStorageSettings", "storage", "Storage", false],
   ["magic", "buildMagicSettings", "magic", "Magic", false],
   ["jobs", "buildJobSettings", "job", "Job", false],
   [
@@ -185,10 +181,6 @@ for (const registration of registrations) {
 assert.deepEqual(
   trace.filter((entry) => /^(reset|update|checkbox|cleanup):/.test(entry)),
   [
-    "reset:storage:true",
-    "update:storage:",
-    "checkbox:autoStorage",
-    "cleanup:storage",
     "reset:magic:true",
     "update:magic:",
     "checkbox:autoAlchemy|autoPylon|magicFullmetalHelper",
@@ -350,4 +342,4 @@ assert.ok(domTrace.includes("remove:#script_market_top_row"));
 assert.ok(domTrace.includes("remove:#resStorage .ea-storage-toggle"));
 assert.ok(domTrace.includes("remove:#script_storage_top_row"));
 
-console.log("Next 13 UI-boundary bundled characterization tests passed");
+console.log("Next 12 UI-boundary bundled characterization tests passed");

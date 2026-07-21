@@ -163,6 +163,9 @@ import { createPlanetSettingsEvolveAdapter } from "./adapters/evolve/planet-sett
 import { createProjectSettingsIntentHandler } from "./application/project-settings.ts";
 import { createProjectSettingsBrowserAdapter } from "./adapters/browser/project-settings.ts";
 import { createProjectSettingsEvolveAdapter } from "./adapters/evolve/project-settings.ts";
+import { createStorageSettingsIntentHandler } from "./application/storage-settings.ts";
+import { createStorageSettingsBrowserAdapter } from "./adapters/browser/storage-settings.ts";
+import { createStorageSettingsEvolveAdapter } from "./adapters/evolve/storage-settings.ts";
 import { runTick } from "./application/tick.ts";
 import {
   createTickReader,
@@ -416,7 +419,6 @@ import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createMechSettings } from "./ui/mech-settings.ts";
 import { createEjectorSettings } from "./ui/ejector-settings.ts";
 import { createMarketSettings } from "./ui/market-settings.ts";
-import { createStorageSettings } from "./ui/storage-settings.ts";
 import { createMagicSettings } from "./ui/magic-settings.ts";
 import { createJobSettings } from "./ui/job-settings.ts";
 import { createWeightingSettings } from "./ui/weighting-settings.ts";
@@ -701,32 +703,64 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       },
     });
   }
-  const storageBoundaryOverrides = {};
-  const getStorageBoundaryDependency = createDependencyResolver(
-    storageBoundaryOverrides,
-    {
-      $: () => $,
-      StorageManager: () => StorageManager,
-      addSettingsToggle: () => addSettingsToggle,
-      addTableInput: () => addTableInput,
-      addTableToggle: () => addTableToggle,
-      buildSettingsSection: () => buildSettingsSection,
-      buildTableLabel: () => buildTableLabel,
-      document: () => document,
-      removeStorageToggles: () => removeStorageToggles,
-      resetCheckbox: () => resetCheckbox,
-      resetStorageSettings: () => resetStorageSettings,
-      settingsRaw: () => settingsRaw,
-      sorterHelper: () => sorterHelper,
-      updateSettingsFromState: () => updateSettingsFromState,
+  let storageSettingsTestContext;
+  const storageSettingsActions = {
+    buildSettingsSection,
+    addSettingsToggle,
+    addTableInput,
+    addTableToggle,
+    buildTableLabel,
+    getSorterHelper: () => sorterHelper,
+  };
+  const storageSettingsEvolveAdapter = createStorageSettingsEvolveAdapter({
+    getStorageManager: () =>
+      storageSettingsTestContext?.StorageManager ?? StorageManager,
+    getSettingsRaw: () =>
+      storageSettingsTestContext?.settingsRaw ?? settingsRaw,
+  });
+  let storageSettingsIntentHandler;
+  const storageSettingsBrowserAdapter = createStorageSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    getReadModel: () =>
+      storageSettingsEvolveAdapter.readStorageSettingsReadModel(),
+    intents: {
+      handle: (intent) => storageSettingsIntentHandler.handle(intent),
     },
-  );
-  const storageBoundary = createStorageSettings({
-    getDependency: getStorageBoundaryDependency,
-    getOverride: (name) => storageBoundaryOverrides[name],
+    getActions: () =>
+      storageSettingsTestContext?.actions ?? storageSettingsActions,
+  });
+  storageSettingsIntentHandler = createStorageSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          storageSettingsTestContext?.resetStorageSettings ??
+          resetStorageSettings
+        )(true),
+      persist: () =>
+        (
+          storageSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+      reorderResources: (resourceIds) =>
+        storageSettingsEvolveAdapter.reorderResources(resourceIds),
+    },
+    renderSettingsContent: () =>
+      storageSettingsBrowserAdapter.updateStorageSettingsContent(),
+    effects: {
+      resetCheckbox: () =>
+        (storageSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoStorage",
+        ),
+      removeStorageToggles: () =>
+        (
+          storageSettingsTestContext?.removeStorageToggles ??
+          removeStorageToggles
+        )(),
+    },
   });
   const { buildStorageSettings, updateStorageSettingsContent } =
-    storageBoundary;
+    storageSettingsBrowserAdapter;
 
   const magicBoundaryOverrides = {};
   const getMagicBoundaryDependency = createDependencyResolver(
@@ -5515,6 +5549,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {
+      storageSettings: storageSettingsBrowserAdapter,
+      setStorageSettingsTestContext(context) {
+        storageSettingsTestContext = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
       achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
       setAchievementGuardSettingsTestContext(context) {
         achievementGuardSettingsTestActions = context;
@@ -5693,7 +5733,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
       remainingUiBoundaries: {
-        storage: storageBoundary,
         magic: magicBoundary,
         jobs: jobsBoundary,
         weighting: weightingBoundary,
@@ -5728,7 +5767,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
           ProjectManager = context.ProjectManager;
         if ("EjectManager" in context) EjectManager = context.EjectManager;
         if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-        Object.assign(storageBoundaryOverrides, context);
         Object.assign(magicBoundaryOverrides, context);
         Object.assign(jobsBoundaryOverrides, context);
         Object.assign(weightingBoundaryOverrides, context);

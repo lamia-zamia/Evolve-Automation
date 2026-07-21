@@ -18816,6 +18816,211 @@
     return Object.freeze({ readProjectSettingsReadModel, reorderProjects });
   }
 
+  // src/application/storage-settings.ts
+  function createStorageSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-storage-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            effects.resetCheckbox();
+            effects.removeStorageToggles();
+            return;
+          case "reorder-storage-resources":
+            writer.reorderResources(intent.resourceIds);
+            writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/storage-settings.ts
+  function freezeRow2(row) {
+    return Object.freeze({ ...row });
+  }
+  function createStorageSettingsReadModel(rows) {
+    return Object.freeze({
+      sectionId: "storage",
+      sectionName: "Storage",
+      controls: Object.freeze([
+        Object.freeze({
+          settingName: "storageLimitPreMad",
+          label: "Limit Pre-MAD Storage",
+          hint: "Saves resources and shortens run time by limiting storage pre-MAD"
+        }),
+        Object.freeze({
+          settingName: "storageSafeReassign",
+          label: "Reassign only empty storages",
+          hint: "Wait until storage is empty before reassigning containers to another resource, to prevent overflowing and wasting resources"
+        }),
+        Object.freeze({
+          settingName: "storageAssignExtra",
+          label: "Assign buffer storage",
+          hint: "Assigns 3% extra strorage above required amounts, ensuring that required quantity will be actually reached, even if other part of script trying to sell\\eject\\switch production, etc. When manual trades enabled applies additional adjust derieved from selling threshold."
+        }),
+        Object.freeze({
+          settingName: "storageAssignPart",
+          label: "Assign partial storage",
+          hint: "When enabled script will be allowed to assign some crates and containers even if resulting storage space won't be enough to build new building. It allows to pre-build stock of resources for further use, but can be potentially dungerous.\nIf script not allowed to reassign non-empty storage it can lock storage in position when stored resources can't be used.\nIf script is allowed to reassign non-empty storage it might waste time producing materials which might need to be disposed."
+        })
+      ]),
+      rows: Object.freeze(rows.map(freezeRow2))
+    });
+  }
+
+  // src/adapters/browser/storage-settings.ts
+  function createStorageSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    getActions
+  }) {
+    function buildStorageSettings2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      actions.buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-storage-settings" }),
+        updateStorageSettingsContent2
+      );
+    }
+    function updateStorageSettingsContent2() {
+      const readModel = getReadModel();
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
+      currentNode.empty().off("*");
+      for (const control of readModel.controls) {
+        renderControl(currentNode, control, actions);
+      }
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:35%">Resource</th>
+              <th class="has-text-warning" style="width:15%">Enabled</th>
+              <th class="has-text-warning" style="width:15%">Store Overflow</th>
+              <th class="has-text-warning" style="width:15%">Min Storage</th>
+              <th class="has-text-warning" style="width:15%">Max Storage</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_storageTableBody"></tbody>
+          </table>`);
+      const tableBodyNode = getJQuery()("#script_storageTableBody");
+      let newTableBodyText = "";
+      for (const row of readModel.rows) {
+        newTableBodyText += `<tr value="${row.id}" class="script-draggable"><td id="script_storage_${row.id}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+      }
+      tableBodyNode.append(getJQuery()(newTableBodyText));
+      for (const row of readModel.rows) {
+        let storageElement = getJQuery()(`#script_storage_${row.id}`);
+        storageElement.append(actions.buildTableLabel(row.label));
+        storageElement = storageElement.next();
+        actions.addTableToggle(storageElement, row.enabledSettingName);
+        storageElement = storageElement.next();
+        actions.addTableToggle(storageElement, row.overflowSettingName);
+        storageElement = storageElement.next();
+        actions.addTableInput(storageElement, row.minimumSettingName);
+        storageElement = storageElement.next();
+        actions.addTableInput(storageElement, row.maximumSettingName);
+      }
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: actions.getSorterHelper(),
+        update: () => {
+          const resourceIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          intents.handle({ type: "reorder-storage-resources", resourceIds });
+        }
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function renderControl(node, control, actions) {
+      actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    return Object.freeze({
+      buildStorageSettings: buildStorageSettings2,
+      updateStorageSettingsContent: updateStorageSettingsContent2
+    });
+  }
+
+  // src/adapters/evolve/storage-settings.ts
+  function requireString6(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function readPriorityList2(manager) {
+    const priorityList = manager["priorityList"];
+    if (!Array.isArray(priorityList)) {
+      throw new TypeError("StorageManager.priorityList must be an array");
+    }
+    return priorityList.map(
+      (resource2, index) => requireRecord(resource2, `StorageManager.priorityList[${index}]`)
+    );
+  }
+  function createStorageSettingsEvolveAdapter({
+    getStorageManager,
+    getSettingsRaw
+  }) {
+    function readStorageSettingsReadModel() {
+      const manager = requireRecord(getStorageManager(), "StorageManager");
+      const rows = readPriorityList2(manager).map(
+        (resource2, index) => {
+          const id = requireString6(
+            resource2["id"],
+            `StorageManager.priorityList[${index}].id`
+          );
+          return {
+            id,
+            label: requireString6(
+              resource2["name"],
+              `StorageManager.priorityList[${index}].name`
+            ),
+            enabledSettingName: `res_storage${id}`,
+            overflowSettingName: `res_storage_o_${id}`,
+            minimumSettingName: `res_min_store${id}`,
+            maximumSettingName: `res_max_store${id}`
+          };
+        }
+      );
+      return createStorageSettingsReadModel(rows);
+    }
+    function reorderResources(resourceIds) {
+      const manager = requireRecord(getStorageManager(), "StorageManager");
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      const sortByPriority = requireFunction(
+        manager["sortByPriority"],
+        "StorageManager.sortByPriority"
+      );
+      resourceIds.forEach((resourceId3, index) => {
+        const id = requireString6(resourceId3, `resourceIds[${index}]`);
+        settingsRaw2[`res_storage_p_${id}`] = index;
+      });
+      Reflect.apply(sortByPriority, manager, []);
+    }
+    return Object.freeze({
+      readStorageSettingsReadModel,
+      reorderResources
+    });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -22441,7 +22646,7 @@
   }
 
   // src/adapters/evolve/hell.ts
-  function requireString6(value, path) {
+  function requireString7(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -22738,7 +22943,7 @@
           ),
           evilTechnology: optionalNumber(tech["evil"], "game.global.tech.evil"),
           grenadier: Boolean(race2["grenadier"]),
-          government: requireString6(
+          government: requireString7(
             govern["type"],
             "game.global.civic.govern.type"
           )
@@ -23329,7 +23534,7 @@
   }
 
   // src/adapters/evolve/battle.ts
-  function requireString7(value, path) {
+  function requireString8(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -23347,7 +23552,7 @@
     return {
       input: Object.freeze({
         governmentId: requireNumber(foreign["id"], `${path}.id`),
-        policy: requireString7(foreign["policy"], `${path}.policy`),
+        policy: requireString8(foreign["policy"], `${path}.policy`),
         released: Boolean(foreign["released"]),
         occupied: Boolean(government["occ"]),
         annexed: Boolean(government["anx"]),
@@ -23462,7 +23667,7 @@
         );
         const hellAvailable = Boolean(manager["_hellVue"]);
         const readHell = autoHell2 && hellAvailable;
-        const protectMode = requireString7(
+        const protectMode = requireString8(
           settings2["foreignProtect"],
           "settings.foreignProtect"
         );
@@ -23736,7 +23941,7 @@
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        const governmentName = requireString7(
+        const governmentName = requireString8(
           dependencies.getGovernmentName(decision2.governmentId),
           `government name ${decision2.governmentId}`
         );
@@ -23762,7 +23967,7 @@
         if (removeBattalion !== null) {
           Reflect.apply(removeBattalion, active.manager, [-deltaBattalion]);
         }
-        const campaignTitle = requireString7(
+        const campaignTitle = requireString8(
           Reflect.apply(getCampaignTitle, active.manager, [decision2.tactic]),
           `campaign title ${decision2.tactic}`
         );
@@ -27709,7 +27914,7 @@
       moneyStorageRequired: 0
     });
   }
-  function requireString8(value, path) {
+  function requireString9(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -27758,7 +27963,7 @@
         );
         if (maxCityGarrison <= 0) return unavailableInput2();
         const state2 = requireRecord(dependencies.getState(), "state");
-        const goal = requireString8(state2["goal"], "state.goal");
+        const goal = requireString9(state2["goal"], "state.goal");
         const saveInflationMoney = Boolean(
           dependencies.shouldSaveInflationMoney()
         );
@@ -30246,7 +30451,7 @@
       }
     });
   }
-  function readPriorityList2(manager) {
+  function readPriorityList3(manager) {
     const list = manager["priorityList"];
     if (!Array.isArray(list)) {
       throw new TypeError("MarketManager.priorityList must be an array");
@@ -30285,7 +30490,7 @@
           manager["setMultiplier"],
           "MarketManager.setMultiplier"
         );
-        const list = readPriorityList2(manager);
+        const list = readPriorityList3(manager);
         const raw = list[decision2.index];
         const resource2 = typeof raw === "object" && raw !== null ? raw : null;
         const actualId = resource2 !== null && typeof resource2["id"] === "string" ? resource2["id"] : null;
@@ -35463,7 +35668,7 @@
     );
     return { foreign, government };
   }
-  function requireString9(value, path) {
+  function requireString10(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -35474,7 +35679,7 @@
     const ids = {};
     for (const [name, rawType] of Object.entries(types)) {
       const type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString9(type["id"], `SpyManager.Types.${name}.id`);
+      ids[name] = requireString10(type["id"], `SpyManager.Types.${name}.id`);
     }
     return Object.freeze(ids);
   }
@@ -35582,7 +35787,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString9(
+        const policy = requireString10(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -35603,7 +35808,7 @@
             "resources.Money.maxQuantity"
           );
         }
-        const governmentName = requireString9(
+        const governmentName = requireString10(
           dependencies.getGovName(governmentId),
           `government name ${governmentId}`
         );
@@ -35649,7 +35854,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString9(
+        const policy = requireString10(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -36799,7 +37004,7 @@
   }
 
   // src/adapters/evolve/jobs.ts
-  function requireString10(value, path) {
+  function requireString11(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
     return value;
@@ -36929,7 +37134,7 @@
           if (count === 0) {
             maximum = 1;
           } else {
-            const id = requireString10(job["id"], "job.id");
+            const id = requireString11(job["id"], "job.id");
             const production = requireNumber(
               call2(
                 resource(resources2, "Food"),
@@ -37281,7 +37486,7 @@
           );
           return Object.freeze({
             token: token2,
-            id: requireString10(job["id"], `jobList[${token2}].id`),
+            id: requireString11(job["id"], `jobList[${token2}].id`),
             kind,
             workers: requireNumber(job["workers"], `jobList[${token2}].workers`),
             servants: requireNumber(
@@ -37398,7 +37603,7 @@
                 `craftingJobs[${index}].resource.craftPreserve`
               ))) {
                 affordability = 0;
-                exclusion = `${requireString10(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
+                exclusion = `${requireString11(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
                 break;
               }
               affordability = Math.min(
@@ -37430,7 +37635,7 @@
                 craftResource["currentQuantity"],
                 `craftingJobs[${index}].resource.currentQuantity`
               );
-              const resourceId3 = requireString10(
+              const resourceId3 = requireString11(
                 craftResource["id"],
                 `craftingJobs[${index}].resource.id`
               );
@@ -37450,7 +37655,7 @@
                 driver = `no building×${craftWeight}`;
               } else {
                 const record = requireRecord(driving, "driving building");
-                driver = `${requireString10(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
+                driver = `${requireString11(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
               }
             }
             return Object.freeze({
@@ -37657,7 +37862,7 @@
           minerToken: token("Miner"),
           population: resourceNumber(resources2, "Population", "currentQuantity"),
           craftDebug: Boolean(debugWindow["craftDebug"]),
-          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString10(state2["lastCraftWinner"], "state.lastCraftWinner"),
+          lastCraftWinner: state2["lastCraftWinner"] === void 0 ? null : requireString11(state2["lastCraftWinner"], "state.lastCraftWinner"),
           authority,
           jobs: Object.freeze(jobInputs),
           crafting: Object.freeze(craftingInputs),
@@ -38111,7 +38316,7 @@
   }
 
   // src/adapters/evolve/build.ts
-  function requireString11(value, path) {
+  function requireString12(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -38201,7 +38406,7 @@
         const byKey = /* @__PURE__ */ new Map();
         const candidates = entities.map((entity, index) => {
           const path = `buildList[${index}]`;
-          const key = requireString11(entity["_vueBinding"], `${path}._vueBinding`);
+          const key = requireString12(entity["_vueBinding"], `${path}._vueBinding`);
           byKey.set(key, entity);
           const rawCost = requireRecord(entity["cost"], `${path}.cost`);
           const cost = {};
@@ -38595,7 +38800,7 @@
       )
     });
   }
-  function readPriorityList3(manager) {
+  function readPriorityList4(manager) {
     const priorityList = manager["priorityList"];
     if (!Array.isArray(priorityList)) {
       throw new TypeError("MutableTraitManager.priorityList must be an array");
@@ -38655,7 +38860,7 @@
         const currencyId = currencyIdFromGame(dependencies.getGame);
         const views = [];
         let currency = null;
-        const list = readPriorityList3(manager);
+        const list = readPriorityList4(manager);
         for (let index = 0; index < list.length; index++) {
           const path = `MutableTraitManager.priorityList[${index}]`;
           const trait2 = requireRecord(list[index], path);
@@ -38738,7 +38943,7 @@
           dependencies.getMutableTraitManager(),
           "MutableTraitManager"
         );
-        const list = readPriorityList3(manager);
+        const list = readPriorityList4(manager);
         const trait2 = typeof list[decision2.index] === "object" && list[decision2.index] !== null ? list[decision2.index] : null;
         const actualTraitName = trait2 !== null && typeof trait2["traitName"] === "string" ? trait2["traitName"] : null;
         if (trait2 === null || actualTraitName !== decision2.traitName) {
@@ -38977,7 +39182,7 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString12(value, path) {
+  function requireString13(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -38997,7 +39202,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString12(
+    const status2 = requireString13(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -39066,7 +39271,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString12(
+          mode = requireString13(
             settings2["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -39204,7 +39409,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString12(
+            const id = requireString13(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -39363,7 +39568,7 @@
             );
           }
         }
-        const targetLocationName = requireString12(
+        const targetLocationName = requireString13(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -39396,7 +39601,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString12(
+        const shipName = requireString13(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -39407,7 +39612,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString12(
+        const shipClass = requireString13(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -39479,7 +39684,7 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString12(
+          const resourceId3 = requireString13(
             missingResource,
             "missing outer-fleet resource id"
           );
@@ -39487,7 +39692,7 @@
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString12(
+          missingResourceName = requireString13(
             resource2["name"],
             `resources.${resourceId3}.name`
           );
@@ -39917,7 +40122,7 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString13(value, path) {
+  function requireString14(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -40093,7 +40298,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString13(
+          const name = requireString14(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -40121,7 +40326,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString13(
+          chthonianLossMode = requireString14(
             settings2["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -40155,7 +40360,7 @@
               settings2["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString13(
+            alien2LossMode = requireString14(
               settings2["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -40504,7 +40709,7 @@
   }
 
   // src/adapters/evolve/mech.ts
-  function requireString14(value, path) {
+  function requireString15(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -40523,7 +40728,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString14(raw["size"], `${path}.size`),
+        size: requireString15(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -40558,7 +40763,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString14(raw["size"], `${path}.size`),
+      size: requireString15(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -40675,7 +40880,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString14(settings2["mechBuild"], "settings.mechBuild")
+          buildMode: requireString15(settings2["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -40710,7 +40915,7 @@
             call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString14(preferred[0], "preferred mech size");
+          const size = requireString15(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
             call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
@@ -40749,7 +40954,7 @@
           buildings2["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString14(
+        const prestigeType = requireString15(
           settings2["prestigeType"],
           "settings.prestigeType"
         );
@@ -40838,7 +41043,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString14(
+        const configuredScrapMode = requireString15(
           settings2["mechScrap"],
           "settings.mechScrap"
         );
@@ -40867,7 +41072,7 @@
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString14(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString15(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -41052,7 +41257,7 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString14(
+          const description = requireString15(
             call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
@@ -44594,139 +44799,6 @@
       return implementation.apply(this, args);
     }
     return { buildMarketSettings: buildMarketSettings2, updateMarketSettingsContent: updateMarketSettingsContent2 };
-  }
-
-  // src/ui/storage-settings.ts
-  function createStorageSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const StorageManager2 = liveObject4(() => getDependency("StorageManager"));
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
-    const addTableToggle2 = liveFunction(() => getDependency("addTableToggle"));
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject4(() => getDependency("document"));
-    const removeStorageToggles2 = liveFunction(
-      () => getDependency("removeStorageToggles")
-    );
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetStorageSettings2 = liveFunction(
-      () => getDependency("resetStorageSettings")
-    );
-    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
-    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildStorageSettingsImpl() {
-      let sectionId = "storage";
-      let sectionName = "Storage";
-      let resetFunction = function() {
-        resetStorageSettings2(true);
-        updateSettingsFromState2();
-        updateStorageSettingsContent2();
-        resetCheckbox2("autoStorage");
-        removeStorageToggles2();
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateStorageSettingsContent2
-      );
-    }
-    function updateStorageSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_storageContent");
-      currentNode.empty().off("*");
-      addSettingsToggle2(
-        currentNode,
-        "storageLimitPreMad",
-        "Limit Pre-MAD Storage",
-        "Saves resources and shortens run time by limiting storage pre-MAD"
-      );
-      addSettingsToggle2(
-        currentNode,
-        "storageSafeReassign",
-        "Reassign only empty storages",
-        "Wait until storage is empty before reassigning containers to another resource, to prevent overflowing and wasting resources"
-      );
-      addSettingsToggle2(
-        currentNode,
-        "storageAssignExtra",
-        "Assign buffer storage",
-        "Assigns 3% extra strorage above required amounts, ensuring that required quantity will be actually reached, even if other part of script trying to sell\\eject\\switch production, etc. When manual trades enabled applies additional adjust derieved from selling threshold."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "storageAssignPart",
-        "Assign partial storage",
-        "When enabled script will be allowed to assign some crates and containers even if resulting storage space won't be enough to build new building. It allows to pre-build stock of resources for further use, but can be potentially dungerous.\nIf script not allowed to reassign non-empty storage it can lock storage in position when stored resources can't be used.\nIf script is allowed to reassign non-empty storage it might waste time producing materials which might need to be disposed."
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:35%">Resource</th>
-              <th class="has-text-warning" style="width:15%">Enabled</th>
-              <th class="has-text-warning" style="width:15%">Store Overflow</th>
-              <th class="has-text-warning" style="width:15%">Min Storage</th>
-              <th class="has-text-warning" style="width:15%">Max Storage</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_storageTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $2("#script_storageTableBody");
-      let newTableBodyText = "";
-      for (let i = 0; i < StorageManager2.priorityList.length; i++) {
-        const resource2 = StorageManager2.priorityList[i];
-        newTableBodyText += `<tr value="${resource2.id}" class="script-draggable"><td id="script_storage_${resource2.id}" style="width:35%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:15%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
-      }
-      tableBodyNode.append($2(newTableBodyText));
-      for (let i = 0; i < StorageManager2.priorityList.length; i++) {
-        const resource2 = StorageManager2.priorityList[i];
-        let storageElement = $2("#script_storage_" + resource2.id);
-        storageElement.append(buildTableLabel2(resource2.name));
-        storageElement = storageElement.next();
-        addTableToggle2(storageElement, "res_storage" + resource2.id);
-        storageElement = storageElement.next();
-        addTableToggle2(storageElement, "res_storage_o_" + resource2.id);
-        storageElement = storageElement.next();
-        addTableInput2(storageElement, "res_min_store" + resource2.id);
-        storageElement = storageElement.next();
-        addTableInput2(storageElement, "res_max_store" + resource2.id);
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper2,
-        update: function() {
-          let storageIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < storageIds.length; i++) {
-            settingsRaw2["res_storage_p_" + storageIds[i]] = i;
-          }
-          StorageManager2.sortByPriority();
-          updateSettingsFromState2();
-        }
-      });
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildStorageSettings2(...args) {
-      const implementation = getOverride("buildStorageSettings") ?? buildStorageSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateStorageSettingsContent2(...args) {
-      const implementation = getOverride("updateStorageSettingsContent") ?? updateStorageSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildStorageSettings: buildStorageSettings2, updateStorageSettingsContent: updateStorageSettingsContent2 };
   }
 
   // src/ui/magic-settings.ts
@@ -50163,31 +50235,44 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const storageBoundaryOverrides = {};
-    const getStorageBoundaryDependency = createDependencyResolver(
-      storageBoundaryOverrides,
-      {
-        $: () => $,
-        StorageManager: () => StorageManager,
-        addSettingsToggle: () => addSettingsToggle,
-        addTableInput: () => addTableInput,
-        addTableToggle: () => addTableToggle,
-        buildSettingsSection: () => buildSettingsSection,
-        buildTableLabel: () => buildTableLabel,
-        document: () => document,
-        removeStorageToggles: () => removeStorageToggles,
-        resetCheckbox: () => resetCheckbox,
-        resetStorageSettings: () => resetStorageSettings,
-        settingsRaw: () => settingsRaw,
-        sorterHelper: () => sorterHelper,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const storageBoundary = createStorageSettings({
-      getDependency: getStorageBoundaryDependency,
-      getOverride: (name) => storageBoundaryOverrides[name]
+    let storageSettingsTestContext;
+    const storageSettingsActions = {
+      buildSettingsSection,
+      addSettingsToggle,
+      addTableInput,
+      addTableToggle,
+      buildTableLabel,
+      getSorterHelper: () => sorterHelper
+    };
+    const storageSettingsEvolveAdapter = createStorageSettingsEvolveAdapter({
+      getStorageManager: () => storageSettingsTestContext?.StorageManager ?? StorageManager,
+      getSettingsRaw: () => storageSettingsTestContext?.settingsRaw ?? settingsRaw
     });
-    const { buildStorageSettings, updateStorageSettingsContent } = storageBoundary;
+    let storageSettingsIntentHandler;
+    const storageSettingsBrowserAdapter = createStorageSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getReadModel: () => storageSettingsEvolveAdapter.readStorageSettingsReadModel(),
+      intents: {
+        handle: (intent) => storageSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => storageSettingsTestContext?.actions ?? storageSettingsActions
+    });
+    storageSettingsIntentHandler = createStorageSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (storageSettingsTestContext?.resetStorageSettings ?? resetStorageSettings)(true),
+        persist: () => (storageSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)(),
+        reorderResources: (resourceIds) => storageSettingsEvolveAdapter.reorderResources(resourceIds)
+      },
+      renderSettingsContent: () => storageSettingsBrowserAdapter.updateStorageSettingsContent(),
+      effects: {
+        resetCheckbox: () => (storageSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoStorage"
+        ),
+        removeStorageToggles: () => (storageSettingsTestContext?.removeStorageToggles ?? removeStorageToggles)()
+      }
+    });
+    const { buildStorageSettings, updateStorageSettingsContent } = storageSettingsBrowserAdapter;
     const magicBoundaryOverrides = {};
     const getMagicBoundaryDependency = createDependencyResolver(
       magicBoundaryOverrides,
@@ -54455,6 +54540,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
+        storageSettings: storageSettingsBrowserAdapter,
+        setStorageSettingsTestContext(context) {
+          storageSettingsTestContext = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
         achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
         setAchievementGuardSettingsTestContext(context) {
           achievementGuardSettingsTestActions = context;
@@ -54622,7 +54713,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         remainingUiBoundaries: {
-          storage: storageBoundary,
           magic: magicBoundary,
           jobs: jobsBoundary,
           weighting: weightingBoundary,
@@ -54657,7 +54747,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
             ProjectManager = context.ProjectManager;
           if ("EjectManager" in context) EjectManager = context.EjectManager;
           if ("SupplyManager" in context) SupplyManager = context.SupplyManager;
-          Object.assign(storageBoundaryOverrides, context);
           Object.assign(magicBoundaryOverrides, context);
           Object.assign(jobsBoundaryOverrides, context);
           Object.assign(weightingBoundaryOverrides, context);

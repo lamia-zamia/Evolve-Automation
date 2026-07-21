@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import { liveFunction } from "../src/ui/dependencies.ts";
-import { createStorageSettings } from "../src/ui/storage-settings.ts";
 import { createMagicSettings } from "../src/ui/magic-settings.ts";
 import { createJobSettings } from "../src/ui/job-settings.ts";
 import { createWeightingSettings } from "../src/ui/weighting-settings.ts";
@@ -23,16 +22,6 @@ function makeFactory(factory, context = {}, overrides = {}) {
 }
 
 const settingsSpecs = [
-  [
-    "storage",
-    createStorageSettings,
-    "buildStorageSettings",
-    "updateStorageSettingsContent",
-    "storage",
-    "Storage",
-    false,
-    ["checkbox:autoStorage", "cleanup:storage"],
-  ],
   [
     "magic",
     createMagicSettings,
@@ -91,7 +80,6 @@ for (const [
     [resetName]: (value) => trace.push(`reset:first:${value}`),
     updateSettingsFromState: () => trace.push("persist"),
     resetCheckbox: (...keys) => trace.push(`checkbox:${keys.join("|")}`),
-    removeStorageToggles: () => trace.push("cleanup:storage"),
     removeBuildingToggles: () => trace.push("cleanup:building"),
     buildFilterRegExp: () => trace.push("filter"),
   };
@@ -269,4 +257,4 @@ currentClass = SecondClass;
 assert.equal(new FirstClass() instanceof liveClass, false);
 assert.equal(new SecondClass() instanceof liveClass, true);
 
-console.log("Next 13 UI-boundary module tests passed");
+console.log("Next 12 UI-boundary module tests passed");
