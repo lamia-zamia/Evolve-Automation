@@ -100,7 +100,7 @@ assert.deepEqual(
   },
   {
     rules: 71,
-    hash: "f45ddb55c2f9b205e9005ace02f66a36a28913d271c78ad98ec02dc40a2c6b93",
+    hash: "268af91ec05023f6349463c147f9406ec776d0197e28a153451b49a0a67dacdd",
     authority: [
       "city-garrison",
       "city-temple",

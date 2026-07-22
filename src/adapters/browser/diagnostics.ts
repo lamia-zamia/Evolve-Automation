@@ -1,7 +1,6 @@
 export interface BrowserDiagnostics {
   readonly readMechDebugEnabled: () => boolean;
   readonly nowMs: () => number;
-  readonly publishPerformance: (value: unknown) => void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -31,13 +30,8 @@ export function createBrowserDiagnostics(
     return Date.now();
   };
 
-  const publishPerformance = (value: unknown) => {
-    if (isRecord(globalObject)) globalObject["__EAperf"] = value;
-  };
-
   return Object.freeze({
     readMechDebugEnabled,
     nowMs,
-    publishPerformance,
   });
 }

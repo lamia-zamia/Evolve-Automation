@@ -1,3 +1,5 @@
+import type { RandomSource } from "../ports/randomness.ts";
+
 type LooseFunction = (...args: any[]) => any;
 type LooseObject = Record<PropertyKey, any>;
 type LooseConstructor = new (...args: any[]) => any;
@@ -34,6 +36,7 @@ type BuildingWeightingDependencies = {
   getIsPillarFinished: () => LooseFunction;
   getCitadelConsumptionFn: () => LooseFunction;
   ResourceAction: LooseConstructor;
+  randomSource: RandomSource;
 };
 
 export function createBuildingWeightingPolicy({
@@ -68,6 +71,7 @@ export function createBuildingWeightingPolicy({
   getIsPillarFinished,
   getCitadelConsumptionFn,
   ResourceAction,
+  randomSource,
 }: BuildingWeightingDependencies) {
   const traitVal: LooseFunction = (...args) => getTraitVal()(...args);
   const haveTech: LooseFunction = (...args) => getHaveTech()(...args);
@@ -1172,7 +1176,7 @@ export function createBuildingWeightingPolicy({
       () => getGame().global.tech.tau_gas === 1, // Only used for name contest, no need to check at other game stages
       (building: any) => building.is.random,
       () => "Randomized weighting",
-      () => 1 + Math.random(), // Fluctuate weight to pick random item
+      () => 1 + randomSource.nextUnit(), // Fluctuate weight to pick random item
     ],
     [
       () => getGame().global.race["truepath"] && haveTech("tauceti", 2),

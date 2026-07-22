@@ -1,10 +1,20 @@
 type RuntimeRecord = Record<PropertyKey, unknown>;
 type RuntimeFunction = (...args: unknown[]) => unknown;
 
+export interface RuntimeUrlApi {
+  readonly createObjectURL: (blob: unknown) => string;
+  readonly revokeObjectURL: (url: string) => void;
+}
+
+export type RuntimeBlobConstructor = new (parts: string[]) => unknown;
+
 export interface LegacyRuntimeEnvironment {
   readonly document: unknown;
   readonly window: unknown;
   readonly storage: unknown;
+  readonly createDate: () => Date;
+  readonly urlApi: RuntimeUrlApi;
+  readonly BlobConstructor: RuntimeBlobConstructor;
   readonly schedule: RuntimeFunction;
   readonly repeat: RuntimeFunction;
   readonly MutationObserver: unknown;
@@ -43,6 +53,43 @@ function bindFunction(
 
 const noOperation: RuntimeFunction = () => undefined;
 const confirmByDefault: RuntimeFunction = () => true;
+const unavailableUrlApi: RuntimeUrlApi = Object.freeze({
+  createObjectURL: () => {
+    throw new Error("URL.createObjectURL is unavailable");
+  },
+  revokeObjectURL: () => undefined,
+});
+class UnavailableBlob {
+  constructor(_parts: string[]) {
+    throw new Error("Blob is unavailable");
+  }
+}
+
+function readUrlApi(globalObject: unknown): RuntimeUrlApi {
+  const candidate = readProperty(globalObject, "URL");
+  const createObjectURL = readProperty(candidate, "createObjectURL");
+  const revokeObjectURL = readProperty(candidate, "revokeObjectURL");
+  if (
+    typeof createObjectURL !== "function" ||
+    typeof revokeObjectURL !== "function"
+  ) {
+    return unavailableUrlApi;
+  }
+  return Object.freeze({
+    createObjectURL: (blob: unknown) =>
+      Reflect.apply(createObjectURL, candidate, [blob]) as string,
+    revokeObjectURL: (url: string) => {
+      Reflect.apply(revokeObjectURL, candidate, [url]);
+    },
+  });
+}
+
+function readBlobConstructor(globalObject: unknown): RuntimeBlobConstructor {
+  const candidate = readProperty(globalObject, "Blob");
+  return typeof candidate === "function"
+    ? (candidate as RuntimeBlobConstructor)
+    : UnavailableBlob;
+}
 
 export function createLegacyRuntimeEnvironment(
   globalObject: unknown,
@@ -55,6 +102,9 @@ export function createLegacyRuntimeEnvironment(
     document,
     window,
     storage: readProperty(globalObject, "localStorage"),
+    createDate: () => new Date(),
+    urlApi: readUrlApi(globalObject),
+    BlobConstructor: readBlobConstructor(globalObject),
     schedule: bindFunction(globalObject, "setTimeout", noOperation),
     repeat: bindFunction(globalObject, "setInterval", noOperation),
     MutationObserver: readProperty(globalObject, "MutationObserver"),

@@ -269,6 +269,7 @@ import { findTechConflict } from "../domain/tech-conflicts.ts";
 import { readTechConflictInput } from "../adapters/evolve/tech-conflicts.ts";
 import { formatTechConflict } from "../application/tech-conflicts.ts";
 import { createBrowserClock } from "../adapters/browser/clock.ts";
+import { createBrowserRandomSource } from "../adapters/browser/random.ts";
 import { createBuildingWeightingPolicy } from "../policies/building-weighting.ts";
 import { readTradeRoutesInput } from "../adapters/evolve/trade-routes.ts";
 import { planTradeRoutes } from "../domain/trade-routes.ts";
@@ -488,6 +489,7 @@ export function startRuntime($, diagnostics, runtimeEnvironment) {
   const { getRealNumber, getNumberString, getNiceNumber } =
     createNumberFormatting({ numberSuffix });
   const browserClock = createBrowserClock();
+  const randomSource = createBrowserRandomSource();
   const settingsStore = createSettingsStore(runtimeEnvironment.storage);
   var settingsRaw = settingsStore.load();
   var settings = {};
@@ -2541,7 +2543,7 @@ export function startRuntime($, diagnostics, runtimeEnvironment) {
     getTraitVal: () => traitVal,
     getGovernor: () => getGovernor(),
     getHaveTech: () => haveTech,
-    getDate: () => new Date(),
+    getDate: () => runtimeEnvironment.createDate(),
   });
   var win = null;
   const userscriptEnvironment = createUserscriptEnvironment(
@@ -2550,8 +2552,8 @@ export function startRuntime($, diagnostics, runtimeEnvironment) {
   const { getVueById, triggerFileDownload } = createBrowserRuntime({
     getWin: () => win,
     getDocument: () => runtimeEnvironment.document,
-    getUrlApi: () => URL,
-    getBlobConstructor: () => Blob,
+    getUrlApi: () => runtimeEnvironment.urlApi,
+    getBlobConstructor: () => runtimeEnvironment.BlobConstructor,
     schedule: (callback, delay) => runtimeEnvironment.schedule(callback, delay),
   });
   var needSandboxBypass = false;
@@ -3083,6 +3085,7 @@ export function startRuntime($, diagnostics, runtimeEnvironment) {
     getIsPillarFinished: () => isPillarFinished,
     getCitadelConsumptionFn: () => getCitadelConsumption,
     ResourceAction,
+    randomSource,
   });
 
   Object.assign(runtimeTestSurface, {
@@ -3271,6 +3274,7 @@ export function startRuntime($, diagnostics, runtimeEnvironment) {
       userscriptEnvironment.cloneIntoPage(value, options),
     createMutationObserver: (callback) =>
       new runtimeEnvironment.MutationObserver(callback),
+    randomSource,
   });
 
   Object.assign(runtimeTestSurface, {
@@ -5659,51 +5663,8 @@ export function startRuntime($, diagnostics, runtimeEnvironment) {
         : updateState(),
   });
 
-  // Cheap per-tick timer mirroring the pre-migration baseline probe in
-  // evolve_automation.user_original.js. Times only work ticks (runTick returns
-  // true past the throttle gate) so the numbers line up with the baseline.
-  // Inspect/reset from the console via window.__EAperf; __EAperf.report() prints
-  // on demand. Remove once the performance comparison is done.
-  const __EAperf = {
-    n: 0,
-    total: 0,
-    max: 0,
-    window: 0,
-    windowTotal: 0,
-    report() {
-      const avg = this.n ? this.total / this.n : 0;
-      const wavg = this.window ? this.windowTotal / this.window : 0;
-      runtimeEnvironment.log(
-        `[EA perf] work-ticks=${this.n} cum-avg=${avg.toFixed(3)}ms ` +
-          `last-${this.window}-avg=${wavg.toFixed(3)}ms max=${this.max.toFixed(3)}ms`,
-      );
-    },
-    record(ms) {
-      this.n++;
-      this.total += ms;
-      this.window++;
-      this.windowTotal += ms;
-      if (ms > this.max) this.max = ms;
-      if (this.window >= 200) {
-        this.report();
-        this.window = 0;
-        this.windowTotal = 0;
-      }
-    },
-    reset() {
-      this.n = this.total = this.max = this.window = this.windowTotal = 0;
-      runtimeEnvironment.log("[EA perf] reset");
-    },
-  };
-  diagnostics.publishPerformance(__EAperf);
-  const __eaNow = () => diagnostics.nowMs();
-
   const automate = () => {
-    const t0 = __eaNow();
-    const worked = applicationRunner.runCycle();
-    if (worked) {
-      __EAperf.record(__eaNow() - t0);
-    }
+    applicationRunner.runCycle();
   };
 
   Object.assign(runtimeTestSurface, {
@@ -6553,7 +6514,7 @@ export function startRuntime($, diagnostics, runtimeEnvironment) {
     normalizeProperties,
     cloneIntoPage: (value, options) =>
       userscriptEnvironment.cloneIntoPage(value, options),
-    getDate: () => new Date(),
+    getDate: () => runtimeEnvironment.createDate(),
   });
 
   Object.assign(runtimeTestSurface, {

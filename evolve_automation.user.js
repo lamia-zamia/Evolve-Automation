@@ -40,13 +40,9 @@
       }
       return Date.now();
     };
-    const publishPerformance = (value) => {
-      if (isRecord(globalObject)) globalObject["__EAperf"] = value;
-    };
     return Object.freeze({
       readMechDebugEnabled,
-      nowMs,
-      publishPerformance
+      nowMs
     });
   }
 
@@ -74,6 +70,35 @@
   }
   var noOperation = () => void 0;
   var confirmByDefault = () => true;
+  var unavailableUrlApi = Object.freeze({
+    createObjectURL: () => {
+      throw new Error("URL.createObjectURL is unavailable");
+    },
+    revokeObjectURL: () => void 0
+  });
+  var UnavailableBlob = class {
+    constructor(_parts) {
+      throw new Error("Blob is unavailable");
+    }
+  };
+  function readUrlApi(globalObject) {
+    const candidate = readProperty(globalObject, "URL");
+    const createObjectURL = readProperty(candidate, "createObjectURL");
+    const revokeObjectURL = readProperty(candidate, "revokeObjectURL");
+    if (typeof createObjectURL !== "function" || typeof revokeObjectURL !== "function") {
+      return unavailableUrlApi;
+    }
+    return Object.freeze({
+      createObjectURL: (blob) => Reflect.apply(createObjectURL, candidate, [blob]),
+      revokeObjectURL: (url) => {
+        Reflect.apply(revokeObjectURL, candidate, [url]);
+      }
+    });
+  }
+  function readBlobConstructor(globalObject) {
+    const candidate = readProperty(globalObject, "Blob");
+    return typeof candidate === "function" ? candidate : UnavailableBlob;
+  }
   function createLegacyRuntimeEnvironment(globalObject) {
     const window = readProperty(globalObject, "window") ?? globalObject;
     const document = readProperty(globalObject, "document");
@@ -82,6 +107,9 @@
       document,
       window,
       storage: readProperty(globalObject, "localStorage"),
+      createDate: () => /* @__PURE__ */ new Date(),
+      urlApi: readUrlApi(globalObject),
+      BlobConstructor: readBlobConstructor(globalObject),
       schedule: bindFunction(globalObject, "setTimeout", noOperation),
       repeat: bindFunction(globalObject, "setInterval", noOperation),
       MutationObserver: readProperty(globalObject, "MutationObserver"),
@@ -4432,7 +4460,8 @@
     getVueById,
     kCombinations,
     cloneIntoPage,
-    createMutationObserver
+    createMutationObserver,
+    randomSource
   }) {
     let game;
     let settings;
@@ -4884,8 +4913,8 @@
         }
       },
       getRandomMech(size) {
-        let randomBody = this.bestBody[size][Math.floor(Math.random() * this.bestBody[size].length)];
-        let randomWeapon = this.bestWeapon[Math.floor(Math.random() * this.bestWeapon.length)];
+        let randomBody = this.bestBody[size][Math.floor(randomSource.nextUnit() * this.bestBody[size].length)];
+        let randomWeapon = this.bestWeapon[Math.floor(randomSource.nextUnit() * this.bestWeapon.length)];
         let weaponsAmount = this.SizeWeapons[size];
         let mech = {
           hardpoint: new Array(weaponsAmount).fill(randomWeapon),
@@ -23702,6 +23731,11 @@
     return Object.freeze({ nowMs: () => Date.now() });
   }
 
+  // src/adapters/browser/random.ts
+  function createBrowserRandomSource() {
+    return Object.freeze({ nextUnit: () => Math.random() });
+  }
+
   // src/policies/building-weighting.ts
   function createBuildingWeightingPolicy({
     getGame,
@@ -23734,7 +23768,8 @@
     getIsPrestigeAllowed,
     getIsPillarFinished,
     getCitadelConsumptionFn,
-    ResourceAction
+    ResourceAction,
+    randomSource
   }) {
     const traitVal = (...args) => getTraitVal()(...args);
     const haveTech = (...args) => getHaveTech()(...args);
@@ -24480,7 +24515,7 @@
         // Only used for name contest, no need to check at other game stages
         (building3) => building3.is.random,
         () => "Randomized weighting",
-        () => 1 + Math.random()
+        () => 1 + randomSource.nextUnit()
         // Fluctuate weight to pick random item
       ],
       [
@@ -52240,6 +52275,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const runtimeTestSurface = {};
     const { getRealNumber, getNumberString, getNiceNumber } = createNumberFormatting({ numberSuffix });
     const browserClock = createBrowserClock();
+    const randomSource = createBrowserRandomSource();
     const settingsStore = createSettingsStore(runtimeEnvironment.storage);
     var settingsRaw = settingsStore.load();
     var settings = {};
@@ -53823,7 +53859,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getTraitVal: () => traitVal,
       getGovernor: () => getGovernor(),
       getHaveTech: () => haveTech,
-      getDate: () => /* @__PURE__ */ new Date()
+      getDate: () => runtimeEnvironment.createDate()
     });
     var win = null;
     const userscriptEnvironment = createUserscriptEnvironment(
@@ -53832,8 +53868,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const { getVueById, triggerFileDownload } = createBrowserRuntime({
       getWin: () => win,
       getDocument: () => runtimeEnvironment.document,
-      getUrlApi: () => URL,
-      getBlobConstructor: () => Blob,
+      getUrlApi: () => runtimeEnvironment.urlApi,
+      getBlobConstructor: () => runtimeEnvironment.BlobConstructor,
       schedule: (callback, delay) => runtimeEnvironment.schedule(callback, delay)
     });
     var needSandboxBypass = false;
@@ -54331,7 +54367,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getIsPrestigeAllowed: () => isPrestigeAllowed2,
       getIsPillarFinished: () => isPillarFinished2,
       getCitadelConsumptionFn: () => getCitadelConsumption,
-      ResourceAction
+      ResourceAction,
+      randomSource
     });
     Object.assign(runtimeTestSurface, {
       weightingPolicy: {
@@ -54498,7 +54535,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getVueById: (id) => getVueById(id),
       kCombinations: k_combinations,
       cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2),
-      createMutationObserver: (callback) => new runtimeEnvironment.MutationObserver(callback)
+      createMutationObserver: (callback) => new runtimeEnvironment.MutationObserver(callback),
+      randomSource
     });
     Object.assign(runtimeTestSurface, {
       MechManager,
@@ -56627,44 +56665,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       controls: tickControls,
       updateState: () => tickTestControllers?.updateState ? tickTestControllers.updateState() : updateState()
     });
-    const __EAperf = {
-      n: 0,
-      total: 0,
-      max: 0,
-      window: 0,
-      windowTotal: 0,
-      report() {
-        const avg = this.n ? this.total / this.n : 0;
-        const wavg = this.window ? this.windowTotal / this.window : 0;
-        runtimeEnvironment.log(
-          `[EA perf] work-ticks=${this.n} cum-avg=${avg.toFixed(3)}ms last-${this.window}-avg=${wavg.toFixed(3)}ms max=${this.max.toFixed(3)}ms`
-        );
-      },
-      record(ms) {
-        this.n++;
-        this.total += ms;
-        this.window++;
-        this.windowTotal += ms;
-        if (ms > this.max) this.max = ms;
-        if (this.window >= 200) {
-          this.report();
-          this.window = 0;
-          this.windowTotal = 0;
-        }
-      },
-      reset() {
-        this.n = this.total = this.max = this.window = this.windowTotal = 0;
-        runtimeEnvironment.log("[EA perf] reset");
-      }
-    };
-    diagnostics.publishPerformance(__EAperf);
-    const __eaNow = () => diagnostics.nowMs();
     const automate = () => {
-      const t0 = __eaNow();
-      const worked = applicationRunner.runCycle();
-      if (worked) {
-        __EAperf.record(__eaNow() - t0);
-      }
+      applicationRunner.runCycle();
     };
     Object.assign(runtimeTestSurface, {
       automate: () => automate(),
@@ -57416,7 +57418,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getVueById: (...args) => getVueById(...args),
       normalizeProperties,
       cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2),
-      getDate: () => /* @__PURE__ */ new Date()
+      getDate: () => runtimeEnvironment.createDate()
     });
     Object.assign(runtimeTestSurface, {
       gameCompatibility: poly

@@ -40,6 +40,7 @@ const { MechManager } = createMechManager({
     observerCallback = callback;
     return { observe() {} };
   },
+  randomSource: { nextUnit: () => 0 },
 });
 
 game = {

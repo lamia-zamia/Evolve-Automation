@@ -6,10 +6,26 @@ const document = { id: "document" };
 const storage = { id: "storage" };
 const calls = [];
 const window = { document, navigator: { platform: "Win32" }, location: "game" };
+const urlApi = {
+  createObjectURL(blob) {
+    assert.deepEqual(blob, { contents: "payload" });
+    return "blob:url";
+  },
+  revokeObjectURL(url) {
+    calls.push(["revoke", url]);
+  },
+};
+class BlobConstructor {
+  constructor(parts) {
+    this.parts = parts;
+  }
+}
 const globalObject = {
   window,
   document,
   localStorage: storage,
+  URL: urlApi,
+  Blob: BlobConstructor,
   MutationObserver: class MutationObserver {},
   ResizeObserver: class ResizeObserver {},
   HTMLElement: class HTMLElement {},
@@ -45,6 +61,15 @@ const environment = createLegacyRuntimeEnvironment(globalObject);
 assert.equal(environment.document, document);
 assert.equal(environment.window, window);
 assert.equal(environment.storage, storage);
+assert.ok(environment.createDate() instanceof Date);
+assert.equal(
+  environment.urlApi.createObjectURL({ contents: "payload" }),
+  "blob:url",
+);
+environment.urlApi.revokeObjectURL("blob:url");
+assert.deepEqual(new environment.BlobConstructor(["payload"]).parts, [
+  "payload",
+]);
 assert.equal(typeof environment.MutationObserver, "function");
 assert.equal(typeof environment.ResizeObserver, "function");
 assert.equal(typeof environment.HTMLElement, "function");
@@ -59,6 +84,7 @@ assert.equal(environment.confirm("question"), false);
 environment.log("hello", 1);
 environment.error("failure");
 assert.deepEqual(calls, [
+  ["revoke", "blob:url"],
   ["timeout", 10],
   ["scheduled"],
   ["interval", 20],

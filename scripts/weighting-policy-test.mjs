@@ -68,6 +68,7 @@ const policy = createBuildingWeightingPolicy({
   getIsPillarFinished: () => neutralFunction,
   getCitadelConsumptionFn: () => neutralFunction,
   ResourceAction,
+  randomSource: { nextUnit: () => 0.5 },
 });
 
 assert.equal(policy.weightingRules.length, 71);

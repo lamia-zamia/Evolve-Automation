@@ -1,3 +1,5 @@
+import type { RandomSource } from "../ports/randomness.ts";
+
 type AnyFunction = (...args: any[]) => any;
 type AnyRecord = Record<string, any>;
 
@@ -17,6 +19,7 @@ type MechManagerDependencies = {
   kCombinations: (values: any[], size: number) => any[][];
   cloneIntoPage: (value: unknown, options?: AnyRecord) => any;
   createMutationObserver: (callback: (...args: any[]) => void) => unknown;
+  randomSource: RandomSource;
 };
 
 export function createMechManager({
@@ -35,6 +38,7 @@ export function createMechManager({
   kCombinations,
   cloneIntoPage,
   createMutationObserver,
+  randomSource,
 }: MechManagerDependencies) {
   let game: AnyRecord;
   let settings: AnyRecord;
@@ -621,10 +625,12 @@ export function createMechManager({
     getRandomMech(size: any) {
       let randomBody =
         this.bestBody[size][
-          Math.floor(Math.random() * this.bestBody[size].length)
+          Math.floor(randomSource.nextUnit() * this.bestBody[size].length)
         ];
       let randomWeapon =
-        this.bestWeapon[Math.floor(Math.random() * this.bestWeapon.length)];
+        this.bestWeapon[
+          Math.floor(randomSource.nextUnit() * this.bestWeapon.length)
+        ];
       let weaponsAmount = this.SizeWeapons[size];
       let mech = {
         hardpoint: new Array(weaponsAmount).fill(randomWeapon),

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import { createBrowserDiagnostics } from "../src/adapters/browser/diagnostics.ts";
 
-const published = {};
 const performance = {
   now() {
     assert.equal(this, performance);
@@ -14,9 +13,6 @@ const diagnostics = createBrowserDiagnostics(browserGlobal);
 
 assert.equal(diagnostics.readMechDebugEnabled(), true);
 assert.equal(diagnostics.nowMs(), 12.5);
-diagnostics.publishPerformance(published);
-assert.equal(browserGlobal.__EAperf, published);
-
 browserGlobal.mechDebug = false;
 assert.equal(diagnostics.readMechDebugEnabled(), false);
 
