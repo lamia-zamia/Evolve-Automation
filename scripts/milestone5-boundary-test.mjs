@@ -10,8 +10,8 @@ const read = (relativePath) =>
 
 const main = read("src/main.ts");
 assert.doesNotMatch(main, /bootstrap/);
-assert.doesNotMatch(main, /startLegacyRuntime/);
 assert.doesNotMatch(main, /__EA_TEST_HOOKS__/);
+assert.doesNotMatch(main, /captureTestSurface/);
 assert.match(main, /startEvolveRuntime\(/);
 
 assert.equal(
@@ -38,7 +38,7 @@ const sourceJavaScript = sourceFiles
   .map((file) => path.relative(root, file).replaceAll(path.sep, "/"))
   .sort();
 assert.deepEqual(sourceJavaScript, [
-  "src/adapters/evolve/legacy-runtime.js",
+  "src/adapters/evolve/evolve-runtime.js",
   "src/userscript.meta.js",
 ]);
 

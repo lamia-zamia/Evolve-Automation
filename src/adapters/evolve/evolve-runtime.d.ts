@@ -2,7 +2,7 @@ import type { BrowserDiagnostics } from "../browser/diagnostics.ts";
 import type { JQueryGlobal } from "../browser/jquery.ts";
 import type { LegacyRuntimeEnvironment } from "../browser/legacy-runtime-environment.ts";
 
-export type LegacyRuntimeSurface = Record<string, unknown>;
+export type EvolveCharacterizationSurface = Record<string, unknown>;
 
 /**
  * TRANSITIONAL: The current Evolve/Vue 2 composition is kept behind this
@@ -20,4 +20,4 @@ export declare function startEvolveRuntimeForTests(
   jquery: JQueryGlobal,
   diagnostics: BrowserDiagnostics,
   environment: LegacyRuntimeEnvironment,
-): LegacyRuntimeSurface;
+): EvolveCharacterizationSurface;

@@ -52184,18 +52184,24 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     };
   }
 
-  // src/adapters/evolve/legacy-runtime.js
+  // src/adapters/evolve/evolve-runtime.js
   function startEvolveRuntime($, diagnostics, runtimeEnvironment) {
-    startLegacyRuntime($, diagnostics, runtimeEnvironment, false);
+    startEvolveRuntimeComposition($, diagnostics, runtimeEnvironment, false);
   }
   function startEvolveRuntimeForTests($, diagnostics, runtimeEnvironment) {
-    return startLegacyRuntime($, diagnostics, runtimeEnvironment, true);
+    return startEvolveRuntimeComposition(
+      $,
+      diagnostics,
+      runtimeEnvironment,
+      true
+    );
   }
-  function startLegacyRuntime($, diagnostics, runtimeEnvironment, captureTestSurface) {
+  function startEvolveRuntimeComposition($, diagnostics, runtimeEnvironment, captureTestSurface) {
     "use strict";
-    const runtimeTestSurface = captureTestSurface === true ? {} : null;
+    const characterizationSurface = captureTestSurface === true ? {} : null;
     const publishTestSurface = (...parts) => {
-      if (runtimeTestSurface) Object.assign(runtimeTestSurface, ...parts);
+      if (characterizationSurface)
+        Object.assign(characterizationSurface, ...parts);
     };
     const { getRealNumber, getNumberString, getNiceNumber } = createNumberFormatting({ numberSuffix });
     const browserClock = createBrowserClock();
@@ -53890,8 +53896,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readWin: () => win,
       readWindowManager: () => WindowManager
     });
-    if (runtimeTestSurface)
-      runtimeTestSurface.entityClasses = {
+    if (characterizationSurface)
+      characterizationSurface.entityClasses = {
         Job,
         BasicJob,
         CraftingJob,
@@ -57267,8 +57273,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         resources = context.resources;
       }
     });
-    if (runtimeTestSurface)
-      runtimeTestSurface.numberFormatting = {
+    if (characterizationSurface)
+      characterizationSurface.numberFormatting = {
         getRealNumber,
         getNumberString,
         getNiceNumber
@@ -57372,7 +57378,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       gameCompatibility: poly
     });
     $().ready(mainAutoEvolveScript);
-    return runtimeTestSurface ?? {};
+    return characterizationSurface ?? {};
   }
 
   // src/adapters/browser/jquery.ts

@@ -464,23 +464,29 @@ import { createOverrideCatalog } from "../../settings/override-catalog.ts";
 import { createScriptRuntimeUI } from "../../ui/script-runtime.ts";
 
 export function startEvolveRuntime($, diagnostics, runtimeEnvironment) {
-  startLegacyRuntime($, diagnostics, runtimeEnvironment, false);
+  startEvolveRuntimeComposition($, diagnostics, runtimeEnvironment, false);
 }
 
 export function startEvolveRuntimeForTests($, diagnostics, runtimeEnvironment) {
-  return startLegacyRuntime($, diagnostics, runtimeEnvironment, true);
+  return startEvolveRuntimeComposition(
+    $,
+    diagnostics,
+    runtimeEnvironment,
+    true,
+  );
 }
 
-function startLegacyRuntime(
+function startEvolveRuntimeComposition(
   $,
   diagnostics,
   runtimeEnvironment,
   captureTestSurface,
 ) {
   "use strict";
-  const runtimeTestSurface = captureTestSurface === true ? {} : null;
+  const characterizationSurface = captureTestSurface === true ? {} : null;
   const publishTestSurface = (...parts) => {
-    if (runtimeTestSurface) Object.assign(runtimeTestSurface, ...parts);
+    if (characterizationSurface)
+      Object.assign(characterizationSurface, ...parts);
   };
   const { getRealNumber, getNumberString, getNiceNumber } =
     createNumberFormatting({ numberSuffix });
@@ -2656,8 +2662,8 @@ function startLegacyRuntime(
     readWindowManager: () => WindowManager,
   });
 
-  if (runtimeTestSurface)
-    runtimeTestSurface.entityClasses = {
+  if (characterizationSurface)
+    characterizationSurface.entityClasses = {
       Job,
       BasicJob,
       CraftingJob,
@@ -6426,8 +6432,8 @@ function startLegacyRuntime(
     },
   });
 
-  if (runtimeTestSurface)
-    runtimeTestSurface.numberFormatting = {
+  if (characterizationSurface)
+    characterizationSurface.numberFormatting = {
       getRealNumber,
       getNumberString,
       getNiceNumber,
@@ -6545,5 +6551,5 @@ function startLegacyRuntime(
   });
 
   $().ready(mainAutoEvolveScript);
-  return runtimeTestSurface ?? {};
+  return characterizationSurface ?? {};
 }

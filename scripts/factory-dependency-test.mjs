@@ -9,7 +9,7 @@ const mainPath = path.join(
   "src",
   "adapters",
   "evolve",
-  "legacy-runtime.js",
+  "evolve-runtime.js",
 );
 
 function findTypeScriptFiles(directory) {
