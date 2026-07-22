@@ -213,11 +213,11 @@ export function createSettingsShell({
   }
 
   function buildSettingsSectionImpl(
-    parentNode,
-    sectionId,
-    sectionName,
-    resetFunction,
-    updateSettingsContentFunction,
+    parentNode: any,
+    sectionId: any,
+    sectionName: any,
+    resetFunction: any,
+    updateSettingsContentFunction: any,
   ) {
     const triggerID = `${sectionId}SettingsCollapsed`;
     const resetID = `script_reset${sectionId}`;
@@ -256,10 +256,10 @@ export function createSettingsShell({
   }
 
   function buildSettingsSection(
-    sectionId,
-    sectionName,
-    resetFunction,
-    updateSettingsContentFunction,
+    sectionId: any,
+    sectionName: any,
+    resetFunction: any,
+    updateSettingsContentFunction: any,
   ) {
     buildSettingsSectionImpl(
       $("#script_settings"),
@@ -271,12 +271,12 @@ export function createSettingsShell({
   }
 
   function buildSettingsSection2(
-    parentNode,
-    secondaryPrefix,
-    sectionId,
-    sectionName,
-    resetFunction,
-    updateSettingsContentFunction,
+    parentNode: any,
+    secondaryPrefix: any,
+    sectionId: any,
+    sectionName: any,
+    resetFunction: any,
+    updateSettingsContentFunction: any,
   ) {
     if (secondaryPrefix !== "") {
       parentNode.append(
@@ -296,7 +296,7 @@ export function createSettingsShell({
     }
   }
 
-  function genericResetFunction(resetFunction, sectionName) {
+  function genericResetFunction(resetFunction: any, sectionName: any) {
     if (
       confirm("Are you sure you wish to reset " + sectionName + " Settings?")
     ) {
@@ -304,19 +304,19 @@ export function createSettingsShell({
     }
   }
 
-  function addStandardHeading(node, heading) {
+  function addStandardHeading(node: any, heading: any) {
     node.append(
       `<div style="margin-top: 5px; width: 600px; text-align: left;"><span class="has-text-danger" style="margin-left: 10px;">${heading}</span></div>`,
     );
   }
 
-  function addSettingsHeader1(node, headerText) {
+  function addSettingsHeader1(node: any, headerText: any) {
     node.append(
       `<div style="margin: 4px; width: 100%; display: inline-block; text-align: left;"><span class="has-text-success" style="font-weight: bold;">${headerText}</span></div>`,
     );
   }
 
-  function addSettingsHeader2(node, headerText) {
+  function addSettingsHeader2(node: any, headerText: any) {
     node.append(
       `<div style="margin: 2px; width: 90%; display: inline-block; text-align: left;"><span class="has-text-caution">${headerText}</span></div>`,
     );

@@ -509,9 +509,9 @@ export function createScriptRuntimeUI({
 
   // Known game errors, bugs, etc that we don't want to show to the user.
   // This should be game errors only.
-  function checkIgnoredError(e) {
+  function checkIgnoredError(e: any) {
     if (typeof e !== "string") e = String(e);
-    let ignoreRegexes = [
+    let ignoreRegexes: RegExp[] = [
       // Currently no known game errors. Example regex:
       // /.*ReferenceError.*defineGovernor.*/,
     ];
@@ -523,7 +523,7 @@ export function createScriptRuntimeUI({
     return false;
   }
 
-  function displayScriptWarningNode(title, msg, stack) {
+  function displayScriptWarningNode(title: any, msg: any, stack: any) {
     // Add stack info if available. Format is browser-dependent, but better than nothing, I suppose.
     if (typeof stack === "string") {
       msg = `${msg}\n\nStack info:\n${stack}`;
@@ -538,8 +538,8 @@ export function createScriptRuntimeUI({
     let clickable = $(
       `<span id="script-script-warning" style="cursor: pointer; border-right: 1px solid; margin-right: 1rem; padding-right: 1rem">⚠️ ${title}</span>`,
     );
-    clickable.on("click", (e) => {
-      const builder = (currentNode) => {
+    clickable.on("click", (e: any) => {
+      const builder = (currentNode: any) => {
         currentNode.append(
           $(
             `<textarea style="width: 100%; height: 100%; min-height: 400px; margin-bottom: 10px">`,
@@ -557,7 +557,7 @@ export function createScriptRuntimeUI({
 
   // Generic JS & Vue2 error handler so that things don't break invisibly as often
   function addErrorHandler() {
-    getWin().addEventListener("error", (e) => {
+    getWin().addEventListener("error", (e: any) => {
       if (!checkIgnoredError(e?.message)) {
         displayScriptWarningNode(
           "Script Error",
@@ -570,7 +570,7 @@ export function createScriptRuntimeUI({
     });
 
     if (getWin()?.Vue?.config && !getWin()?.Vue?.config?.errorHandler) {
-      getWin().Vue.config.errorHandler = (err, vm, info) => {
+      getWin().Vue.config.errorHandler = (err: any, vm: any, info: any) => {
         if (!checkIgnoredError(err)) {
           displayScriptWarningNode(
             "Script Error",

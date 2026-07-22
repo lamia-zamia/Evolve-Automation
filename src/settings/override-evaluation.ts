@@ -60,8 +60,8 @@ export function createOverrideEvaluation({
       return;
     }
 
-    let xorLists = {};
-    let overrides = {};
+    let xorLists: Record<string, any[]> = {};
+    let overrides: Record<string, any> = {};
     for (let key in settingsRaw.overrides) {
       let conditions = settingsRaw.overrides[key];
       for (let i = 0; i < conditions.length; i++) {

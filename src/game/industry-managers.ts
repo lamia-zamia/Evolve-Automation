@@ -47,7 +47,7 @@ export function createIndustryManagers({
       return game.global.city.rock_quarry.asbestos;
     },
 
-    increaseProduction(count: number) {
+    increaseProduction(count: number): any {
       if (count === 0) {
         return false;
       }
@@ -61,7 +61,7 @@ export function createIndustryManagers({
       }
     },
 
-    decreaseProduction(count: number) {
+    decreaseProduction(count: number): any {
       if (count === 0) {
         return false;
       }
@@ -99,7 +99,7 @@ export function createIndustryManagers({
       return game.global.space.titan_mine.ratio;
     },
 
-    increaseProduction(count: number) {
+    increaseProduction(count: number): any {
       if (count === 0) {
         return false;
       }
@@ -113,7 +113,7 @@ export function createIndustryManagers({
       }
     },
 
-    decreaseProduction(count: number) {
+    decreaseProduction(count: number): any {
       if (count === 0) {
         return false;
       }
@@ -151,7 +151,7 @@ export function createIndustryManagers({
       return game.global.tauceti.mining_ship[production];
     },
 
-    increaseProduction(production: string, count: number) {
+    increaseProduction(production: string, count: number): any {
       if (count === 0) {
         return false;
       }
@@ -165,7 +165,7 @@ export function createIndustryManagers({
       }
     },
 
-    decreaseProduction(production: string, count: number) {
+    decreaseProduction(production: string, count: number): any {
       if (count === 0) {
         return false;
       }

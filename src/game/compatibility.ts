@@ -95,12 +95,12 @@ export function createGameCompatibility({
       else return "time itself is broken";
     },
     // export function arpaAdjustCosts(costs) from arpa.js
-    arpaAdjustCosts: function (t) {
+    arpaAdjustCosts: function (t: any): any {
       return (
         (t = (function (t) {
           var r = traitVal("creative", 1, "-");
           if (r < 1) {
-            var a = {};
+            var a: LooseObject = {};
             return (
               Object.keys(t).forEach(function (e) {
                 a[e] = function () {
@@ -116,7 +116,7 @@ export function createGameCompatibility({
       );
     },
     // function govPrice(gov) from civics.js
-    govPrice: function (e) {
+    govPrice: function (e: any) {
       let o = getGame().global.civic.foreign[`gov${e}`],
         i = 15384 * o.eco;
       return (
@@ -1338,7 +1338,7 @@ export function createGameCompatibility({
       },
     },
     // export function hellSupression(area, val) from portal.js
-    hellSupression: function (t, e) {
+    hellSupression: function (t: any, e: any): any {
       switch (t) {
         case "ruins": {
           let t = e || getBuildings().RuinsGuardPost.stateOnCount,
@@ -1364,7 +1364,7 @@ export function createGameCompatibility({
       }
     },
     // function taxCap(min) from civics.js
-    taxCap: function (e) {
+    taxCap: function (e: any) {
       let a =
         (haveTech("currency", 5) || getGame().global.race.terrifying) &&
         !getGame().global.race.noble;
@@ -1384,7 +1384,7 @@ export function createGameCompatibility({
       }
     },
     // export function mechCost(size,infernal) from portal.js
-    mechCost: function (e, a, x) {
+    mechCost: function (e: any, a: any, x: any) {
       let l = 9999,
         r = 1e7;
       switch (e) {
@@ -1411,7 +1411,7 @@ export function createGameCompatibility({
       return { s: l, c: r };
     },
     // function terrainRating(mech,rating,effects) from portal.js
-    terrainRating: function (e, i, s, x) {
+    terrainRating: function (e: any, i: any, s: any, x: any) {
       return (
         !e.equip.includes("special") ||
           ("small" !== e.size &&
@@ -1428,7 +1428,7 @@ export function createGameCompatibility({
       );
     },
     // function weaponPower(mech,power) from portal.js
-    weaponPower: function (e, i) {
+    weaponPower: function (e: any, i: any) {
       return (
         i < 1 &&
           0 !== i &&
@@ -1442,7 +1442,7 @@ export function createGameCompatibility({
       );
     },
     // export function timeFormat(time) from functions.js
-    timeFormat: function (e) {
+    timeFormat: function (e: any) {
       let i;
       if (e < 0) i = getGame().loc("time_never");
       else if ((e = +e.toFixed(0)) > 60) {
@@ -1460,7 +1460,7 @@ export function createGameCompatibility({
       return i;
     },
     // export universeAffix(universe) from achieve.js
-    universeAffix: function (e) {
+    universeAffix: function (e: any) {
       switch ((e = e || getGame().global.race.universe)) {
         case "evil":
           return "e";
@@ -1546,15 +1546,16 @@ export function createGameCompatibility({
       ),
 
     // Firefox compatibility:
-    adjustCosts: (c_action, wiki?) =>
+    adjustCosts: (c_action: any, wiki?: any) =>
       getGame().adjustCosts(
         cloneIntoPage(c_action, { cloneFunctions: true }),
         wiki,
       ),
-    loc: (key, variables) => getGame().loc(key, cloneIntoPage(variables)),
-    messageQueue: (msg, color, dnr, tags) =>
+    loc: (key: any, variables: any) =>
+      getGame().loc(key, cloneIntoPage(variables)),
+    messageQueue: (msg: any, color: any, dnr: any, tags: any) =>
       getGame().messageQueue(msg, color, dnr, cloneIntoPage(tags)),
-    shipCosts: (bp) => getGame().shipCosts(cloneIntoPage(bp)),
+    shipCosts: (bp: any) => getGame().shipCosts(cloneIntoPage(bp)),
   };
 
   return poly;

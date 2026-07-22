@@ -173,7 +173,7 @@ export function createProductionManagers({
       return getGame().global.city.smelter[production.id];
     },
 
-    increaseFuel(fuel: any, count: number) {
+    increaseFuel(fuel: any, count: number): any {
       if (count === 0 || !fuel.unlocked) {
         return false;
       }
@@ -187,7 +187,7 @@ export function createProductionManagers({
       }
     },
 
-    decreaseFuel(fuel: any, count: number) {
+    decreaseFuel(fuel: any, count: number): any {
       if (count === 0 || !fuel.unlocked) {
         return false;
       }
@@ -201,7 +201,7 @@ export function createProductionManagers({
       }
     },
 
-    increaseSmelting(id: string, count: number) {
+    increaseSmelting(id: string, count: number): any {
       if (count === 0 || !this.Productions[id].unlocked) {
         return false;
       }
@@ -215,7 +215,7 @@ export function createProductionManagers({
       }
     },
 
-    decreaseSmelting(id: string, count: number) {
+    decreaseSmelting(id: string, count: number): any {
       if (count === 0 || !this.Productions[id].unlocked) {
         return false;
       }
@@ -430,7 +430,7 @@ export function createProductionManagers({
       return production.unlocked ? game.global.city.factory[production.id] : 0;
     },
 
-    increaseProduction(production: any, count: number) {
+    increaseProduction(production: any, count: number): any {
       if (count === 0 || !production.unlocked) {
         return false;
       }
@@ -444,7 +444,7 @@ export function createProductionManagers({
       }
     },
 
-    decreaseProduction(production: any, count: number) {
+    decreaseProduction(production: any, count: number): any {
       if (count === 0 || !production.unlocked) {
         return false;
       }
@@ -557,7 +557,7 @@ export function createProductionManagers({
       return getGame().global.interstellar.mining_droid[production.id];
     },
 
-    increaseProduction(production: any, count: number) {
+    increaseProduction(production: any, count: number): any {
       if (count === 0) {
         return false;
       }
@@ -571,7 +571,7 @@ export function createProductionManagers({
       }
     },
 
-    decreaseProduction(production: any, count: number) {
+    decreaseProduction(production: any, count: number): any {
       if (count === 0) {
         return false;
       }
@@ -640,7 +640,7 @@ export function createProductionManagers({
       return this._graphPlant.instance[fuel.id];
     },
 
-    increaseFuel(fuel: any, count: number) {
+    increaseFuel(fuel: any, count: number): any {
       if (count === 0 || !fuel.cost.resource.isUnlocked()) {
         return false;
       }
@@ -654,7 +654,7 @@ export function createProductionManagers({
       }
     },
 
-    decreaseFuel(fuel: any, count: number) {
+    decreaseFuel(fuel: any, count: number): any {
       if (count === 0 || !fuel.cost.resource.isUnlocked()) {
         return false;
       }

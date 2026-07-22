@@ -200,7 +200,7 @@ export function createCustomRaceUI({
     let form = $(
       '<div class="fields" style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;"></div>',
     ).appendTo(identity);
-    const addTextField = (key, label, max) => {
+    const addTextField = (key: any, label: any, max: any) => {
       let row = $('<label style="display:flex; gap:8px;"></label>').appendTo(
         form,
       );
@@ -241,7 +241,7 @@ export function createCustomRaceUI({
       '<details style="margin-top:6px;"><summary class="has-text-caution">Outer-system names</summary><div class="fields" style="display:grid; grid-template-columns:1fr 1fr; gap:6px 14px;"></div></details>',
     ).appendTo(identity);
     let outerForm = outerNames.find("div");
-    const addOuterField = (key, label) => {
+    const addOuterField = (key: any, label: any) => {
       let row = $('<label style="display:flex; gap:8px;"></label>').appendTo(
         outerForm,
       );
@@ -294,8 +294,8 @@ export function createCustomRaceUI({
     let effectPanel = $(
       '<div class="script-custom-effect" style="height:112px; overflow-y:scroll; overflow-x:hidden; overflow-wrap:anywhere; white-space:normal; scrollbar-gutter:stable; overscroll-behavior:contain; pointer-events:auto; position:relative; z-index:2; padding:5px 9px; margin-bottom:5px; border-top:1px solid #777; border-bottom:1px solid #777; text-align:left;"></div>',
     ).appendTo(modal);
-    let activeTrait = null;
-    const showTraitEffect = (id) => {
+    let activeTrait: any = null;
+    const showTraitEffect = (id: any) => {
       activeTrait = id;
       let trait = game.traits[id];
       let rank = draft.ranks[id] ?? 1;
@@ -329,7 +329,10 @@ export function createCustomRaceUI({
       '<div class="lame trait_selection"><h4 class="has-text-danger">Negative traits</h4></div>',
     ).appendTo(traitsArea);
     let traitRows = [];
-    let lastCategory = { positive: null, negative: null };
+    let lastCategory: Record<string, any> = {
+      positive: null,
+      negative: null,
+    };
     for (let [id, trait] of customRaceEditorTraits(draft)) {
       let side = trait.val >= 0 ? "positive" : "negative";
       let targetArea = trait.val >= 0 ? positiveArea : negativeArea;
@@ -678,7 +681,7 @@ export function createCustomRaceUI({
       return false;
     }
 
-    let textLimits = {
+    let textLimits: Record<string, number> = {
       name: 20,
       desc: 255,
       entity: 40,

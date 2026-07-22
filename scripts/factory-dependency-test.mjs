@@ -11,7 +11,7 @@ function findTypeScriptFiles(directory) {
     const entryPath = path.join(directory, entry.name);
     return entry.isDirectory()
       ? findTypeScriptFiles(entryPath)
-      : entry.name.endsWith(".ts")
+      : entry.name.endsWith(".ts") && !entry.name.endsWith(".d.ts")
         ? [entryPath]
         : [];
   });

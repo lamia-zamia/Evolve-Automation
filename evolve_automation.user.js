@@ -3597,7 +3597,7 @@
         const game = getGame();
         const state = getState();
         let gov = game.global.civic.foreign[`gov${govIndex}`];
-        spy = spy ?? gov.spy + 1;
+        const spyLevel = spy ?? gov.spy + 1;
         let base = Math.max(
           50,
           Math.round(gov.mil / 2 + gov.hstl / 2 - gov.unrest) + 10
@@ -3608,7 +3608,7 @@
         if (state.astroSign === "scorpio") {
           base * 0.88;
         }
-        return Math.round(base ** spy) + 500;
+        return Math.round(base ** spyLevel) + 500;
       },
       updateForeigns() {
         const game = getGame();
@@ -8036,7 +8036,7 @@
         let def = this.definition;
         let title = typeof def.title === "function" ? def.title() : def.title;
         if (this._id in Technology.techDiscriminators) {
-          title += ` (${Technology.techDiscriminators[this._id]})`;
+          title += ` (${Technology.techDiscriminators[String(this._id)]})`;
         }
         return title;
       }
@@ -8650,7 +8650,7 @@
       constructor(traitName) {
         super(traitName);
         this.type = "genus";
-        let genus = Object.entries(readPoly().genus_traits).filter(([id, traits]) => traits[traitName] !== void 0).map(([id, traits]) => id);
+        let genus = Object.entries(readPoly().genus_traits).filter(([, traits]) => traits[traitName] !== void 0).map(([id, traits]) => id);
         this.source = genus[0] ?? readSpecialRaceTraits()[traitName] ?? "";
         this.genus = this.source;
       }
@@ -14323,7 +14323,7 @@
         list.html(rows.join(""));
       }
       const stats = state.plannerStats;
-      if (stats?.total > 0) {
+      if (stats !== null && stats !== void 0 && stats.total > 0) {
         const shares = Object.entries(stats.samples).sort((a, b) => b[1] - a[1]).slice(0, 5).map(
           ([resource2, samples]) => `${resource2} ${Math.round(samples / stats.total * 100)}%`
         ).join(" · ");
@@ -16722,9 +16722,9 @@
       (buildings.TauStarRingworld.count >= 1e3 ? 1 : 0) + // Ringworld built
       (game.global.tech.tau_gas2 >= 5 ? 1 : 0) + // Alien Space Station built
       (game.global.tech.replicator ? 1 : 0) + // Matter Replicator unlocked
-      (game.global.tauceti.tau_factory?.count > 0 ? 1 : 0) + // Factory built in lone survivor
-      (game.global.space.g_factory?.count > 0 ? 1 : 0) + // Graphene plant built in lone survivor
-      (game.global.tauceti.mining_ship?.count > 0 ? 1 : 0) + // Extractor ship built
+      ((game.global.tauceti.tau_factory?.count ?? 0) > 0 ? 1 : 0) + // Factory built in lone survivor
+      ((game.global.space.g_factory?.count ?? 0) > 0 ? 1 : 0) + // Graphene plant built in lone survivor
+      ((game.global.tauceti.mining_ship?.count ?? 0) > 0 ? 1 : 0) + // Extractor ship built
       (game.global.tech.psychicthrall ?? 0) + // Psychic powers
       (game.global.tech.psychic ?? 0) + // Psychic powers
       (game.global.tech.edenic >= 1 ? 1 : 0) + // Spire floor 50 Eden access
@@ -49612,7 +49612,10 @@
         '<div class="lame trait_selection"><h4 class="has-text-danger">Negative traits</h4></div>'
       ).appendTo(traitsArea);
       let traitRows = [];
-      let lastCategory = { positive: null, negative: null };
+      let lastCategory = {
+        positive: null,
+        negative: null
+      };
       for (let [id, trait2] of customRaceEditorTraits(draft)) {
         let side = trait2.val >= 0 ? "positive" : "negative";
         let targetArea = trait2.val >= 0 ? positiveArea : negativeArea;
@@ -51358,7 +51361,12 @@
         def: "none",
         desc: "Returns string"
       },
-      Number: { fn: (v) => v, arg: "number", def: 0, desc: "Returns number" },
+      Number: {
+        fn: (v) => v,
+        arg: "number",
+        def: 0,
+        desc: "Returns number"
+      },
       Boolean: {
         fn: (v) => v,
         arg: "boolean",

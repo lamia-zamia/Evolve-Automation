@@ -150,7 +150,7 @@ export function createScriptBootstrap({
   function initialiseScriptImpl() {
     const actions = getScriptBootstrapActions();
     // Init objects and lookup tables
-    for (let [key, action] of Object.entries(game.actions.tech) as [
+    for (let [key, action] of Object.entries(game!.actions.tech) as [
       string,
       AnyRecord,
     ][]) {
@@ -181,7 +181,7 @@ export function createScriptBootstrap({
     actions.updateStateFromSettings();
     actions.updateSettingsFromState();
 
-    TriggerManager.priorityList.forEach((trigger) => {
+    TriggerManager.priorityList.forEach((trigger: any) => {
       trigger.complete = false;
     });
 
@@ -197,9 +197,9 @@ export function createScriptBootstrap({
     );
 
     // Modals; check script callbacks and add Space Dock tooltips
-    new MutationObserver((bodyMutations) =>
-      bodyMutations.forEach((bodyMutation) =>
-        bodyMutation.addedNodes.forEach((node) => {
+    new MutationObserver((bodyMutations: any) =>
+      bodyMutations.forEach((bodyMutation: any) =>
+        bodyMutation.addedNodes.forEach((node: any) => {
           if (
             node.nodeType === Node.ELEMENT_NODE &&
             node.classList.contains("modal")
@@ -331,13 +331,13 @@ export function createScriptBootstrap({
     actions.updateOverrides();
 
     // Hook to game loop, to allow script run at full speed in unfocused tab
-    const setCallback = (fn) =>
+    const setCallback = (fn: any) =>
       !needSandboxBypass ? fn : userscriptEnvironment.exportToPage(fn);
     // This should be the last var set in game's debug.js:updateDebugData(), otherwise we may be working with partially outdated data
     let breakdown = game.breakdown;
     Object.defineProperty(game, "breakdown", {
       get: setCallback(() => breakdown),
-      set: setCallback((v) => {
+      set: setCallback((v: any) => {
         breakdown = v;
         state.gameTicked = true;
         if (settings.tickSchedule) {
@@ -356,7 +356,7 @@ export function createScriptBootstrap({
     win.eaExportStateLog = () =>
       actions.triggerFileDownload(
         JSON.stringify(state.stateLog ?? actions.loadStateLog()),
-        `evolve-statelog-manual-d${game.global.stats.days}.json`,
+        `evolve-statelog-manual-d${game!.global.stats.days}.json`,
       );
 
     // Safe mode warning, if active. Hope users can't miss it

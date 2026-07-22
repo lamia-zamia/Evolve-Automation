@@ -187,7 +187,7 @@ export function createMagicManagers({
       return level * (1.0025 ** level - 1);
     },
 
-    increaseRitual(spell: any, count: number) {
+    increaseRitual(spell: any, count: number): any {
       if (count === 0 || !spell.isUnlocked()) {
         return false;
       }
@@ -201,7 +201,7 @@ export function createMagicManagers({
       }
     },
 
-    decreaseRitual(spell: any, count: number) {
+    decreaseRitual(spell: any, count: number): any {
       if (count === 0 || !spell.isUnlocked()) {
         return false;
       }

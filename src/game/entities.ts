@@ -1,3 +1,6 @@
+// TRANSITIONAL: Evolve entity constructors and methods still mirror the game's dynamic
+// JavaScript classes. Keep the untyped surface contained here until the game adapter slice
+// replaces these compatibility classes with validated snapshots and commands.
 type Loose = any;
 type LooseRecord = Record<PropertyKey, Loose>;
 type LooseFunction = (...args: Loose[]) => Loose;
@@ -111,7 +114,7 @@ export function createEntityClasses({
   class Job {
     [key: string]: Loose;
 
-    constructor(id, name, flags) {
+    constructor(id: Loose, name: Loose, flags: Loose) {
       this._originalId = id;
       this._originalName = name;
       this._workerBinding = "civ-" + this._originalId;
@@ -128,7 +131,7 @@ export function createEntityClasses({
     get priority() {
       return readSettingsRaw()["job_p_" + this._originalId];
     }
-    getBreakpoint(n) {
+    getBreakpoint(n: Loose) {
       return readSettings()[`job_b${n + 1}_${this._originalId}`];
     }
 
@@ -172,7 +175,7 @@ export function createEntityClasses({
       return this.definition.max;
     }
 
-    breakpointEmployees(breakpoint, ignoreMax) {
+    breakpointEmployees(breakpoint: Loose, ignoreMax: Loose) {
       let breakpointActual = this.getBreakpoint(breakpoint);
 
       // -1 equals unlimited up to the maximum available jobs for this job
@@ -191,7 +194,7 @@ export function createEntityClasses({
         : Math.min(breakpointActual, this.max);
     }
 
-    addWorkers(count) {
+    addWorkers(count: Loose) {
       if (this.isDefault()) {
         return false;
       }
@@ -209,7 +212,7 @@ export function createEntityClasses({
       }
     }
 
-    removeWorkers(count) {
+    removeWorkers(count: Loose) {
       if (this.isDefault()) {
         return false;
       }
@@ -247,7 +250,7 @@ export function createEntityClasses({
       return Number.MAX_SAFE_INTEGER;
     }
 
-    addServants(count) {
+    addServants(count: Loose) {
       if (count < 0) {
         this.removeServants(-1 * count);
       }
@@ -262,7 +265,7 @@ export function createEntityClasses({
       }
     }
 
-    removeServants(count) {
+    removeServants(count: Loose) {
       if (count < 0) {
         this.addServants(-1 * count);
       }
@@ -287,7 +290,7 @@ export function createEntityClasses({
   }
 
   class CraftingJob extends Job {
-    constructor(id, name, resource) {
+    constructor(id: Loose, name: Loose, resource: Loose) {
       super(id, name, { serve: true });
 
       this._crafterBinding = "foundry";
@@ -319,7 +322,7 @@ export function createEntityClasses({
       return readGame().global.civic.craftsman.max;
     }
 
-    addWorkers(count) {
+    addWorkers(count: Loose) {
       if (!this.isUnlocked()) {
         return false;
       }
@@ -337,7 +340,7 @@ export function createEntityClasses({
       }
     }
 
-    removeWorkers(count) {
+    removeWorkers(count: Loose) {
       if (!this.isUnlocked()) {
         return false;
       }
@@ -355,7 +358,7 @@ export function createEntityClasses({
       }
     }
 
-    addServants(count) {
+    addServants(count: Loose) {
       if (count < 0) {
         this.removeServants(-1 * count);
       }
@@ -370,7 +373,7 @@ export function createEntityClasses({
       }
     }
 
-    removeServants(count) {
+    removeServants(count: Loose) {
       if (count < 0) {
         this.addServants(-1 * count);
       }
@@ -389,7 +392,7 @@ export function createEntityClasses({
   class Resource {
     [key: string]: Loose;
 
-    constructor(name, id, flags?: Loose) {
+    constructor(name: Loose, id: Loose, flags?: Loose) {
       this.name = name;
       this._id = id;
 
@@ -538,7 +541,7 @@ export function createEntityClasses({
       }
     }
 
-    calculateRateOfChange(apply) {
+    calculateRateOfChange(apply: Loose) {
       let value = this.rateOfChange;
       for (let mod in this.rateMods) {
         if (apply[mod] ?? apply.all) {
@@ -608,7 +611,7 @@ export function createEntityClasses({
       );
     }
 
-    getProduction(source, locArg) {
+    getProduction(source: Loose, locArg: Loose) {
       let produced = 0;
       let labelFound = false;
       for (let [label, value] of Object.entries(
@@ -628,7 +631,7 @@ export function createEntityClasses({
       return produced * readState().globalProductionModifier;
     }
 
-    isValidProductionLabel(label) {
+    isValidProductionLabel(label: Loose) {
       // Bug as of 1.3.11a: Space Syndicate is already applied to the displayed base value
       // The calculations are correct though
       // This can cause constant Iron flicker in Truepath because the script thinks
@@ -643,7 +646,7 @@ export function createEntityClasses({
       return true;
     }
 
-    getBusyWorkers(workersSource, workersCount, locArg) {
+    getBusyWorkers(workersSource: Loose, workersCount: Loose, locArg: Loose) {
       if (this.incomeAdusted) {
         // Don't reduce workers of same resource more than once per tick to avoid flickering
         return workersCount;
@@ -723,7 +726,7 @@ export function createEntityClasses({
       );
     }
 
-    tryCraftX(count) {
+    tryCraftX(count: Loose) {
       let vue = getVueById(this._vueBinding);
       if (vue === undefined) {
         return false;
@@ -733,7 +736,7 @@ export function createEntityClasses({
       vue.craft(this.id, count);
     }
 
-    requestQuantity(req) {
+    requestQuantity(req: Loose) {
       if (this.requestedQuantity < req) {
         // We can't request more than our storage.
         // TODO: Resources with consumption can usually never be max due to game processing order
@@ -838,7 +841,7 @@ export function createEntityClasses({
 
   class Support extends Resource {
     // This isn't really a resource but we're going to make a dummy one so that we can treat it like a resource
-    constructor(name, id, region, inRegionId) {
+    constructor(name: Loose, id: Loose, region: Loose, inRegionId: Loose) {
       super(name, id);
 
       this._region = region;
@@ -993,7 +996,7 @@ export function createEntityClasses({
   class ResourceProductionCost {
     [key: string]: Loose;
 
-    constructor(resource, quantity, minRateOfChange) {
+    constructor(resource: Loose, quantity: Loose, minRateOfChange: Loose) {
       this.resource = resource;
       this.quantity = quantity;
       this.minRateOfChange = minRateOfChange;
@@ -1003,7 +1006,13 @@ export function createEntityClasses({
   class Action {
     [key: string]: Loose;
 
-    constructor(name, tab, id, location, flags?: Loose) {
+    constructor(
+      name: Loose,
+      tab: Loose,
+      id: Loose,
+      location: Loose,
+      flags?: Loose,
+    ) {
       this.name = name;
       this._tab = tab;
       this._id = id;
@@ -1305,7 +1314,7 @@ export function createEntityClasses({
       return true;
     }
 
-    addSupport(resource) {
+    addSupport(resource: Loose) {
       this.consumption.push(
         normalizeProperties({
           resource: resource,
@@ -1314,14 +1323,14 @@ export function createEntityClasses({
       );
     }
 
-    addResourceConsumption(resource, rate) {
+    addResourceConsumption(resource: Loose, rate: Loose) {
       // TODO: Load fuel from definition, same as for support
       this.consumption.push(
         normalizeProperties({ resource: resource, rate: rate }),
       );
     }
 
-    getFuelRate(idx) {
+    getFuelRate(idx: Loose) {
       if (!this.consumption[idx]) {
         return 0;
       }
@@ -1502,7 +1511,7 @@ export function createEntityClasses({
       return this.instance.count - this.instance.on;
     }
 
-    tryAdjustState(adjustCount) {
+    tryAdjustState(adjustCount: Loose) {
       if (adjustCount === 0 || !this.hasState()) {
         return false;
       }
@@ -1551,7 +1560,14 @@ export function createEntityClasses({
   }
 
   class ResourceAction extends Action {
-    constructor(name, tab, id, location, res, flags) {
+    constructor(
+      name: Loose,
+      tab: Loose,
+      id: Loose,
+      location: Loose,
+      res: Loose,
+      flags: Loose,
+    ) {
       super(name, tab, id, location, flags);
 
       this.resource = readResources()[res];
@@ -1563,7 +1579,7 @@ export function createEntityClasses({
   }
 
   class EvolutionAction extends Action {
-    constructor(id) {
+    constructor(id: Loose) {
       super("", "evolution", id, "");
     }
 
@@ -1652,7 +1668,7 @@ export function createEntityClasses({
   }
 
   class Project extends Action {
-    constructor(name, id) {
+    constructor(name: Loose, id: Loose) {
       super(name, "arpa", id, "");
       this._vueBinding = "arpa" + this.id;
       this.currentStep = 1;
@@ -1822,7 +1838,7 @@ export function createEntityClasses({
       replicator: "Lone Survivor",
     };
 
-    constructor(id) {
+    constructor(id: Loose) {
       this._id = id;
 
       this._vueBinding = "tech-" + id;
@@ -1851,7 +1867,7 @@ export function createEntityClasses({
       let def = this.definition;
       let title = typeof def.title === "function" ? def.title() : def.title;
       if (this._id in Technology.techDiscriminators) {
-        title += ` (${Technology.techDiscriminators[this._id]})`;
+        title += ` (${(Technology.techDiscriminators as LooseRecord)[String(this._id)]})`;
       }
       return title;
     }
@@ -1923,7 +1939,7 @@ export function createEntityClasses({
   class Race {
     [key: string]: Loose;
 
-    constructor(id) {
+    constructor(id: Loose) {
       this.id = id;
       this.evolutionTree = {};
     }
@@ -1945,7 +1961,7 @@ export function createEntityClasses({
       return readGame().races[this.id].type;
     }
 
-    getWeighting(verbose) {
+    getWeighting(verbose: Loose) {
       // Locked races always have zero weighting
       let habitability = this.getHabitability();
       if (habitability < (readSettings().evolutionAutoUnbound ? 0.8 : 1)) {
@@ -2057,7 +2073,7 @@ export function createEntityClasses({
       let goals = [];
       let weighting = 0;
       let starLevel = getStarLevel(readSettings());
-      const checkAchievement = (baseWeight, id) => {
+      const checkAchievement = (baseWeight: Loose, id: Loose) => {
         let improve = starLevel - getAchievementStar(id);
         if (improve > 0) {
           weighting += baseWeight * improve;
@@ -2213,7 +2229,7 @@ export function createEntityClasses({
 
       // Feats, lowest weight - go for them only if there's nothing better
       if (readGame().global.race.universe !== "micro") {
-        const checkFeat = (id) => {
+        const checkFeat = (id: Loose) => {
           let improve = starLevel - (readGame().global.stats.feat[id] ?? 0);
           if (improve > 0) {
             weighting += 1 * improve;
@@ -2433,14 +2449,14 @@ export function createEntityClasses({
     [key: string]: Loose;
 
     constructor(
-      seq,
-      priority,
-      requirementType,
-      requirementId,
-      requirementCount,
-      actionType,
-      actionId,
-      actionCount,
+      seq: Loose,
+      priority: Loose,
+      requirementType: Loose,
+      requirementId: Loose,
+      requirementCount: Loose,
+      actionType: Loose,
+      actionId: Loose,
+      actionCount: Loose,
     ) {
       this.seq = seq;
       this.priority = priority;
@@ -2550,7 +2566,7 @@ export function createEntityClasses({
       return false;
     }
 
-    updateRequirementType(requirementType) {
+    updateRequirementType(requirementType: Loose) {
       if (requirementType === this.requirementType) {
         return;
       }
@@ -2580,7 +2596,7 @@ export function createEntityClasses({
       }
     }
 
-    updateActionType(actionType) {
+    updateActionType(actionType: Loose) {
       if (actionType === this.actionType) {
         return;
       }
@@ -2609,7 +2625,7 @@ export function createEntityClasses({
   class MinorTrait {
     [key: string]: Loose;
 
-    constructor(traitName) {
+    constructor(traitName: Loose) {
       this.traitName = traitName;
     }
 
@@ -2649,7 +2665,7 @@ export function createEntityClasses({
   class MutableTrait {
     [key: string]: Loose;
 
-    constructor(traitName) {
+    constructor(traitName: Loose) {
       this.traitName = traitName;
       this.baseCost = Math.abs(readGame().traits[traitName].val);
       this.isPositive = readGame().traits[traitName].val >= 0;
@@ -2711,7 +2727,7 @@ export function createEntityClasses({
       );
     }
 
-    canMutate(action) {
+    canMutate(action: Loose) {
       let currentPlasmids =
         readResources()[
           readGame().global.race.universe === "antimatter"
@@ -2729,7 +2745,7 @@ export function createEntityClasses({
       );
     }
 
-    mutationCost(action) {
+    mutationCost(action: Loose) {
       let mult =
         readMutationCostMultipliers()[readGame().global.race.species]?.[
           action
@@ -2743,7 +2759,7 @@ export function createEntityClasses({
   }
 
   class MajorTrait extends MutableTrait {
-    constructor(traitName) {
+    constructor(traitName: Loose) {
       super(traitName);
       this.type = "major";
       let ownerRace: { id?: Loose; genus?: Loose } =
@@ -2790,11 +2806,11 @@ export function createEntityClasses({
   }
 
   class GenusTrait extends MutableTrait {
-    constructor(traitName) {
+    constructor(traitName: Loose) {
       super(traitName);
       this.type = "genus";
-      let genus = Object.entries(readPoly().genus_traits)
-        .filter(([id, traits]) => traits[traitName] !== undefined)
+      let genus = (Object.entries(readPoly().genus_traits) as [string, Loose][])
+        .filter(([, traits]) => traits[traitName] !== undefined)
         .map(([id, traits]) => id);
       this.source = genus[0] ?? readSpecialRaceTraits()[traitName] ?? "";
       this.genus = this.source;

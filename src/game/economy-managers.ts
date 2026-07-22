@@ -66,7 +66,7 @@ export function createEconomyManagers({
       this._industryVue.zero(production);
     },
 
-    increaseProduction(production: string, count: number) {
+    increaseProduction(production: string, count: number): any {
       if (count === 0) {
         return false;
       }
@@ -80,7 +80,7 @@ export function createEconomyManagers({
       }
     },
 
-    decreaseProduction(production: string, count: number) {
+    decreaseProduction(production: string, count: number): any {
       if (count === 0) {
         return false;
       }

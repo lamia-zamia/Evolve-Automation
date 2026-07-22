@@ -9,8 +9,8 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
     "strict": true,
-    "noImplicitAny": false,
-    "strictNullChecks": false,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
     "skipLibCheck": true
   },
   "include": ["src/**/*.ts"]

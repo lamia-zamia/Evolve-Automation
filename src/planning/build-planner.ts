@@ -170,7 +170,7 @@ export function createBuildPlanner({
     }
 
     const stats = state.plannerStats;
-    if (stats?.total > 0) {
+    if (stats !== null && stats !== undefined && stats.total > 0) {
       const shares = Object.entries(stats.samples)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5)

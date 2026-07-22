@@ -39,7 +39,7 @@ export function createRaceInitialization({
     ];
     let mammals = [e.mammals, ...bilateralSymmetry];
 
-    let genusEvolution = {
+    let genusEvolution: LooseObject = {
       eldritch: [e.sentience, e.eldritch, ...bilateralSymmetry],
       aquatic: [e.sentience, e.aquatic, ...bilateralSymmetry],
       insectoid: [e.sentience, e.athropods, ...bilateralSymmetry],

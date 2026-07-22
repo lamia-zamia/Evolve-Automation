@@ -62,9 +62,9 @@ export function createInfrastructureManagers({
     },
 
     openModalWindowWithCallback(
-      elementToClick,
-      callbackWindowTitle,
-      callbackFunction,
+      elementToClick: any,
+      callbackWindowTitle: any,
+      callbackFunction: any,
     ) {
       if (this.isOpen()) {
         return;
@@ -137,16 +137,16 @@ export function createInfrastructureManagers({
 
       if (!all && (!set || !unset)) {
         // Fallback, if there's no handlers in JQuery data
-        this._setFn = (e) =>
+        this._setFn = (e: any) =>
           document.dispatchEvent(new KeyboardEvent("keydown", e));
-        this._unsetFn = (e) =>
+        this._unsetFn = (e: any) =>
           document.dispatchEvent(new KeyboardEvent("keyup", e));
         this._allFn = null;
       } else if (needSandboxBypass) {
         // FF fix
-        this._setFn = (e) => set(cloneIntoPage(e));
-        this._unsetFn = (e) => unset(cloneIntoPage(e));
-        this._allFn = (e) => all(cloneIntoPage(e));
+        this._setFn = (e: any) => set(cloneIntoPage(e));
+        this._unsetFn = (e: any) => unset(cloneIntoPage(e));
+        this._allFn = (e: any) => all(cloneIntoPage(e));
       } else {
         this._setFn = set;
         this._unsetFn = unset;
@@ -189,7 +189,7 @@ export function createInfrastructureManagers({
       }
     },
 
-    setKey(key, pressed) {
+    setKey(key: any, pressed: any) {
       if (this._state[key] === pressed) {
         return;
       }
@@ -202,7 +202,7 @@ export function createInfrastructureManagers({
       this._state[key] = pressed;
     },
 
-    set(x100, x25, x10) {
+    set(x100: any, x25: any, x10: any) {
       if (this._mode === "all") {
         let map = game.global.settings.keyMap;
         let fakeEvent = {
@@ -218,7 +218,7 @@ export function createInfrastructureManagers({
       }
     },
 
-    *click(amount) {
+    *click(amount: any) {
       if (this._mode === "none") {
         while (amount > 0) {
           yield (amount -= 1);
@@ -277,7 +277,7 @@ export function createInfrastructureManagers({
       prestige: "Prestige",
     },
 
-    logInfo(loggingType, text, tags) {
+    logInfo(loggingType: any, text: any, tags: any) {
       if (!settings.logEnabled || !settings["log_" + loggingType]) {
         return;
       }
@@ -285,7 +285,7 @@ export function createInfrastructureManagers({
       poly.messageQueue(text, "info", false, tags);
     },
 
-    logSuccess(loggingType, text, tags) {
+    logSuccess(loggingType: any, text: any, tags: any) {
       if (!settings.logEnabled || !settings["log_" + loggingType]) {
         return;
       }
@@ -293,7 +293,7 @@ export function createInfrastructureManagers({
       poly.messageQueue(text, "success", false, tags);
     },
 
-    logWarning(loggingType, text, tags) {
+    logWarning(loggingType: any, text: any, tags: any) {
       if (!settings.logEnabled || !settings["log_" + loggingType]) {
         return;
       }
@@ -301,7 +301,7 @@ export function createInfrastructureManagers({
       poly.messageQueue(text, "warning", false, tags);
     },
 
-    logDanger(loggingType, text, tags) {
+    logDanger(loggingType: any, text: any, tags: any) {
       if (!settings.logEnabled || !settings["log_" + loggingType]) {
         return;
       }

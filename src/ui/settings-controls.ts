@@ -39,14 +39,14 @@ export function createSettingsControls({
   const sorterHelper: AnyFunction = (...args) => getSorterHelper()(...args);
   const updateSettingsFromState: AnyFunction = (...args) =>
     getUpdateSettingsFromState()(...args);
-  function _(check, arg) {
+  function _(check: any, arg: any) {
     return getCheckTypes()[check].fn(arg);
   }
 
-  function openOverrideModal(event) {
+  function openOverrideModal(event: any) {
     if (event[getOverrideKey()]) {
       event.preventDefault();
-      openOptionsModal(event.data.label, function (this: any, modal) {
+      openOptionsModal(event.data.label, function (this: any, modal: any) {
         modal.append(
           `<div style="margin-top: 10px; margin-bottom: 10px;" id="script_${event.data.name}Modal"></div>`,
         );
@@ -60,7 +60,7 @@ export function createSettingsControls({
     }
   }
 
-  function buildOverrideSettings(settingName, type, options) {
+  function buildOverrideSettings(settingName: any, type: any, options: any) {
     const rebuild = () => buildOverrideSettings(settingName, type, options);
     let overrides = getSettingsRaw().overrides[settingName] ?? [];
 
@@ -124,7 +124,7 @@ export function createSettingsControls({
           type,
           options,
           getSettingsRaw()[settingName],
-          function (this: any, result) {
+          function (this: any, result: any) {
             getSettingsRaw()[settingName] = result;
             updateSettingsFromState();
 
@@ -190,7 +190,7 @@ export function createSettingsControls({
           attribute: "value",
         });
         getSettingsRaw().overrides[settingName] = newOrder.map(
-          (i) => getSettingsRaw().overrides[settingName][i],
+          (i: any) => getSettingsRaw().overrides[settingName][i],
         );
 
         updateSettingsFromState();
@@ -199,7 +199,7 @@ export function createSettingsControls({
     });
   }
 
-  function buildInputNode(type, options, value, callback) {
+  function buildInputNode(type: any, options: any, value: any, callback: any) {
     switch (type) {
       case "string":
         return $(`
@@ -263,7 +263,7 @@ export function createSettingsControls({
     }
   }
 
-  function buildInputNodeForDisplay(type, options, value) {
+  function buildInputNodeForDisplay(type: any, options: any, value: any) {
     switch (type) {
       case "string":
       case "number":
@@ -289,7 +289,7 @@ export function createSettingsControls({
         return $(`
                   <span></span>`).text(
           value
-            .map((item) => options.list[item]?.name ?? "[Invalid item]")
+            .map((item: any) => options.list[item]?.name ?? "[Invalid item]")
             .join(", "),
         );
       default:
@@ -298,7 +298,7 @@ export function createSettingsControls({
     }
   }
 
-  function changeDisplayInputNode(currentNode) {
+  function changeDisplayInputNode(currentNode: any) {
     let type = currentNode.attr("type");
     let id = currentNode.attr("value");
     let value = getSettings()[currentNode.attr("value")];
@@ -314,7 +314,7 @@ export function createSettingsControls({
         if (id === "researchIgnore") {
           return node.text(
             value
-              .map((item) => getTechIds()[item]?.name ?? "[Invalid item]")
+              .map((item: any) => getTechIds()[item]?.name ?? "[Invalid item]")
               .join(", "),
           );
         }
@@ -324,7 +324,7 @@ export function createSettingsControls({
     }
   }
 
-  function buildConditionType(override, num, rebuild) {
+  function buildConditionType(override: any, num: any, rebuild: any) {
     let types = Object.entries(getCheckTypes())
       .map(
         ([id, type]) =>
@@ -343,14 +343,14 @@ export function createSettingsControls({
       });
   }
 
-  function buildConditionArg(override, num) {
+  function buildConditionArg(override: any, num: any) {
     let check = getCheckTypes()[override["type" + num]];
     return check
       ? buildInputNode(
           check.arg,
           check.options,
           override["arg" + num],
-          function (this: any, result) {
+          function (this: any, result: any) {
             override["arg" + num] = result;
             updateSettingsFromState();
           },
@@ -358,7 +358,7 @@ export function createSettingsControls({
       : "";
   }
 
-  function buildConditionComparator(override, rebuild) {
+  function buildConditionComparator(override: any, rebuild: any) {
     let types = Object.entries(getCheckCompare())
       .map(
         ([id, fn]) =>
@@ -376,7 +376,7 @@ export function createSettingsControls({
       });
   }
 
-  function buildConditionRemove(settingName, id, rebuild) {
+  function buildConditionRemove(settingName: any, id: any, rebuild: any) {
     return $(
       `<a class="button is-small" style="width: 26px; height: 26px"><span>-</span></a>`,
     ).on("click", function (this: any) {
@@ -390,7 +390,7 @@ export function createSettingsControls({
     });
   }
 
-  function buildConditionDuplicate(settingName, id, rebuild) {
+  function buildConditionDuplicate(settingName: any, id: any, rebuild: any) {
     return $(
       `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 1.2rem;">&#9282;</span></a>`,
     ).on("click", function (this: any) {
@@ -402,7 +402,7 @@ export function createSettingsControls({
     });
   }
 
-  function buildConditionEvalize(settingName, id, rebuild) {
+  function buildConditionEvalize(settingName: any, id: any, rebuild: any) {
     return $(
       `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 0.9rem;">E</span></a>`,
     ).on("click", function (this: any) {
@@ -410,7 +410,7 @@ export function createSettingsControls({
       let check = getCheckCompare()
         [override.cmp].toString()
         .substr(10)
-        .replace(/([ab])/g, (s, v) => {
+        .replace(/([ab])/g, (s: any, v: any) => {
           let idx = v === "a" ? 1 : 2;
           switch (override["type" + idx]) {
             case "Number":
@@ -430,23 +430,29 @@ export function createSettingsControls({
     });
   }
 
-  function buildConditionRet(override, type, options) {
+  function buildConditionRet(override: any, type: any, options: any) {
     return buildInputNode(
       type,
       options,
       override.ret,
-      function (this: any, result) {
+      function (this: any, result: any) {
         override.ret = result;
         updateSettingsFromState();
       },
     );
   }
 
-  function buildObjectListInput(list: AnyRecord, name, id, value, callback) {
+  function buildObjectListInput(
+    list: AnyRecord,
+    name: any,
+    id: any,
+    value: any,
+    callback: any,
+  ) {
     let listNode = $(`<input type="text" style="width:100%"></input>`);
 
     // Event handler
-    let onChange = function (this: any, event, ui) {
+    let onChange = function (this: any, event: any, ui: any) {
       event.preventDefault();
 
       // If it wasn't selected from list
@@ -480,7 +486,7 @@ export function createSettingsControls({
     listNode.autocomplete({
       minLength: 2,
       delay: 0,
-      source: function (this: any, request, response) {
+      source: function (this: any, request: any, response: any) {
         let matcher = new RegExp(
           $.ui.autocomplete.escapeRegex(request.term),
           "i",
@@ -504,12 +510,12 @@ export function createSettingsControls({
   }
 
   function addSettingsToggle(
-    node,
-    settingName,
-    labelText,
-    hintText,
-    enabledCallBack,
-    disabledCallBack,
+    node: any,
+    settingName: any,
+    labelText: any,
+    hintText: any,
+    enabledCallBack: any,
+    disabledCallBack: any,
   ) {
     return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; width: 90%; display: inline-block; text-align: left;">
@@ -556,7 +562,12 @@ export function createSettingsControls({
     }
   }
 
-  function addSettingsNumber(node, settingName, labelText, hintText) {
+  function addSettingsNumber(
+    node: any,
+    settingName: any,
+    labelText: any,
+    hintText: any,
+  ) {
     return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
             <label title="${hintText}" tabindex="0">
@@ -588,7 +599,12 @@ export function createSettingsControls({
       .appendTo(node);
   }
 
-  function addSettingsString(node, settingName, labelText, hintText) {
+  function addSettingsString(
+    node: any,
+    settingName: any,
+    labelText: any,
+    hintText: any,
+  ) {
     return $(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
             <label title="${hintText}" tabindex="0">
@@ -617,10 +633,10 @@ export function createSettingsControls({
       .appendTo(node);
   }
 
-  function buildSelectOptions(optionsList) {
+  function buildSelectOptions(optionsList: any) {
     return optionsList
       .map(
-        (item) =>
+        (item: any) =>
           `<option value="${item.val}" title="${item.hint ?? ""}">${
             item.label
           }</option>`,
@@ -629,11 +645,11 @@ export function createSettingsControls({
   }
 
   function addSettingsSelect(
-    node,
-    settingName,
-    labelText,
-    hintText,
-    optionsList,
+    node: any,
+    settingName: any,
+    labelText: any,
+    hintText: any,
+    optionsList: any,
   ) {
     let options = buildSelectOptions(optionsList);
     return $(`
@@ -672,10 +688,10 @@ export function createSettingsControls({
   }
 
   function addSettingsList(
-    node,
-    settingName,
-    labelText,
-    hintText,
+    node: any,
+    settingName: any,
+    labelText: any,
+    hintText: any,
     list: AnyRecord,
   ) {
     let listBlock = $(`
@@ -705,19 +721,19 @@ export function createSettingsControls({
       )
       .appendTo(node);
 
-    let selectedItem = "";
+    let selectedItem: string | null = "";
 
     let updateList = function (this: any) {
       let techsString = getSettingsRaw()
         [settingName].map(
-          (id) =>
+          (id: any) =>
             Object.values(list).find((obj) => obj._vueBinding === id).name,
         )
         .join(", ");
       $(".script_" + settingName).val(techsString);
     };
 
-    let onChange = function (this: any, event, ui) {
+    let onChange = function (this: any, event: any, ui: any) {
       event.preventDefault();
 
       // If it wasn't selected from list
@@ -743,7 +759,7 @@ export function createSettingsControls({
     listBlock.find("input").autocomplete({
       minLength: 2,
       delay: 0,
-      source: function (this: any, request, response) {
+      source: function (this: any, request: any, response: any) {
         let matcher = new RegExp(
           $.ui.autocomplete.escapeRegex(request.term),
           "i",
@@ -789,7 +805,7 @@ export function createSettingsControls({
     updateList();
   }
 
-  function addInputCallbacks(node, settingKey) {
+  function addInputCallbacks(node: any, settingKey: any) {
     return node
       .on("change", function (this: any) {
         let parsedValue = getRealNumberValue(this.value);
@@ -806,7 +822,7 @@ export function createSettingsControls({
       );
   }
 
-  function addTableInput(node, settingKey) {
+  function addTableInput(node: any, settingKey: any) {
     node
       .addClass(
         "script_bg_" +
@@ -823,7 +839,7 @@ export function createSettingsControls({
       );
   }
 
-  function addToggleCallbacks(node, settingKey) {
+  function addToggleCallbacks(node: any, settingKey: any) {
     return node
       .on("change", "input", function (this: any) {
         getSettingsRaw()[settingKey] = this.checked;
@@ -841,7 +857,7 @@ export function createSettingsControls({
       );
   }
 
-  function addTableToggle(node, settingKey) {
+  function addTableToggle(node: any, settingKey: any) {
     node
       .addClass(
         "script_bg_" +
@@ -863,7 +879,11 @@ export function createSettingsControls({
       );
   }
 
-  function buildTableLabel(note, title = "", color = "has-text-info") {
+  function buildTableLabel(
+    note: any,
+    title: any = "",
+    color: any = "has-text-info",
+  ) {
     return $(`<span class="${color}" title="${title}" >${note}</span>`);
   }
 

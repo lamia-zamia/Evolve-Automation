@@ -66,7 +66,7 @@ export function createForeignAffairsManagers({
       const game = getGame();
       const state = getState();
       let gov = game.global.civic.foreign[`gov${govIndex}`];
-      spy = spy ?? gov.spy + 1;
+      const spyLevel = spy ?? gov.spy + 1;
 
       let base = Math.max(
         50,
@@ -78,7 +78,7 @@ export function createForeignAffairsManagers({
       if (state.astroSign === "scorpio") {
         base * 0.88;
       }
-      return Math.round(base ** spy) + 500;
+      return Math.round(base ** spyLevel) + 500;
     },
 
     updateForeigns() {
@@ -506,7 +506,8 @@ export function createForeignAffairsManagers({
         if (
           settings.hellAssaultReserve ||
           !Object.entries(buildings.PitAssaultForge.cost).find(
-            ([id, amount]) => resources[id].currentQuantity < amount,
+            ([id, amount]: [string, any]) =>
+              resources[id].currentQuantity < amount,
           )
         ) {
           soldiers = Math.round(650 / soldierRating);
