@@ -23,7 +23,7 @@ if (
 
 const buildOptions = {
   absWorkingDir: root,
-  entryPoints: ["src/main.js"],
+  entryPoints: ["src/main.ts"],
   outfile: userscriptOutputPath,
   bundle: true,
   banner: {

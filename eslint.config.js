@@ -36,7 +36,7 @@ export default defineConfig(
     },
   },
   {
-    files: ["src/main.js"],
+    files: ["src/legacy-main.js"],
     languageOptions: {
       globals: {
         ...globals.browser,

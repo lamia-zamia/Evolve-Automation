@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const sourceDirectory = path.join(root, "src");
-const mainPath = path.join(root, "src", "main.js");
+const mainPath = path.join(root, "src", "legacy-main.js");
 
 function findTypeScriptFiles(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -30,7 +30,8 @@ const factoryFiles = findTypeScriptFiles(sourceDirectory).filter((file) => {
     .split(path.sep);
   return (
     !newArchitectureDirectories.has(topLevelDirectory) &&
-    path.basename(file) !== "dependencies.ts"
+    path.basename(file) !== "dependencies.ts" &&
+    path.basename(file) !== "main.ts"
   );
 });
 

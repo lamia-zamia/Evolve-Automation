@@ -52000,7 +52000,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     };
   }
 
-  // src/main.js
+  // src/legacy-main.js
   (function($) {
     "use strict";
     const { getRealNumber, getNumberString, getNiceNumber } = createNumberFormatting({ numberSuffix });
