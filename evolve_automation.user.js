@@ -14532,205 +14532,6 @@
     return { runCycle };
   }
 
-  // src/adapters/validation.ts
-  function requireRecord(value, path) {
-    if (typeof value !== "object" || value === null) {
-      throw new TypeError(`${path} must be an object`);
-    }
-    return value;
-  }
-  function requireNumber(value, path) {
-    if (typeof value !== "number" || !Number.isFinite(value)) {
-      throw new TypeError(`${path} must be a finite number`);
-    }
-    return value;
-  }
-  function requireBoolean(value, path) {
-    if (typeof value !== "boolean") {
-      throw new TypeError(`${path} must be a boolean`);
-    }
-    return value;
-  }
-  function requireFunction(value, path) {
-    if (typeof value !== "function") {
-      throw new TypeError(`${path} must be a function`);
-    }
-    return value;
-  }
-
-  // src/adapters/evolve/storage-command-executor.ts
-  function rejected(code, message) {
-    return { status: "rejected", failure: { code, message } };
-  }
-  function createStorageCommandExecutor(dependencies) {
-    function execute2(envelope) {
-      const { command } = envelope;
-      if (typeof command.count !== "number" || !Number.isFinite(command.count)) {
-        return rejected(
-          "invalid-storage-count",
-          "storage construction count must be a finite number"
-        );
-      }
-      const storageManager = requireRecord(
-        dependencies.getStorageManager(),
-        "StorageManager"
-      );
-      const method = command.unit === "crate" ? "constructCrate" : "constructContainer";
-      const construct = requireFunction(
-        storageManager[method],
-        `StorageManager.${method}`
-      );
-      Reflect.apply(construct, storageManager, [command.count]);
-      const resources = requireRecord(dependencies.getResources(), "resources");
-      const produced = requireRecord(
-        resources[command.producedResourceId],
-        `resources.${command.producedResourceId}`
-      );
-      produced["currentQuantity"] = requireNumber(
-        produced["currentQuantity"],
-        `resources.${command.producedResourceId}.currentQuantity`
-      ) + command.count;
-      for (const delta of command.spend) {
-        const resource2 = requireRecord(
-          resources[delta.resourceId],
-          `resources.${delta.resourceId}`
-        );
-        resource2["currentQuantity"] = requireNumber(
-          resource2["currentQuantity"],
-          `resources.${delta.resourceId}.currentQuantity`
-        ) - delta.amount;
-      }
-      return { status: "succeeded" };
-    }
-    return Object.freeze({ execute: execute2 });
-  }
-
-  // src/domain/snapshot.ts
-  function createSnapshotMetadata(input) {
-    if (typeof input.capturedAtMs !== "number" || !Number.isSafeInteger(input.capturedAtMs) || input.capturedAtMs < 0) {
-      throw new TypeError("snapshot capture time must be a non-negative integer");
-    }
-    return Object.freeze({
-      id: snapshotId(input.id),
-      capturedAtMs: input.capturedAtMs
-    });
-  }
-
-  // src/adapters/evolve/storage-expansion-reader.ts
-  function readView(resources, resourceId3, storagePerUnit) {
-    const view = requireRecord(resources[resourceId3], `resources.${resourceId3}`);
-    const costRecord = requireRecord(
-      view["cost"],
-      `resources.${resourceId3}.cost`
-    );
-    const costs = [];
-    for (const key in costRecord) {
-      const costPerUnit = requireNumber(
-        costRecord[key],
-        `resources.${resourceId3}.cost.${key}`
-      );
-      const costResource = requireRecord(resources[key], `resources.${key}`);
-      const available = requireNumber(
-        costResource["currentQuantity"],
-        `resources.${key}.currentQuantity`
-      );
-      costs.push(Object.freeze({ resourceId: key, costPerUnit, available }));
-    }
-    return Object.freeze({
-      resourceId: resourceId3,
-      maxQuantity: requireNumber(
-        view["maxQuantity"],
-        `resources.${resourceId3}.maxQuantity`
-      ),
-      currentQuantity: requireNumber(
-        view["currentQuantity"],
-        `resources.${resourceId3}.currentQuantity`
-      ),
-      storagePerUnit,
-      costs: Object.freeze(costs)
-    });
-  }
-  function readPlywoodCost(library) {
-    const cost = library["cost"];
-    if (typeof cost !== "object" || cost === null) {
-      return null;
-    }
-    const value = cost["Plywood"];
-    return typeof value === "number" && Number.isFinite(value) ? value : null;
-  }
-  function createEvolveStorageExpansionReader(dependencies) {
-    let snapshotSequence = 0;
-    function readSnapshot() {
-      snapshotSequence += 1;
-      const metadata = createSnapshotMetadata({
-        id: `storage-expansion-snapshot-${snapshotSequence}`,
-        capturedAtMs: dependencies.clock.nowMs()
-      });
-      const resources = requireRecord(dependencies.getResources(), "resources");
-      const storageManager = requireRecord(
-        dependencies.getStorageManager(),
-        "StorageManager"
-      );
-      const crateValue = requireNumber(
-        storageManager["crateValue"],
-        "StorageManager.crateValue"
-      );
-      const containerValue = requireNumber(
-        storageManager["containerValue"],
-        "StorageManager.containerValue"
-      );
-      const buildings = requireRecord(dependencies.getBuildings(), "buildings");
-      const library = requireRecord(buildings["Library"], "buildings.Library");
-      const steel = requireRecord(resources["Steel"], "resources.Steel");
-      const plywood = requireRecord(resources["Plywood"], "resources.Plywood");
-      return Object.freeze({
-        metadata,
-        storageToBuild: dependencies.getStorageToBuild(),
-        crates: readView(resources, "Crates", crateValue),
-        containers: readView(resources, "Containers", containerValue),
-        isEarlyGame: Boolean(dependencies.isEarlyGame()),
-        isLumberRace: Boolean(dependencies.isLumberRace()),
-        steel: Object.freeze({
-          storageRatio: requireNumber(
-            steel["storageRatio"],
-            "resources.Steel.storageRatio"
-          ),
-          maxQuantity: requireNumber(
-            steel["maxQuantity"],
-            "resources.Steel.maxQuantity"
-          ),
-          storageRequired: requireNumber(
-            steel["storageRequired"],
-            "resources.Steel.storageRequired"
-          )
-        }),
-        library: Object.freeze({
-          count: requireNumber(library["count"], "buildings.Library.count"),
-          plywoodCost: readPlywoodCost(library)
-        }),
-        plywoodAvailable: requireNumber(
-          plywood["currentQuantity"],
-          "resources.Plywood.currentQuantity"
-        )
-      });
-    }
-    return Object.freeze({ readSnapshot });
-  }
-
-  // src/adapters/storage/storage-expansion-settings-reader.ts
-  function createStorageExpansionSettingsReader(getSettings) {
-    function readSettings3() {
-      const settings = requireRecord(getSettings(), "settings");
-      return Object.freeze({
-        storageLimitPreMad: requireBoolean(
-          settings["storageLimitPreMad"],
-          "settings.storageLimitPreMad"
-        )
-      });
-    }
-    return Object.freeze({ readSettings: readSettings3 });
-  }
-
   // src/domain/storage-expansion.ts
   function affordableUnits(view) {
     let cap = view.maxQuantity - view.currentQuantity;
@@ -14786,30 +14587,18 @@
     return Object.freeze(commands);
   }
 
-  // src/bootstrap/storage-expansion.ts
-  function createStorageExpansion(dependencies) {
-    const clock = Object.freeze({ nowMs: dependencies.nowMs });
+  // src/application/storage-expansion.ts
+  function createStorageExpansion({
+    clock,
+    createReader,
+    settingsReader,
+    commandExecutor
+  }) {
     let pendingStorageToBuild = 0;
-    const gameReader = createEvolveStorageExpansionReader({
-      clock,
-      getStorageToBuild: () => pendingStorageToBuild,
-      getResources: dependencies.getResources,
-      getBuildings: dependencies.getBuildings,
-      getStorageManager: dependencies.getStorageManager,
-      isEarlyGame: dependencies.isEarlyGame,
-      isLumberRace: dependencies.isLumberRace
-    });
-    const settingsReader = createStorageExpansionSettingsReader(
-      dependencies.getSettings
-    );
-    const commandExecutor = createStorageCommandExecutor({
-      getStorageManager: dependencies.getStorageManager,
-      getResources: dependencies.getResources
-    });
     let lastTrace;
     const runner = createCycleRunner({
       clock,
-      gameReader,
+      gameReader: createReader(() => pendingStorageToBuild),
       settingsReader,
       commandExecutor,
       logger: { record: () => {
@@ -14841,6 +14630,32 @@
       return storageAdded > 0;
     }
     return Object.freeze({ expandStorage, getLastTrace: () => lastTrace });
+  }
+
+  // src/adapters/validation.ts
+  function requireRecord(value, path) {
+    if (typeof value !== "object" || value === null) {
+      throw new TypeError(`${path} must be an object`);
+    }
+    return value;
+  }
+  function requireNumber(value, path) {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new TypeError(`${path} must be a finite number`);
+    }
+    return value;
+  }
+  function requireBoolean(value, path) {
+    if (typeof value !== "boolean") {
+      throw new TypeError(`${path} must be a boolean`);
+    }
+    return value;
+  }
+  function requireFunction(value, path) {
+    if (typeof value !== "function") {
+      throw new TypeError(`${path} must be a function`);
+    }
+    return value;
   }
 
   // src/adapters/evolve/storage-requirements.ts
@@ -25094,7 +24909,7 @@
   var SUCCEEDED2 = Object.freeze({
     status: "succeeded"
   });
-  function rejected2(code, message) {
+  function rejected(code, message) {
     return { status: "rejected", failure: { code, message } };
   }
   function stale(code, message, context) {
@@ -25515,7 +25330,7 @@
           expected = prepared;
         }
         if (expected === null || !decisionsMatch(expected, decision2)) {
-          return rejected2(
+          return rejected(
             "invalid-hell-decision",
             "Hell decision does not match the sampled plan"
           );
@@ -26345,7 +26160,7 @@
         }
         const expected = planBattle(active.parameters, active.battlefield);
         if (expected === null || !decisionsMatch2(expected, decision2)) {
-          return rejected2(
+          return rejected(
             "invalid-battle-decision",
             "battle decision does not match the sampled plan"
           );
@@ -26941,7 +26756,7 @@
       const resolvedFuels = [];
       for (const adjustment of decision2.fuelAdjustments) {
         if (!Number.isSafeInteger(adjustment.delta)) {
-          return rejected2(
+          return rejected(
             "invalid-smelter-fuel-adjustment",
             "smelter fuel adjustment must be a safe integer"
           );
@@ -26966,7 +26781,7 @@
       const resolvedSmelt = [];
       for (const adjustment of decision2.smeltAdjustments) {
         if (!Number.isSafeInteger(adjustment.delta)) {
-          return rejected2(
+          return rejected(
             "invalid-smelter-smelt-adjustment",
             "smelter smelting adjustment must be a safe integer"
           );
@@ -27116,6 +26931,17 @@
     return Object.freeze({ execute: execute2 });
   }
 
+  // src/domain/snapshot.ts
+  function createSnapshotMetadata(input) {
+    if (typeof input.capturedAtMs !== "number" || !Number.isSafeInteger(input.capturedAtMs) || input.capturedAtMs < 0) {
+      throw new TypeError("snapshot capture time must be a non-negative integer");
+    }
+    return Object.freeze({
+      id: snapshotId(input.id),
+      capturedAtMs: input.capturedAtMs
+    });
+  }
+
   // src/adapters/evolve/tax-reader.ts
   function createEvolveTaxReader(dependencies) {
     let snapshotSequence = 0;
@@ -27252,6 +27078,168 @@
         authorityTarget: requireNumber(
           settings["generalMinimumAuthority"],
           "settings.generalMinimumAuthority"
+        )
+      });
+    }
+    return Object.freeze({ readSettings: readSettings3 });
+  }
+
+  // src/adapters/evolve/storage-command-executor.ts
+  function rejected2(code, message) {
+    return { status: "rejected", failure: { code, message } };
+  }
+  function createStorageCommandExecutor(dependencies) {
+    function execute2(envelope) {
+      const { command } = envelope;
+      if (typeof command.count !== "number" || !Number.isFinite(command.count)) {
+        return rejected2(
+          "invalid-storage-count",
+          "storage construction count must be a finite number"
+        );
+      }
+      const storageManager = requireRecord(
+        dependencies.getStorageManager(),
+        "StorageManager"
+      );
+      const method = command.unit === "crate" ? "constructCrate" : "constructContainer";
+      const construct = requireFunction(
+        storageManager[method],
+        `StorageManager.${method}`
+      );
+      Reflect.apply(construct, storageManager, [command.count]);
+      const resources = requireRecord(dependencies.getResources(), "resources");
+      const produced = requireRecord(
+        resources[command.producedResourceId],
+        `resources.${command.producedResourceId}`
+      );
+      produced["currentQuantity"] = requireNumber(
+        produced["currentQuantity"],
+        `resources.${command.producedResourceId}.currentQuantity`
+      ) + command.count;
+      for (const delta of command.spend) {
+        const resource2 = requireRecord(
+          resources[delta.resourceId],
+          `resources.${delta.resourceId}`
+        );
+        resource2["currentQuantity"] = requireNumber(
+          resource2["currentQuantity"],
+          `resources.${delta.resourceId}.currentQuantity`
+        ) - delta.amount;
+      }
+      return { status: "succeeded" };
+    }
+    return Object.freeze({ execute: execute2 });
+  }
+
+  // src/adapters/evolve/storage-expansion-reader.ts
+  function readView(resources, resourceId3, storagePerUnit) {
+    const view = requireRecord(resources[resourceId3], `resources.${resourceId3}`);
+    const costRecord = requireRecord(
+      view["cost"],
+      `resources.${resourceId3}.cost`
+    );
+    const costs = [];
+    for (const key in costRecord) {
+      const costPerUnit = requireNumber(
+        costRecord[key],
+        `resources.${resourceId3}.cost.${key}`
+      );
+      const costResource = requireRecord(resources[key], `resources.${key}`);
+      const available = requireNumber(
+        costResource["currentQuantity"],
+        `resources.${key}.currentQuantity`
+      );
+      costs.push(Object.freeze({ resourceId: key, costPerUnit, available }));
+    }
+    return Object.freeze({
+      resourceId: resourceId3,
+      maxQuantity: requireNumber(
+        view["maxQuantity"],
+        `resources.${resourceId3}.maxQuantity`
+      ),
+      currentQuantity: requireNumber(
+        view["currentQuantity"],
+        `resources.${resourceId3}.currentQuantity`
+      ),
+      storagePerUnit,
+      costs: Object.freeze(costs)
+    });
+  }
+  function readPlywoodCost(library) {
+    const cost = library["cost"];
+    if (typeof cost !== "object" || cost === null) {
+      return null;
+    }
+    const value = cost["Plywood"];
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+  function createEvolveStorageExpansionReader(dependencies) {
+    let snapshotSequence = 0;
+    function readSnapshot() {
+      snapshotSequence += 1;
+      const metadata = createSnapshotMetadata({
+        id: `storage-expansion-snapshot-${snapshotSequence}`,
+        capturedAtMs: dependencies.clock.nowMs()
+      });
+      const resources = requireRecord(dependencies.getResources(), "resources");
+      const storageManager = requireRecord(
+        dependencies.getStorageManager(),
+        "StorageManager"
+      );
+      const crateValue = requireNumber(
+        storageManager["crateValue"],
+        "StorageManager.crateValue"
+      );
+      const containerValue = requireNumber(
+        storageManager["containerValue"],
+        "StorageManager.containerValue"
+      );
+      const buildings = requireRecord(dependencies.getBuildings(), "buildings");
+      const library = requireRecord(buildings["Library"], "buildings.Library");
+      const steel = requireRecord(resources["Steel"], "resources.Steel");
+      const plywood = requireRecord(resources["Plywood"], "resources.Plywood");
+      return Object.freeze({
+        metadata,
+        storageToBuild: dependencies.getStorageToBuild(),
+        crates: readView(resources, "Crates", crateValue),
+        containers: readView(resources, "Containers", containerValue),
+        isEarlyGame: Boolean(dependencies.isEarlyGame()),
+        isLumberRace: Boolean(dependencies.isLumberRace()),
+        steel: Object.freeze({
+          storageRatio: requireNumber(
+            steel["storageRatio"],
+            "resources.Steel.storageRatio"
+          ),
+          maxQuantity: requireNumber(
+            steel["maxQuantity"],
+            "resources.Steel.maxQuantity"
+          ),
+          storageRequired: requireNumber(
+            steel["storageRequired"],
+            "resources.Steel.storageRequired"
+          )
+        }),
+        library: Object.freeze({
+          count: requireNumber(library["count"], "buildings.Library.count"),
+          plywoodCost: readPlywoodCost(library)
+        }),
+        plywoodAvailable: requireNumber(
+          plywood["currentQuantity"],
+          "resources.Plywood.currentQuantity"
+        )
+      });
+    }
+    return Object.freeze({ readSnapshot });
+  }
+
+  // src/adapters/storage/storage-expansion-settings-reader.ts
+  function createStorageExpansionSettingsReader(getSettings) {
+    function readSettings3() {
+      const settings = requireRecord(getSettings(), "settings");
+      return Object.freeze({
+        storageLimitPreMad: requireBoolean(
+          settings["storageLimitPreMad"],
+          "settings.storageLimitPreMad"
         )
       });
     }
@@ -27653,7 +27641,7 @@
       ];
       for (const adjustment of adjustments) {
         if (!Number.isSafeInteger(adjustment.count) || adjustment.count < 0) {
-          return rejected2(
+          return rejected(
             "invalid-alchemy-adjustment",
             "alchemy adjustment count must be a non-negative safe integer"
           );
@@ -27920,7 +27908,7 @@
       const resolved = [];
       for (const adjustment of [...decision2.decrease, ...decision2.increase]) {
         if (!Number.isSafeInteger(adjustment.count) || adjustment.count < 0) {
-          return rejected2(
+          return rejected(
             "invalid-pylon-adjustment",
             "ritual adjustment count must be a non-negative safe integer"
           );
@@ -28185,7 +28173,7 @@
   function createSingleRatioExecutor(getManager, managerName) {
     function execute2(adjustment) {
       if (!Number.isSafeInteger(adjustment.delta)) {
-        return rejected2(
+        return rejected(
           "invalid-production-ratio-adjustment",
           "production ratio adjustment must be a safe integer"
         );
@@ -28232,7 +28220,7 @@
         );
         for (const adjustment of adjustments) {
           if (!Number.isSafeInteger(adjustment.delta)) {
-            return rejected2(
+            return rejected(
               "invalid-production-ratio-adjustment",
               "production ratio adjustment must be a safe integer"
             );
@@ -28802,7 +28790,7 @@
     const executor = Object.freeze({
       execute(decision2) {
         if (!Number.isSafeInteger(decision2.expectedMaximum) || decision2.expectedMaximum < 0) {
-          return rejected2(
+          return rejected(
             "invalid-factory-maximum",
             "factory maximum must be a non-negative safe integer"
           );
@@ -28812,7 +28800,7 @@
           if (typeof adjustment.productionId !== "string" || adjustment.productionId.length === 0 || ids.has(adjustment.productionId) || typeof adjustment.outputResourceId !== "string" || adjustment.outputResourceId.length === 0 || !Number.isSafeInteger(adjustment.expectedCurrent) || adjustment.expectedCurrent < 0 || !Number.isSafeInteger(adjustment.delta) || !Number.isSafeInteger(
             adjustment.expectedCurrent + adjustment.delta
           ) || adjustment.expectedCurrent + adjustment.delta < 0) {
-            return rejected2(
+            return rejected(
               "invalid-factory-adjustment",
               "factory adjustments require unique ids and safe non-negative allocations"
             );
@@ -29214,7 +29202,7 @@
           if (typeof adjustment.productionId !== "string" || adjustment.productionId.length === 0 || decisionIds.has(adjustment.productionId) || !Number.isSafeInteger(adjustment.expectedCurrent) || adjustment.expectedCurrent < 0 || !Number.isSafeInteger(adjustment.delta) || !Number.isSafeInteger(
             adjustment.expectedCurrent + adjustment.delta
           ) || adjustment.expectedCurrent + adjustment.delta < 0) {
-            return rejected2(
+            return rejected(
               "invalid-mining-droid-adjustment",
               "mining-droid adjustments require unique ids and safe non-negative target allocations"
             );
@@ -29444,7 +29432,7 @@
       const resolved = [];
       for (const adjustment of adjustments) {
         if (!Number.isSafeInteger(adjustment.delta)) {
-          return rejected2(
+          return rejected(
             "invalid-graphene-adjustment",
             "graphene fuel adjustment must be a safe integer"
           );
@@ -29807,7 +29795,7 @@
     return Object.freeze({
       execute(decision2) {
         if (decision2.tier !== "minor" && decision2.tier !== "major" || typeof decision2.wishId !== "string" || decision2.expectedRemaining !== 0) {
-          return rejected2(
+          return rejected(
             "invalid-wish-selection",
             "wish selection must identify a tier, setting id, and zero precondition"
           );
@@ -30136,7 +30124,7 @@
     };
     const executeAssembly = (decision2, active) => {
       if (!Number.isSafeInteger(decision2.count) || decision2.count <= 0 || !Number.isFinite(decision2.knowledgeAfter) || !Number.isFinite(decision2.genesAfter)) {
-        return rejected2(
+        return rejected(
           "invalid-genetics-assembly",
           "genetics assembly must have a positive safe count and finite balances"
         );
@@ -30186,7 +30174,7 @@
         }
         if (decision2.kind === "set-genetics-toggle") {
           if (!["sequence", "boost", "auto"].includes(decision2.toggle) || typeof decision2.expected !== "boolean" || typeof decision2.enabled !== "boolean") {
-            return rejected2(
+            return rejected(
               "invalid-genetics-toggle",
               "genetics toggle decision is invalid"
             );
@@ -30196,7 +30184,7 @@
         if (decision2.kind === "assemble-genes") {
           return executeAssembly(decision2, active);
         }
-        return rejected2(
+        return rejected(
           "invalid-genetics-decision",
           "genetics decision is invalid"
         );
@@ -30478,7 +30466,7 @@
           );
         }
         if (!Number.isFinite(decision2.expectedSoldiers) || !Number.isFinite(decision2.expectedCost) || !Number.isFinite(decision2.expectedMoneyCurrent) || !Number.isFinite(decision2.expectedMoneySpare) || !decisionMatchesState(decision2, sampled)) {
-          return rejected2(
+          return rejected(
             "invalid-mercenary-decision",
             "mercenary decision does not match the sampled state"
           );
@@ -30944,7 +30932,7 @@
           (candidate) => decisionsMatch3(candidate, decision2)
         );
         if (expected === void 0) {
-          return rejected2(
+          return rejected(
             "invalid-psychic-decision",
             "psychic decision was not present in the sampled plan"
           );
@@ -31132,7 +31120,7 @@
     const executor = Object.freeze({
       execute(decision2) {
         if (typeof decision2.key !== "string" || decision2.key.length === 0 || typeof decision2.id !== "string" || decision2.id.length === 0 || typeof decision2.enabled !== "boolean") {
-          return rejected2(
+          return rejected(
             "invalid-ocular-power-decision",
             "ocular power decisions require a key, id, and boolean state"
           );
@@ -31386,7 +31374,7 @@
     return Object.freeze({
       execute(decision2) {
         if (!Number.isFinite(decision2.geneCost) || decision2.geneCost < 0) {
-          return rejected2(
+          return rejected(
             "invalid-minor-trait-cost",
             "minor-trait gene cost must be a non-negative finite number"
           );
@@ -31516,7 +31504,7 @@
       execute(decision2) {
         if (!Number.isSafeInteger(decision2.index) || decision2.index < 0) {
           return executionResult(
-            rejected2(
+            rejected(
               "invalid-trigger-index",
               "trigger index must be a non-negative integer"
             ),
@@ -31897,7 +31885,7 @@
         ) ? requireFunction(manager["consumeMore"], "ConsumeManager.consumeMore") : null;
         for (const adjustment of activeAdjustments) {
           if (!Number.isSafeInteger(adjustment.delta)) {
-            return rejected2(
+            return rejected(
               "invalid-consume-adjustment",
               "consume adjustment must be a safe integer"
             );
@@ -32417,14 +32405,14 @@
       executor: Object.freeze({
         execute(decision2) {
           if (office === null) {
-            return rejected2(
+            return rejected(
               "governor-office-not-open",
               "replicator governor office session is not open"
             );
           }
           if (decision2.kind === "assign-governor-task") {
             if (!Number.isSafeInteger(decision2.taskIndex) || decision2.taskIndex < 0) {
-              return rejected2(
+              return rejected(
                 "invalid-governor-task-index",
                 "governor task index must be a non-negative safe integer"
               );
@@ -32908,7 +32896,7 @@
       execute(decision2) {
         if (decision2.kind === "restore-multiplier") {
           if (!Number.isFinite(decision2.multiplier)) {
-            return rejected2(
+            return rejected(
               "invalid-market-multiplier",
               "market multiplier must be finite"
             );
@@ -32925,7 +32913,7 @@
           return SUCCEEDED2;
         }
         if (!Number.isSafeInteger(decision2.repetitions) || decision2.repetitions < 1 || !Number.isSafeInteger(decision2.multiplier)) {
-          return rejected2(
+          return rejected(
             "invalid-market-trade",
             "market trade multiplier and repetitions must be safe integers"
           );
@@ -35266,7 +35254,7 @@
           return SUCCEEDED2;
         }
         if (decision2.kind !== "shutdown-warned-building") {
-          return rejected2("invalid-power-decision", "Unsupported power decision");
+          return rejected("invalid-power-decision", "Unsupported power decision");
         }
         const buildingIds = requireRecord(
           dependencies.getBuildingIds(),
@@ -36044,7 +36032,7 @@
       execute(decision2) {
         const invalid = validateDecision(decision2);
         if (invalid !== null) {
-          return rejected2("invalid-storage-allocation", invalid);
+          return rejected("invalid-storage-allocation", invalid);
         }
         const active = session;
         if (active === null) {
@@ -36494,7 +36482,7 @@
     const executor = Object.freeze({
       execute(decision2) {
         if (!Number.isSafeInteger(decision2.expectedMaximum) || decision2.expectedMaximum < 0) {
-          return rejected2(
+          return rejected(
             "invalid-galaxy-market-maximum",
             "galaxy-market maximum must be a non-negative safe integer"
           );
@@ -36504,7 +36492,7 @@
           if (!Number.isSafeInteger(adjustment.offerIndex) || adjustment.offerIndex < 0 || indices.has(adjustment.offerIndex) || typeof adjustment.buyResourceId !== "string" || adjustment.buyResourceId.length === 0 || typeof adjustment.sellResourceId !== "string" || adjustment.sellResourceId.length === 0 || !Number.isSafeInteger(adjustment.expectedCurrent) || adjustment.expectedCurrent < 0 || !Number.isSafeInteger(adjustment.delta) || !Number.isSafeInteger(
             adjustment.expectedCurrent + adjustment.delta
           ) || adjustment.expectedCurrent + adjustment.delta < 0) {
-            return rejected2(
+            return rejected(
               "invalid-galaxy-market-adjustment",
               "galaxy-market adjustments require unique indices and safe non-negative allocations"
             );
@@ -36957,7 +36945,7 @@
     const executor = Object.freeze({
       execute(decision2) {
         if (!Array.isArray(decision2.operations)) {
-          return rejected2(
+          return rejected(
             "invalid-gather-operations",
             "gather operations must be an array"
           );
@@ -37003,7 +36991,7 @@
         for (const operation2 of operations) {
           const actionIndex = ACTION_ORDER.indexOf(operation2.actionId);
           if (actionIndex <= previousActionIndex || typeof operation2.amount !== "number" || !Number.isFinite(operation2.amount) || !Array.isArray(operation2.beforeAction) || !Array.isArray(operation2.afterAction)) {
-            return rejected2(
+            return rejected(
               "invalid-gather-operation",
               "gather operations must be finite and follow resource order"
             );
@@ -37011,7 +36999,7 @@
           previousActionIndex = actionIndex;
           const clickCount = operation2.amount > 0 ? Math.ceil(operation2.amount) : 0;
           if (!Number.isSafeInteger(clickCount)) {
-            return rejected2(
+            return rejected(
               "invalid-gather-click-count",
               "gather click count must be a safe integer"
             );
@@ -37022,13 +37010,13 @@
           ];
           for (const assignment of assignments) {
             if (!RESOURCE_IDS.includes(assignment.resourceId) || typeof assignment.expectedQuantity !== "number" || !Number.isFinite(assignment.expectedQuantity) || typeof assignment.quantity !== "number" || !Number.isFinite(assignment.quantity) || simulated[assignment.resourceId] !== assignment.expectedQuantity) {
-              return rejected2(
+              return rejected(
                 "invalid-gather-assignment",
                 "gather assignments must form a finite sequential state"
               );
             }
             if (active.resources[assignment.resourceId] === void 0) {
-              return rejected2(
+              return rejected(
                 "invalid-gather-assignment",
                 "gather assignments require a sampled resource"
               );
@@ -37938,7 +37926,7 @@
     return Object.freeze({
       execute(decision2) {
         if (!Number.isSafeInteger(decision2.count) || decision2.count < 1) {
-          return rejected2(
+          return rejected(
             "invalid-craft-count",
             "craft count must be a positive safe integer"
           );
@@ -37958,7 +37946,7 @@
         const writes = [];
         for (const spend of decision2.spend) {
           if (!Number.isFinite(spend.amount) || spend.amount < 0) {
-            return rejected2(
+            return rejected(
               "invalid-craft-spend",
               "craft spend must be a non-negative finite number"
             );
@@ -38363,7 +38351,7 @@
         }
         const expected = sampled.kind === "training" ? planSpyTraining(sampled.input) : planSpyEspionage(sampled.input);
         if (expected === null || !decisionMatches(expected, decision2)) {
-          return rejected2(
+          return rejected(
             "invalid-spy-decision",
             "spy decision does not match the sampled plan"
           );
@@ -38374,7 +38362,7 @@
         sample = null;
         if (decision2.kind === "train-spy") {
           if (sampled.kind !== "training") {
-            return rejected2("invalid-spy-phase", "spy training phase changed");
+            return rejected("invalid-spy-phase", "spy training phase changed");
           }
           const gameLog = requireRecord(dependencies.getGameLog(), "GameLog");
           const logSuccess = requireFunction(
@@ -38394,7 +38382,7 @@
           return SUCCEEDED2;
         }
         if (sampled.kind !== "espionage") {
-          return rejected2("invalid-spy-phase", "spy espionage phase changed");
+          return rejected("invalid-spy-phase", "spy espionage phase changed");
         }
         if (decision2.kind === "release-foreign") {
           const warManager = requireRecord(
@@ -38421,7 +38409,7 @@
           ]);
           return SUCCEEDED2;
         }
-        return rejected2("invalid-spy-decision", "spy decision is invalid");
+        return rejected("invalid-spy-decision", "spy decision is invalid");
       }
     });
     return Object.freeze({ reader, executor });
@@ -40337,7 +40325,7 @@
         }
         const expected = planJobs(active.input);
         if (expected === null || !decisionsMatch4(expected, decision2)) {
-          return rejected2(
+          return rejected(
             "invalid-jobs-decision",
             "Jobs decision does not match the sampled plan"
           );
@@ -40350,7 +40338,7 @@
           const job = active.rawJobs[assignment.jobToken];
           const sampled = active.input.jobs[assignment.jobToken];
           if (job === void 0 || sampled === void 0)
-            return rejected2(
+            return rejected(
               "unknown-job-token",
               "Jobs decision contains an unknown job token"
             );
@@ -40974,7 +40962,7 @@
     const executor = Object.freeze({
       annotate(annotation) {
         if (cycle === null) {
-          return rejected2(
+          return rejected(
             "no-build-cycle",
             "annotate requires an active build cycle"
           );
@@ -41011,7 +40999,7 @@
       executeClick(decision2) {
         if (cycle === null) {
           return Object.freeze({
-            outcome: rejected2(
+            outcome: rejected(
               "no-build-cycle",
               "executeClick requires an active build cycle"
             ),
@@ -41136,7 +41124,7 @@
       execute(decision2) {
         if (!Number.isSafeInteger(decision2.index) || decision2.index < 0) {
           return executionResult2(
-            rejected2(
+            rejected(
               "invalid-research-index",
               "research index must be a non-negative integer"
             ),
@@ -41352,7 +41340,7 @@
     return Object.freeze({
       execute(decision2) {
         if (!Number.isFinite(decision2.mutationCost) || decision2.mutationCost < 0) {
-          return rejected2(
+          return rejected(
             "invalid-mutation-cost",
             "mutation cost must be a non-negative finite number"
           );
@@ -42173,7 +42161,7 @@
           );
         }
         if (!decisionMatches2(expected, decision2)) {
-          return rejected2(
+          return rejected(
             "invalid-outer-fleet-decision",
             "outer fleet decision does not match the sampled plan"
           );
@@ -42921,7 +42909,7 @@
         }
         const expected = planFleet(active.input);
         if (expected === null || !commandsMatch(expected, decision2)) {
-          return rejected2(
+          return rejected(
             "invalid-fleet-decision",
             "fleet decision does not match the sampled plan"
           );
@@ -43655,7 +43643,7 @@
         }
         const expected = planMechCycle(active.cycleInput);
         if (expected === null || !cycleDecisionsMatch(expected, decision2)) {
-          return rejected2(
+          return rejected(
             "invalid-mech-cycle-decision",
             "mech cycle decision does not match the sampled plan"
           );
@@ -43748,7 +43736,7 @@
         }
         const rawDesign = active.designs.get(decision2.designToken);
         if (rawDesign === void 0) {
-          return rejected2("unknown-mech-design", "mech design token is unknown");
+          return rejected("unknown-mech-design", "mech design token is unknown");
         }
         const supply = requireRecord(
           active.resources["Supply"],
@@ -53734,14 +53722,23 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     function savePlannerStats(stats) {
       return plannerStatsLifecycle.save(stats);
     }
+    const storageClock = Object.freeze({ nowMs: () => browserClock.nowMs() });
     const { expandStorage } = createStorageExpansion({
-      getSettings: () => settings,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getStorageManager: () => StorageManager,
-      isEarlyGame: () => isEarlyGame(),
-      isLumberRace: () => isLumberRace(),
-      nowMs: () => browserClock.nowMs()
+      clock: storageClock,
+      createReader: (getStorageToBuild) => createEvolveStorageExpansionReader({
+        clock: storageClock,
+        getStorageToBuild,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getStorageManager: () => StorageManager,
+        isEarlyGame: () => isEarlyGame(),
+        isLumberRace: () => isLumberRace()
+      }),
+      settingsReader: createStorageExpansionSettingsReader(() => settings),
+      commandExecutor: createStorageCommandExecutor({
+        getStorageManager: () => StorageManager,
+        getResources: () => resources
+      })
     });
     function calculateRequiredStorages() {
       const result2 = planStorageRequirements(

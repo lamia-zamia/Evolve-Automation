@@ -92,7 +92,7 @@ import { createSettingsStore } from "../storage/settings-store.ts";
 import { createStateLogStore } from "../storage/state-log-store.ts";
 import { createPlannerStatsLifecycle } from "../../application/planner-stats.ts";
 import { createBuildPlanner } from "../../planning/build-planner.ts";
-import { createStorageExpansion } from "../../bootstrap/storage-expansion.ts";
+import { createStorageExpansion } from "../../application/storage-expansion.ts";
 import { readStorageRequirementsInput } from "./storage-requirements.ts";
 import { planStorageRequirements } from "../../domain/storage-requirements.ts";
 import { readDemandPrioritizationInput } from "./demand-prioritization.ts";
@@ -281,6 +281,9 @@ import {
 import { createTaxCommandExecutor } from "./tax-command-executor.ts";
 import { createEvolveTaxReader } from "./tax-reader.ts";
 import { createTaxSettingsReader } from "../storage/tax-settings-reader.ts";
+import { createStorageCommandExecutor } from "./storage-command-executor.ts";
+import { createEvolveStorageExpansionReader } from "./storage-expansion-reader.ts";
+import { createStorageExpansionSettingsReader } from "../storage/storage-expansion-settings-reader.ts";
 import { planSmelter } from "../../domain/smelter.ts";
 import { createAlchemyCommandExecutor, readAlchemyInput } from "./alchemy.ts";
 import { planAlchemy } from "../../domain/alchemy.ts";
@@ -2391,14 +2394,24 @@ export function startLegacyRuntime(
   function savePlannerStats(stats) {
     return plannerStatsLifecycle.save(stats);
   }
+  const storageClock = Object.freeze({ nowMs: () => browserClock.nowMs() });
   const { expandStorage } = createStorageExpansion({
-    getSettings: () => settings,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getStorageManager: () => StorageManager,
-    isEarlyGame: () => isEarlyGame(),
-    isLumberRace: () => isLumberRace(),
-    nowMs: () => browserClock.nowMs(),
+    clock: storageClock,
+    createReader: (getStorageToBuild) =>
+      createEvolveStorageExpansionReader({
+        clock: storageClock,
+        getStorageToBuild,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getStorageManager: () => StorageManager,
+        isEarlyGame: () => isEarlyGame(),
+        isLumberRace: () => isLumberRace(),
+      }),
+    settingsReader: createStorageExpansionSettingsReader(() => settings),
+    commandExecutor: createStorageCommandExecutor({
+      getStorageManager: () => StorageManager,
+      getResources: () => resources,
+    }),
   });
   function calculateRequiredStorages() {
     const result = planStorageRequirements(
