@@ -4,9 +4,10 @@ import { createLegacyRuntimeEnvironment } from "../src/adapters/browser/legacy-r
 import { readTestHooks } from "../src/adapters/userscript/test-hooks.ts";
 import { startRuntime } from "../src/bootstrap/runtime.js";
 
-startRuntime(
+const runtimeTestSurface = startRuntime(
   readJQueryGlobal(globalThis),
   createBrowserDiagnostics(globalThis),
   createLegacyRuntimeEnvironment(globalThis),
-  readTestHooks(globalThis),
 );
+const testHooks = readTestHooks(globalThis);
+if (testHooks) Object.assign(testHooks, runtimeTestSurface);

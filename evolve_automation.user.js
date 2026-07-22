@@ -52235,8 +52235,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
   }
 
   // src/bootstrap/runtime.js
-  function startRuntime($, diagnostics, runtimeEnvironment, testHooks) {
+  function startRuntime($, diagnostics, runtimeEnvironment) {
     "use strict";
+    const runtimeTestSurface = {};
     const { getRealNumber, getNumberString, getNiceNumber } = createNumberFormatting({ numberSuffix });
     const browserClock = createBrowserClock();
     const settingsStore = createSettingsStore(runtimeEnvironment.storage);
@@ -52540,23 +52541,21 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       updateProductionTableMiningDrone,
       updateProductionTableReplicator
     } = productionSettingsBrowserAdapter;
-    if (testHooks) {
-      Object.assign(testHooks, {
-        productionSettings: {
-          buildProductionSettings,
-          updateProductionSettingsContent,
-          updateProductionTableSmelter,
-          updateProductionTableFoundry,
-          updateProductionTableFactory,
-          updateProductionTableMiningDrone,
-          updateProductionTableReplicator
-        },
-        setProductionSettingsTestContext(context) {
-          settingsRaw = context.settingsRaw;
-          productionSettingsTestContext = context;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      productionSettings: {
+        buildProductionSettings,
+        updateProductionSettingsContent,
+        updateProductionTableSmelter,
+        updateProductionTableFoundry,
+        updateProductionTableFactory,
+        updateProductionTableMiningDrone,
+        updateProductionTableReplicator
+      },
+      setProductionSettingsTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        productionSettingsTestContext = context;
+      }
+    });
     let storageSettingsTestContext;
     const storageSettingsActions = {
       buildSettingsSection,
@@ -53637,36 +53636,34 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       const view = readAuthorityView();
       return view.status === "ready" ? assessAuthorityRemoval(view.view, quantity.value) : view;
     };
-    if (testHooks) {
-      Object.assign(testHooks, {
-        authorityPolicy: {
-          getAuthorityTarget() {
-            const view = readAuthorityView();
-            return view.status === "ready" ? resolveAuthorityTarget(view.view.target) : view;
-          },
-          getAuthorityPerSoldier() {
-            const view = readAuthorityView();
-            return view.status === "ready" ? calculateAuthorityPerSoldier(view.view.modifiers) : view;
-          },
-          getRequiredAuthorityGarrison(currentGarrison) {
-            const requirement = getAuthorityGarrisonRequirement(currentGarrison);
-            return requirement.status === "ready" ? requirement.requiredGarrison : requirement;
-          },
-          getPredictedAuthorityAfterRemovingSoldiers(removedSoldiers) {
-            const quantity = readAuthorityQuantity(removedSoldiers);
-            if (quantity.status === "unavailable") return quantity;
-            const view = readAuthorityView();
-            return view.status === "ready" ? predictAuthorityAfterRemovingSoldiers(view.view, quantity.value) : view;
-          },
-          assessAuthorityRemoval: assessAuthorityRemoval2
+    Object.assign(runtimeTestSurface, {
+      authorityPolicy: {
+        getAuthorityTarget() {
+          const view = readAuthorityView();
+          return view.status === "ready" ? resolveAuthorityTarget(view.view.target) : view;
         },
-        setAuthorityPolicyTestContext(context) {
-          game = context.game;
-          settings = context.settings;
-          resources = context.resources;
-        }
-      });
-    }
+        getAuthorityPerSoldier() {
+          const view = readAuthorityView();
+          return view.status === "ready" ? calculateAuthorityPerSoldier(view.view.modifiers) : view;
+        },
+        getRequiredAuthorityGarrison(currentGarrison) {
+          const requirement = getAuthorityGarrisonRequirement(currentGarrison);
+          return requirement.status === "ready" ? requirement.requiredGarrison : requirement;
+        },
+        getPredictedAuthorityAfterRemovingSoldiers(removedSoldiers) {
+          const quantity = readAuthorityQuantity(removedSoldiers);
+          if (quantity.status === "unavailable") return quantity;
+          const view = readAuthorityView();
+          return view.status === "ready" ? predictAuthorityAfterRemovingSoldiers(view.view, quantity.value) : view;
+        },
+        assessAuthorityRemoval: assessAuthorityRemoval2
+      },
+      setAuthorityPolicyTestContext(context) {
+        game = context.game;
+        settings = context.settings;
+        resources = context.resources;
+      }
+    });
     const { normalizeProperties, addProps } = createPropertyHelpers({
       getSettings: () => settings
     });
@@ -53924,42 +53921,40 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readWin: () => win,
       readWindowManager: () => WindowManager
     });
-    if (testHooks) {
-      testHooks.entityClasses = {
-        Job,
-        BasicJob,
-        CraftingJob,
-        Resource,
-        SoulGem,
-        Troops,
-        Supply,
-        Power,
-        Support,
-        BeltSupport,
-        ElectrolysisSupport,
-        WomlingsSupport,
-        PrestigeResource,
-        Population,
-        Morale,
-        Thrall,
-        ResourceProductionCost,
-        Action,
-        CityAction,
-        Pillar,
-        ResourceAction,
-        EvolutionAction,
-        SpaceDock,
-        ModalAction,
-        Project,
-        Technology,
-        Race,
-        Trigger,
-        MinorTrait,
-        MutableTrait,
-        MajorTrait,
-        GenusTrait
-      };
-    }
+    runtimeTestSurface.entityClasses = {
+      Job,
+      BasicJob,
+      CraftingJob,
+      Resource,
+      SoulGem,
+      Troops,
+      Supply,
+      Power,
+      Support,
+      BeltSupport,
+      ElectrolysisSupport,
+      WomlingsSupport,
+      PrestigeResource,
+      Population,
+      Morale,
+      Thrall,
+      ResourceProductionCost,
+      Action,
+      CityAction,
+      Pillar,
+      ResourceAction,
+      EvolutionAction,
+      SpaceDock,
+      ModalAction,
+      Project,
+      Technology,
+      Race,
+      Trigger,
+      MinorTrait,
+      MutableTrait,
+      MajorTrait,
+      GenusTrait
+    };
     const biomeList = [
       "grassland",
       "oceanic",
@@ -54283,18 +54278,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => haveTech,
       setResources: (value) => resources = value
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        entityCatalogs: {
-          resources,
-          jobs,
-          crafter,
-          buildings,
-          linkedBuildings,
-          projects
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      entityCatalogs: {
+        resources,
+        jobs,
+        crafter,
+        buildings,
+        linkedBuildings,
+        projects
+      }
+    });
     const {
       wrGlobalCondition,
       wrIndividualCondition,
@@ -54340,23 +54333,21 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getCitadelConsumptionFn: () => getCitadelConsumption,
       ResourceAction
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        weightingPolicy: {
-          wrGlobalCondition,
-          wrIndividualCondition,
-          wrDescription,
-          wrMultiplier,
-          authorityCapBuildings,
-          INFLATION_CHALLENGE_MONEY,
-          RETIREMENT_PREP,
-          inflationMoneyStorageBuildings,
-          inflationMoneyIncomeBuildings,
-          galaxyCombatShips,
-          weightingRules
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      weightingPolicy: {
+        wrGlobalCondition,
+        wrIndividualCondition,
+        wrDescription,
+        wrMultiplier,
+        authorityCapBuildings,
+        INFLATION_CHALLENGE_MONEY,
+        RETIREMENT_PREP,
+        inflationMoneyStorageBuildings,
+        inflationMoneyIncomeBuildings,
+        galaxyCombatShips,
+        weightingRules
+      }
+    });
     let MinorTraitManager, MutableTraitManager;
     ({ MinorTraitManager, MutableTraitManager } = createTraitManagers({
       getGame: () => game,
@@ -54449,26 +54440,24 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getOccCosts,
       logError: (...args) => runtimeEnvironment.error(...args)
     }));
-    if (testHooks) {
-      Object.assign(testHooks, {
-        foreignAffairsManagers: { SpyManager, WarManager },
-        setForeignAffairsManagersTestContext(context) {
-          if ("game" in context) game = context.game;
-          if ("settings" in context) settings = context.settings;
-          if ("state" in context) state = context.state;
-          if ("resources" in context) resources = context.resources;
-          if ("buildings" in context) buildings = context.buildings;
-          if ("poly" in context) poly = context.poly;
-          if ("win" in context) win = context.win;
-          if ("WindowManager" in context) WindowManager = context.WindowManager;
-          if ("GameLog" in context) GameLog = context.GameLog;
-          if ("KeyManager" in context) KeyManager = context.KeyManager;
-          if ("haveTech" in context) haveTech = context.haveTech;
-          if ("guardActive" in context) guardActive = context.guardActive;
-          if ("traitVal" in context) traitVal = context.traitVal;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      foreignAffairsManagers: { SpyManager, WarManager },
+      setForeignAffairsManagersTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("state" in context) state = context.state;
+        if ("resources" in context) resources = context.resources;
+        if ("buildings" in context) buildings = context.buildings;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("WindowManager" in context) WindowManager = context.WindowManager;
+        if ("GameLog" in context) GameLog = context.GameLog;
+        if ("KeyManager" in context) KeyManager = context.KeyManager;
+        if ("haveTech" in context) haveTech = context.haveTech;
+        if ("guardActive" in context) guardActive = context.guardActive;
+        if ("traitVal" in context) traitVal = context.traitVal;
+      }
+    });
     let FleetManagerOuter, FleetManager;
     ({ FleetManagerOuter, FleetManager } = createFleetManagers({
       getGame: () => game,
@@ -54481,21 +54470,19 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => haveTech,
       getJQuery: () => $
     }));
-    if (testHooks) {
-      Object.assign(testHooks, {
-        fleetManagers: { FleetManagerOuter, FleetManager },
-        setFleetManagersTestContext(context) {
-          if ("game" in context) game = context.game;
-          if ("settings" in context) settings = context.settings;
-          if ("resources" in context) resources = context.resources;
-          if ("buildings" in context) buildings = context.buildings;
-          if ("poly" in context) poly = context.poly;
-          if ("win" in context) win = context.win;
-          if ("KeyManager" in context) KeyManager = context.KeyManager;
-          if ("haveTech" in context) haveTech = context.haveTech;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      fleetManagers: { FleetManagerOuter, FleetManager },
+      setFleetManagersTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("resources" in context) resources = context.resources;
+        if ("buildings" in context) buildings = context.buildings;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("KeyManager" in context) KeyManager = context.KeyManager;
+        if ("haveTech" in context) haveTech = context.haveTech;
+      }
+    });
     let { MechManager } = createMechManager({
       getGame: () => game,
       getSettings: () => settings,
@@ -54513,22 +54500,20 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2),
       createMutationObserver: (callback) => new runtimeEnvironment.MutationObserver(callback)
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        MechManager,
-        setMechManagerTestContext(context) {
-          if ("game" in context) game = context.game;
-          if ("settings" in context) settings = context.settings;
-          if ("resources" in context) resources = context.resources;
-          if ("buildings" in context) buildings = context.buildings;
-          if ("poly" in context) poly = context.poly;
-          if ("win" in context) win = context.win;
-          if ("GameLog" in context) GameLog = context.GameLog;
-          if ("needSandboxBypass" in context)
-            needSandboxBypass = context.needSandboxBypass;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      MechManager,
+      setMechManagerTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("resources" in context) resources = context.resources;
+        if ("buildings" in context) buildings = context.buildings;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("GameLog" in context) GameLog = context.GameLog;
+        if ("needSandboxBypass" in context)
+          needSandboxBypass = context.needSandboxBypass;
+      }
+    });
     let JobManager, BuildingManager, ProjectManager, TriggerManager;
     ({ JobManager, BuildingManager, ProjectManager, TriggerManager } = createCoreManagers({
       getGame: () => game,
@@ -54560,19 +54545,17 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getKeyboardEvent: () => runtimeEnvironment.KeyboardEvent,
       cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value)
     }));
-    if (testHooks) {
-      Object.assign(testHooks, {
-        infrastructureManagers: { WindowManager, KeyManager, GameLog },
-        setInfrastructureManagersTestContext(context) {
-          if ("game" in context) game = context.game;
-          if ("settings" in context) settings = context.settings;
-          if ("poly" in context) poly = context.poly;
-          if ("win" in context) win = context.win;
-          if ("needSandboxBypass" in context)
-            needSandboxBypass = context.needSandboxBypass;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      infrastructureManagers: { WindowManager, KeyManager, GameLog },
+      setInfrastructureManagersTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("needSandboxBypass" in context)
+          needSandboxBypass = context.needSandboxBypass;
+      }
+    });
     const { updateCraftCost } = createCraftingCosts({
       getGame: () => game,
       getState: () => state,
@@ -54580,19 +54563,17 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       setCraftablesList: (list) => craftablesList = list,
       setFoundryList: (list) => foundryList = list
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        updateCraftCost,
-        getCraftCostTestLists: () => ({ craftablesList, foundryList }),
-        setCraftCostTestContext(context) {
-          game = context.game;
-          state = context.state;
-          resources = context.resources;
-          craftablesList = context.craftablesList ?? [];
-          foundryList = context.foundryList ?? [];
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      updateCraftCost,
+      getCraftCostTestLists: () => ({ craftablesList, foundryList }),
+      setCraftCostTestContext(context) {
+        game = context.game;
+        state = context.state;
+        resources = context.resources;
+        craftablesList = context.craftablesList ?? [];
+        foundryList = context.foundryList ?? [];
+      }
+    });
     let stateInitializationTestActions = null;
     const { initialiseState } = createStateInitialization({
       getGame: () => game,
@@ -54608,28 +54589,26 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => stateInitializationTestActions?.haveTech ?? haveTech,
       log: (message) => runtimeEnvironment.log(message)
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        initialiseState,
-        getStateInitializationTestContext: () => ({
-          game,
-          resources,
-          JobManager,
-          crafter,
-          buildings,
-          projects
-        }),
-        setStateInitializationTestContext(context) {
-          game = context.game;
-          resources = context.resources;
-          JobManager = context.JobManager;
-          crafter = context.crafter;
-          buildings = context.buildings;
-          projects = context.projects;
-          stateInitializationTestActions = context.actions;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      initialiseState,
+      getStateInitializationTestContext: () => ({
+        game,
+        resources,
+        JobManager,
+        crafter,
+        buildings,
+        projects
+      }),
+      setStateInitializationTestContext(context) {
+        game = context.game;
+        resources = context.resources;
+        JobManager = context.JobManager;
+        crafter = context.crafter;
+        buildings = context.buildings;
+        projects = context.projects;
+        stateInitializationTestActions = context.actions;
+      }
+    });
     let raceInitializationTestContext = null;
     const { initialiseRaces } = createRaceInitialization({
       getGame: () => raceInitializationTestContext?.game ?? game,
@@ -54639,27 +54618,23 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getEvolutionAction: () => raceInitializationTestContext?.EvolutionAction ?? EvolutionAction,
       getRace: () => raceInitializationTestContext?.Race ?? Race
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        initialiseRaces,
-        setRaceInitializationTestContext(context) {
-          raceInitializationTestContext = context;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      initialiseRaces,
+      setRaceInitializationTestContext(context) {
+        raceInitializationTestContext = context;
+      }
+    });
     const { initBuildingState } = createBuildingStateInitialization({
       getBuildings: () => buildings,
       getBuildingManager: () => BuildingManager
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        initBuildingState,
-        setBuildingStateTestContext(context) {
-          buildings = context.buildings;
-          BuildingManager = context.BuildingManager;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      initBuildingState,
+      setBuildingStateTestContext(context) {
+        buildings = context.buildings;
+        BuildingManager = context.BuildingManager;
+      }
+    });
     const { updateStateFromSettings, updateSettingsFromState } = createSettingsState({
       getSettingsRaw: () => settingsRaw,
       getTriggerManager: () => TriggerManager,
@@ -54719,55 +54694,51 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       })),
       crafterOriginalIds: Object.values(crafter).map((job) => job._originalId)
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        settingsMigration: { updateStandAloneSettings }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        settingsState: {
-          updateStateFromSettings,
-          updateSettingsFromState,
-          applySettings: applySettings2,
-          migrateSetting: migrateSetting2
-        },
-        resetSettings: {
-          resetWarSettings,
-          resetHellSettings,
-          resetGeneralSettings,
-          resetInterfaceSettings,
-          resetStateLogSettings,
-          resetAchievementGuardSettings,
-          resetChallengeHelperSettings,
-          resetPrestigeSettings,
-          resetGovernmentSettings,
-          resetAuthoritySettings,
-          resetEvolutionSettings,
-          resetResearchSettings,
-          resetMarketSettings,
-          resetStorageSettings,
-          resetMinorTraitSettings,
-          resetMutableTraitSettings,
-          resetJobSettings,
-          resetWeightingSettings,
-          resetBuildingSettings,
-          resetProjectSettings,
-          resetMagicSettings,
-          resetProductionSettings,
-          resetTriggerSettings,
-          resetLoggingSettings,
-          resetPlanetSettings,
-          resetFleetSettings,
-          resetMechSettings,
-          resetEjectorSettings
-        },
-        setSettingsStateTestContext(context) {
-          settingsRaw = context.settingsRaw;
-          TriggerManager = context.triggerManager;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      settingsMigration: { updateStandAloneSettings }
+    });
+    Object.assign(runtimeTestSurface, {
+      settingsState: {
+        updateStateFromSettings,
+        updateSettingsFromState,
+        applySettings: applySettings2,
+        migrateSetting: migrateSetting2
+      },
+      resetSettings: {
+        resetWarSettings,
+        resetHellSettings,
+        resetGeneralSettings,
+        resetInterfaceSettings,
+        resetStateLogSettings,
+        resetAchievementGuardSettings,
+        resetChallengeHelperSettings,
+        resetPrestigeSettings,
+        resetGovernmentSettings,
+        resetAuthoritySettings,
+        resetEvolutionSettings,
+        resetResearchSettings,
+        resetMarketSettings,
+        resetStorageSettings,
+        resetMinorTraitSettings,
+        resetMutableTraitSettings,
+        resetJobSettings,
+        resetWeightingSettings,
+        resetBuildingSettings,
+        resetProjectSettings,
+        resetMagicSettings,
+        resetProductionSettings,
+        resetTriggerSettings,
+        resetLoggingSettings,
+        resetPlanetSettings,
+        resetFleetSettings,
+        resetMechSettings,
+        resetEjectorSettings
+      },
+      setSettingsStateTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        TriggerManager = context.triggerManager;
+      }
+    });
     let getStarLevel = (context) => {
       const result2 = readAchievementStarLevelContext(context);
       return result2.status === "ready" ? calculateAchievementStarLevel(result2.context) : 1;
@@ -54869,33 +54840,31 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getNumberString
       ) : [];
     };
-    if (testHooks) {
-      Object.assign(testHooks, {
-        runGuards: {
-          getStarLevel,
-          getAchievementStar,
-          isAchievementUnlocked: isAchievementUnlocked2,
-          guardActive,
-          bananaRepublicObjectiveComplete,
-          bananaRepublicSmoothieComplete,
-          bananaRepublicReadyForUnification,
-          guardBananaRepublicActive,
-          inflationChallengeAssistActive,
-          inflationChallengeMoneyReachable,
-          inflationChallengeSecondsToFinish,
-          inflationChallengeShouldSaveMoney,
-          retirementChallengeAssistActive,
-          retirementPreparationMissing
-        },
-        setRunGuardTestContext(context) {
-          settings = context.settings;
-          game = context.game;
-          poly = context.poly;
-          resources = context.resources;
-          buildings = context.buildings;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      runGuards: {
+        getStarLevel,
+        getAchievementStar,
+        isAchievementUnlocked: isAchievementUnlocked2,
+        guardActive,
+        bananaRepublicObjectiveComplete,
+        bananaRepublicSmoothieComplete,
+        bananaRepublicReadyForUnification,
+        guardBananaRepublicActive,
+        inflationChallengeAssistActive,
+        inflationChallengeMoneyReachable,
+        inflationChallengeSecondsToFinish,
+        inflationChallengeShouldSaveMoney,
+        retirementChallengeAssistActive,
+        retirementPreparationMissing
+      },
+      setRunGuardTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        poly = context.poly;
+        resources = context.resources;
+        buildings = context.buildings;
+      }
+    });
     let queuedSettingsTestActions;
     const { loadQueuedSettings } = createQueuedSettings({
       getSettings: () => settings,
@@ -54909,27 +54878,23 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getRemoveScriptSettings: () => queuedSettingsTestActions?.removeScriptSettings ?? removeScriptSettings,
       getBuildScriptSettings: () => queuedSettingsTestActions?.buildScriptSettings ?? buildScriptSettings
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        loadQueuedSettings,
-        setQueuedSettingsTestContext(context) {
-          settings = context.settings;
-          settingsRaw = context.settingsRaw;
-          state = context.state;
-          GameLog = context.GameLog;
-          queuedSettingsTestActions = context.actions;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      loadQueuedSettings,
+      setQueuedSettingsTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        GameLog = context.GameLog;
+        queuedSettingsTestActions = context.actions;
+      }
+    });
     const findRequiredResourceWeight2 = (resource2) => findRequiredResourceWeight(state.unlockedBuildings, resource2);
-    if (testHooks) {
-      Object.assign(testHooks, {
-        findRequiredResourceWeight: findRequiredResourceWeight2,
-        setResourceWeightTestContext(context) {
-          state = context.state;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      findRequiredResourceWeight: findRequiredResourceWeight2,
+      setResourceWeightTestContext(context) {
+        state = context.state;
+      }
+    });
     const challengeGroups = challenges.map((members) => ({ members }));
     const evolutionReader = createEvolutionReader({
       getGame: () => game,
@@ -54981,16 +54946,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getIsAchievementUnlocked: () => isAchievementUnlocked2,
       universes
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        generatePlanets,
-        setPlanetGenerationTestContext(context) {
-          game = context.game;
-          poly = context.poly;
-          isAchievementUnlocked2 = context.isAchievementUnlocked;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      generatePlanets,
+      setPlanetGenerationTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+        isAchievementUnlocked2 = context.isAchievementUnlocked;
+      }
+    });
     const planetSelectionReader = createPlanetSelectionReader({
       getGame: () => game,
       getSettings: () => settings,
@@ -55092,9 +55055,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       debugLog: (message) => runtimeEnvironment.log(message)
     });
     const autoHell = () => runHellAutomation(hellAdapter);
-    if (testHooks) {
-      Object.assign(testHooks, { autoHell });
-    }
+    Object.assign(runtimeTestSurface, { autoHell });
     const jobsAdapter = createJobsAdapter({
       getJobManager: () => JobManager,
       getGame: () => game,
@@ -55127,19 +55088,17 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       clearKeyModifiers: () => KeyManager.set(false, false, false),
       nowMs: () => browserClock.nowMs()
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        autoTax: () => autoTax(),
-        setAutoTaxTestContext(context) {
-          if ("game" in context) game = context.game;
-          if ("settings" in context) settings = context.settings;
-          if ("resources" in context) resources = context.resources;
-          if ("poly" in context) poly = context.poly;
-          if ("win" in context) win = context.win;
-          if ("keySet" in context) KeyManager.set = context.keySet;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      autoTax: () => autoTax(),
+      setAutoTaxTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("settings" in context) settings = context.settings;
+        if ("resources" in context) resources = context.resources;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("keySet" in context) KeyManager.set = context.keySet;
+      }
+    });
     const alchemyExecutor = createAlchemyCommandExecutor(() => AlchemyManager);
     const autoAlchemy = function autoAlchemy2() {
       alchemyExecutor.execute(
@@ -55235,14 +55194,12 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       executor: factoryAdapter.executor,
       tooltips: factoryTooltips
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        autoFactory,
-        FactoryManager,
-        factorySettings: settings,
-        factoryState: state
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      autoFactory,
+      FactoryManager,
+      factorySettings: settings,
+      factoryState: state
+    });
     const autoMiningDroid = () => runMiningDroidAutomation({
       reader: createMiningDroidReader(() => DroidManager),
       executor: createMiningDroidCommandExecutor(() => DroidManager)
@@ -55300,18 +55257,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getSaveStateLog: () => prestigeLogTestActions?.saveStateLog ?? saveStateLog,
       getTriggerFileDownload: () => prestigeLogTestActions?.triggerFileDownload ?? triggerFileDownload
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        prestigeLog: { formatLogString, logPrestige },
-        setPrestigeLogTestContext(context) {
-          settings = context.settings;
-          game = context.game;
-          state = context.state;
-          GameLog = context.GameLog;
-          prestigeLogTestActions = context.actions;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      prestigeLog: { formatLogString, logPrestige },
+      setPrestigeLogTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        state = context.state;
+        GameLog = context.GameLog;
+        prestigeLogTestActions = context.actions;
+      }
+    });
     const readPrestigeView = () => readPrestigeEligibilityView(
       settings,
       game,
@@ -55413,51 +55368,47 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       loadQueuedSettings
     });
     const autoPrestige = () => runPrestige({ reader: prestigeReader, executor: prestigeExecutor });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        autoEvolution,
-        autoUniverseSelection,
-        autoCraft,
-        autoSpy,
-        autoBattle,
-        autoPrestige,
-        setWave3TestContext(context) {
-          foundryList = context.foundryList;
-          SpyManager = context.SpyManager;
-          buildings = context.buildings;
-          haveTask = context.haveTask;
-          haveTech = context.haveTech;
-          isBioseederPrestigeAvailable = context.isBioseederPrestigeAvailable;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        prestigeEligibility: {
-          isPrestigeAllowed: isPrestigeAllowed2,
-          isCataclysmPrestigeAvailable: isCataclysmPrestigeAvailable2,
-          isBioseederPrestigeAvailable,
-          isWhiteholePrestigeAvailable: isWhiteholePrestigeAvailable2,
-          isApocalypsePrestigeAvailable: isApocalypsePrestigeAvailable2,
-          isAscensionPrestigeAvailable: isAscensionPrestigeAvailable2,
-          isWitchAscensionPrestigeAvailable: isWitchAscensionPrestigeAvailable2,
-          isDemonicPrestigeAvailable: isDemonicPrestigeAvailable2,
-          isPillarFinished: isPillarFinished2,
-          isGECKNeeded,
-          getBlackholeMass: getBlackholeMass2
-        },
-        setPrestigeEligibilityTestContext(context) {
-          settings = context.settings;
-          game = context.game;
-          resources = context.resources;
-          buildings = context.buildings;
-          techIds = context.techIds;
-          MechManager = context.MechManager;
-          haveTech = context.haveTech;
-          isAchievementUnlocked2 = context.isAchievementUnlocked;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      autoEvolution,
+      autoUniverseSelection,
+      autoCraft,
+      autoSpy,
+      autoBattle,
+      autoPrestige,
+      setWave3TestContext(context) {
+        foundryList = context.foundryList;
+        SpyManager = context.SpyManager;
+        buildings = context.buildings;
+        haveTask = context.haveTask;
+        haveTech = context.haveTech;
+        isBioseederPrestigeAvailable = context.isBioseederPrestigeAvailable;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      prestigeEligibility: {
+        isPrestigeAllowed: isPrestigeAllowed2,
+        isCataclysmPrestigeAvailable: isCataclysmPrestigeAvailable2,
+        isBioseederPrestigeAvailable,
+        isWhiteholePrestigeAvailable: isWhiteholePrestigeAvailable2,
+        isApocalypsePrestigeAvailable: isApocalypsePrestigeAvailable2,
+        isAscensionPrestigeAvailable: isAscensionPrestigeAvailable2,
+        isWitchAscensionPrestigeAvailable: isWitchAscensionPrestigeAvailable2,
+        isDemonicPrestigeAvailable: isDemonicPrestigeAvailable2,
+        isPillarFinished: isPillarFinished2,
+        isGECKNeeded,
+        getBlackholeMass: getBlackholeMass2
+      },
+      setPrestigeEligibilityTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        resources = context.resources;
+        buildings = context.buildings;
+        techIds = context.techIds;
+        MechManager = context.MechManager;
+        haveTech = context.haveTech;
+        isAchievementUnlocked2 = context.isAchievementUnlocked;
+      }
+    });
     const shapeshiftExecutor = createShapeshiftCommandExecutor({
       getGame: () => game,
       controls: createShapeshiftControls(getVueById)
@@ -55559,24 +55510,22 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       executor: geneticsAdapter.executor,
       controls: geneticsControls
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        autoMiningDroid,
-        DroidManager,
-        autoGraphenePlant,
-        GrapheneManager,
-        autoShapeshift,
-        autoWish,
-        autoGenetics,
-        automationSettings: settings,
-        automationResources: resources,
-        automationKeyManager: KeyManager,
-        setAutomationTestContext(context) {
-          game = context.game;
-          win = context.win;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      autoMiningDroid,
+      DroidManager,
+      autoGraphenePlant,
+      GrapheneManager,
+      autoShapeshift,
+      autoWish,
+      autoGenetics,
+      automationSettings: settings,
+      automationResources: resources,
+      automationKeyManager: KeyManager,
+      setAutomationTestContext(context) {
+        game = context.game;
+        win = context.win;
+      }
+    });
     const autoMarket = (bulkSell, ignoreSellRatio) => runMarketAutomation(
       {
         reader: createMarketReader({
@@ -55616,24 +55565,22 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       reader: gatherResourcesAdapter.reader,
       executor: gatherResourcesAdapter.executor
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        autoConsume,
-        autoReplicator,
-        autoMarket,
-        autoGalaxyMarket,
-        autoGatherResources,
-        getAutomationPoly: () => poly,
-        setWave2TestContext(context) {
-          ReplicatorManager = context.ReplicatorManager;
-          MarketManager = context.MarketManager;
-          GalaxyTradeManager = context.GalaxyTradeManager;
-          buildings = context.buildings;
-          adjustTradeRoutes = context.adjustTradeRoutes;
-          getResourcesPerClick = context.getResourcesPerClick;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      autoConsume,
+      autoReplicator,
+      autoMarket,
+      autoGalaxyMarket,
+      autoGatherResources,
+      getAutomationPoly: () => poly,
+      setWave2TestContext(context) {
+        ReplicatorManager = context.ReplicatorManager;
+        MarketManager = context.MarketManager;
+        GalaxyTradeManager = context.GalaxyTradeManager;
+        buildings = context.buildings;
+        adjustTradeRoutes = context.adjustTradeRoutes;
+        getResourcesPerClick = context.getResourcesPerClick;
+      }
+    });
     const buildAdapter = createBuildAdapter({
       getBuildingManager: () => BuildingManager,
       getProjectManager: () => ProjectManager,
@@ -55669,20 +55616,18 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       const conflict2 = findTechConflict(readResult.input);
       return conflict2 === null ? false : formatTechConflict(conflict2, getNumberString);
     };
-    if (testHooks) {
-      Object.assign(testHooks, {
-        getTechConflict,
-        setTechConflictTestContext(context) {
-          settings = context.settings;
-          game = context.game;
-          state = context.state;
-          resources = context.resources;
-          buildings = context.buildings;
-          isAchievementUnlocked2 = context.isAchievementUnlocked;
-          techConflictClock = context.clock ?? browserClock;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      getTechConflict,
+      setTechConflictTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        state = context.state;
+        resources = context.resources;
+        buildings = context.buildings;
+        isAchievementUnlocked2 = context.isAchievementUnlocked;
+        techConflictClock = context.clock ?? browserClock;
+      }
+    });
     const triggerReader = createTriggerReader({
       getState: () => state,
       shouldSaveInflationMoney: inflationChallengeShouldSaveMoney
@@ -55697,21 +55642,19 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       });
       return result2.outcome.status === "succeeded" ? result2.active : true;
     };
-    if (testHooks) {
-      Object.assign(testHooks, {
-        autoMerc,
-        WarManager,
-        GameLog,
-        autoPsychic,
-        autoOcularPowers,
-        autoTrigger,
-        automationState: state,
-        setWave1TestManagers(managers) {
-          WarManager = managers.WarManager;
-          MinorTraitManager = managers.MinorTraitManager;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      autoMerc,
+      WarManager,
+      GameLog,
+      autoPsychic,
+      autoOcularPowers,
+      autoTrigger,
+      automationState: state,
+      setWave1TestManagers(managers) {
+        WarManager = managers.WarManager;
+        MinorTraitManager = managers.MinorTraitManager;
+      }
+    });
     const researchReader = createResearchReader({
       getState: () => state,
       getCostConflict: (tech) => getCostConflict(tech)
@@ -55761,34 +55704,30 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       warnings: powerWarnings
     });
     const autoPower = () => powerAutomation.run();
-    if (testHooks) {
-      Object.assign(testHooks, {
-        powerSupport: {
-          getCitadelConsumption,
-          isHellSupressUseful,
-          adjustSpire,
-          getBestSupplyRatio
-        },
-        setPowerSupportTestContext(context) {
-          game = context.game;
-          jobs = context.jobs;
-          crafter = context.crafter;
-          buildings = context.buildings;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        expandStorage,
-        setStorageExpansionTestContext(context) {
-          game = context.game;
-          settings = context.settings;
-          resources = context.resources;
-          buildings = context.buildings;
-          StorageManager = context.StorageManager;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      powerSupport: {
+        getCitadelConsumption,
+        isHellSupressUseful,
+        adjustSpire,
+        getBestSupplyRatio
+      },
+      setPowerSupportTestContext(context) {
+        game = context.game;
+        jobs = context.jobs;
+        crafter = context.crafter;
+        buildings = context.buildings;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      expandStorage,
+      setStorageExpansionTestContext(context) {
+        game = context.game;
+        settings = context.settings;
+        resources = context.resources;
+        buildings = context.buildings;
+        StorageManager = context.StorageManager;
+      }
+    });
     const storageDebug = createStorageDebugSource(
       () => runtimeEnvironment.window
     );
@@ -55822,12 +55761,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       reader: minorTraitReader,
       executor: minorTraitExecutor
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        autoMinorTrait,
-        MinorTraitManager
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      autoMinorTrait,
+      MinorTraitManager
+    });
     const mutationReader = createMutationReader({
       getMutableTraitManager: () => MutableTraitManager,
       getGame: () => game,
@@ -55843,26 +55780,24 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       reader: mutationReader,
       executor: mutationExecutor
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        autoPlanetSelection,
-        autoJobs,
-        autoBuild,
-        autoResearch,
-        autoMutateTrait,
-        setWave4TestContext(context) {
-          generatePlanets = context.generatePlanets;
-          getStarLevel = context.getStarLevel;
-          isAchievementUnlocked2 = context.isAchievementUnlocked;
-          races = context.races;
-          JobManager = context.JobManager;
-          BuildingManager = context.BuildingManager;
-          ProjectManager = context.ProjectManager;
-          MutableTraitManager = context.MutableTraitManager;
-          getCostConflict = context.getCostConflict;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      autoPlanetSelection,
+      autoJobs,
+      autoBuild,
+      autoResearch,
+      autoMutateTrait,
+      setWave4TestContext(context) {
+        generatePlanets = context.generatePlanets;
+        getStarLevel = context.getStarLevel;
+        isAchievementUnlocked2 = context.isAchievementUnlocked;
+        races = context.races;
+        JobManager = context.JobManager;
+        BuildingManager = context.BuildingManager;
+        ProjectManager = context.ProjectManager;
+        MutableTraitManager = context.MutableTraitManager;
+        getCostConflict = context.getCostConflict;
+      }
+    });
     let adjustTradeRoutes = function adjustTradeRoutes2() {
       const result2 = planTradeRoutes(
         readTradeRoutesInput({
@@ -55886,17 +55821,15 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
       resources.Money.rateOfChange = result2.moneyRate;
     };
-    if (testHooks) {
-      Object.assign(testHooks, {
-        adjustTradeRoutes,
-        setTradeRoutesTestContext(context) {
-          settings = context.settings;
-          game = context.game;
-          resources = context.resources;
-          MarketManager = context.MarketManager;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      adjustTradeRoutes,
+      setTradeRoutesTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        resources = context.resources;
+        MarketManager = context.MarketManager;
+      }
+    });
     const outerFleetAdapter = createOuterFleetAdapter({
       getFleetManagerOuter: () => FleetManagerOuter,
       getWarManager: () => WarManager,
@@ -55908,24 +55841,22 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGameLog: () => GameLog
     });
     const autoFleetOuter = () => runOuterFleetAutomation(outerFleetAdapter);
-    if (testHooks) {
-      Object.assign(testHooks, {
-        galaxyIntelligence: {
-          getGalaxyCombatShipPower,
-          getPiracyMultiplier,
-          galaxyAssaultPending,
-          getGalaxyRegions
-        },
-        setGalaxyIntelligenceTestContext(context) {
-          game = context.game;
-          buildings = context.buildings;
-          resources = context.resources;
-          poly = context.poly;
-          settings = context.settings;
-          traitVal = context.traitVal;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      galaxyIntelligence: {
+        getGalaxyCombatShipPower,
+        getPiracyMultiplier,
+        galaxyAssaultPending,
+        getGalaxyRegions
+      },
+      setGalaxyIntelligenceTestContext(context) {
+        game = context.game;
+        buildings = context.buildings;
+        resources = context.resources;
+        poly = context.poly;
+        settings = context.settings;
+        traitVal = context.traitVal;
+      }
+    });
     const fleetAdapter = createFleetAdapter({
       getFleetManager: () => FleetManager,
       getGame: () => game,
@@ -55977,84 +55908,76 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getTicksPerSecond: () => scriptDataTestActions?.ticksPerSecond ?? ticksPerSecond,
       getHaveTech: () => scriptDataTestActions?.haveTech ?? haveTech
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        scriptDataLifecycle: { updateScriptData, finalizeScriptData },
-        setScriptDataTestContext(context) {
-          settings = context.settings;
-          state = context.state;
-          game = context.game;
-          resources = context.resources;
-          buildings = context.buildings;
-          WarManager = context.WarManager;
-          MarketManager = context.MarketManager;
-          BuildingManager = context.BuildingManager;
-          SpyManager = context.SpyManager;
-          EjectManager = context.EjectManager;
-          SupplyManager = context.SupplyManager;
-          NaniteManager = context.NaniteManager;
-          RitualManager = context.RitualManager;
-          scriptDataTestActions = context.actions;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        autoPower,
-        autoStorage,
-        autoFleetOuter,
-        autoFleet,
-        autoMech,
-        setWave5TestManagers(managers) {
-          StorageManager = managers.StorageManager;
-          FleetManagerOuter = managers.FleetManagerOuter;
-          FleetManager = managers.FleetManager;
-          MechManager = managers.MechManager;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        storageRequirements: { calculateRequiredStorages },
-        setStorageRequirementTestContext(context) {
-          settings = context.settings;
-          state = context.state;
-          resources = context.resources;
-          buildings = context.buildings;
-          game = context.game;
-          BuildingManager = context.BuildingManager;
-          ProjectManager = context.ProjectManager;
-          FleetManagerOuter = context.FleetManagerOuter;
-          inflationChallengeAssistActive = context.inflationChallengeAssistActive;
-          retirementChallengeAssistActive = context.retirementChallengeAssistActive;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        prioritizeDemandedResources,
-        makeDemandProject(cost, progress) {
-          return Object.defineProperties(Object.create(Project.prototype), {
-            cost: { value: cost, writable: true, enumerable: true },
-            progress: { value: progress, writable: true, enumerable: true }
-          });
-        },
-        setDemandPrioritizationTestContext(context) {
-          settings = context.settings;
-          state = context.state;
-          resources = context.resources;
-          buildings = context.buildings;
-          game = context.game;
-          crafter = context.crafter;
-          SpyManager = context.SpyManager;
-          FleetManagerOuter = context.FleetManagerOuter;
-          JobManager = context.JobManager;
-          FactoryManager = context.FactoryManager;
-          inflationChallengeAssistActive = context.inflationChallengeAssistActive;
-          retirementChallengeAssistActive = context.retirementChallengeAssistActive;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      scriptDataLifecycle: { updateScriptData, finalizeScriptData },
+      setScriptDataTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        buildings = context.buildings;
+        WarManager = context.WarManager;
+        MarketManager = context.MarketManager;
+        BuildingManager = context.BuildingManager;
+        SpyManager = context.SpyManager;
+        EjectManager = context.EjectManager;
+        SupplyManager = context.SupplyManager;
+        NaniteManager = context.NaniteManager;
+        RitualManager = context.RitualManager;
+        scriptDataTestActions = context.actions;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      autoPower,
+      autoStorage,
+      autoFleetOuter,
+      autoFleet,
+      autoMech,
+      setWave5TestManagers(managers) {
+        StorageManager = managers.StorageManager;
+        FleetManagerOuter = managers.FleetManagerOuter;
+        FleetManager = managers.FleetManager;
+        MechManager = managers.MechManager;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      storageRequirements: { calculateRequiredStorages },
+      setStorageRequirementTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        resources = context.resources;
+        buildings = context.buildings;
+        game = context.game;
+        BuildingManager = context.BuildingManager;
+        ProjectManager = context.ProjectManager;
+        FleetManagerOuter = context.FleetManagerOuter;
+        inflationChallengeAssistActive = context.inflationChallengeAssistActive;
+        retirementChallengeAssistActive = context.retirementChallengeAssistActive;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      prioritizeDemandedResources,
+      makeDemandProject(cost, progress) {
+        return Object.defineProperties(Object.create(Project.prototype), {
+          cost: { value: cost, writable: true, enumerable: true },
+          progress: { value: progress, writable: true, enumerable: true }
+        });
+      },
+      setDemandPrioritizationTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        resources = context.resources;
+        buildings = context.buildings;
+        game = context.game;
+        crafter = context.crafter;
+        SpyManager = context.SpyManager;
+        FleetManagerOuter = context.FleetManagerOuter;
+        JobManager = context.JobManager;
+        FactoryManager = context.FactoryManager;
+        inflationChallengeAssistActive = context.inflationChallengeAssistActive;
+        retirementChallengeAssistActive = context.retirementChallengeAssistActive;
+      }
+    });
     function checkAffordableCustom(cost, max = false) {
       const readResult = readCostAffordabilityInput(
         cost,
@@ -56091,26 +56014,24 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       inflationChallengeShouldSaveMoney,
       inflationChallengeMoney: INFLATION_CHALLENGE_MONEY
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        updatePriorityTargets: () => updatePriorityTargets(),
-        setPriorityTargetsTestContext(context) {
-          settings = context.settings;
-          state = context.state;
-          game = context.game;
-          resources = context.resources;
-          buildings = context.buildings;
-          techIds = context.techIds;
-          buildingIds = context.buildingIds;
-          arpaIds = context.arpaIds;
-          SpyManager = context.SpyManager;
-          FleetManagerOuter = context.FleetManagerOuter;
-          MechManager = context.MechManager;
-          TriggerManager = context.TriggerManager;
-          if (context.poly) poly = context.poly;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      updatePriorityTargets: () => updatePriorityTargets(),
+      setPriorityTargetsTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        buildings = context.buildings;
+        techIds = context.techIds;
+        buildingIds = context.buildingIds;
+        arpaIds = context.arpaIds;
+        SpyManager = context.SpyManager;
+        FleetManagerOuter = context.FleetManagerOuter;
+        MechManager = context.MechManager;
+        TriggerManager = context.TriggerManager;
+        if (context.poly) poly = context.poly;
+      }
+    });
     let evolutionResultTestActions;
     const checkEvolutionResult = () => {
       if (!settings.masterScriptToggle || !state.evoCheckNeeded) {
@@ -56162,21 +56083,19 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
       return true;
     };
-    if (testHooks) {
-      Object.assign(testHooks, {
-        checkEvolutionResult: () => checkEvolutionResult(),
-        setEvolutionResultTestContext(context) {
-          settings = context.settings;
-          settingsRaw = context.settingsRaw;
-          state = context.state;
-          game = context.game;
-          races = context.races;
-          MutableTraitManager = context.MutableTraitManager;
-          GameLog = context.GameLog;
-          evolutionResultTestActions = context.actions;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      checkEvolutionResult: () => checkEvolutionResult(),
+      setEvolutionResultTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        game = context.game;
+        races = context.races;
+        MutableTraitManager = context.MutableTraitManager;
+        GameLog = context.GameLog;
+        evolutionResultTestActions = context.actions;
+      }
+    });
     const { updateTabs } = createTabRefresh({
       getState: () => state,
       getGame: () => game,
@@ -56185,19 +56104,17 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => haveTech,
       getMainVue: () => win.$("#mainColumn > div:first-child")[0].__vue__
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        updateTabs: (update) => updateTabs(update),
-        setTabRefreshTestContext(context) {
-          state = context.state;
-          game = context.game;
-          buildings = context.buildings;
-          resources = context.resources;
-          haveTech = context.haveTech;
-          win = context.win;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      updateTabs: (update) => updateTabs(update),
+      setTabRefreshTestContext(context) {
+        state = context.state;
+        game = context.game;
+        buildings = context.buildings;
+        resources = context.resources;
+        haveTech = context.haveTech;
+        win = context.win;
+      }
+    });
     const getMultiSegmentedTimeLeft = (target) => {
       const readResult = readTargetTimingInput(
         game,
@@ -56216,24 +56133,22 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         timeLeft: result2.seconds === Infinity ? "Never" : poly.timeFormat(result2.seconds)
       };
     };
-    if (testHooks) {
-      Object.assign(testHooks, {
-        getMultiSegmentedTimeLeft,
-        makeTargetTimingProject(progress, currentStep, cost) {
-          return Object.defineProperties(Object.create(Project.prototype), {
-            gameMax: { value: 0, enumerable: true },
-            count: { value: 0, enumerable: true },
-            progress: { value: progress, enumerable: true },
-            currentStep: { value: currentStep, enumerable: true },
-            cost: { value: cost, enumerable: true }
-          });
-        },
-        setTargetTimingTestContext(context) {
-          game = context.game;
-          poly = context.poly;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      getMultiSegmentedTimeLeft,
+      makeTargetTimingProject(progress, currentStep, cost) {
+        return Object.defineProperties(Object.create(Project.prototype), {
+          gameMax: { value: 0, enumerable: true },
+          count: { value: 0, enumerable: true },
+          progress: { value: progress, enumerable: true },
+          currentStep: { value: currentStep, enumerable: true },
+          cost: { value: cost, enumerable: true }
+        });
+      },
+      setTargetTimingTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+      }
+    });
     const {
       updateActiveTargetsUI,
       buildActiveTargetsUI,
@@ -56255,38 +56170,34 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       makePlannerStats: () => makePlannerStats(),
       savePlannerStats: (stats) => savePlannerStats(stats)
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        plannerAnalysis: {
-          plannerLimitingResource,
-          makePlannerStats,
-          loadPlannerStats,
-          savePlannerStats: () => savePlannerStats(state.plannerStats)
-        },
-        setPlannerAnalysisTestContext(context) {
-          game = context.game;
-          resources = context.resources;
-          state = context.state;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        stateLogLifecycle: {
-          makeStateLog,
-          loadStateLog,
-          saveStateLog,
-          stateLogDiff,
-          stateLogBlocker,
-          recordStateSnapshot
-        },
-        setStateLogTestContext(context) {
-          game = context.game;
-          resources = context.resources;
-          state = context.state;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      plannerAnalysis: {
+        plannerLimitingResource,
+        makePlannerStats,
+        loadPlannerStats,
+        savePlannerStats: () => savePlannerStats(state.plannerStats)
+      },
+      setPlannerAnalysisTestContext(context) {
+        game = context.game;
+        resources = context.resources;
+        state = context.state;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      stateLogLifecycle: {
+        makeStateLog,
+        loadStateLog,
+        saveStateLog,
+        stateLogDiff,
+        stateLogBlocker,
+        recordStateSnapshot
+      },
+      setStateLogTestContext(context) {
+        game = context.game;
+        resources = context.resources;
+        state = context.state;
+      }
+    });
     const { updateBuildPlanner } = createBuildPlanner({
       getSettings: () => settings,
       getSettingsRaw: () => settingsRaw,
@@ -56300,19 +56211,17 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       loadPlannerStats,
       savePlannerStats
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        updateBuildPlanner: () => updateBuildPlanner(),
-        setBuildPlannerTestContext(context) {
-          settings = context.settings;
-          settingsRaw = context.settingsRaw;
-          state = context.state;
-          game = context.game;
-          resources = context.resources;
-          poly = context.poly;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      updateBuildPlanner: () => updateBuildPlanner(),
+      setBuildPlannerTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        poly = context.poly;
+      }
+    });
     let stateUpdateTestHelpers;
     const stateUpdateHelpers = {
       checkEvolutionResult,
@@ -56357,45 +56266,41 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       controls: stateUpdateControls,
       clock: browserClock
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        updateState: () => updateState(),
-        // Real prototypes, so the instanceof classification of queued targets is exercised for real.
-        makeStateUpdateTargets() {
-          return {
-            technology: Object.create(Technology.prototype),
-            project: Object.create(Project.prototype),
-            building: {}
-          };
-        },
-        setStateUpdateTestContext(context) {
-          settings = context.settings;
-          settingsRaw = context.settingsRaw;
-          state = context.state;
-          game = context.game;
-          resources = context.resources;
-          buildings = context.buildings;
-          StorageManager = context.StorageManager;
-          ProjectManager = context.ProjectManager;
-          TriggerManager = context.TriggerManager;
-          poly = context.poly;
-          stateUpdateTestHelpers = context.helpers;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        gameActionVerification: {
-          verifyGameActions,
-          verifyGameActionsExist,
-          verifyGameActionExists
-        },
-        setGameActionVerificationTestContext(context) {
-          game = context.game;
-          buildings = context.buildings;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      updateState: () => updateState(),
+      // Real prototypes, so the instanceof classification of queued targets is exercised for real.
+      makeStateUpdateTargets() {
+        return {
+          technology: Object.create(Technology.prototype),
+          project: Object.create(Project.prototype),
+          building: {}
+        };
+      },
+      setStateUpdateTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        buildings = context.buildings;
+        StorageManager = context.StorageManager;
+        ProjectManager = context.ProjectManager;
+        TriggerManager = context.TriggerManager;
+        poly = context.poly;
+        stateUpdateTestHelpers = context.helpers;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      gameActionVerification: {
+        verifyGameActions,
+        verifyGameActionsExist,
+        verifyGameActionExists
+      },
+      setGameActionVerificationTestContext(context) {
+        game = context.game;
+        buildings = context.buildings;
+      }
+    });
     let scriptBootstrapTestActions;
     const getScriptBootstrapActions = () => scriptBootstrapTestActions ?? {
       updateStandAloneSettings,
@@ -56459,50 +56364,45 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         needSandboxBypass = value;
       }
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        scriptBootstrap: { initialiseScript, mainAutoEvolveScript },
-        setScriptBootstrapTestContext(context) {
-          if ("game" in context) game = context.game;
-          if ("state" in context) state = context.state;
-          if ("settings" in context) settings = context.settings;
-          if ("techIds" in context) techIds = context.techIds;
-          if ("buildingIds" in context) buildingIds = context.buildingIds;
-          if ("arpaIds" in context) arpaIds = context.arpaIds;
-          if ("jobIds" in context) jobIds = context.jobIds;
-          if ("buildings" in context) buildings = context.buildings;
-          if ("projects" in context) projects = context.projects;
-          if ("jobs" in context) jobs = context.jobs;
-          if ("crafter" in context) crafter = context.crafter;
-          if ("TriggerManager" in context)
-            TriggerManager = context.TriggerManager;
-          if ("WindowManager" in context) WindowManager = context.WindowManager;
-          if ("KeyManager" in context) KeyManager = context.KeyManager;
-          if ("poly" in context) poly = context.poly;
-          if ("win" in context) win = context.win;
-          if ("safeMode" in context) safeMode = context.safeMode;
-          if ("checkActions" in context) checkActions = context.checkActions;
-          scriptBootstrapTestActions = context.actions;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      scriptBootstrap: { initialiseScript, mainAutoEvolveScript },
+      setScriptBootstrapTestContext(context) {
+        if ("game" in context) game = context.game;
+        if ("state" in context) state = context.state;
+        if ("settings" in context) settings = context.settings;
+        if ("techIds" in context) techIds = context.techIds;
+        if ("buildingIds" in context) buildingIds = context.buildingIds;
+        if ("arpaIds" in context) arpaIds = context.arpaIds;
+        if ("jobIds" in context) jobIds = context.jobIds;
+        if ("buildings" in context) buildings = context.buildings;
+        if ("projects" in context) projects = context.projects;
+        if ("jobs" in context) jobs = context.jobs;
+        if ("crafter" in context) crafter = context.crafter;
+        if ("TriggerManager" in context) TriggerManager = context.TriggerManager;
+        if ("WindowManager" in context) WindowManager = context.WindowManager;
+        if ("KeyManager" in context) KeyManager = context.KeyManager;
+        if ("poly" in context) poly = context.poly;
+        if ("win" in context) win = context.win;
+        if ("safeMode" in context) safeMode = context.safeMode;
+        if ("checkActions" in context) checkActions = context.checkActions;
+        scriptBootstrapTestActions = context.actions;
+      }
+    });
     const { buildFilterRegExp, filterLog } = createLogFilter({
       getSettingsRaw: () => settingsRaw,
       getSettings: () => settings,
       getState: () => state,
       getPoly: () => poly
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        logFilter: { buildFilterRegExp, filterLog },
-        setLogFilterTestContext(context) {
-          settingsRaw = context.settingsRaw;
-          settings = context.settings;
-          state = context.state;
-          poly = context.poly;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      logFilter: { buildFilterRegExp, filterLog },
+      setLogFilterTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        settings = context.settings;
+        state = context.state;
+        poly = context.poly;
+      }
+    });
     const { getTooltipInfo, tooltipObserverCallback, addTooltip } = createTooltipUI({
       getJQuery: () => $,
       getDocument: () => runtimeEnvironment.document,
@@ -56530,25 +56430,23 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readTraitVal: () => traitVal,
       isTechnology: (value) => value instanceof Technology
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        tooltipUI: { getTooltipInfo, tooltipObserverCallback, addTooltip },
-        setTooltipUITestContext(context) {
-          if ("settings" in context) settings = context.settings;
-          if ("state" in context) state = context.state;
-          if ("game" in context) game = context.game;
-          if ("buildings" in context) buildings = context.buildings;
-          if ("jobs" in context) jobs = context.jobs;
-          if ("resources" in context) resources = context.resources;
-          if ("techIds" in context) techIds = context.techIds;
-          if ("buildingIds" in context) buildingIds = context.buildingIds;
-          if ("arpaIds" in context) arpaIds = context.arpaIds;
-          if ("MechManager" in context) MechManager = context.MechManager;
-          if ("FleetManagerOuter" in context)
-            FleetManagerOuter = context.FleetManagerOuter;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      tooltipUI: { getTooltipInfo, tooltipObserverCallback, addTooltip },
+      setTooltipUITestContext(context) {
+        if ("settings" in context) settings = context.settings;
+        if ("state" in context) state = context.state;
+        if ("game" in context) game = context.game;
+        if ("buildings" in context) buildings = context.buildings;
+        if ("jobs" in context) jobs = context.jobs;
+        if ("resources" in context) resources = context.resources;
+        if ("techIds" in context) techIds = context.techIds;
+        if ("buildingIds" in context) buildingIds = context.buildingIds;
+        if ("arpaIds" in context) arpaIds = context.arpaIds;
+        if ("MechManager" in context) MechManager = context.MechManager;
+        if ("FleetManagerOuter" in context)
+          FleetManagerOuter = context.FleetManagerOuter;
+      }
+    });
     const { updateOverrides } = createOverrideEvaluation({
       getSafeMode: () => safeMode,
       getSettings: () => settings,
@@ -56598,24 +56496,22 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getRaces: () => races,
       genusOpposition: customRaceGenusOpposition
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        customRaceModel: {
-          customRaceRankCost,
-          customRaceGeneBalance,
-          customRaceRankOptions,
-          customRaceTraitEffect,
-          customRaceEditorTraits,
-          customRaceDraftFromPreset
-        },
-        setCustomRaceModelTestContext(context) {
-          game = context.game;
-          poly = context.poly;
-          resources = context.resources;
-          races = context.races;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      customRaceModel: {
+        customRaceRankCost,
+        customRaceGeneBalance,
+        customRaceRankOptions,
+        customRaceTraitEffect,
+        customRaceEditorTraits,
+        customRaceDraftFromPreset
+      },
+      setCustomRaceModelTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+        resources = context.resources;
+        races = context.races;
+      }
+    });
     const {
       showCustomRaceImportStatus,
       getCustomRacePreset,
@@ -56641,28 +56537,26 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getVueById,
       getAlert: () => (message) => runtimeEnvironment.alert(message)
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        customRaceUI: {
-          showCustomRaceImportStatus,
-          getCustomRacePreset,
-          refreshCustomRacePresetSelectors,
-          buildCustomRacePresetEditor,
-          importCustomRaceIntoLab,
-          automateLab
-        },
-        setCustomRaceUITestContext(context) {
-          if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
-          if ("settings" in context) settings = context.settings;
-          if ("state" in context) state = context.state;
-          if ("game" in context) game = context.game;
-          if ("poly" in context) poly = context.poly;
-          if ("resources" in context) resources = context.resources;
-          if ("races" in context) races = context.races;
-          if ("win" in context) win = context.win;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      customRaceUI: {
+        showCustomRaceImportStatus,
+        getCustomRacePreset,
+        refreshCustomRacePresetSelectors,
+        buildCustomRacePresetEditor,
+        importCustomRaceIntoLab,
+        automateLab
+      },
+      setCustomRaceUITestContext(context) {
+        if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
+        if ("settings" in context) settings = context.settings;
+        if ("state" in context) state = context.state;
+        if ("game" in context) game = context.game;
+        if ("poly" in context) poly = context.poly;
+        if ("resources" in context) resources = context.resources;
+        if ("races" in context) races = context.races;
+        if ("win" in context) win = context.win;
+      }
+    });
     let tickTestControllers;
     const tickControllers = {
       updateScriptData,
@@ -56772,22 +56666,20 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         __EAperf.record(__eaNow() - t0);
       }
     };
-    if (testHooks) {
-      Object.assign(testHooks, {
-        automate: () => automate(),
-        setTickTestContext(context) {
-          settings = context.settings;
-          state = context.state;
-          game = context.game;
-          resources = context.resources;
-          KeyManager = context.KeyManager;
-          NaniteManager = context.NaniteManager;
-          SupplyManager = context.SupplyManager;
-          EjectManager = context.EjectManager;
-          tickTestControllers = context.controllers;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      automate: () => automate(),
+      setTickTestContext(context) {
+        settings = context.settings;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        KeyManager = context.KeyManager;
+        NaniteManager = context.NaniteManager;
+        SupplyManager = context.SupplyManager;
+        EjectManager = context.EjectManager;
+        tickTestControllers = context.controllers;
+      }
+    });
     const {
       updateDebugData,
       addScriptStyle,
@@ -56805,22 +56697,20 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getScriptVersionExtra: () => SCRIPT_VERSION_EXTRA,
       getScriptVersion: () => userscriptEnvironment.getScriptVersion()
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        scriptRuntimeUI: {
-          updateDebugData,
-          addScriptStyle,
-          checkIgnoredError,
-          displayScriptWarningNode,
-          addErrorHandler
-        },
-        setScriptRuntimeUITestContext(context) {
-          if ("state" in context) state = context.state;
-          if ("game" in context) game = context.game;
-          if ("win" in context) win = context.win;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      scriptRuntimeUI: {
+        updateDebugData,
+        addScriptStyle,
+        checkIgnoredError,
+        displayScriptWarningNode,
+        addErrorHandler
+      },
+      setScriptRuntimeUITestContext(context) {
+        if ("state" in context) state = context.state;
+        if ("game" in context) game = context.game;
+        if ("win" in context) win = context.win;
+      }
+    });
     const {
       prestigeTypes,
       prestigeOptions,
@@ -56855,61 +56745,59 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readFastEval: () => fastEval,
       readGovernor: () => getGovernor
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        settingsControls: {
-          removeScriptSettings,
-          buildScriptSettings,
-          buildImportExport,
-          buildSettingsSectionImpl,
-          buildSettingsSection,
-          buildSettingsSection2,
-          genericResetFunction,
-          addStandardHeading,
-          addSettingsHeader1,
-          addSettingsHeader2,
-          buildSelectOptions,
-          openOverrideModal,
-          buildOverrideSettings,
-          buildInputNode,
-          buildInputNodeForDisplay,
-          changeDisplayInputNode,
-          buildConditionType,
-          buildConditionArg,
-          buildConditionComparator,
-          buildConditionRemove,
-          buildConditionDuplicate,
-          buildConditionEvalize,
-          buildConditionRet,
-          buildObjectListInput,
-          addSettingsToggle,
-          addSettingsNumber,
-          addSettingsString,
-          addSettingsSelect,
-          addSettingsList,
-          addInputCallbacks,
-          addTableInput,
-          addToggleCallbacks,
-          addTableToggle,
-          buildTableLabel,
-          resetCheckbox,
-          evaluateCheck: _,
-          prestigeTypes,
-          prestigeOptions,
-          checkCompare,
-          checkCustom,
-          argType,
-          checkTypes
-        },
-        setSettingsControlsTestContext(context) {
-          if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
-          if ("settings" in context) settings = context.settings;
-          if ("game" in context) game = context.game;
-          if ("state" in context) state = context.state;
-          if ("win" in context) win = context.win;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      settingsControls: {
+        removeScriptSettings,
+        buildScriptSettings,
+        buildImportExport,
+        buildSettingsSectionImpl,
+        buildSettingsSection,
+        buildSettingsSection2,
+        genericResetFunction,
+        addStandardHeading,
+        addSettingsHeader1,
+        addSettingsHeader2,
+        buildSelectOptions,
+        openOverrideModal,
+        buildOverrideSettings,
+        buildInputNode,
+        buildInputNodeForDisplay,
+        changeDisplayInputNode,
+        buildConditionType,
+        buildConditionArg,
+        buildConditionComparator,
+        buildConditionRemove,
+        buildConditionDuplicate,
+        buildConditionEvalize,
+        buildConditionRet,
+        buildObjectListInput,
+        addSettingsToggle,
+        addSettingsNumber,
+        addSettingsString,
+        addSettingsSelect,
+        addSettingsList,
+        addInputCallbacks,
+        addTableInput,
+        addToggleCallbacks,
+        addTableToggle,
+        buildTableLabel,
+        resetCheckbox,
+        evaluateCheck: _,
+        prestigeTypes,
+        prestigeOptions,
+        checkCompare,
+        checkCustom,
+        argType,
+        checkTypes
+      },
+      setSettingsControlsTestContext(context) {
+        if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
+        if ("settings" in context) settings = context.settings;
+        if ("game" in context) game = context.game;
+        if ("state" in context) state = context.state;
+        if ("win" in context) win = context.win;
+      }
+    });
     let interfaceSettingsTestActions;
     const interfaceSettingsActions = {
       buildSettingsSection,
@@ -56993,18 +56881,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     const { buildInterfaceSettings, updateInterfaceSettingsContent } = interfaceSettingsBrowserAdapter;
-    if (testHooks) {
-      Object.assign(testHooks, {
-        interfaceSettings: {
-          buildInterfaceSettings,
-          updateInterfaceSettingsContent
-        },
-        setInterfaceSettingsTestContext(context) {
-          settingsRaw = context.settingsRaw;
-          interfaceSettingsTestActions = context.actions;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      interfaceSettings: {
+        buildInterfaceSettings,
+        updateInterfaceSettingsContent
+      },
+      setInterfaceSettingsTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        interfaceSettingsTestActions = context.actions;
+      }
+    });
     const stateLogSettingsIntents = createStateLogSettingsIntentHandler({
       resetToDefaults: () => resetStateLogSettings(true),
       persist: () => updateSettingsFromState()
@@ -57017,17 +56903,15 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       addSettingsToggle,
       addSettingsNumber
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        stateLogSettings: {
-          buildStateLogSettings,
-          updateStateLogSettingsContent
-        },
-        setStateLogSettingsTestContext(context) {
-          settingsRaw = context.settingsRaw;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      stateLogSettings: {
+        buildStateLogSettings,
+        updateStateLogSettingsContent
+      },
+      setStateLogSettingsTestContext(context) {
+        settingsRaw = context.settingsRaw;
+      }
+    });
     const { calculateMechStats } = createMechStats({
       getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
@@ -57036,156 +56920,152 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       average
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        calculateMechStats,
-        setMechStatsTestContext(context) {
-          game = context.game;
-          poly = context.poly;
-          MechManager = context.MechManager;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        evolutionSettings: evolutionSettingsBrowserAdapter,
-        setEvolutionSettingsTestContext(context) {
-          evolutionSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        prestigeSettings: prestigeSettingsBrowserAdapter,
-        setPrestigeSettingsTestContext(context) {
-          prestigeSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        triggerSettings: triggerSettingsBrowserAdapter,
-        setTriggerSettingsTestContext(context) {
-          triggerSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        fleetSettings: fleetSettingsBrowserAdapter,
-        setFleetSettingsTestContext(context) {
-          fleetSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        ejectorSettings: ejectorSettingsBrowserAdapter,
-        setEjectorSettingsTestContext(context) {
-          ejectorSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        marketSettings: marketSettingsBrowserAdapter,
-        setMarketSettingsTestContext(context) {
-          marketSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        warSettings: warSettingsBrowserAdapter,
-        setWarSettingsTestContext(context) {
-          warSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        hellSettings: hellSettingsBrowserAdapter,
-        setHellSettingsTestContext(context) {
-          hellSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        mechSettings: mechSettingsBrowserAdapter,
-        setMechSettingsTestContext(context) {
-          mechSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        challengeHelperSettings: challengeHelperSettingsBrowserAdapter,
-        setChallengeHelperSettingsTestContext(context) {
-          challengeHelperSettingsTestActions = context;
-        }
-      });
-      Object.assign(testHooks, {
-        governmentSettings: governmentSettingsBrowserAdapter,
-        setGovernmentSettingsTestContext(context) {
-          governmentSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        planetSettings: planetSettingsBrowserAdapter,
-        setPlanetSettingsTestContext(context) {
-          planetSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        projectSettings: projectSettingsBrowserAdapter,
-        setProjectSettingsTestContext(context) {
-          projectSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        storageSettings: storageSettingsBrowserAdapter,
-        setStorageSettingsTestContext(context) {
-          storageSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        magicSettings: magicSettingsBrowserAdapter,
-        setMagicSettingsTestContext(context) {
-          magicSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        jobSettings: jobSettingsBrowserAdapter,
-        setJobSettingsTestContext(context) {
-          jobSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        weightingSettings: weightingSettingsBrowserAdapter,
-        setWeightingSettingsTestContext(context) {
-          weightingSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        buildingSettings: buildingSettingsBrowserAdapter,
-        setBuildingSettingsTestContext(context) {
-          buildingSettingsTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        optionsModal: optionsModalBrowserAdapter,
-        setOptionsModalTestContext(context) {
-          optionsModalTestContext = context;
-        }
-      });
-      Object.assign(testHooks, {
-        achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
-        setAchievementGuardSettingsTestContext(context) {
-          achievementGuardSettingsTestActions = context;
-        }
-      });
-      Object.assign(testHooks, {
-        authoritySettings: authoritySettingsBrowserAdapter,
-        setAuthoritySettingsTestContext(context) {
-          authoritySettingsTestActions = context;
-        }
-      });
-      Object.assign(testHooks, {
-        generalSettings: generalSettingsBrowserAdapter,
-        setGeneralSettingsTestContext(context) {
-          generalSettingsTestActions = context;
-        }
-      });
-      Object.assign(testHooks, {
-        researchSettings: researchSettingsBrowserAdapter,
-        setResearchSettingsTestContext(context) {
-          researchSettingsTestContext = context;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      calculateMechStats,
+      setMechStatsTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+        MechManager = context.MechManager;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      evolutionSettings: evolutionSettingsBrowserAdapter,
+      setEvolutionSettingsTestContext(context) {
+        evolutionSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      prestigeSettings: prestigeSettingsBrowserAdapter,
+      setPrestigeSettingsTestContext(context) {
+        prestigeSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      triggerSettings: triggerSettingsBrowserAdapter,
+      setTriggerSettingsTestContext(context) {
+        triggerSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      fleetSettings: fleetSettingsBrowserAdapter,
+      setFleetSettingsTestContext(context) {
+        fleetSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      ejectorSettings: ejectorSettingsBrowserAdapter,
+      setEjectorSettingsTestContext(context) {
+        ejectorSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      marketSettings: marketSettingsBrowserAdapter,
+      setMarketSettingsTestContext(context) {
+        marketSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      warSettings: warSettingsBrowserAdapter,
+      setWarSettingsTestContext(context) {
+        warSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      hellSettings: hellSettingsBrowserAdapter,
+      setHellSettingsTestContext(context) {
+        hellSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      mechSettings: mechSettingsBrowserAdapter,
+      setMechSettingsTestContext(context) {
+        mechSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      challengeHelperSettings: challengeHelperSettingsBrowserAdapter,
+      setChallengeHelperSettingsTestContext(context) {
+        challengeHelperSettingsTestActions = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      governmentSettings: governmentSettingsBrowserAdapter,
+      setGovernmentSettingsTestContext(context) {
+        governmentSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      planetSettings: planetSettingsBrowserAdapter,
+      setPlanetSettingsTestContext(context) {
+        planetSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      projectSettings: projectSettingsBrowserAdapter,
+      setProjectSettingsTestContext(context) {
+        projectSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      storageSettings: storageSettingsBrowserAdapter,
+      setStorageSettingsTestContext(context) {
+        storageSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      magicSettings: magicSettingsBrowserAdapter,
+      setMagicSettingsTestContext(context) {
+        magicSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      jobSettings: jobSettingsBrowserAdapter,
+      setJobSettingsTestContext(context) {
+        jobSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      weightingSettings: weightingSettingsBrowserAdapter,
+      setWeightingSettingsTestContext(context) {
+        weightingSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      buildingSettings: buildingSettingsBrowserAdapter,
+      setBuildingSettingsTestContext(context) {
+        buildingSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      optionsModal: optionsModalBrowserAdapter,
+      setOptionsModalTestContext(context) {
+        optionsModalTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
+      setAchievementGuardSettingsTestContext(context) {
+        achievementGuardSettingsTestActions = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      authoritySettings: authoritySettingsBrowserAdapter,
+      setAuthoritySettingsTestContext(context) {
+        authoritySettingsTestActions = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      generalSettings: generalSettingsBrowserAdapter,
+      setGeneralSettingsTestContext(context) {
+        generalSettingsTestActions = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      researchSettings: researchSettingsBrowserAdapter,
+      setResearchSettingsTestContext(context) {
+        researchSettingsTestContext = context;
+      }
+    });
     let traitSettingsTestContext;
     const traitSettingsEvolveAdapter = createTraitSettingsEvolveAdapter({
       getSettingsRaw: () => traitSettingsTestContext?.settingsRaw ?? settingsRaw,
@@ -57243,20 +57123,18 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       updateTraitSettingsContent,
       makeToggleSwitchesMutuallyExclusive
     } = traitSettingsBrowserAdapter;
-    if (testHooks) {
-      Object.assign(testHooks, {
-        traitSettings: {
-          buildTraitSettings,
-          updateImitateWarning,
-          updateTraitSettingsContent,
-          makeToggleSwitchesMutuallyExclusive
-        },
-        setTraitSettingsTestContext(context) {
-          settingsRaw = context.settingsRaw;
-          traitSettingsTestContext = context;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      traitSettings: {
+        buildTraitSettings,
+        updateImitateWarning,
+        updateTraitSettingsContent,
+        makeToggleSwitchesMutuallyExclusive
+      },
+      setTraitSettingsTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        traitSettingsTestContext = context;
+      }
+    });
     let uiRefreshTestActions;
     const uiRefreshActions = {
       createOptionsModal,
@@ -57328,202 +57206,171 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         renderPreviousGameStats
       })
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        updateUI: () => updateUI(),
-        setUIRefreshTestContext(context) {
-          settings = context.settings;
-          settingsRaw = context.settingsRaw;
-          state = context.state;
-          game = context.game;
-          resources = context.resources;
-          win = context.win;
-          safeMode = context.safeMode;
-          overrideKeyLabel = context.overrideKeyLabel;
-          uiRefreshTestActions = context.actions;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        prestigeTopBar: prestigeTopBarBrowserAdapter,
-        setPrestigeTopBarTestContext(context) {
-          prestigeTopBarTestContext = context;
-        },
-        totalDaysTopBar: totalDaysTopBarBrowserAdapter,
-        setTotalDaysTopBarTestContext(context) {
-          totalDaysTopBarTestContext = context;
-        },
-        ejectToggles: ejectToggleBrowserAdapter,
-        setEjectTogglesTestContext(context) {
-          ejectTogglesTestContext = context;
-        },
-        supplyToggles: supplyToggleBrowserAdapter,
-        setSupplyTogglesTestContext(context) {
-          supplyTogglesTestContext = context;
-        },
-        craftToggles: craftToggleBrowserAdapter,
-        setCraftTogglesTestContext(context) {
-          craftTogglesTestContext = context;
-        },
-        arpaToggles: arpaToggleBrowserAdapter,
-        setArpaTogglesTestContext(context) {
-          arpaTogglesTestContext = context;
-        },
-        buildingToggles: buildingToggleBrowserAdapter,
-        setBuildingTogglesTestContext(context) {
-          buildingTogglesTestContext = context;
-        },
-        resourceToggles: resourceToggleBrowserAdapter,
-        setResourceTogglesTestContext(context) {
-          resourceToggleTestContext = context;
-        },
-        mechInfo: mechInfoBrowserAdapter,
-        setMechInfoTestContext(context) {
-          mechInfoTestContext = context;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        loggingSettings: loggingSettingsBrowserAdapter,
-        setLoggingSettingsTestContext(context) {
-          loggingSettingsTestContext = context;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        finalInlineUiBoundaries: {
-          updateActiveTargetsUI,
-          buildActiveTargetsUI,
-          removeActiveTargetsUI,
-          buildBuildPlannerUI,
-          removeBuildPlannerUI,
-          createMechInfo,
-          removeMechInfo,
-          createMarketToggles,
-          removeMarketToggles,
-          createStorageToggles,
-          removeStorageToggles
-        },
-        setFinalInlineUiBoundariesTestContext(context) {
-          if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
-          if ("state" in context) state = context.state;
-          if ("game" in context) game = context.game;
-          if ("resources" in context) resources = context.resources;
-          if ("MarketManager" in context) MarketManager = context.MarketManager;
-          if ("StorageManager" in context)
-            StorageManager = context.StorageManager;
-          if ("MechManager" in context) MechManager = context.MechManager;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      updateUI: () => updateUI(),
+      setUIRefreshTestContext(context) {
+        settings = context.settings;
+        settingsRaw = context.settingsRaw;
+        state = context.state;
+        game = context.game;
+        resources = context.resources;
+        win = context.win;
+        safeMode = context.safeMode;
+        overrideKeyLabel = context.overrideKeyLabel;
+        uiRefreshTestActions = context.actions;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      prestigeTopBar: prestigeTopBarBrowserAdapter,
+      setPrestigeTopBarTestContext(context) {
+        prestigeTopBarTestContext = context;
+      },
+      totalDaysTopBar: totalDaysTopBarBrowserAdapter,
+      setTotalDaysTopBarTestContext(context) {
+        totalDaysTopBarTestContext = context;
+      },
+      ejectToggles: ejectToggleBrowserAdapter,
+      setEjectTogglesTestContext(context) {
+        ejectTogglesTestContext = context;
+      },
+      supplyToggles: supplyToggleBrowserAdapter,
+      setSupplyTogglesTestContext(context) {
+        supplyTogglesTestContext = context;
+      },
+      craftToggles: craftToggleBrowserAdapter,
+      setCraftTogglesTestContext(context) {
+        craftTogglesTestContext = context;
+      },
+      arpaToggles: arpaToggleBrowserAdapter,
+      setArpaTogglesTestContext(context) {
+        arpaTogglesTestContext = context;
+      },
+      buildingToggles: buildingToggleBrowserAdapter,
+      setBuildingTogglesTestContext(context) {
+        buildingTogglesTestContext = context;
+      },
+      resourceToggles: resourceToggleBrowserAdapter,
+      setResourceTogglesTestContext(context) {
+        resourceToggleTestContext = context;
+      },
+      mechInfo: mechInfoBrowserAdapter,
+      setMechInfoTestContext(context) {
+        mechInfoTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      loggingSettings: loggingSettingsBrowserAdapter,
+      setLoggingSettingsTestContext(context) {
+        loggingSettingsTestContext = context;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      finalInlineUiBoundaries: {
+        updateActiveTargetsUI,
+        buildActiveTargetsUI,
+        removeActiveTargetsUI,
+        buildBuildPlannerUI,
+        removeBuildPlannerUI,
+        createMechInfo,
+        removeMechInfo,
+        createMarketToggles,
+        removeMarketToggles,
+        createStorageToggles,
+        removeStorageToggles
+      },
+      setFinalInlineUiBoundariesTestContext(context) {
+        if ("settingsRaw" in context) settingsRaw = context.settingsRaw;
+        if ("state" in context) state = context.state;
+        if ("game" in context) game = context.game;
+        if ("resources" in context) resources = context.resources;
+        if ("MarketManager" in context) MarketManager = context.MarketManager;
+        if ("StorageManager" in context) StorageManager = context.StorageManager;
+        if ("MechManager" in context) MechManager = context.MechManager;
+      }
+    });
     const { sorterHelper } = createSortHelper({
       getJQuery: () => $,
       isHTMLElement: (value) => runtimeEnvironment.HTMLElement !== void 0 && value instanceof runtimeEnvironment.HTMLElement
     });
-    if (testHooks) {
-      Object.assign(testHooks, { sorterHelper });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        gameRates: {
-          ticksPerSecond,
-          getHealingRate,
-          getFoodConsume,
-          getGrowthRate,
-          getResourcesPerClick
-        },
-        setGameRateTestContext(context) {
-          settings = context.settings;
-          game = context.game;
-          buildings = context.buildings;
-          state = context.state;
-          resources = context.resources;
-          jobs = context.jobs;
-          traitVal = context.traitVal;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        getCostConflict,
-        setCostConflictTestContext(context) {
-          state = context.state;
-          resources = context.resources;
-        }
-      });
-    }
-    if (testHooks) {
-      testHooks.numberFormatting = {
-        getRealNumber,
-        getNumberString,
-        getNiceNumber
-      };
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        runtimeQueries: { getGovernor, haveTask, haveTech, isEarlyGame },
-        setRuntimeQueryTestContext(context) {
-          game = context.game;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        raceProfile: { isHungryRace, isDemonRace, isLumberRace, getOccCosts },
-        setRaceProfileTestContext(context) {
-          game = context.game;
-          traitVal = context.traitVal;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        foreignGovernment: { getGovName, getGovPower },
-        setForeignGovernmentTestContext(context) {
-          game = context.game;
-          poly = context.poly;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        fastEvaluator: {
-          fastEval,
-          cacheSize: fastEvalCacheSize
-        },
-        setFastEvaluatorTestContext(context) {
-          if ("settings" in context) settings = context.settings;
-          if ("state" in context) state = context.state;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        propertyHelpers: { normalizeProperties, addProps },
-        setPropertyHelperTestContext(context) {
-          settings = context.settings;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        browserRuntime: { getVueById, triggerFileDownload },
-        setBrowserRuntimeTestContext(context) {
-          win = context.win;
-        }
-      });
-    }
-    if (testHooks) {
-      Object.assign(testHooks, {
-        traitVal,
-        setTraitValueTestContext(context) {
-          game = context.game;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, { sorterHelper });
+    Object.assign(runtimeTestSurface, {
+      gameRates: {
+        ticksPerSecond,
+        getHealingRate,
+        getFoodConsume,
+        getGrowthRate,
+        getResourcesPerClick
+      },
+      setGameRateTestContext(context) {
+        settings = context.settings;
+        game = context.game;
+        buildings = context.buildings;
+        state = context.state;
+        resources = context.resources;
+        jobs = context.jobs;
+        traitVal = context.traitVal;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      getCostConflict,
+      setCostConflictTestContext(context) {
+        state = context.state;
+        resources = context.resources;
+      }
+    });
+    runtimeTestSurface.numberFormatting = {
+      getRealNumber,
+      getNumberString,
+      getNiceNumber
+    };
+    Object.assign(runtimeTestSurface, {
+      runtimeQueries: { getGovernor, haveTask, haveTech, isEarlyGame },
+      setRuntimeQueryTestContext(context) {
+        game = context.game;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      raceProfile: { isHungryRace, isDemonRace, isLumberRace, getOccCosts },
+      setRaceProfileTestContext(context) {
+        game = context.game;
+        traitVal = context.traitVal;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      foreignGovernment: { getGovName, getGovPower },
+      setForeignGovernmentTestContext(context) {
+        game = context.game;
+        poly = context.poly;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      fastEvaluator: {
+        fastEval,
+        cacheSize: fastEvalCacheSize
+      },
+      setFastEvaluatorTestContext(context) {
+        if ("settings" in context) settings = context.settings;
+        if ("state" in context) state = context.state;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      propertyHelpers: { normalizeProperties, addProps },
+      setPropertyHelperTestContext(context) {
+        settings = context.settings;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      browserRuntime: { getVueById, triggerFileDownload },
+      setBrowserRuntimeTestContext(context) {
+        win = context.win;
+      }
+    });
+    Object.assign(runtimeTestSurface, {
+      traitVal,
+      setTraitValueTestContext(context) {
+        game = context.game;
+      }
+    });
     let settingsTransferTestActions;
     const settingsTransferActions = {
       updateStandAloneSettings,
@@ -57552,16 +57399,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       confirmImport: (message) => runtimeEnvironment.confirm(message),
       logToConsole: (message) => runtimeEnvironment.log(message)
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        settingsTransfer: { importSettings, exportSettings },
-        setSettingsTransferTestContext(context) {
-          settingsRaw = context.settingsRaw;
-          GameLog = context.GameLog;
-          settingsTransferTestActions = context.actions;
-        }
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      settingsTransfer: { importSettings, exportSettings },
+      setSettingsTransferTestContext(context) {
+        settingsRaw = context.settingsRaw;
+        GameLog = context.GameLog;
+        settingsTransferTestActions = context.actions;
+      }
+    });
     var poly = createGameCompatibility({
       getGame: () => game,
       getBuildings: () => buildings,
@@ -57573,12 +57418,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2),
       getDate: () => /* @__PURE__ */ new Date()
     });
-    if (testHooks) {
-      Object.assign(testHooks, {
-        gameCompatibility: poly
-      });
-    }
+    Object.assign(runtimeTestSurface, {
+      gameCompatibility: poly
+    });
     $().ready(mainAutoEvolveScript);
+    return runtimeTestSurface;
   }
 
   // src/main.ts
