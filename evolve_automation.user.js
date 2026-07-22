@@ -47196,68 +47196,239 @@
     };
   }
 
-  // src/ui/mech-info.ts
-  function createMechInfoUI({
-    getDocument,
-    getJQuery,
+  // src/domain/mech-info.ts
+  function formatMechInfo(input, formatNumber) {
+    const rating = input.power / input.bestPower;
+    const ratingText = `${Math.round(rating * 100)}%`;
+    if (input.size === "collector") {
+      const collectorValue = input.collectorValue ?? 0;
+      return `${ratingText}, ${formatNumber(input.power * collectorValue)} /s | `;
+    }
+    return `${ratingText}, ${formatNumber(input.power * 100)}, ${formatNumber(
+      input.efficiency * 100
+    )} | `;
+  }
+
+  // src/adapters/evolve/mech-info.ts
+  function requireString25(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function call4(target, key, path, args = []) {
+    return Reflect.apply(requireFunction(target[key], path), target, args);
+  }
+  function createMechInfoEvolveAdapter({
     getGame,
     getMechManager,
-    getVueById: getVueById2,
     getNiceNumber: getNiceNumber2
   }) {
-    const dependencies = {
-      getDocument,
-      getJQuery,
-      getGame,
-      getMechManager,
-      getVueById: getVueById2,
-      getNiceNumber: getNiceNumber2
-    };
-    function createMechInfo2() {
-      const $2 = dependencies.getJQuery();
-      const MechManager2 = dependencies.getMechManager();
-      if ($2(`#mechList .mechRow[draggable=true]`).length > 0) {
-        return;
+    function readManager() {
+      return requireRecord(getMechManager(), "MechManager");
+    }
+    function ensureLabActive() {
+      const manager = readManager();
+      if (manager["isActive"]) return true;
+      if (call4(manager, "initLab", "MechManager.initLab")) return true;
+      return false;
+    }
+    function readItems(count) {
+      if (!Number.isInteger(count) || count < 0) {
+        throw new TypeError("mech info count must be a non-negative integer");
       }
-      if (MechManager2.isActive || MechManager2.initLab()) {
-        MechManager2.mechObserver.disconnect();
-        const list = dependencies.getVueById("mechList");
-        const game2 = dependencies.getGame();
-        for (let i = 0; i < list._vnode.children.length; i++) {
-          const mech = game2.global.portal.mechbay.mechs[i];
-          const stats = MechManager2.getMechStats(mech);
-          const rating = stats.power / MechManager2.bestMech[mech.size].power;
-          const info = (mech.size === "collector" ? `${Math.round(rating * 100)}%, ${dependencies.getNiceNumber(
-            stats.power * MechManager2.collectorValue
-          )} /s` : `${Math.round(rating * 100)}%, ${dependencies.getNiceNumber(
-            stats.power * 100
-          )}, ${dependencies.getNiceNumber(stats.efficiency * 100)}`) + " | ";
-          const mechNode = list._vnode.children[i].elm;
-          const firstNode = $2(mechNode.childNodes[0]);
-          if (firstNode.hasClass("ea-mech-info")) {
-            firstNode.text(info);
-          } else {
-            const note = dependencies.getDocument().createElement("span");
-            note.className = "ea-mech-info";
-            note.innerHTML = info;
-            mechNode.insertBefore(note, mechNode.firstChild);
-          }
-        }
-        MechManager2.mechObserver.observe(
-          dependencies.getDocument().getElementById("mechList"),
-          { childList: true }
+      const manager = readManager();
+      const game2 = requireRecord(getGame(), "game");
+      const global = requireRecord(game2["global"], "game.global");
+      const portal = requireRecord(global["portal"], "game.global.portal");
+      const mechbay = requireRecord(
+        portal["mechbay"],
+        "game.global.portal.mechbay"
+      );
+      const mechs = mechbay["mechs"];
+      if (!Array.isArray(mechs)) {
+        throw new TypeError("game.global.portal.mechbay.mechs must be an array");
+      }
+      const bestMech = requireRecord(manager["bestMech"], "MechManager.bestMech");
+      const items = [];
+      for (let index = 0; index < count; index += 1) {
+        const mech = requireRecord(
+          mechs[index],
+          `game.global.portal.mechbay.mechs[${index}]`
         );
+        const size = requireString25(mech["size"], `mechs[${index}].size`);
+        const stats = requireRecord(
+          call4(manager, "getMechStats", "MechManager.getMechStats", [mech]),
+          `MechManager.getMechStats(${index})`
+        );
+        const best = requireRecord(
+          bestMech[size],
+          `MechManager.bestMech.${size}`
+        );
+        const input = {
+          size,
+          power: requireNumber(stats["power"], `mechStats[${index}].power`),
+          efficiency: requireNumber(
+            stats["efficiency"],
+            `mechStats[${index}].efficiency`
+          ),
+          bestPower: requireNumber(best["power"], `bestMech.${size}.power`),
+          ...size === "collector" ? {
+            collectorValue: requireNumber(
+              manager["collectorValue"],
+              "MechManager.collectorValue"
+            )
+          } : {}
+        };
+        items.push(Object.freeze({ text: formatMechInfo(input, getNiceNumber2) }));
       }
+      return Object.freeze(items);
+    }
+    function getObserver() {
+      return requireRecord(
+        readManager()["mechObserver"],
+        "MechManager.mechObserver"
+      );
+    }
+    const reader = Object.freeze({
+      ensureLabActive,
+      readItems
+    });
+    const observer = Object.freeze({
+      disconnect() {
+        const target = getObserver();
+        call4(target, "disconnect", "MechManager.mechObserver.disconnect");
+      },
+      observe(target, options) {
+        const observerTarget = getObserver();
+        call4(observerTarget, "observe", "MechManager.mechObserver.observe", [
+          target,
+          options
+        ]);
+      }
+    });
+    return Object.freeze({ reader, observer });
+  }
+
+  // src/adapters/browser/mech-info.ts
+  function call5(target, key, path, args = []) {
+    return Reflect.apply(requireFunction(target[key], path), target, args);
+  }
+  function requireObjectLike(value, path) {
+    if (value === null || typeof value !== "object" && typeof value !== "function") {
+      throw new TypeError(`${path} must be an object`);
+    }
+    return value;
+  }
+  function readJQueryNode(value, path) {
+    const raw = requireObjectLike(value, path);
+    return {
+      length: requireNumber(raw["length"], `${path}.length`),
+      hasClass(className) {
+        return Boolean(call5(raw, "hasClass", `${path}.hasClass`, [className]));
+      },
+      text(textValue) {
+        call5(raw, "text", `${path}.text`, [textValue]);
+        return this;
+      },
+      remove() {
+        call5(raw, "remove", `${path}.remove`);
+        return this;
+      }
+    };
+  }
+  function readMechNode(value, path) {
+    const raw = requireRecord(value, path);
+    const childNodes = raw["childNodes"];
+    if (!Array.isArray(childNodes)) {
+      throw new TypeError(`${path}.childNodes must be an array`);
+    }
+    return {
+      childNodes,
+      firstChild: raw["firstChild"],
+      insertBefore(note, before) {
+        call5(raw, "insertBefore", `${path}.insertBefore`, [note, before]);
+      }
+    };
+  }
+  function readMechList(value) {
+    const list = requireRecord(value, "mechList");
+    const vnode = requireRecord(list["_vnode"], "mechList._vnode");
+    const children = vnode["children"];
+    if (!Array.isArray(children)) {
+      throw new TypeError("mechList._vnode.children must be an array");
+    }
+    return Object.freeze({
+      children: Object.freeze(
+        children.map(
+          (child, index) => readMechNode(
+            child && requireRecord(child, `mechList child ${index}`)["elm"],
+            `mechList child ${index}.elm`
+          )
+        )
+      )
+    });
+  }
+  function createMechInfoBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getVueById: getVueById2,
+    reader,
+    observer
+  }) {
+    function query(value) {
+      const jquery = requireFunction(getJQuery(), "jQuery");
+      return readJQueryNode(
+        Reflect.apply(jquery, void 0, [value]),
+        `jQuery(${String(value)})`
+      );
+    }
+    function createMechInfo2() {
+      if (query("#mechList .mechRow[draggable=true]").length > 0) return;
+      if (!reader.ensureLabActive()) return;
+      observer.disconnect();
+      const list = readMechList(getVueById2("mechList"));
+      const items = reader.readItems(list.children.length);
+      const document2 = requireRecord(getDocument(), "document");
+      const getElementById = requireFunction(
+        document2["getElementById"],
+        "document.getElementById"
+      );
+      const createElement = requireFunction(
+        document2["createElement"],
+        "document.createElement"
+      );
+      for (let index = 0; index < list.children.length; index += 1) {
+        const node = list.children[index];
+        const item = items[index];
+        if (!node || !item) continue;
+        const firstNode = query(node.childNodes[0]);
+        if (firstNode.hasClass("ea-mech-info")) {
+          firstNode.text(item.text);
+        } else {
+          const note = requireRecord(
+            Reflect.apply(createElement, document2, ["span"]),
+            "document.createElement(span)"
+          );
+          note["className"] = "ea-mech-info";
+          note["innerHTML"] = item.text;
+          node.insertBefore(note, node.firstChild);
+        }
+      }
+      observer.observe(
+        Reflect.apply(getElementById, document2, ["mechList"]),
+        Object.freeze({ childList: true })
+      );
     }
     function removeMechInfo2() {
-      dependencies.getMechManager().mechObserver.disconnect();
-      dependencies.getJQuery()("#mechList .ea-mech-info").remove();
+      observer.disconnect();
+      query("#mechList .ea-mech-info").remove();
     }
-    return { createMechInfo: createMechInfo2, removeMechInfo: removeMechInfo2 };
+    return Object.freeze({ createMechInfo: createMechInfo2, removeMechInfo: removeMechInfo2 });
   }
 
   // src/adapters/evolve/resource-toggles.ts
-  function requireString25(value, path) {
+  function requireString26(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47278,7 +47449,7 @@
     return priorityList;
   }
   function readResourceId3(value, path) {
-    return requireString25(requireRecord(value, path)["id"], `${path}.id`);
+    return requireString26(requireRecord(value, path)["id"], `${path}.id`);
   }
   function createResourceToggleEvolveAdapter({
     getGame,
@@ -47294,13 +47465,13 @@
       const noTrade = Boolean(race2["no_trade"]);
       const loc = requireFunction2(game2["loc"], "game.loc");
       const labels = noTrade ? Object.freeze({ buy: "", sell: "", routes: "", cancelRoutes: "" }) : Object.freeze({
-        buy: requireString25(loc("resource_market_buy"), "game.loc(buy)"),
-        sell: requireString25(loc("resource_market_sell"), "game.loc(sell)"),
-        routes: requireString25(
+        buy: requireString26(loc("resource_market_buy"), "game.loc(buy)"),
+        sell: requireString26(loc("resource_market_sell"), "game.loc(sell)"),
+        routes: requireString26(
           loc("resource_market_routes"),
           "game.loc(routes)"
         ),
-        cancelRoutes: requireString25(
+        cancelRoutes: requireString26(
           loc("cancel_routes"),
           "game.loc(cancel_routes)"
         )
@@ -50885,14 +51056,20 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         updateSettingsFromState
       })
     });
-    const { createMechInfo, removeMechInfo } = createMechInfoUI({
+    let mechInfoTestContext;
+    const { reader: mechInfoReader, observer: mechInfoObserver } = createMechInfoEvolveAdapter({
+      getGame: () => mechInfoTestContext?.game ?? game,
+      getMechManager: () => mechInfoTestContext?.MechManager ?? MechManager,
+      getNiceNumber: (value) => mechInfoTestContext?.getNiceNumber?.(value) ?? getNiceNumber(value)
+    });
+    const mechInfoBrowserAdapter = createMechInfoBrowserAdapter({
       getDocument: () => document,
       getJQuery: () => $,
-      getGame: () => game,
-      getMechManager: () => MechManager,
-      getVueById: (id) => getVueById(id),
-      getNiceNumber: (value) => getNiceNumber(value)
+      getVueById: (id) => mechInfoTestContext?.getVueById?.(id) ?? getVueById(id),
+      reader: mechInfoReader,
+      observer: mechInfoObserver
     });
+    const { createMechInfo, removeMechInfo } = mechInfoBrowserAdapter;
     let resourceToggleTestContext;
     const resourceToggleReader = createResourceToggleEvolveAdapter({
       getGame: () => resourceToggleTestContext?.game ?? game,
@@ -55545,6 +55722,10 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         resourceToggles: resourceToggleBrowserAdapter,
         setResourceTogglesTestContext(context) {
           resourceToggleTestContext = context;
+        },
+        mechInfo: mechInfoBrowserAdapter,
+        setMechInfoTestContext(context) {
+          mechInfoTestContext = context;
         }
       });
     }

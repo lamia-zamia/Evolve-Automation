@@ -446,7 +446,8 @@ import { createMechSettings } from "./ui/mech-settings.ts";
 import { createEjectorSettings } from "./ui/ejector-settings.ts";
 import { createMarketSettings } from "./ui/market-settings.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
-import { createMechInfoUI } from "./ui/mech-info.ts";
+import { createMechInfoEvolveAdapter } from "./adapters/evolve/mech-info.ts";
+import { createMechInfoBrowserAdapter } from "./adapters/browser/mech-info.ts";
 import { createResourceToggleEvolveAdapter } from "./adapters/evolve/resource-toggles.ts";
 import { createResourceToggleBrowserAdapter } from "./adapters/browser/resource-toggles.ts";
 import { createTooltipUI } from "./ui/tooltips.ts";
@@ -639,14 +640,22 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       updateSettingsFromState,
     }),
   });
-  const { createMechInfo, removeMechInfo } = createMechInfoUI({
+  let mechInfoTestContext;
+  const { reader: mechInfoReader, observer: mechInfoObserver } =
+    createMechInfoEvolveAdapter({
+      getGame: () => mechInfoTestContext?.game ?? game,
+      getMechManager: () => mechInfoTestContext?.MechManager ?? MechManager,
+      getNiceNumber: (value) =>
+        mechInfoTestContext?.getNiceNumber?.(value) ?? getNiceNumber(value),
+    });
+  const mechInfoBrowserAdapter = createMechInfoBrowserAdapter({
     getDocument: () => document,
     getJQuery: () => $,
-    getGame: () => game,
-    getMechManager: () => MechManager,
-    getVueById: (id) => getVueById(id),
-    getNiceNumber: (value) => getNiceNumber(value),
+    getVueById: (id) => mechInfoTestContext?.getVueById?.(id) ?? getVueById(id),
+    reader: mechInfoReader,
+    observer: mechInfoObserver,
   });
+  const { createMechInfo, removeMechInfo } = mechInfoBrowserAdapter;
   let resourceToggleTestContext;
   const resourceToggleReader = createResourceToggleEvolveAdapter({
     getGame: () => resourceToggleTestContext?.game ?? game,
@@ -5937,6 +5946,10 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       resourceToggles: resourceToggleBrowserAdapter,
       setResourceTogglesTestContext(context) {
         resourceToggleTestContext = context;
+      },
+      mechInfo: mechInfoBrowserAdapter,
+      setMechInfoTestContext(context) {
+        mechInfoTestContext = context;
       },
     });
   }

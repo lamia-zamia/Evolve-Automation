@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 
+import { createMechInfoBrowserAdapter } from "../src/adapters/browser/mech-info.ts";
+import { createMechInfoEvolveAdapter } from "../src/adapters/evolve/mech-info.ts";
 import { createResourceToggleBrowserAdapter } from "../src/adapters/browser/resource-toggles.ts";
 import { createResourceToggleEvolveAdapter } from "../src/adapters/evolve/resource-toggles.ts";
-import { createMechInfoUI } from "../src/ui/mech-info.ts";
 import { createQueuePanels } from "../src/ui/queue-panels.ts";
 
 const trace = [];
@@ -156,7 +157,15 @@ const mechManager = {
   collectorValue: 2,
   getMechStats: () => ({ power: 5, efficiency: 0.25 }),
 };
-const mechUI = createMechInfoUI({
+const { reader: mechInfoReader, observer: mechInfoObserver } =
+  createMechInfoEvolveAdapter({
+    getGame: () => ({
+      global: { portal: { mechbay: { mechs: [{ size: "collector" }] } } },
+    }),
+    getMechManager: () => mechManager,
+    getNiceNumber: (value) => `nice:${value}`,
+  });
+const mechUI = createMechInfoBrowserAdapter({
   getDocument: () => ({
     createElement: () => ({}),
     getElementById: () => ({ id: "mechList" }),
@@ -165,12 +174,9 @@ const mechUI = createMechInfoUI({
     String(value).includes("draggable")
       ? makeNode(String(value), 0)
       : makeNode(String(value)),
-  getGame: () => ({
-    global: { portal: { mechbay: { mechs: [{ size: "collector" }] } } },
-  }),
-  getMechManager: () => mechManager,
   getVueById: () => ({ _vnode: { children: [{ elm: mechNode }] } }),
-  getNiceNumber: (value) => `nice:${value}`,
+  reader: mechInfoReader,
+  observer: mechInfoObserver,
 });
 mechUI.createMechInfo();
 assert.equal(inserted[0].innerHTML, "50%, nice:10 /s | ");
