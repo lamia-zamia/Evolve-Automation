@@ -5899,7 +5899,8 @@
       return !race2["kindling_kindred"] && !race2["smoldering"];
     }
     function getOccCosts() {
-      return getTraitVal()("high_pop", 0, 1) * (getGame().global.civic.govern.type === "federation" ? 15 : 20);
+      const governmentType = getGame().global.civic.govern?.type;
+      return getTraitVal()("high_pop", 0, 1) * (governmentType === "federation" ? 15 : 20);
     }
     return { isHungryRace, isDemonRace, isLumberRace, getOccCosts };
   }

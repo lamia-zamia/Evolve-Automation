@@ -4,7 +4,7 @@ type RaceProfileGame = {
       species: string;
       [key: string]: unknown;
     };
-    civic: { govern: { type: string } };
+    civic: { govern?: { type: string } };
   };
 };
 
@@ -42,9 +42,12 @@ export function createRaceProfile({
   }
 
   function getOccCosts() {
+    // Evolve leaves civic.govern absent on a fresh game until government data
+    // is initialized; the legacy non-federation branch is the safe default.
+    const governmentType = getGame().global.civic.govern?.type;
     return (
       getTraitVal()("high_pop", 0, 1) *
-      (getGame().global.civic.govern.type === "federation" ? 15 : 20)
+      (governmentType === "federation" ? 15 : 20)
     );
   }
 

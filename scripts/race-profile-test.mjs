@@ -22,6 +22,18 @@ assert.equal(profile.getOccCosts(), 20);
 
 game = {
   global: {
+    race: { species: "human" },
+    civic: {},
+  },
+};
+assert.equal(
+  profile.getOccCosts(),
+  20,
+  "fresh games use the non-federation occupation-cost fallback",
+);
+
+game = {
+  global: {
     race: { species: "balorg", soul_eater: true, evil: true, smoldering: true },
     civic: { govern: { type: "federation" } },
   },

@@ -83,4 +83,10 @@ assert.equal(profile.isLumberRace(), false);
 use({ species: "human" }, "federation", 1.5);
 assert.equal(profile.getOccCosts(), 22.5);
 
+hooks.setRaceProfileTestContext({
+  game: { global: { race: { species: "human" }, civic: {} } },
+  traitVal: () => 1,
+});
+assert.equal(profile.getOccCosts(), 20);
+
 console.log("Race profile bundled characterization tests passed");
