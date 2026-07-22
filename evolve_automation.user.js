@@ -6691,91 +6691,61 @@
 
   // src/game/entities.ts
   function createEntityClasses({
-    dependencies
+    readJQuery,
+    readArpaIds,
+    readBuildingIds,
+    readBuildings,
+    readCheckAffordableCustom,
+    readCheckTypes,
+    readConflictingTraits,
+    readDocument,
+    readFanatAchievements,
+    readFibonacci,
+    readGame,
+    readGameLog,
+    readAchievementStar: readAchievementStar2,
+    readCitadelConsumption,
+    readStarLevel,
+    readVueById,
+    readHaveTask,
+    readHaveTech,
+    readJobs,
+    readKeyManager,
+    readLogIgnore,
+    readLogPrestige,
+    readMutableTraitManager,
+    readMutationCostMultipliers,
+    readMutationCostMultipliersGenus,
+    readNormalizeProperties,
+    readPoly,
+    readRaces,
+    readResources: readResources2,
+    readRetBools,
+    readSettings: readSettings3,
+    readSettingsRaw,
+    readSpecialRaceTraits,
+    readState,
+    readTechIds,
+    readTicksPerSecond,
+    readTraitVal,
+    readTriggerManager,
+    readWarManager,
+    readWin,
+    readWindowManager
   }) {
-    const liveObject2 = (key) => new Proxy(
-      {},
-      {
-        get(_target, property) {
-          const current = dependencies[key]();
-          const value = current?.[property];
-          return typeof value === "function" ? value.bind(current) : value;
-        },
-        set(_target, property, value) {
-          return Reflect.set(
-            dependencies[key](),
-            property,
-            value
-          );
-        },
-        deleteProperty(_target, property) {
-          return Reflect.deleteProperty(
-            dependencies[key](),
-            property
-          );
-        },
-        has(_target, property) {
-          return Reflect.has(dependencies[key](), property);
-        },
-        ownKeys() {
-          return Reflect.ownKeys(dependencies[key]());
-        },
-        getOwnPropertyDescriptor(_target, property) {
-          const current = dependencies[key]();
-          const descriptor = Object.getOwnPropertyDescriptor(current, property);
-          return {
-            configurable: true,
-            enumerable: descriptor?.enumerable ?? true,
-            writable: true,
-            value: Reflect.get(current, property)
-          };
-        }
-      }
-    );
-    const liveFunction = (key) => ((...args) => dependencies[key]()(...args));
-    const $2 = liveFunction("$");
-    const arpaIds = liveObject2("arpaIds");
-    const buildingIds = liveObject2("buildingIds");
-    const buildings = liveObject2("buildings");
-    const checkAffordableCustom = liveFunction("checkAffordableCustom");
-    const checkTypes = liveObject2("checkTypes");
-    const conflictingTraits = liveObject2("conflictingTraits");
-    const document2 = liveObject2("document");
-    const fanatAchievements = liveObject2("fanatAchievements");
-    const Fibonacci2 = liveFunction("Fibonacci");
-    const game = liveObject2("game");
-    const GameLog = liveObject2("GameLog");
-    const getAchievementStar = liveFunction("getAchievementStar");
-    const getCitadelConsumption = liveFunction("getCitadelConsumption");
-    const getStarLevel = liveFunction("getStarLevel");
-    const getVueById = liveFunction("getVueById");
-    const haveTask = liveFunction("haveTask");
-    const haveTech = liveFunction("haveTech");
-    const jobs = liveObject2("jobs");
-    const KeyManager = liveObject2("KeyManager");
-    const logIgnore = liveObject2("logIgnore");
-    const logPrestige = liveFunction("logPrestige");
-    const MutableTraitManager = liveObject2("MutableTraitManager");
-    const mutationCostMultipliers = liveObject2("mutationCostMultipliers");
-    const mutationCostMultipliersGenus = liveObject2(
-      "mutationCostMultipliersGenus"
-    );
-    const normalizeProperties = liveFunction("normalizeProperties");
-    const poly = liveObject2("poly");
-    const races = liveObject2("races");
-    const resources = liveObject2("resources");
-    const retBools = liveObject2("retBools");
-    const settings = liveObject2("settings");
-    const settingsRaw = liveObject2("settingsRaw");
-    const specialRaceTraits = liveObject2("specialRaceTraits");
-    const state = liveObject2("state");
-    const techIds = liveObject2("techIds");
-    const ticksPerSecond = liveFunction("ticksPerSecond");
-    const traitVal = liveFunction("traitVal");
-    const TriggerManager = liveObject2("TriggerManager");
-    const WarManager = liveObject2("WarManager");
-    const win = liveObject2("win");
-    const WindowManager = liveObject2("WindowManager");
+    const $2 = (...args) => readJQuery()(...args);
+    const checkAffordableCustom = (...args) => readCheckAffordableCustom()(...args);
+    const Fibonacci2 = (...args) => readFibonacci()(...args);
+    const getAchievementStar = (...args) => readAchievementStar2()(...args);
+    const getCitadelConsumption = (...args) => readCitadelConsumption()(...args);
+    const getStarLevel = (...args) => readStarLevel()(...args);
+    const getVueById = (...args) => readVueById()(...args);
+    const haveTask = (...args) => readHaveTask()(...args);
+    const haveTech = (...args) => readHaveTech()(...args);
+    const logPrestige = (...args) => readLogPrestige()(...args);
+    const normalizeProperties = (...args) => readNormalizeProperties()(...args);
+    const ticksPerSecond = (...args) => readTicksPerSecond()(...args);
+    const traitVal = (...args) => readTraitVal()(...args);
     class Job {
       constructor(id, name, flags) {
         this._originalId = id;
@@ -6784,19 +6754,19 @@
         this.is = normalizeProperties(flags) ?? {};
       }
       get autoJobEnabled() {
-        return settings["job_" + this._originalId];
+        return readSettings3()["job_" + this._originalId];
       }
       get isSmartEnabled() {
-        return settings["job_s_" + this._originalId];
+        return readSettings3()["job_s_" + this._originalId];
       }
       get priority() {
-        return settingsRaw["job_p_" + this._originalId];
+        return readSettingsRaw()["job_p_" + this._originalId];
       }
       getBreakpoint(n) {
-        return settings[`job_b${n + 1}_${this._originalId}`];
+        return readSettings3()[`job_b${n + 1}_${this._originalId}`];
       }
       get definition() {
-        return game.global.civic[this._originalId];
+        return readGame().global.civic[this._originalId];
       }
       get id() {
         return this.definition.job;
@@ -6829,7 +6799,7 @@
         let breakpointActual = this.getBreakpoint(breakpoint);
         if (breakpointActual === -1) {
           breakpointActual = Number.MAX_SAFE_INTEGER;
-        } else if (settings.jobScalePop && this._originalId !== "hell_surveyor") {
+        } else if (readSettings3().jobScalePop && this._originalId !== "hell_surveyor") {
           breakpointActual *= traitVal("high_pop", 0, 1);
         }
         return ignoreMax ? breakpointActual : Math.min(breakpointActual, this.max);
@@ -6845,7 +6815,7 @@
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager.click(count2)) {
+        for (let m of readKeyManager().click(count2)) {
           vue.add();
         }
       }
@@ -6860,7 +6830,7 @@
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager.click(count2)) {
+        for (let m of readKeyManager().click(count2)) {
           vue.sub();
         }
       }
@@ -6874,7 +6844,7 @@
         this._servantBinding = "servant-" + this._originalId;
       }
       get servants() {
-        return game.global.race.servants?.jobs[this._originalId] ?? 0;
+        return readGame().global.race.servants?.jobs[this._originalId] ?? 0;
       }
       get max() {
         return Number.MAX_SAFE_INTEGER;
@@ -6887,7 +6857,7 @@
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager.click(count2)) {
+        for (let m of readKeyManager().click(count2)) {
           vue.add();
         }
       }
@@ -6899,12 +6869,12 @@
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager.click(count2)) {
+        for (let m of readKeyManager().click(count2)) {
           vue.sub();
         }
       }
       isDefault() {
-        return game.global.civic.d_job === this.id;
+        return readGame().global.civic.d_job === this.id;
       }
       setAsDefault() {
         getVueById(this._workerBinding)?.setDefault(this.id);
@@ -6918,22 +6888,22 @@
         this.resource = resource2;
       }
       get definition() {
-        return game.global.civic["craftsman"];
+        return readGame().global.civic["craftsman"];
       }
       get id() {
         return this.resource.id;
       }
       isUnlocked() {
-        return game.global.resource[this._originalId].display;
+        return readGame().global.resource[this._originalId].display;
       }
       get servants() {
-        return game.global.race.servants?.sjobs[this._originalId] ?? 0;
+        return readGame().global.race.servants?.sjobs[this._originalId] ?? 0;
       }
       get workers() {
-        return game.global.city.foundry?.[this._originalId] ?? 0;
+        return readGame().global.city.foundry?.[this._originalId] ?? 0;
       }
       get max() {
-        return game.global.civic.craftsman.max;
+        return readGame().global.civic.craftsman.max;
       }
       addWorkers(count2) {
         if (!this.isUnlocked()) {
@@ -6946,7 +6916,7 @@
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager.click(count2)) {
+        for (let m of readKeyManager().click(count2)) {
           vue.add(this._originalId);
         }
       }
@@ -6961,7 +6931,7 @@
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager.click(count2)) {
+        for (let m of readKeyManager().click(count2)) {
           vue.sub(this._originalId);
         }
       }
@@ -6973,7 +6943,7 @@
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager.click(count2)) {
+        for (let m of readKeyManager().click(count2)) {
           vue.add(this._originalId);
         }
       }
@@ -6985,7 +6955,7 @@
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager.click(count2)) {
+        for (let m of readKeyManager().click(count2)) {
           vue.sub(this._originalId);
         }
       }
@@ -7012,67 +6982,67 @@
         this.is = normalizeProperties(flags) ?? {};
       }
       get autoCraftEnabled() {
-        return settings["craft" + this.id];
+        return readSettings3()["craft" + this.id];
       }
       get craftWeighting() {
-        return settings["foundry_w_" + this.id];
+        return readSettings3()["foundry_w_" + this.id];
       }
       get craftPreserve() {
-        return settings["foundry_p_" + this.id];
+        return readSettings3()["foundry_p_" + this.id];
       }
       get autoStorageEnabled() {
-        return settings["res_storage" + this.id];
+        return readSettings3()["res_storage" + this.id];
       }
       get storagePriority() {
-        return settingsRaw["res_storage_p_" + this.id];
+        return readSettingsRaw()["res_storage_p_" + this.id];
       }
       get storeOverflow() {
-        return settings["res_storage_o_" + this.id];
+        return readSettings3()["res_storage_o_" + this.id];
       }
       get minStorage() {
-        return settings["res_min_store" + this.id];
+        return readSettings3()["res_min_store" + this.id];
       }
       get maxStorage() {
-        return settings["res_max_store" + this.id];
+        return readSettings3()["res_max_store" + this.id];
       }
       get marketPriority() {
-        return settingsRaw["res_buy_p_" + this.id];
+        return readSettingsRaw()["res_buy_p_" + this.id];
       }
       get autoBuyEnabled() {
-        return settings["buy" + this.id];
+        return readSettings3()["buy" + this.id];
       }
       get autoBuyRatio() {
-        return settings["res_buy_r_" + this.id];
+        return readSettings3()["res_buy_r_" + this.id];
       }
       get autoSellEnabled() {
-        return settings["sell" + this.id];
+        return readSettings3()["sell" + this.id];
       }
       get autoSellRatio() {
-        return settings["res_sell_r_" + this.id];
+        return readSettings3()["res_sell_r_" + this.id];
       }
       get autoTradeBuyEnabled() {
-        return settings["res_trade_buy_" + this.id];
+        return readSettings3()["res_trade_buy_" + this.id];
       }
       get autoTradeSellEnabled() {
-        return settings["res_trade_sell_" + this.id];
+        return readSettings3()["res_trade_sell_" + this.id];
       }
       get autoTradeWeighting() {
-        return settings["res_trade_w_" + this.id];
+        return readSettings3()["res_trade_w_" + this.id];
       }
       get autoTradePriority() {
-        return settings["res_trade_p_" + this.id];
+        return readSettings3()["res_trade_p_" + this.id];
       }
       get galaxyMarketWeighting() {
-        return settings["res_galaxy_w_" + this.id];
+        return readSettings3()["res_galaxy_w_" + this.id];
       }
       get galaxyMarketPriority() {
-        return settings["res_galaxy_p_" + this.id];
+        return readSettings3()["res_galaxy_p_" + this.id];
       }
       get title() {
         return this.instance?.name || this.name;
       }
       get instance() {
-        return game.global.resource[this.id];
+        return readGame().global.resource[this.id];
       }
       get id() {
         return this._id;
@@ -7098,11 +7068,11 @@
         if (!this.isUnlocked() || this.constructor !== Resource) {
           return;
         }
-        if (settings.autoMarket && this.is.tradable) {
+        if (readSettings3().autoMarket && this.is.tradable) {
           this.tradeRoutes = this.instance.trade;
-          this.tradeBuyPrice = game.tradeBuyPrice(this._id);
-          this.tradeSellPrice = game.tradeSellPrice(this._id);
-          let tradeDiff = game.breakdown.p.consume[this._id]?.Trade || 0;
+          this.tradeBuyPrice = readGame().tradeBuyPrice(this._id);
+          this.tradeSellPrice = readGame().tradeSellPrice(this._id);
+          let tradeDiff = readGame().breakdown.p.consume[this._id]?.Trade || 0;
           if (tradeDiff > 0) {
             this.rateMods["buy"] = tradeDiff * -1;
           } else if (tradeDiff < 0) {
@@ -7110,7 +7080,7 @@
             this.rateOfChange += this.rateMods["sell"];
           }
         }
-        if (game.global.race["decay"] && this.tradeRouteQuantity > 0 && this.currentQuantity >= 50) {
+        if (readGame().global.race["decay"] && this.tradeRouteQuantity > 0 && this.currentQuantity >= 50) {
           this.rateMods["decay"] = (this.currentQuantity - 50) * (1e-3 * this.tradeRouteQuantity);
           this.rateOfChange += this.rateMods["decay"];
         }
@@ -7140,13 +7110,13 @@
         return this.instance?.display ?? false;
       }
       isRoutesUnlocked() {
-        return this.isUnlocked() && !(this === resources.Food && (game.global.race["artifical"] || game.global.race["fasting"])) && (game.global.race["banana"] && this === resources.Food || game.global.tech["trade"] && !game.global.race["terrifying"]);
+        return this.isUnlocked() && !(this === readResources2().Food && (readGame().global.race["artifical"] || readGame().global.race["fasting"])) && (readGame().global.race["banana"] && this === readResources2().Food || readGame().global.tech["trade"] && !readGame().global.race["terrifying"]);
       }
       isManagedStorage() {
         return this.hasStorage() && this.autoStorageEnabled;
       }
       get atomicMass() {
-        return game.atomic_mass[this.id] ?? 0;
+        return readGame().atomic_mass[this.id] ?? 0;
       }
       isUseful() {
         return this.storageRatio < 0.99 || this.isDemanded() || this.rateMods["eject"] > 0 || this.rateMods["supply"] > 0 || this.storeOverflow && this.currentQuantity < this.maxStorage;
@@ -7155,12 +7125,12 @@
         let produced = 0;
         let labelFound = false;
         for (let [label, value] of Object.entries(
-          game.breakdown.p[this._id] ?? {}
+          readGame().breakdown.p[this._id] ?? {}
         )) {
           if (value.indexOf("%") === -1) {
             if (labelFound) {
               break;
-            } else if (label === poly.loc(source, locArg)) {
+            } else if (label === readPoly().loc(source, locArg)) {
               labelFound = true;
               produced += parseFloat(value) || 0;
             }
@@ -7168,10 +7138,10 @@
             produced *= 1 + (parseFloat(value) || 0) / 100;
           }
         }
-        return produced * state.globalProductionModifier;
+        return produced * readState().globalProductionModifier;
       }
       isValidProductionLabel(label) {
-        if (this._id === "Iron" && label === `ᄂ${poly.loc("space_syndicate")}`)
+        if (this._id === "Iron" && label === `ᄂ${readPoly().loc("space_syndicate")}`)
           return false;
         return true;
       }
@@ -7193,13 +7163,13 @@
         return newWorkers;
       }
       isCraftable() {
-        return game.craftCost.hasOwnProperty(this.id);
+        return readGame().craftCost.hasOwnProperty(this.id);
       }
       hasStorage() {
         return this.instance?.stackable ?? false;
       }
       get tradeRouteQuantity() {
-        return game.tradeRatio[this.id] || -1;
+        return readGame().tradeRatio[this.id] || -1;
       }
       get storageRatio() {
         return this.maxQuantity > 0 ? this.currentQuantity / this.maxQuantity : 1;
@@ -7238,7 +7208,7 @@
         if (vue === void 0) {
           return false;
         }
-        KeyManager.set(false, false, false);
+        readKeyManager().set(false, false, false);
         vue.craft(this.id, count2);
       }
       requestQuantity(req) {
@@ -7251,7 +7221,7 @@
     class SoulGem extends Resource {
       updateData() {
         super.updateData();
-        this.rateOfChange = state.soulGemPerHour / 3600;
+        this.rateOfChange = readState().soulGemPerHour / 3600;
       }
     }
     class Troops extends Resource {
@@ -7259,12 +7229,12 @@
         if (!this.isUnlocked()) {
           return;
         }
-        this.currentQuantity = WarManager.currentCityGarrison;
-        this.maxQuantity = WarManager.maxCityGarrison;
+        this.currentQuantity = readWarManager().currentCityGarrison;
+        this.maxQuantity = readWarManager().maxCityGarrison;
         this.rateOfChange = 0;
       }
       isUnlocked() {
-        return WarManager._garrisonVue !== void 0;
+        return readWarManager()._garrisonVue !== void 0;
       }
     }
     class Supply extends Resource {
@@ -7272,12 +7242,12 @@
         if (!this.isUnlocked()) {
           return;
         }
-        this.currentQuantity = game.global.portal.purifier.supply;
-        this.maxQuantity = game.global.portal.purifier.sup_max;
-        this.rateOfChange = game.global.portal.purifier.diff;
+        this.currentQuantity = readGame().global.portal.purifier.supply;
+        this.maxQuantity = readGame().global.portal.purifier.sup_max;
+        this.rateOfChange = readGame().global.portal.purifier.diff;
       }
       isUnlocked() {
-        return game.global.portal.hasOwnProperty("purifier");
+        return readGame().global.portal.hasOwnProperty("purifier");
       }
     }
     class Power extends Resource {
@@ -7285,22 +7255,22 @@
         if (!this.isUnlocked()) {
           return;
         }
-        this.currentQuantity = game.global.city.power;
+        this.currentQuantity = readGame().global.city.power;
         if (haveTask("replicate")) {
-          this.currentQuantity += game.global.race.replicator.pow;
+          this.currentQuantity += readGame().global.race.replicator.pow;
         }
         this.rateOfChange = this.currentQuantity;
         this.maxQuantity = 0;
-        if (game.global.race.powered) {
-          this.maxQuantity += (resources.Population.maxQuantity - resources.Population.currentQuantity) * traitVal("powered", 0);
+        if (readGame().global.race.powered) {
+          this.maxQuantity += (readResources2().Population.maxQuantity - readResources2().Population.currentQuantity) * traitVal("powered", 0);
         }
-        for (let building3 of Object.values(buildings)) {
+        for (let building3 of Object.values(readBuildings())) {
           if (building3.stateOffCount > 0) {
             let missingAmount = building3.stateOffCount;
-            if (building3.autoMax < building3.count && settings.masterScriptToggle && settings.autoPower && building3.autoStateEnabled && settings.buildingsLimitPowered) {
+            if (building3.autoMax < building3.count && readSettings3().masterScriptToggle && readSettings3().autoPower && building3.autoStateEnabled && readSettings3().buildingsLimitPowered) {
               missingAmount -= building3.count - building3.autoMax;
             }
-            if (building3 === buildings.NeutronCitadel) {
+            if (building3 === readBuildings().NeutronCitadel) {
               this.maxQuantity += getCitadelConsumption(building3.stateOnCount + missingAmount) - getCitadelConsumption(building3.stateOnCount);
             } else {
               this.maxQuantity += missingAmount * building3.powered;
@@ -7312,7 +7282,7 @@
         return this.currentQuantity >= this.maxQuantity ? 1 : 0;
       }
       isUnlocked() {
-        return game.global.city.powered;
+        return readGame().global.city.powered;
       }
     }
     class Support extends Resource {
@@ -7326,18 +7296,18 @@
         if (!this.isUnlocked()) {
           return;
         }
-        this.maxQuantity = game.global[this._region][this.supportId].s_max;
-        this.currentQuantity = game.global[this._region][this.supportId].support;
+        this.maxQuantity = readGame().global[this._region][this.supportId].s_max;
+        this.currentQuantity = readGame().global[this._region][this.supportId].support;
         this.rateOfChange = this.maxQuantity - this.currentQuantity;
       }
       get supportId() {
-        return game.actions[this._region][this._inRegionId].info.support;
+        return readGame().actions[this._region][this._inRegionId].info.support;
       }
       get storageRatio() {
         return this.maxQuantity > 0 ? (this.maxQuantity - this.currentQuantity) / this.maxQuantity : 1;
       }
       isUnlocked() {
-        return game.global[this._region][this.supportId] !== void 0;
+        return readGame().global[this._region][this.supportId] !== void 0;
       }
     }
     class BeltSupport extends Support {
@@ -7346,13 +7316,13 @@
         if (!this.isUnlocked()) {
           return;
         }
-        let maxStations = settings.autoPower && buildings.BeltSpaceStation.autoStateEnabled ? buildings.BeltSpaceStation.count : buildings.BeltSpaceStation.stateOnCount;
-        let maxWorkers = settings.autoJobs && jobs.SpaceMiner.autoJobEnabled && jobs.SpaceMiner.isSmartEnabled ? state.maxSpaceMiners : jobs.SpaceMiner.count;
+        let maxStations = readSettings3().autoPower && readBuildings().BeltSpaceStation.autoStateEnabled ? readBuildings().BeltSpaceStation.count : readBuildings().BeltSpaceStation.stateOnCount;
+        let maxWorkers = readSettings3().autoJobs && readJobs().SpaceMiner.autoJobEnabled && readJobs().SpaceMiner.isSmartEnabled ? readState().maxSpaceMiners : readJobs().SpaceMiner.count;
         this.maxQuantity = Math.min(
           maxStations * 3 * traitVal("high_pop", 0, 1),
           maxWorkers
         );
-        this.currentQuantity = game.global[this._region][this.supportId].support;
+        this.currentQuantity = readGame().global[this._region][this.supportId].support;
         this.rateOfChange = this.maxQuantity - this.currentQuantity;
       }
     }
@@ -7361,12 +7331,12 @@
         if (!this.isUnlocked()) {
           return;
         }
-        this.maxQuantity = buildings.TitanElectrolysis.stateOnCount;
-        this.currentQuantity = buildings.TitanHydrogen.stateOnCount;
+        this.maxQuantity = readBuildings().TitanElectrolysis.stateOnCount;
+        this.currentQuantity = readBuildings().TitanHydrogen.stateOnCount;
         this.rateOfChange = this.maxQuantity - this.currentQuantity;
       }
       isUnlocked() {
-        return game.global.race["truepath"] ? true : false;
+        return readGame().global.race["truepath"] ? true : false;
       }
     }
     class WomlingsSupport extends Support {
@@ -7374,8 +7344,8 @@
         if (!this.isUnlocked()) {
           return;
         }
-        this.maxQuantity = buildings.TauRedWomlingVillage.stateOnCount * (haveTech("womling_pop", 2) ? 6 : 5);
-        this.currentQuantity = buildings.TauRedWomlingFarm.stateOnCount * 2 + buildings.TauRedWomlingLab.stateOnCount + buildings.TauRedWomlingMine.stateOnCount * 6;
+        this.maxQuantity = readBuildings().TauRedWomlingVillage.stateOnCount * (haveTech("womling_pop", 2) ? 6 : 5);
+        this.currentQuantity = readBuildings().TauRedWomlingFarm.stateOnCount * 2 + readBuildings().TauRedWomlingLab.stateOnCount + readBuildings().TauRedWomlingMine.stateOnCount * 6;
         this.rateOfChange = this.maxQuantity - this.currentQuantity;
       }
       isUnlocked() {
@@ -7384,7 +7354,7 @@
     }
     class PrestigeResource extends Resource {
       updateData() {
-        this.currentQuantity = game.global.prestige[this.id].count;
+        this.currentQuantity = readGame().global.prestige[this.id].count;
         this.maxQuantity = Number.MAX_SAFE_INTEGER;
       }
       isUnlocked() {
@@ -7393,14 +7363,14 @@
     }
     class Population extends Resource {
       get id() {
-        return game.global.race.species;
+        return readGame().global.race.species;
       }
     }
     class Morale extends Resource {
       updateData() {
-        this.currentQuantity = game.global.city.morale.current;
-        this.maxQuantity = game.global.city.morale.cap;
-        this.rateOfChange = game.global.city.morale.potential;
+        this.currentQuantity = readGame().global.city.morale.current;
+        this.maxQuantity = readGame().global.city.morale.cap;
+        this.rateOfChange = readGame().global.city.morale.potential;
         this.incomeAdusted = false;
       }
       isUnlocked() {
@@ -7414,15 +7384,15 @@
         }
         this.currentQuantity = 0;
         this.rateOfChange = 0;
-        for (let i = 0; i < game.global.city.surfaceDwellers.length; i++) {
-          this.currentQuantity += game.global.city.captive_housing[`race${i}`];
-          this.rateOfChange += game.global.city.captive_housing[`jailrace${i}`];
+        for (let i = 0; i < readGame().global.city.surfaceDwellers.length; i++) {
+          this.currentQuantity += readGame().global.city.captive_housing[`race${i}`];
+          this.rateOfChange += readGame().global.city.captive_housing[`jailrace${i}`];
         }
         this.currentQuantity += this.rateOfChange;
-        this.maxQuantity = game.global.city.captive_housing.raceCap;
+        this.maxQuantity = readGame().global.city.captive_housing.raceCap;
       }
       isUnlocked() {
-        return game.global.city.captive_housing ? true : false;
+        return readGame().global.city.captive_housing ? true : false;
       }
     }
     class ResourceProductionCost {
@@ -7448,32 +7418,32 @@
         this.is = normalizeProperties(flags) ?? {};
       }
       get autoBuildEnabled() {
-        return settings["bat" + this._vueBinding];
+        return readSettings3()["bat" + this._vueBinding];
       }
       get autoStateEnabled() {
-        return settings["bld_s_" + this._vueBinding];
+        return readSettings3()["bld_s_" + this._vueBinding];
       }
       get autoStateSmart() {
-        return settings["bld_s2_" + this._vueBinding];
+        return readSettings3()["bld_s2_" + this._vueBinding];
       }
       get priority() {
-        return settingsRaw["bld_p_" + this._vueBinding];
+        return readSettingsRaw()["bld_p_" + this._vueBinding];
       }
       get _weighting() {
-        return settings["bld_w_" + this._vueBinding];
+        return readSettings3()["bld_w_" + this._vueBinding];
       }
       get _autoMax() {
-        return settings["bld_m_" + this._vueBinding];
+        return readSettings3()["bld_m_" + this._vueBinding];
       }
       get definition() {
         if (this._location !== "") {
-          return game.actions[this._tab][this._location][this._id];
+          return readGame().actions[this._tab][this._location][this._id];
         } else {
-          return game.actions[this._tab][this._id];
+          return readGame().actions[this._tab][this._id];
         }
       }
       get instance() {
-        return game.global[this._tab][this._id];
+        return readGame().global[this._tab][this._id];
       }
       get id() {
         return this._id;
@@ -7498,7 +7468,7 @@
         return this._autoMax >= 0 && this._autoMax <= this.gameMax ? this._autoMax : this.gameMax;
       }
       isUnlocked() {
-        if (this._tab === "city" && !game.global.settings.showCity || this._tab === "space" && !game.global.settings.showSpace && !game.global.settings.showOuter || this._tab === "interstellar" && !game.global.settings.showDeep || this._tab === "portal" && !game.global.settings.showPortal || this._tab === "galaxy" && !game.global.settings.showGalactic || this._tab === "tauceti" && !game.global.settings.showTau || this._tab === "eden" && !game.global.settings.showEden) {
+        if (this._tab === "city" && !readGame().global.settings.showCity || this._tab === "space" && !readGame().global.settings.showSpace && !readGame().global.settings.showOuter || this._tab === "interstellar" && !readGame().global.settings.showDeep || this._tab === "portal" && !readGame().global.settings.showPortal || this._tab === "galaxy" && !readGame().global.settings.showGalactic || this._tab === "tauceti" && !readGame().global.settings.showTau || this._tab === "eden" && !readGame().global.settings.showEden) {
           return false;
         }
         return this.vue !== void 0;
@@ -7513,7 +7483,7 @@
         return haveTech(this.definition.grant[0], this.definition.grant[1]);
       }
       isSmartManaged() {
-        return settings.autoPower && this.isUnlocked() && this.autoStateEnabled && this.autoStateSmart;
+        return readSettings3().autoPower && this.isUnlocked() && this.autoStateEnabled && this.autoStateSmart;
       }
       isAutoBuildable() {
         return this.isUnlocked() && this.autoBuildEnabled && this._weighting > 0 && this.count < this.autoMax;
@@ -7546,9 +7516,9 @@
         if (!this.definition.cost) {
           return;
         }
-        let adjustedCosts = poly.adjustCosts(this.definition);
+        let adjustedCosts = readPoly().adjustCosts(this.definition);
         for (let resourceName in adjustedCosts) {
-          if (resources[resourceName]) {
+          if (readResources2()[resourceName]) {
             let resourceAmount = Number(adjustedCosts[resourceName]());
             if (resourceAmount > 0) {
               this.cost[resourceName] = resourceAmount;
@@ -7557,7 +7527,7 @@
         }
       }
       isAffordable(max = false) {
-        return game.checkAffordable(this.definition, max);
+        return readGame().checkAffordable(this.definition, max);
       }
       // Whether the action is clickable is determined by whether it is unlocked, affordable and not a "permanently clickable" action
       isClickable() {
@@ -7569,14 +7539,14 @@
         if (!this.isClickable()) {
           return false;
         }
-        let doMultiClick = this.is.multiSegmented && settings.buildingsUseMultiClick;
+        let doMultiClick = this.is.multiSegmented && readSettings3().buildingsUseMultiClick;
         let amountToBuild = 1;
         if (doMultiClick) {
           amountToBuild = this.gameMax - this.count;
           for (let res in this.cost) {
             amountToBuild = Math.min(
               amountToBuild,
-              Math.floor(resources[res].currentQuantity / this.cost[res])
+              Math.floor(readResources2()[res].currentQuantity / this.cost[res])
             );
           }
           if (amountToBuild < 1) {
@@ -7584,31 +7554,31 @@
           }
         }
         for (let res in this.cost) {
-          resources[res].currentQuantity -= this.cost[res] * amountToBuild;
+          readResources2()[res].currentQuantity -= this.cost[res] * amountToBuild;
         }
-        if (game.global.race.species !== "protoplasm" && !logIgnore.includes(this.id)) {
+        if (readGame().global.race.species !== "protoplasm" && !readLogIgnore().includes(this.id)) {
           if (this.gameMax < Number.MAX_SAFE_INTEGER && this.count + amountToBuild < this.gameMax) {
-            GameLog.logSuccess(
+            readGameLog().logSuccess(
               "multi_construction",
-              poly.loc("build_success", [
+              readPoly().loc("build_success", [
                 `${this.title} (${this.count + amountToBuild})`
               ]),
               ["queue", "building_queue"]
             );
           } else {
-            GameLog.logSuccess(
+            readGameLog().logSuccess(
               "construction",
-              poly.loc("build_success", [this.title]),
+              readPoly().loc("build_success", [this.title]),
               ["queue", "building_queue"]
             );
           }
         }
-        KeyManager.set(doMultiClick, doMultiClick, doMultiClick);
+        readKeyManager().set(doMultiClick, doMultiClick, doMultiClick);
         if (this.is.prestige) {
           logPrestige();
         }
         let popper = $2("#popper");
-        if (settings.performanceHackAvoidDrawTech && this.definition.refresh && this.count > 0 && !this.definition.grant && !this.definition.post && !this.definition.queue_complete && !this.is.prestige && !game.global.race.inflation && (popper.length === 0 || !popper.is(":visible"))) {
+        if (readSettings3().performanceHackAvoidDrawTech && this.definition.refresh && this.count > 0 && !this.definition.grant && !this.definition.post && !this.definition.queue_complete && !this.is.prestige && !readGame().global.race.inflation && (popper.length === 0 || !popper.is(":visible"))) {
           this.definition.action();
           return true;
         }
@@ -7623,7 +7593,7 @@
           this.vue.action();
         }
         if (this.is.prestige) {
-          state.goal = "GameOverMan";
+          readState().goal = "GameOverMan";
         }
         return true;
       }
@@ -7646,10 +7616,10 @@
         }
         let resource2 = this.consumption[idx].resource;
         let rate = this.consumption[idx].rate;
-        if (this._tab === "space" && (resource2 === resources.Oil || resource2 === resources.Helium_3)) {
-          rate = game.fuel_adjust(rate, true);
-        } else if ((this._tab === "interstellar" || this._tab === "galaxy" || this._tab === "tauceti") && (resource2 === resources.Deuterium || resource2 === resources.Helium_3) && this !== buildings.AlphaFusion) {
-          rate = game.int_fuel_adjust(rate);
+        if (this._tab === "space" && (resource2 === readResources2().Oil || resource2 === readResources2().Helium_3)) {
+          rate = readGame().fuel_adjust(rate, true);
+        } else if ((this._tab === "interstellar" || this._tab === "galaxy" || this._tab === "tauceti") && (resource2 === readResources2().Deuterium || resource2 === readResources2().Helium_3) && this !== readBuildings().AlphaFusion) {
+          rate = readGame().int_fuel_adjust(rate);
         }
         return rate;
       }
@@ -7659,7 +7629,7 @@
           if (resource2 instanceof Support) {
             continue;
           }
-          if (resource2 === resources.Food && settings.autoJobs && (jobs.Farmer.autoJobEnabled || jobs.Hunter.autoJobEnabled)) {
+          if (resource2 === readResources2().Food && readSettings3().autoJobs && (readJobs().Farmer.autoJobEnabled || readJobs().Hunter.autoJobEnabled)) {
             continue;
           }
           let consumptionRate = this.getFuelRate(j);
@@ -7670,18 +7640,18 @@
         return null;
       }
       getMissingSupport() {
-        if (game.global.race["fasting"] && this === buildings.AlphaMiningDroid && this.count < 1) {
+        if (readGame().global.race["fasting"] && this === readBuildings().AlphaMiningDroid && this.count < 1) {
           return null;
         }
         for (let j = 0; j < this.consumption.length; j++) {
           let resource2 = this.consumption[j].resource;
-          if (resource2 === resources.Spire_Support && this.autoStateSmart) {
+          if (resource2 === readResources2().Spire_Support && this.autoStateSmart) {
             continue;
           }
-          if (resource2 === resources.Tau_Belt_Support) {
+          if (resource2 === readResources2().Tau_Belt_Support) {
             continue;
           }
-          if (resource2 === resources.Womlings_Support && resource2.rateOfChange > 0) {
+          if (resource2 === readResources2().Womlings_Support && resource2.rateOfChange > 0) {
             continue;
           }
           let rate = this.consumption[j].rate;
@@ -7695,7 +7665,7 @@
         return null;
       }
       getUselessSupport() {
-        if (this === buildings.GatewayStarbase || this === buildings.AlphaHabitat || this === buildings.SpaceNavBeacon && game.global.race["orbit_decayed"]) {
+        if (this === readBuildings().GatewayStarbase || this === readBuildings().AlphaHabitat || this === readBuildings().SpaceNavBeacon && readGame().global.race["orbit_decayed"]) {
           return null;
         }
         let uselessSupports = [];
@@ -7705,7 +7675,7 @@
           if (!(resource2 instanceof Support) || rate >= 0) {
             continue;
           }
-          let minSupport = resource2 === resources.Belt_Support ? 2 * traitVal("high_pop", 0, 1) : resource2 === resources.Gateway_Support ? 5 : resource2 === resources.Womlings_Support ? 6 : 1;
+          let minSupport = resource2 === readResources2().Belt_Support ? 2 * traitVal("high_pop", 0, 1) : resource2 === readResources2().Gateway_Support ? 5 : resource2 === readResources2().Womlings_Support ? 6 : 1;
           if (resource2.rateOfChange >= minSupport) {
             uselessSupports.push(resource2);
           } else {
@@ -7721,7 +7691,7 @@
         if (!this.isUnlocked()) {
           return 0;
         }
-        if (this === buildings.Banquet) {
+        if (this === readBuildings().Banquet) {
           return this.instance?.count ? this.instance.level : 0;
         }
         return this.instance?.count ?? 0;
@@ -7750,13 +7720,13 @@
         }
         let vue = this.vue;
         if (adjustCount > 0) {
-          for (let m of KeyManager.click(adjustCount)) {
+          for (let m of readKeyManager().click(adjustCount)) {
             vue.power_on();
           }
           return true;
         }
         if (adjustCount < 0) {
-          for (let m of KeyManager.click(adjustCount * -1)) {
+          for (let m of readKeyManager().click(adjustCount * -1)) {
             vue.power_off();
           }
           return true;
@@ -7765,7 +7735,7 @@
     }
     class CityAction extends Action {
       get instance() {
-        return game.global.city[this._id];
+        return readGame().global.city[this._id];
       }
     }
     class Pillar extends Action {
@@ -7776,16 +7746,16 @@
         return this.isUnlocked() ? this.definition.on() : 0;
       }
       isAffordable(max = false) {
-        if (game.global.tech.pillars !== 1 || game.global.race.universe === "micro") {
+        if (readGame().global.tech.pillars !== 1 || readGame().global.race.universe === "micro") {
           return false;
         }
-        return game.checkAffordable(this.definition, max);
+        return readGame().checkAffordable(this.definition, max);
       }
     }
     class ResourceAction extends Action {
       constructor(name, tab, id, location, res, flags) {
         super(name, tab, id, location, flags);
-        this.resource = resources[res];
+        this.resource = readResources2()[res];
       }
       get count() {
         return this.resource.currentQuantity;
@@ -7796,32 +7766,38 @@
         super("", "evolution", id, "");
       }
       isUnlocked() {
-        let node = document2.getElementById(this._vueBinding);
+        let node = readDocument().getElementById(this._vueBinding);
         return node !== null && !node.classList.contains("is-hidden");
       }
     }
     class SpaceDock extends Action {
       isOptionsCached() {
-        if (this.count < 1 || game.global.tech["genesis"] < 4) {
+        if (this.count < 1 || readGame().global.tech["genesis"] < 4) {
           return true;
         }
-        if (!buildings.GasSpaceDockProbe.isOptionsCached() || game.global.tech["genesis"] >= 5 && !buildings.GasSpaceDockShipSegment.isOptionsCached() || game.global.tech["genesis"] === 6 && !buildings.GasSpaceDockPrepForLaunch.isOptionsCached() || game.global.tech["genesis"] >= 7 && !buildings.GasSpaceDockLaunch.isOptionsCached() || game.global.tech["geck"] >= 1 && !buildings.GasSpaceDockGECK.isOptionsCached()) {
+        if (!readBuildings().GasSpaceDockProbe.isOptionsCached() || readGame().global.tech["genesis"] >= 5 && !readBuildings().GasSpaceDockShipSegment.isOptionsCached() || readGame().global.tech["genesis"] === 6 && !readBuildings().GasSpaceDockPrepForLaunch.isOptionsCached() || readGame().global.tech["genesis"] >= 7 && !readBuildings().GasSpaceDockLaunch.isOptionsCached() || readGame().global.tech["geck"] >= 1 && !readBuildings().GasSpaceDockGECK.isOptionsCached()) {
           return false;
         }
         return true;
       }
       cacheOptions() {
-        if (this.count < 1 || WindowManager.isOpen()) {
+        if (this.count < 1 || readWindowManager().isOpen()) {
           return false;
         }
-        let optionsNode = document2.querySelector("#space-star_dock .special");
-        WindowManager.openModalWindowWithCallback(optionsNode, this.title, () => {
-          buildings.GasSpaceDockProbe.cacheOptions();
-          buildings.GasSpaceDockGECK.cacheOptions();
-          buildings.GasSpaceDockShipSegment.cacheOptions();
-          buildings.GasSpaceDockPrepForLaunch.cacheOptions();
-          buildings.GasSpaceDockLaunch.cacheOptions();
-        });
+        let optionsNode = readDocument().querySelector(
+          "#space-star_dock .special"
+        );
+        readWindowManager().openModalWindowWithCallback(
+          optionsNode,
+          this.title,
+          () => {
+            readBuildings().GasSpaceDockProbe.cacheOptions();
+            readBuildings().GasSpaceDockGECK.cacheOptions();
+            readBuildings().GasSpaceDockShipSegment.cacheOptions();
+            readBuildings().GasSpaceDockPrepForLaunch.cacheOptions();
+            readBuildings().GasSpaceDockLaunch.cacheOptions();
+          }
+        );
         return true;
       }
     }
@@ -7840,7 +7816,7 @@
         this._vue = getVueById(this._vueBinding);
       }
       isUnlocked() {
-        if (!game.global.settings.showSpace) {
+        if (!readGame().global.settings.showSpace) {
           return false;
         }
         return this._vue !== void 0;
@@ -7853,16 +7829,16 @@
         this.currentStep = 1;
       }
       get autoBuildEnabled() {
-        return settings["arpa_" + this._id];
+        return readSettings3()["arpa_" + this._id];
       }
       get priority() {
-        return settingsRaw["arpa_p_" + this._id];
+        return readSettingsRaw()["arpa_p_" + this._id];
       }
       get _autoMax() {
-        return settings["arpa_m_" + this._id];
+        return readSettings3()["arpa_m_" + this._id];
       }
       get _weighting() {
-        return settings["arpa_w_" + this._id];
+        return readSettings3()["arpa_w_" + this._id];
       }
       updateResourceRequirements() {
         if (!this.isUnlocked()) {
@@ -7871,17 +7847,17 @@
         this.cost = {};
         let maxStep = Math.min(
           100 - this.progress,
-          state.triggerTargets.includes(this) ? 100 : settings.arpaStep
+          readState().triggerTargets.includes(this) ? 100 : readSettings3().arpaStep
         );
-        let adjustedCosts = poly.arpaAdjustCosts(this.definition.cost);
+        let adjustedCosts = readPoly().arpaAdjustCosts(this.definition.cost);
         for (let resourceName in adjustedCosts) {
-          if (resources[resourceName]) {
+          if (readResources2()[resourceName]) {
             let resourceAmount = Number(adjustedCosts[resourceName]());
             if (resourceAmount > 0) {
               this.cost[resourceName] = resourceAmount / 100;
               maxStep = Math.min(
                 maxStep,
-                resources[resourceName].maxQuantity / this.cost[resourceName]
+                readResources2()[resourceName].maxQuantity / this.cost[resourceName]
               );
             }
           }
@@ -7914,29 +7890,29 @@
           return false;
         }
         for (let res in this.cost) {
-          resources[res].currentQuantity -= this.cost[res];
+          readResources2()[res].currentQuantity -= this.cost[res];
         }
         if (this.progress + this.currentStep < 100) {
-          GameLog.logSuccess(
+          readGameLog().logSuccess(
             "arpa",
-            poly.loc("build_success", [
+            readPoly().loc("build_success", [
               `${this.title} (${this.progress + this.currentStep}%)`
             ]),
             ["queue", "building_queue"]
           );
         } else {
-          GameLog.logSuccess(
+          readGameLog().logSuccess(
             "construction",
-            poly.loc("build_success", [this.title]),
+            readPoly().loc("build_success", [this.title]),
             ["queue", "building_queue"]
           );
           if (this.id === "syphon" && this.count == 79) {
             logPrestige();
           }
         }
-        KeyManager.set(false, false, false);
-        if (settings.performanceHackAvoidDrawTech && this.count >= 10 && !(this.id === "syphon" && this.count >= 79)) {
-          let mainVue = win.$("#mainColumn > div:first-child")[0]?.__vue__;
+        readKeyManager().set(false, false, false);
+        if (readSettings3().performanceHackAvoidDrawTech && this.count >= 10 && !(this.id === "syphon" && this.count >= 79)) {
+          let mainVue = readWin().$("#mainColumn > div:first-child")[0]?.__vue__;
           if (mainVue) {
             let oldTabLoad = mainVue.s.tabLoad;
             try {
@@ -7995,12 +7971,12 @@
         return this._id;
       }
       isUnlocked() {
-        return document2.querySelector(
+        return readDocument().querySelector(
           "#" + this._vueBinding + " > .button:not(.precog)"
         ) !== null && getVueById(this._vueBinding) !== void 0;
       }
       get definition() {
-        return game.actions.tech[this._id];
+        return readGame().actions.tech[this._id];
       }
       get title() {
         let def = this.definition;
@@ -8014,7 +7990,7 @@
         return this.title;
       }
       isAffordable(max = false) {
-        return game.checkAffordable(this.definition, max);
+        return readGame().checkAffordable(this.definition, max);
       }
       // Whether the action is clickable is determined by whether it is unlocked, affordable and not a "permanently clickable" action
       isClickable() {
@@ -8027,19 +8003,20 @@
           return false;
         }
         for (let res in this.cost) {
-          resources[res].currentQuantity -= this.cost[res];
+          readResources2()[res].currentQuantity -= this.cost[res];
         }
         getVueById(this._vueBinding).action();
         let def = this.definition;
         let title = typeof def.title === "function" ? def.title() : def.title;
-        GameLog.logSuccess("research", poly.loc("research_success", [title]), [
-          "queue",
-          "research_queue"
-        ]);
+        readGameLog().logSuccess(
+          "research",
+          readPoly().loc("research_success", [title]),
+          ["queue", "research_queue"]
+        );
         return true;
       }
       isResearched() {
-        return document2.querySelector("#tech-" + this.id + " .oldTech") !== null;
+        return readDocument().querySelector("#tech-" + this.id + " .oldTech") !== null;
       }
       updateResourceRequirements() {
         if (!this.isUnlocked()) {
@@ -8049,9 +8026,9 @@
         if (!this.definition.cost) {
           return;
         }
-        let adjustedCosts = poly.adjustCosts(this.definition);
+        let adjustedCosts = readPoly().adjustCosts(this.definition);
         for (let resourceName in adjustedCosts) {
-          if (resources[resourceName]) {
+          if (readResources2()[resourceName]) {
             let resourceAmount = Number(adjustedCosts[resourceName]());
             if (resourceAmount > 0) {
               this.cost[resourceName] = resourceAmount;
@@ -8066,18 +8043,18 @@
         this.evolutionTree = {};
       }
       get name() {
-        return game.races[this.id].name ?? `Custom (${this.id} slot)`;
+        return readGame().races[this.id].name ?? `Custom (${this.id} slot)`;
       }
       get desc() {
-        let nameRef = game.races[this.id].desc;
+        let nameRef = readGame().races[this.id].desc;
         return typeof nameRef === "function" ? nameRef() : typeof nameRef === "string" ? nameRef : "Custom";
       }
       get genus() {
-        return game.races[this.id].type;
+        return readGame().races[this.id].type;
       }
       getWeighting(verbose) {
         let habitability = this.getHabitability();
-        if (habitability < (settings.evolutionAutoUnbound ? 0.8 : 1)) {
+        if (habitability < (readSettings3().evolutionAutoUnbound ? 0.8 : 1)) {
           return -1;
         }
         const noMADRace = ["sludge", "ultra_sludge", "hellspawn"];
@@ -8168,20 +8145,20 @@
         const noImitates = ["junker", "nano", "synth", "hellspawn"];
         let goals = [];
         let weighting = 0;
-        let starLevel = getStarLevel(settings);
+        let starLevel = getStarLevel(readSettings3());
         const checkAchievement = (baseWeight, id) => {
           let improve = starLevel - getAchievementStar(id);
           if (improve > 0) {
             weighting += baseWeight * improve;
             goals.push(`achieve_${id}_name`);
-            if (game.global.race.universe !== "micro" && game.global.race.universe !== "standard") {
+            if (readGame().global.race.universe !== "micro" && readGame().global.race.universe !== "standard") {
               weighting += baseWeight * Math.max(0, starLevel - getAchievementStar(id, "standard"));
             }
           }
         };
-        if ((settings.prestigeType === "ascension" && settings.prestigeAscensionPillar || ["demonic", "apotheosis"].includes(settings.prestigeType)) && game.global.race.universe !== "micro") {
-          let speciesPillarLevel = game.global.pillars[this.id] ?? 0;
-          let canPillar = !speciesPillarLevel && resources.Harmony.currentQuantity >= 1;
+        if ((readSettings3().prestigeType === "ascension" && readSettings3().prestigeAscensionPillar || ["demonic", "apotheosis"].includes(readSettings3().prestigeType)) && readGame().global.race.universe !== "micro") {
+          let speciesPillarLevel = readGame().global.pillars[this.id] ?? 0;
+          let canPillar = !speciesPillarLevel && readResources2().Harmony.currentQuantity >= 1;
           let canUpgrade = speciesPillarLevel && speciesPillarLevel < starLevel;
           if (canPillar || canUpgrade) {
             weighting += 1e3 * Math.max(0, starLevel - speciesPillarLevel);
@@ -8190,9 +8167,9 @@
             goals.push("feat_equilibrium_name");
             if (!noPillarRace.includes(this.id)) {
               let genusPillar = Math.max(
-                ...Object.values(races).filter(
+                ...Object.values(readRaces()).filter(
                   (r) => r.genus === this.genus && !noPillarRace.includes(r.id)
-                ).map((r) => game.global.pillars[r.id] ?? 0)
+                ).map((r) => readGame().global.pillars[r.id] ?? 0)
               );
               let improve = starLevel - genusPillar;
               if (improve > 0) {
@@ -8202,8 +8179,8 @@
             }
           }
         }
-        if (settings.prestigeType === "apocalypse") {
-          let imitateUnlocked = game.global.stats?.synth?.[this.id] ?? false;
+        if (readSettings3().prestigeType === "apocalypse") {
+          let imitateUnlocked = readGame().global.stats?.synth?.[this.id] ?? false;
           if (!noImitates.includes(this.id) && !imitateUnlocked) {
             weighting += 1e4;
             goals.push("feat_planned_obsolescence_name");
@@ -8212,55 +8189,55 @@
             }
           }
         }
-        if (greatnessReset.includes(settings.prestigeType)) {
+        if (greatnessReset.includes(readSettings3().prestigeType)) {
           if (!noGreatnessGenus.includes(this.genus) && !noGreatnessRace.includes(this.id)) {
             checkAchievement(100, "genus_" + this.genus);
           }
-        } else if (!noExtinctionRace.includes(this.id) && (!noMADRace.includes(this.id) || settings.prestigeType !== "mad")) {
+        } else if (!noExtinctionRace.includes(this.id) && (!noMADRace.includes(this.id) || readSettings3().prestigeType !== "mad")) {
           checkAchievement(100, "extinct_" + this.id);
         }
-        if (this.genus === "demonic" && settings.prestigeType !== "mad" && settings.prestigeType !== "bioseed") {
+        if (this.genus === "demonic" && readSettings3().prestigeType !== "mad" && readSettings3().prestigeType !== "bioseed") {
           checkAchievement(50, "blood_war");
         }
-        if (this.id === "sharkin" && settings.prestigeType !== "mad") {
+        if (this.id === "sharkin" && readSettings3().prestigeType !== "mad") {
           checkAchievement(50, "laser_shark");
         }
-        if (game.global.race.universe === "micro" && settings.prestigeType === "bioseed") {
-          let smallRace = this.genus === "small" || game.races[this.id].traits.compact;
+        if (readGame().global.race.universe === "micro" && readSettings3().prestigeType === "bioseed") {
+          let smallRace = this.genus === "small" || readGame().races[this.id].traits.compact;
           checkAchievement(50, smallRace ? "macro" : "marble");
         }
-        if (this.id === "balorg" && game.global.race.universe === "magic" && settings.prestigeType === "vacuum") {
+        if (this.id === "balorg" && readGame().global.race.universe === "magic" && readSettings3().prestigeType === "vacuum") {
           checkAchievement(50, "pass");
         }
-        for (let set of fanatAchievements) {
-          if (this.id === set.race && game.global.race.gods === set.god) {
+        for (let set of readFanatAchievements()) {
+          if (this.id === set.race && readGame().global.race.gods === set.god) {
             checkAchievement(150, set.achieve);
           }
         }
         if (weighting > 0 && habitability === 1 && this.getCondition() !== "" && !challengeRace.includes(this.id)) {
           weighting += 500;
         }
-        if (midTierReset.includes(settings.prestigeType) && bestForMid.includes(this.id) || highTierReset.includes(settings.prestigeType) && bestForHigh.includes(this.id)) {
+        if (midTierReset.includes(readSettings3().prestigeType) && bestForMid.includes(this.id) || highTierReset.includes(readSettings3().prestigeType) && bestForHigh.includes(this.id)) {
           weighting += 1;
         }
-        if (this.id === game.global.race.gods) {
+        if (this.id === readGame().global.race.gods) {
           checkAchievement(10, "second_evolution");
         }
-        for (let set of fanatAchievements) {
+        for (let set of readFanatAchievements()) {
           if (this.id === set.god) {
             checkAchievement(5, set.achieve);
           }
         }
-        if (game.global.race.universe !== "micro") {
+        if (readGame().global.race.universe !== "micro") {
           const checkFeat = (id) => {
-            let improve = starLevel - (game.global.stats.feat[id] ?? 0);
+            let improve = starLevel - (readGame().global.stats.feat[id] ?? 0);
             if (improve > 0) {
               weighting += 1 * improve;
               goals.push(`feat_${id}_name`);
             }
           };
-          if (game.global.city.biome === "hellscape" && this.genus !== "demonic") {
-            switch (settings.prestigeType) {
+          if (readGame().global.city.biome === "hellscape" && this.genus !== "demonic") {
+            switch (readSettings3().prestigeType) {
               case "mad":
               case "cataclysm":
                 checkFeat("take_no_advice");
@@ -8271,7 +8248,7 @@
             }
           }
           if (this.id === "junker") {
-            switch (settings.prestigeType) {
+            switch (readSettings3().prestigeType) {
               case "bioseed":
                 checkFeat("organ_harvester");
                 break;
@@ -8287,16 +8264,16 @@
                 break;
             }
           }
-          if (settings.prestigeType === "whitehole" && game.global.race.universe === "evil" && this.genus === "angelic") {
+          if (readSettings3().prestigeType === "whitehole" && readGame().global.race.universe === "evil" && this.genus === "angelic") {
             checkFeat("nephilim");
           }
-          if (settings.prestigeType === "demonic" && this.genus === "angelic") {
+          if (readSettings3().prestigeType === "demonic" && this.genus === "angelic") {
             checkFeat("twisted");
           }
-          if (settings.prestigeType === "ascension" && settings.challenge_emfield && this.genus === "artifical" && this.id !== "custom") {
+          if (readSettings3().prestigeType === "ascension" && readSettings3().challenge_emfield && this.genus === "artifical" && this.id !== "custom") {
             checkFeat("digital_ascension");
           }
-          if (settings.prestigeType === "demonic" && this.id === "sludge") {
+          if (readSettings3().prestigeType === "demonic" && this.id === "sludge") {
             checkFeat("slime_lord");
           }
         }
@@ -8309,39 +8286,41 @@
       getHabitability() {
         switch (this.id) {
           case "hellspawn":
-            return game.global.race.universe === "evil" && game.global.stats.achieve["godslayer"]?.e ? 1 : 0;
+            return readGame().global.race.universe === "evil" && readGame().global.stats.achieve["godslayer"]?.e ? 1 : 0;
           case "junker":
-            return game.global.genes.challenge ? 1 : 0;
+            return readGame().global.genes.challenge ? 1 : 0;
           case "sludge":
-            return (game.global.stats.achieve["ascended"] || game.global.stats.achieve["corrupted"]) && game.global.stats.achieve["extinct_junker"] ? 1 : 0;
+            return (readGame().global.stats.achieve["ascended"] || readGame().global.stats.achieve["corrupted"]) && readGame().global.stats.achieve["extinct_junker"] ? 1 : 0;
           case "ultra_sludge":
-            return game.global.stats.achieve["godslayer"] && game.global.stats.achieve["extinct_sludge"] ? 1 : 0;
+            return readGame().global.stats.achieve["godslayer"] && readGame().global.stats.achieve["extinct_sludge"] ? 1 : 0;
           case "hybrid":
-            return game.global.stats.achieve["what_is_best"]?.e >= 5 ? 1 : 0;
+            return readGame().global.stats.achieve["what_is_best"]?.e >= 5 ? 1 : 0;
         }
-        let unboundMod = game.global.blood.unbound >= 4 ? 0.95 : game.global.blood.unbound >= 2 ? 0.9 : game.global.blood.unbound >= 1 ? 0.8 : 0;
-        let shadowMod = game.global.blood.unbound >= 3 ? unboundMod : 0;
+        let unboundMod = readGame().global.blood.unbound >= 4 ? 0.95 : readGame().global.blood.unbound >= 2 ? 0.9 : readGame().global.blood.unbound >= 1 ? 0.8 : 0;
+        let shadowMod = readGame().global.blood.unbound >= 3 ? unboundMod : 0;
         switch (this.genus) {
           case "aquatic":
-            return ["swamp", "oceanic"].includes(game.global.city.biome) ? 1 : unboundMod;
+            return ["swamp", "oceanic"].includes(readGame().global.city.biome) ? 1 : unboundMod;
           case "fey":
-            return ["forest", "swamp", "taiga"].includes(game.global.city.biome) ? 1 : unboundMod;
+            return ["forest", "swamp", "taiga"].includes(
+              readGame().global.city.biome
+            ) ? 1 : unboundMod;
           case "sand":
-            return ["ashland", "desert"].includes(game.global.city.biome) ? 1 : unboundMod;
+            return ["ashland", "desert"].includes(readGame().global.city.biome) ? 1 : unboundMod;
           case "heat":
-            return ["ashland", "volcanic"].includes(game.global.city.biome) ? 1 : unboundMod;
+            return ["ashland", "volcanic"].includes(readGame().global.city.biome) ? 1 : unboundMod;
           case "polar":
-            return ["tundra", "taiga"].includes(game.global.city.biome) ? 1 : unboundMod;
+            return ["tundra", "taiga"].includes(readGame().global.city.biome) ? 1 : unboundMod;
           case "demonic":
-            return game.global.city.biome === "hellscape" ? 1 : shadowMod;
+            return readGame().global.city.biome === "hellscape" ? 1 : shadowMod;
           case "angelic":
-            return game.global.city.biome === "eden" ? 1 : shadowMod;
+            return readGame().global.city.biome === "eden" ? 1 : shadowMod;
           case "synthetic":
-            return game.global.stats.achieve["obsolete"]?.l >= 5 ? 1 : 0;
+            return readGame().global.stats.achieve["obsolete"]?.l >= 5 ? 1 : 0;
           case "eldritch":
-            return game.global.stats.achieve["nightmare"]?.mg ? 1 : 0;
+            return readGame().global.stats.achieve["nightmare"]?.mg ? 1 : 0;
           case "hybrid":
-            return game.global.stats.achieve["godslayer"] ? 1 : 0;
+            return readGame().global.stats.achieve["godslayer"] ? 1 : 0;
           case void 0:
             return 0;
           default:
@@ -8351,8 +8330,8 @@
       getCondition() {
         switch (this.id) {
           case "hellspawn":
-            return poly.loc("wiki_challenges_reqs_reset", [
-              `${poly.loc("wiki_universe_evil")} ${poly.loc(
+            return readPoly().loc("wiki_challenges_reqs_reset", [
+              `${readPoly().loc("wiki_universe_evil")} ${readPoly().loc(
                 "wiki_resets_apotheosis"
               )}`
             ]);
@@ -8363,9 +8342,9 @@
           case "ultra_sludge":
             return "Ultra Failed Experiment unlocked.";
           case "custom":
-            return `Complete an Ascension reset and be on a suitable planet for your chosen genus (${this.genus ? game.loc("genelab_genus_" + this.genus) : "not set"}).`;
+            return `Complete an Ascension reset and be on a suitable planet for your chosen genus (${this.genus ? readGame().loc("genelab_genus_" + this.genus) : "not set"}).`;
           case "hybrid":
-            return game.loc("wiki_achieve_what_is_best");
+            return readGame().loc("wiki_achieve_what_is_best");
         }
         switch (this.genus) {
           case "aquatic":
@@ -8383,11 +8362,11 @@
           case "angelic":
             return "Eden planet.";
           case "synthetic":
-            return game.loc("wiki_achieve_obsolete");
+            return readGame().loc("wiki_achieve_obsolete");
           case "eldritch":
-            return game.loc("wiki_achieve_nightmare");
+            return readGame().loc("wiki_achieve_nightmare");
           case "hybrid":
-            return game.loc("wiki_achieve_godslayer");
+            return readGame().loc("wiki_achieve_godslayer");
           case void 0:
             return "Unknown.";
           default:
@@ -8409,26 +8388,26 @@
       }
       cost() {
         if (this.actionType === "research") {
-          return techIds[this.actionId].definition.cost;
+          return readTechIds()[this.actionId].definition.cost;
         }
         if (this.actionType === "build") {
-          return buildingIds[this.actionId].definition.cost;
+          return readBuildingIds()[this.actionId].definition.cost;
         }
         if (this.actionType === "arpa") {
-          return arpaIds[this.actionId].definition.cost;
+          return readArpaIds()[this.actionId].definition.cost;
         }
         return {};
       }
       isActionPossible() {
         let obj = null;
         if (this.actionType === "research") {
-          obj = techIds[this.actionId];
+          obj = readTechIds()[this.actionId];
         }
         if (this.actionType === "build") {
-          obj = buildingIds[this.actionId];
+          obj = readBuildingIds()[this.actionId];
         }
         if (this.actionType === "arpa") {
-          obj = arpaIds[this.actionId];
+          obj = readArpaIds()[this.actionId];
         }
         return obj && obj.isUnlocked() && obj.isAffordable(true);
       }
@@ -8436,15 +8415,15 @@
         if (this.complete) {
           return false;
         }
-        if (this.actionType === "research" && techIds[this.actionId].isResearched()) {
+        if (this.actionType === "research" && readTechIds()[this.actionId].isResearched()) {
           this.complete = true;
           return true;
         }
-        if (this.actionType === "build" && buildingIds[this.actionId].count >= this.actionCount) {
+        if (this.actionType === "build" && readBuildingIds()[this.actionId].count >= this.actionCount) {
           this.complete = true;
           return true;
         }
-        if (this.actionType === "arpa" && arpaIds[this.actionId].count >= this.actionCount) {
+        if (this.actionType === "arpa" && readArpaIds()[this.actionId].count >= this.actionCount) {
           this.complete = true;
           return true;
         }
@@ -8452,21 +8431,21 @@
       }
       areRequirementsMet() {
         if (this.requirementType === "chain") {
-          return this.priority < 1 || TriggerManager.priorityList[this.priority - 1]?.complete;
-        } else if (checkTypes[this.requirementType]) {
+          return this.priority < 1 || readTriggerManager().priorityList[this.priority - 1]?.complete;
+        } else if (readCheckTypes()[this.requirementType]) {
           try {
-            if (retBools.includes(this.requirementType)) {
-              return checkTypes[this.requirementType].fn(this.requirementId) == this.requirementCount;
+            if (readRetBools().includes(this.requirementType)) {
+              return readCheckTypes()[this.requirementType].fn(this.requirementId) == this.requirementCount;
             } else {
-              return checkTypes[this.requirementType].fn(this.requirementId) >= this.requirementCount;
+              return readCheckTypes()[this.requirementType].fn(this.requirementId) >= this.requirementCount;
             }
           } catch (error) {
             let displayName = `${this.requirementType} ${this.requirementId} x${this.requirementCount} => ${this.actionType}: ${this.actionId} x${this.actionCount}`;
             let msg = `Trigger ${this.seq} [${displayName}] requirement is invalid! Fix or remove it. (${error})`;
-            if (!WindowManager.isOpen() && !Object.values(game.global.lastMsg.all).find(
+            if (!readWindowManager().isOpen() && !Object.values(readGame().global.lastMsg.all).find(
               (log) => log.m === msg
             )) {
-              GameLog.logDanger("special", msg, ["events", "major_events"]);
+              readGameLog().logDanger("special", msg, ["events", "major_events"]);
             }
           }
         }
@@ -8482,18 +8461,18 @@
           this.requirementCount = 0;
           return;
         }
-        if (!checkTypes[requirementType]) {
+        if (!readCheckTypes()[requirementType]) {
           return;
         }
-        let oldArg = checkTypes[this.requirementType]?.arg ?? null;
-        let oldOpts = checkTypes[this.requirementType]?.options ?? null;
-        let newArg = checkTypes[requirementType].arg;
-        let newOpts = checkTypes[requirementType].options;
+        let oldArg = readCheckTypes()[this.requirementType]?.arg ?? null;
+        let oldOpts = readCheckTypes()[this.requirementType]?.options ?? null;
+        let newArg = readCheckTypes()[requirementType].arg;
+        let newOpts = readCheckTypes()[requirementType].options;
         this.requirementType = requirementType;
         this.requirementCount = 1;
         this.complete = false;
         if (oldArg !== newArg || oldOpts !== newOpts) {
-          this.requirementId = checkTypes[this.requirementType].def;
+          this.requirementId = readCheckTypes()[this.requirementType].def;
         }
       }
       updateActionType(actionType) {
@@ -8524,25 +8503,25 @@
         this.traitName = traitName;
       }
       get enabled() {
-        return settings["mTrait_" + this.traitName];
+        return readSettings3()["mTrait_" + this.traitName];
       }
       get priority() {
-        return settingsRaw["mTrait_p_" + this.traitName];
+        return readSettingsRaw()["mTrait_p_" + this.traitName];
       }
       get weighting() {
-        return settings["mTrait_w_" + this.traitName];
+        return readSettings3()["mTrait_w_" + this.traitName];
       }
       isUnlocked() {
-        return game.global.settings.mtorder.includes(this.traitName);
+        return readGame().global.settings.mtorder.includes(this.traitName);
       }
       geneCount() {
-        return game.global.race.minor[this.traitName] ?? 0;
+        return readGame().global.race.minor[this.traitName] ?? 0;
       }
       phageCount() {
-        return game.global.genes.minor[this.traitName] ?? 0;
+        return readGame().global.genes.minor[this.traitName] ?? 0;
       }
       totalCount() {
-        return game.global.race[this.traitName] ?? 0;
+        return readGame().global.race[this.traitName] ?? 0;
       }
       geneCost() {
         return this.traitName === "mastery" ? Fibonacci2(this.geneCount()) * 5 : Fibonacci2(this.geneCount());
@@ -8551,42 +8530,42 @@
     class MutableTrait {
       constructor(traitName) {
         this.traitName = traitName;
-        this.baseCost = Math.abs(game.traits[traitName].val);
-        this.isPositive = game.traits[traitName].val >= 0;
+        this.baseCost = Math.abs(readGame().traits[traitName].val);
+        this.isPositive = readGame().traits[traitName].val >= 0;
       }
       get gainEnabled() {
-        return settings["mutableTrait_gain_" + this.traitName];
+        return readSettings3()["mutableTrait_gain_" + this.traitName];
       }
       get purgeEnabled() {
-        return settings["mutableTrait_purge_" + this.traitName];
+        return readSettings3()["mutableTrait_purge_" + this.traitName];
       }
       get resetEnabled() {
-        return settings["mutableTrait_reset_" + this.traitName];
+        return readSettings3()["mutableTrait_reset_" + this.traitName];
       }
       get priority() {
-        return settingsRaw["mutableTrait_p_" + this.traitName];
+        return readSettingsRaw()["mutableTrait_p_" + this.traitName];
       }
       get name() {
-        return game.loc("trait_" + this.traitName + "_name");
+        return readGame().loc("trait_" + this.traitName + "_name");
       }
       canGain() {
-        if (game.global.race.species === "hellspawn" && game.global.race["warlord"]) {
+        if (readGame().global.race.species === "hellspawn" && readGame().global.race["warlord"]) {
           return false;
         }
-        return this.gainEnabled && !this.purgeEnabled && this.canMutate("gain") && game.global.race[this.traitName] === void 0 && !conflictingTraits.some(
-          (set) => set[0] === this.traitName && game.global.race[set[1]] !== void 0 || set[1] === this.traitName && game.global.race[set[0]] !== void 0
+        return this.gainEnabled && !this.purgeEnabled && this.canMutate("gain") && readGame().global.race[this.traitName] === void 0 && !readConflictingTraits().some(
+          (set) => set[0] === this.traitName && readGame().global.race[set[1]] !== void 0 || set[1] === this.traitName && readGame().global.race[set[0]] !== void 0
         );
       }
       canPurge() {
-        return this.purgeEnabled && !this.gainEnabled && this.canMutate("purge") && game.global.race[this.traitName] !== void 0 && !((game.global.race.species === "sludge" || game.global.race.species === "ultra_sludge") && this.traitName === "ooze") && !game.global.race.ss_traits?.includes(this.traitName) && !game.global.race.iTraits?.hasOwnProperty(this.traitName);
+        return this.purgeEnabled && !this.gainEnabled && this.canMutate("purge") && readGame().global.race[this.traitName] !== void 0 && !((readGame().global.race.species === "sludge" || readGame().global.race.species === "ultra_sludge") && this.traitName === "ooze") && !readGame().global.race.ss_traits?.includes(this.traitName) && !readGame().global.race.iTraits?.hasOwnProperty(this.traitName);
       }
       canMutate(action) {
-        let currentPlasmids = resources[game.global.race.universe === "antimatter" ? "AntiPlasmid" : "Plasmid"].currentQuantity;
-        return currentPlasmids - this.mutationCost(action) >= MutableTraitManager.minimumPlasmidsToPreserve && !((game.global.race.species === "sludge" || game.global.race.species === "ultra_sludge") && game.global.race["modified"]);
+        let currentPlasmids = readResources2()[readGame().global.race.universe === "antimatter" ? "AntiPlasmid" : "Plasmid"].currentQuantity;
+        return currentPlasmids - this.mutationCost(action) >= readMutableTraitManager().minimumPlasmidsToPreserve && !((readGame().global.race.species === "sludge" || readGame().global.race.species === "ultra_sludge") && readGame().global.race["modified"]);
       }
       mutationCost(action) {
-        let mult = mutationCostMultipliers[game.global.race.species]?.[action] ?? 1;
-        let multGenus = mutationCostMultipliersGenus[game.races[game.global.race.species].type]?.[action] ?? 1;
+        let mult = readMutationCostMultipliers()[readGame().global.race.species]?.[action] ?? 1;
+        let multGenus = readMutationCostMultipliersGenus()[readGame().races[readGame().global.race.species].type]?.[action] ?? 1;
         return this.baseCost * 5 * mult * multGenus;
       }
     }
@@ -8594,11 +8573,11 @@
       constructor(traitName) {
         super(traitName);
         this.type = "major";
-        let ownerRace = Object.entries(game.races).filter(
+        let ownerRace = Object.entries(readGame().races).filter(
           ([id, race2]) => id !== "custom" && id !== "hybrid" && race2.traits[traitName] !== void 0
         ).map(([id, race2]) => ({ id, genus: race2.type }))[0] ?? {};
-        this.source = ownerRace.id ?? specialRaceTraits[traitName] ?? "";
-        this.racesThatCanGain = Object.entries(game.races).filter(
+        this.source = ownerRace.id ?? readSpecialRaceTraits()[traitName] ?? "";
+        this.racesThatCanGain = Object.entries(readGame().races).filter(
           ([id, race2]) => id == ownerRace.id || (race2?.type == "hybrid" ? race2?.hybrid?.includes(ownerRace.genus) : race2?.type === ownerRace.genus)
         ).map(([id, race2]) => id).flat();
         this.genus = this.source === "reindeer" ? "herbivore" : ownerRace.genus;
@@ -8607,18 +8586,18 @@
         return this.traitName !== "frail" && this.traitName !== "ooze";
       }
       canGain() {
-        return super.canGain() && game.global.genes["mutation"] >= 3 && this.racesThatCanGain.includes(game.global.race.species);
+        return super.canGain() && readGame().global.genes["mutation"] >= 3 && this.racesThatCanGain.includes(readGame().global.race.species);
       }
       canPurge() {
-        return super.canPurge() && game.global.genes["mutation"] >= 1;
+        return super.canPurge() && readGame().global.genes["mutation"] >= 1;
       }
     }
     class GenusTrait extends MutableTrait {
       constructor(traitName) {
         super(traitName);
         this.type = "genus";
-        let genus = Object.entries(poly.genus_traits).filter(([id, traits]) => traits[traitName] !== void 0).map(([id, traits]) => id);
-        this.source = genus[0] ?? specialRaceTraits[traitName] ?? "";
+        let genus = Object.entries(readPoly().genus_traits).filter(([id, traits]) => traits[traitName] !== void 0).map(([id, traits]) => id);
+        this.source = genus[0] ?? readSpecialRaceTraits()[traitName] ?? "";
         this.genus = this.source;
       }
       isGainable() {
@@ -8628,7 +8607,7 @@
         return false;
       }
       canPurge() {
-        return super.canPurge() && game.global.genes["mutation"] >= 2;
+        return super.canPurge() && readGame().global.genes["mutation"] >= 2;
       }
     }
     return {
@@ -53832,49 +53811,47 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       MajorTrait,
       GenusTrait
     } = createEntityClasses({
-      dependencies: {
-        $: () => $2,
-        arpaIds: () => arpaIds,
-        buildingIds: () => buildingIds,
-        buildings: () => buildings,
-        checkAffordableCustom: () => checkAffordableCustom,
-        checkTypes: () => checkTypes,
-        conflictingTraits: () => conflictingTraits,
-        document: () => document,
-        fanatAchievements: () => fanatAchievements,
-        Fibonacci: () => Fibonacci,
-        game: () => game,
-        GameLog: () => GameLog,
-        getAchievementStar: () => getAchievementStar,
-        getCitadelConsumption: () => getCitadelConsumption,
-        getStarLevel: () => getStarLevel,
-        getVueById: () => getVueById,
-        haveTask: () => haveTask,
-        haveTech: () => haveTech,
-        jobs: () => jobs,
-        KeyManager: () => KeyManager,
-        logIgnore: () => logIgnore,
-        logPrestige: () => logPrestige,
-        MutableTraitManager: () => MutableTraitManager,
-        mutationCostMultipliers: () => mutationCostMultipliers,
-        mutationCostMultipliersGenus: () => mutationCostMultipliersGenus,
-        normalizeProperties: () => normalizeProperties,
-        poly: () => poly,
-        races: () => races,
-        resources: () => resources,
-        retBools: () => retBools,
-        settings: () => settings,
-        settingsRaw: () => settingsRaw,
-        specialRaceTraits: () => specialRaceTraits,
-        state: () => state,
-        techIds: () => techIds,
-        ticksPerSecond: () => ticksPerSecond,
-        traitVal: () => traitVal,
-        TriggerManager: () => TriggerManager,
-        WarManager: () => WarManager,
-        win: () => win,
-        WindowManager: () => WindowManager
-      }
+      readJQuery: () => $2,
+      readArpaIds: () => arpaIds,
+      readBuildingIds: () => buildingIds,
+      readBuildings: () => buildings,
+      readCheckAffordableCustom: () => checkAffordableCustom,
+      readCheckTypes: () => checkTypes,
+      readConflictingTraits: () => conflictingTraits,
+      readDocument: () => document,
+      readFanatAchievements: () => fanatAchievements,
+      readFibonacci: () => Fibonacci,
+      readGame: () => game,
+      readGameLog: () => GameLog,
+      readAchievementStar: () => getAchievementStar,
+      readCitadelConsumption: () => getCitadelConsumption,
+      readStarLevel: () => getStarLevel,
+      readVueById: () => getVueById,
+      readHaveTask: () => haveTask,
+      readHaveTech: () => haveTech,
+      readJobs: () => jobs,
+      readKeyManager: () => KeyManager,
+      readLogIgnore: () => logIgnore,
+      readLogPrestige: () => logPrestige,
+      readMutableTraitManager: () => MutableTraitManager,
+      readMutationCostMultipliers: () => mutationCostMultipliers,
+      readMutationCostMultipliersGenus: () => mutationCostMultipliersGenus,
+      readNormalizeProperties: () => normalizeProperties,
+      readPoly: () => poly,
+      readRaces: () => races,
+      readResources: () => resources,
+      readRetBools: () => retBools,
+      readSettings: () => settings,
+      readSettingsRaw: () => settingsRaw,
+      readSpecialRaceTraits: () => specialRaceTraits,
+      readState: () => state,
+      readTechIds: () => techIds,
+      readTicksPerSecond: () => ticksPerSecond,
+      readTraitVal: () => traitVal,
+      readTriggerManager: () => TriggerManager,
+      readWarManager: () => WarManager,
+      readWin: () => win,
+      readWindowManager: () => WindowManager
     });
     if (window.__EA_TEST_HOOKS__) {
       window.__EA_TEST_HOOKS__.entityClasses = {

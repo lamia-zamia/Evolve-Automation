@@ -2,146 +2,111 @@ type Loose = any;
 type LooseRecord = Record<PropertyKey, Loose>;
 type LooseFunction = (...args: Loose[]) => Loose;
 
-interface EntityClassesContext {
-  $: LooseFunction;
-  arpaIds: LooseRecord;
-  buildingIds: LooseRecord;
-  buildings: LooseRecord;
-  checkAffordableCustom: LooseFunction;
-  checkTypes: LooseRecord;
-  conflictingTraits: Loose[];
-  document: LooseRecord;
-  fanatAchievements: Loose[];
-  Fibonacci: LooseFunction;
-  game: LooseRecord;
-  GameLog: LooseRecord;
-  getAchievementStar: LooseFunction;
-  getCitadelConsumption: LooseFunction;
-  getStarLevel: LooseFunction;
-  getVueById: LooseFunction;
-  haveTask: LooseFunction;
-  haveTech: LooseFunction;
-  jobs: LooseRecord;
-  KeyManager: LooseRecord;
-  logIgnore: Loose[];
-  logPrestige: LooseFunction;
-  MutableTraitManager: LooseRecord;
-  mutationCostMultipliers: LooseRecord;
-  mutationCostMultipliersGenus: LooseRecord;
-  normalizeProperties: LooseFunction;
-  poly: LooseRecord;
-  races: LooseRecord;
-  resources: LooseRecord;
-  retBools: Loose[];
-  settings: LooseRecord;
-  settingsRaw: LooseRecord;
-  specialRaceTraits: LooseRecord;
-  state: LooseRecord;
-  techIds: LooseRecord;
-  ticksPerSecond: LooseFunction;
-  traitVal: LooseFunction;
-  TriggerManager: LooseRecord;
-  WarManager: LooseRecord;
-  win: LooseRecord;
-  WindowManager: LooseRecord;
-}
-
 interface EntityClassesDependencies {
-  dependencies: {
-    [Key in keyof EntityClassesContext]: () => EntityClassesContext[Key];
-  };
+  readJQuery: () => LooseFunction;
+  readArpaIds: () => LooseRecord;
+  readBuildingIds: () => LooseRecord;
+  readBuildings: () => LooseRecord;
+  readCheckAffordableCustom: () => LooseFunction;
+  readCheckTypes: () => LooseRecord;
+  readConflictingTraits: () => Loose[];
+  readDocument: () => LooseRecord;
+  readFanatAchievements: () => Loose[];
+  readFibonacci: () => LooseFunction;
+  readGame: () => LooseRecord;
+  readGameLog: () => LooseRecord;
+  readAchievementStar: () => LooseFunction;
+  readCitadelConsumption: () => LooseFunction;
+  readStarLevel: () => LooseFunction;
+  readVueById: () => LooseFunction;
+  readHaveTask: () => LooseFunction;
+  readHaveTech: () => LooseFunction;
+  readJobs: () => LooseRecord;
+  readKeyManager: () => LooseRecord;
+  readLogIgnore: () => Loose[];
+  readLogPrestige: () => LooseFunction;
+  readMutableTraitManager: () => LooseRecord;
+  readMutationCostMultipliers: () => LooseRecord;
+  readMutationCostMultipliersGenus: () => LooseRecord;
+  readNormalizeProperties: () => LooseFunction;
+  readPoly: () => LooseRecord;
+  readRaces: () => LooseRecord;
+  readResources: () => LooseRecord;
+  readRetBools: () => Loose[];
+  readSettings: () => LooseRecord;
+  readSettingsRaw: () => LooseRecord;
+  readSpecialRaceTraits: () => LooseRecord;
+  readState: () => LooseRecord;
+  readTechIds: () => LooseRecord;
+  readTicksPerSecond: () => LooseFunction;
+  readTraitVal: () => LooseFunction;
+  readTriggerManager: () => LooseRecord;
+  readWarManager: () => LooseRecord;
+  readWin: () => LooseRecord;
+  readWindowManager: () => LooseRecord;
 }
 
 export function createEntityClasses({
-  dependencies,
+  readJQuery,
+  readArpaIds,
+  readBuildingIds,
+  readBuildings,
+  readCheckAffordableCustom,
+  readCheckTypes,
+  readConflictingTraits,
+  readDocument,
+  readFanatAchievements,
+  readFibonacci,
+  readGame,
+  readGameLog,
+  readAchievementStar,
+  readCitadelConsumption,
+  readStarLevel,
+  readVueById,
+  readHaveTask,
+  readHaveTech,
+  readJobs,
+  readKeyManager,
+  readLogIgnore,
+  readLogPrestige,
+  readMutableTraitManager,
+  readMutationCostMultipliers,
+  readMutationCostMultipliersGenus,
+  readNormalizeProperties,
+  readPoly,
+  readRaces,
+  readResources,
+  readRetBools,
+  readSettings,
+  readSettingsRaw,
+  readSpecialRaceTraits,
+  readState,
+  readTechIds,
+  readTicksPerSecond,
+  readTraitVal,
+  readTriggerManager,
+  readWarManager,
+  readWin,
+  readWindowManager,
 }: EntityClassesDependencies) {
-  const liveObject = (key: keyof EntityClassesContext) =>
-    new Proxy(
-      {},
-      {
-        get(_target, property) {
-          const current = dependencies[key]() as LooseRecord;
-          const value = current?.[property];
-          return typeof value === "function" ? value.bind(current) : value;
-        },
-        set(_target, property, value) {
-          return Reflect.set(
-            dependencies[key]() as LooseRecord,
-            property,
-            value,
-          );
-        },
-        deleteProperty(_target, property) {
-          return Reflect.deleteProperty(
-            dependencies[key]() as LooseRecord,
-            property,
-          );
-        },
-        has(_target, property) {
-          return Reflect.has(dependencies[key]() as LooseRecord, property);
-        },
-        ownKeys() {
-          return Reflect.ownKeys(dependencies[key]() as LooseRecord);
-        },
-        getOwnPropertyDescriptor(_target, property) {
-          const current = dependencies[key]() as LooseRecord;
-          const descriptor = Object.getOwnPropertyDescriptor(current, property);
-          return {
-            configurable: true,
-            enumerable: descriptor?.enumerable ?? true,
-            writable: true,
-            value: Reflect.get(current, property),
-          };
-        },
-      },
-    ) as LooseRecord;
-  const liveFunction = (key: keyof EntityClassesContext) =>
-    ((...args: Loose[]) =>
-      (dependencies[key]() as LooseFunction)(...args)) as LooseFunction;
-
-  const $ = liveFunction("$");
-  const arpaIds = liveObject("arpaIds");
-  const buildingIds = liveObject("buildingIds");
-  const buildings = liveObject("buildings");
-  const checkAffordableCustom = liveFunction("checkAffordableCustom");
-  const checkTypes = liveObject("checkTypes");
-  const conflictingTraits = liveObject("conflictingTraits") as Loose[];
-  const document = liveObject("document");
-  const fanatAchievements = liveObject("fanatAchievements") as Loose[];
-  const Fibonacci = liveFunction("Fibonacci");
-  const game = liveObject("game");
-  const GameLog = liveObject("GameLog");
-  const getAchievementStar = liveFunction("getAchievementStar");
-  const getCitadelConsumption = liveFunction("getCitadelConsumption");
-  const getStarLevel = liveFunction("getStarLevel");
-  const getVueById = liveFunction("getVueById");
-  const haveTask = liveFunction("haveTask");
-  const haveTech = liveFunction("haveTech");
-  const jobs = liveObject("jobs");
-  const KeyManager = liveObject("KeyManager");
-  const logIgnore = liveObject("logIgnore") as Loose[];
-  const logPrestige = liveFunction("logPrestige");
-  const MutableTraitManager = liveObject("MutableTraitManager");
-  const mutationCostMultipliers = liveObject("mutationCostMultipliers");
-  const mutationCostMultipliersGenus = liveObject(
-    "mutationCostMultipliersGenus",
-  );
-  const normalizeProperties = liveFunction("normalizeProperties");
-  const poly = liveObject("poly");
-  const races = liveObject("races");
-  const resources = liveObject("resources");
-  const retBools = liveObject("retBools") as Loose[];
-  const settings = liveObject("settings");
-  const settingsRaw = liveObject("settingsRaw");
-  const specialRaceTraits = liveObject("specialRaceTraits");
-  const state = liveObject("state");
-  const techIds = liveObject("techIds");
-  const ticksPerSecond = liveFunction("ticksPerSecond");
-  const traitVal = liveFunction("traitVal");
-  const TriggerManager = liveObject("TriggerManager");
-  const WarManager = liveObject("WarManager");
-  const win = liveObject("win");
-  const WindowManager = liveObject("WindowManager");
+  const $: LooseFunction = (...args) => readJQuery()(...args);
+  const checkAffordableCustom: LooseFunction = (...args) =>
+    readCheckAffordableCustom()(...args);
+  const Fibonacci: LooseFunction = (...args) => readFibonacci()(...args);
+  const getAchievementStar: LooseFunction = (...args) =>
+    readAchievementStar()(...args);
+  const getCitadelConsumption: LooseFunction = (...args) =>
+    readCitadelConsumption()(...args);
+  const getStarLevel: LooseFunction = (...args) => readStarLevel()(...args);
+  const getVueById: LooseFunction = (...args) => readVueById()(...args);
+  const haveTask: LooseFunction = (...args) => readHaveTask()(...args);
+  const haveTech: LooseFunction = (...args) => readHaveTech()(...args);
+  const logPrestige: LooseFunction = (...args) => readLogPrestige()(...args);
+  const normalizeProperties: LooseFunction = (...args) =>
+    readNormalizeProperties()(...args);
+  const ticksPerSecond: LooseFunction = (...args) =>
+    readTicksPerSecond()(...args);
+  const traitVal: LooseFunction = (...args) => readTraitVal()(...args);
 
   class Job {
     [key: string]: Loose;
@@ -155,20 +120,20 @@ export function createEntityClasses({
     }
 
     get autoJobEnabled() {
-      return settings["job_" + this._originalId];
+      return readSettings()["job_" + this._originalId];
     }
     get isSmartEnabled() {
-      return settings["job_s_" + this._originalId];
+      return readSettings()["job_s_" + this._originalId];
     }
     get priority() {
-      return settingsRaw["job_p_" + this._originalId];
+      return readSettingsRaw()["job_p_" + this._originalId];
     }
     getBreakpoint(n) {
-      return settings[`job_b${n + 1}_${this._originalId}`];
+      return readSettings()[`job_b${n + 1}_${this._originalId}`];
     }
 
     get definition() {
-      return game.global.civic[this._originalId];
+      return readGame().global.civic[this._originalId];
     }
 
     get id() {
@@ -213,7 +178,10 @@ export function createEntityClasses({
       // -1 equals unlimited up to the maximum available jobs for this job
       if (breakpointActual === -1) {
         breakpointActual = Number.MAX_SAFE_INTEGER;
-      } else if (settings.jobScalePop && this._originalId !== "hell_surveyor") {
+      } else if (
+        readSettings().jobScalePop &&
+        this._originalId !== "hell_surveyor"
+      ) {
         breakpointActual *= traitVal("high_pop", 0, 1);
       }
 
@@ -236,7 +204,7 @@ export function createEntityClasses({
         return false;
       }
 
-      for (let m of KeyManager.click(count)) {
+      for (let m of readKeyManager().click(count)) {
         vue.add();
       }
     }
@@ -254,7 +222,7 @@ export function createEntityClasses({
         return false;
       }
 
-      for (let m of KeyManager.click(count)) {
+      for (let m of readKeyManager().click(count)) {
         vue.sub();
       }
     }
@@ -272,7 +240,7 @@ export function createEntityClasses({
     }
 
     get servants() {
-      return game.global.race.servants?.jobs[this._originalId] ?? 0;
+      return readGame().global.race.servants?.jobs[this._originalId] ?? 0;
     }
 
     get max() {
@@ -289,7 +257,7 @@ export function createEntityClasses({
         return false;
       }
 
-      for (let m of KeyManager.click(count)) {
+      for (let m of readKeyManager().click(count)) {
         vue.add();
       }
     }
@@ -304,13 +272,13 @@ export function createEntityClasses({
         return false;
       }
 
-      for (let m of KeyManager.click(count)) {
+      for (let m of readKeyManager().click(count)) {
         vue.sub();
       }
     }
 
     isDefault() {
-      return game.global.civic.d_job === this.id;
+      return readGame().global.civic.d_job === this.id;
     }
 
     setAsDefault() {
@@ -328,7 +296,7 @@ export function createEntityClasses({
     }
 
     get definition() {
-      return game.global.civic["craftsman"];
+      return readGame().global.civic["craftsman"];
     }
 
     get id() {
@@ -336,19 +304,19 @@ export function createEntityClasses({
     }
 
     isUnlocked() {
-      return game.global.resource[this._originalId].display;
+      return readGame().global.resource[this._originalId].display;
     }
 
     get servants() {
-      return game.global.race.servants?.sjobs[this._originalId] ?? 0;
+      return readGame().global.race.servants?.sjobs[this._originalId] ?? 0;
     }
 
     get workers() {
-      return game.global.city.foundry?.[this._originalId] ?? 0;
+      return readGame().global.city.foundry?.[this._originalId] ?? 0;
     }
 
     get max() {
-      return game.global.civic.craftsman.max;
+      return readGame().global.civic.craftsman.max;
     }
 
     addWorkers(count) {
@@ -364,7 +332,7 @@ export function createEntityClasses({
         return false;
       }
 
-      for (let m of KeyManager.click(count)) {
+      for (let m of readKeyManager().click(count)) {
         vue.add(this._originalId);
       }
     }
@@ -382,7 +350,7 @@ export function createEntityClasses({
         return false;
       }
 
-      for (let m of KeyManager.click(count)) {
+      for (let m of readKeyManager().click(count)) {
         vue.sub(this._originalId);
       }
     }
@@ -397,7 +365,7 @@ export function createEntityClasses({
         return false;
       }
 
-      for (let m of KeyManager.click(count)) {
+      for (let m of readKeyManager().click(count)) {
         vue.add(this._originalId);
       }
     }
@@ -412,7 +380,7 @@ export function createEntityClasses({
         return false;
       }
 
-      for (let m of KeyManager.click(count)) {
+      for (let m of readKeyManager().click(count)) {
         vue.sub(this._originalId);
       }
     }
@@ -447,61 +415,61 @@ export function createEntityClasses({
     }
 
     get autoCraftEnabled() {
-      return settings["craft" + this.id];
+      return readSettings()["craft" + this.id];
     }
     get craftWeighting() {
-      return settings["foundry_w_" + this.id];
+      return readSettings()["foundry_w_" + this.id];
     }
     get craftPreserve() {
-      return settings["foundry_p_" + this.id];
+      return readSettings()["foundry_p_" + this.id];
     }
     get autoStorageEnabled() {
-      return settings["res_storage" + this.id];
+      return readSettings()["res_storage" + this.id];
     }
     get storagePriority() {
-      return settingsRaw["res_storage_p_" + this.id];
+      return readSettingsRaw()["res_storage_p_" + this.id];
     }
     get storeOverflow() {
-      return settings["res_storage_o_" + this.id];
+      return readSettings()["res_storage_o_" + this.id];
     }
     get minStorage() {
-      return settings["res_min_store" + this.id];
+      return readSettings()["res_min_store" + this.id];
     }
     get maxStorage() {
-      return settings["res_max_store" + this.id];
+      return readSettings()["res_max_store" + this.id];
     }
     get marketPriority() {
-      return settingsRaw["res_buy_p_" + this.id];
+      return readSettingsRaw()["res_buy_p_" + this.id];
     }
     get autoBuyEnabled() {
-      return settings["buy" + this.id];
+      return readSettings()["buy" + this.id];
     }
     get autoBuyRatio() {
-      return settings["res_buy_r_" + this.id];
+      return readSettings()["res_buy_r_" + this.id];
     }
     get autoSellEnabled() {
-      return settings["sell" + this.id];
+      return readSettings()["sell" + this.id];
     }
     get autoSellRatio() {
-      return settings["res_sell_r_" + this.id];
+      return readSettings()["res_sell_r_" + this.id];
     }
     get autoTradeBuyEnabled() {
-      return settings["res_trade_buy_" + this.id];
+      return readSettings()["res_trade_buy_" + this.id];
     }
     get autoTradeSellEnabled() {
-      return settings["res_trade_sell_" + this.id];
+      return readSettings()["res_trade_sell_" + this.id];
     }
     get autoTradeWeighting() {
-      return settings["res_trade_w_" + this.id];
+      return readSettings()["res_trade_w_" + this.id];
     }
     get autoTradePriority() {
-      return settings["res_trade_p_" + this.id];
+      return readSettings()["res_trade_p_" + this.id];
     }
     get galaxyMarketWeighting() {
-      return settings["res_galaxy_w_" + this.id];
+      return readSettings()["res_galaxy_w_" + this.id];
     }
     get galaxyMarketPriority() {
-      return settings["res_galaxy_p_" + this.id];
+      return readSettings()["res_galaxy_p_" + this.id];
     }
 
     get title() {
@@ -509,7 +477,7 @@ export function createEntityClasses({
     }
 
     get instance() {
-      return game.global.resource[this.id];
+      return readGame().global.resource[this.id];
     }
 
     get id() {
@@ -545,11 +513,11 @@ export function createEntityClasses({
       }
 
       // When routes are managed - we're excluding trade diff from operational rate of change.
-      if (settings.autoMarket && this.is.tradable) {
+      if (readSettings().autoMarket && this.is.tradable) {
         this.tradeRoutes = this.instance.trade;
-        this.tradeBuyPrice = game.tradeBuyPrice(this._id);
-        this.tradeSellPrice = game.tradeSellPrice(this._id);
-        let tradeDiff = game.breakdown.p.consume[this._id]?.Trade || 0;
+        this.tradeBuyPrice = readGame().tradeBuyPrice(this._id);
+        this.tradeSellPrice = readGame().tradeSellPrice(this._id);
+        let tradeDiff = readGame().breakdown.p.consume[this._id]?.Trade || 0;
         if (tradeDiff > 0) {
           this.rateMods["buy"] = tradeDiff * -1;
         } else if (tradeDiff < 0) {
@@ -560,7 +528,7 @@ export function createEntityClasses({
 
       // Restore decayed rate
       if (
-        game.global.race["decay"] &&
+        readGame().global.race["decay"] &&
         this.tradeRouteQuantity > 0 &&
         this.currentQuantity >= 50
       ) {
@@ -604,11 +572,13 @@ export function createEntityClasses({
       return (
         this.isUnlocked() &&
         !(
-          this === resources.Food &&
-          (game.global.race["artifical"] || game.global.race["fasting"])
+          this === readResources().Food &&
+          (readGame().global.race["artifical"] ||
+            readGame().global.race["fasting"])
         ) &&
-        ((game.global.race["banana"] && this === resources.Food) ||
-          (game.global.tech["trade"] && !game.global.race["terrifying"]))
+        ((readGame().global.race["banana"] && this === readResources().Food) ||
+          (readGame().global.tech["trade"] &&
+            !readGame().global.race["terrifying"]))
       );
     }
 
@@ -617,13 +587,13 @@ export function createEntityClasses({
     }
 
     get atomicMass() {
-      return game.atomic_mass[this.id] ?? 0;
+      return readGame().atomic_mass[this.id] ?? 0;
     }
 
     isUseful() {
       /* This check always cause issues, i'll just disable it for now
             // Spending accumulated resources
-            if (settings.autoStorage && settings.storageSafeReassign && !this.storeOverflow && this.currentQuantity > this.minStorage && this.currentQuantity > this.storageRequired &&
+            if (readSettings().autoStorage && readSettings().storageSafeReassign && !this.storeOverflow && this.currentQuantity > this.minStorage && this.currentQuantity > this.storageRequired &&
               ((this.currentCrates > 0 && this.maxQuantity - StorageManager.crateValue > this.storageRequired) ||
                (this.currentContainers > 0 && this.maxQuantity - StorageManager.containerValue > this.storageRequired))) {
                 return false;
@@ -642,12 +612,12 @@ export function createEntityClasses({
       let produced = 0;
       let labelFound = false;
       for (let [label, value] of Object.entries(
-        game.breakdown.p[this._id] ?? {},
+        readGame().breakdown.p[this._id] ?? {},
       ) as [string, string][]) {
         if (value.indexOf("%") === -1) {
           if (labelFound) {
             break;
-          } else if (label === poly.loc(source, locArg)) {
+          } else if (label === readPoly().loc(source, locArg)) {
             labelFound = true;
             produced += parseFloat(value) || 0;
           }
@@ -655,7 +625,7 @@ export function createEntityClasses({
           produced *= 1 + (parseFloat(value) || 0) / 100;
         }
       }
-      return produced * state.globalProductionModifier;
+      return produced * readState().globalProductionModifier;
     }
 
     isValidProductionLabel(label) {
@@ -663,7 +633,10 @@ export function createEntityClasses({
       // The calculations are correct though
       // This can cause constant Iron flicker in Truepath because the script thinks
       // a worker is producing more than the constant smelter consumption.
-      if (this._id === "Iron" && label === `ᄂ${poly.loc("space_syndicate")}`)
+      if (
+        this._id === "Iron" &&
+        label === `ᄂ${readPoly().loc("space_syndicate")}`
+      )
         return false;
 
       // Everything else is valid (at least for now)
@@ -692,7 +665,7 @@ export function createEntityClasses({
     }
 
     isCraftable() {
-      return game.craftCost.hasOwnProperty(this.id);
+      return readGame().craftCost.hasOwnProperty(this.id);
     }
 
     hasStorage() {
@@ -700,7 +673,7 @@ export function createEntityClasses({
     }
 
     get tradeRouteQuantity() {
-      return game.tradeRatio[this.id] || -1;
+      return readGame().tradeRatio[this.id] || -1;
     }
 
     get storageRatio() {
@@ -756,7 +729,7 @@ export function createEntityClasses({
         return false;
       }
 
-      KeyManager.set(false, false, false);
+      readKeyManager().set(false, false, false);
       vue.craft(this.id, count);
     }
 
@@ -774,7 +747,7 @@ export function createEntityClasses({
   class SoulGem extends Resource {
     updateData() {
       super.updateData();
-      this.rateOfChange = state.soulGemPerHour / 3600;
+      this.rateOfChange = readState().soulGemPerHour / 3600;
     }
   }
 
@@ -784,13 +757,13 @@ export function createEntityClasses({
         return;
       }
 
-      this.currentQuantity = WarManager.currentCityGarrison;
-      this.maxQuantity = WarManager.maxCityGarrison;
+      this.currentQuantity = readWarManager().currentCityGarrison;
+      this.maxQuantity = readWarManager().maxCityGarrison;
       this.rateOfChange = 0;
     }
 
     isUnlocked() {
-      return WarManager._garrisonVue !== undefined;
+      return readWarManager()._garrisonVue !== undefined;
     }
   }
 
@@ -800,13 +773,13 @@ export function createEntityClasses({
         return;
       }
 
-      this.currentQuantity = game.global.portal.purifier.supply;
-      this.maxQuantity = game.global.portal.purifier.sup_max;
-      this.rateOfChange = game.global.portal.purifier.diff;
+      this.currentQuantity = readGame().global.portal.purifier.supply;
+      this.maxQuantity = readGame().global.portal.purifier.sup_max;
+      this.rateOfChange = readGame().global.portal.purifier.diff;
     }
 
     isUnlocked() {
-      return game.global.portal.hasOwnProperty("purifier");
+      return readGame().global.portal.hasOwnProperty("purifier");
     }
   }
 
@@ -816,33 +789,33 @@ export function createEntityClasses({
         return;
       }
 
-      this.currentQuantity = game.global.city.power;
+      this.currentQuantity = readGame().global.city.power;
       if (haveTask("replicate")) {
-        this.currentQuantity += game.global.race.replicator.pow;
+        this.currentQuantity += readGame().global.race.replicator.pow;
       }
       this.rateOfChange = this.currentQuantity;
 
       this.maxQuantity = 0;
-      if (game.global.race.powered) {
+      if (readGame().global.race.powered) {
         this.maxQuantity +=
-          (resources.Population.maxQuantity -
-            resources.Population.currentQuantity) *
+          (readResources().Population.maxQuantity -
+            readResources().Population.currentQuantity) *
           traitVal("powered", 0);
       }
-      for (let building of Object.values(buildings)) {
+      for (let building of Object.values(readBuildings())) {
         if (building.stateOffCount > 0) {
           let missingAmount = building.stateOffCount;
           if (
             building.autoMax < building.count &&
-            settings.masterScriptToggle &&
-            settings.autoPower &&
+            readSettings().masterScriptToggle &&
+            readSettings().autoPower &&
             building.autoStateEnabled &&
-            settings.buildingsLimitPowered
+            readSettings().buildingsLimitPowered
           ) {
             missingAmount -= building.count - building.autoMax;
           }
 
-          if (building === buildings.NeutronCitadel) {
+          if (building === readBuildings().NeutronCitadel) {
             this.maxQuantity +=
               getCitadelConsumption(building.stateOnCount + missingAmount) -
               getCitadelConsumption(building.stateOnCount);
@@ -859,7 +832,7 @@ export function createEntityClasses({
     }
 
     isUnlocked() {
-      return game.global.city.powered;
+      return readGame().global.city.powered;
     }
   }
 
@@ -877,13 +850,14 @@ export function createEntityClasses({
         return;
       }
 
-      this.maxQuantity = game.global[this._region][this.supportId].s_max;
-      this.currentQuantity = game.global[this._region][this.supportId].support;
+      this.maxQuantity = readGame().global[this._region][this.supportId].s_max;
+      this.currentQuantity =
+        readGame().global[this._region][this.supportId].support;
       this.rateOfChange = this.maxQuantity - this.currentQuantity;
     }
 
     get supportId() {
-      return game.actions[this._region][this._inRegionId].info.support;
+      return readGame().actions[this._region][this._inRegionId].info.support;
     }
 
     get storageRatio() {
@@ -893,7 +867,7 @@ export function createEntityClasses({
     }
 
     isUnlocked() {
-      return game.global[this._region][this.supportId] !== undefined;
+      return readGame().global[this._region][this.supportId] !== undefined;
     }
   }
 
@@ -905,20 +879,22 @@ export function createEntityClasses({
       }
 
       let maxStations =
-        settings.autoPower && buildings.BeltSpaceStation.autoStateEnabled
-          ? buildings.BeltSpaceStation.count
-          : buildings.BeltSpaceStation.stateOnCount;
+        readSettings().autoPower &&
+        readBuildings().BeltSpaceStation.autoStateEnabled
+          ? readBuildings().BeltSpaceStation.count
+          : readBuildings().BeltSpaceStation.stateOnCount;
       let maxWorkers =
-        settings.autoJobs &&
-        jobs.SpaceMiner.autoJobEnabled &&
-        jobs.SpaceMiner.isSmartEnabled
-          ? state.maxSpaceMiners
-          : jobs.SpaceMiner.count;
+        readSettings().autoJobs &&
+        readJobs().SpaceMiner.autoJobEnabled &&
+        readJobs().SpaceMiner.isSmartEnabled
+          ? readState().maxSpaceMiners
+          : readJobs().SpaceMiner.count;
       this.maxQuantity = Math.min(
         maxStations * 3 * traitVal("high_pop", 0, 1),
         maxWorkers,
       );
-      this.currentQuantity = game.global[this._region][this.supportId].support;
+      this.currentQuantity =
+        readGame().global[this._region][this.supportId].support;
       this.rateOfChange = this.maxQuantity - this.currentQuantity;
     }
   }
@@ -929,13 +905,13 @@ export function createEntityClasses({
         return;
       }
 
-      this.maxQuantity = buildings.TitanElectrolysis.stateOnCount;
-      this.currentQuantity = buildings.TitanHydrogen.stateOnCount;
+      this.maxQuantity = readBuildings().TitanElectrolysis.stateOnCount;
+      this.currentQuantity = readBuildings().TitanHydrogen.stateOnCount;
       this.rateOfChange = this.maxQuantity - this.currentQuantity;
     }
 
     isUnlocked() {
-      return game.global.race["truepath"] ? true : false;
+      return readGame().global.race["truepath"] ? true : false;
     }
   }
 
@@ -946,13 +922,13 @@ export function createEntityClasses({
       }
 
       this.maxQuantity =
-        buildings.TauRedWomlingVillage.stateOnCount *
+        readBuildings().TauRedWomlingVillage.stateOnCount *
         (haveTech("womling_pop", 2) ? 6 : 5);
       this.currentQuantity =
-        buildings.TauRedWomlingFarm.stateOnCount * 2 +
-        buildings.TauRedWomlingLab.stateOnCount +
-        buildings.TauRedWomlingMine.stateOnCount * 6;
-      this.rateOfChange = this.maxQuantity - this.currentQuantity; // - game.global.tauceti.overseer.injured
+        readBuildings().TauRedWomlingFarm.stateOnCount * 2 +
+        readBuildings().TauRedWomlingLab.stateOnCount +
+        readBuildings().TauRedWomlingMine.stateOnCount * 6;
+      this.rateOfChange = this.maxQuantity - this.currentQuantity; // - readGame().global.tauceti.overseer.injured
     }
 
     isUnlocked() {
@@ -962,7 +938,7 @@ export function createEntityClasses({
 
   class PrestigeResource extends Resource {
     updateData() {
-      this.currentQuantity = game.global.prestige[this.id].count;
+      this.currentQuantity = readGame().global.prestige[this.id].count;
       this.maxQuantity = Number.MAX_SAFE_INTEGER;
     }
 
@@ -974,15 +950,15 @@ export function createEntityClasses({
   class Population extends Resource {
     get id() {
       // The population node is special and its id will change to the race name
-      return game.global.race.species;
+      return readGame().global.race.species;
     }
   }
 
   class Morale extends Resource {
     updateData() {
-      this.currentQuantity = game.global.city.morale.current;
-      this.maxQuantity = game.global.city.morale.cap;
-      this.rateOfChange = game.global.city.morale.potential;
+      this.currentQuantity = readGame().global.city.morale.current;
+      this.maxQuantity = readGame().global.city.morale.cap;
+      this.rateOfChange = readGame().global.city.morale.potential;
       this.incomeAdusted = false;
     }
 
@@ -999,16 +975,18 @@ export function createEntityClasses({
 
       this.currentQuantity = 0;
       this.rateOfChange = 0;
-      for (let i = 0; i < game.global.city.surfaceDwellers.length; i++) {
-        this.currentQuantity += game.global.city.captive_housing[`race${i}`];
-        this.rateOfChange += game.global.city.captive_housing[`jailrace${i}`];
+      for (let i = 0; i < readGame().global.city.surfaceDwellers.length; i++) {
+        this.currentQuantity +=
+          readGame().global.city.captive_housing[`race${i}`];
+        this.rateOfChange +=
+          readGame().global.city.captive_housing[`jailrace${i}`];
       }
       this.currentQuantity += this.rateOfChange;
-      this.maxQuantity = game.global.city.captive_housing.raceCap;
+      this.maxQuantity = readGame().global.city.captive_housing.raceCap;
     }
 
     isUnlocked() {
-      return game.global.city.captive_housing ? true : false;
+      return readGame().global.city.captive_housing ? true : false;
     }
   }
 
@@ -1042,34 +1020,34 @@ export function createEntityClasses({
     }
 
     get autoBuildEnabled() {
-      return settings["bat" + this._vueBinding];
+      return readSettings()["bat" + this._vueBinding];
     }
     get autoStateEnabled() {
-      return settings["bld_s_" + this._vueBinding];
+      return readSettings()["bld_s_" + this._vueBinding];
     }
     get autoStateSmart() {
-      return settings["bld_s2_" + this._vueBinding];
+      return readSettings()["bld_s2_" + this._vueBinding];
     }
     get priority() {
-      return settingsRaw["bld_p_" + this._vueBinding];
+      return readSettingsRaw()["bld_p_" + this._vueBinding];
     }
     get _weighting() {
-      return settings["bld_w_" + this._vueBinding];
+      return readSettings()["bld_w_" + this._vueBinding];
     }
     get _autoMax() {
-      return settings["bld_m_" + this._vueBinding];
+      return readSettings()["bld_m_" + this._vueBinding];
     }
 
     get definition() {
       if (this._location !== "") {
-        return game.actions[this._tab][this._location][this._id];
+        return readGame().actions[this._tab][this._location][this._id];
       } else {
-        return game.actions[this._tab][this._id];
+        return readGame().actions[this._tab][this._id];
       }
     }
 
     get instance() {
-      return game.global[this._tab][this._id];
+      return readGame().global[this._tab][this._id];
     }
 
     get id() {
@@ -1113,15 +1091,16 @@ export function createEntityClasses({
 
     isUnlocked() {
       if (
-        (this._tab === "city" && !game.global.settings.showCity) ||
+        (this._tab === "city" && !readGame().global.settings.showCity) ||
         (this._tab === "space" &&
-          !game.global.settings.showSpace &&
-          !game.global.settings.showOuter) ||
-        (this._tab === "interstellar" && !game.global.settings.showDeep) ||
-        (this._tab === "portal" && !game.global.settings.showPortal) ||
-        (this._tab === "galaxy" && !game.global.settings.showGalactic) ||
-        (this._tab === "tauceti" && !game.global.settings.showTau) ||
-        (this._tab === "eden" && !game.global.settings.showEden)
+          !readGame().global.settings.showSpace &&
+          !readGame().global.settings.showOuter) ||
+        (this._tab === "interstellar" &&
+          !readGame().global.settings.showDeep) ||
+        (this._tab === "portal" && !readGame().global.settings.showPortal) ||
+        (this._tab === "galaxy" && !readGame().global.settings.showGalactic) ||
+        (this._tab === "tauceti" && !readGame().global.settings.showTau) ||
+        (this._tab === "eden" && !readGame().global.settings.showEden)
       ) {
         return false;
       }
@@ -1145,7 +1124,7 @@ export function createEntityClasses({
 
     isSmartManaged() {
       return (
-        settings.autoPower &&
+        readSettings().autoPower &&
         this.isUnlocked() &&
         this.autoStateEnabled &&
         this.autoStateSmart
@@ -1198,9 +1177,9 @@ export function createEntityClasses({
         return;
       }
 
-      let adjustedCosts = poly.adjustCosts(this.definition);
+      let adjustedCosts = readPoly().adjustCosts(this.definition);
       for (let resourceName in adjustedCosts) {
-        if (resources[resourceName]) {
+        if (readResources()[resourceName]) {
           let resourceAmount = Number(adjustedCosts[resourceName]());
           if (resourceAmount > 0) {
             this.cost[resourceName] = resourceAmount;
@@ -1210,7 +1189,7 @@ export function createEntityClasses({
     }
 
     isAffordable(max = false) {
-      return game.checkAffordable(this.definition, max);
+      return readGame().checkAffordable(this.definition, max);
     }
 
     // Whether the action is clickable is determined by whether it is unlocked, affordable and not a "permanently clickable" action
@@ -1228,14 +1207,14 @@ export function createEntityClasses({
       }
 
       let doMultiClick =
-        this.is.multiSegmented && settings.buildingsUseMultiClick;
+        this.is.multiSegmented && readSettings().buildingsUseMultiClick;
       let amountToBuild = 1;
       if (doMultiClick) {
         amountToBuild = this.gameMax - this.count;
         for (let res in this.cost) {
           amountToBuild = Math.min(
             amountToBuild,
-            Math.floor(resources[res].currentQuantity / this.cost[res]),
+            Math.floor(readResources()[res].currentQuantity / this.cost[res]),
           );
         }
         if (amountToBuild < 1) {
@@ -1245,35 +1224,35 @@ export function createEntityClasses({
       }
 
       for (let res in this.cost) {
-        resources[res].currentQuantity -= this.cost[res] * amountToBuild;
+        readResources()[res].currentQuantity -= this.cost[res] * amountToBuild;
       }
 
       // Don't log evolution actions and gathering actions
       if (
-        game.global.race.species !== "protoplasm" &&
-        !logIgnore.includes(this.id)
+        readGame().global.race.species !== "protoplasm" &&
+        !readLogIgnore().includes(this.id)
       ) {
         if (
           this.gameMax < Number.MAX_SAFE_INTEGER &&
           this.count + amountToBuild < this.gameMax
         ) {
-          GameLog.logSuccess(
+          readGameLog().logSuccess(
             "multi_construction",
-            poly.loc("build_success", [
+            readPoly().loc("build_success", [
               `${this.title} (${this.count + amountToBuild})`,
             ]),
             ["queue", "building_queue"],
           );
         } else {
-          GameLog.logSuccess(
+          readGameLog().logSuccess(
             "construction",
-            poly.loc("build_success", [this.title]),
+            readPoly().loc("build_success", [this.title]),
             ["queue", "building_queue"],
           );
         }
       }
 
-      KeyManager.set(doMultiClick, doMultiClick, doMultiClick);
+      readKeyManager().set(doMultiClick, doMultiClick, doMultiClick);
 
       if (this.is.prestige) {
         logPrestige();
@@ -1287,14 +1266,14 @@ export function createEntityClasses({
       // refresh is really only needed for first building as there are no buildings where building a second unlocks more stuff.
       // Keep this narrowly guarded: postBuild also handles grants, post hooks, queues, poppers, and Inflation.
       if (
-        settings.performanceHackAvoidDrawTech &&
+        readSettings().performanceHackAvoidDrawTech &&
         this.definition.refresh &&
         this.count > 0 &&
         !this.definition.grant &&
         !this.definition.post &&
         !this.definition.queue_complete &&
         !this.is.prestige &&
-        !game.global.race.inflation &&
+        !readGame().global.race.inflation &&
         (popper.length === 0 || !popper.is(":visible"))
       ) {
         this.definition.action();
@@ -1320,7 +1299,7 @@ export function createEntityClasses({
       }
 
       if (this.is.prestige) {
-        state.goal = "GameOverMan";
+        readState().goal = "GameOverMan";
       }
 
       return true;
@@ -1351,17 +1330,19 @@ export function createEntityClasses({
       let rate = this.consumption[idx].rate;
       if (
         this._tab === "space" &&
-        (resource === resources.Oil || resource === resources.Helium_3)
+        (resource === readResources().Oil ||
+          resource === readResources().Helium_3)
       ) {
-        rate = game.fuel_adjust(rate, true);
+        rate = readGame().fuel_adjust(rate, true);
       } else if (
         (this._tab === "interstellar" ||
           this._tab === "galaxy" ||
           this._tab === "tauceti") &&
-        (resource === resources.Deuterium || resource === resources.Helium_3) &&
-        this !== buildings.AlphaFusion
+        (resource === readResources().Deuterium ||
+          resource === readResources().Helium_3) &&
+        this !== readBuildings().AlphaFusion
       ) {
-        rate = game.int_fuel_adjust(rate);
+        rate = readGame().int_fuel_adjust(rate);
       }
       return rate;
     }
@@ -1375,9 +1356,9 @@ export function createEntityClasses({
 
         // Food fluctuate a lot, ignore it, assuming we always can get more
         if (
-          resource === resources.Food &&
-          settings.autoJobs &&
-          (jobs.Farmer.autoJobEnabled || jobs.Hunter.autoJobEnabled)
+          resource === readResources().Food &&
+          readSettings().autoJobs &&
+          (readJobs().Farmer.autoJobEnabled || readJobs().Hunter.autoJobEnabled)
         ) {
           continue;
         }
@@ -1398,8 +1379,8 @@ export function createEntityClasses({
     getMissingSupport() {
       // In fasting we need to build mining droid first to unlock habitats
       if (
-        game.global.race["fasting"] &&
-        this === buildings.AlphaMiningDroid &&
+        readGame().global.race["fasting"] &&
+        this === readBuildings().AlphaMiningDroid &&
         this.count < 1
       ) {
         return null;
@@ -1409,16 +1390,16 @@ export function createEntityClasses({
         let resource = this.consumption[j].resource;
 
         // We're going to build Spire things with no support, to enable them later
-        if (resource === resources.Spire_Support && this.autoStateSmart) {
+        if (resource === readResources().Spire_Support && this.autoStateSmart) {
           continue;
         }
         // Tau Belt support can be overused
-        if (resource === resources.Tau_Belt_Support) {
+        if (resource === readResources().Tau_Belt_Support) {
           continue;
         }
         // Womlings facilities can run understaffed
         if (
-          resource === resources.Womlings_Support &&
+          resource === readResources().Womlings_Support &&
           resource.rateOfChange > 0
         ) {
           continue;
@@ -1440,9 +1421,10 @@ export function createEntityClasses({
     getUselessSupport() {
       // Starbase and Habitats are exceptions, they're always useful
       if (
-        this === buildings.GatewayStarbase ||
-        this === buildings.AlphaHabitat ||
-        (this === buildings.SpaceNavBeacon && game.global.race["orbit_decayed"])
+        this === readBuildings().GatewayStarbase ||
+        this === readBuildings().AlphaHabitat ||
+        (this === readBuildings().SpaceNavBeacon &&
+          readGame().global.race["orbit_decayed"])
       ) {
         return null;
       }
@@ -1455,11 +1437,11 @@ export function createEntityClasses({
           continue;
         }
         let minSupport =
-          resource === resources.Belt_Support
+          resource === readResources().Belt_Support
             ? 2 * traitVal("high_pop", 0, 1)
-            : resource === resources.Gateway_Support
+            : resource === readResources().Gateway_Support
               ? 5
-              : resource === resources.Womlings_Support
+              : resource === readResources().Womlings_Support
                 ? 6
                 : 1;
 
@@ -1482,7 +1464,7 @@ export function createEntityClasses({
         return 0;
       }
 
-      if (this === buildings.Banquet) {
+      if (this === readBuildings().Banquet) {
         // Banquet hall uses "level" as build count if >= 1
         return this.instance?.count ? this.instance.level : 0;
       }
@@ -1528,13 +1510,13 @@ export function createEntityClasses({
       let vue = this.vue;
 
       if (adjustCount > 0) {
-        for (let m of KeyManager.click(adjustCount)) {
+        for (let m of readKeyManager().click(adjustCount)) {
           vue.power_on();
         }
         return true;
       }
       if (adjustCount < 0) {
-        for (let m of KeyManager.click(adjustCount * -1)) {
+        for (let m of readKeyManager().click(adjustCount * -1)) {
           vue.power_off();
         }
         return true;
@@ -1544,7 +1526,7 @@ export function createEntityClasses({
 
   class CityAction extends Action {
     get instance() {
-      return game.global.city[this._id];
+      return readGame().global.city[this._id];
     }
   }
 
@@ -1559,12 +1541,12 @@ export function createEntityClasses({
 
     isAffordable(max = false) {
       if (
-        game.global.tech.pillars !== 1 ||
-        game.global.race.universe === "micro"
+        readGame().global.tech.pillars !== 1 ||
+        readGame().global.race.universe === "micro"
       ) {
         return false;
       }
-      return game.checkAffordable(this.definition, max);
+      return readGame().checkAffordable(this.definition, max);
     }
   }
 
@@ -1572,7 +1554,7 @@ export function createEntityClasses({
     constructor(name, tab, id, location, res, flags) {
       super(name, tab, id, location, flags);
 
-      this.resource = resources[res];
+      this.resource = readResources()[res];
     }
 
     get count() {
@@ -1586,14 +1568,14 @@ export function createEntityClasses({
     }
 
     isUnlocked() {
-      let node = document.getElementById(this._vueBinding);
+      let node = readDocument().getElementById(this._vueBinding);
       return node !== null && !node.classList.contains("is-hidden");
     }
   }
 
   class SpaceDock extends Action {
     isOptionsCached() {
-      if (this.count < 1 || game.global.tech["genesis"] < 4) {
+      if (this.count < 1 || readGame().global.tech["genesis"] < 4) {
         // It doesn't have options yet so I guess all "none" of them are cached!
         // Also return true if we don't have the required tech level yet
         return true;
@@ -1601,15 +1583,15 @@ export function createEntityClasses({
 
       // If our tech is unlocked but we haven't cached the vue the the options aren't cached
       if (
-        !buildings.GasSpaceDockProbe.isOptionsCached() ||
-        (game.global.tech["genesis"] >= 5 &&
-          !buildings.GasSpaceDockShipSegment.isOptionsCached()) ||
-        (game.global.tech["genesis"] === 6 &&
-          !buildings.GasSpaceDockPrepForLaunch.isOptionsCached()) ||
-        (game.global.tech["genesis"] >= 7 &&
-          !buildings.GasSpaceDockLaunch.isOptionsCached()) ||
-        (game.global.tech["geck"] >= 1 &&
-          !buildings.GasSpaceDockGECK.isOptionsCached())
+        !readBuildings().GasSpaceDockProbe.isOptionsCached() ||
+        (readGame().global.tech["genesis"] >= 5 &&
+          !readBuildings().GasSpaceDockShipSegment.isOptionsCached()) ||
+        (readGame().global.tech["genesis"] === 6 &&
+          !readBuildings().GasSpaceDockPrepForLaunch.isOptionsCached()) ||
+        (readGame().global.tech["genesis"] >= 7 &&
+          !readBuildings().GasSpaceDockLaunch.isOptionsCached()) ||
+        (readGame().global.tech["geck"] >= 1 &&
+          !readBuildings().GasSpaceDockGECK.isOptionsCached())
       ) {
         return false;
       }
@@ -1618,18 +1600,24 @@ export function createEntityClasses({
     }
 
     cacheOptions() {
-      if (this.count < 1 || WindowManager.isOpen()) {
+      if (this.count < 1 || readWindowManager().isOpen()) {
         return false;
       }
 
-      let optionsNode = document.querySelector("#space-star_dock .special");
-      WindowManager.openModalWindowWithCallback(optionsNode, this.title, () => {
-        buildings.GasSpaceDockProbe.cacheOptions();
-        buildings.GasSpaceDockGECK.cacheOptions();
-        buildings.GasSpaceDockShipSegment.cacheOptions();
-        buildings.GasSpaceDockPrepForLaunch.cacheOptions();
-        buildings.GasSpaceDockLaunch.cacheOptions();
-      });
+      let optionsNode = readDocument().querySelector(
+        "#space-star_dock .special",
+      );
+      readWindowManager().openModalWindowWithCallback(
+        optionsNode,
+        this.title,
+        () => {
+          readBuildings().GasSpaceDockProbe.cacheOptions();
+          readBuildings().GasSpaceDockGECK.cacheOptions();
+          readBuildings().GasSpaceDockShipSegment.cacheOptions();
+          readBuildings().GasSpaceDockPrepForLaunch.cacheOptions();
+          readBuildings().GasSpaceDockLaunch.cacheOptions();
+        },
+      );
       return true;
     }
   }
@@ -1655,7 +1643,7 @@ export function createEntityClasses({
 
     isUnlocked() {
       // All ModalActions belongs to starDock tab
-      if (!game.global.settings.showSpace) {
+      if (!readGame().global.settings.showSpace) {
         return false;
       }
       // We have to override this as there won't be an element unless the modal window is open
@@ -1671,16 +1659,16 @@ export function createEntityClasses({
     }
 
     get autoBuildEnabled() {
-      return settings["arpa_" + this._id];
+      return readSettings()["arpa_" + this._id];
     }
     get priority() {
-      return settingsRaw["arpa_p_" + this._id];
+      return readSettingsRaw()["arpa_p_" + this._id];
     }
     get _autoMax() {
-      return settings["arpa_m_" + this._id];
+      return readSettings()["arpa_m_" + this._id];
     }
     get _weighting() {
-      return settings["arpa_w_" + this._id];
+      return readSettings()["arpa_w_" + this._id];
     }
 
     updateResourceRequirements() {
@@ -1691,18 +1679,21 @@ export function createEntityClasses({
       this.cost = {};
       let maxStep = Math.min(
         100 - this.progress,
-        state.triggerTargets.includes(this) ? 100 : settings.arpaStep,
+        readState().triggerTargets.includes(this)
+          ? 100
+          : readSettings().arpaStep,
       );
 
-      let adjustedCosts = poly.arpaAdjustCosts(this.definition.cost);
+      let adjustedCosts = readPoly().arpaAdjustCosts(this.definition.cost);
       for (let resourceName in adjustedCosts) {
-        if (resources[resourceName]) {
+        if (readResources()[resourceName]) {
           let resourceAmount = Number(adjustedCosts[resourceName]());
           if (resourceAmount > 0) {
             this.cost[resourceName] = resourceAmount / 100;
             maxStep = Math.min(
               maxStep,
-              resources[resourceName].maxQuantity / this.cost[resourceName],
+              readResources()[resourceName].maxQuantity /
+                this.cost[resourceName],
             );
           }
         }
@@ -1744,21 +1735,21 @@ export function createEntityClasses({
       }
 
       for (let res in this.cost) {
-        resources[res].currentQuantity -= this.cost[res];
+        readResources()[res].currentQuantity -= this.cost[res];
       }
 
       if (this.progress + this.currentStep < 100) {
-        GameLog.logSuccess(
+        readGameLog().logSuccess(
           "arpa",
-          poly.loc("build_success", [
+          readPoly().loc("build_success", [
             `${this.title} (${this.progress + this.currentStep}%)`,
           ]),
           ["queue", "building_queue"],
         );
       } else {
-        GameLog.logSuccess(
+        readGameLog().logSuccess(
           "construction",
-          poly.loc("build_success", [this.title]),
+          readPoly().loc("build_success", [this.title]),
           ["queue", "building_queue"],
         );
         if (this.id === "syphon" && this.count == 79) {
@@ -1766,17 +1757,17 @@ export function createEntityClasses({
         }
       }
 
-      KeyManager.set(false, false, false);
+      readKeyManager().set(false, false, false);
       // This is a really bad lag hack. ARPAs make a very expensive drawTech() call on every build.
       // After 10 ARPAs, this will never actually accomplish anything; AFAIK nothing needs more than 10 ARPAs.
       // Luckily, drawTech() doesn't draw anything if preload tab content is off and we're not on research.
       // So if we can, we briefly hack that off while buying an ARPA that won't change anything.
       if (
-        settings.performanceHackAvoidDrawTech &&
+        readSettings().performanceHackAvoidDrawTech &&
         this.count >= 10 &&
         !(this.id === "syphon" && this.count >= 79)
       ) {
-        let mainVue = win.$("#mainColumn > div:first-child")[0]?.__vue__;
+        let mainVue = readWin().$("#mainColumn > div:first-child")[0]?.__vue__;
         if (mainVue) {
           let oldTabLoad = mainVue.s.tabLoad;
           try {
@@ -1846,14 +1837,14 @@ export function createEntityClasses({
     isUnlocked() {
       // vue of researched techs still can be found in #oldTech
       return (
-        document.querySelector(
+        readDocument().querySelector(
           "#" + this._vueBinding + " > .button:not(.precog)",
         ) !== null && getVueById(this._vueBinding) !== undefined
       );
     }
 
     get definition() {
-      return game.actions.tech[this._id];
+      return readGame().actions.tech[this._id];
     }
 
     get title() {
@@ -1870,7 +1861,7 @@ export function createEntityClasses({
     }
 
     isAffordable(max = false) {
-      return game.checkAffordable(this.definition, max);
+      return readGame().checkAffordable(this.definition, max);
     }
 
     // Whether the action is clickable is determined by whether it is unlocked, affordable and not a "permanently clickable" action
@@ -1886,22 +1877,25 @@ export function createEntityClasses({
       }
 
       for (let res in this.cost) {
-        resources[res].currentQuantity -= this.cost[res];
+        readResources()[res].currentQuantity -= this.cost[res];
       }
 
       getVueById(this._vueBinding).action();
 
       let def = this.definition;
       let title = typeof def.title === "function" ? def.title() : def.title;
-      GameLog.logSuccess("research", poly.loc("research_success", [title]), [
-        "queue",
-        "research_queue",
-      ]);
+      readGameLog().logSuccess(
+        "research",
+        readPoly().loc("research_success", [title]),
+        ["queue", "research_queue"],
+      );
       return true;
     }
 
     isResearched() {
-      return document.querySelector("#tech-" + this.id + " .oldTech") !== null;
+      return (
+        readDocument().querySelector("#tech-" + this.id + " .oldTech") !== null
+      );
     }
 
     updateResourceRequirements() {
@@ -1914,9 +1908,9 @@ export function createEntityClasses({
         return;
       }
 
-      let adjustedCosts = poly.adjustCosts(this.definition);
+      let adjustedCosts = readPoly().adjustCosts(this.definition);
       for (let resourceName in adjustedCosts) {
-        if (resources[resourceName]) {
+        if (readResources()[resourceName]) {
           let resourceAmount = Number(adjustedCosts[resourceName]());
           if (resourceAmount > 0) {
             this.cost[resourceName] = resourceAmount;
@@ -1935,11 +1929,11 @@ export function createEntityClasses({
     }
 
     get name() {
-      return game.races[this.id].name ?? `Custom (${this.id} slot)`;
+      return readGame().races[this.id].name ?? `Custom (${this.id} slot)`;
     }
 
     get desc() {
-      let nameRef = game.races[this.id].desc;
+      let nameRef = readGame().races[this.id].desc;
       return typeof nameRef === "function"
         ? nameRef()
         : typeof nameRef === "string"
@@ -1948,13 +1942,13 @@ export function createEntityClasses({
     }
 
     get genus() {
-      return game.races[this.id].type;
+      return readGame().races[this.id].type;
     }
 
     getWeighting(verbose) {
       // Locked races always have zero weighting
       let habitability = this.getHabitability();
-      if (habitability < (settings.evolutionAutoUnbound ? 0.8 : 1)) {
+      if (habitability < (readSettings().evolutionAutoUnbound ? 0.8 : 1)) {
         return -1;
       }
 
@@ -2062,15 +2056,15 @@ export function createEntityClasses({
 
       let goals = [];
       let weighting = 0;
-      let starLevel = getStarLevel(settings);
+      let starLevel = getStarLevel(readSettings());
       const checkAchievement = (baseWeight, id) => {
         let improve = starLevel - getAchievementStar(id);
         if (improve > 0) {
           weighting += baseWeight * improve;
           goals.push(`achieve_${id}_name`);
           if (
-            game.global.race.universe !== "micro" &&
-            game.global.race.universe !== "standard"
+            readGame().global.race.universe !== "micro" &&
+            readGame().global.race.universe !== "standard"
           ) {
             weighting +=
               baseWeight *
@@ -2081,14 +2075,14 @@ export function createEntityClasses({
 
       // Check pillar
       if (
-        ((settings.prestigeType === "ascension" &&
-          settings.prestigeAscensionPillar) ||
-          ["demonic", "apotheosis"].includes(settings.prestigeType)) &&
-        game.global.race.universe !== "micro"
+        ((readSettings().prestigeType === "ascension" &&
+          readSettings().prestigeAscensionPillar) ||
+          ["demonic", "apotheosis"].includes(readSettings().prestigeType)) &&
+        readGame().global.race.universe !== "micro"
       ) {
-        let speciesPillarLevel = game.global.pillars[this.id] ?? 0;
+        let speciesPillarLevel = readGame().global.pillars[this.id] ?? 0;
         let canPillar =
-          !speciesPillarLevel && resources.Harmony.currentQuantity >= 1;
+          !speciesPillarLevel && readResources().Harmony.currentQuantity >= 1;
         let canUpgrade = speciesPillarLevel && speciesPillarLevel < starLevel;
         if (canPillar || canUpgrade) {
           weighting += 1000 * Math.max(0, starLevel - speciesPillarLevel);
@@ -2100,11 +2094,11 @@ export function createEntityClasses({
           // Check genus pillar for Enlightenment
           if (!noPillarRace.includes(this.id)) {
             let genusPillar = Math.max(
-              ...Object.values(races)
+              ...Object.values(readRaces())
                 .filter(
                   (r) => r.genus === this.genus && !noPillarRace.includes(r.id),
                 )
-                .map((r) => game.global.pillars[r.id] ?? 0),
+                .map((r) => readGame().global.pillars[r.id] ?? 0),
             );
             let improve = starLevel - genusPillar;
             if (improve > 0) {
@@ -2116,8 +2110,9 @@ export function createEntityClasses({
       }
 
       // Check imitate unlock
-      if (settings.prestigeType === "apocalypse") {
-        let imitateUnlocked = game.global.stats?.synth?.[this.id] ?? false;
+      if (readSettings().prestigeType === "apocalypse") {
+        let imitateUnlocked =
+          readGame().global.stats?.synth?.[this.id] ?? false;
         if (!noImitates.includes(this.id) && !imitateUnlocked) {
           weighting += 10000;
           goals.push("feat_planned_obsolescence_name");
@@ -2129,7 +2124,7 @@ export function createEntityClasses({
       }
 
       // Check greatness\extinction achievement
-      if (greatnessReset.includes(settings.prestigeType)) {
+      if (greatnessReset.includes(readSettings().prestigeType)) {
         if (
           !noGreatnessGenus.includes(this.genus) &&
           !noGreatnessRace.includes(this.id)
@@ -2138,7 +2133,7 @@ export function createEntityClasses({
         }
       } else if (
         !noExtinctionRace.includes(this.id) &&
-        (!noMADRace.includes(this.id) || settings.prestigeType !== "mad")
+        (!noMADRace.includes(this.id) || readSettings().prestigeType !== "mad")
       ) {
         checkAchievement(100, "extinct_" + this.id);
       }
@@ -2146,39 +2141,39 @@ export function createEntityClasses({
       // Blood War
       if (
         this.genus === "demonic" &&
-        settings.prestigeType !== "mad" &&
-        settings.prestigeType !== "bioseed"
+        readSettings().prestigeType !== "mad" &&
+        readSettings().prestigeType !== "bioseed"
       ) {
         checkAchievement(50, "blood_war");
       }
 
       // Sharks with Lasers
-      if (this.id === "sharkin" && settings.prestigeType !== "mad") {
+      if (this.id === "sharkin" && readSettings().prestigeType !== "mad") {
         checkAchievement(50, "laser_shark");
       }
 
       // Macro Universe and Arquillian Galaxy
       if (
-        game.global.race.universe === "micro" &&
-        settings.prestigeType === "bioseed"
+        readGame().global.race.universe === "micro" &&
+        readSettings().prestigeType === "bioseed"
       ) {
         let smallRace =
-          this.genus === "small" || game.races[this.id].traits.compact;
+          this.genus === "small" || readGame().races[this.id].traits.compact;
         checkAchievement(50, smallRace ? "macro" : "marble");
       }
 
       // You Shall Pass
       if (
         this.id === "balorg" &&
-        game.global.race.universe === "magic" &&
-        settings.prestigeType === "vacuum"
+        readGame().global.race.universe === "magic" &&
+        readSettings().prestigeType === "vacuum"
       ) {
         checkAchievement(50, "pass");
       }
 
       // Madagascar Tree, Godwin's law, Infested Terrans - Achievement race
-      for (let set of fanatAchievements) {
-        if (this.id === set.race && game.global.race.gods === set.god) {
+      for (let set of readFanatAchievements()) {
+        if (this.id === set.race && readGame().global.race.gods === set.god) {
           checkAchievement(150, set.achieve);
         }
       }
@@ -2193,33 +2188,33 @@ export function createEntityClasses({
         weighting += 500;
       }
 
-      // Increases weight of stringest races of genus
+      // Increases weight of stringest readRaces() of genus
       if (
-        (midTierReset.includes(settings.prestigeType) &&
+        (midTierReset.includes(readSettings().prestigeType) &&
           bestForMid.includes(this.id)) ||
-        (highTierReset.includes(settings.prestigeType) &&
+        (highTierReset.includes(readSettings().prestigeType) &&
           bestForHigh.includes(this.id))
       ) {
         weighting += 1;
       }
 
       // Same race for Second Evolution
-      if (this.id === game.global.race.gods) {
+      if (this.id === readGame().global.race.gods) {
         checkAchievement(10, "second_evolution");
       }
 
       // Madagascar Tree, Godwin's law, Infested Terrans - God race
       // This races shouldn't benefit from suited planet, to avoid prep -> prep loops
-      for (let set of fanatAchievements) {
+      for (let set of readFanatAchievements()) {
         if (this.id === set.god) {
           checkAchievement(5, set.achieve);
         }
       }
 
       // Feats, lowest weight - go for them only if there's nothing better
-      if (game.global.race.universe !== "micro") {
+      if (readGame().global.race.universe !== "micro") {
         const checkFeat = (id) => {
-          let improve = starLevel - (game.global.stats.feat[id] ?? 0);
+          let improve = starLevel - (readGame().global.stats.feat[id] ?? 0);
           if (improve > 0) {
             weighting += 1 * improve;
             goals.push(`feat_${id}_name`);
@@ -2228,10 +2223,10 @@ export function createEntityClasses({
 
         // Take no advice, Ill Advised
         if (
-          game.global.city.biome === "hellscape" &&
+          readGame().global.city.biome === "hellscape" &&
           this.genus !== "demonic"
         ) {
-          switch (settings.prestigeType) {
+          switch (readSettings().prestigeType) {
             case "mad":
             case "cataclysm":
               checkFeat("take_no_advice");
@@ -2244,7 +2239,7 @@ export function createEntityClasses({
 
         // Organ Harvester, The Misery, Garbage Pie
         if (this.id === "junker") {
-          switch (settings.prestigeType) {
+          switch (readSettings().prestigeType) {
             case "bioseed":
               checkFeat("organ_harvester");
               break;
@@ -2263,22 +2258,25 @@ export function createEntityClasses({
 
         // Nephilim
         if (
-          settings.prestigeType === "whitehole" &&
-          game.global.race.universe === "evil" &&
+          readSettings().prestigeType === "whitehole" &&
+          readGame().global.race.universe === "evil" &&
           this.genus === "angelic"
         ) {
           checkFeat("nephilim");
         }
 
         // Twisted
-        if (settings.prestigeType === "demonic" && this.genus === "angelic") {
+        if (
+          readSettings().prestigeType === "demonic" &&
+          this.genus === "angelic"
+        ) {
           checkFeat("twisted");
         }
 
         // Digital Ascension
         if (
-          settings.prestigeType === "ascension" &&
-          settings.challenge_emfield &&
+          readSettings().prestigeType === "ascension" &&
+          readSettings().challenge_emfield &&
           this.genus === "artifical" &&
           this.id !== "custom"
         ) {
@@ -2286,7 +2284,7 @@ export function createEntityClasses({
         }
 
         // Slime Lord
-        if (settings.prestigeType === "demonic" && this.id === "sludge") {
+        if (readSettings().prestigeType === "demonic" && this.id === "sludge") {
           checkFeat("slime_lord");
         }
       }
@@ -2305,68 +2303,72 @@ export function createEntityClasses({
     getHabitability() {
       switch (this.id) {
         case "hellspawn":
-          return game.global.race.universe === "evil" &&
-            game.global.stats.achieve["godslayer"]?.e
+          return readGame().global.race.universe === "evil" &&
+            readGame().global.stats.achieve["godslayer"]?.e
             ? 1
             : 0;
         case "junker":
-          return game.global.genes.challenge ? 1 : 0;
+          return readGame().global.genes.challenge ? 1 : 0;
         case "sludge":
-          return (game.global.stats.achieve["ascended"] ||
-            game.global.stats.achieve["corrupted"]) &&
-            game.global.stats.achieve["extinct_junker"]
+          return (readGame().global.stats.achieve["ascended"] ||
+            readGame().global.stats.achieve["corrupted"]) &&
+            readGame().global.stats.achieve["extinct_junker"]
             ? 1
             : 0;
         case "ultra_sludge":
-          return game.global.stats.achieve["godslayer"] &&
-            game.global.stats.achieve["extinct_sludge"]
+          return readGame().global.stats.achieve["godslayer"] &&
+            readGame().global.stats.achieve["extinct_sludge"]
             ? 1
             : 0;
         case "hybrid":
-          return game.global.stats.achieve["what_is_best"]?.e >= 5 ? 1 : 0;
+          return readGame().global.stats.achieve["what_is_best"]?.e >= 5
+            ? 1
+            : 0;
       }
 
       let unboundMod =
-        game.global.blood.unbound >= 4
+        readGame().global.blood.unbound >= 4
           ? 0.95
-          : game.global.blood.unbound >= 2
+          : readGame().global.blood.unbound >= 2
             ? 0.9
-            : game.global.blood.unbound >= 1
+            : readGame().global.blood.unbound >= 1
               ? 0.8
               : 0;
-      let shadowMod = game.global.blood.unbound >= 3 ? unboundMod : 0;
+      let shadowMod = readGame().global.blood.unbound >= 3 ? unboundMod : 0;
 
       switch (this.genus) {
         case "aquatic":
-          return ["swamp", "oceanic"].includes(game.global.city.biome)
+          return ["swamp", "oceanic"].includes(readGame().global.city.biome)
             ? 1
             : unboundMod;
         case "fey":
-          return ["forest", "swamp", "taiga"].includes(game.global.city.biome)
+          return ["forest", "swamp", "taiga"].includes(
+            readGame().global.city.biome,
+          )
             ? 1
             : unboundMod;
         case "sand":
-          return ["ashland", "desert"].includes(game.global.city.biome)
+          return ["ashland", "desert"].includes(readGame().global.city.biome)
             ? 1
             : unboundMod;
         case "heat":
-          return ["ashland", "volcanic"].includes(game.global.city.biome)
+          return ["ashland", "volcanic"].includes(readGame().global.city.biome)
             ? 1
             : unboundMod;
         case "polar":
-          return ["tundra", "taiga"].includes(game.global.city.biome)
+          return ["tundra", "taiga"].includes(readGame().global.city.biome)
             ? 1
             : unboundMod;
         case "demonic":
-          return game.global.city.biome === "hellscape" ? 1 : shadowMod;
+          return readGame().global.city.biome === "hellscape" ? 1 : shadowMod;
         case "angelic":
-          return game.global.city.biome === "eden" ? 1 : shadowMod;
+          return readGame().global.city.biome === "eden" ? 1 : shadowMod;
         case "synthetic":
-          return game.global.stats.achieve["obsolete"]?.l >= 5 ? 1 : 0;
+          return readGame().global.stats.achieve["obsolete"]?.l >= 5 ? 1 : 0;
         case "eldritch":
-          return game.global.stats.achieve["nightmare"]?.mg ? 1 : 0;
+          return readGame().global.stats.achieve["nightmare"]?.mg ? 1 : 0;
         case "hybrid":
-          return game.global.stats.achieve["godslayer"] ? 1 : 0;
+          return readGame().global.stats.achieve["godslayer"] ? 1 : 0;
         case undefined: // Nonexistent custom
           return 0;
         default:
@@ -2377,8 +2379,8 @@ export function createEntityClasses({
     getCondition() {
       switch (this.id) {
         case "hellspawn":
-          return poly.loc("wiki_challenges_reqs_reset", [
-            `${poly.loc("wiki_universe_evil")} ${poly.loc(
+          return readPoly().loc("wiki_challenges_reqs_reset", [
+            `${readPoly().loc("wiki_universe_evil")} ${readPoly().loc(
               "wiki_resets_apotheosis",
             )}`,
           ]);
@@ -2390,10 +2392,12 @@ export function createEntityClasses({
           return "Ultra Failed Experiment unlocked.";
         case "custom":
           return `Complete an Ascension reset and be on a suitable planet for your chosen genus (${
-            this.genus ? game.loc("genelab_genus_" + this.genus) : "not set"
+            this.genus
+              ? readGame().loc("genelab_genus_" + this.genus)
+              : "not set"
           }).`;
         case "hybrid":
-          return game.loc("wiki_achieve_what_is_best");
+          return readGame().loc("wiki_achieve_what_is_best");
       }
 
       switch (this.genus) {
@@ -2412,11 +2416,11 @@ export function createEntityClasses({
         case "angelic":
           return "Eden planet.";
         case "synthetic":
-          return game.loc("wiki_achieve_obsolete");
+          return readGame().loc("wiki_achieve_obsolete");
         case "eldritch":
-          return game.loc("wiki_achieve_nightmare");
+          return readGame().loc("wiki_achieve_nightmare");
         case "hybrid":
-          return game.loc("wiki_achieve_godslayer");
+          return readGame().loc("wiki_achieve_godslayer");
         case undefined:
           return "Unknown.";
         default: // No special conditions
@@ -2454,13 +2458,13 @@ export function createEntityClasses({
 
     cost() {
       if (this.actionType === "research") {
-        return techIds[this.actionId].definition.cost;
+        return readTechIds()[this.actionId].definition.cost;
       }
       if (this.actionType === "build") {
-        return buildingIds[this.actionId].definition.cost;
+        return readBuildingIds()[this.actionId].definition.cost;
       }
       if (this.actionType === "arpa") {
-        return arpaIds[this.actionId].definition.cost;
+        return readArpaIds()[this.actionId].definition.cost;
       }
       return {};
     }
@@ -2469,13 +2473,13 @@ export function createEntityClasses({
       // check against MAX as we want to know if it is possible...
       let obj = null;
       if (this.actionType === "research") {
-        obj = techIds[this.actionId];
+        obj = readTechIds()[this.actionId];
       }
       if (this.actionType === "build") {
-        obj = buildingIds[this.actionId];
+        obj = readBuildingIds()[this.actionId];
       }
       if (this.actionType === "arpa") {
-        obj = arpaIds[this.actionId];
+        obj = readArpaIds()[this.actionId];
       }
       return obj && obj.isUnlocked() && obj.isAffordable(true);
     }
@@ -2487,21 +2491,21 @@ export function createEntityClasses({
 
       if (
         this.actionType === "research" &&
-        techIds[this.actionId].isResearched()
+        readTechIds()[this.actionId].isResearched()
       ) {
         this.complete = true;
         return true;
       }
       if (
         this.actionType === "build" &&
-        buildingIds[this.actionId].count >= this.actionCount
+        readBuildingIds()[this.actionId].count >= this.actionCount
       ) {
         this.complete = true;
         return true;
       }
       if (
         this.actionType === "arpa" &&
-        arpaIds[this.actionId].count >= this.actionCount
+        readArpaIds()[this.actionId].count >= this.actionCount
       ) {
         this.complete = true;
         return true;
@@ -2513,18 +2517,18 @@ export function createEntityClasses({
       if (this.requirementType === "chain") {
         return (
           this.priority < 1 ||
-          TriggerManager.priorityList[this.priority - 1]?.complete
+          readTriggerManager().priorityList[this.priority - 1]?.complete
         );
-      } else if (checkTypes[this.requirementType]) {
+      } else if (readCheckTypes()[this.requirementType]) {
         try {
-          if (retBools.includes(this.requirementType)) {
+          if (readRetBools().includes(this.requirementType)) {
             return (
-              checkTypes[this.requirementType].fn(this.requirementId) ==
+              readCheckTypes()[this.requirementType].fn(this.requirementId) ==
               this.requirementCount
             );
           } else {
             return (
-              checkTypes[this.requirementType].fn(this.requirementId) >=
+              readCheckTypes()[this.requirementType].fn(this.requirementId) >=
               this.requirementCount
             );
           }
@@ -2533,13 +2537,13 @@ export function createEntityClasses({
           let displayName = `${this.requirementType} ${this.requirementId} x${this.requirementCount} => ${this.actionType}: ${this.actionId} x${this.actionCount}`;
           let msg = `Trigger ${this.seq} [${displayName}] requirement is invalid! Fix or remove it. (${error})`;
           if (
-            !WindowManager.isOpen() &&
-            !(Object.values(game.global.lastMsg.all) as Loose[]).find(
+            !readWindowManager().isOpen() &&
+            !(Object.values(readGame().global.lastMsg.all) as Loose[]).find(
               (log) => log.m === msg,
             )
           ) {
             // Don't spam with errors
-            GameLog.logDanger("special", msg, ["events", "major_events"]);
+            readGameLog().logDanger("special", msg, ["events", "major_events"]);
           }
         }
       }
@@ -2558,21 +2562,21 @@ export function createEntityClasses({
         return; // Special case
       }
 
-      if (!checkTypes[requirementType]) {
+      if (!readCheckTypes()[requirementType]) {
         return; // Invalid type
       }
 
-      let oldArg = checkTypes[this.requirementType]?.arg ?? null;
-      let oldOpts = checkTypes[this.requirementType]?.options ?? null;
-      let newArg = checkTypes[requirementType].arg;
-      let newOpts = checkTypes[requirementType].options;
+      let oldArg = readCheckTypes()[this.requirementType]?.arg ?? null;
+      let oldOpts = readCheckTypes()[this.requirementType]?.options ?? null;
+      let newArg = readCheckTypes()[requirementType].arg;
+      let newOpts = readCheckTypes()[requirementType].options;
 
       this.requirementType = requirementType;
       this.requirementCount = 1;
       this.complete = false;
 
       if (oldArg !== newArg || oldOpts !== newOpts) {
-        this.requirementId = checkTypes[this.requirementType].def;
+        this.requirementId = readCheckTypes()[this.requirementType].def;
       }
     }
 
@@ -2610,29 +2614,29 @@ export function createEntityClasses({
     }
 
     get enabled() {
-      return settings["mTrait_" + this.traitName];
+      return readSettings()["mTrait_" + this.traitName];
     }
     get priority() {
-      return settingsRaw["mTrait_p_" + this.traitName];
+      return readSettingsRaw()["mTrait_p_" + this.traitName];
     }
     get weighting() {
-      return settings["mTrait_w_" + this.traitName];
+      return readSettings()["mTrait_w_" + this.traitName];
     }
 
     isUnlocked() {
-      return game.global.settings.mtorder.includes(this.traitName);
+      return readGame().global.settings.mtorder.includes(this.traitName);
     }
 
     geneCount() {
-      return game.global.race.minor[this.traitName] ?? 0;
+      return readGame().global.race.minor[this.traitName] ?? 0;
     }
 
     phageCount() {
-      return game.global.genes.minor[this.traitName] ?? 0;
+      return readGame().global.genes.minor[this.traitName] ?? 0;
     }
 
     totalCount() {
-      return game.global.race[this.traitName] ?? 0;
+      return readGame().global.race[this.traitName] ?? 0;
     }
 
     geneCost() {
@@ -2647,31 +2651,31 @@ export function createEntityClasses({
 
     constructor(traitName) {
       this.traitName = traitName;
-      this.baseCost = Math.abs(game.traits[traitName].val);
-      this.isPositive = game.traits[traitName].val >= 0;
+      this.baseCost = Math.abs(readGame().traits[traitName].val);
+      this.isPositive = readGame().traits[traitName].val >= 0;
     }
 
     get gainEnabled() {
-      return settings["mutableTrait_gain_" + this.traitName];
+      return readSettings()["mutableTrait_gain_" + this.traitName];
     }
     get purgeEnabled() {
-      return settings["mutableTrait_purge_" + this.traitName];
+      return readSettings()["mutableTrait_purge_" + this.traitName];
     }
     get resetEnabled() {
-      return settings["mutableTrait_reset_" + this.traitName];
+      return readSettings()["mutableTrait_reset_" + this.traitName];
     }
     get priority() {
-      return settingsRaw["mutableTrait_p_" + this.traitName];
+      return readSettingsRaw()["mutableTrait_p_" + this.traitName];
     }
 
     get name() {
-      return game.loc("trait_" + this.traitName + "_name");
+      return readGame().loc("trait_" + this.traitName + "_name");
     }
 
     canGain() {
       if (
-        game.global.race.species === "hellspawn" &&
-        game.global.race["warlord"]
+        readGame().global.race.species === "hellspawn" &&
+        readGame().global.race["warlord"]
       ) {
         return false;
       }
@@ -2680,13 +2684,13 @@ export function createEntityClasses({
         this.gainEnabled &&
         !this.purgeEnabled &&
         this.canMutate("gain") &&
-        game.global.race[this.traitName] === undefined &&
-        !conflictingTraits.some(
+        readGame().global.race[this.traitName] === undefined &&
+        !readConflictingTraits().some(
           (set) =>
             (set[0] === this.traitName &&
-              game.global.race[set[1]] !== undefined) ||
+              readGame().global.race[set[1]] !== undefined) ||
             (set[1] === this.traitName &&
-              game.global.race[set[0]] !== undefined),
+              readGame().global.race[set[0]] !== undefined),
         )
       );
     }
@@ -2696,39 +2700,43 @@ export function createEntityClasses({
         this.purgeEnabled &&
         !this.gainEnabled &&
         this.canMutate("purge") &&
-        game.global.race[this.traitName] !== undefined &&
+        readGame().global.race[this.traitName] !== undefined &&
         !(
-          (game.global.race.species === "sludge" ||
-            game.global.race.species === "ultra_sludge") &&
+          (readGame().global.race.species === "sludge" ||
+            readGame().global.race.species === "ultra_sludge") &&
           this.traitName === "ooze"
         ) &&
-        !game.global.race.ss_traits?.includes(this.traitName) &&
-        !game.global.race.iTraits?.hasOwnProperty(this.traitName)
+        !readGame().global.race.ss_traits?.includes(this.traitName) &&
+        !readGame().global.race.iTraits?.hasOwnProperty(this.traitName)
       );
     }
 
     canMutate(action) {
       let currentPlasmids =
-        resources[
-          game.global.race.universe === "antimatter" ? "AntiPlasmid" : "Plasmid"
+        readResources()[
+          readGame().global.race.universe === "antimatter"
+            ? "AntiPlasmid"
+            : "Plasmid"
         ].currentQuantity;
       return (
         currentPlasmids - this.mutationCost(action) >=
-          MutableTraitManager.minimumPlasmidsToPreserve &&
+          readMutableTraitManager().minimumPlasmidsToPreserve &&
         !(
-          (game.global.race.species === "sludge" ||
-            game.global.race.species === "ultra_sludge") &&
-          game.global.race["modified"]
+          (readGame().global.race.species === "sludge" ||
+            readGame().global.race.species === "ultra_sludge") &&
+          readGame().global.race["modified"]
         )
       );
     }
 
     mutationCost(action) {
       let mult =
-        mutationCostMultipliers[game.global.race.species]?.[action] ?? 1;
+        readMutationCostMultipliers()[readGame().global.race.species]?.[
+          action
+        ] ?? 1;
       let multGenus =
-        mutationCostMultipliersGenus[
-          game.races[game.global.race.species].type
+        readMutationCostMultipliersGenus()[
+          readGame().races[readGame().global.race.species].type
         ]?.[action] ?? 1;
       return this.baseCost * 5 * mult * multGenus;
     }
@@ -2739,7 +2747,7 @@ export function createEntityClasses({
       super(traitName);
       this.type = "major";
       let ownerRace: { id?: Loose; genus?: Loose } =
-        (Object.entries(game.races) as [string, Loose][])
+        (Object.entries(readGame().races) as [string, Loose][])
           .filter(
             ([id, race]) =>
               id !== "custom" &&
@@ -2747,8 +2755,10 @@ export function createEntityClasses({
               race.traits[traitName] !== undefined,
           )
           .map(([id, race]) => ({ id: id, genus: race.type }))[0] ?? {};
-      this.source = ownerRace.id ?? specialRaceTraits[traitName] ?? "";
-      this.racesThatCanGain = (Object.entries(game.races) as [string, Loose][])
+      this.source = ownerRace.id ?? readSpecialRaceTraits()[traitName] ?? "";
+      this.racesThatCanGain = (
+        Object.entries(readGame().races) as [string, Loose][]
+      )
         .filter(
           ([id, race]) =>
             id == ownerRace.id ||
@@ -2769,13 +2779,13 @@ export function createEntityClasses({
     canGain() {
       return (
         super.canGain() &&
-        game.global.genes["mutation"] >= 3 &&
-        this.racesThatCanGain.includes(game.global.race.species)
+        readGame().global.genes["mutation"] >= 3 &&
+        this.racesThatCanGain.includes(readGame().global.race.species)
       );
     }
 
     canPurge() {
-      return super.canPurge() && game.global.genes["mutation"] >= 1;
+      return super.canPurge() && readGame().global.genes["mutation"] >= 1;
     }
   }
 
@@ -2783,10 +2793,10 @@ export function createEntityClasses({
     constructor(traitName) {
       super(traitName);
       this.type = "genus";
-      let genus = Object.entries(poly.genus_traits)
+      let genus = Object.entries(readPoly().genus_traits)
         .filter(([id, traits]) => traits[traitName] !== undefined)
         .map(([id, traits]) => id);
-      this.source = genus[0] ?? specialRaceTraits[traitName] ?? "";
+      this.source = genus[0] ?? readSpecialRaceTraits()[traitName] ?? "";
       this.genus = this.source;
     }
 
@@ -2799,7 +2809,7 @@ export function createEntityClasses({
     }
 
     canPurge() {
-      return super.canPurge() && game.global.genes["mutation"] >= 2;
+      return super.canPurge() && readGame().global.genes["mutation"] >= 2;
     }
   }
 

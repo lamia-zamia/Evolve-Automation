@@ -70,10 +70,49 @@ Object.assign(context, {
   },
 });
 
-const dependencies = Object.fromEntries(
-  dependencyNames.map((name) => [name, () => context[name]]),
-);
-const classes = createEntityClasses({ dependencies });
+const classes = createEntityClasses({
+  readJQuery: () => context.$,
+  readArpaIds: () => context.arpaIds,
+  readBuildingIds: () => context.buildingIds,
+  readBuildings: () => context.buildings,
+  readCheckAffordableCustom: () => context.checkAffordableCustom,
+  readCheckTypes: () => context.checkTypes,
+  readConflictingTraits: () => context.conflictingTraits,
+  readDocument: () => context.document,
+  readFanatAchievements: () => context.fanatAchievements,
+  readFibonacci: () => context.Fibonacci,
+  readGame: () => context.game,
+  readGameLog: () => context.GameLog,
+  readAchievementStar: () => context.getAchievementStar,
+  readCitadelConsumption: () => context.getCitadelConsumption,
+  readStarLevel: () => context.getStarLevel,
+  readVueById: () => context.getVueById,
+  readHaveTask: () => context.haveTask,
+  readHaveTech: () => context.haveTech,
+  readJobs: () => context.jobs,
+  readKeyManager: () => context.KeyManager,
+  readLogIgnore: () => context.logIgnore,
+  readLogPrestige: () => context.logPrestige,
+  readMutableTraitManager: () => context.MutableTraitManager,
+  readMutationCostMultipliers: () => context.mutationCostMultipliers,
+  readMutationCostMultipliersGenus: () => context.mutationCostMultipliersGenus,
+  readNormalizeProperties: () => context.normalizeProperties,
+  readPoly: () => context.poly,
+  readRaces: () => context.races,
+  readResources: () => context.resources,
+  readRetBools: () => context.retBools,
+  readSettings: () => context.settings,
+  readSettingsRaw: () => context.settingsRaw,
+  readSpecialRaceTraits: () => context.specialRaceTraits,
+  readState: () => context.state,
+  readTechIds: () => context.techIds,
+  readTicksPerSecond: () => context.ticksPerSecond,
+  readTraitVal: () => context.traitVal,
+  readTriggerManager: () => context.TriggerManager,
+  readWarManager: () => context.WarManager,
+  readWin: () => context.win,
+  readWindowManager: () => context.WindowManager,
+});
 
 assert.equal(Object.keys(classes).length, 32);
 assert.equal(classes.BasicJob.prototype instanceof classes.Job, true);
