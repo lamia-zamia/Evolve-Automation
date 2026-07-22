@@ -443,12 +443,14 @@ import {
   createMarketSettingsEvolveAdapter,
   createMarketSettingsWriter,
 } from "./adapters/evolve/market-settings.ts";
+import { createWarSettingsIntentHandler } from "./application/war-settings.ts";
+import { createWarSettingsBrowserAdapter } from "./adapters/browser/war-settings.ts";
+import { createWarSettingsEvolveAdapter } from "./adapters/evolve/war-settings.ts";
 import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
 import { createPrestigeSettings } from "./ui/prestige-settings.ts";
 import { createEvolutionSettings } from "./ui/evolution-settings.ts";
 import { createTriggerSettings } from "./ui/trigger-settings.ts";
-import { createWarSettings } from "./ui/war-settings.ts";
 import { createHellSettings } from "./ui/hell-settings.ts";
 import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createMechSettings } from "./ui/mech-settings.ts";
@@ -1732,29 +1734,44 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildResearchSettings, updateResearchSettingsContent } =
     researchSettingsBrowserAdapter;
 
-  const warSettingsOverrides = {};
-  const getWarSettingsDependency = createDependencyResolver(
-    warSettingsOverrides,
-    {
-      $: () => $,
-      SpyManager: () => SpyManager,
-      addSettingsHeader1: () => addSettingsHeader1,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsSelect: () => addSettingsSelect,
-      addSettingsToggle: () => addSettingsToggle,
-      buildSettingsSection2: () => buildSettingsSection2,
-      document: () => document,
-      game: () => game,
-      resetCheckbox: () => resetCheckbox,
-      resetWarSettings: () => resetWarSettings,
-      updateSettingsFromState: () => updateSettingsFromState,
-    },
-  );
-  const warSettings = createWarSettings({
-    getDependency: getWarSettingsDependency,
-    getOverride: (name) => warSettingsOverrides[name],
+  let warSettingsTestContext;
+  const warSettingsReader = createWarSettingsEvolveAdapter({
+    getSpyManager: () => warSettingsTestContext?.SpyManager ?? SpyManager,
+    getGame: () => warSettingsTestContext?.game ?? game,
   });
-  const { buildWarSettings, updateWarSettingsContent } = warSettings;
+  const warSettingsActions = {
+    buildSettingsSection2: (...args) => buildSettingsSection2(...args),
+    addSettingsHeader1: (...args) => addSettingsHeader1(...args),
+    addSettingsNumber: (...args) => addSettingsNumber(...args),
+    addSettingsSelect: (...args) => addSettingsSelect(...args),
+    addSettingsToggle: (...args) => addSettingsToggle(...args),
+  };
+  const warSettingsIntentHandler = createWarSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (warSettingsTestContext?.resetWarSettings ?? resetWarSettings)(true),
+      persist: () =>
+        (
+          warSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    },
+    renderSettingsContent: (secondaryPrefix) =>
+      updateWarSettingsContent(secondaryPrefix),
+    effects: {
+      resetCheckboxes: () =>
+        (warSettingsTestContext?.resetCheckbox ?? resetCheckbox)("autoFight"),
+    },
+  });
+  const warSettingsBrowserAdapter = createWarSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    reader: warSettingsReader,
+    intents: warSettingsIntentHandler,
+    getActions: () => warSettingsTestContext?.actions ?? warSettingsActions,
+  });
+  const { buildWarSettings, updateWarSettingsContent } =
+    warSettingsBrowserAdapter;
 
   const hellSettingsOverrides = {};
   const getHellSettingsDependency = createDependencyResolver(
@@ -5727,7 +5744,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         prestige: prestigeSettings,
         evolution: evolutionSettings,
         trigger: triggerSettings,
-        war: warSettings,
         hell: hellSettings,
         fleet: fleetSettings,
         mech: mechSettings,
@@ -5736,7 +5752,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         Object.assign(prestigeSettingsOverrides, context);
         Object.assign(evolutionSettingsOverrides, context);
         Object.assign(triggerSettingsOverrides, context);
-        Object.assign(warSettingsOverrides, context);
         Object.assign(hellSettingsOverrides, context);
         Object.assign(fleetSettingsOverrides, context);
         Object.assign(mechSettingsOverrides, context);
@@ -5752,6 +5767,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       marketSettings: marketSettingsBrowserAdapter,
       setMarketSettingsTestContext(context) {
         marketSettingsTestContext = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      warSettings: warSettingsBrowserAdapter,
+      setWarSettingsTestContext(context) {
+        warSettingsTestContext = context;
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {

@@ -44171,6 +44171,290 @@
     };
   }
 
+  // src/application/war-settings.ts
+  function createWarSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        writer.resetToDefaults();
+        writer.persist();
+        renderSettingsContent(intent.secondaryPrefix);
+        effects.resetCheckboxes();
+      }
+    });
+  }
+
+  // src/adapters/browser/war-settings.ts
+  function createWarSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function renderControl(node, control, actions) {
+      if (control.kind === "header") {
+        actions.addSettingsHeader1(node, control.label);
+        return;
+      }
+      if (control.kind === "number") {
+        actions.addSettingsNumber(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      if (control.kind === "toggle") {
+        actions.addSettingsToggle(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      actions.addSettingsSelect(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        control.options
+      );
+    }
+    function buildWarSettings2(parentNode, secondaryPrefix) {
+      const model = reader.read();
+      getActions().buildSettingsSection2(
+        parentNode,
+        secondaryPrefix,
+        model.sectionId,
+        model.sectionName,
+        () => intents.handle({ type: "reset-war-settings", secondaryPrefix }),
+        updateWarSettingsContent2
+      );
+    }
+    function updateWarSettingsContent2(secondaryPrefix) {
+      const model = reader.read();
+      const document2 = getDocument();
+      const scroll = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const node = getJQuery()(
+        `#script_${secondaryPrefix}${model.sectionId}Content`
+      );
+      node.empty().off("*");
+      const actions = getActions();
+      for (const control of model.controls) renderControl(node, control, actions);
+      document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
+    }
+    return Object.freeze({ buildWarSettings: buildWarSettings2, updateWarSettingsContent: updateWarSettingsContent2 });
+  }
+
+  // src/domain/war-settings.ts
+  var rivalOptions = Object.freeze([
+    Object.freeze({ val: "Ignore", label: "Ignore", hint: "Does nothing" }),
+    Object.freeze({
+      val: "Influence",
+      label: "Alliance",
+      hint: "Influence rival up to best relations"
+    }),
+    Object.freeze({
+      val: "Sabotage",
+      label: "War",
+      hint: "Sabotage and plunder rival"
+    }),
+    Object.freeze({
+      val: "Betrayal",
+      label: "Betrayal",
+      hint: "Influence rival up to best relations, and start sabotaging. Once military power reached minimum - start plundering it"
+    })
+  ]);
+  var protectOptions = Object.freeze([
+    Object.freeze({
+      val: "never",
+      label: "Never",
+      hint: "No additional limits to battalion size. Always send maximum soldiers allowed with current Max Advantage."
+    }),
+    Object.freeze({
+      val: "always",
+      label: "Always",
+      hint: "Limit battalions to sizes which will neven suffer any casualties in successful fights. You still will lose soldiers after failures, increasing minimum advantage can improve winning odds. This option designed to use with armored races favoring frequent attacks, with no approppriate build it may prevent any attacks from happening."
+    }),
+    Object.freeze({
+      val: "auto",
+      label: "Auto",
+      hint: "Tries to maximize total number of attacks, alternating between full and safe attacks based on soldiers condition, to get most from both healing and recruiting."
+    })
+  ]);
+  function createWarSettingsReadModel(policyOptions) {
+    const controls3 = Object.freeze([
+      Object.freeze({ kind: "header", label: "Foreign Powers" }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "foreignPacifist",
+        label: "Pacifist",
+        hint: "Turns attacks off and on"
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "foreignUnification",
+        label: "Perform unification",
+        hint: "Perform unification once all three powers are controlled. autoResearch should be enabled for this to work."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "foreignOccupyLast",
+        label: "Occupy last foreign power",
+        hint: "Occupy last foreign power once other two are controlled, and unification is researched to speed up unification. Disable if you want annex\\purchase achievements."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "foreignForceSabotage",
+        label: "Sabotage foreign power when useful",
+        hint: "Perform sabotage against current target if it's useful(power above 50), regardless of required power, and default action defined above"
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "foreignTrainSpy",
+        label: "Train spies",
+        hint: "Train spies to use against foreign powers"
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "foreignSpyMax",
+        label: "Maximum spies",
+        hint: "Maximum spies per foreign power"
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "foreignPowerRequired",
+        label: "Military Power to switch target",
+        hint: "Switches to attack next foreign power once its power lowered down to this number. When exact numbers not know script tries to approximate it."
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "foreignPolicyInferior",
+        label: "Inferior Power",
+        hint: "Perform this against inferior foreign power, with military power equal or below given threshold. Complex actions includes required preparation - Annex and Purchase will incite and influence, Occupy will sabotage, until said options will be available.",
+        options: policyOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "foreignPolicySuperior",
+        label: "Superior Power",
+        hint: "Perform this against superior foreign power, with military power above given threshold. Complex actions includes required preparation - Annex and Purchase will incite and influence, Occupy will sabotage, until said options will be available.",
+        options: policyOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "foreignPolicyRival",
+        label: "Rival Power (The True Path)",
+        hint: "Perform this against rival foreign power.",
+        options: rivalOptions
+      }),
+      Object.freeze({ kind: "header", label: "Campaigns" }),
+      Object.freeze({
+        kind: "number",
+        settingName: "foreignAttackLivingSoldiersPercent",
+        label: "Minimum percentage of alive soldiers for attack",
+        hint: "Only attacks if you ALSO have the target battalion size of healthy soldiers available, so this setting will only take effect if your battalion does not include all of your soldiers"
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "foreignAttackHealthySoldiersPercent",
+        label: "Minimum percentage of healthy soldiers for attack",
+        hint: "Set to less than 100 to take advantage of being able to heal more soldiers in a game day than get wounded in a typical attack"
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "foreignHireMercMoneyStoragePercent",
+        label: "Hire mercenary if money storage greater than percent",
+        hint: "Hire a mercenary if remaining money after purchase will be greater than this percent"
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "foreignHireMercCostLowerThanIncome",
+        label: "OR if cost lower than money earned in X seconds",
+        hint: "Combines with the money storage percent setting to determine when to hire mercenaries"
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "foreignHireMercDeadSoldiers",
+        label: "AND amount of dead soldiers above this number",
+        hint: "Hire a mercenary only when current amount of dead soldiers above given number"
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "foreignMinAdvantage",
+        label: "Minimum advantage",
+        hint: "Minimum advantage to launch campaign, ignored during ambushes. 100% chance to win will be reached at approximately(influenced by traits and selected campaign) 75% advantage."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "foreignMaxAdvantage",
+        label: "Maximum advantage",
+        hint: "Once campaign is selected, your battalion will be limited in size down to this advantage, reducing potential loses"
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "foreignMaxSiegeBattalion",
+        label: "Maximum siege battalion",
+        hint: "Maximum battalion for siege campaign. Only try to siege if it's possible with up to given amount of soldiers. Siege is expensive, if you'll be doing it with too big battalion it might be less profitable than other combat campaigns. This option does not applied to unifying sieges, it affect only looting."
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "foreignProtect",
+        label: "Protect soldiers",
+        hint: "Configures safety of attacks. This option does not applies to unifying sieges, it affect only looting.",
+        options: protectOptions
+      })
+    ]);
+    return Object.freeze({
+      sectionId: "war",
+      sectionName: "Foreign Affairs",
+      controls: controls3
+    });
+  }
+
+  // src/adapters/evolve/war-settings.ts
+  function requireString27(value, path) {
+    if (typeof value !== "string")
+      throw new TypeError(`${path} must be a string`);
+    return value;
+  }
+  function createWarSettingsEvolveAdapter({
+    getSpyManager,
+    getGame
+  }) {
+    return Object.freeze({
+      read() {
+        const spyManager = requireRecord(getSpyManager(), "SpyManager");
+        const types = requireRecord(spyManager["Types"], "SpyManager.Types");
+        const game2 = requireRecord(getGame(), "game");
+        const loc = requireFunction(game2["loc"], "game.loc");
+        const policyOptions = [
+          { val: "Ignore", label: "Ignore", hint: "" }
+        ];
+        for (const [name, rawTask] of Object.entries(types)) {
+          const task = requireRecord(rawTask, `SpyManager.Types.${name}`);
+          const id = requireString27(task["id"], `SpyManager.Types.${name}.id`);
+          policyOptions.push({
+            val: name,
+            label: requireString27(
+              Reflect.apply(loc, game2, [`civics_spy_${id}`]),
+              `game.loc(civics_spy_${id})`
+            ),
+            hint: ""
+          });
+        }
+        policyOptions.push({ val: "Occupy", label: "Occupy", hint: "" });
+        return createWarSettingsReadModel(policyOptions);
+      }
+    });
+  }
+
   // src/ui/production-settings.ts
   function createProductionSettings({
     getSettingsRaw,
@@ -46196,234 +46480,6 @@
     };
   }
 
-  // src/ui/war-settings.ts
-  function createWarSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const SpyManager2 = liveObject4(() => getDependency("SpyManager"));
-    const addSettingsHeader12 = liveFunction(
-      () => getDependency("addSettingsHeader1")
-    );
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsSelect2 = liveFunction(
-      () => getDependency("addSettingsSelect")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const buildSettingsSection22 = liveFunction(
-      () => getDependency("buildSettingsSection2")
-    );
-    const document2 = liveObject4(() => getDependency("document"));
-    const game2 = liveObject4(() => getDependency("game"));
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetWarSettings2 = liveFunction(
-      () => getDependency("resetWarSettings")
-    );
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildWarSettingsImpl(parentNode, secondaryPrefix) {
-      let sectionId = "war";
-      let sectionName = "Foreign Affairs";
-      let resetFunction = function() {
-        resetWarSettings2(true);
-        updateSettingsFromState2();
-        updateWarSettingsContent2(secondaryPrefix);
-        resetCheckbox2("autoFight");
-      };
-      buildSettingsSection22(
-        parentNode,
-        secondaryPrefix,
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateWarSettingsContent2
-      );
-    }
-    function updateWarSettingsContentImpl(secondaryPrefix) {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2(`#script_${secondaryPrefix}warContent`);
-      currentNode.empty().off("*");
-      addSettingsHeader12(currentNode, "Foreign Powers");
-      addSettingsToggle2(
-        currentNode,
-        "foreignPacifist",
-        "Pacifist",
-        "Turns attacks off and on"
-      );
-      addSettingsToggle2(
-        currentNode,
-        "foreignUnification",
-        "Perform unification",
-        "Perform unification once all three powers are controlled. autoResearch should be enabled for this to work."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "foreignOccupyLast",
-        "Occupy last foreign power",
-        "Occupy last foreign power once other two are controlled, and unification is researched to speed up unification. Disable if you want annex\\purchase achievements."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "foreignForceSabotage",
-        "Sabotage foreign power when useful",
-        "Perform sabotage against current target if it's useful(power above 50), regardless of required power, and default action defined above"
-      );
-      addSettingsToggle2(
-        currentNode,
-        "foreignTrainSpy",
-        "Train spies",
-        "Train spies to use against foreign powers"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "foreignSpyMax",
-        "Maximum spies",
-        "Maximum spies per foreign power"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "foreignPowerRequired",
-        "Military Power to switch target",
-        "Switches to attack next foreign power once its power lowered down to this number. When exact numbers not know script tries to approximate it."
-      );
-      let policyOptions = [
-        { val: "Ignore", label: "Ignore", hint: "" },
-        ...Object.entries(SpyManager2.Types).map(
-          ([name, task]) => ({
-            val: name,
-            label: game2.loc("civics_spy_" + task.id),
-            hint: ""
-          })
-        ),
-        { val: "Occupy", label: "Occupy", hint: "" }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "foreignPolicyInferior",
-        "Inferior Power",
-        "Perform this against inferior foreign power, with military power equal or below given threshold. Complex actions includes required preparation - Annex and Purchase will incite and influence, Occupy will sabotage, until said options will be available.",
-        policyOptions
-      );
-      addSettingsSelect2(
-        currentNode,
-        "foreignPolicySuperior",
-        "Superior Power",
-        "Perform this against superior foreign power, with military power above given threshold. Complex actions includes required preparation - Annex and Purchase will incite and influence, Occupy will sabotage, until said options will be available.",
-        policyOptions
-      );
-      let rivalOptions = [
-        { val: "Ignore", label: "Ignore", hint: "Does nothing" },
-        {
-          val: "Influence",
-          label: "Alliance",
-          hint: "Influence rival up to best relations"
-        },
-        { val: "Sabotage", label: "War", hint: "Sabotage and plunder rival" },
-        {
-          val: "Betrayal",
-          label: "Betrayal",
-          hint: "Influence rival up to best relations, and start sabotaging. Once military power reached minimum - start plundering it"
-        }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "foreignPolicyRival",
-        "Rival Power (The True Path)",
-        "Perform this against rival foreign power.",
-        rivalOptions
-      );
-      addSettingsHeader12(currentNode, "Campaigns");
-      addSettingsNumber2(
-        currentNode,
-        "foreignAttackLivingSoldiersPercent",
-        "Minimum percentage of alive soldiers for attack",
-        "Only attacks if you ALSO have the target battalion size of healthy soldiers available, so this setting will only take effect if your battalion does not include all of your soldiers"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "foreignAttackHealthySoldiersPercent",
-        "Minimum percentage of healthy soldiers for attack",
-        "Set to less than 100 to take advantage of being able to heal more soldiers in a game day than get wounded in a typical attack"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "foreignHireMercMoneyStoragePercent",
-        "Hire mercenary if money storage greater than percent",
-        "Hire a mercenary if remaining money after purchase will be greater than this percent"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "foreignHireMercCostLowerThanIncome",
-        "OR if cost lower than money earned in X seconds",
-        "Combines with the money storage percent setting to determine when to hire mercenaries"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "foreignHireMercDeadSoldiers",
-        "AND amount of dead soldiers above this number",
-        "Hire a mercenary only when current amount of dead soldiers above given number"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "foreignMinAdvantage",
-        "Minimum advantage",
-        "Minimum advantage to launch campaign, ignored during ambushes. 100% chance to win will be reached at approximately(influenced by traits and selected campaign) 75% advantage."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "foreignMaxAdvantage",
-        "Maximum advantage",
-        "Once campaign is selected, your battalion will be limited in size down to this advantage, reducing potential loses"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "foreignMaxSiegeBattalion",
-        "Maximum siege battalion",
-        "Maximum battalion for siege campaign. Only try to siege if it's possible with up to given amount of soldiers. Siege is expensive, if you'll be doing it with too big battalion it might be less profitable than other combat campaigns. This option does not applied to unifying sieges, it affect only looting."
-      );
-      let protectOptions = [
-        {
-          val: "never",
-          label: "Never",
-          hint: "No additional limits to battalion size. Always send maximum soldiers allowed with current Max Advantage."
-        },
-        {
-          val: "always",
-          label: "Always",
-          hint: "Limit battalions to sizes which will neven suffer any casualties in successful fights. You still will lose soldiers after failures, increasing minimum advantage can improve winning odds. This option designed to use with armored races favoring frequent attacks, with no approppriate build it may prevent any attacks from happening."
-        },
-        {
-          val: "auto",
-          label: "Auto",
-          hint: "Tries to maximize total number of attacks, alternating between full and safe attacks based on soldiers condition, to get most from both healing and recruiting."
-        }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "foreignProtect",
-        "Protect soldiers",
-        "Configures safety of attacks. This option does not applies to unifying sieges, it affect only looting.",
-        protectOptions
-      );
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildWarSettings2(...args) {
-      const implementation = getOverride("buildWarSettings") ?? buildWarSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateWarSettingsContent2(...args) {
-      const implementation = getOverride("updateWarSettingsContent") ?? updateWarSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildWarSettings: buildWarSettings2, updateWarSettingsContent: updateWarSettingsContent2 };
-  }
-
   // src/ui/hell-settings.ts
   function createHellSettings({
     getDependency,
@@ -47473,7 +47529,7 @@
   }
 
   // src/adapters/evolve/mech-info.ts
-  function requireString27(value, path) {
+  function requireString28(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47519,7 +47575,7 @@
           mechs[index],
           `game.global.portal.mechbay.mechs[${index}]`
         );
-        const size = requireString27(mech["size"], `mechs[${index}].size`);
+        const size = requireString28(mech["size"], `mechs[${index}].size`);
         const stats = requireRecord(
           call4(manager, "getMechStats", "MechManager.getMechStats", [mech]),
           `MechManager.getMechStats(${index})`
@@ -47697,7 +47753,7 @@
   }
 
   // src/adapters/evolve/resource-toggles.ts
-  function requireString28(value, path) {
+  function requireString29(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47718,7 +47774,7 @@
     return priorityList;
   }
   function readResourceId3(value, path) {
-    return requireString28(requireRecord(value, path)["id"], `${path}.id`);
+    return requireString29(requireRecord(value, path)["id"], `${path}.id`);
   }
   function createResourceToggleEvolveAdapter({
     getGame,
@@ -47734,13 +47790,13 @@
       const noTrade = Boolean(race2["no_trade"]);
       const loc = requireFunction2(game2["loc"], "game.loc");
       const labels = noTrade ? Object.freeze({ buy: "", sell: "", routes: "", cancelRoutes: "" }) : Object.freeze({
-        buy: requireString28(loc("resource_market_buy"), "game.loc(buy)"),
-        sell: requireString28(loc("resource_market_sell"), "game.loc(sell)"),
-        routes: requireString28(
+        buy: requireString29(loc("resource_market_buy"), "game.loc(buy)"),
+        sell: requireString29(loc("resource_market_sell"), "game.loc(sell)"),
+        routes: requireString29(
           loc("resource_market_routes"),
           "game.loc(routes)"
         ),
-        cancelRoutes: requireString28(
+        cancelRoutes: requireString29(
           loc("cancel_routes"),
           "game.loc(cancel_routes)"
         )
@@ -52158,29 +52214,36 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       }
     });
     const { buildResearchSettings, updateResearchSettingsContent } = researchSettingsBrowserAdapter;
-    const warSettingsOverrides = {};
-    const getWarSettingsDependency = createDependencyResolver(
-      warSettingsOverrides,
-      {
-        $: () => $,
-        SpyManager: () => SpyManager,
-        addSettingsHeader1: () => addSettingsHeader1,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsSelect: () => addSettingsSelect,
-        addSettingsToggle: () => addSettingsToggle,
-        buildSettingsSection2: () => buildSettingsSection2,
-        document: () => document,
-        game: () => game,
-        resetCheckbox: () => resetCheckbox,
-        resetWarSettings: () => resetWarSettings,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const warSettings = createWarSettings({
-      getDependency: getWarSettingsDependency,
-      getOverride: (name) => warSettingsOverrides[name]
+    let warSettingsTestContext;
+    const warSettingsReader = createWarSettingsEvolveAdapter({
+      getSpyManager: () => warSettingsTestContext?.SpyManager ?? SpyManager,
+      getGame: () => warSettingsTestContext?.game ?? game
     });
-    const { buildWarSettings, updateWarSettingsContent } = warSettings;
+    const warSettingsActions = {
+      buildSettingsSection2: (...args) => buildSettingsSection2(...args),
+      addSettingsHeader1: (...args) => addSettingsHeader1(...args),
+      addSettingsNumber: (...args) => addSettingsNumber(...args),
+      addSettingsSelect: (...args) => addSettingsSelect(...args),
+      addSettingsToggle: (...args) => addSettingsToggle(...args)
+    };
+    const warSettingsIntentHandler = createWarSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (warSettingsTestContext?.resetWarSettings ?? resetWarSettings)(true),
+        persist: () => (warSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      renderSettingsContent: (secondaryPrefix) => updateWarSettingsContent(secondaryPrefix),
+      effects: {
+        resetCheckboxes: () => (warSettingsTestContext?.resetCheckbox ?? resetCheckbox)("autoFight")
+      }
+    });
+    const warSettingsBrowserAdapter = createWarSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      reader: warSettingsReader,
+      intents: warSettingsIntentHandler,
+      getActions: () => warSettingsTestContext?.actions ?? warSettingsActions
+    });
+    const { buildWarSettings, updateWarSettingsContent } = warSettingsBrowserAdapter;
     const hellSettingsOverrides = {};
     const getHellSettingsDependency = createDependencyResolver(
       hellSettingsOverrides,
@@ -55742,7 +55805,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           prestige: prestigeSettings,
           evolution: evolutionSettings,
           trigger: triggerSettings,
-          war: warSettings,
           hell: hellSettings,
           fleet: fleetSettings,
           mech: mechSettings
@@ -55751,7 +55813,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           Object.assign(prestigeSettingsOverrides, context);
           Object.assign(evolutionSettingsOverrides, context);
           Object.assign(triggerSettingsOverrides, context);
-          Object.assign(warSettingsOverrides, context);
           Object.assign(hellSettingsOverrides, context);
           Object.assign(fleetSettingsOverrides, context);
           Object.assign(mechSettingsOverrides, context);
@@ -55767,6 +55828,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         marketSettings: marketSettingsBrowserAdapter,
         setMarketSettingsTestContext(context) {
           marketSettingsTestContext = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        warSettings: warSettingsBrowserAdapter,
+        setWarSettingsTestContext(context) {
+          warSettingsTestContext = context;
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {

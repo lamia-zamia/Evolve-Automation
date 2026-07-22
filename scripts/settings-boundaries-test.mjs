@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { createPrestigeSettings } from "../src/ui/prestige-settings.ts";
 import { createEvolutionSettings } from "../src/ui/evolution-settings.ts";
 import { createTriggerSettings } from "../src/ui/trigger-settings.ts";
-import { createWarSettings } from "../src/ui/war-settings.ts";
 import { createHellSettings } from "../src/ui/hell-settings.ts";
 import { createFleetSettings } from "../src/ui/fleet-settings.ts";
 import { createMechSettings } from "../src/ui/mech-settings.ts";
@@ -38,16 +37,6 @@ const specs = [
     "Trigger",
     false,
     ["checkbox:autoTrigger"],
-  ],
-  [
-    "war",
-    createWarSettings,
-    "buildWarSettings",
-    "updateWarSettingsContent",
-    "war",
-    "Foreign Affairs",
-    true,
-    ["checkbox:autoFight"],
   ],
   [
     "hell",
@@ -137,4 +126,4 @@ for (const [
   ]);
 }
 
-console.log("7 settings-boundary module tests passed");
+console.log("6 settings-boundary module tests passed");
