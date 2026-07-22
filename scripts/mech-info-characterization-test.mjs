@@ -89,7 +89,7 @@ assert.deepEqual(Object.keys(hooks.mechInfo), [
 ]);
 
 const mechNode = {
-  childNodes: [{}],
+  childNodes: { 0: {}, length: 1 },
   firstChild: {},
   insertBefore: (note) => {
     inserted = note;

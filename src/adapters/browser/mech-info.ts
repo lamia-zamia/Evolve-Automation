@@ -79,12 +79,19 @@ function readJQueryNode(value: unknown, path: string): JQueryNode {
   };
 }
 
+function readArrayLike(value: unknown, path: string): readonly unknown[] {
+  const raw = requireRecord(value, path);
+  const length = raw["length"];
+  if (typeof length !== "number" || !Number.isInteger(length) || length < 0) {
+    throw new TypeError(`${path} must be an array or array-like object`);
+  }
+  const arrayLike = raw as unknown as ArrayLike<unknown>;
+  return Object.freeze(Array.from(arrayLike));
+}
+
 function readMechNode(value: unknown, path: string): MechNode {
   const raw = requireRecord(value, path);
-  const childNodes = raw["childNodes"];
-  if (!Array.isArray(childNodes)) {
-    throw new TypeError(`${path}.childNodes must be an array`);
-  }
+  const childNodes = readArrayLike(raw["childNodes"], `${path}.childNodes`);
   return {
     childNodes,
     firstChild: raw["firstChild"],

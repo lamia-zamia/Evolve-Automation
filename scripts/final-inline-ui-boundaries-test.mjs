@@ -141,7 +141,7 @@ assert.ok(trace.includes("save-planner"));
 
 const inserted = [];
 const mechNode = {
-  childNodes: [{}],
+  childNodes: { 0: {}, length: 1 },
   firstChild: {},
   insertBefore: (note) => inserted.push(note),
 };

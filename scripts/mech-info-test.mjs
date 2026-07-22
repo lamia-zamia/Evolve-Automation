@@ -97,7 +97,7 @@ const firstNode = {
   text: (value) => browserTrace.push(`text:${value}`),
 };
 const mechNode = {
-  childNodes: [firstNode],
+  childNodes: { 0: firstNode, length: 1 },
   firstChild: firstNode,
   insertBefore: (note) => browserTrace.push(`insert:${note.innerHTML}`),
 };
