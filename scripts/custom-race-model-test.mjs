@@ -72,4 +72,16 @@ assert.equal(
   "replacement:wiki_trait_effect_positive:3",
 );
 
+game = {
+  ...makeGame(5),
+  global: {
+    ...makeGame(5).global,
+    civic: {},
+  },
+};
+assert.equal(
+  model.customRaceTraitEffect("positive", 1),
+  "replacement:wiki_trait_effect_positive:1",
+);
+
 console.log("Custom race model module tests passed");

@@ -74,6 +74,11 @@ assert.equal(catalog.checkTypes.SettingDefault.fn("example"), 3);
 assert.equal(catalog.checkTypes.SettingCurrent.fn("example"), 7);
 assert.equal(catalog.checkTypes.BuildingCount.fn("farm"), 2);
 assert.equal(catalog.checkTypes.Eval.fn("x + 1"), "eval:x + 1");
+context.game = {
+  ...context.game,
+  global: { ...context.game.global, civic: {} },
+};
+assert.equal(catalog.checkTypes.Government.fn("democracy"), false);
 
 settingsRaw = { example: 11 };
 settings = { example: 13 };

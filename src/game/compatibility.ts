@@ -1373,7 +1373,7 @@ export function createGameCompatibility({
         let e = traitVal("noble", 1, 30);
         return (
           a && (e += 20),
-          "oligarchy" === getGame().global.civic.govern.type &&
+          "oligarchy" === getGame().global.civic.govern?.type &&
             (e += "bureaucrat" === getGovernor() ? 25 : 20),
           "noble" === getGovernor() && (e += 20),
           getGame().global.race["wish"] &&

@@ -28,7 +28,7 @@ interface CustomRaceGame {
       universe: string;
       srace?: string;
     };
-    civic: { govern: { type: string } };
+    civic: { govern?: { type: string } };
     custom?: { race0?: Partial<CustomRaceDraft> };
   };
   traits: Record<string, TraitDefinition | undefined>;
@@ -235,7 +235,7 @@ export function createCustomRaceModel({
       }
       if (
         game.global.race.universe === "evil" &&
-        game.global.civic.govern.type !== "theocracy" &&
+        game.global.civic.govern?.type !== "theocracy" &&
         ["spiritual", "blasphemous"].includes(id)
       ) {
         return poly.loc(

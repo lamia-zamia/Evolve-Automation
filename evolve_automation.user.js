@@ -3358,12 +3358,15 @@
         return this.isUnlocked() && node !== null && node.getAttribute("disabled") !== "disabled";
       },
       currentGovernment() {
-        return getGame().global.civic.govern.type;
+        return getGame().global.civic.govern?.type;
       },
       setGovernment(government) {
         const game = getGame();
         const WindowManager = getWindowManager();
         const GameLog = getGameLog();
+        if (!game?.global?.civic?.govern) {
+          return;
+        }
         if (this.currentGovernment() === government || WindowManager.isOpen()) {
           return;
         }
@@ -6657,7 +6660,7 @@
           const specialVars = rank <= 2 ? [] : rank === 3 ? [vars[0]] : vars;
           return poly.loc(`wiki_trait_effect_${id}${rank}`, specialVars);
         }
-        if (game.global.race.universe === "evil" && game.global.civic.govern.type !== "theocracy" && ["spiritual", "blasphemous"].includes(id)) {
+        if (game.global.race.universe === "evil" && game.global.civic.govern?.type !== "theocracy" && ["spiritual", "blasphemous"].includes(id)) {
           return poly.loc(
             `wiki_trait_effect_${id === "spiritual" ? "manipulator" : "blasphemous_evil"}`,
             vars
@@ -10052,7 +10055,7 @@
         if (e) return a ? 0 : traitVal("noble", 0, 10);
         {
           let e2 = traitVal("noble", 1, 30);
-          return a && (e2 += 20), "oligarchy" === getGame().global.civic.govern.type && (e2 += "bureaucrat" === getGovernor() ? 25 : 20), "noble" === getGovernor() && (e2 += 20), getGame().global.race["wish"] && getGame().global.race["wishStats"] && (e2 += getGame().global.race.wishStats.tax), e2;
+          return a && (e2 += 20), "oligarchy" === getGame().global.civic.govern?.type && (e2 += "bureaucrat" === getGovernor() ? 25 : 20), "noble" === getGovernor() && (e2 += 20), getGame().global.race["wish"] && getGame().global.race["wishStats"] && (e2 += getGame().global.race.wishStats.tax), e2;
         }
       },
       // export function mechCost(size,infernal) from portal.js
@@ -51630,7 +51633,7 @@
         desc: "Returns true when playing in selected universe"
       },
       Government: {
-        fn: (g) => readGame().global.civic.govern.type === g,
+        fn: (g) => readGame().global.civic.govern?.type === g,
         ...argType.government,
         desc: "Returns true when selected government is active"
       },

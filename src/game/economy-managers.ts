@@ -129,13 +129,18 @@ export function createEconomyManagers({
     },
 
     currentGovernment() {
-      return getGame().global.civic.govern.type;
+      // Evolve creates civic.govern lazily on a fresh game. Treat that state
+      // as not ready instead of dereferencing a field the game has not made.
+      return getGame().global.civic.govern?.type;
     },
 
     setGovernment(government: string) {
       const game = getGame();
       const WindowManager = getWindowManager();
       const GameLog = getGameLog();
+      if (!game?.global?.civic?.govern) {
+        return;
+      }
       // Don't try anything if chosen government already set, or modal window is already open
       if (this.currentGovernment() === government || WindowManager.isOpen()) {
         return;

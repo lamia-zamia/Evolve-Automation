@@ -110,6 +110,12 @@ assert.equal(modalCalls.length, 1);
 assert.equal(logs.length, 1);
 assert.deepEqual(clicks, [["setGov", "oligarchy"]]);
 
+game = { global: { civic: {} }, loc: (k) => k };
+assert.equal(GovernmentManager.currentGovernment(), undefined);
+modalCalls.length = 0;
+GovernmentManager.setGovernment("democracy");
+assert.equal(modalCalls.length, 0);
+
 // ---------- Market ----------
 techOk = true;
 assert.equal(MarketManager.isUnlocked(), true);

@@ -740,7 +740,7 @@ export function createOverrideCatalog({
       desc: "Returns true when playing in selected universe",
     },
     Government: {
-      fn: (g: any) => readGame().global.civic.govern.type === g,
+      fn: (g: any) => readGame().global.civic.govern?.type === g,
       ...argType.government,
       desc: "Returns true when selected government is active",
     },
