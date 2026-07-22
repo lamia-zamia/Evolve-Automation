@@ -52287,9 +52287,12 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
   }
 
   // src/legacy-runtime.js
-  function startLegacyRuntime($, diagnostics, runtimeEnvironment) {
+  function startLegacyRuntime($, diagnostics, runtimeEnvironment, captureTestSurface) {
     "use strict";
-    const runtimeTestSurface = {};
+    const runtimeTestSurface = captureTestSurface === true ? {} : null;
+    const publishTestSurface = (...parts) => {
+      if (runtimeTestSurface) Object.assign(runtimeTestSurface, ...parts);
+    };
     const { getRealNumber, getNumberString, getNiceNumber } = createNumberFormatting({ numberSuffix });
     const browserClock = createBrowserClock();
     const randomSource = createBrowserRandomSource();
@@ -52594,7 +52597,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       updateProductionTableMiningDrone,
       updateProductionTableReplicator
     } = productionSettingsBrowserAdapter;
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       productionSettings: {
         buildProductionSettings,
         updateProductionSettingsContent,
@@ -53689,7 +53692,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       const view = readAuthorityView();
       return view.status === "ready" ? assessAuthorityRemoval(view.view, quantity.value) : view;
     };
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       authorityPolicy: {
         getAuthorityTarget() {
           const view = readAuthorityView();
@@ -53974,40 +53977,41 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readWin: () => win,
       readWindowManager: () => WindowManager
     });
-    runtimeTestSurface.entityClasses = {
-      Job,
-      BasicJob,
-      CraftingJob,
-      Resource,
-      SoulGem,
-      Troops,
-      Supply,
-      Power,
-      Support,
-      BeltSupport,
-      ElectrolysisSupport,
-      WomlingsSupport,
-      PrestigeResource,
-      Population,
-      Morale,
-      Thrall,
-      ResourceProductionCost,
-      Action,
-      CityAction,
-      Pillar,
-      ResourceAction,
-      EvolutionAction,
-      SpaceDock,
-      ModalAction,
-      Project,
-      Technology,
-      Race,
-      Trigger,
-      MinorTrait,
-      MutableTrait,
-      MajorTrait,
-      GenusTrait
-    };
+    if (runtimeTestSurface)
+      runtimeTestSurface.entityClasses = {
+        Job,
+        BasicJob,
+        CraftingJob,
+        Resource,
+        SoulGem,
+        Troops,
+        Supply,
+        Power,
+        Support,
+        BeltSupport,
+        ElectrolysisSupport,
+        WomlingsSupport,
+        PrestigeResource,
+        Population,
+        Morale,
+        Thrall,
+        ResourceProductionCost,
+        Action,
+        CityAction,
+        Pillar,
+        ResourceAction,
+        EvolutionAction,
+        SpaceDock,
+        ModalAction,
+        Project,
+        Technology,
+        Race,
+        Trigger,
+        MinorTrait,
+        MutableTrait,
+        MajorTrait,
+        GenusTrait
+      };
     const biomeList = [
       "grassland",
       "oceanic",
@@ -54331,7 +54335,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => haveTech,
       setResources: (value) => resources = value
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       entityCatalogs: {
         resources,
         jobs,
@@ -54387,7 +54391,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       ResourceAction,
       randomSource
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       weightingPolicy: {
         wrGlobalCondition,
         wrIndividualCondition,
@@ -54494,7 +54498,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getOccCosts,
       logError: (...args) => runtimeEnvironment.error(...args)
     }));
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       foreignAffairsManagers: { SpyManager, WarManager },
       setForeignAffairsManagersTestContext(context) {
         if ("game" in context) game = context.game;
@@ -54524,7 +54528,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => haveTech,
       getJQuery: () => $
     }));
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       fleetManagers: { FleetManagerOuter, FleetManager },
       setFleetManagersTestContext(context) {
         if ("game" in context) game = context.game;
@@ -54555,7 +54559,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       createMutationObserver: (callback) => new runtimeEnvironment.MutationObserver(callback),
       randomSource
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       MechManager,
       setMechManagerTestContext(context) {
         if ("game" in context) game = context.game;
@@ -54600,7 +54604,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getKeyboardEvent: () => runtimeEnvironment.KeyboardEvent,
       cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value)
     }));
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       infrastructureManagers: { WindowManager, KeyManager, GameLog },
       setInfrastructureManagersTestContext(context) {
         if ("game" in context) game = context.game;
@@ -54618,7 +54622,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       setCraftablesList: (list) => craftablesList = list,
       setFoundryList: (list) => foundryList = list
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       updateCraftCost,
       getCraftCostTestLists: () => ({ craftablesList, foundryList }),
       setCraftCostTestContext(context) {
@@ -54644,7 +54648,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => stateInitializationTestActions?.haveTech ?? haveTech,
       log: (message) => runtimeEnvironment.log(message)
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       initialiseState,
       getStateInitializationTestContext: () => ({
         game,
@@ -54673,7 +54677,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getEvolutionAction: () => raceInitializationTestContext?.EvolutionAction ?? EvolutionAction,
       getRace: () => raceInitializationTestContext?.Race ?? Race
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       initialiseRaces,
       setRaceInitializationTestContext(context) {
         raceInitializationTestContext = context;
@@ -54683,7 +54687,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getBuildings: () => buildings,
       getBuildingManager: () => BuildingManager
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       initBuildingState,
       setBuildingStateTestContext(context) {
         buildings = context.buildings;
@@ -54749,10 +54753,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       })),
       crafterOriginalIds: Object.values(crafter).map((job) => job._originalId)
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       settingsMigration: { updateStandAloneSettings }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       settingsState: {
         updateStateFromSettings,
         updateSettingsFromState,
@@ -54895,7 +54899,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getNumberString
       ) : [];
     };
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       runGuards: {
         getStarLevel,
         getAchievementStar,
@@ -54933,7 +54937,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getRemoveScriptSettings: () => queuedSettingsTestActions?.removeScriptSettings ?? removeScriptSettings,
       getBuildScriptSettings: () => queuedSettingsTestActions?.buildScriptSettings ?? buildScriptSettings
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       loadQueuedSettings,
       setQueuedSettingsTestContext(context) {
         settings = context.settings;
@@ -54944,7 +54948,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     const findRequiredResourceWeight2 = (resource2) => findRequiredResourceWeight(state.unlockedBuildings, resource2);
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       findRequiredResourceWeight: findRequiredResourceWeight2,
       setResourceWeightTestContext(context) {
         state = context.state;
@@ -55001,7 +55005,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getIsAchievementUnlocked: () => isAchievementUnlocked2,
       universes
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       generatePlanets,
       setPlanetGenerationTestContext(context) {
         game = context.game;
@@ -55110,7 +55114,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       debugLog: (message) => runtimeEnvironment.log(message)
     });
     const autoHell = () => runHellAutomation(hellAdapter);
-    Object.assign(runtimeTestSurface, { autoHell });
+    publishTestSurface({ autoHell });
     const jobsAdapter = createJobsAdapter({
       getJobManager: () => JobManager,
       getGame: () => game,
@@ -55143,7 +55147,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       clearKeyModifiers: () => KeyManager.set(false, false, false),
       nowMs: () => browserClock.nowMs()
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       autoTax: () => autoTax(),
       setAutoTaxTestContext(context) {
         if ("game" in context) game = context.game;
@@ -55249,7 +55253,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       executor: factoryAdapter.executor,
       tooltips: factoryTooltips
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       autoFactory,
       FactoryManager,
       factorySettings: settings,
@@ -55312,7 +55316,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getSaveStateLog: () => prestigeLogTestActions?.saveStateLog ?? saveStateLog,
       getTriggerFileDownload: () => prestigeLogTestActions?.triggerFileDownload ?? triggerFileDownload
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       prestigeLog: { formatLogString, logPrestige },
       setPrestigeLogTestContext(context) {
         settings = context.settings;
@@ -55423,7 +55427,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       loadQueuedSettings
     });
     const autoPrestige = () => runPrestige({ reader: prestigeReader, executor: prestigeExecutor });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       autoEvolution,
       autoUniverseSelection,
       autoCraft,
@@ -55439,7 +55443,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         isBioseederPrestigeAvailable = context.isBioseederPrestigeAvailable;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       prestigeEligibility: {
         isPrestigeAllowed: isPrestigeAllowed2,
         isCataclysmPrestigeAvailable: isCataclysmPrestigeAvailable2,
@@ -55565,7 +55569,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       executor: geneticsAdapter.executor,
       controls: geneticsControls
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       autoMiningDroid,
       DroidManager,
       autoGraphenePlant,
@@ -55620,7 +55624,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       reader: gatherResourcesAdapter.reader,
       executor: gatherResourcesAdapter.executor
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       autoConsume,
       autoReplicator,
       autoMarket,
@@ -55672,7 +55676,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       const conflict2 = findTechConflict(readResult.input);
       return conflict2 === null ? false : formatTechConflict(conflict2, getNumberString);
     };
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       getTechConflict,
       setTechConflictTestContext(context) {
         settings = context.settings;
@@ -55698,7 +55702,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       });
       return result2.outcome.status === "succeeded" ? result2.active : true;
     };
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       autoMerc,
       WarManager,
       GameLog,
@@ -55760,7 +55764,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       warnings: powerWarnings
     });
     const autoPower = () => powerAutomation.run();
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       powerSupport: {
         getCitadelConsumption,
         isHellSupressUseful,
@@ -55774,7 +55778,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         buildings = context.buildings;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       expandStorage,
       setStorageExpansionTestContext(context) {
         game = context.game;
@@ -55817,7 +55821,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       reader: minorTraitReader,
       executor: minorTraitExecutor
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       autoMinorTrait,
       MinorTraitManager
     });
@@ -55836,7 +55840,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       reader: mutationReader,
       executor: mutationExecutor
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       autoPlanetSelection,
       autoJobs,
       autoBuild,
@@ -55877,7 +55881,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
       resources.Money.rateOfChange = result2.moneyRate;
     };
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       adjustTradeRoutes,
       setTradeRoutesTestContext(context) {
         settings = context.settings;
@@ -55897,7 +55901,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGameLog: () => GameLog
     });
     const autoFleetOuter = () => runOuterFleetAutomation(outerFleetAdapter);
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       galaxyIntelligence: {
         getGalaxyCombatShipPower,
         getPiracyMultiplier,
@@ -55964,7 +55968,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getTicksPerSecond: () => scriptDataTestActions?.ticksPerSecond ?? ticksPerSecond,
       getHaveTech: () => scriptDataTestActions?.haveTech ?? haveTech
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       scriptDataLifecycle: { updateScriptData, finalizeScriptData },
       setScriptDataTestContext(context) {
         settings = context.settings;
@@ -55983,7 +55987,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         scriptDataTestActions = context.actions;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       autoPower,
       autoStorage,
       autoFleetOuter,
@@ -55996,7 +56000,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         MechManager = managers.MechManager;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       storageRequirements: { calculateRequiredStorages },
       setStorageRequirementTestContext(context) {
         settings = context.settings;
@@ -56011,7 +56015,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         retirementChallengeAssistActive = context.retirementChallengeAssistActive;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       prioritizeDemandedResources,
       makeDemandProject(cost, progress) {
         return Object.defineProperties(Object.create(Project.prototype), {
@@ -56070,7 +56074,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       inflationChallengeShouldSaveMoney,
       inflationChallengeMoney: INFLATION_CHALLENGE_MONEY
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       updatePriorityTargets: () => updatePriorityTargets(),
       setPriorityTargetsTestContext(context) {
         settings = context.settings;
@@ -56139,7 +56143,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
       return true;
     };
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       checkEvolutionResult: () => checkEvolutionResult(),
       setEvolutionResultTestContext(context) {
         settings = context.settings;
@@ -56160,7 +56164,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => haveTech,
       getMainVue: () => win.$("#mainColumn > div:first-child")[0].__vue__
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       updateTabs: (update) => updateTabs(update),
       setTabRefreshTestContext(context) {
         state = context.state;
@@ -56189,7 +56193,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         timeLeft: result2.seconds === Infinity ? "Never" : poly.timeFormat(result2.seconds)
       };
     };
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       getMultiSegmentedTimeLeft,
       makeTargetTimingProject(progress, currentStep, cost) {
         return Object.defineProperties(Object.create(Project.prototype), {
@@ -56226,7 +56230,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       makePlannerStats: () => makePlannerStats(),
       savePlannerStats: (stats) => savePlannerStats(stats)
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       plannerAnalysis: {
         plannerLimitingResource,
         makePlannerStats,
@@ -56239,7 +56243,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         state = context.state;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       stateLogLifecycle: {
         makeStateLog,
         loadStateLog,
@@ -56267,7 +56271,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       loadPlannerStats,
       savePlannerStats
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       updateBuildPlanner: () => updateBuildPlanner(),
       setBuildPlannerTestContext(context) {
         settings = context.settings;
@@ -56322,7 +56326,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       controls: stateUpdateControls,
       clock: browserClock
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       updateState: () => updateState(),
       // Real prototypes, so the instanceof classification of queued targets is exercised for real.
       makeStateUpdateTargets() {
@@ -56346,7 +56350,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         stateUpdateTestHelpers = context.helpers;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       gameActionVerification: {
         verifyGameActions,
         verifyGameActionsExist,
@@ -56420,7 +56424,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         needSandboxBypass = value;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       scriptBootstrap: { initialiseScript, mainAutoEvolveScript },
       setScriptBootstrapTestContext(context) {
         if ("game" in context) game = context.game;
@@ -56450,7 +56454,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getState: () => state,
       getPoly: () => poly
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       logFilter: { buildFilterRegExp, filterLog },
       setLogFilterTestContext(context) {
         settingsRaw = context.settingsRaw;
@@ -56486,7 +56490,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readTraitVal: () => traitVal,
       isTechnology: (value) => value instanceof Technology
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       tooltipUI: { getTooltipInfo, tooltipObserverCallback, addTooltip },
       setTooltipUITestContext(context) {
         if ("settings" in context) settings = context.settings;
@@ -56552,7 +56556,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getRaces: () => races,
       genusOpposition: customRaceGenusOpposition
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       customRaceModel: {
         customRaceRankCost,
         customRaceGeneBalance,
@@ -56593,7 +56597,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getVueById,
       getAlert: () => (message) => runtimeEnvironment.alert(message)
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       customRaceUI: {
         showCustomRaceImportStatus,
         getCustomRacePreset,
@@ -56686,7 +56690,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const automate = () => {
       applicationRunner.runCycle();
     };
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       automate: () => automate(),
       setTickTestContext(context) {
         settings = context.settings;
@@ -56717,7 +56721,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getScriptVersionExtra: () => SCRIPT_VERSION_EXTRA,
       getScriptVersion: () => userscriptEnvironment.getScriptVersion()
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       scriptRuntimeUI: {
         updateDebugData,
         addScriptStyle,
@@ -56765,7 +56769,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readFastEval: () => fastEval,
       readGovernor: () => getGovernor
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       settingsControls: {
         removeScriptSettings,
         buildScriptSettings,
@@ -56901,7 +56905,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     const { buildInterfaceSettings, updateInterfaceSettingsContent } = interfaceSettingsBrowserAdapter;
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       interfaceSettings: {
         buildInterfaceSettings,
         updateInterfaceSettingsContent
@@ -56923,7 +56927,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       addSettingsToggle,
       addSettingsNumber
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       stateLogSettings: {
         buildStateLogSettings,
         updateStateLogSettingsContent
@@ -56940,7 +56944,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       average
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       calculateMechStats,
       setMechStatsTestContext(context) {
         game = context.game;
@@ -56948,139 +56952,139 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         MechManager = context.MechManager;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       evolutionSettings: evolutionSettingsBrowserAdapter,
       setEvolutionSettingsTestContext(context) {
         evolutionSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       prestigeSettings: prestigeSettingsBrowserAdapter,
       setPrestigeSettingsTestContext(context) {
         prestigeSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       triggerSettings: triggerSettingsBrowserAdapter,
       setTriggerSettingsTestContext(context) {
         triggerSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       fleetSettings: fleetSettingsBrowserAdapter,
       setFleetSettingsTestContext(context) {
         fleetSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       ejectorSettings: ejectorSettingsBrowserAdapter,
       setEjectorSettingsTestContext(context) {
         ejectorSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       marketSettings: marketSettingsBrowserAdapter,
       setMarketSettingsTestContext(context) {
         marketSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       warSettings: warSettingsBrowserAdapter,
       setWarSettingsTestContext(context) {
         warSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       hellSettings: hellSettingsBrowserAdapter,
       setHellSettingsTestContext(context) {
         hellSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       mechSettings: mechSettingsBrowserAdapter,
       setMechSettingsTestContext(context) {
         mechSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       challengeHelperSettings: challengeHelperSettingsBrowserAdapter,
       setChallengeHelperSettingsTestContext(context) {
         challengeHelperSettingsTestActions = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       governmentSettings: governmentSettingsBrowserAdapter,
       setGovernmentSettingsTestContext(context) {
         governmentSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       planetSettings: planetSettingsBrowserAdapter,
       setPlanetSettingsTestContext(context) {
         planetSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       projectSettings: projectSettingsBrowserAdapter,
       setProjectSettingsTestContext(context) {
         projectSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       storageSettings: storageSettingsBrowserAdapter,
       setStorageSettingsTestContext(context) {
         storageSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       magicSettings: magicSettingsBrowserAdapter,
       setMagicSettingsTestContext(context) {
         magicSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       jobSettings: jobSettingsBrowserAdapter,
       setJobSettingsTestContext(context) {
         jobSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       weightingSettings: weightingSettingsBrowserAdapter,
       setWeightingSettingsTestContext(context) {
         weightingSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       buildingSettings: buildingSettingsBrowserAdapter,
       setBuildingSettingsTestContext(context) {
         buildingSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       optionsModal: optionsModalBrowserAdapter,
       setOptionsModalTestContext(context) {
         optionsModalTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
       setAchievementGuardSettingsTestContext(context) {
         achievementGuardSettingsTestActions = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       authoritySettings: authoritySettingsBrowserAdapter,
       setAuthoritySettingsTestContext(context) {
         authoritySettingsTestActions = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       generalSettings: generalSettingsBrowserAdapter,
       setGeneralSettingsTestContext(context) {
         generalSettingsTestActions = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       researchSettings: researchSettingsBrowserAdapter,
       setResearchSettingsTestContext(context) {
         researchSettingsTestContext = context;
@@ -57143,7 +57147,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       updateTraitSettingsContent,
       makeToggleSwitchesMutuallyExclusive
     } = traitSettingsBrowserAdapter;
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       traitSettings: {
         buildTraitSettings,
         updateImitateWarning,
@@ -57226,7 +57230,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         renderPreviousGameStats
       })
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       updateUI: () => updateUI(),
       setUIRefreshTestContext(context) {
         settings = context.settings;
@@ -57240,7 +57244,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         uiRefreshTestActions = context.actions;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       prestigeTopBar: prestigeTopBarBrowserAdapter,
       setPrestigeTopBarTestContext(context) {
         prestigeTopBarTestContext = context;
@@ -57278,13 +57282,13 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         mechInfoTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       loggingSettings: loggingSettingsBrowserAdapter,
       setLoggingSettingsTestContext(context) {
         loggingSettingsTestContext = context;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       finalInlineUiBoundaries: {
         updateActiveTargetsUI,
         buildActiveTargetsUI,
@@ -57312,8 +57316,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getJQuery: () => $,
       isHTMLElement: (value) => runtimeEnvironment.HTMLElement !== void 0 && value instanceof runtimeEnvironment.HTMLElement
     });
-    Object.assign(runtimeTestSurface, { sorterHelper });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({ sorterHelper });
+    publishTestSurface({
       gameRates: {
         ticksPerSecond,
         getHealingRate,
@@ -57331,39 +57335,40 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         traitVal = context.traitVal;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       getCostConflict,
       setCostConflictTestContext(context) {
         state = context.state;
         resources = context.resources;
       }
     });
-    runtimeTestSurface.numberFormatting = {
-      getRealNumber,
-      getNumberString,
-      getNiceNumber
-    };
-    Object.assign(runtimeTestSurface, {
+    if (runtimeTestSurface)
+      runtimeTestSurface.numberFormatting = {
+        getRealNumber,
+        getNumberString,
+        getNiceNumber
+      };
+    publishTestSurface({
       runtimeQueries: { getGovernor, haveTask, haveTech, isEarlyGame },
       setRuntimeQueryTestContext(context) {
         game = context.game;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       raceProfile: { isHungryRace, isDemonRace, isLumberRace, getOccCosts },
       setRaceProfileTestContext(context) {
         game = context.game;
         traitVal = context.traitVal;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       foreignGovernment: { getGovName, getGovPower },
       setForeignGovernmentTestContext(context) {
         game = context.game;
         poly = context.poly;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       fastEvaluator: {
         fastEval,
         cacheSize: fastEvalCacheSize
@@ -57373,19 +57378,19 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         if ("state" in context) state = context.state;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       propertyHelpers: { normalizeProperties, addProps },
       setPropertyHelperTestContext(context) {
         settings = context.settings;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       browserRuntime: { getVueById, triggerFileDownload },
       setBrowserRuntimeTestContext(context) {
         win = context.win;
       }
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       traitVal,
       setTraitValueTestContext(context) {
         game = context.game;
@@ -57419,7 +57424,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       confirmImport: (message) => runtimeEnvironment.confirm(message),
       logToConsole: (message) => runtimeEnvironment.log(message)
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       settingsTransfer: { importSettings, exportSettings },
       setSettingsTransferTestContext(context) {
         settingsRaw = context.settingsRaw;
@@ -57438,16 +57443,19 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2),
       getDate: () => runtimeEnvironment.createDate()
     });
-    Object.assign(runtimeTestSurface, {
+    publishTestSurface({
       gameCompatibility: poly
     });
     $().ready(mainAutoEvolveScript);
-    return runtimeTestSurface;
+    return runtimeTestSurface ?? {};
   }
 
   // src/bootstrap/runtime.ts
   function startRuntime(jquery, diagnostics, environment) {
-    return startLegacyRuntime(jquery, diagnostics, environment);
+    startLegacyRuntime(jquery, diagnostics, environment, false);
+  }
+  function startRuntimeForTests(jquery, diagnostics, environment) {
+    return startLegacyRuntime(jquery, diagnostics, environment, true);
   }
 
   // src/main.ts

@@ -8,4 +8,5 @@ export declare function startLegacyRuntime(
   jquery: JQueryGlobal,
   diagnostics: BrowserDiagnostics,
   environment: LegacyRuntimeEnvironment,
+  captureTestSurface?: boolean,
 ): LegacyRuntimeSurface;
