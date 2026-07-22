@@ -63,7 +63,30 @@ const context = {
 };
 
 const tooltips = createTooltipUI({
-  getContext: () => ({ ...context, settings }),
+  getJQuery: () => context.$,
+  getDocument: () => context.document,
+  getMutationObserver: () => context.MutationObserver,
+  getSettings: () => settings,
+  getState: () => context.state,
+  getGame: () => context.game,
+  getBuildings: () => context.buildings,
+  getJobs: () => context.jobs,
+  getResources: () => context.resources,
+  getTechIds: () => context.techIds,
+  getBuildingIds: () => context.buildingIds,
+  getArpaIds: () => context.arpaIds,
+  getMechManager: () => context.MechManager,
+  getFleetManagerOuter: () => context.FleetManagerOuter,
+  getPoly: () => context.poly,
+  readCitadelConsumption: () => context.getCitadelConsumption,
+  readNiceNumber: () => context.getNiceNumber,
+  readCostConflict: () => context.getCostConflict,
+  readTechConflict: () => context.getTechConflict,
+  readHaveTech: () => context.haveTech,
+  readHealingRate: () => context.getHealingRate,
+  readGrowthRate: () => context.getGrowthRate,
+  readGovernor: () => context.getGovernor,
+  readTraitVal: () => context.traitVal,
   isTechnology: (value) => value.kind === "technology",
 });
 

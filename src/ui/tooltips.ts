@@ -1,61 +1,90 @@
 type AnyRecord = Record<string, any>;
 
-export interface TooltipUIContext {
-  $: any;
-  document: any;
-  MutationObserver: any;
-  settings: AnyRecord;
-  state: AnyRecord;
-  game: AnyRecord;
-  buildings: AnyRecord;
-  jobs: AnyRecord;
-  resources: AnyRecord;
-  techIds: AnyRecord;
-  buildingIds: AnyRecord;
-  arpaIds: AnyRecord;
-  MechManager: AnyRecord;
-  FleetManagerOuter: AnyRecord;
-  poly: AnyRecord;
-  getCitadelConsumption: (count: number) => number;
-  getNiceNumber: (value: number) => string;
-  getCostConflict: (target: AnyRecord) => AnyRecord | undefined;
-  getTechConflict: (target: AnyRecord) => string | undefined;
-  haveTech: (id: string, level: number) => boolean;
-  getHealingRate: () => number;
-  getGrowthRate: () => number;
-  getGovernor: () => string;
-  traitVal: (id: string, fallback: number, operation: string) => number;
-}
-
 export interface TooltipUIDependencies {
-  getContext: () => TooltipUIContext;
+  getJQuery: () => any;
+  getDocument: () => any;
+  getMutationObserver: () => any;
+  getSettings: () => AnyRecord;
+  getState: () => AnyRecord;
+  getGame: () => AnyRecord;
+  getBuildings: () => AnyRecord;
+  getJobs: () => AnyRecord;
+  getResources: () => AnyRecord;
+  getTechIds: () => AnyRecord;
+  getBuildingIds: () => AnyRecord;
+  getArpaIds: () => AnyRecord;
+  getMechManager: () => AnyRecord;
+  getFleetManagerOuter: () => AnyRecord;
+  getPoly: () => AnyRecord;
+  readCitadelConsumption: () => (count: number) => number;
+  readNiceNumber: () => (value: number) => string;
+  readCostConflict: () => (target: AnyRecord) => AnyRecord | undefined;
+  readTechConflict: () => (target: AnyRecord) => string | undefined;
+  readHaveTech: () => (id: string, level: number) => boolean;
+  readHealingRate: () => () => number;
+  readGrowthRate: () => () => number;
+  readGovernor: () => () => string;
+  readTraitVal: () => (
+    id: string,
+    fallback: number,
+    operation: string,
+  ) => number;
   isTechnology: (value: unknown) => boolean;
 }
 
 export function createTooltipUI({
-  getContext,
+  getJQuery,
+  getDocument,
+  getMutationObserver,
+  getSettings,
+  getState,
+  getGame,
+  getBuildings,
+  getJobs,
+  getResources,
+  getTechIds,
+  getBuildingIds,
+  getArpaIds,
+  getMechManager,
+  getFleetManagerOuter,
+  getPoly,
+  readCitadelConsumption,
+  readNiceNumber,
+  readCostConflict,
+  readTechConflict,
+  readHaveTech,
+  readHealingRate,
+  readGrowthRate,
+  readGovernor,
+  readTraitVal,
   isTechnology,
 }: TooltipUIDependencies) {
   function getTooltipInfo(obj: AnyRecord) {
-    const {
-      settings,
-      state,
-      game,
-      buildings,
-      jobs,
-      resources,
-      MechManager,
-      FleetManagerOuter,
-      getCitadelConsumption,
-      getNiceNumber,
-      getCostConflict,
-      getTechConflict,
-      haveTech,
-      getHealingRate,
-      getGrowthRate,
-      getGovernor,
-      traitVal,
-    } = getContext();
+    const settings = getSettings();
+    const state = getState();
+    const game = getGame();
+    const buildings = getBuildings();
+    const jobs = getJobs();
+    const resources = getResources();
+    const MechManager = getMechManager();
+    const FleetManagerOuter = getFleetManagerOuter();
+    const getCitadelConsumptionValue = readCitadelConsumption();
+    const getNiceNumberValue = readNiceNumber();
+    const getCostConflictValue = readCostConflict();
+    const getTechConflictValue = readTechConflict();
+    const haveTech = readHaveTech();
+    const getHealingRateValue = readHealingRate();
+    const getGrowthRateValue = readGrowthRate();
+    const getGovernorValue = readGovernor();
+    const traitValValue = readTraitVal();
+    const getCitadelConsumption = getCitadelConsumptionValue;
+    const getNiceNumber = getNiceNumberValue;
+    const getCostConflict = getCostConflictValue;
+    const getTechConflict = getTechConflictValue;
+    const getHealingRate = getHealingRateValue;
+    const getGrowthRate = getGrowthRateValue;
+    const getGovernor = getGovernorValue;
+    const traitVal = traitValValue;
     const notes = [];
     if (obj === buildings.NeutronCitadel) {
       const diff =
@@ -265,7 +294,9 @@ export function createTooltipUI({
   }
 
   function tooltipObserverCallback(mutations: AnyRecord[]) {
-    const { settings, document, MutationObserver } = getContext();
+    const settings = getSettings();
+    const document = getDocument();
+    const MutationObserver = getMutationObserver();
     if (!settings.masterScriptToggle || document.hidden) {
       return;
     }
@@ -308,7 +339,18 @@ export function createTooltipUI({
       arpaIds,
       poly,
       getNiceNumber,
-    } = getContext();
+    } = {
+      $: getJQuery(),
+      state: getState(),
+      game: getGame(),
+      buildings: getBuildings(),
+      resources: getResources(),
+      techIds: getTechIds(),
+      buildingIds: getBuildingIds(),
+      arpaIds: getArpaIds(),
+      poly: getPoly(),
+      getNiceNumber: readNiceNumber(),
+    };
     $(node).append(`<span class="script-tooltip" hidden></span>`);
     const dataId = node.dataset.id;
     if (dataId === "powerStatus") {

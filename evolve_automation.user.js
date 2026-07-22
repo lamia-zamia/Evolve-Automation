@@ -48868,29 +48868,58 @@
 
   // src/ui/tooltips.ts
   function createTooltipUI({
-    getContext,
+    getJQuery,
+    getDocument,
+    getMutationObserver,
+    getSettings,
+    getState,
+    getGame,
+    getBuildings,
+    getJobs,
+    getResources,
+    getTechIds,
+    getBuildingIds,
+    getArpaIds,
+    getMechManager,
+    getFleetManagerOuter,
+    getPoly,
+    readCitadelConsumption,
+    readNiceNumber,
+    readCostConflict,
+    readTechConflict,
+    readHaveTech,
+    readHealingRate,
+    readGrowthRate,
+    readGovernor,
+    readTraitVal,
     isTechnology
   }) {
     function getTooltipInfo(obj) {
-      const {
-        settings,
-        state,
-        game,
-        buildings,
-        jobs,
-        resources,
-        MechManager,
-        FleetManagerOuter,
-        getCitadelConsumption,
-        getNiceNumber,
-        getCostConflict,
-        getTechConflict,
-        haveTech,
-        getHealingRate,
-        getGrowthRate,
-        getGovernor,
-        traitVal
-      } = getContext();
+      const settings = getSettings();
+      const state = getState();
+      const game = getGame();
+      const buildings = getBuildings();
+      const jobs = getJobs();
+      const resources = getResources();
+      const MechManager = getMechManager();
+      const FleetManagerOuter = getFleetManagerOuter();
+      const getCitadelConsumptionValue = readCitadelConsumption();
+      const getNiceNumberValue = readNiceNumber();
+      const getCostConflictValue = readCostConflict();
+      const getTechConflictValue = readTechConflict();
+      const haveTech = readHaveTech();
+      const getHealingRateValue = readHealingRate();
+      const getGrowthRateValue = readGrowthRate();
+      const getGovernorValue = readGovernor();
+      const traitValValue = readTraitVal();
+      const getCitadelConsumption = getCitadelConsumptionValue;
+      const getNiceNumber = getNiceNumberValue;
+      const getCostConflict = getCostConflictValue;
+      const getTechConflict = getTechConflictValue;
+      const getHealingRate = getHealingRateValue;
+      const getGrowthRate = getGrowthRateValue;
+      const getGovernor = getGovernorValue;
+      const traitVal = traitValValue;
       const notes = [];
       if (obj === buildings.NeutronCitadel) {
         const diff = getCitadelConsumption(obj.stateOnCount + 1) - getCitadelConsumption(obj.stateOnCount);
@@ -49050,7 +49079,9 @@
       return notes.join("<br>");
     }
     function tooltipObserverCallback(mutations) {
-      const { settings, document: document2, MutationObserver: MutationObserver2 } = getContext();
+      const settings = getSettings();
+      const document2 = getDocument();
+      const MutationObserver2 = getMutationObserver();
       if (!settings.masterScriptToggle || document2.hidden) {
         return;
       }
@@ -49091,7 +49122,18 @@
         arpaIds,
         poly,
         getNiceNumber
-      } = getContext();
+      } = {
+        $: getJQuery(),
+        state: getState(),
+        game: getGame(),
+        buildings: getBuildings(),
+        resources: getResources(),
+        techIds: getTechIds(),
+        buildingIds: getBuildingIds(),
+        arpaIds: getArpaIds(),
+        poly: getPoly(),
+        getNiceNumber: readNiceNumber()
+      };
       $2(node).append(`<span class="script-tooltip" hidden></span>`);
       const dataId = node.dataset.id;
       if (dataId === "powerStatus") {
@@ -56244,32 +56286,30 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       });
     }
     const { getTooltipInfo, tooltipObserverCallback, addTooltip } = createTooltipUI({
-      getContext: () => ({
-        $: $2,
-        document,
-        MutationObserver,
-        settings,
-        state,
-        game,
-        buildings,
-        jobs,
-        resources,
-        techIds,
-        buildingIds,
-        arpaIds,
-        MechManager,
-        FleetManagerOuter,
-        poly,
-        getCitadelConsumption,
-        getNiceNumber,
-        getCostConflict,
-        getTechConflict,
-        haveTech,
-        getHealingRate,
-        getGrowthRate,
-        getGovernor,
-        traitVal
-      }),
+      getJQuery: () => $2,
+      getDocument: () => document,
+      getMutationObserver: () => MutationObserver,
+      getSettings: () => settings,
+      getState: () => state,
+      getGame: () => game,
+      getBuildings: () => buildings,
+      getJobs: () => jobs,
+      getResources: () => resources,
+      getTechIds: () => techIds,
+      getBuildingIds: () => buildingIds,
+      getArpaIds: () => arpaIds,
+      getMechManager: () => MechManager,
+      getFleetManagerOuter: () => FleetManagerOuter,
+      getPoly: () => poly,
+      readCitadelConsumption: () => getCitadelConsumption,
+      readNiceNumber: () => getNiceNumber,
+      readCostConflict: () => getCostConflict,
+      readTechConflict: () => getTechConflict,
+      readHaveTech: () => haveTech,
+      readHealingRate: () => getHealingRate,
+      readGrowthRate: () => getGrowthRate,
+      readGovernor: () => getGovernor,
+      readTraitVal: () => traitVal,
       isTechnology: (value) => value instanceof Technology
     });
     if (window.__EA_TEST_HOOKS__) {
