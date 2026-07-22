@@ -1,58 +1,38 @@
 type AnyRecord = Record<string, any>;
 type AnyFunction = (...args: any[]) => any;
 
-interface ScriptRuntimeUIContext {
-  $: AnyFunction & AnyRecord;
-  document: AnyRecord;
-  state: AnyRecord;
-  game: AnyRecord;
-  win: AnyRecord;
-  createOptionsModal: AnyFunction;
-  openOptionsModal: AnyFunction;
-  scriptVersionExtra: string;
-}
-
 interface ScriptRuntimeUIDependencies {
-  getContext: () => ScriptRuntimeUIContext;
+  getJQuery: () => AnyFunction & AnyRecord;
+  getDocument: () => AnyRecord;
+  getState: () => AnyRecord;
+  getGame: () => AnyRecord;
+  getWin: () => AnyRecord;
+  getCreateOptionsModal: () => AnyFunction;
+  getOpenOptionsModal: () => AnyFunction;
+  getScriptVersionExtra: () => string;
   getScriptVersion: () => string | undefined;
 }
 
 export function createScriptRuntimeUI({
-  getContext,
+  getJQuery,
+  getDocument,
+  getState,
+  getGame,
+  getWin,
+  getCreateOptionsModal,
+  getOpenOptionsModal,
+  getScriptVersionExtra,
   getScriptVersion,
 }: ScriptRuntimeUIDependencies) {
-  const liveObject = (key: keyof ScriptRuntimeUIContext) =>
-    new Proxy(
-      {},
-      {
-        get(_target, property) {
-          const current = getContext()[key] as AnyRecord;
-          const value = current?.[property as keyof typeof current];
-          return typeof value === "function" ? value.bind(current) : value;
-        },
-        set(_target, property, value) {
-          (getContext()[key] as AnyRecord)[property as string] = value;
-          return true;
-        },
-      },
-    ) as AnyRecord;
-  const $ = new Proxy(function () {}, {
-    apply(_target, _thisArg, args) {
-      return getContext().$(...args);
-    },
-  }) as AnyFunction & AnyRecord;
-  const document = liveObject("document");
-  const state = liveObject("state");
-  const game = liveObject("game");
-  const win = liveObject("win");
+  const $: AnyFunction = (...args) => getJQuery()(...args);
   const createOptionsModal: AnyFunction = (...args) =>
-    getContext().createOptionsModal(...args);
+    getCreateOptionsModal()(...args);
   const openOptionsModal: AnyFunction = (...args) =>
-    getContext().openOptionsModal(...args);
+    getOpenOptionsModal()(...args);
   function updateDebugData() {
-    state.forcedUpdate = true;
-    game.updateDebugData();
-    state.forcedUpdate = false;
+    getState().forcedUpdate = true;
+    getGame().updateDebugData();
+    getState().forcedUpdate = false;
   }
 
   function addScriptStyle() {
@@ -519,12 +499,12 @@ export function createScriptRuntimeUI({
         `;
 
     // Create style document
-    var css = document.createElement("style");
+    var css = getDocument().createElement("style");
     css.type = "text/css";
-    css.appendChild(document.createTextNode(styles));
+    css.appendChild(getDocument().createTextNode(styles));
 
     // Append style to html head
-    document.getElementsByTagName("head")[0].appendChild(css);
+    getDocument().getElementsByTagName("head")[0].appendChild(css);
   }
 
   // Known game errors, bugs, etc that we don't want to show to the user.
@@ -551,7 +531,7 @@ export function createScriptRuntimeUI({
 
     const versionPart = getScriptVersion() ?? "unknown";
 
-    msg = `${msg}\n\nScript version: ${versionPart} ${getContext().scriptVersionExtra}\n`;
+    msg = `${msg}\n\nScript version: ${versionPart} ${getScriptVersionExtra()}\n`;
 
     $("#script-script-warning").remove();
 
@@ -577,7 +557,7 @@ export function createScriptRuntimeUI({
 
   // Generic JS & Vue2 error handler so that things don't break invisibly as often
   function addErrorHandler() {
-    win.addEventListener("error", (e) => {
+    getWin().addEventListener("error", (e) => {
       if (!checkIgnoredError(e?.message)) {
         displayScriptWarningNode(
           "Script Error",
@@ -589,8 +569,8 @@ export function createScriptRuntimeUI({
       return false;
     });
 
-    if (win?.Vue?.config && !win?.Vue?.config?.errorHandler) {
-      win.Vue.config.errorHandler = (err, vm, info) => {
+    if (getWin()?.Vue?.config && !getWin()?.Vue?.config?.errorHandler) {
+      getWin().Vue.config.errorHandler = (err, vm, info) => {
         if (!checkIgnoredError(err)) {
           displayScriptWarningNode(
             "Script Error",

@@ -51424,39 +51424,23 @@
 
   // src/ui/script-runtime.ts
   function createScriptRuntimeUI({
-    getContext,
+    getJQuery,
+    getDocument,
+    getState,
+    getGame,
+    getWin,
+    getCreateOptionsModal,
+    getOpenOptionsModal,
+    getScriptVersionExtra,
     getScriptVersion
   }) {
-    const liveObject4 = (key) => new Proxy(
-      {},
-      {
-        get(_target, property) {
-          const current = getContext()[key];
-          const value = current?.[property];
-          return typeof value === "function" ? value.bind(current) : value;
-        },
-        set(_target, property, value) {
-          getContext()[key][property] = value;
-          return true;
-        }
-      }
-    );
-    const $2 = new Proxy(function() {
-    }, {
-      apply(_target, _thisArg, args) {
-        return getContext().$(...args);
-      }
-    });
-    const document2 = liveObject4("document");
-    const state = liveObject4("state");
-    const game = liveObject4("game");
-    const win = liveObject4("win");
-    const createOptionsModal = (...args) => getContext().createOptionsModal(...args);
-    const openOptionsModal = (...args) => getContext().openOptionsModal(...args);
+    const $2 = (...args) => getJQuery()(...args);
+    const createOptionsModal = (...args) => getCreateOptionsModal()(...args);
+    const openOptionsModal = (...args) => getOpenOptionsModal()(...args);
     function updateDebugData() {
-      state.forcedUpdate = true;
-      game.updateDebugData();
-      state.forcedUpdate = false;
+      getState().forcedUpdate = true;
+      getGame().updateDebugData();
+      getState().forcedUpdate = false;
     }
     function addScriptStyle() {
       let cssData = {
@@ -51918,10 +51902,10 @@
                 font-size: 1.2rem;
             }
         `;
-      var css = document2.createElement("style");
+      var css = getDocument().createElement("style");
       css.type = "text/css";
-      css.appendChild(document2.createTextNode(styles));
-      document2.getElementsByTagName("head")[0].appendChild(css);
+      css.appendChild(getDocument().createTextNode(styles));
+      getDocument().getElementsByTagName("head")[0].appendChild(css);
     }
     function checkIgnoredError(e) {
       if (typeof e !== "string") e = String(e);
@@ -51944,7 +51928,7 @@ ${stack}`;
       const versionPart = getScriptVersion() ?? "unknown";
       msg = `${msg}
 
-Script version: ${versionPart} ${getContext().scriptVersionExtra}
+Script version: ${versionPart} ${getScriptVersionExtra()}
 `;
       $2("#script-script-warning").remove();
       let clickable = $2(
@@ -51965,7 +51949,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       $2("#versionLog").before(clickable);
     }
     function addErrorHandler() {
-      win.addEventListener("error", (e) => {
+      getWin().addEventListener("error", (e) => {
         if (!checkIgnoredError(e?.message)) {
           displayScriptWarningNode(
             "Script Error",
@@ -51975,8 +51959,8 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
         return false;
       });
-      if (win?.Vue?.config && !win?.Vue?.config?.errorHandler) {
-        win.Vue.config.errorHandler = (err, vm, info) => {
+      if (getWin()?.Vue?.config && !getWin()?.Vue?.config?.errorHandler) {
+        getWin().Vue.config.errorHandler = (err, vm, info) => {
           if (!checkIgnoredError(err)) {
             displayScriptWarningNode(
               "Script Error",
@@ -56555,16 +56539,14 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       displayScriptWarningNode,
       addErrorHandler
     } = createScriptRuntimeUI({
-      getContext: () => ({
-        $: $2,
-        document,
-        state,
-        game,
-        win,
-        createOptionsModal,
-        openOptionsModal,
-        scriptVersionExtra: SCRIPT_VERSION_EXTRA
-      }),
+      getJQuery: () => $2,
+      getDocument: () => document,
+      getState: () => state,
+      getGame: () => game,
+      getWin: () => win,
+      getCreateOptionsModal: () => createOptionsModal,
+      getOpenOptionsModal: () => openOptionsModal,
+      getScriptVersionExtra: () => SCRIPT_VERSION_EXTRA,
       getScriptVersion: () => userscriptEnvironment.getScriptVersion()
     });
     if (window.__EA_TEST_HOOKS__) {

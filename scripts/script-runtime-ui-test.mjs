@@ -31,16 +31,14 @@ function jquery(label) {
 }
 
 const runtime = createScriptRuntimeUI({
-  getContext: () => ({
-    $: jquery,
-    document,
-    state,
-    game,
-    win,
-    createOptionsModal: () => trace.push("modal"),
-    openOptionsModal: () => trace.push("open"),
-    scriptVersionExtra: "test",
-  }),
+  getJQuery: () => jquery,
+  getDocument: () => document,
+  getState: () => state,
+  getGame: () => game,
+  getWin: () => win,
+  getCreateOptionsModal: () => () => trace.push("modal"),
+  getOpenOptionsModal: () => () => trace.push("open"),
+  getScriptVersionExtra: () => "test",
   getScriptVersion: () => "3.3.2-test",
 });
 

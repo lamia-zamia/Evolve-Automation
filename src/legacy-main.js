@@ -5829,16 +5829,14 @@ import { createScriptRuntimeUI } from "./ui/script-runtime.ts";
     displayScriptWarningNode,
     addErrorHandler,
   } = createScriptRuntimeUI({
-    getContext: () => ({
-      $,
-      document,
-      state,
-      game,
-      win,
-      createOptionsModal,
-      openOptionsModal,
-      scriptVersionExtra: SCRIPT_VERSION_EXTRA,
-    }),
+    getJQuery: () => $,
+    getDocument: () => document,
+    getState: () => state,
+    getGame: () => game,
+    getWin: () => win,
+    getCreateOptionsModal: () => createOptionsModal,
+    getOpenOptionsModal: () => openOptionsModal,
+    getScriptVersionExtra: () => SCRIPT_VERSION_EXTRA,
     getScriptVersion: () => userscriptEnvironment.getScriptVersion(),
   });
   if (window.__EA_TEST_HOOKS__) {
