@@ -16,21 +16,6 @@ type StateInitializationDependencies = {
   log: (message: string) => void;
 };
 
-function liveObject(getValue: () => LooseObject): LooseObject {
-  return new Proxy({} as LooseObject, {
-    get: (_target, property) => Reflect.get(getValue(), property),
-    set: (_target, property, value) => Reflect.set(getValue(), property, value),
-    has: (_target, property) => Reflect.has(getValue(), property),
-    ownKeys: () => Reflect.ownKeys(getValue()),
-    getOwnPropertyDescriptor: (_target, property) => {
-      const descriptor = Reflect.getOwnPropertyDescriptor(getValue(), property);
-      return descriptor ? { ...descriptor, configurable: true } : undefined;
-    },
-    defineProperty: (_target, property, attributes) =>
-      Reflect.defineProperty(getValue(), property, attributes),
-  });
-}
-
 export function createStateInitialization({
   getGame,
   getResources,
@@ -45,10 +30,6 @@ export function createStateInitialization({
   getHaveTech,
   log,
 }: StateInitializationDependencies) {
-  const game = liveObject(getGame);
-  const resources = liveObject(getResources);
-  const buildings = liveObject(getBuildings);
-  const projects = liveObject(getProjects);
   const updateCraftCost: LooseFunction = (...args) =>
     getUpdateCraftCost()(...args);
   const updateTabs: LooseFunction = (...args) => getUpdateTabs()(...args);
@@ -63,454 +44,631 @@ export function createStateInitialization({
     updateTabs(false);
 
     // Lets set our crate / container resource requirements
-    Object.defineProperty(resources.Crates, "cost", {
+    Object.defineProperty(getResources().Crates, "cost", {
       get: () =>
-        game.global.race["warlord"] && game.global.race["iron_wood"]
+        getGame().global.race["warlord"] && getGame().global.race["iron_wood"]
           ? { Lumber: 200 }
           : isLumberRace()
             ? { Plywood: 10 }
             : { Stone: 200 },
     });
-    resources.Containers.cost["Steel"] = 125;
+    getResources().Containers.cost["Steel"] = 125;
 
     JobManager.craftingJobs = Object.values(crafter);
 
     // Construct city builds list
     // TODO: replace gameMax with queue_complete
-    //buildings.SacrificialAltar.gameMax = 1; // Although it is technically limited to single altar, we don't care about that, as we're going to click it to make sacrifices
+    //getBuildings().SacrificialAltar.gameMax = 1; // Although it is technically limited to single altar, we don't care about that, as we're going to click it to make sacrifices
     // Max level depends on achievement progress, building is unavailable during fasting so it doesn't have to update dynamically.
-    buildings.Banquet.gameMax =
-      game.global.stats.achieve.endless_hunger?.l ?? 0;
-    buildings.RedTerraformer.gameMax = 100;
-    buildings.RedAtmoTerraformer.gameMax = 1;
-    buildings.RedTerraform.gameMax = 1;
-    buildings.GasSpaceDock.gameMax = 1;
-    buildings.DwarfWorldController.gameMax = 1;
-    buildings.GasSpaceDockShipSegment.gameMax = 100;
-    buildings.ProximaDyson.gameMax = 100;
-    buildings.BlackholeStellarEngine.gameMax = 100;
-    buildings.DwarfWorldCollider.gameMax = 1859;
-    buildings.DwarfShipyard.gameMax = 1;
-    buildings.DwarfMassRelay.gameMax = 100;
-    buildings.DwarfMassRelayComplete.gameMax = 1;
-    buildings.TitanAI.gameMax = 100;
-    buildings.TitanAIComplete.gameMax = 1;
-    buildings.TritonFOB.gameMax = 1;
+    getBuildings().Banquet.gameMax =
+      getGame().global.stats.achieve.endless_hunger?.l ?? 0;
+    getBuildings().RedTerraformer.gameMax = 100;
+    getBuildings().RedAtmoTerraformer.gameMax = 1;
+    getBuildings().RedTerraform.gameMax = 1;
+    getBuildings().GasSpaceDock.gameMax = 1;
+    getBuildings().DwarfWorldController.gameMax = 1;
+    getBuildings().GasSpaceDockShipSegment.gameMax = 100;
+    getBuildings().ProximaDyson.gameMax = 100;
+    getBuildings().BlackholeStellarEngine.gameMax = 100;
+    getBuildings().DwarfWorldCollider.gameMax = 1859;
+    getBuildings().DwarfShipyard.gameMax = 1;
+    getBuildings().DwarfMassRelay.gameMax = 100;
+    getBuildings().DwarfMassRelayComplete.gameMax = 1;
+    getBuildings().TitanAI.gameMax = 100;
+    getBuildings().TitanAIComplete.gameMax = 1;
+    getBuildings().TritonFOB.gameMax = 1;
 
-    buildings.SunJumpGate.gameMax = 100;
-    buildings.TauJumpGate.gameMax = 100;
-    buildings.TauAlienOutpost.gameMax = 1;
-    buildings.TauStarRingworld.gameMax = 1000;
-    buildings.TauStarMatrix.gameMax = 1;
-    buildings.TauGas2AlienStation.gameMax = 100;
-    buildings.TauGas2AlienSpaceStation.gameMax = 1;
-    buildings.TauGas2MatrioshkaBrain.gameMax = 1000;
-    buildings.TauGas2IgnitionDevice.gameMax = 10;
+    getBuildings().SunJumpGate.gameMax = 100;
+    getBuildings().TauJumpGate.gameMax = 100;
+    getBuildings().TauAlienOutpost.gameMax = 1;
+    getBuildings().TauStarRingworld.gameMax = 1000;
+    getBuildings().TauStarMatrix.gameMax = 1;
+    getBuildings().TauGas2AlienStation.gameMax = 100;
+    getBuildings().TauGas2AlienSpaceStation.gameMax = 1;
+    getBuildings().TauGas2MatrioshkaBrain.gameMax = 1000;
+    getBuildings().TauGas2IgnitionDevice.gameMax = 10;
 
-    buildings.ProximaDysonSphere.gameMax = 100;
-    buildings.ProximaOrichalcumSphere.gameMax = 100;
-    buildings.ProximaElysaniteSphere.gameMax = 1000;
-    buildings.BlackholeStargate.gameMax = 200;
-    buildings.BlackholeStargateComplete.gameMax = 1;
-    buildings.SiriusSpaceElevator.gameMax = 100;
-    buildings.SiriusGravityDome.gameMax = 100;
-    buildings.SiriusAscensionMachine.gameMax = 100;
-    buildings.SiriusAscensionTrigger.gameMax = 1;
-    buildings.WastelandThrone.gameMax = 0; // TODO should probably be 1 or 2 with smart logic, 2 to toggle skill assignment mode and 3 to disable it? and then 1 after all skills assigned while a commander is captured
-    buildings.RuinsWarVault.gameMax = 1;
-    buildings.BadlandsCodex.gameMax = 0; // TODO script just needs to know what it costs, for now it just tries to spam it
-    buildings.PitSoulForge.gameMax = 1;
-    buildings.PitSoulCapacitor.gameMax = 40;
-    buildings.PitAbsorptionChamber.gameMax = 100;
-    buildings.GateEastTower.gameMax = 1;
-    buildings.GateWestTower.gameMax = 1;
-    buildings.RuinsVault.gameMax = 2;
-    buildings.LakeOven.gameMax = 100;
-    buildings.LakeOvenComplete.gameMax = 1;
-    buildings.SpireBridge.gameMax = 10;
-    buildings.SpireEdenicGate.gameMax = 1;
+    getBuildings().ProximaDysonSphere.gameMax = 100;
+    getBuildings().ProximaOrichalcumSphere.gameMax = 100;
+    getBuildings().ProximaElysaniteSphere.gameMax = 1000;
+    getBuildings().BlackholeStargate.gameMax = 200;
+    getBuildings().BlackholeStargateComplete.gameMax = 1;
+    getBuildings().SiriusSpaceElevator.gameMax = 100;
+    getBuildings().SiriusGravityDome.gameMax = 100;
+    getBuildings().SiriusAscensionMachine.gameMax = 100;
+    getBuildings().SiriusAscensionTrigger.gameMax = 1;
+    getBuildings().WastelandThrone.gameMax = 0; // TODO should probably be 1 or 2 with smart logic, 2 to toggle skill assignment mode and 3 to disable it? and then 1 after all skills assigned while a commander is captured
+    getBuildings().RuinsWarVault.gameMax = 1;
+    getBuildings().BadlandsCodex.gameMax = 0; // TODO script just needs to know what it costs, for now it just tries to spam it
+    getBuildings().PitSoulForge.gameMax = 1;
+    getBuildings().PitSoulCapacitor.gameMax = 40;
+    getBuildings().PitAbsorptionChamber.gameMax = 100;
+    getBuildings().GateEastTower.gameMax = 1;
+    getBuildings().GateWestTower.gameMax = 1;
+    getBuildings().RuinsVault.gameMax = 2;
+    getBuildings().LakeOven.gameMax = 100;
+    getBuildings().LakeOvenComplete.gameMax = 1;
+    getBuildings().SpireBridge.gameMax = 10;
+    getBuildings().SpireEdenicGate.gameMax = 1;
 
-    buildings.AsphodelMechStation.gameMax = 10;
-    buildings.AsphodelRuneGate.gameMax = 100;
-    buildings.ElysiumFireSupportBase.gameMax = 101; // 101th click to fire cannon
-    buildings.ElysiumNorthPier.gameMax = 10;
-    buildings.ElysiumRushmore.gameMax = 1;
-    buildings.ElysiumReincarnation.gameMax = 1; // TODO use it
-    buildings.IsleSouthPier.gameMax = 10;
-    buildings.IsleSoulCompactor.gameMax = 1;
-    buildings.PalaceInfuser.gameMax = 25;
-    buildings.PalaceConduit.gameMax = 25;
-    buildings.PalaceTomb.gameMax = 10;
+    getBuildings().AsphodelMechStation.gameMax = 10;
+    getBuildings().AsphodelRuneGate.gameMax = 100;
+    getBuildings().ElysiumFireSupportBase.gameMax = 101; // 101th click to fire cannon
+    getBuildings().ElysiumNorthPier.gameMax = 10;
+    getBuildings().ElysiumRushmore.gameMax = 1;
+    getBuildings().ElysiumReincarnation.gameMax = 1; // TODO use it
+    getBuildings().IsleSouthPier.gameMax = 10;
+    getBuildings().IsleSoulCompactor.gameMax = 1;
+    getBuildings().PalaceInfuser.gameMax = 25;
+    getBuildings().PalaceConduit.gameMax = 25;
+    getBuildings().PalaceTomb.gameMax = 10;
 
-    buildings.GorddonEmbassy.gameMax = 1;
-    buildings.Alien1Consulate.gameMax = 1;
+    getBuildings().GorddonEmbassy.gameMax = 1;
+    getBuildings().Alien1Consulate.gameMax = 1;
 
-    projects.LaunchFacility.gameMax = 1;
-    projects.ManaSyphon.gameMax = 80;
+    getProjects().LaunchFacility.gameMax = 1;
+    getProjects().ManaSyphon.gameMax = 80;
 
-    buildings.CoalPower.addResourceConsumption(
+    getBuildings().CoalPower.addResourceConsumption(
       () =>
-        game.global.race.universe === "magic" ? resources.Mana : resources.Coal,
+        getGame().global.race.universe === "magic"
+          ? getResources().Mana
+          : getResources().Coal,
       () =>
-        game.global.race["environmentalist"]
+        getGame().global.race["environmentalist"]
           ? 0
-          : game.global.race.universe === "magic"
+          : getGame().global.race.universe === "magic"
             ? 0.05
             : 0.65,
     );
-    buildings.OilPower.addResourceConsumption(resources.Oil, () =>
-      game.global.race["environmentalist"] ? 0 : 0.65,
+    getBuildings().OilPower.addResourceConsumption(getResources().Oil, () =>
+      getGame().global.race["environmentalist"] ? 0 : 0.65,
     );
-    buildings.FissionPower.addResourceConsumption(resources.Uranium, 0.1);
-    buildings.TouristCenter.addResourceConsumption(resources.Food, 50);
+    getBuildings().FissionPower.addResourceConsumption(
+      getResources().Uranium,
+      0.1,
+    );
+    getBuildings().TouristCenter.addResourceConsumption(
+      getResources().Food,
+      50,
+    );
 
     // Init support
-    buildings.SpaceNavBeacon.addSupport(resources.Moon_Support);
-    buildings.SpaceNavBeacon.addResourceConsumption(
-      resources.Red_Support,
+    getBuildings().SpaceNavBeacon.addSupport(getResources().Moon_Support);
+    getBuildings().SpaceNavBeacon.addResourceConsumption(
+      getResources().Red_Support,
       () => (haveTech("luna", 3) ? -1 : 0),
     );
 
-    buildings.MoonBase.addSupport(resources.Moon_Support);
-    buildings.MoonIridiumMine.addSupport(resources.Moon_Support);
-    buildings.MoonHeliumMine.addSupport(resources.Moon_Support);
-    buildings.MoonObservatory.addSupport(resources.Moon_Support);
+    getBuildings().MoonBase.addSupport(getResources().Moon_Support);
+    getBuildings().MoonIridiumMine.addSupport(getResources().Moon_Support);
+    getBuildings().MoonHeliumMine.addSupport(getResources().Moon_Support);
+    getBuildings().MoonObservatory.addSupport(getResources().Moon_Support);
 
-    buildings.RedSpaceport.addSupport(resources.Red_Support);
-    buildings.RedTower.addSupport(resources.Red_Support);
-    buildings.RedLivingQuarters.addSupport(resources.Red_Support);
-    buildings.RedVrCenter.addSupport(resources.Red_Support);
-    buildings.RedMine.addSupport(resources.Red_Support);
-    buildings.RedFabrication.addSupport(resources.Red_Support);
-    buildings.RedBiodome.addSupport(resources.Red_Support);
-    buildings.RedExoticLab.addSupport(resources.Red_Support);
+    getBuildings().RedSpaceport.addSupport(getResources().Red_Support);
+    getBuildings().RedTower.addSupport(getResources().Red_Support);
+    getBuildings().RedLivingQuarters.addSupport(getResources().Red_Support);
+    getBuildings().RedVrCenter.addSupport(getResources().Red_Support);
+    getBuildings().RedMine.addSupport(getResources().Red_Support);
+    getBuildings().RedFabrication.addSupport(getResources().Red_Support);
+    getBuildings().RedBiodome.addSupport(getResources().Red_Support);
+    getBuildings().RedExoticLab.addSupport(getResources().Red_Support);
 
-    buildings.SunSwarmControl.addSupport(resources.Sun_Support);
-    buildings.SunSwarmSatellite.addSupport(resources.Sun_Support);
+    getBuildings().SunSwarmControl.addSupport(getResources().Sun_Support);
+    getBuildings().SunSwarmSatellite.addSupport(getResources().Sun_Support);
 
-    buildings.BeltSpaceStation.addSupport(resources.Belt_Support);
-    buildings.BeltEleriumShip.addSupport(resources.Belt_Support);
-    buildings.BeltIridiumShip.addSupport(resources.Belt_Support);
-    buildings.BeltIronShip.addSupport(resources.Belt_Support);
+    getBuildings().BeltSpaceStation.addSupport(getResources().Belt_Support);
+    getBuildings().BeltEleriumShip.addSupport(getResources().Belt_Support);
+    getBuildings().BeltIridiumShip.addSupport(getResources().Belt_Support);
+    getBuildings().BeltIronShip.addSupport(getResources().Belt_Support);
 
-    buildings.AlphaStarport.addSupport(resources.Alpha_Support);
-    buildings.AlphaHabitat.addSupport(resources.Alpha_Support);
-    buildings.AlphaMiningDroid.addSupport(resources.Alpha_Support);
-    buildings.AlphaProcessing.addSupport(resources.Alpha_Support);
-    buildings.AlphaFusion.addSupport(resources.Alpha_Support);
-    buildings.AlphaLaboratory.addSupport(resources.Alpha_Support);
-    buildings.AlphaExchange.addSupport(resources.Alpha_Support);
-    buildings.AlphaGraphenePlant.addSupport(resources.Alpha_Support);
-    buildings.AlphaExoticZoo.addResourceConsumption(resources.Alpha_Support, 1);
-    buildings.ProximaTransferStation.addSupport(resources.Alpha_Support);
-
-    buildings.NebulaNexus.addSupport(resources.Nebula_Support);
-    buildings.NebulaHarvester.addSupport(resources.Nebula_Support);
-    buildings.NebulaEleriumProspector.addSupport(resources.Nebula_Support);
-
-    buildings.GatewayStarbase.addSupport(resources.Gateway_Support);
-    buildings.GatewayShipDock.addSupport(resources.Gateway_Support);
-    buildings.BologniumShip.addSupport(resources.Gateway_Support);
-    buildings.ScoutShip.addSupport(resources.Gateway_Support);
-    buildings.CorvetteShip.addSupport(resources.Gateway_Support);
-    buildings.FrigateShip.addSupport(resources.Gateway_Support);
-    buildings.CruiserShip.addSupport(resources.Gateway_Support);
-    buildings.Dreadnought.addSupport(resources.Gateway_Support);
-    buildings.StargateStation.addSupport(resources.Gateway_Support);
-    buildings.StargateTelemetryBeacon.addSupport(resources.Gateway_Support);
-
-    buildings.Alien2Foothold.addSupport(resources.Alien_Support);
-    buildings.Alien2ArmedMiner.addSupport(resources.Alien_Support);
-    buildings.Alien2OreProcessor.addSupport(resources.Alien_Support);
-    buildings.Alien2Scavenger.addSupport(resources.Alien_Support);
-
-    buildings.LakeHarbor.addSupport(resources.Lake_Support);
-    buildings.LakeBireme.addSupport(resources.Lake_Support);
-    buildings.LakeTransport.addSupport(resources.Lake_Support);
-
-    buildings.SpirePurifier.addSupport(resources.Spire_Support);
-    buildings.SpirePort.addSupport(resources.Spire_Support);
-    buildings.SpireBaseCamp.addSupport(resources.Spire_Support);
-    buildings.SpireMechBay.addSupport(resources.Spire_Support);
-
-    buildings.TitanElectrolysis.addSupport(resources.Titan_Support);
-    buildings.TitanQuarters.addSupport(resources.Titan_Support);
-    buildings.TitanMine.addSupport(resources.Titan_Support);
-    buildings.TitanGraphene.addSupport(resources.Titan_Support);
-    buildings.TitanDecoder.addResourceConsumption(resources.Titan_Support, 1);
-
-    buildings.TitanSpaceport.addSupport(resources.Enceladus_Support);
-    buildings.EnceladusWaterFreighter.addSupport(resources.Enceladus_Support);
-    buildings.EnceladusZeroGLab.addSupport(resources.Enceladus_Support);
-    buildings.EnceladusBase.addSupport(resources.Enceladus_Support);
-
-    buildings.TitanElectrolysis.addResourceConsumption(
-      resources.Electrolysis_Support,
-      -1,
+    getBuildings().AlphaStarport.addSupport(getResources().Alpha_Support);
+    getBuildings().AlphaHabitat.addSupport(getResources().Alpha_Support);
+    getBuildings().AlphaMiningDroid.addSupport(getResources().Alpha_Support);
+    getBuildings().AlphaProcessing.addSupport(getResources().Alpha_Support);
+    getBuildings().AlphaFusion.addSupport(getResources().Alpha_Support);
+    getBuildings().AlphaLaboratory.addSupport(getResources().Alpha_Support);
+    getBuildings().AlphaExchange.addSupport(getResources().Alpha_Support);
+    getBuildings().AlphaGraphenePlant.addSupport(getResources().Alpha_Support);
+    getBuildings().AlphaExoticZoo.addResourceConsumption(
+      getResources().Alpha_Support,
+      1,
     );
-    buildings.TitanHydrogen.addResourceConsumption(
-      resources.Electrolysis_Support,
+    getBuildings().ProximaTransferStation.addSupport(
+      getResources().Alpha_Support,
+    );
+
+    getBuildings().NebulaNexus.addSupport(getResources().Nebula_Support);
+    getBuildings().NebulaHarvester.addSupport(getResources().Nebula_Support);
+    getBuildings().NebulaEleriumProspector.addSupport(
+      getResources().Nebula_Support,
+    );
+
+    getBuildings().GatewayStarbase.addSupport(getResources().Gateway_Support);
+    getBuildings().GatewayShipDock.addSupport(getResources().Gateway_Support);
+    getBuildings().BologniumShip.addSupport(getResources().Gateway_Support);
+    getBuildings().ScoutShip.addSupport(getResources().Gateway_Support);
+    getBuildings().CorvetteShip.addSupport(getResources().Gateway_Support);
+    getBuildings().FrigateShip.addSupport(getResources().Gateway_Support);
+    getBuildings().CruiserShip.addSupport(getResources().Gateway_Support);
+    getBuildings().Dreadnought.addSupport(getResources().Gateway_Support);
+    getBuildings().StargateStation.addSupport(getResources().Gateway_Support);
+    getBuildings().StargateTelemetryBeacon.addSupport(
+      getResources().Gateway_Support,
+    );
+
+    getBuildings().Alien2Foothold.addSupport(getResources().Alien_Support);
+    getBuildings().Alien2ArmedMiner.addSupport(getResources().Alien_Support);
+    getBuildings().Alien2OreProcessor.addSupport(getResources().Alien_Support);
+    getBuildings().Alien2Scavenger.addSupport(getResources().Alien_Support);
+
+    getBuildings().LakeHarbor.addSupport(getResources().Lake_Support);
+    getBuildings().LakeBireme.addSupport(getResources().Lake_Support);
+    getBuildings().LakeTransport.addSupport(getResources().Lake_Support);
+
+    getBuildings().SpirePurifier.addSupport(getResources().Spire_Support);
+    getBuildings().SpirePort.addSupport(getResources().Spire_Support);
+    getBuildings().SpireBaseCamp.addSupport(getResources().Spire_Support);
+    getBuildings().SpireMechBay.addSupport(getResources().Spire_Support);
+
+    getBuildings().TitanElectrolysis.addSupport(getResources().Titan_Support);
+    getBuildings().TitanQuarters.addSupport(getResources().Titan_Support);
+    getBuildings().TitanMine.addSupport(getResources().Titan_Support);
+    getBuildings().TitanGraphene.addSupport(getResources().Titan_Support);
+    getBuildings().TitanDecoder.addResourceConsumption(
+      getResources().Titan_Support,
       1,
     );
 
-    buildings.ErisDrone.addSupport(resources.Eris_Support);
-    buildings.ErisTrooper.addSupport(resources.Eris_Support);
-    buildings.ErisTank.addSupport(resources.Eris_Support);
+    getBuildings().TitanSpaceport.addSupport(getResources().Enceladus_Support);
+    getBuildings().EnceladusWaterFreighter.addSupport(
+      getResources().Enceladus_Support,
+    );
+    getBuildings().EnceladusZeroGLab.addSupport(
+      getResources().Enceladus_Support,
+    );
+    getBuildings().EnceladusBase.addSupport(getResources().Enceladus_Support);
 
-    buildings.TauOrbitalStation.addSupport(resources.Tau_Support);
-    buildings.TauFarm.addSupport(resources.Tau_Support);
-    buildings.TauColony.addSupport(resources.Tau_Support);
-    buildings.TauFactory.addSupport(resources.Tau_Support);
-    buildings.TauDiseaseLab.addSupport(resources.Tau_Support);
-    buildings.TauMiningPit.addSupport(resources.Tau_Support);
+    getBuildings().TitanElectrolysis.addResourceConsumption(
+      getResources().Electrolysis_Support,
+      -1,
+    );
+    getBuildings().TitanHydrogen.addResourceConsumption(
+      getResources().Electrolysis_Support,
+      1,
+    );
 
-    buildings.TauRedOrbitalPlatform.addSupport(resources.Tau_Red_Support);
-    buildings.TauRedOverseer.addSupport(resources.Tau_Red_Support);
-    buildings.TauRedWomlingVillage.addSupport(resources.Tau_Red_Support);
-    buildings.TauRedWomlingFarm.addSupport(resources.Tau_Red_Support);
-    buildings.TauRedWomlingMine.addSupport(resources.Tau_Red_Support);
-    buildings.TauRedWomlingFun.addSupport(resources.Tau_Red_Support);
-    buildings.TauRedWomlingLab.addSupport(resources.Tau_Red_Support);
+    getBuildings().ErisDrone.addSupport(getResources().Eris_Support);
+    getBuildings().ErisTrooper.addSupport(getResources().Eris_Support);
+    getBuildings().ErisTank.addSupport(getResources().Eris_Support);
 
-    buildings.TauRedWomlingVillage.addResourceConsumption(
-      resources.Womlings_Support,
+    getBuildings().TauOrbitalStation.addSupport(getResources().Tau_Support);
+    getBuildings().TauFarm.addSupport(getResources().Tau_Support);
+    getBuildings().TauColony.addSupport(getResources().Tau_Support);
+    getBuildings().TauFactory.addSupport(getResources().Tau_Support);
+    getBuildings().TauDiseaseLab.addSupport(getResources().Tau_Support);
+    getBuildings().TauMiningPit.addSupport(getResources().Tau_Support);
+
+    getBuildings().TauRedOrbitalPlatform.addSupport(
+      getResources().Tau_Red_Support,
+    );
+    getBuildings().TauRedOverseer.addSupport(getResources().Tau_Red_Support);
+    getBuildings().TauRedWomlingVillage.addSupport(
+      getResources().Tau_Red_Support,
+    );
+    getBuildings().TauRedWomlingFarm.addSupport(getResources().Tau_Red_Support);
+    getBuildings().TauRedWomlingMine.addSupport(getResources().Tau_Red_Support);
+    getBuildings().TauRedWomlingFun.addSupport(getResources().Tau_Red_Support);
+    getBuildings().TauRedWomlingLab.addSupport(getResources().Tau_Red_Support);
+
+    getBuildings().TauRedWomlingVillage.addResourceConsumption(
+      getResources().Womlings_Support,
       () => (haveTech("womling_pop", 2) ? -6 : -5),
     );
-    buildings.TauRedWomlingFarm.addResourceConsumption(
-      resources.Womlings_Support,
-      () => (buildings.TauRedWomlingFarm.autoStateSmart ? 2 : 0),
+    getBuildings().TauRedWomlingFarm.addResourceConsumption(
+      getResources().Womlings_Support,
+      () => (getBuildings().TauRedWomlingFarm.autoStateSmart ? 2 : 0),
     );
-    buildings.TauRedWomlingLab.addResourceConsumption(
-      resources.Womlings_Support,
-      () => (buildings.TauRedWomlingLab.autoStateSmart ? 1 : 0),
+    getBuildings().TauRedWomlingLab.addResourceConsumption(
+      getResources().Womlings_Support,
+      () => (getBuildings().TauRedWomlingLab.autoStateSmart ? 1 : 0),
     );
-    buildings.TauRedWomlingMine.addResourceConsumption(
-      resources.Womlings_Support,
-      () => (buildings.TauRedWomlingMine.autoStateSmart ? 6 : 0),
+    getBuildings().TauRedWomlingMine.addResourceConsumption(
+      getResources().Womlings_Support,
+      () => (getBuildings().TauRedWomlingMine.autoStateSmart ? 6 : 0),
     );
 
-    buildings.TauBeltPatrolShip.addSupport(resources.Tau_Belt_Support);
-    buildings.TauBeltMiningShip.addSupport(resources.Tau_Belt_Support);
-    buildings.TauBeltWhalingShip.addSupport(resources.Tau_Belt_Support);
+    getBuildings().TauBeltPatrolShip.addSupport(
+      getResources().Tau_Belt_Support,
+    );
+    getBuildings().TauBeltMiningShip.addSupport(
+      getResources().Tau_Belt_Support,
+    );
+    getBuildings().TauBeltWhalingShip.addSupport(
+      getResources().Tau_Belt_Support,
+    );
 
-    buildings.AsphodelEncampment.addSupport(resources.Asphodel_Support);
-    buildings.AsphodelSoulEngine.addSupport(resources.Asphodel_Support);
-    buildings.AsphodelResearchStation.addSupport(resources.Asphodel_Support);
-    buildings.AsphodelHarvester.addSupport(resources.Asphodel_Support);
-    buildings.AsphodelProcessor.addSupport(resources.Asphodel_Support);
-    buildings.AsphodelBunker.addSupport(resources.Asphodel_Support);
-    buildings.AsphodelBlissDen.addSupport(resources.Asphodel_Support);
-    buildings.AsphodelRectory.addSupport(resources.Asphodel_Support);
-    buildings.AsphodelCorruptor.addSupport(resources.Asphodel_Support);
+    getBuildings().AsphodelEncampment.addSupport(
+      getResources().Asphodel_Support,
+    );
+    getBuildings().AsphodelSoulEngine.addSupport(
+      getResources().Asphodel_Support,
+    );
+    getBuildings().AsphodelResearchStation.addSupport(
+      getResources().Asphodel_Support,
+    );
+    getBuildings().AsphodelHarvester.addSupport(
+      getResources().Asphodel_Support,
+    );
+    getBuildings().AsphodelProcessor.addSupport(
+      getResources().Asphodel_Support,
+    );
+    getBuildings().AsphodelBunker.addSupport(getResources().Asphodel_Support);
+    getBuildings().AsphodelBlissDen.addSupport(getResources().Asphodel_Support);
+    getBuildings().AsphodelRectory.addSupport(getResources().Asphodel_Support);
+    getBuildings().AsphodelCorruptor.addSupport(
+      getResources().Asphodel_Support,
+    );
 
     // Powered buildings whose output other managed buildings burn as fuel.
     // autoPower reserves power for these so consumers can't starve their own fuel source.
-    buildings.GasMining.produces = [resources.Helium_3];
-    buildings.GasMoonOilExtractor.produces = [resources.Oil];
-    buildings.CoalMine.produces = [resources.Coal];
-    buildings.NebulaHarvester.produces = [
-      resources.Helium_3,
-      resources.Deuterium,
+    getBuildings().GasMining.produces = [getResources().Helium_3];
+    getBuildings().GasMoonOilExtractor.produces = [getResources().Oil];
+    getBuildings().CoalMine.produces = [getResources().Coal];
+    getBuildings().NebulaHarvester.produces = [
+      getResources().Helium_3,
+      getResources().Deuterium,
     ];
-    buildings.KuiperElerium.produces = [resources.Elerium];
-    buildings.EnceladusWaterFreighter.produces = [resources.Water];
+    getBuildings().KuiperElerium.produces = [getResources().Elerium];
+    getBuildings().EnceladusWaterFreighter.produces = [getResources().Water];
 
     // Init consumptions
-    buildings.MoonBase.addResourceConsumption(resources.Oil, 2);
-    buildings.RedSpaceport.addResourceConsumption(resources.Helium_3, 1.25);
-    buildings.RedSpaceport.addResourceConsumption(resources.Food, () =>
-      game.global.race["cataclysm"] || game.global.race["orbit_decayed"]
-        ? 2
-        : 25,
+    getBuildings().MoonBase.addResourceConsumption(getResources().Oil, 2);
+    getBuildings().RedSpaceport.addResourceConsumption(
+      getResources().Helium_3,
+      1.25,
     );
-    buildings.RedFactory.addResourceConsumption(resources.Helium_3, 1);
-    buildings.RedSpaceBarracks.addResourceConsumption(resources.Oil, 2);
-    buildings.RedSpaceBarracks.addResourceConsumption(resources.Food, () =>
-      game.global.race["cataclysm"] || game.global.race["orbit_decayed"]
-        ? 0
-        : 10,
+    getBuildings().RedSpaceport.addResourceConsumption(
+      getResources().Food,
+      () =>
+        getGame().global.race["cataclysm"] ||
+        getGame().global.race["orbit_decayed"]
+          ? 2
+          : 25,
     );
-    buildings.HellGeothermal.addResourceConsumption(resources.Helium_3, 0.5);
-    buildings.GasMoonOutpost.addResourceConsumption(resources.Oil, 2);
-    buildings.BeltSpaceStation.addResourceConsumption(resources.Food, () =>
-      game.global.race["fasting"]
-        ? 0
-        : game.global.race["cataclysm"] || game.global.race["orbit_decayed"]
-          ? 1
+    getBuildings().RedFactory.addResourceConsumption(
+      getResources().Helium_3,
+      1,
+    );
+    getBuildings().RedSpaceBarracks.addResourceConsumption(
+      getResources().Oil,
+      2,
+    );
+    getBuildings().RedSpaceBarracks.addResourceConsumption(
+      getResources().Food,
+      () =>
+        getGame().global.race["cataclysm"] ||
+        getGame().global.race["orbit_decayed"]
+          ? 0
           : 10,
     );
-    buildings.BeltSpaceStation.addResourceConsumption(resources.Helium_3, 2.5);
-    buildings.DwarfEleriumReactor.addResourceConsumption(
-      resources.Elerium,
+    getBuildings().HellGeothermal.addResourceConsumption(
+      getResources().Helium_3,
+      0.5,
+    );
+    getBuildings().GasMoonOutpost.addResourceConsumption(getResources().Oil, 2);
+    getBuildings().BeltSpaceStation.addResourceConsumption(
+      getResources().Food,
+      () =>
+        getGame().global.race["fasting"]
+          ? 0
+          : getGame().global.race["cataclysm"] ||
+              getGame().global.race["orbit_decayed"]
+            ? 1
+            : 10,
+    );
+    getBuildings().BeltSpaceStation.addResourceConsumption(
+      getResources().Helium_3,
+      2.5,
+    );
+    getBuildings().DwarfEleriumReactor.addResourceConsumption(
+      getResources().Elerium,
       0.05,
     );
 
-    buildings.AlphaStarport.addResourceConsumption(resources.Food, 100);
-    buildings.AlphaStarport.addResourceConsumption(resources.Helium_3, 5);
-    buildings.AlphaFusion.addResourceConsumption(resources.Deuterium, 1.25);
-    buildings.AlphaExoticZoo.addResourceConsumption(resources.Food, 12000);
-    buildings.AlphaMegaFactory.addResourceConsumption(resources.Deuterium, 5);
-
-    buildings.ProximaTransferStation.addResourceConsumption(
-      resources.Uranium,
-      0.28,
-    );
-    buildings.ProximaCruiser.addResourceConsumption(resources.Helium_3, 6);
-
-    buildings.NeutronMiner.addResourceConsumption(resources.Helium_3, 3);
-
-    buildings.GatewayStarbase.addResourceConsumption(resources.Helium_3, 25);
-    buildings.GatewayStarbase.addResourceConsumption(resources.Food, 250);
-
-    buildings.BologniumShip.addResourceConsumption(resources.Helium_3, 5);
-    buildings.ScoutShip.addResourceConsumption(resources.Helium_3, 6);
-    buildings.CorvetteShip.addResourceConsumption(resources.Helium_3, 10);
-    buildings.FrigateShip.addResourceConsumption(resources.Helium_3, 25);
-    buildings.CruiserShip.addResourceConsumption(resources.Deuterium, 25);
-    buildings.Dreadnought.addResourceConsumption(resources.Deuterium, 80);
-
-    buildings.GorddonEmbassy.addResourceConsumption(resources.Food, () =>
-      game.global.race["fasting"] ? 0 : 7500,
-    );
-    buildings.GorddonFreighter.addResourceConsumption(resources.Helium_3, 12);
-
-    buildings.Alien1VitreloyPlant.addResourceConsumption(
-      resources.Bolognium,
-      2.5,
-    );
-    buildings.Alien1VitreloyPlant.addResourceConsumption(
-      resources.Stanene,
+    getBuildings().AlphaStarport.addResourceConsumption(
+      getResources().Food,
       100,
     );
-    buildings.Alien1VitreloyPlant.addResourceConsumption(
-      resources.Money,
-      50000,
+    getBuildings().AlphaStarport.addResourceConsumption(
+      getResources().Helium_3,
+      5,
     );
-    buildings.Alien1SuperFreighter.addResourceConsumption(
-      resources.Helium_3,
-      25,
+    getBuildings().AlphaFusion.addResourceConsumption(
+      getResources().Deuterium,
+      1.25,
     );
-
-    buildings.Alien2Foothold.addResourceConsumption(resources.Elerium, 2.5);
-    buildings.Alien2ArmedMiner.addResourceConsumption(resources.Helium_3, 10);
-    buildings.Alien2Scavenger.addResourceConsumption(resources.Helium_3, 12);
-
-    buildings.ChthonianMineLayer.addResourceConsumption(resources.Helium_3, 8);
-    buildings.ChthonianRaider.addResourceConsumption(resources.Helium_3, 18);
-
-    buildings.RuinsInfernoPower.addResourceConsumption(resources.Infernite, 5);
-    buildings.RuinsInfernoPower.addResourceConsumption(resources.Coal, 100);
-    buildings.RuinsInfernoPower.addResourceConsumption(resources.Oil, 80);
-
-    buildings.LakeOvenComplete.addResourceConsumption(resources.Infernite, 225);
-
-    buildings.TitanElectrolysis.addResourceConsumption(resources.Water, 35);
-
-    buildings.TitanQuarters.addResourceConsumption(resources.Water, 12);
-    buildings.TitanQuarters.addResourceConsumption(resources.Food, 500);
-    buildings.TitanDecoder.addResourceConsumption(resources.Cipher, 0.06);
-    buildings.TitanAIComplete.addResourceConsumption(resources.Water, 1000);
-
-    buildings.EnceladusWaterFreighter.addResourceConsumption(
-      resources.Helium_3,
+    getBuildings().AlphaExoticZoo.addResourceConsumption(
+      getResources().Food,
+      12000,
+    );
+    getBuildings().AlphaMegaFactory.addResourceConsumption(
+      getResources().Deuterium,
       5,
     );
 
-    buildings.TritonFOB.addResourceConsumption(resources.Helium_3, 125);
-    buildings.TritonLander.addResourceConsumption(resources.Oil, 50);
+    getBuildings().ProximaTransferStation.addResourceConsumption(
+      getResources().Uranium,
+      0.28,
+    );
+    getBuildings().ProximaCruiser.addResourceConsumption(
+      getResources().Helium_3,
+      6,
+    );
 
-    buildings.KuiperOrichalcum.addResourceConsumption(resources.Oil, 200);
-    buildings.KuiperUranium.addResourceConsumption(resources.Oil, 60);
-    buildings.KuiperNeutronium.addResourceConsumption(resources.Oil, 60);
-    buildings.KuiperElerium.addResourceConsumption(resources.Oil, 125);
+    getBuildings().NeutronMiner.addResourceConsumption(
+      getResources().Helium_3,
+      3,
+    );
 
-    buildings.ErisDrone.addResourceConsumption(resources.Uranium, 5);
+    getBuildings().GatewayStarbase.addResourceConsumption(
+      getResources().Helium_3,
+      25,
+    );
+    getBuildings().GatewayStarbase.addResourceConsumption(
+      getResources().Food,
+      250,
+    );
 
-    buildings.TauOrbitalStation.addResourceConsumption(
-      resources.Helium_3,
+    getBuildings().BologniumShip.addResourceConsumption(
+      getResources().Helium_3,
+      5,
+    );
+    getBuildings().ScoutShip.addResourceConsumption(getResources().Helium_3, 6);
+    getBuildings().CorvetteShip.addResourceConsumption(
+      getResources().Helium_3,
+      10,
+    );
+    getBuildings().FrigateShip.addResourceConsumption(
+      getResources().Helium_3,
+      25,
+    );
+    getBuildings().CruiserShip.addResourceConsumption(
+      getResources().Deuterium,
+      25,
+    );
+    getBuildings().Dreadnought.addResourceConsumption(
+      getResources().Deuterium,
+      80,
+    );
+
+    getBuildings().GorddonEmbassy.addResourceConsumption(
+      getResources().Food,
+      () => (getGame().global.race["fasting"] ? 0 : 7500),
+    );
+    getBuildings().GorddonFreighter.addResourceConsumption(
+      getResources().Helium_3,
+      12,
+    );
+
+    getBuildings().Alien1VitreloyPlant.addResourceConsumption(
+      getResources().Bolognium,
+      2.5,
+    );
+    getBuildings().Alien1VitreloyPlant.addResourceConsumption(
+      getResources().Stanene,
+      100,
+    );
+    getBuildings().Alien1VitreloyPlant.addResourceConsumption(
+      getResources().Money,
+      50000,
+    );
+    getBuildings().Alien1SuperFreighter.addResourceConsumption(
+      getResources().Helium_3,
+      25,
+    );
+
+    getBuildings().Alien2Foothold.addResourceConsumption(
+      getResources().Elerium,
+      2.5,
+    );
+    getBuildings().Alien2ArmedMiner.addResourceConsumption(
+      getResources().Helium_3,
+      10,
+    );
+    getBuildings().Alien2Scavenger.addResourceConsumption(
+      getResources().Helium_3,
+      12,
+    );
+
+    getBuildings().ChthonianMineLayer.addResourceConsumption(
+      getResources().Helium_3,
+      8,
+    );
+    getBuildings().ChthonianRaider.addResourceConsumption(
+      getResources().Helium_3,
+      18,
+    );
+
+    getBuildings().RuinsInfernoPower.addResourceConsumption(
+      getResources().Infernite,
+      5,
+    );
+    getBuildings().RuinsInfernoPower.addResourceConsumption(
+      getResources().Coal,
+      100,
+    );
+    getBuildings().RuinsInfernoPower.addResourceConsumption(
+      getResources().Oil,
+      80,
+    );
+
+    getBuildings().LakeOvenComplete.addResourceConsumption(
+      getResources().Infernite,
+      225,
+    );
+
+    getBuildings().TitanElectrolysis.addResourceConsumption(
+      getResources().Water,
+      35,
+    );
+
+    getBuildings().TitanQuarters.addResourceConsumption(
+      getResources().Water,
+      12,
+    );
+    getBuildings().TitanQuarters.addResourceConsumption(
+      getResources().Food,
+      500,
+    );
+    getBuildings().TitanDecoder.addResourceConsumption(
+      getResources().Cipher,
+      0.06,
+    );
+    getBuildings().TitanAIComplete.addResourceConsumption(
+      getResources().Water,
+      1000,
+    );
+
+    getBuildings().EnceladusWaterFreighter.addResourceConsumption(
+      getResources().Helium_3,
+      5,
+    );
+
+    getBuildings().TritonFOB.addResourceConsumption(
+      getResources().Helium_3,
+      125,
+    );
+    getBuildings().TritonLander.addResourceConsumption(getResources().Oil, 50);
+
+    getBuildings().KuiperOrichalcum.addResourceConsumption(
+      getResources().Oil,
+      200,
+    );
+    getBuildings().KuiperUranium.addResourceConsumption(getResources().Oil, 60);
+    getBuildings().KuiperNeutronium.addResourceConsumption(
+      getResources().Oil,
+      60,
+    );
+    getBuildings().KuiperElerium.addResourceConsumption(
+      getResources().Oil,
+      125,
+    );
+
+    getBuildings().ErisDrone.addResourceConsumption(getResources().Uranium, 5);
+
+    getBuildings().TauOrbitalStation.addResourceConsumption(
+      getResources().Helium_3,
       () =>
         haveTech("isolation")
-          ? game.global.race["lone_survivor"]
+          ? getGame().global.race["lone_survivor"]
             ? 5
             : 25
           : 400,
     );
-    buildings.TauColony.addResourceConsumption(resources.Food, () =>
+    getBuildings().TauColony.addResourceConsumption(getResources().Food, () =>
       haveTech("isolation")
-        ? game.global.race["lone_survivor"]
+        ? getGame().global.race["lone_survivor"]
           ? -2
           : 75
         : 1000,
     );
-    buildings.TauFusionGenerator.addResourceConsumption(
-      resources.Helium_3,
+    getBuildings().TauFusionGenerator.addResourceConsumption(
+      getResources().Helium_3,
       () =>
         haveTech("isolation")
-          ? game.global.race["lone_survivor"]
+          ? getGame().global.race["lone_survivor"]
             ? -15
             : 75
           : 500,
     );
-    buildings.TauCulturalCenter.addResourceConsumption(resources.Food, () =>
-      game.global.race["lone_survivor"] ? 25 : 500,
+    getBuildings().TauCulturalCenter.addResourceConsumption(
+      getResources().Food,
+      () => (getGame().global.race["lone_survivor"] ? 25 : 500),
     );
-    buildings.TauRedOrbitalPlatform.addResourceConsumption(resources.Oil, () =>
-      game.global.race["lone_survivor"] ? 0 : haveTech("isolation") ? 32 : 125,
-    );
-    buildings.TauRedOrbitalPlatform.addResourceConsumption(
-      resources.Helium_3,
+    getBuildings().TauRedOrbitalPlatform.addResourceConsumption(
+      getResources().Oil,
       () =>
-        game.global.race["lone_survivor"]
+        getGame().global.race["lone_survivor"]
+          ? 0
+          : haveTech("isolation")
+            ? 32
+            : 125,
+    );
+    getBuildings().TauRedOrbitalPlatform.addResourceConsumption(
+      getResources().Helium_3,
+      () =>
+        getGame().global.race["lone_survivor"]
           ? haveTech("isolation")
             ? 8
             : 125
           : 0,
     );
-    buildings.TauBeltPatrolShip.addResourceConsumption(
-      resources.Helium_3,
+    getBuildings().TauBeltPatrolShip.addResourceConsumption(
+      getResources().Helium_3,
       () => (haveTech("isolation") ? 15 : 250),
     );
-    buildings.TauBeltMiningShip.addResourceConsumption(
-      resources.Helium_3,
+    getBuildings().TauBeltMiningShip.addResourceConsumption(
+      getResources().Helium_3,
       () => (haveTech("isolation") ? 12 : 75),
     );
-    buildings.TauBeltWhalingShip.addResourceConsumption(
-      resources.Helium_3,
+    getBuildings().TauBeltWhalingShip.addResourceConsumption(
+      getResources().Helium_3,
       () => (haveTech("isolation") ? 14 : 90),
     );
-    buildings.TauGas2AlienSpaceStation.addResourceConsumption(
-      resources.Elerium,
-      () => (game.global.race["lone_survivor"] ? 1 : 10),
+    getBuildings().TauGas2AlienSpaceStation.addResourceConsumption(
+      getResources().Elerium,
+      () => (getGame().global.race["lone_survivor"] ? 1 : 10),
     );
 
     // Better back compatibility, to run beta version's script on stable game build without commenting out new buildings
     setBuildings(
       Object.fromEntries(
-        Object.entries(buildings).filter(([id, b]) =>
+        Object.entries(getBuildings()).filter(([id, b]) =>
           b.definition ? true : log(`${b.name} action not found.`),
         ),
       ),
     );
 
     // These are buildings which are specified as powered in the actions definition game code but aren't actually powered in the main.js powered calculations
-    Object.values(buildings).forEach((building) => {
+    Object.values(getBuildings()).forEach((building) => {
       if (building.powered > 0) {
         let powerId = (building._location || building._tab) + ":" + building.id;
-        if (game.global.power.indexOf(powerId) === -1) {
+        if (getGame().global.power.indexOf(powerId) === -1) {
           building.overridePowered = 0;
         }
       }
     });
-    //Object.defineProperty(buildings.Assembly, "overridePowered", {get: () => traitVal('powered', 0)});
-    //Object.defineProperty(buildings.RedAssembly, "overridePowered", {get: () => traitVal('powered', 0)});
-    buildings.Windmill.overridePowered = -1;
-    buildings.SunSwarmSatellite.overridePowered = -0.35;
-    buildings.ProximaDyson.overridePowered = -1.25;
-    buildings.ProximaDysonSphere.overridePowered = -5;
-    buildings.ProximaOrichalcumSphere.overridePowered = -8;
-    buildings.ProximaElysaniteSphere.overridePowered = -18;
-    buildings.BlackholeStellarEngine.overridePowered = 0;
-    buildings.WastelandIncinerator.overridePowered = -25;
+    //Object.defineProperty(getBuildings().Assembly, "overridePowered", {get: () => traitVal('powered', 0)});
+    //Object.defineProperty(getBuildings().RedAssembly, "overridePowered", {get: () => traitVal('powered', 0)});
+    getBuildings().Windmill.overridePowered = -1;
+    getBuildings().SunSwarmSatellite.overridePowered = -0.35;
+    getBuildings().ProximaDyson.overridePowered = -1.25;
+    getBuildings().ProximaDysonSphere.overridePowered = -5;
+    getBuildings().ProximaOrichalcumSphere.overridePowered = -8;
+    getBuildings().ProximaElysaniteSphere.overridePowered = -18;
+    getBuildings().BlackholeStellarEngine.overridePowered = 0;
+    getBuildings().WastelandIncinerator.overridePowered = -25;
     // Numbers aren't exactly correct. That's fine - it won't mess with calculations - it's not something we can turn off and on. We just need to know that they *are* power generators, for autobuild, and that's enough for us.
     // We don't handle the Stellar Engine at at all, it will be treated as mystery power in autoPower
   }
