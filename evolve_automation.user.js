@@ -44652,6 +44652,348 @@
     return Object.freeze({ sectionId: "hell", sectionName: "Hell", controls: controls3 });
   }
 
+  // src/application/mech-settings.ts
+  function createMechSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type !== "reset-mech-settings") return;
+        writer.resetToDefaults();
+        writer.persist();
+        renderSettingsContent();
+        effects.resetCheckboxes();
+        effects.removeMechInfo();
+      }
+    });
+  }
+
+  // src/adapters/browser/mech-settings.ts
+  function createMechSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function renderControl(node, control, actions) {
+      if (control.kind === "header") {
+        actions.addStandardHeading(node, control.label);
+        return;
+      }
+      if (control.kind === "number") {
+        actions.addSettingsNumber(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      if (control.kind === "toggle") {
+        actions.addSettingsToggle(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      actions.addSettingsSelect(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        control.options
+      );
+    }
+    function buildMechSettings2() {
+      const model = reader.read();
+      getActions().buildSettingsSection(
+        model.sectionId,
+        model.sectionName,
+        () => intents.handle({ type: "reset-mech-settings" }),
+        updateMechSettingsContent2
+      );
+    }
+    function updateMechSettingsContent2() {
+      const model = reader.read();
+      const document2 = getDocument();
+      const scroll = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const actions = getActions();
+      const node = getJQuery()(`#script_${model.sectionId}Content`);
+      node.empty().off("*");
+      for (const control of model.controls) {
+        renderControl(node, control, actions);
+        if (control.kind === "header") {
+          const statsControls = getJQuery()(
+            `<div style="margin-top: 5px; display: inline-flex;"></div>`
+          );
+          statsControls.append(
+            `<label class="switch" title="This switch have no ingame effect, and used to configure calculator below"><input id="script_mechStatsCompact" type="checkbox" checked><span class="check"></span><span style="margin-left: 10px;">Compact</span></label>`
+          );
+          statsControls.append(
+            `<label class="switch" title="This switch have no ingame effect, and used to configure calculator below"><input id="script_mechStatsEfficient" type="checkbox" checked><span class="check"></span><span style="margin-left: 10px;">Efficient</span></label>`
+          );
+          statsControls.append(
+            `<label class="switch" title="This switch have no ingame effect, and used to configure calculator below"><input id="script_mechStatsSpecial" type="checkbox" checked><span class="check"></span><span style="margin-left: 10px;">Special</span></label>`
+          );
+          statsControls.append(
+            `<label class="switch" title="This switch have no ingame effect, and used to configure calculator below"><input id="script_mechStatsGravity" type="checkbox"><span class="check"></span><span style="margin-left: 10px;">Gravity</span></label>`
+          );
+          statsControls.append(
+            `<label class="switch" title="This input have no ingame effect, and used to configure calculator below"><input id="script_mechStatsScouts" class="input is-small" style="height: 25px; width: 50px" type="text" value="0"><span style="margin-left: 10px;">Scouts</span></label>`
+          );
+          statsControls.on("input", actions.calculateMechStats);
+          node.append(statsControls);
+          node.append(
+            `<table class="selectable"><tbody id="script_mechStatsTable"><tbody></table>`
+          );
+          actions.calculateMechStats();
+        }
+      }
+      document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
+    }
+    return Object.freeze({ buildMechSettings: buildMechSettings2, updateMechSettingsContent: updateMechSettingsContent2 });
+  }
+
+  // src/domain/mech-settings.ts
+  var scrapOptions = Object.freeze([
+    Object.freeze({
+      val: "none",
+      label: "None",
+      hint: "Nothing will be scrapped automatically"
+    }),
+    Object.freeze({
+      val: "single",
+      label: "Full bay",
+      hint: "Scrap mechs only when mech bay is full, and script need more room to build mechs"
+    }),
+    Object.freeze({
+      val: "all",
+      label: "All inefficient",
+      hint: "Scrap all inefficient mechs immediately, using refounded resources to build better ones"
+    }),
+    Object.freeze({
+      val: "mixed",
+      label: "Excess inefficient",
+      hint: "Scrap as much inefficient mechs as possible, trying to preserve just enough of old mechs to fill bay to max by the time when next floor will be reached, calculating threshold based on progress speed and resources incomes"
+    })
+  ]);
+  var buildOptions = Object.freeze([
+    Object.freeze({
+      val: "none",
+      label: "None",
+      hint: "Nothing will be build automatically"
+    }),
+    Object.freeze({
+      val: "random",
+      label: "Random good",
+      hint: "Build random mech with size chosen below, and best possible efficiency"
+    }),
+    Object.freeze({
+      val: "user",
+      label: "Current design",
+      hint: "Build whatever currently set in Mech Lab"
+    })
+  ]);
+  var specialOptions = Object.freeze([
+    Object.freeze({
+      val: "always",
+      label: "Always",
+      hint: "Add special equipment to all mechs"
+    }),
+    Object.freeze({
+      val: "prefered",
+      label: "Preferred",
+      hint: "Add special equipment when it doesn't reduce efficiency for current floor"
+    }),
+    Object.freeze({
+      val: "random",
+      label: "Random",
+      hint: "Special equipment will have same chance to be added as all others"
+    }),
+    Object.freeze({
+      val: "never",
+      label: "Never",
+      hint: "Never add special equipment"
+    })
+  ]);
+  function createMechSettingsReadModel(sizeOptions) {
+    const controls4 = Object.freeze([
+      Object.freeze({
+        kind: "select",
+        settingName: "mechScrap",
+        label: "Scrap mechs",
+        hint: "Configures what will be scrapped. Infernal mechs won't ever be scrapped.",
+        options: scrapOptions
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "mechScrapEfficiency",
+        label: "Scrap efficiency",
+        hint: "Scrap mechs only when '((OldMechRefund / NewMechCost) / (OldMechDamage / NewMechDamage))' more than given number.\nFor the cases when exchanged mechs have same size(1/3 refund) it means that with 1 eff. script allowed to scrap mechs under 33.3%. 1.5 eff. - under 22.2%, 2 eff. - under 16.6%, 0.5 eff. - under 66.6%, 0 eff. - under 100%, etc.\nEfficiency below '1' is not recommended, unless scrap set to 'Full bay', as it's a breakpoint when refunded resources can immidiately compensate lost damage, resulting with best damage growth rate.\nEfficiency above '1' is useful to save resources for more desperate times, or to compensate low soul gems income."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "mechCollectorValue",
+        label: "Collector value",
+        hint: "Collectors can't be directly compared with combat mechs, having no firepower. Script will assume that one collector/size is equal to this amount of scout/size. If you feel that script is too reluctant to scrap old collectors - you can decrease this value. Or increase, to make them more persistant. 1 value - 50% collector equial to 50% scout, 0.5 value - 50% collector equial to 25% scout, 2 value - 50% collector equial to 100% scout, etc."
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "mechBuild",
+        label: "Build mechs",
+        hint: "Configures what will be built. Infernal mechs won't ever be built.",
+        options: buildOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "mechSize",
+        label: "Preferred mech size",
+        hint: "Size of random mechs",
+        options: sizeOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "mechSizeGravity",
+        label: "Gravity mech size",
+        hint: "Override preferred size with this on floors with high gravity",
+        options: sizeOptions
+      }),
+      Object.freeze({
+        kind: "select",
+        settingName: "mechSpecial",
+        label: "Special mechs",
+        hint: "Configures special equip",
+        options: specialOptions
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "mechWaygatePotential",
+        label: "Maximum mech potential for Waygate",
+        hint: "Fight Demon Lord only when current mech team potential below given amount. Full bay of best mechs will have `1` potential. Damage against Demon Lord does not affected by floor modifiers, all mechs always does 100% damage to him. Thus it's most time-efficient to fight him at times when mechs can't make good progress against regular monsters, and waiting for rebuilding. Auto Power needs to be on for this to work."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "mechMinSupply",
+        label: "Minimum supply income",
+        hint: "Build collectors if current supply income below given number"
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "mechMaxCollectors",
+        label: "Maximum collectors ratio",
+        hint: "Limiter for above option, maximum space used by collectors. 0.5 means up to 50% of total bay capacity will be dedicated to collectors, and such."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "mechSaveSupplyRatio",
+        label: "Save up supplies for next floor",
+        hint: "Ratio of supplies to save up for next floor. Script will stop spending supplies on new mechs when it estimates that by the time when floor will be cleared you'll be under this supply ratio. That allows build bunch of new mechs suited for next enemy right after entering new floor. With 1 value script will try to start new floors with full supplies, 0.5 - with half, 0 - any, effectively disabling this option, etc."
+      }),
+      Object.freeze({
+        kind: "number",
+        settingName: "mechScouts",
+        label: "Minimum scouts ratio",
+        hint: "Scouts compensate terrain penalty of suboptimal mechs. Build them up to this ratio."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "mechInfernalCollector",
+        label: "Build infernal collectors",
+        hint: "Infernal collectors have incresed supply cost, and payback time, but becomes more profitable after ~30 minutes of uptime."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "mechScoutsRebuild",
+        label: "Rebuild scouts",
+        hint: "Scouts provides full bonus to other mechs even being infficient, this option prevent rebuilding them saving resources."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "mechFillBay",
+        label: "Build smaller mechs when preferred not available",
+        hint: "Build smaller mechs when preferred size can't be used due to low remaining bay space, or supplies cap"
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "buildingMechsFirst",
+        label: "Build spire buildings only with full bay",
+        hint: "Fill mech bays up to current limit before spending resources on additional spire buildings"
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "mechBaysFirst",
+        label: "Scrap mechs only after building maximum bays",
+        hint: "Scrap old mechs only when no new bays and purifiers can be builded"
+      }),
+      Object.freeze({ kind: "header", label: "Mech Stats" })
+    ]);
+    return Object.freeze({
+      sectionId: "mech",
+      sectionName: "Mech & Spire",
+      controls: controls4
+    });
+  }
+
+  // src/adapters/evolve/mech-settings.ts
+  function requireString28(value, path) {
+    if (typeof value !== "string")
+      throw new TypeError(`${path} must be a string`);
+    return value;
+  }
+  function createMechSettingsEvolveAdapter({
+    getMechManager,
+    getGame
+  }) {
+    return Object.freeze({
+      read() {
+        const manager = requireRecord(getMechManager(), "MechManager");
+        const game2 = requireRecord(getGame(), "game");
+        const loc = requireFunction(game2["loc"], "game.loc");
+        if (!Array.isArray(manager["Size"]))
+          throw new TypeError("MechManager.Size must be an array");
+        const options = [
+          {
+            val: "auto",
+            label: "Damage Per Size",
+            hint: "Select affordable mech with most damage per size on current floor"
+          },
+          {
+            val: "gems",
+            label: "Damage Per Gems",
+            hint: "Select affordable mech with most damage per gems on current floor"
+          },
+          {
+            val: "supply",
+            label: "Damage Per Supply",
+            hint: "Select affordable mech with most damage per supply on current floor"
+          }
+        ];
+        manager["Size"].forEach((rawId, index) => {
+          const id = requireString28(rawId, `MechManager.Size[${index}]`);
+          options.push({
+            val: id,
+            label: requireString28(
+              Reflect.apply(loc, game2, [`portal_mech_size_${id}`]),
+              `game.loc(portal_mech_size_${id})`
+            ),
+            hint: requireString28(
+              Reflect.apply(loc, game2, [`portal_mech_size_${id}_desc`]),
+              `game.loc(portal_mech_size_${id}_desc)`
+            )
+          });
+        });
+        return createMechSettingsReadModel(
+          Object.freeze(options.map((option) => Object.freeze(option)))
+        );
+      }
+    });
+  }
+
   // src/ui/production-settings.ts
   function createProductionSettings({
     getSettingsRaw,
@@ -47031,288 +47373,6 @@
     };
   }
 
-  // src/ui/mech-settings.ts
-  function createMechSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const MechManager2 = liveObject4(() => getDependency("MechManager"));
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsSelect2 = liveFunction(
-      () => getDependency("addSettingsSelect")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const addStandardHeading2 = liveFunction(
-      () => getDependency("addStandardHeading")
-    );
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const calculateMechStats2 = liveFunction(
-      () => getDependency("calculateMechStats")
-    );
-    const document2 = liveObject4(() => getDependency("document"));
-    const game2 = liveObject4(() => getDependency("game"));
-    const removeMechInfo2 = liveFunction(() => getDependency("removeMechInfo"));
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetMechSettings2 = liveFunction(
-      () => getDependency("resetMechSettings")
-    );
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildMechSettingsImpl() {
-      let sectionId = "mech";
-      let sectionName = "Mech & Spire";
-      let resetFunction = function() {
-        resetMechSettings2(true);
-        updateSettingsFromState2();
-        updateMechSettingsContent2();
-        resetCheckbox2("autoMech");
-        removeMechInfo2();
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateMechSettingsContent2
-      );
-    }
-    function updateMechSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_mechContent");
-      currentNode.empty().off("*");
-      let scrapOptions = [
-        {
-          val: "none",
-          label: "None",
-          hint: "Nothing will be scrapped automatically"
-        },
-        {
-          val: "single",
-          label: "Full bay",
-          hint: "Scrap mechs only when mech bay is full, and script need more room to build mechs"
-        },
-        {
-          val: "all",
-          label: "All inefficient",
-          hint: "Scrap all inefficient mechs immediately, using refounded resources to build better ones"
-        },
-        {
-          val: "mixed",
-          label: "Excess inefficient",
-          hint: "Scrap as much inefficient mechs as possible, trying to preserve just enough of old mechs to fill bay to max by the time when next floor will be reached, calculating threshold based on progress speed and resources incomes"
-        }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "mechScrap",
-        "Scrap mechs",
-        "Configures what will be scrapped. Infernal mechs won't ever be scrapped.",
-        scrapOptions
-      );
-      addSettingsNumber2(
-        currentNode,
-        "mechScrapEfficiency",
-        "Scrap efficiency",
-        "Scrap mechs only when '((OldMechRefund / NewMechCost) / (OldMechDamage / NewMechDamage))' more than given number.&#xA;For the cases when exchanged mechs have same size(1/3 refund) it means that with 1 eff. script allowed to scrap mechs under 33.3%. 1.5 eff. - under 22.2%, 2 eff. - under 16.6%, 0.5 eff. - under 66.6%, 0 eff. - under 100%, etc.&#xA;Efficiency below '1' is not recommended, unless scrap set to 'Full bay', as it's a breakpoint when refunded resources can immidiately compensate lost damage, resulting with best damage growth rate.&#xA;Efficiency above '1' is useful to save resources for more desperate times, or to compensate low soul gems income."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "mechCollectorValue",
-        "Collector value",
-        "Collectors can't be directly compared with combat mechs, having no firepower. Script will assume that one collector/size is equal to this amount of scout/size. If you feel that script is too reluctant to scrap old collectors - you can decrease this value. Or increase, to make them more persistant. 1 value - 50% collector equial to 50% scout, 0.5 value - 50% collector equial to 25% scout, 2 value - 50% collector equial to 100% scout, etc."
-      );
-      let buildOptions = [
-        {
-          val: "none",
-          label: "None",
-          hint: "Nothing will be build automatically"
-        },
-        {
-          val: "random",
-          label: "Random good",
-          hint: "Build random mech with size chosen below, and best possible efficiency"
-        },
-        {
-          val: "user",
-          label: "Current design",
-          hint: "Build whatever currently set in Mech Lab"
-        }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "mechBuild",
-        "Build mechs",
-        "Configures what will be built. Infernal mechs won't ever be built.",
-        buildOptions
-      );
-      let sizeOptions = [
-        {
-          val: "auto",
-          label: "Damage Per Size",
-          hint: "Select affordable mech with most damage per size on current floor"
-        },
-        {
-          val: "gems",
-          label: "Damage Per Gems",
-          hint: "Select affordable mech with most damage per gems on current floor"
-        },
-        {
-          val: "supply",
-          label: "Damage Per Supply",
-          hint: "Select affordable mech with most damage per supply on current floor"
-        },
-        ...MechManager2.Size.map((id) => ({
-          val: id,
-          label: game2.loc(`portal_mech_size_${id}`),
-          hint: game2.loc(`portal_mech_size_${id}_desc`)
-        }))
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "mechSize",
-        "Preferred mech size",
-        "Size of random mechs",
-        sizeOptions
-      );
-      addSettingsSelect2(
-        currentNode,
-        "mechSizeGravity",
-        "Gravity mech size",
-        "Override preferred size with this on floors with high gravity",
-        sizeOptions
-      );
-      let specialOptions = [
-        {
-          val: "always",
-          label: "Always",
-          hint: "Add special equipment to all mechs"
-        },
-        {
-          val: "prefered",
-          label: "Preferred",
-          hint: "Add special equipment when it doesn't reduce efficiency for current floor"
-        },
-        {
-          val: "random",
-          label: "Random",
-          hint: "Special equipment will have same chance to be added as all others"
-        },
-        { val: "never", label: "Never", hint: "Never add special equipment" }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "mechSpecial",
-        "Special mechs",
-        "Configures special equip",
-        specialOptions
-      );
-      addSettingsNumber2(
-        currentNode,
-        "mechWaygatePotential",
-        "Maximum mech potential for Waygate",
-        "Fight Demon Lord only when current mech team potential below given amount. Full bay of best mechs will have `1` potential. Damage against Demon Lord does not affected by floor modifiers, all mechs always does 100% damage to him. Thus it's most time-efficient to fight him at times when mechs can't make good progress against regular monsters, and waiting for rebuilding. Auto Power needs to be on for this to work."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "mechMinSupply",
-        "Minimum supply income",
-        "Build collectors if current supply income below given number"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "mechMaxCollectors",
-        "Maximum collectors ratio",
-        "Limiter for above option, maximum space used by collectors. 0.5 means up to 50% of total bay capacity will be dedicated to collectors, and such."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "mechSaveSupplyRatio",
-        "Save up supplies for next floor",
-        "Ratio of supplies to save up for next floor. Script will stop spending supplies on new mechs when it estimates that by the time when floor will be cleared you'll be under this supply ratio. That allows build bunch of new mechs suited for next enemy right after entering new floor. With 1 value script will try to start new floors with full supplies, 0.5 - with half, 0 - any, effectively disabling this option, etc."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "mechScouts",
-        "Minimum scouts ratio",
-        "Scouts compensate terrain penalty of suboptimal mechs. Build them up to this ratio."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "mechInfernalCollector",
-        "Build infernal collectors",
-        "Infernal collectors have incresed supply cost, and payback time, but becomes more profitable after ~30 minutes of uptime."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "mechScoutsRebuild",
-        "Rebuild scouts",
-        "Scouts provides full bonus to other mechs even being infficient, this option prevent rebuilding them saving resources."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "mechFillBay",
-        "Build smaller mechs when preferred not available",
-        "Build smaller mechs when preferred size can't be used due to low remaining bay space, or supplies cap"
-      );
-      addSettingsToggle2(
-        currentNode,
-        "buildingMechsFirst",
-        "Build spire buildings only with full bay",
-        "Fill mech bays up to current limit before spending resources on additional spire buildings"
-      );
-      addSettingsToggle2(
-        currentNode,
-        "mechBaysFirst",
-        "Scrap mechs only after building maximum bays",
-        "Scrap old mechs only when no new bays and purifiers can be builded"
-      );
-      addStandardHeading2(currentNode, "Mech Stats");
-      let statsControls = $2(
-        `<div style="margin-top: 5px; display: inline-flex;"></div>`
-      );
-      Object.entries({
-        Compact: true,
-        Efficient: true,
-        Special: true,
-        Gravity: false
-      }).forEach(([option, value]) => {
-        statsControls.append(`
-              <label class="switch" title="This switch have no ingame effect, and used to configure calculator below">
-                <input id="script_mechStats${option}" type="checkbox"${value ? " checked" : ""}>
-                <span class="check"></span><span style="margin-left: 10px;">${option}</span>
-              </label>`);
-      });
-      statsControls.append(`
-          <label class="switch" title="This input have no ingame effect, and used to configure calculator below">
-            <input id="script_mechStatsScouts" class="input is-small" style="height: 25px; width: 50px" type="text" value="0">
-            <span style="margin-left: 10px;">Scouts</span>
-          </label>`);
-      statsControls.on("input", calculateMechStats2);
-      currentNode.append(statsControls);
-      currentNode.append(
-        `<table class="selectable"><tbody id="script_mechStatsTable"><tbody></table>`
-      );
-      calculateMechStats2();
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildMechSettings2(...args) {
-      const implementation = getOverride("buildMechSettings") ?? buildMechSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateMechSettingsContent2(...args) {
-      const implementation = getOverride("updateMechSettingsContent") ?? updateMechSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildMechSettings: buildMechSettings2, updateMechSettingsContent: updateMechSettingsContent2 };
-  }
-
   // src/ui/queue-panels.ts
   function createQueuePanels({
     getJQuery,
@@ -47546,7 +47606,7 @@
   }
 
   // src/adapters/evolve/mech-info.ts
-  function requireString28(value, path) {
+  function requireString29(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47592,7 +47652,7 @@
           mechs[index],
           `game.global.portal.mechbay.mechs[${index}]`
         );
-        const size = requireString28(mech["size"], `mechs[${index}].size`);
+        const size = requireString29(mech["size"], `mechs[${index}].size`);
         const stats = requireRecord(
           call4(manager, "getMechStats", "MechManager.getMechStats", [mech]),
           `MechManager.getMechStats(${index})`
@@ -47770,7 +47830,7 @@
   }
 
   // src/adapters/evolve/resource-toggles.ts
-  function requireString29(value, path) {
+  function requireString30(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47791,7 +47851,7 @@
     return priorityList;
   }
   function readResourceId3(value, path) {
-    return requireString29(requireRecord(value, path)["id"], `${path}.id`);
+    return requireString30(requireRecord(value, path)["id"], `${path}.id`);
   }
   function createResourceToggleEvolveAdapter({
     getGame,
@@ -47807,13 +47867,13 @@
       const noTrade = Boolean(race2["no_trade"]);
       const loc = requireFunction2(game2["loc"], "game.loc");
       const labels = noTrade ? Object.freeze({ buy: "", sell: "", routes: "", cancelRoutes: "" }) : Object.freeze({
-        buy: requireString29(loc("resource_market_buy"), "game.loc(buy)"),
-        sell: requireString29(loc("resource_market_sell"), "game.loc(sell)"),
-        routes: requireString29(
+        buy: requireString30(loc("resource_market_buy"), "game.loc(buy)"),
+        sell: requireString30(loc("resource_market_sell"), "game.loc(sell)"),
+        routes: requireString30(
           loc("resource_market_routes"),
           "game.loc(routes)"
         ),
-        cancelRoutes: requireString29(
+        cancelRoutes: requireString30(
           loc("cancel_routes"),
           "game.loc(cancel_routes)"
         )
@@ -52323,31 +52383,38 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       updateFleetOuter,
       updateFleetAndromeda
     } = fleetSettings;
-    const mechSettingsOverrides = {};
-    const getMechSettingsDependency = createDependencyResolver(
-      mechSettingsOverrides,
-      {
-        $: () => $,
-        MechManager: () => MechManager,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsSelect: () => addSettingsSelect,
-        addSettingsToggle: () => addSettingsToggle,
-        addStandardHeading: () => addStandardHeading,
-        buildSettingsSection: () => buildSettingsSection,
-        calculateMechStats: () => calculateMechStats,
-        document: () => document,
-        game: () => game,
-        removeMechInfo: () => removeMechInfo,
-        resetCheckbox: () => resetCheckbox,
-        resetMechSettings: () => resetMechSettings,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const mechSettings = createMechSettings({
-      getDependency: getMechSettingsDependency,
-      getOverride: (name) => mechSettingsOverrides[name]
+    let mechSettingsTestContext;
+    const mechSettingsReader = createMechSettingsEvolveAdapter({
+      getMechManager: () => mechSettingsTestContext?.MechManager ?? MechManager,
+      getGame: () => mechSettingsTestContext?.game ?? game
     });
-    const { buildMechSettings, updateMechSettingsContent } = mechSettings;
+    const mechSettingsActions = {
+      buildSettingsSection: (...args) => buildSettingsSection(...args),
+      addSettingsNumber: (...args) => addSettingsNumber(...args),
+      addSettingsSelect: (...args) => addSettingsSelect(...args),
+      addSettingsToggle: (...args) => addSettingsToggle(...args),
+      addStandardHeading: (...args) => addStandardHeading(...args),
+      calculateMechStats: (...args) => calculateMechStats(...args)
+    };
+    const mechSettingsIntentHandler = createMechSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (mechSettingsTestContext?.resetMechSettings ?? resetMechSettings)(true),
+        persist: () => (mechSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      renderSettingsContent: () => updateMechSettingsContent(),
+      effects: {
+        resetCheckboxes: () => (mechSettingsTestContext?.resetCheckbox ?? resetCheckbox)("autoMech"),
+        removeMechInfo: () => (mechSettingsTestContext?.removeMechInfo ?? removeMechInfo)()
+      }
+    });
+    const mechSettingsBrowserAdapter = createMechSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      reader: mechSettingsReader,
+      intents: mechSettingsIntentHandler,
+      getActions: () => mechSettingsTestContext?.actions ?? mechSettingsActions
+    });
+    const { buildMechSettings, updateMechSettingsContent } = mechSettingsBrowserAdapter;
     let ejectorSettingsTestContext;
     const ejectorSettingsReader = createEjectorSettingsEvolveAdapter({
       getResources: () => ejectorSettingsTestContext?.resources ?? resources,
@@ -55828,15 +55895,13 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           prestige: prestigeSettings,
           evolution: evolutionSettings,
           trigger: triggerSettings,
-          fleet: fleetSettings,
-          mech: mechSettings
+          fleet: fleetSettings
         },
         setSettingsBoundariesTestContext(context) {
           Object.assign(prestigeSettingsOverrides, context);
           Object.assign(evolutionSettingsOverrides, context);
           Object.assign(triggerSettingsOverrides, context);
           Object.assign(fleetSettingsOverrides, context);
-          Object.assign(mechSettingsOverrides, context);
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
@@ -55861,6 +55926,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         hellSettings: hellSettingsBrowserAdapter,
         setHellSettingsTestContext(context) {
           hellSettingsTestContext = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        mechSettings: mechSettingsBrowserAdapter,
+        setMechSettingsTestContext(context) {
+          mechSettingsTestContext = context;
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {

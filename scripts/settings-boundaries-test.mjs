@@ -4,7 +4,6 @@ import { createPrestigeSettings } from "../src/ui/prestige-settings.ts";
 import { createEvolutionSettings } from "../src/ui/evolution-settings.ts";
 import { createTriggerSettings } from "../src/ui/trigger-settings.ts";
 import { createFleetSettings } from "../src/ui/fleet-settings.ts";
-import { createMechSettings } from "../src/ui/mech-settings.ts";
 
 const specs = [
   [
@@ -46,16 +45,6 @@ const specs = [
     "Fleet",
     true,
     ["checkbox:autoFleet"],
-  ],
-  [
-    "mech",
-    createMechSettings,
-    "buildMechSettings",
-    "updateMechSettingsContent",
-    "mech",
-    "Mech & Spire",
-    false,
-    ["checkbox:autoMech", "remove:mechInfo"],
   ],
 ];
 
@@ -115,4 +104,4 @@ for (const [
   ]);
 }
 
-console.log("5 settings-boundary module tests passed");
+console.log("4 settings-boundary module tests passed");

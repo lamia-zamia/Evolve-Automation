@@ -449,13 +449,15 @@ import { createWarSettingsEvolveAdapter } from "./adapters/evolve/war-settings.t
 import { createHellSettingsIntentHandler } from "./application/hell-settings.ts";
 import { createHellSettingsBrowserAdapter } from "./adapters/browser/hell-settings.ts";
 import { getHellSettingsReadModel } from "./domain/hell-settings.ts";
+import { createMechSettingsIntentHandler } from "./application/mech-settings.ts";
+import { createMechSettingsBrowserAdapter } from "./adapters/browser/mech-settings.ts";
+import { createMechSettingsEvolveAdapter } from "./adapters/evolve/mech-settings.ts";
 import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
 import { createPrestigeSettings } from "./ui/prestige-settings.ts";
 import { createEvolutionSettings } from "./ui/evolution-settings.ts";
 import { createTriggerSettings } from "./ui/trigger-settings.ts";
 import { createFleetSettings } from "./ui/fleet-settings.ts";
-import { createMechSettings } from "./ui/mech-settings.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoEvolveAdapter } from "./adapters/evolve/mech-info.ts";
 import { createMechInfoBrowserAdapter } from "./adapters/browser/mech-info.ts";
@@ -1847,31 +1849,46 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     updateFleetAndromeda,
   } = fleetSettings;
 
-  const mechSettingsOverrides = {};
-  const getMechSettingsDependency = createDependencyResolver(
-    mechSettingsOverrides,
-    {
-      $: () => $,
-      MechManager: () => MechManager,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsSelect: () => addSettingsSelect,
-      addSettingsToggle: () => addSettingsToggle,
-      addStandardHeading: () => addStandardHeading,
-      buildSettingsSection: () => buildSettingsSection,
-      calculateMechStats: () => calculateMechStats,
-      document: () => document,
-      game: () => game,
-      removeMechInfo: () => removeMechInfo,
-      resetCheckbox: () => resetCheckbox,
-      resetMechSettings: () => resetMechSettings,
-      updateSettingsFromState: () => updateSettingsFromState,
-    },
-  );
-  const mechSettings = createMechSettings({
-    getDependency: getMechSettingsDependency,
-    getOverride: (name) => mechSettingsOverrides[name],
+  let mechSettingsTestContext;
+  const mechSettingsReader = createMechSettingsEvolveAdapter({
+    getMechManager: () => mechSettingsTestContext?.MechManager ?? MechManager,
+    getGame: () => mechSettingsTestContext?.game ?? game,
   });
-  const { buildMechSettings, updateMechSettingsContent } = mechSettings;
+  const mechSettingsActions = {
+    buildSettingsSection: (...args) => buildSettingsSection(...args),
+    addSettingsNumber: (...args) => addSettingsNumber(...args),
+    addSettingsSelect: (...args) => addSettingsSelect(...args),
+    addSettingsToggle: (...args) => addSettingsToggle(...args),
+    addStandardHeading: (...args) => addStandardHeading(...args),
+    calculateMechStats: (...args) => calculateMechStats(...args),
+  };
+  const mechSettingsIntentHandler = createMechSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (mechSettingsTestContext?.resetMechSettings ?? resetMechSettings)(true),
+      persist: () =>
+        (
+          mechSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    },
+    renderSettingsContent: () => updateMechSettingsContent(),
+    effects: {
+      resetCheckboxes: () =>
+        (mechSettingsTestContext?.resetCheckbox ?? resetCheckbox)("autoMech"),
+      removeMechInfo: () =>
+        (mechSettingsTestContext?.removeMechInfo ?? removeMechInfo)(),
+    },
+  });
+  const mechSettingsBrowserAdapter = createMechSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    reader: mechSettingsReader,
+    intents: mechSettingsIntentHandler,
+    getActions: () => mechSettingsTestContext?.actions ?? mechSettingsActions,
+  });
+  const { buildMechSettings, updateMechSettingsContent } =
+    mechSettingsBrowserAdapter;
 
   let ejectorSettingsTestContext;
   const ejectorSettingsReader = createEjectorSettingsEvolveAdapter({
@@ -5761,14 +5778,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         evolution: evolutionSettings,
         trigger: triggerSettings,
         fleet: fleetSettings,
-        mech: mechSettings,
       },
       setSettingsBoundariesTestContext(context) {
         Object.assign(prestigeSettingsOverrides, context);
         Object.assign(evolutionSettingsOverrides, context);
         Object.assign(triggerSettingsOverrides, context);
         Object.assign(fleetSettingsOverrides, context);
-        Object.assign(mechSettingsOverrides, context);
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {
@@ -5793,6 +5808,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       hellSettings: hellSettingsBrowserAdapter,
       setHellSettingsTestContext(context) {
         hellSettingsTestContext = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      mechSettings: mechSettingsBrowserAdapter,
+      setMechSettingsTestContext(context) {
+        mechSettingsTestContext = context;
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {
