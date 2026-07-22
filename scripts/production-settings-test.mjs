@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 
-import { createProductionSettings } from "../src/adapters/browser/production-settings.ts";
+import { createProductionSettingsBrowserAdapter } from "../src/adapters/browser/production-settings.ts";
+import { createProductionSettingsEvolveAdapter } from "../src/adapters/evolve/production-settings.ts";
+import { createProductionSettingsIntentHandler } from "../src/application/production-settings.ts";
 
 let settingsRaw = { overrides: {} };
 let document = {
@@ -69,21 +71,22 @@ function makeNode(label) {
   };
 }
 
-const productionSettings = createProductionSettings({
-  getSettingsRaw: () => settingsRaw,
-  getDocument: () => document,
-  getJQuery: () => (value) => makeNode(String(value)),
+const evolveAdapter = createProductionSettingsEvolveAdapter({
   getResources: () => resources,
   getCraftablesList: () => craftablesList,
   getSmelterManager: () => smelterManager,
   getFactoryManager: () => factoryManager,
   getDroidManager: () => droidManager,
   getReplicatorManager: () => replicatorManager,
+  getSettingsRaw: () => settingsRaw,
   consumptionBalanceTarget: 42,
-  resetProductionSettings: (reset) => trace.push(`reset:${reset}`),
-  updateSettingsFromState: () => trace.push("persist"),
-  resetCheckbox: (...keys) => trace.push(`resetCheckbox:${keys.join(",")}`),
-  removeCraftToggles: () => trace.push("removeCraftToggles"),
+});
+let intents;
+const productionSettings = createProductionSettingsBrowserAdapter({
+  getDocument: () => document,
+  getJQuery: () => (value) => makeNode(String(value)),
+  getReadModel: () => evolveAdapter.readProductionSettingsReadModel(),
+  intents: { handle: (intent) => intents.handle(intent) },
   buildSettingsSection: (...args) => {
     sectionRegistration = args;
     trace.push(`section:${args[0]}:${args[1]}`);
@@ -100,6 +103,23 @@ const productionSettings = createProductionSettings({
   addTableInput: (_node, key) => trace.push(`tableInput:${key}`),
   buildTableLabel: (note) => ({ label: `label:${note}` }),
   getSorterHelper: () => sorterHelper,
+});
+intents = createProductionSettingsIntentHandler({
+  writer: {
+    resetToDefaults: () => trace.push("reset:true"),
+    persist: () => trace.push("persist"),
+    reorderSmelterFuels: (fuelIds) =>
+      evolveAdapter.reorderSmelterFuels(fuelIds),
+  },
+  renderSettingsContent: () =>
+    productionSettings.updateProductionSettingsContent(),
+  effects: {
+    resetCheckboxes: () =>
+      trace.push(
+        "resetCheckbox:autoQuarry,autoMine,autoExtractor,autoGraphenePlant,autoSmelter,autoCraft,autoFactory,autoMiningDroid,autoReplicator",
+      ),
+    removeCraftToggles: () => trace.push("removeCraftToggles"),
+  },
 });
 
 productionSettings.updateProductionSettingsContent();

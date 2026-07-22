@@ -46594,110 +46594,85 @@
     });
   }
 
-  // src/adapters/browser/production-settings.ts
-  function createProductionSettings({
-    getSettingsRaw,
-    getDocument,
-    getJQuery,
-    getResources,
-    getCraftablesList,
-    getSmelterManager,
-    getFactoryManager,
-    getDroidManager,
-    getReplicatorManager,
-    consumptionBalanceTarget,
-    resetProductionSettings: resetProductionSettings2,
-    updateSettingsFromState: updateSettingsFromState2,
-    resetCheckbox: resetCheckbox2,
-    removeCraftToggles: removeCraftToggles2,
-    buildSettingsSection: buildSettingsSection3,
-    addSettingsNumber: addSettingsNumber2,
-    addSettingsToggle: addSettingsToggle2,
-    addSettingsSelect: addSettingsSelect2,
-    addStandardHeading: addStandardHeading2,
-    addTableToggle: addTableToggle2,
-    addTableInput: addTableInput2,
-    buildTableLabel: buildTableLabel2,
-    getSorterHelper
+  // src/application/production-settings.ts
+  function createProductionSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
   }) {
-    function buildProductionSettings2() {
-      const sectionId = "production";
-      const sectionName = "Production";
-      const resetFunction = function() {
-        resetProductionSettings2(true);
-        updateSettingsFromState2();
-        updateProductionSettingsContent2();
-        resetCheckbox2(
-          "autoQuarry",
-          "autoMine",
-          "autoExtractor",
-          "autoGraphenePlant",
-          "autoSmelter",
-          "autoCraft",
-          "autoFactory",
-          "autoMiningDroid",
-          "autoReplicator"
-        );
-        removeCraftToggles2();
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateProductionSettingsContent2
-      );
-    }
-    function updateProductionSettingsContent2() {
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      const currentNode = getJQuery()("#script_productionContent");
-      currentNode.empty().off("*");
-      addSettingsNumber2(
-        currentNode,
-        "productionChrysotileWeight",
-        "Chrysotile weighting (Quarry, Smoldering)",
-        "Chrysotile weighting for autoQuarry, applies after adjusting to difference between current amounts of Stone and Chrysotile"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "productionAdamantiteWeight",
-        "Adamantite weighting (Mine, The True Path)",
-        "Adamantite weighting for autoMine, applies after adjusting to difference between current amounts of Aluminium and Adamantite"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "productionExtWeight_common",
-        "Aluminium weighting (Extractor Ship, The True Path)",
-        "Aluminium weighting for autoExtractor, applies after adjusting to difference between current amounts of Iron and Aluminium"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "productionExtWeight_uncommon",
-        "Neutronium weighting (Extractor Ship, The True Path)",
-        "Neutronium weighting for autoExtractor, applies after adjusting to difference between current amounts of Iridium and Neutronium"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "productionExtWeight_rare",
-        "Elerium weighting (Extractor Ship, The True Path)",
-        "Elerium weighting for autoExtractor, applies after adjusting to difference between current amounts of Orichalcum and Elerium"
-      );
-      addSettingsToggle2(
-        currentNode,
-        "productionFactoryFocusMaterials",
-        "Prioritize keeping materials stockpiled",
-        `Aggressively request stockpiling ${consumptionBalanceTarget}s + min materials worth of materials to ensure factory and craftsmen can always produce`
-      );
-      updateProductionTableSmelter2(currentNode);
-      updateProductionTableFoundry2(currentNode);
-      updateProductionTableFactory2(currentNode);
-      updateProductionTableMiningDrone2(currentNode);
-      updateProductionTableReplicator2(currentNode);
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function updateProductionTableSmelter2(currentNode) {
-      addStandardHeading2(currentNode, "Smelter");
-      const smelterOptions = [
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-production-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            effects.resetCheckboxes();
+            effects.removeCraftToggles();
+            return;
+          case "reorder-smelter-fuels":
+            writer.reorderSmelterFuels(intent.fuelIds);
+            writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/production-settings.ts
+  function freezeControl(control) {
+    return Object.freeze({
+      ...control,
+      ...control.kind === "select" ? {
+        options: Object.freeze(
+          control.options.map((option2) => Object.freeze({ ...option2 }))
+        )
+      } : {}
+    });
+  }
+  var productionSettingsControls = [
+    {
+      kind: "number",
+      settingName: "productionChrysotileWeight",
+      label: "Chrysotile weighting (Quarry, Smoldering)",
+      hint: "Chrysotile weighting for autoQuarry, applies after adjusting to difference between current amounts of Stone and Chrysotile"
+    },
+    {
+      kind: "number",
+      settingName: "productionAdamantiteWeight",
+      label: "Adamantite weighting (Mine, The True Path)",
+      hint: "Adamantite weighting for autoMine, applies after adjusting to difference between current amounts of Aluminium and Adamantite"
+    },
+    {
+      kind: "number",
+      settingName: "productionExtWeight_common",
+      label: "Aluminium weighting (Extractor Ship, The True Path)",
+      hint: "Aluminium weighting for autoExtractor, applies after adjusting to difference between current amounts of Iron and Aluminium"
+    },
+    {
+      kind: "number",
+      settingName: "productionExtWeight_uncommon",
+      label: "Neutronium weighting (Extractor Ship, The True Path)",
+      hint: "Neutronium weighting for autoExtractor, applies after adjusting to difference between current amounts of Iridium and Neutronium"
+    },
+    {
+      kind: "number",
+      settingName: "productionExtWeight_rare",
+      label: "Elerium weighting (Extractor Ship, The True Path)",
+      hint: "Elerium weighting for autoExtractor, applies after adjusting to difference between current amounts of Orichalcum and Elerium"
+    },
+    {
+      kind: "toggle",
+      settingName: "productionFactoryFocusMaterials",
+      label: "Prioritize keeping materials stockpiled",
+      hint: ""
+    },
+    {
+      kind: "select",
+      settingName: "productionSmelting",
+      label: "Smelters production",
+      hint: "Distribution of smelters between iron and steel",
+      options: [
         {
           val: "iron",
           label: "Prioritize Iron",
@@ -46718,20 +46693,232 @@
           label: "Up to required amounts",
           hint: "Produce both Iron and Steel at ratio which will produce maximum amount of resources required for buildings at same time for both"
         }
-      ];
-      addSettingsSelect2(
-        currentNode,
+      ]
+    },
+    {
+      kind: "number",
+      settingName: "productionSmeltingIridium",
+      label: "Iridium ratio",
+      hint: "Share of smelters dedicated to Iridium"
+    },
+    {
+      kind: "select",
+      settingName: "productionFoundryWeighting",
+      label: "Weightings adjustments",
+      hint: "Configures how exactly craftables will be weighted against each other",
+      options: [
+        {
+          val: "none",
+          label: "None",
+          hint: "Use configured weightings with no additional adjustments, craftables with x2 weighting will be crafted two times more intense than with x1, etc."
+        },
+        {
+          val: "demanded",
+          label: "Prioritize demanded",
+          hint: "Ignore craftables once stored amount surpass cost of most expensive building, until all missing resources will be crafted. After that works as with 'none' adjustments."
+        },
+        {
+          val: "buildings",
+          label: "Buildings weightings",
+          hint: "Uses weightings of buildings which are waiting for craftables, as multipliers to craftables weighting. This option requires autoBuild."
+        }
+      ]
+    },
+    {
+      kind: "select",
+      settingName: "productionCraftsmen",
+      label: "Assign craftsmen",
+      hint: "Configures when workers should be assigned to crafting jobs",
+      options: [
+        { val: "always", label: "Always", hint: "Always assign all craftsmens" },
+        {
+          val: "nocraft",
+          label: "No Manual Crafting",
+          hint: "Assign workers only manual crafting is not possible, servants still always will be assigned"
+        },
+        {
+          val: "advanced",
+          label: "Advanced",
+          hint: "Assign workers only to advanced craftables(Scarletite, Quantium), basic craftables will be crafted by servants"
+        },
+        { val: "servants", label: "Servants", hint: "Assign only servants" }
+      ]
+    },
+    {
+      kind: "select",
+      settingName: "productionFactoryWeighting",
+      label: "Weightings adjustments",
+      hint: "Configures how exactly the resources will be weighted against each other",
+      options: [
+        {
+          val: "none",
+          label: "None",
+          hint: "Use configured weightings with no additional adjustments, resources with x2 weighting will be produced two times more intense than with x1, etc."
+        },
+        {
+          val: "demanded",
+          label: "Prioritize demanded",
+          hint: "Ignore resources once stored amount surpass cost of most expensive building, until all missing resources will be crafted. After that works as with 'none' adjustments."
+        },
+        {
+          val: "buildings",
+          label: "Buildings weightings",
+          hint: "Uses weightings of buildings which are waiting for resources, as multipliers to production weighting. This option requires autoBuild."
+        }
+      ]
+    },
+    {
+      kind: "number",
+      settingName: "productionFactoryMinIngredients",
+      label: "Minimum materials to preserve",
+      hint: "Factory will craft resources only when all required materials above given ratio"
+    },
+    {
+      kind: "toggle",
+      settingName: "replicatorAssignGovernorTask",
+      label: "Assign governor task",
+      hint: "If active, the replicator scheduler governor task will be set, the power adjustment will be enabled."
+    },
+    {
+      kind: "select",
+      settingName: "replicatorWeightingMode",
+      label: "Weighting mode",
+      hint: "Replicator only picks from enabled resources with the current highest valid priority (or -1 priority). After that, replicator use is split between resources of identical weighting. Setting configures how that split happens.",
+      options: [
+        {
+          val: "mass",
+          label: "By atomic mass",
+          hint: "Spends more time on resources that are easy to replicate. A resource with 2x the weighting will have roughly 2x the time spent. Based on differences in atomic mass, resources at similar weightings may have very different quantities."
+        },
+        {
+          val: "quantity",
+          label: "By resource quantity",
+          hint: "Spends more time on resources that are hard to replicate. A resource with 2x the weighting will be focused until you have roughly 2x the amount. Resources at similar weightings will have similar quantities."
+        },
+        {
+          val: "legacy",
+          label: "Legacy (deprecated)",
+          hint: "Legacy mode, similar to previous script behavior. Only the resource with the highest weighting is picked. If multiple resources have the same weighting then it will focus exclusively on one of those resources. This mode exists only to give you time to migrate your config to using the priority field."
+        }
+      ]
+    }
+  ];
+  function createProductionSettingsReadModel({
+    consumptionBalanceTarget,
+    smelterFuels,
+    foundryRows,
+    factoryRows,
+    miningDroidRows,
+    replicatorRows
+  }) {
+    const controls4 = productionSettingsControls.map(
+      (control) => control.settingName === "productionFactoryFocusMaterials" ? {
+        ...control,
+        hint: `Aggressively request stockpiling ${consumptionBalanceTarget}s + min materials worth of materials to ensure factory and craftsmen can always produce`
+      } : control
+    );
+    return Object.freeze({
+      sectionId: "production",
+      sectionName: "Production",
+      controls: Object.freeze(controls4.map(freezeControl)),
+      smelterFuels: Object.freeze(
+        smelterFuels.map((row) => Object.freeze({ ...row }))
+      ),
+      foundryRows: Object.freeze(
+        foundryRows.map((row) => Object.freeze({ ...row }))
+      ),
+      factoryRows: Object.freeze(
+        factoryRows.map((row) => Object.freeze({ ...row }))
+      ),
+      miningDroidRows: Object.freeze(
+        miningDroidRows.map((row) => Object.freeze({ ...row }))
+      ),
+      replicatorRows: Object.freeze(
+        replicatorRows.map((row) => Object.freeze({ ...row }))
+      )
+    });
+  }
+
+  // src/adapters/browser/production-settings.ts
+  function createProductionSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    getReadModel,
+    intents,
+    buildSettingsSection: buildSettingsSection3,
+    addSettingsNumber: addSettingsNumber2,
+    addSettingsToggle: addSettingsToggle2,
+    addSettingsSelect: addSettingsSelect2,
+    addStandardHeading: addStandardHeading2,
+    addTableToggle: addTableToggle2,
+    addTableInput: addTableInput2,
+    buildTableLabel: buildTableLabel2,
+    getSorterHelper
+  }) {
+    function buildProductionSettings2() {
+      const readModel = getReadModel();
+      buildSettingsSection3(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-production-settings" }),
+        updateProductionSettingsContent2
+      );
+    }
+    function updateProductionSettingsContent2() {
+      const readModel = getReadModel();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentNode = getJQuery()("#script_productionContent");
+      currentNode.empty().off("*");
+      const tableControlNames = /* @__PURE__ */ new Set([
         "productionSmelting",
-        "Smelters production",
-        "Distribution of smelters between iron and steel",
-        smelterOptions
-      );
-      addSettingsNumber2(
-        currentNode,
         "productionSmeltingIridium",
-        "Iridium ratio",
-        "Share of smelters dedicated to Iridium"
+        "productionFoundryWeighting",
+        "productionCraftsmen",
+        "productionFactoryWeighting",
+        "productionFactoryMinIngredients",
+        "replicatorAssignGovernorTask",
+        "replicatorWeightingMode"
+      ]);
+      for (const control of readModel.controls) {
+        if (!tableControlNames.has(control.settingName)) {
+          renderControl2(currentNode, control);
+        }
+      }
+      updateProductionTableSmelter2(currentNode);
+      updateProductionTableFoundry2(currentNode);
+      updateProductionTableFactory2(currentNode);
+      updateProductionTableMiningDrone2(currentNode);
+      updateProductionTableReplicator2(currentNode);
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function renderControl2(node, control) {
+      if (control.kind === "number") {
+        addSettingsNumber2(node, control.settingName, control.label, control.hint);
+      } else if (control.kind === "toggle") {
+        addSettingsToggle2(node, control.settingName, control.label, control.hint);
+      } else {
+        addSettingsSelect2(
+          node,
+          control.settingName,
+          control.label,
+          control.hint,
+          control.options
+        );
+      }
+    }
+    function renderControlBySetting(node, settingName) {
+      const control = getReadModel().controls.find(
+        (candidate) => candidate.settingName === settingName
       );
+      if (!control) throw new Error(`Missing Production control: ${settingName}`);
+      renderControl2(node, control);
+    }
+    function updateProductionTableSmelter2(currentNode) {
+      const readModel = getReadModel();
+      addStandardHeading2(currentNode, "Smelter");
+      renderControlBySetting(currentNode, "productionSmelting");
+      renderControlBySetting(currentNode, "productionSmeltingIridium");
       currentNode.append(`
           <table style="width:100%">
             <tr>
@@ -46743,7 +46930,7 @@
       const $2 = getJQuery();
       const tableBodyNode = $2("#script_productionTableBodySmelter");
       let newTableBodyText = "";
-      const smelterFuels = getSmelterManager().managedFuelPriorityList();
+      const smelterFuels = readModel.smelterFuels;
       for (let i = 0; i < smelterFuels.length; i++) {
         const fuel = smelterFuels[i];
         newTableBodyText += `<tr value="${fuel.id}" class="script-draggable"><td id="script_smelter_${fuel.id}" style="width:95%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
@@ -46761,46 +46948,14 @@
           const fuelIds = tableBodyNode.sortable("toArray", {
             attribute: "value"
           });
-          const settingsRaw2 = getSettingsRaw();
-          for (let i = 0; i < fuelIds.length; i++) {
-            settingsRaw2["smelter_fuel_p_" + fuelIds[i]] = i;
-          }
-          updateSettingsFromState2();
+          intents.handle({ type: "reorder-smelter-fuels", fuelIds });
         }
       });
     }
     function updateProductionTableFactory2(currentNode) {
       addStandardHeading2(currentNode, "Factory");
-      const weightingOptions = [
-        {
-          val: "none",
-          label: "None",
-          hint: "Use configured weightings with no additional adjustments, resources with x2 weighting will be produced two times more intense than with x1, etc."
-        },
-        {
-          val: "demanded",
-          label: "Prioritize demanded",
-          hint: "Ignore resources once stored amount surpass cost of most expensive building, until all missing resources will be crafted. After that works as with 'none' adjustments."
-        },
-        {
-          val: "buildings",
-          label: "Buildings weightings",
-          hint: "Uses weightings of buildings which are waiting for resources, as multipliers to production weighting. This option requires autoBuild."
-        }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "productionFactoryWeighting",
-        "Weightings adjustments",
-        "Configures how exactly the resources will be weighted against each other",
-        weightingOptions
-      );
-      addSettingsNumber2(
-        currentNode,
-        "productionFactoryMinIngredients",
-        "Minimum materials to preserve",
-        "Factory will craft resources only when all required materials above given ratio"
-      );
+      renderControlBySetting(currentNode, "productionFactoryWeighting");
+      renderControlBySetting(currentNode, "productionFactoryMinIngredients");
       currentNode.append(`
           <table style="width:100%">
             <tr>
@@ -46815,77 +46970,28 @@
       const $2 = getJQuery();
       const tableBodyNode = $2("#script_productionTableBodyFactory");
       let newTableBodyText = "";
-      const productionSettings = Object.values(getFactoryManager().Productions);
+      const productionSettings = getReadModel().factoryRows;
       for (let i = 0; i < productionSettings.length; i++) {
         const production = productionSettings[i];
-        newTableBodyText += `<tr><td id="script_factory_${production.resource.id}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
+        newTableBodyText += `<tr><td id="script_factory_${production.id}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
       }
       tableBodyNode.append($2(newTableBodyText));
       for (let i = 0; i < productionSettings.length; i++) {
         const production = productionSettings[i];
-        let productionElement = $2("#script_factory_" + production.resource.id);
-        productionElement.append(buildTableLabel2(production.resource.name));
+        let productionElement = $2("#script_factory_" + production.id);
+        productionElement.append(buildTableLabel2(production.label));
         productionElement = productionElement.next();
-        addTableToggle2(productionElement, "production_" + production.resource.id);
+        addTableToggle2(productionElement, "production_" + production.id);
         productionElement = productionElement.next();
-        addTableInput2(
-          productionElement,
-          "production_w_" + production.resource.id
-        );
+        addTableInput2(productionElement, "production_w_" + production.id);
         productionElement = productionElement.next();
-        addTableInput2(
-          productionElement,
-          "production_p_" + production.resource.id
-        );
+        addTableInput2(productionElement, "production_p_" + production.id);
       }
     }
     function updateProductionTableFoundry2(currentNode) {
       addStandardHeading2(currentNode, "Foundry");
-      const weightingOptions = [
-        {
-          val: "none",
-          label: "None",
-          hint: "Use configured weightings with no additional adjustments, craftables with x2 weighting will be crafted two times more intense than with x1, etc."
-        },
-        {
-          val: "demanded",
-          label: "Prioritize demanded",
-          hint: "Ignore craftables once stored amount surpass cost of most expensive building, until all missing resources will be crafted. After that works as with 'none' adjustments."
-        },
-        {
-          val: "buildings",
-          label: "Buildings weightings",
-          hint: "Uses weightings of buildings which are waiting for craftables, as multipliers to craftables weighting. This option requires autoBuild."
-        }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "productionFoundryWeighting",
-        "Weightings adjustments",
-        "Configures how exactly craftables will be weighted against each other",
-        weightingOptions
-      );
-      const assignOptions = [
-        { val: "always", label: "Always", hint: "Always assign all craftsmens" },
-        {
-          val: "nocraft",
-          label: "No Manual Crafting",
-          hint: "Assign workers only manual crafting is not possible, servants still always will be assigned"
-        },
-        {
-          val: "advanced",
-          label: "Advanced",
-          hint: "Assign workers only to advanced craftables(Scarletite, Quantium), basic craftables will be crafted by servants"
-        },
-        { val: "servants", label: "Servants", hint: "Assign only servants" }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "productionCraftsmen",
-        "Assign craftsmen",
-        "Configures when workers should be assigned to crafting jobs",
-        assignOptions
-      );
+      renderControlBySetting(currentNode, "productionFoundryWeighting");
+      renderControlBySetting(currentNode, "productionCraftsmen");
       currentNode.append(`
           <table style="width:100%">
             <tr>
@@ -46901,8 +47007,7 @@
       const $2 = getJQuery();
       const tableBodyNode = $2("#script_productionTableBodyFoundry");
       let newTableBodyText = "";
-      const craftablesList2 = getCraftablesList();
-      const resources2 = getResources();
+      const craftablesList2 = getReadModel().foundryRows;
       for (let i = 0; i < craftablesList2.length; i++) {
         const resource2 = craftablesList2[i];
         newTableBodyText += `<tr><td id="script_foundry_${resource2.id}" style="width:21%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
@@ -46911,13 +47016,13 @@
       for (let i = 0; i < craftablesList2.length; i++) {
         const resource2 = craftablesList2[i];
         let productionElement = $2("#script_foundry_" + resource2.id);
-        productionElement.append(buildTableLabel2(resource2.name));
+        productionElement.append(buildTableLabel2(resource2.label));
         productionElement = productionElement.next();
         addTableToggle2(productionElement, "craft" + resource2.id);
         productionElement = productionElement.next();
         addTableToggle2(productionElement, "job_" + resource2.id);
         productionElement = productionElement.next();
-        if (resource2 === resources2.Scarletite || resource2 === resources2.Quantium) {
+        if (resource2.managed) {
           productionElement.append("<span>Managed</span>");
         } else {
           addTableInput2(productionElement, "foundry_w_" + resource2.id);
@@ -46927,6 +47032,7 @@
       }
     }
     function updateProductionTableMiningDrone2(currentNode) {
+      const readModel = getReadModel();
       addStandardHeading2(currentNode, "Mining Droid");
       currentNode.append(`
           <table style="width:100%">
@@ -46942,53 +47048,26 @@
       const $2 = getJQuery();
       const tableBodyNode = $2("#script_productionTableBodyMiningDrone");
       let newTableBodyText = "";
-      const droidProducts = Object.values(getDroidManager().Productions);
+      const droidProducts = readModel.miningDroidRows;
       for (let i = 0; i < droidProducts.length; i++) {
         const production = droidProducts[i];
-        newTableBodyText += `<tr><td id="script_droid_${production.resource.id}" style="width:35%"><td style="width:20%"></td><td style="width:20%"></td></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
+        newTableBodyText += `<tr><td id="script_droid_${production.id}" style="width:35%"><td style="width:20%"></td><td style="width:20%"></td></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
       }
       tableBodyNode.append($2(newTableBodyText));
       for (let i = 0; i < droidProducts.length; i++) {
         const production = droidProducts[i];
-        let productionElement = $2("#script_droid_" + production.resource.id);
-        productionElement.append(buildTableLabel2(production.resource.name));
+        let productionElement = $2("#script_droid_" + production.id);
+        productionElement.append(buildTableLabel2(production.label));
         productionElement = productionElement.next().next();
-        addTableInput2(productionElement, "droid_w_" + production.resource.id);
+        addTableInput2(productionElement, "droid_w_" + production.id);
         productionElement = productionElement.next();
-        addTableInput2(productionElement, "droid_pr_" + production.resource.id);
+        addTableInput2(productionElement, "droid_pr_" + production.id);
       }
     }
     function updateProductionTableReplicator2(currentNode) {
       addStandardHeading2(currentNode, "Replicator");
-      addSettingsToggle2(
-        currentNode,
-        "replicatorAssignGovernorTask",
-        "Assign governor task",
-        "If active, the replicator scheduler governor task will be set, the power adjustment will be enabled."
-      );
-      addSettingsSelect2(
-        currentNode,
-        "replicatorWeightingMode",
-        "Weighting mode",
-        "Replicator only picks from enabled resources with the current highest valid priority (or -1 priority). After that, replicator use is split between resources of identical weighting. Setting configures how that split happens.",
-        [
-          {
-            val: "mass",
-            hint: "Spends more time on resources that are easy to replicate. A resource with 2x the weighting will have roughly 2x the time spent. Based on differences in atomic mass, resources at similar weightings may have very different quantities.",
-            label: "By atomic mass"
-          },
-          {
-            val: "quantity",
-            hint: "Spends more time on resources that are hard to replicate. A resource with 2x the weighting will be focused until you have roughly 2x the amount. Resources at similar weightings will have similar quantities.",
-            label: "By resource quantity"
-          },
-          {
-            val: "legacy",
-            hint: "Legacy mode, similar to previous script behavior. Only the resource with the highest weighting is picked. If multiple resources have the same weighting then it will focus exclusively on one of those resources. This mode exists only to give you time to migrate your config to using the priority field.",
-            label: "Legacy (deprecated)"
-          }
-        ]
-      );
+      renderControlBySetting(currentNode, "replicatorAssignGovernorTask");
+      renderControlBySetting(currentNode, "replicatorWeightingMode");
       currentNode.append(`
         <table style="width:100%">
           <tr>
@@ -47003,30 +47082,22 @@
       const $2 = getJQuery();
       const tableBodyNode = $2("#script_productionTableBodyReplicator");
       let newTableBodyText = "";
-      const replicatorProducts = Object.values(
-        getReplicatorManager().Productions
-      );
+      const replicatorProducts = getReadModel().replicatorRows;
       for (let i = 0; i < replicatorProducts.length; i++) {
         const production = replicatorProducts[i];
-        newTableBodyText += `<tr><td id="script_replicator_${production.resource.id}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
+        newTableBodyText += `<tr><td id="script_replicator_${production.id}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
       }
       tableBodyNode.append($2(newTableBodyText));
       for (let i = 0; i < replicatorProducts.length; i++) {
         const production = replicatorProducts[i];
-        let productionElement = $2("#script_replicator_" + production.resource.id);
-        productionElement.append(buildTableLabel2(production.resource.name));
+        let productionElement = $2("#script_replicator_" + production.id);
+        productionElement.append(buildTableLabel2(production.label));
         productionElement = productionElement.next();
-        addTableToggle2(productionElement, "replicator_" + production.resource.id);
+        addTableToggle2(productionElement, "replicator_" + production.id);
         productionElement = productionElement.next();
-        addTableInput2(
-          productionElement,
-          "replicator_w_" + production.resource.id
-        );
+        addTableInput2(productionElement, "replicator_w_" + production.id);
         productionElement = productionElement.next();
-        addTableInput2(
-          productionElement,
-          "replicator_p_" + production.resource.id
-        );
+        addTableInput2(productionElement, "replicator_p_" + production.id);
       }
     }
     return {
@@ -47038,6 +47109,113 @@
       updateProductionTableMiningDrone: updateProductionTableMiningDrone2,
       updateProductionTableReplicator: updateProductionTableReplicator2
     };
+  }
+
+  // src/adapters/evolve/production-settings.ts
+  function requireString32(value, path) {
+    if (typeof value !== "string")
+      throw new TypeError(`${path} must be a string`);
+    return value;
+  }
+  function readResource4(value, path) {
+    const resource2 = requireRecord(value, path);
+    return {
+      id: requireString32(resource2["id"], `${path}.id`),
+      label: requireString32(resource2["name"], `${path}.name`)
+    };
+  }
+  function readProductionRows(value, path) {
+    const manager = requireRecord(value, path);
+    const productions = requireRecord(
+      manager["Productions"],
+      `${path}.Productions`
+    );
+    return Object.entries(productions).map(([key, rawProduction]) => {
+      const production = requireRecord(
+        rawProduction,
+        `${path}.Productions.${key}`
+      );
+      return readResource4(
+        production["resource"],
+        `${path}.Productions.${key}.resource`
+      );
+    });
+  }
+  function readFuelRows(value) {
+    const manager = requireRecord(value, "SmelterManager");
+    const method = requireFunction(
+      manager["managedFuelPriorityList"],
+      "SmelterManager.managedFuelPriorityList"
+    );
+    const fuels = Reflect.apply(method, manager, []);
+    if (!Array.isArray(fuels)) {
+      throw new TypeError(
+        "SmelterManager.managedFuelPriorityList() must return an array"
+      );
+    }
+    return fuels.map((fuel, index) => {
+      const record = requireRecord(
+        fuel,
+        `SmelterManager.managedFuelPriorityList()[${index}]`
+      );
+      const id = requireString32(
+        record["id"],
+        `SmelterManager.managedFuelPriorityList()[${index}].id`
+      );
+      return { id, label: id };
+    });
+  }
+  function readFoundryRows(resourcesValue, craftablesValue) {
+    const resources2 = requireRecord(resourcesValue, "resources");
+    const managedIds = /* @__PURE__ */ new Set();
+    for (const key of ["Scarletite", "Quantium"]) {
+      const resource2 = resources2[key];
+      if (resource2 !== void 0) {
+        managedIds.add(readResource4(resource2, `resources.${key}`).id);
+      }
+    }
+    if (!Array.isArray(craftablesValue)) {
+      throw new TypeError("craftablesList must be an array");
+    }
+    return craftablesValue.map((resource2, index) => {
+      const row = readResource4(resource2, `craftablesList[${index}]`);
+      return { ...row, managed: managedIds.has(row.id) };
+    });
+  }
+  function createProductionSettingsEvolveAdapter({
+    getResources,
+    getCraftablesList,
+    getSmelterManager,
+    getFactoryManager,
+    getDroidManager,
+    getReplicatorManager,
+    getSettingsRaw,
+    consumptionBalanceTarget
+  }) {
+    function readProductionSettingsReadModel() {
+      return createProductionSettingsReadModel({
+        consumptionBalanceTarget,
+        smelterFuels: readFuelRows(getSmelterManager()),
+        foundryRows: readFoundryRows(getResources(), getCraftablesList()),
+        factoryRows: readProductionRows(getFactoryManager(), "FactoryManager"),
+        miningDroidRows: readProductionRows(getDroidManager(), "DroidManager"),
+        replicatorRows: readProductionRows(
+          getReplicatorManager(),
+          "ReplicatorManager"
+        )
+      });
+    }
+    function reorderSmelterFuels(fuelIds) {
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      fuelIds.forEach((fuelId, index) => {
+        const id = requireString32(fuelId, `fuelIds[${index}]`);
+        settingsRaw2[`smelter_fuel_p_${id}`] = index;
+      });
+    }
+    return Object.freeze({
+      readProductionSettingsReadModel,
+      reorderSmelterFuels
+    });
   }
 
   // src/adapters/browser/trait-settings.ts
@@ -47763,7 +47941,7 @@
   }
 
   // src/adapters/evolve/mech-info.ts
-  function requireString32(value, path) {
+  function requireString33(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47809,7 +47987,7 @@
           mechs[index],
           `game.global.portal.mechbay.mechs[${index}]`
         );
-        const size = requireString32(mech["size"], `mechs[${index}].size`);
+        const size = requireString33(mech["size"], `mechs[${index}].size`);
         const stats = requireRecord(
           call4(manager, "getMechStats", "MechManager.getMechStats", [mech]),
           `MechManager.getMechStats(${index})`
@@ -47987,7 +48165,7 @@
   }
 
   // src/adapters/evolve/resource-toggles.ts
-  function requireString33(value, path) {
+  function requireString34(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -48008,7 +48186,7 @@
     return priorityList;
   }
   function readResourceId3(value, path) {
-    return requireString33(requireRecord(value, path)["id"], `${path}.id`);
+    return requireString34(requireRecord(value, path)["id"], `${path}.id`);
   }
   function createResourceToggleEvolveAdapter({
     getGame,
@@ -48024,13 +48202,13 @@
       const noTrade = Boolean(race2["no_trade"]);
       const loc2 = requireFunction2(game2["loc"], "game.loc");
       const labels = noTrade ? Object.freeze({ buy: "", sell: "", routes: "", cancelRoutes: "" }) : Object.freeze({
-        buy: requireString33(loc2("resource_market_buy"), "game.loc(buy)"),
-        sell: requireString33(loc2("resource_market_sell"), "game.loc(sell)"),
-        routes: requireString33(
+        buy: requireString34(loc2("resource_market_buy"), "game.loc(buy)"),
+        sell: requireString34(loc2("resource_market_sell"), "game.loc(sell)"),
+        routes: requireString34(
           loc2("resource_market_routes"),
           "game.loc(routes)"
         ),
-        cancelRoutes: requireString33(
+        cancelRoutes: requireString34(
           loc2("cancel_routes"),
           "game.loc(cancel_routes)"
         )
@@ -51649,6 +51827,62 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       createStorageToggles,
       removeStorageToggles
     } = resourceToggleBrowserAdapter;
+    let productionSettingsTestContext;
+    const productionSettingsActions = {
+      buildSettingsSection,
+      addSettingsNumber,
+      addSettingsSelect,
+      addSettingsToggle,
+      addTableInput,
+      addTableToggle,
+      addStandardHeading,
+      buildTableLabel,
+      getSorterHelper: () => sorterHelper
+    };
+    const productionSettingsEvolveAdapter = createProductionSettingsEvolveAdapter(
+      {
+        getResources: () => productionSettingsTestContext?.resources ?? resources,
+        getCraftablesList: () => productionSettingsTestContext?.craftablesList ?? craftablesList,
+        getSmelterManager: () => productionSettingsTestContext?.SmelterManager ?? SmelterManager,
+        getFactoryManager: () => productionSettingsTestContext?.FactoryManager ?? FactoryManager,
+        getDroidManager: () => productionSettingsTestContext?.DroidManager ?? DroidManager,
+        getReplicatorManager: () => productionSettingsTestContext?.ReplicatorManager ?? ReplicatorManager,
+        getSettingsRaw: () => productionSettingsTestContext?.settingsRaw ?? settingsRaw,
+        consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET
+      }
+    );
+    let productionSettingsIntentHandler;
+    const productionSettingsBrowserAdapter = createProductionSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getReadModel: () => productionSettingsEvolveAdapter.readProductionSettingsReadModel(),
+      intents: {
+        handle: (intent) => productionSettingsIntentHandler.handle(intent)
+      },
+      ...productionSettingsActions
+    });
+    productionSettingsIntentHandler = createProductionSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (productionSettingsTestContext?.resetProductionSettings ?? resetProductionSettings)(true),
+        persist: () => (productionSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)(),
+        reorderSmelterFuels: (fuelIds) => productionSettingsEvolveAdapter.reorderSmelterFuels(fuelIds)
+      },
+      renderSettingsContent: () => productionSettingsBrowserAdapter.updateProductionSettingsContent(),
+      effects: {
+        resetCheckboxes: () => (productionSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoQuarry",
+          "autoMine",
+          "autoExtractor",
+          "autoGraphenePlant",
+          "autoSmelter",
+          "autoCraft",
+          "autoFactory",
+          "autoMiningDroid",
+          "autoReplicator"
+        ),
+        removeCraftToggles: () => (productionSettingsTestContext?.removeCraftToggles ?? removeCraftToggles)()
+      }
+    });
     const {
       buildProductionSettings,
       updateProductionSettingsContent,
@@ -51657,31 +51891,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       updateProductionTableFactory,
       updateProductionTableMiningDrone,
       updateProductionTableReplicator
-    } = createProductionSettings({
-      getSettingsRaw: () => settingsRaw,
-      getDocument: () => document,
-      getJQuery: () => $,
-      getResources: () => resources,
-      getCraftablesList: () => craftablesList,
-      getSmelterManager: () => SmelterManager,
-      getFactoryManager: () => FactoryManager,
-      getDroidManager: () => DroidManager,
-      getReplicatorManager: () => ReplicatorManager,
-      consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
-      resetProductionSettings,
-      updateSettingsFromState: (...args) => updateSettingsFromState(...args),
-      resetCheckbox,
-      removeCraftToggles: (...args) => removeCraftToggles(...args),
-      buildSettingsSection,
-      addSettingsNumber,
-      addSettingsToggle,
-      addSettingsSelect,
-      addStandardHeading,
-      addTableToggle,
-      addTableInput,
-      buildTableLabel,
-      getSorterHelper: () => sorterHelper
-    });
+    } = productionSettingsBrowserAdapter;
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         productionSettings: {
@@ -51695,12 +51905,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         },
         setProductionSettingsTestContext(context) {
           settingsRaw = context.settingsRaw;
-          resources = context.resources;
-          craftablesList = context.craftablesList;
-          SmelterManager = context.SmelterManager;
-          FactoryManager = context.FactoryManager;
-          DroidManager = context.DroidManager;
-          ReplicatorManager = context.ReplicatorManager;
+          productionSettingsTestContext = context;
         }
       });
     }

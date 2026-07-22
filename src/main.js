@@ -464,7 +464,9 @@ import { createPrestigeSettingsEvolveAdapter } from "./adapters/evolve/prestige-
 import { createEvolutionSettingsIntentHandler } from "./application/evolution-settings.ts";
 import { createEvolutionSettingsBrowserAdapter } from "./adapters/browser/evolution-settings.ts";
 import { createEvolutionSettingsEvolveAdapter } from "./adapters/evolve/evolution-settings.ts";
-import { createProductionSettings } from "./adapters/browser/production-settings.ts";
+import { createProductionSettingsIntentHandler } from "./application/production-settings.ts";
+import { createProductionSettingsBrowserAdapter } from "./adapters/browser/production-settings.ts";
+import { createProductionSettingsEvolveAdapter } from "./adapters/evolve/production-settings.ts";
 import { createTraitSettings } from "./adapters/browser/trait-settings.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoEvolveAdapter } from "./adapters/evolve/mech-info.ts";
@@ -700,6 +702,85 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     createStorageToggles,
     removeStorageToggles,
   } = resourceToggleBrowserAdapter;
+  let productionSettingsTestContext;
+  const productionSettingsActions = {
+    buildSettingsSection,
+    addSettingsNumber,
+    addSettingsSelect,
+    addSettingsToggle,
+    addTableInput,
+    addTableToggle,
+    addStandardHeading,
+    buildTableLabel,
+    getSorterHelper: () => sorterHelper,
+  };
+  const productionSettingsEvolveAdapter = createProductionSettingsEvolveAdapter(
+    {
+      getResources: () => productionSettingsTestContext?.resources ?? resources,
+      getCraftablesList: () =>
+        productionSettingsTestContext?.craftablesList ?? craftablesList,
+      getSmelterManager: () =>
+        productionSettingsTestContext?.SmelterManager ?? SmelterManager,
+      getFactoryManager: () =>
+        productionSettingsTestContext?.FactoryManager ?? FactoryManager,
+      getDroidManager: () =>
+        productionSettingsTestContext?.DroidManager ?? DroidManager,
+      getReplicatorManager: () =>
+        productionSettingsTestContext?.ReplicatorManager ?? ReplicatorManager,
+      getSettingsRaw: () =>
+        productionSettingsTestContext?.settingsRaw ?? settingsRaw,
+      consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
+    },
+  );
+  let productionSettingsIntentHandler;
+  const productionSettingsBrowserAdapter =
+    createProductionSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      getReadModel: () =>
+        productionSettingsEvolveAdapter.readProductionSettingsReadModel(),
+      intents: {
+        handle: (intent) => productionSettingsIntentHandler.handle(intent),
+      },
+      ...productionSettingsActions,
+    });
+  productionSettingsIntentHandler = createProductionSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          productionSettingsTestContext?.resetProductionSettings ??
+          resetProductionSettings
+        )(true),
+      persist: () =>
+        (
+          productionSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+      reorderSmelterFuels: (fuelIds) =>
+        productionSettingsEvolveAdapter.reorderSmelterFuels(fuelIds),
+    },
+    renderSettingsContent: () =>
+      productionSettingsBrowserAdapter.updateProductionSettingsContent(),
+    effects: {
+      resetCheckboxes: () =>
+        (productionSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoQuarry",
+          "autoMine",
+          "autoExtractor",
+          "autoGraphenePlant",
+          "autoSmelter",
+          "autoCraft",
+          "autoFactory",
+          "autoMiningDroid",
+          "autoReplicator",
+        ),
+      removeCraftToggles: () =>
+        (
+          productionSettingsTestContext?.removeCraftToggles ??
+          removeCraftToggles
+        )(),
+    },
+  });
   const {
     buildProductionSettings,
     updateProductionSettingsContent,
@@ -708,31 +789,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     updateProductionTableFactory,
     updateProductionTableMiningDrone,
     updateProductionTableReplicator,
-  } = createProductionSettings({
-    getSettingsRaw: () => settingsRaw,
-    getDocument: () => document,
-    getJQuery: () => $,
-    getResources: () => resources,
-    getCraftablesList: () => craftablesList,
-    getSmelterManager: () => SmelterManager,
-    getFactoryManager: () => FactoryManager,
-    getDroidManager: () => DroidManager,
-    getReplicatorManager: () => ReplicatorManager,
-    consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET,
-    resetProductionSettings,
-    updateSettingsFromState: (...args) => updateSettingsFromState(...args),
-    resetCheckbox,
-    removeCraftToggles: (...args) => removeCraftToggles(...args),
-    buildSettingsSection,
-    addSettingsNumber,
-    addSettingsToggle,
-    addSettingsSelect,
-    addStandardHeading,
-    addTableToggle,
-    addTableInput,
-    buildTableLabel,
-    getSorterHelper: () => sorterHelper,
-  });
+  } = productionSettingsBrowserAdapter;
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
@@ -747,12 +804,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       },
       setProductionSettingsTestContext(context) {
         settingsRaw = context.settingsRaw;
-        resources = context.resources;
-        craftablesList = context.craftablesList;
-        SmelterManager = context.SmelterManager;
-        FactoryManager = context.FactoryManager;
-        DroidManager = context.DroidManager;
-        ReplicatorManager = context.ReplicatorManager;
+        productionSettingsTestContext = context;
       },
     });
   }
