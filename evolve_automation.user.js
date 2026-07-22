@@ -44994,6 +44994,340 @@
     });
   }
 
+  // src/application/trigger-settings.ts
+  function createTriggerSettingsIntentHandler({
+    writer,
+    render,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-trigger-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            render();
+            effects.resetCheckbox();
+            return;
+          case "add-trigger":
+            writer.addDefault();
+            writer.persist();
+            render();
+            return;
+          case "update-trigger":
+            writer.update(intent.seq, intent.field, intent.value);
+            writer.persist();
+            render();
+            return;
+          case "remove-trigger":
+            writer.remove(intent.seq);
+            writer.persist();
+            render();
+            return;
+          case "duplicate-trigger":
+            writer.duplicate(intent.seq);
+            writer.persist();
+            render();
+            return;
+          case "evalize-trigger":
+            writer.evalize(intent.seq);
+            return;
+          case "reorder-triggers":
+            writer.reorder(intent.seqs);
+            writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/trigger-settings.ts
+  function normalizeTriggerValue(value, path) {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      return value;
+    }
+    throw new TypeError(`${path} must be a string, number, or boolean`);
+  }
+  function createTriggerSettingsReadModel(input) {
+    return Object.freeze({
+      sectionId: "trigger",
+      sectionName: "Trigger",
+      rows: Object.freeze(input.rows.map((row) => Object.freeze({ ...row }))),
+      checks: Object.freeze({ ...input.checks }),
+      actionInputs: Object.freeze({ ...input.actionInputs }),
+      booleanResultChecks: Object.freeze([...input.booleanResultChecks])
+    });
+  }
+
+  // src/adapters/browser/trigger-settings.ts
+  function optionsForChecks(model) {
+    return Object.entries(model.checks);
+  }
+  function actionOptions(model) {
+    return Object.entries(model.actionInputs);
+  }
+  function createTriggerSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function emitUpdate(seq, field, value) {
+      intents.handle({
+        type: "update-trigger",
+        seq,
+        field,
+        value: normalizeTriggerValue(value, `trigger ${seq}.${field}`)
+      });
+    }
+    function buildInput(node, check, value, onChange) {
+      if (check !== void 0) {
+        node.append(
+          getActions().buildInputNode(check.arg, check.options, value, onChange)
+        );
+      }
+    }
+    function buildRequirementType(row, node, model) {
+      node.empty().off("*");
+      const options = optionsForChecks(model).map(
+        ([id, check]) => `<option value="${id}" title="${check.description}">${id.replace(/([A-Z])/g, " $1").trim()}</option>`
+      ).join("");
+      const select = getJQuery()(
+        `<select style="width: 100%"><option value="chain" title="This condition is met when above trigger is complete, always true for first trigger in list">Chain</option>${options}</select>`
+      );
+      select.val(row.requirementType);
+      node.append(select);
+      select.on(
+        "change",
+        () => emitUpdate(row.seq, "requirementType", select.val())
+      );
+    }
+    function buildRequirementId(row, node, model) {
+      node.empty().off("*");
+      buildInput(
+        node,
+        model.checks[row.requirementType],
+        row.requirementId,
+        (value) => emitUpdate(row.seq, "requirementId", value)
+      );
+    }
+    function buildRequirementCount(row, node, model) {
+      node.empty().off("*");
+      const check = model.checks[row.requirementType];
+      if (row.requirementType !== "Boolean" && check !== void 0) {
+        const arg = model.booleanResultChecks.includes(row.requirementType) ? "boolean" : "number";
+        buildInput(
+          node,
+          { ...check, arg },
+          row.requirementCount,
+          (value) => emitUpdate(row.seq, "requirementCount", value)
+        );
+      }
+    }
+    function buildActionType(row, node, model) {
+      node.empty().off("*");
+      const select = getJQuery()(
+        `<select style="width: 100%"><option value="research" title="Research technology">Research</option><option value="build" title="Build buildings up to 'count' amount">Build</option><option value="arpa" title="Build projects up to 'count' amount">A.R.P.A.</option></select>`
+      );
+      select.val(row.actionType);
+      node.append(select);
+      select.on("change", () => emitUpdate(row.seq, "actionType", select.val()));
+    }
+    function buildActionId(row, node, model) {
+      node.empty().off("*");
+      const input = model.actionInputs[row.actionType === "research" ? "research" : row.actionType === "build" ? "building" : row.actionType === "arpa" ? "project" : ""];
+      buildInput(
+        node,
+        input,
+        row.actionId,
+        (value) => emitUpdate(row.seq, "actionId", value)
+      );
+    }
+    function buildActionCount(row, node, model) {
+      node.empty().off("*");
+      if (row.actionType === "build" || row.actionType === "arpa") {
+        const input = model.actionInputs[row.actionType === "build" ? "building" : "project"];
+        if (input !== void 0)
+          buildInput(
+            node,
+            { ...input, arg: "number" },
+            row.actionCount,
+            (value) => emitUpdate(row.seq, "actionCount", value)
+          );
+      }
+    }
+    function buildActions(row, node) {
+      node.empty().off("*");
+      const deleteButton = getJQuery()(
+        '<a class="button is-small" style="width: 26px; height: 26px"><span>X</span></a>'
+      );
+      const duplicateButton = getJQuery()(
+        '<a class="button is-small" style="width: 26px; height: 26px"><span>&#9282;</span></a>'
+      );
+      const evalizeButton = getJQuery()(
+        '<a class="button is-small" style="width: 26px; height: 26px"><span>E</span></a>'
+      );
+      deleteButton.on(
+        "click",
+        () => intents.handle({ type: "remove-trigger", seq: row.seq })
+      );
+      duplicateButton.on(
+        "click",
+        () => intents.handle({ type: "duplicate-trigger", seq: row.seq })
+      );
+      evalizeButton.on(
+        "click",
+        () => intents.handle({ type: "evalize-trigger", seq: row.seq })
+      );
+      node.append(deleteButton).append(duplicateButton).append(evalizeButton);
+    }
+    function buildRow(row, model) {
+      const rowNode = getJQuery()(`#script_trigger_${row.seq}`);
+      const cells = rowNode.children();
+      buildRequirementType(row, cells.eq(0), model);
+      buildRequirementId(row, cells.eq(1), model);
+      buildRequirementCount(row, cells.eq(2), model);
+      buildActionType(row, cells.eq(3), model);
+      buildActionId(row, cells.eq(4), model);
+      buildActionCount(row, cells.eq(5), model);
+      buildActions(row, cells.eq(6));
+    }
+    function buildTriggerSettings2() {
+      const model = reader.read();
+      getActions().buildSettingsSection(
+        model.sectionId,
+        model.sectionName,
+        () => intents.handle({ type: "reset-trigger-settings" }),
+        updateTriggerSettingsContent2
+      );
+    }
+    function updateTriggerSettingsContent2() {
+      const model = reader.read();
+      const document2 = getDocument();
+      const scroll = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const node = getJQuery()(`#script_${model.sectionId}Content`);
+      node.empty().off("*");
+      node.append(
+        '<div style="margin-top: 10px;"><button id="script_trigger_add" class="button">Add New Trigger</button></div>'
+      );
+      getJQuery()("#script_trigger_add").on(
+        "click",
+        () => intents.handle({ type: "add-trigger" })
+      );
+      node.append(
+        '<table style="width:100%"><tr><th class="has-text-warning" colspan="3">Requirement</th><th class="has-text-warning" colspan="5">Action</th></tr><tr><th class="has-text-warning" style="width:16%">Type</th><th class="has-text-warning" style="width:18%">Value</th><th class="has-text-warning" style="width:6%" title="Numerical variables compared to this value using &gt;=, boolean variables - using &gt;=. String variables not currently supported by triggers.">Result</th><th class="has-text-warning" style="width:16%">Type</th><th class="has-text-warning" style="width:18%">Id</th><th class="has-text-warning" style="width:6%">Count</th><th style="width:20%"></th></tr><tbody id="script_triggerTableBody"></tbody></table>'
+      );
+      const body = getJQuery()("#script_triggerTableBody");
+      const rows = model.rows.map(
+        (row) => `<tr id="script_trigger_${row.seq}" value="${row.seq}" class="script-draggable"><td style="width:16%"></td><td style="width:18%"></td><td style="width:6%"></td><td style="width:16%"></td><td style="width:18%"></td><td style="width:6%"></td><td style="width:20%"></td></tr>`
+      ).join("");
+      body.append(getJQuery()(rows));
+      for (const row of model.rows) buildRow(row, model);
+      body.sortable({
+        items: "tr:not(.unsortable)",
+        helper: getActions().sorterHelper,
+        update: () => {
+          const ids = body.sortable("toArray", { attribute: "value" });
+          if (Array.isArray(ids))
+            intents.handle({
+              type: "reorder-triggers",
+              seqs: ids.map((id) => Number(id))
+            });
+        }
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
+    }
+    return Object.freeze({ buildTriggerSettings: buildTriggerSettings2, updateTriggerSettingsContent: updateTriggerSettingsContent2 });
+  }
+
+  // src/adapters/evolve/trigger-settings.ts
+  function requireString29(value, path) {
+    if (typeof value !== "string")
+      throw new TypeError(`${path} must be a string`);
+    return value;
+  }
+  function readCatalog3(value, path) {
+    const record = requireRecord(value, path);
+    const result2 = {};
+    for (const [id, raw] of Object.entries(record)) {
+      const entry = requireRecord(raw, `${path}.${id}`);
+      result2[id] = Object.freeze({
+        arg: requireString29(entry["arg"], `${path}.${id}.arg`),
+        options: entry["options"] ?? null,
+        description: requireString29(entry["desc"], `${path}.${id}.desc`)
+      });
+    }
+    return result2;
+  }
+  function readRows2(value) {
+    if (!Array.isArray(value))
+      throw new TypeError("TriggerManager.priorityList must be an array");
+    return value.map((raw, index) => {
+      const trigger = requireRecord(raw, `TriggerManager.priorityList[${index}]`);
+      return Object.freeze({
+        seq: typeof trigger["seq"] === "number" ? trigger["seq"] : index,
+        requirementType: requireString29(
+          trigger["requirementType"],
+          `TriggerManager.priorityList[${index}].requirementType`
+        ),
+        requirementId: normalizeTriggerValue(
+          trigger["requirementId"],
+          `TriggerManager.priorityList[${index}].requirementId`
+        ),
+        requirementCount: normalizeTriggerValue(
+          trigger["requirementCount"],
+          `TriggerManager.priorityList[${index}].requirementCount`
+        ),
+        actionType: requireString29(
+          trigger["actionType"],
+          `TriggerManager.priorityList[${index}].actionType`
+        ),
+        actionId: normalizeTriggerValue(
+          trigger["actionId"],
+          `TriggerManager.priorityList[${index}].actionId`
+        ),
+        actionCount: normalizeTriggerValue(
+          trigger["actionCount"],
+          `TriggerManager.priorityList[${index}].actionCount`
+        )
+      });
+    });
+  }
+  function readStringList(value, path) {
+    if (!Array.isArray(value)) throw new TypeError(`${path} must be an array`);
+    return Object.freeze(
+      value.map((item, index) => requireString29(item, `${path}[${index}]`))
+    );
+  }
+  function createTriggerSettingsEvolveAdapter({
+    getTriggerManager,
+    getCheckTypes,
+    getActionInputs,
+    getBooleanResultChecks,
+    getOverrideOnlyChecks
+  }) {
+    return Object.freeze({
+      read() {
+        const manager = requireRecord(getTriggerManager(), "TriggerManager");
+        const overrideOnly = new Set(
+          readStringList(getOverrideOnlyChecks(), "overrideOnlyChecks")
+        );
+        const checks = readCatalog3(getCheckTypes(), "checkTypes");
+        const visibleChecks = {};
+        for (const [id, check] of Object.entries(checks)) {
+          if (!overrideOnly.has(id)) visibleChecks[id] = check;
+        }
+        return createTriggerSettingsReadModel({
+          rows: readRows2(manager["priorityList"]),
+          checks: visibleChecks,
+          actionInputs: readCatalog3(getActionInputs(), "argType"),
+          booleanResultChecks: getBooleanResultChecks()
+        });
+      }
+    });
+  }
+
   // src/ui/production-settings.ts
   function createProductionSettings({
     getSettingsRaw,
@@ -46684,341 +47018,6 @@
     };
   }
 
-  // src/ui/trigger-settings.ts
-  function createTriggerSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const TriggerManager2 = liveObject4(() => getDependency("TriggerManager"));
-    const argType2 = liveObject4(() => getDependency("argType"));
-    const buildInputNode2 = liveFunction(() => getDependency("buildInputNode"));
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const checkTypes2 = liveObject4(() => getDependency("checkTypes"));
-    const document2 = liveObject4(() => getDependency("document"));
-    const overrideOnlyChecks2 = liveObject4(
-      () => getDependency("overrideOnlyChecks")
-    );
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetTriggerSettings2 = liveFunction(
-      () => getDependency("resetTriggerSettings")
-    );
-    const retBools2 = liveObject4(() => getDependency("retBools"));
-    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildTriggerSettingsImpl() {
-      let sectionId = "trigger";
-      let sectionName = "Trigger";
-      let resetFunction = function() {
-        resetTriggerSettings2(true);
-        updateSettingsFromState2();
-        updateTriggerSettingsContent2();
-        resetCheckbox2("autoTrigger");
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateTriggerSettingsContent2
-      );
-    }
-    function updateTriggerSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_triggerContent");
-      currentNode.empty().off("*");
-      currentNode.append(
-        '<div style="margin-top: 10px;"><button id="script_trigger_add" class="button">Add New Trigger</button></div>'
-      );
-      $2("#script_trigger_add").on("click", addTriggerSetting2);
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" colspan="3">Requirement</th>
-              <th class="has-text-warning" colspan="5">Action</th>
-            </tr>
-            <tr>
-              <th class="has-text-warning" style="width:16%">Type</th>
-              <th class="has-text-warning" style="width:18%">Value</th>
-              <th class="has-text-warning" style="width:6%" title="Numerical variables compared to this value using '>=', boolean variables - using '=='. String variables not currently supported by triggers.">Result</th>
-              <th class="has-text-warning" style="width:16%">Type</th>
-              <th class="has-text-warning" style="width:18%">Id</th>
-              <th class="has-text-warning" style="width:6%">Count</th>
-              <th style="width:20%"></th>
-            </tr>
-            <tbody id="script_triggerTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $2("#script_triggerTableBody");
-      let newTableBodyText = "";
-      for (let i = 0; i < TriggerManager2.priorityList.length; i++) {
-        const trigger = TriggerManager2.priorityList[i];
-        newTableBodyText += `
-            <tr id="script_trigger_${trigger.seq}" value="${trigger.seq}" class="script-draggable">
-              <td style="width:16%"></td>
-              <td style="width:18%"></td>
-              <td style="width:6%"></td>
-              <td style="width:16%"></td>
-              <td style="width:18%"></td>
-              <td style="width:6%"></td>
-              <td style="width:20%"></td>
-            </tr>`;
-      }
-      tableBodyNode.append($2(newTableBodyText));
-      for (let i = 0; i < TriggerManager2.priorityList.length; i++) {
-        const trigger = TriggerManager2.priorityList[i];
-        buildTriggerRequirementType2(trigger);
-        buildTriggerRequirementId2(trigger);
-        buildTriggerRequirementCount2(trigger);
-        buildTriggerActionType2(trigger);
-        buildTriggerActionId2(trigger);
-        buildTriggerActionCount2(trigger);
-        buildTriggerSettingsColumn2(trigger);
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper2,
-        update: function() {
-          let triggerIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < triggerIds.length; i++) {
-            TriggerManager2.getTrigger(parseInt(triggerIds[i])).priority = i;
-          }
-          TriggerManager2.sortByPriority();
-          updateSettingsFromState2();
-        }
-      });
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function addTriggerSettingImpl() {
-      let trigger = TriggerManager2.AddTrigger(
-        "Boolean",
-        false,
-        1,
-        "research",
-        "tech-club",
-        0
-      );
-      updateSettingsFromState2();
-      let tableBodyNode = $2("#script_triggerTableBody");
-      let newTableBodyText = "";
-      newTableBodyText += `
-        <tr id="script_trigger_${trigger.seq}" value="${trigger.seq}" class="script-draggable">
-          <td style="width:16%"></td>
-          <td style="width:18%"></td>
-          <td style="width:6%"></td>
-          <td style="width:16%"></td>
-          <td style="width:18%"></td>
-          <td style="width:6%"></td>
-          <td style="width:20%"></td>
-        </tr>`;
-      tableBodyNode.append($2(newTableBodyText));
-      buildTriggerRequirementType2(trigger);
-      buildTriggerRequirementId2(trigger);
-      buildTriggerRequirementCount2(trigger);
-      buildTriggerActionType2(trigger);
-      buildTriggerActionId2(trigger);
-      buildTriggerActionCount2(trigger);
-      buildTriggerSettingsColumn2(trigger);
-    }
-    function buildTriggerRequirementTypeImpl(trigger) {
-      let triggerElement = $2("#script_trigger_" + trigger.seq).children().eq(0);
-      triggerElement.empty().off("*");
-      let types = Object.entries(checkTypes2).filter(
-        (c) => !overrideOnlyChecks2.includes(c[0]) || trigger.requirementType === c[0]
-      ).map(
-        ([id, type]) => `<option value="${id}" title="${type.desc}">${id.replace(/([A-Z])/g, " $1").trim()}</option>`
-      ).join();
-      let typeSelectNode = $2(`
-          <select style="width: 100%">
-            <option value = "chain" title = "This condition is met when above trigger is complete, always true for first trigger in list">Chain</option>
-            ${types}
-          </select>`);
-      typeSelectNode.val(trigger.requirementType);
-      triggerElement.append(typeSelectNode);
-      typeSelectNode.on("change", function() {
-        trigger.updateRequirementType(this.value);
-        buildTriggerRequirementId2(trigger);
-        buildTriggerRequirementCount2(trigger);
-        updateSettingsFromState2();
-      });
-      return;
-    }
-    function buildTriggerRequirementIdImpl(trigger) {
-      let triggerElement = $2("#script_trigger_" + trigger.seq).children().eq(1);
-      triggerElement.empty().off("*");
-      let check = checkTypes2[trigger.requirementType];
-      if (check) {
-        triggerElement.append(
-          buildInputNode2(
-            check.arg,
-            check.options,
-            trigger.requirementId,
-            function(result2) {
-              trigger.requirementId = result2;
-              trigger.complete = false;
-              updateSettingsFromState2();
-            }
-          )
-        );
-      }
-    }
-    function buildTriggerRequirementCountImpl(trigger) {
-      let triggerElement = $2("#script_trigger_" + trigger.seq).children().eq(2);
-      triggerElement.empty().off("*");
-      if (trigger.requirementType !== "Boolean" && checkTypes2[trigger.requirementType]) {
-        let retType = retBools2.includes(trigger.requirementType) ? "boolean" : "number";
-        triggerElement.append(
-          buildInputNode2(
-            retType,
-            null,
-            trigger.requirementCount,
-            function(result2) {
-              trigger.requirementCount = Number(result2);
-              trigger.complete = false;
-              updateSettingsFromState2();
-            }
-          )
-        );
-      }
-    }
-    function buildTriggerActionTypeImpl(trigger) {
-      let triggerElement = $2("#script_trigger_" + trigger.seq).children().eq(3);
-      triggerElement.empty().off("*");
-      let typeSelectNode = $2(`
-          <select style="width: 100%">
-            <option value = "research" title = "Research technology">Research</option>
-            <option value = "build" title = "Build buildings up to 'count' amount">Build</option>
-            <option value = "arpa" title = "Build projects up to 'count' amount">A.R.P.A.</option>
-          </select>`);
-      typeSelectNode.val(trigger.actionType);
-      triggerElement.append(typeSelectNode);
-      typeSelectNode.on("change", function() {
-        trigger.updateActionType(this.value);
-        buildTriggerActionId2(trigger);
-        buildTriggerActionCount2(trigger);
-        updateSettingsFromState2();
-      });
-      return;
-    }
-    function buildTriggerActionIdImpl(trigger) {
-      let triggerElement = $2("#script_trigger_" + trigger.seq).children().eq(4);
-      triggerElement.empty().off("*");
-      let argDef = trigger.actionType === "research" ? argType2.research : trigger.actionType === "build" ? argType2.building : trigger.actionType === "arpa" ? argType2.project : null;
-      if (argDef) {
-        triggerElement.append(
-          buildInputNode2(
-            argDef.arg,
-            argDef.options,
-            trigger.actionId,
-            function(result2) {
-              trigger.actionId = result2;
-              trigger.complete = false;
-              updateSettingsFromState2();
-            }
-          )
-        );
-      }
-    }
-    function buildTriggerActionCountImpl(trigger) {
-      let triggerElement = $2("#script_trigger_" + trigger.seq).children().eq(5);
-      triggerElement.empty().off("*");
-      if (trigger.actionType === "build" || trigger.actionType === "arpa") {
-        triggerElement.append(
-          buildInputNode2("number", null, trigger.actionCount, function(result2) {
-            trigger.actionCount = Number(result2);
-            trigger.complete = false;
-            updateSettingsFromState2();
-          })
-        );
-      }
-    }
-    function buildTriggerSettingsColumnImpl(trigger) {
-      let triggerElement = $2("#script_trigger_" + trigger.seq).children().eq(6);
-      triggerElement.empty().off("*");
-      let deleteTriggerButton = $2(
-        '<a class="button is-small" style="width: 26px; height: 26px"><span>X</span></a>'
-      );
-      triggerElement.append(deleteTriggerButton);
-      deleteTriggerButton.on("click", function() {
-        TriggerManager2.RemoveTrigger(trigger.seq);
-        updateSettingsFromState2();
-        updateTriggerSettingsContent2();
-      });
-      let duplicateTriggerButton = $2(
-        '<a class="button is-small" style="width: 26px; height: 26px"><span>&#9282;</span></a>'
-      );
-      triggerElement.append(duplicateTriggerButton);
-      duplicateTriggerButton.on("click", function() {
-        TriggerManager2.DuplicateTrigger(trigger.seq);
-        updateSettingsFromState2();
-        updateTriggerSettingsContent2();
-      });
-      let evalizeTriggerButton = $2(
-        '<a class="button is-small" style="width: 26px; height: 26px"><span>E</span></a>'
-      );
-      triggerElement.append(evalizeTriggerButton);
-      evalizeTriggerButton.on("click", function() {
-        TriggerManager2.EvalizeTrigger(trigger.seq);
-      });
-    }
-    function buildTriggerSettings2(...args) {
-      const implementation = getOverride("buildTriggerSettings") ?? buildTriggerSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateTriggerSettingsContent2(...args) {
-      const implementation = getOverride("updateTriggerSettingsContent") ?? updateTriggerSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    function addTriggerSetting2(...args) {
-      const implementation = getOverride("addTriggerSetting") ?? addTriggerSettingImpl;
-      return implementation.apply(this, args);
-    }
-    function buildTriggerRequirementType2(...args) {
-      const implementation = getOverride("buildTriggerRequirementType") ?? buildTriggerRequirementTypeImpl;
-      return implementation.apply(this, args);
-    }
-    function buildTriggerRequirementId2(...args) {
-      const implementation = getOverride("buildTriggerRequirementId") ?? buildTriggerRequirementIdImpl;
-      return implementation.apply(this, args);
-    }
-    function buildTriggerRequirementCount2(...args) {
-      const implementation = getOverride("buildTriggerRequirementCount") ?? buildTriggerRequirementCountImpl;
-      return implementation.apply(this, args);
-    }
-    function buildTriggerActionType2(...args) {
-      const implementation = getOverride("buildTriggerActionType") ?? buildTriggerActionTypeImpl;
-      return implementation.apply(this, args);
-    }
-    function buildTriggerActionId2(...args) {
-      const implementation = getOverride("buildTriggerActionId") ?? buildTriggerActionIdImpl;
-      return implementation.apply(this, args);
-    }
-    function buildTriggerActionCount2(...args) {
-      const implementation = getOverride("buildTriggerActionCount") ?? buildTriggerActionCountImpl;
-      return implementation.apply(this, args);
-    }
-    function buildTriggerSettingsColumn2(...args) {
-      const implementation = getOverride("buildTriggerSettingsColumn") ?? buildTriggerSettingsColumnImpl;
-      return implementation.apply(this, args);
-    }
-    return {
-      buildTriggerSettings: buildTriggerSettings2,
-      updateTriggerSettingsContent: updateTriggerSettingsContent2,
-      addTriggerSetting: addTriggerSetting2,
-      buildTriggerRequirementType: buildTriggerRequirementType2,
-      buildTriggerRequirementId: buildTriggerRequirementId2,
-      buildTriggerRequirementCount: buildTriggerRequirementCount2,
-      buildTriggerActionType: buildTriggerActionType2,
-      buildTriggerActionId: buildTriggerActionId2,
-      buildTriggerActionCount: buildTriggerActionCount2,
-      buildTriggerSettingsColumn: buildTriggerSettingsColumn2
-    };
-  }
-
   // src/ui/fleet-settings.ts
   function createFleetSettings({
     getDependency,
@@ -47606,7 +47605,7 @@
   }
 
   // src/adapters/evolve/mech-info.ts
-  function requireString29(value, path) {
+  function requireString30(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47652,7 +47651,7 @@
           mechs[index],
           `game.global.portal.mechbay.mechs[${index}]`
         );
-        const size = requireString29(mech["size"], `mechs[${index}].size`);
+        const size = requireString30(mech["size"], `mechs[${index}].size`);
         const stats = requireRecord(
           call4(manager, "getMechStats", "MechManager.getMechStats", [mech]),
           `MechManager.getMechStats(${index})`
@@ -47830,7 +47829,7 @@
   }
 
   // src/adapters/evolve/resource-toggles.ts
-  function requireString30(value, path) {
+  function requireString31(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47851,7 +47850,7 @@
     return priorityList;
   }
   function readResourceId3(value, path) {
-    return requireString30(requireRecord(value, path)["id"], `${path}.id`);
+    return requireString31(requireRecord(value, path)["id"], `${path}.id`);
   }
   function createResourceToggleEvolveAdapter({
     getGame,
@@ -47867,13 +47866,13 @@
       const noTrade = Boolean(race2["no_trade"]);
       const loc = requireFunction2(game2["loc"], "game.loc");
       const labels = noTrade ? Object.freeze({ buy: "", sell: "", routes: "", cancelRoutes: "" }) : Object.freeze({
-        buy: requireString30(loc("resource_market_buy"), "game.loc(buy)"),
-        sell: requireString30(loc("resource_market_sell"), "game.loc(sell)"),
-        routes: requireString30(
+        buy: requireString31(loc("resource_market_buy"), "game.loc(buy)"),
+        sell: requireString31(loc("resource_market_sell"), "game.loc(sell)"),
+        routes: requireString31(
           loc("resource_market_routes"),
           "game.loc(routes)"
         ),
-        cancelRoutes: requireString30(
+        cancelRoutes: requireString31(
           loc("cancel_routes"),
           "game.loc(cancel_routes)"
         )
@@ -52223,41 +52222,71 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       renderSettingsContent: () => planetSettingsBrowserAdapter.updatePlanetSettingsContent()
     });
     const { buildPlanetSettings, updatePlanetSettingsContent } = planetSettingsBrowserAdapter;
-    const triggerSettingsOverrides = {};
-    const getTriggerSettingsDependency = createDependencyResolver(
-      triggerSettingsOverrides,
-      {
-        $: () => $,
-        TriggerManager: () => TriggerManager,
-        argType: () => argType,
-        buildInputNode: () => buildInputNode,
-        buildSettingsSection: () => buildSettingsSection,
-        checkTypes: () => checkTypes,
-        document: () => document,
-        overrideOnlyChecks: () => overrideOnlyChecks,
-        resetCheckbox: () => resetCheckbox,
-        resetTriggerSettings: () => resetTriggerSettings,
-        retBools: () => retBools,
-        sorterHelper: () => sorterHelper,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const triggerSettings = createTriggerSettings({
-      getDependency: getTriggerSettingsDependency,
-      getOverride: (name) => triggerSettingsOverrides[name]
+    let triggerSettingsTestContext;
+    const triggerSettingsReader = createTriggerSettingsEvolveAdapter({
+      getTriggerManager: () => triggerSettingsTestContext?.TriggerManager ?? TriggerManager,
+      getCheckTypes: () => triggerSettingsTestContext?.checkTypes ?? checkTypes,
+      getActionInputs: () => triggerSettingsTestContext?.argType ?? argType,
+      getBooleanResultChecks: () => triggerSettingsTestContext?.retBools ?? retBools,
+      getOverrideOnlyChecks: () => triggerSettingsTestContext?.overrideOnlyChecks ?? overrideOnlyChecks
     });
-    const {
-      buildTriggerSettings,
-      updateTriggerSettingsContent,
-      addTriggerSetting,
-      buildTriggerRequirementType,
-      buildTriggerRequirementId,
-      buildTriggerRequirementCount,
-      buildTriggerActionType,
-      buildTriggerActionId,
-      buildTriggerActionCount,
-      buildTriggerSettingsColumn
-    } = triggerSettings;
+    let triggerSettingsIntentHandler;
+    const triggerSettingsBrowserAdapter = createTriggerSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      reader: triggerSettingsReader,
+      intents: {
+        handle: (intent) => triggerSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => triggerSettingsTestContext?.actions ?? {
+        buildSettingsSection,
+        buildInputNode,
+        sorterHelper
+      }
+    });
+    triggerSettingsIntentHandler = createTriggerSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (triggerSettingsTestContext?.resetTriggerSettings ?? resetTriggerSettings)(true),
+        addDefault: () => {
+          const manager = triggerSettingsTestContext?.TriggerManager ?? TriggerManager;
+          manager.AddTrigger("Boolean", false, 1, "research", "tech-club", 0);
+        },
+        update: (seq, field, value) => {
+          const manager = triggerSettingsTestContext?.TriggerManager ?? TriggerManager;
+          const trigger = manager.getTrigger(seq);
+          if (!trigger) return;
+          trigger[field] = value;
+          trigger.complete = false;
+          if (field === "requirementType") {
+            trigger.requirementId = false;
+            trigger.requirementCount = 1;
+          }
+          if (field === "actionType") {
+            trigger.actionId = "";
+            trigger.actionCount = 0;
+          }
+        },
+        remove: (seq) => (triggerSettingsTestContext?.TriggerManager ?? TriggerManager).RemoveTrigger(seq),
+        duplicate: (seq) => (triggerSettingsTestContext?.TriggerManager ?? TriggerManager).DuplicateTrigger(seq),
+        evalize: (seq) => (triggerSettingsTestContext?.TriggerManager ?? TriggerManager).EvalizeTrigger(seq),
+        reorder: (seqs) => {
+          const manager = triggerSettingsTestContext?.TriggerManager ?? TriggerManager;
+          seqs.forEach((seq, index) => {
+            const trigger = manager.getTrigger(seq);
+            if (trigger) trigger.priority = index;
+          });
+          manager.sortByPriority();
+        },
+        persist: () => (triggerSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      render: () => triggerSettingsBrowserAdapter.updateTriggerSettingsContent(),
+      effects: {
+        resetCheckbox: () => (triggerSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoTrigger"
+        )
+      }
+    });
+    const { buildTriggerSettings, updateTriggerSettingsContent } = triggerSettingsBrowserAdapter;
     let researchSettingsTestContext;
     const researchSettingsActions = {
       buildSettingsSection,
@@ -55894,14 +55923,18 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         settingsBoundaries: {
           prestige: prestigeSettings,
           evolution: evolutionSettings,
-          trigger: triggerSettings,
           fleet: fleetSettings
         },
         setSettingsBoundariesTestContext(context) {
           Object.assign(prestigeSettingsOverrides, context);
           Object.assign(evolutionSettingsOverrides, context);
-          Object.assign(triggerSettingsOverrides, context);
           Object.assign(fleetSettingsOverrides, context);
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        triggerSettings: triggerSettingsBrowserAdapter,
+        setTriggerSettingsTestContext(context) {
+          triggerSettingsTestContext = context;
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {

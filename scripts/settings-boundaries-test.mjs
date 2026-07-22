@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import { createPrestigeSettings } from "../src/ui/prestige-settings.ts";
 import { createEvolutionSettings } from "../src/ui/evolution-settings.ts";
-import { createTriggerSettings } from "../src/ui/trigger-settings.ts";
 import { createFleetSettings } from "../src/ui/fleet-settings.ts";
 
 const specs = [
@@ -25,16 +24,6 @@ const specs = [
     "Evolution",
     false,
     ["checkbox:autoEvolution"],
-  ],
-  [
-    "trigger",
-    createTriggerSettings,
-    "buildTriggerSettings",
-    "updateTriggerSettingsContent",
-    "trigger",
-    "Trigger",
-    false,
-    ["checkbox:autoTrigger"],
   ],
   [
     "fleet",
@@ -104,4 +93,4 @@ for (const [
   ]);
 }
 
-console.log("4 settings-boundary module tests passed");
+console.log("3 settings-boundary module tests passed");

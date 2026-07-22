@@ -452,11 +452,13 @@ import { getHellSettingsReadModel } from "./domain/hell-settings.ts";
 import { createMechSettingsIntentHandler } from "./application/mech-settings.ts";
 import { createMechSettingsBrowserAdapter } from "./adapters/browser/mech-settings.ts";
 import { createMechSettingsEvolveAdapter } from "./adapters/evolve/mech-settings.ts";
+import { createTriggerSettingsIntentHandler } from "./application/trigger-settings.ts";
+import { createTriggerSettingsBrowserAdapter } from "./adapters/browser/trigger-settings.ts";
+import { createTriggerSettingsEvolveAdapter } from "./adapters/evolve/trigger-settings.ts";
 import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
 import { createPrestigeSettings } from "./ui/prestige-settings.ts";
 import { createEvolutionSettings } from "./ui/evolution-settings.ts";
-import { createTriggerSettings } from "./ui/trigger-settings.ts";
 import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoEvolveAdapter } from "./adapters/evolve/mech-info.ts";
@@ -1655,41 +1657,97 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildPlanetSettings, updatePlanetSettingsContent } =
     planetSettingsBrowserAdapter;
 
-  const triggerSettingsOverrides = {};
-  const getTriggerSettingsDependency = createDependencyResolver(
-    triggerSettingsOverrides,
-    {
-      $: () => $,
-      TriggerManager: () => TriggerManager,
-      argType: () => argType,
-      buildInputNode: () => buildInputNode,
-      buildSettingsSection: () => buildSettingsSection,
-      checkTypes: () => checkTypes,
-      document: () => document,
-      overrideOnlyChecks: () => overrideOnlyChecks,
-      resetCheckbox: () => resetCheckbox,
-      resetTriggerSettings: () => resetTriggerSettings,
-      retBools: () => retBools,
-      sorterHelper: () => sorterHelper,
-      updateSettingsFromState: () => updateSettingsFromState,
-    },
-  );
-  const triggerSettings = createTriggerSettings({
-    getDependency: getTriggerSettingsDependency,
-    getOverride: (name) => triggerSettingsOverrides[name],
+  let triggerSettingsTestContext;
+  const triggerSettingsReader = createTriggerSettingsEvolveAdapter({
+    getTriggerManager: () =>
+      triggerSettingsTestContext?.TriggerManager ?? TriggerManager,
+    getCheckTypes: () => triggerSettingsTestContext?.checkTypes ?? checkTypes,
+    getActionInputs: () => triggerSettingsTestContext?.argType ?? argType,
+    getBooleanResultChecks: () =>
+      triggerSettingsTestContext?.retBools ?? retBools,
+    getOverrideOnlyChecks: () =>
+      triggerSettingsTestContext?.overrideOnlyChecks ?? overrideOnlyChecks,
   });
-  const {
-    buildTriggerSettings,
-    updateTriggerSettingsContent,
-    addTriggerSetting,
-    buildTriggerRequirementType,
-    buildTriggerRequirementId,
-    buildTriggerRequirementCount,
-    buildTriggerActionType,
-    buildTriggerActionId,
-    buildTriggerActionCount,
-    buildTriggerSettingsColumn,
-  } = triggerSettings;
+  let triggerSettingsIntentHandler;
+  const triggerSettingsBrowserAdapter = createTriggerSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    reader: triggerSettingsReader,
+    intents: {
+      handle: (intent) => triggerSettingsIntentHandler.handle(intent),
+    },
+    getActions: () =>
+      triggerSettingsTestContext?.actions ?? {
+        buildSettingsSection,
+        buildInputNode,
+        sorterHelper,
+      },
+  });
+  triggerSettingsIntentHandler = createTriggerSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          triggerSettingsTestContext?.resetTriggerSettings ??
+          resetTriggerSettings
+        )(true),
+      addDefault: () => {
+        const manager =
+          triggerSettingsTestContext?.TriggerManager ?? TriggerManager;
+        manager.AddTrigger("Boolean", false, 1, "research", "tech-club", 0);
+      },
+      update: (seq, field, value) => {
+        const manager =
+          triggerSettingsTestContext?.TriggerManager ?? TriggerManager;
+        const trigger = manager.getTrigger(seq);
+        if (!trigger) return;
+        trigger[field] = value;
+        trigger.complete = false;
+        if (field === "requirementType") {
+          trigger.requirementId = false;
+          trigger.requirementCount = 1;
+        }
+        if (field === "actionType") {
+          trigger.actionId = "";
+          trigger.actionCount = 0;
+        }
+      },
+      remove: (seq) =>
+        (
+          triggerSettingsTestContext?.TriggerManager ?? TriggerManager
+        ).RemoveTrigger(seq),
+      duplicate: (seq) =>
+        (
+          triggerSettingsTestContext?.TriggerManager ?? TriggerManager
+        ).DuplicateTrigger(seq),
+      evalize: (seq) =>
+        (
+          triggerSettingsTestContext?.TriggerManager ?? TriggerManager
+        ).EvalizeTrigger(seq),
+      reorder: (seqs) => {
+        const manager =
+          triggerSettingsTestContext?.TriggerManager ?? TriggerManager;
+        seqs.forEach((seq, index) => {
+          const trigger = manager.getTrigger(seq);
+          if (trigger) trigger.priority = index;
+        });
+        manager.sortByPriority();
+      },
+      persist: () =>
+        (
+          triggerSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    },
+    render: () => triggerSettingsBrowserAdapter.updateTriggerSettingsContent(),
+    effects: {
+      resetCheckbox: () =>
+        (triggerSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoTrigger",
+        ),
+    },
+  });
+  const { buildTriggerSettings, updateTriggerSettingsContent } =
+    triggerSettingsBrowserAdapter;
 
   let researchSettingsTestContext;
   const researchSettingsActions = {
@@ -5776,14 +5834,18 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       settingsBoundaries: {
         prestige: prestigeSettings,
         evolution: evolutionSettings,
-        trigger: triggerSettings,
         fleet: fleetSettings,
       },
       setSettingsBoundariesTestContext(context) {
         Object.assign(prestigeSettingsOverrides, context);
         Object.assign(evolutionSettingsOverrides, context);
-        Object.assign(triggerSettingsOverrides, context);
         Object.assign(fleetSettingsOverrides, context);
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      triggerSettings: triggerSettingsBrowserAdapter,
+      setTriggerSettingsTestContext(context) {
+        triggerSettingsTestContext = context;
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {
