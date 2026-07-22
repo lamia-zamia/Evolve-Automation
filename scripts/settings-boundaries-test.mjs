@@ -7,7 +7,6 @@ import { createWarSettings } from "../src/ui/war-settings.ts";
 import { createHellSettings } from "../src/ui/hell-settings.ts";
 import { createFleetSettings } from "../src/ui/fleet-settings.ts";
 import { createMechSettings } from "../src/ui/mech-settings.ts";
-import { createMarketSettings } from "../src/ui/market-settings.ts";
 
 const specs = [
   [
@@ -80,16 +79,6 @@ const specs = [
     false,
     ["checkbox:autoMech", "remove:mechInfo"],
   ],
-  [
-    "market",
-    createMarketSettings,
-    "buildMarketSettings",
-    "updateMarketSettingsContent",
-    "market",
-    "Market",
-    false,
-    ["checkbox:autoMarket|autoGalaxyMarket", "remove:marketToggles"],
-  ],
 ];
 
 const resetName = (name) =>
@@ -148,4 +137,4 @@ for (const [
   ]);
 }
 
-console.log("8 settings-boundary module tests passed");
+console.log("7 settings-boundary module tests passed");

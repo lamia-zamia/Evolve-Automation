@@ -437,6 +437,12 @@ import { createMechAdapter } from "./adapters/evolve/mech.ts";
 import { createEjectorSettingsIntentHandler } from "./application/ejector-settings.ts";
 import { createEjectorSettingsBrowserAdapter } from "./adapters/browser/ejector-settings.ts";
 import { createEjectorSettingsEvolveAdapter } from "./adapters/evolve/ejector-settings.ts";
+import { createMarketSettingsIntentHandler } from "./application/market-settings.ts";
+import { createMarketSettingsBrowserAdapter } from "./adapters/browser/market-settings.ts";
+import {
+  createMarketSettingsEvolveAdapter,
+  createMarketSettingsWriter,
+} from "./adapters/evolve/market-settings.ts";
 import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
 import { createPrestigeSettings } from "./ui/prestige-settings.ts";
@@ -446,7 +452,6 @@ import { createWarSettings } from "./ui/war-settings.ts";
 import { createHellSettings } from "./ui/hell-settings.ts";
 import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createMechSettings } from "./ui/mech-settings.ts";
-import { createMarketSettings } from "./ui/market-settings.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoEvolveAdapter } from "./adapters/evolve/mech-info.ts";
 import { createMechInfoBrowserAdapter } from "./adapters/browser/mech-info.ts";
@@ -1897,35 +1902,65 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildEjectorSettings, updateEjectorSettingsContent } =
     ejectorSettingsBrowserAdapter;
 
-  const marketSettingsOverrides = {};
-  const getMarketSettingsDependency = createDependencyResolver(
-    marketSettingsOverrides,
-    {
-      $: () => $,
-      MarketManager: () => MarketManager,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsToggle: () => addSettingsToggle,
-      addStandardHeading: () => addStandardHeading,
-      addTableInput: () => addTableInput,
-      addTableToggle: () => addTableToggle,
-      buildSettingsSection: () => buildSettingsSection,
-      buildTableLabel: () => buildTableLabel,
-      document: () => document,
-      poly: () => poly,
-      removeMarketToggles: () => removeMarketToggles,
-      resetCheckbox: () => resetCheckbox,
-      resetMarketSettings: () => resetMarketSettings,
-      resources: () => resources,
-      settingsRaw: () => settingsRaw,
-      sorterHelper: () => sorterHelper,
-      updateSettingsFromState: () => updateSettingsFromState,
-    },
-  );
-  const marketSettings = createMarketSettings({
-    getDependency: getMarketSettingsDependency,
-    getOverride: (name) => marketSettingsOverrides[name],
+  let marketSettingsTestContext;
+  const marketSettingsReader = createMarketSettingsEvolveAdapter({
+    getMarketManager: () =>
+      marketSettingsTestContext?.MarketManager ?? MarketManager,
+    getResources: () => marketSettingsTestContext?.resources ?? resources,
+    getPoly: () => marketSettingsTestContext?.poly ?? poly,
   });
-  const { buildMarketSettings, updateMarketSettingsContent } = marketSettings;
+  const marketSettingsReorderer = createMarketSettingsWriter({
+    getMarketManager: () =>
+      marketSettingsTestContext?.MarketManager ?? MarketManager,
+    getSettingsRaw: () => marketSettingsTestContext?.settingsRaw ?? settingsRaw,
+  });
+  const marketSettingsActions = {
+    buildSettingsSection: (...args) => buildSettingsSection(...args),
+    addSettingsNumber: (...args) => addSettingsNumber(...args),
+    addSettingsToggle: (...args) => addSettingsToggle(...args),
+    addStandardHeading: (...args) => addStandardHeading(...args),
+    addTableInput: (...args) => addTableInput(...args),
+    addTableToggle: (...args) => addTableToggle(...args),
+    buildTableLabel: (...args) => buildTableLabel(...args),
+    getSorterHelper: () => sorterHelper,
+  };
+  const marketSettingsIntentHandler = createMarketSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (marketSettingsTestContext?.resetMarketSettings ?? resetMarketSettings)(
+          true,
+        ),
+      persist: () =>
+        (
+          marketSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+      reorderResources: (resourceIds) =>
+        marketSettingsReorderer.reorderResources(resourceIds),
+    },
+    renderSettingsContent: () => updateMarketSettingsContent(),
+    effects: {
+      resetCheckboxes: () =>
+        (marketSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoMarket",
+          "autoGalaxyMarket",
+        ),
+      removeMarketToggles: () =>
+        (
+          marketSettingsTestContext?.removeMarketToggles ?? removeMarketToggles
+        )(),
+    },
+  });
+  const marketSettingsBrowserAdapter = createMarketSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    reader: marketSettingsReader,
+    intents: marketSettingsIntentHandler,
+    getActions: () =>
+      marketSettingsTestContext?.actions ?? marketSettingsActions,
+  });
+  const { buildMarketSettings, updateMarketSettingsContent } =
+    marketSettingsBrowserAdapter;
 
   let { traitVal } = createTraitValue({ getGame: () => game });
   const readAuthorityView = () =>
@@ -5696,7 +5731,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         hell: hellSettings,
         fleet: fleetSettings,
         mech: mechSettings,
-        market: marketSettings,
       },
       setSettingsBoundariesTestContext(context) {
         Object.assign(prestigeSettingsOverrides, context);
@@ -5706,13 +5740,18 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         Object.assign(hellSettingsOverrides, context);
         Object.assign(fleetSettingsOverrides, context);
         Object.assign(mechSettingsOverrides, context);
-        Object.assign(marketSettingsOverrides, context);
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {
       ejectorSettings: ejectorSettingsBrowserAdapter,
       setEjectorSettingsTestContext(context) {
         ejectorSettingsTestContext = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      marketSettings: marketSettingsBrowserAdapter,
+      setMarketSettingsTestContext(context) {
+        marketSettingsTestContext = context;
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {

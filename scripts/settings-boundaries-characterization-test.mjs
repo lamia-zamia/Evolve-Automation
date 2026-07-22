@@ -83,7 +83,6 @@ assert.deepEqual(Object.keys(boundaries), [
   "hell",
   "fleet",
   "mech",
-  "market",
 ]);
 
 const trace = [];
@@ -180,7 +179,6 @@ assert.deepEqual(
     { kind: "secondary", prefix: "", id: "hell", label: "Hell" },
     { kind: "secondary", prefix: "", id: "fleet", label: "Fleet" },
     { kind: "primary", id: "mech", label: "Mech & Spire" },
-    { kind: "primary", id: "market", label: "Market" },
   ],
 );
 
@@ -215,11 +213,7 @@ assert.deepEqual(behavioralTrace, [
   "update:mech:",
   "checkbox:autoMech",
   "remove:mechInfo",
-  "reset:market:true",
-  "update:market:",
-  "checkbox:autoMarket|autoGalaxyMarket",
-  "remove:marketToggles",
 ]);
 
-assert.ok(storageTrace.length >= 8);
-console.log("8 settings-boundary bundled characterization tests passed");
+assert.ok(storageTrace.length >= 7);
+console.log("7 settings-boundary bundled characterization tests passed");

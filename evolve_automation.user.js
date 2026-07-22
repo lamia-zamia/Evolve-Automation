@@ -18047,7 +18047,7 @@
     logFilter
   }) {
     const frozenMessageTypes = Object.freeze(messageTypes.map(freezeMessageType));
-    const controls2 = [
+    const controls3 = [
       Object.freeze({ kind: "header", label: "Script Messages" }),
       Object.freeze({
         kind: "toggle",
@@ -18057,7 +18057,7 @@
       })
     ];
     for (const { id, label } of frozenMessageTypes) {
-      controls2.push(
+      controls3.push(
         Object.freeze({
           kind: "toggle",
           settingName: "log_" + id,
@@ -18066,7 +18066,7 @@
         })
       );
     }
-    controls2.push(
+    controls3.push(
       Object.freeze({
         kind: "string",
         settingName: "log_prestige_format",
@@ -18086,7 +18086,7 @@
       sectionName: "Logging",
       locale,
       logFilter,
-      controls: Object.freeze(controls2)
+      controls: Object.freeze(controls3)
     });
   }
 
@@ -21213,162 +21213,162 @@
   }
 
   // src/application/tick.ts
-  function runTick({ reader, controls: controls2 }) {
+  function runTick({ reader, controls: controls3 }) {
     const preamble = reader.samplePreamble();
     if (!shouldStartTick(preamble)) {
       return;
     }
-    controls2.markGameTickConsumed();
+    controls3.markGameTickConsumed();
     const scriptTick = advanceScriptTick(preamble.scriptTick);
-    controls2.setScriptTick(scriptTick);
+    controls3.setScriptTick(scriptTick);
     if (isThrottledTick(scriptTick, preamble.tickRate, preamble.accelerated)) {
       return;
     }
-    controls2.updateScriptData();
-    controls2.updateOverrides();
-    controls2.finalizeScriptData();
-    if (controls2.updateTabs()) {
+    controls3.updateScriptData();
+    controls3.updateOverrides();
+    controls3.finalizeScriptData();
+    if (controls3.updateTabs()) {
       return;
     }
-    controls2.updateState();
-    controls2.updateUI();
-    controls2.keyManagerReset();
+    controls3.updateState();
+    controls3.updateUI();
+    controls3.keyManagerReset();
     const s = reader.sampleAutomation();
     if (!s.masterScriptToggle) {
       return;
     }
     if (s.goal === "Evolution") {
       if (s.autoEvolution) {
-        controls2.autoEvolution();
+        controls3.autoEvolution();
       }
       return;
     }
     if (s.buildingAlwaysClick || s.autoBuild) {
-      controls2.autoGatherResources();
+      controls3.autoGatherResources();
     }
     if (s.autoMarket) {
-      controls2.autoMarket();
+      controls3.autoMarket();
     }
     if (s.autoHell) {
-      controls2.autoHell();
+      controls3.autoHell();
     }
     if (s.autoGalaxyMarket) {
-      controls2.autoGalaxyMarket();
+      controls3.autoGalaxyMarket();
     }
     if (s.autoMiningDroid) {
-      controls2.autoMiningDroid();
+      controls3.autoMiningDroid();
     }
     if (s.autoGraphenePlant) {
-      controls2.autoGraphenePlant();
+      controls3.autoGraphenePlant();
     }
     if (s.autoAlchemy) {
-      controls2.autoAlchemy();
+      controls3.autoAlchemy();
     }
     if (s.autoPylon) {
-      controls2.autoPylon();
+      controls3.autoPylon();
     }
     if (s.autoQuarry) {
-      controls2.autoQuarry();
+      controls3.autoQuarry();
     }
     if (s.autoMine) {
-      controls2.autoMine();
+      controls3.autoMine();
     }
     if (s.autoExtractor) {
-      controls2.autoExtractor();
+      controls3.autoExtractor();
     }
     if (s.autoSmelter) {
-      controls2.autoSmelter();
+      controls3.autoSmelter();
     }
     if (s.autoStorage) {
-      controls2.autoStorage();
+      controls3.autoStorage();
     }
     if (s.autoReplicator) {
-      controls2.autoReplicator();
+      controls3.autoReplicator();
     }
-    if (!s.autoTrigger || !controls2.autoTrigger()) {
+    if (!s.autoTrigger || !controls3.autoTrigger()) {
       if (s.autoResearch) {
-        controls2.autoResearch();
+        controls3.autoResearch();
       }
       if (s.autoBuild || s.autoARPA) {
-        controls2.autoBuild();
-        controls2.setPlannerFreshTick(scriptTick);
+        controls3.autoBuild();
+        controls3.setPlannerFreshTick(scriptTick);
       }
     }
     if (s.autoFactory) {
-      controls2.autoFactory();
+      controls3.autoFactory();
     }
     if (s.autoJobs) {
-      controls2.autoJobs();
+      controls3.autoJobs();
     } else if (s.autoCraftsmen) {
-      controls2.autoJobs(true);
+      controls3.autoJobs(true);
     }
     if (s.autoFleet) {
       if (s.truepath) {
-        controls2.autoFleetOuter();
+        controls3.autoFleetOuter();
       } else {
-        controls2.autoFleet();
+        controls3.autoFleet();
       }
     }
     if (s.autoMech) {
-      controls2.autoMech();
+      controls3.autoMech();
     }
     if (s.autoGenetics) {
-      controls2.autoGenetics();
+      controls3.autoGenetics();
     }
     if (s.autoMinorTrait) {
-      controls2.autoMinorTrait();
+      controls3.autoMinorTrait();
     }
     if (s.autoCraft) {
-      controls2.autoCraft();
+      controls3.autoCraft();
     }
     if (s.autoFight) {
-      controls2.autoMerc();
-      controls2.autoSpy();
-      controls2.autoBattle();
+      controls3.autoMerc();
+      controls3.autoSpy();
+      controls3.autoBattle();
     }
     if (s.autoTax) {
-      controls2.autoTax();
+      controls3.autoTax();
     }
     if (s.autoGovernment) {
-      controls2.autoGovernment();
+      controls3.autoGovernment();
     }
     if (s.autoNanite) {
-      controls2.consumeNanite();
+      controls3.consumeNanite();
     }
     if (s.autoSupply) {
-      controls2.consumeSupply();
+      controls3.consumeSupply();
     }
     if (s.autoEject) {
-      controls2.consumeEject();
+      controls3.consumeEject();
     }
     if (s.autoPower) {
-      controls2.autoPower();
+      controls3.autoPower();
     }
-    if (controls2.isPrestigeAllowed()) {
-      controls2.autoPrestige();
+    if (controls3.isPrestigeAllowed()) {
+      controls3.autoPrestige();
     }
     if (s.autoMinorTrait) {
-      controls2.autoShapeshift();
-      controls2.autoPsychic();
-      controls2.autoOcularPowers();
-      controls2.autoWish();
+      controls3.autoShapeshift();
+      controls3.autoPsychic();
+      controls3.autoOcularPowers();
+      controls3.autoWish();
     }
     if (s.autoMutateTraits) {
-      controls2.autoMutateTrait();
+      controls3.autoMutateTrait();
     }
-    controls2.updateBuildPlanner();
+    controls3.updateBuildPlanner();
     if (s.stateLogEnabled) {
       const { next, record } = advanceStateLog(
         s.stateLogTick,
         s.stateLogInterval
       );
-      controls2.setStateLogTick(next);
+      controls3.setStateLogTick(next);
       if (record) {
-        controls2.recordStateSnapshot();
+        controls3.recordStateSnapshot();
       }
     }
-    controls2.keyManagerFinish();
-    controls2.recordSoulGem();
+    controls3.keyManagerFinish();
+    controls3.recordSoulGem();
   }
 
   // src/adapters/evolve/tick.ts
@@ -21573,51 +21573,51 @@
   // src/application/state-update.ts
   function runStateUpdate({
     reader,
-    controls: controls2,
+    controls: controls3,
     clock
   }) {
     const goalSnapshot = reader.sampleGoalTransition();
     const transition = planGoalTransition(goalSnapshot);
     switch (transition.kind) {
       case "force-evolution":
-        controls2.setGoal("Evolution");
+        controls3.setGoal("Evolution");
         break;
       case "resolve-leaving":
-        if (!controls2.checkEvolutionResult()) {
+        if (!controls3.checkEvolutionResult()) {
           return;
         }
-        controls2.setGoal("Standard");
+        controls3.setGoal("Standard");
         if (transition.rebuildTriggers) {
-          controls2.rebuildTriggerContent();
+          controls3.rebuildTriggerContent();
         }
         break;
       case "day1-fallback":
-        if (!controls2.checkEvolutionResult()) {
+        if (!controls3.checkEvolutionResult()) {
           return;
         }
         break;
       case "proceed":
         break;
     }
-    controls2.resetResourceAccumulators();
-    controls2.applyStorageUnitValues();
-    controls2.runPlanningPasses();
-    controls2.resetTooltips();
+    controls3.resetResourceAccumulators();
+    controls3.applyStorageUnitValues();
+    controls3.runPlanningPasses();
+    controls3.resetTooltips();
     const refresh = reader.sampleRefresh();
     const money = computeMoneyWindow(refresh.moneyIncomes, refresh.moneyRate);
-    controls2.applyMoneyWindow(money.incomes, money.median);
-    controls2.applyAstroSign();
-    controls2.applyTowerSize(computeTowerSize(refresh.pillars));
+    controls3.applyMoneyWindow(money.incomes, money.median);
+    controls3.applyAstroSign();
+    controls3.applyTowerSize(computeTowerSize(refresh.pillars));
     const stabilise = evaluateStabilise(
       refresh.currentExotic,
       refresh.lastExoticMass
     );
-    controls2.applyStabilise(
+    controls3.applyStabilise(
       stabilise.stabilised ? clock.nowMs() : void 0,
       stabilise.lastExoticMass
     );
-    controls2.cacheSpaceDockOptions();
-    controls2.updateActiveTargets();
+    controls3.cacheSpaceDockOptions();
+    controls3.updateActiveTargets();
   }
 
   // src/adapters/evolve/state-update.ts
@@ -26177,23 +26177,23 @@
     function getControls() {
       const candidate = getVueById2("tax_rates");
       if (candidate === void 0 || candidate === null) return void 0;
-      const controls2 = requireRecord(candidate, "tax controls");
-      requireFunction(controls2["add"], "tax controls.add");
-      requireFunction(controls2["sub"], "tax controls.sub");
-      return controls2;
+      const controls3 = requireRecord(candidate, "tax controls");
+      requireFunction(controls3["add"], "tax controls.add");
+      requireFunction(controls3["sub"], "tax controls.sub");
+      return controls3;
     }
     function isAvailable() {
       return getControls() !== void 0;
     }
     function adjust(direction) {
-      const controls2 = getControls();
-      if (controls2 === void 0) return false;
+      const controls3 = getControls();
+      if (controls3 === void 0) return false;
       const methodName = direction === "increase" ? "add" : "sub";
       const method = requireFunction(
-        controls2[methodName],
+        controls3[methodName],
         `tax controls.${methodName}`
       );
-      Reflect.apply(method, controls2, []);
+      Reflect.apply(method, controls3, []);
       return true;
     }
     return Object.freeze({ isAvailable, adjust });
@@ -26504,17 +26504,17 @@
   // src/bootstrap/tax.ts
   function createTaxAutomation(dependencies) {
     const clock = Object.freeze({ nowMs: dependencies.nowMs });
-    const controls2 = createBrowserTaxControls(dependencies.getVueById);
+    const controls3 = createBrowserTaxControls(dependencies.getVueById);
     const gameReader = createEvolveTaxReader({
       clock,
-      controls: controls2,
+      controls: controls3,
       getGame: dependencies.getGame,
       getPoly: dependencies.getPoly,
       getResources: dependencies.getResources
     });
     const settingsReader = createTaxSettingsReader(dependencies.getSettings);
     const commandExecutor = createTaxCommandExecutor({
-      controls: controls2,
+      controls: controls3,
       keyModifiers: createKeyModifierController(dependencies.clearKeyModifiers),
       getGame: dependencies.getGame,
       getResources: dependencies.getResources
@@ -43820,6 +43820,357 @@
     });
   }
 
+  // src/application/market-settings.ts
+  function createMarketSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-market-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            effects.resetCheckboxes();
+            effects.removeMarketToggles();
+            return;
+          case "reorder-market-resources":
+            writer.reorderResources(intent.resourceIds);
+            writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/adapters/browser/market-settings.ts
+  function createMarketSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function buildMarketSettings2() {
+      const readModel = reader.read();
+      const actions = getActions();
+      actions.buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-market-settings" }),
+        updateMarketSettingsContent2
+      );
+    }
+    function updateMarketSettingsContent2() {
+      const readModel = reader.read();
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const jquery = getJQuery();
+      const currentNode = jquery(`#script_${readModel.sectionId}Content`);
+      currentNode.empty().off("*");
+      for (const control of readModel.controls) {
+        if (control.kind === "heading") break;
+        renderControl(currentNode, control, actions);
+      }
+      renderMarketTable(currentNode, readModel, actions, jquery, intents);
+      const galaxyHeading = readModel.controls.find(
+        (control) => control.kind === "heading"
+      );
+      if (galaxyHeading?.kind === "heading") {
+        actions.addStandardHeading(currentNode, galaxyHeading.label);
+      }
+      const galaxyControl = readModel.controls[readModel.controls.length - 1];
+      if (galaxyControl?.kind === "number") {
+        renderControl(currentNode, galaxyControl, actions);
+      }
+      renderGalaxyTable(currentNode, readModel, actions, jquery);
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function renderControl(node, control, actions) {
+      if (control.kind === "number") {
+        actions.addSettingsNumber(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+      } else {
+        actions.addSettingsToggle(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+      }
+    }
+    function renderMarketTable(node, readModel, actions, jquery, intents2) {
+      node.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" colspan="1"></th>
+              <th class="has-text-warning" colspan="4">Manual Trades</th>
+              <th class="has-text-warning" colspan="4">Trade Routes</th>
+              <th class="has-text-warning" colspan="1"></th>
+            </tr>
+            <tr>
+              <th class="has-text-warning" style="width:15%">Resource</th>
+              <th class="has-text-warning" style="width:10%">Buy</th>
+              <th class="has-text-warning" style="width:10%">Ratio</th>
+              <th class="has-text-warning" style="width:10%">Sell</th>
+              <th class="has-text-warning" style="width:10%">Ratio</th>
+              <th class="has-text-warning" style="width:10%">In</th>
+              <th class="has-text-warning" style="width:10%">Away</th>
+              <th class="has-text-warning" style="width:10%">Weighting</th>
+              <th class="has-text-warning" style="width:10%">Priority</th>
+              <th style="width:5%"></th>
+            </tr>
+            <tbody id="script_marketTableBody"></tbody>
+          </table>`);
+      const tableBodyNode = jquery("#script_marketTableBody");
+      let rows = "";
+      for (const row of readModel.rows) {
+        rows += `<tr value="${row.id}" class="script-draggable"><td id="script_market_${row.id}" style="width:15%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%;border-right-width:1px"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+      }
+      tableBodyNode.append(jquery(rows));
+      for (const row of readModel.rows) renderMarketRow(row, actions, jquery);
+      tableBodyNode.sortable({
+        items: "tr:not(.unsortable)",
+        helper: actions.getSorterHelper(),
+        update: () => {
+          const resourceIds = tableBodyNode.sortable("toArray", {
+            attribute: "value"
+          });
+          intents2.handle({ type: "reorder-market-resources", resourceIds });
+        }
+      });
+    }
+    function renderMarketRow(row, actions, jquery) {
+      let cell = jquery(`#script_market_${row.id}`);
+      cell.append(actions.buildTableLabel(row.label));
+      cell = cell.next();
+      actions.addTableToggle(cell, row.buySettingName);
+      cell = cell.next();
+      actions.addTableInput(cell, row.buyRatioSettingName);
+      cell = cell.next();
+      actions.addTableToggle(cell, row.sellSettingName);
+      cell = cell.next();
+      actions.addTableInput(cell, row.sellRatioSettingName);
+      cell = cell.next();
+      actions.addTableToggle(cell, row.tradeBuySettingName);
+      cell = cell.next();
+      actions.addTableToggle(cell, row.tradeSellSettingName);
+      cell = cell.next();
+      actions.addTableInput(cell, row.tradeWeightingSettingName);
+      cell = cell.next();
+      actions.addTableInput(cell, row.tradePrioritySettingName);
+    }
+    function renderGalaxyTable(node, readModel, actions, jquery) {
+      node.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:30%">Buy</th>
+              <th class="has-text-warning" style="width:30%">Sell</th>
+              <th class="has-text-warning" style="width:20%">Weighting</th>
+              <th class="has-text-warning" style="width:20%">Priority</th>
+            </tr>
+            <tbody id="script_marketGalaxyTableBody"></tbody>
+          </table>`);
+      const tableBodyNode = jquery("#script_marketGalaxyTableBody");
+      let rows = "";
+      readModel.galaxyRows.forEach(
+        (_row, index) => rows += `<tr><td id="script_market_galaxy_${index}" style="width:30%"><td style="width:30%"></td></td><td style="width:20%"></td><td style="width:20%"></td></tr>`
+      );
+      tableBodyNode.append(jquery(rows));
+      readModel.galaxyRows.forEach((row, index) => {
+        let cell = jquery(`#script_market_galaxy_${index}`);
+        cell.append(actions.buildTableLabel(row.buyLabel, "has-text-success"));
+        cell = cell.next();
+        cell.append(actions.buildTableLabel(row.sellLabel, "has-text-danger"));
+        cell = cell.next();
+        actions.addTableInput(cell, row.weightingSettingName);
+        cell = cell.next();
+        actions.addTableInput(cell, row.prioritySettingName);
+      });
+    }
+    return Object.freeze({ buildMarketSettings: buildMarketSettings2, updateMarketSettingsContent: updateMarketSettingsContent2 });
+  }
+
+  // src/domain/market-settings.ts
+  var controls2 = Object.freeze([
+    Object.freeze({
+      kind: "number",
+      settingName: "minimumMoney",
+      label: "Manual trade minimum money",
+      hint: "Minimum money to keep after bulk buying"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "minimumMoneyPercentage",
+      label: "Manual trade minimum money percentage",
+      hint: "Minimum percentage of money to keep after bulk buying"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "tradeRouteMinimumMoneyPerSecond",
+      label: "Trade minimum money /s",
+      hint: "Uses the highest per second amount of these two values. Will trade for resources until this minimum money per second amount is hit"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "tradeRouteMinimumMoneyPercentage",
+      label: "Trade minimum money percentage /s",
+      hint: "Uses the highest per second amount of these two values. Will trade for resources until this percentage of your money per second amount is hit"
+    }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "tradeRouteSellExcess",
+      label: "Sell excess resources",
+      hint: "With this option enabled script will be allowed to sell resources above amounts needed for constructions or researches, without it script sell only capped resources. As side effect boughts will also be limited to that amounts, to avoid 'buy up to cap -> sell excess' loops."
+    }),
+    Object.freeze({ kind: "heading", label: "Galaxy Trades" }),
+    Object.freeze({
+      kind: "number",
+      settingName: "marketMinIngredients",
+      label: "Minimum materials to preserve",
+      hint: "Galaxy Market will buy resources only when all selling materials above given ratio"
+    })
+  ]);
+  function createMarketSettingsReadModel({
+    rows,
+    galaxyRows
+  }) {
+    return Object.freeze({
+      sectionId: "market",
+      sectionName: "Market",
+      controls: controls2,
+      rows: Object.freeze(rows.map((row) => Object.freeze({ ...row }))),
+      galaxyRows: Object.freeze(
+        galaxyRows.map((row) => Object.freeze({ ...row }))
+      )
+    });
+  }
+
+  // src/adapters/evolve/market-settings.ts
+  function requireString26(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function readResource3(value, path) {
+    const resource2 = requireRecord(value, path);
+    return {
+      id: requireString26(resource2["id"], `${path}.id`),
+      name: requireString26(resource2["name"], `${path}.name`)
+    };
+  }
+  function readMarketRows(managerValue) {
+    const manager = requireRecord(managerValue, "MarketManager");
+    if (!Array.isArray(manager["priorityList"])) {
+      throw new TypeError("MarketManager.priorityList must be an array");
+    }
+    return Object.freeze(
+      manager["priorityList"].map((rawResource, index) => {
+        const resource2 = readResource3(
+          rawResource,
+          `MarketManager.priorityList[${index}]`
+        );
+        const id = resource2.id;
+        return Object.freeze({
+          id,
+          label: resource2.name,
+          buySettingName: `buy${id}`,
+          buyRatioSettingName: `res_buy_r_${id}`,
+          sellSettingName: `sell${id}`,
+          sellRatioSettingName: `res_sell_r_${id}`,
+          tradeBuySettingName: `res_trade_buy_${id}`,
+          tradeSellSettingName: `res_trade_sell_${id}`,
+          tradeWeightingSettingName: `res_trade_w_${id}`,
+          tradePrioritySettingName: `res_trade_p_${id}`
+        });
+      })
+    );
+  }
+  function readGalaxyRows(polyValue, resourcesValue) {
+    const poly2 = requireRecord(polyValue, "poly");
+    const resources2 = requireRecord(resourcesValue, "resources");
+    if (!Array.isArray(poly2["galaxyOffers"])) {
+      throw new TypeError("poly.galaxyOffers must be an array");
+    }
+    return Object.freeze(
+      poly2["galaxyOffers"].map((rawOffer, index) => {
+        const offer = requireRecord(rawOffer, `poly.galaxyOffers[${index}]`);
+        const buy = requireRecord(
+          offer["buy"],
+          `poly.galaxyOffers[${index}].buy`
+        );
+        const sell = requireRecord(
+          offer["sell"],
+          `poly.galaxyOffers[${index}].sell`
+        );
+        const buyKey = requireString26(
+          buy["res"],
+          `poly.galaxyOffers[${index}].buy.res`
+        );
+        const sellKey = requireString26(
+          sell["res"],
+          `poly.galaxyOffers[${index}].sell.res`
+        );
+        const buyResource = readResource3(
+          resources2[buyKey],
+          `resources.${buyKey}`
+        );
+        const sellResource = readResource3(
+          resources2[sellKey],
+          `resources.${sellKey}`
+        );
+        return Object.freeze({
+          buyId: buyResource.id,
+          buyLabel: buyResource.name,
+          sellLabel: sellResource.name,
+          weightingSettingName: `res_galaxy_w_${buyResource.id}`,
+          prioritySettingName: `res_galaxy_p_${buyResource.id}`
+        });
+      })
+    );
+  }
+  function createMarketSettingsEvolveAdapter({
+    getMarketManager,
+    getResources,
+    getPoly
+  }) {
+    return Object.freeze({
+      read() {
+        return createMarketSettingsReadModel({
+          rows: readMarketRows(getMarketManager()),
+          galaxyRows: readGalaxyRows(getPoly(), getResources())
+        });
+      }
+    });
+  }
+  function createMarketSettingsWriter({
+    getMarketManager,
+    getSettingsRaw
+  }) {
+    return {
+      reorderResources(resourceIds) {
+        const manager = requireRecord(getMarketManager(), "MarketManager");
+        const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+        const sortByPriority = requireFunction(
+          manager["sortByPriority"],
+          "MarketManager.sortByPriority"
+        );
+        resourceIds.forEach(
+          (resourceId3, index) => settingsRaw2[`res_buy_p_${resourceId3}`] = index
+        );
+        Reflect.apply(sortByPriority, manager, []);
+      }
+    };
+  }
+
   // src/ui/production-settings.ts
   function createProductionSettings({
     getSettingsRaw,
@@ -46889,211 +47240,6 @@
     return { buildMechSettings: buildMechSettings2, updateMechSettingsContent: updateMechSettingsContent2 };
   }
 
-  // src/ui/market-settings.ts
-  function createMarketSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const MarketManager2 = liveObject4(() => getDependency("MarketManager"));
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const addStandardHeading2 = liveFunction(
-      () => getDependency("addStandardHeading")
-    );
-    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
-    const addTableToggle2 = liveFunction(() => getDependency("addTableToggle"));
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject4(() => getDependency("document"));
-    const poly2 = liveObject4(() => getDependency("poly"));
-    const removeMarketToggles2 = liveFunction(
-      () => getDependency("removeMarketToggles")
-    );
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetMarketSettings2 = liveFunction(
-      () => getDependency("resetMarketSettings")
-    );
-    const resources2 = liveObject4(() => getDependency("resources"));
-    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
-    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildMarketSettingsImpl() {
-      let sectionId = "market";
-      let sectionName = "Market";
-      let resetFunction = function() {
-        resetMarketSettings2(true);
-        updateSettingsFromState2();
-        updateMarketSettingsContent2();
-        resetCheckbox2("autoMarket", "autoGalaxyMarket");
-        removeMarketToggles2();
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateMarketSettingsContent2
-      );
-    }
-    function updateMarketSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_marketContent");
-      currentNode.empty().off("*");
-      addSettingsNumber2(
-        currentNode,
-        "minimumMoney",
-        "Manual trade minimum money",
-        "Minimum money to keep after bulk buying"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "minimumMoneyPercentage",
-        "Manual trade minimum money percentage",
-        "Minimum percentage of money to keep after bulk buying"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "tradeRouteMinimumMoneyPerSecond",
-        "Trade minimum money /s",
-        "Uses the highest per second amount of these two values. Will trade for resources until this minimum money per second amount is hit"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "tradeRouteMinimumMoneyPercentage",
-        "Trade minimum money percentage /s",
-        "Uses the highest per second amount of these two values. Will trade for resources until this percentage of your money per second amount is hit"
-      );
-      addSettingsToggle2(
-        currentNode,
-        "tradeRouteSellExcess",
-        "Sell excess resources",
-        "With this option enabled script will be allowed to sell resources above amounts needed for constructions or researches, without it script sell only capped resources. As side effect boughts will also be limited to that amounts, to avoid 'buy up to cap -> sell excess' loops."
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" colspan="1"></th>
-              <th class="has-text-warning" colspan="4">Manual Trades</th>
-              <th class="has-text-warning" colspan="4">Trade Routes</th>
-              <th class="has-text-warning" colspan="1"></th>
-            </tr>
-            <tr>
-              <th class="has-text-warning" style="width:15%">Resource</th>
-              <th class="has-text-warning" style="width:10%">Buy</th>
-              <th class="has-text-warning" style="width:10%">Ratio</th>
-              <th class="has-text-warning" style="width:10%">Sell</th>
-              <th class="has-text-warning" style="width:10%">Ratio</th>
-              <th class="has-text-warning" style="width:10%">In</th>
-              <th class="has-text-warning" style="width:10%">Away</th>
-              <th class="has-text-warning" style="width:10%">Weighting</th>
-              <th class="has-text-warning" style="width:10%">Priority</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_marketTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $2("#script_marketTableBody");
-      let newTableBodyText = "";
-      for (let i = 0; i < MarketManager2.priorityList.length; i++) {
-        const resource2 = MarketManager2.priorityList[i];
-        newTableBodyText += `<tr value="${resource2.id}" class="script-draggable"><td id="script_market_${resource2.id}" style="width:15%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%;border-right-width:1px"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
-      }
-      tableBodyNode.append($2(newTableBodyText));
-      for (let i = 0; i < MarketManager2.priorityList.length; i++) {
-        const resource2 = MarketManager2.priorityList[i];
-        let marketElement = $2("#script_market_" + resource2.id);
-        marketElement.append(buildTableLabel2(resource2.name));
-        marketElement = marketElement.next();
-        addTableToggle2(marketElement, "buy" + resource2.id);
-        marketElement = marketElement.next();
-        addTableInput2(marketElement, "res_buy_r_" + resource2.id);
-        marketElement = marketElement.next();
-        addTableToggle2(marketElement, "sell" + resource2.id);
-        marketElement = marketElement.next();
-        addTableInput2(marketElement, "res_sell_r_" + resource2.id);
-        marketElement = marketElement.next();
-        addTableToggle2(marketElement, "res_trade_buy_" + resource2.id);
-        marketElement = marketElement.next();
-        addTableToggle2(marketElement, "res_trade_sell_" + resource2.id);
-        marketElement = marketElement.next();
-        addTableInput2(marketElement, "res_trade_w_" + resource2.id);
-        marketElement = marketElement.next();
-        addTableInput2(marketElement, "res_trade_p_" + resource2.id);
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper2,
-        update: function() {
-          let marketIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < marketIds.length; i++) {
-            settingsRaw2["res_buy_p_" + marketIds[i]] = i;
-          }
-          MarketManager2.sortByPriority();
-          updateSettingsFromState2();
-        }
-      });
-      addStandardHeading2(currentNode, "Galaxy Trades");
-      addSettingsNumber2(
-        currentNode,
-        "marketMinIngredients",
-        "Minimum materials to preserve",
-        "Galaxy Market will buy resources only when all selling materials above given ratio"
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:30%">Buy</th>
-              <th class="has-text-warning" style="width:30%">Sell</th>
-              <th class="has-text-warning" style="width:20%">Weighting</th>
-              <th class="has-text-warning" style="width:20%">Priority</th>
-            </tr>
-            <tbody id="script_marketGalaxyTableBody"></tbody>
-          </table>`);
-      tableBodyNode = $2("#script_marketGalaxyTableBody");
-      newTableBodyText = "";
-      for (let i = 0; i < poly2.galaxyOffers.length; i++) {
-        newTableBodyText += `<tr><td id="script_market_galaxy_${i}" style="width:30%"><td style="width:30%"></td></td><td style="width:20%"></td><td style="width:20%"></td></tr>`;
-      }
-      tableBodyNode.append($2(newTableBodyText));
-      for (let i = 0; i < poly2.galaxyOffers.length; i++) {
-        let trade = poly2.galaxyOffers[i];
-        let buyResource = resources2[trade.buy.res];
-        let sellResource = resources2[trade.sell.res];
-        let marketElement = $2("#script_market_galaxy_" + i);
-        marketElement.append(
-          buildTableLabel2(buyResource.name, "has-text-success")
-        );
-        marketElement = marketElement.next();
-        marketElement.append(
-          buildTableLabel2(sellResource.name, "has-text-danger")
-        );
-        marketElement = marketElement.next();
-        addTableInput2(marketElement, "res_galaxy_w_" + buyResource.id);
-        marketElement = marketElement.next();
-        addTableInput2(marketElement, "res_galaxy_p_" + buyResource.id);
-      }
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildMarketSettings2(...args) {
-      const implementation = getOverride("buildMarketSettings") ?? buildMarketSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateMarketSettingsContent2(...args) {
-      const implementation = getOverride("updateMarketSettingsContent") ?? updateMarketSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildMarketSettings: buildMarketSettings2, updateMarketSettingsContent: updateMarketSettingsContent2 };
-  }
-
   // src/ui/queue-panels.ts
   function createQueuePanels({
     getJQuery,
@@ -47327,7 +47473,7 @@
   }
 
   // src/adapters/evolve/mech-info.ts
-  function requireString26(value, path) {
+  function requireString27(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47373,7 +47519,7 @@
           mechs[index],
           `game.global.portal.mechbay.mechs[${index}]`
         );
-        const size = requireString26(mech["size"], `mechs[${index}].size`);
+        const size = requireString27(mech["size"], `mechs[${index}].size`);
         const stats = requireRecord(
           call4(manager, "getMechStats", "MechManager.getMechStats", [mech]),
           `MechManager.getMechStats(${index})`
@@ -47551,7 +47697,7 @@
   }
 
   // src/adapters/evolve/resource-toggles.ts
-  function requireString27(value, path) {
+  function requireString28(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47572,7 +47718,7 @@
     return priorityList;
   }
   function readResourceId3(value, path) {
-    return requireString27(requireRecord(value, path)["id"], `${path}.id`);
+    return requireString28(requireRecord(value, path)["id"], `${path}.id`);
   }
   function createResourceToggleEvolveAdapter({
     getGame,
@@ -47588,13 +47734,13 @@
       const noTrade = Boolean(race2["no_trade"]);
       const loc = requireFunction2(game2["loc"], "game.loc");
       const labels = noTrade ? Object.freeze({ buy: "", sell: "", routes: "", cancelRoutes: "" }) : Object.freeze({
-        buy: requireString27(loc("resource_market_buy"), "game.loc(buy)"),
-        sell: requireString27(loc("resource_market_sell"), "game.loc(sell)"),
-        routes: requireString27(
+        buy: requireString28(loc("resource_market_buy"), "game.loc(buy)"),
+        sell: requireString28(loc("resource_market_sell"), "game.loc(sell)"),
+        routes: requireString28(
           loc("resource_market_routes"),
           "game.loc(routes)"
         ),
-        cancelRoutes: requireString27(
+        cancelRoutes: requireString28(
           loc("cancel_routes"),
           "game.loc(cancel_routes)"
         )
@@ -48211,31 +48357,31 @@
       modal.append(
         '<div><h3 class="has-text-danger">Custom Race Presets</h3> - <span class="has-text-warning">Automation Custom Lab</span></div>'
       );
-      let controls2 = $2(
+      let controls3 = $2(
         '<div class="fields" style="margin-bottom:10px;"></div>'
       ).appendTo(modal);
       let presetSelect = $2(
         '<select class="select" style="width:220px;"></select>'
-      ).appendTo(controls2);
+      ).appendTo(controls3);
       settingsRaw2.prestigeCustomRacePresets.forEach((item, index) => {
         $2("<option></option>").val(String(index)).text(item.name || `Preset ${index + 1}`).appendTo(presetSelect);
       });
       presetSelect.val(String(presetIndex));
       let presetName = $2(
         '<input class="input" type="text" maxlength="60" style="width:180px;" />'
-      ).val(preset.name || `Preset ${presetIndex + 1}`).appendTo(controls2);
+      ).val(preset.name || `Preset ${presetIndex + 1}`).appendTo(controls3);
       let addButton = $2(
         '<button class="button" type="button">Add</button>'
-      ).appendTo(controls2);
+      ).appendTo(controls3);
       let cloneButton = $2(
         '<button class="button" type="button">Clone</button>'
-      ).appendTo(controls2);
+      ).appendTo(controls3);
       let deleteButton = $2(
         '<button class="button" type="button">Delete</button>'
-      ).appendTo(controls2);
+      ).appendTo(controls3);
       let captureButton = $2(
         '<button class="button" type="button">Capture saved custom</button>'
-      ).appendTo(controls2);
+      ).appendTo(controls3);
       let summary = $2(
         '<div class="has-text-warning" style="margin:8px 0; font-weight:bold;"></div>'
       ).appendTo(modal);
@@ -52156,35 +52302,51 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getActions: () => ejectorSettingsTestContext?.actions ?? ejectorSettingsActions
     });
     const { buildEjectorSettings, updateEjectorSettingsContent } = ejectorSettingsBrowserAdapter;
-    const marketSettingsOverrides = {};
-    const getMarketSettingsDependency = createDependencyResolver(
-      marketSettingsOverrides,
-      {
-        $: () => $,
-        MarketManager: () => MarketManager,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsToggle: () => addSettingsToggle,
-        addStandardHeading: () => addStandardHeading,
-        addTableInput: () => addTableInput,
-        addTableToggle: () => addTableToggle,
-        buildSettingsSection: () => buildSettingsSection,
-        buildTableLabel: () => buildTableLabel,
-        document: () => document,
-        poly: () => poly,
-        removeMarketToggles: () => removeMarketToggles,
-        resetCheckbox: () => resetCheckbox,
-        resetMarketSettings: () => resetMarketSettings,
-        resources: () => resources,
-        settingsRaw: () => settingsRaw,
-        sorterHelper: () => sorterHelper,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const marketSettings = createMarketSettings({
-      getDependency: getMarketSettingsDependency,
-      getOverride: (name) => marketSettingsOverrides[name]
+    let marketSettingsTestContext;
+    const marketSettingsReader = createMarketSettingsEvolveAdapter({
+      getMarketManager: () => marketSettingsTestContext?.MarketManager ?? MarketManager,
+      getResources: () => marketSettingsTestContext?.resources ?? resources,
+      getPoly: () => marketSettingsTestContext?.poly ?? poly
     });
-    const { buildMarketSettings, updateMarketSettingsContent } = marketSettings;
+    const marketSettingsReorderer = createMarketSettingsWriter({
+      getMarketManager: () => marketSettingsTestContext?.MarketManager ?? MarketManager,
+      getSettingsRaw: () => marketSettingsTestContext?.settingsRaw ?? settingsRaw
+    });
+    const marketSettingsActions = {
+      buildSettingsSection: (...args) => buildSettingsSection(...args),
+      addSettingsNumber: (...args) => addSettingsNumber(...args),
+      addSettingsToggle: (...args) => addSettingsToggle(...args),
+      addStandardHeading: (...args) => addStandardHeading(...args),
+      addTableInput: (...args) => addTableInput(...args),
+      addTableToggle: (...args) => addTableToggle(...args),
+      buildTableLabel: (...args) => buildTableLabel(...args),
+      getSorterHelper: () => sorterHelper
+    };
+    const marketSettingsIntentHandler = createMarketSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (marketSettingsTestContext?.resetMarketSettings ?? resetMarketSettings)(
+          true
+        ),
+        persist: () => (marketSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)(),
+        reorderResources: (resourceIds) => marketSettingsReorderer.reorderResources(resourceIds)
+      },
+      renderSettingsContent: () => updateMarketSettingsContent(),
+      effects: {
+        resetCheckboxes: () => (marketSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoMarket",
+          "autoGalaxyMarket"
+        ),
+        removeMarketToggles: () => (marketSettingsTestContext?.removeMarketToggles ?? removeMarketToggles)()
+      }
+    });
+    const marketSettingsBrowserAdapter = createMarketSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      reader: marketSettingsReader,
+      intents: marketSettingsIntentHandler,
+      getActions: () => marketSettingsTestContext?.actions ?? marketSettingsActions
+    });
+    const { buildMarketSettings, updateMarketSettingsContent } = marketSettingsBrowserAdapter;
     let { traitVal } = createTraitValue({ getGame: () => game });
     const readAuthorityView = () => readAuthorityPolicyView(
       game,
@@ -55583,8 +55745,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           war: warSettings,
           hell: hellSettings,
           fleet: fleetSettings,
-          mech: mechSettings,
-          market: marketSettings
+          mech: mechSettings
         },
         setSettingsBoundariesTestContext(context) {
           Object.assign(prestigeSettingsOverrides, context);
@@ -55594,13 +55755,18 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           Object.assign(hellSettingsOverrides, context);
           Object.assign(fleetSettingsOverrides, context);
           Object.assign(mechSettingsOverrides, context);
-          Object.assign(marketSettingsOverrides, context);
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
         ejectorSettings: ejectorSettingsBrowserAdapter,
         setEjectorSettingsTestContext(context) {
           ejectorSettingsTestContext = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        marketSettings: marketSettingsBrowserAdapter,
+        setMarketSettingsTestContext(context) {
+          marketSettingsTestContext = context;
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
