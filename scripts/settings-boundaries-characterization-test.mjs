@@ -83,7 +83,6 @@ assert.deepEqual(Object.keys(boundaries), [
   "hell",
   "fleet",
   "mech",
-  "ejector",
   "market",
 ]);
 
@@ -139,9 +138,6 @@ hooks.setSettingsBoundariesTestContext({
   SpyManager: {},
   FleetManagerOuter: {},
   MechManager: {},
-  EjectManager: { priorityList: [] },
-  NaniteManager: { priorityList: [] },
-  SupplyManager: { priorityList: [] },
   MarketManager: { priorityList: [] },
   buildSettingsSection,
   buildSettingsSection2,
@@ -184,11 +180,6 @@ assert.deepEqual(
     { kind: "secondary", prefix: "", id: "hell", label: "Hell" },
     { kind: "secondary", prefix: "", id: "fleet", label: "Fleet" },
     { kind: "primary", id: "mech", label: "Mech & Spire" },
-    {
-      kind: "primary",
-      id: "ejector",
-      label: "Ejector, Supply & Nanite",
-    },
     { kind: "primary", id: "market", label: "Market" },
   ],
 );
@@ -224,16 +215,11 @@ assert.deepEqual(behavioralTrace, [
   "update:mech:",
   "checkbox:autoMech",
   "remove:mechInfo",
-  "reset:ejector:true",
-  "update:ejector:",
-  "checkbox:autoEject|autoSupply|autoNanite",
-  "remove:ejectToggles",
-  "remove:supplyToggles",
   "reset:market:true",
   "update:market:",
   "checkbox:autoMarket|autoGalaxyMarket",
   "remove:marketToggles",
 ]);
 
-assert.ok(storageTrace.length >= 9);
-console.log("9 settings-boundary bundled characterization tests passed");
+assert.ok(storageTrace.length >= 8);
+console.log("8 settings-boundary bundled characterization tests passed");

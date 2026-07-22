@@ -18047,7 +18047,7 @@
     logFilter
   }) {
     const frozenMessageTypes = Object.freeze(messageTypes.map(freezeMessageType));
-    const controls = [
+    const controls2 = [
       Object.freeze({ kind: "header", label: "Script Messages" }),
       Object.freeze({
         kind: "toggle",
@@ -18057,7 +18057,7 @@
       })
     ];
     for (const { id, label } of frozenMessageTypes) {
-      controls.push(
+      controls2.push(
         Object.freeze({
           kind: "toggle",
           settingName: "log_" + id,
@@ -18066,7 +18066,7 @@
         })
       );
     }
-    controls.push(
+    controls2.push(
       Object.freeze({
         kind: "string",
         settingName: "log_prestige_format",
@@ -18086,7 +18086,7 @@
       sectionName: "Logging",
       locale,
       logFilter,
-      controls: Object.freeze(controls)
+      controls: Object.freeze(controls2)
     });
   }
 
@@ -21213,162 +21213,162 @@
   }
 
   // src/application/tick.ts
-  function runTick({ reader, controls }) {
+  function runTick({ reader, controls: controls2 }) {
     const preamble = reader.samplePreamble();
     if (!shouldStartTick(preamble)) {
       return;
     }
-    controls.markGameTickConsumed();
+    controls2.markGameTickConsumed();
     const scriptTick = advanceScriptTick(preamble.scriptTick);
-    controls.setScriptTick(scriptTick);
+    controls2.setScriptTick(scriptTick);
     if (isThrottledTick(scriptTick, preamble.tickRate, preamble.accelerated)) {
       return;
     }
-    controls.updateScriptData();
-    controls.updateOverrides();
-    controls.finalizeScriptData();
-    if (controls.updateTabs()) {
+    controls2.updateScriptData();
+    controls2.updateOverrides();
+    controls2.finalizeScriptData();
+    if (controls2.updateTabs()) {
       return;
     }
-    controls.updateState();
-    controls.updateUI();
-    controls.keyManagerReset();
+    controls2.updateState();
+    controls2.updateUI();
+    controls2.keyManagerReset();
     const s = reader.sampleAutomation();
     if (!s.masterScriptToggle) {
       return;
     }
     if (s.goal === "Evolution") {
       if (s.autoEvolution) {
-        controls.autoEvolution();
+        controls2.autoEvolution();
       }
       return;
     }
     if (s.buildingAlwaysClick || s.autoBuild) {
-      controls.autoGatherResources();
+      controls2.autoGatherResources();
     }
     if (s.autoMarket) {
-      controls.autoMarket();
+      controls2.autoMarket();
     }
     if (s.autoHell) {
-      controls.autoHell();
+      controls2.autoHell();
     }
     if (s.autoGalaxyMarket) {
-      controls.autoGalaxyMarket();
+      controls2.autoGalaxyMarket();
     }
     if (s.autoMiningDroid) {
-      controls.autoMiningDroid();
+      controls2.autoMiningDroid();
     }
     if (s.autoGraphenePlant) {
-      controls.autoGraphenePlant();
+      controls2.autoGraphenePlant();
     }
     if (s.autoAlchemy) {
-      controls.autoAlchemy();
+      controls2.autoAlchemy();
     }
     if (s.autoPylon) {
-      controls.autoPylon();
+      controls2.autoPylon();
     }
     if (s.autoQuarry) {
-      controls.autoQuarry();
+      controls2.autoQuarry();
     }
     if (s.autoMine) {
-      controls.autoMine();
+      controls2.autoMine();
     }
     if (s.autoExtractor) {
-      controls.autoExtractor();
+      controls2.autoExtractor();
     }
     if (s.autoSmelter) {
-      controls.autoSmelter();
+      controls2.autoSmelter();
     }
     if (s.autoStorage) {
-      controls.autoStorage();
+      controls2.autoStorage();
     }
     if (s.autoReplicator) {
-      controls.autoReplicator();
+      controls2.autoReplicator();
     }
-    if (!s.autoTrigger || !controls.autoTrigger()) {
+    if (!s.autoTrigger || !controls2.autoTrigger()) {
       if (s.autoResearch) {
-        controls.autoResearch();
+        controls2.autoResearch();
       }
       if (s.autoBuild || s.autoARPA) {
-        controls.autoBuild();
-        controls.setPlannerFreshTick(scriptTick);
+        controls2.autoBuild();
+        controls2.setPlannerFreshTick(scriptTick);
       }
     }
     if (s.autoFactory) {
-      controls.autoFactory();
+      controls2.autoFactory();
     }
     if (s.autoJobs) {
-      controls.autoJobs();
+      controls2.autoJobs();
     } else if (s.autoCraftsmen) {
-      controls.autoJobs(true);
+      controls2.autoJobs(true);
     }
     if (s.autoFleet) {
       if (s.truepath) {
-        controls.autoFleetOuter();
+        controls2.autoFleetOuter();
       } else {
-        controls.autoFleet();
+        controls2.autoFleet();
       }
     }
     if (s.autoMech) {
-      controls.autoMech();
+      controls2.autoMech();
     }
     if (s.autoGenetics) {
-      controls.autoGenetics();
+      controls2.autoGenetics();
     }
     if (s.autoMinorTrait) {
-      controls.autoMinorTrait();
+      controls2.autoMinorTrait();
     }
     if (s.autoCraft) {
-      controls.autoCraft();
+      controls2.autoCraft();
     }
     if (s.autoFight) {
-      controls.autoMerc();
-      controls.autoSpy();
-      controls.autoBattle();
+      controls2.autoMerc();
+      controls2.autoSpy();
+      controls2.autoBattle();
     }
     if (s.autoTax) {
-      controls.autoTax();
+      controls2.autoTax();
     }
     if (s.autoGovernment) {
-      controls.autoGovernment();
+      controls2.autoGovernment();
     }
     if (s.autoNanite) {
-      controls.consumeNanite();
+      controls2.consumeNanite();
     }
     if (s.autoSupply) {
-      controls.consumeSupply();
+      controls2.consumeSupply();
     }
     if (s.autoEject) {
-      controls.consumeEject();
+      controls2.consumeEject();
     }
     if (s.autoPower) {
-      controls.autoPower();
+      controls2.autoPower();
     }
-    if (controls.isPrestigeAllowed()) {
-      controls.autoPrestige();
+    if (controls2.isPrestigeAllowed()) {
+      controls2.autoPrestige();
     }
     if (s.autoMinorTrait) {
-      controls.autoShapeshift();
-      controls.autoPsychic();
-      controls.autoOcularPowers();
-      controls.autoWish();
+      controls2.autoShapeshift();
+      controls2.autoPsychic();
+      controls2.autoOcularPowers();
+      controls2.autoWish();
     }
     if (s.autoMutateTraits) {
-      controls.autoMutateTrait();
+      controls2.autoMutateTrait();
     }
-    controls.updateBuildPlanner();
+    controls2.updateBuildPlanner();
     if (s.stateLogEnabled) {
       const { next, record } = advanceStateLog(
         s.stateLogTick,
         s.stateLogInterval
       );
-      controls.setStateLogTick(next);
+      controls2.setStateLogTick(next);
       if (record) {
-        controls.recordStateSnapshot();
+        controls2.recordStateSnapshot();
       }
     }
-    controls.keyManagerFinish();
-    controls.recordSoulGem();
+    controls2.keyManagerFinish();
+    controls2.recordSoulGem();
   }
 
   // src/adapters/evolve/tick.ts
@@ -21573,51 +21573,51 @@
   // src/application/state-update.ts
   function runStateUpdate({
     reader,
-    controls,
+    controls: controls2,
     clock
   }) {
     const goalSnapshot = reader.sampleGoalTransition();
     const transition = planGoalTransition(goalSnapshot);
     switch (transition.kind) {
       case "force-evolution":
-        controls.setGoal("Evolution");
+        controls2.setGoal("Evolution");
         break;
       case "resolve-leaving":
-        if (!controls.checkEvolutionResult()) {
+        if (!controls2.checkEvolutionResult()) {
           return;
         }
-        controls.setGoal("Standard");
+        controls2.setGoal("Standard");
         if (transition.rebuildTriggers) {
-          controls.rebuildTriggerContent();
+          controls2.rebuildTriggerContent();
         }
         break;
       case "day1-fallback":
-        if (!controls.checkEvolutionResult()) {
+        if (!controls2.checkEvolutionResult()) {
           return;
         }
         break;
       case "proceed":
         break;
     }
-    controls.resetResourceAccumulators();
-    controls.applyStorageUnitValues();
-    controls.runPlanningPasses();
-    controls.resetTooltips();
+    controls2.resetResourceAccumulators();
+    controls2.applyStorageUnitValues();
+    controls2.runPlanningPasses();
+    controls2.resetTooltips();
     const refresh = reader.sampleRefresh();
     const money = computeMoneyWindow(refresh.moneyIncomes, refresh.moneyRate);
-    controls.applyMoneyWindow(money.incomes, money.median);
-    controls.applyAstroSign();
-    controls.applyTowerSize(computeTowerSize(refresh.pillars));
+    controls2.applyMoneyWindow(money.incomes, money.median);
+    controls2.applyAstroSign();
+    controls2.applyTowerSize(computeTowerSize(refresh.pillars));
     const stabilise = evaluateStabilise(
       refresh.currentExotic,
       refresh.lastExoticMass
     );
-    controls.applyStabilise(
+    controls2.applyStabilise(
       stabilise.stabilised ? clock.nowMs() : void 0,
       stabilise.lastExoticMass
     );
-    controls.cacheSpaceDockOptions();
-    controls.updateActiveTargets();
+    controls2.cacheSpaceDockOptions();
+    controls2.updateActiveTargets();
   }
 
   // src/adapters/evolve/state-update.ts
@@ -26177,23 +26177,23 @@
     function getControls() {
       const candidate = getVueById2("tax_rates");
       if (candidate === void 0 || candidate === null) return void 0;
-      const controls = requireRecord(candidate, "tax controls");
-      requireFunction(controls["add"], "tax controls.add");
-      requireFunction(controls["sub"], "tax controls.sub");
-      return controls;
+      const controls2 = requireRecord(candidate, "tax controls");
+      requireFunction(controls2["add"], "tax controls.add");
+      requireFunction(controls2["sub"], "tax controls.sub");
+      return controls2;
     }
     function isAvailable() {
       return getControls() !== void 0;
     }
     function adjust(direction) {
-      const controls = getControls();
-      if (controls === void 0) return false;
+      const controls2 = getControls();
+      if (controls2 === void 0) return false;
       const methodName = direction === "increase" ? "add" : "sub";
       const method = requireFunction(
-        controls[methodName],
+        controls2[methodName],
         `tax controls.${methodName}`
       );
-      Reflect.apply(method, controls, []);
+      Reflect.apply(method, controls2, []);
       return true;
     }
     return Object.freeze({ isAvailable, adjust });
@@ -26504,17 +26504,17 @@
   // src/bootstrap/tax.ts
   function createTaxAutomation(dependencies) {
     const clock = Object.freeze({ nowMs: dependencies.nowMs });
-    const controls = createBrowserTaxControls(dependencies.getVueById);
+    const controls2 = createBrowserTaxControls(dependencies.getVueById);
     const gameReader = createEvolveTaxReader({
       clock,
-      controls,
+      controls: controls2,
       getGame: dependencies.getGame,
       getPoly: dependencies.getPoly,
       getResources: dependencies.getResources
     });
     const settingsReader = createTaxSettingsReader(dependencies.getSettings);
     const commandExecutor = createTaxCommandExecutor({
-      controls,
+      controls: controls2,
       keyModifiers: createKeyModifierController(dependencies.clearKeyModifiers),
       getGame: dependencies.getGame,
       getResources: dependencies.getResources
@@ -43522,6 +43522,304 @@
     });
   }
 
+  // src/application/ejector-settings.ts
+  function createEjectorSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-ejector-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            renderSettingsContent();
+            effects.resetCheckboxes();
+            effects.removeEjectToggles();
+            effects.removeSupplyToggles();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/adapters/browser/ejector-settings.ts
+  function createEjectorSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function buildEjectorSettings2() {
+      const readModel = reader.read();
+      const actions = getActions();
+      actions.buildSettingsSection(
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-ejector-settings" }),
+        updateEjectorSettingsContent2
+      );
+    }
+    function updateEjectorSettingsContent2() {
+      const readModel = reader.read();
+      const actions = getActions();
+      const document2 = getDocument();
+      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const jquery = getJQuery();
+      const currentNode = jquery(`#script_${readModel.sectionId}Content`);
+      currentNode.empty().off("*");
+      for (const control of readModel.controls) {
+        renderControl(currentNode, control, actions);
+      }
+      currentNode.append(`
+          <table style="width:100%">
+            <tr>
+              <th class="has-text-warning" style="width:20%">Resource</th>
+              <th class="has-text-warning" style="width:20%">Atomic Mass</th>
+              <th class="has-text-warning" style="width:10%">Eject</th>
+              <th class="has-text-warning" style="width:10%">Nanite</th>
+              <th class="has-text-warning" style="width:30%">Supply Value</th>
+              <th class="has-text-warning" style="width:10%">Supply</th>
+            </tr>
+            <tbody id="script_ejectorTableBody"></tbody>
+          </table>`);
+      const tableBodyNode = jquery("#script_ejectorTableBody");
+      let newTableBodyText = "";
+      for (const row of readModel.rows) {
+        newTableBodyText += `<tr><td id="script_eject_${row.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:30%"></td><td style="width:10%"></td></tr>`;
+      }
+      tableBodyNode.append(jquery(newTableBodyText));
+      for (const row of readModel.rows) {
+        let cell = jquery(`#script_eject_${row.id}`);
+        cell.append(actions.buildTableLabel(row.label, "", row.color));
+        cell = cell.next();
+        if (row.atomicMass > 0) {
+          cell.append(
+            `<span class="mass"><span class="has-text-warning">${row.atomicMass}</span> kt</span>`
+          );
+        }
+        cell = cell.next();
+        if (row.showEject) actions.addTableToggle(cell, row.ejectSettingName);
+        cell = cell.next();
+        if (row.showNanite) actions.addTableToggle(cell, row.naniteSettingName);
+        if (row.showSupply) {
+          cell = cell.next();
+          cell.append(
+            `<span class="mass">Export <span class="has-text-caution">${row.supplyOut}</span>, Gain <span class="has-text-success">${row.supplyIn}</span></span>`
+          );
+          cell = cell.next();
+          actions.addTableToggle(cell, row.supplySettingName);
+        }
+      }
+      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+    }
+    function renderControl(node, control, actions) {
+      if (control.kind === "select") {
+        actions.addSettingsSelect(
+          node,
+          control.settingName,
+          control.label,
+          control.hint,
+          control.options
+        );
+      } else if (control.kind === "toggle") {
+        actions.addSettingsToggle(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+      } else {
+        actions.addSettingsNumber(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+      }
+    }
+    return Object.freeze({
+      buildEjectorSettings: buildEjectorSettings2,
+      updateEjectorSettingsContent: updateEjectorSettingsContent2
+    });
+  }
+
+  // src/domain/ejector-settings.ts
+  var spendOptions = Object.freeze([
+    Object.freeze({ val: "cap", label: "Capped", hint: "Use capped resources" }),
+    Object.freeze({
+      val: "excess",
+      label: "Excess",
+      hint: "Use excess resources"
+    }),
+    Object.freeze({
+      val: "all",
+      label: "All",
+      hint: "Use all resources. This option can prevent script from progressing, and intended to use with additional conditions."
+    }),
+    Object.freeze({
+      val: "mixed",
+      label: "Capped > Excess",
+      hint: "Use capped resources first, switching to excess resources when capped alone is not enough."
+    }),
+    Object.freeze({
+      val: "full",
+      label: "Capped > Excess > All",
+      hint: "Use capped first, then excess, then everything else. Same as 'All' option can be potentialy dungerous."
+    })
+  ]);
+  var spendDescription = "Configures threshold when script will be allowed to use resources. With any option script will try to use most expensive of allowed resources within selected group. Craftables, when enabled, always use excess amount as threshold, having no cap.";
+  var controls = Object.freeze([
+    Object.freeze({
+      kind: "select",
+      settingName: "ejectMode",
+      label: "Eject mode",
+      hint: spendDescription,
+      options: spendOptions
+    }),
+    Object.freeze({
+      kind: "select",
+      settingName: "supplyMode",
+      label: "Supply mode",
+      hint: spendDescription,
+      options: spendOptions
+    }),
+    Object.freeze({
+      kind: "select",
+      settingName: "naniteMode",
+      label: "Nanite mode",
+      hint: spendDescription,
+      options: spendOptions
+    }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "prestigeWhiteholeStabiliseMass",
+      label: "Stabilize blackhole",
+      hint: "Stabilizes the blackhole with exotic materials, disabled on whitehole runs"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "prestigeWhiteholeStabiliseCooldown",
+      label: "Cooldown between stabilizes",
+      hint: "Waits this many seconds between stabilizes. Stabilizing too frequently may cause significant lag in late game due to frequent full page redraws. Set to 0 to disable cooldown."
+    })
+  ]);
+  function createEjectorSettingsReadModel(rows) {
+    return Object.freeze({
+      sectionId: "ejector",
+      sectionName: "Ejector, Supply & Nanite",
+      controls,
+      rows: Object.freeze(rows.map((row) => Object.freeze({ ...row })))
+    });
+  }
+
+  // src/adapters/evolve/ejector-settings.ts
+  function requireString25(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function readConsumable(manager, resource2, path) {
+    const isConsumable = requireFunction(
+      manager["isConsumable"],
+      `${path}.isConsumable`
+    );
+    return Boolean(isConsumable(resource2));
+  }
+  function readResourceRows(resourcesValue, ejectManagerValue, naniteManagerValue, supplyManagerValue, settingsRawValue) {
+    const resources2 = requireRecord(resourcesValue, "resources");
+    const ejectManager = requireRecord(ejectManagerValue, "EjectManager");
+    const naniteManager = requireRecord(naniteManagerValue, "NaniteManager");
+    const supplyManager = requireRecord(supplyManagerValue, "SupplyManager");
+    const settingsRaw2 = requireRecord(settingsRawValue, "settingsRaw");
+    const rows = [];
+    for (const [key, rawResource] of Object.entries(resources2)) {
+      const resource2 = requireRecord(rawResource, `resources.${key}`);
+      const id = requireString25(resource2["id"], `resources.${key}.id`);
+      const name = requireString25(resource2["name"], `resources.${key}.name`);
+      const state2 = requireRecord(resource2["is"], `resources.${key}.is`);
+      const atomicMass = requireNumber(
+        resource2["atomicMass"],
+        `resources.${key}.atomicMass`
+      );
+      const isCraftable = requireFunction(
+        resource2["isCraftable"],
+        `resources.${key}.isCraftable`
+      );
+      const ejectConsumable = readConsumable(
+        ejectManager,
+        resource2,
+        "EjectManager"
+      );
+      const naniteConsumable = readConsumable(
+        naniteManager,
+        resource2,
+        "NaniteManager"
+      );
+      const supplyConsumable = readConsumable(
+        supplyManager,
+        resource2,
+        "SupplyManager"
+      );
+      if (!ejectConsumable && !naniteConsumable && !supplyConsumable) continue;
+      const color = id === "Elerium" || id === "Infernite" ? "has-text-caution" : isCraftable() ? "has-text-danger" : !state2["tradable"] ? "has-text-advanced" : "has-text-info";
+      const supplyOut = supplyConsumable ? String(
+        requireFunction(
+          supplyManager["supplyOut"],
+          "SupplyManager.supplyOut"
+        )(id)
+      ) : "";
+      const supplyIn = supplyConsumable ? String(
+        requireFunction(
+          supplyManager["supplyIn"],
+          "SupplyManager.supplyIn"
+        )(id)
+      ) : "";
+      rows.push({
+        id,
+        label: name,
+        color,
+        atomicMass,
+        ejectEnabled: Boolean(settingsRaw2[`res_eject${id}`]),
+        naniteEnabled: Boolean(settingsRaw2[`res_nanite${id}`]),
+        supplyEnabled: Boolean(settingsRaw2[`res_supply${id}`]),
+        ejectSettingName: `res_eject${id}`,
+        naniteSettingName: `res_nanite${id}`,
+        supplySettingName: `res_supply${id}`,
+        supplyOut,
+        supplyIn,
+        showEject: ejectConsumable,
+        showNanite: naniteConsumable,
+        showSupply: supplyConsumable
+      });
+    }
+    return Object.freeze(rows.map((row) => Object.freeze(row)));
+  }
+  function createEjectorSettingsEvolveAdapter({
+    getResources,
+    getEjectManager,
+    getNaniteManager,
+    getSupplyManager,
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      read() {
+        return createEjectorSettingsReadModel(
+          readResourceRows(
+            getResources(),
+            getEjectManager(),
+            getNaniteManager(),
+            getSupplyManager(),
+            getSettingsRaw()
+          )
+        );
+      }
+    });
+  }
+
   // src/ui/production-settings.ts
   function createProductionSettings({
     getSettingsRaw,
@@ -46591,187 +46889,6 @@
     return { buildMechSettings: buildMechSettings2, updateMechSettingsContent: updateMechSettingsContent2 };
   }
 
-  // src/ui/ejector-settings.ts
-  function createEjectorSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const EjectManager2 = liveObject4(() => getDependency("EjectManager"));
-    const NaniteManager2 = liveObject4(() => getDependency("NaniteManager"));
-    const SupplyManager2 = liveObject4(() => getDependency("SupplyManager"));
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsSelect2 = liveFunction(
-      () => getDependency("addSettingsSelect")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const addTableToggle2 = liveFunction(() => getDependency("addTableToggle"));
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject4(() => getDependency("document"));
-    const removeEjectToggles2 = liveFunction(
-      () => getDependency("removeEjectToggles")
-    );
-    const removeSupplyToggles2 = liveFunction(
-      () => getDependency("removeSupplyToggles")
-    );
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetEjectorSettings2 = liveFunction(
-      () => getDependency("resetEjectorSettings")
-    );
-    const resources2 = liveObject4(() => getDependency("resources"));
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildEjectorSettingsImpl() {
-      let sectionId = "ejector";
-      let sectionName = "Ejector, Supply & Nanite";
-      let resetFunction = function() {
-        resetEjectorSettings2(true);
-        updateSettingsFromState2();
-        updateEjectorSettingsContent2();
-        resetCheckbox2("autoEject", "autoSupply", "autoNanite");
-        removeEjectToggles2();
-        removeSupplyToggles2();
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateEjectorSettingsContent2
-      );
-    }
-    function updateEjectorSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_ejectorContent");
-      currentNode.empty().off("*");
-      let spendOptions = [
-        { val: "cap", label: "Capped", hint: "Use capped resources" },
-        { val: "excess", label: "Excess", hint: "Use excess resources" },
-        {
-          val: "all",
-          label: "All",
-          hint: "Use all resources. This option can prevent script from progressing, and intended to use with additional conditions."
-        },
-        {
-          val: "mixed",
-          label: "Capped > Excess",
-          hint: "Use capped resources first, switching to excess resources when capped alone is not enough."
-        },
-        {
-          val: "full",
-          label: "Capped > Excess > All",
-          hint: "Use capped first, then excess, then everything else. Same as 'All' option can be potentialy dungerous."
-        }
-      ];
-      let spendDesc = "Configures threshold when script will be allowed to use resources. With any option script will try to use most expensive of allowed resources within selected group. Craftables, when enabled, always use excess amount as threshold, having no cap.";
-      addSettingsSelect2(
-        currentNode,
-        "ejectMode",
-        "Eject mode",
-        spendDesc,
-        spendOptions
-      );
-      addSettingsSelect2(
-        currentNode,
-        "supplyMode",
-        "Supply mode",
-        spendDesc,
-        spendOptions
-      );
-      addSettingsSelect2(
-        currentNode,
-        "naniteMode",
-        "Nanite mode",
-        spendDesc,
-        spendOptions
-      );
-      addSettingsToggle2(
-        currentNode,
-        "prestigeWhiteholeStabiliseMass",
-        "Stabilize blackhole",
-        "Stabilizes the blackhole with exotic materials, disabled on whitehole runs"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "prestigeWhiteholeStabiliseCooldown",
-        "Cooldown between stabilizes",
-        "Waits this many seconds between stabilizes. Stabilizing too frequently may cause significant lag in late game due to frequent full page redraws. Set to 0 to disable cooldown."
-      );
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:20%">Resource</th>
-              <th class="has-text-warning" style="width:20%">Atomic Mass</th>
-              <th class="has-text-warning" style="width:10%">Eject</th>
-              <th class="has-text-warning" style="width:10%">Nanite</th>
-              <th class="has-text-warning" style="width:30%">Supply Value</th>
-              <th class="has-text-warning" style="width:10%">Supply</th>
-            </tr>
-            <tbody id="script_ejectorTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $2("#script_ejectorTableBody");
-      let newTableBodyText = "";
-      let tabResources = [];
-      for (let id in resources2) {
-        let resource2 = resources2[id];
-        if (EjectManager2.isConsumable(resource2) || SupplyManager2.isConsumable(resource2) || NaniteManager2.isConsumable(resource2)) {
-          tabResources.push(resource2);
-          newTableBodyText += `<tr><td id="script_eject_${resource2.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:30%"></td><td style="width:10%"></td></tr>`;
-        }
-      }
-      tableBodyNode.append($2(newTableBodyText));
-      for (let i = 0; i < tabResources.length; i++) {
-        let resource2 = tabResources[i];
-        let ejectElement = $2("#script_eject_" + resource2.id);
-        let color = resource2 === resources2.Elerium || resource2 === resources2.Infernite ? "has-text-caution" : resource2.isCraftable() ? "has-text-danger" : !resource2.is.tradable ? "has-text-advanced" : "has-text-info";
-        ejectElement.append(buildTableLabel2(resource2.name, "", color));
-        ejectElement = ejectElement.next();
-        if (resource2.atomicMass > 0) {
-          ejectElement.append(
-            `<span class="mass"><span class="has-text-warning">${resource2.atomicMass}</span> kt</span>`
-          );
-        }
-        ejectElement = ejectElement.next();
-        if (EjectManager2.isConsumable(resource2)) {
-          addTableToggle2(ejectElement, "res_eject" + resource2.id);
-        }
-        ejectElement = ejectElement.next();
-        if (NaniteManager2.isConsumable(resource2)) {
-          addTableToggle2(ejectElement, "res_nanite" + resource2.id);
-        }
-        if (SupplyManager2.isConsumable(resource2)) {
-          ejectElement = ejectElement.next();
-          ejectElement.append(
-            `<span class="mass">Export <span class="has-text-caution">${SupplyManager2.supplyOut(
-              resource2.id
-            )}</span>, Gain <span class="has-text-success">${SupplyManager2.supplyIn(
-              resource2.id
-            )}</span></span>`
-          );
-          ejectElement = ejectElement.next();
-          addTableToggle2(ejectElement, "res_supply" + resource2.id);
-        }
-      }
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildEjectorSettings2(...args) {
-      const implementation = getOverride("buildEjectorSettings") ?? buildEjectorSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateEjectorSettingsContent2(...args) {
-      const implementation = getOverride("updateEjectorSettingsContent") ?? updateEjectorSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildEjectorSettings: buildEjectorSettings2, updateEjectorSettingsContent: updateEjectorSettingsContent2 };
-  }
-
   // src/ui/market-settings.ts
   function createMarketSettings({
     getDependency,
@@ -47210,7 +47327,7 @@
   }
 
   // src/adapters/evolve/mech-info.ts
-  function requireString25(value, path) {
+  function requireString26(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47256,7 +47373,7 @@
           mechs[index],
           `game.global.portal.mechbay.mechs[${index}]`
         );
-        const size = requireString25(mech["size"], `mechs[${index}].size`);
+        const size = requireString26(mech["size"], `mechs[${index}].size`);
         const stats = requireRecord(
           call4(manager, "getMechStats", "MechManager.getMechStats", [mech]),
           `MechManager.getMechStats(${index})`
@@ -47434,7 +47551,7 @@
   }
 
   // src/adapters/evolve/resource-toggles.ts
-  function requireString26(value, path) {
+  function requireString27(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47455,7 +47572,7 @@
     return priorityList;
   }
   function readResourceId3(value, path) {
-    return requireString26(requireRecord(value, path)["id"], `${path}.id`);
+    return requireString27(requireRecord(value, path)["id"], `${path}.id`);
   }
   function createResourceToggleEvolveAdapter({
     getGame,
@@ -47471,13 +47588,13 @@
       const noTrade = Boolean(race2["no_trade"]);
       const loc = requireFunction2(game2["loc"], "game.loc");
       const labels = noTrade ? Object.freeze({ buy: "", sell: "", routes: "", cancelRoutes: "" }) : Object.freeze({
-        buy: requireString26(loc("resource_market_buy"), "game.loc(buy)"),
-        sell: requireString26(loc("resource_market_sell"), "game.loc(sell)"),
-        routes: requireString26(
+        buy: requireString27(loc("resource_market_buy"), "game.loc(buy)"),
+        sell: requireString27(loc("resource_market_sell"), "game.loc(sell)"),
+        routes: requireString27(
           loc("resource_market_routes"),
           "game.loc(routes)"
         ),
-        cancelRoutes: requireString26(
+        cancelRoutes: requireString27(
           loc("cancel_routes"),
           "game.loc(cancel_routes)"
         )
@@ -48094,31 +48211,31 @@
       modal.append(
         '<div><h3 class="has-text-danger">Custom Race Presets</h3> - <span class="has-text-warning">Automation Custom Lab</span></div>'
       );
-      let controls = $2(
+      let controls2 = $2(
         '<div class="fields" style="margin-bottom:10px;"></div>'
       ).appendTo(modal);
       let presetSelect = $2(
         '<select class="select" style="width:220px;"></select>'
-      ).appendTo(controls);
+      ).appendTo(controls2);
       settingsRaw2.prestigeCustomRacePresets.forEach((item, index) => {
         $2("<option></option>").val(String(index)).text(item.name || `Preset ${index + 1}`).appendTo(presetSelect);
       });
       presetSelect.val(String(presetIndex));
       let presetName = $2(
         '<input class="input" type="text" maxlength="60" style="width:180px;" />'
-      ).val(preset.name || `Preset ${presetIndex + 1}`).appendTo(controls);
+      ).val(preset.name || `Preset ${presetIndex + 1}`).appendTo(controls2);
       let addButton = $2(
         '<button class="button" type="button">Add</button>'
-      ).appendTo(controls);
+      ).appendTo(controls2);
       let cloneButton = $2(
         '<button class="button" type="button">Clone</button>'
-      ).appendTo(controls);
+      ).appendTo(controls2);
       let deleteButton = $2(
         '<button class="button" type="button">Delete</button>'
-      ).appendTo(controls);
+      ).appendTo(controls2);
       let captureButton = $2(
         '<button class="button" type="button">Capture saved custom</button>'
-      ).appendTo(controls);
+      ).appendTo(controls2);
       let summary = $2(
         '<div class="has-text-warning" style="margin:8px 0; font-weight:bold;"></div>'
       ).appendTo(modal);
@@ -51999,34 +52116,46 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getOverride: (name) => mechSettingsOverrides[name]
     });
     const { buildMechSettings, updateMechSettingsContent } = mechSettings;
-    const ejectorSettingsOverrides = {};
-    const getEjectorSettingsDependency = createDependencyResolver(
-      ejectorSettingsOverrides,
-      {
-        $: () => $,
-        EjectManager: () => EjectManager,
-        NaniteManager: () => NaniteManager,
-        SupplyManager: () => SupplyManager,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsSelect: () => addSettingsSelect,
-        addSettingsToggle: () => addSettingsToggle,
-        addTableToggle: () => addTableToggle,
-        buildSettingsSection: () => buildSettingsSection,
-        buildTableLabel: () => buildTableLabel,
-        document: () => document,
-        removeEjectToggles: () => removeEjectToggles,
-        removeSupplyToggles: () => removeSupplyToggles,
-        resetCheckbox: () => resetCheckbox,
-        resetEjectorSettings: () => resetEjectorSettings,
-        resources: () => resources,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const ejectorSettings = createEjectorSettings({
-      getDependency: getEjectorSettingsDependency,
-      getOverride: (name) => ejectorSettingsOverrides[name]
+    let ejectorSettingsTestContext;
+    const ejectorSettingsReader = createEjectorSettingsEvolveAdapter({
+      getResources: () => ejectorSettingsTestContext?.resources ?? resources,
+      getEjectManager: () => ejectorSettingsTestContext?.EjectManager ?? EjectManager,
+      getNaniteManager: () => ejectorSettingsTestContext?.NaniteManager ?? NaniteManager,
+      getSupplyManager: () => ejectorSettingsTestContext?.SupplyManager ?? SupplyManager,
+      getSettingsRaw: () => ejectorSettingsTestContext?.settingsRaw ?? settingsRaw
     });
-    const { buildEjectorSettings, updateEjectorSettingsContent } = ejectorSettings;
+    const ejectorSettingsActions = {
+      buildSettingsSection: (...args) => buildSettingsSection(...args),
+      addSettingsNumber: (...args) => addSettingsNumber(...args),
+      addSettingsSelect: (...args) => addSettingsSelect(...args),
+      addSettingsToggle: (...args) => addSettingsToggle(...args),
+      addTableToggle: (...args) => addTableToggle(...args),
+      buildTableLabel: (...args) => buildTableLabel(...args)
+    };
+    const ejectorSettingsIntentHandler = createEjectorSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (ejectorSettingsTestContext?.resetEjectorSettings ?? resetEjectorSettings)(true),
+        persist: () => (ejectorSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      renderSettingsContent: () => updateEjectorSettingsContent(),
+      effects: {
+        resetCheckboxes: () => (ejectorSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoEject",
+          "autoSupply",
+          "autoNanite"
+        ),
+        removeEjectToggles: () => (ejectorSettingsTestContext?.removeEjectToggles ?? removeEjectToggles)(),
+        removeSupplyToggles: () => (ejectorSettingsTestContext?.removeSupplyToggles ?? removeSupplyToggles)()
+      }
+    });
+    const ejectorSettingsBrowserAdapter = createEjectorSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      reader: ejectorSettingsReader,
+      intents: ejectorSettingsIntentHandler,
+      getActions: () => ejectorSettingsTestContext?.actions ?? ejectorSettingsActions
+    });
+    const { buildEjectorSettings, updateEjectorSettingsContent } = ejectorSettingsBrowserAdapter;
     const marketSettingsOverrides = {};
     const getMarketSettingsDependency = createDependencyResolver(
       marketSettingsOverrides,
@@ -55455,7 +55584,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           hell: hellSettings,
           fleet: fleetSettings,
           mech: mechSettings,
-          ejector: ejectorSettings,
           market: marketSettings
         },
         setSettingsBoundariesTestContext(context) {
@@ -55466,8 +55594,13 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           Object.assign(hellSettingsOverrides, context);
           Object.assign(fleetSettingsOverrides, context);
           Object.assign(mechSettingsOverrides, context);
-          Object.assign(ejectorSettingsOverrides, context);
           Object.assign(marketSettingsOverrides, context);
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        ejectorSettings: ejectorSettingsBrowserAdapter,
+        setEjectorSettingsTestContext(context) {
+          ejectorSettingsTestContext = context;
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {

@@ -7,7 +7,6 @@ import { createWarSettings } from "../src/ui/war-settings.ts";
 import { createHellSettings } from "../src/ui/hell-settings.ts";
 import { createFleetSettings } from "../src/ui/fleet-settings.ts";
 import { createMechSettings } from "../src/ui/mech-settings.ts";
-import { createEjectorSettings } from "../src/ui/ejector-settings.ts";
 import { createMarketSettings } from "../src/ui/market-settings.ts";
 
 const specs = [
@@ -82,20 +81,6 @@ const specs = [
     ["checkbox:autoMech", "remove:mechInfo"],
   ],
   [
-    "ejector",
-    createEjectorSettings,
-    "buildEjectorSettings",
-    "updateEjectorSettingsContent",
-    "ejector",
-    "Ejector, Supply & Nanite",
-    false,
-    [
-      "checkbox:autoEject|autoSupply|autoNanite",
-      "remove:ejectToggles",
-      "remove:supplyToggles",
-    ],
-  ],
-  [
     "market",
     createMarketSettings,
     "buildMarketSettings",
@@ -163,4 +148,4 @@ for (const [
   ]);
 }
 
-console.log("9 settings-boundary module tests passed");
+console.log("8 settings-boundary module tests passed");

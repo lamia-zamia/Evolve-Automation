@@ -434,6 +434,9 @@ import { runFleetAutomation } from "./application/fleet.ts";
 import { createFleetAdapter } from "./adapters/evolve/fleet.ts";
 import { runMechAutomation } from "./application/mech.ts";
 import { createMechAdapter } from "./adapters/evolve/mech.ts";
+import { createEjectorSettingsIntentHandler } from "./application/ejector-settings.ts";
+import { createEjectorSettingsBrowserAdapter } from "./adapters/browser/ejector-settings.ts";
+import { createEjectorSettingsEvolveAdapter } from "./adapters/evolve/ejector-settings.ts";
 import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
 import { createPrestigeSettings } from "./ui/prestige-settings.ts";
@@ -443,7 +446,6 @@ import { createWarSettings } from "./ui/war-settings.ts";
 import { createHellSettings } from "./ui/hell-settings.ts";
 import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createMechSettings } from "./ui/mech-settings.ts";
-import { createEjectorSettings } from "./ui/ejector-settings.ts";
 import { createMarketSettings } from "./ui/market-settings.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoEvolveAdapter } from "./adapters/evolve/mech-info.ts";
@@ -1833,35 +1835,67 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   });
   const { buildMechSettings, updateMechSettingsContent } = mechSettings;
 
-  const ejectorSettingsOverrides = {};
-  const getEjectorSettingsDependency = createDependencyResolver(
-    ejectorSettingsOverrides,
-    {
-      $: () => $,
-      EjectManager: () => EjectManager,
-      NaniteManager: () => NaniteManager,
-      SupplyManager: () => SupplyManager,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsSelect: () => addSettingsSelect,
-      addSettingsToggle: () => addSettingsToggle,
-      addTableToggle: () => addTableToggle,
-      buildSettingsSection: () => buildSettingsSection,
-      buildTableLabel: () => buildTableLabel,
-      document: () => document,
-      removeEjectToggles: () => removeEjectToggles,
-      removeSupplyToggles: () => removeSupplyToggles,
-      resetCheckbox: () => resetCheckbox,
-      resetEjectorSettings: () => resetEjectorSettings,
-      resources: () => resources,
-      updateSettingsFromState: () => updateSettingsFromState,
+  let ejectorSettingsTestContext;
+  const ejectorSettingsReader = createEjectorSettingsEvolveAdapter({
+    getResources: () => ejectorSettingsTestContext?.resources ?? resources,
+    getEjectManager: () =>
+      ejectorSettingsTestContext?.EjectManager ?? EjectManager,
+    getNaniteManager: () =>
+      ejectorSettingsTestContext?.NaniteManager ?? NaniteManager,
+    getSupplyManager: () =>
+      ejectorSettingsTestContext?.SupplyManager ?? SupplyManager,
+    getSettingsRaw: () =>
+      ejectorSettingsTestContext?.settingsRaw ?? settingsRaw,
+  });
+  const ejectorSettingsActions = {
+    buildSettingsSection: (...args) => buildSettingsSection(...args),
+    addSettingsNumber: (...args) => addSettingsNumber(...args),
+    addSettingsSelect: (...args) => addSettingsSelect(...args),
+    addSettingsToggle: (...args) => addSettingsToggle(...args),
+    addTableToggle: (...args) => addTableToggle(...args),
+    buildTableLabel: (...args) => buildTableLabel(...args),
+  };
+  const ejectorSettingsIntentHandler = createEjectorSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          ejectorSettingsTestContext?.resetEjectorSettings ??
+          resetEjectorSettings
+        )(true),
+      persist: () =>
+        (
+          ejectorSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
     },
-  );
-  const ejectorSettings = createEjectorSettings({
-    getDependency: getEjectorSettingsDependency,
-    getOverride: (name) => ejectorSettingsOverrides[name],
+    renderSettingsContent: () => updateEjectorSettingsContent(),
+    effects: {
+      resetCheckboxes: () =>
+        (ejectorSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoEject",
+          "autoSupply",
+          "autoNanite",
+        ),
+      removeEjectToggles: () =>
+        (
+          ejectorSettingsTestContext?.removeEjectToggles ?? removeEjectToggles
+        )(),
+      removeSupplyToggles: () =>
+        (
+          ejectorSettingsTestContext?.removeSupplyToggles ?? removeSupplyToggles
+        )(),
+    },
+  });
+  const ejectorSettingsBrowserAdapter = createEjectorSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    reader: ejectorSettingsReader,
+    intents: ejectorSettingsIntentHandler,
+    getActions: () =>
+      ejectorSettingsTestContext?.actions ?? ejectorSettingsActions,
   });
   const { buildEjectorSettings, updateEjectorSettingsContent } =
-    ejectorSettings;
+    ejectorSettingsBrowserAdapter;
 
   const marketSettingsOverrides = {};
   const getMarketSettingsDependency = createDependencyResolver(
@@ -5662,7 +5696,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         hell: hellSettings,
         fleet: fleetSettings,
         mech: mechSettings,
-        ejector: ejectorSettings,
         market: marketSettings,
       },
       setSettingsBoundariesTestContext(context) {
@@ -5673,8 +5706,13 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         Object.assign(hellSettingsOverrides, context);
         Object.assign(fleetSettingsOverrides, context);
         Object.assign(mechSettingsOverrides, context);
-        Object.assign(ejectorSettingsOverrides, context);
         Object.assign(marketSettingsOverrides, context);
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      ejectorSettings: ejectorSettingsBrowserAdapter,
+      setEjectorSettingsTestContext(context) {
+        ejectorSettingsTestContext = context;
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {
