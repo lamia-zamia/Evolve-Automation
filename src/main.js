@@ -481,7 +481,6 @@ import { createSettingsShell } from "./ui/settings-shell.ts";
 import { createSettingsControls } from "./ui/settings-controls.ts";
 import { createOverrideCatalog } from "./settings/override-catalog.ts";
 import { createScriptRuntimeUI } from "./ui/script-runtime.ts";
-import { createDependencyResolver } from "./ui/dependencies.ts";
 
 (function ($) {
   "use strict";
