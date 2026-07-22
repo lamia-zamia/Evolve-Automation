@@ -98,24 +98,22 @@ const document = {
 };
 
 const ui = createCustomRaceUI({
-  getContext: () => ({
-    $: jquery,
-    document,
-    settingsRaw,
-    settings,
-    state,
-    game,
-    poly: { genus_traits: {} },
-    customRaceDraftFromPreset: () => ({}),
-    customRaceEditorTraits: () => [],
-    customRaceRankOptions: () => [1, 2],
-    customRaceTraitEffect: () => "",
-    customRaceGeneBalance: () => 0,
-    updateSettingsFromState: () => trace.push("persist"),
-    updateOverrides: () => trace.push("overrides"),
-    getVueById: () => lab,
-    alert: (message) => trace.push(`alert:${message}`),
-  }),
+  getJQuery: () => jquery,
+  getDocument: () => document,
+  getSettingsRaw: () => settingsRaw,
+  getSettings: () => settings,
+  getState: () => state,
+  getGame: () => game,
+  getPoly: () => ({ genus_traits: {} }),
+  getCustomRaceDraftFromPreset: () => ({}),
+  getCustomRaceEditorTraits: () => [],
+  getCustomRaceRankOptions: () => [1, 2],
+  getCustomRaceTraitEffect: () => "",
+  getCustomRaceGeneBalance: () => 0,
+  getUpdateSettingsFromState: () => () => trace.push("persist"),
+  getUpdateOverrides: () => () => trace.push("overrides"),
+  getVueById: () => lab,
+  getAlert: () => (message) => trace.push(`alert:${message}`),
 });
 
 assert.deepEqual(ui.getCustomRacePreset(), {

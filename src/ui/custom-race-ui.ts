@@ -16,34 +16,47 @@ interface CustomRaceDraft extends AnyRecord {
   genus: string;
 }
 
-interface CustomRaceUIContext {
-  $: any;
-  document: any;
-  settingsRaw: CustomRaceSettings;
-  settings: CustomRaceSettings;
-  state: AnyRecord;
-  game: AnyRecord;
-  poly: AnyRecord;
-  customRaceDraftFromPreset: (preset: CustomRacePreset) => CustomRaceDraft;
-  customRaceEditorTraits: (
+interface CustomRaceUIDependencies {
+  getJQuery: () => any;
+  getDocument: () => any;
+  getSettingsRaw: () => CustomRaceSettings;
+  getSettings: () => CustomRaceSettings;
+  getState: () => AnyRecord;
+  getGame: () => AnyRecord;
+  getPoly: () => AnyRecord;
+  getCustomRaceDraftFromPreset: (preset: CustomRacePreset) => CustomRaceDraft;
+  getCustomRaceEditorTraits: (
     draft: CustomRaceDraft,
   ) => Array<[string, AnyRecord]>;
-  customRaceRankOptions: (trait: string) => number[];
-  customRaceTraitEffect: (trait: string, rank: number) => string;
-  customRaceGeneBalance: (draft: CustomRaceDraft) => number;
-  updateSettingsFromState: () => void;
-  updateOverrides: () => void;
+  getCustomRaceRankOptions: (trait: string) => number[];
+  getCustomRaceTraitEffect: (trait: string, rank: number) => string;
+  getCustomRaceGeneBalance: (draft: CustomRaceDraft) => number;
+  getUpdateSettingsFromState: () => () => void;
+  getUpdateOverrides: () => () => void;
   getVueById: (id: string) => AnyRecord | undefined;
-  alert: (message: string) => void;
+  getAlert: () => (message: string) => void;
 }
 
-interface CustomRaceUIDependencies {
-  getContext: () => CustomRaceUIContext;
-}
-
-export function createCustomRaceUI({ getContext }: CustomRaceUIDependencies) {
+export function createCustomRaceUI({
+  getJQuery,
+  getDocument,
+  getSettingsRaw,
+  getSettings,
+  getState,
+  getGame,
+  getPoly,
+  getCustomRaceDraftFromPreset,
+  getCustomRaceEditorTraits,
+  getCustomRaceRankOptions,
+  getCustomRaceTraitEffect,
+  getCustomRaceGeneBalance,
+  getUpdateSettingsFromState,
+  getUpdateOverrides,
+  getVueById,
+  getAlert,
+}: CustomRaceUIDependencies) {
   function showCustomRaceImportStatus(message: string, danger = false) {
-    const { $ } = getContext();
+    const $ = getJQuery();
     let status = $("#scriptCustomRaceImportStatus");
     if (status.length === 0) {
       status = $('<p id="scriptCustomRaceImportStatus"></p>');
@@ -56,7 +69,8 @@ export function createCustomRaceUI({ getContext }: CustomRaceUIDependencies) {
   }
 
   function getCustomRacePreset(raw = false) {
-    const { settingsRaw, settings } = getContext();
+    const settingsRaw = getSettingsRaw();
+    const settings = getSettings();
     let source = raw ? settingsRaw : settings;
     let presets = source.prestigeCustomRacePresets;
     if (!Array.isArray(presets) || presets.length === 0) {
@@ -77,7 +91,8 @@ export function createCustomRaceUI({ getContext }: CustomRaceUIDependencies) {
   }
 
   function refreshCustomRacePresetSelectors() {
-    const { $, settingsRaw } = getContext();
+    const $ = getJQuery();
+    const settingsRaw = getSettingsRaw();
     $(".script_prestigeCustomRacePreset").each(function (this: any) {
       let select = $(this).empty();
       (settingsRaw.prestigeCustomRacePresets ?? []).forEach((preset, index) =>
@@ -91,20 +106,18 @@ export function createCustomRaceUI({ getContext }: CustomRaceUIDependencies) {
   }
 
   function buildCustomRacePresetEditor(modal: any) {
-    const {
-      $,
-      settingsRaw,
-      state,
-      game,
-      poly,
-      customRaceDraftFromPreset,
-      customRaceEditorTraits,
-      customRaceRankOptions,
-      customRaceTraitEffect,
-      customRaceGeneBalance,
-      updateSettingsFromState,
-      alert,
-    } = getContext();
+    const $ = getJQuery();
+    const settingsRaw = getSettingsRaw();
+    const state = getState();
+    const game = getGame();
+    const poly = getPoly();
+    const customRaceDraftFromPreset = getCustomRaceDraftFromPreset;
+    const customRaceEditorTraits = getCustomRaceEditorTraits;
+    const customRaceRankOptions = getCustomRaceRankOptions;
+    const customRaceTraitEffect = getCustomRaceTraitEffect;
+    const customRaceGeneBalance = getCustomRaceGeneBalance;
+    const updateSettingsFromState = getUpdateSettingsFromState();
+    const alert = getAlert();
     modal.empty().off("*").addClass("celestialLab");
     modal.closest(".script-modal-content").addClass("custom-race-modal");
     modal.append(`
@@ -545,14 +558,11 @@ export function createCustomRaceUI({ getContext }: CustomRaceUIDependencies) {
   }
 
   function importCustomRaceIntoLab() {
-    const {
-      settings,
-      state,
-      game,
-      document,
-      getVueById,
-      customRaceRankOptions,
-    } = getContext();
+    const settings = getSettings();
+    const state = getState();
+    const game = getGame();
+    const document = getDocument();
+    const customRaceRankOptions = getCustomRaceRankOptions;
     let preset = getCustomRacePreset();
     let attemptKey = `${settings.prestigeCustomRacePreset}:${preset.json}`;
     if (state.customRaceImportAttempt === attemptKey) {
@@ -706,7 +716,11 @@ export function createCustomRaceUI({ getContext }: CustomRaceUIDependencies) {
   }
 
   function automateLab() {
-    const { document, settings, state, game, updateOverrides } = getContext();
+    const document = getDocument();
+    const settings = getSettings();
+    const state = getState();
+    const game = getGame();
+    const updateOverrides = getUpdateOverrides();
     let createCustom = document.querySelector("#celestialLab .create button");
     if (createCustom) {
       updateOverrides(); // Game doesn't tick in lab. Update settings here.

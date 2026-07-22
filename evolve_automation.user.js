@@ -49215,9 +49215,26 @@
   }
 
   // src/ui/custom-race-ui.ts
-  function createCustomRaceUI({ getContext }) {
+  function createCustomRaceUI({
+    getJQuery,
+    getDocument,
+    getSettingsRaw,
+    getSettings,
+    getState,
+    getGame,
+    getPoly,
+    getCustomRaceDraftFromPreset,
+    getCustomRaceEditorTraits,
+    getCustomRaceRankOptions,
+    getCustomRaceTraitEffect,
+    getCustomRaceGeneBalance,
+    getUpdateSettingsFromState,
+    getUpdateOverrides,
+    getVueById,
+    getAlert
+  }) {
     function showCustomRaceImportStatus(message, danger = false) {
-      const { $: $2 } = getContext();
+      const $2 = getJQuery();
       let status2 = $2("#scriptCustomRaceImportStatus");
       if (status2.length === 0) {
         status2 = $2('<p id="scriptCustomRaceImportStatus"></p>');
@@ -49226,7 +49243,8 @@
       status2.toggleClass("has-text-danger", danger).toggleClass("has-text-warning", !danger).text(message);
     }
     function getCustomRacePreset(raw = false) {
-      const { settingsRaw, settings } = getContext();
+      const settingsRaw = getSettingsRaw();
+      const settings = getSettings();
       let source = raw ? settingsRaw : settings;
       let presets = source.prestigeCustomRacePresets;
       if (!Array.isArray(presets) || presets.length === 0) {
@@ -49243,7 +49261,8 @@
       };
     }
     function refreshCustomRacePresetSelectors() {
-      const { $: $2, settingsRaw } = getContext();
+      const $2 = getJQuery();
+      const settingsRaw = getSettingsRaw();
       $2(".script_prestigeCustomRacePreset").each(function() {
         let select = $2(this).empty();
         (settingsRaw.prestigeCustomRacePresets ?? []).forEach(
@@ -49253,20 +49272,18 @@
       });
     }
     function buildCustomRacePresetEditor(modal) {
-      const {
-        $: $2,
-        settingsRaw,
-        state,
-        game,
-        poly,
-        customRaceDraftFromPreset,
-        customRaceEditorTraits,
-        customRaceRankOptions,
-        customRaceTraitEffect,
-        customRaceGeneBalance,
-        updateSettingsFromState,
-        alert: alert2
-      } = getContext();
+      const $2 = getJQuery();
+      const settingsRaw = getSettingsRaw();
+      const state = getState();
+      const game = getGame();
+      const poly = getPoly();
+      const customRaceDraftFromPreset = getCustomRaceDraftFromPreset;
+      const customRaceEditorTraits = getCustomRaceEditorTraits;
+      const customRaceRankOptions = getCustomRaceRankOptions;
+      const customRaceTraitEffect = getCustomRaceTraitEffect;
+      const customRaceGeneBalance = getCustomRaceGeneBalance;
+      const updateSettingsFromState = getUpdateSettingsFromState();
+      const alert2 = getAlert();
       modal.empty().off("*").addClass("celestialLab");
       modal.closest(".script-modal-content").addClass("custom-race-modal");
       modal.append(`
@@ -49643,14 +49660,11 @@
       updateSummary();
     }
     function importCustomRaceIntoLab() {
-      const {
-        settings,
-        state,
-        game,
-        document: document2,
-        getVueById,
-        customRaceRankOptions
-      } = getContext();
+      const settings = getSettings();
+      const state = getState();
+      const game = getGame();
+      const document2 = getDocument();
+      const customRaceRankOptions = getCustomRaceRankOptions;
       let preset = getCustomRacePreset();
       let attemptKey = `${settings.prestigeCustomRacePreset}:${preset.json}`;
       if (state.customRaceImportAttempt === attemptKey) {
@@ -49775,7 +49789,11 @@
       return true;
     }
     function automateLab() {
-      const { document: document2, settings, state, game, updateOverrides } = getContext();
+      const document2 = getDocument();
+      const settings = getSettings();
+      const state = getState();
+      const game = getGame();
+      const updateOverrides = getUpdateOverrides();
       let createCustom = document2.querySelector("#celestialLab .create button");
       if (createCustom) {
         updateOverrides();
@@ -56411,24 +56429,22 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       importCustomRaceIntoLab,
       automateLab
     } = createCustomRaceUI({
-      getContext: () => ({
-        $: $2,
-        document,
-        settingsRaw,
-        settings,
-        state,
-        game,
-        poly,
-        customRaceDraftFromPreset,
-        customRaceEditorTraits,
-        customRaceRankOptions,
-        customRaceTraitEffect,
-        customRaceGeneBalance,
-        updateSettingsFromState,
-        updateOverrides,
-        getVueById,
-        alert: (message) => alert(message)
-      })
+      getJQuery: () => $2,
+      getDocument: () => document,
+      getSettingsRaw: () => settingsRaw,
+      getSettings: () => settings,
+      getState: () => state,
+      getGame: () => game,
+      getPoly: () => poly,
+      getCustomRaceDraftFromPreset: customRaceDraftFromPreset,
+      getCustomRaceEditorTraits: customRaceEditorTraits,
+      getCustomRaceRankOptions: customRaceRankOptions,
+      getCustomRaceTraitEffect: customRaceTraitEffect,
+      getCustomRaceGeneBalance: customRaceGeneBalance,
+      getUpdateSettingsFromState: () => updateSettingsFromState,
+      getUpdateOverrides: () => updateOverrides,
+      getVueById,
+      getAlert: () => (message) => alert(message)
     });
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
