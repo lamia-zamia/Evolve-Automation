@@ -41,7 +41,7 @@ import {
 import { cartesian, k_combinations } from "./utils/collections.js";
 import { Fibonacci, average } from "./utils/math.js";
 import { createPropertyHelpers } from "./utils/properties.ts";
-import { createFastEvaluator } from "./utils/fast-evaluator.ts";
+import { createCustomExpressionAdapter } from "./adapters/evolve/custom-expression.ts";
 import { createNumberFormatting } from "./formatting/numbers.ts";
 import { createSettingsState } from "./settings/state.ts";
 import { createEvolveSettingsResetAdapter } from "./adapters/evolve/settings-reset.ts";
@@ -491,10 +491,40 @@ import { createScriptRuntimeUI } from "./ui/script-runtime.ts";
   var settingsRaw = settingsStore.load();
   var settings = {};
   var game = null;
-  // Keep direct eval in the composition-root scope: custom expressions rely on
-  // access to these live bindings. The factory owns caching and invocation.
-  const { fastEval, cacheSize: fastEvalCacheSize } = createFastEvaluator({
-    compileExpression: (source) => eval(`(function() { return ${source} })`),
+  const { fastEval, cacheSize: fastEvalCacheSize } = createCustomExpressionAdapter({
+    getScope: () => ({
+      settings,
+      state,
+      game,
+      resources,
+      buildings,
+      buildingIds,
+      arpaIds,
+      jobIds,
+      techIds,
+      races,
+      poly,
+      win,
+      jobs,
+      projects,
+      universes,
+      governors,
+      challenges,
+      biomeList,
+      traitList,
+      GovernmentManager,
+      SmelterManager,
+      FactoryManager,
+      WarManager,
+      FleetManager,
+      MechManager,
+      TriggerManager,
+      GameLog,
+      WindowManager,
+      getGovernor,
+      haveTech,
+      isAchievementUnlocked,
+    }),
   });
   const {
     resetWarSettings,

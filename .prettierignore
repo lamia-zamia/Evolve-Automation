@@ -4,3 +4,5 @@ evolve_automation.meta.js
 docs/
 progress_log/
 tools/
+# The legacy composition root is excluded while Milestone 5 replaces it.
+src/legacy-main.js
