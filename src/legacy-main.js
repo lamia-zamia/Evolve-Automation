@@ -482,7 +482,7 @@ import { createSettingsControls } from "./ui/settings-controls.ts";
 import { createOverrideCatalog } from "./settings/override-catalog.ts";
 import { createScriptRuntimeUI } from "./ui/script-runtime.ts";
 
-export function startLegacyRuntime($, testHooks, diagnostics) {
+export function startLegacyRuntime($, diagnostics, testHooks) {
   "use strict";
   const { getRealNumber, getNumberString, getNiceNumber } =
     createNumberFormatting({ numberSuffix });
