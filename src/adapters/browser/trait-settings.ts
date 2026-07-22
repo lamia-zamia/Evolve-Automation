@@ -1,56 +1,86 @@
-// TRANSITIONAL: The legacy trait manager/game object surface remains untyped at this browser edge;
-// replace this alias with validated read-model fields when the Trait policy slice migrates.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Loose = any;
+import {
+  type TraitSettingsControl,
+  type TraitSettingsReadModel,
+} from "../../domain/trait-settings.ts";
+import type { TraitSettingsIntentHandler } from "../../ports/trait-settings.ts";
 
 interface TraitSettingsDependencies {
-  getSettingsRaw: () => Loose;
-  getState: () => Loose;
-  getGame: () => Loose;
-  getRaces: () => Loose;
-  getResources: () => Loose;
-  getPoly: () => Loose;
-  getMinorTraitManager: () => Loose;
-  getMutableTraitManager: () => Loose;
-  getOcularPowerData: () => Loose;
-  getWishData: () => Loose;
-  getMutationCostMultipliers: () => Loose;
-  getDocument: () => Loose;
-  getJQuery: () => Loose;
-  getSorterHelper: () => Loose;
-  resetMinorTraitSettings: (reset: boolean) => void;
-  resetMutableTraitSettings: (reset: boolean) => void;
-  updateSettingsFromState: () => void;
-  resetCheckbox: (...settingNames: string[]) => void;
-  buildSettingsSection: Loose;
-  addStandardHeading: Loose;
-  addSettingsSelect: Loose;
-  addSettingsNumber: Loose;
-  addSettingsToggle: Loose;
-  addTableToggle: Loose;
-  addTableInput: Loose;
-  buildTableLabel: Loose;
+  getReadModel: () => TraitSettingsReadModel;
+  getDocument: () => TraitSettingsDocument;
+  getJQuery: () => JQuery;
+  intents: TraitSettingsIntentHandler;
+  getSorterHelper: () => unknown;
+  buildSettingsSection: (
+    sectionId: string,
+    sectionName: string,
+    resetFunction: () => void,
+    updateSettingsContentFunction: () => void,
+  ) => void;
+  addStandardHeading: (node: JQueryNode, heading: string) => void;
+  addSettingsSelect: (
+    node: JQueryNode,
+    settingName: string,
+    label: string,
+    hint: string,
+    options: readonly { val: string; label: string; hint: string }[],
+  ) => JQueryNode;
+  addSettingsNumber: (
+    node: JQueryNode,
+    settingName: string,
+    label: string,
+    hint: string,
+  ) => unknown;
+  addSettingsToggle: (
+    node: JQueryNode,
+    settingName: string,
+    label: string,
+    hint: string,
+  ) => unknown;
+  addTableToggle: (node: JQueryNode, settingName: string) => void;
+  addTableInput: (node: JQueryNode, settingName: string) => void;
+  buildTableLabel: (note: string, hint?: string, color?: string) => unknown;
 }
 
-export function createTraitSettings({
-  getSettingsRaw,
-  getState,
-  getGame,
-  getRaces,
-  getResources,
-  getPoly,
-  getMinorTraitManager,
-  getMutableTraitManager,
-  getOcularPowerData,
-  getWishData,
-  getMutationCostMultipliers,
+interface TraitSettingsDocument {
+  documentElement: { scrollTop: number };
+  body: { scrollTop: number };
+}
+
+interface JQueryNode {
+  empty(): JQueryNode;
+  off(events: string): JQueryNode;
+  append(value: unknown): JQueryNode;
+  appendTo(node: JQueryNode): JQueryNode;
+  on(events: string, ...args: unknown[]): JQueryNode;
+  find(selector: string): JQueryNode;
+  first(): JQueryNode;
+  next(): JQueryNode;
+  html(value: unknown): JQueryNode;
+  prop(name: string, value?: unknown): boolean | JQueryNode;
+  sortable(options: Record<string, unknown>): JQueryNode;
+  sortable(command: string, options: Record<string, unknown>): string[];
+}
+
+type JQuery = (value: unknown) => JQueryNode;
+
+export interface TraitSettingsBrowserAdapter {
+  buildTraitSettings(): void;
+  updateImitateWarning(): void;
+  updateTraitSettingsContent(): void;
+  makeToggleSwitchesMutuallyExclusive(
+    switch1: JQueryNode,
+    settingsKey1: string,
+    switch2: JQueryNode,
+    settingsKey2: string,
+  ): void;
+}
+
+export function createTraitSettingsBrowserAdapter({
+  getReadModel,
   getDocument,
   getJQuery,
   getSorterHelper,
-  resetMinorTraitSettings,
-  resetMutableTraitSettings,
-  updateSettingsFromState,
-  resetCheckbox,
+  intents,
   buildSettingsSection,
   addStandardHeading,
   addSettingsSelect,
@@ -59,38 +89,22 @@ export function createTraitSettings({
   addTableToggle,
   addTableInput,
   buildTableLabel,
-}: TraitSettingsDependencies) {
+}: TraitSettingsDependencies): TraitSettingsBrowserAdapter {
   function buildTraitSettings() {
-    let sectionId = "trait";
-    let sectionName = "Traits";
-
-    let resetFunction = function () {
-      resetMinorTraitSettings(true);
-      resetMutableTraitSettings(true);
-      updateSettingsFromState();
-      updateTraitSettingsContent();
-
-      resetCheckbox("autoMinorTrait", "autoMutateTraits", "autoGenetics");
-    };
-
+    const readModel = getReadModel();
     buildSettingsSection(
-      sectionId,
-      sectionName,
-      resetFunction,
+      readModel.sectionId,
+      readModel.sectionName,
+      () => intents.handle({ type: "reset-trait-settings" }),
       updateTraitSettingsContent,
     );
   }
 
   function updateImitateWarning() {
-    const settingsRaw = getSettingsRaw();
-    const races = getRaces();
-    const game = getGame();
+    const readModel = getReadModel();
     const $ = getJQuery();
-    let race = races[settingsRaw.imitateRace];
-
-    if (race) {
-      const raceAvaialableForImitate = race && game.global.stats.synth[race.id];
-      if (raceAvaialableForImitate) {
+    if (readModel.imitateRaceCompleted !== undefined) {
+      if (readModel.imitateRaceCompleted) {
         $("#script_imitate_warning").html(
           `<span class="has-text-success">You have completed an AI Apocalypse with this race and can imitate it.</span>`,
         );
@@ -104,18 +118,23 @@ export function createTraitSettings({
     }
   }
 
-  function updateTraitSettingsContent() {
+  function controlOptions(
+    readModel: TraitSettingsReadModel,
+    settingName: string,
+  ): readonly { val: string; label: string; hint: string }[] {
+    const control = readModel.controls.find(
+      (candidate) => candidate.settingName === settingName,
+    );
+    if (!control || control.kind !== "select") {
+      throw new Error(`Missing Trait select control: ${settingName}`);
+    }
+    return control.options;
+  }
+
+  function updateTraitSettingsContent(): void {
+    const readModel = getReadModel();
     const document = getDocument();
     const $ = getJQuery();
-    const game = getGame();
-    const races = getRaces();
-    const resources = getResources();
-    const poly = getPoly();
-    const ocularPowerData = getOcularPowerData();
-    const wishData = getWishData();
-    const mutationCostMultipliers = getMutationCostMultipliers();
-    const MinorTraitManager = getMinorTraitManager();
-    const MutableTraitManager = getMutableTraitManager();
     let currentScrollPosition =
       document.documentElement.scrollTop || document.body.scrollTop;
 
@@ -124,81 +143,35 @@ export function createTraitSettings({
     currentNode.empty().off("*");
 
     addStandardHeading(currentNode, "Major Traits");
-    let genusOptions = [
-      { val: "ignore", label: "Ignore", hint: "Do not shift genus" },
-      { val: "none", label: game.loc(`genelab_genus_none`) },
-      ...Object.values(game.races as Record<string, Loose>)
-        .map((r) => r.type)
-        .filter(
-          (g, i, a) =>
-            g && g !== "organism" && g !== "synthetic" && a.indexOf(g) === i,
-        )
-        .map((g) => ({ val: g, label: game.loc(`genelab_genus_${g}`) })),
-    ];
     addSettingsSelect(
       currentNode,
       "shifterGenus",
       "Mimic genus",
       "Mimic selected genus, if avaialble. If you want to add some conditional overrides to this setting, keep in mind changing genus redraws game page, frequent changes can drastically harm game performance.",
-      genusOptions,
+      readModel.genusOptions,
     );
 
-    const imitateOptions = [
-      {
-        val: "ignore",
-        label: "Ignore",
-        hint: "Do not imitate race. IMPORTANT: script will stall at evolution if none selected",
-      },
-      ...Object.values(races as Record<string, Loose>).map((race) => {
-        const label = game.global.stats.synth[race.id]
-          ? race.name
-          : `--${race.name}--`;
-
-        return {
-          val: race.id,
-          label,
-          hint: race.desc,
-        };
-      }),
-    ];
-
-    addSettingsSelect(
+    const imitateControl = addSettingsSelect(
       currentNode,
       "imitateRace",
       "Imitate race",
       "Imitate selected race, if available.",
-      imitateOptions,
-    ).on("change", "select", function () {
-      getState().evolutionTarget = null;
+      readModel.imitateOptions,
+    );
+    imitateControl.on("change", "select", () => {
+      intents.handle({ type: "clear-evolution-target" });
       updateImitateWarning();
     });
 
     currentNode.append(`<div><span id="script_imitate_warning"></span></div>`);
     updateImitateWarning();
 
-    let shrineOptions = [
-      {
-        val: "any",
-        label: "Any",
-        hint: "Build any Shrines, whenever have resources for it",
-      },
-      { val: "equally", label: "Equally", hint: "Build all Shrines equally" },
-      { val: "morale", label: "Morale", hint: "Build only Morale Shrines" },
-      { val: "metal", label: "Metal", hint: "Build only Metal Shrines" },
-      { val: "know", label: "Knowledge", hint: "Build only Knowledge Shrines" },
-      { val: "tax", label: "Tax", hint: "Build only Tax Shrines" },
-      {
-        val: "rotating",
-        label: "Rotating",
-        hint: "Build Shrines during quarter/full phases for rotating effect shrines",
-      },
-    ];
     addSettingsSelect(
       currentNode,
       "buildingShrineType",
       "Magnificent shrine",
       "Auto Build shrines only at moons of chosen shrine",
-      shrineOptions,
+      controlOptions(readModel, "buildingShrineType"),
     );
     addSettingsNumber(
       currentNode,
@@ -207,78 +180,35 @@ export function createTraitSettings({
       "Script will use Slave Market only when money is capped, or have income above given number",
     );
 
-    let psychicOptions = [
-      {
-        val: "none",
-        label: "Ignore",
-        hint: "Psychic Powers ignored by script",
-      },
-      {
-        val: "auto",
-        label: "Script Managed",
-        hint: "Performs one of available actions in this order: Capture, Mind Break, Boost Profits, Boost Resource, Boost Attack Power.",
-      },
-      ...["boost", "murder", "assault", "profit", "stun", "mind_break"].map(
-        (p) => ({
-          val: p,
-          label: game.loc(`psychic_${p}_title`),
-          hint: game.loc(`psychic_${p}_desc`),
-        }),
-      ),
-    ];
     addSettingsSelect(
       currentNode,
       "psychicPower",
       "Psychic Powers",
       "Activates selected power with full energy. 10 murders required to research advanced powers will be performed automatically, if needed.",
-      psychicOptions,
+      readModel.psychicOptions,
     );
 
-    let psychicBoost = [
-      {
-        val: "auto",
-        label: "Script Managed",
-        hint: "Resource selected by looking for highest income among ones having enough free storage room.",
-      },
-      ...Object.values(resources as Record<string, Loose>)
-        .filter((r) => r.atomicMass > 0)
-        .map((r) => ({ val: r.id, label: r.title })),
-    ];
     addSettingsSelect(
       currentNode,
       "psychicBoostRes",
       "Boosted Resource",
       "Resource for Boost Resource Production psychic power.",
-      psychicBoost,
+      readModel.psychicBoostOptions,
     );
 
-    let wishMinor = [
-      { val: "none", label: "None", hint: "Disable using minor wishes." },
-      ...wishData.minor.map((w: Loose) => ({
-        val: w.id,
-        label: poly.loc("wish_for", [poly.loc(w.loc)]),
-      })),
-    ];
     addSettingsSelect(
       currentNode,
       "wishMinor",
       "Minor Wish",
       "Uses this minor wish when available.",
-      wishMinor,
+      readModel.wishMinorOptions,
     );
-    let wishMajor = [
-      { val: "none", label: "None", hint: "Disable using major wishes." },
-      ...wishData.major.map((w: Loose) => ({
-        val: w.id,
-        label: poly.loc("wish_for", [poly.loc(w.loc)]),
-      })),
-    ];
     addSettingsSelect(
       currentNode,
       "wishMajor",
       "Major Wish",
       "Uses this major wish when available.",
-      wishMajor,
+      readModel.wishMajorOptions,
     );
 
     addSettingsToggle(
@@ -300,17 +230,12 @@ export function createTraitSettings({
           </table>
         `);
     const ocularTableBodyNode = $("#script_ocularPowersTableBody");
-    ocularPowerData.forEach((p: Loose) => {
+    readModel.ocularRows.forEach((p) => {
       let tr = $(`<tr><td></td><td></td><td></td></tr>`);
       tr.appendTo(ocularTableBodyNode);
 
       let ocularPowerElement = tr.find("td").first();
-      ocularPowerElement.append(
-        buildTableLabel(
-          game.loc(`ocular_${p.id}`),
-          game.loc(`ocular_${p.id}_desc`, p.locParam),
-        ),
-      );
+      ocularPowerElement.append(buildTableLabel(p.label, p.hint));
 
       ocularPowerElement = ocularPowerElement.next();
       addTableToggle(ocularPowerElement, `ocularPower_${p.id}`);
@@ -397,29 +322,22 @@ export function createTraitSettings({
     let tableBodyNode = $("#script_minorTraitTableBody");
     let newTableBodyText = "";
 
-    for (let i = 0; i < MinorTraitManager.priorityList.length; i++) {
-      const trait = MinorTraitManager.priorityList[i];
-      newTableBodyText += `<tr value="${trait.traitName}" class="script-draggable"><td id="script_minorTrait_${trait.traitName}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"><span class="script-lastcolumn"></span></td></tr>`;
+    for (const trait of readModel.minorRows) {
+      newTableBodyText += `<tr value="${trait.id}" class="script-draggable"><td id="script_minorTrait_${trait.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"><span class="script-lastcolumn"></span></td></tr>`;
     }
     tableBodyNode.append($(newTableBodyText));
 
     // Build all other minorTraits settings rows
-    for (let i = 0; i < MinorTraitManager.priorityList.length; i++) {
-      const trait = MinorTraitManager.priorityList[i];
-      let minorTraitElement = $("#script_minorTrait_" + trait.traitName);
+    for (const trait of readModel.minorRows) {
+      let minorTraitElement = $("#script_minorTrait_" + trait.id);
 
-      minorTraitElement.append(
-        buildTableLabel(
-          game.loc("trait_" + trait.traitName + "_name"),
-          game.loc("trait_" + trait.traitName),
-        ),
-      );
+      minorTraitElement.append(buildTableLabel(trait.label, trait.hint));
 
       minorTraitElement = minorTraitElement.next();
-      addTableToggle(minorTraitElement, "mTrait_" + trait.traitName);
+      addTableToggle(minorTraitElement, "mTrait_" + trait.id);
 
       minorTraitElement = minorTraitElement.next();
-      addTableInput(minorTraitElement, "mTrait_w_" + trait.traitName);
+      addTableInput(minorTraitElement, "mTrait_w_" + trait.id);
     }
 
     tableBodyNode.sortable({
@@ -429,13 +347,10 @@ export function createTraitSettings({
         let minorTraitNames = tableBodyNode.sortable("toArray", {
           attribute: "value",
         });
-        const settingsRaw = getSettingsRaw();
-        for (let i = 0; i < minorTraitNames.length; i++) {
-          settingsRaw["mTrait_p_" + minorTraitNames[i]] = i;
-        }
-
-        getMinorTraitManager().sortByPriority();
-        updateSettingsFromState();
+        intents.handle({
+          type: "reorder-minor-traits",
+          traitIds: minorTraitNames,
+        });
       },
     });
 
@@ -472,79 +387,50 @@ export function createTraitSettings({
     let mutateTraitTableBodyNode = $("#script_mutateTraitTableBody");
     newTableBodyText = "";
 
-    for (let i = 0; i < MutableTraitManager.priorityList.length; i++) {
-      const trait = MutableTraitManager.priorityList[i];
-      newTableBodyText += `<tr value="${trait.traitName}" class="script-draggable"><td id="script_mutableTrait_${trait.traitName}" style="width:30%"></td><td style="width:25%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+    for (const trait of readModel.mutableRows) {
+      newTableBodyText += `<tr value="${trait.id}" class="script-draggable"><td id="script_mutableTrait_${trait.id}" style="width:30%"></td><td style="width:25%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
     }
     mutateTraitTableBodyNode.append($(newTableBodyText));
 
     // Build all other mutableTraits settings rows
-    for (let i = 0; i < MutableTraitManager.priorityList.length; i++) {
-      const trait = MutableTraitManager.priorityList[i];
-      let mutableTraitElement = $("#script_mutableTrait_" + trait.traitName);
+    for (const trait of readModel.mutableRows) {
+      let mutableTraitElement = $("#script_mutableTrait_" + trait.id);
 
       mutableTraitElement.append(
-        buildTableLabel(
-          trait.source === ""
-            ? "-"
-            : game.loc(
-                (trait.type === "major" ? "race_" : "genelab_genus_") +
-                  trait.source,
-              ),
-          trait.type === "major" ? "Major" : "Genus",
-          trait.type === "genus" ? "has-text-special" : "has-text",
-        ),
+        buildTableLabel(trait.sourceLabel, trait.sourceHint, trait.sourceColor),
       );
 
       mutableTraitElement = mutableTraitElement.next();
       mutableTraitElement.append(
-        buildTableLabel(
-          trait.name,
-          game.loc("trait_" + trait.traitName),
-          trait.isPositive ? "has-text-success" : "has-text-danger",
-        ),
+        buildTableLabel(trait.traitLabel, trait.traitHint, trait.traitColor),
       );
 
       mutableTraitElement = mutableTraitElement.next();
       mutableTraitElement.append(
-        buildTableLabel(
-          `${trait.baseCost * 5}`,
-          `${
-            trait.baseCost * 5 * mutationCostMultipliers["custom"]["gain"]
-          } for Custom${trait.traitName !== "ooze" ? " and Sludge" : ""}`,
-        ),
+        buildTableLabel(trait.costLabel, trait.costHint),
       );
 
       mutableTraitElement = mutableTraitElement.next();
-      if (trait.isGainable()) {
+      if (trait.gainable) {
         // TODO check if beast_of_burden can be gained by other races during winter event.
-        addTableToggle(
-          mutableTraitElement,
-          "mutableTrait_gain_" + trait.traitName,
-        );
+        addTableToggle(mutableTraitElement, "mutableTrait_gain_" + trait.id);
       }
 
       mutableTraitElement = mutableTraitElement.next();
-      addTableToggle(
-        mutableTraitElement,
-        "mutableTrait_purge_" + trait.traitName,
-      );
+      addTableToggle(mutableTraitElement, "mutableTrait_purge_" + trait.id);
 
-      if (trait.isGainable()) {
+      if (trait.gainable) {
         makeToggleSwitchesMutuallyExclusive(
-          $(".script_mutableTrait_gain_" + trait.traitName),
-          "mutableTrait_gain_" + trait.traitName,
-          $(".script_mutableTrait_purge_" + trait.traitName),
-          "mutableTrait_purge_" + trait.traitName,
+          $(".script_mutableTrait_gain_" + trait.id),
+          "mutableTrait_gain_" + trait.id,
+          $(".script_mutableTrait_purge_" + trait.id),
+          "mutableTrait_purge_" + trait.id,
         );
       }
 
       mutableTraitElement = mutableTraitElement.next();
-      if (poly.neg_roll_traits.includes(trait.traitName)) {
-        addTableToggle(
-          mutableTraitElement,
-          "mutableTrait_reset_" + trait.traitName,
-        );
+      if (trait.resettable) {
+        addTableToggle(mutableTraitElement, "mutableTrait_reset_" + trait.id);
       }
     }
 
@@ -555,13 +441,10 @@ export function createTraitSettings({
         let mutableTraitNames = mutateTraitTableBodyNode.sortable("toArray", {
           attribute: "value",
         });
-        const settingsRaw = getSettingsRaw();
-        for (let i = 0; i < mutableTraitNames.length; i++) {
-          settingsRaw["mutableTrait_p_" + mutableTraitNames[i]] = i;
-        }
-
-        getMutableTraitManager().sortByPriority();
-        updateSettingsFromState();
+        intents.handle({
+          type: "reorder-mutable-traits",
+          traitIds: mutableTraitNames,
+        });
       },
     });
 
@@ -570,31 +453,43 @@ export function createTraitSettings({
   }
 
   function makeToggleSwitchesMutuallyExclusive(
-    switch1: Loose,
+    switch1: JQueryNode,
     settingsKey1: string,
-    switch2: Loose,
+    switch2: JQueryNode,
     settingsKey2: string,
-  ) {
+  ): void {
     switch1.on("change", function () {
-      if (switch1.prop("checked") && switch2.prop("checked")) {
+      if (
+        switch1.prop("checked") === true &&
+        switch2.prop("checked") === true
+      ) {
         switch2.prop("checked", false);
-        getSettingsRaw()[settingsKey2] = false;
-        updateSettingsFromState();
+        intents.handle({
+          type: "set-trait-setting",
+          settingName: settingsKey2,
+          value: false,
+        });
       }
     });
     switch2.on("change", function () {
-      if (switch1.prop("checked") && switch2.prop("checked")) {
+      if (
+        switch1.prop("checked") === true &&
+        switch2.prop("checked") === true
+      ) {
         switch1.prop("checked", false);
-        getSettingsRaw()[settingsKey1] = false;
-        updateSettingsFromState();
+        intents.handle({
+          type: "set-trait-setting",
+          settingName: settingsKey1,
+          value: false,
+        });
       }
     });
   }
 
-  return {
+  return Object.freeze({
     buildTraitSettings,
     updateImitateWarning,
     updateTraitSettingsContent,
     makeToggleSwitchesMutuallyExclusive,
-  };
+  });
 }

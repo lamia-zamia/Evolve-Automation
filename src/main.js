@@ -467,7 +467,9 @@ import { createEvolutionSettingsEvolveAdapter } from "./adapters/evolve/evolutio
 import { createProductionSettingsIntentHandler } from "./application/production-settings.ts";
 import { createProductionSettingsBrowserAdapter } from "./adapters/browser/production-settings.ts";
 import { createProductionSettingsEvolveAdapter } from "./adapters/evolve/production-settings.ts";
-import { createTraitSettings } from "./adapters/browser/trait-settings.ts";
+import { createTraitSettingsIntentHandler } from "./application/trait-settings.ts";
+import { createTraitSettingsBrowserAdapter } from "./adapters/browser/trait-settings.ts";
+import { createTraitSettingsEvolveAdapter } from "./adapters/evolve/trait-settings.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoEvolveAdapter } from "./adapters/evolve/mech-info.ts";
 import { createMechInfoBrowserAdapter } from "./adapters/browser/mech-info.ts";
@@ -6228,30 +6230,31 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     });
   }
 
-  const {
-    buildTraitSettings,
-    updateImitateWarning,
-    updateTraitSettingsContent,
-    makeToggleSwitchesMutuallyExclusive,
-  } = createTraitSettings({
-    getSettingsRaw: () => settingsRaw,
-    getState: () => state,
-    getGame: () => game,
-    getRaces: () => races,
-    getResources: () => resources,
-    getPoly: () => poly,
-    getMinorTraitManager: () => MinorTraitManager,
-    getMutableTraitManager: () => MutableTraitManager,
+  let traitSettingsTestContext;
+  const traitSettingsEvolveAdapter = createTraitSettingsEvolveAdapter({
+    getSettingsRaw: () => traitSettingsTestContext?.settingsRaw ?? settingsRaw,
+    getState: () => traitSettingsTestContext?.state ?? state,
+    getGame: () => traitSettingsTestContext?.game ?? game,
+    getRaces: () => traitSettingsTestContext?.races ?? races,
+    getResources: () => traitSettingsTestContext?.resources ?? resources,
+    getPoly: () => traitSettingsTestContext?.poly ?? poly,
+    getMinorTraitManager: () =>
+      traitSettingsTestContext?.MinorTraitManager ?? MinorTraitManager,
+    getMutableTraitManager: () =>
+      traitSettingsTestContext?.MutableTraitManager ?? MutableTraitManager,
     getOcularPowerData: () => ocularPowerData,
     getWishData: () => wishData,
     getMutationCostMultipliers: () => mutationCostMultipliers,
+  });
+  let traitSettingsIntentHandler;
+  const traitSettingsBrowserAdapter = createTraitSettingsBrowserAdapter({
+    getReadModel: () => traitSettingsEvolveAdapter.readTraitSettingsReadModel(),
     getDocument: () => document,
     getJQuery: () => $,
+    intents: {
+      handle: (intent) => traitSettingsIntentHandler.handle(intent),
+    },
     getSorterHelper: () => sorterHelper,
-    resetMinorTraitSettings,
-    resetMutableTraitSettings,
-    updateSettingsFromState,
-    resetCheckbox,
     buildSettingsSection,
     addStandardHeading,
     addSettingsSelect,
@@ -6261,6 +6264,49 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     addTableInput,
     buildTableLabel,
   });
+  traitSettingsIntentHandler = createTraitSettingsIntentHandler({
+    writer: {
+      resetMinorTraits: () =>
+        (
+          traitSettingsTestContext?.resetMinorTraitSettings ??
+          resetMinorTraitSettings
+        )(true),
+      resetMutableTraits: () =>
+        (
+          traitSettingsTestContext?.resetMutableTraitSettings ??
+          resetMutableTraitSettings
+        )(true),
+      persist: () =>
+        (
+          traitSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+      clearEvolutionTarget: () =>
+        traitSettingsEvolveAdapter.clearEvolutionTarget(),
+      reorderMinorTraits: (traitIds) =>
+        traitSettingsEvolveAdapter.reorderMinorTraits(traitIds),
+      reorderMutableTraits: (traitIds) =>
+        traitSettingsEvolveAdapter.reorderMutableTraits(traitIds),
+      setBoolean: (settingName, value) =>
+        traitSettingsEvolveAdapter.setBoolean(settingName, value),
+    },
+    renderSettingsContent: () =>
+      traitSettingsBrowserAdapter.updateTraitSettingsContent(),
+    effects: {
+      resetCheckboxes: () =>
+        (traitSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoMinorTrait",
+          "autoMutateTraits",
+          "autoGenetics",
+        ),
+    },
+  });
+  const {
+    buildTraitSettings,
+    updateImitateWarning,
+    updateTraitSettingsContent,
+    makeToggleSwitchesMutuallyExclusive,
+  } = traitSettingsBrowserAdapter;
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
@@ -6272,13 +6318,7 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       },
       setTraitSettingsTestContext(context) {
         settingsRaw = context.settingsRaw;
-        state = context.state;
-        game = context.game;
-        races = context.races;
-        resources = context.resources;
-        poly = context.poly;
-        MinorTraitManager = context.MinorTraitManager;
-        MutableTraitManager = context.MutableTraitManager;
+        traitSettingsTestContext = context;
       },
     });
   }

@@ -17830,8 +17830,8 @@
   }
 
   // src/domain/research-settings.ts
-  function freezeOption(option2) {
-    return Object.freeze({ ...option2 });
+  function freezeOption(option3) {
+    return Object.freeze({ ...option3 });
   }
   function freezeTechnologyCatalog(technologies) {
     const frozen = {};
@@ -18241,8 +18241,8 @@
   }
 
   // src/domain/government-settings.ts
-  function freezeOption2(option2) {
-    return Object.freeze({ ...option2 });
+  function freezeOption2(option3) {
+    return Object.freeze({ ...option3 });
   }
   function freezeOptions(options2) {
     return Object.freeze(options2.map(freezeOption2));
@@ -20701,7 +20701,7 @@
 
   // src/domain/prestige-top-bar.ts
   function selectPrestigeTopBarType(options2, selectedValue) {
-    const selected = options2.find((option2) => option2.value === selectedValue);
+    const selected = options2.find((option3) => option3.value === selectedValue);
     return selected ?? {
       value: selectedValue,
       label: selectedValue,
@@ -20797,14 +20797,14 @@
         }
         return Object.freeze(
           rawOptions.map((rawOption, index) => {
-            const option2 = requireRecord(rawOption, `prestigeTypes[${index}]`);
+            const option3 = requireRecord(rawOption, `prestigeTypes[${index}]`);
             return Object.freeze({
-              value: requireString10(option2["val"], `prestigeTypes[${index}].val`),
+              value: requireString10(option3["val"], `prestigeTypes[${index}].val`),
               label: requireString10(
-                option2["label"],
+                option3["label"],
                 `prestigeTypes[${index}].label`
               ),
-              hint: requireString10(option2["hint"], `prestigeTypes[${index}].hint`)
+              hint: requireString10(option3["hint"], `prestigeTypes[${index}].hint`)
             });
           })
         );
@@ -44998,7 +44998,7 @@
           });
         });
         return createMechSettingsReadModel(
-          Object.freeze(options2.map((option2) => Object.freeze(option2)))
+          Object.freeze(options2.map((option3) => Object.freeze(option3)))
         );
       }
     });
@@ -45376,8 +45376,8 @@
   }
 
   // src/domain/fleet-settings.ts
-  function freezeOption3(option2) {
-    return Object.freeze({ ...option2 });
+  function freezeOption3(option3) {
+    return Object.freeze({ ...option3 });
   }
   function freezeControls(controls4) {
     return Object.freeze(
@@ -45827,7 +45827,7 @@
   // src/domain/prestige-settings.ts
   function createPrestigeSettingsReadModel(input) {
     const options2 = Object.freeze(
-      input.prestigeOptions.map((option2) => Object.freeze({ ...option2 }))
+      input.prestigeOptions.map((option3) => Object.freeze({ ...option3 }))
     );
     const controls4 = Object.freeze([
       {
@@ -46061,11 +46061,11 @@
       throw new TypeError("prestigeTypes must be an array");
     return Object.freeze(
       value.map((raw, index) => {
-        const option2 = requireRecord(raw, `prestigeTypes[${index}]`);
+        const option3 = requireRecord(raw, `prestigeTypes[${index}]`);
         return Object.freeze({
-          val: requireString31(option2["val"], `prestigeTypes[${index}].val`),
-          label: requireString31(option2["label"], `prestigeTypes[${index}].label`),
-          hint: requireString31(option2["hint"], `prestigeTypes[${index}].hint`)
+          val: requireString31(option3["val"], `prestigeTypes[${index}].val`),
+          label: requireString31(option3["label"], `prestigeTypes[${index}].label`),
+          hint: requireString31(option3["hint"], `prestigeTypes[${index}].hint`)
         });
       })
     );
@@ -46202,7 +46202,7 @@
 
   // src/domain/evolution-settings.ts
   function createEvolutionSettingsReadModel(input) {
-    const freezeOptions2 = (options2) => Object.freeze(options2.map((option2) => Object.freeze({ ...option2 })));
+    const freezeOptions2 = (options2) => Object.freeze(options2.map((option3) => Object.freeze({ ...option3 })));
     return Object.freeze({
       sectionId: "evolution",
       sectionName: "Evolution",
@@ -46283,7 +46283,7 @@
       const prestige = getJQuery()("#script_evolution_prestige");
       prestige.append(
         model.prestigeOptions.map(
-          (option2) => `<option value="${option2.val}">${option2.label}</option>`
+          (option3) => `<option value="${option3.val}">${option3.label}</option>`
         ).join("")
       );
       getJQuery()("#script_evlution_add").on(
@@ -46545,7 +46545,7 @@
           const race2 = races2.find((candidate) => candidate["id"] === target2);
           const name = queueName(race2 ?? {}, game2, merged);
           const prestige = prestigeOptions2.find(
-            (option2) => option2.val === merged["prestigeType"]
+            (option3) => option3.val === merged["prestigeType"]
           );
           const starRaw = deps.getStarLevel(merged);
           const starLevel = typeof starRaw === "number" ? starRaw : 1;
@@ -46625,7 +46625,7 @@
       ...control,
       ...control.kind === "select" ? {
         options: Object.freeze(
-          control.options.map((option2) => Object.freeze({ ...option2 }))
+          control.options.map((option3) => Object.freeze({ ...option3 }))
         )
       } : {}
     });
@@ -47218,26 +47218,84 @@
     });
   }
 
+  // src/application/trait-settings.ts
+  function createTraitSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-trait-settings":
+            writer.resetMinorTraits();
+            writer.resetMutableTraits();
+            writer.persist();
+            renderSettingsContent();
+            effects.resetCheckboxes();
+            return;
+          case "clear-evolution-target":
+            writer.clearEvolutionTarget();
+            writer.persist();
+            return;
+          case "reorder-minor-traits":
+            writer.reorderMinorTraits(intent.traitIds);
+            writer.persist();
+            return;
+          case "reorder-mutable-traits":
+            writer.reorderMutableTraits(intent.traitIds);
+            writer.persist();
+            return;
+          case "set-trait-setting":
+            writer.setBoolean(intent.settingName, intent.value);
+            writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/trait-settings.ts
+  function createTraitSettingsReadModel(input) {
+    const freezeOptions2 = (options2) => Object.freeze(options2.map((option3) => Object.freeze({ ...option3 })));
+    return Object.freeze({
+      sectionId: "trait",
+      sectionName: "Traits",
+      controls: Object.freeze(
+        input.controls.map(
+          (control) => Object.freeze({
+            ...control,
+            ...control.kind === "select" ? { options: freezeOptions2(control.options) } : {}
+          })
+        )
+      ),
+      genusOptions: freezeOptions2(input.genusOptions),
+      imitateOptions: freezeOptions2(input.imitateOptions),
+      imitateRaceId: input.imitateRaceId,
+      imitateRaceCompleted: input.imitateRaceCompleted,
+      psychicOptions: freezeOptions2(input.psychicOptions),
+      psychicBoostOptions: freezeOptions2(input.psychicBoostOptions),
+      wishMinorOptions: freezeOptions2(input.wishMinorOptions),
+      wishMajorOptions: freezeOptions2(input.wishMajorOptions),
+      ocularRows: Object.freeze(
+        input.ocularRows.map((row) => Object.freeze({ ...row }))
+      ),
+      minorRows: Object.freeze(
+        input.minorRows.map((row) => Object.freeze({ ...row }))
+      ),
+      mutableRows: Object.freeze(
+        input.mutableRows.map((row) => Object.freeze({ ...row }))
+      )
+    });
+  }
+
   // src/adapters/browser/trait-settings.ts
-  function createTraitSettings({
-    getSettingsRaw,
-    getState,
-    getGame,
-    getRaces,
-    getResources,
-    getPoly,
-    getMinorTraitManager,
-    getMutableTraitManager,
-    getOcularPowerData,
-    getWishData,
-    getMutationCostMultipliers,
+  function createTraitSettingsBrowserAdapter({
+    getReadModel,
     getDocument,
     getJQuery,
     getSorterHelper,
-    resetMinorTraitSettings: resetMinorTraitSettings2,
-    resetMutableTraitSettings: resetMutableTraitSettings2,
-    updateSettingsFromState: updateSettingsFromState2,
-    resetCheckbox: resetCheckbox2,
+    intents,
     buildSettingsSection: buildSettingsSection3,
     addStandardHeading: addStandardHeading2,
     addSettingsSelect: addSettingsSelect2,
@@ -47248,31 +47306,19 @@
     buildTableLabel: buildTableLabel2
   }) {
     function buildTraitSettings2() {
-      let sectionId = "trait";
-      let sectionName = "Traits";
-      let resetFunction = function() {
-        resetMinorTraitSettings2(true);
-        resetMutableTraitSettings2(true);
-        updateSettingsFromState2();
-        updateTraitSettingsContent2();
-        resetCheckbox2("autoMinorTrait", "autoMutateTraits", "autoGenetics");
-      };
+      const readModel = getReadModel();
       buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
+        readModel.sectionId,
+        readModel.sectionName,
+        () => intents.handle({ type: "reset-trait-settings" }),
         updateTraitSettingsContent2
       );
     }
     function updateImitateWarning2() {
-      const settingsRaw2 = getSettingsRaw();
-      const races2 = getRaces();
-      const game2 = getGame();
+      const readModel = getReadModel();
       const $2 = getJQuery();
-      let race2 = races2[settingsRaw2.imitateRace];
-      if (race2) {
-        const raceAvaialableForImitate = race2 && game2.global.stats.synth[race2.id];
-        if (raceAvaialableForImitate) {
+      if (readModel.imitateRaceCompleted !== void 0) {
+        if (readModel.imitateRaceCompleted) {
           $2("#script_imitate_warning").html(
             `<span class="has-text-success">You have completed an AI Apocalypse with this race and can imitate it.</span>`
           );
@@ -47285,86 +47331,49 @@
         $2("#script_imitate_warning").empty();
       }
     }
+    function controlOptions(readModel, settingName) {
+      const control = readModel.controls.find(
+        (candidate) => candidate.settingName === settingName
+      );
+      if (!control || control.kind !== "select") {
+        throw new Error(`Missing Trait select control: ${settingName}`);
+      }
+      return control.options;
+    }
     function updateTraitSettingsContent2() {
+      const readModel = getReadModel();
       const document2 = getDocument();
       const $2 = getJQuery();
-      const game2 = getGame();
-      const races2 = getRaces();
-      const resources2 = getResources();
-      const poly2 = getPoly();
-      const ocularPowerData2 = getOcularPowerData();
-      const wishData2 = getWishData();
-      const mutationCostMultipliers2 = getMutationCostMultipliers();
-      const MinorTraitManager2 = getMinorTraitManager();
-      const MutableTraitManager2 = getMutableTraitManager();
       let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
       let currentNode = $2("#script_traitContent");
       currentNode.empty().off("*");
       addStandardHeading2(currentNode, "Major Traits");
-      let genusOptions = [
-        { val: "ignore", label: "Ignore", hint: "Do not shift genus" },
-        { val: "none", label: game2.loc(`genelab_genus_none`) },
-        ...Object.values(game2.races).map((r) => r.type).filter(
-          (g, i, a) => g && g !== "organism" && g !== "synthetic" && a.indexOf(g) === i
-        ).map((g) => ({ val: g, label: game2.loc(`genelab_genus_${g}`) }))
-      ];
       addSettingsSelect2(
         currentNode,
         "shifterGenus",
         "Mimic genus",
         "Mimic selected genus, if avaialble. If you want to add some conditional overrides to this setting, keep in mind changing genus redraws game page, frequent changes can drastically harm game performance.",
-        genusOptions
+        readModel.genusOptions
       );
-      const imitateOptions = [
-        {
-          val: "ignore",
-          label: "Ignore",
-          hint: "Do not imitate race. IMPORTANT: script will stall at evolution if none selected"
-        },
-        ...Object.values(races2).map((race2) => {
-          const label = game2.global.stats.synth[race2.id] ? race2.name : `--${race2.name}--`;
-          return {
-            val: race2.id,
-            label,
-            hint: race2.desc
-          };
-        })
-      ];
-      addSettingsSelect2(
+      const imitateControl = addSettingsSelect2(
         currentNode,
         "imitateRace",
         "Imitate race",
         "Imitate selected race, if available.",
-        imitateOptions
-      ).on("change", "select", function() {
-        getState().evolutionTarget = null;
+        readModel.imitateOptions
+      );
+      imitateControl.on("change", "select", () => {
+        intents.handle({ type: "clear-evolution-target" });
         updateImitateWarning2();
       });
       currentNode.append(`<div><span id="script_imitate_warning"></span></div>`);
       updateImitateWarning2();
-      let shrineOptions = [
-        {
-          val: "any",
-          label: "Any",
-          hint: "Build any Shrines, whenever have resources for it"
-        },
-        { val: "equally", label: "Equally", hint: "Build all Shrines equally" },
-        { val: "morale", label: "Morale", hint: "Build only Morale Shrines" },
-        { val: "metal", label: "Metal", hint: "Build only Metal Shrines" },
-        { val: "know", label: "Knowledge", hint: "Build only Knowledge Shrines" },
-        { val: "tax", label: "Tax", hint: "Build only Tax Shrines" },
-        {
-          val: "rotating",
-          label: "Rotating",
-          hint: "Build Shrines during quarter/full phases for rotating effect shrines"
-        }
-      ];
       addSettingsSelect2(
         currentNode,
         "buildingShrineType",
         "Magnificent shrine",
         "Auto Build shrines only at moons of chosen shrine",
-        shrineOptions
+        controlOptions(readModel, "buildingShrineType")
       );
       addSettingsNumber2(
         currentNode,
@@ -47372,74 +47381,33 @@
         "Minimum income to buy slave",
         "Script will use Slave Market only when money is capped, or have income above given number"
       );
-      let psychicOptions = [
-        {
-          val: "none",
-          label: "Ignore",
-          hint: "Psychic Powers ignored by script"
-        },
-        {
-          val: "auto",
-          label: "Script Managed",
-          hint: "Performs one of available actions in this order: Capture, Mind Break, Boost Profits, Boost Resource, Boost Attack Power."
-        },
-        ...["boost", "murder", "assault", "profit", "stun", "mind_break"].map(
-          (p) => ({
-            val: p,
-            label: game2.loc(`psychic_${p}_title`),
-            hint: game2.loc(`psychic_${p}_desc`)
-          })
-        )
-      ];
       addSettingsSelect2(
         currentNode,
         "psychicPower",
         "Psychic Powers",
         "Activates selected power with full energy. 10 murders required to research advanced powers will be performed automatically, if needed.",
-        psychicOptions
+        readModel.psychicOptions
       );
-      let psychicBoost = [
-        {
-          val: "auto",
-          label: "Script Managed",
-          hint: "Resource selected by looking for highest income among ones having enough free storage room."
-        },
-        ...Object.values(resources2).filter((r) => r.atomicMass > 0).map((r) => ({ val: r.id, label: r.title }))
-      ];
       addSettingsSelect2(
         currentNode,
         "psychicBoostRes",
         "Boosted Resource",
         "Resource for Boost Resource Production psychic power.",
-        psychicBoost
+        readModel.psychicBoostOptions
       );
-      let wishMinor = [
-        { val: "none", label: "None", hint: "Disable using minor wishes." },
-        ...wishData2.minor.map((w) => ({
-          val: w.id,
-          label: poly2.loc("wish_for", [poly2.loc(w.loc)])
-        }))
-      ];
       addSettingsSelect2(
         currentNode,
         "wishMinor",
         "Minor Wish",
         "Uses this minor wish when available.",
-        wishMinor
+        readModel.wishMinorOptions
       );
-      let wishMajor = [
-        { val: "none", label: "None", hint: "Disable using major wishes." },
-        ...wishData2.major.map((w) => ({
-          val: w.id,
-          label: poly2.loc("wish_for", [poly2.loc(w.loc)])
-        }))
-      ];
       addSettingsSelect2(
         currentNode,
         "wishMajor",
         "Major Wish",
         "Uses this major wish when available.",
-        wishMajor
+        readModel.wishMajorOptions
       );
       addSettingsToggle2(
         currentNode,
@@ -47459,16 +47427,11 @@
           </table>
         `);
       const ocularTableBodyNode = $2("#script_ocularPowersTableBody");
-      ocularPowerData2.forEach((p) => {
+      readModel.ocularRows.forEach((p) => {
         let tr = $2(`<tr><td></td><td></td><td></td></tr>`);
         tr.appendTo(ocularTableBodyNode);
         let ocularPowerElement = tr.find("td").first();
-        ocularPowerElement.append(
-          buildTableLabel2(
-            game2.loc(`ocular_${p.id}`),
-            game2.loc(`ocular_${p.id}_desc`, p.locParam)
-          )
-        );
+        ocularPowerElement.append(buildTableLabel2(p.label, p.hint));
         ocularPowerElement = ocularPowerElement.next();
         addTableToggle2(ocularPowerElement, `ocularPower_${p.id}`);
         ocularPowerElement = ocularPowerElement.next();
@@ -47545,24 +47508,17 @@
           </table>`);
       let tableBodyNode = $2("#script_minorTraitTableBody");
       let newTableBodyText = "";
-      for (let i = 0; i < MinorTraitManager2.priorityList.length; i++) {
-        const trait2 = MinorTraitManager2.priorityList[i];
-        newTableBodyText += `<tr value="${trait2.traitName}" class="script-draggable"><td id="script_minorTrait_${trait2.traitName}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"><span class="script-lastcolumn"></span></td></tr>`;
+      for (const trait2 of readModel.minorRows) {
+        newTableBodyText += `<tr value="${trait2.id}" class="script-draggable"><td id="script_minorTrait_${trait2.id}" style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:40%"><span class="script-lastcolumn"></span></td></tr>`;
       }
       tableBodyNode.append($2(newTableBodyText));
-      for (let i = 0; i < MinorTraitManager2.priorityList.length; i++) {
-        const trait2 = MinorTraitManager2.priorityList[i];
-        let minorTraitElement = $2("#script_minorTrait_" + trait2.traitName);
-        minorTraitElement.append(
-          buildTableLabel2(
-            game2.loc("trait_" + trait2.traitName + "_name"),
-            game2.loc("trait_" + trait2.traitName)
-          )
-        );
+      for (const trait2 of readModel.minorRows) {
+        let minorTraitElement = $2("#script_minorTrait_" + trait2.id);
+        minorTraitElement.append(buildTableLabel2(trait2.label, trait2.hint));
         minorTraitElement = minorTraitElement.next();
-        addTableToggle2(minorTraitElement, "mTrait_" + trait2.traitName);
+        addTableToggle2(minorTraitElement, "mTrait_" + trait2.id);
         minorTraitElement = minorTraitElement.next();
-        addTableInput2(minorTraitElement, "mTrait_w_" + trait2.traitName);
+        addTableInput2(minorTraitElement, "mTrait_w_" + trait2.id);
       }
       tableBodyNode.sortable({
         items: "tr:not(.unsortable)",
@@ -47571,12 +47527,10 @@
           let minorTraitNames = tableBodyNode.sortable("toArray", {
             attribute: "value"
           });
-          const settingsRaw2 = getSettingsRaw();
-          for (let i = 0; i < minorTraitNames.length; i++) {
-            settingsRaw2["mTrait_p_" + minorTraitNames[i]] = i;
-          }
-          getMinorTraitManager().sortByPriority();
-          updateSettingsFromState2();
+          intents.handle({
+            type: "reorder-minor-traits",
+            traitIds: minorTraitNames
+          });
         }
       });
       addStandardHeading2(currentNode, "Trait Mutation");
@@ -47607,64 +47561,40 @@
         </table>`);
       let mutateTraitTableBodyNode = $2("#script_mutateTraitTableBody");
       newTableBodyText = "";
-      for (let i = 0; i < MutableTraitManager2.priorityList.length; i++) {
-        const trait2 = MutableTraitManager2.priorityList[i];
-        newTableBodyText += `<tr value="${trait2.traitName}" class="script-draggable"><td id="script_mutableTrait_${trait2.traitName}" style="width:30%"></td><td style="width:25%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
+      for (const trait2 of readModel.mutableRows) {
+        newTableBodyText += `<tr value="${trait2.id}" class="script-draggable"><td id="script_mutableTrait_${trait2.id}" style="width:30%"></td><td style="width:25%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:10%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
       }
       mutateTraitTableBodyNode.append($2(newTableBodyText));
-      for (let i = 0; i < MutableTraitManager2.priorityList.length; i++) {
-        const trait2 = MutableTraitManager2.priorityList[i];
-        let mutableTraitElement = $2("#script_mutableTrait_" + trait2.traitName);
+      for (const trait2 of readModel.mutableRows) {
+        let mutableTraitElement = $2("#script_mutableTrait_" + trait2.id);
         mutableTraitElement.append(
-          buildTableLabel2(
-            trait2.source === "" ? "-" : game2.loc(
-              (trait2.type === "major" ? "race_" : "genelab_genus_") + trait2.source
-            ),
-            trait2.type === "major" ? "Major" : "Genus",
-            trait2.type === "genus" ? "has-text-special" : "has-text"
-          )
+          buildTableLabel2(trait2.sourceLabel, trait2.sourceHint, trait2.sourceColor)
         );
         mutableTraitElement = mutableTraitElement.next();
         mutableTraitElement.append(
-          buildTableLabel2(
-            trait2.name,
-            game2.loc("trait_" + trait2.traitName),
-            trait2.isPositive ? "has-text-success" : "has-text-danger"
-          )
+          buildTableLabel2(trait2.traitLabel, trait2.traitHint, trait2.traitColor)
         );
         mutableTraitElement = mutableTraitElement.next();
         mutableTraitElement.append(
-          buildTableLabel2(
-            `${trait2.baseCost * 5}`,
-            `${trait2.baseCost * 5 * mutationCostMultipliers2["custom"]["gain"]} for Custom${trait2.traitName !== "ooze" ? " and Sludge" : ""}`
-          )
+          buildTableLabel2(trait2.costLabel, trait2.costHint)
         );
         mutableTraitElement = mutableTraitElement.next();
-        if (trait2.isGainable()) {
-          addTableToggle2(
-            mutableTraitElement,
-            "mutableTrait_gain_" + trait2.traitName
-          );
+        if (trait2.gainable) {
+          addTableToggle2(mutableTraitElement, "mutableTrait_gain_" + trait2.id);
         }
         mutableTraitElement = mutableTraitElement.next();
-        addTableToggle2(
-          mutableTraitElement,
-          "mutableTrait_purge_" + trait2.traitName
-        );
-        if (trait2.isGainable()) {
+        addTableToggle2(mutableTraitElement, "mutableTrait_purge_" + trait2.id);
+        if (trait2.gainable) {
           makeToggleSwitchesMutuallyExclusive2(
-            $2(".script_mutableTrait_gain_" + trait2.traitName),
-            "mutableTrait_gain_" + trait2.traitName,
-            $2(".script_mutableTrait_purge_" + trait2.traitName),
-            "mutableTrait_purge_" + trait2.traitName
+            $2(".script_mutableTrait_gain_" + trait2.id),
+            "mutableTrait_gain_" + trait2.id,
+            $2(".script_mutableTrait_purge_" + trait2.id),
+            "mutableTrait_purge_" + trait2.id
           );
         }
         mutableTraitElement = mutableTraitElement.next();
-        if (poly2.neg_roll_traits.includes(trait2.traitName)) {
-          addTableToggle2(
-            mutableTraitElement,
-            "mutableTrait_reset_" + trait2.traitName
-          );
+        if (trait2.resettable) {
+          addTableToggle2(mutableTraitElement, "mutableTrait_reset_" + trait2.id);
         }
       }
       mutateTraitTableBodyNode.sortable({
@@ -47674,38 +47604,495 @@
           let mutableTraitNames = mutateTraitTableBodyNode.sortable("toArray", {
             attribute: "value"
           });
-          const settingsRaw2 = getSettingsRaw();
-          for (let i = 0; i < mutableTraitNames.length; i++) {
-            settingsRaw2["mutableTrait_p_" + mutableTraitNames[i]] = i;
-          }
-          getMutableTraitManager().sortByPriority();
-          updateSettingsFromState2();
+          intents.handle({
+            type: "reorder-mutable-traits",
+            traitIds: mutableTraitNames
+          });
         }
       });
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
     function makeToggleSwitchesMutuallyExclusive2(switch1, settingsKey1, switch2, settingsKey2) {
       switch1.on("change", function() {
-        if (switch1.prop("checked") && switch2.prop("checked")) {
+        if (switch1.prop("checked") === true && switch2.prop("checked") === true) {
           switch2.prop("checked", false);
-          getSettingsRaw()[settingsKey2] = false;
-          updateSettingsFromState2();
+          intents.handle({
+            type: "set-trait-setting",
+            settingName: settingsKey2,
+            value: false
+          });
         }
       });
       switch2.on("change", function() {
-        if (switch1.prop("checked") && switch2.prop("checked")) {
+        if (switch1.prop("checked") === true && switch2.prop("checked") === true) {
           switch1.prop("checked", false);
-          getSettingsRaw()[settingsKey1] = false;
-          updateSettingsFromState2();
+          intents.handle({
+            type: "set-trait-setting",
+            settingName: settingsKey1,
+            value: false
+          });
         }
       });
     }
-    return {
+    return Object.freeze({
       buildTraitSettings: buildTraitSettings2,
       updateImitateWarning: updateImitateWarning2,
       updateTraitSettingsContent: updateTraitSettingsContent2,
       makeToggleSwitchesMutuallyExclusive: makeToggleSwitchesMutuallyExclusive2
-    };
+    });
+  }
+
+  // src/adapters/evolve/trait-settings.ts
+  function requireString33(value, path) {
+    if (typeof value !== "string")
+      throw new TypeError(`${path} must be a string`);
+    return value;
+  }
+  function requireNumber2(value, path) {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new TypeError(`${path} must be a finite number`);
+    }
+    return value;
+  }
+  function callLocalization(game2, key, args = []) {
+    return requireString33(
+      Reflect.apply(requireFunction(game2["loc"], "game.loc"), game2, [
+        key,
+        ...args
+      ]),
+      `game.loc(${key})`
+    );
+  }
+  function readOptions2(value, path) {
+    if (!Array.isArray(value)) throw new TypeError(`${path} must be an array`);
+    return value.map((item, index) => requireRecord(item, `${path}[${index}]`));
+  }
+  function option2(val, label, hint = "") {
+    return { val, label, hint };
+  }
+  function createTraitSettingsEvolveAdapter({
+    getSettingsRaw,
+    getState,
+    getGame,
+    getRaces,
+    getResources,
+    getPoly,
+    getMinorTraitManager,
+    getMutableTraitManager,
+    getOcularPowerData,
+    getWishData,
+    getMutationCostMultipliers
+  }) {
+    function readTraitSettingsReadModel() {
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      const game2 = requireRecord(getGame(), "game");
+      const gameRaces = requireRecord(game2["races"], "game.races");
+      const races2 = requireRecord(getRaces(), "races");
+      const resources2 = requireRecord(getResources(), "resources");
+      const poly2 = requireRecord(getPoly(), "poly");
+      const synth = requireRecord(
+        requireRecord(game2["global"], "game.global")["stats"],
+        "game.global.stats"
+      );
+      const synthRaces = requireRecord(synth["synth"], "game.global.stats.synth");
+      const genusTypes = [
+        ...new Set(
+          Object.values(gameRaces).map(
+            (rawRace, index) => requireString33(
+              requireRecord(rawRace, `game.races[${index}]`)["type"],
+              `game.races[${index}].type`
+            )
+          )
+        )
+      ].filter((type) => type !== "organism" && type !== "synthetic");
+      const genusOptions = [
+        option2("ignore", "Ignore", "Do not shift genus"),
+        option2("none", callLocalization(game2, "genelab_genus_none")),
+        ...genusTypes.map(
+          (type) => option2(type, callLocalization(game2, `genelab_genus_${type}`))
+        )
+      ];
+      const imitateOptions = [
+        option2(
+          "ignore",
+          "Ignore",
+          "Do not imitate race. IMPORTANT: script will stall at evolution if none selected"
+        ),
+        ...Object.entries(races2).map(([id, rawRace]) => {
+          const race2 = requireRecord(rawRace, `races.${id}`);
+          const raceId = requireString33(race2["id"], `races.${id}.id`);
+          const completed = Boolean(synthRaces[raceId]);
+          return option2(
+            raceId,
+            completed ? requireString33(race2["name"], `races.${id}.name`) : `--${requireString33(race2["name"], `races.${id}.name`)}--`,
+            requireString33(race2["desc"], `races.${id}.desc`)
+          );
+        })
+      ];
+      const psychicOptions = [
+        option2("none", "Ignore", "Psychic Powers ignored by script"),
+        option2(
+          "auto",
+          "Script Managed",
+          "Performs one of available actions in this order: Capture, Mind Break, Boost Profits, Boost Resource, Boost Attack Power."
+        ),
+        ...["boost", "murder", "assault", "profit", "stun", "mind_break"].map(
+          (id) => option2(
+            id,
+            callLocalization(game2, `psychic_${id}_title`),
+            callLocalization(game2, `psychic_${id}_desc`)
+          )
+        )
+      ];
+      const psychicBoostOptions = [
+        option2(
+          "auto",
+          "Script Managed",
+          "Resource selected by looking for highest income among ones having enough free storage room."
+        ),
+        ...Object.entries(resources2).flatMap(([key, rawResource]) => {
+          const resource2 = requireRecord(rawResource, `resources.${key}`);
+          const atomicMass = requireNumber2(
+            resource2["atomicMass"],
+            `resources.${key}.atomicMass`
+          );
+          return atomicMass > 0 ? [
+            option2(
+              requireString33(resource2["id"], `resources.${key}.id`),
+              requireString33(resource2["title"], `resources.${key}.title`)
+            )
+          ] : [];
+        })
+      ];
+      const polyLoc = requireFunction(poly2["loc"], "poly.loc");
+      const readWishes = (key) => readOptions2(
+        requireRecord(getWishData(), "wishData")[key],
+        `wishData.${key}`
+      ).map((wish, index) => {
+        const id = requireString33(wish["id"], `wishData.${key}[${index}].id`);
+        const loc2 = requireString33(wish["loc"], `wishData.${key}[${index}].loc`);
+        const label = Reflect.apply(polyLoc, poly2, [
+          "wish_for",
+          [Reflect.apply(polyLoc, poly2, [loc2])]
+        ]);
+        return option2(
+          id,
+          requireString33(label, `poly.loc(wishData.${key}[${index}])`)
+        );
+      });
+      const ocularRows = readOptions2(getOcularPowerData(), "ocularPowerData").map(
+        (power, index) => {
+          const id = requireString33(power["id"], `ocularPowerData[${index}].id`);
+          const locParam = power["locParam"];
+          return {
+            id,
+            label: callLocalization(game2, `ocular_${id}`),
+            hint: callLocalization(
+              game2,
+              `ocular_${id}_desc`,
+              locParam === void 0 ? [] : [locParam]
+            )
+          };
+        }
+      );
+      const minorRows = readOptions2(
+        requireRecord(getMinorTraitManager(), "MinorTraitManager")["priorityList"],
+        "MinorTraitManager.priorityList"
+      ).map((trait2, index) => {
+        const id = requireString33(
+          trait2["traitName"],
+          `MinorTraitManager.priorityList[${index}].traitName`
+        );
+        return {
+          id,
+          label: callLocalization(game2, `trait_${id}_name`),
+          hint: callLocalization(game2, `trait_${id}`)
+        };
+      });
+      const multipliers = requireRecord(
+        getMutationCostMultipliers(),
+        "mutationCostMultipliers"
+      );
+      const custom = requireRecord(
+        multipliers["custom"],
+        "mutationCostMultipliers.custom"
+      );
+      const negRollTraits = requireRecord(poly2, "poly")["neg_roll_traits"];
+      if (!Array.isArray(negRollTraits))
+        throw new TypeError("poly.neg_roll_traits must be an array");
+      const mutableRows = readOptions2(
+        requireRecord(getMutableTraitManager(), "MutableTraitManager")["priorityList"],
+        "MutableTraitManager.priorityList"
+      ).map((trait2, index) => {
+        const id = requireString33(
+          trait2["traitName"],
+          `MutableTraitManager.priorityList[${index}].traitName`
+        );
+        const source2 = requireString33(
+          trait2["source"],
+          `MutableTraitManager.priorityList[${index}].source`
+        );
+        const type = requireString33(
+          trait2["type"],
+          `MutableTraitManager.priorityList[${index}].type`
+        );
+        const baseCost = requireNumber2(
+          trait2["baseCost"],
+          `MutableTraitManager.priorityList[${index}].baseCost`
+        );
+        const isPositive = Boolean(trait2["isPositive"]);
+        const gainable = Boolean(
+          Reflect.apply(
+            requireFunction(
+              trait2["isGainable"],
+              `MutableTraitManager.priorityList[${index}].isGainable`
+            ),
+            trait2,
+            []
+          )
+        );
+        const sourceLabel = source2 === "" ? "-" : callLocalization(
+          game2,
+          `${type === "major" ? "race_" : "genelab_genus_"}${source2}`
+        );
+        return {
+          id,
+          sourceLabel,
+          sourceHint: type === "major" ? "Major" : "Genus",
+          sourceColor: type === "genus" ? "has-text-special" : "has-text",
+          traitLabel: requireString33(
+            trait2["name"],
+            `MutableTraitManager.priorityList[${index}].name`
+          ),
+          traitHint: callLocalization(game2, `trait_${id}`),
+          traitColor: isPositive ? "has-text-success" : "has-text-danger",
+          costLabel: `${baseCost * 5}`,
+          costHint: `${baseCost * 5 * requireNumber2(custom["gain"], "mutationCostMultipliers.custom.gain")} for Custom${id !== "ooze" ? " and Sludge" : ""}`,
+          gainable,
+          resettable: negRollTraits.includes(id)
+        };
+      });
+      const controls4 = [
+        {
+          kind: "select",
+          settingName: "shifterGenus",
+          label: "Mimic genus",
+          hint: "Mimic selected genus, if avaialble. If you want to add some conditional overrides to this setting, keep in mind changing genus redraws game page, frequent changes can drastically harm game performance.",
+          options: genusOptions
+        },
+        {
+          kind: "select",
+          settingName: "imitateRace",
+          label: "Imitate race",
+          hint: "Imitate selected race, if available.",
+          options: imitateOptions
+        },
+        {
+          kind: "select",
+          settingName: "buildingShrineType",
+          label: "Magnificent shrine",
+          hint: "Auto Build shrines only at moons of chosen shrine",
+          options: [
+            option2(
+              "any",
+              "Any",
+              "Build any Shrines, whenever have resources for it"
+            ),
+            option2("equally", "Equally", "Build all Shrines equally"),
+            option2("morale", "Morale", "Build only Morale Shrines"),
+            option2("metal", "Metal", "Build only Metal Shrines"),
+            option2("know", "Knowledge", "Build only Knowledge Shrines"),
+            option2("tax", "Tax", "Build only Tax Shrines"),
+            option2(
+              "rotating",
+              "Rotating",
+              "Build Shrines during quarter/full phases for rotating effect shrines"
+            )
+          ]
+        },
+        {
+          kind: "number",
+          settingName: "slaveIncome",
+          label: "Minimum income to buy slave",
+          hint: "Script will use Slave Market only when money is capped, or have income above given number"
+        },
+        {
+          kind: "select",
+          settingName: "psychicPower",
+          label: "Psychic Powers",
+          hint: "Activates selected power with full energy. 10 murders required to research advanced powers will be performed automatically, if needed.",
+          options: psychicOptions
+        },
+        {
+          kind: "select",
+          settingName: "psychicBoostRes",
+          label: "Boosted Resource",
+          hint: "Resource for Boost Resource Production psychic power.",
+          options: psychicBoostOptions
+        },
+        {
+          kind: "select",
+          settingName: "wishMinor",
+          label: "Minor Wish",
+          hint: "Uses this minor wish when available.",
+          options: [
+            option2("none", "None", "Disable using minor wishes."),
+            ...readWishes("minor")
+          ]
+        },
+        {
+          kind: "select",
+          settingName: "wishMajor",
+          label: "Major Wish",
+          hint: "Uses this major wish when available.",
+          options: [
+            option2("none", "None", "Disable using major wishes."),
+            ...readWishes("major")
+          ]
+        },
+        {
+          kind: "toggle",
+          settingName: "jobScalePop",
+          label: "High Pop job scale",
+          hint: "Auto Job will automatically scaly breakpoints to match population increase"
+        },
+        {
+          kind: "select",
+          settingName: "geneticsSequence",
+          label: "Sequencer",
+          hint: "Manages genome decoding, and mutations",
+          options: [
+            option2(
+              "none",
+              "Ignore",
+              "Ignored by script, managed by game and player"
+            ),
+            option2("enabled", "Enable", "Sequencer enabled"),
+            option2("disabled", "Disable", "Sequencer disabled"),
+            option2(
+              "decode",
+              "Decode",
+              "Decode genome only, with no further mutations"
+            )
+          ]
+        },
+        {
+          kind: "select",
+          settingName: "geneticsBoost",
+          label: "Sequence Booster",
+          hint: "Manages sequencer booster",
+          options: [
+            option2(
+              "none",
+              "Ignore",
+              "Ignored by script, managed by game and player"
+            ),
+            option2("enabled", "Enable", "Booster enabled"),
+            option2("disabled", "Disable", "Booster disabled")
+          ]
+        },
+        {
+          kind: "select",
+          settingName: "geneticsAssemble",
+          label: "Auto Sequence",
+          hint: "Manages genome decoding, and mutations",
+          options: [
+            option2(
+              "none",
+              "Ignore",
+              "Ignored by script, managed by game and player"
+            ),
+            option2("enabled", "Enable", "Auto Sequencer enable"),
+            option2("disabled", "Disable", "Auto Sequencer disable"),
+            option2(
+              "auto",
+              "Script Managed",
+              "Gene assembling managed by script, allowing to dump excess knowledge at faster rate, matching income"
+            )
+          ]
+        },
+        {
+          kind: "toggle",
+          settingName: "doNotGoBelowPlasmidSoftcap",
+          label: "Do not go below Plasmid softcap",
+          hint: "Script will not mutate if the number of remaining plasmids or anti plamids would be lower than the softcap (250 + Phage)"
+        },
+        {
+          kind: "number",
+          settingName: "minimumPlasmidsToPreserve",
+          label: "Minimum Plasmids / Anti-Plasmids to preserve",
+          hint: "Script will not mutate if the number of remaining plasmids or anti plamids would be lower than this value"
+        }
+      ];
+      const imitateRaceId = typeof settingsRaw2["imitateRace"] === "string" ? settingsRaw2["imitateRace"] : "";
+      const selectedRace = races2[imitateRaceId];
+      return createTraitSettingsReadModel({
+        controls: controls4,
+        genusOptions,
+        imitateOptions,
+        imitateRaceId,
+        imitateRaceCompleted: selectedRace === void 0 ? void 0 : Boolean(
+          synthRaces[requireString33(
+            requireRecord(selectedRace, `races.${imitateRaceId}`)["id"],
+            `races.${imitateRaceId}.id`
+          )]
+        ),
+        psychicOptions,
+        psychicBoostOptions,
+        wishMinorOptions: controls4[6].kind === "select" ? controls4[6].options : [],
+        wishMajorOptions: controls4[7].kind === "select" ? controls4[7].options : [],
+        ocularRows,
+        minorRows,
+        mutableRows
+      });
+    }
+    function clearEvolutionTarget() {
+      requireRecord(getState(), "state")["evolutionTarget"] = null;
+    }
+    function reorderMinorTraits(traitIds) {
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      const manager = requireRecord(getMinorTraitManager(), "MinorTraitManager");
+      traitIds.forEach((id, index) => {
+        settingsRaw2[`mTrait_p_${requireString33(id, `traitIds[${index}]`)}`] = index;
+      });
+      Reflect.apply(
+        requireFunction(
+          manager["sortByPriority"],
+          "MinorTraitManager.sortByPriority"
+        ),
+        manager,
+        []
+      );
+    }
+    function reorderMutableTraits(traitIds) {
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      const manager = requireRecord(
+        getMutableTraitManager(),
+        "MutableTraitManager"
+      );
+      traitIds.forEach((id, index) => {
+        settingsRaw2[`mutableTrait_p_${requireString33(id, `traitIds[${index}]`)}`] = index;
+      });
+      Reflect.apply(
+        requireFunction(
+          manager["sortByPriority"],
+          "MutableTraitManager.sortByPriority"
+        ),
+        manager,
+        []
+      );
+    }
+    function setBoolean(settingName, value) {
+      const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
+      settingsRaw2[requireString33(settingName, "settingName")] = value;
+    }
+    return Object.freeze({
+      readTraitSettingsReadModel,
+      clearEvolutionTarget,
+      reorderMinorTraits,
+      reorderMutableTraits,
+      setBoolean
+    });
   }
 
   // src/ui/queue-panels.ts
@@ -47941,7 +48328,7 @@
   }
 
   // src/adapters/evolve/mech-info.ts
-  function requireString33(value, path) {
+  function requireString34(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47987,7 +48374,7 @@
           mechs[index],
           `game.global.portal.mechbay.mechs[${index}]`
         );
-        const size = requireString33(mech["size"], `mechs[${index}].size`);
+        const size = requireString34(mech["size"], `mechs[${index}].size`);
         const stats = requireRecord(
           call4(manager, "getMechStats", "MechManager.getMechStats", [mech]),
           `MechManager.getMechStats(${index})`
@@ -48165,7 +48552,7 @@
   }
 
   // src/adapters/evolve/resource-toggles.ts
-  function requireString34(value, path) {
+  function requireString35(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -48186,7 +48573,7 @@
     return priorityList;
   }
   function readResourceId3(value, path) {
-    return requireString34(requireRecord(value, path)["id"], `${path}.id`);
+    return requireString35(requireRecord(value, path)["id"], `${path}.id`);
   }
   function createResourceToggleEvolveAdapter({
     getGame,
@@ -48202,13 +48589,13 @@
       const noTrade = Boolean(race2["no_trade"]);
       const loc2 = requireFunction2(game2["loc"], "game.loc");
       const labels = noTrade ? Object.freeze({ buy: "", sell: "", routes: "", cancelRoutes: "" }) : Object.freeze({
-        buy: requireString34(loc2("resource_market_buy"), "game.loc(buy)"),
-        sell: requireString34(loc2("resource_market_sell"), "game.loc(sell)"),
-        routes: requireString34(
+        buy: requireString35(loc2("resource_market_buy"), "game.loc(buy)"),
+        sell: requireString35(loc2("resource_market_sell"), "game.loc(sell)"),
+        routes: requireString35(
           loc2("resource_market_routes"),
           "game.loc(routes)"
         ),
-        cancelRoutes: requireString34(
+        cancelRoutes: requireString35(
           loc2("cancel_routes"),
           "game.loc(cancel_routes)"
         )
@@ -56535,30 +56922,29 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         }
       });
     }
-    const {
-      buildTraitSettings,
-      updateImitateWarning,
-      updateTraitSettingsContent,
-      makeToggleSwitchesMutuallyExclusive
-    } = createTraitSettings({
-      getSettingsRaw: () => settingsRaw,
-      getState: () => state,
-      getGame: () => game,
-      getRaces: () => races,
-      getResources: () => resources,
-      getPoly: () => poly,
-      getMinorTraitManager: () => MinorTraitManager,
-      getMutableTraitManager: () => MutableTraitManager,
+    let traitSettingsTestContext;
+    const traitSettingsEvolveAdapter = createTraitSettingsEvolveAdapter({
+      getSettingsRaw: () => traitSettingsTestContext?.settingsRaw ?? settingsRaw,
+      getState: () => traitSettingsTestContext?.state ?? state,
+      getGame: () => traitSettingsTestContext?.game ?? game,
+      getRaces: () => traitSettingsTestContext?.races ?? races,
+      getResources: () => traitSettingsTestContext?.resources ?? resources,
+      getPoly: () => traitSettingsTestContext?.poly ?? poly,
+      getMinorTraitManager: () => traitSettingsTestContext?.MinorTraitManager ?? MinorTraitManager,
+      getMutableTraitManager: () => traitSettingsTestContext?.MutableTraitManager ?? MutableTraitManager,
       getOcularPowerData: () => ocularPowerData,
       getWishData: () => wishData,
-      getMutationCostMultipliers: () => mutationCostMultipliers,
+      getMutationCostMultipliers: () => mutationCostMultipliers
+    });
+    let traitSettingsIntentHandler;
+    const traitSettingsBrowserAdapter = createTraitSettingsBrowserAdapter({
+      getReadModel: () => traitSettingsEvolveAdapter.readTraitSettingsReadModel(),
       getDocument: () => document,
       getJQuery: () => $,
+      intents: {
+        handle: (intent) => traitSettingsIntentHandler.handle(intent)
+      },
       getSorterHelper: () => sorterHelper,
-      resetMinorTraitSettings,
-      resetMutableTraitSettings,
-      updateSettingsFromState,
-      resetCheckbox,
       buildSettingsSection,
       addStandardHeading,
       addSettingsSelect,
@@ -56568,6 +56954,31 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       addTableInput,
       buildTableLabel
     });
+    traitSettingsIntentHandler = createTraitSettingsIntentHandler({
+      writer: {
+        resetMinorTraits: () => (traitSettingsTestContext?.resetMinorTraitSettings ?? resetMinorTraitSettings)(true),
+        resetMutableTraits: () => (traitSettingsTestContext?.resetMutableTraitSettings ?? resetMutableTraitSettings)(true),
+        persist: () => (traitSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)(),
+        clearEvolutionTarget: () => traitSettingsEvolveAdapter.clearEvolutionTarget(),
+        reorderMinorTraits: (traitIds) => traitSettingsEvolveAdapter.reorderMinorTraits(traitIds),
+        reorderMutableTraits: (traitIds) => traitSettingsEvolveAdapter.reorderMutableTraits(traitIds),
+        setBoolean: (settingName, value) => traitSettingsEvolveAdapter.setBoolean(settingName, value)
+      },
+      renderSettingsContent: () => traitSettingsBrowserAdapter.updateTraitSettingsContent(),
+      effects: {
+        resetCheckboxes: () => (traitSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoMinorTrait",
+          "autoMutateTraits",
+          "autoGenetics"
+        )
+      }
+    });
+    const {
+      buildTraitSettings,
+      updateImitateWarning,
+      updateTraitSettingsContent,
+      makeToggleSwitchesMutuallyExclusive
+    } = traitSettingsBrowserAdapter;
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         traitSettings: {
@@ -56578,13 +56989,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         },
         setTraitSettingsTestContext(context) {
           settingsRaw = context.settingsRaw;
-          state = context.state;
-          game = context.game;
-          races = context.races;
-          resources = context.resources;
-          poly = context.poly;
-          MinorTraitManager = context.MinorTraitManager;
-          MutableTraitManager = context.MutableTraitManager;
+          traitSettingsTestContext = context;
         }
       });
     }

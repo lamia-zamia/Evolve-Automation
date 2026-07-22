@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 
-import { createTraitSettings } from "../src/adapters/browser/trait-settings.ts";
+import { createTraitSettingsBrowserAdapter } from "../src/adapters/browser/trait-settings.ts";
+import { createTraitSettingsEvolveAdapter } from "../src/adapters/evolve/trait-settings.ts";
+import { createTraitSettingsIntentHandler } from "../src/application/trait-settings.ts";
 
 let settingsRaw = { imitateRace: "human" };
 let state = { evolutionTarget: "first" };
@@ -108,7 +110,7 @@ let MutableTraitManager = {
   sortByPriority: () => mutableSorts++,
 };
 
-const traitSettings = createTraitSettings({
+const evolveAdapter = createTraitSettingsEvolveAdapter({
   getSettingsRaw: () => settingsRaw,
   getState: () => state,
   getGame: () => game,
@@ -126,13 +128,14 @@ const traitSettings = createTraitSettings({
     major: [{ id: "Power", loc: "power" }],
   }),
   getMutationCostMultipliers: () => ({ custom: { gain: 2 } }),
+});
+let intents;
+const traitSettings = createTraitSettingsBrowserAdapter({
+  getReadModel: () => evolveAdapter.readTraitSettingsReadModel(),
   getDocument: () => document,
   getJQuery: () => (value) => makeNode(String(value)),
+  intents: { handle: (intent) => intents.handle(intent) },
   getSorterHelper: () => sorterHelper,
-  resetMinorTraitSettings: (reset) => trace.push(`resetMinor:${reset}`),
-  resetMutableTraitSettings: (reset) => trace.push(`resetMutable:${reset}`),
-  updateSettingsFromState: () => trace.push("persist"),
-  resetCheckbox: (...keys) => trace.push(`resetCheckbox:${keys.join(",")}`),
   buildSettingsSection: (...args) => {
     sectionRegistration = args;
     trace.push(`section:${args[0]}:${args[1]}`);
@@ -147,6 +150,25 @@ const traitSettings = createTraitSettings({
   addTableToggle: (_node, key) => trace.push(`tableToggle:${key}`),
   addTableInput: (_node, key) => trace.push(`tableInput:${key}`),
   buildTableLabel: (note) => ({ label: `label:${note}` }),
+});
+intents = createTraitSettingsIntentHandler({
+  writer: {
+    resetMinorTraits: () => trace.push("resetMinor:true"),
+    resetMutableTraits: () => trace.push("resetMutable:true"),
+    persist: () => trace.push("persist"),
+    clearEvolutionTarget: () => evolveAdapter.clearEvolutionTarget(),
+    reorderMinorTraits: (traitIds) =>
+      evolveAdapter.reorderMinorTraits(traitIds),
+    reorderMutableTraits: (traitIds) =>
+      evolveAdapter.reorderMutableTraits(traitIds),
+    setBoolean: (settingName, value) =>
+      evolveAdapter.setBoolean(settingName, value),
+  },
+  renderSettingsContent: () => traitSettings.updateTraitSettingsContent(),
+  effects: {
+    resetCheckboxes: () =>
+      trace.push("resetCheckbox:autoMinorTrait,autoMutateTraits,autoGenetics"),
+  },
 });
 
 traitSettings.updateTraitSettingsContent();
