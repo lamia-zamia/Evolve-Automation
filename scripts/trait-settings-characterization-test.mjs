@@ -199,6 +199,7 @@ const game = {
     elf: { type: "humanoid" },
     imp: { type: "demonic" },
     ooze: { type: "organism" },
+    placeholder: {},
   },
   loc: (key) => `loc:${key}`,
 };

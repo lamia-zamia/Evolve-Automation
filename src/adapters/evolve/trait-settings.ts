@@ -101,12 +101,12 @@ export function createTraitSettingsEvolveAdapter({
 
     const genusTypes = [
       ...new Set(
-        Object.values(gameRaces).map((rawRace, index) =>
-          requireString(
-            requireRecord(rawRace, `game.races[${index}]`)["type"],
-            `game.races[${index}].type`,
-          ),
-        ),
+        Object.values(gameRaces).flatMap((rawRace, index) => {
+          const race = requireRecord(rawRace, `game.races[${index}]`);
+          const type = race["type"];
+          // Evolve retains placeholder race entries without a type; legacy UI code ignored them.
+          return typeof type === "string" && type.length > 0 ? [type] : [];
+        }),
       ),
     ].filter((type) => type !== "organism" && type !== "synthetic");
     const genusOptions = [

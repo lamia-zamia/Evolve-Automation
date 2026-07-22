@@ -47697,12 +47697,11 @@
       const synthRaces = requireRecord(synth["synth"], "game.global.stats.synth");
       const genusTypes = [
         ...new Set(
-          Object.values(gameRaces).map(
-            (rawRace, index) => requireString33(
-              requireRecord(rawRace, `game.races[${index}]`)["type"],
-              `game.races[${index}].type`
-            )
-          )
+          Object.values(gameRaces).flatMap((rawRace, index) => {
+            const race2 = requireRecord(rawRace, `game.races[${index}]`);
+            const type = race2["type"];
+            return typeof type === "string" && type.length > 0 ? [type] : [];
+          })
         )
       ].filter((type) => type !== "organism" && type !== "synthetic");
       const genusOptions = [

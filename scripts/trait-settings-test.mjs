@@ -78,7 +78,7 @@ function makeNode(label) {
 
 const game = {
   global: { stats: { synth: { human: true } } },
-  races: { human: { type: "humanoid" } },
+  races: { human: { type: "humanoid" }, placeholder: {} },
   loc: (key) => `loc:${key}`,
 };
 const races = {
