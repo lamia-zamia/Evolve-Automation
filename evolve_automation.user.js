@@ -55629,6 +55629,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getCostConflict: (target) => getCostConflict(target)
     });
     const autoBuild = () => {
+      if (!game?.global?.civic?.govern) return;
       runBuildAutomation(buildAdapter);
     };
     let techConflictClock = browserClock;

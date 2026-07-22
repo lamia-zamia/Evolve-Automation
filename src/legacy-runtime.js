@@ -4519,6 +4519,9 @@ export function startLegacyRuntime($, diagnostics, runtimeEnvironment) {
     getCostConflict: (target) => getCostConflict(target),
   });
   const autoBuild = () => {
+    // Evolve initializes civic.govern lazily on a fresh game, but its build
+    // click path assumes the object already exists. Retry on the next tick.
+    if (!game?.global?.civic?.govern) return;
     runBuildAutomation(buildAdapter);
   };
 

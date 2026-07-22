@@ -739,7 +739,10 @@ hooks.automationResources.Horseshoe = { usefulRatio: 1 };
 const wave4Game = {
   global: {
     race: { universe: "standard", seeded: true, chose: false, gods: "human" },
-    civic: { crew: { max: 0, workers: 0 } },
+    civic: {
+      crew: { max: 0, workers: 0 },
+      govern: { type: "democracy" },
+    },
     genes: {},
     tech: {},
     stats: { achieve: {} },
@@ -814,6 +817,18 @@ assert.deepEqual(wave4Actions, [["buildingWeights"], ["projectWeights"]]);
 assert.equal(
   building.extraDescription,
   "Cost reservation data unavailable; skipped for safety<br>",
+);
+
+wave4Actions.length = 0;
+hooks.setAutomationTestContext({
+  game: { global: { civic: {} } },
+  win: { document: testDocument },
+});
+hooks.autoBuild();
+assert.deepEqual(
+  wave4Actions,
+  [],
+  "autoBuild waits for fresh-game government state",
 );
 
 console.log("Wave 4 bundled characterization tests passed");
