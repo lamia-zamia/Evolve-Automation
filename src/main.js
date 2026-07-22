@@ -458,9 +458,11 @@ import { createTriggerSettingsEvolveAdapter } from "./adapters/evolve/trigger-se
 import { createFleetSettingsIntentHandler } from "./application/fleet-settings.ts";
 import { createFleetSettingsBrowserAdapter } from "./adapters/browser/fleet-settings.ts";
 import { createFleetSettingsEvolveAdapter } from "./adapters/evolve/fleet-settings.ts";
+import { createPrestigeSettingsIntentHandler } from "./application/prestige-settings.ts";
+import { createPrestigeSettingsBrowserAdapter } from "./adapters/browser/prestige-settings.ts";
+import { createPrestigeSettingsEvolveAdapter } from "./adapters/evolve/prestige-settings.ts";
 import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
-import { createPrestigeSettings } from "./ui/prestige-settings.ts";
 import { createEvolutionSettings } from "./ui/evolution-settings.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoEvolveAdapter } from "./adapters/evolve/mech-info.ts";
@@ -1445,46 +1447,107 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildChallengeHelperSettings, updateChallengeHelperSettingsContent } =
     challengeHelperSettingsBrowserAdapter;
 
-  const prestigeSettingsOverrides = {};
-  const getPrestigeSettingsDependency = createDependencyResolver(
-    prestigeSettingsOverrides,
-    {
-      $: () => $,
-      addSettingsHeader1: () => addSettingsHeader1,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsSelect: () => addSettingsSelect,
-      addSettingsToggle: () => addSettingsToggle,
-      buildCustomRacePresetEditor: () => buildCustomRacePresetEditor,
-      buildSettingsSection2: () => buildSettingsSection2,
-      buildings: () => buildings,
-      confirm: () => confirm,
-      document: () => document,
-      game: () => game,
-      haveTech: () => haveTech,
-      isApocalypsePrestigeAvailable: () => isApocalypsePrestigeAvailable,
-      isAscensionPrestigeAvailable: () => isAscensionPrestigeAvailable,
-      isBioseederPrestigeAvailable: () => isBioseederPrestigeAvailable,
-      isCataclysmPrestigeAvailable: () => isCataclysmPrestigeAvailable,
-      isDemonicPrestigeAvailable: () => isDemonicPrestigeAvailable,
-      isPrestigeAllowed: () => isPrestigeAllowed,
-      isWhiteholePrestigeAvailable: () => isWhiteholePrestigeAvailable,
-      isWitchAscensionPrestigeAvailable: () =>
-        isWitchAscensionPrestigeAvailable,
-      openOptionsModal: () => openOptionsModal,
-      openOverrideModal: () => openOverrideModal,
-      prestigeOptions: () => prestigeOptions,
-      resetPrestigeSettings: () => resetPrestigeSettings,
-      settingsRaw: () => settingsRaw,
-      state: () => state,
-      updateSettingsFromState: () => updateSettingsFromState,
+  let prestigeSettingsTestContext;
+  const prestigeSettingsReader = createPrestigeSettingsEvolveAdapter({
+    getPrestigeTypes: () =>
+      prestigeSettingsTestContext?.prestigeTypes ?? prestigeTypes,
+    getGame: () => prestigeSettingsTestContext?.game ?? game,
+    getSettingsRaw: () =>
+      prestigeSettingsTestContext?.settingsRaw ?? settingsRaw,
+    getBuildings: () => prestigeSettingsTestContext?.buildings ?? buildings,
+    isPrestigeAllowed: () =>
+      (prestigeSettingsTestContext?.isPrestigeAllowed ?? isPrestigeAllowed)(),
+    haveTech: (...args) =>
+      (prestigeSettingsTestContext?.haveTech ?? haveTech)(...args),
+    isBioseederPrestigeAvailable: () =>
+      (
+        prestigeSettingsTestContext?.isBioseederPrestigeAvailable ??
+        isBioseederPrestigeAvailable
+      )(),
+    isCataclysmPrestigeAvailable: () =>
+      (
+        prestigeSettingsTestContext?.isCataclysmPrestigeAvailable ??
+        isCataclysmPrestigeAvailable
+      )(),
+    isWhiteholePrestigeAvailable: () =>
+      (
+        prestigeSettingsTestContext?.isWhiteholePrestigeAvailable ??
+        isWhiteholePrestigeAvailable
+      )(),
+    isApocalypsePrestigeAvailable: () =>
+      (
+        prestigeSettingsTestContext?.isApocalypsePrestigeAvailable ??
+        isApocalypsePrestigeAvailable
+      )(),
+    isAscensionPrestigeAvailable: () =>
+      (
+        prestigeSettingsTestContext?.isAscensionPrestigeAvailable ??
+        isAscensionPrestigeAvailable
+      )(),
+    isWitchAscensionPrestigeAvailable: (demonic) =>
+      (
+        prestigeSettingsTestContext?.isWitchAscensionPrestigeAvailable ??
+        isWitchAscensionPrestigeAvailable
+      )(demonic),
+    isDemonicPrestigeAvailable: () =>
+      (
+        prestigeSettingsTestContext?.isDemonicPrestigeAvailable ??
+        isDemonicPrestigeAvailable
+      )(),
+  });
+  let prestigeSettingsIntentHandler;
+  const prestigeSettingsBrowserAdapter = createPrestigeSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    reader: prestigeSettingsReader,
+    intents: {
+      handle: (intent) => prestigeSettingsIntentHandler.handle(intent),
     },
-  );
-  const prestigeSettings = createPrestigeSettings({
-    getDependency: getPrestigeSettingsDependency,
-    getOverride: (name) => prestigeSettingsOverrides[name],
+    getActions: () =>
+      prestigeSettingsTestContext?.actions ?? {
+        buildSettingsSection2,
+        addSettingsHeader1,
+        addSettingsNumber,
+        addSettingsSelect,
+        addSettingsToggle,
+        openOverrideModal,
+        openOptionsModal,
+        buildCustomRacePresetEditor,
+      },
+  });
+  prestigeSettingsIntentHandler = createPrestigeSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          prestigeSettingsTestContext?.resetPrestigeSettings ??
+          resetPrestigeSettings
+        )(true),
+      setPrestigeType: (value) => {
+        const target = prestigeSettingsTestContext?.settingsRaw ?? settingsRaw;
+        target.prestigeType = value;
+      },
+      setGoalStandard: () => {
+        const target = prestigeSettingsTestContext?.state ?? state;
+        target.goal = "Standard";
+      },
+      persist: () =>
+        (
+          prestigeSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    },
+    reader: prestigeSettingsReader,
+    render: (secondaryPrefix) =>
+      prestigeSettingsBrowserAdapter.updatePrestigeSettingsContent(
+        secondaryPrefix,
+      ),
+    effects: {
+      confirm: (message) =>
+        (prestigeSettingsTestContext?.confirm ?? confirm)(message),
+    },
   });
   const { buildPrestigeSettings, updatePrestigeSettingsContent } =
-    prestigeSettings;
+    prestigeSettingsBrowserAdapter;
 
   let governmentSettingsTestContext;
   const governmentSettingsActions = {
@@ -5856,12 +5919,16 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
       settingsBoundaries: {
-        prestige: prestigeSettings,
         evolution: evolutionSettings,
       },
       setSettingsBoundariesTestContext(context) {
-        Object.assign(prestigeSettingsOverrides, context);
         Object.assign(evolutionSettingsOverrides, context);
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      prestigeSettings: prestigeSettingsBrowserAdapter,
+      setPrestigeSettingsTestContext(context) {
+        prestigeSettingsTestContext = context;
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {

@@ -1,19 +1,8 @@
 import assert from "node:assert/strict";
 
-import { createPrestigeSettings } from "../src/ui/prestige-settings.ts";
 import { createEvolutionSettings } from "../src/ui/evolution-settings.ts";
 
 const specs = [
-  [
-    "prestige",
-    createPrestigeSettings,
-    "buildPrestigeSettings",
-    "updatePrestigeSettingsContent",
-    "prestige",
-    "Prestige",
-    true,
-    [],
-  ],
   [
     "evolution",
     createEvolutionSettings,
@@ -82,4 +71,4 @@ for (const [
   ]);
 }
 
-console.log("2 settings-boundary module tests passed");
+console.log("1 settings-boundary module tests passed");

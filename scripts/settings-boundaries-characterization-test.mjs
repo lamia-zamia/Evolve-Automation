@@ -75,7 +75,7 @@ vm.runInNewContext(source, sandbox, {
 });
 
 const boundaries = hooks.settingsBoundaries;
-assert.deepEqual(Object.keys(boundaries), ["prestige", "evolution"]);
+assert.deepEqual(Object.keys(boundaries), ["evolution"]);
 
 const trace = [];
 const registrations = [];
@@ -158,10 +158,7 @@ assert.deepEqual(
     id,
     label,
   })),
-  [
-    { kind: "secondary", prefix: "", id: "prestige", label: "Prestige" },
-    { kind: "primary", id: "evolution", label: "Evolution" },
-  ],
+  [{ kind: "primary", id: "evolution", label: "Evolution" }],
 );
 
 for (const registration of registrations) registration.reset();
@@ -174,11 +171,9 @@ const behavioralTrace = trace.filter(
     entry.startsWith("remove:"),
 );
 assert.deepEqual(behavioralTrace, [
-  "reset:prestige:true",
-  "update:prestige:",
   "reset:evolution:true",
   "update:evolution:",
   "checkbox:autoEvolution",
 ]);
 
-console.log("2 settings-boundary bundled characterization tests passed");
+console.log("1 settings-boundary bundled characterization tests passed");

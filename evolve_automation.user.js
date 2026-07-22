@@ -278,14 +278,14 @@
       },
       readBuilding() {
         const buildingsMap = d.buildings();
-        const buildings2 = d.BuildingManager().priorityList.map((building2) => ({
-          binding: building2._vueBinding,
-          switchable: building2.isSwitchable(),
-          smart: Boolean(building2.is.smart)
+        const buildings2 = d.BuildingManager().priorityList.map((building3) => ({
+          binding: building3._vueBinding,
+          switchable: building3.isSwitchable(),
+          smart: Boolean(building3.is.smart)
         }));
         const bindingByKey = {};
         Object.entries(buildingsMap).forEach(
-          ([key, building2]) => bindingByKey[key] = building2._vueBinding
+          ([key, building3]) => bindingByKey[key] = building3._vueBinding
         );
         return { buildings: buildings2, bindingByKey };
       },
@@ -1018,16 +1018,16 @@
       buildingEnabledAll: true,
       buildingStateAll: true
     };
-    context.buildings.forEach((building2, i) => {
-      const id = building2.binding;
+    context.buildings.forEach((building3, i) => {
+      const id = building3.binding;
       def["bat" + id] = true;
       def["bld_p_" + id] = i;
       def["bld_m_" + id] = -1;
       def["bld_w_" + id] = 100;
-      if (building2.switchable) {
+      if (building3.switchable) {
         def["bld_s_" + id] = true;
       }
-      if (building2.smart) {
+      if (building3.smart) {
         def["bld_s2_" + id] = true;
       }
     });
@@ -1423,7 +1423,7 @@
     projectIds.forEach(
       (projectId) => delete settingsRaw2["arpa_ignore_money_" + projectId]
     );
-    buildings2.filter((building2) => !building2.switchable).forEach((building2) => delete settingsRaw2["bld_s_" + building2.vueBinding]);
+    buildings2.filter((building3) => !building3.switchable).forEach((building3) => delete settingsRaw2["bld_s_" + building3.vueBinding]);
     migrateSetting2(
       settingsRaw2,
       "prestigeWhiteholeEjectEnabled",
@@ -2006,27 +2006,27 @@
         const game2 = getGame();
         return game2.global.city.rock_quarry.asbestos;
       },
-      increaseProduction(count) {
-        if (count === 0) {
+      increaseProduction(count2) {
+        if (count2 === 0) {
           return false;
         }
-        if (count < 0) {
-          return this.decreaseProduction(count * -1);
+        if (count2 < 0) {
+          return this.decreaseProduction(count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.add();
         }
       },
-      decreaseProduction(count) {
-        if (count === 0) {
+      decreaseProduction(count2) {
+        if (count2 === 0) {
           return false;
         }
-        if (count < 0) {
-          return this.increaseProduction(count * -1);
+        if (count2 < 0) {
+          return this.increaseProduction(count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.sub();
         }
       }
@@ -2049,27 +2049,27 @@
         const game2 = getGame();
         return game2.global.space.titan_mine.ratio;
       },
-      increaseProduction(count) {
-        if (count === 0) {
+      increaseProduction(count2) {
+        if (count2 === 0) {
           return false;
         }
-        if (count < 0) {
-          return this.decreaseProduction(count * -1);
+        if (count2 < 0) {
+          return this.decreaseProduction(count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.add();
         }
       },
-      decreaseProduction(count) {
-        if (count === 0) {
+      decreaseProduction(count2) {
+        if (count2 === 0) {
           return false;
         }
-        if (count < 0) {
-          return this.increaseProduction(count * -1);
+        if (count2 < 0) {
+          return this.increaseProduction(count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.sub();
         }
       }
@@ -2092,27 +2092,27 @@
         const game2 = getGame();
         return game2.global.tauceti.mining_ship[production];
       },
-      increaseProduction(production, count) {
-        if (count === 0) {
+      increaseProduction(production, count2) {
+        if (count2 === 0) {
           return false;
         }
-        if (count < 0) {
-          return this.decreaseProduction(production, count * -1);
+        if (count2 < 0) {
+          return this.decreaseProduction(production, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.add(production);
         }
       },
-      decreaseProduction(production, count) {
-        if (count === 0) {
+      decreaseProduction(production, count2) {
+        if (count2 === 0) {
           return false;
         }
-        if (count < 0) {
-          return this.increaseProduction(production, count * -1);
+        if (count2 < 0) {
+          return this.increaseProduction(production, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.sub(production);
         }
       }
@@ -2156,29 +2156,29 @@
         const game2 = getGame();
         return game2.global.race.alchemy[id];
       },
-      transmuteMore(id, count) {
+      transmuteMore(id, count2) {
         const resources2 = getResources();
         let vue = getVueById2(this._alchemyVuePrefix + id);
         if (vue === void 0) {
           return false;
         }
-        resources2.Mana.rateOfChange -= count * 1;
-        resources2.Crystal.rateOfChange -= count * 0.5;
+        resources2.Mana.rateOfChange -= count2 * 1;
+        resources2.Crystal.rateOfChange -= count2 * 0.5;
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.addSpell(id);
         }
       },
-      transmuteLess(id, count) {
+      transmuteLess(id, count2) {
         const resources2 = getResources();
         let vue = getVueById2(this._alchemyVuePrefix + id);
         if (vue === void 0) {
           return false;
         }
-        resources2.Mana.rateOfChange += count * 1;
-        resources2.Crystal.rateOfChange += count * 0.5;
+        resources2.Mana.rateOfChange += count2 * 1;
+        resources2.Crystal.rateOfChange += count2 * 0.5;
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.subSpell(id);
         }
       }
@@ -2239,27 +2239,27 @@
       manaCost(level) {
         return level * (1.0025 ** level - 1);
       },
-      increaseRitual(spell, count) {
-        if (count === 0 || !spell.isUnlocked()) {
+      increaseRitual(spell, count2) {
+        if (count2 === 0 || !spell.isUnlocked()) {
           return false;
         }
-        if (count < 0) {
-          return this.decreaseRitual(spell, count * -1);
+        if (count2 < 0) {
+          return this.decreaseRitual(spell, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.addSpell(spell.id);
         }
       },
-      decreaseRitual(spell, count) {
-        if (count === 0 || !spell.isUnlocked()) {
+      decreaseRitual(spell, count2) {
+        if (count2 === 0 || !spell.isUnlocked()) {
           return false;
         }
-        if (count < 0) {
-          return this.increaseRitual(count * -1);
+        if (count2 < 0) {
+          return this.increaseRitual(count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.subSpell(spell.id);
         }
       }
@@ -2378,19 +2378,19 @@
         let extraStore = (resource2.storageRatio - keepRatio) * resource2.maxQuantity;
         return Math.max(extraIncome, extraStore);
       },
-      consumeMore(id, count) {
+      consumeMore(id, count2) {
         const resources2 = getResources();
-        resources2[id].rateMods["nanite"] += count;
+        resources2[id].rateMods["nanite"] += count2;
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.addItem(id);
         }
       },
-      consumeLess(id, count) {
+      consumeLess(id, count2) {
         const resources2 = getResources();
-        resources2[id].rateMods["nanite"] -= count;
+        resources2[id].rateMods["nanite"] -= count2;
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.subItem(id);
         }
       }
@@ -2472,27 +2472,27 @@
         let extraStore = (resource2.storageRatio - keepRatio) * resource2.maxQuantity;
         return Math.max(extraIncome, extraStore) / this.supplyOut(resource2.id);
       },
-      consumeMore(id, count) {
+      consumeMore(id, count2) {
         const resources2 = getResources();
         let vue = getVueById2(this._supplyVuePrefix + id);
         if (vue === void 0) {
           return false;
         }
-        resources2[id].rateMods["supply"] += count * this.supplyOut(id);
+        resources2[id].rateMods["supply"] += count2 * this.supplyOut(id);
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.supplyMore(id);
         }
       },
-      consumeLess(id, count) {
+      consumeLess(id, count2) {
         const resources2 = getResources();
         let vue = getVueById2(this._supplyVuePrefix + id);
         if (vue === void 0) {
           return false;
         }
-        resources2[id].rateMods["supply"] -= count * this.supplyOut(id);
+        resources2[id].rateMods["supply"] -= count2 * this.supplyOut(id);
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.supplyLess(id);
         }
       }
@@ -2570,27 +2570,27 @@
         let extraStore = (resource2.storageRatio - keepRatio) * resource2.maxQuantity;
         return Math.max(extraIncome, extraStore);
       },
-      consumeMore(id, count) {
+      consumeMore(id, count2) {
         const resources2 = getResources();
         let vue = getVueById2(this._ejectVuePrefix + id);
         if (vue === void 0) {
           return false;
         }
-        resources2[id].rateMods["eject"] += count;
+        resources2[id].rateMods["eject"] += count2;
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.ejectMore(id);
         }
       },
-      consumeLess(id, count) {
+      consumeLess(id, count2) {
         const resources2 = getResources();
         let vue = getVueById2(this._ejectVuePrefix + id);
         if (vue === void 0) {
           return false;
         }
-        resources2[id].rateMods["eject"] -= count;
+        resources2[id].rateMods["eject"] -= count2;
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.ejectLess(id);
         }
       }
@@ -2716,51 +2716,51 @@
         }
         return getGame().global.city.smelter[production.id];
       },
-      increaseFuel(fuel, count) {
-        if (count === 0 || !fuel.unlocked) {
+      increaseFuel(fuel, count2) {
+        if (count2 === 0 || !fuel.unlocked) {
           return false;
         }
-        if (count < 0) {
-          return this.decreaseFuel(fuel, count * -1);
+        if (count2 < 0) {
+          return this.decreaseFuel(fuel, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.addFuel(fuel.id);
         }
       },
-      decreaseFuel(fuel, count) {
-        if (count === 0 || !fuel.unlocked) {
+      decreaseFuel(fuel, count2) {
+        if (count2 === 0 || !fuel.unlocked) {
           return false;
         }
-        if (count < 0) {
-          return this.increaseFuel(fuel, count * -1);
+        if (count2 < 0) {
+          return this.increaseFuel(fuel, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.subFuel(fuel.id);
         }
       },
-      increaseSmelting(id, count) {
-        if (count === 0 || !this.Productions[id].unlocked) {
+      increaseSmelting(id, count2) {
+        if (count2 === 0 || !this.Productions[id].unlocked) {
           return false;
         }
-        if (count < 0) {
-          return this.decreaseSmelting(id, count * -1);
+        if (count2 < 0) {
+          return this.decreaseSmelting(id, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.addMetal(id);
         }
       },
-      decreaseSmelting(id, count) {
-        if (count === 0 || !this.Productions[id].unlocked) {
+      decreaseSmelting(id, count2) {
+        if (count2 === 0 || !this.Productions[id].unlocked) {
           return false;
         }
-        if (count < 0) {
-          return this.increaseSmelting(id, count * -1);
+        if (count2 < 0) {
+          return this.increaseSmelting(id, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.subMetal(id);
         }
       },
@@ -2941,27 +2941,27 @@
         const game2 = getGame();
         return production.unlocked ? game2.global.city.factory[production.id] : 0;
       },
-      increaseProduction(production, count) {
-        if (count === 0 || !production.unlocked) {
+      increaseProduction(production, count2) {
+        if (count2 === 0 || !production.unlocked) {
           return false;
         }
-        if (count < 0) {
-          return this.decreaseProduction(production, count * -1);
+        if (count2 < 0) {
+          return this.decreaseProduction(production, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.addItem(production.id);
         }
       },
-      decreaseProduction(production, count) {
-        if (count === 0 || !production.unlocked) {
+      decreaseProduction(production, count2) {
+        if (count2 === 0 || !production.unlocked) {
           return false;
         }
-        if (count < 0) {
-          return this.increaseProduction(production, count * -1);
+        if (count2 < 0) {
+          return this.increaseProduction(production, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.subItem(production.id);
         }
       }
@@ -3049,27 +3049,27 @@
       currentProduction(production) {
         return getGame().global.interstellar.mining_droid[production.id];
       },
-      increaseProduction(production, count) {
-        if (count === 0) {
+      increaseProduction(production, count2) {
+        if (count2 === 0) {
           return false;
         }
-        if (count < 0) {
-          return this.decreaseProduction(production, count * -1);
+        if (count2 < 0) {
+          return this.decreaseProduction(production, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.addItem(production.id);
         }
       },
-      decreaseProduction(production, count) {
-        if (count === 0) {
+      decreaseProduction(production, count2) {
+        if (count2 === 0) {
           return false;
         }
-        if (count < 0) {
-          return this.increaseProduction(production, count * -1);
+        if (count2 < 0) {
+          return this.increaseProduction(production, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.subItem(production.id);
         }
       }
@@ -3117,27 +3117,27 @@
       fueledCount(fuel) {
         return this._graphPlant.instance[fuel.id];
       },
-      increaseFuel(fuel, count) {
-        if (count === 0 || !fuel.cost.resource.isUnlocked()) {
+      increaseFuel(fuel, count2) {
+        if (count2 === 0 || !fuel.cost.resource.isUnlocked()) {
           return false;
         }
-        if (count < 0) {
-          return this.decreaseFuel(fuel, count * -1);
+        if (count2 < 0) {
+          return this.decreaseFuel(fuel, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue[fuel.add]();
         }
       },
-      decreaseFuel(fuel, count) {
-        if (count === 0 || !fuel.cost.resource.isUnlocked()) {
+      decreaseFuel(fuel, count2) {
+        if (count2 === 0 || !fuel.cost.resource.isUnlocked()) {
           return false;
         }
-        if (count < 0) {
-          return this.increaseFuel(fuel, count * -1);
+        if (count2 < 0) {
+          return this.increaseFuel(fuel, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue[fuel.sub]();
         }
       }
@@ -3190,27 +3190,27 @@
       zeroProduction(production) {
         this._industryVue.zero(production);
       },
-      increaseProduction(production, count) {
-        if (count === 0) {
+      increaseProduction(production, count2) {
+        if (count2 === 0) {
           return false;
         }
-        if (count < 0) {
-          return this.decreaseProduction(production, count * -1);
+        if (count2 < 0) {
+          return this.decreaseProduction(production, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.more(production);
         }
       },
-      decreaseProduction(production, count) {
-        if (count === 0) {
+      decreaseProduction(production, count2) {
+        if (count2 === 0) {
           return false;
         }
-        if (count < 0) {
-          return this.increaseProduction(production, count * -1);
+        if (count2 < 0) {
+          return this.increaseProduction(production, count2 * -1);
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._industryVue.less(production);
         }
       }
@@ -3369,7 +3369,7 @@
       zeroTradeRoutes(resource2) {
         getVueById2(resource2._marketVueBinding)?.zero(resource2.id);
       },
-      addTradeRoutes(resource2, count) {
+      addTradeRoutes(resource2, count2) {
         if (!resource2.isUnlocked()) {
           return false;
         }
@@ -3378,11 +3378,11 @@
           return false;
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.autoBuy(resource2.id);
         }
       },
-      removeTradeRoutes(resource2, count) {
+      removeTradeRoutes(resource2, count2) {
         if (!resource2.isUnlocked()) {
           return false;
         }
@@ -3391,7 +3391,7 @@
           return false;
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.autoSell(resource2.id);
         }
       }
@@ -3422,61 +3422,61 @@
       sortByPriority() {
         this.priorityList.sort((a, b) => a.storagePriority - b.storagePriority);
       },
-      constructCrate(count) {
-        if (count <= 0) {
+      constructCrate(count2) {
+        if (count2 <= 0) {
           return;
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._storageVue.crate();
         }
       },
-      constructContainer(count) {
-        if (count <= 0) {
+      constructContainer(count2) {
+        if (count2 <= 0) {
           return;
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._storageVue.container();
         }
       },
-      assignCrate(resource2, count) {
+      assignCrate(resource2, count2) {
         let vue = getVueById2(resource2._stackVueBinding);
         if (vue === void 0) {
           return false;
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.addCrate(resource2.id);
         }
       },
-      unassignCrate(resource2, count) {
+      unassignCrate(resource2, count2) {
         let vue = getVueById2(resource2._stackVueBinding);
         if (vue === void 0) {
           return false;
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.subCrate(resource2.id);
         }
       },
-      assignContainer(resource2, count) {
+      assignContainer(resource2, count2) {
         let vue = getVueById2(resource2._stackVueBinding);
         if (vue === void 0) {
           return false;
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.addCon(resource2.id);
         }
       },
-      unassignContainer(resource2, count) {
+      unassignContainer(resource2, count2) {
         let vue = getVueById2(resource2._stackVueBinding);
         if (vue === void 0) {
           return false;
         }
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.subCon(resource2.id);
         }
       }
@@ -3853,19 +3853,19 @@
       getCampaignTitle(tactic) {
         return this._garrisonVue.$options.filters.tactics(tactic);
       },
-      addBattalion(count) {
+      addBattalion(count2) {
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._garrisonVue.aNext();
         }
-        this.raid = Math.min(this.raid + count, this.currentCityGarrison);
+        this.raid = Math.min(this.raid + count2, this.currentCityGarrison);
       },
-      removeBattalion(count) {
+      removeBattalion(count2) {
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._garrisonVue.aLast();
         }
-        this.raid = Math.max(this.raid - count, 0);
+        this.raid = Math.max(this.raid - count2, 0);
       },
       getGovArmy(tactic, govIndex) {
         const game2 = getGame();
@@ -3909,30 +3909,30 @@
         }
         return maxSoldiers;
       },
-      addHellGarrison(count) {
+      addHellGarrison(count2) {
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._hellVue.aNext();
         }
-        this.hellSoldiers = Math.min(this.hellSoldiers + count, this.workers);
+        this.hellSoldiers = Math.min(this.hellSoldiers + count2, this.workers);
         this.hellAssigned = this.hellSoldiers;
       },
-      removeHellGarrison(count) {
+      removeHellGarrison(count2) {
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._hellVue.aLast();
         }
         let min = this.hellPatrols * this.hellPatrolSize + this.hellReservedSoldiers;
-        this.hellSoldiers = Math.max(this.hellSoldiers - count, min);
+        this.hellSoldiers = Math.max(this.hellSoldiers - count2, min);
         this.hellAssigned = this.hellSoldiers;
       },
-      addHellPatrol(count) {
+      addHellPatrol(count2) {
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._hellVue.patInc();
         }
         if (this.hellPatrols * this.hellPatrolSize < this.hellSoldiers) {
-          this.hellPatrols += count;
+          this.hellPatrols += count2;
           if (this.hellSoldiers < this.hellPatrols * this.hellPatrolSize) {
             this.hellPatrols = Math.floor(
               this.hellSoldiers / this.hellPatrolSize
@@ -3940,20 +3940,20 @@
           }
         }
       },
-      removeHellPatrol(count) {
+      removeHellPatrol(count2) {
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._hellVue.patDec();
         }
-        this.hellPatrols = Math.max(this.hellPatrols - count, 0);
+        this.hellPatrols = Math.max(this.hellPatrols - count2, 0);
       },
-      addHellPatrolSize(count) {
+      addHellPatrolSize(count2) {
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._hellVue.patSizeInc();
         }
         if (this.hellPatrolSize < this.hellSoldiers) {
-          this.hellPatrolSize += count;
+          this.hellPatrolSize += count2;
           if (this.hellSoldiers < this.hellPatrols * this.hellPatrolSize) {
             this.hellPatrols = Math.floor(
               this.hellSoldiers / this.hellPatrolSize
@@ -3961,12 +3961,12 @@
           }
         }
       },
-      removeHellPatrolSize(count) {
+      removeHellPatrolSize(count2) {
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._hellVue.patSizeDec();
         }
-        this.hellPatrolSize = Math.max(this.hellPatrolSize - count, 1);
+        this.hellPatrolSize = Math.max(this.hellPatrolSize - count2, 1);
       },
       attackEnemyFortress(enemyIndex) {
         const game2 = getGame();
@@ -4220,13 +4220,13 @@
       },
       shipCount(loc, template) {
         const game2 = getGame();
-        let count = 0;
+        let count2 = 0;
         for (let ship of game2.global.space.shipyard.ships) {
           if (ship.location === loc && ship.class === template.class && ship.power === template.power && ship.weapon === template.weapon && ship.armor === template.armor && ship.engine === template.engine && ship.sensor === template.sensor) {
-            count++;
+            count2++;
           }
         }
-        return count;
+        return count2;
       },
       // export function syndicate(region,extra) from truepath.js with added "all" argument
       syndicate(region, extra, all) {
@@ -4312,15 +4312,15 @@
         }
         return true;
       },
-      addShip(region, ship, count) {
+      addShip(region, ship, count2) {
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._fleetVue.add(region, ship);
         }
       },
-      subShip(region, ship, count) {
+      subShip(region, ship, count2) {
         const KeyManager2 = getKeyManager();
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           this._fleetVue.sub(region, ship);
         }
       }
@@ -5249,10 +5249,10 @@
       for (let [key, action] of Object.entries(game2.actions.tech)) {
         techIds2[action.id] = new Technology2(key);
       }
-      for (let building2 of Object.values(buildings2)) {
-        buildingIds2[building2._vueBinding] = building2;
-        if (building2.isMission() && building2 !== buildings2.BlackholeJumpShip && building2 !== buildings2.PitAssaultForge) {
-          state2.missionBuildingList.push(building2);
+      for (let building3 of Object.values(buildings2)) {
+        buildingIds2[building3._vueBinding] = building3;
+        if (building3.isMission() && building3 !== buildings2.BlackholeJumpShip && building3 !== buildings2.PitAssaultForge) {
+          state2.missionBuildingList.push(building3);
         }
       }
       for (let project of Object.values(projects2)) {
@@ -5496,36 +5496,36 @@
       statePriorityList: [],
       updateBuildings() {
         const buildings2 = getBuildings();
-        for (let building2 of Object.values(buildings2)) {
-          building2.updateResourceRequirements();
-          building2.extraDescription = "";
+        for (let building3 of Object.values(buildings2)) {
+          building3.updateResourceRequirements();
+          building3.extraDescription = "";
         }
       },
       updateWeighting() {
         let activeRules = weightingRules2.filter(
           (rule) => rule[wrGlobalCondition2]() && rule[wrMultiplier2]() !== 1
         );
-        for (let building2 of this.priorityList) {
-          building2.weighting = building2._weighting;
+        for (let building3 of this.priorityList) {
+          building3.weighting = building3._weighting;
           for (let j = 0; j < activeRules.length; j++) {
-            let result2 = activeRules[j][wrIndividualCondition2](building2);
+            let result2 = activeRules[j][wrIndividualCondition2](building3);
             if (result2) {
-              let note = activeRules[j][wrDescription2](result2, building2);
+              let note = activeRules[j][wrDescription2](result2, building3);
               if (note !== "") {
-                building2.extraDescription += note + "<br>";
+                building3.extraDescription += note + "<br>";
               }
-              building2.weighting *= activeRules[j][wrMultiplier2](result2);
-              if (building2.weighting <= 0) {
+              building3.weighting *= activeRules[j][wrMultiplier2](result2);
+              if (building3.weighting <= 0) {
                 break;
               }
             }
           }
-          if (building2.weighting > 0) {
-            building2.weighting = Math.max(
+          if (building3.weighting > 0) {
+            building3.weighting = Math.max(
               Number.MIN_VALUE,
-              building2.weighting - 1e-7 * building2.count
+              building3.weighting - 1e-7 * building3.count
             );
-            building2.extraDescription = "AutoBuild weighting: " + getNiceNumber2(building2.weighting) + "<br>" + building2.extraDescription;
+            building3.extraDescription = "AutoBuild weighting: " + getNiceNumber2(building3.weighting) + "<br>" + building3.extraDescription;
           }
         }
       },
@@ -5534,11 +5534,11 @@
         this.statePriorityList.sort((a, b) => a.priority - b.priority);
       },
       managedPriorityList() {
-        return this.priorityList.filter((building2) => building2.weighting > 0);
+        return this.priorityList.filter((building3) => building3.weighting > 0);
       },
       managedStatePriorityList() {
         return this.statePriorityList.filter(
-          (building2) => building2.hasState() && building2.autoStateEnabled && building2.count > 0
+          (building3) => building3.hasState() && building3.autoStateEnabled && building3.count > 0
         );
       }
     };
@@ -6530,15 +6530,15 @@
     }
     function customRaceEditorTraits2(draft) {
       const game2 = getGame();
-      const unlocked = new Set(draft.traitlist);
+      const unlocked2 = new Set(draft.traitlist);
       Object.entries(game2.races).forEach(([id, race2]) => {
         const genus = race2.type;
         if (game2.global.stats.achieve[`extinct_${id}`]?.l || game2.global.stats.achieve[`genus_${genus}`]?.l) {
-          Object.keys(race2.traits ?? {}).forEach((trait2) => unlocked.add(trait2));
+          Object.keys(race2.traits ?? {}).forEach((trait2) => unlocked2.add(trait2));
         }
       });
       return Object.entries(game2.traits).filter(
-        (entry) => entry[1]?.type === "major" && unlocked.has(entry[0])
+        (entry) => entry[1]?.type === "major" && unlocked2.has(entry[0])
       ).sort(
         ([, a], [, b]) => (a.taxonomy ?? "").localeCompare(b.taxonomy ?? "") || a.name.localeCompare(b.name)
       );
@@ -6798,33 +6798,33 @@
         }
         return ignoreMax ? breakpointActual : Math.min(breakpointActual, this.max);
       }
-      addWorkers(count) {
+      addWorkers(count2) {
         if (this.isDefault()) {
           return false;
         }
-        if (count < 0) {
-          this.removeWorkers(-1 * count);
+        if (count2 < 0) {
+          this.removeWorkers(-1 * count2);
         }
         let vue = getVueById2(this._workerBinding);
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.add();
         }
       }
-      removeWorkers(count) {
+      removeWorkers(count2) {
         if (this.isDefault()) {
           return false;
         }
-        if (count < 0) {
-          this.addWorkers(-1 * count);
+        if (count2 < 0) {
+          this.addWorkers(-1 * count2);
         }
         let vue = getVueById2(this._workerBinding);
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.sub();
         }
       }
@@ -6843,27 +6843,27 @@
       get max() {
         return Number.MAX_SAFE_INTEGER;
       }
-      addServants(count) {
-        if (count < 0) {
-          this.removeServants(-1 * count);
+      addServants(count2) {
+        if (count2 < 0) {
+          this.removeServants(-1 * count2);
         }
         let vue = getVueById2(this._servantBinding);
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.add();
         }
       }
-      removeServants(count) {
-        if (count < 0) {
-          this.addServants(-1 * count);
+      removeServants(count2) {
+        if (count2 < 0) {
+          this.addServants(-1 * count2);
         }
         let vue = getVueById2(this._servantBinding);
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.sub();
         }
       }
@@ -6899,57 +6899,57 @@
       get max() {
         return game2.global.civic.craftsman.max;
       }
-      addWorkers(count) {
+      addWorkers(count2) {
         if (!this.isUnlocked()) {
           return false;
         }
-        if (count < 0) {
-          this.removeWorkers(-1 * count);
+        if (count2 < 0) {
+          this.removeWorkers(-1 * count2);
         }
         let vue = getVueById2(this._crafterBinding);
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.add(this._originalId);
         }
       }
-      removeWorkers(count) {
+      removeWorkers(count2) {
         if (!this.isUnlocked()) {
           return false;
         }
-        if (count < 0) {
-          this.addWorkers(-1 * count);
+        if (count2 < 0) {
+          this.addWorkers(-1 * count2);
         }
         let vue = getVueById2(this._crafterBinding);
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.sub(this._originalId);
         }
       }
-      addServants(count) {
-        if (count < 0) {
-          this.removeServants(-1 * count);
+      addServants(count2) {
+        if (count2 < 0) {
+          this.removeServants(-1 * count2);
         }
         let vue = getVueById2(this._servantBinding);
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.add(this._originalId);
         }
       }
-      removeServants(count) {
-        if (count < 0) {
-          this.addServants(-1 * count);
+      removeServants(count2) {
+        if (count2 < 0) {
+          this.addServants(-1 * count2);
         }
         let vue = getVueById2(this._servantBinding);
         if (vue === void 0) {
           return false;
         }
-        for (let m of KeyManager2.click(count)) {
+        for (let m of KeyManager2.click(count2)) {
           vue.sub(this._originalId);
         }
       }
@@ -7197,13 +7197,13 @@
         }
         return (Math.min(this.maxQuantity, this.storageRequired) - this.currentQuantity) / totalRateOfCharge;
       }
-      tryCraftX(count) {
+      tryCraftX(count2) {
         let vue = getVueById2(this._vueBinding);
         if (vue === void 0) {
           return false;
         }
         KeyManager2.set(false, false, false);
-        vue.craft(this.id, count);
+        vue.craft(this.id, count2);
       }
       requestQuantity(req) {
         if (this.requestedQuantity < req) {
@@ -7258,16 +7258,16 @@
         if (game2.global.race.powered) {
           this.maxQuantity += (resources2.Population.maxQuantity - resources2.Population.currentQuantity) * traitVal2("powered", 0);
         }
-        for (let building2 of Object.values(buildings2)) {
-          if (building2.stateOffCount > 0) {
-            let missingAmount = building2.stateOffCount;
-            if (building2.autoMax < building2.count && settings2.masterScriptToggle && settings2.autoPower && building2.autoStateEnabled && settings2.buildingsLimitPowered) {
-              missingAmount -= building2.count - building2.autoMax;
+        for (let building3 of Object.values(buildings2)) {
+          if (building3.stateOffCount > 0) {
+            let missingAmount = building3.stateOffCount;
+            if (building3.autoMax < building3.count && settings2.masterScriptToggle && settings2.autoPower && building3.autoStateEnabled && settings2.buildingsLimitPowered) {
+              missingAmount -= building3.count - building3.autoMax;
             }
-            if (building2 === buildings2.NeutronCitadel) {
-              this.maxQuantity += getCitadelConsumption2(building2.stateOnCount + missingAmount) - getCitadelConsumption2(building2.stateOnCount);
+            if (building3 === buildings2.NeutronCitadel) {
+              this.maxQuantity += getCitadelConsumption2(building3.stateOnCount + missingAmount) - getCitadelConsumption2(building3.stateOnCount);
             } else {
-              this.maxQuantity += missingAmount * building2.powered;
+              this.maxQuantity += missingAmount * building3.powered;
             }
           }
         }
@@ -13594,11 +13594,11 @@
           )
         )
       );
-      Object.values(buildings2).forEach((building2) => {
-        if (building2.powered > 0) {
-          let powerId = (building2._location || building2._tab) + ":" + building2.id;
+      Object.values(buildings2).forEach((building3) => {
+        if (building3.powered > 0) {
+          let powerId = (building3._location || building3._tab) + ":" + building3.id;
           if (game2.global.power.indexOf(powerId) === -1) {
-            building2.overridePowered = 0;
+            building3.overridePowered = 0;
           }
         }
       });
@@ -13810,10 +13810,10 @@
     }
     const validatedSamples = {};
     let sampleTotal = 0;
-    for (const [bucket, count] of Object.entries(samples)) {
-      if (!isNonNegativeSafeInteger(count)) return null;
-      validatedSamples[bucket] = count;
-      sampleTotal += count;
+    for (const [bucket, count2] of Object.entries(samples)) {
+      if (!isNonNegativeSafeInteger(count2)) return null;
+      validatedSamples[bucket] = count2;
+      sampleTotal += count2;
     }
     if (!Number.isSafeInteger(sampleTotal) || sampleTotal !== total) return null;
     return freezeStats({
@@ -13862,14 +13862,14 @@
       if (!isRecord3(rawTarget) || typeof rawTarget["isAffordable"] !== "function") {
         return unavailableLimit("invalid-target");
       }
-      const affordable = rawTarget["isAffordable"].call(rawTarget);
-      if (typeof affordable !== "boolean") {
+      const affordable2 = rawTarget["isAffordable"].call(rawTarget);
+      if (typeof affordable2 !== "boolean") {
         return unavailableLimit("invalid-target");
       }
-      if (affordable) {
+      if (affordable2) {
         return Object.freeze({
           status: "ready",
-          input: Object.freeze({ affordable, requirements: Object.freeze([]) })
+          input: Object.freeze({ affordable: affordable2, requirements: Object.freeze([]) })
         });
       }
       const rawCosts = rawTarget["cost"];
@@ -13891,8 +13891,8 @@
         if (!isFiniteNumber2(currentQuantity) || !isFiniteNumber2(maximumQuantity) || !isFiniteNumber2(income)) {
           return unavailableLimit("invalid-resource", resourceId3);
         }
-        const unlocked = rawResource["isUnlocked"].call(rawResource);
-        if (typeof unlocked !== "boolean") {
+        const unlocked2 = rawResource["isUnlocked"].call(rawResource);
+        if (typeof unlocked2 !== "boolean") {
           return unavailableLimit("invalid-resource", resourceId3);
         }
         requirements.push(
@@ -13903,14 +13903,14 @@
             currentQuantity,
             maximumQuantity,
             income,
-            unlocked
+            unlocked: unlocked2
           })
         );
       }
       return Object.freeze({
         status: "ready",
         input: Object.freeze({
-          affordable,
+          affordable: affordable2,
           requirements: Object.freeze(requirements)
         })
       });
@@ -14469,17 +14469,17 @@
     }
     return cap;
   }
-  function constructCommand(unit, view, count) {
+  function constructCommand(unit, view, count2) {
     const spend = view.costs.map(
       (cost) => Object.freeze({
         resourceId: cost.resourceId,
-        amount: cost.costPerUnit * count
+        amount: cost.costPerUnit * count2
       })
     );
     return Object.freeze({
       kind: "construct-storage",
       unit,
-      count,
+      count: count2,
       storagePerUnit: view.storagePerUnit,
       producedResourceId: view.resourceId,
       spend: Object.freeze(spend)
@@ -16034,9 +16034,9 @@
   }
   function segmentedTargetSegmentsRemaining(target) {
     const gameMax = target["gameMax"];
-    const count = target["count"];
-    if (!isFiniteNumber5(gameMax) || !isFiniteNumber5(count)) return void 0;
-    return gameMax - count;
+    const count2 = target["count"];
+    if (!isFiniteNumber5(gameMax) || !isFiniteNumber5(count2)) return void 0;
+    return gameMax - count2;
   }
 
   // src/domain/resource-weighting.ts
@@ -20214,7 +20214,7 @@
       throw new TypeError("BuildingManager.priorityList must be an array");
     }
     return priorityList.map(
-      (building2, index) => requireRecord(building2, `BuildingManager.priorityList[${index}]`)
+      (building3, index) => requireRecord(building3, `BuildingManager.priorityList[${index}]`)
     );
   }
   function readOptionalString(value) {
@@ -20227,7 +20227,7 @@
     if (tab === "portal" || tab === "tauceti") return "has-text-warning";
     return "has-text-info";
   }
-  function readLinkedIds(building2, linkedBuildings2, path) {
+  function readLinkedIds(building3, linkedBuildings2, path) {
     for (let setIndex = 0; setIndex < linkedBuildings2.length; setIndex += 1) {
       const rawSet = linkedBuildings2[setIndex];
       if (!Array.isArray(rawSet)) {
@@ -20236,7 +20236,7 @@
       const set = rawSet.map(
         (item, itemIndex) => requireRecord(item, `linkedBuildings[${setIndex}][${itemIndex}]`)
       );
-      if (set.some((item) => item === building2)) {
+      if (set.some((item) => item === building3)) {
         return set.map(
           (item, itemIndex) => requireString9(
             item["_vueBinding"],
@@ -20252,21 +20252,21 @@
       settingsRaw2["overrides"],
       "settingsRaw.overrides"
     );
-    return readPriorityList5(manager).map((building2, index) => {
+    return readPriorityList5(manager).map((building3, index) => {
       const path = `BuildingManager.priorityList[${index}]`;
-      const id = requireString9(building2["_vueBinding"], `${path}._vueBinding`);
-      const flags = requireRecord(building2["is"], `${path}.is`);
+      const id = requireString9(building3["_vueBinding"], `${path}._vueBinding`);
+      const flags = requireRecord(building3["is"], `${path}.is`);
       const stateSettingName = Reflect.apply(
-        requireFunction(building2["isSwitchable"], `${path}.isSwitchable`),
-        building2,
+        requireFunction(building3["isSwitchable"], `${path}.isSwitchable`),
+        building3,
         []
       ) ? `bld_s_${id}` : void 0;
       const smartSettingName = flags["smart"] ? `bld_s2_${id}` : void 0;
-      const linkedIds = smartSettingName ? readLinkedIds(building2, linkedBuildings2, path) : void 0;
+      const linkedIds = smartSettingName ? readLinkedIds(building3, linkedBuildings2, path) : void 0;
       return {
         id,
-        label: requireString9(building2["name"], `${path}.name`),
-        color: readColor(readOptionalString(building2["_tab"])),
+        label: requireString9(building3["name"], `${path}.name`),
+        color: readColor(readOptionalString(building3["_tab"])),
         autoBuildSettingName: `bat${id}`,
         maximumSettingName: `bld_m_${id}`,
         weightingSettingName: `bld_w_${id}`,
@@ -20324,27 +20324,27 @@
       const leftOperand = reg[1] ?? "";
       const operator = reg[2] ?? "";
       const rightOperand = reg[3] ?? "";
-      const buildingValue = (building2) => {
+      const buildingValue = (building3) => {
         switch (leftOperand.trim()) {
           case "BUILD":
           case "AUTOBUILD":
-            return building2["autoBuildEnabled"];
+            return building3["autoBuildEnabled"];
           case "POWER":
           case "AUTOPOWER":
-            return building2["autoStateEnabled"];
+            return building3["autoStateEnabled"];
           case "WEIGHT":
           case "WEIGHTING":
-            return building2["_weighting"];
+            return building3["_weighting"];
           case "MAX":
           case "MAXBUILD":
-            return building2["_autoMax"];
+            return building3["_autoMax"];
           case "POWERED":
-            return building2["powered"];
+            return building3["powered"];
           case "KNOW":
           case "KNOWLEDGE":
-            return requireRecord(building2["is"], "building.is")["knowledge"];
+            return requireRecord(building3["is"], "building.is")["knowledge"];
           default: {
-            const cost = requireRecord(building2["cost"], "building.cost");
+            const cost = requireRecord(building3["cost"], "building.cost");
             const resources2 = requireRecord(getResources(), "resources");
             const match = Object.entries(cost).find(([resourceId3]) => {
               const resource2 = requireRecord(
@@ -20384,9 +20384,9 @@
       const buildingIds2 = requireRecord(getBuildingIds(), "buildingIds");
       const matchingIds = [];
       for (const [id, rawBuilding] of Object.entries(buildingIds2)) {
-        const building2 = requireRecord(rawBuilding, `buildingIds.${id}`);
+        const building3 = requireRecord(rawBuilding, `buildingIds.${id}`);
         if (Reflect.apply(compare, comparisons, [
-          buildingValue(building2),
+          buildingValue(building3),
           testValue
         ])) {
           matchingIds.push(id);
@@ -20428,9 +20428,9 @@
       const manager = requireRecord(getBuildingManager(), "BuildingManager");
       const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
       settingsRaw2["buildingEnabledAll"] = requireBoolean2(enabled, "enabled");
-      for (const [index, building2] of readPriorityList5(manager).entries()) {
+      for (const [index, building3] of readPriorityList5(manager).entries()) {
         const id = requireString9(
-          building2["_vueBinding"],
+          building3["_vueBinding"],
           `BuildingManager.priorityList[${index}]._vueBinding`
         );
         settingsRaw2[`bat${id}`] = enabled;
@@ -20440,9 +20440,9 @@
       const manager = requireRecord(getBuildingManager(), "BuildingManager");
       const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
       settingsRaw2["buildingStateAll"] = requireBoolean2(enabled, "enabled");
-      for (const [index, building2] of readPriorityList5(manager).entries()) {
+      for (const [index, building3] of readPriorityList5(manager).entries()) {
         const id = requireString9(
-          building2["_vueBinding"],
+          building3["_vueBinding"],
           `BuildingManager.priorityList[${index}]._vueBinding`
         );
         settingsRaw2[`bld_s_${id}`] = enabled;
@@ -21132,16 +21132,16 @@
       removeBuildingToggles2();
       if (!reader.readVisible()) return;
       const $2 = getJQuery();
-      let count = 0;
+      let count2 = 0;
       for (const item of reader.readItems()) {
         const buildingElement = $2("#" + item.binding);
         if (buildingElement.length === 0) continue;
         buildingElement.append(
           addToggleCallbacks2($2(createToggleMarkup5(item)), item.settingKey)
         );
-        count++;
+        count2++;
       }
-      getCountWriter().setCount(count);
+      getCountWriter().setCount(count2);
     }
     function removeBuildingToggles2() {
       getJQuery()("#mTabCivil .ea-building-toggle").remove();
@@ -21176,12 +21176,12 @@
         const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
         return Object.freeze(
           priorityList.map((rawBuilding, index) => {
-            const building2 = requireRecord(
+            const building3 = requireRecord(
               rawBuilding,
               `BuildingManager.priorityList[${index}]`
             );
             const binding = requireString15(
-              building2["_vueBinding"],
+              building3["_vueBinding"],
               `BuildingManager.priorityList[${index}]._vueBinding`
             );
             const settingKey = `bat${binding}`;
@@ -21889,12 +21889,12 @@
     }
   }
   function readBuilding(rawBuildings, id) {
-    const building2 = rawBuildings[id];
-    if (!isRecord8(building2)) return void 0;
-    const name = building2["name"];
-    const count = building2["count"];
-    if (typeof name !== "string" || !finiteNonNegative(count)) return void 0;
-    return { name, count };
+    const building3 = rawBuildings[id];
+    if (!isRecord8(building3)) return void 0;
+    const name = building3["name"];
+    const count2 = building3["count"];
+    if (typeof name !== "string" || !finiteNonNegative(count2)) return void 0;
+    return { name, count: count2 };
   }
   function readRetirementPreparationInput(rawBuildings, rawResources, rawThresholds) {
     try {
@@ -22120,10 +22120,10 @@
   }
   function readBuildingCount(rawBuildings, id) {
     if (!isRecord9(rawBuildings)) return void 0;
-    const building2 = rawBuildings[id];
-    if (!isRecord9(building2)) return void 0;
-    const count = building2["count"];
-    return finiteNonNegative2(count) ? count : void 0;
+    const building3 = rawBuildings[id];
+    if (!isRecord9(building3)) return void 0;
+    const count2 = building3["count"];
+    return finiteNonNegative2(count2) ? count2 : void 0;
   }
   function guardStarId(guard) {
     switch (guard) {
@@ -22716,15 +22716,15 @@
     return typeof value === "boolean" ? value : void 0;
   }
   function readBuilding2(buildings2, id) {
-    const building2 = buildings2[id];
-    return isRecord12(building2) ? building2 : void 0;
+    const building3 = buildings2[id];
+    return isRecord12(building3) ? building3 : void 0;
   }
   function readTechState(techIds2, id, includeAffordable) {
     const rawTech = techIds2[id];
     if (!isRecord12(rawTech)) return void 0;
-    const unlocked = callBoolean2(rawTech, "isUnlocked");
-    const affordable = includeAffordable ? callBoolean2(rawTech, "isAffordable") : false;
-    return unlocked === void 0 || affordable === void 0 ? void 0 : Object.freeze({ unlocked, affordable });
+    const unlocked2 = callBoolean2(rawTech, "isUnlocked");
+    const affordable2 = includeAffordable ? callBoolean2(rawTech, "isAffordable") : false;
+    return unlocked2 === void 0 || affordable2 === void 0 ? void 0 : Object.freeze({ unlocked: unlocked2, affordable: affordable2 });
   }
   function readPrestigePermissionView(rawSettings, rawGame) {
     try {
@@ -22970,9 +22970,9 @@
       ];
       const buildingRecords = {};
       for (const id of buildingIds2) {
-        const building2 = readBuilding2(rawBuildings, id);
-        if (building2 === void 0) return unavailable8("invalid-building", id);
-        buildingRecords[id] = building2;
+        const building3 = readBuilding2(rawBuildings, id);
+        if (building3 === void 0) return unavailable8("invalid-building", id);
+        buildingRecords[id] = building3;
       }
       for (const id of [
         "GasSpaceDock",
@@ -22982,8 +22982,8 @@
         "PitAbsorptionChamber",
         "SpireTower"
       ]) {
-        const building2 = buildingRecords[id];
-        if (building2 === void 0 || !finiteNonNegative5(building2["count"])) {
+        const building3 = buildingRecords[id];
+        if (building3 === void 0 || !finiteNonNegative5(building3["count"])) {
           return unavailable8("invalid-building", `${id}.count`);
         }
       }
@@ -23358,18 +23358,18 @@
             if (!isRecord13(rawCombination) || typeof rawCombination["race"] !== "string" || typeof rawCombination["god"] !== "string" || typeof rawCombination["achieve"] !== "string") {
               return unavailable9("invalid-external-result", "fanatAchievements");
             }
-            const unlocked = dependencies.isAchievementUnlocked(
+            const unlocked2 = dependencies.isAchievementUnlocked(
               rawCombination["achieve"],
               achievementLevel2
             );
-            if (typeof unlocked !== "boolean") {
+            if (typeof unlocked2 !== "boolean") {
               return unavailable9("invalid-external-result", "achievement");
             }
             fanaticismAchievements.push(
               Object.freeze({
                 race: rawCombination["race"],
                 god: rawCombination["god"],
-                unlocked
+                unlocked: unlocked2
               })
             );
           }
@@ -23593,46 +23593,46 @@
       ],
       [
         () => true,
-        (building2) => !building2.isUnlocked(),
+        (building3) => !building3.isUnlocked(),
         () => "Locked",
         () => 0
         // Should always be on top, processing locked building may lead to issues
       ],
       [
         () => true,
-        (building2) => state2.queuedTargets.includes(building2),
+        (building3) => state2.queuedTargets.includes(building3),
         () => "Queued building, processing...",
         () => 0
       ],
       [
         () => true,
-        (building2) => state2.triggerTargets.includes(building2),
+        (building3) => state2.triggerTargets.includes(building3),
         () => "Active trigger, processing...",
         () => 0
       ],
       [
         () => true,
-        (building2) => !building2.autoBuildEnabled,
+        (building3) => !building3.autoBuildEnabled,
         () => "AutoBuild disabled",
         () => 0
       ],
       [
         () => true,
-        (building2) => building2.count >= building2.autoMax,
+        (building3) => building3.count >= building3.autoMax,
         () => "Maximum amount reached",
         () => 0
       ],
       [
         () => true,
-        (building2) => !building2.isAffordable(true),
+        (building3) => !building3.isAffordable(true),
         () => "",
         () => 0
         // Red buildings need to be filtered out, so they won't prevent affordable buildings with lower weight from building
       ],
       [
         () => game2.global.race["truepath"] && buildings2.SpaceTestLaunch.isUnlocked() && !haveTech2("world_control"),
-        (building2) => {
-          if (building2 === buildings2.SpaceTestLaunch) {
+        (building3) => {
+          if (building3 === buildings2.SpaceTestLaunch) {
             let sabotage = 1;
             for (let i = 0; i < 3; i++) {
               let gov = game2.global.civic.foreign[`gov${i}`];
@@ -23648,26 +23648,26 @@
       ],
       [
         () => game2.global.race["truepath"] && buildings2.ErisDigsite.isUnlocked() && buildings2.ErisDigsite.count < 100,
-        (building2) => building2 === buildings2.ErisDrone || building2 === buildings2.ErisTank || building2 === buildings2.ErisTrooper,
+        (building3) => building3 === buildings2.ErisDrone || building3 === buildings2.ErisTank || building3 === buildings2.ErisTrooper,
         () => "Eris Digsite is not yet secured",
         () => settings2.buildingWeightingTruepathDigsite
       ],
       [
         () => settings2.jobDisableMiners && buildings2.GatewayStarbase.count > 0,
-        (building2) => building2 === buildings2.CoalMine || building2 === buildings2.Mine && !(game2.global.race["sappy"] && game2.global.race["smoldering"]),
+        (building3) => building3 === buildings2.CoalMine || building3 === buildings2.Mine && !(game2.global.race["sappy"] && game2.global.race["smoldering"]),
         () => "Miners disabled in Andromeda",
         () => 0
       ],
       [
         () => haveTech2("piracy"),
-        (building2) => building2 === buildings2.StargateDefensePlatform && buildings2.StargateDefensePlatform.count * 20 >= (game2.global.race["instinct"] ? 0.09 : 0.1) * game2.global.tech.piracy * getPiracyMultiplier2(),
+        (building3) => building3 === buildings2.StargateDefensePlatform && buildings2.StargateDefensePlatform.count * 20 >= (game2.global.race["instinct"] ? 0.09 : 0.1) * game2.global.tech.piracy * getPiracyMultiplier2(),
         () => "Piracy fully supressed",
         () => 0
       ],
       [
         () => settings2.autoFleet && game2.global.tech["piracy"] && !galaxyAssaultPending2(),
-        (building2) => {
-          if (galaxyCombatShips2.includes(building2)) {
+        (building3) => {
+          if (galaxyCombatShips2.includes(building3)) {
             let totalNeed = getGalaxyRegions2().reduce(
               (sum, region) => sum + (region.useful ? Math.max(0, region.piracy - region.armada) : 0),
               0
@@ -23680,8 +23680,8 @@
       ],
       [
         () => settings2.autoMech && settings2.mechBuild !== "none" && settings2.buildingMechsFirst && buildings2.SpireMechBay.count > 0 && buildings2.SpireMechBay.stateOffCount === 0,
-        (building2) => {
-          if (building2.cost["Supply"]) {
+        (building3) => {
+          if (building3.cost["Supply"]) {
             if (MechManager2.isActive) {
               return "Building mechs...";
             }
@@ -23700,20 +23700,20 @@
       ],
       [
         () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "ascension" && !game2.global.race["witch_hunter"],
-        (building2) => building2 === buildings2.GateEastTower || building2 === buildings2.GateWestTower,
+        (building3) => building3 === buildings2.GateEastTower || building3 === buildings2.GateWestTower,
         () => "Not needed for Ascension prestige",
         () => 0
       ],
       [
         () => buildings2.GateEastTower.isUnlocked() && buildings2.GateWestTower.isUnlocked() && poly2.hellSupression("gate").supress < settings2.buildingTowerSuppression / 100,
-        (building2) => building2 === buildings2.GateEastTower || building2 === buildings2.GateWestTower,
+        (building3) => building3 === buildings2.GateEastTower || building3 === buildings2.GateWestTower,
         () => "Too low gate supression",
         () => 0
       ],
       [
         () => settings2.prestigeType === "whitehole" && settings2.prestigeWhiteholeSaveGems,
-        (building2) => {
-          if (building2.cost["Soul_Gem"] > resources2.Soul_Gem.currentQuantity - 10) {
+        (building3) => {
+          if (building3.cost["Soul_Gem"] > resources2.Soul_Gem.currentQuantity - 10) {
             return true;
           }
         },
@@ -23724,18 +23724,18 @@
         () => {
           return buildings2.GorddonFreighter.isAutoBuildable() && buildings2.GorddonFreighter.isAffordable(true) && buildings2.Alien1SuperFreighter.isAutoBuildable() && buildings2.Alien1SuperFreighter.isAffordable(true);
         },
-        (building2) => {
-          if (building2 === buildings2.GorddonFreighter || building2 === buildings2.Alien1SuperFreighter) {
+        (building3) => {
+          if (building3 === buildings2.GorddonFreighter || building3 === buildings2.Alien1SuperFreighter) {
             let regCount = buildings2.GorddonFreighter.count;
             let regTotal = (1 + (regCount + 1) * 0.03) / (1 + regCount * 0.03) - 1;
             let regCrew = regTotal / 3;
             let supCount = buildings2.Alien1SuperFreighter.count;
             let supTotal = (1 + (supCount + 1) * 0.08) / (1 + supCount * 0.08) - 1;
             let supCrew = supTotal / 5;
-            if (building2 === buildings2.GorddonFreighter && regCrew < supCrew) {
+            if (building3 === buildings2.GorddonFreighter && regCrew < supCrew) {
               return buildings2.Alien1SuperFreighter;
             }
-            if (building2 === buildings2.Alien1SuperFreighter && supCrew < regCrew) {
+            if (building3 === buildings2.Alien1SuperFreighter && supCrew < regCrew) {
               return buildings2.GorddonFreighter;
             }
           }
@@ -23748,8 +23748,8 @@
         () => {
           return buildings2.LakeBireme.isAutoBuildable() && buildings2.LakeBireme.isAffordable(true) && buildings2.LakeTransport.isAutoBuildable() && buildings2.LakeTransport.isAffordable(true) && resources2.Lake_Support.rateOfChange <= 1;
         },
-        (building2) => {
-          if (building2 === buildings2.LakeBireme || building2 === buildings2.LakeTransport) {
+        (building3) => {
+          if (building3 === buildings2.LakeBireme || building3 === buildings2.LakeTransport) {
             let biremeCount = buildings2.LakeBireme.count;
             let transportCount = buildings2.LakeTransport.count;
             let rating = game2.global.blood["spire"] && game2.global.blood.spire >= 2 ? 0.8 : 0.85;
@@ -23760,10 +23760,10 @@
               nextBireme = (nextBireme - currentSupply) / buildings2.LakeBireme.cost["Soul_Gem"];
               nextTransport = (nextTransport - currentSupply) / buildings2.LakeTransport.cost["Soul_Gem"];
             }
-            if (building2 === buildings2.LakeBireme && nextBireme < nextTransport) {
+            if (building3 === buildings2.LakeBireme && nextBireme < nextTransport) {
               return buildings2.LakeTransport;
             }
-            if (building2 === buildings2.LakeTransport && nextTransport < nextBireme) {
+            if (building3 === buildings2.LakeTransport && nextTransport < nextBireme) {
               return buildings2.LakeBireme;
             }
           }
@@ -23776,16 +23776,16 @@
         () => {
           return buildings2.SpirePort.isAutoBuildable() && buildings2.SpirePort.isAffordable(true) && buildings2.SpireBaseCamp.isAutoBuildable() && buildings2.SpireBaseCamp.isAffordable(true);
         },
-        (building2) => {
-          if (building2 === buildings2.SpirePort || building2 === buildings2.SpireBaseCamp) {
+        (building3) => {
+          if (building3 === buildings2.SpirePort || building3 === buildings2.SpireBaseCamp) {
             let portCount = buildings2.SpirePort.count;
             let baseCount = buildings2.SpireBaseCamp.count;
             let nextPort = (portCount + 1) * (1 + baseCount * 0.4);
             let nextBase = portCount * (1 + (baseCount + 1) * 0.4);
-            if (building2 === buildings2.SpirePort && nextPort < nextBase) {
+            if (building3 === buildings2.SpirePort && nextPort < nextBase) {
               return buildings2.SpireBaseCamp;
             }
-            if (building2 === buildings2.SpireBaseCamp && nextBase < nextPort) {
+            if (building3 === buildings2.SpireBaseCamp && nextBase < nextPort) {
               return buildings2.SpirePort;
             }
           }
@@ -23796,26 +23796,26 @@
       ],
       [
         () => haveTech2("waygate", 2),
-        (building2) => building2 === buildings2.SpireWaygate,
+        (building3) => building3 === buildings2.SpireWaygate,
         () => "",
         () => 0
         // We can't limit waygate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
       ],
       [
         () => haveTech2("edenic", 3),
-        (building2) => building2 === buildings2.SpireEdenicGate,
+        (building3) => building3 === buildings2.SpireEdenicGate,
         () => "",
         () => 0
         // We can't limit edenic gate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
       ],
       [
         () => haveTech2("elysium", 8),
-        (building2) => {
-          if (building2 === buildings2.ElysiumFireSupportBase) {
+        (building3) => {
+          if (building3 === buildings2.ElysiumFireSupportBase) {
             if (haveTech2("isle", 2)) {
               return "Garrison is destroyed";
             }
-            if (!haveTech2("elysium", 10) && building2.count >= 100) {
+            if (!haveTech2("elysium", 10) && building3.count >= 100) {
               return "Missing Elerium Cannon tech";
             }
           }
@@ -23826,32 +23826,32 @@
       ],
       [
         () => haveTech2("asphodel", 8),
-        (building2) => building2 === buildings2.AsphodelStabilizer && building2.count >= buildings2.AsphodelWarehouse.count,
+        (building3) => building3 === buildings2.AsphodelStabilizer && building3.count >= buildings2.AsphodelWarehouse.count,
         () => "Can not exceed amount of Warehouses",
         () => 0
       ],
       [
         () => haveTech2("hell_spire", 8) || game2.global.race["warlord"],
-        (building2) => building2 === buildings2.SpireSphinx,
+        (building3) => building3 === buildings2.SpireSphinx,
         () => "",
         () => 0
         // Sphinx not usable after solving / Harmachis not usable during Warlord
       ],
       [
         () => game2.global.race["artifical"] && haveTech2("focus_cure", 7),
-        (building2) => building2 instanceof ResourceAction2 && building2.resource === resources2.Population && building2 !== buildings2.TauCloning,
+        (building3) => building3 instanceof ResourceAction2 && building3.resource === resources2.Population && building3 !== buildings2.TauCloning,
         () => "Assembling is not possible",
         () => 0
       ],
       [
         () => game2.global.race["artifical"],
-        (building2) => building2 instanceof ResourceAction2 && building2.resource === resources2.Population && resources2.Population.storageRatio === 1,
+        (building3) => building3 instanceof ResourceAction2 && building3.resource === resources2.Population && resources2.Population.storageRatio === 1,
         () => "No empty housings",
         () => 0
       ],
       [
         () => buildings2.GorddonEmbassy.count === 0 && resources2.Knowledge.maxQuantity < settings2.fleetEmbassyKnowledge,
-        (building2) => building2 === buildings2.GorddonEmbassy,
+        (building3) => building3 === buildings2.GorddonEmbassy,
         () => `${getNumberString2(
           settings2.fleetEmbassyKnowledge
         )} Max Knowledge required`,
@@ -23859,8 +23859,8 @@
       ],
       [
         () => game2.global.race["magnificent"] && settings2.buildingShrineType !== "any",
-        (building2) => {
-          if (building2.id && building2.id.includes("shrine")) {
+        (building3) => {
+          if (building3.id && building3.id.includes("shrine")) {
             let bonus = null;
             if (game2.global.city.calendar.moon > 0 && game2.global.city.calendar.moon < 7) {
               bonus = "morale";
@@ -23893,8 +23893,8 @@
       ],
       [
         () => game2.global.race["slaver"],
-        (building2) => {
-          if (building2 === buildings2.SlaveMarket) {
+        (building3) => {
+          if (building3 === buildings2.SlaveMarket) {
             if (resources2.Slave.currentQuantity >= resources2.Slave.maxQuantity) {
               return "Slave pens already full";
             }
@@ -23909,8 +23909,8 @@
       ],
       [
         () => game2.global.race["cannibalize"],
-        (building2) => {
-          if (building2._id === "s_alter" && building2.count > 0) {
+        (building3) => {
+          if (building3._id === "s_alter" && building3.count > 0) {
             if (resources2.Population.currentQuantity < 1) {
               return "Too low population";
             }
@@ -23934,26 +23934,26 @@
       ],
       [
         () => true,
-        (building2) => building2.getMissingConsumption(),
+        (building3) => building3.getMissingConsumption(),
         (resource2) => `Missing ${resource2.name} to operate`,
         () => settings2.buildingWeightingMissingSupply
       ],
       [
         () => true,
-        (building2) => building2.getMissingSupport(),
+        (building3) => building3.getMissingSupport(),
         (support) => `Missing ${support.name} to operate`,
         () => settings2.buildingWeightingMissingSupport
       ],
       [
         () => true,
-        (building2) => building2.getUselessSupport(),
+        (building3) => building3.getUselessSupport(),
         (support) => `Provided ${support.name} not currently needed`,
         () => settings2.buildingWeightingUselessSupport
       ],
       [
         () => game2.global.race["truepath"] && resources2.Tau_Belt_Support.maxQuantity <= resources2.Tau_Belt_Support.currentQuantity,
-        (building2) => {
-          if (building2 === buildings2.TauBeltWhalingShip || building2 === buildings2.TauBeltMiningShip) {
+        (building3) => {
+          if (building3 === buildings2.TauBeltWhalingShip || building3 === buildings2.TauBeltMiningShip) {
             let s_max = resources2.Tau_Belt_Support.maxQuantity;
             let s_cur = resources2.Tau_Belt_Support.currentQuantity;
             let currentEff = 1 - (1 - s_max / s_cur) ** 1.4;
@@ -23967,8 +23967,8 @@
       [
         () => game2.global.race["truepath"],
         // "&& game.global.tech.tau_red === 4" doesn't want to work for some reason.
-        (building2) => {
-          if (building2 === buildings2.TauRedContact || building2 === buildings2.TauRedIntroduce || building2 === buildings2.TauRedSubjugate) {
+        (building3) => {
+          if (building3 === buildings2.TauRedContact || building3 === buildings2.TauRedIntroduce || building3 === buildings2.TauRedSubjugate) {
             let missing = null;
             for (let [id, stat] of Object.entries({
               TauRedContact: "friend",
@@ -23976,7 +23976,7 @@
               TauRedSubjugate: "lord"
             })) {
               if (!game2.global.stats.womling[stat][poly2.universeAffix()]) {
-                if (building2 === buildings2[id]) {
+                if (building3 === buildings2[id]) {
                   return false;
                 }
                 if (buildings2[id].isAutoBuildable()) {
@@ -23995,23 +23995,23 @@
         // amount of tax/soldier management can fix the production penalty, so prioritize the
         // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
         () => settings2.authorityManage && settings2.generalMinimumAuthority > 0 && resources2.Authority.isUnlocked() && resources2.Authority.maxQuantity < settings2.generalMinimumAuthority,
-        (building2) => authorityCapBuildings2.includes(building2),
+        (building3) => authorityCapBuildings2.includes(building3),
         () => "Raises Authority cap, currently below target",
         () => settings2.buildingWeightingAuthority
       ],
       [
         () => settings2.achievementGuards && settings2.guardBananaRepublic && game2.global.race["banana"],
-        (building2) => building2 === buildings2.DwarfWorldCollider && !bananaRepublicObjectiveComplete2("b2"),
+        (building3) => building3 === buildings2.DwarfWorldCollider && !bananaRepublicObjectiveComplete2("b2"),
         () => "Banana Republic objective",
         () => settings2.buildingWeightingBananaObjective
       ],
       [
         () => inflationChallengeAssistActive2(),
-        (building2) => {
-          if (!inflationChallengeMoneyReachable2() && inflationMoneyStorageBuildings2.includes(building2)) {
+        (building3) => {
+          if (!inflationChallengeMoneyReachable2() && inflationMoneyStorageBuildings2.includes(building3)) {
             return "storage";
           }
-          if (inflationChallengeMoneyReachable2() && inflationMoneyIncomeBuildings2.includes(building2)) {
+          if (inflationChallengeMoneyReachable2() && inflationMoneyIncomeBuildings2.includes(building3)) {
             return "income";
           }
           return false;
@@ -24021,52 +24021,52 @@
       ],
       [
         () => retirementChallengeAssistActive2() && retirementPreparationMissing2().length > 0,
-        (building2) => {
-          if (building2 === buildings2.TauFusionGenerator && building2.count < RETIREMENT_PREP2.fusionGenerators) {
+        (building3) => {
+          if (building3 === buildings2.TauFusionGenerator && building3.count < RETIREMENT_PREP2.fusionGenerators) {
             return RETIREMENT_PREP2.fusionGenerators;
           }
-          if (building2 === buildings2.TauFactory && building2.count < RETIREMENT_PREP2.factories) {
+          if (building3 === buildings2.TauFactory && building3.count < RETIREMENT_PREP2.factories) {
             return RETIREMENT_PREP2.factories;
           }
-          if (building2 === buildings2.TauDiseaseLab && building2.count < RETIREMENT_PREP2.scienceLabs) {
+          if (building3 === buildings2.TauDiseaseLab && building3.count < RETIREMENT_PREP2.scienceLabs) {
             return RETIREMENT_PREP2.scienceLabs;
           }
           return false;
         },
-        (target, building2) => `Retirement preparation: build ${target} ${building2.name}`,
+        (target, building3) => `Retirement preparation: build ${target} ${building3.name}`,
         () => settings2.buildingWeightingRetirementPrep
       ],
       [
         () => settings2.achievementGuards,
-        (building2) => building2 === buildings2.Dreadnought && guardActive2("guardDreaded") ? "Dreaded" : building2 === buildings2.SiriusThermalCollector && guardActive2("guardEnergetic") ? "Energetic" : building2 === buildings2.RedSpaceport && guardActive2("guardRedDead") ? "Red Dead" : false,
+        (building3) => building3 === buildings2.Dreadnought && guardActive2("guardDreaded") ? "Dreaded" : building3 === buildings2.SiriusThermalCollector && guardActive2("guardEnergetic") ? "Energetic" : building3 === buildings2.RedSpaceport && guardActive2("guardRedDead") ? "Red Dead" : false,
         (name) => `${name} achievement guard`,
         () => 0
       ],
       [
         () => true,
-        (building2) => building2._tab === "city" && building2 !== buildings2.Mill && building2 !== buildings2.Banquet && building2.stateOffCount > 0,
+        (building3) => building3._tab === "city" && building3 !== buildings2.Mill && building3 !== buildings2.Banquet && building3.stateOffCount > 0,
         () => "Still have some non operating buildings",
         () => settings2.buildingWeightingNonOperatingCity
       ],
       [
         () => true,
-        (building2) => {
-          if (building2 === buildings2.BlackholeStellarEngine) {
+        (building3) => {
+          if (building3 === buildings2.BlackholeStellarEngine) {
             return false;
           }
-          if ((building2 === buildings2.BadlandsAttractor || building2 === buildings2.SpireMechBay) && building2.isSmartManaged()) {
+          if ((building3 === buildings2.BadlandsAttractor || building3 === buildings2.SpireMechBay) && building3.isSmartManaged()) {
             return false;
           }
-          if (building2 === buildings2.RuinsGuardPost && building2.isSmartManaged() && !isHellSupressUseful2()) {
-            if (building2.count < Math.ceil(
+          if (building3 === buildings2.RuinsGuardPost && building3.isSmartManaged() && !isHellSupressUseful2()) {
+            if (building3.count < Math.ceil(
               5e3 / (game2.armyRating(traitVal2("high_pop", 0, 1), "hellArmy", 0) * traitVal2("holy", 1, "+"))
             )) {
               return false;
             }
           }
-          let supplyIndex = building2 === buildings2.SpirePort ? 1 : building2 === buildings2.SpireBaseCamp ? 2 : -1;
+          let supplyIndex = building3 === buildings2.SpirePort ? 1 : building3 === buildings2.SpireBaseCamp ? 2 : -1;
           if (supplyIndex > 0 && (buildings2.SpireMechBay.isSmartManaged() || buildings2.SpirePurifier.isSmartManaged())) {
-            if (building2.count < getBestSupplyRatio2(
+            if (building3.count < getBestSupplyRatio2(
               resources2.Spire_Support.maxQuantity,
               buildings2.SpirePort.autoMax,
               buildings2.SpireBaseCamp.autoMax
@@ -24074,7 +24074,7 @@
               return false;
             }
           }
-          if (building2._tab !== "city" && building2.stateOffCount > 0) {
+          if (building3._tab !== "city" && building3.stateOffCount > 0) {
             return true;
           }
         },
@@ -24083,91 +24083,91 @@
       ],
       [
         () => settings2.prestigeType !== "bioseed" || !isGECKNeeded2(),
-        (building2) => building2 === buildings2.GasSpaceDockGECK,
+        (building3) => building3 === buildings2.GasSpaceDockGECK,
         () => "Max allowed amount of G.E.C.K reached",
         () => 0
       ],
       [
         () => game2.global.race["lone_survivor"] && !isPrestigeAllowed3("eden"),
-        (building2) => building2 === buildings2.TauStarEden,
+        (building3) => building3 === buildings2.TauStarEden,
         () => "Prestiging not currently allowed",
         () => 0
       ],
       [
         () => game2.global.race["truepath"] && (!isPrestigeAllowed3("retire") || buildings2.TauGas2MatrioshkaBrain.count < 1e3),
-        (building2) => building2 === buildings2.TauGas2IgniteGasGiant,
+        (building3) => building3 === buildings2.TauGas2IgniteGasGiant,
         () => "Prestiging not currently allowed",
         () => 0
       ],
       [
         () => settings2.prestigeBioseedConstruct && settings2.prestigeType !== "bioseed",
-        (building2) => building2 === buildings2.GasSpaceDock || building2 === buildings2.GasSpaceDockShipSegment || building2 === buildings2.GasSpaceDockProbe,
+        (building3) => building3 === buildings2.GasSpaceDock || building3 === buildings2.GasSpaceDockShipSegment || building3 === buildings2.GasSpaceDockProbe,
         () => "Not needed for current prestige",
         () => 0
       ],
       [
         () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "bioseed",
-        (building2) => building2 === buildings2.DwarfWorldCollider || building2 === buildings2.TitanMission,
+        (building3) => building3 === buildings2.DwarfWorldCollider || building3 === buildings2.TitanMission,
         () => "Not needed for Bioseed prestige",
         () => 0
       ],
       [
         () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "whitehole",
-        (building2) => building2 === buildings2.BlackholeJumpShip,
+        (building3) => building3 === buildings2.BlackholeJumpShip,
         () => "Not needed for Whitehole prestige",
         () => 0
       ],
       [
         () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "vacuum",
-        (building2) => building2 === buildings2.BlackholeStellarEngine,
+        (building3) => building3 === buildings2.BlackholeStellarEngine,
         () => "Not needed for Vacuum Collapse prestige",
         () => 0
       ],
       [
         () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "ascension" && isPillarFinished3() && !game2.global.race["witch_hunter"],
-        (building2) => building2 === buildings2.PitMission || building2 === buildings2.RuinsMission,
+        (building3) => building3 === buildings2.PitMission || building3 === buildings2.RuinsMission,
         () => "Not needed for Ascension prestige",
         () => 0
       ],
       [
         () => game2.global.race["witch_hunter"] && settings2.prestigeType === "ascension",
-        (building2) => building2 === buildings2.SpireWaygate,
+        (building3) => building3 === buildings2.SpireWaygate,
         () => "Not needed for Witch Hunter's Ascension prestige",
         () => 0
       ],
       [
         () => settings2.prestigeBioseedConstruct && settings2.prestigeType === "terraform",
-        (building2) => building2 === buildings2.PitMission || building2 === buildings2.RuinsMission,
+        (building3) => building3 === buildings2.PitMission || building3 === buildings2.RuinsMission,
         () => "Not needed for Terraform prestige",
         () => 0
       ],
       [
         () => settings2.autoPrestige && settings2.prestigeType === "mad" && (haveTech2("mad") || techIds2["tech-mad"].isUnlocked() && techIds2["tech-mad"].isAffordable(true)),
-        (building2) => !building2.is.housing && !building2.is.garrison && !building2.cost["Knowledge"] && building2 !== buildings2.OilWell,
+        (building3) => !building3.is.housing && !building3.is.garrison && !building3.cost["Knowledge"] && building3 !== buildings2.OilWell,
         () => "Awaiting MAD prestige",
         () => settings2.buildingWeightingMADUseless
       ],
       [
         () => true,
-        (building2) => !(building2 instanceof ResourceAction2) && building2.count === 0,
+        (building3) => !(building3 instanceof ResourceAction2) && building3.count === 0,
         () => "New building",
         () => settings2.buildingWeightingNew
       ],
       [
         () => resources2.Power.isUnlocked() && resources2.Power.currentQuantity < resources2.Power.maxQuantity,
-        (building2) => building2 === buildings2.LakeCoolingTower || building2.powered < 0,
+        (building3) => building3 === buildings2.LakeCoolingTower || building3.powered < 0,
         () => "Need more energy",
         () => settings2.buildingWeightingNeedfulPowerPlant
       ],
       [
         () => resources2.Power.isUnlocked() && resources2.Power.currentQuantity > resources2.Power.maxQuantity,
-        (building2) => building2 !== buildings2.Mill && (building2 === buildings2.LakeCoolingTower || building2.powered < 0),
+        (building3) => building3 !== buildings2.Mill && (building3 === buildings2.LakeCoolingTower || building3.powered < 0),
         () => "No need for more energy",
         () => settings2.buildingWeightingUselessPowerPlant
       ],
       [
         () => resources2.Power.isUnlocked(),
-        (building2) => building2 !== buildings2.LakeCoolingTower && building2.powered > 0 && (building2 === buildings2.NeutronCitadel ? getCitadelConsumption2(building2.count + 1) - getCitadelConsumption2(building2.count) : building2.powered) > resources2.Power.currentQuantity,
+        (building3) => building3 !== buildings2.LakeCoolingTower && building3.powered > 0 && (building3 === buildings2.NeutronCitadel ? getCitadelConsumption2(building3.count + 1) - getCitadelConsumption2(building3.count) : building3.powered) > resources2.Power.currentQuantity,
         () => "Not enough energy",
         () => settings2.buildingWeightingUnderpowered
       ],
@@ -24176,88 +24176,88 @@
           state2.knowledgeRequiredByTechs,
           state2.knowledgeRequiredByBuildTargets
         ) <= resources2.Knowledge.maxQuantity,
-        (building2) => building2.is.knowledge && building2 !== buildings2.Wardenclyffe && (building2 !== buildings2.StargateTelemetryBeacon || building2.count > 0),
+        (building3) => building3.is.knowledge && building3 !== buildings2.Wardenclyffe && (building3 !== buildings2.StargateTelemetryBeacon || building3.count > 0),
         // We want Wardenclyffe for morale; first beacon required for progress
         () => "No need for more knowledge",
         () => settings2.buildingWeightingUselessKnowledge
       ],
       [
         () => state2.cheapestTechKnowledge > resources2.Knowledge.maxQuantity || state2.knowledgeRequiredByBuildTargets > resources2.Knowledge.maxQuantity,
-        (building2) => building2.is.knowledge,
+        (building3) => building3.is.knowledge,
         () => "Need more knowledge",
         () => settings2.buildingWeightingNeedfulKnowledge
       ],
       [
         () => buildings2.BlackholeMassEjector.count > 0 && buildings2.BlackholeMassEjector.count * 1e3 - game2.global.interstellar.mass_ejector.total > 100,
-        (building2) => building2 === buildings2.BlackholeMassEjector,
+        (building3) => building3 === buildings2.BlackholeMassEjector,
         () => "Still have some unused ejectors",
         () => settings2.buildingWeightingUnusedEjectors
       ],
       [
         () => resources2.Crates.storageRatio < 1 || resources2.Containers.storageRatio < 1,
-        (building2) => building2 === buildings2.StorageYard || building2 === buildings2.Warehouse || building2 === buildings2.EnceladusMunitions,
+        (building3) => building3 === buildings2.StorageYard || building3 === buildings2.Warehouse || building3 === buildings2.EnceladusMunitions,
         () => "Still have some unused storage",
         () => settings2.buildingWeightingCrateUseless
       ],
       [
         () => resources2.Oil.maxQuantity < resources2.Oil.maxCost && buildings2.OilWell.count <= 0 && buildings2.GasMoonOilExtractor.count <= 0,
-        (building2) => building2 === buildings2.OilWell || building2 === buildings2.GasMoonOilExtractor,
+        (building3) => building3 === buildings2.OilWell || building3 === buildings2.GasMoonOilExtractor,
         () => "Need more fuel",
         () => settings2.buildingWeightingMissingFuel
       ],
       [
         () => resources2.Helium_3.isUnlocked() && resources2.Helium_3.maxQuantity < resources2.Helium_3.maxCost || resources2.Oil.maxQuantity < resources2.Oil.maxCost,
-        (building2) => building2 === buildings2.OilDepot || building2 === buildings2.SpacePropellantDepot || building2 === buildings2.GasStorage,
+        (building3) => building3 === buildings2.OilDepot || building3 === buildings2.SpacePropellantDepot || building3 === buildings2.GasStorage,
         () => "Need more fuel",
         () => settings2.buildingWeightingMissingFuel
       ],
       [
         () => game2.global.race.hooved && resources2.Horseshoe.spareQuantity >= resources2.Horseshoe.storageRequired,
-        (building2) => building2 instanceof ResourceAction2 && building2.resource === resources2.Horseshoe,
+        (building3) => building3 instanceof ResourceAction2 && building3.resource === resources2.Horseshoe,
         () => `No more ${resources2.Horseshoe.title} needed`,
         () => settings2.buildingWeightingHorseshoeUseless
       ],
       [
         () => game2.global.race.calm && resources2.Zen.currentQuantity < resources2.Zen.maxQuantity,
-        (building2) => building2.id.includes("meditation"),
+        (building3) => building3.id.includes("meditation"),
         () => "No more Meditation Space needed",
         () => settings2.buildingWeightingZenUseless
       ],
       [
         () => buildings2.GateTurret.isUnlocked() && poly2.hellSupression("gate").rating > 7501 + game2.armyRating(traitVal2("high_pop", 0, 1), "hellArmy", 0) * traitVal2("holy", 1, "+"),
-        (building2) => building2 === buildings2.GateTurret,
+        (building3) => building3 === buildings2.GateTurret,
         () => "Gate demons fully supressed",
         () => settings2.buildingWeightingGateTurret
       ],
       [
         () => (resources2.Containers.isUnlocked() || resources2.Crates.isUnlocked()) && resources2.Containers.storageRatio === 1 && resources2.Crates.storageRatio === 1,
-        (building2) => building2 === buildings2.Shed || building2 === buildings2.RedGarage || building2 === buildings2.AlphaWarehouse || building2 === buildings2.ProximaCargoYard || building2 === buildings2.TitanStorehouse,
+        (building3) => building3 === buildings2.Shed || building3 === buildings2.RedGarage || building3 === buildings2.AlphaWarehouse || building3 === buildings2.ProximaCargoYard || building3 === buildings2.TitanStorehouse,
         () => "Need more storage",
         () => settings2.buildingWeightingNeedStorage
       ],
       [
         () => resources2.Population.maxQuantity > 50 && resources2.Population.storageRatio < 0.9,
-        (building2) => building2.is.housing && building2 !== buildings2.Alien1Consulate && building2 !== buildings2.Transmitter && !(building2 instanceof ResourceAction2),
+        (building3) => building3.is.housing && building3 !== buildings2.Alien1Consulate && building3 !== buildings2.Transmitter && !(building3 instanceof ResourceAction2),
         () => "No more houses needed",
         () => settings2.buildingWeightingUselessHousing
       ],
       [
         () => game2.global.race["orbit_decay"] && !game2.global.race["orbit_decayed"],
-        (building2) => (building2._tab === "city" || building2._location === "spc_moon") && !(building2 instanceof ResourceAction2),
+        (building3) => (building3._tab === "city" || building3._location === "spc_moon") && !(building3 instanceof ResourceAction2),
         () => "Will be destroyed after impact",
         () => settings2.buildingWeightingTemporal
       ],
       [
         () => game2.global.tech.tau_gas === 1,
         // Only used for name contest, no need to check at other game stages
-        (building2) => building2.is.random,
+        (building3) => building3.is.random,
         () => "Randomized weighting",
         () => 1 + Math.random()
         // Fluctuate weight to pick random item
       ],
       [
         () => game2.global.race["truepath"] && haveTech2("tauceti", 2),
-        (building2) => (building2._tab === "city" || building2._tab === "space" || building2._tab === "starDock") && !(building2 instanceof ResourceAction2),
+        (building3) => (building3._tab === "city" || building3._tab === "space" || building3._tab === "starDock") && !(building3 instanceof ResourceAction2),
         () => "Solar System building",
         () => settings2.buildingWeightingSolar
       ]
@@ -24891,8 +24891,8 @@
   function decisionsMatch(left, right) {
     return JSON.stringify(left) === JSON.stringify(right);
   }
-  function readUnlocked(building2, path) {
-    return Boolean(call(building2, "isUnlocked", `${path}.isUnlocked`));
+  function readUnlocked(building3, path) {
+    return Boolean(call(building3, "isUnlocked", `${path}.isUnlocked`));
   }
   function createHellAdapter(dependencies) {
     let session = null;
@@ -25167,7 +25167,7 @@
           garrisonSoldiers,
           patrolSoldiers
         });
-        let unlocked = false;
+        let unlocked2 = false;
         let current = 0;
         let maximum = 0;
         let scriptTick = 0;
@@ -25177,10 +25177,10 @@
             active.resources["Authority"],
             "resources.Authority"
           );
-          unlocked = Boolean(
+          unlocked2 = Boolean(
             call(authority, "isUnlocked", "resources.Authority.isUnlocked")
           );
-          if (unlocked) {
+          if (unlocked2) {
             current = requireNumber(
               authority["currentQuantity"],
               "resources.Authority.currentQuantity"
@@ -25200,7 +25200,7 @@
           garrisonSoldiers,
           patrolSoldiers,
           authority: Object.freeze({
-            unlocked,
+            unlocked: unlocked2,
             current,
             maximum,
             scriptTick,
@@ -26272,8 +26272,8 @@
   function unavailableTaxSnapshot(metadata, reason) {
     return Object.freeze({ metadata, status: "unavailable", reason });
   }
-  function operation(direction, count) {
-    return Object.freeze({ direction, count });
+  function operation(direction, count2) {
+    return Object.freeze({ direction, count: count2 });
   }
   function forcedOperations(currentRate, targetRate) {
     const operations = [];
@@ -26698,9 +26698,9 @@
       if (typeof id !== "string") {
         throw new TypeError(`${path}.id must be a string`);
       }
-      const unlocked = Boolean(fuel["unlocked"]);
+      const unlocked2 = Boolean(fuel["unlocked"]);
       const isInfernoBeforeOil = fuel === inferno && priorityList[index + 1] === oil;
-      if (!unlocked) {
+      if (!unlocked2) {
         return Object.freeze({
           id,
           unlocked: false,
@@ -27022,14 +27022,14 @@
         }
         for (const cost of fuel.cost) {
           if (costLimitsUnits(cost, maxAllowedUnits, input.consumptionBalanceMin)) {
-            const affordable = affordableUnits2(cost, fuel.currentFuelCount);
-            if (affordable < maxAllowedUnits) {
+            const affordable2 = affordableUnits2(cost, fuel.currentFuelCount);
+            if (affordable2 < maxAllowedUnits) {
               tooltips.push({
                 key: "smelterFuels" + fuel.id.toLowerCase(),
                 value: `Too low ${cost.resourceName} income<br>`
               });
             }
-            maxAllowedUnits = Math.min(maxAllowedUnits, affordable);
+            maxAllowedUnits = Math.min(maxAllowedUnits, affordable2);
           }
         }
         remainingSmelters -= maxAllowedUnits;
@@ -27071,14 +27071,14 @@
     }
     for (const cost of input.steelCost) {
       if (costLimitsUnits(cost, smelterSteelCount, input.consumptionBalanceMin)) {
-        const affordable = affordableUnits2(cost, smelterSteelCount);
-        if (affordable < maxAllowedSteel) {
+        const affordable2 = affordableUnits2(cost, smelterSteelCount);
+        if (affordable2 < maxAllowedSteel) {
           tooltips.push({
             key: "smelterMatssteel",
             value: `Too low ${cost.resourceName} income<br>`
           });
         }
-        maxAllowedSteel = Math.min(maxAllowedSteel, affordable);
+        maxAllowedSteel = Math.min(maxAllowedSteel, affordable2);
       }
     }
     let ironWeighting = 0;
@@ -27527,12 +27527,12 @@
     });
     return spells;
   }
-  function readCurrentSpells(manager, unlocked) {
+  function readCurrentSpells(manager, unlocked2) {
     const currentSpells = requireFunction(
       manager["currentSpells"],
       "RitualManager.currentSpells"
     );
-    return unlocked.map(
+    return unlocked2.map(
       ({ spell, ...view }) => Object.freeze({
         ...view,
         currentSpells: requireNumber(
@@ -28168,15 +28168,15 @@
               const currentCost = (targets.get(production.id) ?? 0) * cost.quantity;
               let rate = cost.rateOfChange + previousCost - currentCost - cost.minRateOfChange;
               if (production.demanded) rate += cost.currentQuantity;
-              const affordable = Math.floor(rate / cost.quantity);
-              if (affordable < 1) {
+              const affordable2 = Math.floor(rate / cost.quantity);
+              if (affordable2 < 1) {
                 appendTooltip(
                   tooltips,
                   production.id,
                   `Too low ${cost.name} income<br>`
                 );
               }
-              actual = Math.min(actual, affordable);
+              actual = Math.min(actual, affordable2);
             }
           }
           if (input.bioseedConstruct && production.isNanoTube && input.neutroniumCurrent < (input.truepath ? 500 : 250)) {
@@ -28294,13 +28294,13 @@
   function readBuildingWeight(buildings2, resourceId3, currentQuantity) {
     for (let index = 0; index < buildings2.length; index++) {
       const path = `state.unlockedBuildings[${index}]`;
-      const building2 = requireRecord(buildings2[index], path);
-      const cost = requireRecord(building2["cost"], `${path}.cost`);
+      const building3 = requireRecord(buildings2[index], path);
+      const cost = requireRecord(building3["cost"], `${path}.cost`);
       const required = cost[resourceId3];
       if (required === void 0) continue;
       const quantity = requireNumber(required, `${path}.cost.${resourceId3}`);
       if (quantity > currentQuantity) {
-        return requireNumber(building2["weighting"], `${path}.weighting`);
+        return requireNumber(building3["weighting"], `${path}.weighting`);
       }
     }
     return 100;
@@ -28309,8 +28309,8 @@
     const cost = requireRecord(raw, path);
     const resource2 = requireRecord(cost["resource"], `${path}.resource`);
     const resourceId3 = requireId(resource2["id"], `${path}.resource.id`);
-    const unlocked = callBoolean7(resource2, "isUnlocked", `${path}.resource`);
-    if (!unlocked) {
+    const unlocked2 = callBoolean7(resource2, "isUnlocked", `${path}.resource`);
+    if (!unlocked2) {
       return Object.freeze({
         resourceId: resourceId3,
         name: "",
@@ -28419,10 +28419,10 @@
             output["storageRequired"],
             `${path}.resource.storageRequired`
           );
-          const unlocked = Boolean(production["unlocked"]);
+          const unlocked2 = Boolean(production["unlocked"]);
           const enabled = Boolean(production["enabled"]);
           const weighting = optionalWeighting(production, path);
-          const grouped = unlocked && enabled && weighting > 0;
+          const grouped = unlocked2 && enabled && weighting > 0;
           return {
             identity: identity2,
             path,
@@ -28430,7 +28430,7 @@
             output,
             currentQuantity,
             storageRequired,
-            unlocked,
+            unlocked: unlocked2,
             enabled,
             weighting,
             priority: grouped ? requireNumber(production["priority"], `${path}.priority`) : 0,
@@ -28922,7 +28922,7 @@
               `unknown mining-droid production id ${productionId}`
             );
           }
-          const count = requireCount2(
+          const count2 = requireCount2(
             callNumber5(
               activeSession.manager,
               "currentProduction",
@@ -28931,7 +28931,7 @@
             ),
             `DroidManager.currentProduction(${productionId})`
           );
-          return Object.freeze({ productionId, count });
+          return Object.freeze({ productionId, count: count2 });
         });
         return Object.freeze(current);
       }
@@ -29632,15 +29632,15 @@
     const nextTickKnowledge = assembly.knowledgeCurrent + assembly.knowledgeRate / assembly.ticksPerSecond;
     const overflowKnowledge = nextTickKnowledge - assembly.knowledgeMaximum;
     if (overflowKnowledge <= 0) return Object.freeze(decisions);
-    const count = Math.ceil(overflowKnowledge / 2e5);
+    const count2 = Math.ceil(overflowKnowledge / 2e5);
     decisions.push(
       Object.freeze({
         kind: "assemble-genes",
-        count,
+        count: count2,
         expectedKnowledge: assembly.knowledgeCurrent,
         expectedGenes: assembly.genesCurrent,
-        knowledgeAfter: assembly.knowledgeCurrent - 2e5 * count,
-        genesAfter: assembly.genesCurrent + count
+        knowledgeAfter: assembly.knowledgeCurrent - 2e5 * count2,
+        genesAfter: assembly.genesCurrent + count2
       })
     );
     return Object.freeze(decisions);
@@ -29965,7 +29965,7 @@
         Reflect.apply(method, view, []);
         return true;
       },
-      assemble(count) {
+      assemble(count2) {
         if (view === null) return false;
         if (typeof view["novo"] !== "function") return false;
         const novo = requireFunction(view["novo"], "arpaSequence Vue view.novo");
@@ -29974,7 +29974,7 @@
           "KeyManager"
         );
         const click = requireFunction(keyManager["click"], "KeyManager.click");
-        const rawIterable = Reflect.apply(click, keyManager, [count]);
+        const rawIterable = Reflect.apply(click, keyManager, [count2]);
         const iterable = requireRecord(rawIterable, "KeyManager.click() result");
         const iterator = requireFunction(
           iterable[Symbol.iterator],
@@ -30040,11 +30040,11 @@
       expectedMoneySpare: state2.moneySpare
     });
   }
-  function planMercenaryLog(count) {
-    if (count <= 0) return null;
+  function planMercenaryLog(count2) {
+    if (count2 <= 0) return null;
     return Object.freeze({
       id: "mercenary",
-      message: count === 1 ? "Hired a mercenary to join the garrison." : `Hired ${count} mercenaries to join the garrison.`,
+      message: count2 === 1 ? "Hired a mercenary to join the garrison." : `Hired ${count2} mercenaries to join the garrison.`,
       categories: Object.freeze(["combat"])
     });
   }
@@ -30824,9 +30824,9 @@
     let session = null;
     const reader = Object.freeze({
       readGate() {
-        const unlocked = isUnlocked(readRace(dependencies.getGame()));
-        if (!unlocked) session = null;
-        return Object.freeze({ unlocked });
+        const unlocked2 = isUnlocked(readRace(dependencies.getGame()));
+        if (!unlocked2) session = null;
+        return Object.freeze({ unlocked: unlocked2 });
       },
       readPlan() {
         const game2 = dependencies.getGame();
@@ -31907,12 +31907,12 @@
         const productions = rawProductions.values.map((production, index) => {
           const path = `ReplicatorManager.Productions[${index}]`;
           const id = readProductionId2(production, path);
-          const unlocked = Boolean(production["unlocked"]);
+          const unlocked2 = Boolean(production["unlocked"]);
           const enabled = Boolean(production["enabled"]);
-          if (!unlocked || !enabled) {
+          if (!unlocked2 || !enabled) {
             return Object.freeze({
               id,
-              unlocked,
+              unlocked: unlocked2,
               enabled,
               weighting: 0,
               priority: 0,
@@ -31927,7 +31927,7 @@
           if (weighting <= 0) {
             return Object.freeze({
               id,
-              unlocked,
+              unlocked: unlocked2,
               enabled,
               weighting,
               priority: 0,
@@ -31942,7 +31942,7 @@
           resourcesById.set(id, resource2);
           return Object.freeze({
             id,
-            unlocked,
+            unlocked: unlocked2,
             enabled,
             weighting,
             priority: requireNumber(production["priority"], `${path}.priority`),
@@ -32750,8 +32750,8 @@
       adjusted: next === current ? [] : [observation.resourceId]
     };
   }
-  function applySmartRule(building2, maximum, current, savingPower, availablePower, resources2) {
-    const rule = building2.rule;
+  function applySmartRule(building3, maximum, current, savingPower, availablePower, resources2) {
+    const rule = building3.rule;
     if (savingPower) {
       switch (rule.kind) {
         case "belt-space-station": {
@@ -32773,7 +32773,7 @@
         case "lake-cooling-tower":
           if (rule.harborCount > 0 && // The caller supplies the current available-power cap as maximum.
           maximum > 0) {
-            const needed = building2.powered * maximum + Number(
+            const needed = building3.powered * maximum + Number(
               (500 * 0.92 ** maximum * (rule.electromagneticField ? 1.5 : 1)).toFixed(2)
             ) * Math.min(2, rule.harborCount);
             if (availablePower < needed) {
@@ -32782,7 +32782,7 @@
           }
           break;
         case "lake-harbor":
-          if (maximum === 1 && building2.count > 1) {
+          if (maximum === 1 && building3.count > 1) {
             maximum = 0;
           }
           break;
@@ -32813,7 +32813,7 @@
         }
         break;
       case "ascension-trigger":
-        if (building2.powered > 0 && (!rule.pillarFinished || rule.prestigeType !== "ascension")) {
+        if (building3.powered > 0 && (!rule.pillarFinished || rule.prestigeType !== "ascension")) {
           maximum = 0;
         }
         break;
@@ -32838,10 +32838,10 @@
         }
         break;
       case "mill":
-        if (building2.powered !== 0 && rule.foodStorageRatio < 0.7 && rule.foodWorkers > 0) {
+        if (building3.powered !== 0 && rule.foodStorageRatio < 0.7 && rule.foodWorkers > 0) {
           maximum = Math.min(
             maximum,
-            current - (rule.sampledPower - 5) / -building2.powered
+            current - (rule.sampledPower - 5) / -building3.powered
           );
         }
         break;
@@ -33112,7 +33112,7 @@
         incomeAdjusted: resource2.incomeAdjusted
       });
     }
-    const buildingIds2 = new Set(input.buildings.map((building2) => building2.id));
+    const buildingIds2 = new Set(input.buildings.map((building3) => building3.id));
     if (buildingIds2.size !== input.buildings.length) {
       throw new TypeError("duplicate power building id");
     }
@@ -33130,15 +33130,15 @@
     );
     let availablePower = input.powerCurrent;
     const missingProducer = {};
-    for (const building2 of input.buildings) {
-      availablePower += building2.powered * building2.stateOn;
-      for (const consumption of building2.consumptions) {
+    for (const building3 of input.buildings) {
+      availablePower += building3.powered * building3.stateOn;
+      for (const consumption of building3.consumptions) {
         const resource2 = mapValue(
           resources2,
           consumption.resourceId,
           `power resource ${consumption.resourceId}`
         );
-        const value = building2.rule.kind === "belt-space-station" && resource2.input.supportKind === "support" && resource2.input.id === "Belt_Support" ? resource2.rate - resource2.input.maxQuantity : resource2.rate + consumption.fuelRate * building2.stateOn;
+        const value = building3.rule.kind === "belt-space-station" && resource2.input.supportKind === "support" && resource2.input.id === "Belt_Support" ? resource2.rate - resource2.input.maxQuantity : resource2.rate + consumption.fuelRate * building3.stateOn;
         appendRateOperation(operations, resource2, value);
         if (resource2.input.supportKind !== "none" && consumption.rate < 0) {
           missingProducer[resource2.input.id] = (missingProducer[resource2.input.id] ?? 0) + 1;
@@ -33147,11 +33147,11 @@
     }
     let reservedPower = 0;
     const producerReserve = /* @__PURE__ */ new Map();
-    for (const building2 of input.buildings) {
-      if (building2.produces.length === 0 || building2.powered <= 0) {
+    for (const building3 of input.buildings) {
+      if (building3.produces.length === 0 || building3.powered <= 0) {
         continue;
       }
-      const consumed = building2.produces.some(
+      const consumed = building3.produces.some(
         (resourceId3) => input.buildings.some(
           (candidate) => candidate.consumptions.some(
             (consumption) => consumption.resourceId === resourceId3 && consumption.rate > 0
@@ -33161,56 +33161,56 @@
       if (!consumed) {
         continue;
       }
-      const cap = input.settings.limitPowered ? Math.min(building2.count, building2.autoMaximum) : building2.count;
-      const growth = building2.produces.some(
+      const cap = input.settings.limitPowered ? Math.min(building3.count, building3.autoMaximum) : building3.count;
+      const growth = building3.produces.some(
         (resourceId3) => mapValue(resources2, resourceId3, `producer resource ${resourceId3}`).input.useful
       ) ? 1 : 0;
-      const reserve = building2.powered * Math.min(cap, building2.stateOn + growth);
-      producerReserve.set(building2.binding, reserve);
+      const reserve = building3.powered * Math.min(cap, building3.stateOn + growth);
+      producerReserve.set(building3.binding, reserve);
       reservedPower += reserve;
     }
-    for (const building2 of input.buildings) {
-      let maximum = building2.count;
-      const current = building2.stateOn;
-      if (!input.settings.showGalactic && building2.tab === "galaxy") {
+    for (const building3 of input.buildings) {
+      let maximum = building3.count;
+      const current = building3.stateOn;
+      if (!input.settings.showGalactic && building3.tab === "galaxy") {
         maximum = 0;
       }
       if (input.settings.limitPowered) {
-        maximum = Math.min(maximum, building2.autoMaximum);
+        maximum = Math.min(maximum, building3.autoMaximum);
       }
-      if (building2.singleState) {
+      if (building3.singleState) {
         maximum = Math.min(maximum, 1);
       }
-      reservedPower -= producerReserve.get(building2.binding) ?? 0;
-      if (building2.rule.kind === "neutron-citadel") {
+      reservedPower -= producerReserve.get(building3.binding) ?? 0;
+      if (building3.rule.kind === "neutron-citadel") {
         while (maximum > 0 && availablePower - reservedPower < getCitadelPowerConsumption(
           maximum,
-          building2.rule.electromagneticField
+          building3.rule.electromagneticField
         )) {
           maximum--;
         }
-      } else if (building2.powered > 0 && !building2.ignorePositivePowerCap) {
+      } else if (building3.powered > 0 && !building3.ignorePositivePowerCap) {
         maximum = Math.min(
           maximum,
-          (availablePower - reservedPower) / building2.powered
+          (availablePower - reservedPower) / building3.powered
         );
       }
-      if ((building2.rule.kind === "ascension-trigger" || building2.rule.kind === "terraformer") && availablePower < building2.powered) {
+      if ((building3.rule.kind === "ascension-trigger" || building3.rule.kind === "terraformer") && availablePower < building3.powered) {
         operations.push({
           kind: "set-description",
-          buildingId: building2.id,
-          expected: building2.extraDescription,
+          buildingId: building3.id,
+          expected: building3.extraDescription,
           value: `Missing ${Math.ceil(
-            building2.powered - availablePower
-          )} MW to power on<br>${building2.extraDescription}`
+            building3.powered - availablePower
+          )} MW to power on<br>${building3.extraDescription}`
         });
       }
-      if (building2.skipGroup !== "none") {
+      if (building3.skipGroup !== "none") {
         continue;
       }
-      if (building2.smartCategory && building2.smartEnabled) {
+      if (building3.smartCategory && building3.smartEnabled) {
         const result2 = applySmartRule(
-          building2,
+          building3,
           maximum,
           current,
           input.powerCurrent <= input.powerMaximum || input.replicatorAvailable,
@@ -33224,14 +33224,14 @@
             mapValue(resources2, resourceId3, `power resource ${resourceId3}`)
           );
         }
-        if (input.settings.autoFleet && building2.fleetMaximum !== null) {
-          maximum = Math.min(maximum, building2.fleetMaximum);
+        if (input.settings.autoFleet && building3.fleetMaximum !== null) {
+          maximum = Math.min(maximum, building3.fleetMaximum);
         }
       }
       let description = operations.filter(
-        (operation2) => operation2.kind === "set-description" && operation2.buildingId === building2.id
-      ).at(-1)?.value ?? building2.extraDescription;
-      for (const consumption of building2.consumptions) {
+        (operation2) => operation2.kind === "set-description" && operation2.buildingId === building3.id
+      ).at(-1)?.value ?? building3.extraDescription;
+      for (const consumption of building3.consumptions) {
         const resource2 = mapValue(
           resources2,
           consumption.resourceId,
@@ -33253,7 +33253,7 @@
             if (resource2.input.storageRatio > 0.05 || input.hungryRace) {
               continue;
             }
-          } else if (current > 0 && resource2.input.supportKind === "none" && (building2.powered < 0 || resource2.input.storageRatio >= 0.95) && resource2.input.currentQuantity >= maximum * input.consumptionBalanceMinimum * consumption.rate) {
+          } else if (current > 0 && resource2.input.supportKind === "none" && (building3.powered < 0 || resource2.input.storageRatio >= 0.95) && resource2.input.currentQuantity >= maximum * input.consumptionBalanceMinimum * consumption.rate) {
             continue;
           } else if (resource2.input.supportKind === "tau-belt-support") {
             continue;
@@ -33267,7 +33267,7 @@
             const value = `Make sure all ${resource2.input.title} producers are above consumers in buildings list!<br>${description}`;
             operations.push({
               kind: "set-description",
-              buildingId: building2.id,
+              buildingId: building3.id,
               expected: description,
               value
             });
@@ -33277,24 +33277,24 @@
           missingProducer[resource2.input.id]--;
         }
       }
-      if (building2.powered < 0) {
+      if (building3.powered < 0) {
         maximum = Math.max(maximum, current - 1);
       }
       maximum = Math.max(0, Math.floor(maximum));
-      const oscillation = oscillations[building2.binding] ?? (oscillations[building2.binding] = {});
+      const oscillation = oscillations[building3.binding] ?? (oscillations[building3.binding] = {});
       maximum = debouncePower(maximum, current, oscillation);
-      const warningCap = warningCaps[building2.binding];
+      const warningCap = warningCaps[building3.binding];
       if (warningCap !== void 0) {
         const ticks = warningCap.ticks - 1;
         if (ticks <= 0) {
-          delete warningCaps[building2.binding];
+          delete warningCaps[building3.binding];
         } else {
-          warningCaps[building2.binding] = { cap: warningCap.cap, ticks };
+          warningCaps[building3.binding] = { cap: warningCap.cap, ticks };
           maximum = Math.min(maximum, warningCap.cap);
         }
       }
       if (input.debug && maximum !== current) {
-        const consumption = building2.consumptions.filter((entry) => entry.fuelRate > 0).map((entry) => {
+        const consumption = building3.consumptions.filter((entry) => entry.fuelRate > 0).map((entry) => {
           const resource2 = mapValue(
             resources2,
             entry.resourceId,
@@ -33309,31 +33309,31 @@
         const delta = maximum - current;
         operations.push({
           kind: "log",
-          message: `[power] ${building2.binding}: on ${current}→${maximum} (Δ${delta >= 0 ? "+" : ""}${delta}), powered=${building2.powered}, availPower≈${availablePower.toFixed(
+          message: `[power] ${building3.binding}: on ${current}→${maximum} (Δ${delta >= 0 ? "+" : ""}${delta}), powered=${building3.powered}, availPower≈${availablePower.toFixed(
             1
           )}${reservedPower > 0 ? `, reserved≈${reservedPower.toFixed(1)}` : ""}${consumption ? " || " + consumption : ""}`
         });
       }
-      for (const consumption of building2.consumptions) {
+      for (const consumption of building3.consumptions) {
         const resource2 = mapValue(
           resources2,
           consumption.resourceId,
           `power resource ${consumption.resourceId}`
         );
-        const value = building2.rule.kind === "belt-space-station" && resource2.input.id === "Belt_Support" ? resource2.rate + resource2.input.maxQuantity : resource2.rate - consumption.fuelRate * maximum;
+        const value = building3.rule.kind === "belt-space-station" && resource2.input.id === "Belt_Support" ? resource2.rate + resource2.input.maxQuantity : resource2.rate - consumption.fuelRate * maximum;
         appendRateOperation(operations, resource2, value);
       }
       operations.push({
         kind: "adjust-building",
-        buildingId: building2.id,
-        binding: building2.binding,
+        buildingId: building3.id,
+        binding: building3.binding,
         expectedStateOn: current,
         amount: maximum - current
       });
-      availablePower -= building2.rule.kind === "neutron-citadel" ? getCitadelPowerConsumption(
+      availablePower -= building3.rule.kind === "neutron-citadel" ? getCitadelPowerConsumption(
         maximum,
-        building2.rule.electromagneticField
-      ) : building2.powered * maximum;
+        building3.rule.electromagneticField
+      ) : building3.powered * maximum;
     }
     const lakeSupport = resources2.get("Lake_Support")?.rate ?? 0;
     if (input.lake.enabled && lakeSupport > 0) {
@@ -33370,7 +33370,7 @@
     if (input.spire.enabled && spireSupport > 0) {
       const spire = input.spire;
       const buildAllowed = spire.autoBuild && !(spire.autoMech && spire.mechActive) && !(spire.autoPrestige && spire.prestigeType === "demonic" && spire.prestigeDemonicFloor - spire.towerCount <= spire.mechBay.count);
-      const canBuild = (building2, checkSmart = false) => buildAllowed && building2.autoBuildable && spire.moneyMaximum >= building2.moneyCost && (!checkSmart || building2.smartManaged);
+      const canBuild = (building3, checkSmart = false) => buildAllowed && building3.autoBuildable && spire.moneyMaximum >= building3.moneyCost && (!checkSmart || building3.smartManaged);
       const maximumBay = Math.min(spire.mechBay.count, spireSupport);
       const currentPort = spire.port.count;
       const currentCamp = spire.camp.count;
@@ -33400,17 +33400,17 @@
       });
       let assignStorage = spire.mechQueued || spire.purifierQueued;
       const addSpireAdjustments = (mech, port, camp) => {
-        for (const [building2, target] of [
+        for (const [building3, target] of [
           [spire.mechBay, mech],
           [spire.port, port],
           [spire.camp, camp]
         ]) {
           operations.push({
             kind: "adjust-building",
-            buildingId: building2.buildingId,
-            binding: building2.binding,
-            expectedStateOn: building2.stateOn,
-            amount: target - building2.stateOn
+            buildingId: building3.buildingId,
+            binding: building3.binding,
+            expectedStateOn: building3.stateOn,
+            amount: target - building3.stateOn
           });
         }
       };
@@ -33456,7 +33456,7 @@
         kind: "apply-power-cycle",
         expectedBuildings: Object.freeze(
           input.buildings.map(
-            (building2) => Object.freeze({ id: building2.id, binding: building2.binding })
+            (building3) => Object.freeze({ id: building3.id, binding: building3.binding })
           )
         ),
         operations: Object.freeze(operations)
@@ -33595,11 +33595,11 @@
   function finiteProperty(record, name, path) {
     return requireNumber(record[name], `${path}.${name}`);
   }
-  function buildingId(building2, path) {
-    return readString2(building2["id"], `${path}.id`);
+  function buildingId(building3, path) {
+    return readString2(building3["id"], `${path}.id`);
   }
-  function buildingBinding(building2, path) {
-    return readString2(building2["_vueBinding"], `${path}._vueBinding`);
+  function buildingBinding(building3, path) {
+    return readString2(building3["_vueBinding"], `${path}._vueBinding`);
   }
   function resourceId(resource2, path) {
     return readString2(resource2["id"], `${path}.id`);
@@ -33721,19 +33721,19 @@
       )
     );
   }
-  function readBuildingRule(building2, path, catalogs, registry, dependencies) {
+  function readBuildingRule(building3, path, catalogs, registry, dependencies) {
     const { game: game2, settings: settings2, resources: resources2, buildings: buildings2, jobs: jobs2, mech, war, poly: poly2 } = catalogs;
     const global = requireRecord(game2["global"], "game.global");
     const race2 = requireRecord(global["race"], "game.global.race");
     const tech = requireRecord(global["tech"], "game.global.tech");
-    const stateOn = finiteProperty(building2, "stateOnCount", path);
-    if (identity(buildings2, "NeutronCitadel", building2)) {
+    const stateOn = finiteProperty(building3, "stateOnCount", path);
+    if (identity(buildings2, "NeutronCitadel", building3)) {
       return Object.freeze({
         kind: "neutron-citadel",
         electromagneticField: Boolean(race2["emfield"])
       });
     }
-    if (identity(buildings2, "BeltSpaceStation", building2)) {
+    if (identity(buildings2, "BeltSpaceStation", building3)) {
       const breakdown = recordAt(game2, ["breakdown", "c"], "game");
       const eleriumBreakdown = requireRecord(
         breakdown["Elerium"] ?? {},
@@ -33781,7 +33781,7 @@
       ["Mine", "Miner"],
       ["CoalMine", "CoalMiner"]
     ]) {
-      if (identity(buildings2, buildingName, building2)) {
+      if (identity(buildings2, buildingName, building3)) {
         return Object.freeze({
           kind: "job-dependent",
           jobCount: finiteProperty(
@@ -33792,7 +33792,7 @@
         });
       }
     }
-    if (identity(buildings2, "LakeCoolingTower", building2)) {
+    if (identity(buildings2, "LakeCoolingTower", building3)) {
       return Object.freeze({
         kind: "lake-cooling-tower",
         harborCount: finiteProperty(
@@ -33803,7 +33803,7 @@
         electromagneticField: Boolean(race2["emfield"])
       });
     }
-    if (identity(buildings2, "LakeHarbor", building2)) {
+    if (identity(buildings2, "LakeHarbor", building3)) {
       return Object.freeze({ kind: "lake-harbor" });
     }
     const busyRules = [
@@ -33811,7 +33811,7 @@
       ["GasMoonOilExtractor", "Oil", "space_gas_moon_oil_extractor_title"]
     ];
     for (const [buildingName, resourceName, source2] of busyRules) {
-      if (identity(buildings2, buildingName, building2)) {
+      if (identity(buildings2, buildingName, building3)) {
         const resource2 = namedRecord(resources2, resourceName, "resources");
         return Object.freeze({
           kind: "busy-resource",
@@ -33832,7 +33832,7 @@
       ["KuiperNeutronium", "Neutronium"],
       ["KuiperElerium", "Elerium"]
     ]) {
-      if (identity(buildings2, buildingName, building2)) {
+      if (identity(buildings2, buildingName, building3)) {
         const resource2 = namedRecord(resources2, resourceName, "resources");
         const title = registry.register(
           resource2,
@@ -33856,7 +33856,7 @@
       ["BeltIridiumShip", "Iridium"],
       ["BeltIronShip", "Iron"]
     ]) {
-      if (identity(buildings2, buildingName, building2)) {
+      if (identity(buildings2, buildingName, building3)) {
         const resource2 = namedRecord(resources2, resourceName, "resources");
         const elerium = namedRecord(resources2, "Elerium", "resources");
         return Object.freeze({
@@ -33882,7 +33882,7 @@
       ["AsphodelHarvester", "Asphodel_Powder", "eden_asphodel_harvester_title"]
     ];
     for (const [buildingName, resourceName, source2] of ordinaryBusyRules) {
-      if (identity(buildings2, buildingName, building2)) {
+      if (identity(buildings2, buildingName, building3)) {
         return Object.freeze({
           kind: "busy-resource",
           active: true,
@@ -33896,7 +33896,7 @@
         });
       }
     }
-    if (identity(buildings2, "TritonLander", building2)) {
+    if (identity(buildings2, "TritonLander", building3)) {
       return Object.freeze({
         kind: "triton-lander",
         fobOn: finiteProperty(
@@ -33916,20 +33916,20 @@
         )
       });
     }
-    if (identity(buildings2, "SiriusAscensionTrigger", building2)) {
+    if (identity(buildings2, "SiriusAscensionTrigger", building3)) {
       return Object.freeze({
         kind: "ascension-trigger",
         pillarFinished: dependencies.isPillarFinished(),
         prestigeType: readStringSetting(settings2, "prestigeType")
       });
     }
-    if (identity(buildings2, "RedAtmoTerraformer", building2)) {
+    if (identity(buildings2, "RedAtmoTerraformer", building3)) {
       return Object.freeze({
         kind: "terraformer",
         prestigeType: readStringSetting(settings2, "prestigeType")
       });
     }
-    if (identity(buildings2, "BadlandsAttractor", building2)) {
+    if (identity(buildings2, "BadlandsAttractor", building3)) {
       return Object.freeze({
         kind: "badlands-attractor",
         threat: readNestedNumber(
@@ -33942,7 +33942,7 @@
         hellAssigned: finiteProperty(war, "hellAssigned", "WarManager")
       });
     }
-    if (identity(buildings2, "TouristCenter", building2)) {
+    if (identity(buildings2, "TouristCenter", building3)) {
       const money = namedRecord(resources2, "Money", "resources");
       return Object.freeze({
         kind: "tourist-center",
@@ -33961,7 +33961,7 @@
         )
       });
     }
-    if (identity(buildings2, "Mill", building2)) {
+    if (identity(buildings2, "Mill", building3)) {
       return Object.freeze({
         kind: "mill",
         foodStorageRatio: finiteProperty(
@@ -33985,7 +33985,7 @@
         )
       });
     }
-    if (identity(buildings2, "ChthonianMineLayer", building2)) {
+    if (identity(buildings2, "ChthonianMineLayer", building3)) {
       const regions = dependencies.getGalaxyRegions();
       if (!Array.isArray(regions)) {
         throw new TypeError("galaxy regions must be an array");
@@ -34021,7 +34021,7 @@
         rating: callNumber9(actions, "rating", "gxy_chthonian.minelayer.ship")
       });
     }
-    if (identity(buildings2, "RuinsGuardPost", building2)) {
+    if (identity(buildings2, "RuinsGuardPost", building3)) {
       const armyRating = requireNumber(
         Reflect.apply(
           requireFunction(game2["armyRating"], "game.armyRating"),
@@ -34050,7 +34050,7 @@
         gateRating: suppression("gate")
       });
     }
-    if (identity(buildings2, "SpireWaygate", building2)) {
+    if (identity(buildings2, "SpireWaygate", building3)) {
       const prestigeType = readStringSetting(settings2, "prestigeType");
       const universeAffix = Reflect.apply(
         requireFunction(poly2["universeAffix"], "poly.universeAffix"),
@@ -34077,7 +34077,7 @@
         ) >= readNumberSetting(settings2, "prestigeDemonicFloor")
       });
     }
-    if (identity(buildings2, "ScoutShip", building2) || identity(buildings2, "CorvetteShip", building2)) {
+    if (identity(buildings2, "ScoutShip", building3) || identity(buildings2, "CorvetteShip", building3)) {
       return Object.freeze({
         kind: "early-galaxy-ship",
         piracyUnlocked: Boolean(tech["piracy"]),
@@ -34088,7 +34088,7 @@
         )
       });
     }
-    if (identity(buildings2, "Alien2ArmedMiner", building2)) {
+    if (identity(buildings2, "Alien2ArmedMiner", building3)) {
       return Object.freeze({
         kind: "armed-miner",
         observations: Object.freeze(
@@ -34107,7 +34107,7 @@
         )
       });
     }
-    if (identity(buildings2, "BologniumShip", building2)) {
+    if (identity(buildings2, "BologniumShip", building3)) {
       const resource2 = namedRecord(resources2, "Bolognium", "resources");
       return Object.freeze({
         kind: "bolognium-ship",
@@ -34139,7 +34139,7 @@
         )
       });
     }
-    if (identity(buildings2, "ChthonianRaider", building2)) {
+    if (identity(buildings2, "ChthonianRaider", building3)) {
       const observations = [
         ["Vitreloy", "galaxy_raider"],
         ["Polymer", "galaxy_raider"],
@@ -34163,7 +34163,7 @@
         observations: Object.freeze(observations)
       });
     }
-    if (identity(buildings2, "NebulaHarvester", building2)) {
+    if (identity(buildings2, "NebulaHarvester", building3)) {
       const observations = [
         ["Deuterium", "interstellar_harvester_title"],
         ["Helium_3", "interstellar_harvester_title"]
@@ -34180,7 +34180,7 @@
         observations: Object.freeze(observations)
       });
     }
-    if (identity(buildings2, "TauRedWomlingFarm", building2)) {
+    if (identity(buildings2, "TauRedWomlingFarm", building3)) {
       return Object.freeze({
         kind: "womling-farm",
         supportMaximum: finiteProperty(
@@ -34191,12 +34191,12 @@
         cropPerFarm: (dependencies.haveTech("womling_pop") ? 16 : 12) + (dependencies.haveTech("womling_gene") ? 4 : 0)
       });
     }
-    if (identity(buildings2, "TauRedOverseer", building2)) {
+    if (identity(buildings2, "TauRedOverseer", building3)) {
       return Object.freeze({
         kind: "womling-overseer",
         loyaltyBase: race2["womling_friend"] ? 25 : race2["womling_god"] ? 75 : 0,
         loyaltyPerBuilding: callNumber9(
-          requireRecord(building2["definition"], `${path}.definition`),
+          requireRecord(building3["definition"], `${path}.definition`),
           "val",
           `${path}.definition`
         ),
@@ -34207,12 +34207,12 @@
         )
       });
     }
-    if (identity(buildings2, "TauRedWomlingFun", building2)) {
+    if (identity(buildings2, "TauRedWomlingFun", building3)) {
       return Object.freeze({
         kind: "womling-fun",
         moraleBase: race2["womling_friend"] ? 75 : race2["womling_god"] ? 40 : race2["womling_lord"] ? 30 : 0,
         moralePerBuilding: callNumber9(
-          requireRecord(building2["definition"], `${path}.definition`),
+          requireRecord(building3["definition"], `${path}.definition`),
           "val",
           `${path}.definition`
         ),
@@ -34233,7 +34233,7 @@
         )
       });
     }
-    if (identity(buildings2, "TauGasWhalingStation", building2)) {
+    if (identity(buildings2, "TauGasWhalingStation", building3)) {
       return Object.freeze({
         kind: "tau-whaling-station",
         supportMaximum: finiteProperty(
@@ -34253,7 +34253,7 @@
         )
       });
     }
-    if (identity(buildings2, "TauMiningPit", building2)) {
+    if (identity(buildings2, "TauMiningPit", building3)) {
       return Object.freeze({
         kind: "tau-mining-pit",
         populationMaximum: finiteProperty(
@@ -34265,18 +34265,18 @@
     }
     return Object.freeze({ kind: "ordinary" });
   }
-  function readSpireBuilding(building2, path, register) {
-    const cost = requireRecord(building2["cost"], `${path}.cost`);
-    const id = buildingId(building2, path);
-    register(id, building2);
+  function readSpireBuilding(building3, path, register) {
+    const cost = requireRecord(building3["cost"], `${path}.cost`);
+    const id = buildingId(building3, path);
+    register(id, building3);
     return Object.freeze({
       buildingId: id,
-      binding: buildingBinding(building2, path),
-      count: finiteProperty(building2, "count", path),
-      stateOn: finiteProperty(building2, "stateOnCount", path),
-      autoMaximum: finiteProperty(building2, "autoMax", path),
-      autoBuildable: callBoolean13(building2, "isAutoBuildable", path),
-      smartManaged: callBoolean13(building2, "isSmartManaged", path),
+      binding: buildingBinding(building3, path),
+      count: finiteProperty(building3, "count", path),
+      stateOn: finiteProperty(building3, "stateOnCount", path),
+      autoMaximum: finiteProperty(building3, "autoMax", path),
+      autoBuildable: callBoolean13(building3, "isAutoBuildable", path),
+      smartManaged: callBoolean13(building3, "isSmartManaged", path),
       moneyCost: requireNumber(cost["Money"] ?? 0, `${path}.cost.Money`),
       supplyCost: requireNumber(cost["Supply"] ?? 0, `${path}.cost.Supply`)
     });
@@ -34443,25 +34443,25 @@
         const neededShips = typeof neededShipsValue === "object" && neededShipsValue !== null ? requireRecord(neededShipsValue, "FleetManager.neededShips") : null;
         const seenBuildings = /* @__PURE__ */ new Map();
         const seenBindings = /* @__PURE__ */ new Set();
-        const registerCommandable = (id, building2) => {
+        const registerCommandable = (id, building3) => {
           if (!seenBuildings.has(id)) {
-            seenBuildings.set(id, building2);
+            seenBuildings.set(id, building3);
           }
         };
         const inputs = managedRecords.map(
-          (building2, index) => {
+          (building3, index) => {
             const path = `BuildingManager state list[${index}]`;
-            const id = buildingId(building2, path);
-            const binding = buildingBinding(building2, path);
+            const id = buildingId(building3, path);
+            const binding = buildingBinding(building3, path);
             if (seenBuildings.has(id)) {
               throw new TypeError(`duplicate managed power building ${id}`);
             }
             if (seenBindings.has(binding)) {
               throw new TypeError(`duplicate managed power binding ${binding}`);
             }
-            seenBuildings.set(id, building2);
+            seenBuildings.set(id, building3);
             seenBindings.add(binding);
-            const rawConsumptions = building2["consumption"];
+            const rawConsumptions = building3["consumption"];
             if (!Array.isArray(rawConsumptions)) {
               throw new TypeError(`${path}.consumption must be an array`);
             }
@@ -34477,7 +34477,7 @@
                   resourceId: resource2.id,
                   rate: finiteProperty(consumption, "rate", consumptionPath),
                   fuelRate: callNumber9(
-                    building2,
+                    building3,
                     "getFuelRate",
                     path,
                     consumptionIndex
@@ -34485,7 +34485,7 @@
                 });
               }
             );
-            const rawProduces = building2["produces"];
+            const rawProduces = building3["produces"];
             const produces = rawProduces === void 0 || rawProduces === null ? [] : Array.isArray(rawProduces) ? rawProduces.map(
               (resource2, resourceIndex) => registry.register(
                 resource2,
@@ -34494,9 +34494,9 @@
             ) : (() => {
               throw new TypeError(`${path}.produces must be an array`);
             })();
-            const is = requireRecord(building2["is"] ?? {}, `${path}.is`);
+            const is = requireRecord(building3["is"] ?? {}, `${path}.is`);
             const rule = readBuildingRule(
-              building2,
+              building3,
               path,
               {
                 game: game2,
@@ -34513,28 +34513,28 @@
               dependencies
             );
             const fleetMaximum = readBooleanSetting(settings2, "autoFleet") && neededShips !== null && Object.prototype.hasOwnProperty.call(neededShips, id) ? requireNumber(neededShips[id], `FleetManager.neededShips.${id}`) : null;
-            const skipGroup = manageSpire && (identity(buildings2, "SpirePort", building2) || identity(buildings2, "SpireBaseCamp", building2) || identity(buildings2, "SpireMechBay", building2)) ? "spire" : manageLake && (identity(buildings2, "LakeTransport", building2) || identity(buildings2, "LakeBireme", building2)) ? "lake" : "none";
+            const skipGroup = manageSpire && (identity(buildings2, "SpirePort", building3) || identity(buildings2, "SpireBaseCamp", building3) || identity(buildings2, "SpireMechBay", building3)) ? "spire" : manageLake && (identity(buildings2, "LakeTransport", building3) || identity(buildings2, "LakeBireme", building3)) ? "lake" : "none";
             return Object.freeze({
               index,
               id,
               binding,
-              count: finiteProperty(building2, "count", path),
-              stateOn: finiteProperty(building2, "stateOnCount", path),
-              powered: finiteProperty(building2, "powered", path),
-              autoMaximum: finiteProperty(building2, "autoMax", path),
-              tab: typeof building2["_tab"] === "string" ? building2["_tab"] : "",
+              count: finiteProperty(building3, "count", path),
+              stateOn: finiteProperty(building3, "stateOnCount", path),
+              powered: finiteProperty(building3, "powered", path),
+              autoMaximum: finiteProperty(building3, "autoMax", path),
+              tab: typeof building3["_tab"] === "string" ? building3["_tab"] : "",
               smartCategory: Boolean(is["smart"]),
-              smartEnabled: Boolean(building2["autoStateSmart"]),
+              smartEnabled: Boolean(building3["autoStateSmart"]),
               ship: Boolean(is["ship"]),
-              singleState: identity(buildings2, "Banquet", building2),
+              singleState: identity(buildings2, "Banquet", building3),
               ignorePositivePowerCap: identity(
                 buildings2,
                 "RuinsHellForge",
-                building2
+                building3
               ),
               skipGroup,
               extraDescription: readOptionalString2(
-                building2["extraDescription"],
+                building3["extraDescription"],
                 `${path}.extraDescription`
               ),
               consumptions: Object.freeze(consumptions),
@@ -34677,7 +34677,7 @@
           resources: registry.records,
           ordered: Object.freeze(
             inputs.map(
-              (building2) => Object.freeze({ id: building2.id, binding: building2.binding })
+              (building3) => Object.freeze({ id: building3.id, binding: building3.binding })
             )
           )
         });
@@ -34693,7 +34693,7 @@
           replicatorAvailable: finiteProperty(power, "currentQuantity", "resources.Power") > finiteProperty(power, "maxQuantity", "resources.Power") ? dependencies.haveTech("replicator") : false,
           fasting: Boolean(race2["fasting"]),
           hungryRace: inputs.some(
-            (building2) => building2.rule.kind === "tourist-center" || building2.consumptions.some(
+            (building3) => building3.rule.kind === "tourist-center" || building3.consumptions.some(
               (consumption) => consumption.resourceId === "Food"
             )
           ) ? dependencies.isHungryRace() : false,
@@ -34753,20 +34753,20 @@
             if (domId.length === 0 || buildingIds2[domId] === void 0) {
               return [];
             }
-            const building2 = requireRecord(
+            const building3 = requireRecord(
               buildingIds2[domId],
               `buildingIds.${domId}`
             );
             const path = `buildingIds.${domId}`;
-            const is = requireRecord(building2["is"] ?? {}, `${path}.is`);
-            const warningKind = identity(buildings2, "BeltEleriumShip", building2) ? "belt-elerium" : identity(buildings2, "BeltIridiumShip", building2) ? "belt-iridium" : identity(buildings2, "BeltIronShip", building2) ? "belt-iron" : identity(buildings2, "LakeBireme", building2) ? "lake-bireme" : identity(buildings2, "LakeTransport", building2) ? "lake-transport" : identity(buildings2, "TauBeltWhalingShip", building2) ? "tau-whaling" : identity(buildings2, "TauBeltMiningShip", building2) ? "tau-mining" : "ordinary";
+            const is = requireRecord(building3["is"] ?? {}, `${path}.is`);
+            const warningKind = identity(buildings2, "BeltEleriumShip", building3) ? "belt-elerium" : identity(buildings2, "BeltIridiumShip", building3) ? "belt-iridium" : identity(buildings2, "BeltIronShip", building3) ? "belt-iron" : identity(buildings2, "LakeBireme", building3) ? "lake-bireme" : identity(buildings2, "LakeTransport", building3) ? "lake-transport" : identity(buildings2, "TauBeltWhalingShip", building3) ? "tau-whaling" : identity(buildings2, "TauBeltMiningShip", building3) ? "tau-mining" : "ordinary";
             return [
               Object.freeze({
                 domId,
-                buildingId: buildingId(building2, path),
-                binding: buildingBinding(building2, path),
-                stateOn: finiteProperty(building2, "stateOnCount", path),
-                autoStateEnabled: Boolean(building2["autoStateEnabled"]),
+                buildingId: buildingId(building3, path),
+                binding: buildingBinding(building3, path),
+                stateOn: finiteProperty(building3, "stateOnCount", path),
+                autoStateEnabled: Boolean(building3["autoStateEnabled"]),
                 ship: Boolean(is["ship"]),
                 warningKind,
                 beltSupportNeeded: beltNeeded,
@@ -34790,14 +34790,14 @@
         if (session === null) {
           throw new Error("power cycle must be read before state-on resampling");
         }
-        const building2 = [...session.buildings.values()].find(
+        const building3 = [...session.buildings.values()].find(
           (candidate) => candidate["_vueBinding"] === binding
         );
-        if (building2 === void 0) {
+        if (building3 === void 0) {
           throw new TypeError(`power building binding ${binding} is missing`);
         }
         return finiteProperty(
-          building2,
+          building3,
           "stateOnCount",
           `power building ${binding}`
         );
@@ -34866,11 +34866,11 @@
             break;
           }
           case "set-description": {
-            const building2 = active.buildings.get(operation2.buildingId);
-            if (building2 === void 0)
+            const building3 = active.buildings.get(operation2.buildingId);
+            if (building3 === void 0)
               return `building ${operation2.buildingId} missing`;
             const current = descriptions.get(operation2.buildingId) ?? readOptionalString2(
-              building2["extraDescription"],
+              building3["extraDescription"],
               `building ${operation2.buildingId}.extraDescription`
             );
             if (current !== operation2.expected)
@@ -34879,20 +34879,20 @@
             break;
           }
           case "adjust-building": {
-            const building2 = active.buildings.get(operation2.buildingId);
-            if (building2 === void 0)
+            const building3 = active.buildings.get(operation2.buildingId);
+            if (building3 === void 0)
               return `building ${operation2.buildingId} missing`;
-            if (buildingBinding(building2, `building ${operation2.buildingId}`) !== operation2.binding)
+            if (buildingBinding(building3, `building ${operation2.buildingId}`) !== operation2.binding)
               return `building ${operation2.buildingId} binding changed`;
             const current = buildingStates.get(operation2.buildingId) ?? finiteProperty(
-              building2,
+              building3,
               "stateOnCount",
               `building ${operation2.buildingId}`
             );
             if (current !== operation2.expectedStateOn)
               return `building ${operation2.buildingId} state changed`;
             requireFunction(
-              building2["tryAdjustState"],
+              building3["tryAdjustState"],
               `building ${operation2.buildingId}.tryAdjustState`
             );
             buildingStates.set(operation2.buildingId, current + operation2.amount);
@@ -34953,13 +34953,13 @@
             );
             break;
           case "adjust-building": {
-            const building2 = active.buildings.get(operation2.buildingId);
+            const building3 = active.buildings.get(operation2.buildingId);
             Reflect.apply(
               requireFunction(
-                building2["tryAdjustState"],
+                building3["tryAdjustState"],
                 `building ${operation2.buildingId}.tryAdjustState`
               ),
-              building2,
+              building3,
               [operation2.amount]
             );
             break;
@@ -35007,9 +35007,9 @@
         if (value === void 0) {
           return stale("warned-building-missing", "Warned building disappeared");
         }
-        const building2 = requireRecord(value, `buildingIds.${decision2.domId}`);
-        if (buildingId(building2, `buildingIds.${decision2.domId}`) !== decision2.buildingId || buildingBinding(building2, `buildingIds.${decision2.domId}`) !== decision2.binding || finiteProperty(
-          building2,
+        const building3 = requireRecord(value, `buildingIds.${decision2.domId}`);
+        if (buildingId(building3, `buildingIds.${decision2.domId}`) !== decision2.buildingId || buildingBinding(building3, `buildingIds.${decision2.domId}`) !== decision2.binding || finiteProperty(
+          building3,
           "stateOnCount",
           `buildingIds.${decision2.domId}`
         ) !== decision2.expectedStateOn) {
@@ -35017,10 +35017,10 @@
         }
         Reflect.apply(
           requireFunction(
-            building2["tryAdjustState"],
+            building3["tryAdjustState"],
             `buildingIds.${decision2.domId}.tryAdjustState`
           ),
-          building2,
+          building3,
           [-1]
         );
         return SUCCEEDED2;
@@ -35204,22 +35204,22 @@
           const assignment = { crate: 0, container: 0 };
           currentAssignment.set(resourceId3, assignment);
           if (missing > 0 && remainingCrates > 0) {
-            const count = Math.min(
+            const count2 = Math.min(
               Math.ceil(missing / input.crateValue),
               remainingCrates
             );
-            remainingCrates -= count;
-            missing -= count * input.crateValue;
-            assignment.crate = count;
+            remainingCrates -= count2;
+            missing -= count2 * input.crateValue;
+            assignment.crate = count2;
           }
           if (missing > 0 && remainingContainers > 0) {
-            const count = Math.min(
+            const count2 = Math.min(
               Math.ceil(missing / input.containerValue),
               remainingContainers
             );
-            remainingContainers -= count;
-            missing -= count * input.containerValue;
-            assignment.container = count;
+            remainingContainers -= count2;
+            missing -= count2 * input.containerValue;
+            assignment.container = count2;
           }
           if (missing > 0) {
             storageToBuild = Math.max(storageToBuild, missing);
@@ -35503,14 +35503,14 @@
             throw new TypeError(`storage resource ${id} changed identity`);
           }
           if (existing === void 0) {
-            const unlocked = managed ? callBoolean14(resource2, "isUnlocked", path) : true;
-            const managedStorage = managed && unlocked ? callBoolean14(resource2, "isManagedStorage", path) : false;
+            const unlocked2 = managed ? callBoolean14(resource2, "isUnlocked", path) : true;
+            const managedStorage = managed && unlocked2 ? callBoolean14(resource2, "isManagedStorage", path) : false;
             records.set(id, resource2);
             inputs.set(
               id,
               managed ? Object.freeze({
                 id,
-                unlocked,
+                unlocked: unlocked2,
                 managed: managedStorage,
                 currentQuantity: finiteProperty2(
                   resource2,
@@ -35597,13 +35597,13 @@
         });
         const readTarget3 = (value, path, filterBuildable = false) => {
           const target = requireRecord(value, path);
-          const unlocked = filterBuildable ? callBoolean14(target, "isUnlocked", path) : true;
-          const autoBuildEnabled = filterBuildable ? unlocked && Boolean(target["autoBuildEnabled"]) : true;
+          const unlocked2 = filterBuildable ? callBoolean14(target, "isUnlocked", path) : true;
+          const autoBuildEnabled = filterBuildable ? unlocked2 && Boolean(target["autoBuildEnabled"]) : true;
           return Object.freeze({
             costs: !filterBuildable || autoBuildEnabled ? readCosts4(target, path, resources2, register) : Object.freeze([]),
             isList: Boolean(target["isList"]),
             label: targetLabel(target),
-            unlocked,
+            unlocked: unlocked2,
             autoBuildEnabled
           });
         };
@@ -37420,20 +37420,20 @@
         );
       }
     }
-    const count = Math.floor(affordableAmount);
-    if (count < 1) {
+    const count2 = Math.floor(affordableAmount);
+    if (count2 < 1) {
       return null;
     }
     return Object.freeze({
       index: input.index,
       craftableId: input.craftableId,
-      count,
+      count: count2,
       spend: Object.freeze(
         input.materials.map(
           (material) => Object.freeze({
             resourceId: material.resourceId,
             expectedCurrentQuantity: material.currentQuantity,
-            amount: material.costPerCraft * count
+            amount: material.costPerCraft * count2
           })
         )
       )
@@ -37529,8 +37529,8 @@
         }
         const path = `foundryList[${index}]`;
         const craftable = requireRecord(session.foundryList[index], path);
-        const unlocked = callBoolean17(craftable, "isUnlocked", path);
-        if (!unlocked) {
+        const unlocked2 = callBoolean17(craftable, "isUnlocked", path);
+        if (!unlocked2) {
           return Object.freeze({
             index,
             craftableId: null,
@@ -38169,8 +38169,8 @@
   function createPrestigeReader(dependencies) {
     const buildingBool = (id, method) => {
       const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
-      const building2 = requireRecord(buildings2[id], `buildings.${id}`);
-      return callBool(building2, `buildings.${id}`, method);
+      const building3 = requireRecord(buildings2[id], `buildings.${id}`);
+      return callBool(building3, `buildings.${id}`, method);
     };
     const techBool = (id, method) => {
       const techIds2 = requireRecord(dependencies.getTechIds(), "techIds");
@@ -38301,9 +38301,9 @@
   function createPrestigeCommandExecutor(dependencies) {
     const callBuilding = (id, method) => {
       const buildings2 = requireRecord(dependencies.getBuildings(), "buildings");
-      const building2 = requireRecord(buildings2[id], `buildings.${id}`);
-      requireFunction(building2[method], `buildings.${id}.${method}`).call(
-        building2
+      const building3 = requireRecord(buildings2[id], `buildings.${id}`);
+      requireFunction(building3[method], `buildings.${id}.${method}`).call(
+        building3
       );
     };
     const clickTech = (id) => {
@@ -38628,11 +38628,11 @@
           dependencies.getIsAchievementUnlocked(),
           "isAchievementUnlocked"
         );
-        const unlocked = {};
+        const unlocked2 = {};
         for (const id of ids) {
-          unlocked[id] = Boolean(isUnlocked2(id, starLevel));
+          unlocked2[id] = Boolean(isUnlocked2(id, starLevel));
         }
-        return Object.freeze(unlocked);
+        return Object.freeze(unlocked2);
       }
     });
   }
@@ -38696,30 +38696,30 @@
     if (input.planets.length === 0) {
       throw new TypeError("planet selection requires at least one candidate");
     }
-    const unlocked = (id) => input.achievementUnlocked[id] === true;
+    const unlocked2 = (id) => input.achievementUnlocked[id] === true;
     const weightOf = (value) => value ?? NaN;
     const scored = input.planets.map((planet) => {
       let achieve = 0;
-      if (!unlocked(`biome_${planet.biome}`)) {
+      if (!unlocked2(`biome_${planet.biome}`)) {
         achieve++;
       }
       for (const trait2 of planet.traits) {
-        if (trait2 !== "none" && !unlocked(`atmo_${trait2}`)) {
+        if (trait2 !== "none" && !unlocked2(`atmo_${trait2}`)) {
           achieve++;
         }
       }
       const genus = input.biomeGenus[planet.biome];
       if (genus) {
         for (const raceId of Object.keys(input.raceGenusById)) {
-          if (input.raceGenusById[raceId] === genus && !unlocked(`extinct_${raceId}`)) {
+          if (input.raceGenusById[raceId] === genus && !unlocked2(`extinct_${raceId}`)) {
             achieve++;
           }
         }
-        if (!unlocked(`genus_${genus}`)) {
+        if (!unlocked2(`genus_${genus}`)) {
           achieve++;
         }
       }
-      if (!unlocked("madagascar_tree") && planet.biome === "oceanic" && input.gods !== "sharkin") {
+      if (!unlocked2("madagascar_tree") && planet.biome === "oceanic" && input.gods !== "sharkin") {
         achieve++;
       }
       let weighting = 0;
@@ -38973,13 +38973,13 @@
     }
     const craft = craftPlan(input, availableWorkers, availableCraftsmen);
     availableWorkers = craft.availableWorkers;
-    for (const [token, count] of craft.workers) {
+    for (const [token, count2] of craft.workers) {
       const index = indexOfToken(input, token);
-      if (index !== -1) requiredWorkers[index] = count;
+      if (index !== -1) requiredWorkers[index] = count2;
     }
-    for (const [token, count] of craft.servants) {
+    for (const [token, count2] of craft.servants) {
       const index = indexOfToken(input, token);
-      if (index !== -1) requiredServants[index] = count;
+      if (index !== -1) requiredServants[index] = count2;
     }
     const minerIndex = indexOfToken(input, input.minerToken);
     if (input.reserveMiner && availableWorkers > 1 && minerIndex !== -1 && input.jobs[minerIndex].smart) {
@@ -39222,13 +39222,13 @@
     const value = resource(resources2, name);
     return Boolean(call2(value, method, `resources.${name}.${method}`, args));
   }
-  function busyWorkers(resources2, name, source2, count) {
+  function busyWorkers(resources2, name, source2, count2) {
     return requireNumber(
       call2(
         resource(resources2, name),
         "getBusyWorkers",
         `resources.${name}.getBusyWorkers`,
-        [source2, count]
+        [source2, count2]
       ),
       `resources.${name} busy workers`
     );
@@ -39254,7 +39254,7 @@
     const global = requireRecord(game2["global"], "game.global");
     const race2 = requireRecord(global["race"], "game.global.race");
     const tech = requireRecord(global["tech"], "game.global.tech");
-    const count = jobCount2(job, "job");
+    const count2 = jobCount2(job, "job");
     let maximum = null;
     let farmerMinimum = null;
     if (kind === "miner" && race2["warlord"]) {
@@ -39302,12 +39302,12 @@
         );
         if (population > lastPopulation) {
           const populationChange = population - lastPopulation;
-          const farmerChange = count - lastFarmers;
-          maximum = populationChange === farmerChange && foodRate > 0 ? count - populationChange : count;
+          const farmerChange = count2 - lastFarmers;
+          maximum = populationChange === farmerChange && foodRate > 0 ? count2 - populationChange : count2;
         } else if (resourceFlag(resources2, "Food", "isCapped")) {
           maximum = 0;
         } else if (foodCurrent + foodRate / requireNumber(dependencies.ticksPerSecond(), "ticksPerSecond") < minimumFood) {
-          if (count === 0) {
+          if (count2 === 0) {
             maximum = 1;
           } else {
             const id = requireString20(job["id"], "job.id");
@@ -39322,13 +39322,13 @@
             );
             maximum = Math.max(
               1,
-              count + (Math.ceil(foodRate / -(production / count)) || 0)
+              count2 + (Math.ceil(foodRate / -(production / count2)) || 0)
             );
           }
         } else if (foodCurrent > maximumFood && foodRate > 0) {
-          maximum = count - 1;
+          maximum = count2 - 1;
         } else {
-          maximum = count;
+          maximum = count2;
         }
         farmerMinimum = maximum;
       }
@@ -39338,20 +39338,20 @@
         if (resourceFlag(resources2, "Furs", "isUnlocked") && (race2["evil"] || race2["artifical"])) {
           maximum = resourceFlag(resources2, "Furs", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
             maximum ?? 0,
-            busyWorkers(resources2, "Furs", "job_hunter", count)
+            busyWorkers(resources2, "Furs", "job_hunter", count2)
           );
         }
         if (demonicLumber) {
           maximum = resourceFlag(resources2, "Lumber", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
             maximum ?? 0,
-            busyWorkers(resources2, "Lumber", "job_hunter", count)
+            busyWorkers(resources2, "Lumber", "job_hunter", count2)
           );
         }
       }
     } else if (kind === "lumberjack") {
       maximum = 0;
       if (!race2["soul_eater"] && race2["evil"]) {
-        maximum = resourceFlag(resources2, "Furs", "isUseful") ? Number.MAX_SAFE_INTEGER : busyWorkers(resources2, "Furs", "job_reclaimer", count);
+        maximum = resourceFlag(resources2, "Furs", "isUseful") ? Number.MAX_SAFE_INTEGER : busyWorkers(resources2, "Furs", "job_reclaimer", count2);
       }
       maximum = resourceFlag(resources2, "Lumber", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
         maximum,
@@ -39359,19 +39359,19 @@
           resources2,
           "Lumber",
           race2["evil"] ? "job_reclaimer" : "job_lumberjack",
-          count
+          count2
         )
       );
     } else if (kind === "quarry-worker") {
       maximum = 0;
       for (const name of ["Aluminium", "Chrysotile"]) {
         if (resourceFlag(resources2, name, "isUnlocked")) {
-          maximum = resourceFlag(resources2, name, "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(maximum, busyWorkers(resources2, name, "workers", count));
+          maximum = resourceFlag(resources2, name, "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(maximum, busyWorkers(resources2, name, "workers", count2));
         }
       }
-      maximum = resourceFlag(resources2, "Stone", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(maximum, busyWorkers(resources2, "Stone", "workers", count));
+      maximum = resourceFlag(resources2, "Stone", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(maximum, busyWorkers(resources2, "Stone", "workers", count2));
     } else if (kind === "crystal-miner") {
-      maximum = resourceFlag(resources2, "Crystal", "isUseful") ? Number.MAX_SAFE_INTEGER : busyWorkers(resources2, "Crystal", "job_crystal_miner", count);
+      maximum = resourceFlag(resources2, "Crystal", "isUseful") ? Number.MAX_SAFE_INTEGER : busyWorkers(resources2, "Crystal", "job_crystal_miner", count2);
     } else if (job === jobs2["Torturer"]) {
       const city = requireRecord(global["city"], "game.global.city");
       const dwellers = city["surfaceDwellers"];
@@ -39407,7 +39407,7 @@
           for (const name of ["Aluminium", "Chrysotile"]) {
             if (resourceFlag(resources2, name, "isUnlocked")) {
               const source2 = name === "Aluminium" && (race2["cataclysm"] || race2["orbit_decayed"]) ? "space_red_mine_title" : "job_miner";
-              maximum = resourceFlag(resources2, name, "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(maximum, busyWorkers(resources2, name, source2, count));
+              maximum = resourceFlag(resources2, name, "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(maximum, busyWorkers(resources2, name, source2, count2));
             }
           }
         }
@@ -39422,30 +39422,30 @@
               resources2,
               "Titanium",
               "resource_Iron_name",
-              count + shipShift
+              count2 + shipShift
             ) - shipShift
           );
         }
         if (resourceFlag(resources2, "Iron", "isUnlocked")) {
           maximum = resourceFlag(resources2, "Iron", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
             maximum,
-            busyWorkers(resources2, "Iron", "job_miner", count)
+            busyWorkers(resources2, "Iron", "job_miner", count2)
           );
         }
         maximum = resourceFlag(resources2, "Copper", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
           maximum,
-          busyWorkers(resources2, "Copper", "job_miner", count)
+          busyWorkers(resources2, "Copper", "job_miner", count2)
         );
       }
     } else if (job === jobs2["CoalMiner"]) {
       maximum = 0;
       if (!coalDisabled) {
         if (resourceFlag(resources2, "Uranium", "isUnlocked")) {
-          maximum = resourceFlag(resources2, "Uranium", "isUseful") ? Number.MAX_SAFE_INTEGER : busyWorkers(resources2, "Uranium", "job_coal_miner", count);
+          maximum = resourceFlag(resources2, "Uranium", "isUseful") ? Number.MAX_SAFE_INTEGER : busyWorkers(resources2, "Uranium", "job_coal_miner", count2);
         }
         maximum = resourceFlag(resources2, "Coal", "isUseful") ? Number.MAX_SAFE_INTEGER : Math.max(
           maximum,
-          busyWorkers(resources2, "Coal", "job_coal_miner", count)
+          busyWorkers(resources2, "Coal", "job_coal_miner", count2)
         );
       }
     } else if (kind === "space-miner") {
@@ -39464,7 +39464,7 @@
       const taxes = requireRecord(civic["taxes"], "game.global.civic.taxes");
       const taxBuffer = (booleanSetting2(settings2, "autoTax") || Boolean(dependencies.haveTask("tax"))) && requireNumber(taxes["tax_rate"], "taxes.tax_rate") < requireNumber(dependencies.taxCap(false), "taxCap") ? 1 : 0;
       const entertainerMorale = (optionalNumber2(tech["theatre"], "game.global.tech.theatre") + trait(dependencies, "musical")) * trait(dependencies, "emotionless", 0, "-") * trait(dependencies, "high_pop", 1, "=") * (state2["astroSign"] === "sagittarius" ? 1.05 : 1) * (race2["lone_survivor"] ? 25 : 1);
-      maximum = count - Math.floor(
+      maximum = count2 - Math.floor(
         (resourceNumber(resources2, "Morale", "rateOfChange") - resourceNumber(resources2, "Morale", "maxQuantity") - taxBuffer) / entertainerMorale
       );
     } else if (job === jobs2["Banker"]) {
@@ -39479,14 +39479,14 @@
         const civic = requireRecord(global["civic"], "game.global.civic");
         const govern = requireRecord(civic["govern"], "game.global.civic.govern");
         const suspicionPerWizard = govern["type"] === "magocracy" ? 0.5 : 1;
-        maximum = (99 - resourceNumber(resources2, "Sus", "currentQuantity")) / suspicionPerWizard + count * suspicionPerWizard;
+        maximum = (99 - resourceNumber(resources2, "Sus", "currentQuantity")) / suspicionPerWizard + count2 * suspicionPerWizard;
       }
     } else if (job === jobs2["Professor"]) {
       maximum = !race2["intelligent"] && resourceFlag(resources2, "Knowledge", "isCapped") && !technology(dependencies, "genetics", 5) && !technology(dependencies, "fanaticism", 2) ? 0 : null;
     } else if (job === jobs2["CementWorker"]) {
       maximum = Number.MAX_SAFE_INTEGER;
       if (resourceNumber(resources2, "Stone", "storageRatio") < 0.1) {
-        let stoneRate = resourceNumber(resources2, "Stone", "rateOfChange") + count * 3 - 5;
+        let stoneRate = resourceNumber(resources2, "Stone", "rateOfChange") + count2 * 3 - 5;
         if (race2["smoldering"] && booleanSetting2(settings2, "autoQuarry")) {
           stoneRate += resourceNumber(resources2, "Chrysotile", "rateOfChange");
         }
@@ -39495,7 +39495,7 @@
       if (!resourceFlag(resources2, "Cement", "isUseful")) {
         maximum = Math.min(
           maximum,
-          busyWorkers(resources2, "Cement", "city_cement_plant_bd", count)
+          busyWorkers(resources2, "Cement", "city_cement_plant_bd", count2)
         );
       }
     } else if (job === jobs2["HellSurveyor"]) {
@@ -39804,8 +39804,8 @@
             if (foundryWeighting === "buildings") {
               const requiredWeight = dependencies.findRequiredResourceWeight(craftResource);
               weighting = (requiredWeight === void 0 || requiredWeight === null ? 0 : requireNumber(requiredWeight, "required resource weight")) * craftWeight;
-              const unlocked = state2["unlockedBuildings"];
-              if (!Array.isArray(unlocked))
+              const unlocked2 = state2["unlockedBuildings"];
+              if (!Array.isArray(unlocked2))
                 throw new TypeError("state.unlockedBuildings must be an array");
               const current = requireNumber(
                 craftResource["currentQuantity"],
@@ -39815,7 +39815,7 @@
                 craftResource["id"],
                 `craftingJobs[${index}].resource.id`
               );
-              const driving = unlocked.find((candidate) => {
+              const driving = unlocked2.find((candidate) => {
                 const record = requireRecord(
                   candidate,
                   "state.unlockedBuildings entry"
@@ -40138,29 +40138,29 @@
           dependencies.log(decision2.authorityDebugMessage);
         if (morale !== null) morale["incomeAdusted"] = true;
         if (iron !== null) iron["incomeAdusted"] = true;
-        for (const [job, count] of workerRemovals)
+        for (const [job, count2] of workerRemovals)
           Reflect.apply(
             requireFunction(job["removeWorkers"], "job.removeWorkers"),
             job,
-            [count]
+            [count2]
           );
-        for (const [job, count] of workerAdditions)
+        for (const [job, count2] of workerAdditions)
           Reflect.apply(
             requireFunction(job["addWorkers"], "job.addWorkers"),
             job,
-            [count]
+            [count2]
           );
-        for (const [job, count] of servantRemovals)
+        for (const [job, count2] of servantRemovals)
           Reflect.apply(
             requireFunction(job["removeServants"], "job.removeServants"),
             job,
-            [count]
+            [count2]
           );
-        for (const [job, count] of servantAdditions)
+        for (const [job, count2] of servantAdditions)
           Reflect.apply(
             requireFunction(job["addServants"], "job.addServants"),
             job,
-            [count]
+            [count2]
           );
         active.state["lastPopulationCount"] = decision2.lastPopulationCount;
         active.state["lastFarmerCount"] = decision2.lastFarmerCount;
@@ -40230,23 +40230,23 @@
   function planBuildGate(setup, index, sample, state2) {
     const candidate = candidateAt(setup, index);
     let nextState = state2;
-    let affordable = state2.affordable[candidate.key];
-    if (affordable === void 0) {
+    let affordable2 = state2.affordable[candidate.key];
+    if (affordable2 === void 0) {
       if (sample.affordable === void 0) {
         throw new TypeError(
           `affordability sample missing for build candidate ${candidate.key}`
         );
       }
-      affordable = sample.affordable;
+      affordable2 = sample.affordable;
       nextState = Object.freeze({
         ...state2,
         affordable: Object.freeze({
           ...state2.affordable,
-          [candidate.key]: affordable
+          [candidate.key]: affordable2
         })
       });
     }
-    if (!affordable || usesUsedConsumption(setup, state2, sample)) {
+    if (!affordable2 || usesUsedConsumption(setup, state2, sample)) {
       return Object.freeze({ kind: "skip", state: nextState });
     }
     return Object.freeze({ kind: "conflict-check", state: nextState });
@@ -40321,12 +40321,12 @@
   }
   function planBuildCompetition(setup, index, sample, state2) {
     const candidate = candidateAt(setup, index);
-    const affordable = { ...state2.affordable };
+    const affordable2 = { ...state2.affordable };
     const estimations = { ...state2.estimations };
     const finish = (outcome) => Object.freeze({
       ...outcome,
       state: Object.freeze({
-        affordable: Object.freeze(affordable),
+        affordable: Object.freeze(affordable2),
         estimations: Object.freeze(estimations),
         consumptionsUsed: state2.consumptionsUsed
       })
@@ -40346,7 +40346,7 @@
         break;
       }
       if (weightDiffRatio < 10) {
-        let otherAffordable = affordable[other.key];
+        let otherAffordable = affordable2[other.key];
         if (otherAffordable === void 0) {
           const sampled = sample.affordability[other.key];
           if (sampled === void 0) {
@@ -40355,7 +40355,7 @@
             );
           }
           otherAffordable = sampled;
-          affordable[other.key] = otherAffordable;
+          affordable2[other.key] = otherAffordable;
         }
         if (otherAffordable) {
           continue;
@@ -40414,14 +40414,14 @@
         consumptionsUsed[entry.resourceId] = true;
       }
     }
-    const affordable = {};
+    const affordable2 = {};
     for (const key of Object.keys(state2.affordable)) {
-      affordable[key] = false;
+      affordable2[key] = false;
     }
     return Object.freeze({
       stop: false,
       state: Object.freeze({
-        affordable: Object.freeze(affordable),
+        affordable: Object.freeze(affordable2),
         estimations: state2.estimations,
         consumptionsUsed: Object.freeze(consumptionsUsed)
       })
@@ -40841,14 +40841,14 @@
             tech["isAffordable"],
             `${path}.isAffordable`
           );
-          const affordable = Boolean(Reflect.apply(isAffordable, tech, []));
+          const affordable2 = Boolean(Reflect.apply(isAffordable, tech, []));
           const view = Object.freeze({
             index,
             id: readTechId(tech, path),
-            affordable,
+            affordable: affordable2,
             // Match the legacy && gate: conflict analysis is irrelevant when the
             // technology is not affordable.
-            hasCostConflict: affordable ? Boolean(dependencies.getCostConflict(tech)) : false
+            hasCostConflict: affordable2 ? Boolean(dependencies.getCostConflict(tech)) : false
           });
           techs.push(view);
           if (view.affordable && !view.hasCostConflict) {
@@ -41589,18 +41589,18 @@
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
-            const unlocked = Boolean(
+            const unlocked2 = Boolean(
               Reflect.apply(isUnlocked2, active.manager, [id])
             );
-            const weighting = unlocked ? requireNumber(
+            const weighting = unlocked2 ? requireNumber(
               Reflect.apply(getWeighting, active.manager, [id]),
               `fleet weighting ${id}`
             ) : 0;
-            const syndicateRatio = unlocked && weighting > 0 ? requireNumber(
+            const syndicateRatio = unlocked2 && weighting > 0 ? requireNumber(
               Reflect.apply(syndicate, active.manager, [id, false, true]),
               `syndicate ratio ${id}`
             ) : 1;
-            const maximumDefense = unlocked && weighting > 0 ? requireNumber(
+            const maximumDefense = unlocked2 && weighting > 0 ? requireNumber(
               Reflect.apply(getMaxDefense, active.manager, [id]),
               `maximum fleet defense ${id}`
             ) : 0;
@@ -41615,9 +41615,9 @@
                   rawDigsite,
                   "game.global.space.digsite"
                 );
-                const count = digsite["count"];
-                if (count !== void 0) {
-                  digsiteIncomplete = requireNumber(count, "game.global.space.digsite.count") < 100;
+                const count2 = digsite["count"];
+                if (count2 !== void 0) {
+                  digsiteIncomplete = requireNumber(count2, "game.global.space.digsite.count") < 100;
                 }
               }
               if (digsiteIncomplete) {
@@ -41641,7 +41641,7 @@
             regions.push(
               Object.freeze({
                 id,
-                unlocked,
+                unlocked: unlocked2,
                 weighting,
                 syndicateRatio,
                 maximumDefense,
@@ -42329,14 +42329,14 @@
         if (!isShipName(rawShip)) {
           throw new TypeError(`unknown galaxy defense ship: ${rawShip}`);
         }
-        const count = Math.floor(
+        const count2 = Math.floor(
           requireNumber(
             rawCount,
             `game.global.galaxy.defense.${regionName}.${rawShip}`
           )
         );
-        assigned[rawShip] = count;
-        totals[rawShip] += count;
+        assigned[rawShip] = count2;
+        totals[rawShip] += count2;
       }
       regions.push(
         Object.freeze({
@@ -42369,14 +42369,14 @@
     );
   }
   function readMission(buildings2, key) {
-    const building2 = requireRecord(buildings2[key], `buildings.${key}`);
+    const building3 = requireRecord(buildings2[key], `buildings.${key}`);
     const isUnlocked2 = requireFunction(
-      building2["isUnlocked"],
+      building3["isUnlocked"],
       `buildings.${key}.isUnlocked`
     );
     return {
-      building: building2,
-      unlocked: Boolean(Reflect.apply(isUnlocked2, building2, []))
+      building: building3,
+      unlocked: Boolean(Reflect.apply(isUnlocked2, building3, []))
     };
   }
   function commandsMatch(expected, actual) {
@@ -42454,11 +42454,11 @@
           "game.actions.galaxy.gxy_gateway"
         );
         const shipRecords = SHIP_DEFINITIONS.map((definition) => {
-          const building2 = requireRecord(
+          const building3 = requireRecord(
             buildings2[definition.building],
             `buildings.${definition.building}`
           );
-          return Object.freeze({ definition, building: building2 });
+          return Object.freeze({ definition, building: building3 });
         });
         const preliminaryShips = shipRecords.map(
           ({ definition }) => Object.freeze({
@@ -45762,6 +45762,368 @@
     });
   }
 
+  // src/application/prestige-settings.ts
+  function createPrestigeSettingsIntentHandler({
+    writer,
+    reader,
+    render,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        if (intent.type === "reset-prestige-settings") {
+          writer.resetToDefaults();
+          writer.persist();
+          render(intent.secondaryPrefix);
+          return;
+        }
+        const message = reader.getConfirmationText(intent.value);
+        if (message !== "" && !effects.confirm(
+          `${message} You may prestige immediately. Are you sure you want to toggle this prestige?`
+        )) {
+          writer.setPrestigeType("none");
+        } else {
+          writer.setPrestigeType(intent.value);
+        }
+        writer.setGoalStandard();
+        writer.persist();
+        render("");
+      }
+    });
+  }
+
+  // src/domain/prestige-settings.ts
+  function createPrestigeSettingsReadModel(input) {
+    const options = Object.freeze(
+      input.prestigeOptions.map((option2) => Object.freeze({ ...option2 }))
+    );
+    const controls4 = Object.freeze([
+      {
+        kind: "select",
+        settingName: "prestigeType",
+        label: "Prestige Type",
+        hint: "",
+        options
+      },
+      {
+        kind: "toggle",
+        settingName: "prestigeWaitAT",
+        label: "Disable prestiging under Accelerated Time",
+        hint: "Delay reset until all accelerated time will be used, to avoid wasting it"
+      },
+      {
+        kind: "toggle",
+        settingName: "prestigeMADIgnoreArpa",
+        label: "Ignore early game A.R.P.A.",
+        hint: "Disables building any A.R.P.A. projects until MAD is researched, or rival have appeared"
+      },
+      {
+        kind: "toggle",
+        settingName: "prestigeBioseedConstruct",
+        label: "Ignore useless buildings",
+        hint: "Space Dock, Bioseeder Ship and Probes will be constructed only when Bioseed prestige enabled. World Collider won't be constructed during Bioseed. Jump Ship won't be constructed during Whitehole. Stellar Engine won't be constructed during Vacuum Collapse. Mana Syphon won't be constructed during Witch Hunter's Ascension and Demonic Infusion."
+      },
+      { kind: "header", label: "Mutual Assured Destruction" },
+      {
+        kind: "toggle",
+        settingName: "prestigeMADWait",
+        label: "Wait for maximum population",
+        hint: "Wait for maximum population and soldiers to maximize plasmids gain"
+      },
+      {
+        kind: "number",
+        settingName: "prestigeMADPopulation",
+        label: "Required population",
+        hint: "Required number of workers and soldiers before performing MAD reset"
+      },
+      { kind: "header", label: "Bioseed" },
+      {
+        kind: "number",
+        settingName: "prestigeBioseedProbes",
+        label: "Required probes",
+        hint: "Required number of probes before launching bioseeder ship"
+      },
+      {
+        kind: "number",
+        settingName: "prestigeGECK",
+        label: "Required G.E.C.K",
+        hint: "Required number of G.E.C.K. for Bioseed. Unlike any other buildings G.E.C.K. won't ever be constructed during inappropriate runs, or above this number. To prevent losing plasmids. It can, however, be built with triggers - you should not build G.E.C.K with triggers, unless you absolutely sure you know what you're doing."
+      },
+      { kind: "header", label: "Whitehole" },
+      {
+        kind: "toggle",
+        settingName: "prestigeWhiteholeSaveGems",
+        label: "Save up Soul Gems for reset",
+        hint: "Save up enough Soul Gems for reset, only excess gems will be used. This option does not affect triggers."
+      },
+      {
+        kind: "number",
+        settingName: "prestigeWhiteholeMinMass",
+        label: "Minimum solar mass for reset",
+        hint: "Required minimum solar mass of blackhole before prestiging. Script do not stabilize on blackhole run, this number will need to be reached naturally"
+      },
+      { kind: "header", label: "Ascension" },
+      {
+        kind: "toggle",
+        settingName: "prestigeAscensionPillar",
+        label: "Wait for Pillar",
+        hint: "Wait for Pillar before ascending, unless it was done earlier"
+      },
+      {
+        kind: "select",
+        settingName: "prestigeCustomRaceMode",
+        label: "Custom race handling",
+        hint: "Controls every custom-race lab reached after Ascension, Terraform, or Apotheosis. Pause lets you edit challenge-specific races even when one is already saved. Import replaces the live design with the selected preset and continues only when the game accepts it.",
+        options: Object.freeze([
+          {
+            val: "reuse",
+            label: "Reuse saved",
+            hint: "Automatically reuse the saved custom; pause if none exists."
+          },
+          {
+            val: "pause",
+            label: "Pause in lab",
+            hint: "Always stop in the lab so the custom can be edited or imported manually."
+          },
+          {
+            val: "import",
+            label: "Import selected preset",
+            hint: "Apply the selected structured preset and continue automatically."
+          }
+        ])
+      },
+      { kind: "header", label: "Demonic Infusion" },
+      {
+        kind: "number",
+        settingName: "prestigeDemonicFloor",
+        label: "Minimum spire floor for reset",
+        hint: "Perform reset after climbing up to this spire floor"
+      },
+      {
+        kind: "number",
+        settingName: "prestigeDemonicPotential",
+        label: "Maximum mech potential for reset",
+        hint: "Perform reset only if current mech team potential below given amount. Full bay of best mechs will have `1` potential. This allows postponing reset if your team is still good after reaching target floor, and can quickly clear another floor"
+      },
+      {
+        kind: "toggle",
+        settingName: "prestigeDemonicBomb",
+        label: "Use Dark Energy Bomb",
+        hint: "Kill Demon Lord with Dark Energy Bomb"
+      },
+      { kind: "header", label: "Matrix" },
+      {
+        kind: "select",
+        settingName: "prestigeVaxStrat",
+        label: "Vaccination Strategy",
+        hint: "Alter script behaviour to speed up queued items, prioritizing missing resources.",
+        options: Object.freeze([
+          { val: "none", label: "None", hint: "Do not select strategy" }
+        ])
+      }
+    ]);
+    return Object.freeze({
+      sectionId: "prestige",
+      sectionName: "Prestige",
+      controls: controls4,
+      prestigeOptions: options
+    });
+  }
+
+  // src/adapters/browser/prestige-settings.ts
+  function createPrestigeSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function renderControl2(node, prefix, control, actions) {
+      if (control.kind === "header")
+        return void actions.addSettingsHeader1(node, control.label);
+      if (control.kind === "number")
+        return void actions.addSettingsNumber(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+      if (control.kind === "toggle")
+        return void actions.addSettingsToggle(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+      if (control.kind !== "select") return;
+      actions.addSettingsSelect(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        control.options
+      );
+      if (control.settingName === "prestigeType") {
+        const select = getJQuery()(`.script_${control.settingName}`).find(
+          "select"
+        );
+        select.on(
+          "change",
+          () => intents.handle({
+            type: "set-prestige-type",
+            value: String(select.val())
+          })
+        );
+      }
+    }
+    function buildPrestigeSettings2(parent, prefix) {
+      const model = reader.read();
+      getActions().buildSettingsSection2(
+        parent,
+        prefix,
+        model.sectionId,
+        model.sectionName,
+        () => intents.handle({
+          type: "reset-prestige-settings",
+          secondaryPrefix: prefix
+        }),
+        updatePrestigeSettingsContent2
+      );
+    }
+    function updatePrestigeSettingsContent2(prefix) {
+      const model = reader.read();
+      const document2 = getDocument();
+      const scroll = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const actions = getActions();
+      const node = getJQuery()(`#script_${prefix}${model.sectionId}Content`);
+      node.empty().off("*");
+      for (const control of model.controls)
+        renderControl2(node, prefix, control, actions);
+      const prestigeRow = node.find(".script_bg_prestigeType");
+      prestigeRow.toggleClass("inactive-row", false).on(
+        "click",
+        {
+          label: "Prestige Type (prestigeType)",
+          name: "prestigeType",
+          type: "select",
+          options: model.prestigeOptions
+        },
+        actions.openOverrideModal
+      );
+      document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
+    }
+    return Object.freeze({
+      buildPrestigeSettings: buildPrestigeSettings2,
+      updatePrestigeSettingsContent: updatePrestigeSettingsContent2
+    });
+  }
+
+  // src/adapters/evolve/prestige-settings.ts
+  function requireString31(value, path) {
+    if (typeof value !== "string")
+      throw new TypeError(`${path} must be a string`);
+    return value;
+  }
+  function readOptions(value) {
+    if (!Array.isArray(value))
+      throw new TypeError("prestigeTypes must be an array");
+    return Object.freeze(
+      value.map((raw, index) => {
+        const option2 = requireRecord(raw, `prestigeTypes[${index}]`);
+        return Object.freeze({
+          val: requireString31(option2["val"], `prestigeTypes[${index}].val`),
+          label: requireString31(option2["label"], `prestigeTypes[${index}].label`),
+          hint: requireString31(option2["hint"], `prestigeTypes[${index}].hint`)
+        });
+      })
+    );
+  }
+  function building2(buildings2, id) {
+    const value = buildings2[id];
+    return typeof value === "object" && value !== null && !Array.isArray(value) ? value : void 0;
+  }
+  function unlocked(buildings2, id) {
+    const value = building2(buildings2, id)?.["isUnlocked"];
+    return typeof value === "function" ? Boolean(Reflect.apply(value, building2(buildings2, id), [])) : false;
+  }
+  function affordable(buildings2, id) {
+    const value = building2(buildings2, id)?.["isAffordable"];
+    return typeof value === "function" ? Boolean(Reflect.apply(value, building2(buildings2, id), [])) : false;
+  }
+  function count(buildings2, id) {
+    const value = building2(buildings2, id)?.["count"];
+    return typeof value === "number" ? value : 0;
+  }
+  function createPrestigeSettingsEvolveAdapter(deps) {
+    function read() {
+      const settings2 = requireRecord(deps.getSettingsRaw(), "settingsRaw");
+      const game2 = requireRecord(deps.getGame(), "game");
+      const rawLoc = game2["loc"];
+      if (typeof rawLoc !== "function")
+        throw new TypeError("game.loc must be a function");
+      const vaxOptions = [
+        { val: "none", label: "None", hint: "Do not select strategy" }
+      ];
+      for (const id of ["strat1", "strat2", "strat3", "strat4"])
+        vaxOptions.push({
+          val: id,
+          label: requireString31(
+            Reflect.apply(rawLoc, game2, [`tech_vax_${id}`]),
+            `game.loc(tech_vax_${id})`
+          ),
+          hint: requireString31(
+            Reflect.apply(rawLoc, game2, [`tech_vax_${id}_effect`]),
+            `game.loc(tech_vax_${id}_effect)`
+          )
+        });
+      const model = createPrestigeSettingsReadModel({
+        prestigeOptions: readOptions(deps.getPrestigeTypes())
+      });
+      const controls4 = model.controls.map(
+        (control) => control.kind === "select" && control.settingName === "prestigeVaxStrat" ? Object.freeze({ ...control, options: Object.freeze(vaxOptions) }) : control
+      );
+      return Object.freeze({ ...model, controls: Object.freeze(controls4) });
+    }
+    function getConfirmationText(value) {
+      if (!deps.isPrestigeAllowed()) return "";
+      const game2 = requireRecord(deps.getGame(), "game");
+      const global = requireRecord(game2["global"], "game.global");
+      const race2 = requireRecord(global["race"], "game.global.race");
+      const buildings2 = requireRecord(deps.getBuildings(), "buildings");
+      if (value === "mad" && Boolean(deps.haveTech("mad")))
+        return "MAD has already been researched.";
+      if (value === "bioseed" && Boolean(deps.isBioseederPrestigeAvailable()))
+        return "Required probes are built, and bioseeder ship is ready to launch.";
+      if (value === "cataclysm" && Boolean(deps.isCataclysmPrestigeAvailable()))
+        return "Dial It To 11 is unlocked. You may prestige immediately.";
+      if (value === "whitehole" && Boolean(deps.isWhiteholePrestigeAvailable()))
+        return "Required mass is reached, and exotic infusion is unlocked.";
+      if (value === "apocalypse" && Boolean(deps.isApocalypsePrestigeAvailable()))
+        return "Protocol 66 is unlocked.";
+      const witch = Boolean(race2["witch_hunter"]);
+      if (value === "ascension" && Boolean(
+        witch ? deps.isWitchAscensionPrestigeAvailable() : deps.isAscensionPrestigeAvailable()
+      ))
+        return witch ? "Absorption Chamber is built and ready." : "Ascension machine is built and powered.";
+      if (value === "demonic" && Boolean(
+        witch ? deps.isWitchAscensionPrestigeAvailable(true) : deps.isDemonicPrestigeAvailable()
+      ))
+        return witch ? "Absorption Chamber is built and ready." : "Required floor is reached, and demon lord is already dead.";
+      if (value === "terraform" && unlocked(buildings2, "RedTerraform"))
+        return "Terraformer is built and powered.";
+      if (value === "matrix" && unlocked(buildings2, "TauStarBluePill"))
+        return "Matrix is built and powered.";
+      if (value === "retire" && count(buildings2, "TauGas2MatrioshkaBrain") >= 1e3 && unlocked(buildings2, "TauGas2IgniteGasGiant") && affordable(buildings2, "TauGas2IgniteGasGiant"))
+        return "Ignition Device is built and ready.";
+      if (value === "eden" && unlocked(buildings2, "TauStarEden") && affordable(buildings2, "TauStarEden"))
+        return "Garden Of Eden is ready to build.";
+      if (value === "apotheosis" && unlocked(buildings2, "PalaceApotheosis"))
+        return "Apotheosis is ready to build.";
+      return "";
+    }
+    return Object.freeze({ read, getConfirmationText });
+  }
+
   // src/ui/production-settings.ts
   function createProductionSettings({
     getSettingsRaw,
@@ -46755,323 +47117,6 @@
     });
   }
 
-  // src/ui/prestige-settings.ts
-  function createPrestigeSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const addSettingsHeader12 = liveFunction(
-      () => getDependency("addSettingsHeader1")
-    );
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsSelect2 = liveFunction(
-      () => getDependency("addSettingsSelect")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const buildCustomRacePresetEditor2 = liveFunction(
-      () => getDependency("buildCustomRacePresetEditor")
-    );
-    const buildSettingsSection22 = liveFunction(
-      () => getDependency("buildSettingsSection2")
-    );
-    const buildings2 = liveObject4(() => getDependency("buildings"));
-    const confirm2 = liveFunction(() => getDependency("confirm"));
-    const document2 = liveObject4(() => getDependency("document"));
-    const game2 = liveObject4(() => getDependency("game"));
-    const haveTech2 = liveFunction(() => getDependency("haveTech"));
-    const isApocalypsePrestigeAvailable3 = liveFunction(
-      () => getDependency("isApocalypsePrestigeAvailable")
-    );
-    const isAscensionPrestigeAvailable3 = liveFunction(
-      () => getDependency("isAscensionPrestigeAvailable")
-    );
-    const isBioseederPrestigeAvailable2 = liveFunction(
-      () => getDependency("isBioseederPrestigeAvailable")
-    );
-    const isCataclysmPrestigeAvailable3 = liveFunction(
-      () => getDependency("isCataclysmPrestigeAvailable")
-    );
-    const isDemonicPrestigeAvailable3 = liveFunction(
-      () => getDependency("isDemonicPrestigeAvailable")
-    );
-    const isPrestigeAllowed3 = liveFunction(
-      () => getDependency("isPrestigeAllowed")
-    );
-    const isWhiteholePrestigeAvailable3 = liveFunction(
-      () => getDependency("isWhiteholePrestigeAvailable")
-    );
-    const isWitchAscensionPrestigeAvailable3 = liveFunction(
-      () => getDependency("isWitchAscensionPrestigeAvailable")
-    );
-    const openOptionsModal2 = liveFunction(
-      () => getDependency("openOptionsModal")
-    );
-    const openOverrideModal2 = liveFunction(
-      () => getDependency("openOverrideModal")
-    );
-    const prestigeOptions2 = liveObject4(() => getDependency("prestigeOptions"));
-    const resetPrestigeSettings2 = liveFunction(
-      () => getDependency("resetPrestigeSettings")
-    );
-    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
-    const state2 = liveObject4(() => getDependency("state"));
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildPrestigeSettingsImpl(parentNode, secondaryPrefix) {
-      let sectionId = "prestige";
-      let sectionName = "Prestige";
-      let resetFunction = function() {
-        resetPrestigeSettings2(true);
-        updateSettingsFromState2();
-        updatePrestigeSettingsContent2(secondaryPrefix);
-      };
-      buildSettingsSection22(
-        parentNode,
-        secondaryPrefix,
-        sectionId,
-        sectionName,
-        resetFunction,
-        updatePrestigeSettingsContent2
-      );
-    }
-    function updatePrestigeSettingsContentImpl(secondaryPrefix) {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2(`#script_${secondaryPrefix}prestigeContent`);
-      currentNode.empty().off("*");
-      currentNode.append(`
-          <div class="script_bg_prestigeType" style="display: inline-block; width: 90%; text-align: left; margin-bottom: 10px;">
-            <label>
-              <span>Prestige Type</span>
-              <select class="script_prestigeType" style="height: 18px; width: 150px; float: right;">
-                ${prestigeOptions2}
-              </select>
-            </label>
-          </div>`);
-      currentNode.find(".script_prestigeType").val(settingsRaw2.prestigeType).on("change", function() {
-        if (isPrestigeAllowed3()) {
-          let confirmationText = "";
-          if (this.value === "mad" && haveTech2("mad")) {
-            confirmationText = "MAD has already been researched.";
-          } else if (this.value === "bioseed" && isBioseederPrestigeAvailable2()) {
-            confirmationText = "Required probes are built, and bioseeder ship is ready to launch.";
-          } else if (this.value === "cataclysm" && isCataclysmPrestigeAvailable3()) {
-            confirmationText = "Dial It To 11 is unlocked. You may prestige immediately.";
-          } else if (this.value === "whitehole" && isWhiteholePrestigeAvailable3()) {
-            confirmationText = "Required mass is reached, and exotic infusion is unlocked.";
-          } else if (this.value === "apocalypse" && isApocalypsePrestigeAvailable3()) {
-            confirmationText = "Protocol 66 is unlocked.";
-          } else if (this.value === "ascension" && (game2.global.race["witch_hunter"] ? isWitchAscensionPrestigeAvailable3() : isAscensionPrestigeAvailable3())) {
-            confirmationText = game2.global.race["witch_hunter"] ? "Absorption Chamber is built and ready." : "Ascension machine is built and powered.";
-          } else if (this.value === "demonic" && (game2.global.race["witch_hunter"] ? isWitchAscensionPrestigeAvailable3(true) : isDemonicPrestigeAvailable3())) {
-            confirmationText = game2.global.race["witch_hunter"] ? "Absorption Chamber is built and ready." : "Required floor is reached, and demon lord is already dead.";
-          } else if (this.value === "terraform" && buildings2.RedTerraform.isUnlocked()) {
-            confirmationText = "Terraformer is built and powered.";
-          } else if (this.value === "matrix" && buildings2.TauStarBluePill.isUnlocked()) {
-            confirmationText = "Matrix is built and powered.";
-          } else if (this.value === "retire" && buildings2.TauGas2MatrioshkaBrain.count >= 1e3 && buildings2.TauGas2IgniteGasGiant.isUnlocked() && buildings2.TauGas2IgniteGasGiant.isAffordable()) {
-            confirmationText = "Ignition Device is built and ready.";
-          } else if (this.value === "eden" && buildings2.TauStarEden.isUnlocked() && buildings2.TauStarEden.isAffordable()) {
-            confirmationText = "Garden Of Eden is ready to build.";
-          } else if (this.value === "apotheosis" && buildings2.PalaceApotheosis.isUnlocked()) {
-            confirmationText = "Apotheosis is ready to build.";
-          }
-          if (confirmationText !== "") {
-            confirmationText += " You may prestige immediately. Are you sure you want to toggle this prestige?";
-            if (!confirm2(confirmationText)) {
-              this.value = "none";
-            }
-          }
-        }
-        settingsRaw2.prestigeType = this.value;
-        $2(".script_prestigeType").val(settingsRaw2.prestigeType);
-        state2.goal = "Standard";
-        updateSettingsFromState2();
-      });
-      currentNode.find(".script_bg_prestigeType").toggleClass("inactive-row", Boolean(settingsRaw2.overrides.prestigeType)).on(
-        "click",
-        {
-          label: "Prestige Type (prestigeType)",
-          name: "prestigeType",
-          type: "select",
-          options: prestigeOptions2
-        },
-        openOverrideModal2
-      );
-      addSettingsToggle2(
-        currentNode,
-        "prestigeWaitAT",
-        "Disable prestiging under Accelerated Time",
-        "Delay reset until all accelerated time will be used, to avoid wasting it"
-      );
-      addSettingsToggle2(
-        currentNode,
-        "prestigeMADIgnoreArpa",
-        "Ignore early game A.R.P.A.",
-        "Disables building any A.R.P.A. projects until MAD is researched, or rival have appeared"
-      );
-      addSettingsToggle2(
-        currentNode,
-        "prestigeBioseedConstruct",
-        "Ignore useless buildings",
-        "Space Dock, Bioseeder Ship and Probes will be constructed only when Bioseed prestige enabled. World Collider won't be constructed during Bioseed. Jump Ship won't be constructed during Whitehole. Stellar Engine won't be constucted during Vacuum Collapse. Mana Syphon won't be constructed during Witch Hunter's Ascension and Demonic Infusion."
-      );
-      addSettingsHeader12(currentNode, "Mutual Assured Destruction");
-      addSettingsToggle2(
-        currentNode,
-        "prestigeMADWait",
-        "Wait for maximum population",
-        "Wait for maximum population and soldiers to maximize plasmids gain"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "prestigeMADPopulation",
-        "Required population",
-        "Required number of workers and soldiers before performing MAD reset"
-      );
-      addSettingsHeader12(currentNode, "Bioseed");
-      addSettingsNumber2(
-        currentNode,
-        "prestigeBioseedProbes",
-        "Required probes",
-        "Required number of probes before launching bioseeder ship"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "prestigeGECK",
-        "Required G.E.C.K",
-        "Required number of G.E.C.K. for Bioseed. Unlike any other buildings G.E.C.K. won't ever be constructed during inappropriate runs, or above this number. To prevent losing plasmids. It can, however, be built with triggers - you should not build G.E.C.K with triggers, unless you absolutely sure you know what you're doing."
-      );
-      addSettingsHeader12(currentNode, "Whitehole");
-      addSettingsToggle2(
-        currentNode,
-        "prestigeWhiteholeSaveGems",
-        "Save up Soul Gems for reset",
-        "Save up enough Soul Gems for reset, only excess gems will be used. This option does not affect triggers."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "prestigeWhiteholeMinMass",
-        "Minimum solar mass for reset",
-        "Required minimum solar mass of blackhole before prestiging. Script do not stabilize on blackhole run, this number will need to be reached naturally"
-      );
-      addSettingsHeader12(currentNode, "Ascension");
-      addSettingsToggle2(
-        currentNode,
-        "prestigeAscensionPillar",
-        "Wait for Pillar",
-        "Wait for Pillar before ascending, unless it was done earlier"
-      );
-      addSettingsSelect2(
-        currentNode,
-        "prestigeCustomRaceMode",
-        "Custom race handling",
-        "Controls every custom-race lab reached after Ascension, Terraform, or Apotheosis. Pause lets you edit challenge-specific races even when one is already saved. Import replaces the live design with the selected preset and continues only when the game accepts it.",
-        [
-          {
-            val: "reuse",
-            label: "Reuse saved",
-            hint: "Automatically reuse the saved custom; pause if none exists."
-          },
-          {
-            val: "pause",
-            label: "Pause in lab",
-            hint: "Always stop in the lab so the custom can be edited or imported manually."
-          },
-          {
-            val: "import",
-            label: "Import selected preset",
-            hint: "Apply the selected structured preset and continue automatically."
-          }
-        ]
-      );
-      let presetOptions = (settingsRaw2.prestigeCustomRacePresets ?? []).map(
-        (preset, index) => ({
-          val: String(index),
-          label: preset.name || `Preset ${index + 1}`,
-          hint: "Custom race preset used by Import selected preset."
-        })
-      );
-      addSettingsSelect2(
-        currentNode,
-        "prestigeCustomRacePreset",
-        "Selected custom preset",
-        "Preset used when Custom race handling is Import selected preset. The selection can also be changed by Evolution Queue.",
-        presetOptions
-      );
-      $2(
-        '<button class="button" type="button" style="margin:6px 0;">Edit custom race presets…</button>'
-      ).on("click", function() {
-        openOptionsModal2("Custom Race Presets", buildCustomRacePresetEditor2);
-      }).appendTo(currentNode);
-      addSettingsHeader12(currentNode, "Demonic Infusion");
-      addSettingsNumber2(
-        currentNode,
-        "prestigeDemonicFloor",
-        "Minimum spire floor for reset",
-        "Perform reset after climbing up to this spire floor"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "prestigeDemonicPotential",
-        "Maximum mech potential for reset",
-        "Perform reset only if current mech team potential below given amount. Full bay of best mechs will have `1` potential. This allows to postpone reset if your team is still good after reaching target floor, and can quickly clear another floor"
-      );
-      addSettingsToggle2(
-        currentNode,
-        "prestigeDemonicBomb",
-        "Use Dark Energy Bomb",
-        "Kill Demon Lord with Dark Energy Bomb"
-      );
-      addSettingsHeader12(currentNode, "Matrix");
-      let cureStrat = [
-        { val: "none", label: "None", hint: "Do not select strategy" },
-        {
-          val: "strat1",
-          label: game2.loc(`tech_vax_strat1`),
-          hint: game2.loc(`tech_vax_strat1_effect`)
-        },
-        {
-          val: "strat2",
-          label: game2.loc(`tech_vax_strat2`),
-          hint: game2.loc(`tech_vax_strat2_effect`)
-        },
-        {
-          val: "strat3",
-          label: game2.loc(`tech_vax_strat3`),
-          hint: game2.loc(`tech_vax_strat3_effect`)
-        },
-        {
-          val: "strat4",
-          label: game2.loc(`tech_vax_strat4`),
-          hint: game2.loc(`tech_vax_strat4_effect`)
-        }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "prestigeVaxStrat",
-        "Vaccination Strategy",
-        "Alter script behaviour to speed up queued items, prioritizing missing resources.",
-        cureStrat
-      );
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildPrestigeSettings2(...args) {
-      const implementation = getOverride("buildPrestigeSettings") ?? buildPrestigeSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updatePrestigeSettingsContent2(...args) {
-      const implementation = getOverride("updatePrestigeSettingsContent") ?? updatePrestigeSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildPrestigeSettings: buildPrestigeSettings2, updatePrestigeSettingsContent: updatePrestigeSettingsContent2 };
-  }
-
   // src/ui/evolution-settings.ts
   function createEvolutionSettings({
     getDependency,
@@ -47685,7 +47730,7 @@
   }
 
   // src/adapters/evolve/mech-info.ts
-  function requireString31(value, path) {
+  function requireString32(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47708,8 +47753,8 @@
       if (call4(manager, "initLab", "MechManager.initLab")) return true;
       return false;
     }
-    function readItems(count) {
-      if (!Number.isInteger(count) || count < 0) {
+    function readItems(count2) {
+      if (!Number.isInteger(count2) || count2 < 0) {
         throw new TypeError("mech info count must be a non-negative integer");
       }
       const manager = readManager();
@@ -47726,12 +47771,12 @@
       }
       const bestMech = requireRecord(manager["bestMech"], "MechManager.bestMech");
       const items = [];
-      for (let index = 0; index < count; index += 1) {
+      for (let index = 0; index < count2; index += 1) {
         const mech = requireRecord(
           mechs[index],
           `game.global.portal.mechbay.mechs[${index}]`
         );
-        const size = requireString31(mech["size"], `mechs[${index}].size`);
+        const size = requireString32(mech["size"], `mechs[${index}].size`);
         const stats = requireRecord(
           call4(manager, "getMechStats", "MechManager.getMechStats", [mech]),
           `MechManager.getMechStats(${index})`
@@ -47909,7 +47954,7 @@
   }
 
   // src/adapters/evolve/resource-toggles.ts
-  function requireString32(value, path) {
+  function requireString33(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47930,7 +47975,7 @@
     return priorityList;
   }
   function readResourceId3(value, path) {
-    return requireString32(requireRecord(value, path)["id"], `${path}.id`);
+    return requireString33(requireRecord(value, path)["id"], `${path}.id`);
   }
   function createResourceToggleEvolveAdapter({
     getGame,
@@ -47946,13 +47991,13 @@
       const noTrade = Boolean(race2["no_trade"]);
       const loc = requireFunction2(game2["loc"], "game.loc");
       const labels = noTrade ? Object.freeze({ buy: "", sell: "", routes: "", cancelRoutes: "" }) : Object.freeze({
-        buy: requireString32(loc("resource_market_buy"), "game.loc(buy)"),
-        sell: requireString32(loc("resource_market_sell"), "game.loc(sell)"),
-        routes: requireString32(
+        buy: requireString33(loc("resource_market_buy"), "game.loc(buy)"),
+        sell: requireString33(loc("resource_market_sell"), "game.loc(sell)"),
+        routes: requireString33(
           loc("resource_market_routes"),
           "game.loc(routes)"
         ),
-        cancelRoutes: requireString32(
+        cancelRoutes: requireString33(
           loc("cancel_routes"),
           "game.loc(cancel_routes)"
         )
@@ -48263,8 +48308,8 @@
         }
       }
       if (obj === buildings2.GorddonFreighter && haveTech2("banking", 13)) {
-        const count = obj.stateOnCount;
-        const total = ((1 + (count + 1) * 0.03) / (1 + count * 0.03) - 1) * 100;
+        const count2 = obj.stateOnCount;
+        const total = ((1 + (count2 + 1) * 0.03) / (1 + count2 * 0.03) - 1) * 100;
         const crew = total / 3;
         notes.push(
           `Next level will increase ${buildings2.AlphaExchange.title} storage by +${getNiceNumber2(total)}% (+${getNiceNumber2(
@@ -48273,8 +48318,8 @@
         );
       }
       if (obj === buildings2.Alien1SuperFreighter && haveTech2("banking", 13)) {
-        const count = obj.stateOnCount;
-        const total = ((1 + (count + 1) * 0.08) / (1 + count * 0.08) - 1) * 100;
+        const count2 = obj.stateOnCount;
+        const total = ((1 + (count2 + 1) * 0.08) / (1 + count2 * 0.08) - 1) * 100;
         const crew = total / 5;
         notes.push(
           `Next level will increase ${buildings2.AlphaExchange.title} storage by +${getNiceNumber2(total)}% (+${getNiceNumber2(
@@ -52013,9 +52058,9 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getJQuery: () => $,
       reader: buildingToggleReader,
       getCountWriter: () => ({
-        setCount: (count) => {
+        setCount: (count2) => {
           const targetState = buildingTogglesTestContext?.state ?? state;
-          targetState.buildingToggles = count;
+          targetState.buildingToggles = count2;
         }
       }),
       addToggleCallbacks: (...args) => (buildingTogglesTestContext?.addToggleCallbacks ?? addToggleCallbacks)(
@@ -52130,44 +52175,63 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       renderSettingsContent: () => challengeHelperSettingsBrowserAdapter.updateChallengeHelperSettingsContent()
     });
     const { buildChallengeHelperSettings, updateChallengeHelperSettingsContent } = challengeHelperSettingsBrowserAdapter;
-    const prestigeSettingsOverrides = {};
-    const getPrestigeSettingsDependency = createDependencyResolver(
-      prestigeSettingsOverrides,
-      {
-        $: () => $,
-        addSettingsHeader1: () => addSettingsHeader1,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsSelect: () => addSettingsSelect,
-        addSettingsToggle: () => addSettingsToggle,
-        buildCustomRacePresetEditor: () => buildCustomRacePresetEditor,
-        buildSettingsSection2: () => buildSettingsSection2,
-        buildings: () => buildings,
-        confirm: () => confirm,
-        document: () => document,
-        game: () => game,
-        haveTech: () => haveTech,
-        isApocalypsePrestigeAvailable: () => isApocalypsePrestigeAvailable,
-        isAscensionPrestigeAvailable: () => isAscensionPrestigeAvailable,
-        isBioseederPrestigeAvailable: () => isBioseederPrestigeAvailable,
-        isCataclysmPrestigeAvailable: () => isCataclysmPrestigeAvailable,
-        isDemonicPrestigeAvailable: () => isDemonicPrestigeAvailable,
-        isPrestigeAllowed: () => isPrestigeAllowed,
-        isWhiteholePrestigeAvailable: () => isWhiteholePrestigeAvailable,
-        isWitchAscensionPrestigeAvailable: () => isWitchAscensionPrestigeAvailable,
-        openOptionsModal: () => openOptionsModal,
-        openOverrideModal: () => openOverrideModal,
-        prestigeOptions: () => prestigeOptions,
-        resetPrestigeSettings: () => resetPrestigeSettings,
-        settingsRaw: () => settingsRaw,
-        state: () => state,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const prestigeSettings = createPrestigeSettings({
-      getDependency: getPrestigeSettingsDependency,
-      getOverride: (name) => prestigeSettingsOverrides[name]
+    let prestigeSettingsTestContext;
+    const prestigeSettingsReader = createPrestigeSettingsEvolveAdapter({
+      getPrestigeTypes: () => prestigeSettingsTestContext?.prestigeTypes ?? prestigeTypes,
+      getGame: () => prestigeSettingsTestContext?.game ?? game,
+      getSettingsRaw: () => prestigeSettingsTestContext?.settingsRaw ?? settingsRaw,
+      getBuildings: () => prestigeSettingsTestContext?.buildings ?? buildings,
+      isPrestigeAllowed: () => (prestigeSettingsTestContext?.isPrestigeAllowed ?? isPrestigeAllowed)(),
+      haveTech: (...args) => (prestigeSettingsTestContext?.haveTech ?? haveTech)(...args),
+      isBioseederPrestigeAvailable: () => (prestigeSettingsTestContext?.isBioseederPrestigeAvailable ?? isBioseederPrestigeAvailable)(),
+      isCataclysmPrestigeAvailable: () => (prestigeSettingsTestContext?.isCataclysmPrestigeAvailable ?? isCataclysmPrestigeAvailable)(),
+      isWhiteholePrestigeAvailable: () => (prestigeSettingsTestContext?.isWhiteholePrestigeAvailable ?? isWhiteholePrestigeAvailable)(),
+      isApocalypsePrestigeAvailable: () => (prestigeSettingsTestContext?.isApocalypsePrestigeAvailable ?? isApocalypsePrestigeAvailable)(),
+      isAscensionPrestigeAvailable: () => (prestigeSettingsTestContext?.isAscensionPrestigeAvailable ?? isAscensionPrestigeAvailable)(),
+      isWitchAscensionPrestigeAvailable: (demonic) => (prestigeSettingsTestContext?.isWitchAscensionPrestigeAvailable ?? isWitchAscensionPrestigeAvailable)(demonic),
+      isDemonicPrestigeAvailable: () => (prestigeSettingsTestContext?.isDemonicPrestigeAvailable ?? isDemonicPrestigeAvailable)()
     });
-    const { buildPrestigeSettings, updatePrestigeSettingsContent } = prestigeSettings;
+    let prestigeSettingsIntentHandler;
+    const prestigeSettingsBrowserAdapter = createPrestigeSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      reader: prestigeSettingsReader,
+      intents: {
+        handle: (intent) => prestigeSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => prestigeSettingsTestContext?.actions ?? {
+        buildSettingsSection2,
+        addSettingsHeader1,
+        addSettingsNumber,
+        addSettingsSelect,
+        addSettingsToggle,
+        openOverrideModal,
+        openOptionsModal,
+        buildCustomRacePresetEditor
+      }
+    });
+    prestigeSettingsIntentHandler = createPrestigeSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (prestigeSettingsTestContext?.resetPrestigeSettings ?? resetPrestigeSettings)(true),
+        setPrestigeType: (value) => {
+          const target = prestigeSettingsTestContext?.settingsRaw ?? settingsRaw;
+          target.prestigeType = value;
+        },
+        setGoalStandard: () => {
+          const target = prestigeSettingsTestContext?.state ?? state;
+          target.goal = "Standard";
+        },
+        persist: () => (prestigeSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      reader: prestigeSettingsReader,
+      render: (secondaryPrefix) => prestigeSettingsBrowserAdapter.updatePrestigeSettingsContent(
+        secondaryPrefix
+      ),
+      effects: {
+        confirm: (message) => (prestigeSettingsTestContext?.confirm ?? confirm)(message)
+      }
+    });
+    const { buildPrestigeSettings, updatePrestigeSettingsContent } = prestigeSettingsBrowserAdapter;
     let governmentSettingsTestContext;
     const governmentSettingsActions = {
       buildSettingsSection2,
@@ -53715,9 +53779,9 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       marketPriorityIds: MarketManager.priorityList.map((res) => res.id),
       resourceIds: Object.values(resources).map((res) => res.id),
       projectIds: Object.values(projects).map((project) => project.id),
-      buildings: Object.values(buildings).map((building2) => ({
-        vueBinding: building2._vueBinding,
-        switchable: building2.isSwitchable()
+      buildings: Object.values(buildings).map((building3) => ({
+        vueBinding: building3._vueBinding,
+        switchable: building3.isSwitchable()
       })),
       crafterOriginalIds: Object.values(crafter).map((job) => job._originalId)
     });
@@ -56012,12 +56076,16 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         settingsBoundaries: {
-          prestige: prestigeSettings,
           evolution: evolutionSettings
         },
         setSettingsBoundariesTestContext(context) {
-          Object.assign(prestigeSettingsOverrides, context);
           Object.assign(evolutionSettingsOverrides, context);
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        prestigeSettings: prestigeSettingsBrowserAdapter,
+        setPrestigeSettingsTestContext(context) {
+          prestigeSettingsTestContext = context;
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
