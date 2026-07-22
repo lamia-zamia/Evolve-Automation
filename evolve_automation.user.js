@@ -21213,7 +21213,11 @@
   }
 
   // src/application/tick.ts
-  function runTick({ reader, controls: controls4 }) {
+  function runTick({
+    reader,
+    controls: controls4,
+    updateState: updateState2
+  }) {
     const preamble = reader.samplePreamble();
     if (!shouldStartTick(preamble)) {
       return false;
@@ -21230,7 +21234,7 @@
     if (controls4.updateTabs()) {
       return true;
     }
-    controls4.updateState();
+    (updateState2 ?? controls4.updateState)();
     controls4.updateUI();
     controls4.keyManagerReset();
     const s = reader.sampleAutomation();
@@ -21370,6 +21374,21 @@
     controls4.keyManagerFinish();
     controls4.recordSoulGem();
     return true;
+  }
+
+  // src/application/application-runner.ts
+  function createApplicationRunner({
+    reader,
+    controls: controls4,
+    updateState: updateState2
+  }) {
+    return Object.freeze({
+      runCycle: () => runTick({
+        reader,
+        controls: controls4,
+        updateState: updateState2
+      })
+    });
   }
 
   // src/adapters/evolve/tick.ts
@@ -56464,6 +56483,11 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getSupplyManager: () => SupplyManager,
       getEjectManager: () => EjectManager
     });
+    const applicationRunner = createApplicationRunner({
+      reader: tickReader,
+      controls: tickControls,
+      updateState: () => tickTestControllers?.updateState ? tickTestControllers.updateState() : updateState()
+    });
     const __EAperf = {
       n: 0,
       total: 0,
@@ -56498,7 +56522,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     const __eaNow = typeof performance !== "undefined" && performance.now ? () => performance.now() : () => Date.now();
     const automate = () => {
       const t0 = __eaNow();
-      const worked = runTick({ reader: tickReader, controls: tickControls });
+      const worked = applicationRunner.runCycle();
       if (worked) {
         __EAperf.record(__eaNow() - t0);
       }

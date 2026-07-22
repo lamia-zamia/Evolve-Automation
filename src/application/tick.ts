@@ -9,6 +9,8 @@ import type { TickControls, TickReader } from "../ports/tick.ts";
 export interface TickDependencies {
   readonly reader: TickReader;
   readonly controls: TickControls;
+  /** Optional for direct unit fixtures; the application runner supplies this phase in production. */
+  readonly updateState?: () => void;
 }
 
 /**
@@ -20,7 +22,11 @@ export interface TickDependencies {
  * Returns whether the tick did real work (passed the throttle gate), so callers can time only
  * working cycles.
  */
-export function runTick({ reader, controls }: TickDependencies): boolean {
+export function runTick({
+  reader,
+  controls,
+  updateState,
+}: TickDependencies): boolean {
   const preamble = reader.samplePreamble();
   if (!shouldStartTick(preamble)) {
     return false;
@@ -42,7 +48,7 @@ export function runTick({ reader, controls }: TickDependencies): boolean {
     return true;
   }
 
-  controls.updateState();
+  (updateState ?? controls.updateState)();
   controls.updateUI();
   controls.keyManagerReset();
 

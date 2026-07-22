@@ -192,7 +192,7 @@ import { createArpaToggleBrowserAdapter } from "./adapters/browser/arpa-toggles.
 import { createArpaToggleEvolveAdapter } from "./adapters/evolve/arpa-toggles.ts";
 import { createBuildingToggleBrowserAdapter } from "./adapters/browser/building-toggles.ts";
 import { createBuildingToggleEvolveAdapter } from "./adapters/evolve/building-toggles.ts";
-import { runTick } from "./application/tick.ts";
+import { createApplicationRunner } from "./application/application-runner.ts";
 import {
   createTickReader,
   createTickControls,
@@ -5715,6 +5715,15 @@ import { createScriptRuntimeUI } from "./ui/script-runtime.ts";
     getEjectManager: () => EjectManager,
   });
 
+  const applicationRunner = createApplicationRunner({
+    reader: tickReader,
+    controls: tickControls,
+    updateState: () =>
+      tickTestControllers?.updateState
+        ? tickTestControllers.updateState()
+        : updateState(),
+  });
+
   // Cheap per-tick timer mirroring the pre-migration baseline probe in
   // evolve_automation.user_original.js. Times only work ticks (runTick returns
   // true past the throttle gate) so the numbers line up with the baseline.
@@ -5761,7 +5770,7 @@ import { createScriptRuntimeUI } from "./ui/script-runtime.ts";
 
   const automate = () => {
     const t0 = __eaNow();
-    const worked = runTick({ reader: tickReader, controls: tickControls });
+    const worked = applicationRunner.runCycle();
     if (worked) {
       __EAperf.record(__eaNow() - t0);
     }
