@@ -50740,56 +50740,35 @@
 
   // src/settings/override-catalog.ts
   function createOverrideCatalog({
-    getContext
+    readSettings: readSettings3,
+    readSettingsRaw,
+    readState,
+    readGame,
+    readBuildingIds,
+    readBuildings,
+    readResources: readResources2,
+    readTechIds,
+    readArpaIds,
+    readJobIds,
+    readRaces,
+    readGovernmentManager,
+    readSmelterManager,
+    readFactoryManager,
+    readWarManager,
+    readUniverses,
+    readGovernors,
+    readChallenges,
+    readBiomeList,
+    readTraitList,
+    readBuildSelectOptions,
+    readFastEval,
+    readGovernor
   }) {
-    const liveObject4 = (key) => new Proxy(
-      {},
-      {
-        get(_target, property) {
-          const current = getContext()[key];
-          const value = current?.[property];
-          return typeof value === "function" ? value.bind(current) : value;
-        },
-        set(_target, property, value) {
-          getContext()[key][property] = value;
-          return true;
-        },
-        deleteProperty(_target, property) {
-          return delete getContext()[key][property];
-        },
-        ownKeys() {
-          return Reflect.ownKeys(getContext()[key] ?? {});
-        },
-        getOwnPropertyDescriptor() {
-          return { enumerable: true, configurable: true };
-        }
-      }
-    );
-    const settings = liveObject4("settings");
-    const settingsRaw = liveObject4("settingsRaw");
-    const state = liveObject4("state");
-    const game = liveObject4("game");
-    const buildingIds = liveObject4("buildingIds");
-    const buildings = liveObject4("buildings");
-    const resources = liveObject4("resources");
-    const techIds = liveObject4("techIds");
-    const arpaIds = liveObject4("arpaIds");
-    const jobIds = liveObject4("jobIds");
-    const races = liveObject4("races");
-    const GovernmentManager = liveObject4("GovernmentManager");
-    const SmelterManager = liveObject4("SmelterManager");
-    const FactoryManager = liveObject4("FactoryManager");
-    const WarManager = liveObject4("WarManager");
-    const universes2 = liveObject4("universes");
-    const governors = liveObject4("governors");
-    const challenges = liveObject4("challenges");
-    const biomeList = liveObject4("biomeList");
-    const traitList = liveObject4("traitList");
-    const buildSelectOptions = (...args) => getContext().buildSelectOptions(...args);
-    const fastEval = (...args) => getContext().fastEval(...args);
-    const getGovernor = (...args) => getContext().getGovernor(...args);
+    const buildSelectOptions = (...args) => readBuildSelectOptions()(...args);
+    const fastEval = (...args) => readFastEval()(...args);
+    const getGovernor = (...args) => readGovernor()(...args);
     const historicalRelayChargeRatio = () => {
-      return game.global.space.m_relay?.charged / 1e4;
+      return readGame().global.space.m_relay?.charged / 1e4;
     };
     const prestigeTypes = [
       { val: "none", label: "None", hint: "Endless game" },
@@ -50884,11 +50863,11 @@
         def: "city-farm.Money",
         arg: "list_cb",
         options: () => Object.fromEntries(
-          Object.keys(buildingIds).map(
-            (b) => Object.keys(buildingIds[b].cost).map((r) => [
+          Object.keys(readBuildingIds()).map(
+            (b) => Object.keys(readBuildingIds()[b].cost).map((r) => [
               `${b}.${r}`,
               {
-                name: `${buildingIds[b].name} (${resources[r].name})`,
+                name: `${readBuildingIds()[b].name} (${readResources2()[r].name})`,
                 id: `${b}.${r}`
               }
             ])
@@ -50898,18 +50877,18 @@
       building: {
         def: "city-farm",
         arg: "list",
-        options: { list: buildingIds, name: "name", id: "_vueBinding" }
+        options: { list: readBuildingIds(), name: "name", id: "_vueBinding" }
       },
       research: {
         def: "tech-mad",
         arg: "list",
-        options: { list: techIds, name: "name", id: "_vueBinding" }
+        options: { list: readTechIds(), name: "name", id: "_vueBinding" }
       },
       trait: {
         def: "kindling_kindred",
         arg: "list_cb",
         options: () => Object.fromEntries(
-          Object.entries(game.traits).map(
+          Object.entries(readGame().traits).map(
             ([id, trait2]) => [id, { name: trait2.name, id }]
           )
         )
@@ -50918,24 +50897,30 @@
         def: "humanoid",
         arg: "select_cb",
         options: () => [
-          { val: "organism", label: game.loc(`race_protoplasm`) },
-          ...Object.values(game.races).map((r) => r.type).filter((g, i, a) => g && g !== "organism" && a.indexOf(g) === i).map((g) => ({ val: g, label: game.loc(`genelab_genus_${g}`) }))
+          { val: "organism", label: readGame().loc(`race_protoplasm`) },
+          ...Object.values(readGame().races).map((r) => r.type).filter((g, i, a) => g && g !== "organism" && a.indexOf(g) === i).map((g) => ({
+            val: g,
+            label: readGame().loc(`genelab_genus_${g}`)
+          }))
         ]
       },
       genus_ss: {
         def: "humanoid",
         arg: "select_cb",
         options: () => [
-          { val: "none", label: game.loc(`genelab_genus_none`) },
-          ...Object.values(game.races).map((r) => r.type).filter(
+          { val: "none", label: readGame().loc(`genelab_genus_none`) },
+          ...Object.values(readGame().races).map((r) => r.type).filter(
             (g, i, a) => g && g !== "organism" && g !== "synthetic" && a.indexOf(g) === i
-          ).map((g) => ({ val: g, label: game.loc(`genelab_genus_${g}`) }))
+          ).map((g) => ({
+            val: g,
+            label: readGame().loc(`genelab_genus_${g}`)
+          }))
         ]
       },
       project: {
         def: "arpalaunch_facility",
         arg: "select_cb",
-        options: () => Object.values(arpaIds).map((p) => ({
+        options: () => Object.values(readArpaIds()).map((p) => ({
           val: p._vueBinding,
           label: p.name
         }))
@@ -50943,7 +50928,7 @@
       job: {
         def: "unemployed",
         arg: "select_cb",
-        options: () => Object.values(jobIds).map((j) => ({
+        options: () => Object.values(readJobIds()).map((j) => ({
           val: j._originalId,
           label: j._originalName
         }))
@@ -50951,12 +50936,15 @@
       job_servant: {
         def: "farmer",
         arg: "select_cb",
-        options: () => Object.values(jobIds).filter((j) => j.is.serve).map((j) => ({ val: j._originalId, label: j._originalName }))
+        options: () => Object.values(readJobIds()).filter((j) => j.is.serve).map((j) => ({ val: j._originalId, label: j._originalName }))
       },
       resource: {
         def: "Food",
         arg: "select_cb",
-        options: () => Object.values(resources).map((r) => ({ val: r._id, label: r.name }))
+        options: () => Object.values(readResources2()).map((r) => ({
+          val: r._id,
+          label: r.name
+        }))
       },
       race: {
         def: "species",
@@ -50971,7 +50959,7 @@
             label: "Protoplasm",
             hint: "Race is not chosen yet"
           },
-          ...Object.values(races).map((race2) => ({
+          ...Object.values(readRaces()).map((race2) => ({
             val: race2.id,
             label: race2.name,
             hint: race2.desc
@@ -50981,10 +50969,10 @@
       challenge: {
         def: "junker",
         arg: "select_cb",
-        options: () => challenges.flat().map((c) => ({
+        options: () => readChallenges().flat().map((c) => ({
           val: c.trait,
-          label: game.loc(`evo_challenge_${c.id}`),
-          hint: game.loc(`evo_challenge_${c.id}_effect`)
+          label: readGame().loc(`evo_challenge_${c.id}`),
+          hint: readGame().loc(`evo_challenge_${c.id}_effect`)
         }))
       },
       universe: {
@@ -50996,20 +50984,20 @@
             label: "Big Bang",
             hint: "Universe is not chosen yet"
           },
-          ...universes2.map((u) => ({
+          ...readUniverses().map((u) => ({
             val: u,
-            label: game.loc(`universe_${u}`),
-            hint: game.loc(`universe_${u}_desc`)
+            label: readGame().loc(`universe_${u}`),
+            hint: readGame().loc(`universe_${u}_desc`)
           }))
         ]
       },
       government: {
         def: "anarchy",
         arg: "select_cb",
-        options: () => Object.keys(GovernmentManager.Types).map((g) => ({
+        options: () => Object.keys(readGovernmentManager().Types).map((g) => ({
           val: g,
-          label: game.loc(`govern_${g}`),
-          hint: game.loc(`govern_${g}_desc`)
+          label: readGame().loc(`govern_${g}`),
+          hint: readGame().loc(`govern_${g}_desc`)
         }))
       },
       governor: {
@@ -51017,10 +51005,10 @@
         arg: "select_cb",
         options: () => [
           { val: "none", label: "None", hint: "No governor selected" },
-          ...governors.map((id) => ({
+          ...readGovernors().map((id) => ({
             val: id,
-            label: game.loc(`governor_${id}`),
-            hint: game.loc(`governor_${id}_desc`)
+            label: readGame().loc(`governor_${id}`),
+            hint: readGame().loc(`governor_${id}_desc`)
           }))
         ]
       },
@@ -51089,27 +51077,30 @@
         def: "civTabs1",
         arg: "select_cb",
         options: () => [
-          { val: "civTabs0", label: game.loc("tab_evolve") },
-          { val: "civTabs1", label: game.loc("tab_civil") },
-          { val: "civTabs2", label: game.loc("tab_civics") },
-          { val: "civTabs3", label: game.loc("tab_research") },
-          { val: "civTabs4", label: game.loc("tab_resources") },
-          { val: "civTabs5", label: game.loc("tech_arpa") },
-          { val: "civTabs6", label: game.loc("mTabStats") },
-          { val: "civTabs7", label: game.loc("tab_settings") }
+          { val: "civTabs0", label: readGame().loc("tab_evolve") },
+          { val: "civTabs1", label: readGame().loc("tab_civil") },
+          { val: "civTabs2", label: readGame().loc("tab_civics") },
+          { val: "civTabs3", label: readGame().loc("tab_research") },
+          { val: "civTabs4", label: readGame().loc("tab_resources") },
+          { val: "civTabs5", label: readGame().loc("tech_arpa") },
+          { val: "civTabs6", label: readGame().loc("mTabStats") },
+          { val: "civTabs7", label: readGame().loc("tab_settings") }
         ]
       },
       biome: {
         def: "grassland",
         arg: "select_cb",
-        options: () => biomeList.map((b) => ({ val: b, label: game.loc(`biome_${b}_name`) }))
+        options: () => readBiomeList().map((b) => ({
+          val: b,
+          label: readGame().loc(`biome_${b}_name`)
+        }))
       },
       ptrait: {
         def: "",
         arg: "select_cb",
         options: () => [
           { val: "", label: "None", hint: "Planet have no trait" },
-          ...traitList.slice(1).map((t) => ({ val: t, label: game.loc(`planet_${t}`) }))
+          ...readTraitList().slice(1).map((t) => ({ val: t, label: readGame().loc(`planet_${t}`) }))
         ]
       },
       industry: {
@@ -51163,10 +51154,10 @@
       }
     };
     const argMap = {
-      race: (r) => r === "species" || r === "gods" || r === "old_gods" ? game.global.race[r] : r === "srace" ? game.global.race.srace ?? "protoplasm" : r,
-      date: (d) => d === "total" ? game.global.stats.days : d === "impact" ? game.global.race["orbit_decay"] ? game.global.race["orbit_decay"] - game.global.stats.days : -1 : game.global.city.calendar[d],
-      industry: (b) => b === "smelters" ? SmelterManager.maxOperating() : b === "factories" ? FactoryManager.maxOperating() : b,
-      other: (o) => o === "rname" ? game.races[game.global.race.species === "protoplasm" && game.global.race.evoFinalMenu ? game.global.race.evoFinalMenu : game.global.race.species].name : o === "tpfleet" ? game.global.space.shipyard?.ships?.length ?? 0 : o === "mrelay" ? historicalRelayChargeRatio() : o === "satcost" ? buildings.SunSwarmSatellite.cost.Money ?? 0 : o === "bcar" ? game.global.portal.carport?.damaged ?? 0 : o === "alevel" ? game.alevel() - 1 : o === "tknow" ? state.knowledgeRequiredByTechs : o
+      race: (r) => r === "species" || r === "gods" || r === "old_gods" ? readGame().global.race[r] : r === "srace" ? readGame().global.race.srace ?? "protoplasm" : r,
+      date: (d) => d === "total" ? readGame().global.stats.days : d === "impact" ? readGame().global.race["orbit_decay"] ? readGame().global.race["orbit_decay"] - readGame().global.stats.days : -1 : readGame().global.city.calendar[d],
+      industry: (b) => b === "smelters" ? readSmelterManager().maxOperating() : b === "factories" ? readFactoryManager().maxOperating() : b,
+      other: (o) => o === "rname" ? readGame().races[readGame().global.race.species === "protoplasm" && readGame().global.race.evoFinalMenu ? readGame().global.race.evoFinalMenu : readGame().global.race.species].name : o === "tpfleet" ? readGame().global.space.shipyard?.ships?.length ?? 0 : o === "mrelay" ? historicalRelayChargeRatio() : o === "satcost" ? readBuildings().SunSwarmSatellite.cost.Money ?? 0 : o === "bcar" ? readGame().global.portal.carport?.damaged ?? 0 : o === "alevel" ? readGame().alevel() - 1 : o === "tknow" ? readState().knowledgeRequiredByTechs : o
     };
     const checkTypes = {
       String: {
@@ -51183,13 +51174,13 @@
         desc: "Returns boolean"
       },
       SettingDefault: {
-        fn: (s) => settingsRaw[s],
+        fn: (s) => readSettingsRaw()[s],
         arg: "string",
         def: "masterScriptToggle",
         desc: "Returns default value of setting, types varies"
       },
       SettingCurrent: {
-        fn: (s) => settings[s],
+        fn: (s) => readSettings3()[s],
         arg: "string",
         def: "masterScriptToggle",
         desc: "Returns current value of setting, types varies"
@@ -51203,139 +51194,139 @@
       BuildingCost: {
         fn: (id) => {
           let [b, r] = id.split(".");
-          return buildingIds[b].cost[r] ?? 0;
+          return readBuildingIds()[b].cost[r] ?? 0;
         },
         ...argType.building_cost,
         desc: "Return material cost of building as number\n(Due to technical limitations some options might not appear in list until you unlock corresponding building in game)"
       },
       BuildingUnlocked: {
-        fn: (b) => buildingIds[b].isUnlocked(),
+        fn: (b) => readBuildingIds()[b].isUnlocked(),
         ...argType.building,
         desc: "Return true when building is unlocked"
       },
       BuildingClickable: {
-        fn: (b) => buildingIds[b].isClickable(),
+        fn: (b) => readBuildingIds()[b].isClickable(),
         ...argType.building,
         desc: "Return true when building have all required resources, and can be purchased"
       },
       BuildingAffordable: {
-        fn: (b) => buildingIds[b].isAffordable(true),
+        fn: (b) => readBuildingIds()[b].isAffordable(true),
         ...argType.building,
         desc: "Return true when building is affordable, i.e. costs of all resources below storage caps"
       },
       BuildingCount: {
-        fn: (b) => buildingIds[b].count,
+        fn: (b) => readBuildingIds()[b].count,
         ...argType.building,
         desc: "Returns amount of buildings as number"
       },
       BuildingEnabled: {
-        fn: (b) => buildingIds[b].stateOnCount,
+        fn: (b) => readBuildingIds()[b].stateOnCount,
         ...argType.building,
         desc: "Returns amount of powered buildings as number"
       },
       BuildingDisabled: {
-        fn: (b) => buildingIds[b].stateOffCount,
+        fn: (b) => readBuildingIds()[b].stateOffCount,
         ...argType.building,
         desc: "Returns amount of unpowered buildings as number"
       },
       BuildingQueued: {
-        fn: (b) => state.queuedTargetsAll.includes(buildingIds[b]),
+        fn: (b) => readState().queuedTargetsAll.includes(readBuildingIds()[b]),
         ...argType.building,
         desc: "Returns true when building in queue"
       },
       ProjectUnlocked: {
-        fn: (p) => arpaIds[p].isUnlocked(),
+        fn: (p) => readArpaIds()[p].isUnlocked(),
         ...argType.project,
         desc: "Return true when project is unlocked"
       },
       ProjectCount: {
-        fn: (p) => arpaIds[p].count,
+        fn: (p) => readArpaIds()[p].count,
         ...argType.project,
         desc: "Returns amount of projects as number"
       },
       ProjectProgress: {
-        fn: (p) => arpaIds[p].progress,
+        fn: (p) => readArpaIds()[p].progress,
         ...argType.project,
         desc: "Returns progress of projects as number"
       },
       JobUnlocked: {
-        fn: (j) => jobIds[j].isUnlocked(),
+        fn: (j) => readJobIds()[j].isUnlocked(),
         ...argType.job,
         desc: "Returns true when job is unlocked"
       },
       JobCount: {
-        fn: (j) => jobIds[j].count,
+        fn: (j) => readJobIds()[j].count,
         ...argType.job,
         desc: "Returns current amount of employees(both workers, and servants) as number"
       },
       JobMax: {
-        fn: (j) => jobIds[j].max,
+        fn: (j) => readJobIds()[j].max,
         ...argType.job,
         desc: "Returns maximum amount of assigned workers as number"
       },
       JobWorkers: {
-        fn: (j) => jobIds[j].workers,
+        fn: (j) => readJobIds()[j].workers,
         ...argType.job,
         desc: "Returns current amount of workers as number"
       },
       JobServants: {
-        fn: (j) => jobIds[j].servants,
+        fn: (j) => readJobIds()[j].servants,
         ...argType.job_servant,
         desc: "Returns current amount of servants as number"
       },
       ResearchUnlocked: {
-        fn: (r) => techIds[r].isUnlocked(),
+        fn: (r) => readTechIds()[r].isUnlocked(),
         ...argType.research,
         desc: "Returns true when research is unlocked"
       },
       ResearchComplete: {
-        fn: (r) => techIds[r].isResearched(),
+        fn: (r) => readTechIds()[r].isResearched(),
         ...argType.research,
         desc: "Returns true when research is complete"
       },
       ResourceUnlocked: {
-        fn: (r) => resources[r].isUnlocked(),
+        fn: (r) => readResources2()[r].isUnlocked(),
         ...argType.resource,
         desc: "Returns true when resource or support is unlocked"
       },
       ResourceQuantity: {
-        fn: (r) => resources[r].currentQuantity,
+        fn: (r) => readResources2()[r].currentQuantity,
         ...argType.resource,
         desc: "Returns current amount of resource or support as number"
       },
       ResourceStorage: {
-        fn: (r) => resources[r].maxQuantity,
+        fn: (r) => readResources2()[r].maxQuantity,
         ...argType.resource,
         desc: "Returns maximum amount of resource or support as number. Power returns 'Disabled' amount."
       },
       ResourceMaxCost: {
-        fn: (r) => resources[r].maxCost,
+        fn: (r) => readResources2()[r].maxCost,
         ...argType.resource,
         desc: "Returns maximum cost of resource as number."
       },
       ResourceIncome: {
-        fn: (r) => resources[r].rateOfChange,
+        fn: (r) => readResources2()[r].rateOfChange,
         ...argType.resource,
         desc: "Returns current income of resource or unused support as number"
       },
       // rateOfChange holds full diff of resource at the moment when overrides checked
       ResourceRatio: {
-        fn: (r) => resources[r].storageRatio,
+        fn: (r) => readResources2()[r].storageRatio,
         ...argType.resource,
         desc: "Returns storage ratio of resource as number. Number 0.5 means that storage is 50% full, and such."
       },
       ResourceSatisfied: {
-        fn: (r) => resources[r].usefulRatio >= 1,
+        fn: (r) => readResources2()[r].usefulRatio >= 1,
         ...argType.resource,
         desc: "Returns true when current amount of resource above maximum costs"
       },
       ResourceSatisfyRatio: {
-        fn: (r) => resources[r].usefulRatio,
+        fn: (r) => readResources2()[r].usefulRatio,
         ...argType.resource,
         desc: "Returns satisfy ratio of resource. Number 0.5 means that storead amount equal half of maximum costs"
       },
       ResourceDemanded: {
-        fn: (r) => resources[r].isDemanded(),
+        fn: (r) => readResources2()[r].isDemanded(),
         ...argType.resource,
         desc: "Returns true when resource is demanded, i.e. missed by some prioritized task, such as queue or trigger"
       },
@@ -51345,44 +51336,44 @@
         desc: "Returns ID of selected race as string"
       },
       RacePillared: {
-        fn: (r) => game.global.pillars[argMap.race(r)] >= game.alevel(),
+        fn: (r) => readGame().global.pillars[argMap.race(r)] >= readGame().alevel(),
         ...argType.race,
         desc: "Returns true when selected race pillared at current star level"
       },
       RaceGenus: {
-        fn: (g) => races[game.global.race.species]?.genus === g,
+        fn: (g) => readRaces()[readGame().global.race.species]?.genus === g,
         ...argType.genus,
         desc: "Returns true when playing selected genus"
       },
       MimicGenus: {
-        fn: (g) => (game.global.race.ss_genus ?? "none") === g,
+        fn: (g) => (readGame().global.race.ss_genus ?? "none") === g,
         ...argType.genus_ss,
         desc: "Returns true when mimicking selected genus"
       },
       TraitLevel: {
-        fn: (t) => game.global.race[t] ?? 0,
+        fn: (t) => readGame().global.race[t] ?? 0,
         ...argType.trait,
         desc: "Returns trait level as number"
       },
       ResetType: {
-        fn: (r) => settings.prestigeType === r,
+        fn: (r) => readSettings3().prestigeType === r,
         arg: "select",
         options: prestigeOptions,
         def: "mad",
         desc: "Returns true when selected reset is active"
       },
       Challenge: {
-        fn: (c) => game.global.race[c] ? true : false,
+        fn: (c) => readGame().global.race[c] ? true : false,
         ...argType.challenge,
         desc: "Returns true when selected challenge is active"
       },
       Universe: {
-        fn: (u) => game.global.race.universe === u,
+        fn: (u) => readGame().global.race.universe === u,
         ...argType.universe,
         desc: "Returns true when playing in selected universe"
       },
       Government: {
-        fn: (g) => game.global.civic.govern.type === g,
+        fn: (g) => readGame().global.civic.govern.type === g,
         ...argType.government,
         desc: "Returns true when selected government is active"
       },
@@ -51392,7 +51383,7 @@
         desc: "Returns true when selected governor is active"
       },
       Queue: {
-        fn: (q) => q === "evo" ? settingsRaw.evolutionQueue.length : game.global[q].queue.length,
+        fn: (q) => q === "evo" ? readSettingsRaw().evolutionQueue.length : readGame().global[q].queue.length,
         ...argType.queue,
         desc: "Returns amount of items in queue as number"
       },
@@ -51402,17 +51393,17 @@
         desc: "Returns ingame date as number"
       },
       Soldiers: {
-        fn: (s) => WarManager[s],
+        fn: (s) => readWarManager()[s],
         ...argType.soldiers,
         desc: "Returns amount of soldiers as number"
       },
       PlanetBiome: {
-        fn: (b) => game.global.city.biome === b,
+        fn: (b) => readGame().global.city.biome === b,
         ...argType.biome,
         desc: "Returns true when playing in selected biome"
       },
       PlanetTrait: {
-        fn: (t) => game.global.city.ptrait.includes(t),
+        fn: (t) => readGame().global.city.ptrait.includes(t),
         ...argType.ptrait,
         desc: "Returns true when planet have selected trait"
       },
@@ -56615,31 +56606,29 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       retBools,
       overrideOnlyChecks
     } = createOverrideCatalog({
-      getContext: () => ({
-        settings,
-        settingsRaw,
-        state,
-        game,
-        buildingIds,
-        buildings,
-        resources,
-        techIds,
-        arpaIds,
-        jobIds,
-        races,
-        GovernmentManager,
-        SmelterManager,
-        FactoryManager,
-        WarManager,
-        universes,
-        governors,
-        challenges,
-        biomeList,
-        traitList,
-        buildSelectOptions,
-        fastEval,
-        getGovernor
-      })
+      readSettings: () => settings,
+      readSettingsRaw: () => settingsRaw,
+      readState: () => state,
+      readGame: () => game,
+      readBuildingIds: () => buildingIds,
+      readBuildings: () => buildings,
+      readResources: () => resources,
+      readTechIds: () => techIds,
+      readArpaIds: () => arpaIds,
+      readJobIds: () => jobIds,
+      readRaces: () => races,
+      readGovernmentManager: () => GovernmentManager,
+      readSmelterManager: () => SmelterManager,
+      readFactoryManager: () => FactoryManager,
+      readWarManager: () => WarManager,
+      readUniverses: () => universes,
+      readGovernors: () => governors,
+      readChallenges: () => challenges,
+      readBiomeList: () => biomeList,
+      readTraitList: () => traitList,
+      readBuildSelectOptions: () => buildSelectOptions,
+      readFastEval: () => fastEval,
+      readGovernor: () => getGovernor
     });
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {

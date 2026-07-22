@@ -1,92 +1,65 @@
 type AnyRecord = Record<string, any>;
 type AnyFunction = (...args: any[]) => any;
 
-interface OverrideCatalogContext {
-  settings: AnyRecord;
-  settingsRaw: AnyRecord;
-  state: AnyRecord;
-  game: AnyRecord;
-  buildingIds: AnyRecord;
-  buildings: AnyRecord;
-  resources: AnyRecord;
-  techIds: AnyRecord;
-  arpaIds: AnyRecord;
-  jobIds: AnyRecord;
-  races: AnyRecord;
-  GovernmentManager: AnyRecord;
-  SmelterManager: AnyRecord;
-  FactoryManager: AnyRecord;
-  WarManager: AnyRecord;
-  universes: AnyRecord;
-  governors: AnyRecord;
-  challenges: AnyRecord;
-  biomeList: AnyRecord;
-  traitList: AnyRecord;
-  buildSelectOptions: AnyFunction;
-  fastEval: AnyFunction;
-  getGovernor: AnyFunction;
-}
-
 interface OverrideCatalogDependencies {
-  getContext: () => OverrideCatalogContext;
+  readSettings: () => AnyRecord;
+  readSettingsRaw: () => AnyRecord;
+  readState: () => AnyRecord;
+  readGame: () => AnyRecord;
+  readBuildingIds: () => AnyRecord;
+  readBuildings: () => AnyRecord;
+  readResources: () => AnyRecord;
+  readTechIds: () => AnyRecord;
+  readArpaIds: () => AnyRecord;
+  readJobIds: () => AnyRecord;
+  readRaces: () => AnyRecord;
+  readGovernmentManager: () => AnyRecord;
+  readSmelterManager: () => AnyRecord;
+  readFactoryManager: () => AnyRecord;
+  readWarManager: () => AnyRecord;
+  readUniverses: () => AnyRecord;
+  readGovernors: () => AnyRecord;
+  readChallenges: () => AnyRecord;
+  readBiomeList: () => AnyRecord;
+  readTraitList: () => AnyRecord;
+  readBuildSelectOptions: () => AnyFunction;
+  readFastEval: () => AnyFunction;
+  readGovernor: () => AnyFunction;
 }
 
 export function createOverrideCatalog({
-  getContext,
+  readSettings,
+  readSettingsRaw,
+  readState,
+  readGame,
+  readBuildingIds,
+  readBuildings,
+  readResources,
+  readTechIds,
+  readArpaIds,
+  readJobIds,
+  readRaces,
+  readGovernmentManager,
+  readSmelterManager,
+  readFactoryManager,
+  readWarManager,
+  readUniverses,
+  readGovernors,
+  readChallenges,
+  readBiomeList,
+  readTraitList,
+  readBuildSelectOptions,
+  readFastEval,
+  readGovernor,
 }: OverrideCatalogDependencies) {
-  const liveObject = (key: keyof OverrideCatalogContext) =>
-    new Proxy(
-      {},
-      {
-        get(_target, property) {
-          const current = getContext()[key] as AnyRecord;
-          const value = current?.[property as keyof typeof current];
-          return typeof value === "function" ? value.bind(current) : value;
-        },
-        set(_target, property, value) {
-          (getContext()[key] as AnyRecord)[property as string] = value;
-          return true;
-        },
-        deleteProperty(_target, property) {
-          return delete (getContext()[key] as AnyRecord)[property as string];
-        },
-        ownKeys() {
-          return Reflect.ownKeys((getContext()[key] as AnyRecord) ?? {});
-        },
-        getOwnPropertyDescriptor() {
-          return { enumerable: true, configurable: true };
-        },
-      },
-    ) as AnyRecord;
-  const settings = liveObject("settings");
-  const settingsRaw = liveObject("settingsRaw");
-  const state = liveObject("state");
-  const game = liveObject("game");
-  const buildingIds = liveObject("buildingIds");
-  const buildings = liveObject("buildings");
-  const resources = liveObject("resources");
-  const techIds = liveObject("techIds");
-  const arpaIds = liveObject("arpaIds");
-  const jobIds = liveObject("jobIds");
-  const races = liveObject("races");
-  const GovernmentManager = liveObject("GovernmentManager");
-  const SmelterManager = liveObject("SmelterManager");
-  const FactoryManager = liveObject("FactoryManager");
-  const WarManager = liveObject("WarManager");
-  const universes = liveObject("universes");
-  const governors = liveObject("governors");
-  const challenges = liveObject("challenges");
-  const biomeList = liveObject("biomeList");
-  const traitList = liveObject("traitList");
   const buildSelectOptions: AnyFunction = (...args) =>
-    getContext().buildSelectOptions(...args);
-  const fastEval: AnyFunction = (...args) => getContext().fastEval(...args);
-  const getGovernor: AnyFunction = (...args) =>
-    getContext().getGovernor(...args);
+    readBuildSelectOptions()(...args);
+  const fastEval: AnyFunction = (...args) => readFastEval()(...args);
+  const getGovernor: AnyFunction = (...args) => readGovernor()(...args);
   const historicalRelayChargeRatio = () => {
     // @ts-expect-error Preserve the bundled implementation's historical NaN result when charged is absent.
     // eslint-disable-next-line no-constant-binary-expression
-    return game.global.space.m_relay?.charged / 10000.0 ?? 0;
+    return readGame().global.space.m_relay?.charged / 10000.0 ?? 0;
   };
   const prestigeTypes = [
     { val: "none", label: "None", hint: "Endless game" },
@@ -186,12 +159,12 @@ export function createOverrideCatalog({
       arg: "list_cb",
       options: () =>
         Object.fromEntries(
-          Object.keys(buildingIds)
+          Object.keys(readBuildingIds())
             .map((b) =>
-              Object.keys(buildingIds[b].cost).map((r) => [
+              Object.keys(readBuildingIds()[b].cost).map((r) => [
                 `${b}.${r}`,
                 {
-                  name: `${buildingIds[b].name} (${resources[r].name})`,
+                  name: `${readBuildingIds()[b].name} (${readResources()[r].name})`,
                   id: `${b}.${r}`,
                 },
               ]),
@@ -202,12 +175,12 @@ export function createOverrideCatalog({
     building: {
       def: "city-farm",
       arg: "list",
-      options: { list: buildingIds, name: "name", id: "_vueBinding" },
+      options: { list: readBuildingIds(), name: "name", id: "_vueBinding" },
     },
     research: {
       def: "tech-mad",
       arg: "list",
-      options: { list: techIds, name: "name", id: "_vueBinding" },
+      options: { list: readTechIds(), name: "name", id: "_vueBinding" },
     },
 
     trait: {
@@ -215,7 +188,7 @@ export function createOverrideCatalog({
       arg: "list_cb",
       options: () =>
         Object.fromEntries(
-          (Object.entries(game.traits) as Array<[string, AnyRecord]>).map(
+          (Object.entries(readGame().traits) as Array<[string, AnyRecord]>).map(
             ([id, trait]) => [id, { name: trait.name, id: id }],
           ),
         ),
@@ -225,32 +198,38 @@ export function createOverrideCatalog({
       def: "humanoid",
       arg: "select_cb",
       options: () => [
-        { val: "organism", label: game.loc(`race_protoplasm`) },
-        ...(Object.values(game.races) as AnyRecord[])
+        { val: "organism", label: readGame().loc(`race_protoplasm`) },
+        ...(Object.values(readGame().races) as AnyRecord[])
           .map((r) => r.type)
           .filter((g, i, a) => g && g !== "organism" && a.indexOf(g) === i)
-          .map((g) => ({ val: g, label: game.loc(`genelab_genus_${g}`) })),
+          .map((g) => ({
+            val: g,
+            label: readGame().loc(`genelab_genus_${g}`),
+          })),
       ],
     },
     genus_ss: {
       def: "humanoid",
       arg: "select_cb",
       options: () => [
-        { val: "none", label: game.loc(`genelab_genus_none`) },
-        ...(Object.values(game.races) as AnyRecord[])
+        { val: "none", label: readGame().loc(`genelab_genus_none`) },
+        ...(Object.values(readGame().races) as AnyRecord[])
           .map((r) => r.type)
           .filter(
             (g, i, a) =>
               g && g !== "organism" && g !== "synthetic" && a.indexOf(g) === i,
           )
-          .map((g) => ({ val: g, label: game.loc(`genelab_genus_${g}`) })),
+          .map((g) => ({
+            val: g,
+            label: readGame().loc(`genelab_genus_${g}`),
+          })),
       ],
     },
     project: {
       def: "arpalaunch_facility",
       arg: "select_cb",
       options: () =>
-        Object.values(arpaIds).map((p) => ({
+        Object.values(readArpaIds()).map((p) => ({
           val: p._vueBinding,
           label: p.name,
         })),
@@ -259,7 +238,7 @@ export function createOverrideCatalog({
       def: "unemployed",
       arg: "select_cb",
       options: () =>
-        Object.values(jobIds).map((j) => ({
+        Object.values(readJobIds()).map((j) => ({
           val: j._originalId,
           label: j._originalName,
         })),
@@ -268,7 +247,7 @@ export function createOverrideCatalog({
       def: "farmer",
       arg: "select_cb",
       options: () =>
-        Object.values(jobIds)
+        Object.values(readJobIds())
           .filter((j) => j.is.serve)
           .map((j) => ({ val: j._originalId, label: j._originalName })),
     },
@@ -276,7 +255,10 @@ export function createOverrideCatalog({
       def: "Food",
       arg: "select_cb",
       options: () =>
-        Object.values(resources).map((r) => ({ val: r._id, label: r.name })),
+        Object.values(readResources()).map((r) => ({
+          val: r._id,
+          label: r.name,
+        })),
     },
     race: {
       def: "species",
@@ -291,7 +273,7 @@ export function createOverrideCatalog({
           label: "Protoplasm",
           hint: "Race is not chosen yet",
         },
-        ...Object.values(races).map((race) => ({
+        ...Object.values(readRaces()).map((race) => ({
           val: race.id,
           label: race.name,
           hint: race.desc,
@@ -302,11 +284,13 @@ export function createOverrideCatalog({
       def: "junker",
       arg: "select_cb",
       options: () =>
-        challenges.flat().map((c) => ({
-          val: c.trait,
-          label: game.loc(`evo_challenge_${c.id}`),
-          hint: game.loc(`evo_challenge_${c.id}_effect`),
-        })),
+        readChallenges()
+          .flat()
+          .map((c) => ({
+            val: c.trait,
+            label: readGame().loc(`evo_challenge_${c.id}`),
+            hint: readGame().loc(`evo_challenge_${c.id}_effect`),
+          })),
     },
     universe: {
       def: "standard",
@@ -317,10 +301,10 @@ export function createOverrideCatalog({
           label: "Big Bang",
           hint: "Universe is not chosen yet",
         },
-        ...universes.map((u) => ({
+        ...readUniverses().map((u) => ({
           val: u,
-          label: game.loc(`universe_${u}`),
-          hint: game.loc(`universe_${u}_desc`),
+          label: readGame().loc(`universe_${u}`),
+          hint: readGame().loc(`universe_${u}_desc`),
         })),
       ],
     },
@@ -328,10 +312,10 @@ export function createOverrideCatalog({
       def: "anarchy",
       arg: "select_cb",
       options: () =>
-        Object.keys(GovernmentManager.Types).map((g) => ({
+        Object.keys(readGovernmentManager().Types).map((g) => ({
           val: g,
-          label: game.loc(`govern_${g}`),
-          hint: game.loc(`govern_${g}_desc`),
+          label: readGame().loc(`govern_${g}`),
+          hint: readGame().loc(`govern_${g}_desc`),
         })),
     },
     governor: {
@@ -339,10 +323,10 @@ export function createOverrideCatalog({
       arg: "select_cb",
       options: () => [
         { val: "none", label: "None", hint: "No governor selected" },
-        ...governors.map((id) => ({
+        ...readGovernors().map((id) => ({
           val: id,
-          label: game.loc(`governor_${id}`),
-          hint: game.loc(`governor_${id}_desc`),
+          label: readGame().loc(`governor_${id}`),
+          hint: readGame().loc(`governor_${id}_desc`),
         })),
       ],
     },
@@ -411,30 +395,33 @@ export function createOverrideCatalog({
       def: "civTabs1",
       arg: "select_cb",
       options: () => [
-        { val: "civTabs0", label: game.loc("tab_evolve") },
-        { val: "civTabs1", label: game.loc("tab_civil") },
-        { val: "civTabs2", label: game.loc("tab_civics") },
-        { val: "civTabs3", label: game.loc("tab_research") },
-        { val: "civTabs4", label: game.loc("tab_resources") },
-        { val: "civTabs5", label: game.loc("tech_arpa") },
-        { val: "civTabs6", label: game.loc("mTabStats") },
-        { val: "civTabs7", label: game.loc("tab_settings") },
+        { val: "civTabs0", label: readGame().loc("tab_evolve") },
+        { val: "civTabs1", label: readGame().loc("tab_civil") },
+        { val: "civTabs2", label: readGame().loc("tab_civics") },
+        { val: "civTabs3", label: readGame().loc("tab_research") },
+        { val: "civTabs4", label: readGame().loc("tab_resources") },
+        { val: "civTabs5", label: readGame().loc("tech_arpa") },
+        { val: "civTabs6", label: readGame().loc("mTabStats") },
+        { val: "civTabs7", label: readGame().loc("tab_settings") },
       ],
     },
     biome: {
       def: "grassland",
       arg: "select_cb",
       options: () =>
-        biomeList.map((b) => ({ val: b, label: game.loc(`biome_${b}_name`) })),
+        readBiomeList().map((b) => ({
+          val: b,
+          label: readGame().loc(`biome_${b}_name`),
+        })),
     },
     ptrait: {
       def: "",
       arg: "select_cb",
       options: () => [
         { val: "", label: "None", hint: "Planet have no trait" },
-        ...traitList
+        ...readTraitList()
           .slice(1)
-          .map((t) => ({ val: t, label: game.loc(`planet_${t}`) })),
+          .map((t) => ({ val: t, label: readGame().loc(`planet_${t}`) })),
       ],
     },
     industry: {
@@ -490,44 +477,45 @@ export function createOverrideCatalog({
   const argMap = {
     race: (r) =>
       r === "species" || r === "gods" || r === "old_gods"
-        ? game.global.race[r]
+        ? readGame().global.race[r]
         : r === "srace"
-          ? (game.global.race.srace ?? "protoplasm")
+          ? (readGame().global.race.srace ?? "protoplasm")
           : r,
     date: (d) =>
       d === "total"
-        ? game.global.stats.days
+        ? readGame().global.stats.days
         : d === "impact"
-          ? game.global.race["orbit_decay"]
-            ? game.global.race["orbit_decay"] - game.global.stats.days
+          ? readGame().global.race["orbit_decay"]
+            ? readGame().global.race["orbit_decay"] -
+              readGame().global.stats.days
             : -1
-          : game.global.city.calendar[d],
+          : readGame().global.city.calendar[d],
     industry: (b) =>
       b === "smelters"
-        ? SmelterManager.maxOperating()
+        ? readSmelterManager().maxOperating()
         : b === "factories"
-          ? FactoryManager.maxOperating()
+          ? readFactoryManager().maxOperating()
           : b,
     other: (o) =>
       o === "rname"
-        ? game.races[
-            game.global.race.species === "protoplasm" &&
-            game.global.race.evoFinalMenu
-              ? game.global.race.evoFinalMenu
-              : game.global.race.species
+        ? readGame().races[
+            readGame().global.race.species === "protoplasm" &&
+            readGame().global.race.evoFinalMenu
+              ? readGame().global.race.evoFinalMenu
+              : readGame().global.race.species
           ].name
         : o === "tpfleet"
-          ? (game.global.space.shipyard?.ships?.length ?? 0)
+          ? (readGame().global.space.shipyard?.ships?.length ?? 0)
           : o === "mrelay"
             ? historicalRelayChargeRatio()
             : o === "satcost"
-              ? (buildings.SunSwarmSatellite.cost.Money ?? 0)
+              ? (readBuildings().SunSwarmSatellite.cost.Money ?? 0)
               : o === "bcar"
-                ? (game.global.portal.carport?.damaged ?? 0)
+                ? (readGame().global.portal.carport?.damaged ?? 0)
                 : o === "alevel"
-                  ? game.alevel() - 1
+                  ? readGame().alevel() - 1
                   : o === "tknow"
-                    ? state.knowledgeRequiredByTechs
+                    ? readState().knowledgeRequiredByTechs
                     : o,
   };
 
@@ -547,13 +535,13 @@ export function createOverrideCatalog({
       desc: "Returns boolean",
     },
     SettingDefault: {
-      fn: (s) => settingsRaw[s],
+      fn: (s) => readSettingsRaw()[s],
       arg: "string",
       def: "masterScriptToggle",
       desc: "Returns default value of setting, types varies",
     },
     SettingCurrent: {
-      fn: (s) => settings[s],
+      fn: (s) => readSettings()[s],
       arg: "string",
       def: "masterScriptToggle",
       desc: "Returns current value of setting, types varies",
@@ -567,138 +555,138 @@ export function createOverrideCatalog({
     BuildingCost: {
       fn: (id) => {
         let [b, r] = id.split(".");
-        return buildingIds[b].cost[r] ?? 0;
+        return readBuildingIds()[b].cost[r] ?? 0;
       },
       ...argType.building_cost,
       desc: "Return material cost of building as number\n(Due to technical limitations some options might not appear in list until you unlock corresponding building in game)",
     },
     BuildingUnlocked: {
-      fn: (b) => buildingIds[b].isUnlocked(),
+      fn: (b) => readBuildingIds()[b].isUnlocked(),
       ...argType.building,
       desc: "Return true when building is unlocked",
     },
     BuildingClickable: {
-      fn: (b) => buildingIds[b].isClickable(),
+      fn: (b) => readBuildingIds()[b].isClickable(),
       ...argType.building,
       desc: "Return true when building have all required resources, and can be purchased",
     },
     BuildingAffordable: {
-      fn: (b) => buildingIds[b].isAffordable(true),
+      fn: (b) => readBuildingIds()[b].isAffordable(true),
       ...argType.building,
       desc: "Return true when building is affordable, i.e. costs of all resources below storage caps",
     },
     BuildingCount: {
-      fn: (b) => buildingIds[b].count,
+      fn: (b) => readBuildingIds()[b].count,
       ...argType.building,
       desc: "Returns amount of buildings as number",
     },
     BuildingEnabled: {
-      fn: (b) => buildingIds[b].stateOnCount,
+      fn: (b) => readBuildingIds()[b].stateOnCount,
       ...argType.building,
       desc: "Returns amount of powered buildings as number",
     },
     BuildingDisabled: {
-      fn: (b) => buildingIds[b].stateOffCount,
+      fn: (b) => readBuildingIds()[b].stateOffCount,
       ...argType.building,
       desc: "Returns amount of unpowered buildings as number",
     },
     BuildingQueued: {
-      fn: (b) => state.queuedTargetsAll.includes(buildingIds[b]),
+      fn: (b) => readState().queuedTargetsAll.includes(readBuildingIds()[b]),
       ...argType.building,
       desc: "Returns true when building in queue",
     },
     ProjectUnlocked: {
-      fn: (p) => arpaIds[p].isUnlocked(),
+      fn: (p) => readArpaIds()[p].isUnlocked(),
       ...argType.project,
       desc: "Return true when project is unlocked",
     },
     ProjectCount: {
-      fn: (p) => arpaIds[p].count,
+      fn: (p) => readArpaIds()[p].count,
       ...argType.project,
       desc: "Returns amount of projects as number",
     },
     ProjectProgress: {
-      fn: (p) => arpaIds[p].progress,
+      fn: (p) => readArpaIds()[p].progress,
       ...argType.project,
       desc: "Returns progress of projects as number",
     },
     JobUnlocked: {
-      fn: (j) => jobIds[j].isUnlocked(),
+      fn: (j) => readJobIds()[j].isUnlocked(),
       ...argType.job,
       desc: "Returns true when job is unlocked",
     },
     JobCount: {
-      fn: (j) => jobIds[j].count,
+      fn: (j) => readJobIds()[j].count,
       ...argType.job,
       desc: "Returns current amount of employees(both workers, and servants) as number",
     },
     JobMax: {
-      fn: (j) => jobIds[j].max,
+      fn: (j) => readJobIds()[j].max,
       ...argType.job,
       desc: "Returns maximum amount of assigned workers as number",
     },
     JobWorkers: {
-      fn: (j) => jobIds[j].workers,
+      fn: (j) => readJobIds()[j].workers,
       ...argType.job,
       desc: "Returns current amount of workers as number",
     },
     JobServants: {
-      fn: (j) => jobIds[j].servants,
+      fn: (j) => readJobIds()[j].servants,
       ...argType.job_servant,
       desc: "Returns current amount of servants as number",
     },
     ResearchUnlocked: {
-      fn: (r) => techIds[r].isUnlocked(),
+      fn: (r) => readTechIds()[r].isUnlocked(),
       ...argType.research,
       desc: "Returns true when research is unlocked",
     },
     ResearchComplete: {
-      fn: (r) => techIds[r].isResearched(),
+      fn: (r) => readTechIds()[r].isResearched(),
       ...argType.research,
       desc: "Returns true when research is complete",
     },
     ResourceUnlocked: {
-      fn: (r) => resources[r].isUnlocked(),
+      fn: (r) => readResources()[r].isUnlocked(),
       ...argType.resource,
       desc: "Returns true when resource or support is unlocked",
     },
     ResourceQuantity: {
-      fn: (r) => resources[r].currentQuantity,
+      fn: (r) => readResources()[r].currentQuantity,
       ...argType.resource,
       desc: "Returns current amount of resource or support as number",
     },
     ResourceStorage: {
-      fn: (r) => resources[r].maxQuantity,
+      fn: (r) => readResources()[r].maxQuantity,
       ...argType.resource,
       desc: "Returns maximum amount of resource or support as number. Power returns 'Disabled' amount.",
     },
     ResourceMaxCost: {
-      fn: (r) => resources[r].maxCost,
+      fn: (r) => readResources()[r].maxCost,
       ...argType.resource,
       desc: "Returns maximum cost of resource as number.",
     },
     ResourceIncome: {
-      fn: (r) => resources[r].rateOfChange,
+      fn: (r) => readResources()[r].rateOfChange,
       ...argType.resource,
       desc: "Returns current income of resource or unused support as number",
     }, // rateOfChange holds full diff of resource at the moment when overrides checked
     ResourceRatio: {
-      fn: (r) => resources[r].storageRatio,
+      fn: (r) => readResources()[r].storageRatio,
       ...argType.resource,
       desc: "Returns storage ratio of resource as number. Number 0.5 means that storage is 50% full, and such.",
     },
     ResourceSatisfied: {
-      fn: (r) => resources[r].usefulRatio >= 1,
+      fn: (r) => readResources()[r].usefulRatio >= 1,
       ...argType.resource,
       desc: "Returns true when current amount of resource above maximum costs",
     },
     ResourceSatisfyRatio: {
-      fn: (r) => resources[r].usefulRatio,
+      fn: (r) => readResources()[r].usefulRatio,
       ...argType.resource,
       desc: "Returns satisfy ratio of resource. Number 0.5 means that storead amount equal half of maximum costs",
     },
     ResourceDemanded: {
-      fn: (r) => resources[r].isDemanded(),
+      fn: (r) => readResources()[r].isDemanded(),
       ...argType.resource,
       desc: "Returns true when resource is demanded, i.e. missed by some prioritized task, such as queue or trigger",
     },
@@ -708,44 +696,45 @@ export function createOverrideCatalog({
       desc: "Returns ID of selected race as string",
     },
     RacePillared: {
-      fn: (r) => game.global.pillars[argMap.race(r)] >= game.alevel(),
+      fn: (r) =>
+        readGame().global.pillars[argMap.race(r)] >= readGame().alevel(),
       ...argType.race,
       desc: "Returns true when selected race pillared at current star level",
     },
     RaceGenus: {
-      fn: (g) => races[game.global.race.species]?.genus === g,
+      fn: (g) => readRaces()[readGame().global.race.species]?.genus === g,
       ...argType.genus,
       desc: "Returns true when playing selected genus",
     },
     MimicGenus: {
-      fn: (g) => (game.global.race.ss_genus ?? "none") === g,
+      fn: (g) => (readGame().global.race.ss_genus ?? "none") === g,
       ...argType.genus_ss,
       desc: "Returns true when mimicking selected genus",
     },
     TraitLevel: {
-      fn: (t) => game.global.race[t] ?? 0,
+      fn: (t) => readGame().global.race[t] ?? 0,
       ...argType.trait,
       desc: "Returns trait level as number",
     },
     ResetType: {
-      fn: (r) => settings.prestigeType === r,
+      fn: (r) => readSettings().prestigeType === r,
       arg: "select",
       options: prestigeOptions,
       def: "mad",
       desc: "Returns true when selected reset is active",
     },
     Challenge: {
-      fn: (c) => (game.global.race[c] ? true : false),
+      fn: (c) => (readGame().global.race[c] ? true : false),
       ...argType.challenge,
       desc: "Returns true when selected challenge is active",
     },
     Universe: {
-      fn: (u) => game.global.race.universe === u,
+      fn: (u) => readGame().global.race.universe === u,
       ...argType.universe,
       desc: "Returns true when playing in selected universe",
     },
     Government: {
-      fn: (g) => game.global.civic.govern.type === g,
+      fn: (g) => readGame().global.civic.govern.type === g,
       ...argType.government,
       desc: "Returns true when selected government is active",
     },
@@ -757,8 +746,8 @@ export function createOverrideCatalog({
     Queue: {
       fn: (q) =>
         q === "evo"
-          ? settingsRaw.evolutionQueue.length
-          : game.global[q].queue.length,
+          ? readSettingsRaw().evolutionQueue.length
+          : readGame().global[q].queue.length,
       ...argType.queue,
       desc: "Returns amount of items in queue as number",
     },
@@ -768,17 +757,17 @@ export function createOverrideCatalog({
       desc: "Returns ingame date as number",
     },
     Soldiers: {
-      fn: (s) => WarManager[s],
+      fn: (s) => readWarManager()[s],
       ...argType.soldiers,
       desc: "Returns amount of soldiers as number",
     },
     PlanetBiome: {
-      fn: (b) => game.global.city.biome === b,
+      fn: (b) => readGame().global.city.biome === b,
       ...argType.biome,
       desc: "Returns true when playing in selected biome",
     },
     PlanetTrait: {
-      fn: (t) => game.global.city.ptrait.includes(t),
+      fn: (t) => readGame().global.city.ptrait.includes(t),
       ...argType.ptrait,
       desc: "Returns true when planet have selected trait",
     },

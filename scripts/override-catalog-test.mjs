@@ -43,7 +43,31 @@ const context = {
   getGovernor: () => "none",
 };
 
-const catalog = createOverrideCatalog({ getContext: () => context });
+const catalog = createOverrideCatalog({
+  readSettings: () => context.settings,
+  readSettingsRaw: () => context.settingsRaw,
+  readState: () => context.state,
+  readGame: () => context.game,
+  readBuildingIds: () => context.buildingIds,
+  readBuildings: () => context.buildings,
+  readResources: () => context.resources,
+  readTechIds: () => context.techIds,
+  readArpaIds: () => context.arpaIds,
+  readJobIds: () => context.jobIds,
+  readRaces: () => context.races,
+  readGovernmentManager: () => context.GovernmentManager,
+  readSmelterManager: () => context.SmelterManager,
+  readFactoryManager: () => context.FactoryManager,
+  readWarManager: () => context.WarManager,
+  readUniverses: () => context.universes,
+  readGovernors: () => context.governors,
+  readChallenges: () => context.challenges,
+  readBiomeList: () => context.biomeList,
+  readTraitList: () => context.traitList,
+  readBuildSelectOptions: () => context.buildSelectOptions,
+  readFastEval: () => context.fastEval,
+  readGovernor: () => context.getGovernor,
+});
 assert.match(catalog.prestigeOptions, /Mutual Assured Destruction/);
 assert.equal(catalog.checkCompare[">="](4, 3), true);
 assert.equal(catalog.checkTypes.SettingDefault.fn("example"), 3);
