@@ -271,9 +271,16 @@ import { createGovernmentControls } from "../browser/government-controls.ts";
 import { planGovernment } from "../../domain/government.ts";
 import { runBattleAutomation } from "../../application/battle.ts";
 import { createBattleAdapter } from "./battle.ts";
-import { createTaxAutomation } from "../../bootstrap/tax.ts";
+import { createTaxAutomation } from "../../application/tax.ts";
 import { createUserscriptEnvironment } from "../userscript/environment.ts";
 import { createSmelterCommandExecutor, readSmelterInput } from "./smelter.ts";
+import {
+  createBrowserTaxControls,
+  createKeyModifierController,
+} from "../browser/tax-controls.ts";
+import { createTaxCommandExecutor } from "./tax-command-executor.ts";
+import { createEvolveTaxReader } from "./tax-reader.ts";
+import { createTaxSettingsReader } from "../storage/tax-settings-reader.ts";
 import { planSmelter } from "../../domain/smelter.ts";
 import { createAlchemyCommandExecutor, readAlchemyInput } from "./alchemy.ts";
 import { planAlchemy } from "../../domain/alchemy.ts";
@@ -3926,14 +3933,26 @@ export function startLegacyRuntime(
   const autoJobs = (craftOnly = false) =>
     runJobsAutomation(jobsAdapter, craftOnly);
 
+  const taxClock = Object.freeze({ nowMs: () => browserClock.nowMs() });
+  const taxControls = createBrowserTaxControls(getVueById);
   const { autoTax } = createTaxAutomation({
-    getPoly: () => poly,
-    getResources: () => resources,
-    getSettings: () => settings,
-    getGame: () => game,
-    getVueById,
-    clearKeyModifiers: () => KeyManager.set(false, false, false),
-    nowMs: () => browserClock.nowMs(),
+    clock: taxClock,
+    gameReader: createEvolveTaxReader({
+      clock: taxClock,
+      controls: taxControls,
+      getGame: () => game,
+      getPoly: () => poly,
+      getResources: () => resources,
+    }),
+    settingsReader: createTaxSettingsReader(() => settings),
+    commandExecutor: createTaxCommandExecutor({
+      controls: taxControls,
+      keyModifiers: createKeyModifierController(() =>
+        KeyManager.set(false, false, false),
+      ),
+      getGame: () => game,
+      getResources: () => resources,
+    }),
   });
 
   publishTestSurface({

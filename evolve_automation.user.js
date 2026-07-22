@@ -26452,102 +26452,6 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/adapters/browser/tax-controls.ts
-  function createBrowserTaxControls(getVueById) {
-    function getControls() {
-      const candidate = getVueById("tax_rates");
-      if (candidate === void 0 || candidate === null) return void 0;
-      const controls4 = requireRecord(candidate, "tax controls");
-      requireFunction(controls4["add"], "tax controls.add");
-      requireFunction(controls4["sub"], "tax controls.sub");
-      return controls4;
-    }
-    function isAvailable() {
-      return getControls() !== void 0;
-    }
-    function adjust(direction) {
-      const controls4 = getControls();
-      if (controls4 === void 0) return false;
-      const methodName = direction === "increase" ? "add" : "sub";
-      const method = requireFunction(
-        controls4[methodName],
-        `tax controls.${methodName}`
-      );
-      Reflect.apply(method, controls4, []);
-      return true;
-    }
-    return Object.freeze({ isAvailable, adjust });
-  }
-  function createKeyModifierController(clear) {
-    return Object.freeze({ clear });
-  }
-
-  // src/adapters/evolve/tax-command-executor.ts
-  function failure(status2, code, message, context) {
-    return context === void 0 ? { status: status2, failure: { code, message } } : { status: status2, failure: { code, message, context } };
-  }
-  function createTaxCommandExecutor(dependencies) {
-    function execute2(envelope) {
-      const game = requireRecord(dependencies.getGame(), "game");
-      const global = requireRecord(game["global"], "game.global");
-      const civic = requireRecord(global["civic"], "game.global.civic");
-      const taxes = requireRecord(civic["taxes"], "game.global.civic.taxes");
-      const currentRate = requireNumber(
-        taxes["tax_rate"],
-        "game.global.civic.taxes.tax_rate"
-      );
-      if (currentRate !== envelope.command.expectedRate) {
-        return failure("stale", "stale-tax-rate", "tax rate changed", {
-          expected: envelope.command.expectedRate,
-          actual: currentRate
-        });
-      }
-      if (!requireBoolean(taxes["display"], "game.global.civic.taxes.display")) {
-        return failure("stale", "taxes-hidden", "tax controls became locked");
-      }
-      if (!dependencies.controls.isAvailable()) {
-        return failure(
-          "stale",
-          "tax-controls-unavailable",
-          "tax controls became unavailable"
-        );
-      }
-      const resources = requireRecord(dependencies.getResources(), "resources");
-      const morale = requireRecord(resources["Morale"], "resources.Morale");
-      if (requireBoolean(morale["incomeAdusted"], "resources.Morale.incomeAdusted")) {
-        return failure(
-          "stale",
-          "morale-already-adjusted",
-          "morale was already adjusted"
-        );
-      }
-      for (const batch of envelope.command.batches) {
-        dependencies.keyModifiers.clear();
-        for (const operation2 of batch.operations) {
-          if (!Number.isSafeInteger(operation2.count) || operation2.count < 0) {
-            return failure(
-              "rejected",
-              "invalid-tax-adjustment-count",
-              "tax adjustment count must be a non-negative integer"
-            );
-          }
-          for (let index = 0; index < operation2.count; index += 1) {
-            if (!dependencies.controls.adjust(operation2.direction)) {
-              return failure(
-                "stale",
-                "tax-controls-unavailable",
-                "tax controls became unavailable"
-              );
-            }
-          }
-        }
-        morale["incomeAdusted"] = true;
-      }
-      return { status: "succeeded" };
-    }
-    return Object.freeze({ execute: execute2 });
-  }
-
   // src/domain/tax.ts
   function unavailableTaxSnapshot(metadata, reason) {
     return Object.freeze({ metadata, status: "unavailable", reason });
@@ -26639,166 +26543,13 @@
     ]);
   }
 
-  // src/adapters/evolve/tax-reader.ts
-  function createEvolveTaxReader(dependencies) {
-    let snapshotSequence = 0;
-    function readSnapshot() {
-      snapshotSequence += 1;
-      const metadata = createSnapshotMetadata({
-        id: `tax-snapshot-${snapshotSequence}`,
-        capturedAtMs: dependencies.clock.nowMs()
-      });
-      const resources = requireRecord(dependencies.getResources(), "resources");
-      const morale = requireRecord(resources["Morale"], "resources.Morale");
-      if (requireBoolean(morale["incomeAdusted"], "resources.Morale.incomeAdusted")) {
-        return unavailableTaxSnapshot(metadata, "morale-already-adjusted");
-      }
-      if (!dependencies.controls.isAvailable()) {
-        return unavailableTaxSnapshot(metadata, "controls-unavailable");
-      }
-      const game = requireRecord(dependencies.getGame(), "game");
-      const global = requireRecord(game["global"], "game.global");
-      const civic = requireRecord(global["civic"], "game.global.civic");
-      const taxes = requireRecord(civic["taxes"], "game.global.civic.taxes");
-      if (!requireBoolean(taxes["display"], "game.global.civic.taxes.display")) {
-        return unavailableTaxSnapshot(metadata, "taxes-hidden");
-      }
-      const poly = requireRecord(dependencies.getPoly(), "game compatibility");
-      const taxCap = requireFunction(poly["taxCap"], "game compatibility.taxCap");
-      const maximumRate = requireNumber(
-        Reflect.apply(taxCap, poly, [false]),
-        "maximum tax rate"
-      );
-      const minimumRate = requireNumber(
-        Reflect.apply(taxCap, poly, [true]),
-        "minimum tax rate"
-      );
-      if (minimumRate > maximumRate) {
-        throw new TypeError("minimum tax rate cannot exceed maximum tax rate");
-      }
-      const money = requireRecord(resources["Money"], "resources.Money");
-      const authority = requireRecord(
-        resources["Authority"],
-        "resources.Authority"
-      );
-      const race2 = requireRecord(global["race"], "game.global.race");
-      const banana = Boolean(race2["banana"]);
-      const isDemanded = requireFunction(
-        money["isDemanded"],
-        "resources.Money.isDemanded"
-      );
-      const isAuthorityUnlocked = requireFunction(
-        authority["isUnlocked"],
-        "resources.Authority.isUnlocked"
-      );
-      const snapshot = {
-        metadata,
-        status: "ready",
-        tax: Object.freeze({
-          currentRate: requireNumber(
-            taxes["tax_rate"],
-            "game.global.civic.taxes.tax_rate"
-          ),
-          minimumRate,
-          maximumRate
-        }),
-        morale: Object.freeze({
-          current: requireNumber(
-            morale["currentQuantity"],
-            "resources.Morale.currentQuantity"
-          ),
-          projected: requireNumber(
-            morale["rateOfChange"],
-            "resources.Morale.rateOfChange"
-          ),
-          maximum: requireNumber(
-            morale["maxQuantity"],
-            "resources.Morale.maxQuantity"
-          )
-        }),
-        money: Object.freeze({
-          storageRatio: requireNumber(
-            money["storageRatio"],
-            "resources.Money.storageRatio"
-          ),
-          demanded: banana ? false : requireBoolean(
-            Reflect.apply(isDemanded, money, []),
-            "resources.Money.isDemanded result"
-          )
-        }),
-        authority: Object.freeze({
-          current: requireNumber(
-            authority["currentQuantity"],
-            "resources.Authority.currentQuantity"
-          ),
-          maximum: requireNumber(
-            authority["maxQuantity"],
-            "resources.Authority.maxQuantity"
-          ),
-          unlocked: requireBoolean(
-            Reflect.apply(isAuthorityUnlocked, authority, []),
-            "resources.Authority.isUnlocked result"
-          )
-        }),
-        banana
-      };
-      return Object.freeze(snapshot);
-    }
-    return Object.freeze({ readSnapshot });
-  }
-
-  // src/adapters/storage/tax-settings-reader.ts
-  function createTaxSettingsReader(getSettings) {
-    function readSettings3() {
-      const settings = requireRecord(getSettings(), "settings");
-      return Object.freeze({
-        requestedRate: requireNumber(
-          settings["generalRequestedTaxRate"],
-          "settings.generalRequestedTaxRate"
-        ),
-        minimumRate: requireNumber(
-          settings["generalMinimumTaxRate"],
-          "settings.generalMinimumTaxRate"
-        ),
-        minimumMorale: requireNumber(
-          settings["generalMinimumMorale"],
-          "settings.generalMinimumMorale"
-        ),
-        maximumMorale: requireNumber(
-          settings["generalMaximumMorale"],
-          "settings.generalMaximumMorale"
-        ),
-        manageAuthority: requireBoolean(
-          settings["authorityManage"],
-          "settings.authorityManage"
-        ),
-        authorityTarget: requireNumber(
-          settings["generalMinimumAuthority"],
-          "settings.generalMinimumAuthority"
-        )
-      });
-    }
-    return Object.freeze({ readSettings: readSettings3 });
-  }
-
-  // src/bootstrap/tax.ts
-  function createTaxAutomation(dependencies) {
-    const clock = Object.freeze({ nowMs: dependencies.nowMs });
-    const controls4 = createBrowserTaxControls(dependencies.getVueById);
-    const gameReader = createEvolveTaxReader({
-      clock,
-      controls: controls4,
-      getGame: dependencies.getGame,
-      getPoly: dependencies.getPoly,
-      getResources: dependencies.getResources
-    });
-    const settingsReader = createTaxSettingsReader(dependencies.getSettings);
-    const commandExecutor = createTaxCommandExecutor({
-      controls: controls4,
-      keyModifiers: createKeyModifierController(dependencies.clearKeyModifiers),
-      getGame: dependencies.getGame,
-      getResources: dependencies.getResources
-    });
+  // src/application/tax.ts
+  function createTaxAutomation({
+    clock,
+    gameReader,
+    settingsReader,
+    commandExecutor
+  }) {
     let lastTrace;
     const runner = createCycleRunner({
       clock,
@@ -27267,6 +27018,244 @@
       return SUCCEEDED2;
     }
     return Object.freeze({ execute: execute2 });
+  }
+
+  // src/adapters/browser/tax-controls.ts
+  function createBrowserTaxControls(getVueById) {
+    function getControls() {
+      const candidate = getVueById("tax_rates");
+      if (candidate === void 0 || candidate === null) return void 0;
+      const controls4 = requireRecord(candidate, "tax controls");
+      requireFunction(controls4["add"], "tax controls.add");
+      requireFunction(controls4["sub"], "tax controls.sub");
+      return controls4;
+    }
+    function isAvailable() {
+      return getControls() !== void 0;
+    }
+    function adjust(direction) {
+      const controls4 = getControls();
+      if (controls4 === void 0) return false;
+      const methodName = direction === "increase" ? "add" : "sub";
+      const method = requireFunction(
+        controls4[methodName],
+        `tax controls.${methodName}`
+      );
+      Reflect.apply(method, controls4, []);
+      return true;
+    }
+    return Object.freeze({ isAvailable, adjust });
+  }
+  function createKeyModifierController(clear) {
+    return Object.freeze({ clear });
+  }
+
+  // src/adapters/evolve/tax-command-executor.ts
+  function failure(status2, code, message, context) {
+    return context === void 0 ? { status: status2, failure: { code, message } } : { status: status2, failure: { code, message, context } };
+  }
+  function createTaxCommandExecutor(dependencies) {
+    function execute2(envelope) {
+      const game = requireRecord(dependencies.getGame(), "game");
+      const global = requireRecord(game["global"], "game.global");
+      const civic = requireRecord(global["civic"], "game.global.civic");
+      const taxes = requireRecord(civic["taxes"], "game.global.civic.taxes");
+      const currentRate = requireNumber(
+        taxes["tax_rate"],
+        "game.global.civic.taxes.tax_rate"
+      );
+      if (currentRate !== envelope.command.expectedRate) {
+        return failure("stale", "stale-tax-rate", "tax rate changed", {
+          expected: envelope.command.expectedRate,
+          actual: currentRate
+        });
+      }
+      if (!requireBoolean(taxes["display"], "game.global.civic.taxes.display")) {
+        return failure("stale", "taxes-hidden", "tax controls became locked");
+      }
+      if (!dependencies.controls.isAvailable()) {
+        return failure(
+          "stale",
+          "tax-controls-unavailable",
+          "tax controls became unavailable"
+        );
+      }
+      const resources = requireRecord(dependencies.getResources(), "resources");
+      const morale = requireRecord(resources["Morale"], "resources.Morale");
+      if (requireBoolean(morale["incomeAdusted"], "resources.Morale.incomeAdusted")) {
+        return failure(
+          "stale",
+          "morale-already-adjusted",
+          "morale was already adjusted"
+        );
+      }
+      for (const batch of envelope.command.batches) {
+        dependencies.keyModifiers.clear();
+        for (const operation2 of batch.operations) {
+          if (!Number.isSafeInteger(operation2.count) || operation2.count < 0) {
+            return failure(
+              "rejected",
+              "invalid-tax-adjustment-count",
+              "tax adjustment count must be a non-negative integer"
+            );
+          }
+          for (let index = 0; index < operation2.count; index += 1) {
+            if (!dependencies.controls.adjust(operation2.direction)) {
+              return failure(
+                "stale",
+                "tax-controls-unavailable",
+                "tax controls became unavailable"
+              );
+            }
+          }
+        }
+        morale["incomeAdusted"] = true;
+      }
+      return { status: "succeeded" };
+    }
+    return Object.freeze({ execute: execute2 });
+  }
+
+  // src/adapters/evolve/tax-reader.ts
+  function createEvolveTaxReader(dependencies) {
+    let snapshotSequence = 0;
+    function readSnapshot() {
+      snapshotSequence += 1;
+      const metadata = createSnapshotMetadata({
+        id: `tax-snapshot-${snapshotSequence}`,
+        capturedAtMs: dependencies.clock.nowMs()
+      });
+      const resources = requireRecord(dependencies.getResources(), "resources");
+      const morale = requireRecord(resources["Morale"], "resources.Morale");
+      if (requireBoolean(morale["incomeAdusted"], "resources.Morale.incomeAdusted")) {
+        return unavailableTaxSnapshot(metadata, "morale-already-adjusted");
+      }
+      if (!dependencies.controls.isAvailable()) {
+        return unavailableTaxSnapshot(metadata, "controls-unavailable");
+      }
+      const game = requireRecord(dependencies.getGame(), "game");
+      const global = requireRecord(game["global"], "game.global");
+      const civic = requireRecord(global["civic"], "game.global.civic");
+      const taxes = requireRecord(civic["taxes"], "game.global.civic.taxes");
+      if (!requireBoolean(taxes["display"], "game.global.civic.taxes.display")) {
+        return unavailableTaxSnapshot(metadata, "taxes-hidden");
+      }
+      const poly = requireRecord(dependencies.getPoly(), "game compatibility");
+      const taxCap = requireFunction(poly["taxCap"], "game compatibility.taxCap");
+      const maximumRate = requireNumber(
+        Reflect.apply(taxCap, poly, [false]),
+        "maximum tax rate"
+      );
+      const minimumRate = requireNumber(
+        Reflect.apply(taxCap, poly, [true]),
+        "minimum tax rate"
+      );
+      if (minimumRate > maximumRate) {
+        throw new TypeError("minimum tax rate cannot exceed maximum tax rate");
+      }
+      const money = requireRecord(resources["Money"], "resources.Money");
+      const authority = requireRecord(
+        resources["Authority"],
+        "resources.Authority"
+      );
+      const race2 = requireRecord(global["race"], "game.global.race");
+      const banana = Boolean(race2["banana"]);
+      const isDemanded = requireFunction(
+        money["isDemanded"],
+        "resources.Money.isDemanded"
+      );
+      const isAuthorityUnlocked = requireFunction(
+        authority["isUnlocked"],
+        "resources.Authority.isUnlocked"
+      );
+      const snapshot = {
+        metadata,
+        status: "ready",
+        tax: Object.freeze({
+          currentRate: requireNumber(
+            taxes["tax_rate"],
+            "game.global.civic.taxes.tax_rate"
+          ),
+          minimumRate,
+          maximumRate
+        }),
+        morale: Object.freeze({
+          current: requireNumber(
+            morale["currentQuantity"],
+            "resources.Morale.currentQuantity"
+          ),
+          projected: requireNumber(
+            morale["rateOfChange"],
+            "resources.Morale.rateOfChange"
+          ),
+          maximum: requireNumber(
+            morale["maxQuantity"],
+            "resources.Morale.maxQuantity"
+          )
+        }),
+        money: Object.freeze({
+          storageRatio: requireNumber(
+            money["storageRatio"],
+            "resources.Money.storageRatio"
+          ),
+          demanded: banana ? false : requireBoolean(
+            Reflect.apply(isDemanded, money, []),
+            "resources.Money.isDemanded result"
+          )
+        }),
+        authority: Object.freeze({
+          current: requireNumber(
+            authority["currentQuantity"],
+            "resources.Authority.currentQuantity"
+          ),
+          maximum: requireNumber(
+            authority["maxQuantity"],
+            "resources.Authority.maxQuantity"
+          ),
+          unlocked: requireBoolean(
+            Reflect.apply(isAuthorityUnlocked, authority, []),
+            "resources.Authority.isUnlocked result"
+          )
+        }),
+        banana
+      };
+      return Object.freeze(snapshot);
+    }
+    return Object.freeze({ readSnapshot });
+  }
+
+  // src/adapters/storage/tax-settings-reader.ts
+  function createTaxSettingsReader(getSettings) {
+    function readSettings3() {
+      const settings = requireRecord(getSettings(), "settings");
+      return Object.freeze({
+        requestedRate: requireNumber(
+          settings["generalRequestedTaxRate"],
+          "settings.generalRequestedTaxRate"
+        ),
+        minimumRate: requireNumber(
+          settings["generalMinimumTaxRate"],
+          "settings.generalMinimumTaxRate"
+        ),
+        minimumMorale: requireNumber(
+          settings["generalMinimumMorale"],
+          "settings.generalMinimumMorale"
+        ),
+        maximumMorale: requireNumber(
+          settings["generalMaximumMorale"],
+          "settings.generalMaximumMorale"
+        ),
+        manageAuthority: requireBoolean(
+          settings["authorityManage"],
+          "settings.authorityManage"
+        ),
+        authorityTarget: requireNumber(
+          settings["generalMinimumAuthority"],
+          "settings.generalMinimumAuthority"
+        )
+      });
+    }
+    return Object.freeze({ readSettings: readSettings3 });
   }
 
   // src/domain/smelter.ts
@@ -55138,14 +55127,26 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       log: (message) => runtimeEnvironment.log(message)
     });
     const autoJobs = (craftOnly = false) => runJobsAutomation(jobsAdapter, craftOnly);
+    const taxClock = Object.freeze({ nowMs: () => browserClock.nowMs() });
+    const taxControls = createBrowserTaxControls(getVueById);
     const { autoTax } = createTaxAutomation({
-      getPoly: () => poly,
-      getResources: () => resources,
-      getSettings: () => settings,
-      getGame: () => game,
-      getVueById,
-      clearKeyModifiers: () => KeyManager.set(false, false, false),
-      nowMs: () => browserClock.nowMs()
+      clock: taxClock,
+      gameReader: createEvolveTaxReader({
+        clock: taxClock,
+        controls: taxControls,
+        getGame: () => game,
+        getPoly: () => poly,
+        getResources: () => resources
+      }),
+      settingsReader: createTaxSettingsReader(() => settings),
+      commandExecutor: createTaxCommandExecutor({
+        controls: taxControls,
+        keyModifiers: createKeyModifierController(
+          () => KeyManager.set(false, false, false)
+        ),
+        getGame: () => game,
+        getResources: () => resources
+      })
     });
     publishTestSurface({
       autoTax: () => autoTax(),

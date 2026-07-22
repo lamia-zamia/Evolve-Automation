@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 
-import { createTaxAutomation } from "../src/bootstrap/tax.ts";
+import { createBrowserTaxControls } from "../src/adapters/browser/tax-controls.ts";
+import { createTaxCommandExecutor } from "../src/adapters/evolve/tax-command-executor.ts";
+import { createEvolveTaxReader } from "../src/adapters/evolve/tax-reader.ts";
+import { createTaxSettingsReader } from "../src/adapters/storage/tax-settings-reader.ts";
+import { createKeyModifierController } from "../src/adapters/browser/tax-controls.ts";
+import { createTaxAutomation } from "../src/application/tax.ts";
 
 function runTaxCase({
   taxRate = 10,
@@ -48,23 +53,35 @@ function runTaxCase({
     },
   };
   let now = 100;
+  const clock = Object.freeze({ nowMs: () => now++ });
+  const controls = createBrowserTaxControls(() => ({
+    add: () => {
+      actions.push(["add"]);
+      game.global.civic.taxes.tax_rate += 1;
+    },
+    sub: () => {
+      actions.push(["sub"]);
+      game.global.civic.taxes.tax_rate -= 1;
+    },
+  }));
   const automation = createTaxAutomation({
-    getPoly: () => ({ taxCap: (minimum) => (minimum ? 0 : 50) }),
-    getResources: () => resources,
-    getSettings: () => settings,
-    getGame: () => game,
-    getVueById: () => ({
-      add: () => {
-        actions.push(["add"]);
-        game.global.civic.taxes.tax_rate += 1;
-      },
-      sub: () => {
-        actions.push(["sub"]);
-        game.global.civic.taxes.tax_rate -= 1;
-      },
+    clock,
+    gameReader: createEvolveTaxReader({
+      clock,
+      controls,
+      getGame: () => game,
+      getPoly: () => ({ taxCap: (minimum) => (minimum ? 0 : 50) }),
+      getResources: () => resources,
     }),
-    clearKeyModifiers: () => actions.push(["keys", false, false, false]),
-    nowMs: () => now++,
+    settingsReader: createTaxSettingsReader(() => settings),
+    commandExecutor: createTaxCommandExecutor({
+      controls,
+      keyModifiers: createKeyModifierController(() =>
+        actions.push(["keys", false, false, false]),
+      ),
+      getGame: () => game,
+      getResources: () => resources,
+    }),
   });
 
   automation.autoTax();
