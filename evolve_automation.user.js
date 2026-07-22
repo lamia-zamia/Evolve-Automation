@@ -49760,86 +49760,54 @@
   }
 
   // src/ui/settings-shell.ts
-  function createSettingsShell({ getContext }) {
-    const liveObject4 = (key) => new Proxy(
-      {},
-      {
-        get(_target, property) {
-          const current = getContext()[key];
-          const value = current?.[property];
-          return typeof value === "function" ? value.bind(current) : value;
-        },
-        set(_target, property, value) {
-          getContext()[key][property] = value;
-          return true;
-        },
-        deleteProperty(_target, property) {
-          return delete getContext()[key][property];
-        },
-        ownKeys() {
-          return Reflect.ownKeys(getContext()[key] ?? {});
-        },
-        getOwnPropertyDescriptor() {
-          return { enumerable: true, configurable: true };
-        }
-      }
-    );
-    const $2 = new Proxy(function() {
-    }, {
-      apply(_target, _thisArg, args) {
-        return getContext().$(...args);
-      },
-      get(_target, property) {
-        const current = getContext().$;
-        const value = current[property];
-        return typeof value === "function" ? value.bind(current) : value;
-      }
-    });
-    const document2 = liveObject4("document");
-    const settingsRaw = liveObject4("settingsRaw");
-    const settings = liveObject4("settings");
-    const game = liveObject4("game");
-    const buildPrestigeSettings = (...args) => getContext().buildPrestigeSettings(...args);
-    const buildGeneralSettings = (...args) => getContext().buildGeneralSettings(...args);
-    const buildInterfaceSettings = (...args) => getContext().buildInterfaceSettings(...args);
-    const buildStateLogSettings = (...args) => getContext().buildStateLogSettings(...args);
-    const buildAchievementGuardSettings = (...args) => getContext().buildAchievementGuardSettings(...args);
-    const buildChallengeHelperSettings = (...args) => getContext().buildChallengeHelperSettings(...args);
-    const buildGovernmentSettings = (...args) => getContext().buildGovernmentSettings(...args);
-    const buildAuthoritySettings = (...args) => getContext().buildAuthoritySettings(...args);
-    const buildEvolutionSettings = (...args) => getContext().buildEvolutionSettings(...args);
-    const buildPlanetSettings = (...args) => getContext().buildPlanetSettings(...args);
-    const buildTraitSettings = (...args) => getContext().buildTraitSettings(...args);
-    const buildTriggerSettings = (...args) => getContext().buildTriggerSettings(...args);
-    const buildResearchSettings = (...args) => getContext().buildResearchSettings(...args);
-    const buildWarSettings = (...args) => getContext().buildWarSettings(...args);
-    const buildHellSettings = (...args) => getContext().buildHellSettings(...args);
-    const buildMechSettings = (...args) => getContext().buildMechSettings(...args);
-    const buildFleetSettings = (...args) => getContext().buildFleetSettings(...args);
-    const buildEjectorSettings = (...args) => getContext().buildEjectorSettings(...args);
-    const buildMarketSettings = (...args) => getContext().buildMarketSettings(...args);
-    const buildStorageSettings = (...args) => getContext().buildStorageSettings(...args);
-    const buildMagicSettings = (...args) => getContext().buildMagicSettings(...args);
-    const buildProductionSettings = (...args) => getContext().buildProductionSettings(...args);
-    const buildJobSettings = (...args) => getContext().buildJobSettings(...args);
-    const buildBuildingSettings = (...args) => getContext().buildBuildingSettings(...args);
-    const buildWeightingSettings = (...args) => getContext().buildWeightingSettings(...args);
-    const buildProjectSettings = (...args) => getContext().buildProjectSettings(...args);
-    const buildLoggingSettings = (...args) => getContext().buildLoggingSettings(...args);
-    const filterBuildingSettingsTable = (...args) => getContext().filterBuildingSettingsTable(...args);
-    const updateSettingsFromState = (...args) => getContext().updateSettingsFromState(...args);
-    const importSettings = (...args) => getContext().importSettings(...args);
-    const exportSettings = (...args) => getContext().exportSettings(...args);
-    const triggerFileDownload = (...args) => getContext().triggerFileDownload(...args);
-    const confirm2 = (...args) => getContext().confirm(...args);
+  function createSettingsShell({
+    $: $2,
+    getDocument,
+    getSettingsRaw,
+    getSettings,
+    getGame,
+    buildPrestigeSettings,
+    buildGeneralSettings,
+    buildInterfaceSettings,
+    buildStateLogSettings,
+    buildAchievementGuardSettings,
+    buildChallengeHelperSettings,
+    buildGovernmentSettings,
+    buildAuthoritySettings,
+    buildEvolutionSettings,
+    buildPlanetSettings,
+    buildTraitSettings,
+    buildTriggerSettings,
+    buildResearchSettings,
+    buildWarSettings,
+    buildHellSettings,
+    buildMechSettings,
+    buildFleetSettings,
+    buildEjectorSettings,
+    buildMarketSettings,
+    buildStorageSettings,
+    buildMagicSettings,
+    buildProductionSettings,
+    buildJobSettings,
+    buildBuildingSettings,
+    buildWeightingSettings,
+    buildProjectSettings,
+    buildLoggingSettings,
+    filterBuildingSettingsTable,
+    updateSettingsFromState,
+    importSettings,
+    exportSettings,
+    triggerFileDownload,
+    confirm: confirm2
+  }) {
     function removeScriptSettings() {
       $2("#script_settings").remove();
     }
     function buildScriptSettings() {
-      if (game.global.settings.civTabs != 7) {
+      if (getGame().global.settings.civTabs != 7) {
         return;
       }
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentScrollPosition = getDocument().documentElement.scrollTop || getDocument().body.scrollTop;
       let scriptContentNode = $2("#script_settings");
       if (scriptContentNode.length !== 0) {
         return;
@@ -49876,7 +49844,7 @@
       buildWeightingSettings();
       buildProjectSettings();
       buildLoggingSettings(scriptContentNode, "");
-      let collapsibles = document2.querySelectorAll(
+      let collapsibles = getDocument().querySelectorAll(
         "#script_settings .script-collapsible"
       );
       for (let i = 0; i < collapsibles.length; i++) {
@@ -49884,7 +49852,7 @@
           this.classList.toggle("script-contentactive");
           let content = this.nextElementSibling;
           if (content.style.display === "block") {
-            settingsRaw[collapsibles[i].id] = true;
+            getSettingsRaw()[collapsibles[i].id] = true;
             content.style.display = "none";
             let search = content.getElementsByClassName("script-searchsettings");
             if (search.length > 0) {
@@ -49892,20 +49860,20 @@
               filterBuildingSettingsTable();
             }
           } else {
-            settingsRaw[collapsibles[i].id] = false;
+            getSettingsRaw()[collapsibles[i].id] = false;
             content.style.display = "block";
           }
           updateSettingsFromState();
         });
       }
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      getDocument().documentElement.scrollTop = getDocument().body.scrollTop = currentScrollPosition;
     }
     function buildImportExport() {
       let importExportBase = $2(".importExport").last();
       if (importExportBase === null) {
         return;
       }
-      if (document2.getElementById("script_importExportButtons") !== null) {
+      if (getDocument().getElementById("script_importExportButtons") !== null) {
         return;
       }
       let importExportNode = $2(
@@ -49929,14 +49897,14 @@
       $2("#script_settingsExport").on("click", function() {
         $2("#importExport").val(exportSettings());
         $2("#importExport").select();
-        document2.execCommand("copy");
+        getDocument().execCommand("copy");
       });
       importExportNode.append(
         ' <button id="script_settingsFile" class="button">Script Settings as File</button>'
       );
       $2("#script_settingsFile").on("click", function() {
-        let json = JSON.stringify(settingsRaw, void 0, 2);
-        triggerFileDownload(json, settings.scriptSettingsExportFilename);
+        let json = JSON.stringify(getSettingsRaw(), void 0, 2);
+        triggerFileDownload(json, getSettings().scriptSettingsExportFilename);
       });
     }
     function buildSettingsSectionImpl(parentNode, sectionId, sectionName, resetFunction, updateSettingsContentFunction) {
@@ -49952,9 +49920,9 @@
             </div>
           </div>`);
       parentNode.append(section);
-      if (!settingsRaw[sectionId + "SettingsCollapsed"]) {
+      if (!getSettingsRaw()[sectionId + "SettingsCollapsed"]) {
         updateSettingsContentFunction();
-        let element = document2.getElementById(triggerID);
+        let element = getDocument().getElementById(triggerID);
         element.classList.toggle("script-contentactive");
         element.nextElementSibling.style.display = "block";
       } else {
@@ -52158,46 +52126,44 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       addSettingsHeader1,
       addSettingsHeader2
     } = createSettingsShell({
-      getContext: () => ({
-        $: $2,
-        document,
-        settingsRaw,
-        settings,
-        game,
-        buildPrestigeSettings,
-        buildGeneralSettings,
-        buildInterfaceSettings,
-        buildStateLogSettings,
-        buildAchievementGuardSettings,
-        buildChallengeHelperSettings,
-        buildGovernmentSettings,
-        buildAuthoritySettings,
-        buildEvolutionSettings,
-        buildPlanetSettings,
-        buildTraitSettings,
-        buildTriggerSettings,
-        buildResearchSettings,
-        buildWarSettings,
-        buildHellSettings,
-        buildMechSettings,
-        buildFleetSettings,
-        buildEjectorSettings,
-        buildMarketSettings,
-        buildStorageSettings,
-        buildMagicSettings,
-        buildProductionSettings,
-        buildJobSettings,
-        buildBuildingSettings,
-        buildWeightingSettings,
-        buildProjectSettings,
-        buildLoggingSettings,
-        filterBuildingSettingsTable,
-        updateSettingsFromState,
-        importSettings,
-        exportSettings,
-        triggerFileDownload,
-        confirm: (...args) => confirm(...args)
-      })
+      $: $2,
+      getDocument: () => document,
+      getSettingsRaw: () => settingsRaw,
+      getSettings: () => settings,
+      getGame: () => game,
+      buildPrestigeSettings: (...args) => buildPrestigeSettings(...args),
+      buildGeneralSettings: (...args) => buildGeneralSettings(...args),
+      buildInterfaceSettings: (...args) => buildInterfaceSettings(...args),
+      buildStateLogSettings: (...args) => buildStateLogSettings(...args),
+      buildAchievementGuardSettings: (...args) => buildAchievementGuardSettings(...args),
+      buildChallengeHelperSettings: (...args) => buildChallengeHelperSettings(...args),
+      buildGovernmentSettings: (...args) => buildGovernmentSettings(...args),
+      buildAuthoritySettings: (...args) => buildAuthoritySettings(...args),
+      buildEvolutionSettings: (...args) => buildEvolutionSettings(...args),
+      buildPlanetSettings: (...args) => buildPlanetSettings(...args),
+      buildTraitSettings: (...args) => buildTraitSettings(...args),
+      buildTriggerSettings: (...args) => buildTriggerSettings(...args),
+      buildResearchSettings: (...args) => buildResearchSettings(...args),
+      buildWarSettings: (...args) => buildWarSettings(...args),
+      buildHellSettings: (...args) => buildHellSettings(...args),
+      buildMechSettings: (...args) => buildMechSettings(...args),
+      buildFleetSettings: (...args) => buildFleetSettings(...args),
+      buildEjectorSettings: (...args) => buildEjectorSettings(...args),
+      buildMarketSettings: (...args) => buildMarketSettings(...args),
+      buildStorageSettings: (...args) => buildStorageSettings(...args),
+      buildMagicSettings: (...args) => buildMagicSettings(...args),
+      buildProductionSettings: (...args) => buildProductionSettings(...args),
+      buildJobSettings: (...args) => buildJobSettings(...args),
+      buildBuildingSettings: (...args) => buildBuildingSettings(...args),
+      buildWeightingSettings: (...args) => buildWeightingSettings(...args),
+      buildProjectSettings: (...args) => buildProjectSettings(...args),
+      buildLoggingSettings: (...args) => buildLoggingSettings(...args),
+      filterBuildingSettingsTable: (...args) => filterBuildingSettingsTable(...args),
+      updateSettingsFromState: (...args) => updateSettingsFromState(...args),
+      importSettings: (...args) => importSettings(...args),
+      exportSettings: (...args) => exportSettings(...args),
+      triggerFileDownload: (...args) => triggerFileDownload(...args),
+      confirm: (...args) => confirm(...args)
     });
     const {
       evaluateCheck: _,

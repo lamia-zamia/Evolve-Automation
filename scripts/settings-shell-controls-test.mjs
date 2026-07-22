@@ -169,7 +169,13 @@ const shellContext = {
 for (const name of buildNames) {
   shellContext[name] = () => trace.push(name);
 }
-const shell = createSettingsShell({ getContext: () => shellContext });
+const shell = createSettingsShell({
+  ...shellContext,
+  getDocument: () => shellContext.document,
+  getSettingsRaw: () => shellContext.settingsRaw,
+  getSettings: () => shellContext.settings,
+  getGame: () => shellContext.game,
+});
 trace.length = 0;
 shell.buildScriptSettings();
 assert.deepEqual(
