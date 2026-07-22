@@ -19,7 +19,7 @@ type ForeignAffairsManagerDependencies = {
   getGovPower: (govIndex: number) => number;
   getGovName: (govIndex: number) => string;
   getOccCosts: () => number;
-  logError?: (...args: any[]) => void;
+  logError: (...args: any[]) => void;
 };
 
 export function createForeignAffairsManagers({
@@ -40,7 +40,7 @@ export function createForeignAffairsManagers({
   getGovPower,
   getGovName,
   getOccCosts,
-  logError = (...args) => console.error(...args),
+  logError,
 }: ForeignAffairsManagerDependencies) {
   const haveTech = (...args: any[]) => getHaveTech()(...args);
   const guardActive = (...args: any[]) => getGuardActive()(...args);

@@ -3624,7 +3624,7 @@
     getGovPower,
     getGovName,
     getOccCosts,
-    logError = (...args) => console.error(...args)
+    logError
   }) {
     const haveTech = (...args) => getHaveTech()(...args);
     const guardActive = (...args) => getGuardActive()(...args);
