@@ -52269,8 +52269,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     };
   }
 
-  // src/bootstrap/runtime.js
-  function startRuntime($, diagnostics, runtimeEnvironment) {
+  // src/legacy-runtime.js
+  function startLegacyRuntime($, diagnostics, runtimeEnvironment) {
     "use strict";
     const runtimeTestSurface = {};
     const { getRealNumber, getNumberString, getNiceNumber } = createNumberFormatting({ numberSuffix });
@@ -57425,6 +57425,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     $().ready(mainAutoEvolveScript);
     return runtimeTestSurface;
+  }
+
+  // src/bootstrap/runtime.ts
+  function startRuntime(jquery, diagnostics, environment) {
+    return startLegacyRuntime(jquery, diagnostics, environment);
   }
 
   // src/main.ts

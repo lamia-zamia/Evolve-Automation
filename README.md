@@ -20,7 +20,7 @@ extracted as well.
 Evolution, universe selection, crafting, spying, and prestige controllers are also modularized.
 Planet selection, jobs, building purchases, research, and mutable-trait automation are modularized.
 Power, storage, outer/galaxy fleets, and mech automation complete the controller extraction: no
-`auto*` implementation remains in the transitional `src/legacy-main.js`. Shared achievement and challenge run-eligibility
+`auto*` implementation remains in the transitional `src/legacy-runtime.js`. Shared achievement and challenge run-eligibility
 evaluation is extracted into the typed `createRunGuards` factory; prestige permission and
 reset-readiness evaluation is extracted into `createPrestigeEligibility`.
 
