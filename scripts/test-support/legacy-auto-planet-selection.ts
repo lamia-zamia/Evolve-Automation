@@ -3,21 +3,20 @@
  * the parity oracle for the migrated planet-selection slice tests. Do not wire
  * into production.
  */
-import type { AutomationDependencies } from "../../src/automation/dependencies.ts";
-
-type Dependencies = AutomationDependencies<
-  | "getGame"
-  | "getSettings"
-  | "getGeneratePlanets"
-  | "getStarLevel"
-  | "getIsAchievementUnlocked"
-  | "getPlanetBiomeGenus"
-  | "getRaces"
-  | "getPlanetBiomes"
-  | "getPlanetTraits"
-  | "getDocument"
-  | "getMouseEvent"
->;
+type LegacyDependency = (...args: any[]) => any;
+type Dependencies = {
+  getGame: LegacyDependency;
+  getSettings: LegacyDependency;
+  getGeneratePlanets: LegacyDependency;
+  getStarLevel: LegacyDependency;
+  getIsAchievementUnlocked: LegacyDependency;
+  getPlanetBiomeGenus: LegacyDependency;
+  getRaces: LegacyDependency;
+  getPlanetBiomes: LegacyDependency;
+  getPlanetTraits: LegacyDependency;
+  getDocument: LegacyDependency;
+  getMouseEvent: LegacyDependency;
+};
 export function createLegacyAutoPlanetSelection({
   getGame,
   getSettings,

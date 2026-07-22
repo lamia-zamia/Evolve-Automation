@@ -1,26 +1,25 @@
-import type { AutomationDependencies } from "../../src/automation/dependencies.ts";
-
-type Dependencies = AutomationDependencies<
-  | "getJobManager"
-  | "getGame"
-  | "getJobs"
-  | "isDemonRace"
-  | "isLumberRace"
-  | "getSettings"
-  | "traitVal"
-  | "getCrafter"
-  | "getWindow"
-  | "getBuildings"
-  | "getHaveTech"
-  | "getResources"
-  | "ticksPerSecond"
-  | "getState"
-  | "findRequiredResourceWeight"
-  | "getPoly"
-  | "isCraftingJob"
-  | "getHaveTask"
-  | "getFoodConsume"
->;
+type LegacyDependency = (...args: any[]) => any;
+type Dependencies = {
+  getJobManager: LegacyDependency;
+  getGame: LegacyDependency;
+  getJobs: LegacyDependency;
+  isDemonRace: LegacyDependency;
+  isLumberRace: LegacyDependency;
+  getSettings: LegacyDependency;
+  traitVal: LegacyDependency;
+  getCrafter: LegacyDependency;
+  getWindow: LegacyDependency;
+  getBuildings: LegacyDependency;
+  getHaveTech: LegacyDependency;
+  getResources: LegacyDependency;
+  ticksPerSecond: LegacyDependency;
+  getState: LegacyDependency;
+  findRequiredResourceWeight: LegacyDependency;
+  getPoly: LegacyDependency;
+  isCraftingJob: LegacyDependency;
+  getHaveTask: LegacyDependency;
+  getFoodConsume: LegacyDependency;
+};
 export function createLegacyAutoJobs({
   getJobManager,
   getGame,

@@ -2,29 +2,28 @@
  * Frozen copy of the legacy createAutoPrestige factory, kept only as the parity
  * oracle for the migrated prestige slice tests. Do not wire into production.
  */
-import type { AutomationDependencies } from "../../src/automation/dependencies.ts";
-
-type Dependencies = AutomationDependencies<
-  | "getState"
-  | "getSettings"
-  | "getGame"
-  | "getResources"
-  | "getBuildings"
-  | "getWarManager"
-  | "getHaveTech"
-  | "getVueById"
-  | "logPrestige"
-  | "getIsBioseederPrestigeAvailable"
-  | "isCataclysmPrestigeAvailable"
-  | "loadQueuedSettings"
-  | "getTechIds"
-  | "isWhiteholePrestigeAvailable"
-  | "isApocalypsePrestigeAvailable"
-  | "isWitchAscensionPrestigeAvailable"
-  | "isAscensionPrestigeAvailable"
-  | "KeyManager"
-  | "isDemonicPrestigeAvailable"
->;
+type LegacyDependency = (...args: any[]) => any;
+type Dependencies = {
+  getState: LegacyDependency;
+  getSettings: LegacyDependency;
+  getGame: LegacyDependency;
+  getResources: LegacyDependency;
+  getBuildings: LegacyDependency;
+  getWarManager: LegacyDependency;
+  getHaveTech: LegacyDependency;
+  getVueById: LegacyDependency;
+  logPrestige: LegacyDependency;
+  getIsBioseederPrestigeAvailable: LegacyDependency;
+  isCataclysmPrestigeAvailable: LegacyDependency;
+  loadQueuedSettings: LegacyDependency;
+  getTechIds: LegacyDependency;
+  isWhiteholePrestigeAvailable: LegacyDependency;
+  isApocalypsePrestigeAvailable: LegacyDependency;
+  isWitchAscensionPrestigeAvailable: LegacyDependency;
+  isAscensionPrestigeAvailable: LegacyDependency;
+  KeyManager: LegacyDependency;
+  isDemonicPrestigeAvailable: LegacyDependency;
+};
 export function createLegacyAutoPrestige({
   getState,
   getSettings,

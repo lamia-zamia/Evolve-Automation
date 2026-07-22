@@ -3,24 +3,23 @@
  * parity oracle for the migrated evolution slice tests. Do not wire into
  * production.
  */
-import type { AutomationDependencies } from "../../src/automation/dependencies.ts";
-
-type Dependencies = AutomationDependencies<
-  | "getGame"
-  | "getState"
-  | "getSettings"
-  | "getSettingsRaw"
-  | "getRaces"
-  | "loadQueuedSettings"
-  | "GameLog"
-  | "getChallenges"
-  | "getEvolutions"
-  | "getPoly"
-  | "getResources"
-  | "getImitations"
-  | "getAutoUniverseSelection"
-  | "getAutoPlanetSelection"
->;
+type LegacyDependency = (...args: any[]) => any;
+type Dependencies = {
+  getGame: LegacyDependency;
+  getState: LegacyDependency;
+  getSettings: LegacyDependency;
+  getSettingsRaw: LegacyDependency;
+  getRaces: LegacyDependency;
+  loadQueuedSettings: LegacyDependency;
+  GameLog: LegacyDependency;
+  getChallenges: LegacyDependency;
+  getEvolutions: LegacyDependency;
+  getPoly: LegacyDependency;
+  getResources: LegacyDependency;
+  getImitations: LegacyDependency;
+  getAutoUniverseSelection: LegacyDependency;
+  getAutoPlanetSelection: LegacyDependency;
+};
 export function createLegacyAutoEvolution({
   getGame,
   getState,
