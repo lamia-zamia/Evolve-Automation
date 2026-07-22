@@ -37,9 +37,9 @@ import {
   SCRIPT_VERSION_EXTRA,
   numberSuffix,
   universes,
-} from "./config.js";
-import { cartesian, k_combinations } from "./utils/collections.js";
-import { Fibonacci, average } from "./utils/math.js";
+} from "./config.ts";
+import { cartesian, k_combinations } from "./utils/collections.ts";
+import { Fibonacci, average } from "./utils/math.ts";
 import { createPropertyHelpers } from "./utils/properties.ts";
 import { createCustomExpressionAdapter } from "./adapters/evolve/custom-expression.ts";
 import { createNumberFormatting } from "./formatting/numbers.ts";

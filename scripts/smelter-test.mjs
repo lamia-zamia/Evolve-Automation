@@ -5,7 +5,7 @@ import {
   readSmelterInput,
 } from "../src/adapters/evolve/smelter.ts";
 import { planSmelter } from "../src/domain/smelter.ts";
-import { CONSUMPTION_BALANCE_MIN } from "../src/config.js";
+import { CONSUMPTION_BALANCE_MIN } from "../src/config.ts";
 
 // Exact copy of the deleted `autoSmelter` body, used as the old-versus-new
 // parity oracle. Do not "clean up" — it must stay byte-faithful to the legacy

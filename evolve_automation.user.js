@@ -125,7 +125,7 @@
     });
   }
 
-  // src/config.js
+  // src/config.ts
   var SCRIPT_VERSION_EXTRA = "[Vollch/Lamia]";
   var CONSUMPTION_BALANCE_MIN = 60;
   var CONSUMPTION_BALANCE_TARGET = 120;
@@ -148,34 +148,47 @@
     "magic"
   ];
 
-  // src/utils/collections.js
+  // src/utils/collections.ts
   function k_combinations(set, k) {
     if (k > set.length || k <= 0) {
       return [[]];
     }
-    if (k == set.length) {
+    if (k === set.length) {
       return [set];
     }
-    if (k == 1) {
-      return set.map((i) => [i]);
+    if (k === 1) {
+      return set.map((item) => [item]);
     }
-    let combs = [];
-    let tailcombs = [];
+    const combinations = [];
     for (let i = 0; i < set.length - k + 1; i++) {
-      tailcombs = k_combinations(set.slice(i + 1), k - 1);
-      for (let j = 0; j < tailcombs.length; j++) {
-        combs.push([set[i], ...tailcombs[j]]);
+      const tailCombinations = k_combinations(set.slice(i + 1), k - 1);
+      for (const tail of tailCombinations) {
+        combinations.push([set[i], ...tail]);
       }
     }
-    return combs;
+    return combinations;
+  }
+  function* cartesianGroups(groups) {
+    const [head, ...tail] = groups;
+    if (!head) return;
+    if (tail.length === 0) {
+      for (const headItem of head) yield [headItem];
+      return;
+    }
+    for (const remainderItem of cartesianGroups(tail)) {
+      for (const headItem of head) {
+        yield [headItem, ...remainderItem];
+      }
+    }
   }
   function* cartesian(head, ...tail) {
-    let remainder = tail.length > 0 ? cartesian(...tail) : [[]];
-    for (let r of remainder) for (let h of head) yield [h, ...r];
+    yield* cartesianGroups([head, ...tail]);
   }
 
-  // src/utils/math.js
-  var Fibonacci = /* @__PURE__ */ ((memo) => (n) => memo[n] ?? (memo[n] = Fibonacci(n - 1) + Fibonacci(n - 2)))([5, 8]);
+  // src/utils/math.ts
+  var Fibonacci = /* @__PURE__ */ ((memo) => function fibonacci(n) {
+    return memo[n] ?? (memo[n] = fibonacci(n - 1) + fibonacci(n - 2));
+  })([5, 8]);
   function average(values) {
     return values.reduce((sum, value) => sum + value) / values.length;
   }

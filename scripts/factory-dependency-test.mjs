@@ -24,7 +24,12 @@ const newArchitectureDirectories = new Set([
   "domain",
   "ports",
 ]);
-const legacyUtilityFiles = new Set(["fast-evaluator.ts"]);
+const legacyUtilityFiles = new Set([
+  "config.ts",
+  "collections.ts",
+  "fast-evaluator.ts",
+  "math.ts",
+]);
 const factoryFiles = findTypeScriptFiles(sourceDirectory).filter((file) => {
   const [topLevelDirectory] = path
     .relative(sourceDirectory, file)

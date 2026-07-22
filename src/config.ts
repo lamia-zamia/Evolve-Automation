@@ -5,7 +5,7 @@ export const SCRIPT_VERSION_EXTRA = "[Vollch/Lamia]";
 export const CONSUMPTION_BALANCE_MIN = 60;
 export const CONSUMPTION_BALANCE_TARGET = 120;
 
-export const numberSuffix = {
+export const numberSuffix: Record<string, number> = {
   K: 1000,
   M: 1000000,
   G: 1000000000,
@@ -16,7 +16,7 @@ export const numberSuffix = {
   Y: 1000000000000000000000000,
 };
 
-export const universes = [
+export const universes: string[] = [
   "standard",
   "heavy",
   "antimatter",
