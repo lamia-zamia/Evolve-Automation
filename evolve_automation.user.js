@@ -46562,7 +46562,7 @@
     });
   }
 
-  // src/ui/production-settings.ts
+  // src/adapters/browser/production-settings.ts
   function createProductionSettings({
     getSettingsRaw,
     getDocument,

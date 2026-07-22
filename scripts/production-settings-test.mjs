@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createProductionSettings } from "../src/ui/production-settings.ts";
+import { createProductionSettings } from "../src/adapters/browser/production-settings.ts";
 
 let settingsRaw = { overrides: {} };
 let document = {

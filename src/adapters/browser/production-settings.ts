@@ -257,14 +257,14 @@ export function createProductionSettings({
     const smelterFuels = getSmelterManager().managedFuelPriorityList();
 
     for (let i = 0; i < smelterFuels.length; i++) {
-      const fuel = smelterFuels[i];
+      const fuel = smelterFuels[i]!;
       newTableBodyText += `<tr value="${fuel.id}" class="script-draggable"><td id="script_smelter_${fuel.id}" style="width:95%"></td><td style="width:5%"><span class="script-lastcolumn"></span></td></tr>`;
     }
     tableBodyNode.append($(newTableBodyText));
 
     // Build all other productions settings rows
     for (let i = 0; i < smelterFuels.length; i++) {
-      const fuel = smelterFuels[i];
+      const fuel = smelterFuels[i]!;
       const productionElement = $("#script_smelter_" + fuel.id);
 
       productionElement.append(buildTableLabel(fuel.id));
@@ -339,14 +339,14 @@ export function createProductionSettings({
     const productionSettings = Object.values(getFactoryManager().Productions);
 
     for (let i = 0; i < productionSettings.length; i++) {
-      const production = productionSettings[i];
+      const production = productionSettings[i]!;
       newTableBodyText += `<tr><td id="script_factory_${production.resource.id}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
     }
     tableBodyNode.append($(newTableBodyText));
 
     // Build all other productions settings rows
     for (let i = 0; i < productionSettings.length; i++) {
-      const production = productionSettings[i];
+      const production = productionSettings[i]!;
       let productionElement = $("#script_factory_" + production.resource.id);
 
       productionElement.append(buildTableLabel(production.resource.name));
@@ -437,14 +437,14 @@ export function createProductionSettings({
     const resources = getResources();
 
     for (let i = 0; i < craftablesList.length; i++) {
-      const resource = craftablesList[i];
+      const resource = craftablesList[i]!;
       newTableBodyText += `<tr><td id="script_foundry_${resource.id}" style="width:21%"></td><td style="width:17%"></td><td style="width:17%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
     }
     tableBodyNode.append($(newTableBodyText));
 
     // Build all other productions settings rows
     for (let i = 0; i < craftablesList.length; i++) {
-      const resource = craftablesList[i];
+      const resource = craftablesList[i]!;
       let productionElement = $("#script_foundry_" + resource.id);
 
       productionElement.append(buildTableLabel(resource.name));
@@ -493,14 +493,14 @@ export function createProductionSettings({
     const droidProducts = Object.values(getDroidManager().Productions);
 
     for (let i = 0; i < droidProducts.length; i++) {
-      const production = droidProducts[i];
+      const production = droidProducts[i]!;
       newTableBodyText += `<tr><td id="script_droid_${production.resource.id}" style="width:35%"><td style="width:20%"></td><td style="width:20%"></td></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
     }
     tableBodyNode.append($(newTableBodyText));
 
     // Build all other productions settings rows
     for (let i = 0; i < droidProducts.length; i++) {
-      const production = droidProducts[i];
+      const production = droidProducts[i]!;
       let productionElement = $("#script_droid_" + production.resource.id);
 
       productionElement.append(buildTableLabel(production.resource.name));
@@ -567,14 +567,14 @@ export function createProductionSettings({
     );
 
     for (let i = 0; i < replicatorProducts.length; i++) {
-      const production = replicatorProducts[i];
+      const production = replicatorProducts[i]!;
       newTableBodyText += `<tr><td id="script_replicator_${production.resource.id}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
     }
     tableBodyNode.append($(newTableBodyText));
 
     // Build all other productions settings rows
     for (let i = 0; i < replicatorProducts.length; i++) {
-      const production = replicatorProducts[i];
+      const production = replicatorProducts[i]!;
       let productionElement = $("#script_replicator_" + production.resource.id);
 
       productionElement.append(buildTableLabel(production.resource.name));
