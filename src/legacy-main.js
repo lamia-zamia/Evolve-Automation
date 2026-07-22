@@ -482,7 +482,7 @@ import { createSettingsControls } from "./ui/settings-controls.ts";
 import { createOverrideCatalog } from "./settings/override-catalog.ts";
 import { createScriptRuntimeUI } from "./ui/script-runtime.ts";
 
-export function startLegacyRuntime($) {
+export function startLegacyRuntime($, testHooks) {
   "use strict";
   const { getRealNumber, getNumberString, getNiceNumber } =
     createNumberFormatting({ numberSuffix });
@@ -821,8 +821,8 @@ export function startLegacyRuntime($) {
     updateProductionTableReplicator,
   } = productionSettingsBrowserAdapter;
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       productionSettings: {
         buildProductionSettings,
         updateProductionSettingsContent,
@@ -2330,8 +2330,8 @@ export function startLegacyRuntime($) {
       ? assessAuthorityRemovalPolicy(view.view, quantity.value)
       : view;
   };
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       authorityPolicy: {
         getAuthorityTarget() {
           const view = readAuthorityView();
@@ -2641,8 +2641,8 @@ export function startLegacyRuntime($) {
     readWindowManager: () => WindowManager,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    window.__EA_TEST_HOOKS__.entityClasses = {
+  if (testHooks) {
+    testHooks.entityClasses = {
       Job,
       BasicJob,
       CraftingJob,
@@ -3023,8 +3023,8 @@ export function startLegacyRuntime($) {
       setResources: (value) => (resources = value),
     });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       entityCatalogs: {
         resources,
         jobs,
@@ -3082,8 +3082,8 @@ export function startLegacyRuntime($) {
     ResourceAction,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       weightingPolicy: {
         wrGlobalCondition,
         wrIndividualCondition,
@@ -3206,8 +3206,8 @@ export function startLegacyRuntime($) {
     logError: (...args) => console.error(...args),
   }));
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       foreignAffairsManagers: { SpyManager, WarManager },
       setForeignAffairsManagersTestContext(context) {
         if ("game" in context) game = context.game;
@@ -3240,8 +3240,8 @@ export function startLegacyRuntime($) {
     getJQuery: () => $,
   }));
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       fleetManagers: { FleetManagerOuter, FleetManager },
       setFleetManagersTestContext(context) {
         if ("game" in context) game = context.game;
@@ -3275,8 +3275,8 @@ export function startLegacyRuntime($) {
     createMutationObserver: (callback) => new MutationObserver(callback),
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       MechManager,
       setMechManagerTestContext(context) {
         if ("game" in context) game = context.game;
@@ -3326,8 +3326,8 @@ export function startLegacyRuntime($) {
     cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value),
   }));
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       infrastructureManagers: { WindowManager, KeyManager, GameLog },
       setInfrastructureManagersTestContext(context) {
         if ("game" in context) game = context.game;
@@ -3349,8 +3349,8 @@ export function startLegacyRuntime($) {
     setFoundryList: (list) => (foundryList = list),
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       updateCraftCost,
       getCraftCostTestLists: () => ({ craftablesList, foundryList }),
       setCraftCostTestContext(context) {
@@ -3383,8 +3383,8 @@ export function startLegacyRuntime($) {
     log: (message) => console.log(message),
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       initialiseState,
       getStateInitializationTestContext: () => ({
         game,
@@ -3420,8 +3420,8 @@ export function startLegacyRuntime($) {
     getRace: () => raceInitializationTestContext?.Race ?? Race,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       initialiseRaces,
       setRaceInitializationTestContext(context) {
         raceInitializationTestContext = context;
@@ -3434,8 +3434,8 @@ export function startLegacyRuntime($) {
     getBuildingManager: () => BuildingManager,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       initBuildingState,
       setBuildingStateTestContext(context) {
         buildings = context.buildings;
@@ -3512,14 +3512,14 @@ export function startLegacyRuntime($) {
       crafterOriginalIds: Object.values(crafter).map((job) => job._originalId),
     });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       settingsMigration: { updateStandAloneSettings },
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       settingsState: {
         updateStateFromSettings,
         updateSettingsFromState,
@@ -3688,8 +3688,8 @@ export function startLegacyRuntime($) {
       : [];
   };
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       runGuards: {
         getStarLevel,
         getAchievementStar,
@@ -3739,8 +3739,8 @@ export function startLegacyRuntime($) {
       queuedSettingsTestActions?.buildScriptSettings ?? buildScriptSettings,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       loadQueuedSettings,
       setQueuedSettingsTestContext(context) {
         settings = context.settings;
@@ -3755,8 +3755,8 @@ export function startLegacyRuntime($) {
   const findRequiredResourceWeight = (resource) =>
     findRequiredResourceWeightPolicy(state.unlockedBuildings, resource);
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       findRequiredResourceWeight,
       setResourceWeightTestContext(context) {
         state = context.state;
@@ -3819,8 +3819,8 @@ export function startLegacyRuntime($) {
     universes,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       generatePlanets,
       setPlanetGenerationTestContext(context) {
         game = context.game;
@@ -3940,8 +3940,8 @@ export function startLegacyRuntime($) {
   });
   const autoHell = () => runHellAutomation(hellAdapter);
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, { autoHell });
+  if (testHooks) {
+    Object.assign(testHooks, { autoHell });
   }
 
   const jobsAdapter = createJobsAdapter({
@@ -3979,8 +3979,8 @@ export function startLegacyRuntime($) {
     nowMs: () => browserClock.nowMs(),
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       autoTax: () => autoTax(),
       setAutoTaxTestContext(context) {
         if ("game" in context) game = context.game;
@@ -4094,8 +4094,8 @@ export function startLegacyRuntime($) {
       tooltips: factoryTooltips,
     });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       autoFactory,
       FactoryManager,
       factorySettings: settings,
@@ -4170,8 +4170,8 @@ export function startLegacyRuntime($) {
       prestigeLogTestActions?.triggerFileDownload ?? triggerFileDownload,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       prestigeLog: { formatLogString, logPrestige },
       setPrestigeLogTestContext(context) {
         settings = context.settings;
@@ -4305,8 +4305,8 @@ export function startLegacyRuntime($) {
   const autoPrestige = () =>
     runPrestige({ reader: prestigeReader, executor: prestigeExecutor });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       autoEvolution,
       autoUniverseSelection,
       autoCraft,
@@ -4324,8 +4324,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       prestigeEligibility: {
         isPrestigeAllowed,
         isCataclysmPrestigeAvailable,
@@ -4463,8 +4463,8 @@ export function startLegacyRuntime($) {
       controls: geneticsControls,
     });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       autoMiningDroid,
       DroidManager,
       autoGraphenePlant,
@@ -4527,8 +4527,8 @@ export function startLegacyRuntime($) {
       executor: gatherResourcesAdapter.executor,
     });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       autoConsume,
       autoReplicator,
       autoMarket,
@@ -4585,8 +4585,8 @@ export function startLegacyRuntime($) {
       : formatTechConflict(conflict, getNumberString);
   };
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       getTechConflict,
       setTechConflictTestContext(context) {
         settings = context.settings;
@@ -4617,8 +4617,8 @@ export function startLegacyRuntime($) {
     return result.outcome.status === "succeeded" ? result.active : true;
   };
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       autoMerc,
       WarManager,
       GameLog,
@@ -4685,8 +4685,8 @@ export function startLegacyRuntime($) {
   });
   const autoPower = () => powerAutomation.run();
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       powerSupport: {
         getCitadelConsumption,
         isHellSupressUseful,
@@ -4702,8 +4702,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       expandStorage,
       setStorageExpansionTestContext(context) {
         game = context.game;
@@ -4749,8 +4749,8 @@ export function startLegacyRuntime($) {
       executor: minorTraitExecutor,
     });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       autoMinorTrait,
       MinorTraitManager,
     });
@@ -4773,8 +4773,8 @@ export function startLegacyRuntime($) {
       executor: mutationExecutor,
     });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       autoPlanetSelection,
       autoJobs,
       autoBuild,
@@ -4818,8 +4818,8 @@ export function startLegacyRuntime($) {
     resources.Money.rateOfChange = result.moneyRate;
   };
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       adjustTradeRoutes,
       setTradeRoutesTestContext(context) {
         settings = context.settings;
@@ -4842,8 +4842,8 @@ export function startLegacyRuntime($) {
   });
   const autoFleetOuter = () => runOuterFleetAutomation(outerFleetAdapter);
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       galaxyIntelligence: {
         getGalaxyCombatShipPower,
         getPiracyMultiplier,
@@ -4918,8 +4918,8 @@ export function startLegacyRuntime($) {
     getHaveTech: () => scriptDataTestActions?.haveTech ?? haveTech,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       scriptDataLifecycle: { updateScriptData, finalizeScriptData },
       setScriptDataTestContext(context) {
         settings = context.settings;
@@ -4940,8 +4940,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       autoPower,
       autoStorage,
       autoFleetOuter,
@@ -4956,8 +4956,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       storageRequirements: { calculateRequiredStorages },
       setStorageRequirementTestContext(context) {
         settings = context.settings;
@@ -4975,8 +4975,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       prioritizeDemandedResources,
       makeDemandProject(cost, progress) {
         return Object.defineProperties(Object.create(Project.prototype), {
@@ -5043,8 +5043,8 @@ export function startLegacyRuntime($) {
     inflationChallengeMoney: INFLATION_CHALLENGE_MONEY,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       updatePriorityTargets: () => updatePriorityTargets(),
       setPriorityTargetsTestContext(context) {
         settings = context.settings;
@@ -5124,8 +5124,8 @@ export function startLegacyRuntime($) {
     return true;
   };
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       checkEvolutionResult: () => checkEvolutionResult(),
       setEvolutionResultTestContext(context) {
         settings = context.settings;
@@ -5149,8 +5149,8 @@ export function startLegacyRuntime($) {
     getMainVue: () => win.$("#mainColumn > div:first-child")[0].__vue__,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       updateTabs: (update) => updateTabs(update),
       setTabRefreshTestContext(context) {
         state = context.state;
@@ -5184,8 +5184,8 @@ export function startLegacyRuntime($) {
     };
   };
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       getMultiSegmentedTimeLeft,
       makeTargetTimingProject(progress, currentStep, cost) {
         return Object.defineProperties(Object.create(Project.prototype), {
@@ -5226,8 +5226,8 @@ export function startLegacyRuntime($) {
     savePlannerStats: (stats) => savePlannerStats(stats),
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       plannerAnalysis: {
         plannerLimitingResource,
         makePlannerStats,
@@ -5242,8 +5242,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       stateLogLifecycle: {
         makeStateLog,
         loadStateLog,
@@ -5274,8 +5274,8 @@ export function startLegacyRuntime($) {
     savePlannerStats,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       updateBuildPlanner: () => updateBuildPlanner(),
       setBuildPlannerTestContext(context) {
         settings = context.settings;
@@ -5347,8 +5347,8 @@ export function startLegacyRuntime($) {
       clock: browserClock,
     });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       updateState: () => updateState(),
       // Real prototypes, so the instanceof classification of queued targets is exercised for real.
       makeStateUpdateTargets() {
@@ -5374,8 +5374,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       gameActionVerification: {
         verifyGameActions,
         verifyGameActionsExist,
@@ -5454,8 +5454,8 @@ export function startLegacyRuntime($) {
     },
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       scriptBootstrap: { initialiseScript, mainAutoEvolveScript },
       setScriptBootstrapTestContext(context) {
         if ("game" in context) game = context.game;
@@ -5489,8 +5489,8 @@ export function startLegacyRuntime($) {
     getPoly: () => poly,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       logFilter: { buildFilterRegExp, filterLog },
       setLogFilterTestContext(context) {
         settingsRaw = context.settingsRaw;
@@ -5530,8 +5530,8 @@ export function startLegacyRuntime($) {
       isTechnology: (value) => value instanceof Technology,
     });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       tooltipUI: { getTooltipInfo, tooltipObserverCallback, addTooltip },
       setTooltipUITestContext(context) {
         if ("settings" in context) settings = context.settings;
@@ -5601,8 +5601,8 @@ export function startLegacyRuntime($) {
     genusOpposition: customRaceGenusOpposition,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       customRaceModel: {
         customRaceRankCost,
         customRaceGeneBalance,
@@ -5646,8 +5646,8 @@ export function startLegacyRuntime($) {
     getAlert: () => (message) => alert(message),
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       customRaceUI: {
         showCustomRaceImportStatus,
         getCustomRacePreset,
@@ -5797,8 +5797,8 @@ export function startLegacyRuntime($) {
     }
   };
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       automate: () => automate(),
       setTickTestContext(context) {
         settings = context.settings;
@@ -5831,8 +5831,8 @@ export function startLegacyRuntime($) {
     getScriptVersionExtra: () => SCRIPT_VERSION_EXTRA,
     getScriptVersion: () => userscriptEnvironment.getScriptVersion(),
   });
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       scriptRuntimeUI: {
         updateDebugData,
         addScriptStyle,
@@ -5882,8 +5882,8 @@ export function startLegacyRuntime($) {
     readFastEval: () => fastEval,
     readGovernor: () => getGovernor,
   });
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       settingsControls: {
         removeScriptSettings,
         buildScriptSettings,
@@ -6055,8 +6055,8 @@ export function startLegacyRuntime($) {
   const { buildInterfaceSettings, updateInterfaceSettingsContent } =
     interfaceSettingsBrowserAdapter;
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       interfaceSettings: {
         buildInterfaceSettings,
         updateInterfaceSettingsContent,
@@ -6082,8 +6082,8 @@ export function startLegacyRuntime($) {
       addSettingsNumber,
     });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       stateLogSettings: {
         buildStateLogSettings,
         updateStateLogSettingsContent,
@@ -6103,8 +6103,8 @@ export function startLegacyRuntime($) {
     average,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       calculateMechStats,
       setMechStatsTestContext(context) {
         game = context.game;
@@ -6114,140 +6114,140 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       evolutionSettings: evolutionSettingsBrowserAdapter,
       setEvolutionSettingsTestContext(context) {
         evolutionSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       prestigeSettings: prestigeSettingsBrowserAdapter,
       setPrestigeSettingsTestContext(context) {
         prestigeSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       triggerSettings: triggerSettingsBrowserAdapter,
       setTriggerSettingsTestContext(context) {
         triggerSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       fleetSettings: fleetSettingsBrowserAdapter,
       setFleetSettingsTestContext(context) {
         fleetSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       ejectorSettings: ejectorSettingsBrowserAdapter,
       setEjectorSettingsTestContext(context) {
         ejectorSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       marketSettings: marketSettingsBrowserAdapter,
       setMarketSettingsTestContext(context) {
         marketSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       warSettings: warSettingsBrowserAdapter,
       setWarSettingsTestContext(context) {
         warSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       hellSettings: hellSettingsBrowserAdapter,
       setHellSettingsTestContext(context) {
         hellSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       mechSettings: mechSettingsBrowserAdapter,
       setMechSettingsTestContext(context) {
         mechSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       challengeHelperSettings: challengeHelperSettingsBrowserAdapter,
       setChallengeHelperSettingsTestContext(context) {
         challengeHelperSettingsTestActions = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       governmentSettings: governmentSettingsBrowserAdapter,
       setGovernmentSettingsTestContext(context) {
         governmentSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       planetSettings: planetSettingsBrowserAdapter,
       setPlanetSettingsTestContext(context) {
         planetSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       projectSettings: projectSettingsBrowserAdapter,
       setProjectSettingsTestContext(context) {
         projectSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       storageSettings: storageSettingsBrowserAdapter,
       setStorageSettingsTestContext(context) {
         storageSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       magicSettings: magicSettingsBrowserAdapter,
       setMagicSettingsTestContext(context) {
         magicSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       jobSettings: jobSettingsBrowserAdapter,
       setJobSettingsTestContext(context) {
         jobSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       weightingSettings: weightingSettingsBrowserAdapter,
       setWeightingSettingsTestContext(context) {
         weightingSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       buildingSettings: buildingSettingsBrowserAdapter,
       setBuildingSettingsTestContext(context) {
         buildingSettingsTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       optionsModal: optionsModalBrowserAdapter,
       setOptionsModalTestContext(context) {
         optionsModalTestContext = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
       setAchievementGuardSettingsTestContext(context) {
         achievementGuardSettingsTestActions = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       authoritySettings: authoritySettingsBrowserAdapter,
       setAuthoritySettingsTestContext(context) {
         authoritySettingsTestActions = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       generalSettings: generalSettingsBrowserAdapter,
       setGeneralSettingsTestContext(context) {
         generalSettingsTestActions = context;
       },
     });
-    Object.assign(window.__EA_TEST_HOOKS__, {
+    Object.assign(testHooks, {
       researchSettings: researchSettingsBrowserAdapter,
       setResearchSettingsTestContext(context) {
         researchSettingsTestContext = context;
@@ -6333,8 +6333,8 @@ export function startLegacyRuntime($) {
     makeToggleSwitchesMutuallyExclusive,
   } = traitSettingsBrowserAdapter;
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       traitSettings: {
         buildTraitSettings,
         updateImitateWarning,
@@ -6426,8 +6426,8 @@ export function startLegacyRuntime($) {
     }),
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       updateUI: () => updateUI(),
       setUIRefreshTestContext(context) {
         settings = context.settings;
@@ -6443,8 +6443,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       prestigeTopBar: prestigeTopBarBrowserAdapter,
       setPrestigeTopBarTestContext(context) {
         prestigeTopBarTestContext = context;
@@ -6484,8 +6484,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       loggingSettings: loggingSettingsBrowserAdapter,
       setLoggingSettingsTestContext(context) {
         loggingSettingsTestContext = context;
@@ -6493,8 +6493,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       finalInlineUiBoundaries: {
         updateActiveTargetsUI,
         buildActiveTargetsUI,
@@ -6526,12 +6526,12 @@ export function startLegacyRuntime($) {
     isHTMLElement: (value) => value instanceof HTMLElement,
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, { sorterHelper });
+  if (testHooks) {
+    Object.assign(testHooks, { sorterHelper });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       gameRates: {
         ticksPerSecond,
         getHealingRate,
@@ -6551,8 +6551,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       getCostConflict,
       setCostConflictTestContext(context) {
         state = context.state;
@@ -6561,16 +6561,16 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    window.__EA_TEST_HOOKS__.numberFormatting = {
+  if (testHooks) {
+    testHooks.numberFormatting = {
       getRealNumber,
       getNumberString,
       getNiceNumber,
     };
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       runtimeQueries: { getGovernor, haveTask, haveTech, isEarlyGame },
       setRuntimeQueryTestContext(context) {
         game = context.game;
@@ -6578,8 +6578,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       raceProfile: { isHungryRace, isDemonRace, isLumberRace, getOccCosts },
       setRaceProfileTestContext(context) {
         game = context.game;
@@ -6588,8 +6588,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       foreignGovernment: { getGovName, getGovPower },
       setForeignGovernmentTestContext(context) {
         game = context.game;
@@ -6598,8 +6598,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       fastEvaluator: {
         fastEval,
         cacheSize: fastEvalCacheSize,
@@ -6611,8 +6611,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       propertyHelpers: { normalizeProperties, addProps },
       setPropertyHelperTestContext(context) {
         settings = context.settings;
@@ -6620,8 +6620,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       browserRuntime: { getVueById, triggerFileDownload },
       setBrowserRuntimeTestContext(context) {
         win = context.win;
@@ -6629,8 +6629,8 @@ export function startLegacyRuntime($) {
     });
   }
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       traitVal,
       setTraitValueTestContext(context) {
         game = context.game;
@@ -6668,8 +6668,8 @@ export function startLegacyRuntime($) {
     logToConsole: (message) => console.log(message),
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       settingsTransfer: { importSettings, exportSettings },
       setSettingsTransferTestContext(context) {
         settingsRaw = context.settingsRaw;
@@ -6692,8 +6692,8 @@ export function startLegacyRuntime($) {
     getDate: () => new Date(),
   });
 
-  if (window.__EA_TEST_HOOKS__) {
-    Object.assign(window.__EA_TEST_HOOKS__, {
+  if (testHooks) {
+    Object.assign(testHooks, {
       gameCompatibility: poly,
     });
   }

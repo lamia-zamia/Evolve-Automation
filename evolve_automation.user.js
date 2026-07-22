@@ -33,6 +33,21 @@
     return globalObject["$"];
   }
 
+  // src/adapters/userscript/test-hooks.ts
+  function isRecord2(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function readTestHooks(globalObject) {
+    if (!isRecord2(globalObject)) return void 0;
+    let hooks;
+    try {
+      hooks = globalObject["__EA_TEST_HOOKS__"];
+    } catch {
+      return void 0;
+    }
+    return isRecord2(hooks) ? hooks : void 0;
+  }
+
   // src/config.js
   var SCRIPT_VERSION_EXTRA = "[Vollch/Lamia]";
   var CONSUMPTION_BALANCE_MIN = 60;
@@ -13821,7 +13836,7 @@
   }
 
   // src/adapters/evolve/cost-conflicts.ts
-  function isRecord2(value) {
+  function isRecord3(value) {
     return typeof value === "object" && value !== null;
   }
   function isFiniteNumber(value) {
@@ -13843,15 +13858,15 @@
   }
   function readCostConflictInput(rawState, rawResources, rawAction) {
     try {
-      if (!isRecord2(rawState) || !Array.isArray(rawState["conflictTargets"])) {
+      if (!isRecord3(rawState) || !Array.isArray(rawState["conflictTargets"])) {
         return unavailable("invalid-state");
       }
       const rawTargets = rawState["conflictTargets"];
       if (rawTargets.length === 0) {
         return readyInput({}, [], {});
       }
-      if (!isRecord2(rawResources)) return unavailable("invalid-resource");
-      if (!isRecord2(rawAction) || !isRecord2(rawAction["cost"])) {
+      if (!isRecord3(rawResources)) return unavailable("invalid-resource");
+      if (!isRecord3(rawAction) || !isRecord3(rawAction["cost"])) {
         return unavailable("invalid-action");
       }
       const actionCost = freezeCostMap(rawAction["cost"], true);
@@ -13860,7 +13875,7 @@
       const resources = {};
       for (let targetIndex = 0; targetIndex < rawTargets.length; targetIndex++) {
         const rawTarget = rawTargets[targetIndex];
-        if (!isRecord2(rawTarget) || typeof rawTarget["name"] !== "string" || !isRecord2(rawTarget["cost"])) {
+        if (!isRecord3(rawTarget) || typeof rawTarget["name"] !== "string" || !isRecord3(rawTarget["cost"])) {
           return unavailable("invalid-target", { targetIndex });
         }
         const cost = freezeCostMap(rawTarget["cost"], false);
@@ -13870,7 +13885,7 @@
         for (const resourceId3 of Object.keys(cost)) {
           if (resources[resourceId3] !== void 0) continue;
           const rawResource = rawResources[resourceId3];
-          if (!isRecord2(rawResource) || typeof rawResource["name"] !== "string" || !isFiniteNumber(rawResource["currentQuantity"])) {
+          if (!isRecord3(rawResource) || typeof rawResource["name"] !== "string" || !isFiniteNumber(rawResource["currentQuantity"])) {
             return unavailable("invalid-resource", {
               resourceId: resourceId3,
               targetIndex
@@ -13906,7 +13921,7 @@
   }
 
   // src/domain/planner-analysis.ts
-  function isRecord3(value) {
+  function isRecord4(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
   function isNonNegativeSafeInteger(value) {
@@ -13963,9 +13978,9 @@
     });
   }
   function parsePlannerStats(value) {
-    if (!isRecord3(value)) return null;
+    if (!isRecord4(value)) return null;
     const { startDay, day, reset, samples, total } = value;
-    if (!isNonNegativeSafeInteger(startDay) || !isNonNegativeSafeInteger(day) || !isNonNegativeSafeInteger(reset) || !isNonNegativeSafeInteger(total) || startDay > day || !isRecord3(samples)) {
+    if (!isNonNegativeSafeInteger(startDay) || !isNonNegativeSafeInteger(day) || !isNonNegativeSafeInteger(reset) || !isNonNegativeSafeInteger(total) || startDay > day || !isRecord4(samples)) {
       return null;
     }
     const validatedSamples = {};
@@ -14003,7 +14018,7 @@
   }
 
   // src/adapters/evolve/planner-analysis.ts
-  function isRecord4(value) {
+  function isRecord5(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
   function isFiniteNumber2(value) {
@@ -14019,7 +14034,7 @@
   }
   function readPlannerLimitInput(rawTarget, rawResources) {
     try {
-      if (!isRecord4(rawTarget) || typeof rawTarget["isAffordable"] !== "function") {
+      if (!isRecord5(rawTarget) || typeof rawTarget["isAffordable"] !== "function") {
         return unavailableLimit("invalid-target");
       }
       const affordable2 = rawTarget["isAffordable"].call(rawTarget);
@@ -14033,8 +14048,8 @@
         });
       }
       const rawCosts = rawTarget["cost"];
-      if (!isRecord4(rawCosts)) return unavailableLimit("invalid-target");
-      if (!isRecord4(rawResources)) return unavailableLimit("invalid-resource");
+      if (!isRecord5(rawCosts)) return unavailableLimit("invalid-target");
+      if (!isRecord5(rawResources)) return unavailableLimit("invalid-resource");
       const requirements = [];
       for (const resourceId3 of Object.keys(rawCosts)) {
         const requiredQuantity = rawCosts[resourceId3];
@@ -14042,7 +14057,7 @@
           return unavailableLimit("invalid-target", resourceId3);
         }
         const rawResource = rawResources[resourceId3];
-        if (!isRecord4(rawResource) || typeof rawResource["title"] !== "string" || typeof rawResource["isUnlocked"] !== "function") {
+        if (!isRecord5(rawResource) || typeof rawResource["title"] !== "string" || typeof rawResource["isUnlocked"] !== "function") {
           return unavailableLimit("invalid-resource", resourceId3);
         }
         const currentQuantity = rawResource["currentQuantity"];
@@ -14080,15 +14095,15 @@
   }
   function readPlannerRun(rawGame) {
     try {
-      if (!isRecord4(rawGame)) {
+      if (!isRecord5(rawGame)) {
         return Object.freeze({
           status: "unavailable",
           reason: "invalid-game-state"
         });
       }
       const global = rawGame["global"];
-      const stats = isRecord4(global) ? global["stats"] : void 0;
-      if (!isRecord4(stats)) {
+      const stats = isRecord5(global) ? global["stats"] : void 0;
+      if (!isRecord5(stats)) {
         return Object.freeze({
           status: "unavailable",
           reason: "invalid-game-state"
@@ -15643,7 +15658,7 @@
   }
 
   // src/adapters/evolve/evolution-result.ts
-  function isRecord5(value) {
+  function isRecord6(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
   function isFinite(value) {
@@ -15661,21 +15676,21 @@
   }
   function readEvolutionResultInput(rawSettings, rawGame, rawRaces, rawTraitManager) {
     try {
-      if (!isRecord5(rawSettings)) return unavailable2("invalid-settings");
+      if (!isRecord6(rawSettings)) return unavailable2("invalid-settings");
       const userEvolutionTarget = rawSettings["userEvolutionTarget"];
       if (typeof userEvolutionTarget !== "string") {
         return unavailable2("invalid-settings", "userEvolutionTarget");
       }
-      const global = isRecord5(rawGame) ? rawGame["global"] : void 0;
-      const race2 = isRecord5(global) ? global["race"] : void 0;
-      if (!isRecord5(race2)) return unavailable2("invalid-game-state", "race");
+      const global = isRecord6(rawGame) ? rawGame["global"] : void 0;
+      const race2 = isRecord6(global) ? global["race"] : void 0;
+      if (!isRecord6(race2)) return unavailable2("invalid-game-state", "race");
       const species = race2["species"];
       if (typeof species !== "string") {
         return unavailable2("invalid-game-state", "race.species");
       }
-      if (!isRecord5(rawRaces)) return unavailable2("invalid-race-model");
+      if (!isRecord6(rawRaces)) return unavailable2("invalid-race-model");
       const speciesRace = rawRaces[species];
-      if (!isRecord5(speciesRace)) {
+      if (!isRecord6(speciesRace)) {
         return unavailable2("invalid-race-model", species);
       }
       const speciesName = speciesRace["name"];
@@ -15692,7 +15707,7 @@
       }
       let bestWeighting = Number.NEGATIVE_INFINITY;
       for (const [id, candidate] of Object.entries(rawRaces)) {
-        if (!isRecord5(candidate)) {
+        if (!isRecord6(candidate)) {
           return unavailable2("invalid-race-model", id);
         }
         const weighting = callWeighting(candidate, false);
@@ -15704,7 +15719,7 @@
       let targetHabitability;
       if (userEvolutionTarget !== "auto" && userEvolutionTarget !== species) {
         const targetRace = rawRaces[userEvolutionTarget];
-        const getHabitability = isRecord5(targetRace) ? targetRace["getHabitability"] : void 0;
+        const getHabitability = isRecord6(targetRace) ? targetRace["getHabitability"] : void 0;
         if (typeof getHabitability !== "function") {
           return unavailable2(
             "invalid-race-model",
@@ -15723,18 +15738,18 @@
       const traits = [];
       const autoMutateTraits = Boolean(rawSettings["autoMutateTraits"]);
       if (autoMutateTraits) {
-        const gameRaces = isRecord5(rawGame) ? rawGame["races"] : void 0;
-        const baseRace = isRecord5(gameRaces) ? gameRaces[species] : void 0;
-        const baseTraits = isRecord5(baseRace) ? baseRace["traits"] : void 0;
-        if (!isRecord5(baseTraits)) {
+        const gameRaces = isRecord6(rawGame) ? rawGame["races"] : void 0;
+        const baseRace = isRecord6(gameRaces) ? gameRaces[species] : void 0;
+        const baseTraits = isRecord6(baseRace) ? baseRace["traits"] : void 0;
+        if (!isRecord6(baseTraits)) {
           return unavailable2("invalid-game-state", "races.traits");
         }
-        const priorityList = isRecord5(rawTraitManager) ? rawTraitManager["priorityList"] : void 0;
+        const priorityList = isRecord6(rawTraitManager) ? rawTraitManager["priorityList"] : void 0;
         if (!Array.isArray(priorityList)) {
           return unavailable2("invalid-trait", "priorityList");
         }
         for (const rawTrait of priorityList) {
-          if (!isRecord5(rawTrait)) return unavailable2("invalid-trait");
+          if (!isRecord6(rawTrait)) return unavailable2("invalid-trait");
           const traitName = rawTrait["traitName"];
           const name = rawTrait["name"];
           if (typeof traitName !== "string" || typeof name !== "string") {
@@ -15872,7 +15887,7 @@
   }
 
   // src/adapters/evolve/authority.ts
-  function isRecord6(value) {
+  function isRecord7(value) {
     return typeof value === "object" && value !== null;
   }
   function isFiniteNumber3(value) {
@@ -15886,10 +15901,10 @@
   }
   function readAuthorityPolicyView(rawGame, rawSettings, rawResources, readHighPopulationPercent) {
     try {
-      if (!isRecord6(rawSettings) || typeof rawSettings["authorityManage"] !== "boolean" || !isFiniteNumber3(rawSettings["generalMinimumAuthority"])) {
+      if (!isRecord7(rawSettings) || typeof rawSettings["authorityManage"] !== "boolean" || !isFiniteNumber3(rawSettings["generalMinimumAuthority"])) {
         return unavailable3("invalid-settings");
       }
-      if (!isRecord6(rawResources) || !isRecord6(rawResources["Authority"])) {
+      if (!isRecord7(rawResources) || !isRecord7(rawResources["Authority"])) {
         return unavailable3("invalid-resource");
       }
       const authority = rawResources["Authority"];
@@ -15898,15 +15913,15 @@
       if (!isFiniteNumber3(current) || current < 0 || !isFiniteNumber3(maximum) || maximum < 0) {
         return unavailable3("invalid-resource");
       }
-      if (!isRecord6(rawGame) || !isRecord6(rawGame["global"])) {
+      if (!isRecord7(rawGame) || !isRecord7(rawGame["global"])) {
         return unavailable3("invalid-game-state");
       }
       const global = rawGame["global"];
-      if (!isRecord6(global["tech"]) || !isRecord6(global["race"]) || !isRecord6(global["civic"])) {
+      if (!isRecord7(global["tech"]) || !isRecord7(global["race"]) || !isRecord7(global["civic"])) {
         return unavailable3("invalid-game-state");
       }
       const civic = global["civic"];
-      if (!isRecord6(civic["govern"])) {
+      if (!isRecord7(civic["govern"])) {
         return unavailable3("invalid-game-state");
       }
       const governmentType = civic["govern"]["type"];
@@ -15952,7 +15967,7 @@
   }
 
   // src/adapters/evolve/queue-items.ts
-  function isRecord7(value) {
+  function isRecord8(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
   function isFiniteNumber4(value) {
@@ -15968,8 +15983,8 @@
   }
   function readCostAffordabilityInput(rawCost, rawResources, capacity) {
     try {
-      if (!isRecord7(rawCost)) return unavailableCost("invalid-cost");
-      if (!isRecord7(rawResources)) return unavailableCost("invalid-resource");
+      if (!isRecord8(rawCost)) return unavailableCost("invalid-cost");
+      if (!isRecord8(rawResources)) return unavailableCost("invalid-resource");
       const requirements = [];
       for (const resourceId3 in rawCost) {
         const requiredQuantity = rawCost[resourceId3];
@@ -15977,7 +15992,7 @@
           return unavailableCost("invalid-cost", resourceId3);
         }
         const rawResource = rawResources[resourceId3];
-        if (!isRecord7(rawResource)) {
+        if (!isRecord8(rawResource)) {
           return unavailableCost("invalid-resource", resourceId3);
         }
         const availableQuantity = capacity === "maximum" ? rawResource["maxQuantity"] : rawResource["currentQuantity"];
@@ -16001,7 +16016,7 @@
     }
   }
   function validateCostMap(rawCost, itemId) {
-    if (!isRecord7(rawCost)) return unavailableTarget("invalid-cost", { itemId });
+    if (!isRecord8(rawCost)) return unavailableTarget("invalid-cost", { itemId });
     const cost = {};
     for (const resourceId3 in rawCost) {
       const quantity = rawCost[resourceId3];
@@ -16033,7 +16048,7 @@
     if (rawTarget === void 0 || rawTarget === null) {
       return Object.freeze({ status: "missing", itemId });
     }
-    if (!isRecord7(rawTarget) || typeof rawTarget["id"] !== "string" || typeof rawTarget["title"] !== "string" || typeof rawTarget["isAffordable"] !== "function") {
+    if (!isRecord8(rawTarget) || typeof rawTarget["id"] !== "string" || typeof rawTarget["title"] !== "string" || typeof rawTarget["isAffordable"] !== "function") {
       return unavailableTarget("invalid-target", { itemId });
     }
     const costResult = validateCostMap(rawTarget["cost"], itemId);
@@ -16050,13 +16065,13 @@
   }
   function readQueueTarget(rawItem, dependencies) {
     try {
-      if (!isRecord7(rawItem) || typeof rawItem["id"] !== "string") {
+      if (!isRecord8(rawItem) || typeof rawItem["id"] !== "string") {
         return unavailableTarget("invalid-item");
       }
       const itemId = rawItem["id"];
       const action = rawItem["action"];
       if (action === "tp-ship") {
-        if (typeof rawItem["label"] !== "string" || !isRecord7(dependencies.poly)) {
+        if (typeof rawItem["label"] !== "string" || !isRecord8(dependencies.poly)) {
           return unavailableTarget("invalid-item", { itemId });
         }
         const shipCosts = dependencies.poly["shipCosts"];
@@ -16071,7 +16086,7 @@
         );
       }
       if (action === "hell-mech") {
-        if (typeof rawItem["label"] !== "string" || !isRecord7(dependencies.mechManager)) {
+        if (typeof rawItem["label"] !== "string" || !isRecord8(dependencies.mechManager)) {
           return unavailableTarget("invalid-item", { itemId });
         }
         const getMechCost = dependencies.mechManager["getMechCost"];
@@ -16092,13 +16107,13 @@
           dependencies.resources
         );
       }
-      if (!isRecord7(dependencies.buildingIds) || !isRecord7(dependencies.arpaIds)) {
+      if (!isRecord8(dependencies.buildingIds) || !isRecord8(dependencies.arpaIds)) {
         return unavailableTarget("invalid-target", { itemId });
       }
       const rawTarget = dependencies.buildingIds[itemId] || dependencies.arpaIds[itemId];
       return readCatalogTarget(itemId, rawTarget);
     } catch {
-      const itemId = isRecord7(rawItem) && typeof rawItem["id"] === "string" ? rawItem["id"] : void 0;
+      const itemId = isRecord8(rawItem) && typeof rawItem["id"] === "string" ? rawItem["id"] : void 0;
       return unavailableTarget(
         "inaccessible-data",
         itemId === void 0 ? {} : { itemId }
@@ -16122,7 +16137,7 @@
   }
 
   // src/adapters/evolve/target-timing.ts
-  function isRecord8(value) {
+  function isRecord9(value) {
     return typeof value === "object" && value !== null;
   }
   function isFiniteNumber5(value) {
@@ -16135,16 +16150,16 @@
   }
   function readTargetTimingInput(rawGame, rawTarget, isProject) {
     try {
-      if (!isRecord8(rawTarget) || !isRecord8(rawTarget["cost"])) {
+      if (!isRecord9(rawTarget) || !isRecord9(rawTarget["cost"])) {
         return unavailable4("invalid-target");
       }
       const remainingSegments = isProject ? projectSegmentsRemaining(rawTarget) : segmentedTargetSegmentsRemaining(rawTarget);
       if (remainingSegments === void 0) {
         return unavailable4("invalid-target");
       }
-      if (!isRecord8(rawGame)) return unavailable4("invalid-game-state");
+      if (!isRecord9(rawGame)) return unavailable4("invalid-game-state");
       const global = rawGame["global"];
-      if (!isRecord8(global) || !isRecord8(global["resource"])) {
+      if (!isRecord9(global) || !isRecord9(global["resource"])) {
         return unavailable4("invalid-game-state");
       }
       const costs = rawTarget["cost"];
@@ -16156,7 +16171,7 @@
           return unavailable4("invalid-target", resourceId3);
         }
         const rawResource = gameResources[resourceId3];
-        if (!isRecord8(rawResource)) {
+        if (!isRecord9(rawResource)) {
           return unavailable4("invalid-resource", resourceId3);
         }
         const currentQuantity = rawResource["amount"];
@@ -22032,7 +22047,7 @@
   }
 
   // src/adapters/evolve/retirement-prep.ts
-  function isRecord9(value) {
+  function isRecord10(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
   function finiteNonNegative(value) {
@@ -22045,16 +22060,16 @@
   }
   function readRetirementAssistInput(rawSettings, rawGame, isolationResearched) {
     try {
-      if (!isRecord9(rawSettings)) return unavailable5("invalid-settings");
+      if (!isRecord10(rawSettings)) return unavailable5("invalid-settings");
       const assist = rawSettings["retirementChallengeAssist"];
       if (assist !== void 0 && typeof assist !== "boolean") {
         return unavailable5("invalid-settings", "retirementChallengeAssist");
       }
-      if (!isRecord9(rawGame)) return unavailable5("invalid-game-state");
+      if (!isRecord10(rawGame)) return unavailable5("invalid-game-state");
       const global = rawGame["global"];
-      if (!isRecord9(global)) return unavailable5("invalid-game-state");
+      if (!isRecord10(global)) return unavailable5("invalid-game-state");
       const race2 = global["race"];
-      if (!isRecord9(race2)) return unavailable5("invalid-game-state", "race");
+      if (!isRecord10(race2)) return unavailable5("invalid-game-state", "race");
       return Object.freeze({
         status: "ready",
         input: Object.freeze({
@@ -22070,7 +22085,7 @@
   }
   function readBuilding(rawBuildings, id) {
     const building3 = rawBuildings[id];
-    if (!isRecord9(building3)) return void 0;
+    if (!isRecord10(building3)) return void 0;
     const name = building3["name"];
     const count2 = building3["count"];
     if (typeof name !== "string" || !finiteNonNegative(count2)) return void 0;
@@ -22088,7 +22103,7 @@
           return unavailable5("invalid-thresholds", key);
         }
       }
-      if (!isRecord9(rawBuildings)) return unavailable5("invalid-building");
+      if (!isRecord10(rawBuildings)) return unavailable5("invalid-building");
       const fusionGenerators = readBuilding(rawBuildings, "TauFusionGenerator");
       if (!fusionGenerators) {
         return unavailable5("invalid-building", "TauFusionGenerator");
@@ -22097,9 +22112,9 @@
       if (!factories) return unavailable5("invalid-building", "TauFactory");
       const scienceLabs = readBuilding(rawBuildings, "TauDiseaseLab");
       if (!scienceLabs) return unavailable5("invalid-building", "TauDiseaseLab");
-      if (!isRecord9(rawResources)) return unavailable5("invalid-resource");
+      if (!isRecord10(rawResources)) return unavailable5("invalid-resource");
       const rawGraphene = rawResources["Graphene"];
-      if (!isRecord9(rawGraphene)) {
+      if (!isRecord10(rawGraphene)) {
         return unavailable5("invalid-resource", "Graphene");
       }
       const grapheneName = rawGraphene["name"];
@@ -22190,7 +22205,7 @@
   }
 
   // src/adapters/evolve/achievement-guards.ts
-  function isRecord10(value) {
+  function isRecord11(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
   function finiteNonNegative2(value) {
@@ -22212,15 +22227,15 @@
     );
   }
   function readGameParts(rawGame) {
-    if (!isRecord10(rawGame)) return void 0;
+    if (!isRecord11(rawGame)) return void 0;
     const global = rawGame["global"];
-    if (!isRecord10(global)) return void 0;
+    if (!isRecord11(global)) return void 0;
     const stats = global["stats"];
-    if (!isRecord10(stats)) return void 0;
+    if (!isRecord11(stats)) return void 0;
     return { game: rawGame, global, stats };
   }
   function readCurrentLevel(rawGame) {
-    if (!isRecord10(rawGame)) return void 0;
+    if (!isRecord11(rawGame)) return void 0;
     const alevel = rawGame["alevel"];
     if (typeof alevel !== "function") return void 0;
     const value = alevel.call(rawGame);
@@ -22233,7 +22248,7 @@
       const rawFeats = parts.stats["feat"];
       if (rawFeats === void 0)
         return Object.freeze({ status: "ready", star: 0 });
-      if (!isRecord10(rawFeats))
+      if (!isRecord11(rawFeats))
         return starUnavailable("invalid-achievement", "feat");
       const value = rawFeats[id];
       if (value === void 0 || value === null) {
@@ -22245,7 +22260,7 @@
     }
   }
   function readAchievementStarLevelContext(rawContext) {
-    if (!isRecord10(rawContext)) return levelUnavailable("invalid-settings");
+    if (!isRecord11(rawContext)) return levelUnavailable("invalid-settings");
     const mapping = {
       challengePlasmid: "challenge_plasmid",
       challengeTrade: "challenge_trade",
@@ -22271,7 +22286,7 @@
     try {
       const parts = readGameParts(rawGame);
       if (!parts) return starUnavailable("invalid-game-state");
-      if (!isRecord10(rawPoly)) return starUnavailable("invalid-universe");
+      if (!isRecord11(rawPoly)) return starUnavailable("invalid-universe");
       const universeAffix = rawPoly["universeAffix"];
       if (typeof universeAffix !== "function") {
         return starUnavailable("invalid-universe");
@@ -22279,14 +22294,14 @@
       const affix = universeAffix.call(rawPoly, universe);
       if (typeof affix !== "string") return starUnavailable("invalid-universe");
       const rawAchievements = parts.stats["achieve"];
-      if (!isRecord10(rawAchievements)) {
+      if (!isRecord11(rawAchievements)) {
         return starUnavailable("invalid-achievement", "achieve");
       }
       const rawAchievement = rawAchievements[id];
       if (rawAchievement === void 0 || rawAchievement === null) {
         return Object.freeze({ status: "ready", star: 0 });
       }
-      if (!isRecord10(rawAchievement)) {
+      if (!isRecord11(rawAchievement)) {
         return starUnavailable("invalid-achievement", `achieve.${id}`);
       }
       const value = rawAchievement[affix];
@@ -22299,9 +22314,9 @@
     }
   }
   function readBuildingCount(rawBuildings, id) {
-    if (!isRecord10(rawBuildings)) return void 0;
+    if (!isRecord11(rawBuildings)) return void 0;
     const building3 = rawBuildings[id];
-    if (!isRecord10(building3)) return void 0;
+    if (!isRecord11(building3)) return void 0;
     const count2 = building3["count"];
     return finiteNonNegative2(count2) ? count2 : void 0;
   }
@@ -22324,7 +22339,7 @@
     }
   }
   function configuredFallback(rawSettings, guard) {
-    if (!isRecord10(rawSettings)) return true;
+    if (!isRecord11(rawSettings)) return true;
     return rawSettings["achievementGuards"] !== false && rawSettings[guard] !== false;
   }
   function readAchievementGuardInput(rawSettings, rawGame, rawPoly, rawBuildings, requestedGuard) {
@@ -22333,7 +22348,7 @@
     }
     const fallback = configuredFallback(rawSettings, requestedGuard);
     try {
-      if (!isRecord10(rawSettings)) {
+      if (!isRecord11(rawSettings)) {
         return guardUnavailable("invalid-settings", fallback);
       }
       const master = rawSettings["achievementGuards"];
@@ -22436,8 +22451,8 @@
         case "guardAnarchist": {
           const prestigeType = rawSettings["prestigeType"];
           const civic = parts.global["civic"];
-          const govern = isRecord10(civic) ? civic["govern"] : void 0;
-          const government = isRecord10(govern) ? govern["type"] : void 0;
+          const govern = isRecord11(civic) ? civic["govern"] : void 0;
+          const government = isRecord11(govern) ? govern["type"] : void 0;
           if (typeof prestigeType !== "string") {
             return guardUnavailable("invalid-settings", fallback, "prestigeType");
           }
@@ -22490,8 +22505,8 @@
         }
         case "guardSecondEvolution": {
           const race2 = parts.global["race"];
-          const species = isRecord10(race2) ? race2["species"] : void 0;
-          const gods = isRecord10(race2) ? race2["gods"] : void 0;
+          const species = isRecord11(race2) ? race2["species"] : void 0;
+          const gods = isRecord11(race2) ? race2["gods"] : void 0;
           if (typeof species !== "string" || typeof gods !== "string") {
             return guardUnavailable("invalid-game-state", fallback, "race");
           }
@@ -22531,7 +22546,7 @@
   }
 
   // src/adapters/evolve/banana-republic.ts
-  function isRecord11(value) {
+  function isRecord12(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
   function finiteNonNegative3(value) {
@@ -22546,14 +22561,14 @@
     return Object.freeze({ ...unavailable6(reason, field), fallbackActive });
   }
   function readGlobal(rawGame) {
-    if (!isRecord11(rawGame)) return void 0;
+    if (!isRecord12(rawGame)) return void 0;
     const global = rawGame["global"];
-    return isRecord11(global) ? global : void 0;
+    return isRecord12(global) ? global : void 0;
   }
   function readStats(rawGame) {
     const global = readGlobal(rawGame);
     const stats = global?.["stats"];
-    return isRecord11(stats) ? stats : void 0;
+    return isRecord12(stats) ? stats : void 0;
   }
   function copyUnavailable(result2) {
     return unavailable6(result2.reason, result2.field);
@@ -22565,7 +22580,7 @@
     try {
       const stats = readStats(rawGame);
       if (!stats) return unavailable6("invalid-game-state");
-      if (!isRecord11(rawPoly)) return unavailable6("invalid-universe");
+      if (!isRecord12(rawPoly)) return unavailable6("invalid-universe");
       const universeAffix = rawPoly["universeAffix"];
       if (typeof universeAffix !== "function") {
         return unavailable6("invalid-universe");
@@ -22573,11 +22588,11 @@
       const universe = universeAffix.call(rawPoly);
       if (typeof universe !== "string") return unavailable6("invalid-universe");
       const rawBanana = stats["banana"];
-      if (!isRecord11(rawBanana)) {
+      if (!isRecord12(rawBanana)) {
         return unavailable6("invalid-achievement", "stats.banana");
       }
       const rawObjective = rawBanana[requestedObjective];
-      if (!isRecord11(rawObjective)) {
+      if (!isRecord12(rawObjective)) {
         return unavailable6(
           "invalid-achievement",
           `stats.banana.${requestedObjective}`
@@ -22600,7 +22615,7 @@
       let featStar = 0;
       const rawFeats = stats["feat"];
       if (rawFeats !== void 0) {
-        if (!isRecord11(rawFeats)) {
+        if (!isRecord12(rawFeats)) {
           return unavailable6("invalid-achievement", "stats.feat");
         }
         const rawStar = rawFeats["banana"];
@@ -22612,10 +22627,10 @@
         }
       }
       const rawResources = global["resource"];
-      if (!isRecord11(rawResources)) return unavailable6("invalid-game-state");
+      if (!isRecord12(rawResources)) return unavailable6("invalid-game-state");
       const tradeRoutes = [];
       for (const [id, rawResource] of Object.entries(rawResources)) {
-        if (!isRecord11(rawResource)) {
+        if (!isRecord12(rawResource)) {
           return unavailable6("invalid-game-state", `resource.${id}`);
         }
         if (!Object.hasOwn(rawResource, "trade")) continue;
@@ -22654,9 +22669,9 @@
     });
   }
   function readBananaRepublicGuardInput(rawSettings, rawGame, rawPoly) {
-    const fallbackConfigured = !isRecord11(rawSettings) || rawSettings["achievementGuards"] !== false && rawSettings["guardBananaRepublic"] !== false;
+    const fallbackConfigured = !isRecord12(rawSettings) || rawSettings["achievementGuards"] !== false && rawSettings["guardBananaRepublic"] !== false;
     try {
-      if (!isRecord11(rawSettings)) {
+      if (!isRecord12(rawSettings)) {
         return guardUnavailable2("invalid-settings", fallbackConfigured);
       }
       const master = rawSettings["achievementGuards"];
@@ -22669,7 +22684,7 @@
       }
       const global = readGlobal(rawGame);
       const race2 = global?.["race"];
-      const bananaRace = isRecord11(race2) ? race2["banana"] : void 0;
+      const bananaRace = isRecord12(race2) ? race2["banana"] : void 0;
       if (bananaRace === false || bananaRace === void 0) {
         return Object.freeze({ status: "inactive" });
       }
@@ -22715,7 +22730,7 @@
   }
 
   // src/adapters/evolve/inflation-assist.ts
-  function isRecord12(value) {
+  function isRecord13(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
   function finite(value) {
@@ -22731,16 +22746,16 @@
   }
   function readInflationAssistInput(rawSettings, rawGame, rawWheelbarrowStar) {
     try {
-      if (!isRecord12(rawSettings)) return unavailable7("invalid-settings");
+      if (!isRecord13(rawSettings)) return unavailable7("invalid-settings");
       const assist = rawSettings["inflationChallengeAssist"];
       if (assist !== void 0 && typeof assist !== "boolean") {
         return unavailable7("invalid-settings", "inflationChallengeAssist");
       }
-      if (!isRecord12(rawGame)) return unavailable7("invalid-game-state");
+      if (!isRecord13(rawGame)) return unavailable7("invalid-game-state");
       const global = rawGame["global"];
-      if (!isRecord12(global)) return unavailable7("invalid-game-state");
+      if (!isRecord13(global)) return unavailable7("invalid-game-state");
       const race2 = global["race"];
-      if (!isRecord12(race2)) return unavailable7("invalid-game-state", "race");
+      if (!isRecord13(race2)) return unavailable7("invalid-game-state", "race");
       const inflationRun = Object.hasOwn(race2, "inflation") && race2["inflation"] !== false;
       const alevel = rawGame["alevel"];
       if (typeof alevel !== "function") {
@@ -22771,9 +22786,9 @@
       if (!finiteNonNegative4(rawTargetMoney)) {
         return unavailable7("invalid-settings", "inflationChallengeMoney");
       }
-      if (!isRecord12(rawResources)) return unavailable7("invalid-resource");
+      if (!isRecord13(rawResources)) return unavailable7("invalid-resource");
       const money = rawResources["Money"];
-      if (!isRecord12(money)) return unavailable7("invalid-resource", "Money");
+      if (!isRecord13(money)) return unavailable7("invalid-resource", "Money");
       const currentMoney = money["currentQuantity"];
       const maxMoney = money["maxQuantity"];
       const moneyRate = money["rateOfChange"];
@@ -22870,7 +22885,7 @@
   }
 
   // src/adapters/evolve/prestige-eligibility.ts
-  function isRecord13(value) {
+  function isRecord14(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
   function finiteNonNegative5(value) {
@@ -22897,28 +22912,28 @@
   }
   function readBuilding2(buildings, id) {
     const building3 = buildings[id];
-    return isRecord13(building3) ? building3 : void 0;
+    return isRecord14(building3) ? building3 : void 0;
   }
   function readTechState(techIds, id, includeAffordable) {
     const rawTech = techIds[id];
-    if (!isRecord13(rawTech)) return void 0;
+    if (!isRecord14(rawTech)) return void 0;
     const unlocked2 = callBoolean2(rawTech, "isUnlocked");
     const affordable2 = includeAffordable ? callBoolean2(rawTech, "isAffordable") : false;
     return unlocked2 === void 0 || affordable2 === void 0 ? void 0 : Object.freeze({ unlocked: unlocked2, affordable: affordable2 });
   }
   function readPrestigePermissionView(rawSettings, rawGame) {
     try {
-      if (!isRecord13(rawSettings)) return unavailable8("invalid-settings");
+      if (!isRecord14(rawSettings)) return unavailable8("invalid-settings");
       const autoPrestige = readBoolean(rawSettings, "autoPrestige");
       const waitForArpa = readBoolean(rawSettings, "prestigeWaitAT");
       const selectedType = rawSettings["prestigeType"];
       if (autoPrestige === void 0 || waitForArpa === void 0 || typeof selectedType !== "string") {
         return unavailable8("invalid-settings");
       }
-      if (!isRecord13(rawGame)) return unavailable8("invalid-game-state");
+      if (!isRecord14(rawGame)) return unavailable8("invalid-game-state");
       const global = rawGame["global"];
-      const gameSettings = isRecord13(global) ? global["settings"] : void 0;
-      if (!isRecord13(gameSettings) || !finiteNonNegative5(gameSettings["at"])) {
+      const gameSettings = isRecord14(global) ? global["settings"] : void 0;
+      if (!isRecord14(gameSettings) || !finiteNonNegative5(gameSettings["at"])) {
         return unavailable8("invalid-game-state", "settings.at");
       }
       return Object.freeze({
@@ -22934,18 +22949,18 @@
   }
   function readPillarEligibilityView(rawSettings, rawGame, rawResources) {
     try {
-      if (!isRecord13(rawSettings)) return unavailable8("invalid-settings");
+      if (!isRecord14(rawSettings)) return unavailable8("invalid-settings");
       const requirePillar = readBoolean(rawSettings, "prestigeAscensionPillar");
       if (requirePillar === void 0) return unavailable8("invalid-settings");
-      if (!isRecord13(rawGame)) return unavailable8("invalid-game-state");
+      if (!isRecord14(rawGame)) return unavailable8("invalid-game-state");
       const global = rawGame["global"];
       const alevel = rawGame["alevel"];
-      if (!isRecord13(global) || typeof alevel !== "function") {
+      if (!isRecord14(global) || typeof alevel !== "function") {
         return unavailable8("invalid-game-state");
       }
       const race2 = global["race"];
       const pillars = global["pillars"];
-      if (!isRecord13(race2) || !isRecord13(pillars) || typeof race2["species"] !== "string" || typeof race2["universe"] !== "string") {
+      if (!isRecord14(race2) || !isRecord14(pillars) || typeof race2["species"] !== "string" || typeof race2["universe"] !== "string") {
         return unavailable8("invalid-game-state");
       }
       const ascensionLevel = alevel.call(rawGame);
@@ -22953,9 +22968,9 @@
       if (!finiteNonNegative5(ascensionLevel) || rawPillarLevel !== void 0 && !finiteNonNegative5(rawPillarLevel)) {
         return unavailable8("invalid-game-state");
       }
-      if (!isRecord13(rawResources)) return unavailable8("invalid-resource");
+      if (!isRecord14(rawResources)) return unavailable8("invalid-resource");
       const harmony = rawResources["Harmony"];
-      if (!isRecord13(harmony) || !finiteNonNegative5(harmony["currentQuantity"])) {
+      if (!isRecord14(harmony) || !finiteNonNegative5(harmony["currentQuantity"])) {
         return unavailable8("invalid-resource", "Harmony");
       }
       const pillarLevel = rawPillarLevel;
@@ -22983,7 +22998,7 @@
         rawResources
       );
       if (pillar.status === "unavailable") return pillar;
-      if (!isRecord13(rawBuildings)) return unavailable8("invalid-building");
+      if (!isRecord14(rawBuildings)) return unavailable8("invalid-building");
       const siriusAscend = readBuilding2(rawBuildings, "SiriusAscend");
       if (siriusAscend === void 0) {
         return unavailable8("invalid-building", "SiriusAscend");
@@ -23011,11 +23026,11 @@
         rawResources
       );
       if (pillar.status === "unavailable") return pillar;
-      if (!isRecord13(rawGame)) return unavailable8("invalid-game-state");
+      if (!isRecord14(rawGame)) return unavailable8("invalid-game-state");
       const global = rawGame["global"];
-      const race2 = isRecord13(global) ? global["race"] : void 0;
-      if (!isRecord13(race2)) return unavailable8("invalid-game-state", "race");
-      if (!isRecord13(rawBuildings)) return unavailable8("invalid-building");
+      const race2 = isRecord14(global) ? global["race"] : void 0;
+      if (!isRecord14(race2)) return unavailable8("invalid-game-state", "race");
+      if (!isRecord14(rawBuildings)) return unavailable8("invalid-building");
       const absorptionChamber = readBuilding2(
         rawBuildings,
         "PitAbsorptionChamber"
@@ -23025,7 +23040,7 @@
       if (absorptionChamber === void 0 || !finiteNonNegative5(absorptionChamber["count"])) {
         return unavailable8("invalid-building", "PitAbsorptionChamber.count");
       }
-      if (!isRecord13(capacitorInstance) || !finiteNonNegative5(capacitorInstance["energy"])) {
+      if (!isRecord14(capacitorInstance) || !finiteNonNegative5(capacitorInstance["energy"])) {
         return unavailable8(
           "invalid-building",
           "PitSoulCapacitor.instance.energy"
@@ -23058,10 +23073,10 @@
   }
   function readGeckEligibilityView(rawSettings, rawBuildings, isAchievementUnlocked2) {
     try {
-      if (!isRecord13(rawSettings)) return unavailable8("invalid-settings");
+      if (!isRecord14(rawSettings)) return unavailable8("invalid-settings");
       const requiredGecks = readNumber(rawSettings, "prestigeGECK");
       if (requiredGecks === void 0) return unavailable8("invalid-settings");
-      if (!isRecord13(rawBuildings)) return unavailable8("invalid-building");
+      if (!isRecord14(rawBuildings)) return unavailable8("invalid-building");
       const geck = readBuilding2(rawBuildings, "GasSpaceDockGECK");
       if (geck === void 0 || !finiteNonNegative5(geck["count"])) {
         return unavailable8("invalid-building", "GasSpaceDockGECK.count");
@@ -23083,7 +23098,7 @@
   }
   function readPrestigeEligibilityView(rawSettings, rawGame, rawResources, rawBuildings, rawTechIds, rawMechManager, haveTech, isAchievementUnlocked2) {
     try {
-      if (!isRecord13(rawSettings)) return unavailable8("invalid-settings");
+      if (!isRecord14(rawSettings)) return unavailable8("invalid-settings");
       const settings = {
         autoPrestige: readBoolean(rawSettings, "autoPrestige"),
         waitForArpa: readBoolean(rawSettings, "prestigeWaitAT"),
@@ -23099,14 +23114,14 @@
       for (const [field, value] of Object.entries(settings)) {
         if (value === void 0) return unavailable8("invalid-settings", field);
       }
-      if (!isRecord13(rawGame)) return unavailable8("invalid-game-state");
+      if (!isRecord14(rawGame)) return unavailable8("invalid-game-state");
       const global = rawGame["global"];
-      if (!isRecord13(global)) return unavailable8("invalid-game-state", "global");
+      if (!isRecord14(global)) return unavailable8("invalid-game-state", "global");
       const gameSettings = global["settings"];
       const race2 = global["race"];
       const pillars = global["pillars"];
       const interstellar = global["interstellar"];
-      if (!isRecord13(gameSettings) || !isRecord13(race2) || !isRecord13(pillars) || !isRecord13(interstellar) || typeof race2["species"] !== "string" || typeof race2["universe"] !== "string" || !finiteNonNegative5(gameSettings["at"])) {
+      if (!isRecord14(gameSettings) || !isRecord14(race2) || !isRecord14(pillars) || !isRecord14(interstellar) || typeof race2["species"] !== "string" || typeof race2["universe"] !== "string" || !finiteNonNegative5(gameSettings["at"])) {
         return unavailable8("invalid-game-state");
       }
       const alevel = rawGame["alevel"];
@@ -23126,18 +23141,18 @@
       let blackholeMass = 0;
       let blackholeExotic = 0;
       if (rawEngine !== null && rawEngine !== void 0) {
-        if (!isRecord13(rawEngine) || !finiteNonNegative5(rawEngine["mass"]) || !finiteNonNegative5(rawEngine["exotic"])) {
+        if (!isRecord14(rawEngine) || !finiteNonNegative5(rawEngine["mass"]) || !finiteNonNegative5(rawEngine["exotic"])) {
           return unavailable8("invalid-game-state", "stellar_engine");
         }
         blackholeMass = rawEngine["mass"];
         blackholeExotic = rawEngine["exotic"];
       }
-      if (!isRecord13(rawResources)) return unavailable8("invalid-resource");
+      if (!isRecord14(rawResources)) return unavailable8("invalid-resource");
       const harmony = rawResources["Harmony"];
-      if (!isRecord13(harmony) || !finiteNonNegative5(harmony["currentQuantity"])) {
+      if (!isRecord14(harmony) || !finiteNonNegative5(harmony["currentQuantity"])) {
         return unavailable8("invalid-resource", "Harmony");
       }
-      if (!isRecord13(rawBuildings)) return unavailable8("invalid-building");
+      if (!isRecord14(rawBuildings)) return unavailable8("invalid-building");
       const buildingIds = [
         "GasSpaceDock",
         "GasSpaceDockShipSegment",
@@ -23175,8 +23190,8 @@
         return unavailable8("invalid-building");
       }
       const capacitorInstance = buildingRecords["PitSoulCapacitor"]["instance"];
-      const soulCapacitorEnergy = isRecord13(capacitorInstance) && finiteNonNegative5(capacitorInstance["energy"]) ? capacitorInstance["energy"] : 0;
-      if (!isRecord13(rawTechIds)) return unavailable8("invalid-tech");
+      const soulCapacitorEnergy = isRecord14(capacitorInstance) && finiteNonNegative5(capacitorInstance["energy"]) ? capacitorInstance["energy"] : 0;
+      if (!isRecord14(rawTechIds)) return unavailable8("invalid-tech");
       const techIds = [
         "tech-dial_it_to_11",
         "tech-exotic_infusion",
@@ -23197,7 +23212,7 @@
         if (state === void 0) return unavailable8("invalid-tech", id);
         techStates[id] = state;
       }
-      if (!isRecord13(rawMechManager)) return unavailable8("invalid-mech-state");
+      if (!isRecord14(rawMechManager)) return unavailable8("invalid-mech-state");
       const mechActive = rawMechManager["isActive"];
       const mechPotential = rawMechManager["mechsPotential"];
       if (typeof mechActive !== "boolean" || !finiteNonNegative5(mechPotential)) {
@@ -23385,7 +23400,7 @@
   }
 
   // src/adapters/evolve/tech-conflicts.ts
-  function isRecord14(value) {
+  function isRecord15(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
   function finiteNonNegative6(value) {
@@ -23413,7 +23428,7 @@
   }
   function readTechConflictInput(rawTech, rawSettings, rawResources, rawState, rawGame, dependencies) {
     try {
-      if (!isRecord14(rawTech) || typeof rawTech["_vueBinding"] !== "string" || !isRecord14(rawTech["cost"])) {
+      if (!isRecord15(rawTech) || typeof rawTech["_vueBinding"] !== "string" || !isRecord15(rawTech["cost"])) {
         return unavailable9("invalid-target");
       }
       const itemId = rawTech["_vueBinding"];
@@ -23421,7 +23436,7 @@
       if (rawSoulGemCost !== void 0 && !finiteNonNegative6(rawSoulGemCost)) {
         return unavailable9("invalid-target", "cost.Soul_Gem");
       }
-      if (!isRecord14(rawSettings)) return unavailable9("invalid-settings");
+      if (!isRecord15(rawSettings)) return unavailable9("invalid-settings");
       const rawIgnoredResearch = rawSettings["researchIgnore"];
       if (!Array.isArray(rawIgnoredResearch) || !rawIgnoredResearch.every((value) => typeof value === "string")) {
         return unavailable9("invalid-settings", "researchIgnore");
@@ -23454,26 +23469,26 @@
       for (const [field, value] of Object.entries(settings)) {
         if (value === void 0) return unavailable9("invalid-settings", field);
       }
-      if (!isRecord14(rawResources)) return unavailable9("invalid-resource");
+      if (!isRecord15(rawResources)) return unavailable9("invalid-resource");
       const soulGems = rawResources["Soul_Gem"];
       const knowledge = rawResources["Knowledge"];
-      if (!isRecord14(soulGems) || !finiteNonNegative6(soulGems["currentQuantity"])) {
+      if (!isRecord15(soulGems) || !finiteNonNegative6(soulGems["currentQuantity"])) {
         return unavailable9("invalid-resource", "Soul_Gem.currentQuantity");
       }
-      if (!isRecord14(knowledge) || !finiteNonNegative6(knowledge["maxQuantity"])) {
+      if (!isRecord15(knowledge) || !finiteNonNegative6(knowledge["maxQuantity"])) {
         return unavailable9("invalid-resource", "Knowledge.maxQuantity");
       }
-      if (!isRecord14(rawState)) return unavailable9("invalid-state");
+      if (!isRecord15(rawState)) return unavailable9("invalid-state");
       const rawLastAtMs = rawState["whiteholeLastStabilise"];
       if (rawLastAtMs !== void 0 && rawLastAtMs !== 0 && !finiteNonNegative6(rawLastAtMs)) {
         return unavailable9("invalid-state", "whiteholeLastStabilise");
       }
       const lastAtMs = rawLastAtMs === void 0 || rawLastAtMs === 0 ? null : rawLastAtMs;
-      if (!isRecord14(rawGame)) return unavailable9("invalid-game-state");
+      if (!isRecord15(rawGame)) return unavailable9("invalid-game-state");
       const global = rawGame["global"];
       const alevel = rawGame["alevel"];
-      const race2 = isRecord14(global) ? global["race"] : void 0;
-      if (!isRecord14(race2) || typeof race2["species"] !== "string" || typeof race2["gods"] !== "string" || typeof alevel !== "function") {
+      const race2 = isRecord15(global) ? global["race"] : void 0;
+      if (!isRecord15(race2) || typeof race2["species"] !== "string" || typeof race2["gods"] !== "string" || typeof alevel !== "function") {
         return unavailable9("invalid-game-state");
       }
       const achievementLevel2 = alevel.call(rawGame);
@@ -23535,7 +23550,7 @@
             return unavailable9("invalid-external-result", "fanatAchievements");
           }
           for (const rawCombination of dependencies.fanatAchievements) {
-            if (!isRecord14(rawCombination) || typeof rawCombination["race"] !== "string" || typeof rawCombination["god"] !== "string" || typeof rawCombination["achieve"] !== "string") {
+            if (!isRecord15(rawCombination) || typeof rawCombination["race"] !== "string" || typeof rawCombination["god"] !== "string" || typeof rawCombination["achieve"] !== "string") {
               return unavailable9("invalid-external-result", "fanatAchievements");
             }
             const unlocked2 = dependencies.isAchievementUnlocked(
@@ -26736,22 +26751,22 @@
       gm: readSafely(() => typeof GM === "undefined" ? void 0 : GM)
     });
   }
-  function isRecord15(value) {
+  function isRecord16(value) {
     return typeof value === "object" && value !== null;
   }
   function asBridge(value) {
     return typeof value === "function" ? value : void 0;
   }
   function readVersion(info) {
-    if (!isRecord15(info)) return void 0;
+    if (!isRecord16(info)) return void 0;
     const script = info["script"];
-    if (!isRecord15(script)) return void 0;
+    if (!isRecord16(script)) return void 0;
     const version = script["version"];
     return typeof version === "string" && version.length > 0 ? version : void 0;
   }
   function createUserscriptEnvironment(browserWindow, globals = readAmbientUserscriptGlobals()) {
     const candidatePageWindow = readSafely(() => globals.unsafeWindow);
-    const pageWindow = isRecord15(candidatePageWindow) ? candidatePageWindow : browserWindow;
+    const pageWindow = isRecord16(candidatePageWindow) ? candidatePageWindow : browserWindow;
     const cloneBridge = asBridge(readSafely(() => globals.cloneInto));
     const exportBridge = asBridge(readSafely(() => globals.exportFunction));
     const needsSandboxBridge = pageWindow !== browserWindow && cloneBridge !== void 0 && exportBridge !== void 0;
@@ -26783,7 +26798,7 @@
         const directInfo = globals.gmInfo;
         if (directInfo !== void 0) return readVersion(directInfo);
         const gm = globals.gm;
-        return isRecord15(gm) ? readVersion(gm["info"]) : void 0;
+        return isRecord16(gm) ? readVersion(gm["info"]) : void 0;
       });
     }
     return Object.freeze({
@@ -52163,7 +52178,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
   }
 
   // src/legacy-main.js
-  function startLegacyRuntime($) {
+  function startLegacyRuntime($, testHooks) {
     "use strict";
     const { getRealNumber, getNumberString, getNiceNumber } = createNumberFormatting({ numberSuffix });
     const browserClock = createBrowserClock();
@@ -52468,8 +52483,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       updateProductionTableMiningDrone,
       updateProductionTableReplicator
     } = productionSettingsBrowserAdapter;
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         productionSettings: {
           buildProductionSettings,
           updateProductionSettingsContent,
@@ -53563,8 +53578,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       const view = readAuthorityView();
       return view.status === "ready" ? assessAuthorityRemoval(view.view, quantity.value) : view;
     };
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         authorityPolicy: {
           getAuthorityTarget() {
             const view = readAuthorityView();
@@ -53848,8 +53863,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readWin: () => win,
       readWindowManager: () => WindowManager
     });
-    if (window.__EA_TEST_HOOKS__) {
-      window.__EA_TEST_HOOKS__.entityClasses = {
+    if (testHooks) {
+      testHooks.entityClasses = {
         Job,
         BasicJob,
         CraftingJob,
@@ -54207,8 +54222,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => haveTech,
       setResources: (value) => resources = value
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         entityCatalogs: {
           resources,
           jobs,
@@ -54264,8 +54279,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getCitadelConsumptionFn: () => getCitadelConsumption,
       ResourceAction
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         weightingPolicy: {
           wrGlobalCondition,
           wrIndividualCondition,
@@ -54373,8 +54388,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getOccCosts,
       logError: (...args) => console.error(...args)
     }));
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         foreignAffairsManagers: { SpyManager, WarManager },
         setForeignAffairsManagersTestContext(context) {
           if ("game" in context) game = context.game;
@@ -54405,8 +54420,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => haveTech,
       getJQuery: () => $
     }));
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         fleetManagers: { FleetManagerOuter, FleetManager },
         setFleetManagersTestContext(context) {
           if ("game" in context) game = context.game;
@@ -54437,8 +54452,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2),
       createMutationObserver: (callback) => new MutationObserver(callback)
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         MechManager,
         setMechManagerTestContext(context) {
           if ("game" in context) game = context.game;
@@ -54484,8 +54499,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getKeyboardEvent: () => KeyboardEvent,
       cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value)
     }));
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         infrastructureManagers: { WindowManager, KeyManager, GameLog },
         setInfrastructureManagersTestContext(context) {
           if ("game" in context) game = context.game;
@@ -54504,8 +54519,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       setCraftablesList: (list) => craftablesList = list,
       setFoundryList: (list) => foundryList = list
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         updateCraftCost,
         getCraftCostTestLists: () => ({ craftablesList, foundryList }),
         setCraftCostTestContext(context) {
@@ -54532,8 +54547,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => stateInitializationTestActions?.haveTech ?? haveTech,
       log: (message) => console.log(message)
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         initialiseState,
         getStateInitializationTestContext: () => ({
           game,
@@ -54563,8 +54578,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getEvolutionAction: () => raceInitializationTestContext?.EvolutionAction ?? EvolutionAction,
       getRace: () => raceInitializationTestContext?.Race ?? Race
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         initialiseRaces,
         setRaceInitializationTestContext(context) {
           raceInitializationTestContext = context;
@@ -54575,8 +54590,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getBuildings: () => buildings,
       getBuildingManager: () => BuildingManager
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         initBuildingState,
         setBuildingStateTestContext(context) {
           buildings = context.buildings;
@@ -54643,13 +54658,13 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       })),
       crafterOriginalIds: Object.values(crafter).map((job) => job._originalId)
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         settingsMigration: { updateStandAloneSettings }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         settingsState: {
           updateStateFromSettings,
           updateSettingsFromState,
@@ -54793,8 +54808,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getNumberString
       ) : [];
     };
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         runGuards: {
           getStarLevel,
           getAchievementStar,
@@ -54833,8 +54848,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getRemoveScriptSettings: () => queuedSettingsTestActions?.removeScriptSettings ?? removeScriptSettings,
       getBuildScriptSettings: () => queuedSettingsTestActions?.buildScriptSettings ?? buildScriptSettings
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         loadQueuedSettings,
         setQueuedSettingsTestContext(context) {
           settings = context.settings;
@@ -54846,8 +54861,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       });
     }
     const findRequiredResourceWeight2 = (resource2) => findRequiredResourceWeight(state.unlockedBuildings, resource2);
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         findRequiredResourceWeight: findRequiredResourceWeight2,
         setResourceWeightTestContext(context) {
           state = context.state;
@@ -54903,8 +54918,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getIsAchievementUnlocked: () => isAchievementUnlocked2,
       universes
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         generatePlanets,
         setPlanetGenerationTestContext(context) {
           game = context.game;
@@ -55014,8 +55029,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       debugLog: (message) => console.log(message)
     });
     const autoHell = () => runHellAutomation(hellAdapter);
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, { autoHell });
+    if (testHooks) {
+      Object.assign(testHooks, { autoHell });
     }
     const jobsAdapter = createJobsAdapter({
       getJobManager: () => JobManager,
@@ -55049,8 +55064,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       clearKeyModifiers: () => KeyManager.set(false, false, false),
       nowMs: () => browserClock.nowMs()
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         autoTax: () => autoTax(),
         setAutoTaxTestContext(context) {
           if ("game" in context) game = context.game;
@@ -55157,8 +55172,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       executor: factoryAdapter.executor,
       tooltips: factoryTooltips
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         autoFactory,
         FactoryManager,
         factorySettings: settings,
@@ -55222,8 +55237,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getSaveStateLog: () => prestigeLogTestActions?.saveStateLog ?? saveStateLog,
       getTriggerFileDownload: () => prestigeLogTestActions?.triggerFileDownload ?? triggerFileDownload
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         prestigeLog: { formatLogString, logPrestige },
         setPrestigeLogTestContext(context) {
           settings = context.settings;
@@ -55335,8 +55350,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       loadQueuedSettings
     });
     const autoPrestige = () => runPrestige({ reader: prestigeReader, executor: prestigeExecutor });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         autoEvolution,
         autoUniverseSelection,
         autoCraft,
@@ -55353,8 +55368,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         prestigeEligibility: {
           isPrestigeAllowed: isPrestigeAllowed2,
           isCataclysmPrestigeAvailable: isCataclysmPrestigeAvailable2,
@@ -55481,8 +55496,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       executor: geneticsAdapter.executor,
       controls: geneticsControls
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         autoMiningDroid,
         DroidManager,
         autoGraphenePlant,
@@ -55538,8 +55553,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       reader: gatherResourcesAdapter.reader,
       executor: gatherResourcesAdapter.executor
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         autoConsume,
         autoReplicator,
         autoMarket,
@@ -55591,8 +55606,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       const conflict2 = findTechConflict(readResult.input);
       return conflict2 === null ? false : formatTechConflict(conflict2, getNumberString);
     };
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         getTechConflict,
         setTechConflictTestContext(context) {
           settings = context.settings;
@@ -55619,8 +55634,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       });
       return result2.outcome.status === "succeeded" ? result2.active : true;
     };
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         autoMerc,
         WarManager,
         GameLog,
@@ -55683,8 +55698,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       warnings: powerWarnings
     });
     const autoPower = () => powerAutomation.run();
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         powerSupport: {
           getCitadelConsumption,
           isHellSupressUseful,
@@ -55699,8 +55714,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         expandStorage,
         setStorageExpansionTestContext(context) {
           game = context.game;
@@ -55742,8 +55757,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       reader: minorTraitReader,
       executor: minorTraitExecutor
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         autoMinorTrait,
         MinorTraitManager
       });
@@ -55763,8 +55778,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       reader: mutationReader,
       executor: mutationExecutor
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         autoPlanetSelection,
         autoJobs,
         autoBuild,
@@ -55806,8 +55821,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
       resources.Money.rateOfChange = result2.moneyRate;
     };
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         adjustTradeRoutes,
         setTradeRoutesTestContext(context) {
           settings = context.settings;
@@ -55828,8 +55843,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGameLog: () => GameLog
     });
     const autoFleetOuter = () => runOuterFleetAutomation(outerFleetAdapter);
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         galaxyIntelligence: {
           getGalaxyCombatShipPower,
           getPiracyMultiplier,
@@ -55897,8 +55912,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getTicksPerSecond: () => scriptDataTestActions?.ticksPerSecond ?? ticksPerSecond,
       getHaveTech: () => scriptDataTestActions?.haveTech ?? haveTech
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         scriptDataLifecycle: { updateScriptData, finalizeScriptData },
         setScriptDataTestContext(context) {
           settings = context.settings;
@@ -55918,8 +55933,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         autoPower,
         autoStorage,
         autoFleetOuter,
@@ -55933,8 +55948,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         storageRequirements: { calculateRequiredStorages },
         setStorageRequirementTestContext(context) {
           settings = context.settings;
@@ -55950,8 +55965,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         prioritizeDemandedResources,
         makeDemandProject(cost, progress) {
           return Object.defineProperties(Object.create(Project.prototype), {
@@ -56011,8 +56026,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       inflationChallengeShouldSaveMoney,
       inflationChallengeMoney: INFLATION_CHALLENGE_MONEY
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         updatePriorityTargets: () => updatePriorityTargets(),
         setPriorityTargetsTestContext(context) {
           settings = context.settings;
@@ -56080,8 +56095,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
       return true;
     };
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         checkEvolutionResult: () => checkEvolutionResult(),
         setEvolutionResultTestContext(context) {
           settings = context.settings;
@@ -56103,8 +56118,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => haveTech,
       getMainVue: () => win.$("#mainColumn > div:first-child")[0].__vue__
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         updateTabs: (update) => updateTabs(update),
         setTabRefreshTestContext(context) {
           state = context.state;
@@ -56134,8 +56149,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         timeLeft: result2.seconds === Infinity ? "Never" : poly.timeFormat(result2.seconds)
       };
     };
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         getMultiSegmentedTimeLeft,
         makeTargetTimingProject(progress, currentStep, cost) {
           return Object.defineProperties(Object.create(Project.prototype), {
@@ -56173,8 +56188,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       makePlannerStats: () => makePlannerStats(),
       savePlannerStats: (stats) => savePlannerStats(stats)
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         plannerAnalysis: {
           plannerLimitingResource,
           makePlannerStats,
@@ -56188,8 +56203,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         stateLogLifecycle: {
           makeStateLog,
           loadStateLog,
@@ -56218,8 +56233,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       loadPlannerStats,
       savePlannerStats
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         updateBuildPlanner: () => updateBuildPlanner(),
         setBuildPlannerTestContext(context) {
           settings = context.settings;
@@ -56275,8 +56290,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       controls: stateUpdateControls,
       clock: browserClock
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         updateState: () => updateState(),
         // Real prototypes, so the instanceof classification of queued targets is exercised for real.
         makeStateUpdateTargets() {
@@ -56301,8 +56316,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         gameActionVerification: {
           verifyGameActions,
           verifyGameActionsExist,
@@ -56377,8 +56392,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         needSandboxBypass = value;
       }
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         scriptBootstrap: { initialiseScript, mainAutoEvolveScript },
         setScriptBootstrapTestContext(context) {
           if ("game" in context) game = context.game;
@@ -56410,8 +56425,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getState: () => state,
       getPoly: () => poly
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         logFilter: { buildFilterRegExp, filterLog },
         setLogFilterTestContext(context) {
           settingsRaw = context.settingsRaw;
@@ -56448,8 +56463,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readTraitVal: () => traitVal,
       isTechnology: (value) => value instanceof Technology
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         tooltipUI: { getTooltipInfo, tooltipObserverCallback, addTooltip },
         setTooltipUITestContext(context) {
           if ("settings" in context) settings = context.settings;
@@ -56516,8 +56531,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getRaces: () => races,
       genusOpposition: customRaceGenusOpposition
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         customRaceModel: {
           customRaceRankCost,
           customRaceGeneBalance,
@@ -56559,8 +56574,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getVueById,
       getAlert: () => (message) => alert(message)
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         customRaceUI: {
           showCustomRaceImportStatus,
           getCustomRacePreset,
@@ -56690,8 +56705,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         __EAperf.record(__eaNow() - t0);
       }
     };
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         automate: () => automate(),
         setTickTestContext(context) {
           settings = context.settings;
@@ -56723,8 +56738,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getScriptVersionExtra: () => SCRIPT_VERSION_EXTRA,
       getScriptVersion: () => userscriptEnvironment.getScriptVersion()
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         scriptRuntimeUI: {
           updateDebugData,
           addScriptStyle,
@@ -56773,8 +56788,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readFastEval: () => fastEval,
       readGovernor: () => getGovernor
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         settingsControls: {
           removeScriptSettings,
           buildScriptSettings,
@@ -56911,8 +56926,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     const { buildInterfaceSettings, updateInterfaceSettingsContent } = interfaceSettingsBrowserAdapter;
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         interfaceSettings: {
           buildInterfaceSettings,
           updateInterfaceSettingsContent
@@ -56935,8 +56950,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       addSettingsToggle,
       addSettingsNumber
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         stateLogSettings: {
           buildStateLogSettings,
           updateStateLogSettingsContent
@@ -56954,8 +56969,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       average
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         calculateMechStats,
         setMechStatsTestContext(context) {
           game = context.game;
@@ -56964,140 +56979,140 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         evolutionSettings: evolutionSettingsBrowserAdapter,
         setEvolutionSettingsTestContext(context) {
           evolutionSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         prestigeSettings: prestigeSettingsBrowserAdapter,
         setPrestigeSettingsTestContext(context) {
           prestigeSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         triggerSettings: triggerSettingsBrowserAdapter,
         setTriggerSettingsTestContext(context) {
           triggerSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         fleetSettings: fleetSettingsBrowserAdapter,
         setFleetSettingsTestContext(context) {
           fleetSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         ejectorSettings: ejectorSettingsBrowserAdapter,
         setEjectorSettingsTestContext(context) {
           ejectorSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         marketSettings: marketSettingsBrowserAdapter,
         setMarketSettingsTestContext(context) {
           marketSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         warSettings: warSettingsBrowserAdapter,
         setWarSettingsTestContext(context) {
           warSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         hellSettings: hellSettingsBrowserAdapter,
         setHellSettingsTestContext(context) {
           hellSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         mechSettings: mechSettingsBrowserAdapter,
         setMechSettingsTestContext(context) {
           mechSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         challengeHelperSettings: challengeHelperSettingsBrowserAdapter,
         setChallengeHelperSettingsTestContext(context) {
           challengeHelperSettingsTestActions = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         governmentSettings: governmentSettingsBrowserAdapter,
         setGovernmentSettingsTestContext(context) {
           governmentSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         planetSettings: planetSettingsBrowserAdapter,
         setPlanetSettingsTestContext(context) {
           planetSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         projectSettings: projectSettingsBrowserAdapter,
         setProjectSettingsTestContext(context) {
           projectSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         storageSettings: storageSettingsBrowserAdapter,
         setStorageSettingsTestContext(context) {
           storageSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         magicSettings: magicSettingsBrowserAdapter,
         setMagicSettingsTestContext(context) {
           magicSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         jobSettings: jobSettingsBrowserAdapter,
         setJobSettingsTestContext(context) {
           jobSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         weightingSettings: weightingSettingsBrowserAdapter,
         setWeightingSettingsTestContext(context) {
           weightingSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         buildingSettings: buildingSettingsBrowserAdapter,
         setBuildingSettingsTestContext(context) {
           buildingSettingsTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         optionsModal: optionsModalBrowserAdapter,
         setOptionsModalTestContext(context) {
           optionsModalTestContext = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         achievementGuardSettings: achievementGuardSettingsBrowserAdapter,
         setAchievementGuardSettingsTestContext(context) {
           achievementGuardSettingsTestActions = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         authoritySettings: authoritySettingsBrowserAdapter,
         setAuthoritySettingsTestContext(context) {
           authoritySettingsTestActions = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         generalSettings: generalSettingsBrowserAdapter,
         setGeneralSettingsTestContext(context) {
           generalSettingsTestActions = context;
         }
       });
-      Object.assign(window.__EA_TEST_HOOKS__, {
+      Object.assign(testHooks, {
         researchSettings: researchSettingsBrowserAdapter,
         setResearchSettingsTestContext(context) {
           researchSettingsTestContext = context;
@@ -57161,8 +57176,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       updateTraitSettingsContent,
       makeToggleSwitchesMutuallyExclusive
     } = traitSettingsBrowserAdapter;
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         traitSettings: {
           buildTraitSettings,
           updateImitateWarning,
@@ -57246,8 +57261,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         renderPreviousGameStats
       })
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         updateUI: () => updateUI(),
         setUIRefreshTestContext(context) {
           settings = context.settings;
@@ -57262,8 +57277,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         prestigeTopBar: prestigeTopBarBrowserAdapter,
         setPrestigeTopBarTestContext(context) {
           prestigeTopBarTestContext = context;
@@ -57302,16 +57317,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         loggingSettings: loggingSettingsBrowserAdapter,
         setLoggingSettingsTestContext(context) {
           loggingSettingsTestContext = context;
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         finalInlineUiBoundaries: {
           updateActiveTargetsUI,
           buildActiveTargetsUI,
@@ -57341,11 +57356,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getJQuery: () => $,
       isHTMLElement: (value) => value instanceof HTMLElement
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, { sorterHelper });
+    if (testHooks) {
+      Object.assign(testHooks, { sorterHelper });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         gameRates: {
           ticksPerSecond,
           getHealingRate,
@@ -57364,8 +57379,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         getCostConflict,
         setCostConflictTestContext(context) {
           state = context.state;
@@ -57373,23 +57388,23 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      window.__EA_TEST_HOOKS__.numberFormatting = {
+    if (testHooks) {
+      testHooks.numberFormatting = {
         getRealNumber,
         getNumberString,
         getNiceNumber
       };
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         runtimeQueries: { getGovernor, haveTask, haveTech, isEarlyGame },
         setRuntimeQueryTestContext(context) {
           game = context.game;
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         raceProfile: { isHungryRace, isDemonRace, isLumberRace, getOccCosts },
         setRaceProfileTestContext(context) {
           game = context.game;
@@ -57397,8 +57412,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         foreignGovernment: { getGovName, getGovPower },
         setForeignGovernmentTestContext(context) {
           game = context.game;
@@ -57406,8 +57421,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         fastEvaluator: {
           fastEval,
           cacheSize: fastEvalCacheSize
@@ -57418,24 +57433,24 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         propertyHelpers: { normalizeProperties, addProps },
         setPropertyHelperTestContext(context) {
           settings = context.settings;
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         browserRuntime: { getVueById, triggerFileDownload },
         setBrowserRuntimeTestContext(context) {
           win = context.win;
         }
       });
     }
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         traitVal,
         setTraitValueTestContext(context) {
           game = context.game;
@@ -57470,8 +57485,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       confirmImport: (message) => confirm(message),
       logToConsole: (message) => console.log(message)
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         settingsTransfer: { importSettings, exportSettings },
         setSettingsTransferTestContext(context) {
           settingsRaw = context.settingsRaw;
@@ -57491,8 +57506,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2),
       getDate: () => /* @__PURE__ */ new Date()
     });
-    if (window.__EA_TEST_HOOKS__) {
-      Object.assign(window.__EA_TEST_HOOKS__, {
+    if (testHooks) {
+      Object.assign(testHooks, {
         gameCompatibility: poly
       });
     }
@@ -57500,5 +57515,5 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
   }
 
   // src/main.ts
-  startLegacyRuntime(readJQueryGlobal(globalThis));
+  startLegacyRuntime(readJQueryGlobal(globalThis), readTestHooks(globalThis));
 })();
