@@ -5172,7 +5172,31 @@
 
   // src/game/script-bootstrap.ts
   function createScriptBootstrap({
-    getContext,
+    getGame,
+    getTechIds,
+    getTechnology,
+    getBuildings,
+    getBuildingIds,
+    getState,
+    getProjects,
+    getArpaIds,
+    getJobs,
+    getJobIds,
+    getCrafter,
+    getTriggerManager,
+    getCheckActions,
+    getMutationObserver,
+    getDocument,
+    getNode,
+    getWindowManager,
+    getJQuery,
+    getWindow,
+    getUserscriptEnvironment,
+    getWin,
+    getNeedSandboxBypass,
+    getPoly,
+    getSettings,
+    getSafeMode,
     getActions,
     setWin,
     setGame,
@@ -5205,32 +5229,31 @@
     let safeMode;
     const getScriptBootstrapActions = getActions;
     function refreshContext() {
-      const context = getContext();
-      game = context.game;
-      techIds = context.techIds;
-      Technology = context.Technology;
-      buildings = context.buildings;
-      buildingIds = context.buildingIds;
-      state = context.state;
-      projects = context.projects;
-      arpaIds = context.arpaIds;
-      jobs = context.jobs;
-      jobIds = context.jobIds;
-      crafter = context.crafter;
-      TriggerManager = context.TriggerManager;
-      checkActions = context.checkActions;
-      MutationObserver2 = context.MutationObserver;
-      document2 = context.document;
-      Node2 = context.Node;
-      WindowManager = context.WindowManager;
-      $2 = context.$;
-      window2 = context.window;
-      userscriptEnvironment = context.userscriptEnvironment;
-      win = context.win;
-      needSandboxBypass = context.needSandboxBypass;
-      poly = context.poly;
-      settings = context.settings;
-      safeMode = context.safeMode;
+      game = getGame();
+      techIds = getTechIds();
+      Technology = getTechnology();
+      buildings = getBuildings();
+      buildingIds = getBuildingIds();
+      state = getState();
+      projects = getProjects();
+      arpaIds = getArpaIds();
+      jobs = getJobs();
+      jobIds = getJobIds();
+      crafter = getCrafter();
+      TriggerManager = getTriggerManager();
+      checkActions = getCheckActions();
+      MutationObserver2 = getMutationObserver();
+      document2 = getDocument();
+      Node2 = getNode();
+      WindowManager = getWindowManager();
+      $2 = getJQuery();
+      window2 = getWindow();
+      userscriptEnvironment = getUserscriptEnvironment();
+      win = getWin();
+      needSandboxBypass = getNeedSandboxBypass();
+      poly = getPoly();
+      settings = getSettings();
+      safeMode = getSafeMode();
     }
     function commitContext() {
       setWin(win);
@@ -56194,33 +56217,31 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       displayScriptWarningNode
     };
     const { initialiseScript, mainAutoEvolveScript } = createScriptBootstrap({
-      getContext: () => ({
-        game,
-        techIds,
-        Technology,
-        buildings,
-        buildingIds,
-        state,
-        projects,
-        arpaIds,
-        jobs,
-        jobIds,
-        crafter,
-        TriggerManager,
-        checkActions,
-        MutationObserver,
-        document,
-        Node,
-        WindowManager,
-        $: $2,
-        window,
-        userscriptEnvironment,
-        win,
-        needSandboxBypass,
-        poly,
-        settings,
-        safeMode
-      }),
+      getGame: () => game,
+      getTechIds: () => techIds,
+      getTechnology: () => Technology,
+      getBuildings: () => buildings,
+      getBuildingIds: () => buildingIds,
+      getState: () => state,
+      getProjects: () => projects,
+      getArpaIds: () => arpaIds,
+      getJobs: () => jobs,
+      getJobIds: () => jobIds,
+      getCrafter: () => crafter,
+      getTriggerManager: () => TriggerManager,
+      getCheckActions: () => checkActions,
+      getMutationObserver: () => MutationObserver,
+      getDocument: () => document,
+      getNode: () => Node,
+      getWindowManager: () => WindowManager,
+      getJQuery: () => $2,
+      getWindow: () => window,
+      getUserscriptEnvironment: () => userscriptEnvironment,
+      getWin: () => win,
+      getNeedSandboxBypass: () => needSandboxBypass,
+      getPoly: () => poly,
+      getSettings: () => settings,
+      getSafeMode: () => safeMode,
       getActions: getScriptBootstrapActions,
       setWin: (value) => {
         win = value;

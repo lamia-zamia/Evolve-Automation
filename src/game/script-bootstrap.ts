@@ -2,7 +2,31 @@ type AnyFunction = (...args: any[]) => any;
 type AnyRecord = Record<string, any>;
 
 type ScriptBootstrapDependencies = {
-  getContext: () => AnyRecord;
+  getGame: () => AnyRecord | null;
+  getTechIds: () => AnyRecord;
+  getTechnology: () => any;
+  getBuildings: () => AnyRecord;
+  getBuildingIds: () => AnyRecord;
+  getState: () => AnyRecord;
+  getProjects: () => AnyRecord;
+  getArpaIds: () => AnyRecord;
+  getJobs: () => AnyRecord;
+  getJobIds: () => AnyRecord;
+  getCrafter: () => AnyRecord;
+  getTriggerManager: () => AnyRecord;
+  getCheckActions: () => boolean;
+  getMutationObserver: () => any;
+  getDocument: () => AnyRecord;
+  getNode: () => AnyRecord;
+  getWindowManager: () => AnyRecord;
+  getJQuery: () => AnyFunction & AnyRecord;
+  getWindow: () => AnyRecord;
+  getUserscriptEnvironment: () => AnyRecord;
+  getWin: () => AnyRecord;
+  getNeedSandboxBypass: () => boolean;
+  getPoly: () => AnyRecord;
+  getSettings: () => AnyRecord;
+  getSafeMode: () => boolean;
   getActions: () => AnyRecord;
   setWin: (value: AnyRecord) => void;
   setGame: (value: AnyRecord | null) => void;
@@ -10,7 +34,31 @@ type ScriptBootstrapDependencies = {
 };
 
 export function createScriptBootstrap({
-  getContext,
+  getGame,
+  getTechIds,
+  getTechnology,
+  getBuildings,
+  getBuildingIds,
+  getState,
+  getProjects,
+  getArpaIds,
+  getJobs,
+  getJobIds,
+  getCrafter,
+  getTriggerManager,
+  getCheckActions,
+  getMutationObserver,
+  getDocument,
+  getNode,
+  getWindowManager,
+  getJQuery,
+  getWindow,
+  getUserscriptEnvironment,
+  getWin,
+  getNeedSandboxBypass,
+  getPoly,
+  getSettings,
+  getSafeMode,
   getActions,
   setWin,
   setGame,
@@ -45,32 +93,31 @@ export function createScriptBootstrap({
   const getScriptBootstrapActions = getActions;
 
   function refreshContext() {
-    const context = getContext();
-    game = context.game;
-    techIds = context.techIds;
-    Technology = context.Technology;
-    buildings = context.buildings;
-    buildingIds = context.buildingIds;
-    state = context.state;
-    projects = context.projects;
-    arpaIds = context.arpaIds;
-    jobs = context.jobs;
-    jobIds = context.jobIds;
-    crafter = context.crafter;
-    TriggerManager = context.TriggerManager;
-    checkActions = context.checkActions;
-    MutationObserver = context.MutationObserver;
-    document = context.document;
-    Node = context.Node;
-    WindowManager = context.WindowManager;
-    $ = context.$;
-    window = context.window;
-    userscriptEnvironment = context.userscriptEnvironment;
-    win = context.win;
-    needSandboxBypass = context.needSandboxBypass;
-    poly = context.poly;
-    settings = context.settings;
-    safeMode = context.safeMode;
+    game = getGame();
+    techIds = getTechIds();
+    Technology = getTechnology();
+    buildings = getBuildings();
+    buildingIds = getBuildingIds();
+    state = getState();
+    projects = getProjects();
+    arpaIds = getArpaIds();
+    jobs = getJobs();
+    jobIds = getJobIds();
+    crafter = getCrafter();
+    TriggerManager = getTriggerManager();
+    checkActions = getCheckActions();
+    MutationObserver = getMutationObserver();
+    document = getDocument();
+    Node = getNode();
+    WindowManager = getWindowManager();
+    $ = getJQuery();
+    window = getWindow();
+    userscriptEnvironment = getUserscriptEnvironment();
+    win = getWin();
+    needSandboxBypass = getNeedSandboxBypass();
+    poly = getPoly();
+    settings = getSettings();
+    safeMode = getSafeMode();
   }
 
   function commitContext() {
