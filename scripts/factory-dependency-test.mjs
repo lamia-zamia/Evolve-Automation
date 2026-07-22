@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const sourceDirectory = path.join(root, "src");
-const mainPath = path.join(root, "src", "legacy-main.js");
+const mainPath = path.join(root, "src", "bootstrap", "runtime.js");
 
 function findTypeScriptFiles(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

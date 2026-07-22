@@ -36,32 +36,6 @@ export default defineConfig(
     },
   },
   {
-    files: ["src/legacy-main.js"],
-    languageOptions: {
-      globals: {
-        ...globals.browser,
-        $: "readonly",
-        GM: "readonly",
-        GM_info: "readonly",
-        Sortable: "readonly",
-        cloneInto: "readonly",
-        exportFunction: "readonly",
-        unsafeWindow: "readonly",
-      },
-    },
-    rules: {
-      "no-case-declarations": "off",
-      "no-constant-binary-expression": "off",
-      "no-empty": "off",
-      "no-fallthrough": "off",
-      "no-func-assign": "off",
-      "no-prototype-builtins": "off",
-      "no-unreachable": "off",
-      "no-unused-vars": "off",
-      "no-useless-assignment": "off",
-    },
-  },
-  {
     files: ["*.{js,mjs}", "scripts/**/*.mjs"],
     extends: [js.configs.recommended, prettierConfig],
     languageOptions: {

@@ -15,6 +15,7 @@ const globalObject = {
   HTMLElement: class HTMLElement {},
   KeyboardEvent: class KeyboardEvent {},
   Node: class Node {},
+  Sortable: class Sortable {},
   setTimeout(callback, delay) {
     calls.push(["timeout", delay]);
     callback();
@@ -49,6 +50,7 @@ assert.equal(typeof environment.ResizeObserver, "function");
 assert.equal(typeof environment.HTMLElement, "function");
 assert.equal(typeof environment.KeyboardEvent, "function");
 assert.equal(typeof environment.Node, "function");
+assert.equal(typeof environment.Sortable, "function");
 
 environment.schedule(() => calls.push(["scheduled"]), 10);
 environment.repeat(() => calls.push(["repeated"]), 20);

@@ -89,6 +89,7 @@
       HTMLElement: readProperty(globalObject, "HTMLElement"),
       KeyboardEvent: readProperty(globalObject, "KeyboardEvent"),
       Node: readProperty(globalObject, "Node"),
+      Sortable: readProperty(globalObject, "Sortable"),
       alert: bindFunction(globalObject, "alert", noOperation),
       confirm: bindFunction(globalObject, "confirm", confirmByDefault),
       log: bindFunction(consoleObject, "log", noOperation),
@@ -4441,7 +4442,7 @@
     let GameLog;
     let needSandboxBypass;
     let win;
-    let Sortable2;
+    let Sortable;
     const k_combinations2 = kCombinations;
     const updateDebugData = (...args) => getUpdateDebugData()(...args);
     const createMechInfo = (...args) => getCreateMechInfo()(...args);
@@ -4454,7 +4455,7 @@
       GameLog = getGameLog();
       needSandboxBypass = getNeedSandboxBypass();
       win = getWin();
-      Sortable2 = getSortable();
+      Sortable = getSortable();
     }
     const MechManager = {
       _assemblyVueBinding: "mechAssembly",
@@ -4952,7 +4953,7 @@
             cloneIntoPage(sortObj, { cloneFunctions: true })
           );
         } else {
-          Sortable2.get(this._listVue.$el).options.onEnd(sortObj);
+          Sortable.get(this._listVue.$el).options.onEnd(sortObj);
         }
       }
     };
@@ -52233,8 +52234,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     };
   }
 
-  // src/legacy-main.js
-  function startLegacyRuntime($, diagnostics, runtimeEnvironment, testHooks) {
+  // src/bootstrap/runtime.js
+  function startRuntime($, diagnostics, runtimeEnvironment, testHooks) {
     "use strict";
     const { getRealNumber, getNumberString, getNiceNumber } = createNumberFormatting({ numberSuffix });
     const browserClock = createBrowserClock();
@@ -53113,7 +53114,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         secondaryPrefix
       ),
       effects: {
-        confirm: (message) => (prestigeSettingsTestContext?.confirm ?? runtimeEnvironment.confirm)(message)
+        confirm: (message) => (prestigeSettingsTestContext?.confirm ?? runtimeEnvironment.confirm)(
+          message
+        )
       }
     });
     const { buildPrestigeSettings, updatePrestigeSettingsContent } = prestigeSettingsBrowserAdapter;
@@ -53826,7 +53829,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getDate: () => /* @__PURE__ */ new Date()
     });
     var win = null;
-    const userscriptEnvironment = createUserscriptEnvironment(runtimeEnvironment.window);
+    const userscriptEnvironment = createUserscriptEnvironment(
+      runtimeEnvironment.window
+    );
     const { getVueById, triggerFileDownload } = createBrowserRuntime({
       getWin: () => win,
       getDocument: () => runtimeEnvironment.document,
@@ -54500,7 +54505,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGameLog: () => GameLog,
       getNeedSandboxBypass: () => needSandboxBypass,
       getWin: () => win,
-      getSortable: () => Sortable,
+      getSortable: () => runtimeEnvironment.Sortable,
       getUpdateDebugData: () => updateDebugData,
       getCreateMechInfo: () => createMechInfo,
       getVueById: (id) => getVueById(id),
@@ -54956,7 +54961,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     const universeSelectionExecutor = createUniverseSelectionCommandExecutor({
       getGame: () => game,
-      controls: createUniverseSelectionControls(() => runtimeEnvironment.document)
+      controls: createUniverseSelectionControls(
+        () => runtimeEnvironment.document
+      )
     });
     const autoUniverseSelection = function autoUniverseSelection2() {
       universeSelectionExecutor.execute(
@@ -55782,7 +55789,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    const storageDebug = createStorageDebugSource(() => runtimeEnvironment.window);
+    const storageDebug = createStorageDebugSource(
+      () => runtimeEnvironment.window
+    );
     const storageAllocationAdapter = createStorageAllocationAdapter({
       getStorageManager: () => StorageManager,
       getGame: () => game,
@@ -56132,7 +56141,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       }
       if (decision2.needReset) {
-        const resetButton = runtimeEnvironment.document.querySelector(".reset .button:not(.right)");
+        const resetButton = runtimeEnvironment.document.querySelector(
+          ".reset .button:not(.right)"
+        );
         if (resetButton.innerText === game.loc("reset_soft")) {
           const addEvolutionSettingFn = evolutionResultTestActions?.addEvolutionSetting ?? addEvolutionSetting;
           const updateSettingsFromStateFn = evolutionResultTestActions?.updateSettingsFromState ?? updateSettingsFromState;
@@ -57571,7 +57582,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
   }
 
   // src/main.ts
-  startLegacyRuntime(
+  startRuntime(
     readJQueryGlobal(globalThis),
     createBrowserDiagnostics(globalThis),
     createLegacyRuntimeEnvironment(globalThis)

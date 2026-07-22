@@ -12,6 +12,7 @@ export interface LegacyRuntimeEnvironment {
   readonly HTMLElement: unknown;
   readonly KeyboardEvent: unknown;
   readonly Node: unknown;
+  readonly Sortable: unknown;
   readonly alert: RuntimeFunction;
   readonly confirm: RuntimeFunction;
   readonly log: RuntimeFunction;
@@ -61,6 +62,7 @@ export function createLegacyRuntimeEnvironment(
     HTMLElement: readProperty(globalObject, "HTMLElement"),
     KeyboardEvent: readProperty(globalObject, "KeyboardEvent"),
     Node: readProperty(globalObject, "Node"),
+    Sortable: readProperty(globalObject, "Sortable"),
     alert: bindFunction(globalObject, "alert", noOperation),
     confirm: bindFunction(globalObject, "confirm", confirmByDefault),
     log: bindFunction(consoleObject, "log", noOperation),
