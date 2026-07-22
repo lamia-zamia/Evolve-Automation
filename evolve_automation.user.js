@@ -4090,9 +4090,9 @@
         const game2 = getGame();
         return game2.loc(`outer_shipyard_class_${ship.class}`);
       },
-      getLocName(loc) {
+      getLocName(loc2) {
         const game2 = getGame();
-        let locRef = loc === "tauceti" ? game2.loc("tech_era_tauceti") : game2.actions.space[loc].info.name;
+        let locRef = loc2 === "tauceti" ? game2.loc("tech_era_tauceti") : game2.actions.space[loc2].info.name;
         return typeof locRef === "function" ? locRef() : locRef;
       },
       isUnlocked(id) {
@@ -4218,11 +4218,11 @@
           this.WeaponPower[ship.weapon] * this.ClassPower[ship.class]
         );
       },
-      shipCount(loc, template) {
+      shipCount(loc2, template) {
         const game2 = getGame();
         let count2 = 0;
         for (let ship of game2.global.space.shipyard.ships) {
-          if (ship.location === loc && ship.class === template.class && ship.power === template.power && ship.weapon === template.weapon && ship.armor === template.armor && ship.engine === template.engine && ship.sensor === template.sensor) {
+          if (ship.location === loc2 && ship.class === template.class && ship.power === template.power && ship.weapon === template.weapon && ship.armor === template.armor && ship.engine === template.engine && ship.sensor === template.sensor) {
             count2++;
           }
         }
@@ -6657,7 +6657,7 @@
   function createEntityClasses({
     dependencies
   }) {
-    const liveObject5 = (key) => new Proxy(
+    const liveObject4 = (key) => new Proxy(
       {},
       {
         get(_target, property) {
@@ -6696,50 +6696,50 @@
         }
       }
     );
-    const liveFunction2 = (key) => ((...args) => dependencies[key]()(...args));
-    const $2 = liveFunction2("$");
-    const arpaIds2 = liveObject5("arpaIds");
-    const buildingIds2 = liveObject5("buildingIds");
-    const buildings2 = liveObject5("buildings");
-    const checkAffordableCustom2 = liveFunction2("checkAffordableCustom");
-    const checkTypes2 = liveObject5("checkTypes");
-    const conflictingTraits2 = liveObject5("conflictingTraits");
-    const document2 = liveObject5("document");
-    const fanatAchievements2 = liveObject5("fanatAchievements");
-    const Fibonacci2 = liveFunction2("Fibonacci");
-    const game2 = liveObject5("game");
-    const GameLog2 = liveObject5("GameLog");
-    const getAchievementStar2 = liveFunction2("getAchievementStar");
-    const getCitadelConsumption2 = liveFunction2("getCitadelConsumption");
-    const getStarLevel2 = liveFunction2("getStarLevel");
-    const getVueById2 = liveFunction2("getVueById");
-    const haveTask2 = liveFunction2("haveTask");
-    const haveTech2 = liveFunction2("haveTech");
-    const jobs2 = liveObject5("jobs");
-    const KeyManager2 = liveObject5("KeyManager");
-    const logIgnore2 = liveObject5("logIgnore");
-    const logPrestige2 = liveFunction2("logPrestige");
-    const MutableTraitManager2 = liveObject5("MutableTraitManager");
-    const mutationCostMultipliers2 = liveObject5("mutationCostMultipliers");
-    const mutationCostMultipliersGenus2 = liveObject5(
+    const liveFunction = (key) => ((...args) => dependencies[key]()(...args));
+    const $2 = liveFunction("$");
+    const arpaIds2 = liveObject4("arpaIds");
+    const buildingIds2 = liveObject4("buildingIds");
+    const buildings2 = liveObject4("buildings");
+    const checkAffordableCustom2 = liveFunction("checkAffordableCustom");
+    const checkTypes2 = liveObject4("checkTypes");
+    const conflictingTraits2 = liveObject4("conflictingTraits");
+    const document2 = liveObject4("document");
+    const fanatAchievements2 = liveObject4("fanatAchievements");
+    const Fibonacci2 = liveFunction("Fibonacci");
+    const game2 = liveObject4("game");
+    const GameLog2 = liveObject4("GameLog");
+    const getAchievementStar2 = liveFunction("getAchievementStar");
+    const getCitadelConsumption2 = liveFunction("getCitadelConsumption");
+    const getStarLevel2 = liveFunction("getStarLevel");
+    const getVueById2 = liveFunction("getVueById");
+    const haveTask2 = liveFunction("haveTask");
+    const haveTech2 = liveFunction("haveTech");
+    const jobs2 = liveObject4("jobs");
+    const KeyManager2 = liveObject4("KeyManager");
+    const logIgnore2 = liveObject4("logIgnore");
+    const logPrestige2 = liveFunction("logPrestige");
+    const MutableTraitManager2 = liveObject4("MutableTraitManager");
+    const mutationCostMultipliers2 = liveObject4("mutationCostMultipliers");
+    const mutationCostMultipliersGenus2 = liveObject4(
       "mutationCostMultipliersGenus"
     );
-    const normalizeProperties2 = liveFunction2("normalizeProperties");
-    const poly2 = liveObject5("poly");
-    const races2 = liveObject5("races");
-    const resources2 = liveObject5("resources");
-    const retBools2 = liveObject5("retBools");
-    const settings2 = liveObject5("settings");
-    const settingsRaw2 = liveObject5("settingsRaw");
-    const specialRaceTraits2 = liveObject5("specialRaceTraits");
-    const state2 = liveObject5("state");
-    const techIds2 = liveObject5("techIds");
-    const ticksPerSecond2 = liveFunction2("ticksPerSecond");
-    const traitVal2 = liveFunction2("traitVal");
-    const TriggerManager2 = liveObject5("TriggerManager");
-    const WarManager2 = liveObject5("WarManager");
-    const win2 = liveObject5("win");
-    const WindowManager2 = liveObject5("WindowManager");
+    const normalizeProperties2 = liveFunction("normalizeProperties");
+    const poly2 = liveObject4("poly");
+    const races2 = liveObject4("races");
+    const resources2 = liveObject4("resources");
+    const retBools2 = liveObject4("retBools");
+    const settings2 = liveObject4("settings");
+    const settingsRaw2 = liveObject4("settingsRaw");
+    const specialRaceTraits2 = liveObject4("specialRaceTraits");
+    const state2 = liveObject4("state");
+    const techIds2 = liveObject4("techIds");
+    const ticksPerSecond2 = liveFunction("ticksPerSecond");
+    const traitVal2 = liveFunction("traitVal");
+    const TriggerManager2 = liveObject4("TriggerManager");
+    const WarManager2 = liveObject4("WarManager");
+    const win2 = liveObject4("win");
+    const WindowManager2 = liveObject4("WindowManager");
     class Job2 {
       constructor(id, name, flags) {
         this._originalId = id;
@@ -15019,7 +15019,7 @@
   }
   function readSettings(value) {
     const settings2 = requireRecord(value, "settings");
-    const string = (name) => {
+    const string2 = (name) => {
       const raw = settings2[name];
       if (typeof raw !== "string") {
         throw new TypeError(`settings.${name} must be a string`);
@@ -15027,16 +15027,16 @@
       return raw;
     };
     return Object.freeze({
-      prioritizeQueue: string("prioritizeQueue"),
-      prioritizeTriggers: string("prioritizeTriggers"),
+      prioritizeQueue: string2("prioritizeQueue"),
+      prioritizeTriggers: string2("prioritizeTriggers"),
       missionRequest: Boolean(settings2["missionRequest"]),
       prestigeBioseedConstruct: Boolean(settings2["prestigeBioseedConstruct"]),
-      prestigeType: string("prestigeType"),
+      prestigeType: string2("prestigeType"),
       researchRequest: Boolean(settings2["researchRequest"]),
       researchRequestSpace: Boolean(settings2["researchRequestSpace"]),
-      prioritizeUnify: string("prioritizeUnify"),
+      prioritizeUnify: string2("prioritizeUnify"),
       autoFleet: Boolean(settings2["autoFleet"]),
-      prioritizeOuterFleet: string("prioritizeOuterFleet"),
+      prioritizeOuterFleet: string2("prioritizeOuterFleet"),
       productionFactoryFocusMaterials: Boolean(
         settings2["productionFactoryFocusMaterials"]
       ),
@@ -15614,7 +15614,7 @@
   // src/application/evolution-result.ts
   var PROGRESS = ["progress"];
   var PROGRESS_ACHIEVEMENTS = ["progress", "achievements"];
-  function formatEvolutionLog(event, loc) {
+  function formatEvolutionLog(event, loc2) {
     switch (event.code) {
       case "backup-no-achievements":
         return {
@@ -15643,7 +15643,7 @@
       case "auto-goals":
         return {
           level: "info",
-          message: `Auto Achievement goes for: ${event.goals.map((goal) => loc(goal)).join(", ")}.`,
+          message: `Auto Achievement goes for: ${event.goals.map((goal) => loc2(goal)).join(", ")}.`,
           tags: PROGRESS_ACHIEVEMENTS
         };
       case "auto-goals-none":
@@ -16310,15 +16310,15 @@
       const regexps = [];
       const validIds = [];
       const strings = settingsRaw2.logFilter.split(/[^0-9a-z_%]/g).filter(Boolean);
-      for (const string of strings) {
-        const [id, ...rawParams] = string.split("%");
+      for (const string2 of strings) {
+        const [id, ...rawParams] = string2.split("%");
         const params = rawParams.map(poly2.loc);
         const message = poly2.loc(id, params.length ? params : void 0) + (id === "civics_garrison_gained" ? "%0" : "");
         if (message === id) continue;
         regexps.push(
           message.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%\d/g, ".*")
         );
-        validIds.push(string);
+        validIds.push(string2);
       }
       if (regexps.length > 0) {
         state2.filterRegExp = new RegExp(`^(${regexps.join("|")})$`);
@@ -18244,8 +18244,8 @@
   function freezeOption2(option2) {
     return Object.freeze({ ...option2 });
   }
-  function freezeOptions(options) {
-    return Object.freeze(options.map(freezeOption2));
+  function freezeOptions(options2) {
+    return Object.freeze(options2.map(freezeOption2));
   }
   function createGovernmentSettingsReadModel({
     governmentOptions,
@@ -20700,8 +20700,8 @@
   }
 
   // src/domain/prestige-top-bar.ts
-  function selectPrestigeTopBarType(options, selectedValue) {
-    const selected = options.find((option2) => option2.value === selectedValue);
+  function selectPrestigeTopBarType(options2, selectedValue) {
+    const selected = options2.find((option2) => option2.value === selectedValue);
     return selected ?? {
       value: selectedValue,
       label: selectedValue,
@@ -20713,7 +20713,7 @@
   function createPrestigeTopBarBrowserAdapter({
     getDocument,
     reader,
-    options,
+    options: options2,
     buildPrestigeSettings: buildPrestigeSettings2
   }) {
     function updatePrestigeInTopBar2() {
@@ -20734,7 +20734,7 @@
           "border-left: 1px solid; margin-left: 0.75rem; padding-left: 0.75rem;"
         );
         planetWrap.append(parentNode);
-        options.addOptionUI(
+        options2.addOptionUI(
           "s-prestige-type-helper-btn",
           `#${parentId}`,
           "Prestige",
@@ -26597,12 +26597,12 @@
       canExportToPage: exportBridge !== void 0,
       needsSandboxBridge
     });
-    function cloneIntoPage(value, options) {
+    function cloneIntoPage(value, options2) {
       if (!needsSandboxBridge || cloneBridge === void 0) return value;
       const cloned = Reflect.apply(cloneBridge, void 0, [
         value,
         pageWindow,
-        options
+        options2
       ]);
       return cloned;
     }
@@ -44433,7 +44433,7 @@
         const spyManager = requireRecord(getSpyManager(), "SpyManager");
         const types = requireRecord(spyManager["Types"], "SpyManager.Types");
         const game2 = requireRecord(getGame(), "game");
-        const loc = requireFunction(game2["loc"], "game.loc");
+        const loc2 = requireFunction(game2["loc"], "game.loc");
         const policyOptions = [
           { val: "Ignore", label: "Ignore", hint: "" }
         ];
@@ -44443,7 +44443,7 @@
           policyOptions.push({
             val: name,
             label: requireString27(
-              Reflect.apply(loc, game2, [`civics_spy_${id}`]),
+              Reflect.apply(loc2, game2, [`civics_spy_${id}`]),
               `game.loc(civics_spy_${id})`
             ),
             hint: ""
@@ -44953,10 +44953,10 @@
       read() {
         const manager = requireRecord(getMechManager(), "MechManager");
         const game2 = requireRecord(getGame(), "game");
-        const loc = requireFunction(game2["loc"], "game.loc");
+        const loc2 = requireFunction(game2["loc"], "game.loc");
         if (!Array.isArray(manager["Size"]))
           throw new TypeError("MechManager.Size must be an array");
-        const options = [
+        const options2 = [
           {
             val: "auto",
             label: "Damage Per Size",
@@ -44975,20 +44975,20 @@
         ];
         manager["Size"].forEach((rawId, index) => {
           const id = requireString28(rawId, `MechManager.Size[${index}]`);
-          options.push({
+          options2.push({
             val: id,
             label: requireString28(
-              Reflect.apply(loc, game2, [`portal_mech_size_${id}`]),
+              Reflect.apply(loc2, game2, [`portal_mech_size_${id}`]),
               `game.loc(portal_mech_size_${id})`
             ),
             hint: requireString28(
-              Reflect.apply(loc, game2, [`portal_mech_size_${id}_desc`]),
+              Reflect.apply(loc2, game2, [`portal_mech_size_${id}_desc`]),
               `game.loc(portal_mech_size_${id}_desc)`
             )
           });
         });
         return createMechSettingsReadModel(
-          Object.freeze(options.map((option2) => Object.freeze(option2)))
+          Object.freeze(options2.map((option2) => Object.freeze(option2)))
         );
       }
     });
@@ -45090,11 +45090,11 @@
     }
     function buildRequirementType(row, node, model) {
       node.empty().off("*");
-      const options = optionsForChecks(model).map(
+      const options2 = optionsForChecks(model).map(
         ([id, check]) => `<option value="${id}" title="${check.description}">${id.replace(/([A-Z])/g, " $1").trim()}</option>`
       ).join("");
       const select = getJQuery()(
-        `<select style="width: 100%"><option value="chain" title="This condition is met when above trigger is complete, always true for first trigger in list">Chain</option>${options}</select>`
+        `<select style="width: 100%"><option value="chain" title="This condition is met when above trigger is complete, always true for first trigger in list">Chain</option>${options2}</select>`
       );
       select.val(row.requirementType);
       node.append(select);
@@ -45374,8 +45374,8 @@
   }
   function createFleetSettingsReadModel(input) {
     const components = {};
-    for (const [key, options] of Object.entries(input.outerComponents)) {
-      components[key] = Object.freeze(options.map(freezeOption3));
+    for (const [key, options2] of Object.entries(input.outerComponents)) {
+      components[key] = Object.freeze(options2.map(freezeOption3));
     }
     return Object.freeze({
       sectionId: "fleet",
@@ -45442,22 +45442,22 @@
         '<div class="has-text-info">While the Eris Digsite is incomplete, its effective defense target is raised automatically from the configured scan/post-capture value so active Troopers and Tanks can overcome Digsite regeneration.</div>'
       );
       actions.addSettingsHeader1(node, "Fighter");
-      for (const [type, options] of Object.entries(model.outerComponents))
+      for (const [type, options2] of Object.entries(model.outerComponents))
         actions.addSettingsSelect(
           node,
           `fleet_outer_${type}`,
           ``,
           "Preset ship component",
-          options
+          options2
         );
       actions.addSettingsHeader1(node, "Scout");
-      for (const [type, options] of Object.entries(model.outerComponents))
+      for (const [type, options2] of Object.entries(model.outerComponents))
         actions.addSettingsSelect(
           node,
           `fleet_scout_${type}`,
           ``,
           "Preset ship component",
-          options
+          options2
         );
       node.append(
         `<table style="width:100%; text-align: left"><tbody id="script_${prefix}fleetOuterTable"></tbody></table>`
@@ -45548,11 +45548,11 @@
     return value;
   }
   function localize(game2, key) {
-    const loc = game2["loc"];
-    if (typeof loc !== "function")
+    const loc2 = game2["loc"];
+    if (typeof loc2 !== "function")
       throw new TypeError("game.loc must be a function");
     return requireString30(
-      Reflect.apply(loc, game2, [key]),
+      Reflect.apply(loc2, game2, [key]),
       `game.loc(${key}) result`
     );
   }
@@ -45794,7 +45794,7 @@
 
   // src/domain/prestige-settings.ts
   function createPrestigeSettingsReadModel(input) {
-    const options = Object.freeze(
+    const options2 = Object.freeze(
       input.prestigeOptions.map((option2) => Object.freeze({ ...option2 }))
     );
     const controls4 = Object.freeze([
@@ -45803,7 +45803,7 @@
         settingName: "prestigeType",
         label: "Prestige Type",
         hint: "",
-        options
+        options: options2
       },
       {
         kind: "toggle",
@@ -45926,7 +45926,7 @@
       sectionId: "prestige",
       sectionName: "Prestige",
       controls: controls4,
-      prestigeOptions: options
+      prestigeOptions: options2
     });
   }
 
@@ -46122,6 +46122,444 @@
       return "";
     }
     return Object.freeze({ read, getConfirmationText });
+  }
+
+  // src/application/evolution-settings.ts
+  function createEvolutionSettingsIntentHandler({
+    writer,
+    render,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-evolution-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            render();
+            effects.resetCheckbox();
+            return;
+          case "set-evolution-target":
+            writer.setTarget(intent.value);
+            writer.persist();
+            render();
+            return;
+          case "add-evolution":
+            writer.addCurrent(intent.prestigeType);
+            writer.persist();
+            render();
+            return;
+          case "remove-evolution":
+            writer.remove(intent.index);
+            writer.persist();
+            render();
+            return;
+          case "edit-evolution":
+            writer.edit(intent.index, intent.json);
+            writer.persist();
+            render();
+            return;
+          case "reorder-evolutions":
+            writer.reorder(intent.indexes);
+            writer.persist();
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/evolution-settings.ts
+  function createEvolutionSettingsReadModel(input) {
+    const freezeOptions2 = (options2) => Object.freeze(options2.map((option2) => Object.freeze({ ...option2 })));
+    return Object.freeze({
+      sectionId: "evolution",
+      sectionName: "Evolution",
+      controls: Object.freeze(
+        input.controls.map(
+          (control) => Object.freeze(
+            "options" in control ? { ...control, options: freezeOptions2(control.options) } : { ...control }
+          )
+        )
+      ),
+      prestigeOptions: freezeOptions2(input.prestigeOptions),
+      queue: Object.freeze(input.queue.map((item) => Object.freeze({ ...item }))),
+      raceWarning: input.raceWarning === void 0 ? void 0 : Object.freeze({ ...input.raceWarning })
+    });
+  }
+
+  // src/adapters/browser/evolution-settings.ts
+  function createEvolutionSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function renderControl2(node, control, actions) {
+      if (control.kind === "header")
+        return void actions.addStandardHeading(node, control.label);
+      if (control.kind === "toggle")
+        return void actions.addSettingsToggle(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+      actions.addSettingsSelect(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        control.options
+      );
+      if (control.settingName === "userEvolutionTarget")
+        getJQuery()(`.script_${control.settingName}`).find("select").on(
+          "change",
+          () => intents.handle({
+            type: "set-evolution-target",
+            value: String(
+              getJQuery()(`.script_${control.settingName}`).find("select").val()
+            )
+          })
+        );
+    }
+    function buildEvolutionSettings2() {
+      const model = reader.read();
+      getActions().buildSettingsSection(
+        model.sectionId,
+        model.sectionName,
+        () => intents.handle({ type: "reset-evolution-settings" }),
+        updateEvolutionSettingsContent2
+      );
+    }
+    function updateEvolutionSettingsContent2() {
+      const model = reader.read();
+      const document2 = getDocument();
+      const scroll = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const actions = getActions();
+      const node = getJQuery()(`#script_${model.sectionId}Content`);
+      node.empty().off("*");
+      for (const control of model.controls) renderControl2(node, control, actions);
+      node.append('<div><span id="script_race_warning"></span></div>');
+      if (model.raceWarning)
+        getJQuery()("#script_race_warning").html(
+          `<span class="${model.raceWarning.className}">${model.raceWarning.text}</span>`
+        );
+      node.append(
+        '<div style="margin-top:5px"><label for="script_evolution_prestige">Prestige for new evolutions:</label><select id="script_evolution_prestige" style="height:18px;width:150px;float:right"></select></div><div style="margin-top:10px"><button id="script_evlution_add" class="button">Add New Evolution</button></div>'
+      );
+      const prestige = getJQuery()("#script_evolution_prestige");
+      prestige.append(
+        model.prestigeOptions.map(
+          (option2) => `<option value="${option2.val}">${option2.label}</option>`
+        ).join("")
+      );
+      getJQuery()("#script_evlution_add").on(
+        "click",
+        () => intents.handle({
+          type: "add-evolution",
+          prestigeType: String(prestige.val())
+        })
+      );
+      node.append(
+        '<table style="width:100%"><tbody id="script_evolutionQueueTable"></tbody></table>'
+      );
+      const body = getJQuery()("#script_evolutionQueueTable");
+      body.append(
+        model.queue.map(
+          (item) => `<tr id="script_evolution_${item.index}" value="${item.index}" class="script-draggable"><td><span class="${item.raceClass}">${item.raceLabel}</span> <span class="${item.prestigeClass}">${item.prestigeLabel}</span> ${item.starLevel - 1}*</td><td><textarea class="textarea">${item.json}</textarea></td><td><a class="button is-dark is-small"><span>X</span></a></td></tr>`
+        ).join("")
+      );
+      for (const item of model.queue) {
+        const row = getJQuery()(`#script_evolution_${item.index}`);
+        row.find(".button").on(
+          "click",
+          () => intents.handle({ type: "remove-evolution", index: item.index })
+        );
+        row.find(".textarea").on(
+          "change",
+          () => intents.handle({
+            type: "edit-evolution",
+            index: item.index,
+            json: String(row.find(".textarea").val())
+          })
+        );
+      }
+      body.sortable({
+        items: "tr:not(.unsortable)",
+        helper: actions.sorterHelper,
+        update: () => {
+          const ids = body.sortable("toArray", { attribute: "value" });
+          if (Array.isArray(ids))
+            intents.handle({
+              type: "reorder-evolutions",
+              indexes: ids.map((id) => Number(id))
+            });
+        }
+      });
+      document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
+    }
+    return Object.freeze({
+      buildEvolutionSettings: buildEvolutionSettings2,
+      updateEvolutionSettingsContent: updateEvolutionSettingsContent2
+    });
+  }
+
+  // src/adapters/evolve/evolution-settings.ts
+  function string(value, path) {
+    if (typeof value !== "string")
+      throw new TypeError(`${path} must be a string`);
+    return value;
+  }
+  function array(value, path) {
+    if (!Array.isArray(value)) throw new TypeError(`${path} must be an array`);
+    return value;
+  }
+  function loc(game2, key) {
+    const fn = game2["loc"];
+    if (typeof fn !== "function")
+      throw new TypeError("game.loc must be a function");
+    return string(Reflect.apply(fn, game2, [key]), `game.loc(${key})`);
+  }
+  function options(value, path) {
+    return Object.freeze(
+      array(value, path).map((raw, index) => {
+        const item = requireRecord(raw, `${path}[${index}]`);
+        return Object.freeze({
+          val: string(item["val"], `${path}[${index}].val`),
+          label: string(item["label"], `${path}[${index}].label`),
+          hint: string(item["hint"], `${path}[${index}].hint`)
+        });
+      })
+    );
+  }
+  function raceColor(race2) {
+    const fn = race2["getHabitability"];
+    const value = typeof fn === "function" ? Reflect.apply(fn, race2, []) : 0;
+    return value === 1 ? "has-text-info" : value === 0 ? "has-text-danger" : "has-text-warning";
+  }
+  function queueName(race2, game2, item) {
+    const target = item["userEvolutionTarget"];
+    if (target === "auto")
+      return { label: "Auto Achievements", className: "has-text-advanced" };
+    if (typeof target !== "string")
+      return { label: "Unrecognized race!", className: "has-text-danger" };
+    const name = string(race2["name"], "race.name");
+    const genus = item["userEvolutionGenus"];
+    const genusText = typeof genus === "string" ? `, ${loc(game2, `genelab_genus_${genus}`)}` : "";
+    return { label: `${name}${genusText}`, className: raceColor(race2) };
+  }
+  function createEvolutionSettingsEvolveAdapter(deps) {
+    return Object.freeze({
+      read() {
+        const game2 = requireRecord(deps.getGame(), "game");
+        const settingsRaw2 = requireRecord(deps.getSettingsRaw(), "settingsRaw");
+        const settings2 = requireRecord(deps.getSettings(), "settings");
+        const racesRecord = requireRecord(deps.getRaces(), "races");
+        const races2 = Object.values(racesRecord).map(
+          (raw) => requireRecord(raw, "races entry")
+        );
+        const universeOptions = [
+          { val: "none", label: "None", hint: "Wait for user selection" },
+          ...array(deps.getUniverses(), "universes").map((raw, index) => {
+            const id = string(raw, `universes[${index}]`);
+            return {
+              val: id,
+              label: loc(game2, `universe_${id}`),
+              hint: loc(game2, `universe_${id}_desc`)
+            };
+          })
+        ];
+        const raceOptions = [
+          {
+            val: "auto",
+            label: "Auto Achievements",
+            hint: "Picks race giving most achievements upon completing run. Tracks all achievements limited to specific races and resets. Races unique to current planet biome are prioritized, when available."
+          },
+          ...races2.map((race2) => ({
+            val: string(race2["id"], "race.id"),
+            label: string(race2["name"], "race.name"),
+            hint: string(race2["desc"], "race.desc")
+          }))
+        ];
+        const gameRaces = requireRecord(game2["races"], "game.races");
+        const genusIds = [
+          ...new Set(
+            Object.values(gameRaces).map((raw) => {
+              const item = requireRecord(raw, "game.races entry");
+              return item["type"];
+            }).filter(
+              (value) => typeof value === "string" && value !== "organism"
+            )
+          )
+        ];
+        const genusOptions = genusIds.map((id) => ({
+          val: id,
+          label: loc(game2, `genelab_genus_${id}`),
+          hint: ""
+        }));
+        const challengeSets = array(deps.getChallenges(), "challenges");
+        const challengeControls = challengeSets.map(
+          (raw, index) => {
+            const set = array(raw, `challenges[${index}]`);
+            const first = requireRecord(set[0], `challenges[${index}][0]`);
+            const id = string(first["id"], `challenges[${index}][0].id`);
+            return {
+              kind: "toggle",
+              settingName: `challenge_${id}`,
+              label: set.map(
+                (item, itemIndex) => loc(
+                  game2,
+                  `evo_challenge_${string(requireRecord(item, `challenges[${index}][${itemIndex}]`)["id"], "challenge.id")}`
+                )
+              ).join(" | "),
+              hint: set.map(
+                (item, itemIndex) => loc(
+                  game2,
+                  `evo_challenge_${string(requireRecord(item, `challenges[${index}][${itemIndex}]`)["id"], "challenge.id")}_effect`
+                )
+              ).join("&#xA;")
+            };
+          }
+        );
+        const controls4 = [
+          {
+            kind: "select",
+            settingName: "userUniverseTargetName",
+            label: "Target Universe",
+            hint: "Chosen universe will be automatically selected after appropriate reset",
+            options: universeOptions
+          },
+          {
+            kind: "select",
+            settingName: "userPlanetTargetName",
+            label: "Target Planet",
+            hint: "Chosen planet will be automatically selected after appropriate reset. Warning! Script ignores changes made by G.E.C.K., you need to select planet manually after using it.",
+            options: [
+              { val: "none", label: "None", hint: "Wait for user selection" },
+              {
+                val: "habitable",
+                label: "Most habitable",
+                hint: "Picks most habitable planet, based on biome and trait"
+              },
+              {
+                val: "achieve",
+                label: "Most achievements",
+                hint: "Picks planet with most unearned achievements."
+              },
+              {
+                val: "weighting",
+                label: "Highest weighting",
+                hint: "Picks planet with highest weighting."
+              }
+            ]
+          },
+          {
+            kind: "select",
+            settingName: "userEvolutionTarget",
+            label: "Target Race",
+            hint: "Chosen race will be automatically selected during next evolution",
+            options: raceOptions
+          },
+          {
+            kind: "select",
+            settingName: "userEvolutionGenus",
+            label: "Preferred genus",
+            hint: "Chosen genus will be picked if target race have such option. Works only with challenge races, and hybrids.",
+            options: genusOptions
+          },
+          {
+            kind: "toggle",
+            settingName: "evolutionAutoUnbound",
+            label: "Allow unbound races",
+            hint: "Allow Auto Achievement to pick biome restricted races on unsuited biomes, after getting unbound."
+          },
+          {
+            kind: "toggle",
+            settingName: "evolutionBackup",
+            label: "Soft Reset",
+            hint: "Perform soft resets until you'll get chosen race. Has no effect after getting mass extinction perk."
+          },
+          ...challengeControls,
+          { kind: "header", label: "Evolution Queue" },
+          {
+            kind: "toggle",
+            settingName: "evolutionQueueEnabled",
+            label: "Queue Enabled",
+            hint: "When enabled script will evolve with queued settings, from top to bottom."
+          },
+          {
+            kind: "toggle",
+            settingName: "evolutionQueueRepeat",
+            label: "Repeat Queue",
+            hint: "When enabled applied evolution targets will be moved to the end of queue, instead of being removed"
+          }
+        ];
+        const prestigeOptions2 = options(deps.getPrestigeTypes(), "prestigeTypes");
+        const storeNames = array(
+          deps.getSettingsToStore(),
+          "evolutionSettingsToStore"
+        ).map((raw, index) => string(raw, `evolutionSettingsToStore[${index}]`));
+        const rawQueue = array(
+          settingsRaw2["evolutionQueue"],
+          "settingsRaw.evolutionQueue"
+        );
+        const queue = rawQueue.map((raw, index) => {
+          const item = requireRecord(raw, `evolutionQueue[${index}]`);
+          const merged = { ...item };
+          for (const name2 of storeNames)
+            merged[name2] = merged[name2] ?? settings2[name2];
+          const target2 = merged["userEvolutionTarget"];
+          const race2 = races2.find((candidate) => candidate["id"] === target2);
+          const name = queueName(race2 ?? {}, game2, merged);
+          const prestige = prestigeOptions2.find(
+            (option2) => option2.val === merged["prestigeType"]
+          );
+          const starRaw = deps.getStarLevel(merged);
+          const starLevel = typeof starRaw === "number" ? starRaw : 1;
+          return {
+            index,
+            raceLabel: name.label,
+            raceClass: name.className,
+            prestigeLabel: merged["prestigeType"] === "none" ? "" : prestige?.label ?? "Unrecognized prestige!",
+            prestigeClass: prestige === void 0 && merged["prestigeType"] !== "none" ? "has-text-danger" : "has-text-info",
+            starLevel,
+            json: JSON.stringify(merged, null, 4)
+          };
+        });
+        const target = settingsRaw2["userEvolutionTarget"];
+        const selectedRace = races2.find((race2) => race2["id"] === target);
+        let raceWarning;
+        if (selectedRace) {
+          const condition = selectedRace["getCondition"];
+          const habitability = selectedRace["getHabitability"];
+          if (typeof condition === "function" && typeof habitability === "function") {
+            const text = string(
+              Reflect.apply(condition, selectedRace, []),
+              "race condition"
+            );
+            const suited = Reflect.apply(habitability, selectedRace, []);
+            if (text !== "")
+              raceWarning = suited === 1 ? {
+                className: "has-text-success",
+                text: `This race have special requirements: ${text} This condition is met.`
+              } : suited === 0 ? {
+                className: "has-text-danger",
+                text: `Warning! This race have special requirements: ${text} This condition is not met.`
+              } : {
+                className: "has-text-warning",
+                text: `Warning! This race have special requirements: ${text} This condition is bypassed. Race will have ${100 - Number(suited) * 100}% penalty.`
+              };
+          }
+        }
+        return createEvolutionSettingsReadModel({
+          controls: controls4,
+          prestigeOptions: prestigeOptions2,
+          queue,
+          raceWarning
+        });
+      }
+    });
   }
 
   // src/ui/production-settings.ts
@@ -47060,443 +47498,6 @@
     };
   }
 
-  // src/ui/dependencies.ts
-  function createDependencyResolver(overrides, dependencies) {
-    return (name) => {
-      if (Object.prototype.hasOwnProperty.call(overrides, name)) {
-        return overrides[name];
-      }
-      return dependencies[name]?.();
-    };
-  }
-  function propertyDescriptor(value, property) {
-    const object = Object(value);
-    const descriptor = Object.getOwnPropertyDescriptor(object, property);
-    return {
-      configurable: true,
-      enumerable: descriptor?.enumerable ?? true,
-      writable: true,
-      value: Reflect.get(object, property)
-    };
-  }
-  function liveObject4(getValue) {
-    return new Proxy(
-      {},
-      {
-        get: (_target, property) => {
-          const value = getValue();
-          if (property === Symbol.toPrimitive) return () => value;
-          const result2 = Reflect.get(Object(value), property);
-          return typeof result2 === "function" ? result2.bind(value) : result2;
-        },
-        set: (_target, property, value) => Reflect.set(Object(getValue()), property, value),
-        deleteProperty: (_target, property) => Reflect.deleteProperty(Object(getValue()), property),
-        has: (_target, property) => Reflect.has(Object(getValue()), property),
-        ownKeys: () => Reflect.ownKeys(Object(getValue())),
-        getOwnPropertyDescriptor: (_target, property) => propertyDescriptor(getValue(), property),
-        getPrototypeOf: () => Reflect.getPrototypeOf(Object(getValue()))
-      }
-    );
-  }
-  function liveFunction(getValue) {
-    return new Proxy(function() {
-    }, {
-      apply: (_target, thisArg, argumentsList) => Reflect.apply(getValue(), thisArg, argumentsList),
-      construct: (_target, argumentsList, newTarget) => Reflect.construct(getValue(), argumentsList, newTarget),
-      get: (_target, property) => {
-        if (property === Symbol.hasInstance) {
-          return (value) => value instanceof getValue();
-        }
-        return Reflect.get(getValue(), property);
-      },
-      set: (_target, property, value) => Reflect.set(getValue(), property, value),
-      has: (_target, property) => Reflect.has(getValue(), property),
-      ownKeys: () => Reflect.ownKeys(getValue()),
-      getOwnPropertyDescriptor: (_target, property) => propertyDescriptor(getValue(), property),
-      getPrototypeOf: () => Reflect.getPrototypeOf(getValue())
-    });
-  }
-
-  // src/ui/evolution-settings.ts
-  function createEvolutionSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const addSettingsSelect2 = liveFunction(
-      () => getDependency("addSettingsSelect")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const addStandardHeading2 = liveFunction(
-      () => getDependency("addStandardHeading")
-    );
-    const buildSettingsSection3 = liveFunction(
-      () => getDependency("buildSettingsSection")
-    );
-    const challenges2 = liveObject4(() => getDependency("challenges"));
-    const document2 = liveObject4(() => getDependency("document"));
-    const evolutionSettingsToStore2 = liveObject4(
-      () => getDependency("evolutionSettingsToStore")
-    );
-    const game2 = liveObject4(() => getDependency("game"));
-    const getStarLevel2 = liveFunction(() => getDependency("getStarLevel"));
-    const prestigeOptions2 = liveObject4(() => getDependency("prestigeOptions"));
-    const prestigeTypes2 = liveObject4(() => getDependency("prestigeTypes"));
-    const races2 = liveObject4(() => getDependency("races"));
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetEvolutionSettings2 = liveFunction(
-      () => getDependency("resetEvolutionSettings")
-    );
-    const settings2 = liveObject4(() => getDependency("settings"));
-    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
-    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
-    const state2 = liveObject4(() => getDependency("state"));
-    const universes2 = liveObject4(() => getDependency("universes"));
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildEvolutionSettingsImpl() {
-      let sectionId = "evolution";
-      let sectionName = "Evolution";
-      let resetFunction = function() {
-        resetEvolutionSettings2(true);
-        updateSettingsFromState2();
-        updateEvolutionSettingsContent2();
-        resetCheckbox2("autoEvolution");
-      };
-      buildSettingsSection3(
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateEvolutionSettingsContent2
-      );
-    }
-    function updateRaceWarningImpl() {
-      let race2 = races2[settingsRaw2.userEvolutionTarget];
-      if (race2 && race2.getCondition() !== "") {
-        let suited = race2.getHabitability();
-        if (suited === 1) {
-          $2("#script_race_warning").html(
-            `<span class="has-text-success">This race have special requirements: ${race2.getCondition()} This condition is met.</span>`
-          );
-        } else if (suited === 0) {
-          $2("#script_race_warning").html(
-            `<span class="has-text-danger">Warning! This race have special requirements: ${race2.getCondition()} This condition is not met.</span>`
-          );
-        } else {
-          $2("#script_race_warning").html(
-            `<span class="has-text-warning">Warning! This race have special requirements: ${race2.getCondition()} This condition is bypassed. Race will have ${100 - suited * 100}% penalty.</span>`
-          );
-        }
-      } else {
-        $2("#script_race_warning").empty();
-      }
-    }
-    function updateEvolutionSettingsContentImpl() {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2("#script_evolutionContent");
-      currentNode.empty().off("*");
-      let universeOptions = [
-        { val: "none", label: "None", hint: "Wait for user selection" },
-        ...universes2.map((id) => ({
-          val: id,
-          label: game2.loc(`universe_${id}`),
-          hint: game2.loc(`universe_${id}_desc`)
-        }))
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "userUniverseTargetName",
-        "Target Universe",
-        "Chosen universe will be automatically selected after appropriate reset",
-        universeOptions
-      );
-      let planetOptions = [
-        { val: "none", label: "None", hint: "Wait for user selection" },
-        {
-          val: "habitable",
-          label: "Most habitable",
-          hint: "Picks most habitable planet, based on biome and trait"
-        },
-        {
-          val: "achieve",
-          label: "Most achievements",
-          hint: "Picks planet with most unearned achievements. Takes in account extinction achievements for planet exclusive races, and greatness achievements for planet biome, trait, and exclusive genus."
-        },
-        {
-          val: "weighting",
-          label: "Highest weighting",
-          hint: "Picks planet with highest weighting. Should be configured in Planet Weighting Settings section."
-        }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "userPlanetTargetName",
-        "Target Planet",
-        "Chosen planet will be automatically selected after appropriate reset. Warning! Script ignores changes made by G.E.C.K., you need to select planet manually after using it.",
-        planetOptions
-      );
-      let raceOptions = [
-        {
-          val: "auto",
-          label: "Auto Achievements",
-          hint: "Picks race giving most achievements upon completing run. Tracks all achievements limited to specific races and resets. Races unique to current planet biome are prioritized, when available."
-        },
-        ...Object.values(races2).map((race2) => ({
-          val: race2.id,
-          label: race2.name,
-          hint: race2.desc
-        }))
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "userEvolutionTarget",
-        "Target Race",
-        "Chosen race will be automatically selected during next evolution",
-        raceOptions
-      ).on("change", "select", function() {
-        state2.evolutionTarget = null;
-        updateRaceWarning2();
-      });
-      let genusOptions = [
-        ...Object.values(game2.races).map((r) => r.type).filter((g, i, a) => g && g !== "organism" && a.indexOf(g) === i).map((g) => ({ val: g, label: game2.loc(`genelab_genus_${g}`) }))
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "userEvolutionGenus",
-        "Preferred genus",
-        "Chosen genus will be picked if target race have such option. Works only with challenge races, and hybrids. If chosen genus is not allowed, then first valid option will be picked instead.",
-        genusOptions
-      );
-      currentNode.append(`<div><span id="script_race_warning"></span></div>`);
-      updateRaceWarning2();
-      addSettingsToggle2(
-        currentNode,
-        "evolutionAutoUnbound",
-        "Allow unbound races",
-        "Allow Auto Achievement to pick biome restricted races on unsuited biomes, after getting unbound."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "evolutionBackup",
-        "Soft Reset",
-        "Perform soft resets until you'll get chosen race. Has no effect after getting mass extinction perk."
-      );
-      for (let i = 0; i < challenges2.length; i++) {
-        let set = challenges2[i];
-        addSettingsToggle2(
-          currentNode,
-          `challenge_${set[0].id}`,
-          set.map((c) => game2.loc(`evo_challenge_${c.id}`)).join(" | "),
-          set.map((c) => game2.loc(`evo_challenge_${c.id}_effect`)).join("&#xA;")
-        );
-      }
-      addStandardHeading2(currentNode, "Evolution Queue");
-      addSettingsToggle2(
-        currentNode,
-        "evolutionQueueEnabled",
-        "Queue Enabled",
-        "When enabled script with evolve with queued settings, from top to bottom. During that script settings will be overriden with settings stored in queue. Queued target will be removed from list after evolution."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "evolutionQueueRepeat",
-        "Repeat Queue",
-        "When enabled applied evolution targets will be moved to the end of queue, instead of being removed"
-      );
-      currentNode.append(`
-          <div style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
-            <label for="script_evolution_prestige">Prestige for new evolutions:</label>
-            <select id="script_evolution_prestige" style="height: 18px; width: 150px; float: right;">
-              <option value = "auto" title = "Inherited from current Prestige Settings">Current Prestige</option>
-              ${prestigeOptions2}
-            </select>
-          </div>
-          <div style="margin-top: 10px;">
-            <button id="script_evlution_add" class="button">Add New Evolution</button>
-          </div>`);
-      $2("#script_evlution_add").on("click", addEvolutionSetting2);
-      currentNode.append(`
-          <table style="width:100%">
-            <tr>
-              <th class="has-text-warning" style="width:25%">Race</th>
-              <th class="has-text-warning" style="width:70%" title="Settings applied before evolution. Changed settings not limited to initial template, you can manually add any script options to JSON.">Settings</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_evolutionQueueTable"></tbody>
-          </table>`);
-      let tableBodyNode = $2("#script_evolutionQueueTable");
-      for (let i = 0; i < settingsRaw2.evolutionQueue.length; i++) {
-        tableBodyNode.append(buildEvolutionQueueItem2(i));
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper2,
-        update: function() {
-          let newOrder = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          settingsRaw2.evolutionQueue = newOrder.map(
-            (i) => settingsRaw2.evolutionQueue[i]
-          );
-          updateSettingsFromState2();
-          updateEvolutionSettingsContent2();
-        }
-      });
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildEvolutionQueueItemImpl(id) {
-      let queuedEvolution = settingsRaw2.evolutionQueue[id];
-      for (let settingName of evolutionSettingsToStore2) {
-        queuedEvolution[settingName] = queuedEvolution[settingName] ?? settings2[settingName];
-      }
-      let raceName = "";
-      let raceClass = "";
-      let prestigeName = "";
-      let prestigeClass = "";
-      let race2 = races2[queuedEvolution.userEvolutionTarget];
-      let isValdi = queuedEvolution.challenge_junker || race2 === races2.junker;
-      let isSludge = queuedEvolution.challenge_sludge || race2 === races2.sludge;
-      let isUltraSludge = queuedEvolution.challenge_ultra_sludge || race2 === races2.ultra_sludge;
-      let isHellspawn = queuedEvolution.challenge_warlord || race2 === races2.hellspawn;
-      const getRaceColor = (race3) => {
-        let suited = race3.getHabitability();
-        if (suited === 1) {
-          return "has-text-info";
-        } else if (suited === 0) {
-          return "has-text-danger";
-        } else {
-          return "has-text-warning";
-        }
-      };
-      let uniqPicked = isValdi + isSludge + isUltraSludge + isHellspawn;
-      if (uniqPicked > 1) {
-        raceName = "Valdi, Sludge and Hellspawn can not be combined!";
-        raceClass = "has-text-danger";
-      } else if (uniqPicked === 1) {
-        let name = isValdi ? races2.junker.name : isSludge ? races2.sludge.name : isUltraSludge ? races2.ultra_sludge.name : isHellspawn ? races2.hellspawn.name : "???";
-        if (race2 && race2 !== races2.junker && race2 !== races2.sludge && race2 !== races2.ultra_sludge) {
-          raceName = name + ", " + game2.loc(`genelab_genus_${race2.genus}`);
-          raceClass = getRaceColor(race2);
-        } else {
-          raceName = name + ", " + game2.loc(`genelab_genus_${queuedEvolution.userEvolutionGenus}`);
-          raceClass = getRaceColor(
-            Object.values(races2).find(
-              (r) => r.genus === queuedEvolution.userEvolutionGenus
-            )
-          );
-        }
-      } else if (queuedEvolution.userEvolutionTarget === "auto") {
-        raceName = "Auto Achievements";
-        raceClass = "has-text-advanced";
-      } else if (race2) {
-        raceName = race2.name;
-        raceClass = getRaceColor(race2);
-        if (race2.genus == "hybrid") {
-          if (game2.races[race2.id].hybrid.includes(
-            queuedEvolution.userEvolutionGenus
-          )) {
-            raceName += ", " + game2.loc(`genelab_genus_${queuedEvolution.userEvolutionGenus}`);
-          } else {
-            raceName += ", " + game2.loc(`genelab_genus_${game2.races[race2.id].hybrid[0]}`);
-          }
-        }
-      } else {
-        raceName = "Unrecognized race!";
-        raceClass = "has-text-danger";
-      }
-      let star = $2(
-        `#settings a.dropdown-item:contains("${game2.loc(
-          game2.global.settings.icon
-        )}") svg`
-      ).clone();
-      star.removeClass();
-      star.addClass("star" + getStarLevel2(queuedEvolution));
-      if (queuedEvolution.prestigeType !== "none") {
-        let prestige = prestigeTypes2.find(
-          (prest) => prest.val === queuedEvolution.prestigeType
-        );
-        if (prestige) {
-          prestigeName = `(${prestige.short_label ?? prestige.label})`;
-          prestigeClass = "has-text-info";
-        } else {
-          prestigeName = "Unrecognized prestige!";
-          prestigeClass = "has-text-danger";
-        }
-      }
-      let queueNode = $2(`
-          <tr id="script_evolution_${id}" value="${id}" class="script-draggable">
-            <td style="width:25%"><span class="${raceClass}">${raceName}</span> <span class="${prestigeClass}">${prestigeName}</span> ${star.prop("outerHTML") ?? getStarLevel2(queuedEvolution) - 1 + "*"}</td>
-            <td style="width:70%"><textarea class="textarea">${JSON.stringify(
-        queuedEvolution,
-        null,
-        4
-      )}</textarea></td>
-            <td style="width:5%"><a class="button is-dark is-small" style="width: 26px; height: 26px"><span>X</span></a></td>
-          </tr>`);
-      queueNode.find(".button").on("click", function() {
-        settingsRaw2.evolutionQueue.splice(id, 1);
-        updateSettingsFromState2();
-        updateEvolutionSettingsContent2();
-      });
-      queueNode.find(".textarea").on("change", function() {
-        try {
-          let queuedEvolution2 = JSON.parse(this.value);
-          settingsRaw2.evolutionQueue[id] = queuedEvolution2;
-          updateSettingsFromState2();
-          updateEvolutionSettingsContent2();
-        } catch (error) {
-          queueNode.find("td:eq(0)").html(`<span class="has-text-danger">${error}</span>`);
-        }
-      });
-      return queueNode;
-    }
-    function addEvolutionSettingImpl() {
-      let queuedEvolution = {};
-      for (let settingName of evolutionSettingsToStore2) {
-        let settingValue = settingsRaw2[settingName];
-        queuedEvolution[settingName] = settingValue;
-      }
-      let overridePrestige = $2("#script_evolution_prestige").first().val();
-      if (overridePrestige && overridePrestige !== "auto") {
-        queuedEvolution.prestigeType = overridePrestige;
-      }
-      let queueLength = settingsRaw2.evolutionQueue.push(queuedEvolution);
-      updateSettingsFromState2();
-      let tableBodyNode = $2("#script_evolutionQueueTable");
-      tableBodyNode.append(buildEvolutionQueueItem2(queueLength - 1));
-    }
-    function buildEvolutionSettings2(...args) {
-      const implementation = getOverride("buildEvolutionSettings") ?? buildEvolutionSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateRaceWarning2(...args) {
-      const implementation = getOverride("updateRaceWarning") ?? updateRaceWarningImpl;
-      return implementation.apply(this, args);
-    }
-    function updateEvolutionSettingsContent2(...args) {
-      const implementation = getOverride("updateEvolutionSettingsContent") ?? updateEvolutionSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    function buildEvolutionQueueItem2(...args) {
-      const implementation = getOverride("buildEvolutionQueueItem") ?? buildEvolutionQueueItemImpl;
-      return implementation.apply(this, args);
-    }
-    function addEvolutionSetting2(...args) {
-      const implementation = getOverride("addEvolutionSetting") ?? addEvolutionSettingImpl;
-      return implementation.apply(this, args);
-    }
-    return {
-      buildEvolutionSettings: buildEvolutionSettings2,
-      updateRaceWarning: updateRaceWarning2,
-      updateEvolutionSettingsContent: updateEvolutionSettingsContent2,
-      buildEvolutionQueueItem: buildEvolutionQueueItem2,
-      addEvolutionSetting: addEvolutionSetting2
-    };
-  }
-
   // src/ui/queue-panels.ts
   function createQueuePanels({
     getJQuery,
@@ -47819,11 +47820,11 @@
         const target = getObserver();
         call4(target, "disconnect", "MechManager.mechObserver.disconnect");
       },
-      observe(target, options) {
+      observe(target, options2) {
         const observerTarget = getObserver();
         call4(observerTarget, "observe", "MechManager.mechObserver.observe", [
           target,
-          options
+          options2
         ]);
       }
     });
@@ -47989,16 +47990,16 @@
       const race2 = requireRecord(global["race"], "game.global.race");
       const settingsRaw2 = requireRecord(getSettingsRaw(), "settingsRaw");
       const noTrade = Boolean(race2["no_trade"]);
-      const loc = requireFunction2(game2["loc"], "game.loc");
+      const loc2 = requireFunction2(game2["loc"], "game.loc");
       const labels = noTrade ? Object.freeze({ buy: "", sell: "", routes: "", cancelRoutes: "" }) : Object.freeze({
-        buy: requireString33(loc("resource_market_buy"), "game.loc(buy)"),
-        sell: requireString33(loc("resource_market_sell"), "game.loc(sell)"),
+        buy: requireString33(loc2("resource_market_buy"), "game.loc(buy)"),
+        sell: requireString33(loc2("resource_market_sell"), "game.loc(sell)"),
         routes: requireString33(
-          loc("resource_market_routes"),
+          loc2("resource_market_routes"),
           "game.loc(routes)"
         ),
         cancelRoutes: requireString33(
-          loc("cancel_routes"),
+          loc2("cancel_routes"),
           "game.loc(cancel_routes)"
         )
       });
@@ -49132,7 +49133,7 @@
 
   // src/ui/settings-shell.ts
   function createSettingsShell({ getContext }) {
-    const liveObject5 = (key) => new Proxy(
+    const liveObject4 = (key) => new Proxy(
       {},
       {
         get(_target, property) {
@@ -49166,10 +49167,10 @@
         return typeof value === "function" ? value.bind(current) : value;
       }
     });
-    const document2 = liveObject5("document");
-    const settingsRaw2 = liveObject5("settingsRaw");
-    const settings2 = liveObject5("settings");
-    const game2 = liveObject5("game");
+    const document2 = liveObject4("document");
+    const settingsRaw2 = liveObject4("settingsRaw");
+    const settings2 = liveObject4("settings");
+    const game2 = liveObject4("game");
     const buildPrestigeSettings2 = (...args) => getContext().buildPrestigeSettings(...args);
     const buildGeneralSettings2 = (...args) => getContext().buildGeneralSettings(...args);
     const buildInterfaceSettings2 = (...args) => getContext().buildInterfaceSettings(...args);
@@ -49400,7 +49401,7 @@
   function createSettingsControls({
     getContext
   }) {
-    const liveObject5 = (key) => new Proxy(
+    const liveObject4 = (key) => new Proxy(
       {},
       {
         get(_target, property) {
@@ -49434,13 +49435,13 @@
         return typeof value === "function" ? value.bind(current) : value;
       }
     });
-    const settingsRaw2 = liveObject5("settingsRaw");
-    const settings2 = liveObject5("settings");
-    const techIds2 = liveObject5("techIds");
-    const win2 = liveObject5("win");
-    const checkCompare2 = liveObject5("checkCompare");
-    const checkCustom2 = liveObject5("checkCustom");
-    const checkTypes2 = liveObject5("checkTypes");
+    const settingsRaw2 = liveObject4("settingsRaw");
+    const settings2 = liveObject4("settings");
+    const techIds2 = liveObject4("techIds");
+    const win2 = liveObject4("win");
+    const checkCompare2 = liveObject4("checkCompare");
+    const checkCustom2 = liveObject4("checkCustom");
+    const checkTypes2 = liveObject4("checkTypes");
     const getRealNumber2 = (...args) => getContext().getRealNumber(...args);
     const openOptionsModal2 = (...args) => getContext().openOptionsModal(...args);
     const sorterHelper2 = (...args) => getContext().sorterHelper(...args);
@@ -49464,8 +49465,8 @@
         });
       }
     }
-    function buildOverrideSettings2(settingName, type, options) {
-      const rebuild = () => buildOverrideSettings2(settingName, type, options);
+    function buildOverrideSettings2(settingName, type, options2) {
+      const rebuild = () => buildOverrideSettings2(settingName, type, options2);
       let overrides = settingsRaw2.overrides[settingName] ?? [];
       let currentNode = $2(`#script_${settingName}Modal`);
       currentNode.empty().off("*");
@@ -49514,7 +49515,7 @@
         $2(`#script_${settingName}_d td:eq(1)`).append(
           buildInputNode2(
             type,
-            options,
+            options2,
             settingsRaw2[settingName],
             function(result2) {
               settingsRaw2[settingName] = result2;
@@ -49526,7 +49527,7 @@
         );
       }
       $2(`#script_override_true_value td:eq(1)`).append(
-        buildInputNodeForDisplay2(type, options, settings2[settingName])
+        buildInputNodeForDisplay2(type, options2, settings2[settingName])
       );
       $2(`#script_${settingName}_d a`).on("click", function() {
         if (!settingsRaw2.overrides[settingName]) {
@@ -49558,7 +49559,7 @@
         tableElement.append(buildConditionArg2(override, 2));
         tableElement = tableElement.next();
         if (!checkCustom2[override.cmp]) {
-          tableElement.append(buildConditionRet2(override, type, options));
+          tableElement.append(buildConditionRet2(override, type, options2));
         }
         tableElement = tableElement.next();
         tableElement.append(buildConditionRemove2(settingName, i, rebuild));
@@ -49580,7 +49581,7 @@
         }
       });
     }
-    function buildInputNode2(type, options, value, callback) {
+    function buildInputNode2(type, options2, value, callback) {
       switch (type) {
         case "string":
           return $2(`
@@ -49607,31 +49608,31 @@
           }).end();
         case "select":
           return $2(`
-                  <select style="width: 100%">${options}</select>`).val(value).on("change", function() {
+                  <select style="width: 100%">${options2}</select>`).val(value).on("change", function() {
             callback(this.value);
           });
         case "select_cb":
           return $2(`
                   <select style="width: 100%">${buildSelectOptions2(
-            options()
+            options2()
           )}</select>`).val(value).on("change", function() {
             callback(this.value);
           });
         case "list":
           return buildObjectListInput2(
-            options.list,
-            options.name,
-            options.id,
+            options2.list,
+            options2.name,
+            options2.id,
             value,
             callback
           );
         case "list_cb":
-          return buildObjectListInput2(options(), "name", "id", value, callback);
+          return buildObjectListInput2(options2(), "name", "id", value, callback);
         default:
           return "";
       }
     }
-    function buildInputNodeForDisplay2(type, options, value) {
+    function buildInputNodeForDisplay2(type, options2, value) {
       switch (type) {
         case "string":
         case "number":
@@ -49647,13 +49648,13 @@
                   </label>`).find("input").prop("checked", value).end();
         case "select":
           return $2(`
-                  <select style="width: 100%"  disabled="disabled" class="dropdown is-disabled">${options}</select>`).val(
+                  <select style="width: 100%"  disabled="disabled" class="dropdown is-disabled">${options2}</select>`).val(
             value
           );
         case "list":
           return $2(`
                   <span></span>`).text(
-            value.map((item) => options.list[item]?.name ?? "[Invalid item]").join(", ")
+            value.map((item) => options2.list[item]?.name ?? "[Invalid item]").join(", ")
           );
         default:
           return $2(`
@@ -49764,10 +49765,10 @@
         win2.prompt("Eval of this condition:", check);
       });
     }
-    function buildConditionRet2(override, type, options) {
+    function buildConditionRet2(override, type, options2) {
       return buildInputNode2(
         type,
-        options,
+        options2,
         override.ret,
         function(result2) {
           override.ret = result2;
@@ -49903,13 +49904,13 @@
       ).join();
     }
     function addSettingsSelect2(node, settingName, labelText, hintText, optionsList) {
-      let options = buildSelectOptions2(optionsList);
+      let options2 = buildSelectOptions2(optionsList);
       return $2(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
             <label title="${hintText}" tabindex="0">
               <span>${labelText}</span>
               <select class="script_${settingName}" style="width: 150px; float: right;">
-                ${options}
+                ${options2}
               </select>
             </label>
           </div>`).toggleClass("inactive-row", Boolean(settingsRaw2.overrides[settingName])).find("select").val(settingsRaw2[settingName]).on("change", function() {
@@ -49922,7 +49923,7 @@
           label: `${labelText} (${settingName})`,
           name: settingName,
           type: "select",
-          options
+          options: options2
         },
         openOverrideModal2
       ).appendTo(node);
@@ -50107,7 +50108,7 @@
   function createOverrideCatalog({
     getContext
   }) {
-    const liveObject5 = (key) => new Proxy(
+    const liveObject4 = (key) => new Proxy(
       {},
       {
         get(_target, property) {
@@ -50130,26 +50131,26 @@
         }
       }
     );
-    const settings2 = liveObject5("settings");
-    const settingsRaw2 = liveObject5("settingsRaw");
-    const state2 = liveObject5("state");
-    const game2 = liveObject5("game");
-    const buildingIds2 = liveObject5("buildingIds");
-    const buildings2 = liveObject5("buildings");
-    const resources2 = liveObject5("resources");
-    const techIds2 = liveObject5("techIds");
-    const arpaIds2 = liveObject5("arpaIds");
-    const jobIds2 = liveObject5("jobIds");
-    const races2 = liveObject5("races");
-    const GovernmentManager2 = liveObject5("GovernmentManager");
-    const SmelterManager2 = liveObject5("SmelterManager");
-    const FactoryManager2 = liveObject5("FactoryManager");
-    const WarManager2 = liveObject5("WarManager");
-    const universes2 = liveObject5("universes");
-    const governors2 = liveObject5("governors");
-    const challenges2 = liveObject5("challenges");
-    const biomeList2 = liveObject5("biomeList");
-    const traitList2 = liveObject5("traitList");
+    const settings2 = liveObject4("settings");
+    const settingsRaw2 = liveObject4("settingsRaw");
+    const state2 = liveObject4("state");
+    const game2 = liveObject4("game");
+    const buildingIds2 = liveObject4("buildingIds");
+    const buildings2 = liveObject4("buildings");
+    const resources2 = liveObject4("resources");
+    const techIds2 = liveObject4("techIds");
+    const arpaIds2 = liveObject4("arpaIds");
+    const jobIds2 = liveObject4("jobIds");
+    const races2 = liveObject4("races");
+    const GovernmentManager2 = liveObject4("GovernmentManager");
+    const SmelterManager2 = liveObject4("SmelterManager");
+    const FactoryManager2 = liveObject4("FactoryManager");
+    const WarManager2 = liveObject4("WarManager");
+    const universes2 = liveObject4("universes");
+    const governors2 = liveObject4("governors");
+    const challenges2 = liveObject4("challenges");
+    const biomeList2 = liveObject4("biomeList");
+    const traitList2 = liveObject4("traitList");
     const buildSelectOptions2 = (...args) => getContext().buildSelectOptions(...args);
     const fastEval2 = (...args) => getContext().fastEval(...args);
     const getGovernor2 = (...args) => getContext().getGovernor(...args);
@@ -50834,7 +50835,7 @@
     getContext,
     getScriptVersion
   }) {
-    const liveObject5 = (key) => new Proxy(
+    const liveObject4 = (key) => new Proxy(
       {},
       {
         get(_target, property) {
@@ -50854,10 +50855,10 @@
         return getContext().$(...args);
       }
     });
-    const document2 = liveObject5("document");
-    const state2 = liveObject5("state");
-    const game2 = liveObject5("game");
-    const win2 = liveObject5("win");
+    const document2 = liveObject4("document");
+    const state2 = liveObject4("state");
+    const game2 = liveObject4("game");
+    const win2 = liveObject4("win");
     const createOptionsModal2 = (...args) => getContext().createOptionsModal(...args);
     const openOptionsModal2 = (...args) => getContext().openOptionsModal(...args);
     function updateDebugData2() {
@@ -52296,44 +52297,90 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       renderSettingsContent: () => authoritySettingsBrowserAdapter.updateAuthoritySettingsContent()
     });
     const { buildAuthoritySettings, updateAuthoritySettingsContent } = authoritySettingsBrowserAdapter;
-    const evolutionSettingsOverrides = {};
-    const getEvolutionSettingsDependency = createDependencyResolver(
-      evolutionSettingsOverrides,
+    let evolutionSettingsTestContext;
+    const evolutionSettingsReader = createEvolutionSettingsEvolveAdapter({
+      getGame: () => evolutionSettingsTestContext?.game ?? game,
+      getRaces: () => evolutionSettingsTestContext?.races ?? races,
+      getChallenges: () => evolutionSettingsTestContext?.challenges ?? challenges,
+      getUniverses: () => evolutionSettingsTestContext?.universes ?? universes,
+      getSettingsRaw: () => evolutionSettingsTestContext?.settingsRaw ?? settingsRaw,
+      getSettings: () => evolutionSettingsTestContext?.settings ?? settings,
+      getSettingsToStore: () => evolutionSettingsTestContext?.evolutionSettingsToStore ?? evolutionSettingsToStore,
+      getPrestigeTypes: () => evolutionSettingsTestContext?.prestigeTypes ?? prestigeTypes,
+      getStarLevel: (queueItem) => (evolutionSettingsTestContext?.getStarLevel ?? getStarLevel)(queueItem)
+    });
+    let evolutionSettingsIntentHandler;
+    const evolutionSettingsBrowserAdapter = createEvolutionSettingsBrowserAdapter(
       {
-        $: () => $,
-        addSettingsSelect: () => addSettingsSelect,
-        addSettingsToggle: () => addSettingsToggle,
-        addStandardHeading: () => addStandardHeading,
-        buildSettingsSection: () => buildSettingsSection,
-        challenges: () => challenges,
-        document: () => document,
-        evolutionSettingsToStore: () => evolutionSettingsToStore,
-        game: () => game,
-        getStarLevel: () => getStarLevel,
-        prestigeOptions: () => prestigeOptions,
-        prestigeTypes: () => prestigeTypes,
-        races: () => races,
-        resetCheckbox: () => resetCheckbox,
-        resetEvolutionSettings: () => resetEvolutionSettings,
-        settings: () => settings,
-        settingsRaw: () => settingsRaw,
-        sorterHelper: () => sorterHelper,
-        state: () => state,
-        universes: () => universes,
-        updateSettingsFromState: () => updateSettingsFromState
+        getDocument: () => document,
+        getJQuery: () => $,
+        reader: evolutionSettingsReader,
+        intents: {
+          handle: (intent) => evolutionSettingsIntentHandler.handle(intent)
+        },
+        getActions: () => evolutionSettingsTestContext?.actions ?? {
+          buildSettingsSection,
+          addStandardHeading,
+          addSettingsSelect,
+          addSettingsToggle,
+          sorterHelper
+        }
       }
     );
-    const evolutionSettings = createEvolutionSettings({
-      getDependency: getEvolutionSettingsDependency,
-      getOverride: (name) => evolutionSettingsOverrides[name]
+    evolutionSettingsIntentHandler = createEvolutionSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (evolutionSettingsTestContext?.resetEvolutionSettings ?? resetEvolutionSettings)(true),
+        setTarget: (value) => {
+          const target = evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+          target.userEvolutionTarget = value;
+          const currentState = evolutionSettingsTestContext?.state ?? state;
+          currentState.evolutionTarget = null;
+        },
+        addCurrent: (prestigeType) => {
+          const target = evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+          const currentSettings = evolutionSettingsTestContext?.settings ?? settings;
+          const names = evolutionSettingsTestContext?.evolutionSettingsToStore ?? evolutionSettingsToStore;
+          const queued = {};
+          for (const name of names)
+            queued[name] = target[name] ?? currentSettings[name];
+          if (prestigeType !== "auto") queued.prestigeType = prestigeType;
+          target.evolutionQueue.push(queued);
+        },
+        remove: (index) => {
+          const target = evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+          target.evolutionQueue.splice(index, 1);
+        },
+        edit: (index, json) => {
+          try {
+            const value = JSON.parse(json);
+            if (value && typeof value === "object" && !Array.isArray(value)) {
+              const target = evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+              target.evolutionQueue[index] = value;
+            }
+          } catch {
+            return;
+          }
+        },
+        reorder: (indexes) => {
+          const target = evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+          target.evolutionQueue = indexes.map(
+            (index) => target.evolutionQueue[index]
+          );
+        },
+        persist: () => (evolutionSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      render: () => evolutionSettingsBrowserAdapter.updateEvolutionSettingsContent(),
+      effects: {
+        resetCheckbox: () => (evolutionSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoEvolution"
+        )
+      }
     });
-    const {
-      buildEvolutionSettings,
-      updateRaceWarning,
-      updateEvolutionSettingsContent,
-      buildEvolutionQueueItem,
-      addEvolutionSetting
-    } = evolutionSettings;
+    const addEvolutionSetting = () => evolutionSettingsIntentHandler.handle({
+      type: "add-evolution",
+      prestigeType: "auto"
+    });
+    const { buildEvolutionSettings, updateEvolutionSettingsContent } = evolutionSettingsBrowserAdapter;
     let planetSettingsTestContext;
     const planetSettingsActions = {
       buildSettingsSection,
@@ -53576,7 +53623,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getCreateMechInfo: () => createMechInfo,
       getVueById: (id) => getVueById(id),
       kCombinations: k_combinations,
-      cloneIntoPage: (value, options) => userscriptEnvironment.cloneIntoPage(value, options),
+      cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2),
       createMutationObserver: (callback) => new MutationObserver(callback)
     });
     if (window.__EA_TEST_HOOKS__) {
@@ -56075,11 +56122,9 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
     }
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
-        settingsBoundaries: {
-          evolution: evolutionSettings
-        },
-        setSettingsBoundariesTestContext(context) {
-          Object.assign(evolutionSettingsOverrides, context);
+        evolutionSettings: evolutionSettingsBrowserAdapter,
+        setEvolutionSettingsTestContext(context) {
+          evolutionSettingsTestContext = context;
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
@@ -56581,7 +56626,7 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getGovernor: () => getGovernor(),
       getVueById: (...args) => getVueById(...args),
       normalizeProperties,
-      cloneIntoPage: (value, options) => userscriptEnvironment.cloneIntoPage(value, options),
+      cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2),
       getDate: () => /* @__PURE__ */ new Date()
     });
     if (window.__EA_TEST_HOOKS__) {

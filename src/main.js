@@ -461,9 +461,11 @@ import { createFleetSettingsEvolveAdapter } from "./adapters/evolve/fleet-settin
 import { createPrestigeSettingsIntentHandler } from "./application/prestige-settings.ts";
 import { createPrestigeSettingsBrowserAdapter } from "./adapters/browser/prestige-settings.ts";
 import { createPrestigeSettingsEvolveAdapter } from "./adapters/evolve/prestige-settings.ts";
+import { createEvolutionSettingsIntentHandler } from "./application/evolution-settings.ts";
+import { createEvolutionSettingsBrowserAdapter } from "./adapters/browser/evolution-settings.ts";
+import { createEvolutionSettingsEvolveAdapter } from "./adapters/evolve/evolution-settings.ts";
 import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
-import { createEvolutionSettings } from "./ui/evolution-settings.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoEvolveAdapter } from "./adapters/evolve/mech-info.ts";
 import { createMechInfoBrowserAdapter } from "./adapters/browser/mech-info.ts";
@@ -1641,44 +1643,112 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildAuthoritySettings, updateAuthoritySettingsContent } =
     authoritySettingsBrowserAdapter;
 
-  const evolutionSettingsOverrides = {};
-  const getEvolutionSettingsDependency = createDependencyResolver(
-    evolutionSettingsOverrides,
+  let evolutionSettingsTestContext;
+  const evolutionSettingsReader = createEvolutionSettingsEvolveAdapter({
+    getGame: () => evolutionSettingsTestContext?.game ?? game,
+    getRaces: () => evolutionSettingsTestContext?.races ?? races,
+    getChallenges: () => evolutionSettingsTestContext?.challenges ?? challenges,
+    getUniverses: () => evolutionSettingsTestContext?.universes ?? universes,
+    getSettingsRaw: () =>
+      evolutionSettingsTestContext?.settingsRaw ?? settingsRaw,
+    getSettings: () => evolutionSettingsTestContext?.settings ?? settings,
+    getSettingsToStore: () =>
+      evolutionSettingsTestContext?.evolutionSettingsToStore ??
+      evolutionSettingsToStore,
+    getPrestigeTypes: () =>
+      evolutionSettingsTestContext?.prestigeTypes ?? prestigeTypes,
+    getStarLevel: (queueItem) =>
+      (evolutionSettingsTestContext?.getStarLevel ?? getStarLevel)(queueItem),
+  });
+  let evolutionSettingsIntentHandler;
+  const evolutionSettingsBrowserAdapter = createEvolutionSettingsBrowserAdapter(
     {
-      $: () => $,
-      addSettingsSelect: () => addSettingsSelect,
-      addSettingsToggle: () => addSettingsToggle,
-      addStandardHeading: () => addStandardHeading,
-      buildSettingsSection: () => buildSettingsSection,
-      challenges: () => challenges,
-      document: () => document,
-      evolutionSettingsToStore: () => evolutionSettingsToStore,
-      game: () => game,
-      getStarLevel: () => getStarLevel,
-      prestigeOptions: () => prestigeOptions,
-      prestigeTypes: () => prestigeTypes,
-      races: () => races,
-      resetCheckbox: () => resetCheckbox,
-      resetEvolutionSettings: () => resetEvolutionSettings,
-      settings: () => settings,
-      settingsRaw: () => settingsRaw,
-      sorterHelper: () => sorterHelper,
-      state: () => state,
-      universes: () => universes,
-      updateSettingsFromState: () => updateSettingsFromState,
+      getDocument: () => document,
+      getJQuery: () => $,
+      reader: evolutionSettingsReader,
+      intents: {
+        handle: (intent) => evolutionSettingsIntentHandler.handle(intent),
+      },
+      getActions: () =>
+        evolutionSettingsTestContext?.actions ?? {
+          buildSettingsSection,
+          addStandardHeading,
+          addSettingsSelect,
+          addSettingsToggle,
+          sorterHelper,
+        },
     },
   );
-  const evolutionSettings = createEvolutionSettings({
-    getDependency: getEvolutionSettingsDependency,
-    getOverride: (name) => evolutionSettingsOverrides[name],
+  evolutionSettingsIntentHandler = createEvolutionSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (
+          evolutionSettingsTestContext?.resetEvolutionSettings ??
+          resetEvolutionSettings
+        )(true),
+      setTarget: (value) => {
+        const target = evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+        target.userEvolutionTarget = value;
+        const currentState = evolutionSettingsTestContext?.state ?? state;
+        currentState.evolutionTarget = null;
+      },
+      addCurrent: (prestigeType) => {
+        const target = evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+        const currentSettings =
+          evolutionSettingsTestContext?.settings ?? settings;
+        const names =
+          evolutionSettingsTestContext?.evolutionSettingsToStore ??
+          evolutionSettingsToStore;
+        const queued = {};
+        for (const name of names)
+          queued[name] = target[name] ?? currentSettings[name];
+        if (prestigeType !== "auto") queued.prestigeType = prestigeType;
+        target.evolutionQueue.push(queued);
+      },
+      remove: (index) => {
+        const target = evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+        target.evolutionQueue.splice(index, 1);
+      },
+      edit: (index, json) => {
+        try {
+          const value = JSON.parse(json);
+          if (value && typeof value === "object" && !Array.isArray(value)) {
+            const target =
+              evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+            target.evolutionQueue[index] = value;
+          }
+        } catch {
+          return;
+        }
+      },
+      reorder: (indexes) => {
+        const target = evolutionSettingsTestContext?.settingsRaw ?? settingsRaw;
+        target.evolutionQueue = indexes.map(
+          (index) => target.evolutionQueue[index],
+        );
+      },
+      persist: () =>
+        (
+          evolutionSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    },
+    render: () =>
+      evolutionSettingsBrowserAdapter.updateEvolutionSettingsContent(),
+    effects: {
+      resetCheckbox: () =>
+        (evolutionSettingsTestContext?.resetCheckbox ?? resetCheckbox)(
+          "autoEvolution",
+        ),
+    },
   });
-  const {
-    buildEvolutionSettings,
-    updateRaceWarning,
-    updateEvolutionSettingsContent,
-    buildEvolutionQueueItem,
-    addEvolutionSetting,
-  } = evolutionSettings;
+  const addEvolutionSetting = () =>
+    evolutionSettingsIntentHandler.handle({
+      type: "add-evolution",
+      prestigeType: "auto",
+    });
+  const { buildEvolutionSettings, updateEvolutionSettingsContent } =
+    evolutionSettingsBrowserAdapter;
 
   let planetSettingsTestContext;
   const planetSettingsActions = {
@@ -5918,11 +5988,9 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {
-      settingsBoundaries: {
-        evolution: evolutionSettings,
-      },
-      setSettingsBoundariesTestContext(context) {
-        Object.assign(evolutionSettingsOverrides, context);
+      evolutionSettings: evolutionSettingsBrowserAdapter,
+      setEvolutionSettingsTestContext(context) {
+        evolutionSettingsTestContext = context;
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {
