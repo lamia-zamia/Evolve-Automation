@@ -1,7 +1,7 @@
 import {
   startLegacyRuntime,
   type LegacyRuntimeSurface,
-} from "../legacy-runtime.js";
+} from "../adapters/evolve/legacy-runtime.js";
 import type { BrowserDiagnostics } from "../adapters/browser/diagnostics.ts";
 import type { JQueryGlobal } from "../adapters/browser/jquery.ts";
 import type { LegacyRuntimeEnvironment } from "../adapters/browser/legacy-runtime-environment.ts";
@@ -9,7 +9,7 @@ import type { LegacyRuntimeEnvironment } from "../adapters/browser/legacy-runtim
 /**
  * Starts the userscript through the typed composition boundary.
  *
- * TRANSITIONAL: `legacy-runtime.js` still owns the untyped compatibility
+ * TRANSITIONAL: `adapters/evolve/legacy-runtime.js` still owns the untyped compatibility
  * composition. Each remaining legacy factory must migrate behind a typed
  * application or adapter contract before that module can be deleted.
  */

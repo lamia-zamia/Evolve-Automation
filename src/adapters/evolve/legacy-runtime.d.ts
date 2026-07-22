@@ -1,6 +1,6 @@
-import type { BrowserDiagnostics } from "./adapters/browser/diagnostics.ts";
-import type { JQueryGlobal } from "./adapters/browser/jquery.ts";
-import type { LegacyRuntimeEnvironment } from "./adapters/browser/legacy-runtime-environment.ts";
+import type { BrowserDiagnostics } from "../browser/diagnostics.ts";
+import type { JQueryGlobal } from "../browser/jquery.ts";
+import type { LegacyRuntimeEnvironment } from "../browser/legacy-runtime-environment.ts";
 
 export type LegacyRuntimeSurface = Record<string, unknown>;
 

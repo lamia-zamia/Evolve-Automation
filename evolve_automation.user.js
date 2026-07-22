@@ -52286,7 +52286,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     };
   }
 
-  // src/legacy-runtime.js
+  // src/adapters/evolve/legacy-runtime.js
   function startLegacyRuntime($, diagnostics, runtimeEnvironment, captureTestSurface) {
     "use strict";
     const runtimeTestSurface = captureTestSurface === true ? {} : null;
