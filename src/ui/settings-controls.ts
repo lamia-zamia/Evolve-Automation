@@ -1,84 +1,50 @@
 type AnyRecord = Record<string, any>;
 type AnyFunction = (...args: any[]) => any;
 
-interface SettingsControlsContext {
-  $: AnyFunction & AnyRecord;
-  settingsRaw: AnyRecord;
-  settings: AnyRecord;
-  techIds: AnyRecord;
-  win: AnyRecord;
-  checkCompare: AnyRecord;
-  checkCustom: AnyRecord;
-  checkTypes: AnyRecord;
-  overrideKey: string;
-  getRealNumber: AnyFunction;
-  openOptionsModal: AnyFunction;
-  sorterHelper: AnyFunction;
-  updateSettingsFromState: AnyFunction;
-}
-
 interface SettingsControlsDependencies {
-  getContext: () => SettingsControlsContext;
+  getJQuery: () => AnyFunction & AnyRecord;
+  getSettingsRaw: () => AnyRecord;
+  getSettings: () => AnyRecord;
+  getTechIds: () => AnyRecord;
+  getWin: () => AnyRecord;
+  getCheckCompare: () => AnyRecord;
+  getCheckCustom: () => AnyRecord;
+  getCheckTypes: () => AnyRecord;
+  getOverrideKey: () => string;
+  getRealNumber: () => AnyFunction;
+  getOpenOptionsModal: () => AnyFunction;
+  getSorterHelper: () => AnyFunction;
+  getUpdateSettingsFromState: () => AnyFunction;
 }
 
 export function createSettingsControls({
-  getContext,
+  getJQuery,
+  getSettingsRaw,
+  getSettings,
+  getTechIds,
+  getWin,
+  getCheckCompare,
+  getCheckCustom,
+  getCheckTypes,
+  getOverrideKey,
+  getRealNumber,
+  getOpenOptionsModal,
+  getSorterHelper,
+  getUpdateSettingsFromState,
 }: SettingsControlsDependencies) {
-  const liveObject = (key: keyof SettingsControlsContext) =>
-    new Proxy(
-      {},
-      {
-        get(_target, property) {
-          const current = getContext()[key] as AnyRecord;
-          const value = current?.[property as keyof typeof current];
-          return typeof value === "function" ? value.bind(current) : value;
-        },
-        set(_target, property, value) {
-          (getContext()[key] as AnyRecord)[property as string] = value;
-          return true;
-        },
-        deleteProperty(_target, property) {
-          return delete (getContext()[key] as AnyRecord)[property as string];
-        },
-        ownKeys() {
-          return Reflect.ownKeys((getContext()[key] as AnyRecord) ?? {});
-        },
-        getOwnPropertyDescriptor() {
-          return { enumerable: true, configurable: true };
-        },
-      },
-    ) as AnyRecord;
-  const $ = new Proxy(function (this: any) {}, {
-    apply(_target, _thisArg, args) {
-      return getContext().$(...args);
-    },
-    get(_target, property) {
-      const current = getContext().$;
-      const value = current[property as keyof typeof current];
-      return typeof value === "function" ? value.bind(current) : value;
-    },
-  }) as AnyFunction & AnyRecord;
-  const settingsRaw = liveObject("settingsRaw");
-  const settings = liveObject("settings");
-  const techIds = liveObject("techIds");
-  const win = liveObject("win");
-  const checkCompare = liveObject("checkCompare");
-  const checkCustom = liveObject("checkCustom");
-  const checkTypes = liveObject("checkTypes");
-  const getRealNumber: AnyFunction = (...args) =>
-    getContext().getRealNumber(...args);
+  const $ = getJQuery();
+  const getRealNumberValue: AnyFunction = (...args) => getRealNumber()(...args);
   const openOptionsModal: AnyFunction = (...args) =>
-    getContext().openOptionsModal(...args);
-  const sorterHelper: AnyFunction = (...args) =>
-    getContext().sorterHelper(...args);
+    getOpenOptionsModal()(...args);
+  const sorterHelper: AnyFunction = (...args) => getSorterHelper()(...args);
   const updateSettingsFromState: AnyFunction = (...args) =>
-    getContext().updateSettingsFromState(...args);
+    getUpdateSettingsFromState()(...args);
   function _(check, arg) {
-    return checkTypes[check].fn(arg);
+    return getCheckTypes()[check].fn(arg);
   }
 
   function openOverrideModal(event) {
-    if (event[getContext().overrideKey]) {
+    if (event[getOverrideKey()]) {
       event.preventDefault();
       openOptionsModal(event.data.label, function (this: any, modal) {
         modal.append(
@@ -96,7 +62,7 @@ export function createSettingsControls({
 
   function buildOverrideSettings(settingName, type, options) {
     const rebuild = () => buildOverrideSettings(settingName, type, options);
-    let overrides = settingsRaw.overrides[settingName] ?? [];
+    let overrides = getSettingsRaw().overrides[settingName] ?? [];
 
     let currentNode = $(`#script_${settingName}Modal`);
     currentNode.empty().off("*");
@@ -126,7 +92,7 @@ export function createSettingsControls({
       newTableBodyText += `<tr id="script_${settingName}_o${i}" value="${i}" class="script-draggable"><td style="width:16%"></td><td style="width:16%"></td><td style="width:10%"></td><td style="width:16%"></td><td style="width:16%"></td><td style="width:14%"></td><td style="width:12%"><span class="script-lastcolumn"></span></td></tr>`;
     }
 
-    let listField = typeof settingsRaw[settingName] === "object";
+    let listField = typeof getSettingsRaw()[settingName] === "object";
     let note = listField
       ? "All values passed checks will be added or removed from list"
       : "First value passed check will be used. Default value:";
@@ -157,34 +123,37 @@ export function createSettingsControls({
         buildInputNode(
           type,
           options,
-          settingsRaw[settingName],
+          getSettingsRaw()[settingName],
           function (this: any, result) {
-            settingsRaw[settingName] = result;
+            getSettingsRaw()[settingName] = result;
             updateSettingsFromState();
 
             let retType = typeof result === "boolean" ? "checked" : "value";
-            $(".script_" + settingName).prop(retType, settingsRaw[settingName]);
+            $(".script_" + settingName).prop(
+              retType,
+              getSettingsRaw()[settingName],
+            );
           },
         ),
       );
     }
     $(`#script_override_true_value td:eq(1)`).append(
-      buildInputNodeForDisplay(type, options, settings[settingName]),
+      buildInputNodeForDisplay(type, options, getSettings()[settingName]),
     );
 
     // Add button
     $(`#script_${settingName}_d a`).on("click", function (this: any) {
-      if (!settingsRaw.overrides[settingName]) {
-        settingsRaw.overrides[settingName] = [];
+      if (!getSettingsRaw().overrides[settingName]) {
+        getSettingsRaw().overrides[settingName] = [];
         $(".script_bg_" + settingName).addClass("inactive-row");
       }
-      settingsRaw.overrides[settingName].push({
+      getSettingsRaw().overrides[settingName].push({
         type1: "Boolean",
         arg1: true,
         type2: "Boolean",
         arg2: false,
         cmp: "==",
-        ret: settingsRaw[settingName],
+        ret: getSettingsRaw()[settingName],
       });
       updateSettingsFromState();
       rebuild();
@@ -204,7 +173,7 @@ export function createSettingsControls({
       tableElement = tableElement.next();
       tableElement.append(buildConditionArg(override, 2));
       tableElement = tableElement.next();
-      if (!checkCustom[override.cmp]) {
+      if (!getCheckCustom()[override.cmp]) {
         tableElement.append(buildConditionRet(override, type, options));
       }
       tableElement = tableElement.next();
@@ -220,8 +189,8 @@ export function createSettingsControls({
         let newOrder = tableBodyNode.sortable("toArray", {
           attribute: "value",
         });
-        settingsRaw.overrides[settingName] = newOrder.map(
-          (i) => settingsRaw.overrides[settingName][i],
+        getSettingsRaw().overrides[settingName] = newOrder.map(
+          (i) => getSettingsRaw().overrides[settingName][i],
         );
 
         updateSettingsFromState();
@@ -244,7 +213,7 @@ export function createSettingsControls({
                   <input type="text" class="input is-small" style="height: 22px; width:100%"/>`)
           .val(value)
           .on("change", function (this: any) {
-            let parsedValue = getRealNumber(this.value);
+            let parsedValue = getRealNumberValue(this.value);
             if (isNaN(parsedValue)) {
               parsedValue = value;
             }
@@ -332,7 +301,7 @@ export function createSettingsControls({
   function changeDisplayInputNode(currentNode) {
     let type = currentNode.attr("type");
     let id = currentNode.attr("value");
-    let value = settings[currentNode.attr("value")];
+    let value = getSettings()[currentNode.attr("value")];
     let node = currentNode.find(`td:eq(1)>*:first-child`);
     switch (type) {
       case "string":
@@ -345,7 +314,7 @@ export function createSettingsControls({
         if (id === "researchIgnore") {
           return node.text(
             value
-              .map((item) => techIds[item]?.name ?? "[Invalid item]")
+              .map((item) => getTechIds()[item]?.name ?? "[Invalid item]")
               .join(", "),
           );
         }
@@ -356,7 +325,7 @@ export function createSettingsControls({
   }
 
   function buildConditionType(override, num, rebuild) {
-    let types = Object.entries(checkTypes)
+    let types = Object.entries(getCheckTypes())
       .map(
         ([id, type]) =>
           `<option value="${id}" title="${type.desc}">${id
@@ -368,14 +337,14 @@ export function createSettingsControls({
       .val(override["type" + num])
       .on("change", function (this: any) {
         override["type" + num] = this.value;
-        override["arg" + num] = checkTypes[this.value].def;
+        override["arg" + num] = getCheckTypes()[this.value].def;
         updateSettingsFromState();
         rebuild();
       });
   }
 
   function buildConditionArg(override, num) {
-    let check = checkTypes[override["type" + num]];
+    let check = getCheckTypes()[override["type" + num]];
     return check
       ? buildInputNode(
           check.arg,
@@ -390,11 +359,11 @@ export function createSettingsControls({
   }
 
   function buildConditionComparator(override, rebuild) {
-    let types = Object.entries(checkCompare)
+    let types = Object.entries(getCheckCompare())
       .map(
         ([id, fn]) =>
           `<option value="${id}" title="${
-            checkCustom[id] ?? fn.toString().substr(10)
+            getCheckCustom()[id] ?? fn.toString().substr(10)
           }">${id}</option>`,
       )
       .join();
@@ -411,9 +380,9 @@ export function createSettingsControls({
     return $(
       `<a class="button is-small" style="width: 26px; height: 26px"><span>-</span></a>`,
     ).on("click", function (this: any) {
-      settingsRaw.overrides[settingName].splice(id, 1);
-      if (settingsRaw.overrides[settingName].length === 0) {
-        delete settingsRaw.overrides[settingName];
+      getSettingsRaw().overrides[settingName].splice(id, 1);
+      if (getSettingsRaw().overrides[settingName].length === 0) {
+        delete getSettingsRaw().overrides[settingName];
         $(".script_bg_" + settingName).removeClass("inactive-row");
       }
       updateSettingsFromState();
@@ -425,8 +394,8 @@ export function createSettingsControls({
     return $(
       `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 1.2rem;">&#9282;</span></a>`,
     ).on("click", function (this: any) {
-      settingsRaw.overrides[settingName].splice(id, 0, {
-        ...settingsRaw.overrides[settingName][id],
+      getSettingsRaw().overrides[settingName].splice(id, 0, {
+        ...getSettingsRaw().overrides[settingName][id],
       });
       updateSettingsFromState();
       rebuild();
@@ -437,9 +406,9 @@ export function createSettingsControls({
     return $(
       `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 0.9rem;">E</span></a>`,
     ).on("click", function (this: any) {
-      let override = settingsRaw.overrides[settingName][id];
-      let check = checkCompare[override.cmp]
-        .toString()
+      let override = getSettingsRaw().overrides[settingName][id];
+      let check = getCheckCompare()
+        [override.cmp].toString()
         .substr(10)
         .replace(/([ab])/g, (s, v) => {
           let idx = v === "a" ? 1 : 2;
@@ -457,7 +426,7 @@ export function createSettingsControls({
               )})`;
           }
         });
-      win.prompt("Eval of this condition:", check);
+      getWin().prompt("Eval of this condition:", check);
     });
   }
 
@@ -546,22 +515,28 @@ export function createSettingsControls({
           <div class="script_bg_${settingName}" style="margin-top: 5px; width: 90%; display: inline-block; text-align: left;">
             <label title="${hintText}" tabindex="0" class="switch">
               <input class="script_${settingName}" type="checkbox" ${
-                settingsRaw[settingName] ? " checked" : ""
+                getSettingsRaw()[settingName] ? " checked" : ""
               }><span class="check"></span>
               <span style="margin-left: 10px;">${labelText}</span>
             </label>
           </div>`)
-      .toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName]))
+      .toggleClass(
+        "inactive-row",
+        Boolean(getSettingsRaw().overrides[settingName]),
+      )
       .on("change", "input", function (this: any) {
-        settingsRaw[settingName] = this.checked;
+        getSettingsRaw()[settingName] = this.checked;
         updateSettingsFromState();
 
-        $(".script_" + settingName).prop("checked", settingsRaw[settingName]);
+        $(".script_" + settingName).prop(
+          "checked",
+          getSettingsRaw()[settingName],
+        );
 
-        if (settingsRaw[settingName] && enabledCallBack) {
+        if (getSettingsRaw()[settingName] && enabledCallBack) {
           enabledCallBack();
         }
-        if (!settingsRaw[settingName] && disabledCallBack) {
+        if (!getSettingsRaw()[settingName] && disabledCallBack) {
           disabledCallBack();
         }
       })
@@ -576,7 +551,7 @@ export function createSettingsControls({
       )
       .appendTo(node);
 
-    if (settingsRaw[settingName] && enabledCallBack) {
+    if (getSettingsRaw()[settingName] && enabledCallBack) {
       enabledCallBack();
     }
   }
@@ -586,17 +561,20 @@ export function createSettingsControls({
           <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
             <label title="${hintText}" tabindex="0">
               <span>${labelText}</span>
-              <input class="script_${settingName}" type="text" style="text-align: right; height: 18px; width: 150px; float: right;" value="${settingsRaw[settingName]}"></input>
+              <input class="script_${settingName}" type="text" style="text-align: right; height: 18px; width: 150px; float: right;" value="${getSettingsRaw()[settingName]}"></input>
             </label>
           </div>`)
-      .toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName]))
+      .toggleClass(
+        "inactive-row",
+        Boolean(getSettingsRaw().overrides[settingName]),
+      )
       .on("change", "input", function (this: any) {
-        let parsedValue = getRealNumber(this.value);
+        let parsedValue = getRealNumberValue(this.value);
         if (!isNaN(parsedValue)) {
-          settingsRaw[settingName] = parsedValue;
+          getSettingsRaw()[settingName] = parsedValue;
           updateSettingsFromState();
         }
-        $(".script_" + settingName).val(settingsRaw[settingName]);
+        $(".script_" + settingName).val(getSettingsRaw()[settingName]);
       })
       .on(
         "click",
@@ -615,14 +593,17 @@ export function createSettingsControls({
           <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
             <label title="${hintText}" tabindex="0">
               <span>${labelText}</span>
-              <input class="script_${settingName}" type="text" style="text-align: right; height: 18px; width: 70%; float: right;" value="${settingsRaw[settingName]}"></input>
+              <input class="script_${settingName}" type="text" style="text-align: right; height: 18px; width: 70%; float: right;" value="${getSettingsRaw()[settingName]}"></input>
             </label>
           </div>`)
-      .toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName]))
+      .toggleClass(
+        "inactive-row",
+        Boolean(getSettingsRaw().overrides[settingName]),
+      )
       .on("change", "input", function (this: any) {
-        settingsRaw[settingName] = this.value;
+        getSettingsRaw()[settingName] = this.value;
         updateSettingsFromState();
-        $(".script_" + settingName).val(settingsRaw[settingName]);
+        $(".script_" + settingName).val(getSettingsRaw()[settingName]);
       })
       .on(
         "click",
@@ -664,14 +645,17 @@ export function createSettingsControls({
               </select>
             </label>
           </div>`)
-      .toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName]))
+      .toggleClass(
+        "inactive-row",
+        Boolean(getSettingsRaw().overrides[settingName]),
+      )
       .find("select")
-      .val(settingsRaw[settingName])
+      .val(getSettingsRaw()[settingName])
       .on("change", function (this: any) {
-        settingsRaw[settingName] = this.value;
+        getSettingsRaw()[settingName] = this.value;
         updateSettingsFromState();
 
-        $(".script_" + settingName).val(settingsRaw[settingName]);
+        $(".script_" + settingName).val(getSettingsRaw()[settingName]);
       })
       .end()
       .on(
@@ -705,7 +689,10 @@ export function createSettingsControls({
             <br>
             <textarea class="script_${settingName} textarea" style="margin-top: 12px" readonly></textarea>
           </div>`)
-      .toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName]))
+      .toggleClass(
+        "inactive-row",
+        Boolean(getSettingsRaw().overrides[settingName]),
+      )
       .on(
         "click",
         {
@@ -721,8 +708,8 @@ export function createSettingsControls({
     let selectedItem = "";
 
     let updateList = function (this: any) {
-      let techsString = settingsRaw[settingName]
-        .map(
+      let techsString = getSettingsRaw()
+        [settingName].map(
           (id) =>
             Object.values(list).find((obj) => obj._vueBinding === id).name,
         )
@@ -773,21 +760,27 @@ export function createSettingsControls({
     });
 
     listBlock.on("click", "button:eq(1)", function (this: any) {
-      if (selectedItem && !settingsRaw[settingName].includes(selectedItem)) {
-        settingsRaw[settingName].push(selectedItem);
-        settingsRaw[settingName].sort();
+      if (
+        selectedItem &&
+        !getSettingsRaw()[settingName].includes(selectedItem)
+      ) {
+        getSettingsRaw()[settingName].push(selectedItem);
+        getSettingsRaw()[settingName].sort();
         updateSettingsFromState();
         updateList();
       }
     });
 
     listBlock.on("click", "button:eq(0)", function (this: any) {
-      if (selectedItem && settingsRaw[settingName].includes(selectedItem)) {
-        settingsRaw[settingName].splice(
-          settingsRaw[settingName].indexOf(selectedItem),
+      if (
+        selectedItem &&
+        getSettingsRaw()[settingName].includes(selectedItem)
+      ) {
+        getSettingsRaw()[settingName].splice(
+          getSettingsRaw()[settingName].indexOf(selectedItem),
           1,
         );
-        settingsRaw[settingName].sort();
+        getSettingsRaw()[settingName].sort();
         updateSettingsFromState();
         updateList();
       }
@@ -799,12 +792,12 @@ export function createSettingsControls({
   function addInputCallbacks(node, settingKey) {
     return node
       .on("change", function (this: any) {
-        let parsedValue = getRealNumber(this.value);
+        let parsedValue = getRealNumberValue(this.value);
         if (!isNaN(parsedValue)) {
-          settingsRaw[settingKey] = parsedValue;
+          getSettingsRaw()[settingKey] = parsedValue;
           updateSettingsFromState();
         }
-        $(".script_" + settingKey).val(settingsRaw[settingKey]);
+        $(".script_" + settingKey).val(getSettingsRaw()[settingKey]);
       })
       .on(
         "click",
@@ -818,12 +811,12 @@ export function createSettingsControls({
       .addClass(
         "script_bg_" +
           settingKey +
-          (settingsRaw.overrides[settingKey] ? " inactive-row" : ""),
+          (getSettingsRaw().overrides[settingKey] ? " inactive-row" : ""),
       )
       .append(
         addInputCallbacks(
           $(
-            `<input class="script_${settingKey}" type="text" class="input is-small" style="height: 25px; width:100%" value="${settingsRaw[settingKey]}"/>`,
+            `<input class="script_${settingKey}" type="text" class="input is-small" style="height: 25px; width:100%" value="${getSettingsRaw()[settingKey]}"/>`,
           ),
           settingKey,
         ),
@@ -833,10 +826,13 @@ export function createSettingsControls({
   function addToggleCallbacks(node, settingKey) {
     return node
       .on("change", "input", function (this: any) {
-        settingsRaw[settingKey] = this.checked;
+        getSettingsRaw()[settingKey] = this.checked;
         updateSettingsFromState();
 
-        $(".script_" + settingKey).prop("checked", settingsRaw[settingKey]);
+        $(".script_" + settingKey).prop(
+          "checked",
+          getSettingsRaw()[settingKey],
+        );
       })
       .on(
         "click",
@@ -850,14 +846,14 @@ export function createSettingsControls({
       .addClass(
         "script_bg_" +
           settingKey +
-          (settingsRaw.overrides[settingKey] ? " inactive-row" : ""),
+          (getSettingsRaw().overrides[settingKey] ? " inactive-row" : ""),
       )
       .append(
         addToggleCallbacks(
           $(`
           <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
             <input class="script_${settingKey}" type="checkbox"${
-              settingsRaw[settingKey] ? " checked" : ""
+              getSettingsRaw()[settingKey] ? " checked" : ""
             }>
             <span class="check" style="height:5px; max-width:15px"></span>
             <span style="margin-left: 20px;"></span>
@@ -873,7 +869,7 @@ export function createSettingsControls({
 
   function resetCheckbox(...items: string[]) {
     Array.from(items).forEach((item) =>
-      $(".script_" + item).prop("checked", settingsRaw[item]),
+      $(".script_" + item).prop("checked", getSettingsRaw()[item]),
     );
   }
 

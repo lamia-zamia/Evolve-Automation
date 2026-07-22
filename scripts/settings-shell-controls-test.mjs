@@ -90,7 +90,21 @@ const controlContext = {
   sorterHelper: () => {},
   updateSettingsFromState: () => trace.push("persist"),
 };
-const controls = createSettingsControls({ getContext: () => controlContext });
+const controls = createSettingsControls({
+  getJQuery: () => controlContext.$,
+  getSettingsRaw: () => controlContext.settingsRaw,
+  getSettings: () => controlContext.settings,
+  getTechIds: () => controlContext.techIds,
+  getWin: () => controlContext.win,
+  getCheckCompare: () => controlContext.checkCompare,
+  getCheckCustom: () => controlContext.checkCustom,
+  getCheckTypes: () => controlContext.checkTypes,
+  getOverrideKey: () => controlContext.overrideKey,
+  getRealNumber: () => controlContext.getRealNumber,
+  getOpenOptionsModal: () => controlContext.openOptionsModal,
+  getSorterHelper: () => controlContext.sorterHelper,
+  getUpdateSettingsFromState: () => controlContext.updateSettingsFromState,
+});
 
 const input = makeNode("input");
 controls.addInputCallbacks(input, "amount");

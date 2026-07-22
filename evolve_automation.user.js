@@ -49995,58 +49995,30 @@
 
   // src/ui/settings-controls.ts
   function createSettingsControls({
-    getContext
+    getJQuery,
+    getSettingsRaw,
+    getSettings,
+    getTechIds,
+    getWin,
+    getCheckCompare,
+    getCheckCustom,
+    getCheckTypes,
+    getOverrideKey,
+    getRealNumber,
+    getOpenOptionsModal,
+    getSorterHelper,
+    getUpdateSettingsFromState
   }) {
-    const liveObject4 = (key) => new Proxy(
-      {},
-      {
-        get(_target, property) {
-          const current = getContext()[key];
-          const value = current?.[property];
-          return typeof value === "function" ? value.bind(current) : value;
-        },
-        set(_target, property, value) {
-          getContext()[key][property] = value;
-          return true;
-        },
-        deleteProperty(_target, property) {
-          return delete getContext()[key][property];
-        },
-        ownKeys() {
-          return Reflect.ownKeys(getContext()[key] ?? {});
-        },
-        getOwnPropertyDescriptor() {
-          return { enumerable: true, configurable: true };
-        }
-      }
-    );
-    const $2 = new Proxy(function() {
-    }, {
-      apply(_target, _thisArg, args) {
-        return getContext().$(...args);
-      },
-      get(_target, property) {
-        const current = getContext().$;
-        const value = current[property];
-        return typeof value === "function" ? value.bind(current) : value;
-      }
-    });
-    const settingsRaw = liveObject4("settingsRaw");
-    const settings = liveObject4("settings");
-    const techIds = liveObject4("techIds");
-    const win = liveObject4("win");
-    const checkCompare = liveObject4("checkCompare");
-    const checkCustom = liveObject4("checkCustom");
-    const checkTypes = liveObject4("checkTypes");
-    const getRealNumber = (...args) => getContext().getRealNumber(...args);
-    const openOptionsModal = (...args) => getContext().openOptionsModal(...args);
-    const sorterHelper = (...args) => getContext().sorterHelper(...args);
-    const updateSettingsFromState = (...args) => getContext().updateSettingsFromState(...args);
+    const $2 = getJQuery();
+    const getRealNumberValue = (...args) => getRealNumber()(...args);
+    const openOptionsModal = (...args) => getOpenOptionsModal()(...args);
+    const sorterHelper = (...args) => getSorterHelper()(...args);
+    const updateSettingsFromState = (...args) => getUpdateSettingsFromState()(...args);
     function _(check, arg) {
-      return checkTypes[check].fn(arg);
+      return getCheckTypes()[check].fn(arg);
     }
     function openOverrideModal(event) {
-      if (event[getContext().overrideKey]) {
+      if (event[getOverrideKey()]) {
         event.preventDefault();
         openOptionsModal(event.data.label, function(modal) {
           modal.append(
@@ -50063,7 +50035,7 @@
     }
     function buildOverrideSettings(settingName, type, options2) {
       const rebuild = () => buildOverrideSettings(settingName, type, options2);
-      let overrides = settingsRaw.overrides[settingName] ?? [];
+      let overrides = getSettingsRaw().overrides[settingName] ?? [];
       let currentNode = $2(`#script_${settingName}Modal`);
       currentNode.empty().off("*");
       currentNode.append(`
@@ -50089,7 +50061,7 @@
       for (let i = 0; i < overrides.length; i++) {
         newTableBodyText += `<tr id="script_${settingName}_o${i}" value="${i}" class="script-draggable"><td style="width:16%"></td><td style="width:16%"></td><td style="width:10%"></td><td style="width:16%"></td><td style="width:16%"></td><td style="width:14%"></td><td style="width:12%"><span class="script-lastcolumn"></span></td></tr>`;
       }
-      let listField = typeof settingsRaw[settingName] === "object";
+      let listField = typeof getSettingsRaw()[settingName] === "object";
       let note = listField ? "All values passed checks will be added or removed from list" : "First value passed check will be used. Default value:";
       let note_2 = "The current value:";
       let current = listField ? `<td style="width:32%" colspan="2">${note_2}</td>
@@ -50112,31 +50084,34 @@
           buildInputNode(
             type,
             options2,
-            settingsRaw[settingName],
+            getSettingsRaw()[settingName],
             function(result2) {
-              settingsRaw[settingName] = result2;
+              getSettingsRaw()[settingName] = result2;
               updateSettingsFromState();
               let retType = typeof result2 === "boolean" ? "checked" : "value";
-              $2(".script_" + settingName).prop(retType, settingsRaw[settingName]);
+              $2(".script_" + settingName).prop(
+                retType,
+                getSettingsRaw()[settingName]
+              );
             }
           )
         );
       }
       $2(`#script_override_true_value td:eq(1)`).append(
-        buildInputNodeForDisplay(type, options2, settings[settingName])
+        buildInputNodeForDisplay(type, options2, getSettings()[settingName])
       );
       $2(`#script_${settingName}_d a`).on("click", function() {
-        if (!settingsRaw.overrides[settingName]) {
-          settingsRaw.overrides[settingName] = [];
+        if (!getSettingsRaw().overrides[settingName]) {
+          getSettingsRaw().overrides[settingName] = [];
           $2(".script_bg_" + settingName).addClass("inactive-row");
         }
-        settingsRaw.overrides[settingName].push({
+        getSettingsRaw().overrides[settingName].push({
           type1: "Boolean",
           arg1: true,
           type2: "Boolean",
           arg2: false,
           cmp: "==",
-          ret: settingsRaw[settingName]
+          ret: getSettingsRaw()[settingName]
         });
         updateSettingsFromState();
         rebuild();
@@ -50154,7 +50129,7 @@
         tableElement = tableElement.next();
         tableElement.append(buildConditionArg(override, 2));
         tableElement = tableElement.next();
-        if (!checkCustom[override.cmp]) {
+        if (!getCheckCustom()[override.cmp]) {
           tableElement.append(buildConditionRet(override, type, options2));
         }
         tableElement = tableElement.next();
@@ -50169,8 +50144,8 @@
           let newOrder = tableBodyNode.sortable("toArray", {
             attribute: "value"
           });
-          settingsRaw.overrides[settingName] = newOrder.map(
-            (i) => settingsRaw.overrides[settingName][i]
+          getSettingsRaw().overrides[settingName] = newOrder.map(
+            (i) => getSettingsRaw().overrides[settingName][i]
           );
           updateSettingsFromState();
           rebuild();
@@ -50187,7 +50162,7 @@
         case "number":
           return $2(`
                   <input type="text" class="input is-small" style="height: 22px; width:100%"/>`).val(value).on("change", function() {
-            let parsedValue = getRealNumber(this.value);
+            let parsedValue = getRealNumberValue(this.value);
             if (isNaN(parsedValue)) {
               parsedValue = value;
             }
@@ -50260,7 +50235,7 @@
     function changeDisplayInputNode(currentNode) {
       let type = currentNode.attr("type");
       let id = currentNode.attr("value");
-      let value = settings[currentNode.attr("value")];
+      let value = getSettings()[currentNode.attr("value")];
       let node = currentNode.find(`td:eq(1)>*:first-child`);
       switch (type) {
         case "string":
@@ -50272,7 +50247,7 @@
         case "list":
           if (id === "researchIgnore") {
             return node.text(
-              value.map((item) => techIds[item]?.name ?? "[Invalid item]").join(", ")
+              value.map((item) => getTechIds()[item]?.name ?? "[Invalid item]").join(", ")
             );
           }
         // fall through
@@ -50281,18 +50256,18 @@
       }
     }
     function buildConditionType(override, num, rebuild) {
-      let types = Object.entries(checkTypes).map(
+      let types = Object.entries(getCheckTypes()).map(
         ([id, type]) => `<option value="${id}" title="${type.desc}">${id.replace(/([A-Z])/g, " $1").trim()}</option>`
       ).join();
       return $2(`<select style="width: 100%">${types}</select>`).val(override["type" + num]).on("change", function() {
         override["type" + num] = this.value;
-        override["arg" + num] = checkTypes[this.value].def;
+        override["arg" + num] = getCheckTypes()[this.value].def;
         updateSettingsFromState();
         rebuild();
       });
     }
     function buildConditionArg(override, num) {
-      let check = checkTypes[override["type" + num]];
+      let check = getCheckTypes()[override["type" + num]];
       return check ? buildInputNode(
         check.arg,
         check.options,
@@ -50304,8 +50279,8 @@
       ) : "";
     }
     function buildConditionComparator(override, rebuild) {
-      let types = Object.entries(checkCompare).map(
-        ([id, fn]) => `<option value="${id}" title="${checkCustom[id] ?? fn.toString().substr(10)}">${id}</option>`
+      let types = Object.entries(getCheckCompare()).map(
+        ([id, fn]) => `<option value="${id}" title="${getCheckCustom()[id] ?? fn.toString().substr(10)}">${id}</option>`
       ).join();
       return $2(`<select style="width: 100%">${types}</select>`).val(override.cmp).on("change", function() {
         override.cmp = this.value;
@@ -50317,9 +50292,9 @@
       return $2(
         `<a class="button is-small" style="width: 26px; height: 26px"><span>-</span></a>`
       ).on("click", function() {
-        settingsRaw.overrides[settingName].splice(id, 1);
-        if (settingsRaw.overrides[settingName].length === 0) {
-          delete settingsRaw.overrides[settingName];
+        getSettingsRaw().overrides[settingName].splice(id, 1);
+        if (getSettingsRaw().overrides[settingName].length === 0) {
+          delete getSettingsRaw().overrides[settingName];
           $2(".script_bg_" + settingName).removeClass("inactive-row");
         }
         updateSettingsFromState();
@@ -50330,8 +50305,8 @@
       return $2(
         `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 1.2rem;">&#9282;</span></a>`
       ).on("click", function() {
-        settingsRaw.overrides[settingName].splice(id, 0, {
-          ...settingsRaw.overrides[settingName][id]
+        getSettingsRaw().overrides[settingName].splice(id, 0, {
+          ...getSettingsRaw().overrides[settingName][id]
         });
         updateSettingsFromState();
         rebuild();
@@ -50341,8 +50316,8 @@
       return $2(
         `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 0.9rem;">E</span></a>`
       ).on("click", function() {
-        let override = settingsRaw.overrides[settingName][id];
-        let check = checkCompare[override.cmp].toString().substr(10).replace(/([ab])/g, (s, v) => {
+        let override = getSettingsRaw().overrides[settingName][id];
+        let check = getCheckCompare()[override.cmp].toString().substr(10).replace(/([ab])/g, (s, v) => {
           let idx = v === "a" ? 1 : 2;
           switch (override["type" + idx]) {
             case "Number":
@@ -50358,7 +50333,7 @@
               )})`;
           }
         });
-        win.prompt("Eval of this condition:", check);
+        getWin().prompt("Eval of this condition:", check);
       });
     }
     function buildConditionRet(override, type, options2) {
@@ -50423,17 +50398,23 @@
       return $2(`
           <div class="script_bg_${settingName}" style="margin-top: 5px; width: 90%; display: inline-block; text-align: left;">
             <label title="${hintText}" tabindex="0" class="switch">
-              <input class="script_${settingName}" type="checkbox" ${settingsRaw[settingName] ? " checked" : ""}><span class="check"></span>
+              <input class="script_${settingName}" type="checkbox" ${getSettingsRaw()[settingName] ? " checked" : ""}><span class="check"></span>
               <span style="margin-left: 10px;">${labelText}</span>
             </label>
-          </div>`).toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName])).on("change", "input", function() {
-        settingsRaw[settingName] = this.checked;
+          </div>`).toggleClass(
+        "inactive-row",
+        Boolean(getSettingsRaw().overrides[settingName])
+      ).on("change", "input", function() {
+        getSettingsRaw()[settingName] = this.checked;
         updateSettingsFromState();
-        $2(".script_" + settingName).prop("checked", settingsRaw[settingName]);
-        if (settingsRaw[settingName] && enabledCallBack) {
+        $2(".script_" + settingName).prop(
+          "checked",
+          getSettingsRaw()[settingName]
+        );
+        if (getSettingsRaw()[settingName] && enabledCallBack) {
           enabledCallBack();
         }
-        if (!settingsRaw[settingName] && disabledCallBack) {
+        if (!getSettingsRaw()[settingName] && disabledCallBack) {
           disabledCallBack();
         }
       }).on(
@@ -50445,7 +50426,7 @@
         },
         openOverrideModal
       ).appendTo(node);
-      if (settingsRaw[settingName] && enabledCallBack) {
+      if (getSettingsRaw()[settingName] && enabledCallBack) {
         enabledCallBack();
       }
     }
@@ -50454,15 +50435,18 @@
           <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
             <label title="${hintText}" tabindex="0">
               <span>${labelText}</span>
-              <input class="script_${settingName}" type="text" style="text-align: right; height: 18px; width: 150px; float: right;" value="${settingsRaw[settingName]}"></input>
+              <input class="script_${settingName}" type="text" style="text-align: right; height: 18px; width: 150px; float: right;" value="${getSettingsRaw()[settingName]}"></input>
             </label>
-          </div>`).toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName])).on("change", "input", function() {
-        let parsedValue = getRealNumber(this.value);
+          </div>`).toggleClass(
+        "inactive-row",
+        Boolean(getSettingsRaw().overrides[settingName])
+      ).on("change", "input", function() {
+        let parsedValue = getRealNumberValue(this.value);
         if (!isNaN(parsedValue)) {
-          settingsRaw[settingName] = parsedValue;
+          getSettingsRaw()[settingName] = parsedValue;
           updateSettingsFromState();
         }
-        $2(".script_" + settingName).val(settingsRaw[settingName]);
+        $2(".script_" + settingName).val(getSettingsRaw()[settingName]);
       }).on(
         "click",
         {
@@ -50478,12 +50462,15 @@
           <div class="script_bg_${settingName}" style="margin-top: 5px; display: inline-block; width: 90%; text-align: left;">
             <label title="${hintText}" tabindex="0">
               <span>${labelText}</span>
-              <input class="script_${settingName}" type="text" style="text-align: right; height: 18px; width: 70%; float: right;" value="${settingsRaw[settingName]}"></input>
+              <input class="script_${settingName}" type="text" style="text-align: right; height: 18px; width: 70%; float: right;" value="${getSettingsRaw()[settingName]}"></input>
             </label>
-          </div>`).toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName])).on("change", "input", function() {
-        settingsRaw[settingName] = this.value;
+          </div>`).toggleClass(
+        "inactive-row",
+        Boolean(getSettingsRaw().overrides[settingName])
+      ).on("change", "input", function() {
+        getSettingsRaw()[settingName] = this.value;
         updateSettingsFromState();
-        $2(".script_" + settingName).val(settingsRaw[settingName]);
+        $2(".script_" + settingName).val(getSettingsRaw()[settingName]);
       }).on(
         "click",
         {
@@ -50509,10 +50496,13 @@
                 ${options2}
               </select>
             </label>
-          </div>`).toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName])).find("select").val(settingsRaw[settingName]).on("change", function() {
-        settingsRaw[settingName] = this.value;
+          </div>`).toggleClass(
+        "inactive-row",
+        Boolean(getSettingsRaw().overrides[settingName])
+      ).find("select").val(getSettingsRaw()[settingName]).on("change", function() {
+        getSettingsRaw()[settingName] = this.value;
         updateSettingsFromState();
-        $2(".script_" + settingName).val(settingsRaw[settingName]);
+        $2(".script_" + settingName).val(getSettingsRaw()[settingName]);
       }).end().on(
         "click",
         {
@@ -50535,7 +50525,10 @@
             </label>
             <br>
             <textarea class="script_${settingName} textarea" style="margin-top: 12px" readonly></textarea>
-          </div>`).toggleClass("inactive-row", Boolean(settingsRaw.overrides[settingName])).on(
+          </div>`).toggleClass(
+        "inactive-row",
+        Boolean(getSettingsRaw().overrides[settingName])
+      ).on(
         "click",
         {
           label: `Add or Remove (${settingName})`,
@@ -50547,7 +50540,7 @@
       ).appendTo(node);
       let selectedItem = "";
       let updateList = function() {
-        let techsString = settingsRaw[settingName].map(
+        let techsString = getSettingsRaw()[settingName].map(
           (id) => Object.values(list).find((obj) => obj._vueBinding === id).name
         ).join(", ");
         $2(".script_" + settingName).val(techsString);
@@ -50590,20 +50583,20 @@
         // Keyboard type
       });
       listBlock.on("click", "button:eq(1)", function() {
-        if (selectedItem && !settingsRaw[settingName].includes(selectedItem)) {
-          settingsRaw[settingName].push(selectedItem);
-          settingsRaw[settingName].sort();
+        if (selectedItem && !getSettingsRaw()[settingName].includes(selectedItem)) {
+          getSettingsRaw()[settingName].push(selectedItem);
+          getSettingsRaw()[settingName].sort();
           updateSettingsFromState();
           updateList();
         }
       });
       listBlock.on("click", "button:eq(0)", function() {
-        if (selectedItem && settingsRaw[settingName].includes(selectedItem)) {
-          settingsRaw[settingName].splice(
-            settingsRaw[settingName].indexOf(selectedItem),
+        if (selectedItem && getSettingsRaw()[settingName].includes(selectedItem)) {
+          getSettingsRaw()[settingName].splice(
+            getSettingsRaw()[settingName].indexOf(selectedItem),
             1
           );
-          settingsRaw[settingName].sort();
+          getSettingsRaw()[settingName].sort();
           updateSettingsFromState();
           updateList();
         }
@@ -50612,12 +50605,12 @@
     }
     function addInputCallbacks(node, settingKey) {
       return node.on("change", function() {
-        let parsedValue = getRealNumber(this.value);
+        let parsedValue = getRealNumberValue(this.value);
         if (!isNaN(parsedValue)) {
-          settingsRaw[settingKey] = parsedValue;
+          getSettingsRaw()[settingKey] = parsedValue;
           updateSettingsFromState();
         }
-        $2(".script_" + settingKey).val(settingsRaw[settingKey]);
+        $2(".script_" + settingKey).val(getSettingsRaw()[settingKey]);
       }).on(
         "click",
         { label: `Number (${settingKey})`, name: settingKey, type: "number" },
@@ -50626,11 +50619,11 @@
     }
     function addTableInput(node, settingKey) {
       node.addClass(
-        "script_bg_" + settingKey + (settingsRaw.overrides[settingKey] ? " inactive-row" : "")
+        "script_bg_" + settingKey + (getSettingsRaw().overrides[settingKey] ? " inactive-row" : "")
       ).append(
         addInputCallbacks(
           $2(
-            `<input class="script_${settingKey}" type="text" class="input is-small" style="height: 25px; width:100%" value="${settingsRaw[settingKey]}"/>`
+            `<input class="script_${settingKey}" type="text" class="input is-small" style="height: 25px; width:100%" value="${getSettingsRaw()[settingKey]}"/>`
           ),
           settingKey
         )
@@ -50638,9 +50631,12 @@
     }
     function addToggleCallbacks(node, settingKey) {
       return node.on("change", "input", function() {
-        settingsRaw[settingKey] = this.checked;
+        getSettingsRaw()[settingKey] = this.checked;
         updateSettingsFromState();
-        $2(".script_" + settingKey).prop("checked", settingsRaw[settingKey]);
+        $2(".script_" + settingKey).prop(
+          "checked",
+          getSettingsRaw()[settingKey]
+        );
       }).on(
         "click",
         { label: `Toggle (${settingKey})`, name: settingKey, type: "boolean" },
@@ -50649,12 +50645,12 @@
     }
     function addTableToggle(node, settingKey) {
       node.addClass(
-        "script_bg_" + settingKey + (settingsRaw.overrides[settingKey] ? " inactive-row" : "")
+        "script_bg_" + settingKey + (getSettingsRaw().overrides[settingKey] ? " inactive-row" : "")
       ).append(
         addToggleCallbacks(
           $2(`
           <label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
-            <input class="script_${settingKey}" type="checkbox"${settingsRaw[settingKey] ? " checked" : ""}>
+            <input class="script_${settingKey}" type="checkbox"${getSettingsRaw()[settingKey] ? " checked" : ""}>
             <span class="check" style="height:5px; max-width:15px"></span>
             <span style="margin-left: 20px;"></span>
           </label>`),
@@ -50667,7 +50663,7 @@
     }
     function resetCheckbox(...items) {
       Array.from(items).forEach(
-        (item) => $2(".script_" + item).prop("checked", settingsRaw[item])
+        (item) => $2(".script_" + item).prop("checked", getSettingsRaw()[item])
       );
     }
     return {
@@ -52193,21 +52189,19 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       buildTableLabel,
       resetCheckbox
     } = createSettingsControls({
-      getContext: () => ({
-        $: $2,
-        settingsRaw,
-        settings,
-        techIds,
-        win,
-        checkCompare,
-        checkCustom,
-        checkTypes,
-        overrideKey,
-        getRealNumber,
-        openOptionsModal,
-        sorterHelper,
-        updateSettingsFromState
-      })
+      getJQuery: () => $2,
+      getSettingsRaw: () => settingsRaw,
+      getSettings: () => settings,
+      getTechIds: () => techIds,
+      getWin: () => win,
+      getCheckCompare: () => checkCompare,
+      getCheckCustom: () => checkCustom,
+      getCheckTypes: () => checkTypes,
+      getOverrideKey: () => overrideKey,
+      getRealNumber: () => getRealNumber,
+      getOpenOptionsModal: () => openOptionsModal,
+      getSorterHelper: () => sorterHelper,
+      getUpdateSettingsFromState: () => updateSettingsFromState
     });
     let mechInfoTestContext;
     const { reader: mechInfoReader, observer: mechInfoObserver } = createMechInfoEvolveAdapter({
