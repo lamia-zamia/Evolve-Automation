@@ -61,6 +61,41 @@
     return globalObject["$"];
   }
 
+  // src/adapters/browser/legacy-runtime-environment.ts
+  function asRecord(value) {
+    return typeof value === "object" && value !== null || typeof value === "function" ? value : void 0;
+  }
+  function readProperty(owner, key) {
+    return asRecord(owner)?.[key];
+  }
+  function bindFunction(owner, key, fallback) {
+    const candidate = readProperty(owner, key);
+    return typeof candidate === "function" ? (...args) => Reflect.apply(candidate, owner, args) : fallback;
+  }
+  var noOperation = () => void 0;
+  var confirmByDefault = () => true;
+  function createLegacyRuntimeEnvironment(globalObject) {
+    const window = readProperty(globalObject, "window") ?? globalObject;
+    const document = readProperty(globalObject, "document");
+    const consoleObject = readProperty(globalObject, "console");
+    return Object.freeze({
+      document,
+      window,
+      storage: readProperty(globalObject, "localStorage"),
+      schedule: bindFunction(globalObject, "setTimeout", noOperation),
+      repeat: bindFunction(globalObject, "setInterval", noOperation),
+      MutationObserver: readProperty(globalObject, "MutationObserver"),
+      ResizeObserver: readProperty(globalObject, "ResizeObserver"),
+      HTMLElement: readProperty(globalObject, "HTMLElement"),
+      KeyboardEvent: readProperty(globalObject, "KeyboardEvent"),
+      Node: readProperty(globalObject, "Node"),
+      alert: bindFunction(globalObject, "alert", noOperation),
+      confirm: bindFunction(globalObject, "confirm", confirmByDefault),
+      log: bindFunction(consoleObject, "log", noOperation),
+      error: bindFunction(consoleObject, "error", noOperation)
+    });
+  }
+
   // src/config.js
   var SCRIPT_VERSION_EXTRA = "[Vollch/Lamia]";
   var CONSUMPTION_BALANCE_MIN = 60;
@@ -3674,7 +3709,7 @@
         }
       },
       performEspionage(govIndex, espionageId, influenceAllowed) {
-        const document2 = getDocument();
+        const document = getDocument();
         const WindowManager = getWindowManager();
         const resources = getResources();
         const poly = getPoly();
@@ -3683,13 +3718,13 @@
         if (WindowManager.isOpen()) {
           return;
         }
-        let optionsSpan = document2.querySelector(
+        let optionsSpan = document.querySelector(
           `#gov${govIndex} div span:nth-child(3)`
         );
         if (optionsSpan.style.display === "none") {
           return;
         }
-        let optionsNode = document2.querySelector(
+        let optionsNode = document.querySelector(
           `#gov${govIndex} div span:nth-child(3) button`
         );
         if (optionsNode === null || optionsNode.getAttribute("disabled") === "disabled") {
@@ -4960,28 +4995,28 @@
     getKeyboardEvent,
     cloneIntoPage
   }) {
-    let document2;
+    let document;
     let game;
     let settings;
     let poly;
     let win;
     let needSandboxBypass;
-    let KeyboardEvent2;
+    let KeyboardEvent;
     function refreshContext() {
-      document2 = getDocument();
+      document = getDocument();
       game = getGame();
       settings = getSettings();
       poly = getPoly();
       win = getWin();
       needSandboxBypass = getNeedSandboxBypass();
-      KeyboardEvent2 = getKeyboardEvent();
+      KeyboardEvent = getKeyboardEvent();
     }
     const WindowManager = {
       openedByScript: false,
       _callbackWindowTitle: "",
       _callbackFunction: null,
       currentModalWindowTitle() {
-        let modalTitleNode = document2.getElementById("modalBoxTitle");
+        let modalTitleNode = document.getElementById("modalBoxTitle");
         if (modalTitleNode === null) {
           return "";
         }
@@ -5002,17 +5037,17 @@
         elementToClick.click();
       },
       isOpen() {
-        return this.openedByScript || document2.getElementById("modalBox") !== null || document2.getElementById("scriptModal")?.style.display === "block";
+        return this.openedByScript || document.getElementById("modalBox") !== null || document.getElementById("scriptModal")?.style.display === "block";
       },
       checkCallbacks() {
         if (WindowManager.currentModalWindowTitle() === WindowManager._callbackWindowTitle && WindowManager.openedByScript && WindowManager._callbackFunction) {
           WindowManager._callbackFunction();
-          let modalCloseBtn = document2.querySelector(".modal .modal-close");
+          let modalCloseBtn = document.querySelector(".modal .modal-close");
           if (modalCloseBtn !== null) {
             modalCloseBtn.click();
           }
         } else {
-          let modal = document2.querySelector(".modal");
+          let modal = document.querySelector(".modal");
           if (modal !== null) {
             modal.style.display = "";
           }
@@ -5040,8 +5075,8 @@
         let unset = events?.keyup?.[0]?.handler ?? null;
         let all = events?.mousemove?.[0]?.handler ?? null;
         if (!all && (!set || !unset)) {
-          this._setFn = (e) => document2.dispatchEvent(new KeyboardEvent2("keydown", e));
-          this._unsetFn = (e) => document2.dispatchEvent(new KeyboardEvent2("keyup", e));
+          this._setFn = (e) => document.dispatchEvent(new KeyboardEvent("keydown", e));
+          this._unsetFn = (e) => document.dispatchEvent(new KeyboardEvent("keyup", e));
           this._allFn = null;
         } else if (needSandboxBypass) {
           this._setFn = (e) => set(cloneIntoPage(e));
@@ -5254,12 +5289,12 @@
     let crafter;
     let TriggerManager;
     let checkActions;
-    let MutationObserver2;
-    let document2;
-    let Node2;
+    let MutationObserver;
+    let document;
+    let Node;
     let WindowManager;
     let $;
-    let window2;
+    let window;
     let userscriptEnvironment;
     let win;
     let needSandboxBypass;
@@ -5281,12 +5316,12 @@
       crafter = getCrafter();
       TriggerManager = getTriggerManager();
       checkActions = getCheckActions();
-      MutationObserver2 = getMutationObserver();
-      document2 = getDocument();
-      Node2 = getNode();
+      MutationObserver = getMutationObserver();
+      document = getDocument();
+      Node = getNode();
       WindowManager = getWindowManager();
       $ = getJQuery();
-      window2 = getWindow();
+      window = getWindow();
       userscriptEnvironment = getUserscriptEnvironment();
       win = getWin();
       needSandboxBypass = getNeedSandboxBypass();
@@ -5348,22 +5383,22 @@
       if (checkActions) {
         actions.verifyGameActions();
       }
-      new MutationObserver2(actions.tooltipObserverCallback).observe(
-        document2.getElementById("main"),
+      new MutationObserver(actions.tooltipObserverCallback).observe(
+        document.getElementById("main"),
         { childList: true }
       );
-      new MutationObserver2(
+      new MutationObserver(
         (bodyMutations) => bodyMutations.forEach(
           (bodyMutation) => bodyMutation.addedNodes.forEach((node) => {
-            if (node.nodeType === Node2.ELEMENT_NODE && node.classList.contains("modal")) {
+            if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains("modal")) {
               if (WindowManager.openedByScript) {
                 node.style.display = "none";
-                new MutationObserver2(WindowManager.checkCallbacks).observe(
-                  document2.getElementById("modalBox"),
+                new MutationObserver(WindowManager.checkCallbacks).observe(
+                  document.getElementById("modalBox"),
                   { childList: true }
                 );
               } else {
-                new MutationObserver2(actions.tooltipObserverCallback).observe(
+                new MutationObserver(actions.tooltipObserverCallback).observe(
                   node,
                   {
                     childList: true
@@ -5373,23 +5408,23 @@
             }
           })
         )
-      ).observe(document2.querySelector("body"), { childList: true });
+      ).observe(document.querySelector("body"), { childList: true });
       actions.buildFilterRegExp();
-      new MutationObserver2(actions.filterLog).observe(
-        document2.getElementById("msgQueueLog"),
+      new MutationObserver(actions.filterLog).observe(
+        document.getElementById("msgQueueLog"),
         { childList: true }
       );
     }
     function mainAutoEvolveScriptImpl() {
       const actions = getScriptBootstrapActions();
-      if (document2.getElementById("queueColumn") === null) {
+      if (document.getElementById("queueColumn") === null) {
         actions.schedule(mainAutoEvolveScript, 100);
         return;
       }
       if (userscriptEnvironment.capabilities.hasPageWindow) {
         win = userscriptEnvironment.pageWindow;
       } else {
-        win = window2;
+        win = window;
         if (!win.$._data(win.document).events?.["keydown"]) {
           $.noConflict();
         }
@@ -5421,13 +5456,13 @@
         return;
       }
       if (!$.ui) {
-        let el = document2.createElement("script");
+        let el = document.createElement("script");
         el.src = "https://code.jquery.com/ui/1.12.1/jquery-ui.min.js";
         el.onload = mainAutoEvolveScript;
         el.onerror = () => actions.alert(
           "Can't load jQuery UI. Check browser console for details."
         );
-        document2.body.appendChild(el);
+        document.body.appendChild(el);
         return;
       }
       needSandboxBypass = userscriptEnvironment.capabilities.needsSandboxBridge;
@@ -16574,17 +16609,17 @@
       const cellAdv = '<td><span class="has-text-advanced">';
       const cellEnd = "</span></td>";
       let content = "";
-      const document2 = getDocument();
+      const document = getDocument();
       const MechManager = getMechManager();
       const poly = getPoly();
       const game = getGame();
-      const special = document2.getElementById("script_mechStatsSpecial").checked;
-      const gravity = document2.getElementById("script_mechStatsGravity").checked;
-      const efficient = document2.getElementById(
+      const special = document.getElementById("script_mechStatsSpecial").checked;
+      const gravity = document.getElementById("script_mechStatsGravity").checked;
+      const efficient = document.getElementById(
         "script_mechStatsEfficient"
       ).checked;
-      const scouts = parseInt(document2.getElementById("script_mechStatsScouts").value) || 0;
-      const prepared = document2.getElementById("script_mechStatsCompact").checked ? 2 : 0;
+      const scouts = parseInt(document.getElementById("script_mechStatsScouts").value) || 0;
+      const prepared = document.getElementById("script_mechStatsCompact").checked ? 2 : 0;
       const smallFactor = efficient ? 1 : average2(
         Object.values(MechManager.SmallChassisMod).reduce(
           (list, mod) => list.concat(Object.values(mod)),
@@ -17208,8 +17243,8 @@
     getPhases
   }) {
     function updateUI() {
-      const document2 = getDocument();
-      if (document2.hidden) {
+      const document = getDocument();
+      if (document.hidden) {
         return;
       }
       const {
@@ -17225,7 +17260,7 @@
         renderPreviousGameStats
       } = getPhases();
       let resetScrollPositionRequired = false;
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       createOptionsModal();
       updateOptionsUI();
       updatePrestigeInTopBar();
@@ -17239,7 +17274,7 @@
       updateSoulGemRate();
       renderPreviousGameStats();
       if (resetScrollPositionRequired) {
-        document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+        document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
       }
       updateTotalDaysInTopBar();
     }
@@ -17318,14 +17353,14 @@
       );
     }
     function updateStateLogSettingsContent() {
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
         renderControl2(currentNode, control);
       }
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     return Object.freeze({
       buildStateLogSettings,
@@ -17439,14 +17474,14 @@
     }
     function updateInterfaceSettingsContent() {
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
         renderControl2(currentNode, control, actions);
       }
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     return Object.freeze({
       buildInterfaceSettings,
@@ -17539,14 +17574,14 @@
     }
     function updateChallengeHelperSettingsContent() {
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
         renderControl2(currentNode, control, actions);
       }
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     return Object.freeze({
       buildChallengeHelperSettings,
@@ -17666,14 +17701,14 @@
     }
     function updateAchievementGuardSettingsContent() {
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
         renderControl2(currentNode, control, actions);
       }
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     return Object.freeze({
       buildAchievementGuardSettings,
@@ -17772,14 +17807,14 @@
     }
     function updateAuthoritySettingsContent() {
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
         renderControl2(currentNode, control, actions);
       }
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     return Object.freeze({
       buildAuthoritySettings,
@@ -17982,14 +18017,14 @@
     }
     function updateGeneralSettingsContent() {
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
         renderControl2(currentNode, control, actions);
       }
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     return Object.freeze({
       buildGeneralSettings,
@@ -18138,14 +18173,14 @@
     function updateResearchSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
         renderControl2(currentNode, control, actions);
       }
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     return Object.freeze({
       buildResearchSettings,
@@ -18329,8 +18364,8 @@
     function updateLoggingSettingsContent(secondaryPrefix) {
       const readModel = getReadModel();
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const currentNode = getJQuery()(
         `#script_${secondaryPrefix}${readModel.sectionId}Content`
       );
@@ -18348,7 +18383,7 @@
         intents.handle({ type: "set-log-filter", value: this.value });
         this.value = getReadModel().logFilter;
       });
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     return Object.freeze({
       buildLoggingSettings,
@@ -18547,8 +18582,8 @@
     function updateGovernmentSettingsContent(secondaryPrefix) {
       const readModel = getReadModel();
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const currentNode = getJQuery()(
         `#script_${secondaryPrefix}${readModel.sectionId}Content`
       );
@@ -18556,7 +18591,7 @@
       for (const control of readModel.controls) {
         renderControl2(currentNode, control, actions);
       }
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     return Object.freeze({
       buildGovernmentSettings,
@@ -18738,8 +18773,8 @@
     function updatePlanetSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       currentNode.append(`
@@ -18764,7 +18799,7 @@
       readModel.rows.forEach((row, index) => {
         renderRow(getJQuery()(`#script_planet_${index}`), row, actions);
       });
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderRow(tableElement, row, actions) {
       tableElement = renderCell(tableElement, row.biome, actions, true);
@@ -18886,8 +18921,8 @@
     function updateProjectSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       actions.addSettingsToggle(
@@ -18938,7 +18973,7 @@
           intents.handle({ type: "reorder-projects", projectIds });
         }
       });
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     return Object.freeze({
       buildProjectSettings,
@@ -19084,8 +19119,8 @@
     function updateStorageSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
@@ -19131,7 +19166,7 @@
           intents.handle({ type: "reorder-storage-resources", resourceIds });
         }
       });
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderControl2(node, control, actions) {
       actions.addSettingsToggle(
@@ -19299,8 +19334,8 @@
     function updateMagicSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       const jquery = getJQuery();
@@ -19312,7 +19347,7 @@
         renderControl2(currentNode, control, actions);
       }
       renderPylon(currentNode, readModel.pylonRows, actions, jquery);
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderControl2(node, control, actions) {
       switch (control.kind) {
@@ -19595,8 +19630,8 @@
     function updateJobSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const jquery = getJQuery();
       const currentNode = jquery("#script_jobContent");
       currentNode.empty().off("*");
@@ -19650,7 +19685,7 @@
           intents.handle({ type: "reorder-jobs", jobIds: sortedIds });
         }
       });
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderControl2(node, control, actions) {
       if (control.kind === "number") {
@@ -19997,8 +20032,8 @@
     function updateWeightingSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const jquery = getJQuery();
       const currentNode = jquery(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
@@ -20018,7 +20053,7 @@
       for (const rule of readModel.rules) {
         renderRule(tableBodyNode, rule, actions, jquery);
       }
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderControl2(node, control, actions) {
       actions.addSettingsToggle(
@@ -20193,8 +20228,8 @@
     function updateBuildingSettingsContent() {
       const readModel = getReadModel();
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const jquery = getJQuery();
       const currentNode = jquery(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
@@ -20258,12 +20293,12 @@
           intents.handle({ type: "reorder-buildings", buildingIds: sortedIds });
         }
       });
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function filterBuildingSettingsTable() {
-      const document2 = getDocument();
-      const searchNode = document2.getElementById("script_buildingSearch");
-      const tableNode = document2.getElementById("script_buildingTableBody");
+      const document = getDocument();
+      const searchNode = document.getElementById("script_buildingSearch");
+      const tableNode = document.getElementById("script_buildingTableBody");
       if (!searchNode || !tableNode) return;
       const filter = searchNode.value.toUpperCase();
       const rows = tableNode.getElementsByTagName("tr");
@@ -20753,8 +20788,8 @@
       );
     }
     function addOptionDefinition(definition, buildOptionsFunction) {
-      const document2 = getDocument();
-      if (document2.getElementById(definition.id) !== null) return;
+      const document = getDocument();
+      if (document.getElementById(definition.id) !== null) return;
       const sectionNode = getJQuery()(definition.selector);
       if (sectionNode.length === 0) return;
       const newOptionNode = getJQuery()(
@@ -20781,10 +20816,10 @@
       modal.style.display = "block";
     }
     function createOptionsModal() {
-      const document2 = getDocument();
-      if (document2.getElementById("scriptModal") !== null) return;
+      const document = getDocument();
+      if (document.getElementById("scriptModal") !== null) return;
       const jquery = getJQuery();
-      jquery(document2.body).append(`
+      jquery(document.body).append(`
           <div id="scriptModal" class="script-modal content">
             <span id="scriptModalClose" class="script-modal-close">&times;</span>
             <div class="script-modal-content">
@@ -20840,8 +20875,8 @@
       totalDaysNode.textContent = reader.readTotalDays();
     }
     function addTotalDaysToTopBar() {
-      const document2 = getDocument();
-      if (document2.getElementById("s-total-days") !== null) {
+      const document = getDocument();
+      if (document.getElementById("s-total-days") !== null) {
         return;
       }
       const calendarNode = getJQuery()("#topBar .calendar");
@@ -20905,17 +20940,17 @@
     buildPrestigeSettings
   }) {
     function updatePrestigeInTopBar() {
-      const document2 = getDocument();
+      const document = getDocument();
       const parentId = "s-prestige-type";
-      let parentNode = document2.getElementById(parentId);
+      let parentNode = document.getElementById(parentId);
       if (!reader.readDisplayEnabled()) {
         removePrestigeFromTopBar();
         return;
       }
       if (parentNode === null) {
-        const planetWrap = document2.querySelector(".planetWrap");
+        const planetWrap = document.querySelector(".planetWrap");
         if (planetWrap === null) return;
-        parentNode = document2.createElement("span");
+        parentNode = document.createElement("span");
         parentNode.setAttribute("id", parentId);
         parentNode.setAttribute(
           "style",
@@ -20935,7 +20970,7 @@
       }
       let infoNode = parentNode.querySelector(".info");
       if (infoNode === null) {
-        infoNode = document2.createElement("span");
+        infoNode = document.createElement("span");
         infoNode.setAttribute("class", "info");
         parentNode.append(infoNode);
       }
@@ -29522,12 +29557,12 @@
   function createUniverseSelectionControls(getDocument) {
     return Object.freeze({
       selectUniverse(name) {
-        const document2 = requireRecord(getDocument(), "document");
+        const document = requireRecord(getDocument(), "document");
         const getElementById = requireFunction(
-          document2["getElementById"],
+          document["getElementById"],
           "document.getElementById"
         );
-        const value = Reflect.apply(getElementById, document2, [`uni-${name}`]);
+        const value = Reflect.apply(getElementById, document, [`uni-${name}`]);
         if (typeof value !== "object" || value === null) {
           return false;
         }
@@ -29556,12 +29591,12 @@
   function createPlanetSelectionControls(getDocument, getMouseEventConstructor) {
     return Object.freeze({
       selectPlanet(elementId) {
-        const document2 = requireRecord(getDocument(), "document");
+        const document = requireRecord(getDocument(), "document");
         const getElementById = requireFunction(
-          document2["getElementById"],
+          document["getElementById"],
           "document.getElementById"
         );
-        const value = Reflect.apply(getElementById, document2, [elementId]);
+        const value = Reflect.apply(getElementById, document, [elementId]);
         if (typeof value !== "object" || value === null) {
           return false;
         }
@@ -31109,12 +31144,12 @@
         return requireBoolean(view[key], `ocularPower Vue view.${key}`);
       },
       toggle(powerId) {
-        const document2 = requireRecord(dependencies.getDocument(), "document");
+        const document = requireRecord(dependencies.getDocument(), "document");
         const getElementById = requireFunction(
-          document2["getElementById"],
+          document["getElementById"],
           "document.getElementById"
         );
-        const rawElement = Reflect.apply(getElementById, document2, [
+        const rawElement = Reflect.apply(getElementById, document, [
           `ocular${powerId}`
         ]);
         if (typeof rawElement !== "object" || rawElement === null) return false;
@@ -43757,8 +43792,8 @@
     function updateEjectorSettingsContent() {
       const readModel = reader.read();
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const jquery = getJQuery();
       const currentNode = jquery(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
@@ -43805,7 +43840,7 @@
           actions.addTableToggle(cell, row.supplySettingName);
         }
       }
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderControl2(node, control, actions) {
       if (control.kind === "select") {
@@ -44067,8 +44102,8 @@
     function updateMarketSettingsContent() {
       const readModel = reader.read();
       const actions = getActions();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const jquery = getJQuery();
       const currentNode = jquery(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
@@ -44088,7 +44123,7 @@
         renderControl2(currentNode, galaxyControl, actions);
       }
       renderGalaxyTable(currentNode, readModel, actions, jquery);
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderControl2(node, control, actions) {
       if (control.kind === "number") {
@@ -44440,15 +44475,15 @@
     }
     function updateWarSettingsContent(secondaryPrefix) {
       const model = reader.read();
-      const document2 = getDocument();
-      const scroll = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const scroll = document.documentElement.scrollTop || document.body.scrollTop;
       const node = getJQuery()(
         `#script_${secondaryPrefix}${model.sectionId}Content`
       );
       node.empty().off("*");
       const actions = getActions();
       for (const control of model.controls) renderControl2(node, control, actions);
-      document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
+      document.documentElement.scrollTop = document.body.scrollTop = scroll;
     }
     return Object.freeze({ buildWarSettings, updateWarSettingsContent });
   }
@@ -44714,15 +44749,15 @@
     }
     function updateHellSettingsContent(secondaryPrefix) {
       const model = reader.read();
-      const document2 = getDocument();
-      const scroll = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const scroll = document.documentElement.scrollTop || document.body.scrollTop;
       const node = getJQuery()(
         `#script_${secondaryPrefix}${model.sectionId}Content`
       );
       node.empty().off("*");
       const actions = getActions();
       for (const control of model.controls) renderControl2(node, control, actions);
-      document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
+      document.documentElement.scrollTop = document.body.scrollTop = scroll;
     }
     return Object.freeze({ buildHellSettings, updateHellSettingsContent });
   }
@@ -44921,8 +44956,8 @@
     }
     function updateMechSettingsContent() {
       const model = reader.read();
-      const document2 = getDocument();
-      const scroll = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const scroll = document.documentElement.scrollTop || document.body.scrollTop;
       const actions = getActions();
       const node = getJQuery()(`#script_${model.sectionId}Content`);
       node.empty().off("*");
@@ -44955,7 +44990,7 @@
           actions.calculateMechStats();
         }
       }
-      document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
+      document.documentElement.scrollTop = document.body.scrollTop = scroll;
     }
     return Object.freeze({ buildMechSettings, updateMechSettingsContent });
   }
@@ -45405,8 +45440,8 @@
     }
     function updateTriggerSettingsContent() {
       const model = reader.read();
-      const document2 = getDocument();
-      const scroll = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const scroll = document.documentElement.scrollTop || document.body.scrollTop;
       const node = getJQuery()(`#script_${model.sectionId}Content`);
       node.empty().off("*");
       node.append(
@@ -45437,7 +45472,7 @@
             });
         }
       });
-      document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
+      document.documentElement.scrollTop = document.body.scrollTop = scroll;
     }
     return Object.freeze({ buildTriggerSettings, updateTriggerSettingsContent });
   }
@@ -45736,8 +45771,8 @@
     }
     function updateFleetSettingsContent(secondaryPrefix) {
       const model = reader.read();
-      const document2 = getDocument();
-      const scroll = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const scroll = document.documentElement.scrollTop || document.body.scrollTop;
       const node = getJQuery()(
         `#script_${secondaryPrefix}${model.sectionId}Content`
       );
@@ -45745,7 +45780,7 @@
       const actions = getActions();
       renderOuter(node, secondaryPrefix, model, actions);
       renderAndromeda(node, secondaryPrefix, model, actions);
-      document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
+      document.documentElement.scrollTop = document.body.scrollTop = scroll;
     }
     return Object.freeze({ buildFleetSettings, updateFleetSettingsContent });
   }
@@ -46215,8 +46250,8 @@
     }
     function updatePrestigeSettingsContent(prefix) {
       const model = reader.read();
-      const document2 = getDocument();
-      const scroll = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const scroll = document.documentElement.scrollTop || document.body.scrollTop;
       const actions = getActions();
       const node = getJQuery()(`#script_${prefix}${model.sectionId}Content`);
       node.empty().off("*");
@@ -46233,7 +46268,7 @@
         },
         actions.openOverrideModal
       );
-      document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
+      document.documentElement.scrollTop = document.body.scrollTop = scroll;
     }
     return Object.freeze({
       buildPrestigeSettings,
@@ -46457,8 +46492,8 @@
     }
     function updateEvolutionSettingsContent() {
       const model = reader.read();
-      const document2 = getDocument();
-      const scroll = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const scroll = document.documentElement.scrollTop || document.body.scrollTop;
       const actions = getActions();
       const node = getJQuery()(`#script_${model.sectionId}Content`);
       node.empty().off("*");
@@ -46520,7 +46555,7 @@
             });
         }
       });
-      document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
+      document.documentElement.scrollTop = document.body.scrollTop = scroll;
     }
     return Object.freeze({
       buildEvolutionSettings,
@@ -47057,8 +47092,8 @@
     }
     function updateProductionSettingsContent() {
       const readModel = getReadModel();
-      const document2 = getDocument();
-      const currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const document = getDocument();
+      const currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       const currentNode = getJQuery()("#script_productionContent");
       currentNode.empty().off("*");
       const tableControlNames = /* @__PURE__ */ new Set([
@@ -47081,7 +47116,7 @@
       updateProductionTableFactory(currentNode);
       updateProductionTableMiningDrone(currentNode);
       updateProductionTableReplicator(currentNode);
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function renderControl2(node, control) {
       if (control.kind === "number") {
@@ -47533,9 +47568,9 @@
     }
     function updateTraitSettingsContent() {
       const readModel = getReadModel();
-      const document2 = getDocument();
+      const document = getDocument();
       const $ = getJQuery();
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
+      let currentScrollPosition = document.documentElement.scrollTop || document.body.scrollTop;
       let currentNode = $("#script_traitContent");
       currentNode.empty().off("*");
       addStandardHeading(currentNode, "Major Traits");
@@ -47801,7 +47836,7 @@
           });
         }
       });
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
+      document.documentElement.scrollTop = document.body.scrollTop = currentScrollPosition;
     }
     function makeToggleSwitchesMutuallyExclusive(switch1, settingsKey1, switch2, settingsKey2) {
       switch1.on("change", function() {
@@ -48442,9 +48477,9 @@
                     </div>
                 </div>
             </div>`);
-      const ResizeObserver2 = dependencies.getResizeObserver();
-      if (typeof ResizeObserver2 === "function") {
-        const resizeObserver = new ResizeObserver2((entries) => {
+      const ResizeObserver = dependencies.getResizeObserver();
+      if (typeof ResizeObserver === "function") {
+        const resizeObserver = new ResizeObserver((entries) => {
           for (const entry of entries) {
             if (entry.borderBoxSize) {
               const elementHeight = entry.borderBoxSize[0].blockSize;
@@ -48703,13 +48738,13 @@
       observer.disconnect();
       const list = readMechList(getVueById("mechList"));
       const items = reader.readItems(list.children.length);
-      const document2 = requireRecord(getDocument(), "document");
+      const document = requireRecord(getDocument(), "document");
       const getElementById = requireFunction(
-        document2["getElementById"],
+        document["getElementById"],
         "document.getElementById"
       );
       const createElement = requireFunction(
-        document2["createElement"],
+        document["createElement"],
         "document.createElement"
       );
       for (let index = 0; index < list.children.length; index += 1) {
@@ -48721,7 +48756,7 @@
           firstNode.text(item.text);
         } else {
           const note = requireRecord(
-            Reflect.apply(createElement, document2, ["span"]),
+            Reflect.apply(createElement, document, ["span"]),
             "document.createElement(span)"
           );
           note["className"] = "ea-mech-info";
@@ -48730,7 +48765,7 @@
         }
       }
       observer.observe(
-        Reflect.apply(getElementById, document2, ["mechList"]),
+        Reflect.apply(getElementById, document, ["mechList"]),
         Object.freeze({ childList: true })
       );
     }
@@ -49239,15 +49274,15 @@
     }
     function tooltipObserverCallback(mutations) {
       const settings = getSettings();
-      const document2 = getDocument();
-      const MutationObserver2 = getMutationObserver();
-      if (!settings.masterScriptToggle || document2.hidden) {
+      const document = getDocument();
+      const MutationObserver = getMutationObserver();
+      if (!settings.masterScriptToggle || document.hidden) {
         return;
       }
       mutations.forEach(
         (mutation) => mutation.addedNodes.forEach((node) => {
           if (node.id === "popper") {
-            const popperObserver = new MutationObserver2(() => {
+            const popperObserver = new MutationObserver(() => {
               if (!node.querySelector(".script-tooltip")) {
                 popperObserver.disconnect();
                 addTooltip(node);
@@ -49426,7 +49461,7 @@
       const customRaceTraitEffect = getCustomRaceTraitEffect;
       const customRaceGeneBalance = getCustomRaceGeneBalance;
       const updateSettingsFromState = getUpdateSettingsFromState();
-      const alert2 = getAlert();
+      const alert = getAlert();
       modal.empty().off("*").addClass("celestialLab");
       modal.closest(".script-modal-content").addClass("custom-race-modal");
       modal.append(`
@@ -49774,7 +49809,7 @@
       captureButton.on("click", function() {
         let savedRace = game.global.custom?.race0;
         if (!savedRace) {
-          alert2("There is no saved custom race to capture yet.");
+          alert("There is no saved custom race to capture yet.");
           return;
         }
         preset.json = JSON.stringify(
@@ -49809,7 +49844,7 @@
       const settings = getSettings();
       const state = getState();
       const game = getGame();
-      const document2 = getDocument();
+      const document = getDocument();
       const customRaceRankOptions = getCustomRaceRankOptions;
       let preset = getCustomRacePreset();
       let attemptKey = `${settings.prestigeCustomRacePreset}:${preset.json}`;
@@ -49872,7 +49907,7 @@
         return false;
       }
       let unavailableTraits = traits.filter(
-        (trait2) => typeof trait2 !== "string" || !/^[a-z0-9_]+$/.test(trait2) || document2.querySelector(`#celestialLab .t${trait2}`) === null
+        (trait2) => typeof trait2 !== "string" || !/^[a-z0-9_]+$/.test(trait2) || document.querySelector(`#celestialLab .t${trait2}`) === null
       );
       if (unavailableTraits.length > 0) {
         showCustomRaceImportStatus(
@@ -49935,12 +49970,12 @@
       return true;
     }
     function automateLab() {
-      const document2 = getDocument();
+      const document = getDocument();
       const settings = getSettings();
       const state = getState();
       const game = getGame();
       const updateOverrides = getUpdateOverrides();
-      let createCustom = document2.querySelector("#celestialLab .create button");
+      let createCustom = document.querySelector("#celestialLab .create button");
       if (createCustom) {
         updateOverrides();
         if (settings.masterScriptToggle && settings.autoPrestige && ["ascension", "terraform", "apotheosis"].includes(settings.prestigeType)) {
@@ -50020,7 +50055,7 @@
     importSettings,
     exportSettings,
     triggerFileDownload,
-    confirm: confirm2
+    confirm
   }) {
     function removeScriptSettings() {
       $("#script_settings").remove();
@@ -50182,7 +50217,7 @@
       }
     }
     function genericResetFunction(resetFunction, sectionName) {
-      if (confirm2("Are you sure you wish to reset " + sectionName + " Settings?")) {
+      if (confirm("Are you sure you wish to reset " + sectionName + " Settings?")) {
         resetFunction();
       }
     }
@@ -52199,11 +52234,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
   }
 
   // src/legacy-main.js
-  function startLegacyRuntime($, diagnostics, testHooks) {
+  function startLegacyRuntime($, diagnostics, runtimeEnvironment, testHooks) {
     "use strict";
     const { getRealNumber, getNumberString, getNiceNumber } = createNumberFormatting({ numberSuffix });
     const browserClock = createBrowserClock();
-    const settingsStore = createSettingsStore(localStorage);
+    const settingsStore = createSettingsStore(runtimeEnvironment.storage);
     var settingsRaw = settingsStore.load();
     var settings = {};
     var game = null;
@@ -52325,7 +52360,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       addSettingsHeader2
     } = createSettingsShell({
       $,
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getSettingsRaw: () => settingsRaw,
       getSettings: () => settings,
       getGame: () => game,
@@ -52361,7 +52396,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       importSettings: (...args) => importSettings(...args),
       exportSettings: (...args) => exportSettings(...args),
       triggerFileDownload: (...args) => triggerFileDownload(...args),
-      confirm: (...args) => confirm(...args)
+      confirm: (...args) => runtimeEnvironment.confirm(...args)
     });
     const {
       evaluateCheck: _,
@@ -52412,7 +52447,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getNiceNumber: (value) => mechInfoTestContext?.getNiceNumber?.(value) ?? getNiceNumber(value)
     });
     const mechInfoBrowserAdapter = createMechInfoBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getVueById: (id) => mechInfoTestContext?.getVueById?.(id) ?? getVueById(id),
       reader: mechInfoReader,
@@ -52465,7 +52500,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     );
     let productionSettingsIntentHandler;
     const productionSettingsBrowserAdapter = createProductionSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getReadModel: () => productionSettingsEvolveAdapter.readProductionSettingsReadModel(),
       intents: {
@@ -52536,7 +52571,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     let storageSettingsIntentHandler;
     const storageSettingsBrowserAdapter = createStorageSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getReadModel: () => storageSettingsEvolveAdapter.readStorageSettingsReadModel(),
       intents: {
@@ -52576,7 +52611,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     let magicSettingsIntentHandler;
     const magicSettingsBrowserAdapter = createMagicSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getReadModel: () => magicSettingsEvolveAdapter.readMagicSettingsReadModel(),
       intents: {
@@ -52610,7 +52645,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       addTableToggle,
       addToggleCallbacks,
       getSorterHelper: () => sorterHelper,
-      confirm: (...args) => confirm(...args)
+      confirm: (...args) => runtimeEnvironment.confirm(...args)
     };
     const jobSettingsEvolveAdapter = createJobSettingsEvolveAdapter({
       getBasicJob: () => jobSettingsTestContext?.BasicJob ?? BasicJob,
@@ -52621,7 +52656,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     let jobSettingsIntentHandler;
     const jobSettingsBrowserAdapter = createJobSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getReadModel: () => jobSettingsEvolveAdapter.readJobSettingsReadModel(),
       intents: {
@@ -52654,7 +52689,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     let weightingSettingsIntentHandler;
     const weightingSettingsBrowserAdapter = createWeightingSettingsBrowserAdapter(
       {
-        getDocument: () => document,
+        getDocument: () => runtimeEnvironment.document,
         getJQuery: () => $,
         intents: {
           handle: (intent) => weightingSettingsIntentHandler.handle(intent)
@@ -52680,7 +52715,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       addTableToggle,
       addToggleCallbacks,
       buildTableLabel,
-      confirm: (...args) => confirm(...args),
+      confirm: (...args) => runtimeEnvironment.confirm(...args),
       getSorterHelper: () => sorterHelper
     };
     const buildingSettingsEvolveAdapter = createBuildingSettingsEvolveAdapter({
@@ -52696,7 +52731,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     let buildingSettingsIntentHandler;
     const buildingSettingsBrowserAdapter = createBuildingSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getReadModel: () => buildingSettingsEvolveAdapter.readBuildingSettingsReadModel(),
       getFilterMatches: (query) => buildingSettingsEvolveAdapter.filterBuildingSettings(query),
@@ -52745,7 +52780,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     let projectSettingsIntentHandler;
     const projectSettingsBrowserAdapter = createProjectSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getReadModel: () => projectSettingsEvolveAdapter.readProjectSettingsReadModel(),
       intents: {
@@ -52781,7 +52816,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     let loggingSettingsIntentHandler;
     const loggingSettingsBrowserAdapter = createLoggingSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getReadModel: () => loggingSettingsEvolveAdapter.readLoggingSettingsReadModel(),
       intents: {
@@ -52808,9 +52843,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const { buildLoggingSettings, updateLoggingSettingsContent } = loggingSettingsBrowserAdapter;
     let optionsModalTestContext;
     const optionsModalBrowserAdapter = createOptionsModalBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
-      getWindow: () => window,
+      getWindow: () => runtimeEnvironment.window,
       getSettingsReader: () => ({
         readToggle: (settingName) => {
           const raw = optionsModalTestContext?.settingsRaw ?? settingsRaw;
@@ -52849,7 +52884,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getPrestigeTypes: () => prestigeTopBarTestContext?.prestigeTypes ?? prestigeTypes
     });
     const prestigeTopBarBrowserAdapter = createPrestigeTopBarBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       reader: prestigeTopBarReader,
       options: {
         addOptionUI: (...args) => (prestigeTopBarTestContext?.addOptionUI ?? addOptionUI)(...args)
@@ -52863,7 +52898,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => totalDaysTopBarTestContext?.game ?? game
     });
     const totalDaysTopBarBrowserAdapter = createTotalDaysTopBarBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       reader: totalDaysTopBarReader
     });
@@ -52955,7 +52990,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     };
     let generalSettingsIntentHandler;
     const generalSettingsBrowserAdapter = createGeneralSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       intents: {
         handle: (intent) => generalSettingsIntentHandler.handle(intent)
@@ -52984,7 +53019,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     };
     let achievementGuardSettingsIntentHandler;
     const achievementGuardSettingsBrowserAdapter = createAchievementGuardSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       intents: {
         handle: (intent) => achievementGuardSettingsIntentHandler.handle(intent)
@@ -53010,7 +53045,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     };
     let challengeHelperSettingsIntentHandler;
     const challengeHelperSettingsBrowserAdapter = createChallengeHelperSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       intents: {
         handle: (intent) => challengeHelperSettingsIntentHandler.handle(intent)
@@ -53043,7 +53078,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     let prestigeSettingsIntentHandler;
     const prestigeSettingsBrowserAdapter = createPrestigeSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       reader: prestigeSettingsReader,
       intents: {
@@ -53078,7 +53113,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         secondaryPrefix
       ),
       effects: {
-        confirm: (message) => (prestigeSettingsTestContext?.confirm ?? confirm)(message)
+        confirm: (message) => (prestigeSettingsTestContext?.confirm ?? runtimeEnvironment.confirm)(message)
       }
     });
     const { buildPrestigeSettings, updatePrestigeSettingsContent } = prestigeSettingsBrowserAdapter;
@@ -53097,7 +53132,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     );
     let governmentSettingsIntentHandler;
     const governmentSettingsBrowserAdapter = createGovernmentSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getReadModel: () => governmentSettingsEvolveAdapter.readGovernmentSettingsReadModel(),
       intents: {
@@ -53130,7 +53165,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     let authoritySettingsIntentHandler;
     const authoritySettingsBrowserAdapter = createAuthoritySettingsBrowserAdapter(
       {
-        getDocument: () => document,
+        getDocument: () => runtimeEnvironment.document,
         getJQuery: () => $,
         intents: {
           handle: (intent) => authoritySettingsIntentHandler.handle(intent)
@@ -53161,7 +53196,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     let evolutionSettingsIntentHandler;
     const evolutionSettingsBrowserAdapter = createEvolutionSettingsBrowserAdapter(
       {
-        getDocument: () => document,
+        getDocument: () => runtimeEnvironment.document,
         getJQuery: () => $,
         reader: evolutionSettingsReader,
         intents: {
@@ -53244,7 +53279,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     let planetSettingsIntentHandler;
     const planetSettingsBrowserAdapter = createPlanetSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getReadModel: () => planetSettingsEvolveAdapter.readPlanetSettingsReadModel(),
       intents: {
@@ -53272,7 +53307,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     let triggerSettingsIntentHandler;
     const triggerSettingsBrowserAdapter = createTriggerSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       reader: triggerSettingsReader,
       intents: {
@@ -53339,7 +53374,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     let researchSettingsIntentHandler;
     const researchSettingsBrowserAdapter = createResearchSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getReadModel: () => researchSettingsEvolveAdapter.readResearchSettingsReadModel(),
       intents: {
@@ -53383,7 +53418,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     const warSettingsBrowserAdapter = createWarSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       reader: warSettingsReader,
       intents: warSettingsIntentHandler,
@@ -53409,7 +53444,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     const hellSettingsBrowserAdapter = createHellSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       reader: hellSettingsReader,
       intents: hellSettingsIntentHandler,
@@ -53425,7 +53460,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     let fleetSettingsIntentHandler;
     const fleetSettingsBrowserAdapter = createFleetSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       reader: fleetSettingsReader,
       intents: {
@@ -53488,7 +53523,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     const mechSettingsBrowserAdapter = createMechSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       reader: mechSettingsReader,
       intents: mechSettingsIntentHandler,
@@ -53528,7 +53563,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     const ejectorSettingsBrowserAdapter = createEjectorSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       reader: ejectorSettingsReader,
       intents: ejectorSettingsIntentHandler,
@@ -53573,7 +53608,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     const marketSettingsBrowserAdapter = createMarketSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       reader: marketSettingsReader,
       intents: marketSettingsIntentHandler,
@@ -53637,7 +53672,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       return readResult.status === "ready" ? findCostConflict(readResult.input) : readResult;
     };
     const plannerStatsLifecycle = createPlannerStatsLifecycle(
-      createPlannerStatsStore(localStorage)
+      createPlannerStatsStore(runtimeEnvironment.storage)
     );
     function plannerLimitingResource(target) {
       const readResult = readPlannerLimitInput(target, resources);
@@ -53730,12 +53765,12 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getResources: () => resources,
       getState: () => state,
       plannerLimitingResource,
-      stateLogStore: createStateLogStore(localStorage)
+      stateLogStore: createStateLogStore(runtimeEnvironment.storage)
     });
     const { verifyGameActions, verifyGameActionsExist, verifyGameActionExists } = createGameActionVerification({
       getGame: () => game,
       getBuildings: () => buildings,
-      log: (...values) => console.log(...values)
+      log: (...values) => runtimeEnvironment.log(...values)
     });
     let { getGovernor, haveTask, haveTech, isEarlyGame } = createRuntimeQueries({
       getGame: () => game
@@ -53791,23 +53826,23 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getDate: () => /* @__PURE__ */ new Date()
     });
     var win = null;
-    const userscriptEnvironment = createUserscriptEnvironment(window);
+    const userscriptEnvironment = createUserscriptEnvironment(runtimeEnvironment.window);
     const { getVueById, triggerFileDownload } = createBrowserRuntime({
       getWin: () => win,
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getUrlApi: () => URL,
       getBlobConstructor: () => Blob,
-      schedule: (callback, delay) => setTimeout(callback, delay)
+      schedule: (callback, delay) => runtimeEnvironment.schedule(callback, delay)
     });
     var needSandboxBypass = false;
     var overrideKey = "ctrlKey";
     var overrideKeyLabel = "Ctrl";
-    if (window.navigator.platform.indexOf("Mac") === 0) {
+    if (runtimeEnvironment.window.navigator.platform.indexOf("Mac") === 0) {
       overrideKey = "altKey";
       overrideKeyLabel = "Alt";
     }
     var checkActions = false;
-    let safeMode = String(window.location).toLowerCase().indexOf("safemode") !== -1;
+    let safeMode = String(runtimeEnvironment.window.location).toLowerCase().indexOf("safemode") !== -1;
     const {
       Job,
       BasicJob,
@@ -53849,7 +53884,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readCheckAffordableCustom: () => checkAffordableCustom,
       readCheckTypes: () => checkTypes,
       readConflictingTraits: () => conflictingTraits,
-      readDocument: () => document,
+      readDocument: () => runtimeEnvironment.document,
       readFanatAchievements: () => fanatAchievements,
       readFibonacci: () => Fibonacci,
       readGame: () => game,
@@ -54380,7 +54415,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getVueById: (id) => getVueById(id),
       getKeyManager: () => KeyManager,
       getWindowManager: () => WindowManager,
@@ -54395,7 +54430,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getState: () => state,
       getResources: () => resources,
       getBuildings: () => buildings,
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getPoly: () => poly,
       getVueById: (id) => getVueById(id),
       getWindowManager: () => WindowManager,
@@ -54407,7 +54442,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGovPower,
       getGovName,
       getOccCosts,
-      logError: (...args) => console.error(...args)
+      logError: (...args) => runtimeEnvironment.error(...args)
     }));
     if (testHooks) {
       Object.assign(testHooks, {
@@ -54471,7 +54506,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getVueById: (id) => getVueById(id),
       kCombinations: k_combinations,
       cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2),
-      createMutationObserver: (callback) => new MutationObserver(callback)
+      createMutationObserver: (callback) => new runtimeEnvironment.MutationObserver(callback)
     });
     if (testHooks) {
       Object.assign(testHooks, {
@@ -54511,13 +54546,13 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     }));
     let WindowManager, KeyManager, GameLog;
     ({ WindowManager, KeyManager, GameLog } = createInfrastructureManagers({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getGame: () => game,
       getSettings: () => settings,
       getPoly: () => poly,
       getWin: () => win,
       getNeedSandboxBypass: () => needSandboxBypass,
-      getKeyboardEvent: () => KeyboardEvent,
+      getKeyboardEvent: () => runtimeEnvironment.KeyboardEvent,
       cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value)
     }));
     if (testHooks) {
@@ -54566,7 +54601,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getUpdateTabs: () => stateInitializationTestActions?.updateTabs ?? updateTabs,
       getIsLumberRace: () => stateInitializationTestActions?.isLumberRace ?? isLumberRace,
       getHaveTech: () => stateInitializationTestActions?.haveTech ?? haveTech,
-      log: (message) => console.log(message)
+      log: (message) => runtimeEnvironment.log(message)
     });
     if (testHooks) {
       Object.assign(testHooks, {
@@ -54921,7 +54956,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     const universeSelectionExecutor = createUniverseSelectionCommandExecutor({
       getGame: () => game,
-      controls: createUniverseSelectionControls(() => document)
+      controls: createUniverseSelectionControls(() => runtimeEnvironment.document)
     });
     const autoUniverseSelection = function autoUniverseSelection2() {
       universeSelectionExecutor.execute(
@@ -54962,7 +54997,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const planetSelectionExecutor = createPlanetSelectionCommandExecutor({
       getGame: () => game,
       controls: createPlanetSelectionControls(
-        () => document,
+        () => runtimeEnvironment.document,
         () => MouseEvent
       )
     });
@@ -55046,8 +55081,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getBuildings: () => buildings,
       getResources: () => resources,
       getState: () => state,
-      getDebugWindow: () => window,
-      debugLog: (message) => console.log(message)
+      getDebugWindow: () => runtimeEnvironment.window,
+      debugLog: (message) => runtimeEnvironment.log(message)
     });
     const autoHell = () => runHellAutomation(hellAdapter);
     if (testHooks) {
@@ -55062,7 +55097,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getBuildings: () => buildings,
       getResources: () => resources,
       getState: () => state,
-      getDebugWindow: () => window,
+      getDebugWindow: () => runtimeEnvironment.window,
       isDemonRace,
       isLumberRace,
       traitValue: traitVal,
@@ -55073,7 +55108,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       taxCap: (minimum) => poly.taxCap(minimum),
       isCraftingJob: (job) => job instanceof CraftingJob,
       getFoodConsume,
-      log: (message) => console.log(message)
+      log: (message) => runtimeEnvironment.log(message)
     });
     const autoJobs = (craftOnly = false) => runJobsAutomation(jobsAdapter, craftOnly);
     const { autoTax } = createTaxAutomation({
@@ -55454,7 +55489,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     ];
     const ocularPowerControls = createOcularPowerControls({
       getVueById,
-      getDocument: () => document
+      getDocument: () => runtimeEnvironment.document
     });
     const ocularPowerAdapter = createOcularPowerAdapter({
       getGame: () => game,
@@ -55684,8 +55719,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       executor: researchExecutor
     });
     const powerWarnings = createPowerWarningSource(
-      () => window.document,
-      () => window
+      () => runtimeEnvironment.window.document,
+      () => runtimeEnvironment.window
     );
     const powerAdapter = createPowerAdapter({
       getGame: () => game,
@@ -55711,7 +55746,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       isHungryRace,
       isPillarFinished: isPillarFinished2,
       getBuildingIds: () => buildingIds,
-      log: (message) => console.log(message)
+      log: (message) => runtimeEnvironment.log(message)
     });
     const powerAutomation = createPowerAutomation({
       reader: powerAdapter.reader,
@@ -55747,7 +55782,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       });
     }
-    const storageDebug = createStorageDebugSource(() => window);
+    const storageDebug = createStorageDebugSource(() => runtimeEnvironment.window);
     const storageAllocationAdapter = createStorageAllocationAdapter({
       getStorageManager: () => StorageManager,
       getGame: () => game,
@@ -55758,7 +55793,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getProjectManager: () => ProjectManager,
       getFleetManagerOuter: () => FleetManagerOuter,
       readDebugEnabled: () => storageDebug.readEnabled(),
-      log: (message) => console.log(message)
+      log: (message) => runtimeEnvironment.log(message)
     });
     const storageAllocationAutomation = createStorageAllocationAutomation({
       reader: storageAllocationAdapter.reader,
@@ -55904,12 +55939,12 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGameLog: () => GameLog,
       getJQuery: () => $,
       readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
-      debugLog: (message) => console.log(message)
+      debugLog: (message) => runtimeEnvironment.log(message)
     });
     const autoMech = () => {
       const outcome = runMechAutomation(mechAdapter);
       if (diagnostics.readMechDebugEnabled() && outcome.status !== "succeeded") {
-        console.log("[mech] outcome:", outcome);
+        runtimeEnvironment.log("[mech] outcome:", outcome);
       }
       return outcome;
     };
@@ -56097,7 +56132,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         }
       }
       if (decision2.needReset) {
-        const resetButton = document.querySelector(".reset .button:not(.right)");
+        const resetButton = runtimeEnvironment.document.querySelector(".reset .button:not(.right)");
         if (resetButton.innerText === game.loc("reset_soft")) {
           const addEvolutionSettingFn = evolutionResultTestActions?.addEvolutionSetting ?? addEvolutionSetting;
           const updateSettingsFromStateFn = evolutionResultTestActions?.updateSettingsFromState ?? updateSettingsFromState;
@@ -56204,7 +56239,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getMultiSegmentedTimeLeft: (target) => getMultiSegmentedTimeLeft(target),
       isProject: (target) => target instanceof Project,
       isTechnology: (target) => target instanceof Technology,
-      getResizeObserver: () => typeof ResizeObserver === "function" ? ResizeObserver : void 0,
+      getResizeObserver: () => typeof runtimeEnvironment.ResizeObserver === "function" ? runtimeEnvironment.ResizeObserver : void 0,
       updateSettingsFromState: () => updateSettingsFromState(),
       makePlannerStats: () => makePlannerStats(),
       savePlannerStats: (stats) => savePlannerStats(stats)
@@ -56246,7 +56281,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getSettingsRaw: () => settingsRaw,
       getState: () => state,
       getGame: () => game,
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getPoly: () => poly,
       getNiceNumber,
@@ -56359,9 +56394,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       tooltipObserverCallback,
       buildFilterRegExp,
       filterLog,
-      schedule: (callback, delay) => setTimeout(callback, delay),
-      repeat: (callback, delay) => setInterval(callback, delay),
-      alert: (message) => alert(message),
+      schedule: (callback, delay) => runtimeEnvironment.schedule(callback, delay),
+      repeat: (callback, delay) => runtimeEnvironment.repeat(callback, delay),
+      alert: (message) => runtimeEnvironment.alert(message),
       addErrorHandler,
       addScriptStyle,
       keyManagerInit: () => KeyManager.init(),
@@ -56390,12 +56425,12 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getCrafter: () => crafter,
       getTriggerManager: () => TriggerManager,
       getCheckActions: () => checkActions,
-      getMutationObserver: () => MutationObserver,
-      getDocument: () => document,
-      getNode: () => Node,
+      getMutationObserver: () => runtimeEnvironment.MutationObserver,
+      getDocument: () => runtimeEnvironment.document,
+      getNode: () => runtimeEnvironment.Node,
       getWindowManager: () => WindowManager,
       getJQuery: () => $,
-      getWindow: () => window,
+      getWindow: () => runtimeEnvironment.window,
       getUserscriptEnvironment: () => userscriptEnvironment,
       getWin: () => win,
       getNeedSandboxBypass: () => needSandboxBypass,
@@ -56459,8 +56494,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     }
     const { getTooltipInfo, tooltipObserverCallback, addTooltip } = createTooltipUI({
       getJQuery: () => $,
-      getDocument: () => document,
-      getMutationObserver: () => MutationObserver,
+      getDocument: () => runtimeEnvironment.document,
+      getMutationObserver: () => runtimeEnvironment.MutationObserver,
       getSettings: () => settings,
       getState: () => state,
       getGame: () => game,
@@ -56579,7 +56614,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       automateLab
     } = createCustomRaceUI({
       getJQuery: () => $,
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getSettingsRaw: () => settingsRaw,
       getSettings: () => settings,
       getState: () => state,
@@ -56593,7 +56628,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getUpdateSettingsFromState: () => updateSettingsFromState,
       getUpdateOverrides: () => updateOverrides,
       getVueById,
-      getAlert: () => (message) => alert(message)
+      getAlert: () => (message) => runtimeEnvironment.alert(message)
     });
     if (testHooks) {
       Object.assign(testHooks, {
@@ -56696,7 +56731,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       report() {
         const avg = this.n ? this.total / this.n : 0;
         const wavg = this.window ? this.windowTotal / this.window : 0;
-        console.log(
+        runtimeEnvironment.log(
           `[EA perf] work-ticks=${this.n} cum-avg=${avg.toFixed(3)}ms last-${this.window}-avg=${wavg.toFixed(3)}ms max=${this.max.toFixed(3)}ms`
         );
       },
@@ -56714,7 +56749,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       },
       reset() {
         this.n = this.total = this.max = this.window = this.windowTotal = 0;
-        console.log("[EA perf] reset");
+        runtimeEnvironment.log("[EA perf] reset");
       }
     };
     diagnostics.publishPerformance(__EAperf);
@@ -56750,7 +56785,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       addErrorHandler
     } = createScriptRuntimeUI({
       getJQuery: () => $,
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getState: () => state,
       getGame: () => game,
       getWin: () => win,
@@ -56919,7 +56954,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     let interfaceSettingsIntentHandler;
     const interfaceSettingsBrowserAdapter = createInterfaceSettingsBrowserAdapter(
       {
-        getDocument: () => document,
+        getDocument: () => runtimeEnvironment.document,
         getJQuery: () => $,
         intents: {
           handle: (intent) => interfaceSettingsIntentHandler.handle(intent)
@@ -56964,7 +56999,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       persist: () => updateSettingsFromState()
     });
     const { buildStateLogSettings, updateStateLogSettingsContent } = createStateLogSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       intents: stateLogSettingsIntents,
       buildSettingsSection,
@@ -56983,7 +57018,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       });
     }
     const { calculateMechStats } = createMechStats({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getMechManager: () => MechManager,
       getPoly: () => poly,
@@ -57157,7 +57192,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     let traitSettingsIntentHandler;
     const traitSettingsBrowserAdapter = createTraitSettingsBrowserAdapter({
       getReadModel: () => traitSettingsEvolveAdapter.readTraitSettingsReadModel(),
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       intents: {
         handle: (intent) => traitSettingsIntentHandler.handle(intent)
@@ -57255,7 +57290,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       getWin: () => win,
       getJQuery: () => $,
-      storage: localStorage
+      storage: runtimeEnvironment.storage
     });
     const { repairRuntimeAdapters } = createRuntimeAdapters({
       getSettings: () => settings,
@@ -57273,7 +57308,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getActions: () => uiRefreshTestActions ?? uiRefreshActions
     });
     const { updateUI } = createUIRefresh({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getActions: () => uiRefreshTestActions ?? uiRefreshActions,
       getPhases: () => ({
         ensureAutomationContainer,
@@ -57375,7 +57410,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     }
     const { sorterHelper } = createSortHelper({
       getJQuery: () => $,
-      isHTMLElement: (value) => value instanceof HTMLElement
+      isHTMLElement: (value) => runtimeEnvironment.HTMLElement !== void 0 && value instanceof runtimeEnvironment.HTMLElement
     });
     if (testHooks) {
       Object.assign(testHooks, { sorterHelper });
@@ -57503,8 +57538,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getJQuery: () => $,
       getGameLog: () => GameLog,
       getActions: () => settingsTransferTestActions ?? settingsTransferActions,
-      confirmImport: (message) => confirm(message),
-      logToConsole: (message) => console.log(message)
+      confirmImport: (message) => runtimeEnvironment.confirm(message),
+      logToConsole: (message) => runtimeEnvironment.log(message)
     });
     if (testHooks) {
       Object.assign(testHooks, {
@@ -57538,6 +57573,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
   // src/main.ts
   startLegacyRuntime(
     readJQueryGlobal(globalThis),
-    createBrowserDiagnostics(globalThis)
+    createBrowserDiagnostics(globalThis),
+    createLegacyRuntimeEnvironment(globalThis)
   );
 })();

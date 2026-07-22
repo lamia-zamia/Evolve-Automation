@@ -482,12 +482,12 @@ import { createSettingsControls } from "./ui/settings-controls.ts";
 import { createOverrideCatalog } from "./settings/override-catalog.ts";
 import { createScriptRuntimeUI } from "./ui/script-runtime.ts";
 
-export function startLegacyRuntime($, diagnostics, testHooks) {
+export function startLegacyRuntime($, diagnostics, runtimeEnvironment, testHooks) {
   "use strict";
   const { getRealNumber, getNumberString, getNiceNumber } =
     createNumberFormatting({ numberSuffix });
   const browserClock = createBrowserClock();
-  const settingsStore = createSettingsStore(localStorage);
+  const settingsStore = createSettingsStore(runtimeEnvironment.storage);
   var settingsRaw = settingsStore.load();
   var settings = {};
   var game = null;
@@ -609,7 +609,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     addSettingsHeader2,
   } = createSettingsShell({
     $,
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getSettingsRaw: () => settingsRaw,
     getSettings: () => settings,
     getGame: () => game,
@@ -648,7 +648,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     importSettings: (...args) => importSettings(...args),
     exportSettings: (...args) => exportSettings(...args),
     triggerFileDownload: (...args) => triggerFileDownload(...args),
-    confirm: (...args) => confirm(...args),
+    confirm: (...args) => runtimeEnvironment.confirm(...args),
   });
 
   const {
@@ -702,7 +702,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
         mechInfoTestContext?.getNiceNumber?.(value) ?? getNiceNumber(value),
     });
   const mechInfoBrowserAdapter = createMechInfoBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getVueById: (id) => mechInfoTestContext?.getVueById?.(id) ?? getVueById(id),
     reader: mechInfoReader,
@@ -765,7 +765,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   let productionSettingsIntentHandler;
   const productionSettingsBrowserAdapter =
     createProductionSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getReadModel: () =>
         productionSettingsEvolveAdapter.readProductionSettingsReadModel(),
@@ -855,7 +855,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   });
   let storageSettingsIntentHandler;
   const storageSettingsBrowserAdapter = createStorageSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getReadModel: () =>
       storageSettingsEvolveAdapter.readStorageSettingsReadModel(),
@@ -916,7 +916,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   });
   let magicSettingsIntentHandler;
   const magicSettingsBrowserAdapter = createMagicSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getReadModel: () => magicSettingsEvolveAdapter.readMagicSettingsReadModel(),
     intents: {
@@ -959,7 +959,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     addTableToggle,
     addToggleCallbacks,
     getSorterHelper: () => sorterHelper,
-    confirm: (...args) => confirm(...args),
+    confirm: (...args) => runtimeEnvironment.confirm(...args),
   };
   const jobSettingsEvolveAdapter = createJobSettingsEvolveAdapter({
     getBasicJob: () => jobSettingsTestContext?.BasicJob ?? BasicJob,
@@ -970,7 +970,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   });
   let jobSettingsIntentHandler;
   const jobSettingsBrowserAdapter = createJobSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getReadModel: () => jobSettingsEvolveAdapter.readJobSettingsReadModel(),
     intents: {
@@ -1012,7 +1012,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   let weightingSettingsIntentHandler;
   const weightingSettingsBrowserAdapter = createWeightingSettingsBrowserAdapter(
     {
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       intents: {
         handle: (intent) => weightingSettingsIntentHandler.handle(intent),
@@ -1050,7 +1050,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     addTableToggle,
     addToggleCallbacks,
     buildTableLabel,
-    confirm: (...args) => confirm(...args),
+    confirm: (...args) => runtimeEnvironment.confirm(...args),
     getSorterHelper: () => sorterHelper,
   };
   const buildingSettingsEvolveAdapter = createBuildingSettingsEvolveAdapter({
@@ -1074,7 +1074,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   });
   let buildingSettingsIntentHandler;
   const buildingSettingsBrowserAdapter = createBuildingSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getReadModel: () =>
       buildingSettingsEvolveAdapter.readBuildingSettingsReadModel(),
@@ -1147,7 +1147,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   });
   let projectSettingsIntentHandler;
   const projectSettingsBrowserAdapter = createProjectSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getReadModel: () =>
       projectSettingsEvolveAdapter.readProjectSettingsReadModel(),
@@ -1199,7 +1199,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   });
   let loggingSettingsIntentHandler;
   const loggingSettingsBrowserAdapter = createLoggingSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getReadModel: () =>
       loggingSettingsEvolveAdapter.readLoggingSettingsReadModel(),
@@ -1240,9 +1240,9 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
 
   let optionsModalTestContext;
   const optionsModalBrowserAdapter = createOptionsModalBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
-    getWindow: () => window,
+    getWindow: () => runtimeEnvironment.window,
     getSettingsReader: () => ({
       readToggle: (settingName) => {
         const raw = optionsModalTestContext?.settingsRaw ?? settingsRaw;
@@ -1289,7 +1289,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
       prestigeTopBarTestContext?.prestigeTypes ?? prestigeTypes,
   });
   const prestigeTopBarBrowserAdapter = createPrestigeTopBarBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     reader: prestigeTopBarReader,
     options: {
       addOptionUI: (...args) =>
@@ -1310,7 +1310,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getGame: () => totalDaysTopBarTestContext?.game ?? game,
   });
   const totalDaysTopBarBrowserAdapter = createTotalDaysTopBarBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     reader: totalDaysTopBarReader,
   });
@@ -1421,7 +1421,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   };
   let generalSettingsIntentHandler;
   const generalSettingsBrowserAdapter = createGeneralSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     intents: {
       handle: (intent) => generalSettingsIntentHandler.handle(intent),
@@ -1463,7 +1463,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   let achievementGuardSettingsIntentHandler;
   const achievementGuardSettingsBrowserAdapter =
     createAchievementGuardSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       intents: {
         handle: (intent) =>
@@ -1503,7 +1503,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   let challengeHelperSettingsIntentHandler;
   const challengeHelperSettingsBrowserAdapter =
     createChallengeHelperSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       intents: {
         handle: (intent) => challengeHelperSettingsIntentHandler.handle(intent),
@@ -1581,7 +1581,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   });
   let prestigeSettingsIntentHandler;
   const prestigeSettingsBrowserAdapter = createPrestigeSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     reader: prestigeSettingsReader,
     intents: {
@@ -1627,7 +1627,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
       ),
     effects: {
       confirm: (message) =>
-        (prestigeSettingsTestContext?.confirm ?? confirm)(message),
+        (prestigeSettingsTestContext?.confirm ?? runtimeEnvironment.confirm)(message),
     },
   });
   const { buildPrestigeSettings, updatePrestigeSettingsContent } =
@@ -1650,7 +1650,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   let governmentSettingsIntentHandler;
   const governmentSettingsBrowserAdapter =
     createGovernmentSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       getReadModel: () =>
         governmentSettingsEvolveAdapter.readGovernmentSettingsReadModel(),
@@ -1697,7 +1697,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   let authoritySettingsIntentHandler;
   const authoritySettingsBrowserAdapter = createAuthoritySettingsBrowserAdapter(
     {
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       intents: {
         handle: (intent) => authoritySettingsIntentHandler.handle(intent),
@@ -1745,7 +1745,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   let evolutionSettingsIntentHandler;
   const evolutionSettingsBrowserAdapter = createEvolutionSettingsBrowserAdapter(
     {
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       reader: evolutionSettingsReader,
       intents: {
@@ -1846,7 +1846,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   });
   let planetSettingsIntentHandler;
   const planetSettingsBrowserAdapter = createPlanetSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getReadModel: () =>
       planetSettingsEvolveAdapter.readPlanetSettingsReadModel(),
@@ -1887,7 +1887,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   });
   let triggerSettingsIntentHandler;
   const triggerSettingsBrowserAdapter = createTriggerSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     reader: triggerSettingsReader,
     intents: {
@@ -1978,7 +1978,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   });
   let researchSettingsIntentHandler;
   const researchSettingsBrowserAdapter = createResearchSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getReadModel: () =>
       researchSettingsEvolveAdapter.readResearchSettingsReadModel(),
@@ -2043,7 +2043,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     },
   });
   const warSettingsBrowserAdapter = createWarSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     reader: warSettingsReader,
     intents: warSettingsIntentHandler,
@@ -2078,7 +2078,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     },
   });
   const hellSettingsBrowserAdapter = createHellSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     reader: hellSettingsReader,
     intents: hellSettingsIntentHandler,
@@ -2098,7 +2098,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   });
   let fleetSettingsIntentHandler;
   const fleetSettingsBrowserAdapter = createFleetSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     reader: fleetSettingsReader,
     intents: {
@@ -2178,7 +2178,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     },
   });
   const mechSettingsBrowserAdapter = createMechSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     reader: mechSettingsReader,
     intents: mechSettingsIntentHandler,
@@ -2239,7 +2239,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     },
   });
   const ejectorSettingsBrowserAdapter = createEjectorSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     reader: ejectorSettingsReader,
     intents: ejectorSettingsIntentHandler,
@@ -2299,7 +2299,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     },
   });
   const marketSettingsBrowserAdapter = createMarketSettingsBrowserAdapter({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     reader: marketSettingsReader,
     intents: marketSettingsIntentHandler,
@@ -2378,7 +2378,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
       : readResult;
   };
   const plannerStatsLifecycle = createPlannerStatsLifecycle(
-    createPlannerStatsStore(localStorage),
+    createPlannerStatsStore(runtimeEnvironment.storage),
   );
   function plannerLimitingResource(target) {
     const readResult = readPlannerLimitInput(target, resources);
@@ -2478,13 +2478,13 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getResources: () => resources,
     getState: () => state,
     plannerLimitingResource,
-    stateLogStore: createStateLogStore(localStorage),
+    stateLogStore: createStateLogStore(runtimeEnvironment.storage),
   });
   const { verifyGameActions, verifyGameActionsExist, verifyGameActionExists } =
     createGameActionVerification({
       getGame: () => game,
       getBuildings: () => buildings,
-      log: (...values) => console.log(...values),
+      log: (...values) => runtimeEnvironment.log(...values),
     });
   let { getGovernor, haveTask, haveTech, isEarlyGame } = createRuntimeQueries({
     getGame: () => game,
@@ -2541,19 +2541,19 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getDate: () => new Date(),
   });
   var win = null;
-  const userscriptEnvironment = createUserscriptEnvironment(window);
+  const userscriptEnvironment = createUserscriptEnvironment(runtimeEnvironment.window);
   const { getVueById, triggerFileDownload } = createBrowserRuntime({
     getWin: () => win,
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getUrlApi: () => URL,
     getBlobConstructor: () => Blob,
-    schedule: (callback, delay) => setTimeout(callback, delay),
+    schedule: (callback, delay) => runtimeEnvironment.schedule(callback, delay),
   });
   var needSandboxBypass = false;
 
   var overrideKey = "ctrlKey";
   var overrideKeyLabel = "Ctrl";
-  if (window.navigator.platform.indexOf("Mac") === 0) {
+  if (runtimeEnvironment.window.navigator.platform.indexOf("Mac") === 0) {
     overrideKey = "altKey";
     overrideKeyLabel = "Alt";
   }
@@ -2561,7 +2561,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   var checkActions = false;
 
   let safeMode =
-    String(window.location).toLowerCase().indexOf("safemode") !== -1;
+    String(runtimeEnvironment.window.location).toLowerCase().indexOf("safemode") !== -1;
 
   // Class definitions
   const {
@@ -2605,7 +2605,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     readCheckAffordableCustom: () => checkAffordableCustom,
     readCheckTypes: () => checkTypes,
     readConflictingTraits: () => conflictingTraits,
-    readDocument: () => document,
+    readDocument: () => runtimeEnvironment.document,
     readFanatAchievements: () => fanatAchievements,
     readFibonacci: () => Fibonacci,
     readGame: () => game,
@@ -3175,7 +3175,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
       getGame: () => game,
       getResources: () => resources,
       getBuildings: () => buildings,
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getVueById: (id) => getVueById(id),
       getKeyManager: () => KeyManager,
       getWindowManager: () => WindowManager,
@@ -3191,7 +3191,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getState: () => state,
     getResources: () => resources,
     getBuildings: () => buildings,
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getPoly: () => poly,
     getVueById: (id) => getVueById(id),
     getWindowManager: () => WindowManager,
@@ -3203,7 +3203,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getGovPower,
     getGovName,
     getOccCosts,
-    logError: (...args) => console.error(...args),
+    logError: (...args) => runtimeEnvironment.error(...args),
   }));
 
   if (testHooks) {
@@ -3272,7 +3272,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     kCombinations: k_combinations,
     cloneIntoPage: (value, options) =>
       userscriptEnvironment.cloneIntoPage(value, options),
-    createMutationObserver: (callback) => new MutationObserver(callback),
+    createMutationObserver: (callback) => new runtimeEnvironment.MutationObserver(callback),
   });
 
   if (testHooks) {
@@ -3316,13 +3316,13 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
 
   let WindowManager, KeyManager, GameLog;
   ({ WindowManager, KeyManager, GameLog } = createInfrastructureManagers({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getGame: () => game,
     getSettings: () => settings,
     getPoly: () => poly,
     getWin: () => win,
     getNeedSandboxBypass: () => needSandboxBypass,
-    getKeyboardEvent: () => KeyboardEvent,
+    getKeyboardEvent: () => runtimeEnvironment.KeyboardEvent,
     cloneIntoPage: (value) => userscriptEnvironment.cloneIntoPage(value),
   }));
 
@@ -3380,7 +3380,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getIsLumberRace: () =>
       stateInitializationTestActions?.isLumberRace ?? isLumberRace,
     getHaveTech: () => stateInitializationTestActions?.haveTech ?? haveTech,
-    log: (message) => console.log(message),
+    log: (message) => runtimeEnvironment.log(message),
   });
 
   if (testHooks) {
@@ -3797,7 +3797,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
 
   const universeSelectionExecutor = createUniverseSelectionCommandExecutor({
     getGame: () => game,
-    controls: createUniverseSelectionControls(() => document),
+    controls: createUniverseSelectionControls(() => runtimeEnvironment.document),
   });
   const autoUniverseSelection = function autoUniverseSelection() {
     universeSelectionExecutor.execute(
@@ -3843,7 +3843,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   const planetSelectionExecutor = createPlanetSelectionCommandExecutor({
     getGame: () => game,
     controls: createPlanetSelectionControls(
-      () => document,
+      () => runtimeEnvironment.document,
       () => MouseEvent,
     ),
   });
@@ -3935,8 +3935,8 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getBuildings: () => buildings,
     getResources: () => resources,
     getState: () => state,
-    getDebugWindow: () => window,
-    debugLog: (message) => console.log(message),
+    getDebugWindow: () => runtimeEnvironment.window,
+    debugLog: (message) => runtimeEnvironment.log(message),
   });
   const autoHell = () => runHellAutomation(hellAdapter);
 
@@ -3953,7 +3953,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getBuildings: () => buildings,
     getResources: () => resources,
     getState: () => state,
-    getDebugWindow: () => window,
+    getDebugWindow: () => runtimeEnvironment.window,
     isDemonRace,
     isLumberRace,
     traitValue: traitVal,
@@ -3964,7 +3964,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     taxCap: (minimum) => poly.taxCap(minimum),
     isCraftingJob: (job) => job instanceof CraftingJob,
     getFoodConsume,
-    log: (message) => console.log(message),
+    log: (message) => runtimeEnvironment.log(message),
   });
   const autoJobs = (craftOnly = false) =>
     runJobsAutomation(jobsAdapter, craftOnly);
@@ -4394,7 +4394,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
 
   const ocularPowerControls = createOcularPowerControls({
     getVueById,
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
   });
   const ocularPowerAdapter = createOcularPowerAdapter({
     getGame: () => game,
@@ -4649,8 +4649,8 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     });
 
   const powerWarnings = createPowerWarningSource(
-    () => window.document,
-    () => window,
+    () => runtimeEnvironment.window.document,
+    () => runtimeEnvironment.window,
   );
   const powerAdapter = createPowerAdapter({
     getGame: () => game,
@@ -4676,7 +4676,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     isHungryRace,
     isPillarFinished,
     getBuildingIds: () => buildingIds,
-    log: (message) => console.log(message),
+    log: (message) => runtimeEnvironment.log(message),
   });
   const powerAutomation = createPowerAutomation({
     reader: powerAdapter.reader,
@@ -4715,7 +4715,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     });
   }
 
-  const storageDebug = createStorageDebugSource(() => window);
+  const storageDebug = createStorageDebugSource(() => runtimeEnvironment.window);
   const storageAllocationAdapter = createStorageAllocationAdapter({
     getStorageManager: () => StorageManager,
     getGame: () => game,
@@ -4726,7 +4726,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getProjectManager: () => ProjectManager,
     getFleetManagerOuter: () => FleetManagerOuter,
     readDebugEnabled: () => storageDebug.readEnabled(),
-    log: (message) => console.log(message),
+    log: (message) => runtimeEnvironment.log(message),
   });
   const storageAllocationAutomation = createStorageAllocationAutomation({
     reader: storageAllocationAdapter.reader,
@@ -4884,7 +4884,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getGameLog: () => GameLog,
     getJQuery: () => $,
     readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
-    debugLog: (message) => console.log(message),
+    debugLog: (message) => runtimeEnvironment.log(message),
   });
   const autoMech = () => {
     const outcome = runMechAutomation(mechAdapter);
@@ -4892,7 +4892,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
       diagnostics.readMechDebugEnabled() &&
       outcome.status !== "succeeded"
     ) {
-      console.log("[mech] outcome:", outcome);
+      runtimeEnvironment.log("[mech] outcome:", outcome);
     }
     return outcome;
   };
@@ -5099,7 +5099,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     }
 
     if (decision.needReset) {
-      const resetButton = document.querySelector(".reset .button:not(.right)");
+      const resetButton = runtimeEnvironment.document.querySelector(".reset .button:not(.right)");
       if (resetButton.innerText === game.loc("reset_soft")) {
         const addEvolutionSettingFn =
           evolutionResultTestActions?.addEvolutionSetting ??
@@ -5223,7 +5223,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     isProject: (target) => target instanceof Project,
     isTechnology: (target) => target instanceof Technology,
     getResizeObserver: () =>
-      typeof ResizeObserver === "function" ? ResizeObserver : undefined,
+      typeof runtimeEnvironment.ResizeObserver === "function" ? runtimeEnvironment.ResizeObserver : undefined,
     updateSettingsFromState: () => updateSettingsFromState(),
     makePlannerStats: () => makePlannerStats(),
     savePlannerStats: (stats) => savePlannerStats(stats),
@@ -5268,7 +5268,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getSettingsRaw: () => settingsRaw,
     getState: () => state,
     getGame: () => game,
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getPoly: () => poly,
     getNiceNumber,
@@ -5401,9 +5401,9 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
       tooltipObserverCallback,
       buildFilterRegExp,
       filterLog,
-      schedule: (callback, delay) => setTimeout(callback, delay),
-      repeat: (callback, delay) => setInterval(callback, delay),
-      alert: (message) => alert(message),
+      schedule: (callback, delay) => runtimeEnvironment.schedule(callback, delay),
+      repeat: (callback, delay) => runtimeEnvironment.repeat(callback, delay),
+      alert: (message) => runtimeEnvironment.alert(message),
       addErrorHandler,
       addScriptStyle,
       keyManagerInit: () => KeyManager.init(),
@@ -5433,12 +5433,12 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getCrafter: () => crafter,
     getTriggerManager: () => TriggerManager,
     getCheckActions: () => checkActions,
-    getMutationObserver: () => MutationObserver,
-    getDocument: () => document,
-    getNode: () => Node,
+    getMutationObserver: () => runtimeEnvironment.MutationObserver,
+    getDocument: () => runtimeEnvironment.document,
+    getNode: () => runtimeEnvironment.Node,
     getWindowManager: () => WindowManager,
     getJQuery: () => $,
-    getWindow: () => window,
+    getWindow: () => runtimeEnvironment.window,
     getUserscriptEnvironment: () => userscriptEnvironment,
     getWin: () => win,
     getNeedSandboxBypass: () => needSandboxBypass,
@@ -5507,8 +5507,8 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   const { getTooltipInfo, tooltipObserverCallback, addTooltip } =
     createTooltipUI({
       getJQuery: () => $,
-      getDocument: () => document,
-      getMutationObserver: () => MutationObserver,
+      getDocument: () => runtimeEnvironment.document,
+      getMutationObserver: () => runtimeEnvironment.MutationObserver,
       getSettings: () => settings,
       getState: () => state,
       getGame: () => game,
@@ -5632,7 +5632,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     automateLab,
   } = createCustomRaceUI({
     getJQuery: () => $,
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getSettingsRaw: () => settingsRaw,
     getSettings: () => settings,
     getState: () => state,
@@ -5646,7 +5646,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getUpdateSettingsFromState: () => updateSettingsFromState,
     getUpdateOverrides: () => updateOverrides,
     getVueById,
-    getAlert: () => (message) => alert(message),
+    getAlert: () => (message) => runtimeEnvironment.alert(message),
   });
 
   if (testHooks) {
@@ -5762,7 +5762,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     report() {
       const avg = this.n ? this.total / this.n : 0;
       const wavg = this.window ? this.windowTotal / this.window : 0;
-      console.log(
+      runtimeEnvironment.log(
         `[EA perf] work-ticks=${this.n} cum-avg=${avg.toFixed(3)}ms ` +
           `last-${this.window}-avg=${wavg.toFixed(3)}ms max=${this.max.toFixed(3)}ms`,
       );
@@ -5781,7 +5781,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     },
     reset() {
       this.n = this.total = this.max = this.window = this.windowTotal = 0;
-      console.log("[EA perf] reset");
+      runtimeEnvironment.log("[EA perf] reset");
     },
   };
   diagnostics.publishPerformance(__EAperf);
@@ -5820,7 +5820,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     addErrorHandler,
   } = createScriptRuntimeUI({
     getJQuery: () => $,
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getState: () => state,
     getGame: () => game,
     getWin: () => win,
@@ -5994,7 +5994,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   let interfaceSettingsIntentHandler;
   const interfaceSettingsBrowserAdapter = createInterfaceSettingsBrowserAdapter(
     {
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       intents: {
         handle: (intent) => interfaceSettingsIntentHandler.handle(intent),
@@ -6072,7 +6072,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   });
   const { buildStateLogSettings, updateStateLogSettingsContent } =
     createStateLogSettingsBrowserAdapter({
-      getDocument: () => document,
+      getDocument: () => runtimeEnvironment.document,
       getJQuery: () => $,
       intents: stateLogSettingsIntents,
       buildSettingsSection,
@@ -6093,7 +6093,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   }
 
   const { calculateMechStats } = createMechStats({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     getMechManager: () => MechManager,
     getPoly: () => poly,
@@ -6272,7 +6272,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   let traitSettingsIntentHandler;
   const traitSettingsBrowserAdapter = createTraitSettingsBrowserAdapter({
     getReadModel: () => traitSettingsEvolveAdapter.readTraitSettingsReadModel(),
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getJQuery: () => $,
     intents: {
       handle: (intent) => traitSettingsIntentHandler.handle(intent),
@@ -6393,7 +6393,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getGame: () => game,
     getWin: () => win,
     getJQuery: () => $,
-    storage: localStorage,
+    storage: runtimeEnvironment.storage,
   });
 
   const { repairRuntimeAdapters } = createRuntimeAdapters({
@@ -6414,7 +6414,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
   });
 
   const { updateUI } = createUIRefresh({
-    getDocument: () => document,
+    getDocument: () => runtimeEnvironment.document,
     getActions: () => uiRefreshTestActions ?? uiRefreshActions,
     getPhases: () => ({
       ensureAutomationContainer,
@@ -6521,7 +6521,7 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
 
   const { sorterHelper } = createSortHelper({
     getJQuery: () => $,
-    isHTMLElement: (value) => value instanceof HTMLElement,
+    isHTMLElement: (value) => runtimeEnvironment.HTMLElement !== undefined && value instanceof runtimeEnvironment.HTMLElement,
   });
 
   if (testHooks) {
@@ -6662,8 +6662,8 @@ export function startLegacyRuntime($, diagnostics, testHooks) {
     getJQuery: () => $,
     getGameLog: () => GameLog,
     getActions: () => settingsTransferTestActions ?? settingsTransferActions,
-    confirmImport: (message) => confirm(message),
-    logToConsole: (message) => console.log(message),
+    confirmImport: (message) => runtimeEnvironment.confirm(message),
+    logToConsole: (message) => runtimeEnvironment.log(message),
   });
 
   if (testHooks) {
