@@ -47008,7 +47008,7 @@
     };
   }
 
-  // src/ui/trait-settings.ts
+  // src/adapters/browser/trait-settings.ts
   function createTraitSettings({
     getSettingsRaw,
     getState,

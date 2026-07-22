@@ -1,3 +1,6 @@
+// TRANSITIONAL: The legacy trait manager/game object surface remains untyped at this browser edge;
+// replace this alias with validated read-model fields when the Trait policy slice migrates.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 
 interface TraitSettingsDependencies {
@@ -251,7 +254,7 @@ export function createTraitSettings({
 
     let wishMinor = [
       { val: "none", label: "None", hint: "Disable using minor wishes." },
-      ...wishData.minor.map((w) => ({
+      ...wishData.minor.map((w: Loose) => ({
         val: w.id,
         label: poly.loc("wish_for", [poly.loc(w.loc)]),
       })),
@@ -265,7 +268,7 @@ export function createTraitSettings({
     );
     let wishMajor = [
       { val: "none", label: "None", hint: "Disable using major wishes." },
-      ...wishData.major.map((w) => ({
+      ...wishData.major.map((w: Loose) => ({
         val: w.id,
         label: poly.loc("wish_for", [poly.loc(w.loc)]),
       })),
@@ -297,7 +300,7 @@ export function createTraitSettings({
           </table>
         `);
     const ocularTableBodyNode = $("#script_ocularPowersTableBody");
-    ocularPowerData.forEach((p) => {
+    ocularPowerData.forEach((p: Loose) => {
       let tr = $(`<tr><td></td><td></td><td></td></tr>`);
       tr.appendTo(ocularTableBodyNode);
 
@@ -567,10 +570,10 @@ export function createTraitSettings({
   }
 
   function makeToggleSwitchesMutuallyExclusive(
-    switch1,
-    settingsKey1,
-    switch2,
-    settingsKey2,
+    switch1: Loose,
+    settingsKey1: string,
+    switch2: Loose,
+    settingsKey2: string,
   ) {
     switch1.on("change", function () {
       if (switch1.prop("checked") && switch2.prop("checked")) {

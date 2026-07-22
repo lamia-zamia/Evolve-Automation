@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createTraitSettings } from "../src/ui/trait-settings.ts";
+import { createTraitSettings } from "../src/adapters/browser/trait-settings.ts";
 
 let settingsRaw = { imitateRace: "human" };
 let state = { evolutionTarget: "first" };

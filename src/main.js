@@ -465,7 +465,7 @@ import { createEvolutionSettingsIntentHandler } from "./application/evolution-se
 import { createEvolutionSettingsBrowserAdapter } from "./adapters/browser/evolution-settings.ts";
 import { createEvolutionSettingsEvolveAdapter } from "./adapters/evolve/evolution-settings.ts";
 import { createProductionSettings } from "./adapters/browser/production-settings.ts";
-import { createTraitSettings } from "./ui/trait-settings.ts";
+import { createTraitSettings } from "./adapters/browser/trait-settings.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoEvolveAdapter } from "./adapters/evolve/mech-info.ts";
 import { createMechInfoBrowserAdapter } from "./adapters/browser/mech-info.ts";
