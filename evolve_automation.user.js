@@ -18047,7 +18047,7 @@
     logFilter
   }) {
     const frozenMessageTypes = Object.freeze(messageTypes.map(freezeMessageType));
-    const controls3 = [
+    const controls4 = [
       Object.freeze({ kind: "header", label: "Script Messages" }),
       Object.freeze({
         kind: "toggle",
@@ -18057,7 +18057,7 @@
       })
     ];
     for (const { id, label } of frozenMessageTypes) {
-      controls3.push(
+      controls4.push(
         Object.freeze({
           kind: "toggle",
           settingName: "log_" + id,
@@ -18066,7 +18066,7 @@
         })
       );
     }
-    controls3.push(
+    controls4.push(
       Object.freeze({
         kind: "string",
         settingName: "log_prestige_format",
@@ -18086,7 +18086,7 @@
       sectionName: "Logging",
       locale,
       logFilter,
-      controls: Object.freeze(controls3)
+      controls: Object.freeze(controls4)
     });
   }
 
@@ -21213,162 +21213,162 @@
   }
 
   // src/application/tick.ts
-  function runTick({ reader, controls: controls3 }) {
+  function runTick({ reader, controls: controls4 }) {
     const preamble = reader.samplePreamble();
     if (!shouldStartTick(preamble)) {
       return;
     }
-    controls3.markGameTickConsumed();
+    controls4.markGameTickConsumed();
     const scriptTick = advanceScriptTick(preamble.scriptTick);
-    controls3.setScriptTick(scriptTick);
+    controls4.setScriptTick(scriptTick);
     if (isThrottledTick(scriptTick, preamble.tickRate, preamble.accelerated)) {
       return;
     }
-    controls3.updateScriptData();
-    controls3.updateOverrides();
-    controls3.finalizeScriptData();
-    if (controls3.updateTabs()) {
+    controls4.updateScriptData();
+    controls4.updateOverrides();
+    controls4.finalizeScriptData();
+    if (controls4.updateTabs()) {
       return;
     }
-    controls3.updateState();
-    controls3.updateUI();
-    controls3.keyManagerReset();
+    controls4.updateState();
+    controls4.updateUI();
+    controls4.keyManagerReset();
     const s = reader.sampleAutomation();
     if (!s.masterScriptToggle) {
       return;
     }
     if (s.goal === "Evolution") {
       if (s.autoEvolution) {
-        controls3.autoEvolution();
+        controls4.autoEvolution();
       }
       return;
     }
     if (s.buildingAlwaysClick || s.autoBuild) {
-      controls3.autoGatherResources();
+      controls4.autoGatherResources();
     }
     if (s.autoMarket) {
-      controls3.autoMarket();
+      controls4.autoMarket();
     }
     if (s.autoHell) {
-      controls3.autoHell();
+      controls4.autoHell();
     }
     if (s.autoGalaxyMarket) {
-      controls3.autoGalaxyMarket();
+      controls4.autoGalaxyMarket();
     }
     if (s.autoMiningDroid) {
-      controls3.autoMiningDroid();
+      controls4.autoMiningDroid();
     }
     if (s.autoGraphenePlant) {
-      controls3.autoGraphenePlant();
+      controls4.autoGraphenePlant();
     }
     if (s.autoAlchemy) {
-      controls3.autoAlchemy();
+      controls4.autoAlchemy();
     }
     if (s.autoPylon) {
-      controls3.autoPylon();
+      controls4.autoPylon();
     }
     if (s.autoQuarry) {
-      controls3.autoQuarry();
+      controls4.autoQuarry();
     }
     if (s.autoMine) {
-      controls3.autoMine();
+      controls4.autoMine();
     }
     if (s.autoExtractor) {
-      controls3.autoExtractor();
+      controls4.autoExtractor();
     }
     if (s.autoSmelter) {
-      controls3.autoSmelter();
+      controls4.autoSmelter();
     }
     if (s.autoStorage) {
-      controls3.autoStorage();
+      controls4.autoStorage();
     }
     if (s.autoReplicator) {
-      controls3.autoReplicator();
+      controls4.autoReplicator();
     }
-    if (!s.autoTrigger || !controls3.autoTrigger()) {
+    if (!s.autoTrigger || !controls4.autoTrigger()) {
       if (s.autoResearch) {
-        controls3.autoResearch();
+        controls4.autoResearch();
       }
       if (s.autoBuild || s.autoARPA) {
-        controls3.autoBuild();
-        controls3.setPlannerFreshTick(scriptTick);
+        controls4.autoBuild();
+        controls4.setPlannerFreshTick(scriptTick);
       }
     }
     if (s.autoFactory) {
-      controls3.autoFactory();
+      controls4.autoFactory();
     }
     if (s.autoJobs) {
-      controls3.autoJobs();
+      controls4.autoJobs();
     } else if (s.autoCraftsmen) {
-      controls3.autoJobs(true);
+      controls4.autoJobs(true);
     }
     if (s.autoFleet) {
       if (s.truepath) {
-        controls3.autoFleetOuter();
+        controls4.autoFleetOuter();
       } else {
-        controls3.autoFleet();
+        controls4.autoFleet();
       }
     }
     if (s.autoMech) {
-      controls3.autoMech();
+      controls4.autoMech();
     }
     if (s.autoGenetics) {
-      controls3.autoGenetics();
+      controls4.autoGenetics();
     }
     if (s.autoMinorTrait) {
-      controls3.autoMinorTrait();
+      controls4.autoMinorTrait();
     }
     if (s.autoCraft) {
-      controls3.autoCraft();
+      controls4.autoCraft();
     }
     if (s.autoFight) {
-      controls3.autoMerc();
-      controls3.autoSpy();
-      controls3.autoBattle();
+      controls4.autoMerc();
+      controls4.autoSpy();
+      controls4.autoBattle();
     }
     if (s.autoTax) {
-      controls3.autoTax();
+      controls4.autoTax();
     }
     if (s.autoGovernment) {
-      controls3.autoGovernment();
+      controls4.autoGovernment();
     }
     if (s.autoNanite) {
-      controls3.consumeNanite();
+      controls4.consumeNanite();
     }
     if (s.autoSupply) {
-      controls3.consumeSupply();
+      controls4.consumeSupply();
     }
     if (s.autoEject) {
-      controls3.consumeEject();
+      controls4.consumeEject();
     }
     if (s.autoPower) {
-      controls3.autoPower();
+      controls4.autoPower();
     }
-    if (controls3.isPrestigeAllowed()) {
-      controls3.autoPrestige();
+    if (controls4.isPrestigeAllowed()) {
+      controls4.autoPrestige();
     }
     if (s.autoMinorTrait) {
-      controls3.autoShapeshift();
-      controls3.autoPsychic();
-      controls3.autoOcularPowers();
-      controls3.autoWish();
+      controls4.autoShapeshift();
+      controls4.autoPsychic();
+      controls4.autoOcularPowers();
+      controls4.autoWish();
     }
     if (s.autoMutateTraits) {
-      controls3.autoMutateTrait();
+      controls4.autoMutateTrait();
     }
-    controls3.updateBuildPlanner();
+    controls4.updateBuildPlanner();
     if (s.stateLogEnabled) {
       const { next, record } = advanceStateLog(
         s.stateLogTick,
         s.stateLogInterval
       );
-      controls3.setStateLogTick(next);
+      controls4.setStateLogTick(next);
       if (record) {
-        controls3.recordStateSnapshot();
+        controls4.recordStateSnapshot();
       }
     }
-    controls3.keyManagerFinish();
-    controls3.recordSoulGem();
+    controls4.keyManagerFinish();
+    controls4.recordSoulGem();
   }
 
   // src/adapters/evolve/tick.ts
@@ -21573,51 +21573,51 @@
   // src/application/state-update.ts
   function runStateUpdate({
     reader,
-    controls: controls3,
+    controls: controls4,
     clock
   }) {
     const goalSnapshot = reader.sampleGoalTransition();
     const transition = planGoalTransition(goalSnapshot);
     switch (transition.kind) {
       case "force-evolution":
-        controls3.setGoal("Evolution");
+        controls4.setGoal("Evolution");
         break;
       case "resolve-leaving":
-        if (!controls3.checkEvolutionResult()) {
+        if (!controls4.checkEvolutionResult()) {
           return;
         }
-        controls3.setGoal("Standard");
+        controls4.setGoal("Standard");
         if (transition.rebuildTriggers) {
-          controls3.rebuildTriggerContent();
+          controls4.rebuildTriggerContent();
         }
         break;
       case "day1-fallback":
-        if (!controls3.checkEvolutionResult()) {
+        if (!controls4.checkEvolutionResult()) {
           return;
         }
         break;
       case "proceed":
         break;
     }
-    controls3.resetResourceAccumulators();
-    controls3.applyStorageUnitValues();
-    controls3.runPlanningPasses();
-    controls3.resetTooltips();
+    controls4.resetResourceAccumulators();
+    controls4.applyStorageUnitValues();
+    controls4.runPlanningPasses();
+    controls4.resetTooltips();
     const refresh = reader.sampleRefresh();
     const money = computeMoneyWindow(refresh.moneyIncomes, refresh.moneyRate);
-    controls3.applyMoneyWindow(money.incomes, money.median);
-    controls3.applyAstroSign();
-    controls3.applyTowerSize(computeTowerSize(refresh.pillars));
+    controls4.applyMoneyWindow(money.incomes, money.median);
+    controls4.applyAstroSign();
+    controls4.applyTowerSize(computeTowerSize(refresh.pillars));
     const stabilise = evaluateStabilise(
       refresh.currentExotic,
       refresh.lastExoticMass
     );
-    controls3.applyStabilise(
+    controls4.applyStabilise(
       stabilise.stabilised ? clock.nowMs() : void 0,
       stabilise.lastExoticMass
     );
-    controls3.cacheSpaceDockOptions();
-    controls3.updateActiveTargets();
+    controls4.cacheSpaceDockOptions();
+    controls4.updateActiveTargets();
   }
 
   // src/adapters/evolve/state-update.ts
@@ -26177,23 +26177,23 @@
     function getControls() {
       const candidate = getVueById2("tax_rates");
       if (candidate === void 0 || candidate === null) return void 0;
-      const controls3 = requireRecord(candidate, "tax controls");
-      requireFunction(controls3["add"], "tax controls.add");
-      requireFunction(controls3["sub"], "tax controls.sub");
-      return controls3;
+      const controls4 = requireRecord(candidate, "tax controls");
+      requireFunction(controls4["add"], "tax controls.add");
+      requireFunction(controls4["sub"], "tax controls.sub");
+      return controls4;
     }
     function isAvailable() {
       return getControls() !== void 0;
     }
     function adjust(direction) {
-      const controls3 = getControls();
-      if (controls3 === void 0) return false;
+      const controls4 = getControls();
+      if (controls4 === void 0) return false;
       const methodName = direction === "increase" ? "add" : "sub";
       const method = requireFunction(
-        controls3[methodName],
+        controls4[methodName],
         `tax controls.${methodName}`
       );
-      Reflect.apply(method, controls3, []);
+      Reflect.apply(method, controls4, []);
       return true;
     }
     return Object.freeze({ isAvailable, adjust });
@@ -26504,17 +26504,17 @@
   // src/bootstrap/tax.ts
   function createTaxAutomation(dependencies) {
     const clock = Object.freeze({ nowMs: dependencies.nowMs });
-    const controls3 = createBrowserTaxControls(dependencies.getVueById);
+    const controls4 = createBrowserTaxControls(dependencies.getVueById);
     const gameReader = createEvolveTaxReader({
       clock,
-      controls: controls3,
+      controls: controls4,
       getGame: dependencies.getGame,
       getPoly: dependencies.getPoly,
       getResources: dependencies.getResources
     });
     const settingsReader = createTaxSettingsReader(dependencies.getSettings);
     const commandExecutor = createTaxCommandExecutor({
-      controls: controls3,
+      controls: controls4,
       keyModifiers: createKeyModifierController(dependencies.clearKeyModifiers),
       getGame: dependencies.getGame,
       getResources: dependencies.getResources
@@ -44289,7 +44289,7 @@
     })
   ]);
   function createWarSettingsReadModel(policyOptions) {
-    const controls3 = Object.freeze([
+    const controls4 = Object.freeze([
       Object.freeze({ kind: "header", label: "Foreign Powers" }),
       Object.freeze({
         kind: "toggle",
@@ -44414,7 +44414,7 @@
     return Object.freeze({
       sectionId: "war",
       sectionName: "Foreign Affairs",
-      controls: controls3
+      controls: controls4
     });
   }
 
@@ -44453,6 +44453,203 @@
         return createWarSettingsReadModel(policyOptions);
       }
     });
+  }
+
+  // src/application/hell-settings.ts
+  function createHellSettingsIntentHandler({
+    writer,
+    renderSettingsContent,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        writer.resetToDefaults();
+        writer.persist();
+        renderSettingsContent(intent.secondaryPrefix);
+        effects.resetCheckboxes();
+      }
+    });
+  }
+
+  // src/adapters/browser/hell-settings.ts
+  function createHellSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function renderControl(node, control, actions) {
+      if (control.kind === "header") {
+        actions.addSettingsHeader1(node, control.label);
+        return;
+      }
+      if (control.kind === "number") {
+        actions.addSettingsNumber(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    }
+    function buildHellSettings2(parentNode, secondaryPrefix) {
+      const model = reader.read();
+      getActions().buildSettingsSection2(
+        parentNode,
+        secondaryPrefix,
+        model.sectionId,
+        model.sectionName,
+        () => intents.handle({ type: "reset-hell-settings", secondaryPrefix }),
+        updateHellSettingsContent2
+      );
+    }
+    function updateHellSettingsContent2(secondaryPrefix) {
+      const model = reader.read();
+      const document2 = getDocument();
+      const scroll = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const node = getJQuery()(
+        `#script_${secondaryPrefix}${model.sectionId}Content`
+      );
+      node.empty().off("*");
+      const actions = getActions();
+      for (const control of model.controls) renderControl(node, control, actions);
+      document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
+    }
+    return Object.freeze({ buildHellSettings: buildHellSettings2, updateHellSettingsContent: updateHellSettingsContent2 });
+  }
+
+  // src/domain/hell-settings.ts
+  var controls3 = Object.freeze([
+    Object.freeze({ kind: "header", label: "Entering Hell" }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellHomeGarrison",
+      label: "Soldiers to stay out of hell",
+      hint: "Home garrison maximum"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellMinSoldiers",
+      label: "Minimum soldiers to be available for hell (pull out if below)",
+      hint: "Don't enter hell if not enough soldiers, or get out if already in"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellMinSoldiersPercent",
+      label: "Alive soldier percentage for entering hell",
+      hint: "Don't enter hell if too many soldiers are dead, but don't get out"
+    }),
+    Object.freeze({ kind: "header", label: "Hell Garrison" }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "hellAssaultReserve",
+      label: "Always reserve hell troops to Secure the Pit",
+      hint: "With this option enabled hell soldiers will be put to fortress once Secure the Pit is unlocked, to fulfil its costs. It makes saving resources and setting triggers for it easier, at cost of less efficient use of manpower."
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellTargetFortressDamage",
+      label: "Target wall damage per siege (overestimates threat)",
+      hint: "Actual damage will usually be lower due to patrols and drones"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellLowWallsMulti",
+      label: "Garrison bolster factor for damaged walls",
+      hint: "Multiplies target defense rating by this when close to 0 wall integrity, half as much increase at half integrity"
+    }),
+    Object.freeze({ kind: "header", label: "Patrol Size" }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "hellHandlePatrolSize",
+      label: "Automatically adjust patrol size",
+      hint: "Sets patrol attack rating based on current threat, lowers it depending on buildings, increases it to the minimum rating, and finally increases it based on dead soldiers. Handling patrol count has to be turned on."
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellPatrolMinRating",
+      label: "Minimum patrol attack rating",
+      hint: "Will never go below this"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellPatrolThreatPercent",
+      label: "Percent of current threat as base patrol rating",
+      hint: "Demon encounters have a rating of 2 to 10 percent of current threat"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellPatrolDroneMod",
+      label: "&emsp;Lower Rating for each active Predator Drone by",
+      hint: "Predators reduce threat before patrols fight"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellPatrolDroidMod",
+      label: "&emsp;Lower Rating for each active War Droid by",
+      hint: "War Droids boost patrol attack rating by 1 or 2 soldiers depending on tech"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellPatrolBootcampMod",
+      label: "&emsp;Lower Rating for each Bootcamp by",
+      hint: "Bootcamps help regenerate soldiers faster"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellBolsterPatrolRating",
+      label: "Increase patrol rating by up to this when soldiers die",
+      hint: "Larger patrols are less effective, but also have fewer deaths"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellBolsterPatrolPercentTop",
+      label: "&emsp;Start increasing patrol rating at this home garrison fill percent",
+      hint: "This is the higher number"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellBolsterPatrolPercentBottom",
+      label: "&emsp;Full patrol rating increase below this home garrison fill percent",
+      hint: "This is the lower number"
+    }),
+    Object.freeze({ kind: "header", label: "Attractors" }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellAttractorBottomThreat",
+      label: "&emsp;All Attractors on below this threat",
+      hint: "Turn more and more attractors off when getting nearer to the top threat. Auto Power needs to be on for this to work."
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "hellAttractorTopThreat",
+      label: "&emsp;All Attractors off above this threat",
+      hint: "Turn more and more attractors off when getting nearer to the top threat. Auto Power needs to be on for this to work."
+    }),
+    Object.freeze({ kind: "header", label: "Warlord Specific Settings" }),
+    Object.freeze({
+      kind: "toggle",
+      settingName: "warlordHandleFortress",
+      label: "Automatically attack enemy fortresses during Warlord",
+      hint: "Attacks an enemy fortress when minions are above the specified threshold"
+    }),
+    Object.freeze({
+      kind: "number",
+      settingName: "warlordMinimumMinions",
+      label: "&emsp;Minimum minions required to attack an enemy fortress",
+      hint: "Will not attack if there are fewer than this many minions"
+    })
+  ]);
+  function getHellSettingsReadModel() {
+    return Object.freeze({ sectionId: "hell", sectionName: "Hell", controls: controls3 });
   }
 
   // src/ui/production-settings.ts
@@ -46480,186 +46677,6 @@
     };
   }
 
-  // src/ui/hell-settings.ts
-  function createHellSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const addSettingsHeader12 = liveFunction(
-      () => getDependency("addSettingsHeader1")
-    );
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const buildSettingsSection22 = liveFunction(
-      () => getDependency("buildSettingsSection2")
-    );
-    const document2 = liveObject4(() => getDependency("document"));
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetHellSettings2 = liveFunction(
-      () => getDependency("resetHellSettings")
-    );
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildHellSettingsImpl(parentNode, secondaryPrefix) {
-      let sectionId = "hell";
-      let sectionName = "Hell";
-      let resetFunction = function() {
-        resetHellSettings2(true);
-        updateSettingsFromState2();
-        updateHellSettingsContent2(secondaryPrefix);
-        resetCheckbox2("autoHell");
-      };
-      buildSettingsSection22(
-        parentNode,
-        secondaryPrefix,
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateHellSettingsContent2
-      );
-    }
-    function updateHellSettingsContentImpl(secondaryPrefix) {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2(`#script_${secondaryPrefix}hellContent`);
-      currentNode.empty().off("*");
-      addSettingsHeader12(currentNode, "Entering Hell");
-      addSettingsNumber2(
-        currentNode,
-        "hellHomeGarrison",
-        "Soldiers to stay out of hell",
-        "Home garrison maximum"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "hellMinSoldiers",
-        "Minimum soldiers to be available for hell (pull out if below)",
-        "Don't enter hell if not enough soldiers, or get out if already in"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "hellMinSoldiersPercent",
-        "Alive soldier percentage for entering hell",
-        "Don't enter hell if too many soldiers are dead, but don't get out"
-      );
-      addSettingsHeader12(currentNode, "Hell Garrison");
-      addSettingsToggle2(
-        currentNode,
-        "hellAssaultReserve",
-        "Always reserve hell troops to Secure the Pit",
-        "With this option enabled hell soldiers will be put to fortress once Secure the Pit is unlocked, to fulfil its costs. It makes saving resources and setting triggers for it easier, at cost of less efficient use of manpower."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "hellTargetFortressDamage",
-        "Target wall damage per siege (overestimates threat)",
-        "Actual damage will usually be lower due to patrols and drones"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "hellLowWallsMulti",
-        "Garrison bolster factor for damaged walls",
-        "Multiplies target defense rating by this when close to 0 wall integrity, half as much increase at half integrity"
-      );
-      addSettingsHeader12(currentNode, "Patrol Size");
-      addSettingsToggle2(
-        currentNode,
-        "hellHandlePatrolSize",
-        "Automatically adjust patrol size",
-        "Sets patrol attack rating based on current threat, lowers it depending on buildings, increases it to the minimum rating, and finally increases it based on dead soldiers. Handling patrol count has to be turned on."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "hellPatrolMinRating",
-        "Minimum patrol attack rating",
-        "Will never go below this"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "hellPatrolThreatPercent",
-        "Percent of current threat as base patrol rating",
-        "Demon encounters have a rating of 2 to 10 percent of current threat"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "hellPatrolDroneMod",
-        "&emsp;Lower Rating for each active Predator Drone by",
-        "Predators reduce threat before patrols fight"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "hellPatrolDroidMod",
-        "&emsp;Lower Rating for each active War Droid by",
-        "War Droids boost patrol attack rating by 1 or 2 soldiers depending on tech"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "hellPatrolBootcampMod",
-        "&emsp;Lower Rating for each Bootcamp by",
-        "Bootcamps help regenerate soldiers faster"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "hellBolsterPatrolRating",
-        "Increase patrol rating by up to this when soldiers die",
-        "Larger patrols are less effective, but also have fewer deaths"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "hellBolsterPatrolPercentTop",
-        "&emsp;Start increasing patrol rating at this home garrison fill percent",
-        "This is the higher number"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "hellBolsterPatrolPercentBottom",
-        "&emsp;Full patrol rating increase below this home garrison fill percent",
-        "This is the lower number"
-      );
-      addSettingsHeader12(currentNode, "Attractors");
-      addSettingsNumber2(
-        currentNode,
-        "hellAttractorBottomThreat",
-        "&emsp;All Attractors on below this threat",
-        "Turn more and more attractors off when getting nearer to the top threat. Auto Power needs to be on for this to work."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "hellAttractorTopThreat",
-        "&emsp;All Attractors off above this threat",
-        "Turn more and more attractors off when getting nearer to the top threat. Auto Power needs to be on for this to work."
-      );
-      addSettingsHeader12(currentNode, "Warlord Specific Settings");
-      addSettingsToggle2(
-        currentNode,
-        "warlordHandleFortress",
-        "Automatically attack enemy fortresses during Warlord",
-        "Attacks an enemy fortress when minions are above the specified threshold"
-      );
-      addSettingsNumber2(
-        currentNode,
-        "warlordMinimumMinions",
-        "&emsp;Minimum minions required to attack an enemy fortress",
-        "Will not attack if there are fewer than this many minions"
-      );
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function buildHellSettings2(...args) {
-      const implementation = getOverride("buildHellSettings") ?? buildHellSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateHellSettingsContent2(...args) {
-      const implementation = getOverride("updateHellSettingsContent") ?? updateHellSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    return { buildHellSettings: buildHellSettings2, updateHellSettingsContent: updateHellSettingsContent2 };
-  }
-
   // src/ui/fleet-settings.ts
   function createFleetSettings({
     getDependency,
@@ -48413,31 +48430,31 @@
       modal.append(
         '<div><h3 class="has-text-danger">Custom Race Presets</h3> - <span class="has-text-warning">Automation Custom Lab</span></div>'
       );
-      let controls3 = $2(
+      let controls4 = $2(
         '<div class="fields" style="margin-bottom:10px;"></div>'
       ).appendTo(modal);
       let presetSelect = $2(
         '<select class="select" style="width:220px;"></select>'
-      ).appendTo(controls3);
+      ).appendTo(controls4);
       settingsRaw2.prestigeCustomRacePresets.forEach((item, index) => {
         $2("<option></option>").val(String(index)).text(item.name || `Preset ${index + 1}`).appendTo(presetSelect);
       });
       presetSelect.val(String(presetIndex));
       let presetName = $2(
         '<input class="input" type="text" maxlength="60" style="width:180px;" />'
-      ).val(preset.name || `Preset ${presetIndex + 1}`).appendTo(controls3);
+      ).val(preset.name || `Preset ${presetIndex + 1}`).appendTo(controls4);
       let addButton = $2(
         '<button class="button" type="button">Add</button>'
-      ).appendTo(controls3);
+      ).appendTo(controls4);
       let cloneButton = $2(
         '<button class="button" type="button">Clone</button>'
-      ).appendTo(controls3);
+      ).appendTo(controls4);
       let deleteButton = $2(
         '<button class="button" type="button">Delete</button>'
-      ).appendTo(controls3);
+      ).appendTo(controls4);
       let captureButton = $2(
         '<button class="button" type="button">Capture saved custom</button>'
-      ).appendTo(controls3);
+      ).appendTo(controls4);
       let summary = $2(
         '<div class="has-text-warning" style="margin:8px 0; font-weight:bold;"></div>'
       ).appendTo(modal);
@@ -52244,26 +52261,32 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getActions: () => warSettingsTestContext?.actions ?? warSettingsActions
     });
     const { buildWarSettings, updateWarSettingsContent } = warSettingsBrowserAdapter;
-    const hellSettingsOverrides = {};
-    const getHellSettingsDependency = createDependencyResolver(
-      hellSettingsOverrides,
-      {
-        $: () => $,
-        addSettingsHeader1: () => addSettingsHeader1,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsToggle: () => addSettingsToggle,
-        buildSettingsSection2: () => buildSettingsSection2,
-        document: () => document,
-        resetCheckbox: () => resetCheckbox,
-        resetHellSettings: () => resetHellSettings,
-        updateSettingsFromState: () => updateSettingsFromState
+    let hellSettingsTestContext;
+    const hellSettingsReader = { read: getHellSettingsReadModel };
+    const hellSettingsActions = {
+      buildSettingsSection2: (...args) => buildSettingsSection2(...args),
+      addSettingsHeader1: (...args) => addSettingsHeader1(...args),
+      addSettingsNumber: (...args) => addSettingsNumber(...args),
+      addSettingsToggle: (...args) => addSettingsToggle(...args)
+    };
+    const hellSettingsIntentHandler = createHellSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (hellSettingsTestContext?.resetHellSettings ?? resetHellSettings)(true),
+        persist: () => (hellSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      renderSettingsContent: (secondaryPrefix) => updateHellSettingsContent(secondaryPrefix),
+      effects: {
+        resetCheckboxes: () => (hellSettingsTestContext?.resetCheckbox ?? resetCheckbox)("autoHell")
       }
-    );
-    const hellSettings = createHellSettings({
-      getDependency: getHellSettingsDependency,
-      getOverride: (name) => hellSettingsOverrides[name]
     });
-    const { buildHellSettings, updateHellSettingsContent } = hellSettings;
+    const hellSettingsBrowserAdapter = createHellSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      reader: hellSettingsReader,
+      intents: hellSettingsIntentHandler,
+      getActions: () => hellSettingsTestContext?.actions ?? hellSettingsActions
+    });
+    const { buildHellSettings, updateHellSettingsContent } = hellSettingsBrowserAdapter;
     const fleetSettingsOverrides = {};
     const getFleetSettingsDependency = createDependencyResolver(
       fleetSettingsOverrides,
@@ -55805,7 +55828,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           prestige: prestigeSettings,
           evolution: evolutionSettings,
           trigger: triggerSettings,
-          hell: hellSettings,
           fleet: fleetSettings,
           mech: mechSettings
         },
@@ -55813,7 +55835,6 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
           Object.assign(prestigeSettingsOverrides, context);
           Object.assign(evolutionSettingsOverrides, context);
           Object.assign(triggerSettingsOverrides, context);
-          Object.assign(hellSettingsOverrides, context);
           Object.assign(fleetSettingsOverrides, context);
           Object.assign(mechSettingsOverrides, context);
         }
@@ -55834,6 +55855,12 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
         warSettings: warSettingsBrowserAdapter,
         setWarSettingsTestContext(context) {
           warSettingsTestContext = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        hellSettings: hellSettingsBrowserAdapter,
+        setHellSettingsTestContext(context) {
+          hellSettingsTestContext = context;
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {

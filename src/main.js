@@ -446,12 +446,14 @@ import {
 import { createWarSettingsIntentHandler } from "./application/war-settings.ts";
 import { createWarSettingsBrowserAdapter } from "./adapters/browser/war-settings.ts";
 import { createWarSettingsEvolveAdapter } from "./adapters/evolve/war-settings.ts";
+import { createHellSettingsIntentHandler } from "./application/hell-settings.ts";
+import { createHellSettingsBrowserAdapter } from "./adapters/browser/hell-settings.ts";
+import { getHellSettingsReadModel } from "./domain/hell-settings.ts";
 import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
 import { createPrestigeSettings } from "./ui/prestige-settings.ts";
 import { createEvolutionSettings } from "./ui/evolution-settings.ts";
 import { createTriggerSettings } from "./ui/trigger-settings.ts";
-import { createHellSettings } from "./ui/hell-settings.ts";
 import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createMechSettings } from "./ui/mech-settings.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
@@ -1773,26 +1775,40 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildWarSettings, updateWarSettingsContent } =
     warSettingsBrowserAdapter;
 
-  const hellSettingsOverrides = {};
-  const getHellSettingsDependency = createDependencyResolver(
-    hellSettingsOverrides,
-    {
-      $: () => $,
-      addSettingsHeader1: () => addSettingsHeader1,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsToggle: () => addSettingsToggle,
-      buildSettingsSection2: () => buildSettingsSection2,
-      document: () => document,
-      resetCheckbox: () => resetCheckbox,
-      resetHellSettings: () => resetHellSettings,
-      updateSettingsFromState: () => updateSettingsFromState,
+  let hellSettingsTestContext;
+  const hellSettingsReader = { read: getHellSettingsReadModel };
+  const hellSettingsActions = {
+    buildSettingsSection2: (...args) => buildSettingsSection2(...args),
+    addSettingsHeader1: (...args) => addSettingsHeader1(...args),
+    addSettingsNumber: (...args) => addSettingsNumber(...args),
+    addSettingsToggle: (...args) => addSettingsToggle(...args),
+  };
+  const hellSettingsIntentHandler = createHellSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (hellSettingsTestContext?.resetHellSettings ?? resetHellSettings)(true),
+      persist: () =>
+        (
+          hellSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
     },
-  );
-  const hellSettings = createHellSettings({
-    getDependency: getHellSettingsDependency,
-    getOverride: (name) => hellSettingsOverrides[name],
+    renderSettingsContent: (secondaryPrefix) =>
+      updateHellSettingsContent(secondaryPrefix),
+    effects: {
+      resetCheckboxes: () =>
+        (hellSettingsTestContext?.resetCheckbox ?? resetCheckbox)("autoHell"),
+    },
   });
-  const { buildHellSettings, updateHellSettingsContent } = hellSettings;
+  const hellSettingsBrowserAdapter = createHellSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    reader: hellSettingsReader,
+    intents: hellSettingsIntentHandler,
+    getActions: () => hellSettingsTestContext?.actions ?? hellSettingsActions,
+  });
+  const { buildHellSettings, updateHellSettingsContent } =
+    hellSettingsBrowserAdapter;
 
   const fleetSettingsOverrides = {};
   const getFleetSettingsDependency = createDependencyResolver(
@@ -5744,7 +5760,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         prestige: prestigeSettings,
         evolution: evolutionSettings,
         trigger: triggerSettings,
-        hell: hellSettings,
         fleet: fleetSettings,
         mech: mechSettings,
       },
@@ -5752,7 +5767,6 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
         Object.assign(prestigeSettingsOverrides, context);
         Object.assign(evolutionSettingsOverrides, context);
         Object.assign(triggerSettingsOverrides, context);
-        Object.assign(hellSettingsOverrides, context);
         Object.assign(fleetSettingsOverrides, context);
         Object.assign(mechSettingsOverrides, context);
       },
@@ -5773,6 +5787,12 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       warSettings: warSettingsBrowserAdapter,
       setWarSettingsTestContext(context) {
         warSettingsTestContext = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      hellSettings: hellSettingsBrowserAdapter,
+      setHellSettingsTestContext(context) {
+        hellSettingsTestContext = context;
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {

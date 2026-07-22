@@ -79,7 +79,6 @@ assert.deepEqual(Object.keys(boundaries), [
   "prestige",
   "evolution",
   "trigger",
-  "hell",
   "fleet",
   "mech",
 ]);
@@ -169,7 +168,6 @@ assert.deepEqual(
     { kind: "secondary", prefix: "", id: "prestige", label: "Prestige" },
     { kind: "primary", id: "evolution", label: "Evolution" },
     { kind: "primary", id: "trigger", label: "Trigger" },
-    { kind: "secondary", prefix: "", id: "hell", label: "Hell" },
     { kind: "secondary", prefix: "", id: "fleet", label: "Fleet" },
     { kind: "primary", id: "mech", label: "Mech & Spire" },
   ],
@@ -193,9 +191,6 @@ assert.deepEqual(behavioralTrace, [
   "reset:trigger:true",
   "update:trigger:",
   "checkbox:autoTrigger",
-  "reset:hell:true",
-  "update:hell:",
-  "checkbox:autoHell",
   "reset:fleet:true",
   "update:fleet:",
   "checkbox:autoFleet",
@@ -205,4 +200,4 @@ assert.deepEqual(behavioralTrace, [
   "remove:mechInfo",
 ]);
 
-console.log("6 settings-boundary bundled characterization tests passed");
+console.log("5 settings-boundary bundled characterization tests passed");
