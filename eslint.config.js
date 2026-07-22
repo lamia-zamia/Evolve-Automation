@@ -14,6 +14,7 @@ export default defineConfig(
       "docs/**",
       "progress_log/**",
       "tools/**",
+      "evolve_automation.user_original.js",
     ],
   },
   {
