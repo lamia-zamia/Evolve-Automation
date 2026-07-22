@@ -6693,7 +6693,7 @@
   function createEntityClasses({
     dependencies
   }) {
-    const liveObject4 = (key) => new Proxy(
+    const liveObject3 = (key) => new Proxy(
       {},
       {
         get(_target, property) {
@@ -6734,48 +6734,48 @@
     );
     const liveFunction = (key) => ((...args) => dependencies[key]()(...args));
     const $2 = liveFunction("$");
-    const arpaIds = liveObject4("arpaIds");
-    const buildingIds = liveObject4("buildingIds");
-    const buildings = liveObject4("buildings");
+    const arpaIds = liveObject3("arpaIds");
+    const buildingIds = liveObject3("buildingIds");
+    const buildings = liveObject3("buildings");
     const checkAffordableCustom = liveFunction("checkAffordableCustom");
-    const checkTypes = liveObject4("checkTypes");
-    const conflictingTraits = liveObject4("conflictingTraits");
-    const document2 = liveObject4("document");
-    const fanatAchievements = liveObject4("fanatAchievements");
+    const checkTypes = liveObject3("checkTypes");
+    const conflictingTraits = liveObject3("conflictingTraits");
+    const document2 = liveObject3("document");
+    const fanatAchievements = liveObject3("fanatAchievements");
     const Fibonacci2 = liveFunction("Fibonacci");
-    const game = liveObject4("game");
-    const GameLog = liveObject4("GameLog");
+    const game = liveObject3("game");
+    const GameLog = liveObject3("GameLog");
     const getAchievementStar = liveFunction("getAchievementStar");
     const getCitadelConsumption = liveFunction("getCitadelConsumption");
     const getStarLevel = liveFunction("getStarLevel");
     const getVueById = liveFunction("getVueById");
     const haveTask = liveFunction("haveTask");
     const haveTech = liveFunction("haveTech");
-    const jobs = liveObject4("jobs");
-    const KeyManager = liveObject4("KeyManager");
-    const logIgnore = liveObject4("logIgnore");
+    const jobs = liveObject3("jobs");
+    const KeyManager = liveObject3("KeyManager");
+    const logIgnore = liveObject3("logIgnore");
     const logPrestige = liveFunction("logPrestige");
-    const MutableTraitManager = liveObject4("MutableTraitManager");
-    const mutationCostMultipliers = liveObject4("mutationCostMultipliers");
-    const mutationCostMultipliersGenus = liveObject4(
+    const MutableTraitManager = liveObject3("MutableTraitManager");
+    const mutationCostMultipliers = liveObject3("mutationCostMultipliers");
+    const mutationCostMultipliersGenus = liveObject3(
       "mutationCostMultipliersGenus"
     );
     const normalizeProperties = liveFunction("normalizeProperties");
-    const poly = liveObject4("poly");
-    const races = liveObject4("races");
-    const resources = liveObject4("resources");
-    const retBools = liveObject4("retBools");
-    const settings = liveObject4("settings");
-    const settingsRaw = liveObject4("settingsRaw");
-    const specialRaceTraits = liveObject4("specialRaceTraits");
-    const state = liveObject4("state");
-    const techIds = liveObject4("techIds");
+    const poly = liveObject3("poly");
+    const races = liveObject3("races");
+    const resources = liveObject3("resources");
+    const retBools = liveObject3("retBools");
+    const settings = liveObject3("settings");
+    const settingsRaw = liveObject3("settingsRaw");
+    const specialRaceTraits = liveObject3("specialRaceTraits");
+    const state = liveObject3("state");
+    const techIds = liveObject3("techIds");
     const ticksPerSecond = liveFunction("ticksPerSecond");
     const traitVal = liveFunction("traitVal");
-    const TriggerManager = liveObject4("TriggerManager");
-    const WarManager = liveObject4("WarManager");
-    const win = liveObject4("win");
-    const WindowManager = liveObject4("WindowManager");
+    const TriggerManager = liveObject3("TriggerManager");
+    const WarManager = liveObject3("WarManager");
+    const win = liveObject3("win");
+    const WindowManager = liveObject3("WindowManager");
     class Job {
       constructor(id, name, flags) {
         this._originalId = id;
@@ -8668,18 +8668,6 @@
   }
 
   // src/game/compatibility.ts
-  function liveObject(getValue) {
-    return new Proxy({}, {
-      get: (_target, property) => Reflect.get(getValue(), property),
-      set: (_target, property, value) => Reflect.set(getValue(), property, value),
-      has: (_target, property) => Reflect.has(getValue(), property),
-      ownKeys: () => Reflect.ownKeys(getValue()),
-      getOwnPropertyDescriptor: (_target, property) => {
-        const descriptor = Reflect.getOwnPropertyDescriptor(getValue(), property);
-        return descriptor ? { ...descriptor, configurable: true } : void 0;
-      }
-    });
-  }
   function createGameCompatibility({
     getGame,
     getBuildings,
@@ -8691,8 +8679,6 @@
     cloneIntoPage,
     getDate
   }) {
-    const game = liveObject(getGame);
-    const buildings = liveObject(getBuildings);
     const traitVal = (...args) => getTraitVal()(...args);
     const haveTech = (...args) => getHaveTech()(...args);
     const poly = {
@@ -8743,7 +8729,7 @@
       },
       // function govPrice(gov) from civics.js
       govPrice: function(e) {
-        let o = game.global.civic.foreign[`gov${e}`], i = 15384 * o.eco;
+        let o = getGame().global.civic.foreign[`gov${e}`], i = 15384 * o.eco;
         return i *= 1 + 1.6 * o.hstl / 100, +(i *= 1 - 0.25 * o.unrest / 100).toFixed(0);
       },
       // export const galaxyOffers from resources.js
@@ -8762,7 +8748,7 @@
         {
           buy: { res: "Graphene", vol: 25 },
           sell: {
-            res: () => game.global.race.kindling_kindred || game.global.race.smoldering ? game.global.race.smoldering ? "Chrysotile" : "Stone" : "Lumber",
+            res: () => getGame().global.race.kindling_kindred || getGame().global.race.smoldering ? getGame().global.race.smoldering ? "Chrysotile" : "Stone" : "Lumber",
             vol: 1e3
           }
         },
@@ -9957,13 +9943,17 @@
       hellSupression: function(t, e) {
         switch (t) {
           case "ruins": {
-            let t2 = e || buildings.RuinsGuardPost.stateOnCount, r = 75 * buildings.RuinsArcology.stateOnCount, a = game.armyRating(t2 * traitVal("high_pop", 0, 1), "hellArmy", 0);
+            let t2 = e || getBuildings().RuinsGuardPost.stateOnCount, r = 75 * getBuildings().RuinsArcology.stateOnCount, a = getGame().armyRating(
+              t2 * traitVal("high_pop", 0, 1),
+              "hellArmy",
+              0
+            );
             a *= traitVal("holy", 1, "+");
             let l = (a + r) / 5e3;
             return { supress: l > 1 ? 1 : l, rating: a + r };
           }
           case "gate": {
-            let t2 = poly.hellSupression("ruins", e), r = 100 * buildings.GateTurret.stateOnCount;
+            let t2 = poly.hellSupression("ruins", e), r = 100 * getBuildings().GateTurret.stateOnCount;
             r *= traitVal("holy", 1, "+");
             let a = (t2.rating + r) / 7500;
             return { supress: a > 1 ? 1 : a, rating: t2.rating + r };
@@ -9974,11 +9964,11 @@
       },
       // function taxCap(min) from civics.js
       taxCap: function(e) {
-        let a = (haveTech("currency", 5) || game.global.race.terrifying) && !game.global.race.noble;
+        let a = (haveTech("currency", 5) || getGame().global.race.terrifying) && !getGame().global.race.noble;
         if (e) return a ? 0 : traitVal("noble", 0, 10);
         {
           let e2 = traitVal("noble", 1, 30);
-          return a && (e2 += 20), "oligarchy" === game.global.civic.govern.type && (e2 += "bureaucrat" === getGovernor() ? 25 : 20), "noble" === getGovernor() && (e2 += 20), game.global.race["wish"] && game.global.race["wishStats"] && (e2 += game.global.race.wishStats.tax), e2;
+          return a && (e2 += 20), "oligarchy" === getGame().global.civic.govern.type && (e2 += "bureaucrat" === getGovernor() ? 25 : 20), "noble" === getGovernor() && (e2 += 20), getGame().global.race["wish"] && getGame().global.race["wishStats"] && (e2 += getGame().global.race.wishStats.tax), e2;
         }
       },
       // export function mechCost(size,infernal) from portal.js
@@ -9987,7 +9977,7 @@
         switch (e) {
           case "small":
             {
-              let e2 = (x ?? game.global.blood.prepared) >= 2 ? 5e4 : 75e3;
+              let e2 = (x ?? getGame().global.blood.prepared) >= 2 ? 5e4 : 75e3;
               r = a ? 2.5 * e2 : e2, l = a ? 20 : 1;
             }
             break;
@@ -10001,7 +9991,7 @@
             r = a ? 15e5 : 75e4, l = a ? 1500 : 75;
             break;
           case "collector": {
-            let e2 = (x ?? game.global.blood.prepared) >= 2 ? 8e3 : 1e4;
+            let e2 = (x ?? getGame().global.blood.prepared) >= 2 ? 8e3 : 1e4;
             r = a ? 2.5 * e2 : e2, l = 1;
           }
         }
@@ -10009,7 +9999,7 @@
       },
       // function terrainRating(mech,rating,effects) from portal.js
       terrainRating: function(e, i, s, x) {
-        return !e.equip.includes("special") || "small" !== e.size && "medium" !== e.size && "collector" !== e.size || i < 1 && (i += (1 - i) * (s.includes("gravity") ? 0.1 : 0.2)), "small" !== e.size && i < 1 && (i += (s.includes("fog") || s.includes("dark") ? 5e-3 : 0.01) * (x ?? game.global.portal.mechbay.scouts)) > 1 && (i = 1), i;
+        return !e.equip.includes("special") || "small" !== e.size && "medium" !== e.size && "collector" !== e.size || i < 1 && (i += (1 - i) * (s.includes("gravity") ? 0.1 : 0.2)), "small" !== e.size && i < 1 && (i += (s.includes("fog") || s.includes("dark") ? 5e-3 : 0.01) * (x ?? getGame().global.portal.mechbay.scouts)) > 1 && (i = 1), i;
       },
       // function weaponPower(mech,power) from portal.js
       weaponPower: function(e, i) {
@@ -10018,7 +10008,7 @@
       // export function timeFormat(time) from functions.js
       timeFormat: function(e) {
         let i;
-        if (e < 0) i = game.loc("time_never");
+        if (e < 0) i = getGame().loc("time_never");
         else if ((e = +e.toFixed(0)) > 60) {
           let l = e % 60, s = (e - l) / 60;
           if (s >= 60) {
@@ -10033,7 +10023,7 @@
       },
       // export universeAffix(universe) from achieve.js
       universeAffix: function(e) {
-        switch (e = e || game.global.race.universe) {
+        switch (e = e || getGame().global.race.universe) {
           case "evil":
             return "e";
           case "antimatter":
@@ -10114,10 +10104,13 @@
         getVueById("createHead")?.buildContainerDesc().match(/(\d+)/g)[1] ?? 0
       ),
       // Firefox compatibility:
-      adjustCosts: (c_action, wiki) => game.adjustCosts(cloneIntoPage(c_action, { cloneFunctions: true }), wiki),
-      loc: (key, variables) => game.loc(key, cloneIntoPage(variables)),
-      messageQueue: (msg, color, dnr, tags) => game.messageQueue(msg, color, dnr, cloneIntoPage(tags)),
-      shipCosts: (bp) => game.shipCosts(cloneIntoPage(bp))
+      adjustCosts: (c_action, wiki) => getGame().adjustCosts(
+        cloneIntoPage(c_action, { cloneFunctions: true }),
+        wiki
+      ),
+      loc: (key, variables) => getGame().loc(key, cloneIntoPage(variables)),
+      messageQueue: (msg, color, dnr, tags) => getGame().messageQueue(msg, color, dnr, cloneIntoPage(tags)),
+      shipCosts: (bp) => getGame().shipCosts(cloneIntoPage(bp))
     };
     return poly;
   }
@@ -13251,7 +13244,7 @@
   }
 
   // src/game/state-initialization.ts
-  function liveObject2(getValue) {
+  function liveObject(getValue) {
     return new Proxy({}, {
       get: (_target, property) => Reflect.get(getValue(), property),
       set: (_target, property, value) => Reflect.set(getValue(), property, value),
@@ -13278,10 +13271,10 @@
     getHaveTech,
     log
   }) {
-    const game = liveObject2(getGame);
-    const resources = liveObject2(getResources);
-    const buildings = liveObject2(getBuildings);
-    const projects = liveObject2(getProjects);
+    const game = liveObject(getGame);
+    const resources = liveObject(getResources);
+    const buildings = liveObject(getBuildings);
+    const projects = liveObject(getProjects);
     const updateCraftCost = (...args) => getUpdateCraftCost()(...args);
     const updateTabs = (...args) => getUpdateTabs()(...args);
     const isLumberRace = (...args) => getIsLumberRace()(...args);
@@ -23515,7 +23508,7 @@
   }
 
   // src/policies/building-weighting.ts
-  function liveObject3(getValue) {
+  function liveObject2(getValue) {
     return new Proxy({}, {
       get: (_target, property) => Reflect.get(getValue(), property),
       set: (_target, property, value) => Reflect.set(getValue(), property, value),
@@ -23560,14 +23553,14 @@
     getCitadelConsumptionFn,
     ResourceAction
   }) {
-    const game = liveObject3(getGame);
-    const settings = liveObject3(getSettings);
-    const state = liveObject3(getState);
-    const resources = liveObject3(getResources);
-    const buildings = liveObject3(getBuildings);
-    const poly = liveObject3(getPoly);
-    const MechManager = liveObject3(getMechManager);
-    const techIds = liveObject3(getTechIds);
+    const game = liveObject2(getGame);
+    const settings = liveObject2(getSettings);
+    const state = liveObject2(getState);
+    const resources = liveObject2(getResources);
+    const buildings = liveObject2(getBuildings);
+    const poly = liveObject2(getPoly);
+    const MechManager = liveObject2(getMechManager);
+    const techIds = liveObject2(getTechIds);
     const traitVal = (...args) => getTraitVal()(...args);
     const haveTech = (...args) => getHaveTech()(...args);
     const haveTask = (...args) => getHaveTask()(...args);

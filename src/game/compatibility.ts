@@ -13,19 +13,6 @@ type GameCompatibilityDependencies = {
   getDate: () => { getMonth: () => number; getDate: () => number };
 };
 
-function liveObject(getValue: () => LooseObject): LooseObject {
-  return new Proxy({} as LooseObject, {
-    get: (_target, property) => Reflect.get(getValue(), property),
-    set: (_target, property, value) => Reflect.set(getValue(), property, value),
-    has: (_target, property) => Reflect.has(getValue(), property),
-    ownKeys: () => Reflect.ownKeys(getValue()),
-    getOwnPropertyDescriptor: (_target, property) => {
-      const descriptor = Reflect.getOwnPropertyDescriptor(getValue(), property);
-      return descriptor ? { ...descriptor, configurable: true } : undefined;
-    },
-  });
-}
-
 export function createGameCompatibility({
   getGame,
   getBuildings,
@@ -37,8 +24,6 @@ export function createGameCompatibility({
   cloneIntoPage,
   getDate,
 }: GameCompatibilityDependencies) {
-  const game = liveObject(getGame);
-  const buildings = liveObject(getBuildings);
   const traitVal: LooseFunction = (...args) => getTraitVal()(...args);
   const haveTech: LooseFunction = (...args) => getHaveTech()(...args);
 
@@ -132,7 +117,7 @@ export function createGameCompatibility({
     },
     // function govPrice(gov) from civics.js
     govPrice: function (e) {
-      let o = game.global.civic.foreign[`gov${e}`],
+      let o = getGame().global.civic.foreign[`gov${e}`],
         i = 15384 * o.eco;
       return (
         (i *= 1 + (1.6 * o.hstl) / 100),
@@ -156,8 +141,9 @@ export function createGameCompatibility({
         buy: { res: "Graphene", vol: 25 },
         sell: {
           res: () =>
-            game.global.race.kindling_kindred || game.global.race.smoldering
-              ? game.global.race.smoldering
+            getGame().global.race.kindling_kindred ||
+            getGame().global.race.smoldering
+              ? getGame().global.race.smoldering
                 ? "Chrysotile"
                 : "Stone"
               : "Lumber",
@@ -1355,16 +1341,20 @@ export function createGameCompatibility({
     hellSupression: function (t, e) {
       switch (t) {
         case "ruins": {
-          let t = e || buildings.RuinsGuardPost.stateOnCount,
-            r = 75 * buildings.RuinsArcology.stateOnCount,
-            a = game.armyRating(t * traitVal("high_pop", 0, 1), "hellArmy", 0);
+          let t = e || getBuildings().RuinsGuardPost.stateOnCount,
+            r = 75 * getBuildings().RuinsArcology.stateOnCount,
+            a = getGame().armyRating(
+              t * traitVal("high_pop", 0, 1),
+              "hellArmy",
+              0,
+            );
           a *= traitVal("holy", 1, "+");
           let l = (a + r) / 5e3;
           return { supress: l > 1 ? 1 : l, rating: a + r };
         }
         case "gate": {
           let t = poly.hellSupression("ruins", e),
-            r = 100 * buildings.GateTurret.stateOnCount;
+            r = 100 * getBuildings().GateTurret.stateOnCount;
           r *= traitVal("holy", 1, "+");
           let a = (t.rating + r) / 7500;
           return { supress: a > 1 ? 1 : a, rating: t.rating + r };
@@ -1376,19 +1366,19 @@ export function createGameCompatibility({
     // function taxCap(min) from civics.js
     taxCap: function (e) {
       let a =
-        (haveTech("currency", 5) || game.global.race.terrifying) &&
-        !game.global.race.noble;
+        (haveTech("currency", 5) || getGame().global.race.terrifying) &&
+        !getGame().global.race.noble;
       if (e) return a ? 0 : traitVal("noble", 0, 10);
       {
         let e = traitVal("noble", 1, 30);
         return (
           a && (e += 20),
-          "oligarchy" === game.global.civic.govern.type &&
+          "oligarchy" === getGame().global.civic.govern.type &&
             (e += "bureaucrat" === getGovernor() ? 25 : 20),
           "noble" === getGovernor() && (e += 20),
-          game.global.race["wish"] &&
-            game.global.race["wishStats"] &&
-            (e += game.global.race.wishStats.tax),
+          getGame().global.race["wish"] &&
+            getGame().global.race["wishStats"] &&
+            (e += getGame().global.race.wishStats.tax),
           e
         );
       }
@@ -1400,7 +1390,7 @@ export function createGameCompatibility({
       switch (e) {
         case "small":
           {
-            let e = (x ?? game.global.blood.prepared) >= 2 ? 5e4 : 75e3;
+            let e = (x ?? getGame().global.blood.prepared) >= 2 ? 5e4 : 75e3;
             ((r = a ? 2.5 * e : e), (l = a ? 20 : 1));
           }
           break;
@@ -1414,7 +1404,7 @@ export function createGameCompatibility({
           ((r = a ? 15e5 : 75e4), (l = a ? 1500 : 75));
           break;
         case "collector": {
-          let e = (x ?? game.global.blood.prepared) >= 2 ? 8e3 : 1e4;
+          let e = (x ?? getGame().global.blood.prepared) >= 2 ? 8e3 : 1e4;
           ((r = a ? 2.5 * e : e), (l = 1));
         }
       }
@@ -1432,7 +1422,7 @@ export function createGameCompatibility({
           i < 1 &&
           (i +=
             (s.includes("fog") || s.includes("dark") ? 0.005 : 0.01) *
-            (x ?? game.global.portal.mechbay.scouts)) > 1 &&
+            (x ?? getGame().global.portal.mechbay.scouts)) > 1 &&
           (i = 1),
         i
       );
@@ -1454,7 +1444,7 @@ export function createGameCompatibility({
     // export function timeFormat(time) from functions.js
     timeFormat: function (e) {
       let i;
-      if (e < 0) i = game.loc("time_never");
+      if (e < 0) i = getGame().loc("time_never");
       else if ((e = +e.toFixed(0)) > 60) {
         let l: any = e % 60,
           s: any = (e - l) / 60;
@@ -1471,7 +1461,7 @@ export function createGameCompatibility({
     },
     // export universeAffix(universe) from achieve.js
     universeAffix: function (e) {
-      switch ((e = e || game.global.race.universe)) {
+      switch ((e = e || getGame().global.race.universe)) {
         case "evil":
           return "e";
         case "antimatter":
@@ -1557,11 +1547,14 @@ export function createGameCompatibility({
 
     // Firefox compatibility:
     adjustCosts: (c_action, wiki?) =>
-      game.adjustCosts(cloneIntoPage(c_action, { cloneFunctions: true }), wiki),
-    loc: (key, variables) => game.loc(key, cloneIntoPage(variables)),
+      getGame().adjustCosts(
+        cloneIntoPage(c_action, { cloneFunctions: true }),
+        wiki,
+      ),
+    loc: (key, variables) => getGame().loc(key, cloneIntoPage(variables)),
     messageQueue: (msg, color, dnr, tags) =>
-      game.messageQueue(msg, color, dnr, cloneIntoPage(tags)),
-    shipCosts: (bp) => game.shipCosts(cloneIntoPage(bp)),
+      getGame().messageQueue(msg, color, dnr, cloneIntoPage(tags)),
+    shipCosts: (bp) => getGame().shipCosts(cloneIntoPage(bp)),
   };
 
   return poly;
