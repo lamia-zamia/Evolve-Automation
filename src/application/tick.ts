@@ -16,18 +16,21 @@ export interface TickDependencies {
  * several controllers invalidate data the ones after them would otherwise misread, and the inline
  * comments record which dependency each position is protecting. The pure gating math lives in
  * domain/tick; the goal is re-sampled after updateState because that pass can change it.
+ *
+ * Returns whether the tick did real work (passed the throttle gate), so callers can time only
+ * working cycles.
  */
-export function runTick({ reader, controls }: TickDependencies): void {
+export function runTick({ reader, controls }: TickDependencies): boolean {
   const preamble = reader.samplePreamble();
   if (!shouldStartTick(preamble)) {
-    return;
+    return false;
   }
 
   controls.markGameTickConsumed();
   const scriptTick = advanceScriptTick(preamble.scriptTick);
   controls.setScriptTick(scriptTick);
   if (isThrottledTick(scriptTick, preamble.tickRate, preamble.accelerated)) {
-    return;
+    return false;
   }
 
   controls.updateScriptData(); // Sync exposed data with script variables
@@ -36,7 +39,7 @@ export function runTick({ reader, controls }: TickDependencies): void {
 
   // Redraw tabs once they unlocked
   if (controls.updateTabs()) {
-    return;
+    return true;
   }
 
   controls.updateState();
@@ -50,14 +53,14 @@ export function runTick({ reader, controls }: TickDependencies): void {
   // The user has turned off the master toggle. Stop taking any actions on behalf of the player.
   // We've still updated the UI etc. above; just not performing any actions.
   if (!s.masterScriptToggle) {
-    return;
+    return true;
   }
 
   if (s.goal === "Evolution") {
     if (s.autoEvolution) {
       controls.autoEvolution();
     }
-    return;
+    return true;
   }
 
   if (s.buildingAlwaysClick || s.autoBuild) {
@@ -192,4 +195,5 @@ export function runTick({ reader, controls }: TickDependencies): void {
 
   controls.keyManagerFinish();
   controls.recordSoulGem();
+  return true;
 }

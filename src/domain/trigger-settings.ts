@@ -1,11 +1,16 @@
 /** Immutable data needed to render the Trigger settings panel. */
 export type TriggerValue = string | number | boolean;
 
-export interface TriggerSettingsCheck {
+export interface TriggerSettingsInput {
   readonly arg: string;
   readonly options: unknown;
+}
+
+export interface TriggerSettingsCheck extends TriggerSettingsInput {
   readonly description: string;
 }
+
+export type TriggerSettingsActionInput = TriggerSettingsInput;
 
 export interface TriggerSettingsRow {
   readonly seq: number;
@@ -22,7 +27,7 @@ export interface TriggerSettingsReadModel {
   readonly sectionName: "Trigger";
   readonly rows: readonly TriggerSettingsRow[];
   readonly checks: Readonly<Record<string, TriggerSettingsCheck>>;
-  readonly actionInputs: Readonly<Record<string, TriggerSettingsCheck>>;
+  readonly actionInputs: Readonly<Record<string, TriggerSettingsActionInput>>;
   readonly booleanResultChecks: readonly string[];
 }
 
@@ -63,7 +68,7 @@ export function normalizeTriggerValue(
 export function createTriggerSettingsReadModel(input: {
   readonly rows: readonly TriggerSettingsRow[];
   readonly checks: Readonly<Record<string, TriggerSettingsCheck>>;
-  readonly actionInputs: Readonly<Record<string, TriggerSettingsCheck>>;
+  readonly actionInputs: Readonly<Record<string, TriggerSettingsActionInput>>;
   readonly booleanResultChecks: readonly string[];
 }): TriggerSettingsReadModel {
   return Object.freeze({

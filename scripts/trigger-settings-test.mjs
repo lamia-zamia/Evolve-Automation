@@ -23,6 +23,7 @@ const checks = {
   String: { arg: "string", options: null, desc: "Returns string" },
 };
 const argType = {
+  building_cost: { arg: "list_cb", options: () => ({}) },
   research: { arg: "list", options: { list: {} }, desc: "Research" },
   building: { arg: "list", options: { list: {} }, desc: "Building" },
   project: { arg: "list", options: { list: {} }, desc: "Project" },
@@ -38,6 +39,8 @@ const reader = createTriggerSettingsEvolveAdapter({
 const model = reader.read();
 assert.equal(model.rows.length, 1);
 assert.deepEqual(Object.keys(model.checks), ["Boolean", "Resource"]);
+assert.equal(model.actionInputs.building_cost.arg, "list_cb");
+assert.equal("description" in model.actionInputs.building_cost, false);
 assert.equal(Object.isFrozen(model), true);
 assert.throws(
   () =>

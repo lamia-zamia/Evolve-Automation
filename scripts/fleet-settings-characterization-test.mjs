@@ -58,7 +58,7 @@ sandbox.window.location = "https://pmotschmann.github.io/Evolve/";
 vm.runInNewContext(source, sandbox, { filename: "evolve_automation.user.js" });
 
 hooks.setFleetSettingsTestContext({
-  FleetManagerOuter: { ShipConfig: {} },
+  FleetManagerOuter: { Regions: [], ShipConfig: {} },
   galaxyRegions: [],
   game: { loc: (key) => key, actions: {} },
   settingsRaw: { overrides: {} },

@@ -68,8 +68,18 @@ hooks.setEjectorSettingsTestContext({
       isCraftable: () => false,
     },
   },
-  EjectManager: { isConsumable: () => true },
-  NaniteManager: { isConsumable: () => false },
+  EjectManager: {
+    Resources: ["Iron"],
+    isConsumable() {
+      return this.Resources.includes("Iron");
+    },
+  },
+  NaniteManager: {
+    Resources: [],
+    isConsumable() {
+      return this.Resources.includes("Iron");
+    },
+  },
   SupplyManager: {
     isConsumable: () => true,
     supplyOut: () => 2,
@@ -138,8 +148,18 @@ const actionContext = {
       isCraftable: () => false,
     },
   },
-  EjectManager: { isConsumable: () => true },
-  NaniteManager: { isConsumable: () => false },
+  EjectManager: {
+    Resources: ["Iron"],
+    isConsumable() {
+      return this.Resources.includes("Iron");
+    },
+  },
+  NaniteManager: {
+    Resources: [],
+    isConsumable() {
+      return this.Resources.includes("Iron");
+    },
+  },
   SupplyManager: {
     isConsumable: () => false,
     supplyOut: () => 0,

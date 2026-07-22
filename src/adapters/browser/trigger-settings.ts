@@ -1,5 +1,7 @@
 import {
   normalizeTriggerValue,
+  type TriggerSettingsActionInput,
+  type TriggerSettingsInput,
   type TriggerSettingsCheck,
   type TriggerSettingsIntent,
   type TriggerSettingsReadModel,
@@ -65,7 +67,7 @@ function optionsForChecks(
 
 function actionOptions(
   model: TriggerSettingsReadModel,
-): readonly [string, TriggerSettingsCheck][] {
+): readonly [string, TriggerSettingsActionInput][] {
   return Object.entries(model.actionInputs);
 }
 
@@ -91,7 +93,7 @@ export function createTriggerSettingsBrowserAdapter({
 
   function buildInput(
     node: JQueryNode,
-    check: TriggerSettingsCheck | undefined,
+    check: TriggerSettingsInput | undefined,
     value: TriggerValue,
     onChange: (value: unknown) => void,
   ): void {

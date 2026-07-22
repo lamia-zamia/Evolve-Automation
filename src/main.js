@@ -5662,8 +5662,57 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
     getEjectManager: () => EjectManager,
   });
 
-  const automate = () =>
-    runTick({ reader: tickReader, controls: tickControls });
+  // Cheap per-tick timer mirroring the pre-migration baseline probe in
+  // evolve_automation.user_original.js. Times only work ticks (runTick returns
+  // true past the throttle gate) so the numbers line up with the baseline.
+  // Inspect/reset from the console via window.__EAperf; __EAperf.report() prints
+  // on demand. Remove once the performance comparison is done.
+  const __EAperf = {
+    n: 0,
+    total: 0,
+    max: 0,
+    window: 0,
+    windowTotal: 0,
+    report() {
+      const avg = this.n ? this.total / this.n : 0;
+      const wavg = this.window ? this.windowTotal / this.window : 0;
+      console.log(
+        `[EA perf] work-ticks=${this.n} cum-avg=${avg.toFixed(3)}ms ` +
+          `last-${this.window}-avg=${wavg.toFixed(3)}ms max=${this.max.toFixed(3)}ms`,
+      );
+    },
+    record(ms) {
+      this.n++;
+      this.total += ms;
+      this.window++;
+      this.windowTotal += ms;
+      if (ms > this.max) this.max = ms;
+      if (this.window >= 200) {
+        this.report();
+        this.window = 0;
+        this.windowTotal = 0;
+      }
+    },
+    reset() {
+      this.n = this.total = this.max = this.window = this.windowTotal = 0;
+      console.log("[EA perf] reset");
+    },
+  };
+  window.__EAperf = __EAperf;
+  // performance.now() in the browser (sub-ms resolution); Date.now() only so the
+  // headless test sandbox, which has no performance global, does not crash.
+  const __eaNow =
+    typeof performance !== "undefined" && performance.now
+      ? () => performance.now()
+      : () => Date.now();
+
+  const automate = () => {
+    const t0 = __eaNow();
+    const worked = runTick({ reader: tickReader, controls: tickControls });
+    if (worked) {
+      __EAperf.record(__eaNow() - t0);
+    }
+  };
 
   if (window.__EA_TEST_HOOKS__) {
     Object.assign(window.__EA_TEST_HOOKS__, {

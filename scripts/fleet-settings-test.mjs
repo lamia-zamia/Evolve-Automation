@@ -8,21 +8,23 @@ const game = {
   loc: (key) => key,
   actions: {
     space: {
-      gxy_a: { info: { name: "Alpha" } },
-      gxy_b: { info: { name: () => "Beta" } },
+      spc_red: { info: { name: "Red Planet" } },
     },
     galaxy: {
-      gxy_a: { info: { name: "Alpha System" } },
+      gxy_stargate: { info: { name: "Stargate Region" } },
       gxy_b: { info: { name: "Beta System" } },
     },
   },
 };
 const reader = createFleetSettingsEvolveAdapter({
-  getFleetManagerOuter: () => ({ ShipConfig: { hull: ["scout", "frigate"] } }),
-  getGalaxyRegions: () => ["gxy_a", "gxy_b"],
+  getFleetManagerOuter: () => ({
+    Regions: ["spc_red"],
+    ShipConfig: { hull: ["scout", "frigate"] },
+  }),
+  getGalaxyRegions: () => ["gxy_stargate", "gxy_b"],
   getGame: () => game,
   getSettingsRaw: () => ({
-    fleet_pr_gxy_a: 1,
+    fleet_pr_gxy_stargate: 1,
     fleet_pr_gxy_b: 0,
     overrides: {},
   }),
@@ -30,8 +32,9 @@ const reader = createFleetSettingsEvolveAdapter({
 const model = reader.read();
 assert.deepEqual(
   model.andromedaRegions.map((region) => region.id),
-  ["gxy_b", "gxy_a"],
+  ["gxy_b", "gxy_stargate"],
 );
+assert.deepEqual(model.outerRegions, [{ id: "spc_red", label: "Red Planet" }]);
 assert.deepEqual(
   model.outerComponents.hull.map((option) => option.val),
   ["scout", "frigate"],

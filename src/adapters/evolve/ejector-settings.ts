@@ -34,7 +34,7 @@ function readConsumable(
     manager["isConsumable"],
     `${path}.isConsumable`,
   );
-  return Boolean(isConsumable(resource));
+  return Boolean(Reflect.apply(isConsumable, manager, [resource]));
 }
 
 function readResourceRows(
@@ -82,28 +82,37 @@ function readResourceRows(
 
     if (!ejectConsumable && !naniteConsumable && !supplyConsumable) continue;
 
+    const craftable = Boolean(Reflect.apply(isCraftable, resource, []));
     const color =
       id === "Elerium" || id === "Infernite"
         ? "has-text-caution"
-        : isCraftable()
+        : craftable
           ? "has-text-danger"
           : !state["tradable"]
             ? "has-text-advanced"
             : "has-text-info";
     const supplyOut = supplyConsumable
       ? String(
-          requireFunction(
-            supplyManager["supplyOut"],
-            "SupplyManager.supplyOut",
-          )(id),
+          Reflect.apply(
+            requireFunction(
+              supplyManager["supplyOut"],
+              "SupplyManager.supplyOut",
+            ),
+            supplyManager,
+            [id],
+          ),
         )
       : "";
     const supplyIn = supplyConsumable
       ? String(
-          requireFunction(
-            supplyManager["supplyIn"],
-            "SupplyManager.supplyIn",
-          )(id),
+          Reflect.apply(
+            requireFunction(
+              supplyManager["supplyIn"],
+              "SupplyManager.supplyIn",
+            ),
+            supplyManager,
+            [id],
+          ),
         )
       : "";
 

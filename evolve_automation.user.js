@@ -21216,32 +21216,32 @@
   function runTick({ reader, controls: controls4 }) {
     const preamble = reader.samplePreamble();
     if (!shouldStartTick(preamble)) {
-      return;
+      return false;
     }
     controls4.markGameTickConsumed();
     const scriptTick = advanceScriptTick(preamble.scriptTick);
     controls4.setScriptTick(scriptTick);
     if (isThrottledTick(scriptTick, preamble.tickRate, preamble.accelerated)) {
-      return;
+      return false;
     }
     controls4.updateScriptData();
     controls4.updateOverrides();
     controls4.finalizeScriptData();
     if (controls4.updateTabs()) {
-      return;
+      return true;
     }
     controls4.updateState();
     controls4.updateUI();
     controls4.keyManagerReset();
     const s = reader.sampleAutomation();
     if (!s.masterScriptToggle) {
-      return;
+      return true;
     }
     if (s.goal === "Evolution") {
       if (s.autoEvolution) {
         controls4.autoEvolution();
       }
-      return;
+      return true;
     }
     if (s.buildingAlwaysClick || s.autoBuild) {
       controls4.autoGatherResources();
@@ -21369,6 +21369,7 @@
     }
     controls4.keyManagerFinish();
     controls4.recordSoulGem();
+    return true;
   }
 
   // src/adapters/evolve/tick.ts
@@ -43727,7 +43728,7 @@
       manager["isConsumable"],
       `${path}.isConsumable`
     );
-    return Boolean(isConsumable(resource2));
+    return Boolean(Reflect.apply(isConsumable, manager, [resource2]));
   }
   function readResourceRows(resourcesValue, ejectManagerValue, naniteManagerValue, supplyManagerValue, settingsRawValue) {
     const resources2 = requireRecord(resourcesValue, "resources");
@@ -43765,18 +43766,27 @@
         "SupplyManager"
       );
       if (!ejectConsumable && !naniteConsumable && !supplyConsumable) continue;
-      const color = id === "Elerium" || id === "Infernite" ? "has-text-caution" : isCraftable() ? "has-text-danger" : !state2["tradable"] ? "has-text-advanced" : "has-text-info";
+      const craftable = Boolean(Reflect.apply(isCraftable, resource2, []));
+      const color = id === "Elerium" || id === "Infernite" ? "has-text-caution" : craftable ? "has-text-danger" : !state2["tradable"] ? "has-text-advanced" : "has-text-info";
       const supplyOut = supplyConsumable ? String(
-        requireFunction(
-          supplyManager["supplyOut"],
-          "SupplyManager.supplyOut"
-        )(id)
+        Reflect.apply(
+          requireFunction(
+            supplyManager["supplyOut"],
+            "SupplyManager.supplyOut"
+          ),
+          supplyManager,
+          [id]
+        )
       ) : "";
       const supplyIn = supplyConsumable ? String(
-        requireFunction(
-          supplyManager["supplyIn"],
-          "SupplyManager.supplyIn"
-        )(id)
+        Reflect.apply(
+          requireFunction(
+            supplyManager["supplyIn"],
+            "SupplyManager.supplyIn"
+          ),
+          supplyManager,
+          [id]
+        )
       ) : "";
       rows.push({
         id,
@@ -45260,6 +45270,18 @@
     }
     return result2;
   }
+  function readActionInputs(value, path) {
+    const record = requireRecord(value, path);
+    const result2 = {};
+    for (const [id, raw] of Object.entries(record)) {
+      const entry = requireRecord(raw, `${path}.${id}`);
+      result2[id] = Object.freeze({
+        arg: requireString29(entry["arg"], `${path}.${id}.arg`),
+        options: entry["options"] ?? null
+      });
+    }
+    return result2;
+  }
   function readRows2(value) {
     if (!Array.isArray(value))
       throw new TypeError("TriggerManager.priorityList must be an array");
@@ -45321,7 +45343,7 @@
         return createTriggerSettingsReadModel({
           rows: readRows2(manager["priorityList"]),
           checks: visibleChecks,
-          actionInputs: readCatalog3(getActionInputs(), "argType"),
+          actionInputs: readActionInputs(getActionInputs(), "argType"),
           booleanResultChecks: getBooleanResultChecks()
         });
       }
@@ -45726,20 +45748,30 @@
             })
           );
         }
-        const rawRegions = requireArray3(getGalaxyRegions2(), "galaxyRegions");
-        const regions = rawRegions.map(
-          (raw, index) => requireString30(raw, `galaxyRegions[${index}]`)
+        const rawOuterRegions = requireArray3(
+          manager["Regions"],
+          "FleetManagerOuter.Regions"
         );
-        const outerRegions = regions.map((id) => ({
+        const outerRegionIds = rawOuterRegions.map(
+          (raw, index) => requireString30(raw, `FleetManagerOuter.Regions[${index}]`)
+        );
+        const outerRegions = outerRegionIds.map((id) => ({
           id,
           label: readName(game2, "space", id)
         }));
+        const rawGalaxyRegions = requireArray3(
+          getGalaxyRegions2(),
+          "galaxyRegions"
+        );
+        const galaxyRegions2 = rawGalaxyRegions.map(
+          (raw, index) => requireString30(raw, `galaxyRegions[${index}]`)
+        );
         const settings2 = requireRecord(getSettingsRaw(), "settingsRaw");
         const overrides = requireRecord(
           settings2["overrides"],
           "settingsRaw.overrides"
         );
-        const andromedaRegions = regions.map((id) => ({
+        const andromedaRegions = galaxyRegions2.map((id) => ({
           id,
           label: id === "gxy_alien1" ? "Alien 1 System" : id === "gxy_alien2" ? "Alien 2 System" : readName(game2, "galaxy", id),
           settingName: `fleet_pr_${id}`
@@ -55841,7 +55873,45 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getSupplyManager: () => SupplyManager,
       getEjectManager: () => EjectManager
     });
-    const automate = () => runTick({ reader: tickReader, controls: tickControls });
+    const __EAperf = {
+      n: 0,
+      total: 0,
+      max: 0,
+      window: 0,
+      windowTotal: 0,
+      report() {
+        const avg = this.n ? this.total / this.n : 0;
+        const wavg = this.window ? this.windowTotal / this.window : 0;
+        console.log(
+          `[EA perf] work-ticks=${this.n} cum-avg=${avg.toFixed(3)}ms last-${this.window}-avg=${wavg.toFixed(3)}ms max=${this.max.toFixed(3)}ms`
+        );
+      },
+      record(ms) {
+        this.n++;
+        this.total += ms;
+        this.window++;
+        this.windowTotal += ms;
+        if (ms > this.max) this.max = ms;
+        if (this.window >= 200) {
+          this.report();
+          this.window = 0;
+          this.windowTotal = 0;
+        }
+      },
+      reset() {
+        this.n = this.total = this.max = this.window = this.windowTotal = 0;
+        console.log("[EA perf] reset");
+      }
+    };
+    window.__EAperf = __EAperf;
+    const __eaNow = typeof performance !== "undefined" && performance.now ? () => performance.now() : () => Date.now();
+    const automate = () => {
+      const t0 = __eaNow();
+      const worked = runTick({ reader: tickReader, controls: tickControls });
+      if (worked) {
+        __EAperf.record(__eaNow() - t0);
+      }
+    };
     if (window.__EA_TEST_HOOKS__) {
       Object.assign(window.__EA_TEST_HOOKS__, {
         automate: () => automate(),

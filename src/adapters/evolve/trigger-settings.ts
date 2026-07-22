@@ -1,6 +1,7 @@
 import {
   createTriggerSettingsReadModel,
   normalizeTriggerValue,
+  type TriggerSettingsActionInput,
   type TriggerSettingsCheck,
   type TriggerSettingsReadModel,
   type TriggerSettingsRow,
@@ -37,6 +38,22 @@ function readCatalog(
       arg: requireString(entry["arg"], `${path}.${id}.arg`),
       options: entry["options"] ?? null,
       description: requireString(entry["desc"], `${path}.${id}.desc`),
+    });
+  }
+  return result;
+}
+
+function readActionInputs(
+  value: unknown,
+  path: string,
+): Record<string, TriggerSettingsActionInput> {
+  const record = requireRecord(value, path);
+  const result: Record<string, TriggerSettingsActionInput> = {};
+  for (const [id, raw] of Object.entries(record)) {
+    const entry = requireRecord(raw, `${path}.${id}`);
+    result[id] = Object.freeze({
+      arg: requireString(entry["arg"], `${path}.${id}.arg`),
+      options: entry["options"] ?? null,
     });
   }
   return result;
@@ -106,7 +123,7 @@ export function createTriggerSettingsEvolveAdapter({
       return createTriggerSettingsReadModel({
         rows: readRows(manager["priorityList"]),
         checks: visibleChecks,
-        actionInputs: readCatalog(getActionInputs(), "argType"),
+        actionInputs: readActionInputs(getActionInputs(), "argType"),
         booleanResultChecks: getBooleanResultChecks() as readonly string[],
       });
     },

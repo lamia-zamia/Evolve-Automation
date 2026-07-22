@@ -224,20 +224,30 @@ export function createFleetSettingsEvolveAdapter({
           }),
         );
       }
-      const rawRegions = requireArray(getGalaxyRegions(), "galaxyRegions");
-      const regions = rawRegions.map((raw, index) =>
-        requireString(raw, `galaxyRegions[${index}]`),
+      const rawOuterRegions = requireArray(
+        manager["Regions"],
+        "FleetManagerOuter.Regions",
       );
-      const outerRegions: FleetSettingsRegion[] = regions.map((id) => ({
+      const outerRegionIds = rawOuterRegions.map((raw, index) =>
+        requireString(raw, `FleetManagerOuter.Regions[${index}]`),
+      );
+      const outerRegions: FleetSettingsRegion[] = outerRegionIds.map((id) => ({
         id,
         label: readName(game, "space", id),
       }));
+      const rawGalaxyRegions = requireArray(
+        getGalaxyRegions(),
+        "galaxyRegions",
+      );
+      const galaxyRegions = rawGalaxyRegions.map((raw, index) =>
+        requireString(raw, `galaxyRegions[${index}]`),
+      );
       const settings = requireRecord(getSettingsRaw(), "settingsRaw");
       const overrides = requireRecord(
         settings["overrides"],
         "settingsRaw.overrides",
       );
-      const andromedaRegions = regions
+      const andromedaRegions = galaxyRegions
         .map((id) => ({
           id,
           label:

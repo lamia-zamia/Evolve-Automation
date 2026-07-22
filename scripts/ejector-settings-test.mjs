@@ -9,26 +9,44 @@ const iron = {
   name: "Iron",
   atomicMass: 56,
   is: { tradable: true },
-  isCraftable: () => false,
+  isCraftable() {
+    return this.id === "Elerium";
+  },
 };
 const elerium = {
   id: "Elerium",
   name: "Elerium",
   atomicMass: 0,
   is: { tradable: false },
-  isCraftable: () => true,
+  isCraftable() {
+    return this.id === "Elerium";
+  },
 };
 const resources = { Iron: iron, Elerium: elerium };
 const ejectManager = {
-  isConsumable: (resource) => resource.id === "Iron",
+  Resources: ["Iron"],
+  isConsumable(resource) {
+    return this.Resources.includes(resource.id);
+  },
 };
 const naniteManager = {
-  isConsumable: (resource) => resource.id === "Elerium",
+  Resources: ["Elerium"],
+  isConsumable(resource) {
+    return this.Resources.includes(resource.id);
+  },
 };
 const supplyManager = {
-  isConsumable: (resource) => resource.id === "Iron",
-  supplyOut: () => 2,
-  supplyIn: () => 3,
+  Resources: ["Iron"],
+  Rates: { Iron: { out: 2, in: 3 } },
+  isConsumable(resource) {
+    return this.Resources.includes(resource.id);
+  },
+  supplyOut(id) {
+    return this.Rates[id].out;
+  },
+  supplyIn(id) {
+    return this.Rates[id].in;
+  },
 };
 
 const reader = createEjectorSettingsEvolveAdapter({
