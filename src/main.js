@@ -455,11 +455,13 @@ import { createMechSettingsEvolveAdapter } from "./adapters/evolve/mech-settings
 import { createTriggerSettingsIntentHandler } from "./application/trigger-settings.ts";
 import { createTriggerSettingsBrowserAdapter } from "./adapters/browser/trigger-settings.ts";
 import { createTriggerSettingsEvolveAdapter } from "./adapters/evolve/trigger-settings.ts";
+import { createFleetSettingsIntentHandler } from "./application/fleet-settings.ts";
+import { createFleetSettingsBrowserAdapter } from "./adapters/browser/fleet-settings.ts";
+import { createFleetSettingsEvolveAdapter } from "./adapters/evolve/fleet-settings.ts";
 import { createProductionSettings } from "./ui/production-settings.ts";
 import { createTraitSettings } from "./ui/trait-settings.ts";
 import { createPrestigeSettings } from "./ui/prestige-settings.ts";
 import { createEvolutionSettings } from "./ui/evolution-settings.ts";
-import { createFleetSettings } from "./ui/fleet-settings.ts";
 import { createQueuePanels } from "./ui/queue-panels.ts";
 import { createMechInfoEvolveAdapter } from "./adapters/evolve/mech-info.ts";
 import { createMechInfoBrowserAdapter } from "./adapters/browser/mech-info.ts";
@@ -1870,42 +1872,64 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
   const { buildHellSettings, updateHellSettingsContent } =
     hellSettingsBrowserAdapter;
 
-  const fleetSettingsOverrides = {};
-  const getFleetSettingsDependency = createDependencyResolver(
-    fleetSettingsOverrides,
-    {
-      $: () => $,
-      FleetManagerOuter: () => FleetManagerOuter,
-      addSettingsHeader1: () => addSettingsHeader1,
-      addSettingsNumber: () => addSettingsNumber,
-      addSettingsSelect: () => addSettingsSelect,
-      addSettingsToggle: () => addSettingsToggle,
-      addStandardHeading: () => addStandardHeading,
-      addTableInput: () => addTableInput,
-      buildSettingsSection2: () => buildSettingsSection2,
-      buildTableLabel: () => buildTableLabel,
-      document: () => document,
-      galaxyRegions: () => galaxyRegions,
-      game: () => game,
-      openOverrideModal: () => openOverrideModal,
-      resetCheckbox: () => resetCheckbox,
-      resetFleetSettings: () => resetFleetSettings,
-      settings: () => settings,
-      settingsRaw: () => settingsRaw,
-      sorterHelper: () => sorterHelper,
-      updateSettingsFromState: () => updateSettingsFromState,
-    },
-  );
-  const fleetSettings = createFleetSettings({
-    getDependency: getFleetSettingsDependency,
-    getOverride: (name) => fleetSettingsOverrides[name],
+  let fleetSettingsTestContext;
+  const fleetSettingsReader = createFleetSettingsEvolveAdapter({
+    getFleetManagerOuter: () =>
+      fleetSettingsTestContext?.FleetManagerOuter ?? FleetManagerOuter,
+    getGalaxyRegions: () =>
+      fleetSettingsTestContext?.galaxyRegions ?? galaxyRegions,
+    getGame: () => fleetSettingsTestContext?.game ?? game,
+    getSettingsRaw: () => fleetSettingsTestContext?.settingsRaw ?? settingsRaw,
   });
-  const {
-    buildFleetSettings,
-    updateFleetSettingsContent,
-    updateFleetOuter,
-    updateFleetAndromeda,
-  } = fleetSettings;
+  let fleetSettingsIntentHandler;
+  const fleetSettingsBrowserAdapter = createFleetSettingsBrowserAdapter({
+    getDocument: () => document,
+    getJQuery: () => $,
+    reader: fleetSettingsReader,
+    intents: {
+      handle: (intent) => fleetSettingsIntentHandler.handle(intent),
+    },
+    getActions: () =>
+      fleetSettingsTestContext?.actions ?? {
+        buildSettingsSection2,
+        addSettingsHeader1,
+        addSettingsNumber,
+        addSettingsSelect,
+        addSettingsToggle,
+        addStandardHeading,
+        addTableInput,
+        buildTableLabel,
+        openOverrideModal,
+        sorterHelper,
+      },
+  });
+  fleetSettingsIntentHandler = createFleetSettingsIntentHandler({
+    writer: {
+      resetToDefaults: () =>
+        (fleetSettingsTestContext?.resetFleetSettings ?? resetFleetSettings)(
+          true,
+        ),
+      reorderAndromeda: (regionIds) => {
+        const target = fleetSettingsTestContext?.settingsRaw ?? settingsRaw;
+        regionIds.forEach((regionId, index) => {
+          target[`fleet_pr_${regionId}`] = index;
+        });
+      },
+      persist: () =>
+        (
+          fleetSettingsTestContext?.updateSettingsFromState ??
+          updateSettingsFromState
+        )(),
+    },
+    render: (secondaryPrefix) =>
+      fleetSettingsBrowserAdapter.updateFleetSettingsContent(secondaryPrefix),
+    effects: {
+      resetCheckbox: () =>
+        (fleetSettingsTestContext?.resetCheckbox ?? resetCheckbox)("autoFleet"),
+    },
+  });
+  const { buildFleetSettings, updateFleetSettingsContent } =
+    fleetSettingsBrowserAdapter;
 
   let mechSettingsTestContext;
   const mechSettingsReader = createMechSettingsEvolveAdapter({
@@ -5834,18 +5858,22 @@ import { createDependencyResolver } from "./ui/dependencies.ts";
       settingsBoundaries: {
         prestige: prestigeSettings,
         evolution: evolutionSettings,
-        fleet: fleetSettings,
       },
       setSettingsBoundariesTestContext(context) {
         Object.assign(prestigeSettingsOverrides, context);
         Object.assign(evolutionSettingsOverrides, context);
-        Object.assign(fleetSettingsOverrides, context);
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {
       triggerSettings: triggerSettingsBrowserAdapter,
       setTriggerSettingsTestContext(context) {
         triggerSettingsTestContext = context;
+      },
+    });
+    Object.assign(window.__EA_TEST_HOOKS__, {
+      fleetSettings: fleetSettingsBrowserAdapter,
+      setFleetSettingsTestContext(context) {
+        fleetSettingsTestContext = context;
       },
     });
     Object.assign(window.__EA_TEST_HOOKS__, {

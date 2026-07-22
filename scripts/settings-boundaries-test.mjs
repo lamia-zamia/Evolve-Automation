@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import { createPrestigeSettings } from "../src/ui/prestige-settings.ts";
 import { createEvolutionSettings } from "../src/ui/evolution-settings.ts";
-import { createFleetSettings } from "../src/ui/fleet-settings.ts";
 
 const specs = [
   [
@@ -24,16 +23,6 @@ const specs = [
     "Evolution",
     false,
     ["checkbox:autoEvolution"],
-  ],
-  [
-    "fleet",
-    createFleetSettings,
-    "buildFleetSettings",
-    "updateFleetSettingsContent",
-    "fleet",
-    "Fleet",
-    true,
-    ["checkbox:autoFleet"],
   ],
 ];
 
@@ -93,4 +82,4 @@ for (const [
   ]);
 }
 
-console.log("3 settings-boundary module tests passed");
+console.log("2 settings-boundary module tests passed");

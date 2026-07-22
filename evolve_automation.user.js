@@ -17111,7 +17111,7 @@
     addSettingsNumber: addSettingsNumber2
   }) {
     const readModel = getStateLogSettingsReadModel();
-    function renderControl(node, control) {
+    function renderControl2(node, control) {
       if (control.kind === "toggle") {
         addSettingsToggle2(node, control.settingName, control.label, control.hint);
         return;
@@ -17135,7 +17135,7 @@
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
-        renderControl(currentNode, control);
+        renderControl2(currentNode, control);
       }
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
@@ -17223,7 +17223,7 @@
     getActions
   }) {
     const readModel = getInterfaceSettingsReadModel();
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       if (control.kind === "header") {
         actions.addSettingsHeader1(node, control.label);
         return;
@@ -17256,7 +17256,7 @@
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
@@ -17321,7 +17321,7 @@
     getActions
   }) {
     const readModel = getChallengeHelperSettingsReadModel();
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       if (control.kind === "toggle") {
         actions.addSettingsToggle(
           node,
@@ -17356,7 +17356,7 @@
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
@@ -17457,7 +17457,7 @@
     getActions
   }) {
     const readModel = getAchievementGuardSettingsReadModel();
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       actions.addSettingsToggle(
         node,
         control.settingName,
@@ -17483,7 +17483,7 @@
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
@@ -17554,7 +17554,7 @@
     getActions
   }) {
     const readModel = getAuthoritySettingsReadModel();
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       if (control.kind === "toggle") {
         actions.addSettingsToggle(
           node,
@@ -17589,7 +17589,7 @@
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
@@ -17741,7 +17741,7 @@
     getActions
   }) {
     const readModel = getGeneralSettingsReadModel();
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       switch (control.kind) {
         case "header":
           actions.addSettingsHeader1(node, control.label);
@@ -17799,7 +17799,7 @@
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
@@ -17830,8 +17830,8 @@
   }
 
   // src/domain/research-settings.ts
-  function freezeOption(option) {
-    return Object.freeze({ ...option });
+  function freezeOption(option2) {
+    return Object.freeze({ ...option2 });
   }
   function freezeTechnologyCatalog(technologies) {
     const frozen = {};
@@ -17841,7 +17841,7 @@
     return Object.freeze(frozen);
   }
   function createResearchSettingsReadModel({
-    localize,
+    localize: localize2,
     technologies
   }) {
     const technologyCatalog = freezeTechnologyCatalog(technologies);
@@ -17853,13 +17853,13 @@
       }),
       freezeOption({
         val: "tech-anthropology",
-        label: localize("tech_anthropology"),
-        hint: localize("tech_anthropology_effect")
+        label: localize2("tech_anthropology"),
+        hint: localize2("tech_anthropology_effect")
       }),
       freezeOption({
         val: "tech-fanaticism",
-        label: localize("tech_fanaticism"),
-        hint: localize("tech_fanaticism_effect")
+        label: localize2("tech_fanaticism"),
+        hint: localize2("tech_fanaticism_effect")
       })
     ]);
     const theologyTwoOptions = Object.freeze([
@@ -17870,13 +17870,13 @@
       }),
       freezeOption({
         val: "tech-study",
-        label: localize("tech_study"),
-        hint: localize("tech_study_desc")
+        label: localize2("tech_study"),
+        hint: localize2("tech_study_desc")
       }),
       freezeOption({
         val: "tech-deify",
-        label: localize("tech_deify"),
-        hint: localize("tech_deify_desc")
+        label: localize2("tech_deify"),
+        hint: localize2("tech_deify_desc")
       })
     ]);
     return Object.freeze({
@@ -17916,7 +17916,7 @@
     intents,
     getActions
   }) {
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       if (control.kind === "select") {
         actions.addSettingsSelect(
           node,
@@ -17955,7 +17955,7 @@
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
@@ -17984,7 +17984,7 @@
   }) {
     function readResearchSettingsReadModel() {
       const game2 = requireObjectRecord(getGame(), "game");
-      const localize = requireFunction(game2["loc"], "game.loc");
+      const localize2 = requireFunction(game2["loc"], "game.loc");
       const rawTechIds = requireObjectRecord(getTechIds(), "techIds");
       const technologies = {};
       for (const [key, rawTechnology] of Object.entries(rawTechIds)) {
@@ -18003,7 +18003,7 @@
       }
       return createResearchSettingsReadModel({
         localize: (key) => requireString(
-          Reflect.apply(localize, game2, [key]),
+          Reflect.apply(localize2, game2, [key]),
           `game.loc(${key}) result`
         ),
         technologies
@@ -18098,7 +18098,7 @@
     intents,
     getActions
   }) {
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       switch (control.kind) {
         case "header":
           actions.addSettingsHeader1(node, control.label);
@@ -18148,7 +18148,7 @@
       );
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       const stringsUrl = `strings/strings${readModel.locale === "en-US" ? "" : "." + readModel.locale}.json`;
       currentNode.append(`
@@ -18241,8 +18241,8 @@
   }
 
   // src/domain/government-settings.ts
-  function freezeOption2(option) {
-    return Object.freeze({ ...option });
+  function freezeOption2(option2) {
+    return Object.freeze({ ...option2 });
   }
   function freezeOptions(options) {
     return Object.freeze(options.map(freezeOption2));
@@ -18321,7 +18321,7 @@
     intents,
     getActions
   }) {
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       if (control.kind === "number") {
         actions.addSettingsNumber(
           node,
@@ -18366,7 +18366,7 @@
       );
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
@@ -18389,15 +18389,15 @@
     }
     return value;
   }
-  function readLocalizedOption(id, localize, game2) {
+  function readLocalizedOption(id, localize2, game2) {
     return {
       val: id,
       label: requireString3(
-        Reflect.apply(localize, game2, [`govern_${id}`]),
+        Reflect.apply(localize2, game2, [`govern_${id}`]),
         `game.loc(govern_${id}) result`
       ),
       hint: requireString3(
-        Reflect.apply(localize, game2, [`govern_${id}_desc`]),
+        Reflect.apply(localize2, game2, [`govern_${id}_desc`]),
         `game.loc(govern_${id}_desc) result`
       )
     };
@@ -18413,7 +18413,7 @@
       if (typeof rawLocalize !== "function") {
         throw new TypeError("game.loc must be a function");
       }
-      const localize = (key) => Reflect.apply(rawLocalize, game2, [key]);
+      const localize2 = (key) => Reflect.apply(rawLocalize, game2, [key]);
       const manager = requireObjectRecord3(
         getGovernmentManager(),
         "GovernmentManager"
@@ -18432,7 +18432,7 @@
         );
         if (type["selectable"] === false) continue;
         const id = requireString3(type["id"], `GovernmentManager.Types.${key}.id`);
-        governmentOptions.push(readLocalizedOption(id, localize, game2));
+        governmentOptions.push(readLocalizedOption(id, localize2, game2));
       }
       const rawGovernors = getGovernors();
       if (!Array.isArray(rawGovernors)) {
@@ -18446,11 +18446,11 @@
         governorOptions.push({
           val: id,
           label: requireString3(
-            localize(`governor_${id}`),
+            localize2(`governor_${id}`),
             `game.loc(governor_${id}) result`
           ),
           hint: requireString3(
-            localize(`governor_${id}_desc`),
+            localize2(`governor_${id}_desc`),
             `game.loc(governor_${id}_desc) result`
           )
         });
@@ -18614,20 +18614,20 @@
       if (typeof rawLocalize !== "function") {
         throw new TypeError("game.loc must be a function");
       }
-      const localize = (key) => Reflect.apply(rawLocalize, game2, [key]);
+      const localize2 = (key) => Reflect.apply(rawLocalize, game2, [key]);
       const biomeIds = requireStringArray(getBiomeList(), "biomeList");
       const traitIds = requireStringArray(getTraitList(), "traitList");
       const extraIds = requireStringArray(getExtraList(), "extraList");
       const biomes = biomeIds.map((id) => ({
         label: requireString4(
-          localize(`biome_${id}_name`),
+          localize2(`biome_${id}_name`),
           `game.loc(biome_${id}_name) result`
         ),
         settingName: `biome_w_${id}`
       }));
       const traits = traitIds.map((id, index) => ({
         label: index === 0 ? "None" : requireString4(
-          localize(`planet_${id}`),
+          localize2(`planet_${id}`),
           `game.loc(planet_${id}) result`
         ),
         settingName: `trait_w_${id}`
@@ -18901,7 +18901,7 @@
       const currentNode = getJQuery()(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       currentNode.append(`
           <table style="width:100%">
@@ -18945,7 +18945,7 @@
       });
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       actions.addSettingsToggle(
         node,
         control.settingName,
@@ -19117,16 +19117,16 @@
       currentNode.empty().off("*");
       const jquery = getJQuery();
       for (const control of readModel.alchemyControls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       renderAlchemy(currentNode, readModel.alchemyRows, actions, jquery);
       for (const control of readModel.pylonControls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       renderPylon(currentNode, readModel.pylonRows, actions, jquery);
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       switch (control.kind) {
         case "heading":
           actions.addStandardHeading(node, control.label);
@@ -19227,7 +19227,7 @@
   }) {
     function readMagicSettingsReadModel() {
       const game2 = requireRecord(getGame(), "game");
-      const localize = requireFunction(game2["loc"], "game.loc");
+      const localize2 = requireFunction(game2["loc"], "game.loc");
       const alchemyManager = requireRecord(getAlchemyManager(), "AlchemyManager");
       const resources2 = readPriorityList3(alchemyManager);
       const transmuteTier = requireFunction(
@@ -19267,7 +19267,7 @@
           return {
             id,
             label: requireString7(
-              Reflect.apply(localize, game2, [`modal_pylon_spell_${id}`]),
+              Reflect.apply(localize2, game2, [`modal_pylon_spell_${id}`]),
               `game.loc(modal_pylon_spell_${id}) result`
             ),
             weightingSettingName: `spell_w_${id}`
@@ -19413,7 +19413,7 @@
       const currentNode = jquery("#script_jobContent");
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       currentNode.append(`
           <table style="width:100%">
@@ -19464,7 +19464,7 @@
       });
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       if (control.kind === "number") {
         actions.addSettingsNumber(
           node,
@@ -19815,7 +19815,7 @@
       const currentNode = jquery(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       currentNode.append(`
           <table style="width:100%">
@@ -19832,7 +19832,7 @@
       }
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       actions.addSettingsToggle(
         node,
         control.settingName,
@@ -20011,7 +20011,7 @@
       const currentNode = jquery(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       currentNode.append(`
           <div><input id="script_buildingSearch" class="script-searchsettings" type="text" placeholder="Search for buildings..."></div>
@@ -20096,7 +20096,7 @@
         }
       }
     }
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       if (control.kind === "toggle") {
         actions.addSettingsToggle(
           node,
@@ -20701,7 +20701,7 @@
 
   // src/domain/prestige-top-bar.ts
   function selectPrestigeTopBarType(options, selectedValue) {
-    const selected = options.find((option) => option.value === selectedValue);
+    const selected = options.find((option2) => option2.value === selectedValue);
     return selected ?? {
       value: selectedValue,
       label: selectedValue,
@@ -20797,14 +20797,14 @@
         }
         return Object.freeze(
           rawOptions.map((rawOption, index) => {
-            const option = requireRecord(rawOption, `prestigeTypes[${index}]`);
+            const option2 = requireRecord(rawOption, `prestigeTypes[${index}]`);
             return Object.freeze({
-              value: requireString10(option["val"], `prestigeTypes[${index}].val`),
+              value: requireString10(option2["val"], `prestigeTypes[${index}].val`),
               label: requireString10(
-                option["label"],
+                option2["label"],
                 `prestigeTypes[${index}].label`
               ),
-              hint: requireString10(option["hint"], `prestigeTypes[${index}].hint`)
+              hint: requireString10(option2["hint"], `prestigeTypes[${index}].hint`)
             });
           })
         );
@@ -43571,7 +43571,7 @@
       const currentNode = jquery(`#script_${readModel.sectionId}Content`);
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       currentNode.append(`
           <table style="width:100%">
@@ -43615,7 +43615,7 @@
       }
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       if (control.kind === "select") {
         actions.addSettingsSelect(
           node,
@@ -43873,7 +43873,7 @@
       currentNode.empty().off("*");
       for (const control of readModel.controls) {
         if (control.kind === "heading") break;
-        renderControl(currentNode, control, actions);
+        renderControl2(currentNode, control, actions);
       }
       renderMarketTable(currentNode, readModel, actions, jquery, intents);
       const galaxyHeading = readModel.controls.find(
@@ -43884,12 +43884,12 @@
       }
       const galaxyControl = readModel.controls[readModel.controls.length - 1];
       if (galaxyControl?.kind === "number") {
-        renderControl(currentNode, galaxyControl, actions);
+        renderControl2(currentNode, galaxyControl, actions);
       }
       renderGalaxyTable(currentNode, readModel, actions, jquery);
       document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
     }
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       if (control.kind === "number") {
         actions.addSettingsNumber(
           node,
@@ -44195,7 +44195,7 @@
     intents,
     getActions
   }) {
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       if (control.kind === "header") {
         actions.addSettingsHeader1(node, control.label);
         return;
@@ -44246,7 +44246,7 @@
       );
       node.empty().off("*");
       const actions = getActions();
-      for (const control of model.controls) renderControl(node, control, actions);
+      for (const control of model.controls) renderControl2(node, control, actions);
       document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
     }
     return Object.freeze({ buildWarSettings: buildWarSettings2, updateWarSettingsContent: updateWarSettingsContent2 });
@@ -44479,7 +44479,7 @@
     intents,
     getActions
   }) {
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       if (control.kind === "header") {
         actions.addSettingsHeader1(node, control.label);
         return;
@@ -44520,7 +44520,7 @@
       );
       node.empty().off("*");
       const actions = getActions();
-      for (const control of model.controls) renderControl(node, control, actions);
+      for (const control of model.controls) renderControl2(node, control, actions);
       document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
     }
     return Object.freeze({ buildHellSettings: buildHellSettings2, updateHellSettingsContent: updateHellSettingsContent2 });
@@ -44678,7 +44678,7 @@
     intents,
     getActions
   }) {
-    function renderControl(node, control, actions) {
+    function renderControl2(node, control, actions) {
       if (control.kind === "header") {
         actions.addStandardHeading(node, control.label);
         return;
@@ -44726,7 +44726,7 @@
       const node = getJQuery()(`#script_${model.sectionId}Content`);
       node.empty().off("*");
       for (const control of model.controls) {
-        renderControl(node, control, actions);
+        renderControl2(node, control, actions);
         if (control.kind === "header") {
           const statsControls = getJQuery()(
             `<div style="margin-top: 5px; display: inline-flex;"></div>`
@@ -44988,7 +44988,7 @@
           });
         });
         return createMechSettingsReadModel(
-          Object.freeze(options.map((option) => Object.freeze(option)))
+          Object.freeze(options.map((option2) => Object.freeze(option2)))
         );
       }
     });
@@ -45323,6 +45323,440 @@
           checks: visibleChecks,
           actionInputs: readCatalog3(getActionInputs(), "argType"),
           booleanResultChecks: getBooleanResultChecks()
+        });
+      }
+    });
+  }
+
+  // src/application/fleet-settings.ts
+  function createFleetSettingsIntentHandler({
+    writer,
+    render,
+    effects
+  }) {
+    return Object.freeze({
+      handle(intent) {
+        switch (intent.type) {
+          case "reset-fleet-settings":
+            writer.resetToDefaults();
+            writer.persist();
+            render(intent.secondaryPrefix);
+            effects.resetCheckbox();
+            return;
+          case "reorder-andromeda-regions":
+            writer.reorderAndromeda(intent.regionIds);
+            writer.persist();
+            if (intent.secondaryPrefix !== "") render("");
+            return;
+        }
+      }
+    });
+  }
+
+  // src/domain/fleet-settings.ts
+  function freezeOption3(option2) {
+    return Object.freeze({ ...option2 });
+  }
+  function freezeControls(controls4) {
+    return Object.freeze(
+      controls4.map(
+        (control) => Object.freeze(
+          "options" in control ? {
+            ...control,
+            options: Object.freeze(control.options.map(freezeOption3))
+          } : { ...control }
+        )
+      )
+    );
+  }
+  function freezeRegions(regions) {
+    return Object.freeze(regions.map((region) => Object.freeze({ ...region })));
+  }
+  function createFleetSettingsReadModel(input) {
+    const components = {};
+    for (const [key, options] of Object.entries(input.outerComponents)) {
+      components[key] = Object.freeze(options.map(freezeOption3));
+    }
+    return Object.freeze({
+      sectionId: "fleet",
+      sectionName: "Fleet",
+      outerControls: freezeControls(input.outerControls),
+      outerComponents: Object.freeze(components),
+      outerRegions: freezeRegions(input.outerRegions),
+      andromedaControls: freezeControls(input.andromedaControls),
+      andromedaRegions: freezeRegions(input.andromedaRegions)
+    });
+  }
+
+  // src/adapters/browser/fleet-settings.ts
+  function renderControl(node, control, actions) {
+    if (control.kind === "header")
+      return void actions.addSettingsHeader1(node, control.label);
+    if (control.kind === "number")
+      return void actions.addSettingsNumber(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    if (control.kind === "toggle")
+      return void actions.addSettingsToggle(
+        node,
+        control.settingName,
+        control.label,
+        control.hint
+      );
+    if (control.kind === "select") {
+      actions.addSettingsSelect(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+        control.options
+      );
+    }
+  }
+  function createFleetSettingsBrowserAdapter({
+    getDocument,
+    getJQuery,
+    reader,
+    intents,
+    getActions
+  }) {
+    function buildFleetSettings2(parent, secondaryPrefix) {
+      const model = reader.read();
+      getActions().buildSettingsSection2(
+        parent,
+        secondaryPrefix,
+        model.sectionId,
+        model.sectionName,
+        () => intents.handle({ type: "reset-fleet-settings", secondaryPrefix }),
+        updateFleetSettingsContent2
+      );
+    }
+    function renderOuter(node, prefix, model, actions) {
+      actions.addStandardHeading(node, "Outer Solar");
+      for (const control of model.outerControls)
+        renderControl(node, control, actions);
+      node.append(
+        '<div class="has-text-info">While the Eris Digsite is incomplete, its effective defense target is raised automatically from the configured scan/post-capture value so active Troopers and Tanks can overcome Digsite regeneration.</div>'
+      );
+      actions.addSettingsHeader1(node, "Fighter");
+      for (const [type, options] of Object.entries(model.outerComponents))
+        actions.addSettingsSelect(
+          node,
+          `fleet_outer_${type}`,
+          ``,
+          "Preset ship component",
+          options
+        );
+      actions.addSettingsHeader1(node, "Scout");
+      for (const [type, options] of Object.entries(model.outerComponents))
+        actions.addSettingsSelect(
+          node,
+          `fleet_scout_${type}`,
+          ``,
+          "Preset ship component",
+          options
+        );
+      node.append(
+        `<table style="width:100%; text-align: left"><tbody id="script_${prefix}fleetOuterTable"></tbody></table>`
+      );
+      const body = getJQuery()(`#script_${prefix}fleetOuterTable`);
+      body.append(
+        getJQuery()(
+          model.outerRegions.map(
+            (region) => `<tr><td id="script_${prefix}fleet_${region.id}"></td><td></td><td></td><td></td><td></td></tr>`
+          ).join("")
+        )
+      );
+      for (const region of model.outerRegions) {
+        let cell = getJQuery()(`#script_${prefix}fleet_${region.id}`);
+        cell.append(actions.buildTableLabel(region.label));
+        cell = cell.next();
+        actions.addTableInput(cell, `fleet_outer_pr_${region.id}`);
+        cell = cell.next();
+        actions.addTableInput(cell, `fleet_outer_def_${region.id}`);
+        cell = cell.next();
+        actions.addTableInput(cell, `fleet_outer_sc_${region.id}`);
+      }
+    }
+    function renderAndromeda(node, prefix, model, actions) {
+      actions.addStandardHeading(node, "Andromeda");
+      for (const control of model.andromedaControls)
+        renderControl(node, control, actions);
+      node.append(
+        `<table style="width:100%; text-align:left"><tbody id="script_${prefix}fleetTableBody"></tbody></table>`
+      );
+      const body = getJQuery()(`#script_${prefix}fleetTableBody`);
+      for (const region of model.andromedaRegions) {
+        const row = getJQuery()(
+          `<tr value="${region.id}" class="script-draggable"><td id="script_${prefix}fleet_${region.id}"></td><td><span class="script-lastcolumn"></span></td></tr>`
+        );
+        row.toggleClass("inactive-row", false).on(
+          "click",
+          {
+            label: `Andromeda region priority (${region.settingName})`,
+            name: region.settingName,
+            type: "number"
+          },
+          actions.openOverrideModal
+        );
+        body.append(row);
+        getJQuery()(`#script_${prefix}fleet_${region.id}`).append(
+          actions.buildTableLabel(region.label)
+        );
+      }
+      body.sortable({
+        items: "tr:not(.unsortable)",
+        helper: actions.sorterHelper,
+        update: () => {
+          const ids = body.sortable("toArray", { attribute: "value" });
+          if (Array.isArray(ids))
+            intents.handle({
+              type: "reorder-andromeda-regions",
+              secondaryPrefix: prefix,
+              regionIds: ids
+            });
+        }
+      });
+    }
+    function updateFleetSettingsContent2(secondaryPrefix) {
+      const model = reader.read();
+      const document2 = getDocument();
+      const scroll = document2.documentElement.scrollTop || document2.body.scrollTop;
+      const node = getJQuery()(
+        `#script_${secondaryPrefix}${model.sectionId}Content`
+      );
+      node.empty().off("*");
+      const actions = getActions();
+      renderOuter(node, secondaryPrefix, model, actions);
+      renderAndromeda(node, secondaryPrefix, model, actions);
+      document2.documentElement.scrollTop = document2.body.scrollTop = scroll;
+    }
+    return Object.freeze({ buildFleetSettings: buildFleetSettings2, updateFleetSettingsContent: updateFleetSettingsContent2 });
+  }
+
+  // src/adapters/evolve/fleet-settings.ts
+  function requireString30(value, path) {
+    if (typeof value !== "string")
+      throw new TypeError(`${path} must be a string`);
+    return value;
+  }
+  function requireArray3(value, path) {
+    if (!Array.isArray(value)) throw new TypeError(`${path} must be an array`);
+    return value;
+  }
+  function localize(game2, key) {
+    const loc = game2["loc"];
+    if (typeof loc !== "function")
+      throw new TypeError("game.loc must be a function");
+    return requireString30(
+      Reflect.apply(loc, game2, [key]),
+      `game.loc(${key}) result`
+    );
+  }
+  function option(value, label, hint = "Preset ship component") {
+    return { val: value, label, hint };
+  }
+  function readName(game2, category, id) {
+    const actions = requireRecord(game2["actions"], "game.actions");
+    const group = requireRecord(actions[category], `game.actions.${category}`);
+    const action = requireRecord(group[id], `game.actions.${category}.${id}`);
+    const info = requireRecord(
+      action["info"],
+      `game.actions.${category}.${id}.info`
+    );
+    const rawName = info["name"];
+    const name = typeof rawName === "function" ? Reflect.apply(rawName, action, []) : rawName;
+    return requireString30(name, `game.actions.${category}.${id}.info.name`);
+  }
+  var outerControls = Object.freeze([
+    {
+      kind: "select",
+      settingName: "fleetOuterShips",
+      label: "Ships to build",
+      hint: "Once avalable and affordable script will build ship of selected design, and send it to region with most piracy * weighting",
+      options: Object.freeze([
+        option("none", "None", "Ship building disabled"),
+        option(
+          "user",
+          "Current design",
+          "Build whatever currently set in Ship Yard"
+        ),
+        option(
+          "manual",
+          "Manual mode",
+          "Assists accumulating resources needed for current blueprint, without building or deploying anything. It also might need tweaking prioritization settings to work."
+        ),
+        option(
+          "custom",
+          "Presets",
+          "Build ships with components configured below. All components need to be unlocked, and resulting design should have enough power"
+        )
+      ])
+    },
+    {
+      kind: "number",
+      settingName: "fleetOuterCrew",
+      label: "Minimum idle soldiers",
+      hint: "Only build ships when the remaining idle soldiers exceed this number. In Evil, the configured Authority target can reserve more soldiers automatically."
+    },
+    {
+      kind: "toggle",
+      settingName: "fleetExploreTau",
+      label: "Explore Tau Ceti",
+      hint: "Send explorer to Tau Ceti"
+    }
+  ]);
+  var andromedaControls = Object.freeze([
+    {
+      kind: "toggle",
+      settingName: "fleetMaxCover",
+      label: "Maximize protection of prioritized systems",
+      hint: "Adjusts ships distribution to fully supress piracy in prioritized regions. Some potential defense will be wasted, as it will use big ships to cover small holes, when it doesn't have anything fitting better. This option is not required: all your dreadnoughts still will be used even without this option."
+    },
+    {
+      kind: "toggle",
+      settingName: "fleetCrewReclaim",
+      label: "Crew combat ships only when useful",
+      hint: "Power combat ships only when reducing piracy improves a resource or knowledge output the automation currently needs, and release all other crews back to the workforce. Active trade routes are protected only while their purchased resource is useful. Inactive while fleet is being accumulated for an assault mission. Surplus ships won't be parked at Gorddon for the Symposium bonus while this is enabled."
+    },
+    {
+      kind: "number",
+      settingName: "fleetEmbassyKnowledge",
+      label: "Minimum knowledge for Embassy",
+      hint: "Building Embassy increases maximum piracy up to 100, script won't Auto Build it until this knowledge cap is reached."
+    },
+    {
+      kind: "number",
+      settingName: "fleetAlienGiftKnowledge",
+      label: "Minimum knowledge for Alien Gift",
+      hint: "Researching Alien Gift increases maximum piracy up to 250, script won't Auto Research it until this knowledge cap is reached."
+    },
+    {
+      kind: "number",
+      settingName: "fleetAlien2Knowledge",
+      label: "Minimum knowledge for Alien 2 Assault",
+      hint: "Assaulting Alien 2 increases maximum piracy up to 500, script won't do it until this knowledge cap is reached. Regardless of set value it won't ever try to assault until you have big enough fleet to do it without loses."
+    },
+    {
+      kind: "select",
+      settingName: "fleetAlien2Loses",
+      label: "Alien 2 Mission",
+      hint: "Assault Alien 2 when chosen outcome is achievable. You should really keep the default, unless you're speed running and want to take it out ASAP with losses.",
+      options: Object.freeze([
+        option("none", "No Losses", "Min fleet strength 650. No losses."),
+        option(
+          "suicide",
+          "Suicide Mission",
+          "Attack as soon as we hit 400 fleet rating. There will be losses."
+        )
+      ])
+    },
+    {
+      kind: "select",
+      settingName: "fleetChthonianLoses",
+      label: "Chthonian Mission",
+      hint: "Assault Chthonian when chosen outcome is achievable. Mixed fleet formed to clear mission with minimum possible wasted ships, e.g. for low causlities it can sacriface 8 scouts, or 2 corvettes and 2 scouts, or frigate, and such. Whatever will be first available. It also takes in account perks and challenges, adjusting fleet accordingly.",
+      options: Object.freeze([
+        option(
+          "ignore",
+          "Manual assault",
+          "Won't ever launch assault mission on Chthonian"
+        ),
+        option(
+          "high",
+          "High casualties",
+          "Unlock Chthonian using mixed fleet, high casualties (1250+ total fleet power, 500 will be lost)"
+        ),
+        option(
+          "avg",
+          "Average casualties",
+          "Unlock Chthonian using mixed fleet, average casualties (2500+ total fleet power, 160 will be lost)"
+        ),
+        option(
+          "low",
+          "Low casualties",
+          "Unlock Chthonian using mixed fleet, low casualties (4500+ total fleet power, 80 will be lost)"
+        ),
+        option(
+          "frigate",
+          "Frigate",
+          "Unlock Chthonian loosing Frigate ship(s) (4500+ total fleet power, suboptimal for banana\\instinct runs)"
+        ),
+        option(
+          "dread",
+          "Dreadnought",
+          "Unlock Chthonian with Dreadnought suicide mission"
+        )
+      ])
+    }
+  ]);
+  function createFleetSettingsEvolveAdapter({
+    getFleetManagerOuter,
+    getGalaxyRegions: getGalaxyRegions2,
+    getGame,
+    getSettingsRaw
+  }) {
+    return Object.freeze({
+      read() {
+        const manager = requireRecord(
+          getFleetManagerOuter(),
+          "FleetManagerOuter"
+        );
+        const game2 = requireRecord(getGame(), "game");
+        const config = requireRecord(
+          manager["ShipConfig"],
+          "FleetManagerOuter.ShipConfig"
+        );
+        const components = {};
+        for (const [type, rawParts] of Object.entries(config)) {
+          const parts = requireArray3(
+            rawParts,
+            `FleetManagerOuter.ShipConfig.${type}`
+          );
+          components[type] = Object.freeze(
+            parts.map((raw, index) => {
+              const id = requireString30(
+                raw,
+                `FleetManagerOuter.ShipConfig.${type}[${index}]`
+              );
+              return option(id, localize(game2, `outer_shipyard_${type}_${id}`));
+            })
+          );
+        }
+        const rawRegions = requireArray3(getGalaxyRegions2(), "galaxyRegions");
+        const regions = rawRegions.map(
+          (raw, index) => requireString30(raw, `galaxyRegions[${index}]`)
+        );
+        const outerRegions = regions.map((id) => ({
+          id,
+          label: readName(game2, "space", id)
+        }));
+        const settings2 = requireRecord(getSettingsRaw(), "settingsRaw");
+        const overrides = requireRecord(
+          settings2["overrides"],
+          "settingsRaw.overrides"
+        );
+        const andromedaRegions = regions.map((id) => ({
+          id,
+          label: id === "gxy_alien1" ? "Alien 1 System" : id === "gxy_alien2" ? "Alien 2 System" : readName(game2, "galaxy", id),
+          settingName: `fleet_pr_${id}`
+        })).sort((a, b) => {
+          const left = typeof settings2[a.settingName] === "number" ? settings2[a.settingName] : 0;
+          const right = typeof settings2[b.settingName] === "number" ? settings2[b.settingName] : 0;
+          return left - right;
+        }).map((region) => ({
+          ...region,
+          ...overrides[region.settingName] ? { settingName: region.settingName } : {}
+        }));
+        return createFleetSettingsReadModel({
+          outerControls,
+          outerComponents: components,
+          outerRegions,
+          andromedaControls,
+          andromedaRegions
         });
       }
     });
@@ -47018,360 +47452,6 @@
     };
   }
 
-  // src/ui/fleet-settings.ts
-  function createFleetSettings({
-    getDependency,
-    getOverride
-  }) {
-    const $2 = liveFunction(() => getDependency("$"));
-    const FleetManagerOuter2 = liveObject4(
-      () => getDependency("FleetManagerOuter")
-    );
-    const addSettingsHeader12 = liveFunction(
-      () => getDependency("addSettingsHeader1")
-    );
-    const addSettingsNumber2 = liveFunction(
-      () => getDependency("addSettingsNumber")
-    );
-    const addSettingsSelect2 = liveFunction(
-      () => getDependency("addSettingsSelect")
-    );
-    const addSettingsToggle2 = liveFunction(
-      () => getDependency("addSettingsToggle")
-    );
-    const addStandardHeading2 = liveFunction(
-      () => getDependency("addStandardHeading")
-    );
-    const addTableInput2 = liveFunction(() => getDependency("addTableInput"));
-    const buildSettingsSection22 = liveFunction(
-      () => getDependency("buildSettingsSection2")
-    );
-    const buildTableLabel2 = liveFunction(() => getDependency("buildTableLabel"));
-    const document2 = liveObject4(() => getDependency("document"));
-    const galaxyRegions2 = liveObject4(() => getDependency("galaxyRegions"));
-    const game2 = liveObject4(() => getDependency("game"));
-    const openOverrideModal2 = liveFunction(
-      () => getDependency("openOverrideModal")
-    );
-    const resetCheckbox2 = liveFunction(() => getDependency("resetCheckbox"));
-    const resetFleetSettings2 = liveFunction(
-      () => getDependency("resetFleetSettings")
-    );
-    const settings2 = liveObject4(() => getDependency("settings"));
-    const settingsRaw2 = liveObject4(() => getDependency("settingsRaw"));
-    const sorterHelper2 = liveFunction(() => getDependency("sorterHelper"));
-    const updateSettingsFromState2 = liveFunction(
-      () => getDependency("updateSettingsFromState")
-    );
-    function buildFleetSettingsImpl(parentNode, secondaryPrefix) {
-      let sectionId = "fleet";
-      let sectionName = "Fleet";
-      let resetFunction = function() {
-        resetFleetSettings2(true);
-        updateSettingsFromState2();
-        updateFleetSettingsContent2(secondaryPrefix);
-        resetCheckbox2("autoFleet");
-      };
-      buildSettingsSection22(
-        parentNode,
-        secondaryPrefix,
-        sectionId,
-        sectionName,
-        resetFunction,
-        updateFleetSettingsContent2
-      );
-    }
-    function updateFleetSettingsContentImpl(secondaryPrefix) {
-      let currentScrollPosition = document2.documentElement.scrollTop || document2.body.scrollTop;
-      let currentNode = $2(`#script_${secondaryPrefix}fleetContent`);
-      currentNode.empty().off("*");
-      updateFleetAndromeda2(currentNode, secondaryPrefix);
-      updateFleetOuter2(currentNode, secondaryPrefix);
-      document2.documentElement.scrollTop = document2.body.scrollTop = currentScrollPosition;
-    }
-    function updateFleetOuterImpl(currentNode, secondaryPrefix) {
-      addStandardHeading2(currentNode, "Outer Solar");
-      let shipOptions = [
-        { val: "none", label: "None", hint: "Ship building disabled" },
-        {
-          val: "user",
-          label: "Current design",
-          hint: "Build whatever currently set in Ship Yard"
-        },
-        {
-          val: "manual",
-          label: "Manual mode",
-          hint: "Assists accumulating resources needed for current blueprint, without building or deploying anything. It also might need tweaking prioritization settings to work."
-        },
-        {
-          val: "custom",
-          label: "Presets",
-          hint: "Build ships with components configured below. All components need to be unlocked, and resulting design should have enough power"
-        }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "fleetOuterShips",
-        "Ships to build",
-        "Once avalable and affordable script will build ship of selected design, and send it to region with most piracy * weighting",
-        shipOptions
-      );
-      addSettingsNumber2(
-        currentNode,
-        "fleetOuterCrew",
-        "Minimum idle soldiers",
-        "Only build ships when the remaining idle soldiers exceed this number. In Evil, the configured Authority target can reserve more soldiers automatically."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "fleetExploreTau",
-        "Explore Tau Ceti",
-        "Send explorer to Tau Ceti"
-      );
-      currentNode.append(
-        '<div class="has-text-info">While the Eris Digsite is incomplete, its effective defense target is raised automatically from the configured scan/post-capture value so active Troopers and Tanks can overcome Digsite regeneration.</div>'
-      );
-      addSettingsHeader12(currentNode, "Fighter");
-      for (let [type, parts] of Object.entries(
-        FleetManagerOuter2.ShipConfig
-      )) {
-        let partOptions = parts.map((id) => ({
-          val: id,
-          label: game2.loc(`outer_shipyard_${type}_${id}`)
-        }));
-        addSettingsSelect2(
-          currentNode,
-          `fleet_outer_${type}`,
-          game2.loc(`outer_shipyard_${type}`),
-          "Preset ship component",
-          partOptions
-        );
-      }
-      addSettingsHeader12(currentNode, "Scout");
-      for (let [type, parts] of Object.entries(
-        FleetManagerOuter2.ShipConfig
-      )) {
-        let partOptions = parts.map((id) => ({
-          val: id,
-          label: game2.loc(`outer_shipyard_${type}_${id}`)
-        }));
-        addSettingsSelect2(
-          currentNode,
-          `fleet_scout_${type}`,
-          game2.loc(`outer_shipyard_${type}`),
-          "Preset ship component",
-          partOptions
-        );
-      }
-      currentNode.append(`
-          <table style="width:100%; text-align: left">
-            <tr>
-              <th class="has-text-warning" style="width:35%">Region</th>
-              <th class="has-text-warning" style="width:20%" title="Weighting determines order of ships dispatching, regions with higher weighting will be get ships sooner">Weighting</th>
-              <th class="has-text-warning" style="width:20%" title="Desired protection from syndicate. While the Eris Digsite is incomplete, the script automatically raises its effective target enough for the supported Troopers and Tanks to overcome Digsite regeneration.">Defend</th>
-              <th class="has-text-warning" style="width:20%" title="Amounts of scouts to dispatch">Scouts</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_${secondaryPrefix}fleetOuterTable"></tbody>
-          </table>`);
-      let tableBodyNode = $2(`#script_${secondaryPrefix}fleetOuterTable`);
-      let newTableBodyText = "";
-      for (let reg of FleetManagerOuter2.Regions) {
-        newTableBodyText += `<tr><td id="script_${secondaryPrefix}fleet_${reg}" style="width:35%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:20%"></td><td style="width:5%"></td></tr>`;
-      }
-      tableBodyNode.append($2(newTableBodyText));
-      for (let reg of FleetManagerOuter2.Regions) {
-        let fleetElement = $2(`#script_${secondaryPrefix}fleet_${reg}`);
-        let nameRef = game2.actions.space[reg].info.name;
-        let gameName = typeof nameRef === "function" ? nameRef() : nameRef;
-        let label = reg.split("_").slice(1).map((n) => n.charAt(0).toUpperCase() + n.slice(1)).join(" ");
-        if (label !== gameName) {
-          label += ` (${gameName})`;
-        }
-        fleetElement.append(buildTableLabel2(label));
-        fleetElement = fleetElement.next();
-        addTableInput2(fleetElement, "fleet_outer_pr_" + reg);
-        fleetElement = fleetElement.next();
-        addTableInput2(fleetElement, "fleet_outer_def_" + reg);
-        fleetElement = fleetElement.next();
-        addTableInput2(fleetElement, "fleet_outer_sc_" + reg);
-      }
-    }
-    function updateFleetAndromedaImpl(currentNode, secondaryPrefix) {
-      addStandardHeading2(currentNode, "Andromeda");
-      addSettingsToggle2(
-        currentNode,
-        "fleetMaxCover",
-        "Maximize protection of prioritized systems",
-        "Adjusts ships distribution to fully supress piracy in prioritized regions. Some potential defense will be wasted, as it will use big ships to cover small holes, when it doesn't have anything fitting better. This option is not required: all your dreadnoughts still will be used even without this option."
-      );
-      addSettingsToggle2(
-        currentNode,
-        "fleetCrewReclaim",
-        "Crew combat ships only when useful",
-        "Power combat ships only when reducing piracy improves a resource or knowledge output the automation currently needs, and release all other crews back to the workforce. Active trade routes are protected only while their purchased resource is useful. Inactive while fleet is being accumulated for an assault mission. Surplus ships won't be parked at Gorddon for the Symposium bonus while this is enabled."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "fleetEmbassyKnowledge",
-        "Minimum knowledge for Embassy",
-        "Building Embassy increases maximum piracy up to 100, script won't Auto Build it until this knowledge cap is reached."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "fleetAlienGiftKnowledge",
-        "Minimum knowledge for Alien Gift",
-        "Researching Alien Gift increases maximum piracy up to 250, script won't Auto Research it until this knowledge cap is reached."
-      );
-      addSettingsNumber2(
-        currentNode,
-        "fleetAlien2Knowledge",
-        "Minimum knowledge for Alien 2 Assault",
-        "Assaulting Alien 2 increases maximum piracy up to 500, script won't do it until this knowledge cap is reached. Regardless of set value it won't ever try to assault until you have big enough fleet to do it without loses."
-      );
-      let alien2AssaultOptions = [
-        {
-          val: "none",
-          label: "No Losses",
-          hint: "Min fleet strength 650. No losses."
-        },
-        {
-          val: "suicide",
-          label: "Suicide Mission",
-          hint: "Attack as soon as we hit 400 fleet rating. There will be losses."
-        }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "fleetAlien2Loses",
-        "Alien 2 Mission",
-        "Assault Alien 2 when chosen outcome is achievable. You should really keep the default, unless you're speed running and want to take it out ASAP with losses.",
-        alien2AssaultOptions
-      );
-      let assaultOptions = [
-        {
-          val: "ignore",
-          label: "Manual assault",
-          hint: "Won't ever launch assault mission on Chthonian"
-        },
-        {
-          val: "high",
-          label: "High casualties",
-          hint: "Unlock Chthonian using mixed fleet, high casualties (1250+ total fleet power, 500 will be lost)"
-        },
-        {
-          val: "avg",
-          label: "Average casualties",
-          hint: "Unlock Chthonian using mixed fleet, average casualties (2500+ total fleet power, 160 will be lost)"
-        },
-        {
-          val: "low",
-          label: "Low casualties",
-          hint: "Unlock Chthonian using mixed fleet, low casualties (4500+ total fleet power, 80 will be lost)"
-        },
-        {
-          val: "frigate",
-          label: "Frigate",
-          hint: "Unlock Chthonian loosing Frigate ship(s) (4500+ total fleet power, suboptimal for banana\\instinct runs)"
-        },
-        {
-          val: "dread",
-          label: "Dreadnought",
-          hint: "Unlock Chthonian with Dreadnought suicide mission"
-        }
-      ];
-      addSettingsSelect2(
-        currentNode,
-        "fleetChthonianLoses",
-        "Chthonian Mission",
-        "Assault Chthonian when chosen outcome is achievable. Mixed fleet formed to clear mission with minimum possible wasted ships, e.g. for low causlities it can sacriface 8 scouts, or 2 corvettes and 2 scouts, or frigate, and such. Whatever will be first available. It also takes in account perks and challenges, adjusting fleet accordingly.",
-        assaultOptions
-      );
-      currentNode.append(`
-          <table style="width:100%; text-align: left">
-            <tr>
-              <th class="has-text-warning" style="width:95%">Region</th>
-              <th style="width:5%"></th>
-            </tr>
-            <tbody id="script_${secondaryPrefix}fleetTableBody"></tbody>
-          </table>`);
-      let tableBodyNode = $2(`#script_${secondaryPrefix}fleetTableBody`);
-      let priorityRegions = galaxyRegions2.slice().sort(
-        (a, b) => settingsRaw2["fleet_pr_" + a] - settingsRaw2["fleet_pr_" + b]
-      );
-      for (let i = 0; i < priorityRegions.length; i++) {
-        const settingName = `fleet_pr_${priorityRegions[i]}`;
-        const rowNode = $2(`
-              <tr value="${priorityRegions[i]}" class="script-draggable script_bg_${settingName}">
-                <td id="script_${secondaryPrefix}fleet_${priorityRegions[i]}" style="width:95%"></td>
-                <td style="width:5%">
-                  <span class="script-lastcolumn"></span>
-                </td>
-              </tr>`);
-        rowNode.toggleClass(
-          "inactive-row",
-          Boolean(settingsRaw2.overrides[settingName])
-        ).on(
-          "click",
-          {
-            label: `Andromeda region priority (${settingName})`,
-            name: settingName,
-            type: "number"
-          },
-          openOverrideModal2
-        );
-        tableBodyNode.append(rowNode);
-      }
-      for (let i = 0; i < galaxyRegions2.length; i++) {
-        let fleetElement = $2(
-          `#script_${secondaryPrefix}fleet_${galaxyRegions2[i]}`
-        );
-        let nameRef = galaxyRegions2[i] === "gxy_alien1" ? "Alien 1 System" : galaxyRegions2[i] === "gxy_alien2" ? "Alien 2 System" : game2.actions.galaxy[galaxyRegions2[i]].info.name;
-        fleetElement.append(
-          buildTableLabel2(typeof nameRef === "function" ? nameRef() : nameRef)
-        );
-      }
-      tableBodyNode.sortable({
-        items: "tr:not(.unsortable)",
-        helper: sorterHelper2,
-        update: function() {
-          let regionIds = tableBodyNode.sortable("toArray", {
-            attribute: "value"
-          });
-          for (let i = 0; i < regionIds.length; i++) {
-            settingsRaw2["fleet_pr_" + regionIds[i]] = i;
-          }
-          updateSettingsFromState2();
-          if (settings2.showSettings && secondaryPrefix) {
-            updateFleetSettingsContent2("");
-          }
-        }
-      });
-    }
-    function buildFleetSettings2(...args) {
-      const implementation = getOverride("buildFleetSettings") ?? buildFleetSettingsImpl;
-      return implementation.apply(this, args);
-    }
-    function updateFleetSettingsContent2(...args) {
-      const implementation = getOverride("updateFleetSettingsContent") ?? updateFleetSettingsContentImpl;
-      return implementation.apply(this, args);
-    }
-    function updateFleetOuter2(...args) {
-      const implementation = getOverride("updateFleetOuter") ?? updateFleetOuterImpl;
-      return implementation.apply(this, args);
-    }
-    function updateFleetAndromeda2(...args) {
-      const implementation = getOverride("updateFleetAndromeda") ?? updateFleetAndromedaImpl;
-      return implementation.apply(this, args);
-    }
-    return {
-      buildFleetSettings: buildFleetSettings2,
-      updateFleetSettingsContent: updateFleetSettingsContent2,
-      updateFleetOuter: updateFleetOuter2,
-      updateFleetAndromeda: updateFleetAndromeda2
-    };
-  }
-
   // src/ui/queue-panels.ts
   function createQueuePanels({
     getJQuery,
@@ -47605,7 +47685,7 @@
   }
 
   // src/adapters/evolve/mech-info.ts
-  function requireString30(value, path) {
+  function requireString31(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47651,7 +47731,7 @@
           mechs[index],
           `game.global.portal.mechbay.mechs[${index}]`
         );
-        const size = requireString30(mech["size"], `mechs[${index}].size`);
+        const size = requireString31(mech["size"], `mechs[${index}].size`);
         const stats = requireRecord(
           call4(manager, "getMechStats", "MechManager.getMechStats", [mech]),
           `MechManager.getMechStats(${index})`
@@ -47829,7 +47909,7 @@
   }
 
   // src/adapters/evolve/resource-toggles.ts
-  function requireString31(value, path) {
+  function requireString32(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
     }
@@ -47850,7 +47930,7 @@
     return priorityList;
   }
   function readResourceId3(value, path) {
-    return requireString31(requireRecord(value, path)["id"], `${path}.id`);
+    return requireString32(requireRecord(value, path)["id"], `${path}.id`);
   }
   function createResourceToggleEvolveAdapter({
     getGame,
@@ -47866,13 +47946,13 @@
       const noTrade = Boolean(race2["no_trade"]);
       const loc = requireFunction2(game2["loc"], "game.loc");
       const labels = noTrade ? Object.freeze({ buy: "", sell: "", routes: "", cancelRoutes: "" }) : Object.freeze({
-        buy: requireString31(loc("resource_market_buy"), "game.loc(buy)"),
-        sell: requireString31(loc("resource_market_sell"), "game.loc(sell)"),
-        routes: requireString31(
+        buy: requireString32(loc("resource_market_buy"), "game.loc(buy)"),
+        sell: requireString32(loc("resource_market_sell"), "game.loc(sell)"),
+        routes: requireString32(
           loc("resource_market_routes"),
           "game.loc(routes)"
         ),
-        cancelRoutes: requireString31(
+        cancelRoutes: requireString32(
           loc("cancel_routes"),
           "game.loc(cancel_routes)"
         )
@@ -52376,42 +52456,53 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       getActions: () => hellSettingsTestContext?.actions ?? hellSettingsActions
     });
     const { buildHellSettings, updateHellSettingsContent } = hellSettingsBrowserAdapter;
-    const fleetSettingsOverrides = {};
-    const getFleetSettingsDependency = createDependencyResolver(
-      fleetSettingsOverrides,
-      {
-        $: () => $,
-        FleetManagerOuter: () => FleetManagerOuter,
-        addSettingsHeader1: () => addSettingsHeader1,
-        addSettingsNumber: () => addSettingsNumber,
-        addSettingsSelect: () => addSettingsSelect,
-        addSettingsToggle: () => addSettingsToggle,
-        addStandardHeading: () => addStandardHeading,
-        addTableInput: () => addTableInput,
-        buildSettingsSection2: () => buildSettingsSection2,
-        buildTableLabel: () => buildTableLabel,
-        document: () => document,
-        galaxyRegions: () => galaxyRegions,
-        game: () => game,
-        openOverrideModal: () => openOverrideModal,
-        resetCheckbox: () => resetCheckbox,
-        resetFleetSettings: () => resetFleetSettings,
-        settings: () => settings,
-        settingsRaw: () => settingsRaw,
-        sorterHelper: () => sorterHelper,
-        updateSettingsFromState: () => updateSettingsFromState
-      }
-    );
-    const fleetSettings = createFleetSettings({
-      getDependency: getFleetSettingsDependency,
-      getOverride: (name) => fleetSettingsOverrides[name]
+    let fleetSettingsTestContext;
+    const fleetSettingsReader = createFleetSettingsEvolveAdapter({
+      getFleetManagerOuter: () => fleetSettingsTestContext?.FleetManagerOuter ?? FleetManagerOuter,
+      getGalaxyRegions: () => fleetSettingsTestContext?.galaxyRegions ?? galaxyRegions,
+      getGame: () => fleetSettingsTestContext?.game ?? game,
+      getSettingsRaw: () => fleetSettingsTestContext?.settingsRaw ?? settingsRaw
     });
-    const {
-      buildFleetSettings,
-      updateFleetSettingsContent,
-      updateFleetOuter,
-      updateFleetAndromeda
-    } = fleetSettings;
+    let fleetSettingsIntentHandler;
+    const fleetSettingsBrowserAdapter = createFleetSettingsBrowserAdapter({
+      getDocument: () => document,
+      getJQuery: () => $,
+      reader: fleetSettingsReader,
+      intents: {
+        handle: (intent) => fleetSettingsIntentHandler.handle(intent)
+      },
+      getActions: () => fleetSettingsTestContext?.actions ?? {
+        buildSettingsSection2,
+        addSettingsHeader1,
+        addSettingsNumber,
+        addSettingsSelect,
+        addSettingsToggle,
+        addStandardHeading,
+        addTableInput,
+        buildTableLabel,
+        openOverrideModal,
+        sorterHelper
+      }
+    });
+    fleetSettingsIntentHandler = createFleetSettingsIntentHandler({
+      writer: {
+        resetToDefaults: () => (fleetSettingsTestContext?.resetFleetSettings ?? resetFleetSettings)(
+          true
+        ),
+        reorderAndromeda: (regionIds) => {
+          const target = fleetSettingsTestContext?.settingsRaw ?? settingsRaw;
+          regionIds.forEach((regionId, index) => {
+            target[`fleet_pr_${regionId}`] = index;
+          });
+        },
+        persist: () => (fleetSettingsTestContext?.updateSettingsFromState ?? updateSettingsFromState)()
+      },
+      render: (secondaryPrefix) => fleetSettingsBrowserAdapter.updateFleetSettingsContent(secondaryPrefix),
+      effects: {
+        resetCheckbox: () => (fleetSettingsTestContext?.resetCheckbox ?? resetCheckbox)("autoFleet")
+      }
+    });
+    const { buildFleetSettings, updateFleetSettingsContent } = fleetSettingsBrowserAdapter;
     let mechSettingsTestContext;
     const mechSettingsReader = createMechSettingsEvolveAdapter({
       getMechManager: () => mechSettingsTestContext?.MechManager ?? MechManager,
@@ -55922,19 +56013,23 @@ Script version: ${versionPart} ${getContext().scriptVersionExtra}
       Object.assign(window.__EA_TEST_HOOKS__, {
         settingsBoundaries: {
           prestige: prestigeSettings,
-          evolution: evolutionSettings,
-          fleet: fleetSettings
+          evolution: evolutionSettings
         },
         setSettingsBoundariesTestContext(context) {
           Object.assign(prestigeSettingsOverrides, context);
           Object.assign(evolutionSettingsOverrides, context);
-          Object.assign(fleetSettingsOverrides, context);
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
         triggerSettings: triggerSettingsBrowserAdapter,
         setTriggerSettingsTestContext(context) {
           triggerSettingsTestContext = context;
+        }
+      });
+      Object.assign(window.__EA_TEST_HOOKS__, {
+        fleetSettings: fleetSettingsBrowserAdapter,
+        setFleetSettingsTestContext(context) {
+          fleetSettingsTestContext = context;
         }
       });
       Object.assign(window.__EA_TEST_HOOKS__, {
