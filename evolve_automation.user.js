@@ -52185,6 +52185,12 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
   }
 
   // src/adapters/evolve/legacy-runtime.js
+  function startEvolveRuntime($, diagnostics, runtimeEnvironment) {
+    startLegacyRuntime($, diagnostics, runtimeEnvironment, false);
+  }
+  function startEvolveRuntimeForTests($, diagnostics, runtimeEnvironment) {
+    return startLegacyRuntime($, diagnostics, runtimeEnvironment, true);
+  }
   function startLegacyRuntime($, diagnostics, runtimeEnvironment, captureTestSurface) {
     "use strict";
     const runtimeTestSurface = captureTestSurface === true ? {} : null;
@@ -57449,10 +57455,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
   }
 
   // src/main.ts
-  startLegacyRuntime(
+  startEvolveRuntime(
     readJQueryGlobal(globalThis),
     createBrowserDiagnostics(globalThis),
-    createLegacyRuntimeEnvironment(globalThis),
-    false
+    createLegacyRuntimeEnvironment(globalThis)
   );
 })();

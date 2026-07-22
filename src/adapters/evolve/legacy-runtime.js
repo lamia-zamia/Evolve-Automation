@@ -463,7 +463,15 @@ import { createSettingsControls } from "../../ui/settings-controls.ts";
 import { createOverrideCatalog } from "../../settings/override-catalog.ts";
 import { createScriptRuntimeUI } from "../../ui/script-runtime.ts";
 
-export function startLegacyRuntime(
+export function startEvolveRuntime($, diagnostics, runtimeEnvironment) {
+  startLegacyRuntime($, diagnostics, runtimeEnvironment, false);
+}
+
+export function startEvolveRuntimeForTests($, diagnostics, runtimeEnvironment) {
+  return startLegacyRuntime($, diagnostics, runtimeEnvironment, true);
+}
+
+function startLegacyRuntime(
   $,
   diagnostics,
   runtimeEnvironment,
