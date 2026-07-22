@@ -482,7 +482,7 @@ import { createSettingsControls } from "./ui/settings-controls.ts";
 import { createOverrideCatalog } from "./settings/override-catalog.ts";
 import { createScriptRuntimeUI } from "./ui/script-runtime.ts";
 
-export function startLegacyRuntime($, testHooks) {
+export function startLegacyRuntime($, testHooks, diagnostics) {
   "use strict";
   const { getRealNumber, getNumberString, getNiceNumber } =
     createNumberFormatting({ numberSuffix });
@@ -4883,12 +4883,15 @@ export function startLegacyRuntime($, testHooks) {
     haveTask,
     getGameLog: () => GameLog,
     getJQuery: () => $,
-    readDebugEnabled: () => window.mechDebug === true,
+    readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
     debugLog: (message) => console.log(message),
   });
   const autoMech = () => {
     const outcome = runMechAutomation(mechAdapter);
-    if (window.mechDebug === true && outcome.status !== "succeeded") {
+    if (
+      diagnostics.readMechDebugEnabled() &&
+      outcome.status !== "succeeded"
+    ) {
       console.log("[mech] outcome:", outcome);
     }
     return outcome;
@@ -5781,13 +5784,8 @@ export function startLegacyRuntime($, testHooks) {
       console.log("[EA perf] reset");
     },
   };
-  window.__EAperf = __EAperf;
-  // performance.now() in the browser (sub-ms resolution); Date.now() only so the
-  // headless test sandbox, which has no performance global, does not crash.
-  const __eaNow =
-    typeof performance !== "undefined" && performance.now
-      ? () => performance.now()
-      : () => Date.now();
+  diagnostics.publishPerformance(__EAperf);
+  const __eaNow = () => diagnostics.nowMs();
 
   const automate = () => {
     const t0 = __eaNow();
