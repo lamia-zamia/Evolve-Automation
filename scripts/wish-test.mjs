@@ -4,7 +4,7 @@ import { createWishControls } from "../src/adapters/browser/wish-controls.ts";
 import {
   createWishCommandExecutor,
   createWishReader,
-} from "../src/adapters/evolve/wish.ts";
+} from "../src/adapters/evolve/traits/wish.ts";
 import { runWishAutomation } from "../src/application/wish.ts";
 import { planWishes } from "../src/domain/traits/wish.ts";
 import {

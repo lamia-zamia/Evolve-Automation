@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { readStorageRequirementsInput } from "../src/adapters/evolve/storage-requirements.ts";
+import { readStorageRequirementsInput } from "../src/adapters/evolve/economy/storage/storage-requirements.ts";
 
 function resource(maxQuantity, extra = {}) {
   return {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createPlanetSettingsEvolveAdapter } from "../src/adapters/evolve/planet-settings.ts";
+import { createPlanetSettingsEvolveAdapter } from "../src/adapters/evolve/progression/evolution/planet-settings.ts";
 
 const game = {
   loc(key) {

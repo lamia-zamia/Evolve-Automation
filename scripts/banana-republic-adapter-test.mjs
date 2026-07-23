@@ -5,7 +5,7 @@ import {
   readBananaRepublicObjective,
   readBananaRepublicProgress,
   readBananaRepublicSmoothieInput,
-} from "../src/adapters/evolve/banana-republic.ts";
+} from "../src/adapters/evolve/civic/banana-republic.ts";
 import {
   isBananaRepublicGuardActive,
   isBananaRepublicReadyForUnification,

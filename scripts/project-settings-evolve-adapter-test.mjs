@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createProjectSettingsEvolveAdapter } from "../src/adapters/evolve/project-settings.ts";
+import { createProjectSettingsEvolveAdapter } from "../src/adapters/evolve/progression/research/project-settings.ts";
 
 const settingsRaw = {};
 const trace = [];

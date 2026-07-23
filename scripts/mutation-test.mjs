@@ -4,7 +4,7 @@ import { runMutationAutomation } from "../src/application/mutation.ts";
 import {
   createMutationCommandExecutor,
   createMutationReader,
-} from "../src/adapters/evolve/mutation.ts";
+} from "../src/adapters/evolve/traits/mutation.ts";
 import { planMutation } from "../src/domain/traits/mutation.ts";
 
 function createFixture(scenario) {

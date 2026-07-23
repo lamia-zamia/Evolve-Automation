@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { createPowerAutomation } from "../src/application/power.ts";
 import { createPowerWarningSource } from "../src/adapters/browser/power-warnings.ts";
-import { createPowerAdapter } from "../src/adapters/evolve/power.ts";
+import { createPowerAdapter } from "../src/adapters/evolve/economy/production/power.ts";
 import {
   EMPTY_POWER_AUTOMATION_STATE,
   getBestPowerSupplyRatio,

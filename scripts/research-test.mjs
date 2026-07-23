@@ -4,7 +4,7 @@ import { runResearchAutomation } from "../src/application/research.ts";
 import {
   createResearchCommandExecutor,
   createResearchReader,
-} from "../src/adapters/evolve/research.ts";
+} from "../src/adapters/evolve/progression/research/research.ts";
 import { planResearch } from "../src/domain/progression/research/research.ts";
 
 function createFixture(definitions) {

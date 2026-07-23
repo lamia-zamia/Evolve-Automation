@@ -4,7 +4,7 @@ import {
   readAchievementGuardInput,
   readAchievementStar,
   readAchievementStarLevelContext,
-} from "../src/adapters/evolve/achievement-guards.ts";
+} from "../src/adapters/evolve/progression/prestige/achievement-guards.ts";
 import {
   calculateAchievementStarLevel,
   isAchievementGuardActive,

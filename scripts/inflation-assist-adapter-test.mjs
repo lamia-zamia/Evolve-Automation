@@ -4,7 +4,7 @@ import {
   readInflationAssistInput,
   readInflationMoneyInput,
   readInflationSaveInput,
-} from "../src/adapters/evolve/inflation-assist.ts";
+} from "../src/adapters/evolve/economy/resources/inflation-assist.ts";
 
 const TARGET = 250_000_000_000;
 

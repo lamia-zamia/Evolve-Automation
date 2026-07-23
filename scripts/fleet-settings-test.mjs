@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { createFleetSettingsIntentHandler } from "../src/application/fleet-settings.ts";
 import { createFleetSettingsBrowserAdapter } from "../src/adapters/browser/fleet-settings.ts";
-import { createFleetSettingsEvolveAdapter } from "../src/adapters/evolve/fleet-settings.ts";
+import { createFleetSettingsEvolveAdapter } from "../src/adapters/evolve/combat/fleet-settings.ts";
 
 const game = {
   loc: (key) => key,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createBuildingSettingsEvolveAdapter } from "../src/adapters/evolve/building-settings.ts";
+import { createBuildingSettingsEvolveAdapter } from "../src/adapters/evolve/progression/build/building-settings.ts";
 
 function makeBuilding({
   id,

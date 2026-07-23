@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createTraitSettingsBrowserAdapter } from "../src/adapters/browser/trait-settings.ts";
-import { createTraitSettingsEvolveAdapter } from "../src/adapters/evolve/trait-settings.ts";
+import { createTraitSettingsEvolveAdapter } from "../src/adapters/evolve/traits/trait-settings.ts";
 import { createTraitSettingsIntentHandler } from "../src/application/trait-settings.ts";
 
 let settingsRaw = { imitateRace: "human" };

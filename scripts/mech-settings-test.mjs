@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { createMechSettingsIntentHandler } from "../src/application/mech-settings.ts";
 import { createMechSettingsBrowserAdapter } from "../src/adapters/browser/mech-settings.ts";
-import { createMechSettingsEvolveAdapter } from "../src/adapters/evolve/mech-settings.ts";
+import { createMechSettingsEvolveAdapter } from "../src/adapters/evolve/combat/mech-settings.ts";
 
 const reader = createMechSettingsEvolveAdapter({
   getMechManager: () => ({ Size: ["small", "large"] }),

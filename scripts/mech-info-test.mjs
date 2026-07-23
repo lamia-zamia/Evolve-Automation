@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createMechInfoBrowserAdapter } from "../src/adapters/browser/mech-info.ts";
-import { createMechInfoEvolveAdapter } from "../src/adapters/evolve/mech-info.ts";
+import { createMechInfoEvolveAdapter } from "../src/adapters/evolve/combat/mech-info.ts";
 import { formatMechInfo } from "../src/domain/combat/mech-info.ts";
 
 assert.equal(

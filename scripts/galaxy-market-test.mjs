@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createGalaxyMarketAdapter } from "../src/adapters/evolve/galaxy-market.ts";
+import { createGalaxyMarketAdapter } from "../src/adapters/evolve/economy/market/galaxy-market.ts";
 import { runGalaxyMarketAutomation } from "../src/application/galaxy-market.ts";
 import { planGalaxyMarket } from "../src/domain/economy/market/galaxy-market.ts";
 import {

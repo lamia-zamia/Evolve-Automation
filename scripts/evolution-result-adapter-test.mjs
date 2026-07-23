@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { readEvolutionResultInput } from "../src/adapters/evolve/evolution-result.ts";
+import { readEvolutionResultInput } from "../src/adapters/evolve/progression/evolution/evolution-result.ts";
 
 function makeRace(name, { weighting = 0, goals = [], habitability = 1 } = {}) {
   return {

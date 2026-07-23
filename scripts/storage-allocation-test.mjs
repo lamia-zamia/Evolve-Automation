@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { createStorageAllocationAutomation } from "../src/application/storage-allocation.ts";
 import { createStorageDebugSource } from "../src/adapters/browser/storage-debug.ts";
-import { createStorageAllocationAdapter } from "../src/adapters/evolve/storage-allocation.ts";
+import { createStorageAllocationAdapter } from "../src/adapters/evolve/economy/storage/storage-allocation.ts";
 import {
   EMPTY_STORAGE_ALLOCATION_STATE,
   finalizeStorageAllocation,

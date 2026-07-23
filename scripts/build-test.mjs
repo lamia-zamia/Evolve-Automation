@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { createLegacyAutoBuild } from "./test-support/legacy-auto-build.ts";
 import { runBuildAutomation } from "../src/application/build.ts";
-import { createBuildAdapter } from "../src/adapters/evolve/build.ts";
+import { createBuildAdapter } from "../src/adapters/evolve/progression/build/build.ts";
 import {
   applyBuildClickResult,
   candidateSampleNeeds,

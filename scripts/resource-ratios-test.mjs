@@ -5,7 +5,7 @@ import {
   readExtractorRatioInput,
   readMineRatioInput,
   readQuarryRatioInput,
-} from "../src/adapters/evolve/resource-ratios.ts";
+} from "../src/adapters/evolve/economy/resources/resource-ratios.ts";
 import {
   planExtractorRatios,
   planMineRatio,

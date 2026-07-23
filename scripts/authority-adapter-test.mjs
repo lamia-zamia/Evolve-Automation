@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   readAuthorityPolicyView,
   readAuthorityQuantity,
-} from "../src/adapters/evolve/authority.ts";
+} from "../src/adapters/evolve/civic/authority.ts";
 
 const validGame = {
   global: {

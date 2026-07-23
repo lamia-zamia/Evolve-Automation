@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { createEvolutionSettingsIntentHandler } from "../src/application/evolution-settings.ts";
 import { createEvolutionSettingsBrowserAdapter } from "../src/adapters/browser/evolution-settings.ts";
-import { createEvolutionSettingsEvolveAdapter } from "../src/adapters/evolve/evolution-settings.ts";
+import { createEvolutionSettingsEvolveAdapter } from "../src/adapters/evolve/progression/evolution/evolution-settings.ts";
 
 const race = {
   id: "human",

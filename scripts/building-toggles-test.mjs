@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createBuildingToggleBrowserAdapter } from "../src/adapters/browser/building-toggles.ts";
-import { createBuildingToggleEvolveAdapter } from "../src/adapters/evolve/building-toggles.ts";
+import { createBuildingToggleEvolveAdapter } from "../src/adapters/evolve/progression/build/building-toggles.ts";
 
 const reader = createBuildingToggleEvolveAdapter({
   getBuildingManager: () => ({

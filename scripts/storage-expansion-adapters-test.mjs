@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
-import { createStorageCommandExecutor } from "../src/adapters/evolve/storage-command-executor.ts";
-import { createEvolveStorageExpansionReader } from "../src/adapters/evolve/storage-expansion-reader.ts";
+import { createStorageCommandExecutor } from "../src/adapters/evolve/economy/storage/storage-command-executor.ts";
+import { createEvolveStorageExpansionReader } from "../src/adapters/evolve/economy/storage/storage-expansion-reader.ts";
 
 const clock = Object.freeze({ nowMs: () => 5 });
 

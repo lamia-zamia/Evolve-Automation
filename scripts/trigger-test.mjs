@@ -4,7 +4,7 @@ import { runTriggerAutomation } from "../src/application/trigger.ts";
 import {
   createTriggerCommandExecutor,
   createTriggerReader,
-} from "../src/adapters/evolve/trigger.ts";
+} from "../src/adapters/evolve/progression/build/trigger.ts";
 import { planTrigger } from "../src/domain/progression/build/trigger.ts";
 
 function createFixture(scenario) {

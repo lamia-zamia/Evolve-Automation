@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 
 import { createBrowserTaxControls } from "../src/adapters/browser/tax-controls.ts";
-import { createTaxCommandExecutor } from "../src/adapters/evolve/tax-command-executor.ts";
-import { createEvolveTaxReader } from "../src/adapters/evolve/tax-reader.ts";
+import { createTaxCommandExecutor } from "../src/adapters/evolve/civic/tax-command-executor.ts";
+import { createEvolveTaxReader } from "../src/adapters/evolve/civic/tax-reader.ts";
 import { createTaxSettingsReader } from "../src/adapters/storage/tax-settings-reader.ts";
 import { createKeyModifierController } from "../src/adapters/browser/tax-controls.ts";
 import { createTaxAutomation } from "../src/application/tax.ts";

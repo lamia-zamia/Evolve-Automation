@@ -4,7 +4,7 @@ import { runCraftAutomation } from "../src/application/craft.ts";
 import {
   createCraftCommandExecutor,
   createCraftReader,
-} from "../src/adapters/evolve/craft.ts";
+} from "../src/adapters/evolve/economy/production/craft.ts";
 import {
   planCraft,
   shouldRunCraft,

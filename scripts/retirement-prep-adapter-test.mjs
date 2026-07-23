@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   readRetirementAssistInput,
   readRetirementPreparationInput,
-} from "../src/adapters/evolve/retirement-prep.ts";
+} from "../src/adapters/evolve/progression/prestige/retirement-prep.ts";
 
 const thresholds = Object.freeze({
   fusionGenerators: 20,

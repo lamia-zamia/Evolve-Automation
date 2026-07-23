@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { createTriggerSettingsIntentHandler } from "../src/application/trigger-settings.ts";
 import { createTriggerSettingsBrowserAdapter } from "../src/adapters/browser/trigger-settings.ts";
-import { createTriggerSettingsEvolveAdapter } from "../src/adapters/evolve/trigger-settings.ts";
+import { createTriggerSettingsEvolveAdapter } from "../src/adapters/evolve/progression/build/trigger-settings.ts";
 
 const manager = {
   priorityList: [

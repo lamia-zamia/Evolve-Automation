@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createEjectorSettingsIntentHandler } from "../src/application/ejector-settings.ts";
-import { createEjectorSettingsEvolveAdapter } from "../src/adapters/evolve/ejector-settings.ts";
+import { createEjectorSettingsEvolveAdapter } from "../src/adapters/evolve/economy/resources/ejector-settings.ts";
 import { createEjectorSettingsBrowserAdapter } from "../src/adapters/browser/ejector-settings.ts";
 
 const iron = {

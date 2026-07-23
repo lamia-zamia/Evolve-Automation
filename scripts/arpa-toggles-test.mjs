@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createArpaToggleBrowserAdapter } from "../src/adapters/browser/arpa-toggles.ts";
-import { createArpaToggleEvolveAdapter } from "../src/adapters/evolve/arpa-toggles.ts";
+import { createArpaToggleEvolveAdapter } from "../src/adapters/evolve/progression/research/arpa-toggles.ts";
 
 const reader = createArpaToggleEvolveAdapter({
   getProjectManager: () => ({

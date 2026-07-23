@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { readTradeRoutesInput } from "../src/adapters/evolve/trade-routes.ts";
+import { readTradeRoutesInput } from "../src/adapters/evolve/economy/market/trade-routes.ts";
 
 const baseSettings = {
   tradeRouteSellExcess: true,

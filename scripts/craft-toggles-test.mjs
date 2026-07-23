@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createCraftToggleBrowserAdapter } from "../src/adapters/browser/craft-toggles.ts";
-import { createCraftToggleEvolveAdapter } from "../src/adapters/evolve/craft-toggles.ts";
+import { createCraftToggleEvolveAdapter } from "../src/adapters/evolve/economy/production/craft-toggles.ts";
 
 const reader = createCraftToggleEvolveAdapter({
   getCraftablesList: () => [{ id: "Plywood" }, { id: "Brick" }],

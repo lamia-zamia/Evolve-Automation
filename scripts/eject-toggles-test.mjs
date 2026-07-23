@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createEjectToggleBrowserAdapter } from "../src/adapters/browser/eject-toggles.ts";
-import { createEjectToggleEvolveAdapter } from "../src/adapters/evolve/eject-toggles.ts";
+import { createEjectToggleEvolveAdapter } from "../src/adapters/evolve/economy/resources/eject-toggles.ts";
 
 const reader = createEjectToggleEvolveAdapter({
   getEjectManager: () => ({ priorityList: [{ id: "Iron" }, { id: "Copper" }] }),

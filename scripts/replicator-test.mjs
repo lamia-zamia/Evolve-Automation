@@ -6,7 +6,7 @@ import {
   createReplicatorGovernorGameReader,
   createReplicatorSelectionExecutor,
   createReplicatorSelectionReader,
-} from "../src/adapters/evolve/replicator.ts";
+} from "../src/adapters/evolve/economy/production/replicator.ts";
 import {
   planReplicatorGovernorSettings,
   planReplicatorGovernorTask,

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createProductionSettingsBrowserAdapter } from "../src/adapters/browser/production-settings.ts";
-import { createProductionSettingsEvolveAdapter } from "../src/adapters/evolve/production-settings.ts";
+import { createProductionSettingsEvolveAdapter } from "../src/adapters/evolve/economy/production/production-settings.ts";
 import { createProductionSettingsIntentHandler } from "../src/application/production-settings.ts";
 
 let settingsRaw = { overrides: {} };

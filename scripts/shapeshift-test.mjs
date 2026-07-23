@@ -4,7 +4,7 @@ import { createShapeshiftControls } from "../src/adapters/browser/progression-co
 import {
   createShapeshiftCommandExecutor,
   readShapeshiftInput,
-} from "../src/adapters/evolve/shapeshift.ts";
+} from "../src/adapters/evolve/traits/shapeshift.ts";
 import { planShapeshift } from "../src/domain/traits/shapeshift.ts";
 
 // End-to-end reader + planner + apply, matching the legacy autoShapeshift.

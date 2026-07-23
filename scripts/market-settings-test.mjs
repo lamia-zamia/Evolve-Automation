@@ -5,7 +5,7 @@ import { createMarketSettingsBrowserAdapter } from "../src/adapters/browser/mark
 import {
   createMarketSettingsEvolveAdapter,
   createMarketSettingsWriter,
-} from "../src/adapters/evolve/market-settings.ts";
+} from "../src/adapters/evolve/economy/market/market-settings.ts";
 
 const resources = {
   Iron: { id: "Iron", name: "Iron" },

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createFleetAdapter } from "../src/adapters/evolve/fleet.ts";
+import { createFleetAdapter } from "../src/adapters/evolve/combat/fleet.ts";
 import { runFleetAutomation } from "../src/application/fleet.ts";
 
 const shipNames = [

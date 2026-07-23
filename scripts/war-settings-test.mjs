@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { createWarSettingsIntentHandler } from "../src/application/war-settings.ts";
 import { createWarSettingsBrowserAdapter } from "../src/adapters/browser/war-settings.ts";
-import { createWarSettingsEvolveAdapter } from "../src/adapters/evolve/war-settings.ts";
+import { createWarSettingsEvolveAdapter } from "../src/adapters/evolve/combat/war-settings.ts";
 
 const reader = createWarSettingsEvolveAdapter({
   getSpyManager: () => ({

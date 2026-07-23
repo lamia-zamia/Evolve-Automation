@@ -4,7 +4,7 @@ import { createPlanetSelectionControls } from "../src/adapters/browser/progressi
 import {
   createPlanetSelectionCommandExecutor,
   createPlanetSelectionReader,
-} from "../src/adapters/evolve/planet-selection.ts";
+} from "../src/adapters/evolve/progression/evolution/planet-selection.ts";
 import { runPlanetSelection } from "../src/application/planet-selection.ts";
 import {
   planetSelectionAchievementIds,

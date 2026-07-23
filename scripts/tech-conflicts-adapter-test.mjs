@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { readTechConflictInput } from "../src/adapters/evolve/tech-conflicts.ts";
+import { readTechConflictInput } from "../src/adapters/evolve/progression/research/tech-conflicts.ts";
 
 function baseContext(overrides = {}) {
   const game = {

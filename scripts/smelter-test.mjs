@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   createSmelterCommandExecutor,
   readSmelterInput,
-} from "../src/adapters/evolve/smelter.ts";
+} from "../src/adapters/evolve/economy/production/smelter.ts";
 import { planSmelter } from "../src/domain/economy/production/smelter.ts";
 import { CONSUMPTION_BALANCE_MIN } from "../src/config.ts";
 

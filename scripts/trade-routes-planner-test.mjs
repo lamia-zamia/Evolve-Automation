@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { readTradeRoutesInput } from "../src/adapters/evolve/trade-routes.ts";
+import { readTradeRoutesInput } from "../src/adapters/evolve/economy/market/trade-routes.ts";
 import { planTradeRoutes } from "../src/domain/economy/market/trade-routes.ts";
 
 // Exact copy of the deleted legacy `adjustTradeRoutes` algorithm, run against

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   createEvolutionCommandExecutor,
   createEvolutionReader,
-} from "../src/adapters/evolve/evolution.ts";
+} from "../src/adapters/evolve/progression/evolution/evolution.ts";
 import { runEvolution } from "../src/application/evolution.ts";
 import {
   evolutionChallengeCandidates,

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 
 import { createMechInfoBrowserAdapter } from "../src/adapters/browser/mech-info.ts";
-import { createMechInfoEvolveAdapter } from "../src/adapters/evolve/mech-info.ts";
+import { createMechInfoEvolveAdapter } from "../src/adapters/evolve/combat/mech-info.ts";
 import { createResourceToggleBrowserAdapter } from "../src/adapters/browser/resource-toggles.ts";
-import { createResourceToggleEvolveAdapter } from "../src/adapters/evolve/resource-toggles.ts";
+import { createResourceToggleEvolveAdapter } from "../src/adapters/evolve/economy/resources/resource-toggles.ts";
 import { createQueuePanels } from "../src/ui/queue-panels.ts";
 
 const trace = [];

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createStorageSettingsEvolveAdapter } from "../src/adapters/evolve/storage-settings.ts";
+import { createStorageSettingsEvolveAdapter } from "../src/adapters/evolve/economy/storage/storage-settings.ts";
 
 const settingsRaw = {};
 const trace = [];

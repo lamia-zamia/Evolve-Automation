@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createMechAdapter } from "../src/adapters/evolve/mech.ts";
+import { createMechAdapter } from "../src/adapters/evolve/combat/mech.ts";
 import { runMechAutomation } from "../src/application/mech.ts";
 import { createAutoMech } from "./test-support/legacy-auto-mech.ts";
 import { planMechCycle } from "../src/domain/combat/mech.ts";

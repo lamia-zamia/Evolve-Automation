@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createBattleAdapter } from "../src/adapters/evolve/battle.ts";
+import { createBattleAdapter } from "../src/adapters/evolve/combat/battle.ts";
 import { runBattleAutomation } from "../src/application/battle.ts";
 import { planBattle, prepareBattle } from "../src/domain/combat/battle.ts";
 import {

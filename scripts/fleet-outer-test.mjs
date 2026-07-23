@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createOuterFleetAdapter } from "../src/adapters/evolve/fleet-outer.ts";
+import { createOuterFleetAdapter } from "../src/adapters/evolve/combat/fleet-outer.ts";
 import { runOuterFleetAutomation } from "../src/application/fleet-outer.ts";
 import {
   calculateOuterFleetDefenseTarget,

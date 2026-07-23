@@ -4,7 +4,7 @@ import { runMarketAutomation } from "../src/application/market.ts";
 import {
   createMarketCommandExecutor,
   createMarketReader,
-} from "../src/adapters/evolve/market.ts";
+} from "../src/adapters/evolve/economy/market/market.ts";
 import {
   planMarketBuy,
   planMarketSell,

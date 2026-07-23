@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createSpyAdapter } from "../src/adapters/evolve/spy.ts";
+import { createSpyAdapter } from "../src/adapters/evolve/combat/spy.ts";
 import { runSpyAutomation } from "../src/application/spy.ts";
 import {
   planSpyCycle,

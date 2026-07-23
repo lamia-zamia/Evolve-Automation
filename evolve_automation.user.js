@@ -14579,7 +14579,7 @@
     return value;
   }
 
-  // src/adapters/evolve/storage-requirements.ts
+  // src/adapters/evolve/economy/storage/storage-requirements.ts
   function readCosts(value) {
     if (typeof value !== "object" || value === null) return [];
     const record = value;
@@ -14884,7 +14884,7 @@
     });
   }
 
-  // src/adapters/evolve/demand-prioritization.ts
+  // src/adapters/evolve/economy/resources/demand-prioritization.ts
   function readCosts2(value, path) {
     if (typeof value !== "object" || value === null) return [];
     const record = value;
@@ -15488,7 +15488,7 @@
     return { logs, needReset };
   }
 
-  // src/adapters/evolve/evolution-result.ts
+  // src/adapters/evolve/progression/evolution/evolution-result.ts
   function isRecord5(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
@@ -15717,7 +15717,7 @@
     });
   }
 
-  // src/adapters/evolve/authority.ts
+  // src/adapters/evolve/civic/authority.ts
   function isRecord6(value) {
     return typeof value === "object" && value !== null;
   }
@@ -17971,7 +17971,7 @@
     });
   }
 
-  // src/adapters/evolve/research-settings.ts
+  // src/adapters/evolve/progression/research/research-settings.ts
   function requireObjectRecord(value, path) {
     if (Array.isArray(value)) {
       throw new TypeError(`${path} must be an object`);
@@ -18382,7 +18382,7 @@
     });
   }
 
-  // src/adapters/evolve/government-settings.ts
+  // src/adapters/evolve/civic/government-settings.ts
   function requireObjectRecord3(value, path) {
     if (Array.isArray(value)) {
       throw new TypeError(`${path} must be an object`);
@@ -18595,7 +18595,7 @@
     });
   }
 
-  // src/adapters/evolve/planet-settings.ts
+  // src/adapters/evolve/progression/evolution/planet-settings.ts
   function requireString4(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -18764,7 +18764,7 @@
     });
   }
 
-  // src/adapters/evolve/project-settings.ts
+  // src/adapters/evolve/progression/research/project-settings.ts
   function requireString5(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -18965,7 +18965,7 @@
     });
   }
 
-  // src/adapters/evolve/storage-settings.ts
+  // src/adapters/evolve/economy/storage/storage-settings.ts
   function requireString6(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -19210,7 +19210,7 @@
     });
   }
 
-  // src/adapters/evolve/magic-settings.ts
+  // src/adapters/evolve/economy/production/magic-settings.ts
   function requireString7(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -19515,7 +19515,7 @@
     return Object.freeze({ buildJobSettings, updateJobSettingsContent });
   }
 
-  // src/adapters/evolve/job-settings.ts
+  // src/adapters/evolve/civic/job-settings.ts
   function requireString8(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -20207,7 +20207,7 @@
     });
   }
 
-  // src/adapters/evolve/building-settings.ts
+  // src/adapters/evolve/progression/build/building-settings.ts
   function requireString9(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -20776,7 +20776,7 @@
     });
   }
 
-  // src/adapters/evolve/prestige-top-bar.ts
+  // src/adapters/evolve/progression/prestige/prestige-top-bar.ts
   function requireString10(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -20854,7 +20854,7 @@
     return Object.freeze({ createEjectToggles, removeEjectToggles });
   }
 
-  // src/adapters/evolve/eject-toggles.ts
+  // src/adapters/evolve/economy/resources/eject-toggles.ts
   function requireString11(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -20932,7 +20932,7 @@
     return Object.freeze({ createSupplyToggles, removeSupplyToggles });
   }
 
-  // src/adapters/evolve/supply-toggles.ts
+  // src/adapters/evolve/economy/resources/supply-toggles.ts
   function requireString12(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -21007,7 +21007,7 @@
     return Object.freeze({ createCraftToggles, removeCraftToggles });
   }
 
-  // src/adapters/evolve/craft-toggles.ts
+  // src/adapters/evolve/economy/production/craft-toggles.ts
   function requireString13(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -21078,7 +21078,7 @@
     return Object.freeze({ createArpaToggles, removeArpaToggles });
   }
 
-  // src/adapters/evolve/arpa-toggles.ts
+  // src/adapters/evolve/progression/research/arpa-toggles.ts
   function requireString14(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -21156,7 +21156,7 @@
     return Object.freeze({ createBuildingToggles, removeBuildingToggles });
   }
 
-  // src/adapters/evolve/building-toggles.ts
+  // src/adapters/evolve/progression/build/building-toggles.ts
   function requireString15(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -21877,7 +21877,7 @@
     return missing;
   }
 
-  // src/adapters/evolve/retirement-prep.ts
+  // src/adapters/evolve/progression/prestige/retirement-prep.ts
   function isRecord9(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
@@ -22035,7 +22035,7 @@
     }
   }
 
-  // src/adapters/evolve/achievement-guards.ts
+  // src/adapters/evolve/progression/prestige/achievement-guards.ts
   function isRecord10(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
@@ -22376,7 +22376,7 @@
     return input.enabled && input.bananaRace && !isBananaRepublicReadyForUnification(input.progress);
   }
 
-  // src/adapters/evolve/banana-republic.ts
+  // src/adapters/evolve/civic/banana-republic.ts
   function isRecord11(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
@@ -22560,7 +22560,7 @@
     return input.active && input.saveMinutes >= 0 && inflationSecondsToFinish(input.money) <= input.saveMinutes * 60;
   }
 
-  // src/adapters/evolve/inflation-assist.ts
+  // src/adapters/evolve/economy/resources/inflation-assist.ts
   function isRecord12(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
@@ -22715,7 +22715,7 @@
     return view.buildings.spireFloor >= view.settings.minimumSpireFloor && resetTechUnlocked && resetTechAffordable;
   }
 
-  // src/adapters/evolve/prestige-eligibility.ts
+  // src/adapters/evolve/progression/prestige/prestige-eligibility.ts
   function isRecord13(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
@@ -23230,7 +23230,7 @@
     return null;
   }
 
-  // src/adapters/evolve/tech-conflicts.ts
+  // src/adapters/evolve/progression/research/tech-conflicts.ts
   function isRecord14(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
@@ -24293,7 +24293,7 @@
     };
   }
 
-  // src/adapters/evolve/trade-routes.ts
+  // src/adapters/evolve/economy/market/trade-routes.ts
   function callBoolean3(record, name, path) {
     const method = requireFunction(record[name], `${path}.${name}`);
     return Boolean(Reflect.apply(method, record, []));
@@ -24837,7 +24837,7 @@
     return context === void 0 ? { status: "stale", failure: { code, message } } : { status: "stale", failure: { code, message, context } };
   }
 
-  // src/adapters/evolve/hell.ts
+  // src/adapters/evolve/combat/hell.ts
   function requireString16(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -25325,7 +25325,7 @@
     }
   }
 
-  // src/adapters/evolve/government.ts
+  // src/adapters/evolve/civic/government.ts
   function governmentUnlocked(types, type, path) {
     if (type === "none") {
       return false;
@@ -25725,7 +25725,7 @@
     return decision2 === null ? SUCCEEDED3 : dependencies.executor.execute(decision2);
   }
 
-  // src/adapters/evolve/battle.ts
+  // src/adapters/evolve/combat/battle.ts
   function requireString17(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -26398,7 +26398,7 @@
     });
   }
 
-  // src/adapters/evolve/smelter.ts
+  // src/adapters/evolve/economy/production/smelter.ts
   function callBoolean4(record, name, path, ...args) {
     const method = requireFunction(record[name], `${path}.${name}`);
     return Boolean(Reflect.apply(method, record, args));
@@ -26786,7 +26786,7 @@
     return Object.freeze({ clear });
   }
 
-  // src/adapters/evolve/tax-command-executor.ts
+  // src/adapters/evolve/civic/tax-command-executor.ts
   function failure(status2, code, message, context) {
     return context === void 0 ? { status: status2, failure: { code, message } } : { status: status2, failure: { code, message, context } };
   }
@@ -26863,7 +26863,7 @@
     });
   }
 
-  // src/adapters/evolve/tax-reader.ts
+  // src/adapters/evolve/civic/tax-reader.ts
   function createEvolveTaxReader(dependencies) {
     let snapshotSequence = 0;
     function readSnapshot() {
@@ -27005,7 +27005,7 @@
     return Object.freeze({ readSettings: readSettings3 });
   }
 
-  // src/adapters/evolve/storage-command-executor.ts
+  // src/adapters/evolve/economy/storage/storage-command-executor.ts
   function rejected2(code, message) {
     return { status: "rejected", failure: { code, message } };
   }
@@ -27052,7 +27052,7 @@
     return Object.freeze({ execute: execute2 });
   }
 
-  // src/adapters/evolve/storage-expansion-reader.ts
+  // src/adapters/evolve/economy/storage/storage-expansion-reader.ts
   function readView(resources, resourceId3, storagePerUnit) {
     const view = requireRecord(resources[resourceId3], `resources.${resourceId3}`);
     const costRecord = requireRecord(
@@ -27320,7 +27320,7 @@
     });
   }
 
-  // src/adapters/evolve/alchemy.ts
+  // src/adapters/evolve/economy/production/alchemy.ts
   function callNumber3(record, name, ...args) {
     const method = requireFunction(record[name], `AlchemyManager.${name}`);
     return requireNumber(
@@ -27668,7 +27668,7 @@
     });
   }
 
-  // src/adapters/evolve/pylon.ts
+  // src/adapters/evolve/economy/production/pylon.ts
   function callBoolean6(record, name, path) {
     const method = requireFunction(record[name], `${path}.${name}`);
     return Boolean(Reflect.apply(method, record, []));
@@ -27951,7 +27951,7 @@
     });
   }
 
-  // src/adapters/evolve/resource-ratios.ts
+  // src/adapters/evolve/economy/resources/resource-ratios.ts
   function initIndustry(manager, name) {
     const init = requireFunction(manager["initIndustry"], `${name}.initIndustry`);
     return Boolean(Reflect.apply(init, manager, []));
@@ -28411,7 +28411,7 @@
     return dependencies.executor.execute(decision2);
   }
 
-  // src/adapters/evolve/factory.ts
+  // src/adapters/evolve/economy/production/factory.ts
   function requireId(value, path) {
     if (typeof value !== "string" || value.length === 0) {
       throw new TypeError(`${path} must be a non-empty string`);
@@ -28962,7 +28962,7 @@
     );
   }
 
-  // src/adapters/evolve/mining-droid.ts
+  // src/adapters/evolve/economy/production/mining-droid.ts
   function callBoolean8(record, name, path) {
     return Boolean(
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
@@ -29201,7 +29201,7 @@
     });
   }
 
-  // src/adapters/evolve/graphene.ts
+  // src/adapters/evolve/economy/production/graphene.ts
   function callBoolean9(record, name, path) {
     const method = requireFunction(record[name], `${path}.${name}`);
     return Boolean(Reflect.apply(method, record, []));
@@ -29434,7 +29434,7 @@
     return Object.freeze(fuelAdjust);
   }
 
-  // src/adapters/evolve/shapeshift.ts
+  // src/adapters/evolve/traits/shapeshift.ts
   function readShapeshiftInput(dependencies) {
     const game = requireRecord(dependencies.getGame(), "game");
     const settings = requireRecord(dependencies.getSettings(), "settings");
@@ -29636,7 +29636,7 @@
     return SUCCEEDED6;
   }
 
-  // src/adapters/evolve/wish.ts
+  // src/adapters/evolve/traits/wish.ts
   function requireSelection(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -29846,7 +29846,7 @@
     return SUCCEEDED7;
   }
 
-  // src/adapters/evolve/genetics.ts
+  // src/adapters/evolve/traits/genetics.ts
   function readGlobal2(gameValue) {
     const game = requireRecord(gameValue, "game");
     return requireRecord(game["global"], "game.global");
@@ -30252,7 +30252,7 @@
     return outcome;
   }
 
-  // src/adapters/evolve/mercenary.ts
+  // src/adapters/evolve/combat/mercenary.ts
   function unavailableInput2() {
     return Object.freeze({
       available: false,
@@ -30504,7 +30504,7 @@
     return SUCCEEDED9;
   }
 
-  // src/adapters/evolve/psychic.ts
+  // src/adapters/evolve/traits/psychic.ts
   function requireMode2(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -30944,7 +30944,7 @@
     return SUCCEEDED10;
   }
 
-  // src/adapters/evolve/ocular-power.ts
+  // src/adapters/evolve/traits/ocular-power.ts
   function readRace(gameValue) {
     const game = requireRecord(gameValue, "game");
     const global = requireRecord(game["global"], "game.global");
@@ -31200,7 +31200,7 @@
     return SUCCEEDED11;
   }
 
-  // src/adapters/evolve/minor-trait.ts
+  // src/adapters/evolve/traits/minor-trait.ts
   function readManagedList(manager) {
     const managedPriorityList = requireFunction(
       manager["managedPriorityList"],
@@ -31366,7 +31366,7 @@
     }
   }
 
-  // src/adapters/evolve/trigger.ts
+  // src/adapters/evolve/progression/build/trigger.ts
   function readTriggerTargets(getState) {
     const state = requireRecord(getState(), "state");
     const targets = state["triggerTargets"];
@@ -31557,7 +31557,7 @@
     return dependencies.executor.execute(planConsume(dependencies.reader.read()));
   }
 
-  // src/adapters/evolve/consume.ts
+  // src/adapters/evolve/economy/resources/consume.ts
   function callBoolean10(record, name, path, ...args) {
     return Boolean(
       Reflect.apply(
@@ -32011,7 +32011,7 @@
     return settingsDecision === null ? SUCCEEDED13 : dependencies.governorExecutor.execute(settingsDecision);
   }
 
-  // src/adapters/evolve/replicator.ts
+  // src/adapters/evolve/economy/production/replicator.ts
   function callBoolean11(record, name, path) {
     return Boolean(
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
@@ -32503,7 +32503,7 @@
     return outcome.status === "succeeded" ? restore : outcome;
   }
 
-  // src/adapters/evolve/market.ts
+  // src/adapters/evolve/economy/market/market.ts
   function callBoolean12(record, name, path, ...args) {
     return Boolean(
       Reflect.apply(
@@ -33726,7 +33726,7 @@
     });
   }
 
-  // src/adapters/evolve/power.ts
+  // src/adapters/evolve/economy/production/power.ts
   function readString2(value, path) {
     if (typeof value !== "string" || value.length === 0) {
       throw new TypeError(`${path} must be a non-empty string`);
@@ -35560,7 +35560,7 @@
     });
   }
 
-  // src/adapters/evolve/storage-allocation.ts
+  // src/adapters/evolve/economy/storage/storage-allocation.ts
   function readString3(value, path) {
     if (typeof value !== "string" || value.length === 0) {
       throw new TypeError(`${path} must be a non-empty string`);
@@ -36230,7 +36230,7 @@
     return decision2 === null ? SUCCEEDED17 : dependencies.executor.execute(decision2);
   }
 
-  // src/adapters/evolve/galaxy-market.ts
+  // src/adapters/evolve/economy/market/galaxy-market.ts
   function callBoolean15(record, name, path) {
     return Boolean(
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
@@ -36651,7 +36651,7 @@
     return decision2 === null ? SUCCEEDED18 : dependencies.executor.execute(decision2);
   }
 
-  // src/adapters/evolve/gather-resources.ts
+  // src/adapters/evolve/economy/resources/gather-resources.ts
   var ACTION_ORDER = Object.freeze([
     "food",
     "lumber",
@@ -36983,7 +36983,7 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/adapters/evolve/evolution.ts
+  // src/adapters/evolve/progression/evolution/evolution.ts
   function race(game) {
     return requireRecord(
       requireRecord(requireRecord(game, "game")["global"], "game.global")["race"],
@@ -37510,7 +37510,7 @@
     }
   }
 
-  // src/adapters/evolve/universe-selection.ts
+  // src/adapters/evolve/progression/evolution/universe-selection.ts
   function readUniverseSelectionInput(dependencies) {
     const game = requireRecord(dependencies.getGame(), "game");
     const settings = requireRecord(dependencies.getSettings(), "settings");
@@ -37642,7 +37642,7 @@
     }
   }
 
-  // src/adapters/evolve/craft.ts
+  // src/adapters/evolve/economy/production/craft.ts
   function callBoolean17(record, name, path) {
     return Boolean(
       Reflect.apply(requireFunction(record[name], `${path}.${name}`), record, [])
@@ -37999,7 +37999,7 @@
     return SUCCEEDED20;
   }
 
-  // src/adapters/evolve/spy.ts
+  // src/adapters/evolve/combat/spy.ts
   function unavailableCycle() {
     return Object.freeze({
       available: false,
@@ -38336,7 +38336,7 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/adapters/evolve/prestige.ts
+  // src/adapters/evolve/progression/prestige/prestige.ts
   function toNumber4(value) {
     return Number(value);
   }
@@ -38662,7 +38662,7 @@
     }
   }
 
-  // src/adapters/evolve/planet-selection.ts
+  // src/adapters/evolve/progression/evolution/planet-selection.ts
   function requireRace(game) {
     return requireRecord(
       requireRecord(requireRecord(game, "game")["global"], "game.global")["race"],
@@ -39357,7 +39357,7 @@
     return decision2 === null ? SUCCEEDED21 : dependencies.executor.execute(decision2);
   }
 
-  // src/adapters/evolve/jobs.ts
+  // src/adapters/evolve/civic/jobs.ts
   function requireString20(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
@@ -40669,7 +40669,7 @@
     return SUCCEEDED22;
   }
 
-  // src/adapters/evolve/build.ts
+  // src/adapters/evolve/progression/build/build.ts
   function requireString21(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -40986,7 +40986,7 @@
     }
   }
 
-  // src/adapters/evolve/research.ts
+  // src/adapters/evolve/progression/research/research.ts
   function readUnlockedTechs(getState) {
     const state = requireRecord(getState(), "state");
     const unlockedTechs = state["unlockedTechs"];
@@ -41128,7 +41128,7 @@
     return decision2 === null ? SUCCEEDED24 : dependencies.executor.execute(decision2);
   }
 
-  // src/adapters/evolve/mutation.ts
+  // src/adapters/evolve/traits/mutation.ts
   function currencyIdFromGame(getGame) {
     const game = requireRecord(getGame(), "game");
     const global = requireRecord(game["global"], "game.global");
@@ -41526,7 +41526,7 @@
     );
   }
 
-  // src/adapters/evolve/fleet-outer.ts
+  // src/adapters/evolve/combat/fleet-outer.ts
   var GRENADIER_CREW = Object.freeze({
     corvette: 1,
     frigate: 2,
@@ -42468,7 +42468,7 @@
     return decision2 === null ? SUCCEEDED25 : dependencies.executor.execute(decision2);
   }
 
-  // src/adapters/evolve/fleet.ts
+  // src/adapters/evolve/combat/fleet.ts
   var SHIP_DEFINITIONS = Object.freeze([
     { name: "scout_ship", building: "ScoutShip" },
     { name: "corvette_ship", building: "CorvetteShip" },
@@ -43062,7 +43062,7 @@
     return build === null ? SUCCEEDED26 : dependencies.executor.build(build, continuation);
   }
 
-  // src/adapters/evolve/mech.ts
+  // src/adapters/evolve/combat/mech.ts
   function requireString24(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -43893,7 +43893,7 @@
     });
   }
 
-  // src/adapters/evolve/ejector-settings.ts
+  // src/adapters/evolve/economy/resources/ejector-settings.ts
   function requireString25(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -44240,7 +44240,7 @@
     });
   }
 
-  // src/adapters/evolve/market-settings.ts
+  // src/adapters/evolve/economy/market/market-settings.ts
   function requireString26(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -44605,7 +44605,7 @@
     });
   }
 
-  // src/adapters/evolve/war-settings.ts
+  // src/adapters/evolve/combat/war-settings.ts
   function requireString27(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
@@ -45126,7 +45126,7 @@
     });
   }
 
-  // src/adapters/evolve/mech-settings.ts
+  // src/adapters/evolve/combat/mech-settings.ts
   function requireString28(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
@@ -45428,7 +45428,7 @@
     return Object.freeze({ buildTriggerSettings, updateTriggerSettingsContent });
   }
 
-  // src/adapters/evolve/trigger-settings.ts
+  // src/adapters/evolve/progression/build/trigger-settings.ts
   function requireString29(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
@@ -45736,7 +45736,7 @@
     return Object.freeze({ buildFleetSettings, updateFleetSettingsContent });
   }
 
-  // src/adapters/evolve/fleet-settings.ts
+  // src/adapters/evolve/combat/fleet-settings.ts
   function requireString30(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
@@ -46227,7 +46227,7 @@
     });
   }
 
-  // src/adapters/evolve/prestige-settings.ts
+  // src/adapters/evolve/progression/prestige/prestige-settings.ts
   function requireString31(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
@@ -46514,7 +46514,7 @@
     });
   }
 
-  // src/adapters/evolve/evolution-settings.ts
+  // src/adapters/evolve/progression/evolution/evolution-settings.ts
   function string(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
@@ -47288,7 +47288,7 @@
     };
   }
 
-  // src/adapters/evolve/production-settings.ts
+  // src/adapters/evolve/economy/production/production-settings.ts
   function requireString32(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
@@ -47819,7 +47819,7 @@
     });
   }
 
-  // src/adapters/evolve/trait-settings.ts
+  // src/adapters/evolve/traits/trait-settings.ts
   function requireString33(value, path) {
     if (typeof value !== "string")
       throw new TypeError(`${path} must be a string`);
@@ -48503,7 +48503,7 @@
     )} | `;
   }
 
-  // src/adapters/evolve/mech-info.ts
+  // src/adapters/evolve/combat/mech-info.ts
   function requireString34(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);
@@ -48727,7 +48727,7 @@
     return Object.freeze({ createMechInfo, removeMechInfo });
   }
 
-  // src/adapters/evolve/resource-toggles.ts
+  // src/adapters/evolve/economy/resources/resource-toggles.ts
   function requireString35(value, path) {
     if (typeof value !== "string") {
       throw new TypeError(`${path} must be a string`);

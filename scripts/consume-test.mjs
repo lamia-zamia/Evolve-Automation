@@ -4,7 +4,7 @@ import { runConsumeAutomation } from "../src/application/consume.ts";
 import {
   createConsumeCommandExecutor,
   createConsumeReader,
-} from "../src/adapters/evolve/consume.ts";
+} from "../src/adapters/evolve/economy/resources/consume.ts";
 import {
   calculateConsumeKeepRatio,
   planConsume,

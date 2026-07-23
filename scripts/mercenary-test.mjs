@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createMercenaryAdapter } from "../src/adapters/evolve/mercenary.ts";
+import { createMercenaryAdapter } from "../src/adapters/evolve/combat/mercenary.ts";
 import { runMercenaryAutomation } from "../src/application/mercenary.ts";
 import {
   planMercenaryCycle,

@@ -4,7 +4,7 @@ import { runMiningDroidAutomation } from "../src/application/mining-droid.ts";
 import {
   createMiningDroidCommandExecutor,
   createMiningDroidReader,
-} from "../src/adapters/evolve/mining-droid.ts";
+} from "../src/adapters/evolve/economy/production/mining-droid.ts";
 import {
   planMiningDroidAdjustments,
   planMiningDroidTargets,

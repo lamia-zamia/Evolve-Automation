@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createGovernmentSettingsEvolveAdapter } from "../src/adapters/evolve/government-settings.ts";
+import { createGovernmentSettingsEvolveAdapter } from "../src/adapters/evolve/civic/government-settings.ts";
 
 const game = {
   loc(key) {

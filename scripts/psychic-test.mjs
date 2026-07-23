@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createPsychicControls } from "../src/adapters/browser/psychic-controls.ts";
-import { createPsychicAdapter } from "../src/adapters/evolve/psychic.ts";
+import { createPsychicAdapter } from "../src/adapters/evolve/traits/psychic.ts";
 import { runPsychicAutomation } from "../src/application/psychic.ts";
 import { planPsychic } from "../src/domain/traits/psychic.ts";
 import {

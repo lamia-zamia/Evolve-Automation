@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createResearchSettingsEvolveAdapter } from "../src/adapters/evolve/research-settings.ts";
+import { createResearchSettingsEvolveAdapter } from "../src/adapters/evolve/progression/research/research-settings.ts";
 
 const technologies = {
   "tech-anthropology": {

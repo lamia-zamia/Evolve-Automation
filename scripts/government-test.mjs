@@ -4,7 +4,7 @@ import { createGovernmentControls } from "../src/adapters/browser/government-con
 import {
   createGovernmentCommandExecutor,
   readGovernmentInput,
-} from "../src/adapters/evolve/government.ts";
+} from "../src/adapters/evolve/civic/government.ts";
 import { planGovernment } from "../src/domain/civic/government.ts";
 
 // End-to-end reader + planner + apply, reproducing the legacy autoGovernment

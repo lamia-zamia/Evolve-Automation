@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createHellAdapter } from "../src/adapters/evolve/hell.ts";
+import { createHellAdapter } from "../src/adapters/evolve/combat/hell.ts";
 import { runHellAutomation } from "../src/application/hell.ts";
 import { prepareHellCycle } from "../src/domain/combat/hell.ts";
 import { createAutoHell } from "./test-support/legacy-auto-hell.ts";

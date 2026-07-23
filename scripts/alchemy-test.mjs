@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   createAlchemyCommandExecutor,
   readAlchemyInput,
-} from "../src/adapters/evolve/alchemy.ts";
+} from "../src/adapters/evolve/economy/production/alchemy.ts";
 import { planAlchemy } from "../src/domain/economy/production/alchemy.ts";
 
 // Exact copy of the deleted legacy `autoAlchemy` algorithm, run against

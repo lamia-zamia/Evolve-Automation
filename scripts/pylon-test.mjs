@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   createPylonCommandExecutor,
   readPylonInput,
-} from "../src/adapters/evolve/pylon.ts";
+} from "../src/adapters/evolve/economy/production/pylon.ts";
 import { planPylon } from "../src/domain/economy/production/pylon.ts";
 
 // Independent transcription of RitualManager.costStep / manaCost from

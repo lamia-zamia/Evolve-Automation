@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createMagicSettingsEvolveAdapter } from "../src/adapters/evolve/magic-settings.ts";
+import { createMagicSettingsEvolveAdapter } from "../src/adapters/evolve/economy/production/magic-settings.ts";
 
 const context = {
   game: {

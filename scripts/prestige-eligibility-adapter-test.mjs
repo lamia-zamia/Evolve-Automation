@@ -7,7 +7,7 @@ import {
   readPrestigeEligibilityView,
   readPrestigePermissionView,
   readWitchAscensionEligibilityView,
-} from "../src/adapters/evolve/prestige-eligibility.ts";
+} from "../src/adapters/evolve/progression/prestige/prestige-eligibility.ts";
 import {
   isAscensionPrestigeAvailable,
   isDemonicPrestigeAvailable,

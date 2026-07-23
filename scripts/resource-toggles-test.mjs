@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createResourceToggleBrowserAdapter } from "../src/adapters/browser/resource-toggles.ts";
-import { createResourceToggleEvolveAdapter } from "../src/adapters/evolve/resource-toggles.ts";
+import { createResourceToggleEvolveAdapter } from "../src/adapters/evolve/economy/resources/resource-toggles.ts";
 
 let game = {
   global: { race: {} },

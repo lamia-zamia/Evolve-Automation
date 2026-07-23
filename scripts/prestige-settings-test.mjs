@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { createPrestigeSettingsIntentHandler } from "../src/application/prestige-settings.ts";
 import { createPrestigeSettingsBrowserAdapter } from "../src/adapters/browser/prestige-settings.ts";
-import { createPrestigeSettingsEvolveAdapter } from "../src/adapters/evolve/prestige-settings.ts";
+import { createPrestigeSettingsEvolveAdapter } from "../src/adapters/evolve/progression/prestige/prestige-settings.ts";
 
 const types = [
   { val: "none", label: "None", hint: "Endless" },

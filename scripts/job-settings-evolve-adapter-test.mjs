@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createJobSettingsEvolveAdapter } from "../src/adapters/evolve/job-settings.ts";
+import { createJobSettingsEvolveAdapter } from "../src/adapters/evolve/civic/job-settings.ts";
 
 class BasicJob {}
 class CraftingJob {}

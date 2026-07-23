@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createGatherResourcesAdapter } from "../src/adapters/evolve/gather-resources.ts";
+import { createGatherResourcesAdapter } from "../src/adapters/evolve/economy/resources/gather-resources.ts";
 import { runGatherResourcesAutomation } from "../src/application/gather-resources.ts";
 import { planGatherResources } from "../src/domain/economy/resources/gather-resources.ts";
 import {

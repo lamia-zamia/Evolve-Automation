@@ -4,7 +4,7 @@ import { runMinorTraitAutomation } from "../src/application/minor-trait.ts";
 import {
   createMinorTraitCommandExecutor,
   createMinorTraitReader,
-} from "../src/adapters/evolve/minor-trait.ts";
+} from "../src/adapters/evolve/traits/minor-trait.ts";
 import {
   planMinorTraitPurchase,
   summarizeMinorTraits,

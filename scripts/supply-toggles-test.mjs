@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createSupplyToggleBrowserAdapter } from "../src/adapters/browser/supply-toggles.ts";
-import { createSupplyToggleEvolveAdapter } from "../src/adapters/evolve/supply-toggles.ts";
+import { createSupplyToggleEvolveAdapter } from "../src/adapters/evolve/economy/resources/supply-toggles.ts";
 
 const reader = createSupplyToggleEvolveAdapter({
   getSupplyManager: () => ({ priorityList: [{ id: "Coal" }, { id: "Iron" }] }),
