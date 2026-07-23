@@ -799,6 +799,10 @@ export function computeBuildingDefaults(
     "TauGas2Name8",
   ].forEach((b) => (def["bat" + bindingByKey[b]] = false));
 
+  // Exotic Zoo: enabled by default with a reduced weighting
+  def["bat" + bindingByKey.AlphaExoticZoo] = true;
+  def["bld_w_" + bindingByKey.AlphaExoticZoo] = 50;
+
   // Limit max for belt ships, and horseshoes
   def["bld_m_" + bindingByKey.ForgeHorseshoe] = 20;
   def["bld_m_" + bindingByKey.RedForgeHorseshoe] = 20;

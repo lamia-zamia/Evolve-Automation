@@ -1110,6 +1110,8 @@
       "TauGas2Name7",
       "TauGas2Name8"
     ].forEach((b) => def["bat" + bindingByKey[b]] = false);
+    def["bat" + bindingByKey.AlphaExoticZoo] = true;
+    def["bld_w_" + bindingByKey.AlphaExoticZoo] = 50;
     def["bld_m_" + bindingByKey.ForgeHorseshoe] = 20;
     def["bld_m_" + bindingByKey.RedForgeHorseshoe] = 20;
     def["bld_m_" + bindingByKey.TauForgeHorseshoe] = 20;
