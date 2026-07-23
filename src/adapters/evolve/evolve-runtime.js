@@ -308,11 +308,7 @@ import { createGalaxyMarketControl } from "../../bootstrap/galaxy-market-control
 import { createGatherResourcesControl } from "../../bootstrap/gather-resources-control.ts";
 import { createCraftControl } from "../../bootstrap/craft-control.ts";
 import { createSpyControl } from "../../bootstrap/spy-control.ts";
-import {
-  createPrestigeReader,
-  createPrestigeCommandExecutor,
-} from "./progression/prestige/prestige.ts";
-import { runPrestige } from "../../application/prestige.ts";
+import { createPrestigeControl } from "../../bootstrap/prestige-control.ts";
 import { createJobsControl } from "../../bootstrap/jobs-control.ts";
 import { createBuildControl } from "../../bootstrap/build-control.ts";
 import { createResearchControl } from "../../bootstrap/research-control.ts";
@@ -4077,38 +4073,38 @@ function startEvolveRuntimeComposition(
     return result.status === "ready" ? getBlackholeMassPolicy(result.view) : 0;
   };
 
-  const prestigeReader = createPrestigeReader({
-    getState: () => state,
-    getSettings: () => settings,
-    getGame: () => game,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getTechIds: () => techIds,
-    getWarManager: () => WarManager,
-    getHaveTech: () => haveTech,
-    getVueById,
-    eligibility: {
-      isBioseederPrestigeAvailable: () => isBioseederPrestigeAvailable(),
-      isCataclysmPrestigeAvailable: () => isCataclysmPrestigeAvailable(),
-      isWhiteholePrestigeAvailable: () => isWhiteholePrestigeAvailable(),
-      isApocalypsePrestigeAvailable: () => isApocalypsePrestigeAvailable(),
-      isAscensionPrestigeAvailable: () => isAscensionPrestigeAvailable(),
-      isWitchAscensionPrestigeAvailable: (demonic) =>
-        isWitchAscensionPrestigeAvailable(demonic),
-      isDemonicPrestigeAvailable: () => isDemonicPrestigeAvailable(),
+  const { autoPrestige } = createPrestigeControl({
+    reader: {
+      getState: () => state,
+      getSettings: () => settings,
+      getGame: () => game,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getTechIds: () => techIds,
+      getWarManager: () => WarManager,
+      getHaveTech: () => haveTech,
+      getVueById,
+      eligibility: {
+        isBioseederPrestigeAvailable: () => isBioseederPrestigeAvailable(),
+        isCataclysmPrestigeAvailable: () => isCataclysmPrestigeAvailable(),
+        isWhiteholePrestigeAvailable: () => isWhiteholePrestigeAvailable(),
+        isApocalypsePrestigeAvailable: () => isApocalypsePrestigeAvailable(),
+        isAscensionPrestigeAvailable: () => isAscensionPrestigeAvailable(),
+        isWitchAscensionPrestigeAvailable: (demonic) =>
+          isWitchAscensionPrestigeAvailable(demonic),
+        isDemonicPrestigeAvailable: () => isDemonicPrestigeAvailable(),
+      },
+    },
+    executor: {
+      getState: () => state,
+      getBuildings: () => buildings,
+      getTechIds: () => techIds,
+      getVueById,
+      getKeyManager: () => KeyManager,
+      logPrestige,
+      loadQueuedSettings,
     },
   });
-  const prestigeExecutor = createPrestigeCommandExecutor({
-    getState: () => state,
-    getBuildings: () => buildings,
-    getTechIds: () => techIds,
-    getVueById,
-    getKeyManager: () => KeyManager,
-    logPrestige,
-    loadQueuedSettings,
-  });
-  const autoPrestige = () =>
-    runPrestige({ reader: prestigeReader, executor: prestigeExecutor });
 
   publishTestSurface({
     autoEvolution,

@@ -39329,6 +39329,15 @@
     }
   }
 
+  // src/bootstrap/prestige-control.ts
+  function createPrestigeControl(dependencies) {
+    const reader = createPrestigeReader(dependencies.reader);
+    const executor = createPrestigeCommandExecutor(dependencies.executor);
+    return Object.freeze({
+      autoPrestige: () => runPrestige({ reader, executor })
+    });
+  }
+
   // src/domain/civic/jobs.ts
   function indexOfToken(input, token) {
     return token === null ? -1 : input.jobs.findIndex((job) => job.token === token);
@@ -55656,36 +55665,37 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       const result2 = readPrestigeView();
       return result2.status === "ready" ? getBlackholeMass(result2.view) : 0;
     };
-    const prestigeReader = createPrestigeReader({
-      getState: () => state,
-      getSettings: () => settings,
-      getGame: () => game,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getTechIds: () => techIds,
-      getWarManager: () => WarManager,
-      getHaveTech: () => haveTech,
-      getVueById,
-      eligibility: {
-        isBioseederPrestigeAvailable: () => isBioseederPrestigeAvailable(),
-        isCataclysmPrestigeAvailable: () => isCataclysmPrestigeAvailable2(),
-        isWhiteholePrestigeAvailable: () => isWhiteholePrestigeAvailable2(),
-        isApocalypsePrestigeAvailable: () => isApocalypsePrestigeAvailable2(),
-        isAscensionPrestigeAvailable: () => isAscensionPrestigeAvailable2(),
-        isWitchAscensionPrestigeAvailable: (demonic) => isWitchAscensionPrestigeAvailable2(demonic),
-        isDemonicPrestigeAvailable: () => isDemonicPrestigeAvailable2()
+    const { autoPrestige } = createPrestigeControl({
+      reader: {
+        getState: () => state,
+        getSettings: () => settings,
+        getGame: () => game,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getTechIds: () => techIds,
+        getWarManager: () => WarManager,
+        getHaveTech: () => haveTech,
+        getVueById,
+        eligibility: {
+          isBioseederPrestigeAvailable: () => isBioseederPrestigeAvailable(),
+          isCataclysmPrestigeAvailable: () => isCataclysmPrestigeAvailable2(),
+          isWhiteholePrestigeAvailable: () => isWhiteholePrestigeAvailable2(),
+          isApocalypsePrestigeAvailable: () => isApocalypsePrestigeAvailable2(),
+          isAscensionPrestigeAvailable: () => isAscensionPrestigeAvailable2(),
+          isWitchAscensionPrestigeAvailable: (demonic) => isWitchAscensionPrestigeAvailable2(demonic),
+          isDemonicPrestigeAvailable: () => isDemonicPrestigeAvailable2()
+        }
+      },
+      executor: {
+        getState: () => state,
+        getBuildings: () => buildings,
+        getTechIds: () => techIds,
+        getVueById,
+        getKeyManager: () => KeyManager,
+        logPrestige,
+        loadQueuedSettings
       }
     });
-    const prestigeExecutor = createPrestigeCommandExecutor({
-      getState: () => state,
-      getBuildings: () => buildings,
-      getTechIds: () => techIds,
-      getVueById,
-      getKeyManager: () => KeyManager,
-      logPrestige,
-      loadQueuedSettings
-    });
-    const autoPrestige = () => runPrestige({ reader: prestigeReader, executor: prestigeExecutor });
     publishTestSurface({
       autoEvolution,
       autoUniverseSelection,
