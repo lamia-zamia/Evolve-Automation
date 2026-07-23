@@ -26791,6 +26791,173 @@
     return Object.freeze({ execute: execute2 });
   }
 
+  // src/domain/economy/production/smelter.ts
+  var EMPTY_DECISION = Object.freeze({
+    fuelAdjustments: Object.freeze([]),
+    smeltAdjustments: Object.freeze([]),
+    tooltips: Object.freeze([])
+  });
+  function costLimitsUnits(cost, units, consumptionBalanceMin) {
+    return cost.currentQuantity < units * cost.quantity * consumptionBalanceMin + cost.minRateOfChange || cost.isDemanded;
+  }
+  function affordableUnits2(cost, currentFuelCount) {
+    const remainingRateOfChange = cost.rateOfChange + currentFuelCount * cost.quantity - cost.minRateOfChange;
+    return Math.max(0, Math.floor(remainingRateOfChange / cost.quantity));
+  }
+  function planSmelter(input) {
+    if (!input.initialised) {
+      return EMPTY_DECISION;
+    }
+    const tooltips = [];
+    const fuelAdjustments = [];
+    let totalSmelters = input.totalSmelters;
+    let fuelRemoved = 0;
+    if (!input.hasForge) {
+      let remainingSmelters = totalSmelters;
+      for (const fuel of input.fuels) {
+        if (!fuel.unlocked) {
+          continue;
+        }
+        let maxAllowedUnits = remainingSmelters;
+        if (fuel.isInfernoBeforeOil && remainingSmelters > 75) {
+          maxAllowedUnits = Math.floor(0.5 * remainingSmelters + 37.5);
+        }
+        for (const cost of fuel.cost) {
+          if (costLimitsUnits(cost, maxAllowedUnits, input.consumptionBalanceMin)) {
+            const affordable2 = affordableUnits2(cost, fuel.currentFuelCount);
+            if (affordable2 < maxAllowedUnits) {
+              tooltips.push({
+                key: "smelterFuels" + fuel.id.toLowerCase(),
+                value: `Too low ${cost.resourceName} income<br>`
+              });
+            }
+            maxAllowedUnits = Math.min(maxAllowedUnits, affordable2);
+          }
+        }
+        remainingSmelters -= maxAllowedUnits;
+        const delta = maxAllowedUnits - fuel.currentFuelCount;
+        if (delta !== 0) {
+          fuelAdjustments.push(
+            Object.freeze({
+              fuelId: fuel.id,
+              expectedCurrentFuelCount: fuel.currentFuelCount,
+              delta
+            })
+          );
+        }
+        if (delta < 0) {
+          fuelRemoved += -delta;
+        }
+      }
+      totalSmelters -= remainingSmelters;
+    }
+    totalSmelters += input.extraOperating;
+    const smelterIronCount = input.ironCount;
+    const smelterSteelCount = input.steelCount;
+    const smelterIridiumCount = input.iridiumCount;
+    const maxAllowedIridium = input.iridiumUnlocked && !input.iridiumCapped ? Math.floor(input.productionSmeltingIridium * totalSmelters) : 0;
+    let maxAllowedSteel = totalSmelters - smelterIridiumCount;
+    const smeltAdjust = {
+      Iridium: maxAllowedIridium - smelterIridiumCount,
+      Steel: smelterIridiumCount - maxAllowedIridium,
+      Iron: 0
+    };
+    if (fuelRemoved > smelterIronCount) {
+      const steelRemoved = fuelRemoved - smelterIronCount;
+      if (steelRemoved <= smelterSteelCount) {
+        smeltAdjust.Steel += steelRemoved;
+      } else {
+        smeltAdjust.Steel += smelterSteelCount;
+        smeltAdjust.Iridium += steelRemoved - smelterSteelCount;
+      }
+    }
+    for (const cost of input.steelCost) {
+      if (costLimitsUnits(cost, smelterSteelCount, input.consumptionBalanceMin)) {
+        const affordable2 = affordableUnits2(cost, smelterSteelCount);
+        if (affordable2 < maxAllowedSteel) {
+          tooltips.push({
+            key: "smelterMatssteel",
+            value: `Too low ${cost.resourceName} income<br>`
+          });
+        }
+        maxAllowedSteel = Math.min(maxAllowedSteel, affordable2);
+      }
+    }
+    let ironWeighting = 0;
+    let steelWeighting = 0;
+    switch (input.productionSmelting) {
+      case "iron":
+        ironWeighting = input.ironTimeToFull;
+        if (!ironWeighting) {
+          steelWeighting = input.steelTimeToFull;
+        }
+        break;
+      case "steel":
+        steelWeighting = input.steelTimeToFull;
+        if (!steelWeighting) {
+          ironWeighting = input.ironTimeToFull;
+        }
+        break;
+      case "storage":
+        ironWeighting = input.ironTimeToFull;
+        steelWeighting = input.steelTimeToFull;
+        break;
+      case "required":
+        ironWeighting = input.ironTimeToRequired;
+        steelWeighting = input.steelTimeToRequired;
+        break;
+    }
+    if (input.ironDemanded) {
+      ironWeighting = Number.MAX_SAFE_INTEGER;
+    }
+    if (input.steelDemanded) {
+      steelWeighting = Number.MAX_SAFE_INTEGER;
+    }
+    if (input.minerCount === 0 && input.beltIronShipStateOnCount === 0) {
+      ironWeighting = 0;
+      steelWeighting = 1;
+      maxAllowedSteel = totalSmelters - smelterIridiumCount;
+    }
+    if (smelterSteelCount > maxAllowedSteel || smelterSteelCount > 0 && ironWeighting > steelWeighting) {
+      smeltAdjust.Steel--;
+    }
+    if (smelterSteelCount < maxAllowedSteel && smelterIronCount > 0 && (steelWeighting > ironWeighting || steelWeighting <= 0 && ironWeighting <= 0 && input.titaniumStorageRatio < 0.99 && input.haveTitaniumTech)) {
+      smeltAdjust.Steel++;
+    }
+    smeltAdjust.Iron = totalSmelters - (smelterIronCount + smelterSteelCount + smeltAdjust.Steel + smelterIridiumCount + smeltAdjust.Iridium);
+    const expectedByProduction = {
+      Iron: smelterIronCount,
+      Steel: smelterSteelCount,
+      Iridium: smelterIridiumCount
+    };
+    const smeltAdjustments = Object.entries(smeltAdjust).map(
+      ([productionId, delta]) => Object.freeze({
+        productionId,
+        expectedCurrentCount: expectedByProduction[productionId],
+        delta
+      })
+    );
+    return Object.freeze({
+      fuelAdjustments: Object.freeze(fuelAdjustments),
+      smeltAdjustments: Object.freeze(smeltAdjustments),
+      tooltips: Object.freeze(tooltips)
+    });
+  }
+
+  // src/bootstrap/smelter-control.ts
+  function createSmelterControl(dependencies) {
+    const executor = createSmelterCommandExecutor(
+      dependencies.reader.getSmelterManager
+    );
+    return Object.freeze({
+      autoSmelter: () => {
+        const decision2 = planSmelter(readSmelterInput(dependencies.reader));
+        dependencies.publishTooltips(decision2.tooltips);
+        executor.execute(decision2);
+      }
+    });
+  }
+
   // src/adapters/browser/tax-controls.ts
   function createBrowserTaxControls(getVueById) {
     function getControls() {
@@ -27202,159 +27369,6 @@
     return Object.freeze({ readSettings: readSettings3 });
   }
 
-  // src/domain/economy/production/smelter.ts
-  var EMPTY_DECISION = Object.freeze({
-    fuelAdjustments: Object.freeze([]),
-    smeltAdjustments: Object.freeze([]),
-    tooltips: Object.freeze([])
-  });
-  function costLimitsUnits(cost, units, consumptionBalanceMin) {
-    return cost.currentQuantity < units * cost.quantity * consumptionBalanceMin + cost.minRateOfChange || cost.isDemanded;
-  }
-  function affordableUnits2(cost, currentFuelCount) {
-    const remainingRateOfChange = cost.rateOfChange + currentFuelCount * cost.quantity - cost.minRateOfChange;
-    return Math.max(0, Math.floor(remainingRateOfChange / cost.quantity));
-  }
-  function planSmelter(input) {
-    if (!input.initialised) {
-      return EMPTY_DECISION;
-    }
-    const tooltips = [];
-    const fuelAdjustments = [];
-    let totalSmelters = input.totalSmelters;
-    let fuelRemoved = 0;
-    if (!input.hasForge) {
-      let remainingSmelters = totalSmelters;
-      for (const fuel of input.fuels) {
-        if (!fuel.unlocked) {
-          continue;
-        }
-        let maxAllowedUnits = remainingSmelters;
-        if (fuel.isInfernoBeforeOil && remainingSmelters > 75) {
-          maxAllowedUnits = Math.floor(0.5 * remainingSmelters + 37.5);
-        }
-        for (const cost of fuel.cost) {
-          if (costLimitsUnits(cost, maxAllowedUnits, input.consumptionBalanceMin)) {
-            const affordable2 = affordableUnits2(cost, fuel.currentFuelCount);
-            if (affordable2 < maxAllowedUnits) {
-              tooltips.push({
-                key: "smelterFuels" + fuel.id.toLowerCase(),
-                value: `Too low ${cost.resourceName} income<br>`
-              });
-            }
-            maxAllowedUnits = Math.min(maxAllowedUnits, affordable2);
-          }
-        }
-        remainingSmelters -= maxAllowedUnits;
-        const delta = maxAllowedUnits - fuel.currentFuelCount;
-        if (delta !== 0) {
-          fuelAdjustments.push(
-            Object.freeze({
-              fuelId: fuel.id,
-              expectedCurrentFuelCount: fuel.currentFuelCount,
-              delta
-            })
-          );
-        }
-        if (delta < 0) {
-          fuelRemoved += -delta;
-        }
-      }
-      totalSmelters -= remainingSmelters;
-    }
-    totalSmelters += input.extraOperating;
-    const smelterIronCount = input.ironCount;
-    const smelterSteelCount = input.steelCount;
-    const smelterIridiumCount = input.iridiumCount;
-    const maxAllowedIridium = input.iridiumUnlocked && !input.iridiumCapped ? Math.floor(input.productionSmeltingIridium * totalSmelters) : 0;
-    let maxAllowedSteel = totalSmelters - smelterIridiumCount;
-    const smeltAdjust = {
-      Iridium: maxAllowedIridium - smelterIridiumCount,
-      Steel: smelterIridiumCount - maxAllowedIridium,
-      Iron: 0
-    };
-    if (fuelRemoved > smelterIronCount) {
-      const steelRemoved = fuelRemoved - smelterIronCount;
-      if (steelRemoved <= smelterSteelCount) {
-        smeltAdjust.Steel += steelRemoved;
-      } else {
-        smeltAdjust.Steel += smelterSteelCount;
-        smeltAdjust.Iridium += steelRemoved - smelterSteelCount;
-      }
-    }
-    for (const cost of input.steelCost) {
-      if (costLimitsUnits(cost, smelterSteelCount, input.consumptionBalanceMin)) {
-        const affordable2 = affordableUnits2(cost, smelterSteelCount);
-        if (affordable2 < maxAllowedSteel) {
-          tooltips.push({
-            key: "smelterMatssteel",
-            value: `Too low ${cost.resourceName} income<br>`
-          });
-        }
-        maxAllowedSteel = Math.min(maxAllowedSteel, affordable2);
-      }
-    }
-    let ironWeighting = 0;
-    let steelWeighting = 0;
-    switch (input.productionSmelting) {
-      case "iron":
-        ironWeighting = input.ironTimeToFull;
-        if (!ironWeighting) {
-          steelWeighting = input.steelTimeToFull;
-        }
-        break;
-      case "steel":
-        steelWeighting = input.steelTimeToFull;
-        if (!steelWeighting) {
-          ironWeighting = input.ironTimeToFull;
-        }
-        break;
-      case "storage":
-        ironWeighting = input.ironTimeToFull;
-        steelWeighting = input.steelTimeToFull;
-        break;
-      case "required":
-        ironWeighting = input.ironTimeToRequired;
-        steelWeighting = input.steelTimeToRequired;
-        break;
-    }
-    if (input.ironDemanded) {
-      ironWeighting = Number.MAX_SAFE_INTEGER;
-    }
-    if (input.steelDemanded) {
-      steelWeighting = Number.MAX_SAFE_INTEGER;
-    }
-    if (input.minerCount === 0 && input.beltIronShipStateOnCount === 0) {
-      ironWeighting = 0;
-      steelWeighting = 1;
-      maxAllowedSteel = totalSmelters - smelterIridiumCount;
-    }
-    if (smelterSteelCount > maxAllowedSteel || smelterSteelCount > 0 && ironWeighting > steelWeighting) {
-      smeltAdjust.Steel--;
-    }
-    if (smelterSteelCount < maxAllowedSteel && smelterIronCount > 0 && (steelWeighting > ironWeighting || steelWeighting <= 0 && ironWeighting <= 0 && input.titaniumStorageRatio < 0.99 && input.haveTitaniumTech)) {
-      smeltAdjust.Steel++;
-    }
-    smeltAdjust.Iron = totalSmelters - (smelterIronCount + smelterSteelCount + smeltAdjust.Steel + smelterIridiumCount + smeltAdjust.Iridium);
-    const expectedByProduction = {
-      Iron: smelterIronCount,
-      Steel: smelterSteelCount,
-      Iridium: smelterIridiumCount
-    };
-    const smeltAdjustments = Object.entries(smeltAdjust).map(
-      ([productionId, delta]) => Object.freeze({
-        productionId,
-        expectedCurrentCount: expectedByProduction[productionId],
-        delta
-      })
-    );
-    return Object.freeze({
-      fuelAdjustments: Object.freeze(fuelAdjustments),
-      smeltAdjustments: Object.freeze(smeltAdjustments),
-      tooltips: Object.freeze(tooltips)
-    });
-  }
-
   // src/adapters/evolve/economy/production/alchemy.ts
   function callNumber3(record, name, ...args) {
     const method = requireFunction(record[name], `AlchemyManager.${name}`);
@@ -27703,6 +27717,14 @@
     });
   }
 
+  // src/bootstrap/alchemy-control.ts
+  function createAlchemyControl(dependencies) {
+    const executor = createAlchemyCommandExecutor(dependencies.getAlchemyManager);
+    return Object.freeze({
+      autoAlchemy: () => executor.execute(planAlchemy(readAlchemyInput(dependencies)))
+    });
+  }
+
   // src/adapters/evolve/economy/production/pylon.ts
   function callBoolean6(record, name, path) {
     const method = requireFunction(record[name], `${path}.${name}`);
@@ -27983,6 +28005,14 @@
     return Object.freeze({
       decrease: Object.freeze(decrease),
       increase: Object.freeze(increase)
+    });
+  }
+
+  // src/bootstrap/pylon-control.ts
+  function createPylonControl(dependencies) {
+    const executor = createPylonCommandExecutor(dependencies.getRitualManager);
+    return Object.freeze({
+      autoPylon: () => executor.execute(planPylon(readPylonInput(dependencies)))
     });
   }
 
@@ -28278,6 +28308,28 @@
         });
       })
     );
+  }
+
+  // src/bootstrap/resource-ratio-controls.ts
+  function createResourceRatioControls(dependencies) {
+    const executors = createResourceRatioCommandExecutors(dependencies);
+    return Object.freeze({
+      autoQuarry: () => {
+        const adjustment = planQuarryRatio(readQuarryRatioInput(dependencies));
+        if (adjustment !== null) {
+          executors.quarry.execute(adjustment);
+        }
+      },
+      autoMine: () => {
+        const adjustment = planMineRatio(readMineRatioInput(dependencies));
+        if (adjustment !== null) {
+          executors.mine.execute(adjustment);
+        }
+      },
+      autoExtractor: () => executors.extractor.execute(
+        planExtractorRatios(readExtractorRatioInput(dependencies))
+      )
+    });
   }
 
   // src/adapters/browser/factory-tooltips.ts
@@ -29492,53 +29544,13 @@
     return Object.freeze(fuelAdjust);
   }
 
-  // src/adapters/evolve/traits/shapeshift.ts
-  function readShapeshiftInput(dependencies) {
-    const game = requireRecord(dependencies.getGame(), "game");
-    const settings = requireRecord(dependencies.getSettings(), "settings");
-    const race2 = requireRecord(
-      requireRecord(game["global"], "game.global")["race"],
-      "game.global.race"
+  // src/bootstrap/graphene-control.ts
+  function createGrapheneControl(dependencies) {
+    const executor = createGrapheneCommandExecutor(
+      dependencies.getGrapheneManager
     );
-    const shifterGenus = settings["shifterGenus"];
-    if (typeof shifterGenus !== "string") {
-      throw new TypeError("settings.shifterGenus must be a string");
-    }
-    const currentGenus = race2["ss_genus"];
     return Object.freeze({
-      isShapeshifter: Boolean(race2["shapeshifter"]),
-      shifterGenus,
-      currentGenus: typeof currentGenus === "string" ? currentGenus : null
-    });
-  }
-  function createShapeshiftCommandExecutor(dependencies) {
-    return Object.freeze({
-      execute(targetGenus) {
-        if (targetGenus === null) {
-          return SUCCEEDED;
-        }
-        const game = requireRecord(dependencies.getGame(), "game");
-        const race2 = requireRecord(
-          requireRecord(game["global"], "game.global")["race"],
-          "game.global.race"
-        );
-        if (!race2["shapeshifter"]) {
-          return stale("shapeshift-locked", "shapeshifting became unavailable");
-        }
-        if (race2["ss_genus"] === targetGenus) {
-          return stale(
-            "shape-already-selected",
-            "target shape is already active"
-          );
-        }
-        if (!dependencies.controls.setShape(targetGenus)) {
-          return stale(
-            "shapeshift-controls-unavailable",
-            "shapeshift controls became unavailable"
-          );
-        }
-        return SUCCEEDED;
-      }
+      autoGraphenePlant: () => executor.execute(planGraphene(readGrapheneInput(dependencies)))
     });
   }
 
@@ -29649,12 +29661,75 @@
     });
   }
 
+  // src/adapters/evolve/traits/shapeshift.ts
+  function readShapeshiftInput(dependencies) {
+    const game = requireRecord(dependencies.getGame(), "game");
+    const settings = requireRecord(dependencies.getSettings(), "settings");
+    const race2 = requireRecord(
+      requireRecord(game["global"], "game.global")["race"],
+      "game.global.race"
+    );
+    const shifterGenus = settings["shifterGenus"];
+    if (typeof shifterGenus !== "string") {
+      throw new TypeError("settings.shifterGenus must be a string");
+    }
+    const currentGenus = race2["ss_genus"];
+    return Object.freeze({
+      isShapeshifter: Boolean(race2["shapeshifter"]),
+      shifterGenus,
+      currentGenus: typeof currentGenus === "string" ? currentGenus : null
+    });
+  }
+  function createShapeshiftCommandExecutor(dependencies) {
+    return Object.freeze({
+      execute(targetGenus) {
+        if (targetGenus === null) {
+          return SUCCEEDED;
+        }
+        const game = requireRecord(dependencies.getGame(), "game");
+        const race2 = requireRecord(
+          requireRecord(game["global"], "game.global")["race"],
+          "game.global.race"
+        );
+        if (!race2["shapeshifter"]) {
+          return stale("shapeshift-locked", "shapeshifting became unavailable");
+        }
+        if (race2["ss_genus"] === targetGenus) {
+          return stale(
+            "shape-already-selected",
+            "target shape is already active"
+          );
+        }
+        if (!dependencies.controls.setShape(targetGenus)) {
+          return stale(
+            "shapeshift-controls-unavailable",
+            "shapeshift controls became unavailable"
+          );
+        }
+        return SUCCEEDED;
+      }
+    });
+  }
+
   // src/domain/traits/shapeshift.ts
   function planShapeshift(input) {
     if (!input.isShapeshifter || input.shifterGenus === "ignore" || input.currentGenus === input.shifterGenus) {
       return null;
     }
     return input.shifterGenus;
+  }
+
+  // src/bootstrap/shapeshift-control.ts
+  function createShapeshiftControl(dependencies) {
+    const executor = createShapeshiftCommandExecutor({
+      getGame: dependencies.executor.getGame,
+      controls: createShapeshiftControls(dependencies.executor.getVueById)
+    });
+    return Object.freeze({
+      autoShapeshift: () => executor.execute(
+        planShapeshift(readShapeshiftInput(dependencies.reader))
+      )
+    });
   }
 
   // src/adapters/browser/wish-controls.ts
@@ -55376,36 +55451,22 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         if ("keySet" in context) KeyManager.set = context.keySet;
       }
     });
-    const alchemyExecutor = createAlchemyCommandExecutor(() => AlchemyManager);
-    const autoAlchemy = function autoAlchemy2() {
-      alchemyExecutor.execute(
-        planAlchemy(
-          readAlchemyInput({
-            getAlchemyManager: () => AlchemyManager,
-            getResources: () => resources,
-            getSettings: () => settings,
-            getGame: () => game,
-            getAchievementStar
-          })
-        )
-      );
-    };
-    const pylonExecutor = createPylonCommandExecutor(() => RitualManager);
-    const autoPylon = function autoPylon2() {
-      pylonExecutor.execute(
-        planPylon(
-          readPylonInput({
-            getRitualManager: () => RitualManager,
-            getResources: () => resources,
-            getSettings: () => settings,
-            getGame: () => game,
-            getJobs: () => jobs,
-            haveTech
-          })
-        )
-      );
-    };
-    const resourceRatiosDependencies = {
+    const { autoAlchemy } = createAlchemyControl({
+      getAlchemyManager: () => AlchemyManager,
+      getResources: () => resources,
+      getSettings: () => settings,
+      getGame: () => game,
+      getAchievementStar
+    });
+    const { autoPylon } = createPylonControl({
+      getRitualManager: () => RitualManager,
+      getResources: () => resources,
+      getSettings: () => settings,
+      getGame: () => game,
+      getJobs: () => jobs,
+      haveTech
+    });
+    const { autoQuarry, autoMine, autoExtractor } = createResourceRatioControls({
       getQuarryManager: () => QuarryManager,
       getMineManager: () => MineManager,
       getExtractorManager: () => ExtractorManager,
@@ -55413,50 +55474,24 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getSettings: () => settings,
       getBuildings: () => buildings,
       haveTech
-    };
-    const resourceRatioExecutors = createResourceRatioCommandExecutors(
-      resourceRatiosDependencies
-    );
-    function autoQuarry() {
-      const adjustment = planQuarryRatio(
-        readQuarryRatioInput(resourceRatiosDependencies)
-      );
-      if (adjustment !== null) {
-        resourceRatioExecutors.quarry.execute(adjustment);
+    });
+    const { autoSmelter } = createSmelterControl({
+      reader: {
+        getSmelterManager: () => SmelterManager,
+        getGame: () => game,
+        getResources: () => resources,
+        getSettings: () => settings,
+        getJobs: () => jobs,
+        getBuildings: () => buildings,
+        haveTech,
+        consumptionBalanceMin: CONSUMPTION_BALANCE_MIN
+      },
+      publishTooltips: (tooltips) => {
+        for (const tooltip of tooltips) {
+          state.tooltips[tooltip.key] = tooltip.value;
+        }
       }
-    }
-    function autoMine() {
-      const adjustment = planMineRatio(
-        readMineRatioInput(resourceRatiosDependencies)
-      );
-      if (adjustment !== null) {
-        resourceRatioExecutors.mine.execute(adjustment);
-      }
-    }
-    function autoExtractor() {
-      resourceRatioExecutors.extractor.execute(
-        planExtractorRatios(readExtractorRatioInput(resourceRatiosDependencies))
-      );
-    }
-    const smelterExecutor = createSmelterCommandExecutor(() => SmelterManager);
-    const autoSmelter = function autoSmelter2() {
-      const decision2 = planSmelter(
-        readSmelterInput({
-          getSmelterManager: () => SmelterManager,
-          getGame: () => game,
-          getResources: () => resources,
-          getSettings: () => settings,
-          getJobs: () => jobs,
-          getBuildings: () => buildings,
-          haveTech,
-          consumptionBalanceMin: CONSUMPTION_BALANCE_MIN
-        })
-      );
-      for (const tooltip of decision2.tooltips) {
-        state.tooltips[tooltip.key] = tooltip.value;
-      }
-      smelterExecutor.execute(decision2);
-    };
+    });
     const { autoFactory } = createFactoryControl({
       adapter: {
         getManager: () => FactoryManager,
@@ -55475,18 +55510,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       factoryState: state
     });
     const { autoMiningDroid } = createMiningDroidControl(() => DroidManager);
-    const grapheneExecutor = createGrapheneCommandExecutor(() => GrapheneManager);
-    const autoGraphenePlant = function autoGraphenePlant2() {
-      grapheneExecutor.execute(
-        planGraphene(
-          readGrapheneInput({
-            getGrapheneManager: () => GrapheneManager,
-            getResources: () => resources,
-            consumptionBalanceMin: CONSUMPTION_BALANCE_MIN
-          })
-        )
-      );
-    };
+    const { autoGraphenePlant } = createGrapheneControl({
+      getGrapheneManager: () => GrapheneManager,
+      getResources: () => resources,
+      consumptionBalanceMin: CONSUMPTION_BALANCE_MIN
+    });
     const { autoConsume } = createConsumeControl({
       getResources: () => resources,
       isHungryRace
@@ -55668,20 +55696,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         isAchievementUnlocked2 = context.isAchievementUnlocked;
       }
     });
-    const shapeshiftExecutor = createShapeshiftCommandExecutor({
-      getGame: () => game,
-      controls: createShapeshiftControls(getVueById)
+    const { autoShapeshift } = createShapeshiftControl({
+      reader: {
+        getGame: () => game,
+        getSettings: () => settings
+      },
+      executor: {
+        getGame: () => game,
+        getVueById
+      }
     });
-    const autoShapeshift = function autoShapeshift2() {
-      shapeshiftExecutor.execute(
-        planShapeshift(
-          readShapeshiftInput({
-            getGame: () => game,
-            getSettings: () => settings
-          })
-        )
-      );
-    };
     const { autoPsychic } = createPsychicControl({
       controls: {
         getVueById,

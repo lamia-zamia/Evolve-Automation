@@ -269,10 +269,7 @@ import { createGovernmentControl } from "../../bootstrap/government-control.ts";
 import { createBattleControl } from "../../bootstrap/battle-control.ts";
 import { createTaxAutomation } from "../../application/tax.ts";
 import { createUserscriptEnvironment } from "../userscript/environment.ts";
-import {
-  createSmelterCommandExecutor,
-  readSmelterInput,
-} from "./economy/production/smelter.ts";
+import { createSmelterControl } from "../../bootstrap/smelter-control.ts";
 import {
   createBrowserTaxControls,
   createKeyModifierController,
@@ -283,45 +280,17 @@ import { createTaxSettingsReader } from "../storage/tax-settings-reader.ts";
 import { createStorageCommandExecutor } from "./economy/storage/storage-command-executor.ts";
 import { createEvolveStorageExpansionReader } from "./economy/storage/storage-expansion-reader.ts";
 import { createStorageExpansionSettingsReader } from "../storage/storage-expansion-settings-reader.ts";
-import { planSmelter } from "../../domain/economy/production/smelter.ts";
-import {
-  createAlchemyCommandExecutor,
-  readAlchemyInput,
-} from "./economy/production/alchemy.ts";
-import { planAlchemy } from "../../domain/economy/production/alchemy.ts";
-import {
-  createPylonCommandExecutor,
-  readPylonInput,
-} from "./economy/production/pylon.ts";
-import { planPylon } from "../../domain/economy/production/pylon.ts";
-import {
-  readQuarryRatioInput,
-  readMineRatioInput,
-  readExtractorRatioInput,
-  createResourceRatioCommandExecutors,
-} from "./economy/resources/resource-ratios.ts";
-import {
-  planQuarryRatio,
-  planMineRatio,
-  planExtractorRatios,
-} from "../../domain/economy/resources/resource-ratios.ts";
+import { createAlchemyControl } from "../../bootstrap/alchemy-control.ts";
+import { createPylonControl } from "../../bootstrap/pylon-control.ts";
+import { createResourceRatioControls } from "../../bootstrap/resource-ratio-controls.ts";
 import { createFactoryControl } from "../../bootstrap/factory-control.ts";
 import { createMiningDroidControl } from "../../bootstrap/mining-droid-control.ts";
-import {
-  createGrapheneCommandExecutor,
-  readGrapheneInput,
-} from "./economy/production/graphene.ts";
-import { planGraphene } from "../../domain/economy/production/graphene.ts";
-import {
-  createShapeshiftCommandExecutor,
-  readShapeshiftInput,
-} from "./traits/shapeshift.ts";
+import { createGrapheneControl } from "../../bootstrap/graphene-control.ts";
+import { createShapeshiftControl } from "../../bootstrap/shapeshift-control.ts";
 import {
   createPlanetSelectionControls,
-  createShapeshiftControls,
   createUniverseSelectionControls,
 } from "../browser/progression-controls.ts";
-import { planShapeshift } from "../../domain/traits/shapeshift.ts";
 import { createWishControl } from "../../bootstrap/wish-control.ts";
 import { createGeneticsControl } from "../../bootstrap/genetics-control.ts";
 import { createMercenaryControl } from "../../bootstrap/mercenary-control.ts";
@@ -3937,38 +3906,24 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const alchemyExecutor = createAlchemyCommandExecutor(() => AlchemyManager);
-  const autoAlchemy = function autoAlchemy() {
-    alchemyExecutor.execute(
-      planAlchemy(
-        readAlchemyInput({
-          getAlchemyManager: () => AlchemyManager,
-          getResources: () => resources,
-          getSettings: () => settings,
-          getGame: () => game,
-          getAchievementStar,
-        }),
-      ),
-    );
-  };
+  const { autoAlchemy } = createAlchemyControl({
+    getAlchemyManager: () => AlchemyManager,
+    getResources: () => resources,
+    getSettings: () => settings,
+    getGame: () => game,
+    getAchievementStar,
+  });
 
-  const pylonExecutor = createPylonCommandExecutor(() => RitualManager);
-  const autoPylon = function autoPylon() {
-    pylonExecutor.execute(
-      planPylon(
-        readPylonInput({
-          getRitualManager: () => RitualManager,
-          getResources: () => resources,
-          getSettings: () => settings,
-          getGame: () => game,
-          getJobs: () => jobs,
-          haveTech,
-        }),
-      ),
-    );
-  };
+  const { autoPylon } = createPylonControl({
+    getRitualManager: () => RitualManager,
+    getResources: () => resources,
+    getSettings: () => settings,
+    getGame: () => game,
+    getJobs: () => jobs,
+    haveTech,
+  });
 
-  const resourceRatiosDependencies = {
+  const { autoQuarry, autoMine, autoExtractor } = createResourceRatioControls({
     getQuarryManager: () => QuarryManager,
     getMineManager: () => MineManager,
     getExtractorManager: () => ExtractorManager,
@@ -3976,51 +3931,25 @@ function startEvolveRuntimeComposition(
     getSettings: () => settings,
     getBuildings: () => buildings,
     haveTech,
-  };
-  const resourceRatioExecutors = createResourceRatioCommandExecutors(
-    resourceRatiosDependencies,
-  );
-  function autoQuarry() {
-    const adjustment = planQuarryRatio(
-      readQuarryRatioInput(resourceRatiosDependencies),
-    );
-    if (adjustment !== null) {
-      resourceRatioExecutors.quarry.execute(adjustment);
-    }
-  }
-  function autoMine() {
-    const adjustment = planMineRatio(
-      readMineRatioInput(resourceRatiosDependencies),
-    );
-    if (adjustment !== null) {
-      resourceRatioExecutors.mine.execute(adjustment);
-    }
-  }
-  function autoExtractor() {
-    resourceRatioExecutors.extractor.execute(
-      planExtractorRatios(readExtractorRatioInput(resourceRatiosDependencies)),
-    );
-  }
+  });
 
-  const smelterExecutor = createSmelterCommandExecutor(() => SmelterManager);
-  const autoSmelter = function autoSmelter() {
-    const decision = planSmelter(
-      readSmelterInput({
-        getSmelterManager: () => SmelterManager,
-        getGame: () => game,
-        getResources: () => resources,
-        getSettings: () => settings,
-        getJobs: () => jobs,
-        getBuildings: () => buildings,
-        haveTech,
-        consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
-      }),
-    );
-    for (const tooltip of decision.tooltips) {
-      state.tooltips[tooltip.key] = tooltip.value;
-    }
-    smelterExecutor.execute(decision);
-  };
+  const { autoSmelter } = createSmelterControl({
+    reader: {
+      getSmelterManager: () => SmelterManager,
+      getGame: () => game,
+      getResources: () => resources,
+      getSettings: () => settings,
+      getJobs: () => jobs,
+      getBuildings: () => buildings,
+      haveTech,
+      consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
+    },
+    publishTooltips: (tooltips) => {
+      for (const tooltip of tooltips) {
+        state.tooltips[tooltip.key] = tooltip.value;
+      }
+    },
+  });
 
   const { autoFactory } = createFactoryControl({
     adapter: {
@@ -4043,18 +3972,11 @@ function startEvolveRuntimeComposition(
 
   const { autoMiningDroid } = createMiningDroidControl(() => DroidManager);
 
-  const grapheneExecutor = createGrapheneCommandExecutor(() => GrapheneManager);
-  const autoGraphenePlant = function autoGraphenePlant() {
-    grapheneExecutor.execute(
-      planGraphene(
-        readGrapheneInput({
-          getGrapheneManager: () => GrapheneManager,
-          getResources: () => resources,
-          consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
-        }),
-      ),
-    );
-  };
+  const { autoGraphenePlant } = createGrapheneControl({
+    getGrapheneManager: () => GrapheneManager,
+    getResources: () => resources,
+    consumptionBalanceMin: CONSUMPTION_BALANCE_MIN,
+  });
 
   // TODO: Allow configuring priorities between eject\supply\nanite
   const { autoConsume } = createConsumeControl({
@@ -4266,20 +4188,16 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const shapeshiftExecutor = createShapeshiftCommandExecutor({
-    getGame: () => game,
-    controls: createShapeshiftControls(getVueById),
+  const { autoShapeshift } = createShapeshiftControl({
+    reader: {
+      getGame: () => game,
+      getSettings: () => settings,
+    },
+    executor: {
+      getGame: () => game,
+      getVueById,
+    },
   });
-  const autoShapeshift = function autoShapeshift() {
-    shapeshiftExecutor.execute(
-      planShapeshift(
-        readShapeshiftInput({
-          getGame: () => game,
-          getSettings: () => settings,
-        }),
-      ),
-    );
-  };
 
   const { autoPsychic } = createPsychicControl({
     controls: {
