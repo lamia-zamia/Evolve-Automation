@@ -28257,170 +28257,24 @@
     );
   }
 
-  // src/domain/economy/production/factory.ts
-  function setTooltip(tooltips, productionId, value) {
-    tooltips.set(`iFactory${productionId}`, value);
-  }
-  function appendTooltip(tooltips, productionId, value) {
-    const key = `iFactory${productionId}`;
-    tooltips.set(key, (tooltips.get(key) ?? "") + value);
-  }
-  function planFactory(input) {
-    if (!input.initialized) return null;
-    const tooltips = /* @__PURE__ */ new Map();
-    const priorityGroups = /* @__PURE__ */ new Map();
-    const targets = /* @__PURE__ */ new Map();
-    for (const production of input.productions) {
-      setTooltip(tooltips, production.id, "Disabled<br>");
-      if (production.unlocked && production.enabled) {
-        if (production.weighting > 0) {
-          const priority = production.demanded ? Math.max(production.priority, 100) : production.priority;
-          if (priority !== 0) {
-            const group = priorityGroups.get(priority) ?? [];
-            group.push(production);
-            priorityGroups.set(priority, group);
-            setTooltip(tooltips, production.id, "Low priority<br>");
-          }
-        }
-        targets.set(production.id, 0);
-      }
-    }
-    const priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group);
-    const supplementary = priorityGroups.get(-1);
-    if (supplementary !== void 0 && priorityList.length > 1) {
-      priorityList.splice(priorityList.indexOf(supplementary, 1));
-      priorityList[0]?.push(...supplementary);
-    }
-    const onDemand = input.weightingMode === "demanded" && input.productions.some(
-      (production) => production.currentQuantity < production.storageRequired
-    );
-    const scaledWeights = /* @__PURE__ */ new Map();
-    for (const production of input.productions) {
-      const scale = input.weightingMode === "buildings" && input.hasUnlockedBuildings ? production.buildingWeight : input.weightingMode === "demanded" && onDemand ? production.currentQuantity < production.storageRequired ? 1 : 0 : 1;
-      scaledWeights.set(
-        production.outputResourceId,
-        production.weighting * scale
-      );
-    }
-    let remaining = input.maximum;
-    for (let groupIndex = 0; groupIndex < priorityList.length && remaining > 0; groupIndex++) {
-      const products = [...priorityList[groupIndex] ?? []].sort(
-        (left, right) => (scaledWeights.get(left.outputResourceId) ?? 0) - (scaledWeights.get(right.outputResourceId) ?? 0)
-      );
-      while (remaining > 0) {
-        const beforeDistribution = remaining;
-        const totalWeight = products.reduce(
-          (sum, production) => sum + (scaledWeights.get(production.outputResourceId) ?? 0),
-          0
-        );
-        for (let index = products.length - 1; index >= 0 && remaining > 0; index--) {
-          const production = products[index];
-          if (production === void 0) continue;
-          setTooltip(tooltips, production.id, "");
-          const calculated = Math.min(
-            remaining,
-            Math.max(
-              1,
-              Math.floor(
-                beforeDistribution / totalWeight * (scaledWeights.get(production.outputResourceId) ?? 0)
-              )
-            )
-          );
-          let actual = calculated;
-          if (!production.useful) {
-            actual = 0;
-            appendTooltip(tooltips, production.id, "Resource capped<br>");
-          }
-          for (const cost of production.costs) {
-            if (!cost.unlocked) continue;
-            if (!production.demanded) {
-              if (!input.useDemandedMaterials && cost.demanded) {
-                actual = 0;
-                appendTooltip(
-                  tooltips,
-                  production.id,
-                  `${cost.name} is demanded<br>`
-                );
-                break;
-              }
-              if (cost.storageRatio < input.minimumIngredientRatio) {
-                actual = 0;
-                appendTooltip(
-                  tooltips,
-                  production.id,
-                  `${cost.name} under min materials ratio<br>`
-                );
-                break;
-              }
-            }
-            if (cost.currentQuantity < actual * cost.quantity * input.consumptionBalanceMinimum + cost.minRateOfChange || cost.demanded) {
-              const previousCost = production.currentProduction * cost.quantity;
-              const currentCost = (targets.get(production.id) ?? 0) * cost.quantity;
-              let rate = cost.rateOfChange + previousCost - currentCost - cost.minRateOfChange;
-              if (production.demanded) rate += cost.currentQuantity;
-              const affordable2 = Math.floor(rate / cost.quantity);
-              if (affordable2 < 1) {
-                appendTooltip(
-                  tooltips,
-                  production.id,
-                  `Too low ${cost.name} income<br>`
-                );
-              }
-              actual = Math.min(actual, affordable2);
-            }
-          }
-          if (input.bioseedConstruct && production.isNanoTube && input.neutroniumCurrent < (input.truepath ? 500 : 250)) {
-            const reserved = input.truepath ? 500 : 250;
-            appendTooltip(
-              tooltips,
-              production.id,
-              `${reserved} ${input.neutroniumName} reserved<br>`
-            );
-            actual = 0;
-          }
-          if (actual > 0) {
-            remaining -= actual;
-            targets.set(
-              production.id,
-              (targets.get(production.id) ?? 0) + actual
-            );
-          }
-          if (actual < calculated) products.splice(index, 1);
-        }
-        if (beforeDistribution === remaining) break;
-      }
-    }
+  // src/adapters/browser/factory-tooltips.ts
+  function createFactoryTooltipPublisher(getState) {
     return Object.freeze({
-      expectedMaximum: input.maximum,
-      adjustments: Object.freeze(
-        input.productions.flatMap(
-          (production) => targets.has(production.id) ? [
-            Object.freeze({
-              productionId: production.id,
-              outputResourceId: production.outputResourceId,
-              expectedCurrent: production.currentProduction,
-              delta: (targets.get(production.id) ?? 0) - production.currentProduction
-            })
-          ] : []
-        )
-      ),
-      tooltips: Object.freeze(
-        [...tooltips.entries()].map(
-          ([key, value]) => Object.freeze({ key, value })
-        )
-      )
+      publish(tooltips) {
+        if (tooltips.length === 0) return;
+        const state = getState();
+        if (typeof state !== "object" || state === null) {
+          throw new TypeError("state must be an object");
+        }
+        const values = Reflect.get(state, "tooltips");
+        if (typeof values !== "object" || values === null) {
+          throw new TypeError("state.tooltips must be an object");
+        }
+        for (const tooltip of tooltips) {
+          Reflect.set(values, tooltip.key, tooltip.value);
+        }
+      }
     });
-  }
-
-  // src/application/factory.ts
-  var SUCCEEDED4 = Object.freeze({
-    status: "succeeded"
-  });
-  function runFactoryAutomation(dependencies) {
-    const decision2 = planFactory(dependencies.reader.read());
-    if (decision2 === null) return SUCCEEDED4;
-    dependencies.tooltips.publish(decision2.tooltips);
-    return dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/economy/production/factory.ts
@@ -28836,23 +28690,182 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/adapters/browser/factory-tooltips.ts
-  function createFactoryTooltipPublisher(getState) {
-    return Object.freeze({
-      publish(tooltips) {
-        if (tooltips.length === 0) return;
-        const state = getState();
-        if (typeof state !== "object" || state === null) {
-          throw new TypeError("state must be an object");
+  // src/domain/economy/production/factory.ts
+  function setTooltip(tooltips, productionId, value) {
+    tooltips.set(`iFactory${productionId}`, value);
+  }
+  function appendTooltip(tooltips, productionId, value) {
+    const key = `iFactory${productionId}`;
+    tooltips.set(key, (tooltips.get(key) ?? "") + value);
+  }
+  function planFactory(input) {
+    if (!input.initialized) return null;
+    const tooltips = /* @__PURE__ */ new Map();
+    const priorityGroups = /* @__PURE__ */ new Map();
+    const targets = /* @__PURE__ */ new Map();
+    for (const production of input.productions) {
+      setTooltip(tooltips, production.id, "Disabled<br>");
+      if (production.unlocked && production.enabled) {
+        if (production.weighting > 0) {
+          const priority = production.demanded ? Math.max(production.priority, 100) : production.priority;
+          if (priority !== 0) {
+            const group = priorityGroups.get(priority) ?? [];
+            group.push(production);
+            priorityGroups.set(priority, group);
+            setTooltip(tooltips, production.id, "Low priority<br>");
+          }
         }
-        const values = Reflect.get(state, "tooltips");
-        if (typeof values !== "object" || values === null) {
-          throw new TypeError("state.tooltips must be an object");
-        }
-        for (const tooltip of tooltips) {
-          Reflect.set(values, tooltip.key, tooltip.value);
-        }
+        targets.set(production.id, 0);
       }
+    }
+    const priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group);
+    const supplementary = priorityGroups.get(-1);
+    if (supplementary !== void 0 && priorityList.length > 1) {
+      priorityList.splice(priorityList.indexOf(supplementary, 1));
+      priorityList[0]?.push(...supplementary);
+    }
+    const onDemand = input.weightingMode === "demanded" && input.productions.some(
+      (production) => production.currentQuantity < production.storageRequired
+    );
+    const scaledWeights = /* @__PURE__ */ new Map();
+    for (const production of input.productions) {
+      const scale = input.weightingMode === "buildings" && input.hasUnlockedBuildings ? production.buildingWeight : input.weightingMode === "demanded" && onDemand ? production.currentQuantity < production.storageRequired ? 1 : 0 : 1;
+      scaledWeights.set(
+        production.outputResourceId,
+        production.weighting * scale
+      );
+    }
+    let remaining = input.maximum;
+    for (let groupIndex = 0; groupIndex < priorityList.length && remaining > 0; groupIndex++) {
+      const products = [...priorityList[groupIndex] ?? []].sort(
+        (left, right) => (scaledWeights.get(left.outputResourceId) ?? 0) - (scaledWeights.get(right.outputResourceId) ?? 0)
+      );
+      while (remaining > 0) {
+        const beforeDistribution = remaining;
+        const totalWeight = products.reduce(
+          (sum, production) => sum + (scaledWeights.get(production.outputResourceId) ?? 0),
+          0
+        );
+        for (let index = products.length - 1; index >= 0 && remaining > 0; index--) {
+          const production = products[index];
+          if (production === void 0) continue;
+          setTooltip(tooltips, production.id, "");
+          const calculated = Math.min(
+            remaining,
+            Math.max(
+              1,
+              Math.floor(
+                beforeDistribution / totalWeight * (scaledWeights.get(production.outputResourceId) ?? 0)
+              )
+            )
+          );
+          let actual = calculated;
+          if (!production.useful) {
+            actual = 0;
+            appendTooltip(tooltips, production.id, "Resource capped<br>");
+          }
+          for (const cost of production.costs) {
+            if (!cost.unlocked) continue;
+            if (!production.demanded) {
+              if (!input.useDemandedMaterials && cost.demanded) {
+                actual = 0;
+                appendTooltip(
+                  tooltips,
+                  production.id,
+                  `${cost.name} is demanded<br>`
+                );
+                break;
+              }
+              if (cost.storageRatio < input.minimumIngredientRatio) {
+                actual = 0;
+                appendTooltip(
+                  tooltips,
+                  production.id,
+                  `${cost.name} under min materials ratio<br>`
+                );
+                break;
+              }
+            }
+            if (cost.currentQuantity < actual * cost.quantity * input.consumptionBalanceMinimum + cost.minRateOfChange || cost.demanded) {
+              const previousCost = production.currentProduction * cost.quantity;
+              const currentCost = (targets.get(production.id) ?? 0) * cost.quantity;
+              let rate = cost.rateOfChange + previousCost - currentCost - cost.minRateOfChange;
+              if (production.demanded) rate += cost.currentQuantity;
+              const affordable2 = Math.floor(rate / cost.quantity);
+              if (affordable2 < 1) {
+                appendTooltip(
+                  tooltips,
+                  production.id,
+                  `Too low ${cost.name} income<br>`
+                );
+              }
+              actual = Math.min(actual, affordable2);
+            }
+          }
+          if (input.bioseedConstruct && production.isNanoTube && input.neutroniumCurrent < (input.truepath ? 500 : 250)) {
+            const reserved = input.truepath ? 500 : 250;
+            appendTooltip(
+              tooltips,
+              production.id,
+              `${reserved} ${input.neutroniumName} reserved<br>`
+            );
+            actual = 0;
+          }
+          if (actual > 0) {
+            remaining -= actual;
+            targets.set(
+              production.id,
+              (targets.get(production.id) ?? 0) + actual
+            );
+          }
+          if (actual < calculated) products.splice(index, 1);
+        }
+        if (beforeDistribution === remaining) break;
+      }
+    }
+    return Object.freeze({
+      expectedMaximum: input.maximum,
+      adjustments: Object.freeze(
+        input.productions.flatMap(
+          (production) => targets.has(production.id) ? [
+            Object.freeze({
+              productionId: production.id,
+              outputResourceId: production.outputResourceId,
+              expectedCurrent: production.currentProduction,
+              delta: (targets.get(production.id) ?? 0) - production.currentProduction
+            })
+          ] : []
+        )
+      ),
+      tooltips: Object.freeze(
+        [...tooltips.entries()].map(
+          ([key, value]) => Object.freeze({ key, value })
+        )
+      )
+    });
+  }
+
+  // src/application/factory.ts
+  var SUCCEEDED4 = Object.freeze({
+    status: "succeeded"
+  });
+  function runFactoryAutomation(dependencies) {
+    const decision2 = planFactory(dependencies.reader.read());
+    if (decision2 === null) return SUCCEEDED4;
+    dependencies.tooltips.publish(decision2.tooltips);
+    return dependencies.executor.execute(decision2);
+  }
+
+  // src/bootstrap/factory-control.ts
+  function createFactoryControl(dependencies) {
+    const adapter = createFactoryAdapter(dependencies.adapter);
+    const tooltips = createFactoryTooltipPublisher(dependencies.getState);
+    return Object.freeze({
+      autoFactory: () => runFactoryAutomation({
+        reader: adapter.reader,
+        executor: adapter.executor,
+        tooltips
+      })
     });
   }
 
@@ -31942,167 +31955,147 @@
     });
   }
 
-  // src/domain/economy/production/replicator.ts
-  function planReplicatorPriority(input) {
-    if (!input.initialised) {
+  // src/adapters/browser/replicator-governor.ts
+  function readGovernorSettings(office) {
+    const rawConfig = office["c"];
+    if (rawConfig === void 0 || rawConfig === null) {
       return null;
     }
-    const priorityGroups = /* @__PURE__ */ new Map();
-    for (const production of input.productions) {
-      if (!production.unlocked || !production.enabled || production.weighting <= 0) {
-        continue;
-      }
-      let priority = production.demanded ? Math.max(production.priority, 100) : production.priority;
-      priority *= production.useful ? production.priority : 0;
-      if (priority === 0) {
-        continue;
-      }
-      const group = priorityGroups.get(priority) ?? [];
-      group.push(
-        Object.freeze({
-          productionId: production.id,
-          weighting: production.weighting
-        })
-      );
-      priorityGroups.set(priority, group);
-    }
-    const priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group);
-    const supplementary = priorityGroups.get(-1);
-    if (supplementary !== void 0 && priorityList.length > 1) {
-      priorityList.splice(priorityList.indexOf(supplementary, 1));
-      priorityList[0]?.push(...supplementary);
-    }
-    const candidates = priorityList[0];
-    if (candidates === void 0 || candidates.length === 0) {
+    const config = requireRecord(rawConfig, "governorOffice.c");
+    const rawReplicate = config["replicate"];
+    if (rawReplicate === void 0 || rawReplicate === null) {
       return null;
     }
+    const replicate = requireRecord(rawReplicate, "governorOffice.c.replicate");
+    const power = requireRecord(
+      replicate["pow"],
+      "governorOffice.c.replicate.pow"
+    );
+    const resources = requireRecord(
+      replicate["res"],
+      "governorOffice.c.replicate.res"
+    );
     return Object.freeze({
-      scoreMode: input.scoreMode,
-      selectHighestScore: input.selectHighestScore,
-      candidates: Object.freeze([...candidates])
+      input: Object.freeze({
+        powerOn: requireBoolean(power["on"], "governorOffice.c.replicate.pow.on"),
+        focusQueue: requireBoolean(
+          resources["que"],
+          "governorOffice.c.replicate.res.que"
+        ),
+        focusNegative: requireBoolean(
+          resources["neg"],
+          "governorOffice.c.replicate.res.neg"
+        ),
+        switchOnCap: requireBoolean(
+          resources["cap"],
+          "governorOffice.c.replicate.res.cap"
+        ),
+        powerCap: requireNumber(
+          power["cap"],
+          "governorOffice.c.replicate.pow.cap"
+        )
+      }),
+      power,
+      resources
     });
   }
-  function scoreCandidate(candidate, mode, metric) {
-    if (mode === "weight") {
-      return candidate.weighting;
-    }
-    if (metric === void 0) {
-      return null;
-    }
-    if (mode === "quantity") {
-      return candidate.weighting / metric.currentQuantity;
-    }
-    return candidate.weighting / metric.atomicMass / (metric.exotic ? 4 : 1) / metric.currentQuantity;
+  function settingsMatch(actual, expected) {
+    return actual.powerOn === expected.powerOn && actual.focusQueue === expected.focusQueue && actual.focusNegative === expected.focusNegative && actual.switchOnCap === expected.switchOnCap && actual.powerCap === expected.powerCap;
   }
-  function planReplicatorSelection(priorityPlan, metrics) {
-    const metricById = new Map(
-      metrics.map((metric) => [metric.productionId, metric])
-    );
-    const scored = priorityPlan.candidates.map((candidate) => ({
-      candidate,
-      score: scoreCandidate(
-        candidate,
-        priorityPlan.scoreMode,
-        metricById.get(candidate.productionId)
-      )
-    }));
-    if (scored.some((entry) => entry.score === null)) {
-      return null;
-    }
-    scored.sort(
-      (left, right) => left.score - right.score
-    );
-    const selected = priorityPlan.selectHighestScore ? scored.at(-1) : scored[0];
-    return selected === void 0 ? null : Object.freeze({ productionId: selected.candidate.productionId });
-  }
-  function shouldConfigureReplicatorGovernor(input) {
-    return input.governorPresent && input.replicatorTechnology;
-  }
-  function planReplicatorGovernorTask(tasks) {
-    if (tasks.includes("replicate")) {
-      return Object.freeze({ status: "ready", assignment: null });
-    }
-    const taskIndex = tasks.indexOf("none");
-    if (taskIndex === -1) {
-      return Object.freeze({ status: "unavailable" });
-    }
+  function createReplicatorGovernorOffice(getOffice) {
+    let office = null;
     return Object.freeze({
-      status: "ready",
-      assignment: Object.freeze({
-        kind: "assign-governor-task",
-        taskIndex,
-        expectedTask: "none"
+      reader: Object.freeze({
+        open() {
+          const value = getOffice();
+          if (!value) {
+            office = null;
+            return false;
+          }
+          office = requireRecord(value, "governorOffice");
+          return true;
+        },
+        readSettings() {
+          if (office === null) {
+            throw new Error(
+              "replicator governor office must be opened before reading settings"
+            );
+          }
+          return readGovernorSettings(office)?.input ?? null;
+        }
+      }),
+      executor: Object.freeze({
+        execute(decision2) {
+          if (office === null) {
+            return rejected(
+              "governor-office-not-open",
+              "replicator governor office session is not open"
+            );
+          }
+          if (decision2.kind === "assign-governor-task") {
+            if (!Number.isSafeInteger(decision2.taskIndex) || decision2.taskIndex < 0) {
+              return rejected(
+                "invalid-governor-task-index",
+                "governor task index must be a non-negative safe integer"
+              );
+            }
+            const tasks = requireRecord(office["t"], "governorOffice.t");
+            const actual = Object.values(tasks)[decision2.taskIndex];
+            if (actual !== decision2.expectedTask) {
+              return stale(
+                "stale-governor-task",
+                "governor task assignments changed",
+                {
+                  taskIndex: decision2.taskIndex,
+                  expected: decision2.expectedTask,
+                  actual: typeof actual === "string" ? actual : null
+                }
+              );
+            }
+            const setTask = requireFunction(
+              office["setTask"],
+              "governorOffice.setTask"
+            );
+            Reflect.apply(setTask, office, ["replicate", decision2.taskIndex]);
+            return SUCCEEDED;
+          }
+          const current = readGovernorSettings(office);
+          if (current === null) {
+            return stale(
+              "stale-replicator-governor-settings",
+              "replicator governor settings disappeared"
+            );
+          }
+          if (!settingsMatch(current.input, decision2.expected)) {
+            return stale(
+              "stale-replicator-governor-settings",
+              "replicator governor settings changed"
+            );
+          }
+          const forceUpdate = requireFunction(
+            office["$forceUpdate"],
+            "governorOffice.$forceUpdate"
+          );
+          if (decision2.enablePower) {
+            current.power["on"] = true;
+          }
+          if (decision2.disableQueue) {
+            current.resources["que"] = false;
+          }
+          if (decision2.disableNegative) {
+            current.resources["neg"] = false;
+          }
+          if (decision2.disableCapSwitch) {
+            current.resources["cap"] = false;
+          }
+          if (decision2.raisePowerCap) {
+            current.power["cap"] = 1e12;
+          }
+          Reflect.apply(forceUpdate, office, []);
+          return SUCCEEDED;
+        }
       })
     });
-  }
-  function planReplicatorGovernorSettings(input) {
-    const enablePower = !input.powerOn;
-    const disableQueue = input.focusQueue;
-    const disableNegative = input.focusNegative;
-    const disableCapSwitch = input.switchOnCap;
-    const raisePowerCap = input.powerCap < 1e12;
-    if (!enablePower && !disableQueue && !disableNegative && !disableCapSwitch && !raisePowerCap) {
-      return null;
-    }
-    return Object.freeze({
-      kind: "update-governor-settings",
-      expected: Object.freeze({ ...input }),
-      enablePower,
-      disableQueue,
-      disableNegative,
-      disableCapSwitch,
-      raisePowerCap
-    });
-  }
-
-  // src/application/replicator.ts
-  var SUCCEEDED13 = Object.freeze({
-    status: "succeeded"
-  });
-  function runReplicatorAutomation(dependencies) {
-    const planningInput = dependencies.selectionReader.readPlanningInput();
-    if (!planningInput.initialised) {
-      return SUCCEEDED13;
-    }
-    const priorityPlan = planReplicatorPriority(planningInput);
-    if (priorityPlan !== null) {
-      const selection = planReplicatorSelection(
-        priorityPlan,
-        dependencies.selectionReader.readMetrics(priorityPlan)
-      );
-      if (selection !== null) {
-        const outcome = dependencies.selectionExecutor.execute(selection);
-        if (outcome.status !== "succeeded") {
-          return outcome;
-        }
-      }
-    }
-    if (!planningInput.assignGovernorTask) {
-      return SUCCEEDED13;
-    }
-    if (!shouldConfigureReplicatorGovernor(
-      dependencies.governorGameReader.readGate()
-    ) || !dependencies.governorOfficeReader.open()) {
-      return SUCCEEDED13;
-    }
-    const taskPlan = planReplicatorGovernorTask(
-      dependencies.governorGameReader.readTasks()
-    );
-    if (taskPlan.status === "unavailable") {
-      return SUCCEEDED13;
-    }
-    if (taskPlan.assignment !== null) {
-      const outcome = dependencies.governorExecutor.execute(taskPlan.assignment);
-      if (outcome.status !== "succeeded") {
-        return outcome;
-      }
-    }
-    const settings = dependencies.governorOfficeReader.readSettings();
-    if (settings === null) {
-      return SUCCEEDED13;
-    }
-    const settingsDecision = planReplicatorGovernorSettings(settings);
-    return settingsDecision === null ? SUCCEEDED13 : dependencies.governorExecutor.execute(settingsDecision);
   }
 
   // src/adapters/evolve/economy/production/replicator.ts
@@ -32348,145 +32341,189 @@
     });
   }
 
-  // src/adapters/browser/replicator-governor.ts
-  function readGovernorSettings(office) {
-    const rawConfig = office["c"];
-    if (rawConfig === void 0 || rawConfig === null) {
+  // src/domain/economy/production/replicator.ts
+  function planReplicatorPriority(input) {
+    if (!input.initialised) {
       return null;
     }
-    const config = requireRecord(rawConfig, "governorOffice.c");
-    const rawReplicate = config["replicate"];
-    if (rawReplicate === void 0 || rawReplicate === null) {
+    const priorityGroups = /* @__PURE__ */ new Map();
+    for (const production of input.productions) {
+      if (!production.unlocked || !production.enabled || production.weighting <= 0) {
+        continue;
+      }
+      let priority = production.demanded ? Math.max(production.priority, 100) : production.priority;
+      priority *= production.useful ? production.priority : 0;
+      if (priority === 0) {
+        continue;
+      }
+      const group = priorityGroups.get(priority) ?? [];
+      group.push(
+        Object.freeze({
+          productionId: production.id,
+          weighting: production.weighting
+        })
+      );
+      priorityGroups.set(priority, group);
+    }
+    const priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group);
+    const supplementary = priorityGroups.get(-1);
+    if (supplementary !== void 0 && priorityList.length > 1) {
+      priorityList.splice(priorityList.indexOf(supplementary, 1));
+      priorityList[0]?.push(...supplementary);
+    }
+    const candidates = priorityList[0];
+    if (candidates === void 0 || candidates.length === 0) {
       return null;
     }
-    const replicate = requireRecord(rawReplicate, "governorOffice.c.replicate");
-    const power = requireRecord(
-      replicate["pow"],
-      "governorOffice.c.replicate.pow"
-    );
-    const resources = requireRecord(
-      replicate["res"],
-      "governorOffice.c.replicate.res"
-    );
     return Object.freeze({
-      input: Object.freeze({
-        powerOn: requireBoolean(power["on"], "governorOffice.c.replicate.pow.on"),
-        focusQueue: requireBoolean(
-          resources["que"],
-          "governorOffice.c.replicate.res.que"
-        ),
-        focusNegative: requireBoolean(
-          resources["neg"],
-          "governorOffice.c.replicate.res.neg"
-        ),
-        switchOnCap: requireBoolean(
-          resources["cap"],
-          "governorOffice.c.replicate.res.cap"
-        ),
-        powerCap: requireNumber(
-          power["cap"],
-          "governorOffice.c.replicate.pow.cap"
-        )
-      }),
-      power,
-      resources
+      scoreMode: input.scoreMode,
+      selectHighestScore: input.selectHighestScore,
+      candidates: Object.freeze([...candidates])
     });
   }
-  function settingsMatch(actual, expected) {
-    return actual.powerOn === expected.powerOn && actual.focusQueue === expected.focusQueue && actual.focusNegative === expected.focusNegative && actual.switchOnCap === expected.switchOnCap && actual.powerCap === expected.powerCap;
+  function scoreCandidate(candidate, mode, metric) {
+    if (mode === "weight") {
+      return candidate.weighting;
+    }
+    if (metric === void 0) {
+      return null;
+    }
+    if (mode === "quantity") {
+      return candidate.weighting / metric.currentQuantity;
+    }
+    return candidate.weighting / metric.atomicMass / (metric.exotic ? 4 : 1) / metric.currentQuantity;
   }
-  function createReplicatorGovernorOffice(getOffice) {
-    let office = null;
+  function planReplicatorSelection(priorityPlan, metrics) {
+    const metricById = new Map(
+      metrics.map((metric) => [metric.productionId, metric])
+    );
+    const scored = priorityPlan.candidates.map((candidate) => ({
+      candidate,
+      score: scoreCandidate(
+        candidate,
+        priorityPlan.scoreMode,
+        metricById.get(candidate.productionId)
+      )
+    }));
+    if (scored.some((entry) => entry.score === null)) {
+      return null;
+    }
+    scored.sort(
+      (left, right) => left.score - right.score
+    );
+    const selected = priorityPlan.selectHighestScore ? scored.at(-1) : scored[0];
+    return selected === void 0 ? null : Object.freeze({ productionId: selected.candidate.productionId });
+  }
+  function shouldConfigureReplicatorGovernor(input) {
+    return input.governorPresent && input.replicatorTechnology;
+  }
+  function planReplicatorGovernorTask(tasks) {
+    if (tasks.includes("replicate")) {
+      return Object.freeze({ status: "ready", assignment: null });
+    }
+    const taskIndex = tasks.indexOf("none");
+    if (taskIndex === -1) {
+      return Object.freeze({ status: "unavailable" });
+    }
     return Object.freeze({
-      reader: Object.freeze({
-        open() {
-          const value = getOffice();
-          if (!value) {
-            office = null;
-            return false;
-          }
-          office = requireRecord(value, "governorOffice");
-          return true;
-        },
-        readSettings() {
-          if (office === null) {
-            throw new Error(
-              "replicator governor office must be opened before reading settings"
-            );
-          }
-          return readGovernorSettings(office)?.input ?? null;
+      status: "ready",
+      assignment: Object.freeze({
+        kind: "assign-governor-task",
+        taskIndex,
+        expectedTask: "none"
+      })
+    });
+  }
+  function planReplicatorGovernorSettings(input) {
+    const enablePower = !input.powerOn;
+    const disableQueue = input.focusQueue;
+    const disableNegative = input.focusNegative;
+    const disableCapSwitch = input.switchOnCap;
+    const raisePowerCap = input.powerCap < 1e12;
+    if (!enablePower && !disableQueue && !disableNegative && !disableCapSwitch && !raisePowerCap) {
+      return null;
+    }
+    return Object.freeze({
+      kind: "update-governor-settings",
+      expected: Object.freeze({ ...input }),
+      enablePower,
+      disableQueue,
+      disableNegative,
+      disableCapSwitch,
+      raisePowerCap
+    });
+  }
+
+  // src/application/replicator.ts
+  var SUCCEEDED13 = Object.freeze({
+    status: "succeeded"
+  });
+  function runReplicatorAutomation(dependencies) {
+    const planningInput = dependencies.selectionReader.readPlanningInput();
+    if (!planningInput.initialised) {
+      return SUCCEEDED13;
+    }
+    const priorityPlan = planReplicatorPriority(planningInput);
+    if (priorityPlan !== null) {
+      const selection = planReplicatorSelection(
+        priorityPlan,
+        dependencies.selectionReader.readMetrics(priorityPlan)
+      );
+      if (selection !== null) {
+        const outcome = dependencies.selectionExecutor.execute(selection);
+        if (outcome.status !== "succeeded") {
+          return outcome;
         }
-      }),
-      executor: Object.freeze({
-        execute(decision2) {
-          if (office === null) {
-            return rejected(
-              "governor-office-not-open",
-              "replicator governor office session is not open"
-            );
-          }
-          if (decision2.kind === "assign-governor-task") {
-            if (!Number.isSafeInteger(decision2.taskIndex) || decision2.taskIndex < 0) {
-              return rejected(
-                "invalid-governor-task-index",
-                "governor task index must be a non-negative safe integer"
-              );
-            }
-            const tasks = requireRecord(office["t"], "governorOffice.t");
-            const actual = Object.values(tasks)[decision2.taskIndex];
-            if (actual !== decision2.expectedTask) {
-              return stale(
-                "stale-governor-task",
-                "governor task assignments changed",
-                {
-                  taskIndex: decision2.taskIndex,
-                  expected: decision2.expectedTask,
-                  actual: typeof actual === "string" ? actual : null
-                }
-              );
-            }
-            const setTask = requireFunction(
-              office["setTask"],
-              "governorOffice.setTask"
-            );
-            Reflect.apply(setTask, office, ["replicate", decision2.taskIndex]);
-            return SUCCEEDED;
-          }
-          const current = readGovernorSettings(office);
-          if (current === null) {
-            return stale(
-              "stale-replicator-governor-settings",
-              "replicator governor settings disappeared"
-            );
-          }
-          if (!settingsMatch(current.input, decision2.expected)) {
-            return stale(
-              "stale-replicator-governor-settings",
-              "replicator governor settings changed"
-            );
-          }
-          const forceUpdate = requireFunction(
-            office["$forceUpdate"],
-            "governorOffice.$forceUpdate"
-          );
-          if (decision2.enablePower) {
-            current.power["on"] = true;
-          }
-          if (decision2.disableQueue) {
-            current.resources["que"] = false;
-          }
-          if (decision2.disableNegative) {
-            current.resources["neg"] = false;
-          }
-          if (decision2.disableCapSwitch) {
-            current.resources["cap"] = false;
-          }
-          if (decision2.raisePowerCap) {
-            current.power["cap"] = 1e12;
-          }
-          Reflect.apply(forceUpdate, office, []);
-          return SUCCEEDED;
-        }
+      }
+    }
+    if (!planningInput.assignGovernorTask) {
+      return SUCCEEDED13;
+    }
+    if (!shouldConfigureReplicatorGovernor(
+      dependencies.governorGameReader.readGate()
+    ) || !dependencies.governorOfficeReader.open()) {
+      return SUCCEEDED13;
+    }
+    const taskPlan = planReplicatorGovernorTask(
+      dependencies.governorGameReader.readTasks()
+    );
+    if (taskPlan.status === "unavailable") {
+      return SUCCEEDED13;
+    }
+    if (taskPlan.assignment !== null) {
+      const outcome = dependencies.governorExecutor.execute(taskPlan.assignment);
+      if (outcome.status !== "succeeded") {
+        return outcome;
+      }
+    }
+    const settings = dependencies.governorOfficeReader.readSettings();
+    if (settings === null) {
+      return SUCCEEDED13;
+    }
+    const settingsDecision = planReplicatorGovernorSettings(settings);
+    return settingsDecision === null ? SUCCEEDED13 : dependencies.governorExecutor.execute(settingsDecision);
+  }
+
+  // src/bootstrap/replicator-control.ts
+  function createReplicatorControl(dependencies) {
+    const selectionReader = createReplicatorSelectionReader(
+      dependencies.selectionReader
+    );
+    const governorGameReader = createReplicatorGovernorGameReader(
+      dependencies.governorGameReader
+    );
+    const governorOffice = createReplicatorGovernorOffice(
+      dependencies.getGovernorOffice
+    );
+    return Object.freeze({
+      autoReplicator: () => runReplicatorAutomation({
+        selectionReader,
+        selectionExecutor: createReplicatorSelectionExecutor(
+          dependencies.getReplicatorManager
+        ),
+        governorGameReader,
+        governorOfficeReader: governorOffice.reader,
+        governorExecutor: governorOffice.executor
       })
     });
   }
@@ -41104,33 +41141,6 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/domain/progression/research/research.ts
-  function planResearch(input) {
-    const tech = input.techs.find(
-      (candidate) => candidate.affordable && !candidate.hasCostConflict
-    );
-    return tech === void 0 ? null : Object.freeze({ index: tech.index, techId: tech.id });
-  }
-
-  // src/application/research.ts
-  var SUCCEEDED23 = Object.freeze({
-    status: "succeeded"
-  });
-  function runResearchAutomation(dependencies) {
-    let startIndex = 0;
-    while (true) {
-      const decision2 = planResearch(dependencies.reader.read(startIndex));
-      if (decision2 === null) {
-        return SUCCEEDED23;
-      }
-      const result2 = dependencies.executor.execute(decision2);
-      if (result2.outcome.status !== "succeeded" || result2.researched) {
-        return result2.outcome;
-      }
-      startIndex = decision2.index + 1;
-    }
-  }
-
   // src/adapters/evolve/progression/research/research.ts
   function readUnlockedTechs(getState) {
     const state = requireRecord(getState(), "state");
@@ -41238,6 +41248,42 @@
         Reflect.apply(updateProjects, projectManager, []);
         return executionResult2(SUCCEEDED, true);
       }
+    });
+  }
+
+  // src/domain/progression/research/research.ts
+  function planResearch(input) {
+    const tech = input.techs.find(
+      (candidate) => candidate.affordable && !candidate.hasCostConflict
+    );
+    return tech === void 0 ? null : Object.freeze({ index: tech.index, techId: tech.id });
+  }
+
+  // src/application/research.ts
+  var SUCCEEDED23 = Object.freeze({
+    status: "succeeded"
+  });
+  function runResearchAutomation(dependencies) {
+    let startIndex = 0;
+    while (true) {
+      const decision2 = planResearch(dependencies.reader.read(startIndex));
+      if (decision2 === null) {
+        return SUCCEEDED23;
+      }
+      const result2 = dependencies.executor.execute(decision2);
+      if (result2.outcome.status !== "succeeded" || result2.researched) {
+        return result2.outcome;
+      }
+      startIndex = decision2.index + 1;
+    }
+  }
+
+  // src/bootstrap/research-control.ts
+  function createResearchControl(dependencies) {
+    const reader = createResearchReader(dependencies.reader);
+    const executor = createResearchCommandExecutor(dependencies.executor);
+    return Object.freeze({
+      autoResearch: () => runResearchAutomation({ reader, executor })
     });
   }
 
@@ -55347,19 +55393,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
       smelterExecutor.execute(decision2);
     };
-    const factoryAdapter = createFactoryAdapter({
-      getManager: () => FactoryManager,
-      getState: () => state,
-      getSettings: () => settings,
-      getGame: () => game,
-      getResources: () => resources,
-      consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN
-    });
-    const factoryTooltips = createFactoryTooltipPublisher(() => state);
-    const autoFactory = () => runFactoryAutomation({
-      reader: factoryAdapter.reader,
-      executor: factoryAdapter.executor,
-      tooltips: factoryTooltips
+    const { autoFactory } = createFactoryControl({
+      adapter: {
+        getManager: () => FactoryManager,
+        getState: () => state,
+        getSettings: () => settings,
+        getGame: () => game,
+        getResources: () => resources,
+        consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN
+      },
+      getState: () => state
     });
     publishTestSurface({
       autoFactory,
@@ -55384,27 +55427,19 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getResources: () => resources,
       isHungryRace
     });
-    const replicatorSelectionReader = createReplicatorSelectionReader({
-      getManager: () => ReplicatorManager,
-      getSettings: () => settings,
-      getResources: () => resources
-    });
-    const replicatorGovernorGameReader = createReplicatorGovernorGameReader({
-      getGovernor,
-      haveReplicatorTechnology: () => haveTech("replicator"),
-      getGame: () => game
-    });
-    const replicatorGovernorOffice = createReplicatorGovernorOffice(
-      () => getVueById("govOffice")
-    );
-    const autoReplicator = () => runReplicatorAutomation({
-      selectionReader: replicatorSelectionReader,
-      selectionExecutor: createReplicatorSelectionExecutor(
-        () => ReplicatorManager
-      ),
-      governorGameReader: replicatorGovernorGameReader,
-      governorOfficeReader: replicatorGovernorOffice.reader,
-      governorExecutor: replicatorGovernorOffice.executor
+    const { autoReplicator } = createReplicatorControl({
+      selectionReader: {
+        getManager: () => ReplicatorManager,
+        getSettings: () => settings,
+        getResources: () => resources
+      },
+      governorGameReader: {
+        getGovernor,
+        haveReplicatorTechnology: () => haveTech("replicator"),
+        getGame: () => game
+      },
+      getReplicatorManager: () => ReplicatorManager,
+      getGovernorOffice: () => getVueById("govOffice")
     });
     let prestigeLogTestActions;
     const { formatLogString, logPrestige } = createPrestigeLog({
@@ -55793,18 +55828,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         MinorTraitManager = managers.MinorTraitManager;
       }
     });
-    const researchReader = createResearchReader({
-      getState: () => state,
-      getCostConflict: (tech) => getCostConflict(tech)
-    });
-    const researchExecutor = createResearchCommandExecutor({
-      getState: () => state,
-      getBuildingManager: () => BuildingManager,
-      getProjectManager: () => ProjectManager
-    });
-    const autoResearch = () => runResearchAutomation({
-      reader: researchReader,
-      executor: researchExecutor
+    const { autoResearch } = createResearchControl({
+      reader: {
+        getState: () => state,
+        getCostConflict: (tech) => getCostConflict(tech)
+      },
+      executor: {
+        getState: () => state,
+        getBuildingManager: () => BuildingManager,
+        getProjectManager: () => ProjectManager
+      }
     });
     const powerWarnings = createPowerWarningSource(
       () => runtimeEnvironment.window.document,

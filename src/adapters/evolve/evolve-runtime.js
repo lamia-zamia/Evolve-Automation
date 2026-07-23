@@ -310,9 +310,7 @@ import {
   planMineRatio,
   planExtractorRatios,
 } from "../../domain/economy/resources/resource-ratios.ts";
-import { runFactoryAutomation } from "../../application/factory.ts";
-import { createFactoryAdapter } from "./economy/production/factory.ts";
-import { createFactoryTooltipPublisher } from "../browser/factory-tooltips.ts";
+import { createFactoryControl } from "../../bootstrap/factory-control.ts";
 import { createMiningDroidControl } from "../../bootstrap/mining-droid-control.ts";
 import {
   createGrapheneCommandExecutor,
@@ -343,13 +341,7 @@ import {
   createTriggerReader,
 } from "./progression/build/trigger.ts";
 import { createConsumeControl } from "../../bootstrap/consume-control.ts";
-import { runReplicatorAutomation } from "../../application/replicator.ts";
-import {
-  createReplicatorGovernorGameReader,
-  createReplicatorSelectionExecutor,
-  createReplicatorSelectionReader,
-} from "./economy/production/replicator.ts";
-import { createReplicatorGovernorOffice } from "../browser/replicator-governor.ts";
+import { createReplicatorControl } from "../../bootstrap/replicator-control.ts";
 import { createMarketControl } from "../../bootstrap/market-control.ts";
 import { createPowerAutomation } from "../../application/power.ts";
 import { createPowerAdapter } from "./economy/production/power.ts";
@@ -388,11 +380,7 @@ import { runPlanetSelection } from "../../application/planet-selection.ts";
 import { createJobsControl } from "../../bootstrap/jobs-control.ts";
 import { runBuildAutomation } from "../../application/build.ts";
 import { createBuildAdapter } from "./progression/build/build.ts";
-import { runResearchAutomation } from "../../application/research.ts";
-import {
-  createResearchCommandExecutor,
-  createResearchReader,
-} from "./progression/research/research.ts";
+import { createResearchControl } from "../../bootstrap/research-control.ts";
 import { createMutationControl } from "../../bootstrap/mutation-control.ts";
 import { createOuterFleetControl } from "../../bootstrap/fleet-outer-control.ts";
 import { createFleetControl } from "../../bootstrap/fleet-control.ts";
@@ -4055,21 +4043,17 @@ function startEvolveRuntimeComposition(
     smelterExecutor.execute(decision);
   };
 
-  const factoryAdapter = createFactoryAdapter({
-    getManager: () => FactoryManager,
+  const { autoFactory } = createFactoryControl({
+    adapter: {
+      getManager: () => FactoryManager,
+      getState: () => state,
+      getSettings: () => settings,
+      getGame: () => game,
+      getResources: () => resources,
+      consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
+    },
     getState: () => state,
-    getSettings: () => settings,
-    getGame: () => game,
-    getResources: () => resources,
-    consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
   });
-  const factoryTooltips = createFactoryTooltipPublisher(() => state);
-  const autoFactory = () =>
-    runFactoryAutomation({
-      reader: factoryAdapter.reader,
-      executor: factoryAdapter.executor,
-      tooltips: factoryTooltips,
-    });
 
   publishTestSurface({
     autoFactory,
@@ -4099,29 +4083,20 @@ function startEvolveRuntimeComposition(
     isHungryRace,
   });
 
-  const replicatorSelectionReader = createReplicatorSelectionReader({
-    getManager: () => ReplicatorManager,
-    getSettings: () => settings,
-    getResources: () => resources,
+  const { autoReplicator } = createReplicatorControl({
+    selectionReader: {
+      getManager: () => ReplicatorManager,
+      getSettings: () => settings,
+      getResources: () => resources,
+    },
+    governorGameReader: {
+      getGovernor,
+      haveReplicatorTechnology: () => haveTech("replicator"),
+      getGame: () => game,
+    },
+    getReplicatorManager: () => ReplicatorManager,
+    getGovernorOffice: () => getVueById("govOffice"),
   });
-  const replicatorGovernorGameReader = createReplicatorGovernorGameReader({
-    getGovernor,
-    haveReplicatorTechnology: () => haveTech("replicator"),
-    getGame: () => game,
-  });
-  const replicatorGovernorOffice = createReplicatorGovernorOffice(() =>
-    getVueById("govOffice"),
-  );
-  const autoReplicator = () =>
-    runReplicatorAutomation({
-      selectionReader: replicatorSelectionReader,
-      selectionExecutor: createReplicatorSelectionExecutor(
-        () => ReplicatorManager,
-      ),
-      governorGameReader: replicatorGovernorGameReader,
-      governorOfficeReader: replicatorGovernorOffice.reader,
-      governorExecutor: replicatorGovernorOffice.executor,
-    });
 
   let prestigeLogTestActions;
   const { formatLogString, logPrestige } = createPrestigeLog({
@@ -4559,20 +4534,17 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const researchReader = createResearchReader({
-    getState: () => state,
-    getCostConflict: (tech) => getCostConflict(tech),
+  const { autoResearch } = createResearchControl({
+    reader: {
+      getState: () => state,
+      getCostConflict: (tech) => getCostConflict(tech),
+    },
+    executor: {
+      getState: () => state,
+      getBuildingManager: () => BuildingManager,
+      getProjectManager: () => ProjectManager,
+    },
   });
-  const researchExecutor = createResearchCommandExecutor({
-    getState: () => state,
-    getBuildingManager: () => BuildingManager,
-    getProjectManager: () => ProjectManager,
-  });
-  const autoResearch = () =>
-    runResearchAutomation({
-      reader: researchReader,
-      executor: researchExecutor,
-    });
 
   const powerWarnings = createPowerWarningSource(
     () => runtimeEnvironment.window.document,
