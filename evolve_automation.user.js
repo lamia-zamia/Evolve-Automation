@@ -29781,91 +29781,70 @@
     });
   }
 
-  // src/domain/traits/genetics.ts
-  function configuredTarget(mode) {
-    if (mode === "enabled") return true;
-    if (mode === "disabled") return false;
-    return null;
-  }
-  function planGenetics(input) {
-    if (!input.available) return Object.freeze([]);
-    const decisions = [];
-    const sequenceTarget = input.sequenceMode === "decode" ? input.mutationCount < 1 : configuredTarget(input.sequenceMode);
-    if (sequenceTarget !== null && sequenceTarget !== input.sequenceOn) {
-      decisions.push(
-        Object.freeze({
-          kind: "set-genetics-toggle",
-          toggle: "sequence",
-          expected: input.sequenceOn,
-          enabled: sequenceTarget
-        })
-      );
-    }
-    if (input.technologyLevel < 5) return Object.freeze(decisions);
-    const boostTarget = configuredTarget(input.boostMode);
-    if (boostTarget !== null && boostTarget !== input.boostOn) {
-      decisions.push(
-        Object.freeze({
-          kind: "set-genetics-toggle",
-          toggle: "boost",
-          expected: input.boostOn,
-          enabled: boostTarget
-        })
-      );
-    }
-    if (input.technologyLevel < 6) return Object.freeze(decisions);
-    const autoTarget = configuredTarget(input.assembleMode);
-    if (autoTarget !== null && autoTarget !== input.autoOn) {
-      decisions.push(
-        Object.freeze({
-          kind: "set-genetics-toggle",
-          toggle: "auto",
-          expected: input.autoOn,
-          enabled: autoTarget
-        })
-      );
-    }
-    const assembly = input.assembly;
-    if (input.assembleMode !== "auto" || assembly === null || assembly.knowledgeCurrent < 2e5 || assembly.knowledgeDemanded) {
-      return Object.freeze(decisions);
-    }
-    const nextTickKnowledge = assembly.knowledgeCurrent + assembly.knowledgeRate / assembly.ticksPerSecond;
-    const overflowKnowledge = nextTickKnowledge - assembly.knowledgeMaximum;
-    if (overflowKnowledge <= 0) return Object.freeze(decisions);
-    const count2 = Math.ceil(overflowKnowledge / 2e5);
-    decisions.push(
-      Object.freeze({
-        kind: "assemble-genes",
-        count: count2,
-        expectedKnowledge: assembly.knowledgeCurrent,
-        expectedGenes: assembly.genesCurrent,
-        knowledgeAfter: assembly.knowledgeCurrent - 2e5 * count2,
-        genesAfter: assembly.genesCurrent + count2
-      })
-    );
-    return Object.freeze(decisions);
-  }
-
-  // src/application/genetics.ts
-  var SUCCEEDED7 = Object.freeze({
-    status: "succeeded"
+  // src/adapters/browser/genetics-controls.ts
+  var METHOD_BY_TOGGLE = Object.freeze({
+    sequence: "toggle",
+    boost: "booster",
+    auto: "auto_seq"
   });
-  function runGeneticsAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED7;
-    if (!dependencies.controls.capture()) {
-      return {
-        status: "stale",
-        failure: {
-          code: "genetics-controls-unavailable",
-          message: "genetics controls are unavailable"
+  function createGeneticsControls(dependencies) {
+    let view = null;
+    return Object.freeze({
+      capture() {
+        const value = dependencies.getVueById("arpaSequence");
+        if (!value) {
+          view = null;
+          return false;
         }
-      };
-    }
-    for (const decision2 of planGenetics(dependencies.reader.readPlan())) {
-      const outcome = dependencies.executor.execute(decision2);
-      if (outcome.status !== "succeeded") return outcome;
-    }
-    return SUCCEEDED7;
+        view = requireRecord(value, "arpaSequence Vue view");
+        return true;
+      },
+      toggle(toggle) {
+        if (view === null) return false;
+        const methodName = METHOD_BY_TOGGLE[toggle];
+        if (typeof view[methodName] !== "function") return false;
+        const method = requireFunction(
+          view[methodName],
+          `arpaSequence Vue view.${methodName}`
+        );
+        Reflect.apply(method, view, []);
+        return true;
+      },
+      assemble(count2) {
+        if (view === null) return false;
+        if (typeof view["novo"] !== "function") return false;
+        const novo = requireFunction(view["novo"], "arpaSequence Vue view.novo");
+        const keyManager = requireRecord(
+          dependencies.getKeyManager(),
+          "KeyManager"
+        );
+        const click = requireFunction(keyManager["click"], "KeyManager.click");
+        const rawIterable = Reflect.apply(click, keyManager, [count2]);
+        const iterable = requireRecord(rawIterable, "KeyManager.click() result");
+        const iterator = requireFunction(
+          iterable[Symbol.iterator],
+          "KeyManager.click() result[Symbol.iterator]"
+        );
+        const iteratorValue = Reflect.apply(iterator, iterable, []);
+        const iteratorRecord = requireRecord(
+          iteratorValue,
+          "KeyManager.click() iterator"
+        );
+        const next = requireFunction(
+          iteratorRecord["next"],
+          "KeyManager.click() iterator.next"
+        );
+        while (true) {
+          const result2 = requireRecord(
+            Reflect.apply(next, iteratorRecord, []),
+            "KeyManager.click() iterator result"
+          );
+          if (result2["done"]) break;
+          Reflect.apply(novo, view, []);
+        }
+        return true;
+      }
+    });
   }
 
   // src/adapters/evolve/traits/genetics.ts
@@ -30136,69 +30115,103 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/adapters/browser/genetics-controls.ts
-  var METHOD_BY_TOGGLE = Object.freeze({
-    sequence: "toggle",
-    boost: "booster",
-    auto: "auto_seq"
+  // src/domain/traits/genetics.ts
+  function configuredTarget(mode) {
+    if (mode === "enabled") return true;
+    if (mode === "disabled") return false;
+    return null;
+  }
+  function planGenetics(input) {
+    if (!input.available) return Object.freeze([]);
+    const decisions = [];
+    const sequenceTarget = input.sequenceMode === "decode" ? input.mutationCount < 1 : configuredTarget(input.sequenceMode);
+    if (sequenceTarget !== null && sequenceTarget !== input.sequenceOn) {
+      decisions.push(
+        Object.freeze({
+          kind: "set-genetics-toggle",
+          toggle: "sequence",
+          expected: input.sequenceOn,
+          enabled: sequenceTarget
+        })
+      );
+    }
+    if (input.technologyLevel < 5) return Object.freeze(decisions);
+    const boostTarget = configuredTarget(input.boostMode);
+    if (boostTarget !== null && boostTarget !== input.boostOn) {
+      decisions.push(
+        Object.freeze({
+          kind: "set-genetics-toggle",
+          toggle: "boost",
+          expected: input.boostOn,
+          enabled: boostTarget
+        })
+      );
+    }
+    if (input.technologyLevel < 6) return Object.freeze(decisions);
+    const autoTarget = configuredTarget(input.assembleMode);
+    if (autoTarget !== null && autoTarget !== input.autoOn) {
+      decisions.push(
+        Object.freeze({
+          kind: "set-genetics-toggle",
+          toggle: "auto",
+          expected: input.autoOn,
+          enabled: autoTarget
+        })
+      );
+    }
+    const assembly = input.assembly;
+    if (input.assembleMode !== "auto" || assembly === null || assembly.knowledgeCurrent < 2e5 || assembly.knowledgeDemanded) {
+      return Object.freeze(decisions);
+    }
+    const nextTickKnowledge = assembly.knowledgeCurrent + assembly.knowledgeRate / assembly.ticksPerSecond;
+    const overflowKnowledge = nextTickKnowledge - assembly.knowledgeMaximum;
+    if (overflowKnowledge <= 0) return Object.freeze(decisions);
+    const count2 = Math.ceil(overflowKnowledge / 2e5);
+    decisions.push(
+      Object.freeze({
+        kind: "assemble-genes",
+        count: count2,
+        expectedKnowledge: assembly.knowledgeCurrent,
+        expectedGenes: assembly.genesCurrent,
+        knowledgeAfter: assembly.knowledgeCurrent - 2e5 * count2,
+        genesAfter: assembly.genesCurrent + count2
+      })
+    );
+    return Object.freeze(decisions);
+  }
+
+  // src/application/genetics.ts
+  var SUCCEEDED7 = Object.freeze({
+    status: "succeeded"
   });
-  function createGeneticsControls(dependencies) {
-    let view = null;
+  function runGeneticsAutomation(dependencies) {
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED7;
+    if (!dependencies.controls.capture()) {
+      return {
+        status: "stale",
+        failure: {
+          code: "genetics-controls-unavailable",
+          message: "genetics controls are unavailable"
+        }
+      };
+    }
+    for (const decision2 of planGenetics(dependencies.reader.readPlan())) {
+      const outcome = dependencies.executor.execute(decision2);
+      if (outcome.status !== "succeeded") return outcome;
+    }
+    return SUCCEEDED7;
+  }
+
+  // src/bootstrap/genetics-control.ts
+  function createGeneticsControl(dependencies) {
+    const controls4 = createGeneticsControls(dependencies.controls);
+    const adapter = createGeneticsAdapter({ ...dependencies.adapter, controls: controls4 });
     return Object.freeze({
-      capture() {
-        const value = dependencies.getVueById("arpaSequence");
-        if (!value) {
-          view = null;
-          return false;
-        }
-        view = requireRecord(value, "arpaSequence Vue view");
-        return true;
-      },
-      toggle(toggle) {
-        if (view === null) return false;
-        const methodName = METHOD_BY_TOGGLE[toggle];
-        if (typeof view[methodName] !== "function") return false;
-        const method = requireFunction(
-          view[methodName],
-          `arpaSequence Vue view.${methodName}`
-        );
-        Reflect.apply(method, view, []);
-        return true;
-      },
-      assemble(count2) {
-        if (view === null) return false;
-        if (typeof view["novo"] !== "function") return false;
-        const novo = requireFunction(view["novo"], "arpaSequence Vue view.novo");
-        const keyManager = requireRecord(
-          dependencies.getKeyManager(),
-          "KeyManager"
-        );
-        const click = requireFunction(keyManager["click"], "KeyManager.click");
-        const rawIterable = Reflect.apply(click, keyManager, [count2]);
-        const iterable = requireRecord(rawIterable, "KeyManager.click() result");
-        const iterator = requireFunction(
-          iterable[Symbol.iterator],
-          "KeyManager.click() result[Symbol.iterator]"
-        );
-        const iteratorValue = Reflect.apply(iterator, iterable, []);
-        const iteratorRecord = requireRecord(
-          iteratorValue,
-          "KeyManager.click() iterator"
-        );
-        const next = requireFunction(
-          iteratorRecord["next"],
-          "KeyManager.click() iterator.next"
-        );
-        while (true) {
-          const result2 = requireRecord(
-            Reflect.apply(next, iteratorRecord, []),
-            "KeyManager.click() iterator result"
-          );
-          if (result2["done"]) break;
-          Reflect.apply(novo, view, []);
-        }
-        return true;
-      }
+      autoGenetics: () => runGeneticsAutomation({
+        reader: adapter.reader,
+        executor: adapter.executor,
+        controls: controls4
+      })
     });
   }
 
@@ -30457,6 +30470,43 @@
     });
   }
 
+  // src/adapters/browser/psychic-controls.ts
+  var CONTROL_BY_POWER = Object.freeze({
+    murder: Object.freeze({ id: "psychicKill", method: "murder" }),
+    mind_break: Object.freeze({
+      id: "psychicMindBreak",
+      method: "breakMind"
+    }),
+    stun: Object.freeze({ id: "psychicCapture", method: "stun" }),
+    profit: Object.freeze({ id: "psychicFinance", method: "boostVal" }),
+    boost: Object.freeze({ id: "psychicBoost", method: "boostVal" }),
+    assault: Object.freeze({ id: "psychicAssault", method: "boostVal" })
+  });
+  function createPsychicControls(dependencies) {
+    return Object.freeze({
+      activate(decision2) {
+        const control = CONTROL_BY_POWER[decision2.power];
+        const rawView = dependencies.getVueById(control.id);
+        if (!rawView) return false;
+        const view = requireRecord(rawView, `${control.id} Vue view`);
+        if (typeof view[control.method] !== "function") return false;
+        const method = requireFunction(
+          view[control.method],
+          `${control.id} Vue view.${control.method}`
+        );
+        if (decision2.power === "boost") {
+          const resourceId3 = decision2.boostedResourceId;
+          if (resourceId3 === null) return false;
+          dependencies.clickSelector(
+            `#psychicBoost #psyhscrolltarget input[value="${resourceId3}"]`
+          );
+        }
+        Reflect.apply(method, view, []);
+        return true;
+      }
+    });
+  }
+
   // src/domain/traits/psychic.ts
   var POWER_COSTS = Object.freeze({
     murder: [10, 8],
@@ -30518,20 +30568,6 @@
       decisions.push(decision(input, "assault"));
     }
     return Object.freeze(decisions);
-  }
-
-  // src/application/psychic.ts
-  var SUCCEEDED9 = Object.freeze({
-    status: "succeeded"
-  });
-  function runPsychicAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED9;
-    for (const decision2 of planPsychic(dependencies.reader.readPlan())) {
-      const outcome = dependencies.executor.execute(decision2);
-      if (outcome.status === "succeeded") return outcome;
-      if (outcome.failure.code !== "psychic-control-unavailable") return outcome;
-    }
-    return SUCCEEDED9;
   }
 
   // src/adapters/evolve/traits/psychic.ts
@@ -30902,76 +30938,77 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/adapters/browser/psychic-controls.ts
-  var CONTROL_BY_POWER = Object.freeze({
-    murder: Object.freeze({ id: "psychicKill", method: "murder" }),
-    mind_break: Object.freeze({
-      id: "psychicMindBreak",
-      method: "breakMind"
-    }),
-    stun: Object.freeze({ id: "psychicCapture", method: "stun" }),
-    profit: Object.freeze({ id: "psychicFinance", method: "boostVal" }),
-    boost: Object.freeze({ id: "psychicBoost", method: "boostVal" }),
-    assault: Object.freeze({ id: "psychicAssault", method: "boostVal" })
+  // src/application/psychic.ts
+  var SUCCEEDED9 = Object.freeze({
+    status: "succeeded"
   });
-  function createPsychicControls(dependencies) {
+  function runPsychicAutomation(dependencies) {
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED9;
+    for (const decision2 of planPsychic(dependencies.reader.readPlan())) {
+      const outcome = dependencies.executor.execute(decision2);
+      if (outcome.status === "succeeded") return outcome;
+      if (outcome.failure.code !== "psychic-control-unavailable") return outcome;
+    }
+    return SUCCEEDED9;
+  }
+
+  // src/bootstrap/psychic-control.ts
+  function createPsychicControl(dependencies) {
+    const controls4 = createPsychicControls(dependencies.controls);
+    const adapter = createPsychicAdapter({ ...dependencies.adapter, controls: controls4 });
     return Object.freeze({
-      activate(decision2) {
-        const control = CONTROL_BY_POWER[decision2.power];
-        const rawView = dependencies.getVueById(control.id);
-        if (!rawView) return false;
-        const view = requireRecord(rawView, `${control.id} Vue view`);
-        if (typeof view[control.method] !== "function") return false;
-        const method = requireFunction(
-          view[control.method],
-          `${control.id} Vue view.${control.method}`
-        );
-        if (decision2.power === "boost") {
-          const resourceId3 = decision2.boostedResourceId;
-          if (resourceId3 === null) return false;
-          dependencies.clickSelector(
-            `#psychicBoost #psyhscrolltarget input[value="${resourceId3}"]`
-          );
-        }
-        Reflect.apply(method, view, []);
-        return true;
-      }
+      autoPsychic: () => runPsychicAutomation({
+        reader: adapter.reader,
+        executor: adapter.executor
+      })
     });
   }
 
-  // src/domain/traits/ocular-power.ts
-  function planOcularPowers(input) {
-    if (input.capacity < 1) return Object.freeze([]);
-    let enabledCount = 0;
-    return Object.freeze(
-      [...input.powers].sort((left, right) => right.priority - left.priority).map((power) => {
-        const enabled = power.enabled && enabledCount < input.capacity;
-        if (enabled) enabledCount++;
-        return Object.freeze({ key: power.key, id: power.id, enabled });
-      })
-    );
-  }
-
-  // src/application/ocular-power.ts
-  var SUCCEEDED10 = Object.freeze({
-    status: "succeeded"
-  });
-  function runOcularPowerAutomation(dependencies) {
-    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED10;
-    if (!dependencies.controls.capture()) {
-      return {
-        status: "stale",
-        failure: {
-          code: "ocular-controls-unavailable",
-          message: "ocular power controls are unavailable"
+  // src/adapters/browser/ocular-power-controls.ts
+  function createOcularPowerControls(dependencies) {
+    let view = null;
+    return Object.freeze({
+      capture() {
+        const value = dependencies.getVueById("ocularPower");
+        if (!value) {
+          view = null;
+          return false;
         }
-      };
-    }
-    for (const decision2 of planOcularPowers(dependencies.reader.readPlan())) {
-      const outcome = dependencies.executor.execute(decision2);
-      if (outcome.status !== "succeeded") return outcome;
-    }
-    return SUCCEEDED10;
+        view = requireRecord(value, "ocularPower Vue view");
+        return true;
+      },
+      current(key) {
+        if (view === null) return null;
+        return requireBoolean(view[key], `ocularPower Vue view.${key}`);
+      },
+      toggle(powerId) {
+        const document = requireRecord(dependencies.getDocument(), "document");
+        const getElementById = requireFunction(
+          document["getElementById"],
+          "document.getElementById"
+        );
+        const rawElement = Reflect.apply(getElementById, document, [
+          `ocular${powerId}`
+        ]);
+        if (typeof rawElement !== "object" || rawElement === null) return false;
+        const element = requireRecord(rawElement, `document#ocular${powerId}`);
+        if (typeof element["querySelector"] !== "function") return false;
+        const querySelector = requireFunction(
+          element["querySelector"],
+          `document#ocular${powerId}.querySelector`
+        );
+        const rawInput = Reflect.apply(querySelector, element, ["input"]);
+        if (typeof rawInput !== "object" || rawInput === null) return false;
+        const input = requireRecord(rawInput, `document#ocular${powerId} input`);
+        if (typeof input["click"] !== "function") return false;
+        const click = requireFunction(
+          input["click"],
+          `document#ocular${powerId} input.click`
+        );
+        Reflect.apply(click, input, []);
+        return true;
+      }
+    });
   }
 
   // src/adapters/evolve/traits/ocular-power.ts
@@ -31107,50 +31144,54 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/adapters/browser/ocular-power-controls.ts
-  function createOcularPowerControls(dependencies) {
-    let view = null;
-    return Object.freeze({
-      capture() {
-        const value = dependencies.getVueById("ocularPower");
-        if (!value) {
-          view = null;
-          return false;
+  // src/domain/traits/ocular-power.ts
+  function planOcularPowers(input) {
+    if (input.capacity < 1) return Object.freeze([]);
+    let enabledCount = 0;
+    return Object.freeze(
+      [...input.powers].sort((left, right) => right.priority - left.priority).map((power) => {
+        const enabled = power.enabled && enabledCount < input.capacity;
+        if (enabled) enabledCount++;
+        return Object.freeze({ key: power.key, id: power.id, enabled });
+      })
+    );
+  }
+
+  // src/application/ocular-power.ts
+  var SUCCEEDED10 = Object.freeze({
+    status: "succeeded"
+  });
+  function runOcularPowerAutomation(dependencies) {
+    if (!dependencies.reader.readGate().unlocked) return SUCCEEDED10;
+    if (!dependencies.controls.capture()) {
+      return {
+        status: "stale",
+        failure: {
+          code: "ocular-controls-unavailable",
+          message: "ocular power controls are unavailable"
         }
-        view = requireRecord(value, "ocularPower Vue view");
-        return true;
-      },
-      current(key) {
-        if (view === null) return null;
-        return requireBoolean(view[key], `ocularPower Vue view.${key}`);
-      },
-      toggle(powerId) {
-        const document = requireRecord(dependencies.getDocument(), "document");
-        const getElementById = requireFunction(
-          document["getElementById"],
-          "document.getElementById"
-        );
-        const rawElement = Reflect.apply(getElementById, document, [
-          `ocular${powerId}`
-        ]);
-        if (typeof rawElement !== "object" || rawElement === null) return false;
-        const element = requireRecord(rawElement, `document#ocular${powerId}`);
-        if (typeof element["querySelector"] !== "function") return false;
-        const querySelector = requireFunction(
-          element["querySelector"],
-          `document#ocular${powerId}.querySelector`
-        );
-        const rawInput = Reflect.apply(querySelector, element, ["input"]);
-        if (typeof rawInput !== "object" || rawInput === null) return false;
-        const input = requireRecord(rawInput, `document#ocular${powerId} input`);
-        if (typeof input["click"] !== "function") return false;
-        const click = requireFunction(
-          input["click"],
-          `document#ocular${powerId} input.click`
-        );
-        Reflect.apply(click, input, []);
-        return true;
-      }
+      };
+    }
+    for (const decision2 of planOcularPowers(dependencies.reader.readPlan())) {
+      const outcome = dependencies.executor.execute(decision2);
+      if (outcome.status !== "succeeded") return outcome;
+    }
+    return SUCCEEDED10;
+  }
+
+  // src/bootstrap/ocular-power-control.ts
+  function createOcularPowerControl(dependencies) {
+    const controls4 = createOcularPowerControls(dependencies.controls);
+    const adapter = createOcularPowerAdapter({
+      ...dependencies.adapter,
+      controls: controls4
+    });
+    return Object.freeze({
+      autoOcularPowers: () => runOcularPowerAutomation({
+        reader: adapter.reader,
+        executor: adapter.executor,
+        controls: controls4
+      })
     });
   }
 
@@ -55496,19 +55537,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         )
       );
     };
-    const psychicControls = createPsychicControls({
-      getVueById,
-      clickSelector: (selector) => $(selector).click()
-    });
-    const psychicAdapter = createPsychicAdapter({
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      controls: psychicControls
-    });
-    const autoPsychic = () => runPsychicAutomation({
-      reader: psychicAdapter.reader,
-      executor: psychicAdapter.executor
+    const { autoPsychic } = createPsychicControl({
+      controls: {
+        getVueById,
+        clickSelector: (selector) => $(selector).click()
+      },
+      adapter: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources
+      }
     });
     const ocularPowerData = [
       { key: "d", id: "disintegration", locParam: ["X"] },
@@ -55518,20 +55556,16 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       { key: "f", id: "fear", locParam: void 0 },
       { key: "c", id: "charm", locParam: ["X"] }
     ];
-    const ocularPowerControls = createOcularPowerControls({
-      getVueById,
-      getDocument: () => runtimeEnvironment.document
-    });
-    const ocularPowerAdapter = createOcularPowerAdapter({
-      getGame: () => game,
-      getSettings: () => settings,
-      getPowerData: () => ocularPowerData,
-      controls: ocularPowerControls
-    });
-    const autoOcularPowers = () => runOcularPowerAutomation({
-      reader: ocularPowerAdapter.reader,
-      executor: ocularPowerAdapter.executor,
-      controls: ocularPowerControls
+    const { autoOcularPowers } = createOcularPowerControl({
+      controls: {
+        getVueById,
+        getDocument: () => runtimeEnvironment.document
+      },
+      adapter: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getPowerData: () => ocularPowerData
+      }
     });
     const wishData = {
       minor: [
@@ -55567,21 +55601,17 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       })
     });
     const autoWish = () => runWishAutomation({ reader: wishReader, executor: wishExecutor });
-    const geneticsControls = createGeneticsControls({
-      getVueById,
-      getKeyManager: () => KeyManager
-    });
-    const geneticsAdapter = createGeneticsAdapter({
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getTicksPerSecond: () => ticksPerSecond(),
-      controls: geneticsControls
-    });
-    const autoGenetics = () => runGeneticsAutomation({
-      reader: geneticsAdapter.reader,
-      executor: geneticsAdapter.executor,
-      controls: geneticsControls
+    const { autoGenetics } = createGeneticsControl({
+      controls: {
+        getVueById,
+        getKeyManager: () => KeyManager
+      },
+      adapter: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getTicksPerSecond: () => ticksPerSecond()
+      }
     });
     publishTestSurface({
       autoMiningDroid,

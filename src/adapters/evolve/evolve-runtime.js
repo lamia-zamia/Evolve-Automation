@@ -332,16 +332,10 @@ import { planShapeshift } from "../../domain/traits/shapeshift.ts";
 import { runWishAutomation } from "../../application/wish.ts";
 import { createWishCommandExecutor, createWishReader } from "./traits/wish.ts";
 import { createWishControls } from "../browser/wish-controls.ts";
-import { runGeneticsAutomation } from "../../application/genetics.ts";
-import { createGeneticsAdapter } from "./traits/genetics.ts";
-import { createGeneticsControls } from "../browser/genetics-controls.ts";
+import { createGeneticsControl } from "../../bootstrap/genetics-control.ts";
 import { createMercenaryControl } from "../../bootstrap/mercenary-control.ts";
-import { runPsychicAutomation } from "../../application/psychic.ts";
-import { createPsychicAdapter } from "./traits/psychic.ts";
-import { createPsychicControls } from "../browser/psychic-controls.ts";
-import { runOcularPowerAutomation } from "../../application/ocular-power.ts";
-import { createOcularPowerAdapter } from "./traits/ocular-power.ts";
-import { createOcularPowerControls } from "../browser/ocular-power-controls.ts";
+import { createPsychicControl } from "../../bootstrap/psychic-control.ts";
+import { createOcularPowerControl } from "../../bootstrap/ocular-power-control.ts";
 import { createMinorTraitControl } from "../../bootstrap/minor-trait-control.ts";
 import { runTriggerAutomation } from "../../application/trigger.ts";
 import {
@@ -4350,21 +4344,17 @@ function startEvolveRuntimeComposition(
     );
   };
 
-  const psychicControls = createPsychicControls({
-    getVueById,
-    clickSelector: (selector) => $(selector).click(),
+  const { autoPsychic } = createPsychicControl({
+    controls: {
+      getVueById,
+      clickSelector: (selector) => $(selector).click(),
+    },
+    adapter: {
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+    },
   });
-  const psychicAdapter = createPsychicAdapter({
-    getGame: () => game,
-    getSettings: () => settings,
-    getResources: () => resources,
-    controls: psychicControls,
-  });
-  const autoPsychic = () =>
-    runPsychicAutomation({
-      reader: psychicAdapter.reader,
-      executor: psychicAdapter.executor,
-    });
 
   const ocularPowerData = [
     { key: "d", id: "disintegration", locParam: ["X"] },
@@ -4375,22 +4365,17 @@ function startEvolveRuntimeComposition(
     { key: "c", id: "charm", locParam: ["X"] },
   ];
 
-  const ocularPowerControls = createOcularPowerControls({
-    getVueById,
-    getDocument: () => runtimeEnvironment.document,
+  const { autoOcularPowers } = createOcularPowerControl({
+    controls: {
+      getVueById,
+      getDocument: () => runtimeEnvironment.document,
+    },
+    adapter: {
+      getGame: () => game,
+      getSettings: () => settings,
+      getPowerData: () => ocularPowerData,
+    },
   });
-  const ocularPowerAdapter = createOcularPowerAdapter({
-    getGame: () => game,
-    getSettings: () => settings,
-    getPowerData: () => ocularPowerData,
-    controls: ocularPowerControls,
-  });
-  const autoOcularPowers = () =>
-    runOcularPowerAutomation({
-      reader: ocularPowerAdapter.reader,
-      executor: ocularPowerAdapter.executor,
-      controls: ocularPowerControls,
-    });
 
   const wishData = {
     minor: [
@@ -4428,23 +4413,18 @@ function startEvolveRuntimeComposition(
   const autoWish = () =>
     runWishAutomation({ reader: wishReader, executor: wishExecutor });
 
-  const geneticsControls = createGeneticsControls({
-    getVueById,
-    getKeyManager: () => KeyManager,
+  const { autoGenetics } = createGeneticsControl({
+    controls: {
+      getVueById,
+      getKeyManager: () => KeyManager,
+    },
+    adapter: {
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+      getTicksPerSecond: () => ticksPerSecond(),
+    },
   });
-  const geneticsAdapter = createGeneticsAdapter({
-    getGame: () => game,
-    getSettings: () => settings,
-    getResources: () => resources,
-    getTicksPerSecond: () => ticksPerSecond(),
-    controls: geneticsControls,
-  });
-  const autoGenetics = () =>
-    runGeneticsAutomation({
-      reader: geneticsAdapter.reader,
-      executor: geneticsAdapter.executor,
-      controls: geneticsControls,
-    });
 
   publishTestSurface({
     autoMiningDroid,
