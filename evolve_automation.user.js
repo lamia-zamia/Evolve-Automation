@@ -20973,6 +20973,166 @@
     });
   }
 
+  // src/adapters/evolve/tick.ts
+  function toNumber(value) {
+    return Number(value);
+  }
+  function createTickReader(dependencies) {
+    return Object.freeze({
+      samplePreamble() {
+        const state = requireRecord(dependencies.getState(), "state");
+        const settings = requireRecord(dependencies.getSettings(), "settings");
+        const game = requireRecord(dependencies.getGame(), "game");
+        const global = requireRecord(game["global"], "game.global");
+        const gameSettings = requireRecord(
+          global["settings"],
+          "game.global.settings"
+        );
+        const goal = state["goal"];
+        return {
+          goal: typeof goal === "string" ? goal : "",
+          forcedUpdate: Boolean(state["forcedUpdate"]),
+          gameTicked: Boolean(state["gameTicked"]),
+          scriptTick: toNumber(state["scriptTick"]),
+          tickRate: toNumber(settings["tickRate"]),
+          accelerated: Boolean(gameSettings["at"])
+        };
+      },
+      sampleAutomation() {
+        const state = requireRecord(dependencies.getState(), "state");
+        const settings = requireRecord(dependencies.getSettings(), "settings");
+        const game = requireRecord(dependencies.getGame(), "game");
+        const global = requireRecord(game["global"], "game.global");
+        const race2 = requireRecord(global["race"], "game.global.race");
+        const flag = (key) => Boolean(settings[key]);
+        const goal = state["goal"];
+        const stateLogTick = state["stateLogTick"];
+        return {
+          goal: typeof goal === "string" ? goal : "",
+          masterScriptToggle: flag("masterScriptToggle"),
+          truepath: Boolean(race2["truepath"]),
+          buildingAlwaysClick: flag("buildingAlwaysClick"),
+          autoEvolution: flag("autoEvolution"),
+          autoBuild: flag("autoBuild"),
+          autoARPA: flag("autoARPA"),
+          autoMarket: flag("autoMarket"),
+          autoHell: flag("autoHell"),
+          autoGalaxyMarket: flag("autoGalaxyMarket"),
+          autoMiningDroid: flag("autoMiningDroid"),
+          autoGraphenePlant: flag("autoGraphenePlant"),
+          autoAlchemy: flag("autoAlchemy"),
+          autoPylon: flag("autoPylon"),
+          autoQuarry: flag("autoQuarry"),
+          autoMine: flag("autoMine"),
+          autoExtractor: flag("autoExtractor"),
+          autoSmelter: flag("autoSmelter"),
+          autoStorage: flag("autoStorage"),
+          autoReplicator: flag("autoReplicator"),
+          autoTrigger: flag("autoTrigger"),
+          autoResearch: flag("autoResearch"),
+          autoFactory: flag("autoFactory"),
+          autoJobs: flag("autoJobs"),
+          autoCraftsmen: flag("autoCraftsmen"),
+          autoFleet: flag("autoFleet"),
+          autoMech: flag("autoMech"),
+          autoGenetics: flag("autoGenetics"),
+          autoMinorTrait: flag("autoMinorTrait"),
+          autoCraft: flag("autoCraft"),
+          autoFight: flag("autoFight"),
+          autoTax: flag("autoTax"),
+          autoGovernment: flag("autoGovernment"),
+          autoNanite: flag("autoNanite"),
+          autoSupply: flag("autoSupply"),
+          autoEject: flag("autoEject"),
+          autoPower: flag("autoPower"),
+          autoMutateTraits: flag("autoMutateTraits"),
+          stateLogEnabled: flag("stateLogEnabled"),
+          stateLogInterval: toNumber(settings["stateLogInterval"]),
+          // Legacy defaulted an absent counter to 0 (`state.stateLogTick ?? 0`).
+          stateLogTick: stateLogTick == null ? 0 : toNumber(stateLogTick)
+        };
+      }
+    });
+  }
+  function createTickControls(dependencies) {
+    const c = () => dependencies.getControllers();
+    return Object.freeze({
+      markGameTickConsumed() {
+        dependencies.getState().gameTicked = false;
+      },
+      setScriptTick(scriptTick) {
+        dependencies.getState().scriptTick = scriptTick;
+      },
+      setPlannerFreshTick(scriptTick) {
+        dependencies.getState().plannerFreshTick = scriptTick;
+      },
+      setStateLogTick(stateLogTick) {
+        dependencies.getState().stateLogTick = stateLogTick;
+      },
+      recordSoulGem() {
+        dependencies.getState().soulGemLast = dependencies.getResources().Soul_Gem.currentQuantity;
+      },
+      updateScriptData: () => c().updateScriptData(),
+      updateOverrides: () => c().updateOverrides(),
+      finalizeScriptData: () => c().finalizeScriptData(),
+      updateTabs: () => c().updateTabs(true),
+      updateState: () => c().updateState(),
+      updateUI: () => c().updateUI(),
+      keyManagerReset: () => dependencies.getKeyManager().reset(),
+      keyManagerFinish: () => dependencies.getKeyManager().finish(),
+      autoEvolution: () => c().autoEvolution(),
+      autoGatherResources: () => c().autoGatherResources(),
+      autoMarket: () => c().autoMarket(),
+      autoHell: () => c().autoHell(),
+      autoGalaxyMarket: () => c().autoGalaxyMarket(),
+      autoMiningDroid: () => c().autoMiningDroid(),
+      autoGraphenePlant: () => c().autoGraphenePlant(),
+      autoAlchemy: () => c().autoAlchemy(),
+      autoPylon: () => c().autoPylon(),
+      autoQuarry: () => c().autoQuarry(),
+      autoMine: () => c().autoMine(),
+      autoExtractor: () => c().autoExtractor(),
+      autoSmelter: () => c().autoSmelter(),
+      autoStorage: () => c().autoStorage(),
+      autoReplicator: () => c().autoReplicator(),
+      autoTrigger: () => c().autoTrigger(),
+      autoResearch: () => c().autoResearch(),
+      autoBuild: () => c().autoBuild(),
+      autoFactory: () => c().autoFactory(),
+      autoJobs(craftsmenOnly) {
+        if (craftsmenOnly === void 0) {
+          c().autoJobs();
+        } else {
+          c().autoJobs(craftsmenOnly);
+        }
+      },
+      autoFleetOuter: () => c().autoFleetOuter(),
+      autoFleet: () => c().autoFleet(),
+      autoMech: () => c().autoMech(),
+      autoGenetics: () => c().autoGenetics(),
+      autoMinorTrait: () => c().autoMinorTrait(),
+      autoCraft: () => c().autoCraft(),
+      autoMerc: () => c().autoMerc(),
+      autoSpy: () => c().autoSpy(),
+      autoBattle: () => c().autoBattle(),
+      autoTax: () => c().autoTax(),
+      autoGovernment: () => c().autoGovernment(),
+      consumeNanite: () => c().autoConsume(dependencies.getNaniteManager()),
+      consumeSupply: () => c().autoConsume(dependencies.getSupplyManager()),
+      consumeEject: () => c().autoConsume(dependencies.getEjectManager()),
+      autoPower: () => c().autoPower(),
+      isPrestigeAllowed: () => c().isPrestigeAllowed(),
+      autoPrestige: () => c().autoPrestige(),
+      autoShapeshift: () => c().autoShapeshift(),
+      autoPsychic: () => c().autoPsychic(),
+      autoOcularPowers: () => c().autoOcularPowers(),
+      autoWish: () => c().autoWish(),
+      autoMutateTrait: () => c().autoMutateTrait(),
+      updateBuildPlanner: () => c().updateBuildPlanner(),
+      recordStateSnapshot: () => c().recordStateSnapshot()
+    });
+  }
+
   // src/domain/tick.ts
   function shouldStartTick(snapshot) {
     return snapshot.goal !== "GameOverMan" && !snapshot.forcedUpdate && snapshot.gameTicked;
@@ -21167,164 +21327,26 @@
     });
   }
 
-  // src/adapters/evolve/tick.ts
-  function toNumber(value) {
-    return Number(value);
-  }
-  function createTickReader(dependencies) {
-    return Object.freeze({
-      samplePreamble() {
-        const state = requireRecord(dependencies.getState(), "state");
-        const settings = requireRecord(dependencies.getSettings(), "settings");
-        const game = requireRecord(dependencies.getGame(), "game");
-        const global = requireRecord(game["global"], "game.global");
-        const gameSettings = requireRecord(
-          global["settings"],
-          "game.global.settings"
-        );
-        const goal = state["goal"];
-        return {
-          goal: typeof goal === "string" ? goal : "",
-          forcedUpdate: Boolean(state["forcedUpdate"]),
-          gameTicked: Boolean(state["gameTicked"]),
-          scriptTick: toNumber(state["scriptTick"]),
-          tickRate: toNumber(settings["tickRate"]),
-          accelerated: Boolean(gameSettings["at"])
-        };
-      },
-      sampleAutomation() {
-        const state = requireRecord(dependencies.getState(), "state");
-        const settings = requireRecord(dependencies.getSettings(), "settings");
-        const game = requireRecord(dependencies.getGame(), "game");
-        const global = requireRecord(game["global"], "game.global");
-        const race2 = requireRecord(global["race"], "game.global.race");
-        const flag = (key) => Boolean(settings[key]);
-        const goal = state["goal"];
-        const stateLogTick = state["stateLogTick"];
-        return {
-          goal: typeof goal === "string" ? goal : "",
-          masterScriptToggle: flag("masterScriptToggle"),
-          truepath: Boolean(race2["truepath"]),
-          buildingAlwaysClick: flag("buildingAlwaysClick"),
-          autoEvolution: flag("autoEvolution"),
-          autoBuild: flag("autoBuild"),
-          autoARPA: flag("autoARPA"),
-          autoMarket: flag("autoMarket"),
-          autoHell: flag("autoHell"),
-          autoGalaxyMarket: flag("autoGalaxyMarket"),
-          autoMiningDroid: flag("autoMiningDroid"),
-          autoGraphenePlant: flag("autoGraphenePlant"),
-          autoAlchemy: flag("autoAlchemy"),
-          autoPylon: flag("autoPylon"),
-          autoQuarry: flag("autoQuarry"),
-          autoMine: flag("autoMine"),
-          autoExtractor: flag("autoExtractor"),
-          autoSmelter: flag("autoSmelter"),
-          autoStorage: flag("autoStorage"),
-          autoReplicator: flag("autoReplicator"),
-          autoTrigger: flag("autoTrigger"),
-          autoResearch: flag("autoResearch"),
-          autoFactory: flag("autoFactory"),
-          autoJobs: flag("autoJobs"),
-          autoCraftsmen: flag("autoCraftsmen"),
-          autoFleet: flag("autoFleet"),
-          autoMech: flag("autoMech"),
-          autoGenetics: flag("autoGenetics"),
-          autoMinorTrait: flag("autoMinorTrait"),
-          autoCraft: flag("autoCraft"),
-          autoFight: flag("autoFight"),
-          autoTax: flag("autoTax"),
-          autoGovernment: flag("autoGovernment"),
-          autoNanite: flag("autoNanite"),
-          autoSupply: flag("autoSupply"),
-          autoEject: flag("autoEject"),
-          autoPower: flag("autoPower"),
-          autoMutateTraits: flag("autoMutateTraits"),
-          stateLogEnabled: flag("stateLogEnabled"),
-          stateLogInterval: toNumber(settings["stateLogInterval"]),
-          // Legacy defaulted an absent counter to 0 (`state.stateLogTick ?? 0`).
-          stateLogTick: stateLogTick == null ? 0 : toNumber(stateLogTick)
-        };
+  // src/bootstrap/tick-runner.ts
+  function createTickRunner(dependencies) {
+    const reader = createTickReader(dependencies.reader);
+    const controls4 = createTickControls({
+      ...dependencies.controls,
+      getControllers: () => dependencies.getTestControllers() ?? dependencies.controllers
+    });
+    const applicationRunner = createApplicationRunner({
+      reader,
+      controls: controls4,
+      updateState: () => {
+        const testControllers = dependencies.getTestControllers();
+        if (testControllers?.updateState) {
+          testControllers.updateState();
+        } else {
+          dependencies.controllers.updateState();
+        }
       }
     });
-  }
-  function createTickControls(dependencies) {
-    const c = () => dependencies.getControllers();
-    return Object.freeze({
-      markGameTickConsumed() {
-        dependencies.getState().gameTicked = false;
-      },
-      setScriptTick(scriptTick) {
-        dependencies.getState().scriptTick = scriptTick;
-      },
-      setPlannerFreshTick(scriptTick) {
-        dependencies.getState().plannerFreshTick = scriptTick;
-      },
-      setStateLogTick(stateLogTick) {
-        dependencies.getState().stateLogTick = stateLogTick;
-      },
-      recordSoulGem() {
-        dependencies.getState().soulGemLast = dependencies.getResources().Soul_Gem.currentQuantity;
-      },
-      updateScriptData: () => c().updateScriptData(),
-      updateOverrides: () => c().updateOverrides(),
-      finalizeScriptData: () => c().finalizeScriptData(),
-      updateTabs: () => c().updateTabs(true),
-      updateState: () => c().updateState(),
-      updateUI: () => c().updateUI(),
-      keyManagerReset: () => dependencies.getKeyManager().reset(),
-      keyManagerFinish: () => dependencies.getKeyManager().finish(),
-      autoEvolution: () => c().autoEvolution(),
-      autoGatherResources: () => c().autoGatherResources(),
-      autoMarket: () => c().autoMarket(),
-      autoHell: () => c().autoHell(),
-      autoGalaxyMarket: () => c().autoGalaxyMarket(),
-      autoMiningDroid: () => c().autoMiningDroid(),
-      autoGraphenePlant: () => c().autoGraphenePlant(),
-      autoAlchemy: () => c().autoAlchemy(),
-      autoPylon: () => c().autoPylon(),
-      autoQuarry: () => c().autoQuarry(),
-      autoMine: () => c().autoMine(),
-      autoExtractor: () => c().autoExtractor(),
-      autoSmelter: () => c().autoSmelter(),
-      autoStorage: () => c().autoStorage(),
-      autoReplicator: () => c().autoReplicator(),
-      autoTrigger: () => c().autoTrigger(),
-      autoResearch: () => c().autoResearch(),
-      autoBuild: () => c().autoBuild(),
-      autoFactory: () => c().autoFactory(),
-      autoJobs(craftsmenOnly) {
-        if (craftsmenOnly === void 0) {
-          c().autoJobs();
-        } else {
-          c().autoJobs(craftsmenOnly);
-        }
-      },
-      autoFleetOuter: () => c().autoFleetOuter(),
-      autoFleet: () => c().autoFleet(),
-      autoMech: () => c().autoMech(),
-      autoGenetics: () => c().autoGenetics(),
-      autoMinorTrait: () => c().autoMinorTrait(),
-      autoCraft: () => c().autoCraft(),
-      autoMerc: () => c().autoMerc(),
-      autoSpy: () => c().autoSpy(),
-      autoBattle: () => c().autoBattle(),
-      autoTax: () => c().autoTax(),
-      autoGovernment: () => c().autoGovernment(),
-      consumeNanite: () => c().autoConsume(dependencies.getNaniteManager()),
-      consumeSupply: () => c().autoConsume(dependencies.getSupplyManager()),
-      consumeEject: () => c().autoConsume(dependencies.getEjectManager()),
-      autoPower: () => c().autoPower(),
-      isPrestigeAllowed: () => c().isPrestigeAllowed(),
-      autoPrestige: () => c().autoPrestige(),
-      autoShapeshift: () => c().autoShapeshift(),
-      autoPsychic: () => c().autoPsychic(),
-      autoOcularPowers: () => c().autoOcularPowers(),
-      autoWish: () => c().autoWish(),
-      autoMutateTrait: () => c().autoMutateTrait(),
-      updateBuildPlanner: () => c().updateBuildPlanner(),
-      recordStateSnapshot: () => c().recordStateSnapshot()
-    });
+    return Object.freeze({ automate: () => applicationRunner.runCycle() });
   }
 
   // src/domain/state-update.ts
@@ -56947,28 +56969,23 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       updateBuildPlanner,
       recordStateSnapshot
     };
-    const tickReader = createTickReader({
-      getSettings: () => settings,
-      getState: () => state,
-      getGame: () => game
+    const { automate } = createTickRunner({
+      reader: {
+        getSettings: () => settings,
+        getState: () => state,
+        getGame: () => game
+      },
+      controls: {
+        getKeyManager: () => KeyManager,
+        getState: () => state,
+        getResources: () => resources,
+        getNaniteManager: () => NaniteManager,
+        getSupplyManager: () => SupplyManager,
+        getEjectManager: () => EjectManager
+      },
+      controllers: tickControllers,
+      getTestControllers: () => tickTestControllers
     });
-    const tickControls = createTickControls({
-      getControllers: () => tickTestControllers ?? tickControllers,
-      getKeyManager: () => KeyManager,
-      getState: () => state,
-      getResources: () => resources,
-      getNaniteManager: () => NaniteManager,
-      getSupplyManager: () => SupplyManager,
-      getEjectManager: () => EjectManager
-    });
-    const applicationRunner = createApplicationRunner({
-      reader: tickReader,
-      controls: tickControls,
-      updateState: () => tickTestControllers?.updateState ? tickTestControllers.updateState() : updateState()
-    });
-    const automate = () => {
-      applicationRunner.runCycle();
-    };
     publishTestSurface({
       automate: () => automate(),
       setTickTestContext(context) {

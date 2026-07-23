@@ -185,8 +185,7 @@ import { createArpaToggleBrowserAdapter } from "../browser/arpa-toggles.ts";
 import { createArpaToggleEvolveAdapter } from "./progression/research/arpa-toggles.ts";
 import { createBuildingToggleBrowserAdapter } from "../browser/building-toggles.ts";
 import { createBuildingToggleEvolveAdapter } from "./progression/build/building-toggles.ts";
-import { createApplicationRunner } from "../../application/application-runner.ts";
-import { createTickReader, createTickControls } from "./tick.ts";
+import { createTickRunner } from "../../bootstrap/tick-runner.ts";
 import { runStateUpdate } from "../../application/state-update.ts";
 import {
   createStateUpdateReader,
@@ -5378,34 +5377,23 @@ function startEvolveRuntimeComposition(
     recordStateSnapshot,
   };
 
-  const tickReader = createTickReader({
-    getSettings: () => settings,
-    getState: () => state,
-    getGame: () => game,
+  const { automate } = createTickRunner({
+    reader: {
+      getSettings: () => settings,
+      getState: () => state,
+      getGame: () => game,
+    },
+    controls: {
+      getKeyManager: () => KeyManager,
+      getState: () => state,
+      getResources: () => resources,
+      getNaniteManager: () => NaniteManager,
+      getSupplyManager: () => SupplyManager,
+      getEjectManager: () => EjectManager,
+    },
+    controllers: tickControllers,
+    getTestControllers: () => tickTestControllers,
   });
-
-  const tickControls = createTickControls({
-    getControllers: () => tickTestControllers ?? tickControllers,
-    getKeyManager: () => KeyManager,
-    getState: () => state,
-    getResources: () => resources,
-    getNaniteManager: () => NaniteManager,
-    getSupplyManager: () => SupplyManager,
-    getEjectManager: () => EjectManager,
-  });
-
-  const applicationRunner = createApplicationRunner({
-    reader: tickReader,
-    controls: tickControls,
-    updateState: () =>
-      tickTestControllers?.updateState
-        ? tickTestControllers.updateState()
-        : updateState(),
-  });
-
-  const automate = () => {
-    applicationRunner.runCycle();
-  };
 
   publishTestSurface({
     automate: () => automate(),
