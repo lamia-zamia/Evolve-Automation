@@ -14323,236 +14323,6 @@
     return { updateBuildPlanner };
   }
 
-  // src/domain/identifiers.ts
-  function parseIdentifier(value, label) {
-    if (typeof value !== "string" || value.trim().length === 0) {
-      throw new TypeError(`${label} must be a non-empty string`);
-    }
-    return value;
-  }
-  function automationCycleId(value) {
-    return parseIdentifier(value, "automation cycle id");
-  }
-  function commandId(value) {
-    return parseIdentifier(value, "command id");
-  }
-  function snapshotId(value) {
-    return parseIdentifier(value, "snapshot id");
-  }
-
-  // src/application/cycle-runner.ts
-  function validateMaximum(value) {
-    if (!Number.isSafeInteger(value) || value < 0) {
-      throw new TypeError("maxCommandsPerCycle must be a non-negative integer");
-    }
-  }
-  function executorFailure(error) {
-    return {
-      status: "rejected",
-      failure: {
-        code: "executor-error",
-        message: error instanceof Error ? error.message : "command executor failed"
-      }
-    };
-  }
-  function createCycleRunner(dependencies) {
-    validateMaximum(dependencies.maxCommandsPerCycle);
-    let cycleSequence = 0;
-    function runCycle() {
-      cycleSequence += 1;
-      const cycleId = automationCycleId(`cycle-${cycleSequence}`);
-      const startedAtMs = dependencies.clock.nowMs();
-      const snapshot = dependencies.gameReader.readSnapshot();
-      const settings = dependencies.settingsReader.readSettings();
-      dependencies.logger.record({
-        kind: "cycle-started",
-        cycleId,
-        snapshotId: snapshot.metadata.id
-      });
-      const planned = [];
-      const phaseTraces = [];
-      for (const phase of dependencies.phases) {
-        const plannerTraces = [];
-        for (const planner of phase.planners) {
-          const commands = planner.plan(snapshot, settings);
-          plannerTraces.push({
-            planner: planner.name,
-            commandCount: commands.length
-          });
-          planned.push(...commands);
-        }
-        phaseTraces.push({ phase: phase.name, planners: plannerTraces });
-      }
-      const conflictKeys = /* @__PURE__ */ new Set();
-      const results = [];
-      planned.forEach((command, index) => {
-        const envelope = {
-          id: commandId(`${cycleId}:command-${index + 1}`),
-          expectedSnapshotId: snapshot.metadata.id,
-          command
-        };
-        let outcome;
-        if (index >= dependencies.maxCommandsPerCycle) {
-          outcome = {
-            status: "rejected",
-            failure: {
-              code: "command-limit",
-              message: "cycle command limit reached",
-              context: {
-                commandIndex: index,
-                maximum: dependencies.maxCommandsPerCycle
-              }
-            }
-          };
-        } else {
-          const conflictKey = dependencies.getConflictKey(command);
-          if (conflictKey !== null && conflictKeys.has(conflictKey)) {
-            outcome = {
-              status: "rejected",
-              failure: {
-                code: "command-conflict",
-                message: `conflict on ${conflictKey}`,
-                context: { conflictKey }
-              }
-            };
-          } else {
-            if (conflictKey !== null) {
-              conflictKeys.add(conflictKey);
-            }
-            try {
-              outcome = dependencies.commandExecutor.execute(envelope);
-            } catch (error) {
-              outcome = executorFailure(error);
-            }
-          }
-        }
-        const result2 = {
-          ...outcome,
-          envelope,
-          completedAtMs: dependencies.clock.nowMs()
-        };
-        results.push(result2);
-        dependencies.logger.record({
-          kind: "command-completed",
-          cycleId,
-          result: result2
-        });
-      });
-      const trace = {
-        cycleId,
-        snapshotId: snapshot.metadata.id,
-        startedAtMs,
-        completedAtMs: dependencies.clock.nowMs(),
-        phases: phaseTraces,
-        results
-      };
-      dependencies.publisher.publish(trace);
-      dependencies.logger.record({ kind: "cycle-completed", trace });
-      return trace;
-    }
-    return { runCycle };
-  }
-
-  // src/domain/economy/storage/storage-expansion.ts
-  function affordableUnits(view) {
-    let cap = view.maxQuantity - view.currentQuantity;
-    for (const cost of view.costs) {
-      cap = Math.min(cap, cost.available / cost.costPerUnit);
-    }
-    return cap;
-  }
-  function constructCommand(unit, view, count2) {
-    const spend = view.costs.map(
-      (cost) => Object.freeze({
-        resourceId: cost.resourceId,
-        amount: cost.costPerUnit * count2
-      })
-    );
-    return Object.freeze({
-      kind: "construct-storage",
-      unit,
-      count: count2,
-      storagePerUnit: view.storagePerUnit,
-      producedResourceId: view.resourceId,
-      spend: Object.freeze(spend)
-    });
-  }
-  function planStorageExpansion(snapshot, settings) {
-    let missing = snapshot.storageToBuild;
-    let crateCap = affordableUnits(snapshot.crates);
-    let containerCap = affordableUnits(snapshot.containers);
-    if (settings.storageLimitPreMad && snapshot.isEarlyGame) {
-      if (snapshot.steel.storageRatio < 0.8) {
-        containerCap = 0;
-      }
-      if (snapshot.isLumberRace && snapshot.library.count < 20 && snapshot.library.plywoodCost !== null && snapshot.library.plywoodCost > snapshot.plywoodAvailable && snapshot.steel.maxQuantity >= snapshot.steel.storageRequired) {
-        crateCap = 0;
-      }
-    }
-    const commands = [];
-    const cratesToBuild = Math.min(
-      Math.floor(crateCap),
-      Math.ceil(missing / snapshot.crates.storagePerUnit)
-    );
-    commands.push(constructCommand("crate", snapshot.crates, cratesToBuild));
-    missing -= cratesToBuild * snapshot.crates.storagePerUnit;
-    if (missing > 0) {
-      const containersToBuild = Math.min(
-        Math.floor(containerCap),
-        Math.ceil(missing / snapshot.containers.storagePerUnit)
-      );
-      commands.push(
-        constructCommand("container", snapshot.containers, containersToBuild)
-      );
-    }
-    return Object.freeze(commands);
-  }
-
-  // src/application/storage-expansion.ts
-  function createStorageExpansion({
-    clock,
-    createReader,
-    settingsReader,
-    commandExecutor
-  }) {
-    let pendingStorageToBuild = 0;
-    let lastTrace;
-    const runner = createCycleRunner({
-      clock,
-      gameReader: createReader(() => pendingStorageToBuild),
-      settingsReader,
-      commandExecutor,
-      logger: { record: () => {
-      } },
-      publisher: {
-        publish: (trace) => {
-          lastTrace = trace;
-        }
-      },
-      phases: [
-        {
-          name: "economy",
-          planners: [{ name: "storage-expansion", plan: planStorageExpansion }]
-        }
-      ],
-      getConflictKey: (command) => `storage-${command.unit}`,
-      maxCommandsPerCycle: 2
-    });
-    function expandStorage(storageToBuild) {
-      pendingStorageToBuild = storageToBuild;
-      const trace = runner.runCycle();
-      lastTrace = trace;
-      let storageAdded = 0;
-      for (const result2 of trace.results) {
-        if (result2.status === "succeeded") {
-          storageAdded += result2.envelope.command.count * result2.envelope.command.storagePerUnit;
-        }
-      }
-      return storageAdded > 0;
-    }
-    return Object.freeze({ expandStorage, getLastTrace: () => lastTrace });
-  }
-
   // src/adapters/validation.ts
   function requireRecord(value, path) {
     if (typeof value !== "object" || value === null) {
@@ -26223,132 +25993,6 @@
     return Object.freeze({ autoBattle: () => runBattleAutomation(adapter) });
   }
 
-  // src/domain/civic/tax.ts
-  function unavailableTaxSnapshot(metadata, reason) {
-    return Object.freeze({ metadata, status: "unavailable", reason });
-  }
-  function operation(direction, count2) {
-    return Object.freeze({ direction, count: count2 });
-  }
-  function forcedOperations(currentRate, targetRate) {
-    const operations = [];
-    const decreaseCount = currentRate > targetRate ? Math.ceil(currentRate - targetRate) : 0;
-    const rateAfterDecrease = currentRate - decreaseCount;
-    const increaseCount = rateAfterDecrease < targetRate ? Math.ceil(targetRate - rateAfterDecrease) : 0;
-    if (decreaseCount > 0) {
-      operations.push(operation("decrease", decreaseCount));
-    }
-    if (increaseCount > 0) {
-      operations.push(operation("increase", increaseCount));
-    }
-    return operations;
-  }
-  function planTax(snapshot, settings) {
-    if (snapshot.status === "unavailable") return [];
-    const { currentRate, maximumRate } = snapshot.tax;
-    let minimumRate = snapshot.tax.minimumRate;
-    if (settings.requestedRate !== -1) {
-      const targetRate = Math.min(
-        Math.max(settings.requestedRate, minimumRate),
-        maximumRate
-      );
-      return Object.freeze([
-        Object.freeze({
-          kind: "adjust-tax-rate",
-          expectedRate: currentRate,
-          batches: Object.freeze([
-            Object.freeze({
-              operations: Object.freeze(
-                forcedOperations(currentRate, targetRate)
-              )
-            })
-          ])
-        })
-      ]);
-    }
-    if (snapshot.money.storageRatio < 0.9 && !snapshot.banana) {
-      minimumRate = Math.max(minimumRate, settings.minimumRate);
-    }
-    const optimalRate = snapshot.banana ? minimumRate : snapshot.money.demanded ? maximumRate : Math.round(
-      (maximumRate - minimumRate) * Math.max(0, 0.9 - snapshot.money.storageRatio)
-    ) + minimumRate;
-    let maximumMorale = snapshot.morale.maximum;
-    if (!snapshot.banana) {
-      if (currentRate < 20) {
-        maximumMorale -= 10 - Math.floor(currentRate / 2);
-      }
-      if (optimalRate < 20) {
-        maximumMorale += 10 - Math.floor(minimumRate / 2);
-      }
-    }
-    if (snapshot.money.storageRatio < 0.9) {
-      maximumMorale = Math.min(maximumMorale, settings.maximumMorale);
-    }
-    let minimumMorale = settings.minimumMorale;
-    if (settings.manageAuthority && settings.authorityTarget !== 0 && snapshot.authority.unlocked && snapshot.authority.current < (settings.authorityTarget < 0 ? snapshot.authority.maximum : settings.authorityTarget)) {
-      minimumMorale = Math.min(minimumMorale, 100);
-      maximumMorale = Math.min(maximumMorale, 100);
-    }
-    const batches = [];
-    if (currentRate < maximumRate && snapshot.morale.current >= minimumMorale + 1 && (currentRate < optimalRate || snapshot.morale.current >= maximumMorale + 1 || snapshot.morale.projected >= snapshot.morale.current + 1 && optimalRate >= 20)) {
-      batches.push(
-        Object.freeze({
-          operations: Object.freeze([operation("increase", 1)])
-        })
-      );
-    }
-    if (currentRate > minimumRate && snapshot.morale.current < maximumMorale && (currentRate > optimalRate || snapshot.morale.current < minimumMorale)) {
-      batches.push(
-        Object.freeze({
-          operations: Object.freeze([operation("decrease", 1)])
-        })
-      );
-    }
-    if (batches.length === 0) return [];
-    return Object.freeze([
-      Object.freeze({
-        kind: "adjust-tax-rate",
-        expectedRate: currentRate,
-        batches: Object.freeze(batches)
-      })
-    ]);
-  }
-
-  // src/application/tax.ts
-  function createTaxAutomation({
-    clock,
-    gameReader,
-    settingsReader,
-    commandExecutor
-  }) {
-    let lastTrace;
-    const runner = createCycleRunner({
-      clock,
-      gameReader,
-      settingsReader,
-      commandExecutor,
-      logger: { record: () => {
-      } },
-      publisher: {
-        publish: (trace) => {
-          lastTrace = trace;
-        }
-      },
-      phases: [
-        {
-          name: "civic",
-          planners: [{ name: "tax", plan: planTax }]
-        }
-      ],
-      getConflictKey: () => "tax-rate",
-      maxCommandsPerCycle: 1
-    });
-    function autoTax() {
-      lastTrace = runner.runCycle();
-    }
-    return Object.freeze({ autoTax, getLastTrace: () => lastTrace });
-  }
-
   // src/adapters/userscript/environment.ts
   function readSafely(read) {
     try {
@@ -26800,7 +26444,7 @@
   function costLimitsUnits(cost, units, consumptionBalanceMin) {
     return cost.currentQuantity < units * cost.quantity * consumptionBalanceMin + cost.minRateOfChange || cost.isDemanded;
   }
-  function affordableUnits2(cost, currentFuelCount) {
+  function affordableUnits(cost, currentFuelCount) {
     const remainingRateOfChange = cost.rateOfChange + currentFuelCount * cost.quantity - cost.minRateOfChange;
     return Math.max(0, Math.floor(remainingRateOfChange / cost.quantity));
   }
@@ -26824,7 +26468,7 @@
         }
         for (const cost of fuel.cost) {
           if (costLimitsUnits(cost, maxAllowedUnits, input.consumptionBalanceMin)) {
-            const affordable2 = affordableUnits2(cost, fuel.currentFuelCount);
+            const affordable2 = affordableUnits(cost, fuel.currentFuelCount);
             if (affordable2 < maxAllowedUnits) {
               tooltips.push({
                 key: "smelterFuels" + fuel.id.toLowerCase(),
@@ -26873,7 +26517,7 @@
     }
     for (const cost of input.steelCost) {
       if (costLimitsUnits(cost, smelterSteelCount, input.consumptionBalanceMin)) {
-        const affordable2 = affordableUnits2(cost, smelterSteelCount);
+        const affordable2 = affordableUnits(cost, smelterSteelCount);
         if (affordable2 < maxAllowedSteel) {
           tooltips.push({
             key: "smelterMatssteel",
@@ -27054,6 +26698,23 @@
     return Object.freeze({ execute: execute2 });
   }
 
+  // src/domain/identifiers.ts
+  function parseIdentifier(value, label) {
+    if (typeof value !== "string" || value.trim().length === 0) {
+      throw new TypeError(`${label} must be a non-empty string`);
+    }
+    return value;
+  }
+  function automationCycleId(value) {
+    return parseIdentifier(value, "automation cycle id");
+  }
+  function commandId(value) {
+    return parseIdentifier(value, "command id");
+  }
+  function snapshotId(value) {
+    return parseIdentifier(value, "snapshot id");
+  }
+
   // src/domain/snapshot.ts
   function createSnapshotMetadata(input) {
     if (typeof input.capturedAtMs !== "number" || !Number.isSafeInteger(input.capturedAtMs) || input.capturedAtMs < 0) {
@@ -27063,6 +26724,97 @@
       id: snapshotId(input.id),
       capturedAtMs: input.capturedAtMs
     });
+  }
+
+  // src/domain/civic/tax.ts
+  function unavailableTaxSnapshot(metadata, reason) {
+    return Object.freeze({ metadata, status: "unavailable", reason });
+  }
+  function operation(direction, count2) {
+    return Object.freeze({ direction, count: count2 });
+  }
+  function forcedOperations(currentRate, targetRate) {
+    const operations = [];
+    const decreaseCount = currentRate > targetRate ? Math.ceil(currentRate - targetRate) : 0;
+    const rateAfterDecrease = currentRate - decreaseCount;
+    const increaseCount = rateAfterDecrease < targetRate ? Math.ceil(targetRate - rateAfterDecrease) : 0;
+    if (decreaseCount > 0) {
+      operations.push(operation("decrease", decreaseCount));
+    }
+    if (increaseCount > 0) {
+      operations.push(operation("increase", increaseCount));
+    }
+    return operations;
+  }
+  function planTax(snapshot, settings) {
+    if (snapshot.status === "unavailable") return [];
+    const { currentRate, maximumRate } = snapshot.tax;
+    let minimumRate = snapshot.tax.minimumRate;
+    if (settings.requestedRate !== -1) {
+      const targetRate = Math.min(
+        Math.max(settings.requestedRate, minimumRate),
+        maximumRate
+      );
+      return Object.freeze([
+        Object.freeze({
+          kind: "adjust-tax-rate",
+          expectedRate: currentRate,
+          batches: Object.freeze([
+            Object.freeze({
+              operations: Object.freeze(
+                forcedOperations(currentRate, targetRate)
+              )
+            })
+          ])
+        })
+      ]);
+    }
+    if (snapshot.money.storageRatio < 0.9 && !snapshot.banana) {
+      minimumRate = Math.max(minimumRate, settings.minimumRate);
+    }
+    const optimalRate = snapshot.banana ? minimumRate : snapshot.money.demanded ? maximumRate : Math.round(
+      (maximumRate - minimumRate) * Math.max(0, 0.9 - snapshot.money.storageRatio)
+    ) + minimumRate;
+    let maximumMorale = snapshot.morale.maximum;
+    if (!snapshot.banana) {
+      if (currentRate < 20) {
+        maximumMorale -= 10 - Math.floor(currentRate / 2);
+      }
+      if (optimalRate < 20) {
+        maximumMorale += 10 - Math.floor(minimumRate / 2);
+      }
+    }
+    if (snapshot.money.storageRatio < 0.9) {
+      maximumMorale = Math.min(maximumMorale, settings.maximumMorale);
+    }
+    let minimumMorale = settings.minimumMorale;
+    if (settings.manageAuthority && settings.authorityTarget !== 0 && snapshot.authority.unlocked && snapshot.authority.current < (settings.authorityTarget < 0 ? snapshot.authority.maximum : settings.authorityTarget)) {
+      minimumMorale = Math.min(minimumMorale, 100);
+      maximumMorale = Math.min(maximumMorale, 100);
+    }
+    const batches = [];
+    if (currentRate < maximumRate && snapshot.morale.current >= minimumMorale + 1 && (currentRate < optimalRate || snapshot.morale.current >= maximumMorale + 1 || snapshot.morale.projected >= snapshot.morale.current + 1 && optimalRate >= 20)) {
+      batches.push(
+        Object.freeze({
+          operations: Object.freeze([operation("increase", 1)])
+        })
+      );
+    }
+    if (currentRate > minimumRate && snapshot.morale.current < maximumMorale && (currentRate > optimalRate || snapshot.morale.current < minimumMorale)) {
+      batches.push(
+        Object.freeze({
+          operations: Object.freeze([operation("decrease", 1)])
+        })
+      );
+    }
+    if (batches.length === 0) return [];
+    return Object.freeze([
+      Object.freeze({
+        kind: "adjust-tax-rate",
+        expectedRate: currentRate,
+        batches: Object.freeze(batches)
+      })
+    ]);
   }
 
   // src/adapters/evolve/civic/tax-reader.ts
@@ -27205,6 +26957,176 @@
       });
     }
     return Object.freeze({ readSettings: readSettings3 });
+  }
+
+  // src/application/cycle-runner.ts
+  function validateMaximum(value) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new TypeError("maxCommandsPerCycle must be a non-negative integer");
+    }
+  }
+  function executorFailure(error) {
+    return {
+      status: "rejected",
+      failure: {
+        code: "executor-error",
+        message: error instanceof Error ? error.message : "command executor failed"
+      }
+    };
+  }
+  function createCycleRunner(dependencies) {
+    validateMaximum(dependencies.maxCommandsPerCycle);
+    let cycleSequence = 0;
+    function runCycle() {
+      cycleSequence += 1;
+      const cycleId = automationCycleId(`cycle-${cycleSequence}`);
+      const startedAtMs = dependencies.clock.nowMs();
+      const snapshot = dependencies.gameReader.readSnapshot();
+      const settings = dependencies.settingsReader.readSettings();
+      dependencies.logger.record({
+        kind: "cycle-started",
+        cycleId,
+        snapshotId: snapshot.metadata.id
+      });
+      const planned = [];
+      const phaseTraces = [];
+      for (const phase of dependencies.phases) {
+        const plannerTraces = [];
+        for (const planner of phase.planners) {
+          const commands = planner.plan(snapshot, settings);
+          plannerTraces.push({
+            planner: planner.name,
+            commandCount: commands.length
+          });
+          planned.push(...commands);
+        }
+        phaseTraces.push({ phase: phase.name, planners: plannerTraces });
+      }
+      const conflictKeys = /* @__PURE__ */ new Set();
+      const results = [];
+      planned.forEach((command, index) => {
+        const envelope = {
+          id: commandId(`${cycleId}:command-${index + 1}`),
+          expectedSnapshotId: snapshot.metadata.id,
+          command
+        };
+        let outcome;
+        if (index >= dependencies.maxCommandsPerCycle) {
+          outcome = {
+            status: "rejected",
+            failure: {
+              code: "command-limit",
+              message: "cycle command limit reached",
+              context: {
+                commandIndex: index,
+                maximum: dependencies.maxCommandsPerCycle
+              }
+            }
+          };
+        } else {
+          const conflictKey = dependencies.getConflictKey(command);
+          if (conflictKey !== null && conflictKeys.has(conflictKey)) {
+            outcome = {
+              status: "rejected",
+              failure: {
+                code: "command-conflict",
+                message: `conflict on ${conflictKey}`,
+                context: { conflictKey }
+              }
+            };
+          } else {
+            if (conflictKey !== null) {
+              conflictKeys.add(conflictKey);
+            }
+            try {
+              outcome = dependencies.commandExecutor.execute(envelope);
+            } catch (error) {
+              outcome = executorFailure(error);
+            }
+          }
+        }
+        const result2 = {
+          ...outcome,
+          envelope,
+          completedAtMs: dependencies.clock.nowMs()
+        };
+        results.push(result2);
+        dependencies.logger.record({
+          kind: "command-completed",
+          cycleId,
+          result: result2
+        });
+      });
+      const trace = {
+        cycleId,
+        snapshotId: snapshot.metadata.id,
+        startedAtMs,
+        completedAtMs: dependencies.clock.nowMs(),
+        phases: phaseTraces,
+        results
+      };
+      dependencies.publisher.publish(trace);
+      dependencies.logger.record({ kind: "cycle-completed", trace });
+      return trace;
+    }
+    return { runCycle };
+  }
+
+  // src/application/tax.ts
+  function createTaxAutomation({
+    clock,
+    gameReader,
+    settingsReader,
+    commandExecutor
+  }) {
+    let lastTrace;
+    const runner = createCycleRunner({
+      clock,
+      gameReader,
+      settingsReader,
+      commandExecutor,
+      logger: { record: () => {
+      } },
+      publisher: {
+        publish: (trace) => {
+          lastTrace = trace;
+        }
+      },
+      phases: [
+        {
+          name: "civic",
+          planners: [{ name: "tax", plan: planTax }]
+        }
+      ],
+      getConflictKey: () => "tax-rate",
+      maxCommandsPerCycle: 1
+    });
+    function autoTax() {
+      lastTrace = runner.runCycle();
+    }
+    return Object.freeze({ autoTax, getLastTrace: () => lastTrace });
+  }
+
+  // src/bootstrap/tax-control.ts
+  function createTaxControl(dependencies) {
+    const clock = Object.freeze({ nowMs: dependencies.nowMs });
+    const controls4 = createBrowserTaxControls(dependencies.getVueById);
+    const { resetKeyModifiers, ...commandExecutorRest } = dependencies.commandExecutor;
+    const { autoTax } = createTaxAutomation({
+      clock,
+      gameReader: createEvolveTaxReader({
+        clock,
+        controls: controls4,
+        ...dependencies.gameReader
+      }),
+      settingsReader: createTaxSettingsReader(dependencies.getSettings),
+      commandExecutor: createTaxCommandExecutor({
+        ...commandExecutorRest,
+        controls: controls4,
+        keyModifiers: createKeyModifierController(resetKeyModifiers)
+      })
+    });
+    return Object.freeze({ autoTax });
   }
 
   // src/adapters/evolve/economy/storage/storage-command-executor.ts
@@ -27367,6 +27289,124 @@
       });
     }
     return Object.freeze({ readSettings: readSettings3 });
+  }
+
+  // src/domain/economy/storage/storage-expansion.ts
+  function affordableUnits2(view) {
+    let cap = view.maxQuantity - view.currentQuantity;
+    for (const cost of view.costs) {
+      cap = Math.min(cap, cost.available / cost.costPerUnit);
+    }
+    return cap;
+  }
+  function constructCommand(unit, view, count2) {
+    const spend = view.costs.map(
+      (cost) => Object.freeze({
+        resourceId: cost.resourceId,
+        amount: cost.costPerUnit * count2
+      })
+    );
+    return Object.freeze({
+      kind: "construct-storage",
+      unit,
+      count: count2,
+      storagePerUnit: view.storagePerUnit,
+      producedResourceId: view.resourceId,
+      spend: Object.freeze(spend)
+    });
+  }
+  function planStorageExpansion(snapshot, settings) {
+    let missing = snapshot.storageToBuild;
+    let crateCap = affordableUnits2(snapshot.crates);
+    let containerCap = affordableUnits2(snapshot.containers);
+    if (settings.storageLimitPreMad && snapshot.isEarlyGame) {
+      if (snapshot.steel.storageRatio < 0.8) {
+        containerCap = 0;
+      }
+      if (snapshot.isLumberRace && snapshot.library.count < 20 && snapshot.library.plywoodCost !== null && snapshot.library.plywoodCost > snapshot.plywoodAvailable && snapshot.steel.maxQuantity >= snapshot.steel.storageRequired) {
+        crateCap = 0;
+      }
+    }
+    const commands = [];
+    const cratesToBuild = Math.min(
+      Math.floor(crateCap),
+      Math.ceil(missing / snapshot.crates.storagePerUnit)
+    );
+    commands.push(constructCommand("crate", snapshot.crates, cratesToBuild));
+    missing -= cratesToBuild * snapshot.crates.storagePerUnit;
+    if (missing > 0) {
+      const containersToBuild = Math.min(
+        Math.floor(containerCap),
+        Math.ceil(missing / snapshot.containers.storagePerUnit)
+      );
+      commands.push(
+        constructCommand("container", snapshot.containers, containersToBuild)
+      );
+    }
+    return Object.freeze(commands);
+  }
+
+  // src/application/storage-expansion.ts
+  function createStorageExpansion({
+    clock,
+    createReader,
+    settingsReader,
+    commandExecutor
+  }) {
+    let pendingStorageToBuild = 0;
+    let lastTrace;
+    const runner = createCycleRunner({
+      clock,
+      gameReader: createReader(() => pendingStorageToBuild),
+      settingsReader,
+      commandExecutor,
+      logger: { record: () => {
+      } },
+      publisher: {
+        publish: (trace) => {
+          lastTrace = trace;
+        }
+      },
+      phases: [
+        {
+          name: "economy",
+          planners: [{ name: "storage-expansion", plan: planStorageExpansion }]
+        }
+      ],
+      getConflictKey: (command) => `storage-${command.unit}`,
+      maxCommandsPerCycle: 2
+    });
+    function expandStorage(storageToBuild) {
+      pendingStorageToBuild = storageToBuild;
+      const trace = runner.runCycle();
+      lastTrace = trace;
+      let storageAdded = 0;
+      for (const result2 of trace.results) {
+        if (result2.status === "succeeded") {
+          storageAdded += result2.envelope.command.count * result2.envelope.command.storagePerUnit;
+        }
+      }
+      return storageAdded > 0;
+    }
+    return Object.freeze({ expandStorage, getLastTrace: () => lastTrace });
+  }
+
+  // src/bootstrap/storage-expansion-control.ts
+  function createStorageExpansionControl(dependencies) {
+    const clock = Object.freeze({ nowMs: dependencies.nowMs });
+    const { expandStorage } = createStorageExpansion({
+      clock,
+      createReader: (getStorageToBuild) => createEvolveStorageExpansionReader({
+        clock,
+        getStorageToBuild,
+        ...dependencies.reader
+      }),
+      settingsReader: createStorageExpansionSettingsReader(
+        dependencies.getSettings
+      ),
+      commandExecutor: createStorageCommandExecutor(dependencies.commandExecutor)
+    });
+    return Object.freeze({ expandStorage });
   }
 
   // src/adapters/evolve/economy/production/alchemy.ts
@@ -34101,838 +34141,19 @@
     });
   }
 
-  // src/domain/economy/production/power.ts
-  var POWER_WIDE_OSCILLATION_HOLD_TICKS = 10;
-  function mapValue(map, key, label) {
-    const value = map.get(key);
-    if (value === void 0) {
-      throw new TypeError(`missing ${label}`);
-    }
-    return value;
-  }
-  function calculateBusyWorkers(observation, currentWorkers, incomeAdjusted) {
-    if (incomeAdjusted) {
-      return currentWorkers;
-    }
-    if (currentWorkers > 0) {
-      const perWorker = observation.production / currentWorkers;
-      const usedIncome = observation.production - observation.income;
-      return usedIncome > 0 ? Math.ceil(usedIncome / perWorker) : 0;
-    }
-    return observation.income < 0 ? 1 : 0;
-  }
-  function applyBusyCap(maximum, current, observation, resources) {
-    if (observation.useful) {
-      return { maximum, adjusted: [] };
-    }
-    const resource2 = mapValue(
-      resources,
-      observation.resourceId,
-      `power resource ${observation.resourceId}`
-    );
-    const next = Math.min(
-      maximum,
-      calculateBusyWorkers(observation, current, resource2.incomeAdjusted)
-    );
-    return {
-      maximum: next,
-      adjusted: next === current ? [] : [observation.resourceId]
-    };
-  }
-  function applySmartRule(building3, maximum, current, savingPower, availablePower, resources) {
-    const rule = building3.rule;
-    if (savingPower) {
-      switch (rule.kind) {
-        case "belt-space-station": {
-          const extra = rule.stationStorage > 0 ? Math.floor(
-            (rule.eleriumMaximum - rule.eleriumMaximumCost) / rule.stationStorage
-          ) : 0;
-          const minersNeeded = rule.eleriumShipsOn * 2 + rule.iridiumShipsOn + rule.ironShipsOn;
-          maximum = Math.min(
-            maximum,
-            Math.max(current - extra, Math.ceil(minersNeeded / 3))
-          );
-          break;
-        }
-        case "job-dependent":
-          if (rule.jobCount === 0) {
-            maximum = 0;
-          }
-          break;
-        case "lake-cooling-tower":
-          if (rule.harborCount > 0 && // The caller supplies the current available-power cap as maximum.
-          maximum > 0) {
-            const needed = building3.powered * maximum + Number(
-              (500 * 0.92 ** maximum * (rule.electromagneticField ? 1.5 : 1)).toFixed(2)
-            ) * Math.min(2, rule.harborCount);
-            if (availablePower < needed) {
-              maximum = 0;
-            }
-          }
-          break;
-        case "lake-harbor":
-          if (maximum === 1 && building3.count > 1) {
-            maximum = 0;
-          }
-          break;
-        case "busy-resource":
-          if (rule.active && rule.savingOnly) {
-            return applyBusyCap(maximum, current, rule.observation, resources);
-          }
-          break;
-        default:
-          break;
-      }
-    }
-    switch (rule.kind) {
-      case "busy-resource":
-        if (rule.active && !rule.savingOnly) {
-          return applyBusyCap(maximum, current, rule.observation, resources);
-        }
-        break;
-      case "triton-lander":
-        if (rule.fobOn < 1) {
-          maximum = 0;
-        } else {
-          const dispatch = rule.currentSoldiers - rule.authorityReserve - Math.max(0, rule.wounded - Math.floor(rule.healingRate));
-          maximum = Math.min(
-            maximum,
-            Math.floor(dispatch / (3 * rule.highPopulationMultiplier))
-          );
-        }
-        break;
-      case "ascension-trigger":
-        if (building3.powered > 0 && (!rule.pillarFinished || rule.prestigeType !== "ascension")) {
-          maximum = 0;
-        }
-        break;
-      case "terraformer":
-        if (rule.prestigeType !== "terraform") {
-          maximum = 0;
-        }
-        break;
-      case "badlands-attractor": {
-        let best = 0;
-        if (rule.threat < rule.topThreat && rule.hellAssigned > 0) {
-          best = rule.threat > rule.bottomThreat && rule.topThreat > rule.bottomThreat ? Math.floor(
-            maximum * (rule.topThreat - rule.threat) / (rule.topThreat - rule.bottomThreat)
-          ) : maximum;
-        }
-        maximum = Math.min(maximum, current + 1, Math.max(current - 1, best));
-        break;
-      }
-      case "tourist-center":
-        if (!rule.hungryRace && rule.foodStorageRatio < 0.7 && !rule.moneyUseful) {
-          return applyBusyCap(maximum, current, rule.observation, resources);
-        }
-        break;
-      case "mill":
-        if (building3.powered !== 0 && rule.foodStorageRatio < 0.7 && rule.foodWorkers > 0) {
-          maximum = Math.min(
-            maximum,
-            current - (rule.sampledPower - 5) / -building3.powered
-          );
-        }
-        break;
-      case "chthonian-mine-layer":
-        if (rule.raiderOn === 0 && rule.excavatorOn === 0 || rule.starbaseOn === 0) {
-          maximum = 0;
-        } else {
-          maximum = Math.min(
-            maximum,
-            current + Math.ceil((rule.piracy - rule.armada) / rule.rating)
-          );
-        }
-        break;
-      case "ruins-guard-post":
-        if (!rule.suppressionUseful) {
-          maximum = 0;
-        } else {
-          let adjustment = (5001 - rule.ruinsRating) / rule.postRating;
-          if (rule.gateUnlocked) {
-            adjustment = Math.max(
-              adjustment,
-              (7501 - rule.gateRating) / rule.postRating
-            );
-          }
-          maximum = Math.min(
-            maximum,
-            current + 1,
-            current + Math.ceil(adjustment)
-          );
-        }
-        break;
-      case "spire-waygate":
-        if (rule.cleared || rule.demonicBombReady || rule.mechPotentialTooHigh && !rule.prestigeFloorProtected) {
-          maximum = 0;
-        }
-        break;
-      case "early-galaxy-ship":
-        if (!rule.piracyUnlocked && rule.embassyUnlocked) {
-          maximum = 0;
-        }
-        break;
-      case "armed-miner":
-        if (rule.observations.every((entry) => !entry.useful)) {
-          let cap = 0;
-          for (const observation of rule.observations) {
-            const resource2 = mapValue(
-              resources,
-              observation.resourceId,
-              `power resource ${observation.resourceId}`
-            );
-            cap = Math.max(
-              cap,
-              calculateBusyWorkers(observation, current, resource2.incomeAdjusted)
-            );
-          }
-          maximum = Math.min(maximum, cap);
-        }
-        return {
-          maximum,
-          adjusted: maximum === current ? [] : rule.observations.map((entry) => entry.resourceId)
-        };
-      case "bolognium-ship":
-        if (rule.missionBuildable && rule.scoutCount >= 2 && rule.corvetteCount >= 1) {
-          maximum = Math.min(
-            maximum,
-            rule.gatewaySupportMaximum - (rule.scoutCount + rule.corvetteCount)
-          );
-        }
-        if (!rule.observation.useful) {
-          maximum = applyBusyCap(
-            maximum,
-            current,
-            rule.observation,
-            resources
-          ).maximum;
-        }
-        return {
-          maximum,
-          adjusted: maximum === current ? [] : [rule.observation.resourceId]
-        };
-      case "chthonian-raider":
-        if (rule.starbaseOn === 0) {
-          maximum = 0;
-        } else if (rule.observations.every((entry) => !entry.useful)) {
-          let cap = 0;
-          for (const observation of rule.observations) {
-            const resource2 = mapValue(
-              resources,
-              observation.resourceId,
-              `power resource ${observation.resourceId}`
-            );
-            cap = Math.max(
-              cap,
-              calculateBusyWorkers(observation, current, resource2.incomeAdjusted)
-            );
-          }
-          maximum = Math.min(maximum, cap);
-        }
-        return {
-          maximum,
-          adjusted: maximum === current ? [] : rule.observations.map((entry) => entry.resourceId)
-        };
-      case "dual-resource":
-        if (rule.observations.every((entry) => !entry.useful)) {
-          let cap = 0;
-          for (const observation of rule.observations) {
-            const resource2 = mapValue(
-              resources,
-              observation.resourceId,
-              `power resource ${observation.resourceId}`
-            );
-            cap = Math.max(
-              cap,
-              calculateBusyWorkers(observation, current, resource2.incomeAdjusted)
-            );
-          }
-          maximum = Math.min(maximum, cap);
-        }
-        return {
-          maximum,
-          adjusted: maximum === current ? [] : rule.observations.map((entry) => entry.resourceId)
-        };
-      case "womling-farm":
-        maximum = Math.min(
-          maximum,
-          Math.ceil(rule.supportMaximum / rule.cropPerFarm)
-        );
-        break;
-      case "womling-overseer":
-        maximum = Math.min(
-          maximum,
-          Math.ceil(
-            (100 - (rule.loyaltyBase - rule.miners)) / rule.loyaltyPerBuilding
-          )
-        );
-        break;
-      case "womling-fun":
-        maximum = Math.min(
-          maximum,
-          Math.ceil(
-            (100 - (rule.moraleBase - (rule.miners + rule.farmers + rule.injured))) / rule.moralePerBuilding
-          )
-        );
-        break;
-      case "tau-whaling-station": {
-        const efficiency = 1 - (1 - rule.supportMaximum / rule.supportCurrent) ** 1.4;
-        const income = 8 * efficiency * rule.whalingShipsOn;
-        maximum = Math.min(maximum, Math.ceil(income / 12));
-        break;
-      }
-      case "tau-mining-pit":
-        maximum = Math.min(maximum, Math.ceil(rule.populationMaximum / 6));
-        break;
-      default:
-        break;
-    }
-    return { maximum, adjusted: [] };
-  }
-  function getCitadelPowerConsumption(amount, electromagneticField) {
-    return (30 + (amount - 1) * 2.5) * amount * (electromagneticField ? 1.5 : 1);
-  }
-  function getBestPowerSupplyRatio(support, maximumPorts, maximumCamps) {
-    let bestPort = 0;
-    let bestCamp = 0;
-    const optimalPort = Math.ceil(support / 2 + 1);
-    const optimalCamp = Math.floor(support / 2 - 1);
-    if (support <= 3 || optimalPort > maximumPorts) {
-      bestPort = Math.min(maximumPorts, support);
-      bestCamp = Math.min(maximumCamps, support - bestPort);
-    } else if (optimalCamp > maximumCamps) {
-      bestCamp = Math.min(maximumCamps, support);
-      bestPort = Math.min(maximumPorts, support - bestCamp);
-    } else if (optimalPort <= maximumPorts && optimalCamp <= maximumCamps) {
-      bestPort = optimalPort;
-      bestCamp = optimalCamp;
-    }
-    return Object.freeze([
-      Math.round(bestPort * (1 + bestCamp * 0.4) * 1e4 + 100),
-      bestPort,
-      bestCamp
-    ]);
-  }
-  function debouncePower(desired, current, entry) {
-    if (entry.locked !== void 0) {
-      if (desired === entry.a || desired === entry.b) {
-        return entry.locked;
-      }
-      delete entry.locked;
-    }
-    if (entry.holdTicks) {
-      if (desired === entry.a || desired === entry.b) {
-        entry.holdTicks--;
-        if (entry.holdTicks > 0) {
-          return current;
-        }
-        entry.previous = current;
-        return desired;
-      }
-      entry.holdTicks = 0;
-    }
-    if (desired === current) {
-      return desired;
-    }
-    if (entry.previous === desired) {
-      entry.a = current;
-      entry.b = desired;
-      if (Math.abs(desired - current) === 1) {
-        entry.locked = Math.max(current, desired);
-        return entry.locked;
-      }
-      entry.holdTicks = POWER_WIDE_OSCILLATION_HOLD_TICKS;
-      return current;
-    }
-    entry.previous = current;
-    return desired;
-  }
-  function freezeState(oscillations, warningCaps) {
+  // src/adapters/browser/power-warnings.ts
+  function createPowerWarningSource(getDocument, getWindow) {
     return Object.freeze({
-      oscillations: Object.freeze(
-        Object.fromEntries(
-          Object.entries(oscillations).map(([key, value]) => [
-            key,
-            Object.freeze({ ...value })
-          ])
-        )
-      ),
-      warningCaps: Object.freeze(
-        Object.fromEntries(
-          Object.entries(warningCaps).map(([key, value]) => [
-            key,
-            Object.freeze({ ...value })
-          ])
-        )
-      )
-    });
-  }
-  function appendRateOperation(operations, resource2, value) {
-    operations.push({
-      kind: "set-resource-rate",
-      resourceId: resource2.input.id,
-      expected: resource2.rate,
-      value
-    });
-    resource2.rate = value;
-  }
-  function appendIncomeAdjusted(operations, resource2) {
-    operations.push({
-      kind: "set-income-adjusted",
-      resourceId: resource2.input.id,
-      expected: resource2.incomeAdjusted,
-      value: true
-    });
-    resource2.incomeAdjusted = true;
-  }
-  function planPowerCycle(input, state) {
-    if (!input.powerUnlocked || input.buildings.length === 0) {
-      return Object.freeze({ decision: null, nextState: state });
-    }
-    const operations = [];
-    const resources = /* @__PURE__ */ new Map();
-    for (const resource2 of input.resources) {
-      if (resources.has(resource2.id)) {
-        throw new TypeError(`duplicate power resource ${resource2.id}`);
-      }
-      resources.set(resource2.id, {
-        input: resource2,
-        rate: resource2.rateOfChange,
-        incomeAdjusted: resource2.incomeAdjusted
-      });
-    }
-    const buildingIds = new Set(input.buildings.map((building3) => building3.id));
-    if (buildingIds.size !== input.buildings.length) {
-      throw new TypeError("duplicate power building id");
-    }
-    const oscillations = Object.fromEntries(
-      Object.entries(state.oscillations).map(([key, value]) => [
-        key,
-        { ...value }
-      ])
-    );
-    const warningCaps = Object.fromEntries(
-      Object.entries(state.warningCaps).map(([key, value]) => [
-        key,
-        { ...value }
-      ])
-    );
-    let availablePower = input.powerCurrent;
-    const missingProducer = {};
-    for (const building3 of input.buildings) {
-      availablePower += building3.powered * building3.stateOn;
-      for (const consumption of building3.consumptions) {
-        const resource2 = mapValue(
-          resources,
-          consumption.resourceId,
-          `power resource ${consumption.resourceId}`
-        );
-        const value = building3.rule.kind === "belt-space-station" && resource2.input.supportKind === "support" && resource2.input.id === "Belt_Support" ? resource2.rate - resource2.input.maxQuantity : resource2.rate + consumption.fuelRate * building3.stateOn;
-        appendRateOperation(operations, resource2, value);
-        if (resource2.input.supportKind !== "none" && consumption.rate < 0) {
-          missingProducer[resource2.input.id] = (missingProducer[resource2.input.id] ?? 0) + 1;
-        }
-      }
-    }
-    let reservedPower = 0;
-    const producerReserve = /* @__PURE__ */ new Map();
-    for (const building3 of input.buildings) {
-      if (building3.produces.length === 0 || building3.powered <= 0) {
-        continue;
-      }
-      const consumed = building3.produces.some(
-        (resourceId3) => input.buildings.some(
-          (candidate) => candidate.consumptions.some(
-            (consumption) => consumption.resourceId === resourceId3 && consumption.rate > 0
-          )
-        )
-      );
-      if (!consumed) {
-        continue;
-      }
-      const cap = input.settings.limitPowered ? Math.min(building3.count, building3.autoMaximum) : building3.count;
-      const growth = building3.produces.some(
-        (resourceId3) => mapValue(resources, resourceId3, `producer resource ${resourceId3}`).input.useful
-      ) ? 1 : 0;
-      const reserve = building3.powered * Math.min(cap, building3.stateOn + growth);
-      producerReserve.set(building3.binding, reserve);
-      reservedPower += reserve;
-    }
-    for (const building3 of input.buildings) {
-      let maximum = building3.count;
-      const current = building3.stateOn;
-      if (!input.settings.showGalactic && building3.tab === "galaxy") {
-        maximum = 0;
-      }
-      if (input.settings.limitPowered) {
-        maximum = Math.min(maximum, building3.autoMaximum);
-      }
-      if (building3.singleState) {
-        maximum = Math.min(maximum, 1);
-      }
-      reservedPower -= producerReserve.get(building3.binding) ?? 0;
-      if (building3.rule.kind === "neutron-citadel") {
-        while (maximum > 0 && availablePower - reservedPower < getCitadelPowerConsumption(
-          maximum,
-          building3.rule.electromagneticField
-        )) {
-          maximum--;
-        }
-      } else if (building3.powered > 0 && !building3.ignorePositivePowerCap) {
-        maximum = Math.min(
-          maximum,
-          (availablePower - reservedPower) / building3.powered
-        );
-      }
-      if ((building3.rule.kind === "ascension-trigger" || building3.rule.kind === "terraformer") && availablePower < building3.powered) {
-        operations.push({
-          kind: "set-description",
-          buildingId: building3.id,
-          expected: building3.extraDescription,
-          value: `Missing ${Math.ceil(
-            building3.powered - availablePower
-          )} MW to power on<br>${building3.extraDescription}`
-        });
-      }
-      if (building3.skipGroup !== "none") {
-        continue;
-      }
-      if (building3.smartCategory && building3.smartEnabled) {
-        const result2 = applySmartRule(
-          building3,
-          maximum,
-          current,
-          input.powerCurrent <= input.powerMaximum || input.replicatorAvailable,
-          availablePower,
-          resources
-        );
-        maximum = result2.maximum;
-        for (const resourceId3 of result2.adjusted) {
-          appendIncomeAdjusted(
-            operations,
-            mapValue(resources, resourceId3, `power resource ${resourceId3}`)
-          );
-        }
-        if (input.settings.autoFleet && building3.fleetMaximum !== null) {
-          maximum = Math.min(maximum, building3.fleetMaximum);
-        }
-      }
-      let description = operations.filter(
-        (operation2) => operation2.kind === "set-description" && operation2.buildingId === building3.id
-      ).at(-1)?.value ?? building3.extraDescription;
-      for (const consumption of building3.consumptions) {
-        const resource2 = mapValue(
-          resources,
-          consumption.resourceId,
-          `power resource ${consumption.resourceId}`
-        );
-        if (consumption.rate > 0) {
-          if (!resource2.input.unlocked) {
-            maximum = 0;
-            break;
-          }
-          if (resource2.input.id === "Food") {
-            if (input.fasting) {
-              maximum = 0;
-              break;
-            }
-            if (input.banquetStateOn > 0) {
-              continue;
-            }
-            if (resource2.input.storageRatio > 0.05 || input.hungryRace) {
-              continue;
-            }
-          } else if (current > 0 && resource2.input.supportKind === "none" && (building3.powered < 0 || resource2.input.storageRatio >= 0.95) && resource2.input.currentQuantity >= maximum * input.consumptionBalanceMinimum * consumption.rate) {
-            continue;
-          } else if (resource2.input.supportKind === "tau-belt-support") {
-            continue;
-          }
-          let supported = resource2.rate / consumption.rate;
-          if (resource2.input.supportKind === "womlings-support") {
-            supported = Math.ceil(supported);
-          }
-          maximum = Math.min(maximum, supported);
-          if (missingProducer[resource2.input.id]) {
-            const value = `Make sure all ${resource2.input.title} producers are above consumers in buildings list!<br>${description}`;
-            operations.push({
-              kind: "set-description",
-              buildingId: building3.id,
-              expected: description,
-              value
-            });
-            description = value;
-          }
-        } else if (missingProducer[resource2.input.id] && consumption.rate < 0) {
-          missingProducer[resource2.input.id]--;
-        }
-      }
-      if (building3.powered < 0) {
-        maximum = Math.max(maximum, current - 1);
-      }
-      maximum = Math.max(0, Math.floor(maximum));
-      const oscillation = oscillations[building3.binding] ?? (oscillations[building3.binding] = {});
-      maximum = debouncePower(maximum, current, oscillation);
-      const warningCap = warningCaps[building3.binding];
-      if (warningCap !== void 0) {
-        const ticks = warningCap.ticks - 1;
-        if (ticks <= 0) {
-          delete warningCaps[building3.binding];
-        } else {
-          warningCaps[building3.binding] = { cap: warningCap.cap, ticks };
-          maximum = Math.min(maximum, warningCap.cap);
-        }
-      }
-      if (input.debug && maximum !== current) {
-        const consumption = building3.consumptions.filter((entry) => entry.fuelRate > 0).map((entry) => {
-          const resource2 = mapValue(
-            resources,
-            entry.resourceId,
-            `power resource ${entry.resourceId}`
-          );
-          return `${entry.resourceId}: income=${resource2.rate.toFixed(
-            2
-          )}, qty=${resource2.input.currentQuantity.toFixed(
-            0
-          )}, perUnit=${entry.fuelRate.toFixed(2)}, reserveTo=${(maximum * input.consumptionBalanceMinimum * entry.rate).toFixed(0)}`;
-        }).join(" | ");
-        const delta = maximum - current;
-        operations.push({
-          kind: "log",
-          message: `[power] ${building3.binding}: on ${current}→${maximum} (Δ${delta >= 0 ? "+" : ""}${delta}), powered=${building3.powered}, availPower≈${availablePower.toFixed(
-            1
-          )}${reservedPower > 0 ? `, reserved≈${reservedPower.toFixed(1)}` : ""}${consumption ? " || " + consumption : ""}`
-        });
-      }
-      for (const consumption of building3.consumptions) {
-        const resource2 = mapValue(
-          resources,
-          consumption.resourceId,
-          `power resource ${consumption.resourceId}`
-        );
-        const value = building3.rule.kind === "belt-space-station" && resource2.input.id === "Belt_Support" ? resource2.rate + resource2.input.maxQuantity : resource2.rate - consumption.fuelRate * maximum;
-        appendRateOperation(operations, resource2, value);
-      }
-      operations.push({
-        kind: "adjust-building",
-        buildingId: building3.id,
-        binding: building3.binding,
-        expectedStateOn: current,
-        amount: maximum - current
-      });
-      availablePower -= building3.rule.kind === "neutron-citadel" ? getCitadelPowerConsumption(
-        maximum,
-        building3.rule.electromagneticField
-      ) : building3.powered * maximum;
-    }
-    const lakeSupport = resources.get("Lake_Support")?.rate ?? 0;
-    if (input.lake.enabled && lakeSupport > 0) {
-      const rating = input.lake.bloodSpireLevel >= 2 ? 0.8 : 0.85;
-      let bireme = input.lake.biremeCount;
-      let transport = input.lake.transportCount;
-      while (bireme + transport > lakeSupport) {
-        const nextBireme = (1 - rating ** (bireme - 1)) * (transport * 5);
-        const nextTransport = (1 - rating ** bireme) * ((transport - 1) * 5);
-        if (nextBireme > nextTransport) {
-          bireme--;
-        } else {
-          transport--;
-        }
-      }
-      operations.push(
-        {
-          kind: "adjust-building",
-          buildingId: input.lake.biremeId,
-          binding: input.lake.biremeBinding,
-          expectedStateOn: input.lake.biremeStateOn,
-          amount: bireme - input.lake.biremeStateOn
-        },
-        {
-          kind: "adjust-building",
-          buildingId: input.lake.transportId,
-          binding: input.lake.transportBinding,
-          expectedStateOn: input.lake.transportStateOn,
-          amount: transport - input.lake.transportStateOn
-        }
-      );
-    }
-    const spireSupport = Math.floor(resources.get("Spire_Support")?.rate ?? 0);
-    if (input.spire.enabled && spireSupport > 0) {
-      const spire = input.spire;
-      const buildAllowed = spire.autoBuild && !(spire.autoMech && spire.mechActive) && !(spire.autoPrestige && spire.prestigeType === "demonic" && spire.prestigeDemonicFloor - spire.towerCount <= spire.mechBay.count);
-      const canBuild = (building3, checkSmart = false) => buildAllowed && building3.autoBuildable && spire.moneyMaximum >= building3.moneyCost && (!checkSmart || building3.smartManaged);
-      const maximumBay = Math.min(spire.mechBay.count, spireSupport);
-      const currentPort = spire.port.count;
-      const currentCamp = spire.camp.count;
-      const maximumPorts = canBuild(spire.port) ? spire.port.autoMaximum : currentPort;
-      const maximumCamps = canBuild(spire.camp) ? spire.camp.autoMaximum : currentCamp;
-      const nextMechCost = canBuild(spire.mechBay, true) ? spire.mechBay.supplyCost : Number.MAX_SAFE_INTEGER;
-      const nextPurifierCost = canBuild(spire.purifier, true) ? spire.purifier.supplyCost : Number.MAX_SAFE_INTEGER;
-      const [bestSupplies] = getBestPowerSupplyRatio(
-        spireSupport,
-        maximumPorts,
-        maximumCamps
-      );
-      const purifierDescription = operations.filter(
-        (operation2) => operation2.kind === "set-description" && operation2.buildingId === spire.purifier.buildingId
-      ).at(-1)?.value ?? spire.purifierDescription;
-      operations.push({
-        kind: "set-description",
-        buildingId: spire.purifier.buildingId,
-        expected: purifierDescription,
-        value: `Supported Supplies: ${Math.floor(bestSupplies)}<br>${purifierDescription}`
-      });
-      const nextCost = spire.mechQueued && nextMechCost <= bestSupplies ? nextMechCost : spire.purifierQueued && nextPurifierCost <= bestSupplies ? nextPurifierCost : Math.min(nextMechCost, nextPurifierCost);
-      operations.push({
-        kind: "set-mech-save-supply",
-        expected: spire.expectedSaveSupply,
-        value: nextCost <= bestSupplies
-      });
-      let assignStorage = spire.mechQueued || spire.purifierQueued;
-      const addSpireAdjustments = (mech, port, camp) => {
-        for (const [building3, target] of [
-          [spire.mechBay, mech],
-          [spire.port, port],
-          [spire.camp, camp]
-        ]) {
-          operations.push({
-            kind: "adjust-building",
-            buildingId: building3.buildingId,
-            binding: building3.binding,
-            expectedStateOn: building3.stateOn,
-            amount: target - building3.stateOn
-          });
-        }
-      };
-      for (let targetMech = maximumBay; targetMech >= 0; targetMech--) {
-        const [targetSupplies, targetPort, targetCamp] = getBestPowerSupplyRatio(
-          spireSupport - targetMech,
-          maximumPorts,
-          maximumCamps
-        );
-        const missingStorage = targetPort > currentPort ? spire.port : targetCamp > currentCamp ? spire.camp : null;
-        if (missingStorage !== null) {
-          for (let index = maximumBay; index >= 0; index--) {
-            const [storageSupplies, storagePort, storageCamp] = getBestPowerSupplyRatio(
-              spireSupport - index,
-              currentPort,
-              currentCamp
-            );
-            if (storageSupplies >= missingStorage.supplyCost) {
-              addSpireAdjustments(index, storagePort, storageCamp);
-              break;
-            }
-          }
-          break;
-        }
-        if (spire.supplyCurrent >= targetSupplies) {
-          assignStorage = true;
-        }
-        if (!assignStorage || bestSupplies < nextCost || targetSupplies >= nextCost) {
-          addSpireAdjustments(targetMech, targetPort, targetCamp);
-          break;
-        }
-      }
-    }
-    operations.push({
-      kind: "set-power-model",
-      resourceId: input.powerResourceId,
-      expectedCurrent: input.powerCurrent,
-      expectedRate: mapValue(resources, input.powerResourceId, "power resource").rate,
-      value: availablePower
-    });
-    return Object.freeze({
-      decision: Object.freeze({
-        kind: "apply-power-cycle",
-        expectedBuildings: Object.freeze(
-          input.buildings.map(
-            (building3) => Object.freeze({ id: building3.id, binding: building3.binding })
-          )
-        ),
-        operations: Object.freeze(operations)
-      }),
-      nextState: freezeState(oscillations, warningCaps)
-    });
-  }
-  function planPowerWarningShutdown(warnings) {
-    for (const warning of warnings) {
-      if (!warning.autoStateEnabled || warning.ship) {
-        continue;
-      }
-      if ((warning.warningKind === "belt-elerium" || warning.warningKind === "belt-iridium" || warning.warningKind === "belt-iron") && warning.beltSupportNeeded <= warning.beltSupportMaximum) {
-        continue;
-      }
-      if ((warning.warningKind === "lake-bireme" || warning.warningKind === "lake-transport") && warning.lakeSupportNeeded <= warning.lakeSupportMaximum) {
-        continue;
-      }
-      if (warning.warningKind === "tau-whaling" || warning.warningKind === "tau-mining") {
-        continue;
-      }
-      return Object.freeze({
-        kind: "shutdown-warned-building",
-        domId: warning.domId,
-        buildingId: warning.buildingId,
-        binding: warning.binding,
-        expectedStateOn: warning.stateOn
-      });
-    }
-    return null;
-  }
-  function recordPowerWarningCap(state, binding, cap) {
-    const oscillations = { ...state.oscillations };
-    delete oscillations[binding];
-    return freezeState(oscillations, {
-      ...state.warningCaps,
-      [binding]: {
-        cap,
-        ticks: POWER_WIDE_OSCILLATION_HOLD_TICKS
-      }
-    });
-  }
-  var EMPTY_POWER_AUTOMATION_STATE = Object.freeze(
-    {
-      oscillations: Object.freeze({}),
-      warningCaps: Object.freeze({})
-    }
-  );
-
-  // src/application/power.ts
-  var SUCCEEDED15 = Object.freeze({
-    status: "succeeded"
-  });
-  function createPowerAutomation(dependencies) {
-    let state = EMPTY_POWER_AUTOMATION_STATE;
-    return Object.freeze({
-      run() {
-        const plan = planPowerCycle(dependencies.reader.readCycle(), state);
-        if (plan.decision === null) {
-          return SUCCEEDED15;
-        }
-        const cycleOutcome = dependencies.executor.execute(plan.decision);
-        if (cycleOutcome.status !== "succeeded") {
-          return cycleOutcome;
-        }
-        state = plan.nextState;
-        const warning = planPowerWarningShutdown(
-          dependencies.reader.readWarnings(
-            dependencies.warnings.readWarnedBuildingDomIds()
-          )
-        );
-        if (warning === null) {
-          return SUCCEEDED15;
-        }
-        const warningOutcome = dependencies.executor.execute(warning);
-        if (warningOutcome.status !== "succeeded") {
-          return warningOutcome;
-        }
-        state = recordPowerWarningCap(
-          state,
-          warning.binding,
-          dependencies.reader.readStateOn(warning.binding)
-        );
-        return SUCCEEDED15;
+      readDebugEnabled() {
+        const value = getWindow();
+        return typeof value === "object" && value !== null && Reflect.get(value, "powerDebug") === true;
       },
-      readState() {
-        return state;
+      readWarnedBuildingDomIds() {
+        return Object.freeze(
+          Array.from(getDocument().querySelectorAll("span.on.warn")).map(
+            (element) => element.parentElement?.id ?? ""
+          )
+        );
       }
     });
   }
@@ -36418,355 +35639,866 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/adapters/browser/power-warnings.ts
-  function createPowerWarningSource(getDocument, getWindow) {
-    return Object.freeze({
-      readDebugEnabled() {
-        const value = getWindow();
-        return typeof value === "object" && value !== null && Reflect.get(value, "powerDebug") === true;
-      },
-      readWarnedBuildingDomIds() {
-        return Object.freeze(
-          Array.from(getDocument().querySelectorAll("span.on.warn")).map(
-            (element) => element.parentElement?.id ?? ""
-          )
-        );
-      }
-    });
-  }
-
-  // src/domain/economy/storage/storage-allocation.ts
-  var STORAGE_ALLOCATION_DEBOUNCE_TICKS = 3;
-  function mapValue2(map, key, label) {
+  // src/domain/economy/production/power.ts
+  var POWER_WIDE_OSCILLATION_HOLD_TICKS = 10;
+  function mapValue(map, key, label) {
     const value = map.get(key);
     if (value === void 0) {
       throw new TypeError(`missing ${label}`);
     }
     return value;
   }
-  function sourceEnabled(source, input) {
-    if (!source.enabled) return false;
-    if (source.kind === "safe-current") return input.safeReassign;
-    if (source.kind === "required") return input.assignPart;
-    return true;
+  function calculateBusyWorkers(observation, currentWorkers, incomeAdjusted) {
+    if (incomeAdjusted) {
+      return currentWorkers;
+    }
+    if (currentWorkers > 0) {
+      const perWorker = observation.production / currentWorkers;
+      const usedIncome = observation.production - observation.income;
+      return usedIncome > 0 ? Math.ceil(usedIncome / perWorker) : 0;
+    }
+    return observation.income < 0 ? 1 : 0;
   }
-  function targetEligible(source, target) {
-    return source.kind !== "project" && source.kind !== "building" ? true : target.unlocked && target.autoBuildEnabled;
+  function applyBusyCap(maximum, current, observation, resources) {
+    if (observation.useful) {
+      return { maximum, adjusted: [] };
+    }
+    const resource2 = mapValue(
+      resources,
+      observation.resourceId,
+      `power resource ${observation.resourceId}`
+    );
+    const next = Math.min(
+      maximum,
+      calculateBusyWorkers(observation, current, resource2.incomeAdjusted)
+    );
+    return {
+      maximum: next,
+      adjusted: next === current ? [] : [observation.resourceId]
+    };
   }
-  function buildAllocationItems(input, managedIds) {
-    const result2 = [];
-    for (const source of input.targetSources) {
-      if (!sourceEnabled(source, input)) continue;
-      const groups = new Map(
-        managedIds.map((id) => [id, []])
-      );
-      for (const target of source.targets) {
-        if (!targetEligible(source, target)) continue;
-        const costs = new Map(
-          target.costs.map((cost) => [cost.resourceId, cost.quantity])
-        );
-        for (const resourceId3 of managedIds) {
-          if (costs.get(resourceId3)) {
-            mapValue2(groups, resourceId3, `storage group ${resourceId3}`).push({
-              target,
-              costs
-            });
-            break;
-          }
+  function applySmartRule(building3, maximum, current, savingPower, availablePower, resources) {
+    const rule = building3.rule;
+    if (savingPower) {
+      switch (rule.kind) {
+        case "belt-space-station": {
+          const extra = rule.stationStorage > 0 ? Math.floor(
+            (rule.eleriumMaximum - rule.eleriumMaximumCost) / rule.stationStorage
+          ) : 0;
+          const minersNeeded = rule.eleriumShipsOn * 2 + rule.iridiumShipsOn + rule.ironShipsOn;
+          maximum = Math.min(
+            maximum,
+            Math.max(current - extra, Math.ceil(minersNeeded / 3))
+          );
+          break;
         }
-      }
-      for (const resourceId3 of managedIds) {
-        const group = mapValue2(groups, resourceId3, `storage group ${resourceId3}`);
-        group.sort(
-          (left, right) => (right.costs.get(resourceId3) ?? 0) - (left.costs.get(resourceId3) ?? 0)
-        );
-        result2.push(...group);
+        case "job-dependent":
+          if (rule.jobCount === 0) {
+            maximum = 0;
+          }
+          break;
+        case "lake-cooling-tower":
+          if (rule.harborCount > 0 && // The caller supplies the current available-power cap as maximum.
+          maximum > 0) {
+            const needed = building3.powered * maximum + Number(
+              (500 * 0.92 ** maximum * (rule.electromagneticField ? 1.5 : 1)).toFixed(2)
+            ) * Math.min(2, rule.harborCount);
+            if (availablePower < needed) {
+              maximum = 0;
+            }
+          }
+          break;
+        case "lake-harbor":
+          if (maximum === 1 && building3.count > 1) {
+            maximum = 0;
+          }
+          break;
+        case "busy-resource":
+          if (rule.active && rule.savingOnly) {
+            return applyBusyCap(maximum, current, rule.observation, resources);
+          }
+          break;
+        default:
+          break;
       }
     }
-    return Object.freeze(result2);
+    switch (rule.kind) {
+      case "busy-resource":
+        if (rule.active && !rule.savingOnly) {
+          return applyBusyCap(maximum, current, rule.observation, resources);
+        }
+        break;
+      case "triton-lander":
+        if (rule.fobOn < 1) {
+          maximum = 0;
+        } else {
+          const dispatch = rule.currentSoldiers - rule.authorityReserve - Math.max(0, rule.wounded - Math.floor(rule.healingRate));
+          maximum = Math.min(
+            maximum,
+            Math.floor(dispatch / (3 * rule.highPopulationMultiplier))
+          );
+        }
+        break;
+      case "ascension-trigger":
+        if (building3.powered > 0 && (!rule.pillarFinished || rule.prestigeType !== "ascension")) {
+          maximum = 0;
+        }
+        break;
+      case "terraformer":
+        if (rule.prestigeType !== "terraform") {
+          maximum = 0;
+        }
+        break;
+      case "badlands-attractor": {
+        let best = 0;
+        if (rule.threat < rule.topThreat && rule.hellAssigned > 0) {
+          best = rule.threat > rule.bottomThreat && rule.topThreat > rule.bottomThreat ? Math.floor(
+            maximum * (rule.topThreat - rule.threat) / (rule.topThreat - rule.bottomThreat)
+          ) : maximum;
+        }
+        maximum = Math.min(maximum, current + 1, Math.max(current - 1, best));
+        break;
+      }
+      case "tourist-center":
+        if (!rule.hungryRace && rule.foodStorageRatio < 0.7 && !rule.moneyUseful) {
+          return applyBusyCap(maximum, current, rule.observation, resources);
+        }
+        break;
+      case "mill":
+        if (building3.powered !== 0 && rule.foodStorageRatio < 0.7 && rule.foodWorkers > 0) {
+          maximum = Math.min(
+            maximum,
+            current - (rule.sampledPower - 5) / -building3.powered
+          );
+        }
+        break;
+      case "chthonian-mine-layer":
+        if (rule.raiderOn === 0 && rule.excavatorOn === 0 || rule.starbaseOn === 0) {
+          maximum = 0;
+        } else {
+          maximum = Math.min(
+            maximum,
+            current + Math.ceil((rule.piracy - rule.armada) / rule.rating)
+          );
+        }
+        break;
+      case "ruins-guard-post":
+        if (!rule.suppressionUseful) {
+          maximum = 0;
+        } else {
+          let adjustment = (5001 - rule.ruinsRating) / rule.postRating;
+          if (rule.gateUnlocked) {
+            adjustment = Math.max(
+              adjustment,
+              (7501 - rule.gateRating) / rule.postRating
+            );
+          }
+          maximum = Math.min(
+            maximum,
+            current + 1,
+            current + Math.ceil(adjustment)
+          );
+        }
+        break;
+      case "spire-waygate":
+        if (rule.cleared || rule.demonicBombReady || rule.mechPotentialTooHigh && !rule.prestigeFloorProtected) {
+          maximum = 0;
+        }
+        break;
+      case "early-galaxy-ship":
+        if (!rule.piracyUnlocked && rule.embassyUnlocked) {
+          maximum = 0;
+        }
+        break;
+      case "armed-miner":
+        if (rule.observations.every((entry) => !entry.useful)) {
+          let cap = 0;
+          for (const observation of rule.observations) {
+            const resource2 = mapValue(
+              resources,
+              observation.resourceId,
+              `power resource ${observation.resourceId}`
+            );
+            cap = Math.max(
+              cap,
+              calculateBusyWorkers(observation, current, resource2.incomeAdjusted)
+            );
+          }
+          maximum = Math.min(maximum, cap);
+        }
+        return {
+          maximum,
+          adjusted: maximum === current ? [] : rule.observations.map((entry) => entry.resourceId)
+        };
+      case "bolognium-ship":
+        if (rule.missionBuildable && rule.scoutCount >= 2 && rule.corvetteCount >= 1) {
+          maximum = Math.min(
+            maximum,
+            rule.gatewaySupportMaximum - (rule.scoutCount + rule.corvetteCount)
+          );
+        }
+        if (!rule.observation.useful) {
+          maximum = applyBusyCap(
+            maximum,
+            current,
+            rule.observation,
+            resources
+          ).maximum;
+        }
+        return {
+          maximum,
+          adjusted: maximum === current ? [] : [rule.observation.resourceId]
+        };
+      case "chthonian-raider":
+        if (rule.starbaseOn === 0) {
+          maximum = 0;
+        } else if (rule.observations.every((entry) => !entry.useful)) {
+          let cap = 0;
+          for (const observation of rule.observations) {
+            const resource2 = mapValue(
+              resources,
+              observation.resourceId,
+              `power resource ${observation.resourceId}`
+            );
+            cap = Math.max(
+              cap,
+              calculateBusyWorkers(observation, current, resource2.incomeAdjusted)
+            );
+          }
+          maximum = Math.min(maximum, cap);
+        }
+        return {
+          maximum,
+          adjusted: maximum === current ? [] : rule.observations.map((entry) => entry.resourceId)
+        };
+      case "dual-resource":
+        if (rule.observations.every((entry) => !entry.useful)) {
+          let cap = 0;
+          for (const observation of rule.observations) {
+            const resource2 = mapValue(
+              resources,
+              observation.resourceId,
+              `power resource ${observation.resourceId}`
+            );
+            cap = Math.max(
+              cap,
+              calculateBusyWorkers(observation, current, resource2.incomeAdjusted)
+            );
+          }
+          maximum = Math.min(maximum, cap);
+        }
+        return {
+          maximum,
+          adjusted: maximum === current ? [] : rule.observations.map((entry) => entry.resourceId)
+        };
+      case "womling-farm":
+        maximum = Math.min(
+          maximum,
+          Math.ceil(rule.supportMaximum / rule.cropPerFarm)
+        );
+        break;
+      case "womling-overseer":
+        maximum = Math.min(
+          maximum,
+          Math.ceil(
+            (100 - (rule.loyaltyBase - rule.miners)) / rule.loyaltyPerBuilding
+          )
+        );
+        break;
+      case "womling-fun":
+        maximum = Math.min(
+          maximum,
+          Math.ceil(
+            (100 - (rule.moraleBase - (rule.miners + rule.farmers + rule.injured))) / rule.moralePerBuilding
+          )
+        );
+        break;
+      case "tau-whaling-station": {
+        const efficiency = 1 - (1 - rule.supportMaximum / rule.supportCurrent) ** 1.4;
+        const income = 8 * efficiency * rule.whalingShipsOn;
+        maximum = Math.min(maximum, Math.ceil(income / 12));
+        break;
+      }
+      case "tau-mining-pit":
+        maximum = Math.min(maximum, Math.ceil(rule.populationMaximum / 6));
+        break;
+      default:
+        break;
+    }
+    return { maximum, adjusted: [] };
   }
-  function freezeDebounceMap(map) {
-    return Object.freeze(
-      Object.fromEntries(
-        Object.entries(map).map(([key, value]) => [
-          key,
-          Object.freeze({ ...value })
-        ])
-      )
-    );
+  function getCitadelPowerConsumption(amount, electromagneticField) {
+    return (30 + (amount - 1) * 2.5) * amount * (electromagneticField ? 1.5 : 1);
   }
-  function debounce(entry, desired, current) {
+  function getBestPowerSupplyRatio(support, maximumPorts, maximumCamps) {
+    let bestPort = 0;
+    let bestCamp = 0;
+    const optimalPort = Math.ceil(support / 2 + 1);
+    const optimalCamp = Math.floor(support / 2 - 1);
+    if (support <= 3 || optimalPort > maximumPorts) {
+      bestPort = Math.min(maximumPorts, support);
+      bestCamp = Math.min(maximumCamps, support - bestPort);
+    } else if (optimalCamp > maximumCamps) {
+      bestCamp = Math.min(maximumCamps, support);
+      bestPort = Math.min(maximumPorts, support - bestCamp);
+    } else if (optimalPort <= maximumPorts && optimalCamp <= maximumCamps) {
+      bestPort = optimalPort;
+      bestCamp = optimalCamp;
+    }
+    return Object.freeze([
+      Math.round(bestPort * (1 + bestCamp * 0.4) * 1e4 + 100),
+      bestPort,
+      bestCamp
+    ]);
+  }
+  function debouncePower(desired, current, entry) {
     if (entry.locked !== void 0) {
-      if (desired >= entry.locked || desired <= entry.locked - 2) {
-        delete entry.locked;
-      } else {
+      if (desired === entry.a || desired === entry.b) {
         return entry.locked;
       }
+      delete entry.locked;
+    }
+    if (entry.holdTicks) {
+      if (desired === entry.a || desired === entry.b) {
+        entry.holdTicks--;
+        if (entry.holdTicks > 0) {
+          return current;
+        }
+        entry.previous = current;
+        return desired;
+      }
+      entry.holdTicks = 0;
     }
     if (desired === current) {
-      entry.direction = 0;
-      entry.ticks = 0;
       return desired;
     }
-    const direction = desired > current ? 1 : -1;
-    if (entry.direction === direction) {
-      entry.ticks = (entry.ticks ?? 0) + 1;
-    } else {
-      entry.direction = direction;
-      entry.ticks = 1;
-    }
-    if ((entry.ticks ?? 0) < STORAGE_ALLOCATION_DEBOUNCE_TICKS) {
-      return current;
-    }
-    entry.direction = 0;
-    entry.ticks = 0;
     if (entry.previous === desired) {
-      entry.locked = Math.max(current, desired);
-      return entry.locked;
+      entry.a = current;
+      entry.b = desired;
+      if (Math.abs(desired - current) === 1) {
+        entry.locked = Math.max(current, desired);
+        return entry.locked;
+      }
+      entry.holdTicks = POWER_WIDE_OSCILLATION_HOLD_TICKS;
+      return current;
     }
     entry.previous = current;
     return desired;
   }
-  function planStorageAllocation(input) {
-    if (!input.initialized || input.crateValue <= 0 || input.containerValue <= 0) {
-      return null;
-    }
-    const resources = new Map(
-      input.resources.map((resource2) => [resource2.id, resource2])
-    );
-    if (resources.size !== input.resources.length) {
-      throw new TypeError("duplicate storage resource id");
-    }
-    const managedIds = input.priorityResourceIds.filter((id) => {
-      const resource2 = mapValue2(resources, id, `storage resource ${id}`);
-      return resource2.unlocked && resource2.managed;
-    });
-    if (managedIds.length === 0) return null;
-    let totalCrates = input.freeCrates;
-    let totalContainers = input.freeContainers;
-    const adjustments = /* @__PURE__ */ new Map();
-    const modifiers = /* @__PURE__ */ new Map();
-    for (const id of managedIds) {
-      const resource2 = mapValue2(resources, id, `storage resource ${id}`);
-      const sellAllowed = !input.noTrade && input.autoMarket && resource2.autoSellEnabled && resource2.autoSellRatio > 0;
-      modifiers.set(
-        id,
-        input.assignExtra ? sellAllowed ? 1.03 / resource2.autoSellRatio : 1.03 : 1
-      );
-      adjustments.set(id, {
-        crate: 0,
-        container: 0,
-        amount: resource2.maxQuantity - (resource2.currentCrates * input.crateValue + resource2.currentContainers * input.containerValue)
-      });
-      totalCrates += resource2.currentCrates;
-      totalContainers += resource2.currentContainers;
-    }
-    let storageToBuild = 0;
-    const drivers = /* @__PURE__ */ new Map();
-    const items = buildAllocationItems(input, managedIds);
-    nextItem: for (const item of items) {
-      const currentAssignment = /* @__PURE__ */ new Map();
-      let remainingCrates = totalCrates;
-      let remainingContainers = totalContainers;
-      for (const [resourceId3, quantity] of item.costs) {
-        const resource2 = mapValue2(
-          resources,
-          resourceId3,
-          `target resource ${resourceId3}`
-        );
-        const adjustment = adjustments.get(resourceId3);
-        const modifier = item.target.isList ? 1 : adjustment === void 0 ? 1 : mapValue2(modifiers, resourceId3, `storage modifier ${resourceId3}`);
-        if (adjustment === void 0) {
-          if (resource2.maxQuantity >= quantity) continue;
-          continue nextItem;
-        }
-        if (adjustment.amount >= quantity * modifier) continue;
-        if (!item.target.isList && resource2.maxStorage >= 0 && resource2.maxStorage < quantity * modifier) {
-          continue nextItem;
-        }
-        let missing = Math.min(
-          resource2.maxStorage >= 0 ? resource2.maxStorage : Number.MAX_SAFE_INTEGER,
-          quantity * modifier
-        ) - adjustment.amount;
-        const available = remainingCrates * input.crateValue + remainingContainers * input.containerValue;
-        if (item.target.isList || missing <= available) {
-          const assignment = { crate: 0, container: 0 };
-          currentAssignment.set(resourceId3, assignment);
-          if (missing > 0 && remainingCrates > 0) {
-            const count2 = Math.min(
-              Math.ceil(missing / input.crateValue),
-              remainingCrates
-            );
-            remainingCrates -= count2;
-            missing -= count2 * input.crateValue;
-            assignment.crate = count2;
-          }
-          if (missing > 0 && remainingContainers > 0) {
-            const count2 = Math.min(
-              Math.ceil(missing / input.containerValue),
-              remainingContainers
-            );
-            remainingContainers -= count2;
-            missing -= count2 * input.containerValue;
-            assignment.container = count2;
-          }
-          if (missing > 0) {
-            storageToBuild = Math.max(storageToBuild, missing);
-          }
-        } else {
-          storageToBuild = Math.max(storageToBuild, missing - available);
-          continue nextItem;
-        }
-      }
-      for (const [resourceId3, assignment] of currentAssignment) {
-        const adjustment = mapValue2(
-          adjustments,
-          resourceId3,
-          `storage adjustment ${resourceId3}`
-        );
-        if (input.debug && (assignment.crate > 0 || assignment.container > 0)) {
-          const quantity = item.costs.get(resourceId3) ?? 0;
-          drivers.set(
-            resourceId3,
-            `${item.target.label} (qty=${quantity.toFixed(
-              1
-            )}, missing≈${(quantity - adjustment.amount).toFixed(1)})`
-          );
-        }
-        adjustment.crate += assignment.crate;
-        adjustment.container += assignment.container;
-        adjustment.amount += assignment.crate * input.crateValue + assignment.container * input.containerValue;
-      }
-      totalCrates = remainingCrates;
-      totalContainers = remainingContainers;
-    }
+  function freezeState(oscillations, warningCaps) {
     return Object.freeze({
-      crateValue: input.crateValue,
-      containerValue: input.containerValue,
-      expectedFreeCrates: input.freeCrates,
-      expectedFreeContainers: input.freeContainers,
-      storageToBuild,
-      assignments: Object.freeze(
-        managedIds.map((resourceId3) => {
-          const resource2 = mapValue2(
-            resources,
-            resourceId3,
-            `storage resource ${resourceId3}`
-          );
-          const adjustment = mapValue2(
-            adjustments,
-            resourceId3,
-            `storage adjustment ${resourceId3}`
-          );
-          return Object.freeze({
-            resourceId: resourceId3,
-            expectedCrates: resource2.currentCrates,
-            expectedContainers: resource2.currentContainers,
-            desiredCrates: adjustment.crate,
-            desiredContainers: adjustment.container,
-            expectedMaximum: resource2.maxQuantity,
-            currentQuantity: resource2.currentQuantity,
-            storageRequired: resource2.storageRequired,
-            driver: drivers.get(resourceId3) ?? null
-          });
-        })
+      oscillations: Object.freeze(
+        Object.fromEntries(
+          Object.entries(oscillations).map(([key, value]) => [
+            key,
+            Object.freeze({ ...value })
+          ])
+        )
       ),
-      expectedPriorityResourceIds: Object.freeze([...input.priorityResourceIds]),
-      debug: input.debug
+      warningCaps: Object.freeze(
+        Object.fromEntries(
+          Object.entries(warningCaps).map(([key, value]) => [
+            key,
+            Object.freeze({ ...value })
+          ])
+        )
+      )
     });
   }
-  function finalizeStorageAllocation(plan, state) {
-    const crateState = Object.fromEntries(
-      Object.entries(state.crates).map(([key, value]) => [key, { ...value }])
-    );
-    const containerState = Object.fromEntries(
-      Object.entries(state.containers).map(([key, value]) => [
+  function appendRateOperation(operations, resource2, value) {
+    operations.push({
+      kind: "set-resource-rate",
+      resourceId: resource2.input.id,
+      expected: resource2.rate,
+      value
+    });
+    resource2.rate = value;
+  }
+  function appendIncomeAdjusted(operations, resource2) {
+    operations.push({
+      kind: "set-income-adjusted",
+      resourceId: resource2.input.id,
+      expected: resource2.incomeAdjusted,
+      value: true
+    });
+    resource2.incomeAdjusted = true;
+  }
+  function planPowerCycle(input, state) {
+    if (!input.powerUnlocked || input.buildings.length === 0) {
+      return Object.freeze({ decision: null, nextState: state });
+    }
+    const operations = [];
+    const resources = /* @__PURE__ */ new Map();
+    for (const resource2 of input.resources) {
+      if (resources.has(resource2.id)) {
+        throw new TypeError(`duplicate power resource ${resource2.id}`);
+      }
+      resources.set(resource2.id, {
+        input: resource2,
+        rate: resource2.rateOfChange,
+        incomeAdjusted: resource2.incomeAdjusted
+      });
+    }
+    const buildingIds = new Set(input.buildings.map((building3) => building3.id));
+    if (buildingIds.size !== input.buildings.length) {
+      throw new TypeError("duplicate power building id");
+    }
+    const oscillations = Object.fromEntries(
+      Object.entries(state.oscillations).map(([key, value]) => [
         key,
         { ...value }
       ])
     );
-    const adjustments = [];
-    const logs = [];
-    for (const assignment of plan.assignments) {
-      const crateEntry = crateState[assignment.resourceId] ?? (crateState[assignment.resourceId] = {});
-      const containerEntry = containerState[assignment.resourceId] ?? (containerState[assignment.resourceId] = {});
-      const targetCrates = debounce(
-        crateEntry,
-        assignment.desiredCrates,
-        assignment.expectedCrates
-      );
-      const targetContainers = debounce(
-        containerEntry,
-        assignment.desiredContainers,
-        assignment.expectedContainers
-      );
-      const crateDelta = targetCrates - assignment.expectedCrates;
-      const containerDelta = targetContainers - assignment.expectedContainers;
-      adjustments.push(
-        Object.freeze({
-          resourceId: assignment.resourceId,
-          expectedCrates: assignment.expectedCrates,
-          expectedContainers: assignment.expectedContainers,
-          crateDelta,
-          containerDelta,
-          expectedMaximum: assignment.expectedMaximum
-        })
-      );
-      if (plan.debug && (crateDelta !== 0 || containerDelta !== 0)) {
-        const base = assignment.expectedMaximum - (assignment.expectedCrates * plan.crateValue + assignment.expectedContainers * plan.containerValue);
-        logs.push(
-          `[storage] ${assignment.resourceId}: crates ${assignment.expectedCrates}→${targetCrates} (Δ${crateDelta >= 0 ? "+" : ""}${crateDelta}), containers ${assignment.expectedContainers}→${targetContainers} (Δ${containerDelta >= 0 ? "+" : ""}${containerDelta}) | currentQty=${assignment.currentQuantity.toFixed(
-            1
-          )}, base=${base.toFixed(1)}, storageRequired=${assignment.storageRequired.toFixed(
-            1
-          )}, driver=${assignment.driver ?? "none"}`
+    const warningCaps = Object.fromEntries(
+      Object.entries(state.warningCaps).map(([key, value]) => [
+        key,
+        { ...value }
+      ])
+    );
+    let availablePower = input.powerCurrent;
+    const missingProducer = {};
+    for (const building3 of input.buildings) {
+      availablePower += building3.powered * building3.stateOn;
+      for (const consumption of building3.consumptions) {
+        const resource2 = mapValue(
+          resources,
+          consumption.resourceId,
+          `power resource ${consumption.resourceId}`
         );
+        const value = building3.rule.kind === "belt-space-station" && resource2.input.supportKind === "support" && resource2.input.id === "Belt_Support" ? resource2.rate - resource2.input.maxQuantity : resource2.rate + consumption.fuelRate * building3.stateOn;
+        appendRateOperation(operations, resource2, value);
+        if (resource2.input.supportKind !== "none" && consumption.rate < 0) {
+          missingProducer[resource2.input.id] = (missingProducer[resource2.input.id] ?? 0) + 1;
+        }
       }
     }
+    let reservedPower = 0;
+    const producerReserve = /* @__PURE__ */ new Map();
+    for (const building3 of input.buildings) {
+      if (building3.produces.length === 0 || building3.powered <= 0) {
+        continue;
+      }
+      const consumed = building3.produces.some(
+        (resourceId3) => input.buildings.some(
+          (candidate) => candidate.consumptions.some(
+            (consumption) => consumption.resourceId === resourceId3 && consumption.rate > 0
+          )
+        )
+      );
+      if (!consumed) {
+        continue;
+      }
+      const cap = input.settings.limitPowered ? Math.min(building3.count, building3.autoMaximum) : building3.count;
+      const growth = building3.produces.some(
+        (resourceId3) => mapValue(resources, resourceId3, `producer resource ${resourceId3}`).input.useful
+      ) ? 1 : 0;
+      const reserve = building3.powered * Math.min(cap, building3.stateOn + growth);
+      producerReserve.set(building3.binding, reserve);
+      reservedPower += reserve;
+    }
+    for (const building3 of input.buildings) {
+      let maximum = building3.count;
+      const current = building3.stateOn;
+      if (!input.settings.showGalactic && building3.tab === "galaxy") {
+        maximum = 0;
+      }
+      if (input.settings.limitPowered) {
+        maximum = Math.min(maximum, building3.autoMaximum);
+      }
+      if (building3.singleState) {
+        maximum = Math.min(maximum, 1);
+      }
+      reservedPower -= producerReserve.get(building3.binding) ?? 0;
+      if (building3.rule.kind === "neutron-citadel") {
+        while (maximum > 0 && availablePower - reservedPower < getCitadelPowerConsumption(
+          maximum,
+          building3.rule.electromagneticField
+        )) {
+          maximum--;
+        }
+      } else if (building3.powered > 0 && !building3.ignorePositivePowerCap) {
+        maximum = Math.min(
+          maximum,
+          (availablePower - reservedPower) / building3.powered
+        );
+      }
+      if ((building3.rule.kind === "ascension-trigger" || building3.rule.kind === "terraformer") && availablePower < building3.powered) {
+        operations.push({
+          kind: "set-description",
+          buildingId: building3.id,
+          expected: building3.extraDescription,
+          value: `Missing ${Math.ceil(
+            building3.powered - availablePower
+          )} MW to power on<br>${building3.extraDescription}`
+        });
+      }
+      if (building3.skipGroup !== "none") {
+        continue;
+      }
+      if (building3.smartCategory && building3.smartEnabled) {
+        const result2 = applySmartRule(
+          building3,
+          maximum,
+          current,
+          input.powerCurrent <= input.powerMaximum || input.replicatorAvailable,
+          availablePower,
+          resources
+        );
+        maximum = result2.maximum;
+        for (const resourceId3 of result2.adjusted) {
+          appendIncomeAdjusted(
+            operations,
+            mapValue(resources, resourceId3, `power resource ${resourceId3}`)
+          );
+        }
+        if (input.settings.autoFleet && building3.fleetMaximum !== null) {
+          maximum = Math.min(maximum, building3.fleetMaximum);
+        }
+      }
+      let description = operations.filter(
+        (operation2) => operation2.kind === "set-description" && operation2.buildingId === building3.id
+      ).at(-1)?.value ?? building3.extraDescription;
+      for (const consumption of building3.consumptions) {
+        const resource2 = mapValue(
+          resources,
+          consumption.resourceId,
+          `power resource ${consumption.resourceId}`
+        );
+        if (consumption.rate > 0) {
+          if (!resource2.input.unlocked) {
+            maximum = 0;
+            break;
+          }
+          if (resource2.input.id === "Food") {
+            if (input.fasting) {
+              maximum = 0;
+              break;
+            }
+            if (input.banquetStateOn > 0) {
+              continue;
+            }
+            if (resource2.input.storageRatio > 0.05 || input.hungryRace) {
+              continue;
+            }
+          } else if (current > 0 && resource2.input.supportKind === "none" && (building3.powered < 0 || resource2.input.storageRatio >= 0.95) && resource2.input.currentQuantity >= maximum * input.consumptionBalanceMinimum * consumption.rate) {
+            continue;
+          } else if (resource2.input.supportKind === "tau-belt-support") {
+            continue;
+          }
+          let supported = resource2.rate / consumption.rate;
+          if (resource2.input.supportKind === "womlings-support") {
+            supported = Math.ceil(supported);
+          }
+          maximum = Math.min(maximum, supported);
+          if (missingProducer[resource2.input.id]) {
+            const value = `Make sure all ${resource2.input.title} producers are above consumers in buildings list!<br>${description}`;
+            operations.push({
+              kind: "set-description",
+              buildingId: building3.id,
+              expected: description,
+              value
+            });
+            description = value;
+          }
+        } else if (missingProducer[resource2.input.id] && consumption.rate < 0) {
+          missingProducer[resource2.input.id]--;
+        }
+      }
+      if (building3.powered < 0) {
+        maximum = Math.max(maximum, current - 1);
+      }
+      maximum = Math.max(0, Math.floor(maximum));
+      const oscillation = oscillations[building3.binding] ?? (oscillations[building3.binding] = {});
+      maximum = debouncePower(maximum, current, oscillation);
+      const warningCap = warningCaps[building3.binding];
+      if (warningCap !== void 0) {
+        const ticks = warningCap.ticks - 1;
+        if (ticks <= 0) {
+          delete warningCaps[building3.binding];
+        } else {
+          warningCaps[building3.binding] = { cap: warningCap.cap, ticks };
+          maximum = Math.min(maximum, warningCap.cap);
+        }
+      }
+      if (input.debug && maximum !== current) {
+        const consumption = building3.consumptions.filter((entry) => entry.fuelRate > 0).map((entry) => {
+          const resource2 = mapValue(
+            resources,
+            entry.resourceId,
+            `power resource ${entry.resourceId}`
+          );
+          return `${entry.resourceId}: income=${resource2.rate.toFixed(
+            2
+          )}, qty=${resource2.input.currentQuantity.toFixed(
+            0
+          )}, perUnit=${entry.fuelRate.toFixed(2)}, reserveTo=${(maximum * input.consumptionBalanceMinimum * entry.rate).toFixed(0)}`;
+        }).join(" | ");
+        const delta = maximum - current;
+        operations.push({
+          kind: "log",
+          message: `[power] ${building3.binding}: on ${current}→${maximum} (Δ${delta >= 0 ? "+" : ""}${delta}), powered=${building3.powered}, availPower≈${availablePower.toFixed(
+            1
+          )}${reservedPower > 0 ? `, reserved≈${reservedPower.toFixed(1)}` : ""}${consumption ? " || " + consumption : ""}`
+        });
+      }
+      for (const consumption of building3.consumptions) {
+        const resource2 = mapValue(
+          resources,
+          consumption.resourceId,
+          `power resource ${consumption.resourceId}`
+        );
+        const value = building3.rule.kind === "belt-space-station" && resource2.input.id === "Belt_Support" ? resource2.rate + resource2.input.maxQuantity : resource2.rate - consumption.fuelRate * maximum;
+        appendRateOperation(operations, resource2, value);
+      }
+      operations.push({
+        kind: "adjust-building",
+        buildingId: building3.id,
+        binding: building3.binding,
+        expectedStateOn: current,
+        amount: maximum - current
+      });
+      availablePower -= building3.rule.kind === "neutron-citadel" ? getCitadelPowerConsumption(
+        maximum,
+        building3.rule.electromagneticField
+      ) : building3.powered * maximum;
+    }
+    const lakeSupport = resources.get("Lake_Support")?.rate ?? 0;
+    if (input.lake.enabled && lakeSupport > 0) {
+      const rating = input.lake.bloodSpireLevel >= 2 ? 0.8 : 0.85;
+      let bireme = input.lake.biremeCount;
+      let transport = input.lake.transportCount;
+      while (bireme + transport > lakeSupport) {
+        const nextBireme = (1 - rating ** (bireme - 1)) * (transport * 5);
+        const nextTransport = (1 - rating ** bireme) * ((transport - 1) * 5);
+        if (nextBireme > nextTransport) {
+          bireme--;
+        } else {
+          transport--;
+        }
+      }
+      operations.push(
+        {
+          kind: "adjust-building",
+          buildingId: input.lake.biremeId,
+          binding: input.lake.biremeBinding,
+          expectedStateOn: input.lake.biremeStateOn,
+          amount: bireme - input.lake.biremeStateOn
+        },
+        {
+          kind: "adjust-building",
+          buildingId: input.lake.transportId,
+          binding: input.lake.transportBinding,
+          expectedStateOn: input.lake.transportStateOn,
+          amount: transport - input.lake.transportStateOn
+        }
+      );
+    }
+    const spireSupport = Math.floor(resources.get("Spire_Support")?.rate ?? 0);
+    if (input.spire.enabled && spireSupport > 0) {
+      const spire = input.spire;
+      const buildAllowed = spire.autoBuild && !(spire.autoMech && spire.mechActive) && !(spire.autoPrestige && spire.prestigeType === "demonic" && spire.prestigeDemonicFloor - spire.towerCount <= spire.mechBay.count);
+      const canBuild = (building3, checkSmart = false) => buildAllowed && building3.autoBuildable && spire.moneyMaximum >= building3.moneyCost && (!checkSmart || building3.smartManaged);
+      const maximumBay = Math.min(spire.mechBay.count, spireSupport);
+      const currentPort = spire.port.count;
+      const currentCamp = spire.camp.count;
+      const maximumPorts = canBuild(spire.port) ? spire.port.autoMaximum : currentPort;
+      const maximumCamps = canBuild(spire.camp) ? spire.camp.autoMaximum : currentCamp;
+      const nextMechCost = canBuild(spire.mechBay, true) ? spire.mechBay.supplyCost : Number.MAX_SAFE_INTEGER;
+      const nextPurifierCost = canBuild(spire.purifier, true) ? spire.purifier.supplyCost : Number.MAX_SAFE_INTEGER;
+      const [bestSupplies] = getBestPowerSupplyRatio(
+        spireSupport,
+        maximumPorts,
+        maximumCamps
+      );
+      const purifierDescription = operations.filter(
+        (operation2) => operation2.kind === "set-description" && operation2.buildingId === spire.purifier.buildingId
+      ).at(-1)?.value ?? spire.purifierDescription;
+      operations.push({
+        kind: "set-description",
+        buildingId: spire.purifier.buildingId,
+        expected: purifierDescription,
+        value: `Supported Supplies: ${Math.floor(bestSupplies)}<br>${purifierDescription}`
+      });
+      const nextCost = spire.mechQueued && nextMechCost <= bestSupplies ? nextMechCost : spire.purifierQueued && nextPurifierCost <= bestSupplies ? nextPurifierCost : Math.min(nextMechCost, nextPurifierCost);
+      operations.push({
+        kind: "set-mech-save-supply",
+        expected: spire.expectedSaveSupply,
+        value: nextCost <= bestSupplies
+      });
+      let assignStorage = spire.mechQueued || spire.purifierQueued;
+      const addSpireAdjustments = (mech, port, camp) => {
+        for (const [building3, target] of [
+          [spire.mechBay, mech],
+          [spire.port, port],
+          [spire.camp, camp]
+        ]) {
+          operations.push({
+            kind: "adjust-building",
+            buildingId: building3.buildingId,
+            binding: building3.binding,
+            expectedStateOn: building3.stateOn,
+            amount: target - building3.stateOn
+          });
+        }
+      };
+      for (let targetMech = maximumBay; targetMech >= 0; targetMech--) {
+        const [targetSupplies, targetPort, targetCamp] = getBestPowerSupplyRatio(
+          spireSupport - targetMech,
+          maximumPorts,
+          maximumCamps
+        );
+        const missingStorage = targetPort > currentPort ? spire.port : targetCamp > currentCamp ? spire.camp : null;
+        if (missingStorage !== null) {
+          for (let index = maximumBay; index >= 0; index--) {
+            const [storageSupplies, storagePort, storageCamp] = getBestPowerSupplyRatio(
+              spireSupport - index,
+              currentPort,
+              currentCamp
+            );
+            if (storageSupplies >= missingStorage.supplyCost) {
+              addSpireAdjustments(index, storagePort, storageCamp);
+              break;
+            }
+          }
+          break;
+        }
+        if (spire.supplyCurrent >= targetSupplies) {
+          assignStorage = true;
+        }
+        if (!assignStorage || bestSupplies < nextCost || targetSupplies >= nextCost) {
+          addSpireAdjustments(targetMech, targetPort, targetCamp);
+          break;
+        }
+      }
+    }
+    operations.push({
+      kind: "set-power-model",
+      resourceId: input.powerResourceId,
+      expectedCurrent: input.powerCurrent,
+      expectedRate: mapValue(resources, input.powerResourceId, "power resource").rate,
+      value: availablePower
+    });
     return Object.freeze({
       decision: Object.freeze({
-        kind: "apply-storage-allocation",
-        crateValue: plan.crateValue,
-        containerValue: plan.containerValue,
-        expectedFreeCrates: plan.expectedFreeCrates,
-        expectedFreeContainers: plan.expectedFreeContainers,
-        expectedPriorityResourceIds: plan.expectedPriorityResourceIds,
-        adjustments: Object.freeze(adjustments),
-        logs: Object.freeze(logs)
+        kind: "apply-power-cycle",
+        expectedBuildings: Object.freeze(
+          input.buildings.map(
+            (building3) => Object.freeze({ id: building3.id, binding: building3.binding })
+          )
+        ),
+        operations: Object.freeze(operations)
       }),
-      nextState: Object.freeze({
-        crates: freezeDebounceMap(crateState),
-        containers: freezeDebounceMap(containerState)
-      })
+      nextState: freezeState(oscillations, warningCaps)
     });
   }
-  var EMPTY_STORAGE_ALLOCATION_STATE = Object.freeze({
-    crates: Object.freeze({}),
-    containers: Object.freeze({})
-  });
+  function planPowerWarningShutdown(warnings) {
+    for (const warning of warnings) {
+      if (!warning.autoStateEnabled || warning.ship) {
+        continue;
+      }
+      if ((warning.warningKind === "belt-elerium" || warning.warningKind === "belt-iridium" || warning.warningKind === "belt-iron") && warning.beltSupportNeeded <= warning.beltSupportMaximum) {
+        continue;
+      }
+      if ((warning.warningKind === "lake-bireme" || warning.warningKind === "lake-transport") && warning.lakeSupportNeeded <= warning.lakeSupportMaximum) {
+        continue;
+      }
+      if (warning.warningKind === "tau-whaling" || warning.warningKind === "tau-mining") {
+        continue;
+      }
+      return Object.freeze({
+        kind: "shutdown-warned-building",
+        domId: warning.domId,
+        buildingId: warning.buildingId,
+        binding: warning.binding,
+        expectedStateOn: warning.stateOn
+      });
+    }
+    return null;
+  }
+  function recordPowerWarningCap(state, binding, cap) {
+    const oscillations = { ...state.oscillations };
+    delete oscillations[binding];
+    return freezeState(oscillations, {
+      ...state.warningCaps,
+      [binding]: {
+        cap,
+        ticks: POWER_WIDE_OSCILLATION_HOLD_TICKS
+      }
+    });
+  }
+  var EMPTY_POWER_AUTOMATION_STATE = Object.freeze(
+    {
+      oscillations: Object.freeze({}),
+      warningCaps: Object.freeze({})
+    }
+  );
 
-  // src/application/storage-allocation.ts
-  var SUCCEEDED16 = Object.freeze({
+  // src/application/power.ts
+  var SUCCEEDED15 = Object.freeze({
     status: "succeeded"
   });
-  function createStorageAllocationAutomation(dependencies) {
-    let state = EMPTY_STORAGE_ALLOCATION_STATE;
+  function createPowerAutomation(dependencies) {
+    let state = EMPTY_POWER_AUTOMATION_STATE;
     return Object.freeze({
       run() {
-        const rawPlan = planStorageAllocation(dependencies.reader.read());
-        if (rawPlan === null) return SUCCEEDED16;
-        if (rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild)) {
-          return SUCCEEDED16;
+        const plan = planPowerCycle(dependencies.reader.readCycle(), state);
+        if (plan.decision === null) {
+          return SUCCEEDED15;
         }
-        const finalized = finalizeStorageAllocation(rawPlan, state);
-        const outcome = dependencies.executor.execute(finalized.decision);
-        if (outcome.status === "succeeded") {
-          state = finalized.nextState;
+        const cycleOutcome = dependencies.executor.execute(plan.decision);
+        if (cycleOutcome.status !== "succeeded") {
+          return cycleOutcome;
         }
-        return outcome;
+        state = plan.nextState;
+        const warning = planPowerWarningShutdown(
+          dependencies.reader.readWarnings(
+            dependencies.warnings.readWarnedBuildingDomIds()
+          )
+        );
+        if (warning === null) {
+          return SUCCEEDED15;
+        }
+        const warningOutcome = dependencies.executor.execute(warning);
+        if (warningOutcome.status !== "succeeded") {
+          return warningOutcome;
+        }
+        state = recordPowerWarningCap(
+          state,
+          warning.binding,
+          dependencies.reader.readStateOn(warning.binding)
+        );
+        return SUCCEEDED15;
       },
       readState() {
         return state;
+      }
+    });
+  }
+
+  // src/bootstrap/power-control.ts
+  function createPowerControl(dependencies) {
+    const warnings = createPowerWarningSource(
+      dependencies.warnings.getDocument,
+      dependencies.warnings.getWindow
+    );
+    const adapter = createPowerAdapter({
+      ...dependencies.adapter,
+      readDebugEnabled: () => warnings.readDebugEnabled()
+    });
+    const automation = createPowerAutomation({
+      reader: adapter.reader,
+      executor: adapter.executor,
+      warnings
+    });
+    return Object.freeze({ autoPower: () => automation.run() });
+  }
+
+  // src/adapters/browser/storage-debug.ts
+  function createStorageDebugSource(getWindow) {
+    return Object.freeze({
+      readEnabled() {
+        const value = getWindow();
+        return typeof value === "object" && value !== null && Reflect.get(value, "storageDebug") === true;
       }
     });
   }
@@ -37350,14 +37082,355 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/adapters/browser/storage-debug.ts
-  function createStorageDebugSource(getWindow) {
+  // src/domain/economy/storage/storage-allocation.ts
+  var STORAGE_ALLOCATION_DEBOUNCE_TICKS = 3;
+  function mapValue2(map, key, label) {
+    const value = map.get(key);
+    if (value === void 0) {
+      throw new TypeError(`missing ${label}`);
+    }
+    return value;
+  }
+  function sourceEnabled(source, input) {
+    if (!source.enabled) return false;
+    if (source.kind === "safe-current") return input.safeReassign;
+    if (source.kind === "required") return input.assignPart;
+    return true;
+  }
+  function targetEligible(source, target) {
+    return source.kind !== "project" && source.kind !== "building" ? true : target.unlocked && target.autoBuildEnabled;
+  }
+  function buildAllocationItems(input, managedIds) {
+    const result2 = [];
+    for (const source of input.targetSources) {
+      if (!sourceEnabled(source, input)) continue;
+      const groups = new Map(
+        managedIds.map((id) => [id, []])
+      );
+      for (const target of source.targets) {
+        if (!targetEligible(source, target)) continue;
+        const costs = new Map(
+          target.costs.map((cost) => [cost.resourceId, cost.quantity])
+        );
+        for (const resourceId3 of managedIds) {
+          if (costs.get(resourceId3)) {
+            mapValue2(groups, resourceId3, `storage group ${resourceId3}`).push({
+              target,
+              costs
+            });
+            break;
+          }
+        }
+      }
+      for (const resourceId3 of managedIds) {
+        const group = mapValue2(groups, resourceId3, `storage group ${resourceId3}`);
+        group.sort(
+          (left, right) => (right.costs.get(resourceId3) ?? 0) - (left.costs.get(resourceId3) ?? 0)
+        );
+        result2.push(...group);
+      }
+    }
+    return Object.freeze(result2);
+  }
+  function freezeDebounceMap(map) {
+    return Object.freeze(
+      Object.fromEntries(
+        Object.entries(map).map(([key, value]) => [
+          key,
+          Object.freeze({ ...value })
+        ])
+      )
+    );
+  }
+  function debounce(entry, desired, current) {
+    if (entry.locked !== void 0) {
+      if (desired >= entry.locked || desired <= entry.locked - 2) {
+        delete entry.locked;
+      } else {
+        return entry.locked;
+      }
+    }
+    if (desired === current) {
+      entry.direction = 0;
+      entry.ticks = 0;
+      return desired;
+    }
+    const direction = desired > current ? 1 : -1;
+    if (entry.direction === direction) {
+      entry.ticks = (entry.ticks ?? 0) + 1;
+    } else {
+      entry.direction = direction;
+      entry.ticks = 1;
+    }
+    if ((entry.ticks ?? 0) < STORAGE_ALLOCATION_DEBOUNCE_TICKS) {
+      return current;
+    }
+    entry.direction = 0;
+    entry.ticks = 0;
+    if (entry.previous === desired) {
+      entry.locked = Math.max(current, desired);
+      return entry.locked;
+    }
+    entry.previous = current;
+    return desired;
+  }
+  function planStorageAllocation(input) {
+    if (!input.initialized || input.crateValue <= 0 || input.containerValue <= 0) {
+      return null;
+    }
+    const resources = new Map(
+      input.resources.map((resource2) => [resource2.id, resource2])
+    );
+    if (resources.size !== input.resources.length) {
+      throw new TypeError("duplicate storage resource id");
+    }
+    const managedIds = input.priorityResourceIds.filter((id) => {
+      const resource2 = mapValue2(resources, id, `storage resource ${id}`);
+      return resource2.unlocked && resource2.managed;
+    });
+    if (managedIds.length === 0) return null;
+    let totalCrates = input.freeCrates;
+    let totalContainers = input.freeContainers;
+    const adjustments = /* @__PURE__ */ new Map();
+    const modifiers = /* @__PURE__ */ new Map();
+    for (const id of managedIds) {
+      const resource2 = mapValue2(resources, id, `storage resource ${id}`);
+      const sellAllowed = !input.noTrade && input.autoMarket && resource2.autoSellEnabled && resource2.autoSellRatio > 0;
+      modifiers.set(
+        id,
+        input.assignExtra ? sellAllowed ? 1.03 / resource2.autoSellRatio : 1.03 : 1
+      );
+      adjustments.set(id, {
+        crate: 0,
+        container: 0,
+        amount: resource2.maxQuantity - (resource2.currentCrates * input.crateValue + resource2.currentContainers * input.containerValue)
+      });
+      totalCrates += resource2.currentCrates;
+      totalContainers += resource2.currentContainers;
+    }
+    let storageToBuild = 0;
+    const drivers = /* @__PURE__ */ new Map();
+    const items = buildAllocationItems(input, managedIds);
+    nextItem: for (const item of items) {
+      const currentAssignment = /* @__PURE__ */ new Map();
+      let remainingCrates = totalCrates;
+      let remainingContainers = totalContainers;
+      for (const [resourceId3, quantity] of item.costs) {
+        const resource2 = mapValue2(
+          resources,
+          resourceId3,
+          `target resource ${resourceId3}`
+        );
+        const adjustment = adjustments.get(resourceId3);
+        const modifier = item.target.isList ? 1 : adjustment === void 0 ? 1 : mapValue2(modifiers, resourceId3, `storage modifier ${resourceId3}`);
+        if (adjustment === void 0) {
+          if (resource2.maxQuantity >= quantity) continue;
+          continue nextItem;
+        }
+        if (adjustment.amount >= quantity * modifier) continue;
+        if (!item.target.isList && resource2.maxStorage >= 0 && resource2.maxStorage < quantity * modifier) {
+          continue nextItem;
+        }
+        let missing = Math.min(
+          resource2.maxStorage >= 0 ? resource2.maxStorage : Number.MAX_SAFE_INTEGER,
+          quantity * modifier
+        ) - adjustment.amount;
+        const available = remainingCrates * input.crateValue + remainingContainers * input.containerValue;
+        if (item.target.isList || missing <= available) {
+          const assignment = { crate: 0, container: 0 };
+          currentAssignment.set(resourceId3, assignment);
+          if (missing > 0 && remainingCrates > 0) {
+            const count2 = Math.min(
+              Math.ceil(missing / input.crateValue),
+              remainingCrates
+            );
+            remainingCrates -= count2;
+            missing -= count2 * input.crateValue;
+            assignment.crate = count2;
+          }
+          if (missing > 0 && remainingContainers > 0) {
+            const count2 = Math.min(
+              Math.ceil(missing / input.containerValue),
+              remainingContainers
+            );
+            remainingContainers -= count2;
+            missing -= count2 * input.containerValue;
+            assignment.container = count2;
+          }
+          if (missing > 0) {
+            storageToBuild = Math.max(storageToBuild, missing);
+          }
+        } else {
+          storageToBuild = Math.max(storageToBuild, missing - available);
+          continue nextItem;
+        }
+      }
+      for (const [resourceId3, assignment] of currentAssignment) {
+        const adjustment = mapValue2(
+          adjustments,
+          resourceId3,
+          `storage adjustment ${resourceId3}`
+        );
+        if (input.debug && (assignment.crate > 0 || assignment.container > 0)) {
+          const quantity = item.costs.get(resourceId3) ?? 0;
+          drivers.set(
+            resourceId3,
+            `${item.target.label} (qty=${quantity.toFixed(
+              1
+            )}, missing≈${(quantity - adjustment.amount).toFixed(1)})`
+          );
+        }
+        adjustment.crate += assignment.crate;
+        adjustment.container += assignment.container;
+        adjustment.amount += assignment.crate * input.crateValue + assignment.container * input.containerValue;
+      }
+      totalCrates = remainingCrates;
+      totalContainers = remainingContainers;
+    }
     return Object.freeze({
-      readEnabled() {
-        const value = getWindow();
-        return typeof value === "object" && value !== null && Reflect.get(value, "storageDebug") === true;
+      crateValue: input.crateValue,
+      containerValue: input.containerValue,
+      expectedFreeCrates: input.freeCrates,
+      expectedFreeContainers: input.freeContainers,
+      storageToBuild,
+      assignments: Object.freeze(
+        managedIds.map((resourceId3) => {
+          const resource2 = mapValue2(
+            resources,
+            resourceId3,
+            `storage resource ${resourceId3}`
+          );
+          const adjustment = mapValue2(
+            adjustments,
+            resourceId3,
+            `storage adjustment ${resourceId3}`
+          );
+          return Object.freeze({
+            resourceId: resourceId3,
+            expectedCrates: resource2.currentCrates,
+            expectedContainers: resource2.currentContainers,
+            desiredCrates: adjustment.crate,
+            desiredContainers: adjustment.container,
+            expectedMaximum: resource2.maxQuantity,
+            currentQuantity: resource2.currentQuantity,
+            storageRequired: resource2.storageRequired,
+            driver: drivers.get(resourceId3) ?? null
+          });
+        })
+      ),
+      expectedPriorityResourceIds: Object.freeze([...input.priorityResourceIds]),
+      debug: input.debug
+    });
+  }
+  function finalizeStorageAllocation(plan, state) {
+    const crateState = Object.fromEntries(
+      Object.entries(state.crates).map(([key, value]) => [key, { ...value }])
+    );
+    const containerState = Object.fromEntries(
+      Object.entries(state.containers).map(([key, value]) => [
+        key,
+        { ...value }
+      ])
+    );
+    const adjustments = [];
+    const logs = [];
+    for (const assignment of plan.assignments) {
+      const crateEntry = crateState[assignment.resourceId] ?? (crateState[assignment.resourceId] = {});
+      const containerEntry = containerState[assignment.resourceId] ?? (containerState[assignment.resourceId] = {});
+      const targetCrates = debounce(
+        crateEntry,
+        assignment.desiredCrates,
+        assignment.expectedCrates
+      );
+      const targetContainers = debounce(
+        containerEntry,
+        assignment.desiredContainers,
+        assignment.expectedContainers
+      );
+      const crateDelta = targetCrates - assignment.expectedCrates;
+      const containerDelta = targetContainers - assignment.expectedContainers;
+      adjustments.push(
+        Object.freeze({
+          resourceId: assignment.resourceId,
+          expectedCrates: assignment.expectedCrates,
+          expectedContainers: assignment.expectedContainers,
+          crateDelta,
+          containerDelta,
+          expectedMaximum: assignment.expectedMaximum
+        })
+      );
+      if (plan.debug && (crateDelta !== 0 || containerDelta !== 0)) {
+        const base = assignment.expectedMaximum - (assignment.expectedCrates * plan.crateValue + assignment.expectedContainers * plan.containerValue);
+        logs.push(
+          `[storage] ${assignment.resourceId}: crates ${assignment.expectedCrates}→${targetCrates} (Δ${crateDelta >= 0 ? "+" : ""}${crateDelta}), containers ${assignment.expectedContainers}→${targetContainers} (Δ${containerDelta >= 0 ? "+" : ""}${containerDelta}) | currentQty=${assignment.currentQuantity.toFixed(
+            1
+          )}, base=${base.toFixed(1)}, storageRequired=${assignment.storageRequired.toFixed(
+            1
+          )}, driver=${assignment.driver ?? "none"}`
+        );
+      }
+    }
+    return Object.freeze({
+      decision: Object.freeze({
+        kind: "apply-storage-allocation",
+        crateValue: plan.crateValue,
+        containerValue: plan.containerValue,
+        expectedFreeCrates: plan.expectedFreeCrates,
+        expectedFreeContainers: plan.expectedFreeContainers,
+        expectedPriorityResourceIds: plan.expectedPriorityResourceIds,
+        adjustments: Object.freeze(adjustments),
+        logs: Object.freeze(logs)
+      }),
+      nextState: Object.freeze({
+        crates: freezeDebounceMap(crateState),
+        containers: freezeDebounceMap(containerState)
+      })
+    });
+  }
+  var EMPTY_STORAGE_ALLOCATION_STATE = Object.freeze({
+    crates: Object.freeze({}),
+    containers: Object.freeze({})
+  });
+
+  // src/application/storage-allocation.ts
+  var SUCCEEDED16 = Object.freeze({
+    status: "succeeded"
+  });
+  function createStorageAllocationAutomation(dependencies) {
+    let state = EMPTY_STORAGE_ALLOCATION_STATE;
+    return Object.freeze({
+      run() {
+        const rawPlan = planStorageAllocation(dependencies.reader.read());
+        if (rawPlan === null) return SUCCEEDED16;
+        if (rawPlan.storageToBuild > 0 && dependencies.expansion.expand(rawPlan.storageToBuild)) {
+          return SUCCEEDED16;
+        }
+        const finalized = finalizeStorageAllocation(rawPlan, state);
+        const outcome = dependencies.executor.execute(finalized.decision);
+        if (outcome.status === "succeeded") {
+          state = finalized.nextState;
+        }
+        return outcome;
+      },
+      readState() {
+        return state;
       }
     });
+  }
+
+  // src/bootstrap/storage-allocation-control.ts
+  function createStorageAllocationControl(dependencies) {
+    const debug = createStorageDebugSource(dependencies.debug.getWindow);
+    const adapter = createStorageAllocationAdapter({
+      ...dependencies.adapter,
+      readDebugEnabled: () => debug.readEnabled()
+    });
+    const automation = createStorageAllocationAutomation({
+      reader: adapter.reader,
+      executor: adapter.executor,
+      expansion: { expand: dependencies.expand }
+    });
+    return Object.freeze({ autoStorage: () => automation.run() });
   }
 
   // src/adapters/evolve/economy/market/galaxy-market.ts
@@ -54080,23 +54153,20 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     function savePlannerStats(stats) {
       return plannerStatsLifecycle.save(stats);
     }
-    const storageClock = Object.freeze({ nowMs: () => browserClock.nowMs() });
-    const { expandStorage } = createStorageExpansion({
-      clock: storageClock,
-      createReader: (getStorageToBuild) => createEvolveStorageExpansionReader({
-        clock: storageClock,
-        getStorageToBuild,
+    const { expandStorage } = createStorageExpansionControl({
+      nowMs: () => browserClock.nowMs(),
+      reader: {
         getResources: () => resources,
         getBuildings: () => buildings,
         getStorageManager: () => StorageManager,
         isEarlyGame: () => isEarlyGame(),
         isLumberRace: () => isLumberRace()
-      }),
-      settingsReader: createStorageExpansionSettingsReader(() => settings),
-      commandExecutor: createStorageCommandExecutor({
+      },
+      getSettings: () => settings,
+      commandExecutor: {
         getStorageManager: () => StorageManager,
         getResources: () => resources
-      })
+      }
     });
     function calculateRequiredStorages() {
       const result2 = planStorageRequirements(
@@ -55459,26 +55529,20 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getFoodConsume,
       log: (message) => runtimeEnvironment.log(message)
     });
-    const taxClock = Object.freeze({ nowMs: () => browserClock.nowMs() });
-    const taxControls = createBrowserTaxControls(getVueById);
-    const { autoTax } = createTaxAutomation({
-      clock: taxClock,
-      gameReader: createEvolveTaxReader({
-        clock: taxClock,
-        controls: taxControls,
+    const { autoTax } = createTaxControl({
+      nowMs: () => browserClock.nowMs(),
+      getVueById,
+      gameReader: {
         getGame: () => game,
         getPoly: () => poly,
         getResources: () => resources
-      }),
-      settingsReader: createTaxSettingsReader(() => settings),
-      commandExecutor: createTaxCommandExecutor({
-        controls: taxControls,
-        keyModifiers: createKeyModifierController(
-          () => KeyManager.set(false, false, false)
-        ),
+      },
+      getSettings: () => settings,
+      commandExecutor: {
         getGame: () => game,
-        getResources: () => resources
-      })
+        getResources: () => resources,
+        resetKeyModifiers: () => KeyManager.set(false, false, false)
+      }
     });
     publishTestSurface({
       autoTax: () => autoTax(),
@@ -55963,42 +56027,37 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getProjectManager: () => ProjectManager
       }
     });
-    const powerWarnings = createPowerWarningSource(
-      () => runtimeEnvironment.window.document,
-      () => runtimeEnvironment.window
-    );
-    const powerAdapter = createPowerAdapter({
-      getGame: () => game,
-      getSettings: () => settings,
-      getState: () => state,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getJobs: () => jobs,
-      getPoly: () => poly,
-      getBuildingManager: () => BuildingManager,
-      getFleetManager: () => FleetManager,
-      getMechManager: () => MechManager,
-      getWarManager: () => WarManager,
-      consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
-      isSupportResource: (value) => value instanceof Support,
-      readDebugEnabled: () => powerWarnings.readDebugEnabled(),
-      isHellSuppressionUseful: isHellSupressUseful,
-      getGalaxyRegions,
-      traitValue: traitVal,
-      getAuthorityGarrisonRequirement,
-      haveTech,
-      getHealingRate,
-      isHungryRace,
-      isPillarFinished: isPillarFinished2,
-      getBuildingIds: () => buildingIds,
-      log: (message) => runtimeEnvironment.log(message)
+    const { autoPower } = createPowerControl({
+      warnings: {
+        getDocument: () => runtimeEnvironment.window.document,
+        getWindow: () => runtimeEnvironment.window
+      },
+      adapter: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getState: () => state,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        getJobs: () => jobs,
+        getPoly: () => poly,
+        getBuildingManager: () => BuildingManager,
+        getFleetManager: () => FleetManager,
+        getMechManager: () => MechManager,
+        getWarManager: () => WarManager,
+        consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
+        isSupportResource: (value) => value instanceof Support,
+        isHellSuppressionUseful: isHellSupressUseful,
+        getGalaxyRegions,
+        traitValue: traitVal,
+        getAuthorityGarrisonRequirement,
+        haveTech,
+        getHealingRate,
+        isHungryRace,
+        isPillarFinished: isPillarFinished2,
+        getBuildingIds: () => buildingIds,
+        log: (message) => runtimeEnvironment.log(message)
+      }
     });
-    const powerAutomation = createPowerAutomation({
-      reader: powerAdapter.reader,
-      executor: powerAdapter.executor,
-      warnings: powerWarnings
-    });
-    const autoPower = () => powerAutomation.run();
     publishTestSurface({
       powerSupport: {
         getCitadelConsumption,
@@ -56023,27 +56082,21 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         StorageManager = context.StorageManager;
       }
     });
-    const storageDebug = createStorageDebugSource(
-      () => runtimeEnvironment.window
-    );
-    const storageAllocationAdapter = createStorageAllocationAdapter({
-      getStorageManager: () => StorageManager,
-      getGame: () => game,
-      getSettings: () => settings,
-      getState: () => state,
-      getResources: () => resources,
-      getBuildingManager: () => BuildingManager,
-      getProjectManager: () => ProjectManager,
-      getFleetManagerOuter: () => FleetManagerOuter,
-      readDebugEnabled: () => storageDebug.readEnabled(),
-      log: (message) => runtimeEnvironment.log(message)
+    const { autoStorage } = createStorageAllocationControl({
+      debug: { getWindow: () => runtimeEnvironment.window },
+      adapter: {
+        getStorageManager: () => StorageManager,
+        getGame: () => game,
+        getSettings: () => settings,
+        getState: () => state,
+        getResources: () => resources,
+        getBuildingManager: () => BuildingManager,
+        getProjectManager: () => ProjectManager,
+        getFleetManagerOuter: () => FleetManagerOuter,
+        log: (message) => runtimeEnvironment.log(message)
+      },
+      expand: expandStorage
     });
-    const storageAllocationAutomation = createStorageAllocationAutomation({
-      reader: storageAllocationAdapter.reader,
-      executor: storageAllocationAdapter.executor,
-      expansion: { expand: expandStorage }
-    });
-    const autoStorage = () => storageAllocationAutomation.run();
     const { autoMinorTrait } = createMinorTraitControl({
       reader: {
         getMinorTraitManager: () => MinorTraitManager,

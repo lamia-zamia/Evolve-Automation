@@ -92,7 +92,6 @@ import { createSettingsStore } from "../storage/settings-store.ts";
 import { createStateLogStore } from "../storage/state-log-store.ts";
 import { createPlannerStatsLifecycle } from "../../application/planner-stats.ts";
 import { createBuildPlanner } from "../../planning/build-planner.ts";
-import { createStorageExpansion } from "../../application/storage-expansion.ts";
 import { readStorageRequirementsInput } from "./economy/storage/storage-requirements.ts";
 import { planStorageRequirements } from "../../domain/economy/storage/storage-requirements.ts";
 import { readDemandPrioritizationInput } from "./economy/resources/demand-prioritization.ts";
@@ -267,19 +266,10 @@ import { planTradeRoutes } from "../../domain/economy/market/trade-routes.ts";
 import { createHellControl } from "../../bootstrap/hell-control.ts";
 import { createGovernmentControl } from "../../bootstrap/government-control.ts";
 import { createBattleControl } from "../../bootstrap/battle-control.ts";
-import { createTaxAutomation } from "../../application/tax.ts";
 import { createUserscriptEnvironment } from "../userscript/environment.ts";
 import { createSmelterControl } from "../../bootstrap/smelter-control.ts";
-import {
-  createBrowserTaxControls,
-  createKeyModifierController,
-} from "../browser/tax-controls.ts";
-import { createTaxCommandExecutor } from "./civic/tax-command-executor.ts";
-import { createEvolveTaxReader } from "./civic/tax-reader.ts";
-import { createTaxSettingsReader } from "../storage/tax-settings-reader.ts";
-import { createStorageCommandExecutor } from "./economy/storage/storage-command-executor.ts";
-import { createEvolveStorageExpansionReader } from "./economy/storage/storage-expansion-reader.ts";
-import { createStorageExpansionSettingsReader } from "../storage/storage-expansion-settings-reader.ts";
+import { createTaxControl } from "../../bootstrap/tax-control.ts";
+import { createStorageExpansionControl } from "../../bootstrap/storage-expansion-control.ts";
 import { createAlchemyControl } from "../../bootstrap/alchemy-control.ts";
 import { createPylonControl } from "../../bootstrap/pylon-control.ts";
 import { createResourceRatioControls } from "../../bootstrap/resource-ratio-controls.ts";
@@ -298,12 +288,8 @@ import { createTriggerControl } from "../../bootstrap/trigger-control.ts";
 import { createConsumeControl } from "../../bootstrap/consume-control.ts";
 import { createReplicatorControl } from "../../bootstrap/replicator-control.ts";
 import { createMarketControl } from "../../bootstrap/market-control.ts";
-import { createPowerAutomation } from "../../application/power.ts";
-import { createPowerAdapter } from "./economy/production/power.ts";
-import { createPowerWarningSource } from "../browser/power-warnings.ts";
-import { createStorageAllocationAutomation } from "../../application/storage-allocation.ts";
-import { createStorageAllocationAdapter } from "./economy/storage/storage-allocation.ts";
-import { createStorageDebugSource } from "../browser/storage-debug.ts";
+import { createPowerControl } from "../../bootstrap/power-control.ts";
+import { createStorageAllocationControl } from "../../bootstrap/storage-allocation-control.ts";
 import { createGalaxyMarketControl } from "../../bootstrap/galaxy-market-control.ts";
 import { createGatherResourcesControl } from "../../bootstrap/gather-resources-control.ts";
 import { createCraftControl } from "../../bootstrap/craft-control.ts";
@@ -2309,24 +2295,20 @@ function startEvolveRuntimeComposition(
   function savePlannerStats(stats) {
     return plannerStatsLifecycle.save(stats);
   }
-  const storageClock = Object.freeze({ nowMs: () => browserClock.nowMs() });
-  const { expandStorage } = createStorageExpansion({
-    clock: storageClock,
-    createReader: (getStorageToBuild) =>
-      createEvolveStorageExpansionReader({
-        clock: storageClock,
-        getStorageToBuild,
-        getResources: () => resources,
-        getBuildings: () => buildings,
-        getStorageManager: () => StorageManager,
-        isEarlyGame: () => isEarlyGame(),
-        isLumberRace: () => isLumberRace(),
-      }),
-    settingsReader: createStorageExpansionSettingsReader(() => settings),
-    commandExecutor: createStorageCommandExecutor({
+  const { expandStorage } = createStorageExpansionControl({
+    nowMs: () => browserClock.nowMs(),
+    reader: {
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getStorageManager: () => StorageManager,
+      isEarlyGame: () => isEarlyGame(),
+      isLumberRace: () => isLumberRace(),
+    },
+    getSettings: () => settings,
+    commandExecutor: {
       getStorageManager: () => StorageManager,
       getResources: () => resources,
-    }),
+    },
   });
   function calculateRequiredStorages() {
     const result = planStorageRequirements(
@@ -3833,26 +3815,20 @@ function startEvolveRuntimeComposition(
     log: (message) => runtimeEnvironment.log(message),
   });
 
-  const taxClock = Object.freeze({ nowMs: () => browserClock.nowMs() });
-  const taxControls = createBrowserTaxControls(getVueById);
-  const { autoTax } = createTaxAutomation({
-    clock: taxClock,
-    gameReader: createEvolveTaxReader({
-      clock: taxClock,
-      controls: taxControls,
+  const { autoTax } = createTaxControl({
+    nowMs: () => browserClock.nowMs(),
+    getVueById,
+    gameReader: {
       getGame: () => game,
       getPoly: () => poly,
       getResources: () => resources,
-    }),
-    settingsReader: createTaxSettingsReader(() => settings),
-    commandExecutor: createTaxCommandExecutor({
-      controls: taxControls,
-      keyModifiers: createKeyModifierController(() =>
-        KeyManager.set(false, false, false),
-      ),
+    },
+    getSettings: () => settings,
+    commandExecutor: {
       getGame: () => game,
       getResources: () => resources,
-    }),
+      resetKeyModifiers: () => KeyManager.set(false, false, false),
+    },
   });
 
   publishTestSurface({
@@ -4394,42 +4370,37 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const powerWarnings = createPowerWarningSource(
-    () => runtimeEnvironment.window.document,
-    () => runtimeEnvironment.window,
-  );
-  const powerAdapter = createPowerAdapter({
-    getGame: () => game,
-    getSettings: () => settings,
-    getState: () => state,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getJobs: () => jobs,
-    getPoly: () => poly,
-    getBuildingManager: () => BuildingManager,
-    getFleetManager: () => FleetManager,
-    getMechManager: () => MechManager,
-    getWarManager: () => WarManager,
-    consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
-    isSupportResource: (value) => value instanceof Support,
-    readDebugEnabled: () => powerWarnings.readDebugEnabled(),
-    isHellSuppressionUseful: isHellSupressUseful,
-    getGalaxyRegions,
-    traitValue: traitVal,
-    getAuthorityGarrisonRequirement,
-    haveTech,
-    getHealingRate,
-    isHungryRace,
-    isPillarFinished,
-    getBuildingIds: () => buildingIds,
-    log: (message) => runtimeEnvironment.log(message),
+  const { autoPower } = createPowerControl({
+    warnings: {
+      getDocument: () => runtimeEnvironment.window.document,
+      getWindow: () => runtimeEnvironment.window,
+    },
+    adapter: {
+      getGame: () => game,
+      getSettings: () => settings,
+      getState: () => state,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      getJobs: () => jobs,
+      getPoly: () => poly,
+      getBuildingManager: () => BuildingManager,
+      getFleetManager: () => FleetManager,
+      getMechManager: () => MechManager,
+      getWarManager: () => WarManager,
+      consumptionBalanceMinimum: CONSUMPTION_BALANCE_MIN,
+      isSupportResource: (value) => value instanceof Support,
+      isHellSuppressionUseful: isHellSupressUseful,
+      getGalaxyRegions,
+      traitValue: traitVal,
+      getAuthorityGarrisonRequirement,
+      haveTech,
+      getHealingRate,
+      isHungryRace,
+      isPillarFinished,
+      getBuildingIds: () => buildingIds,
+      log: (message) => runtimeEnvironment.log(message),
+    },
   });
-  const powerAutomation = createPowerAutomation({
-    reader: powerAdapter.reader,
-    executor: powerAdapter.executor,
-    warnings: powerWarnings,
-  });
-  const autoPower = () => powerAutomation.run();
 
   publishTestSurface({
     powerSupport: {
@@ -4457,27 +4428,21 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const storageDebug = createStorageDebugSource(
-    () => runtimeEnvironment.window,
-  );
-  const storageAllocationAdapter = createStorageAllocationAdapter({
-    getStorageManager: () => StorageManager,
-    getGame: () => game,
-    getSettings: () => settings,
-    getState: () => state,
-    getResources: () => resources,
-    getBuildingManager: () => BuildingManager,
-    getProjectManager: () => ProjectManager,
-    getFleetManagerOuter: () => FleetManagerOuter,
-    readDebugEnabled: () => storageDebug.readEnabled(),
-    log: (message) => runtimeEnvironment.log(message),
+  const { autoStorage } = createStorageAllocationControl({
+    debug: { getWindow: () => runtimeEnvironment.window },
+    adapter: {
+      getStorageManager: () => StorageManager,
+      getGame: () => game,
+      getSettings: () => settings,
+      getState: () => state,
+      getResources: () => resources,
+      getBuildingManager: () => BuildingManager,
+      getProjectManager: () => ProjectManager,
+      getFleetManagerOuter: () => FleetManagerOuter,
+      log: (message) => runtimeEnvironment.log(message),
+    },
+    expand: expandStorage,
   });
-  const storageAllocationAutomation = createStorageAllocationAutomation({
-    reader: storageAllocationAdapter.reader,
-    executor: storageAllocationAdapter.executor,
-    expansion: { expand: expandStorage },
-  });
-  const autoStorage = () => storageAllocationAutomation.run();
 
   const { autoMinorTrait } = createMinorTraitControl({
     reader: {
