@@ -1504,6 +1504,7 @@ export function createEntityCatalogs({
       "interstellar",
       "zoo",
       "int_alpha",
+      { smart: true },
     ),
 
     ProximaMission: new Action(

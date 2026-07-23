@@ -111,6 +111,6 @@ assert.deepEqual(
 );
 assert.equal(
   catalogHash,
-  "ddbe26eed9c0dc4c1e751d225a82f37b889a0e17d1fd77fe867c88a7e215e313",
+  "f8883f1294c5f9939fae16dab6198905d20a312f200c35856491665f3901dd4b",
 );
 console.log("Entity catalogs bundled characterization tests passed");

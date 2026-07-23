@@ -32,6 +32,7 @@ export interface BusyWorkerInput {
 
 export type PowerBuildingRule =
   | { readonly kind: "ordinary" }
+  | { readonly kind: "exotic-zoo" }
   | {
       readonly kind: "neutron-citadel";
       readonly electromagneticField: boolean;
@@ -432,6 +433,13 @@ function applyBusyCap(
   };
 }
 
+/**
+ * Exotic Zoos are only kept powered while Food income comfortably exceeds
+ * their upkeep: each on-zoo requires this many multiples of its own Food
+ * consumption in available income before another is allowed on.
+ */
+const EXOTIC_ZOO_FOOD_MARGIN = 2;
+
 function applySmartRule(
   building: Readonly<PowerBuildingInput>,
   maximum: number,
@@ -568,6 +576,23 @@ function applySmartRule(
         );
       }
       break;
+    case "exotic-zoo": {
+      // `resources.Food.rate` here is income with all consumers backed out and
+      // higher-priority consumers already re-applied, so it is the Food income
+      // available to the zoos. Keep on only as many as that income covers with
+      // the configured margin over their per-zoo upkeep.
+      const food = resources.get("Food");
+      const perZoo =
+        building.consumptions.find((entry) => entry.resourceId === "Food")
+          ?.rate ?? 0;
+      if (food !== undefined && perZoo > 0) {
+        maximum = Math.min(
+          maximum,
+          Math.floor(food.rate / (perZoo * EXOTIC_ZOO_FOOD_MARGIN)),
+        );
+      }
+      break;
+    }
     case "chthonian-mine-layer":
       if (
         (rule.raiderOn === 0 && rule.excavatorOn === 0) ||

@@ -928,6 +928,11 @@ function readBuildingRule(
       ),
     });
   }
+  if (identity(buildings, "AlphaExoticZoo", building)) {
+    // Food income and per-zoo upkeep are read from the shared resources map and
+    // the building's own consumption list inside the domain rule.
+    return Object.freeze({ kind: "exotic-zoo" });
+  }
   return Object.freeze({ kind: "ordinary" });
 }
 

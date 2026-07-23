@@ -11601,7 +11601,8 @@
         "Alpha Exotic Zoo",
         "interstellar",
         "zoo",
-        "int_alpha"
+        "int_alpha",
+        { smart: true }
       ),
       ProximaMission: new Action(
         "Proxima Mission",
@@ -34930,6 +34931,9 @@
         )
       });
     }
+    if (identity(buildings, "AlphaExoticZoo", building3)) {
+      return Object.freeze({ kind: "exotic-zoo" });
+    }
     return Object.freeze({ kind: "ordinary" });
   }
   function readSpireBuilding(building3, path, register) {
@@ -35734,6 +35738,7 @@
       adjusted: next === current ? [] : [observation.resourceId]
     };
   }
+  var EXOTIC_ZOO_FOOD_MARGIN = 2;
   function applySmartRule(building3, maximum, current, savingPower, availablePower, resources) {
     const rule = building3.rule;
     if (savingPower) {
@@ -35829,6 +35834,17 @@
           );
         }
         break;
+      case "exotic-zoo": {
+        const food = resources.get("Food");
+        const perZoo = building3.consumptions.find((entry) => entry.resourceId === "Food")?.rate ?? 0;
+        if (food !== void 0 && perZoo > 0) {
+          maximum = Math.min(
+            maximum,
+            Math.floor(food.rate / (perZoo * EXOTIC_ZOO_FOOD_MARGIN))
+          );
+        }
+        break;
+      }
       case "chthonian-mine-layer":
         if (rule.raiderOn === 0 && rule.excavatorOn === 0 || rule.starbaseOn === 0) {
           maximum = 0;

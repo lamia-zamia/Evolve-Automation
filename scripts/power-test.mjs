@@ -956,6 +956,72 @@ for (const [
   assert.equal(adjustment.expectedStateOn + adjustment.amount, expected, name);
 }
 
+// Exotic Zoo smart rule: keep on only as many zoos as Food income covers with
+// the 2x margin over each zoo's upkeep. Gross income = rateOfChange backed out
+// by the on-zoos' consumption (fuelRate * stateOn).
+function zooPlan({ count, stateOn, foodRateOfChange, perZoo = 12000 }) {
+  const zoo = domainBuilding("ExoticZoo", {
+    count,
+    stateOn,
+    powered: 0,
+    autoMaximum: count,
+    smartCategory: true,
+    smartEnabled: true,
+    consumptions: Object.freeze([
+      Object.freeze({ resourceId: "Food", rate: perZoo, fuelRate: perZoo }),
+    ]),
+    rule: Object.freeze({ kind: "exotic-zoo" }),
+  });
+  return planPowerCycle(
+    domainCycle({
+      resources: Object.freeze([
+        domainResource("Power", { currentQuantity: 10, rateOfChange: 10 }),
+        domainResource("Food", {
+          currentQuantity: 100,
+          rateOfChange: foodRateOfChange,
+          storageRatio: 0.5,
+        }),
+      ]),
+      buildings: Object.freeze([zoo]),
+    }),
+    EMPTY_POWER_AUTOMATION_STATE,
+  );
+}
+
+// Gross income 48000 (12000 + 12000*3), 2x margin -> supports floor(48000/24000)
+// = 2 zoos, so one of the three on-zoos is switched off.
+const zooTight = zooPlan({ count: 5, stateOn: 3, foodRateOfChange: 12000 });
+const zooTightAdjust = zooTight.decision.operations.find(
+  (operation) => operation.kind === "adjust-building",
+);
+assert.equal(
+  zooTightAdjust.expectedStateOn + zooTightAdjust.amount,
+  2,
+  "exotic zoo capped to food margin",
+);
+
+// Gross income 200000 comfortably covers all five zoos (floor(200000/24000) = 8).
+const zooAmple = zooPlan({ count: 5, stateOn: 2, foodRateOfChange: 176000 });
+const zooAmpleAdjust = zooAmple.decision.operations.find(
+  (operation) => operation.kind === "adjust-building",
+);
+assert.equal(
+  zooAmpleAdjust.expectedStateOn + zooAmpleAdjust.amount,
+  5,
+  "exotic zoo powers up when food income is ample",
+);
+
+// Negative Food income switches every zoo off.
+const zooStarved = zooPlan({ count: 5, stateOn: 4, foodRateOfChange: -60000 });
+const zooStarvedAdjust = zooStarved.decision.operations.find(
+  (operation) => operation.kind === "adjust-building",
+);
+assert.equal(
+  zooStarvedAdjust.expectedStateOn + zooStarvedAdjust.amount,
+  0,
+  "exotic zoo powers down when food income is negative",
+);
+
 let oscillationState = Object.freeze({
   oscillations: Object.freeze({ "bind-Osc": Object.freeze({ previous: 2 }) }),
   warningCaps: Object.freeze({}),
