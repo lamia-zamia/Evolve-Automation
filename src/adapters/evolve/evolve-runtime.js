@@ -92,8 +92,12 @@ import { createSettingsStore } from "../storage/settings-store.ts";
 import { createStateLogStore } from "../storage/state-log-store.ts";
 import { createPlannerStatsLifecycle } from "../../application/planner-stats.ts";
 import { createBuildPlanner } from "../../planning/build-planner.ts";
-import { readStorageRequirementsInput } from "./economy/storage/storage-requirements.ts";
+import {
+  readStorageRequirementsInput,
+  readFuelDepotDemandInput,
+} from "./economy/storage/storage-requirements.ts";
 import { planStorageRequirements } from "../../domain/economy/storage/storage-requirements.ts";
+import { planFuelDepotDemand } from "../../domain/economy/storage/fuel-depot-demand.ts";
 import { readDemandPrioritizationInput } from "./economy/resources/demand-prioritization.ts";
 import { planDemandPrioritization } from "../../domain/economy/resources/demand-prioritization.ts";
 import { createPriorityTargets } from "../../planning/priority-targets.ts";
@@ -2331,6 +2335,15 @@ function startEvolveRuntimeComposition(
       const resource = resources[requirement.id];
       resource.maxCost = requirement.maxCost;
       resource.storageRequired = requirement.storageRequired;
+    }
+    const fuelDepotDemand = planFuelDepotDemand(
+      readFuelDepotDemandInput({ getState: () => state }),
+    );
+    for (const [resourceId, maxCost] of fuelDepotDemand) {
+      const resource = resources[resourceId];
+      if (resource !== undefined) {
+        resource.techMissionMaxCost = maxCost;
+      }
     }
     state.knowledgeRequiredByTechs = result.knowledge.knowledgeRequiredByTechs;
     state.cheapestTechKnowledge = result.knowledge.cheapestTechKnowledge;

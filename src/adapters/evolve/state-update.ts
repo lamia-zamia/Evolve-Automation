@@ -109,6 +109,7 @@ export interface StateUpdateControlsState {
 
 export interface ResourceAccumulator {
   maxCost: number;
+  techMissionMaxCost: number;
   storageRequired: number;
   requestedQuantity: number;
 }
@@ -170,6 +171,7 @@ export function createStateUpdateControls(
     resetResourceAccumulators(): void {
       for (const resource of Object.values(dependencies.getResources())) {
         resource.maxCost = 0;
+        resource.techMissionMaxCost = 0;
         resource.storageRequired = 1;
         resource.requestedQuantity = 0;
       }

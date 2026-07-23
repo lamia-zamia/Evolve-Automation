@@ -1083,7 +1083,8 @@ export function createBuildingWeightingPolicy({
     ],
     [
       () =>
-        getResources().Oil.maxQuantity < getResources().Oil.maxCost &&
+        getResources().Oil.maxQuantity <
+          getResources().Oil.techMissionMaxCost &&
         getBuildings().OilWell.count <= 0 &&
         getBuildings().GasMoonOilExtractor.count <= 0,
       (building: any) =>
@@ -1096,8 +1097,8 @@ export function createBuildingWeightingPolicy({
       () =>
         (getResources().Helium_3.isUnlocked() &&
           getResources().Helium_3.maxQuantity <
-            getResources().Helium_3.maxCost) ||
-        getResources().Oil.maxQuantity < getResources().Oil.maxCost,
+            getResources().Helium_3.techMissionMaxCost) ||
+        getResources().Oil.maxQuantity < getResources().Oil.techMissionMaxCost,
       (building: any) =>
         building === getBuildings().OilDepot ||
         building === getBuildings().SpacePropellantDepot ||

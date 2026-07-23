@@ -79,6 +79,7 @@ resources = {
 };
 const state = {
   unlockedTechs: [tech100, tech50],
+  missionBuildingList: [],
   queuedTargetsAll: [queuedKnowledge, queuedIron],
   triggerTargets: [triggerKnowledge],
   knowledgeRequiredByTechs: 0,

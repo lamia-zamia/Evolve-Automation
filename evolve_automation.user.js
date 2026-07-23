@@ -7015,6 +7015,7 @@
         this.tradeRoutes = 0;
         this.incomeAdusted = false;
         this.maxCost = 0;
+        this.techMissionMaxCost = 0;
         this.storageRequired = 1;
         this.requestedQuantity = 0;
         this.cost = {};
@@ -14540,6 +14541,25 @@
       ) : null
     });
   }
+  function readFuelDepotDemandInput(dependencies) {
+    const state = requireRecord(dependencies.getState(), "state");
+    const unlockedTechs = targetList(
+      state["unlockedTechs"],
+      "state.unlockedTechs"
+    );
+    const missions = targetList(
+      state["missionBuildingList"],
+      "state.missionBuildingList"
+    ).filter(
+      (mission) => optionalPredicate(mission, "isUnlocked") && Boolean(mission["autoBuildEnabled"]) && !optionalPredicate(mission, "isComplete")
+    );
+    return Object.freeze({
+      targets: Object.freeze([
+        ...costTargets(unlockedTechs),
+        ...costTargets(missions)
+      ])
+    });
+  }
 
   // src/domain/knowledge-requirements.ts
   function reserveBuildCost(costs, target) {
@@ -14652,6 +14672,20 @@
       resources: Object.freeze(resources),
       knowledge: calculateKnowledgeRequirements(input.knowledge)
     });
+  }
+
+  // src/domain/economy/storage/fuel-depot-demand.ts
+  function planFuelDepotDemand(input) {
+    const maxCost = /* @__PURE__ */ new Map();
+    for (const target of input.targets) {
+      for (const cost of target.costs) {
+        const previous = maxCost.get(cost.resourceId) ?? 0;
+        if (cost.amount > previous) {
+          maxCost.set(cost.resourceId, cost.amount);
+        }
+      }
+    }
+    return maxCost;
   }
 
   // src/adapters/evolve/economy/resources/demand-prioritization.ts
@@ -21520,6 +21554,7 @@
       resetResourceAccumulators() {
         for (const resource2 of Object.values(dependencies.getResources())) {
           resource2.maxCost = 0;
+          resource2.techMissionMaxCost = 0;
           resource2.storageRequired = 1;
           resource2.requestedQuantity = 0;
         }
@@ -24008,13 +24043,13 @@
         () => getSettings().buildingWeightingCrateUseless
       ],
       [
-        () => getResources().Oil.maxQuantity < getResources().Oil.maxCost && getBuildings().OilWell.count <= 0 && getBuildings().GasMoonOilExtractor.count <= 0,
+        () => getResources().Oil.maxQuantity < getResources().Oil.techMissionMaxCost && getBuildings().OilWell.count <= 0 && getBuildings().GasMoonOilExtractor.count <= 0,
         (building3) => building3 === getBuildings().OilWell || building3 === getBuildings().GasMoonOilExtractor,
         () => "Need more fuel",
         () => getSettings().buildingWeightingMissingFuel
       ],
       [
-        () => getResources().Helium_3.isUnlocked() && getResources().Helium_3.maxQuantity < getResources().Helium_3.maxCost || getResources().Oil.maxQuantity < getResources().Oil.maxCost,
+        () => getResources().Helium_3.isUnlocked() && getResources().Helium_3.maxQuantity < getResources().Helium_3.techMissionMaxCost || getResources().Oil.maxQuantity < getResources().Oil.techMissionMaxCost,
         (building3) => building3 === getBuildings().OilDepot || building3 === getBuildings().SpacePropellantDepot || building3 === getBuildings().GasStorage,
         () => "Need more fuel",
         () => getSettings().buildingWeightingMissingFuel
@@ -54212,6 +54247,15 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         const resource2 = resources[requirement.id];
         resource2.maxCost = requirement.maxCost;
         resource2.storageRequired = requirement.storageRequired;
+      }
+      const fuelDepotDemand = planFuelDepotDemand(
+        readFuelDepotDemandInput({ getState: () => state })
+      );
+      for (const [resourceId3, maxCost] of fuelDepotDemand) {
+        const resource2 = resources[resourceId3];
+        if (resource2 !== void 0) {
+          resource2.techMissionMaxCost = maxCost;
+        }
       }
       state.knowledgeRequiredByTechs = result2.knowledge.knowledgeRequiredByTechs;
       state.cheapestTechKnowledge = result2.knowledge.cheapestTechKnowledge;

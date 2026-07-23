@@ -189,4 +189,39 @@ assert.equal(piracyRule[policy.wrGlobalCondition](), true);
 haveTech = () => false;
 assert.equal(piracyRule[policy.wrGlobalCondition](), false);
 
+// Fuel-depot rule triggers on techMissionMaxCost, not the broad maxCost. A high
+// maxCost from late-game buildings/projects with no tech/mission demand must not fire it.
+const fuelDepotRule = policy.weightingRules.find((rule) => {
+  try {
+    return (
+      rule[policy.wrDescription]() === "Need more fuel" &&
+      rule[policy.wrIndividualCondition](buildings.OilDepot) === true
+    );
+  } catch {
+    return false;
+  }
+});
+context = {
+  ...context,
+  resources: {
+    Helium_3: {
+      isUnlocked: () => false,
+      maxQuantity: 0,
+      techMissionMaxCost: 0,
+    },
+    Oil: { maxQuantity: 100, maxCost: 999999, techMissionMaxCost: 0 },
+  },
+};
+assert.equal(fuelDepotRule[policy.wrGlobalCondition](), false);
+context.resources.Oil.techMissionMaxCost = 500;
+assert.equal(fuelDepotRule[policy.wrGlobalCondition](), true);
+assert.equal(
+  fuelDepotRule[policy.wrIndividualCondition](buildings.SpacePropellantDepot),
+  true,
+);
+assert.equal(
+  fuelDepotRule[policy.wrIndividualCondition](buildings.Mine),
+  false,
+);
+
 console.log("Weighting policy module tests passed");

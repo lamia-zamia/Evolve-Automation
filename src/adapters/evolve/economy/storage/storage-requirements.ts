@@ -5,6 +5,7 @@ import type {
   StorageRequirementsInput,
   StorageResourceState,
 } from "../../../../domain/economy/storage/storage-requirements.ts";
+import type { FuelDepotDemandInput } from "../../../../domain/economy/storage/fuel-depot-demand.ts";
 import {
   requireBoolean,
   requireFunction,
@@ -274,5 +275,40 @@ export function readStorageRequirementsInput(
           "retirement graphene",
         )
       : null,
+  });
+}
+
+export interface FuelDepotDemandReaderDependencies {
+  readonly getState: () => unknown;
+}
+
+/**
+ * Techs and missions whose costs drive the fuel-depot weighting. Techs are every
+ * currently-researchable tech (`state.unlockedTechs`, which empties once research is done);
+ * missions are `state.missionBuildingList` entries still pending — unlocked, autobuild-enabled,
+ * and not complete — matching how demand prioritization treats active missions.
+ */
+export function readFuelDepotDemandInput(
+  dependencies: FuelDepotDemandReaderDependencies,
+): FuelDepotDemandInput {
+  const state = requireRecord(dependencies.getState(), "state");
+  const unlockedTechs = targetList(
+    state["unlockedTechs"],
+    "state.unlockedTechs",
+  );
+  const missions = targetList(
+    state["missionBuildingList"],
+    "state.missionBuildingList",
+  ).filter(
+    (mission) =>
+      optionalPredicate(mission, "isUnlocked") &&
+      Boolean(mission["autoBuildEnabled"]) &&
+      !optionalPredicate(mission, "isComplete"),
+  );
+  return Object.freeze({
+    targets: Object.freeze([
+      ...costTargets(unlockedTechs),
+      ...costTargets(missions),
+    ]),
   });
 }

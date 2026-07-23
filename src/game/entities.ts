@@ -406,6 +406,7 @@ export function createEntityClasses({
       this.incomeAdusted = false;
 
       this.maxCost = 0;
+      this.techMissionMaxCost = 0;
       this.storageRequired = 1;
       this.requestedQuantity = 0;
       this.cost = {};
