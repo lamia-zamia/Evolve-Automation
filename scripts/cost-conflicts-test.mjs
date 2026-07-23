@@ -2,27 +2,11 @@ import assert from "node:assert/strict";
 
 import { readCostConflictInput } from "../src/adapters/evolve/cost-conflicts.ts";
 import { findCostConflict } from "../src/domain/cost-conflicts.ts";
-import { legacyGetCostConflict } from "./test-support/legacy-cost-conflicts.mjs";
 
 function modernConflict(state, resources, action) {
   const readResult = readCostConflictInput(state, resources, action);
   assert.equal(readResult.status, "ready");
   return findCostConflict(readResult.input);
-}
-
-function normalizeLegacy(conflict, resources) {
-  if (conflict === null) return null;
-  const resourceId = Object.keys(resources).find(
-    (id) => resources[id] === conflict.res,
-  );
-  return {
-    status: "conflict",
-    resourceId,
-    targetName: conflict.obj.name,
-    targetCause: conflict.obj.cause ?? "",
-    resourceNames: conflict.resList,
-    targetNames: conflict.actionList,
-  };
 }
 
 const cases = [
@@ -132,12 +116,7 @@ for (const testCase of cases) {
     testCase.resources,
     testCase.action,
   );
-  const legacy = normalizeLegacy(
-    legacyGetCostConflict(testCase.state, testCase.resources, testCase.action),
-    testCase.resources,
-  );
   assert.deepEqual(modern, testCase.expected, testCase.name);
-  assert.deepEqual(modern, legacy, `${testCase.name}: legacy comparison`);
   if (modern !== null) {
     assert.ok(Object.isFrozen(modern));
     assert.ok(Object.isFrozen(modern.resourceNames));

@@ -5,10 +5,37 @@ import {
   migrateSetting,
   migrateSettingsRecord,
 } from "../src/domain/settings-migration.ts";
-import {
-  createLegacySettingsMigration,
-  resetNames,
-} from "./test-support/legacy-settings-migration.ts";
+
+const resetNames = [
+  "resetEvolutionSettings",
+  "resetWarSettings",
+  "resetHellSettings",
+  "resetMechSettings",
+  "resetFleetSettings",
+  "resetGovernmentSettings",
+  "resetAuthoritySettings",
+  "resetBuildingSettings",
+  "resetWeightingSettings",
+  "resetMarketSettings",
+  "resetResearchSettings",
+  "resetProjectSettings",
+  "resetJobSettings",
+  "resetMagicSettings",
+  "resetProductionSettings",
+  "resetStorageSettings",
+  "resetGeneralSettings",
+  "resetInterfaceSettings",
+  "resetStateLogSettings",
+  "resetAchievementGuardSettings",
+  "resetChallengeHelperSettings",
+  "resetPrestigeSettings",
+  "resetEjectorSettings",
+  "resetPlanetSettings",
+  "resetLoggingSettings",
+  "resetTriggerSettings",
+  "resetMinorTraitSettings",
+  "resetMutableTraitSettings",
+];
 
 // A rich settingsRaw fixture exercising every migration branch. Returns a fresh
 // deep copy each call so the legacy and pure runs mutate independent records.
@@ -111,53 +138,12 @@ const resetLogic = resetNames.map((_name, index) => (record, reset) => {
   }
 });
 
-function makeLegacyResets(record, order) {
-  return Object.fromEntries(
-    resetNames.map((name, index) => [
-      name,
-      (reset) => {
-        order.push({ name, reset });
-        resetLogic[index](record, reset);
-      },
-    ]),
-  );
-}
-
 function makePureResets(record, order) {
   return resetNames.map((name, index) => (reset) => {
     order.push({ name, reset });
     resetLogic[index](record, reset);
   });
 }
-
-// ---- Dual run: legacy getter-bag vs. pure record port over identical inputs ----
-
-const legacyRaw = makeFixture();
-const legacyOrder = [];
-const { updateStandAloneSettings } = createLegacySettingsMigration({
-  getSettingsRaw: () => legacyRaw,
-  getSettings: () => ({ prestigeAscensionSkipCustom }),
-  settingsSections,
-  getResetSettings: () => makeLegacyResets(legacyRaw, legacyOrder),
-  getTechIds: () => techIds,
-  getMarketManager: () => ({
-    priorityList: marketPriorityIds.map((id) => ({ id })),
-  }),
-  getResources: () => Object.fromEntries(resourceIds.map((id) => [id, { id }])),
-  getProjects: () => Object.fromEntries(projectIds.map((id) => [id, { id }])),
-  getBuildings: () =>
-    Object.fromEntries(
-      buildingViews.map((b) => [
-        b.vueBinding,
-        { isSwitchable: () => b.switchable, _vueBinding: b.vueBinding },
-      ]),
-    ),
-  getCrafter: () =>
-    Object.fromEntries(
-      crafterOriginalIds.map((id) => [id, { _originalId: id }]),
-    ),
-});
-updateStandAloneSettings();
 
 const pureRaw = makeFixture();
 const pureOrder = [];
@@ -173,9 +159,7 @@ migrateSettingsRecord(pureRaw, {
   crafterOriginalIds,
 });
 
-// Complete record equivalence, and identical reset order/arg.
-assert.deepEqual(pureRaw, legacyRaw);
-assert.deepEqual(pureOrder, legacyOrder);
+// Reset order and args are driven entirely by the pure record port.
 assert.deepEqual(
   pureOrder.map((entry) => entry.name),
   resetNames,

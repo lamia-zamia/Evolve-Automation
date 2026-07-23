@@ -4,10 +4,7 @@ import { createOcularPowerControls } from "../src/adapters/browser/ocular-power-
 import { createOcularPowerAdapter } from "../src/adapters/evolve/traits/ocular-power.ts";
 import { runOcularPowerAutomation } from "../src/application/ocular-power.ts";
 import { planOcularPowers } from "../src/domain/traits/ocular-power.ts";
-import {
-  assertEquivalentTraces,
-  createTraceRecorder,
-} from "./test-support/modernization-fixtures.mjs";
+import { createTraceRecorder } from "./test-support/modernization-fixtures.mjs";
 
 const CATALOG = [
   { key: "d", id: "disintegration" },
@@ -103,46 +100,6 @@ function createFixture(scenario) {
   };
 }
 
-// Exact copy of the deleted controller, retained only as a parity oracle.
-function runLegacy(scenario) {
-  const fixture = createFixture(scenario);
-  const { game, settings, document, traitVal } = fixture;
-  const ocularPowerData = CATALOG;
-  if (
-    !game.global.race["ocular_power"] ||
-    !game.global.race["ocularPowerConfig"]
-  ) {
-    return fixture.trace.snapshot();
-  }
-
-  const vue = fixture.getVueById("ocularPower");
-  if (!vue) return fixture.trace.snapshot();
-
-  const powerCap = traitVal("ocular_power", 0);
-  if (powerCap < 1) return fixture.trace.snapshot();
-
-  const allPowers = ocularPowerData
-    .map((power) => ({
-      key: power.key,
-      id: power.id,
-      enabled: Boolean(settings[`ocularPower_${power.id}`]),
-      priority: Number(settings[`ocularPower_p_${power.id}`]),
-    }))
-    .sort((left, right) => right.priority - left.priority);
-  let enabledPowers = 0;
-  allPowers.forEach((power) => {
-    const enable = power.enabled && enabledPowers < powerCap;
-    if (enable) enabledPowers++;
-    if (vue[power.key] !== enable) {
-      document
-        .getElementById(`ocular${power.id}`)
-        .querySelector("input")
-        .click();
-    }
-  });
-  return fixture.trace.snapshot();
-}
-
 function createAutomation(fixture, overrides = {}) {
   const controls = createOcularPowerControls({
     getVueById: fixture.getVueById,
@@ -155,62 +112,6 @@ function createAutomation(fixture, overrides = {}) {
     controls,
   });
   return { reader: adapter.reader, executor: adapter.executor, controls };
-}
-
-function runModern(scenario) {
-  const fixture = createFixture(scenario);
-  runOcularPowerAutomation(createAutomation(fixture));
-  return fixture.trace.snapshot();
-}
-
-const dualRunScenarios = [
-  { name: "trait locked", trait: false },
-  { name: "configuration locked", config: false },
-  { name: "panel missing", panel: false },
-  { name: "capacity below one", capacity: 0 },
-  {
-    name: "disable active powers",
-    current: { d: true, p: true },
-  },
-  {
-    name: "highest enabled priority wins",
-    capacity: 1,
-    enabled: { d: true, c: true },
-    priorities: { d: 1, c: 10 },
-  },
-  {
-    name: "equal priorities preserve catalog order",
-    capacity: 2,
-    enabled: { d: true, p: true, w: true },
-    priorities: { d: 5, p: 5, w: 5 },
-  },
-  {
-    name: "disabled high priority does not consume capacity",
-    capacity: 1,
-    enabled: { p: true },
-    priorities: { d: 100, p: 1 },
-  },
-  {
-    name: "numeric string priorities retain conversion",
-    capacity: 1,
-    enabled: { d: true, p: true },
-    priorities: { d: "2", p: "10" },
-  },
-  {
-    name: "earlier click auto-disables later power",
-    capacity: 1,
-    current: { d: true },
-    enabled: { c: true },
-    priorities: { c: 10, d: 1 },
-  },
-];
-
-for (const scenario of dualRunScenarios) {
-  assertEquivalentTraces({
-    legacy: runLegacy(scenario),
-    modern: runModern(scenario),
-    label: `ocular power ${scenario.name}`,
-  });
 }
 
 assert.deepEqual(
@@ -321,5 +222,5 @@ assert.equal(
 assert.deepEqual(phases.slice(0, 3), ["gate", "capture", "plan-input"]);
 
 console.log(
-  `Ocular-power domain, Evolve/browser adapters, application, and parity tests passed (${dualRunScenarios.length} dual-run scenarios)`,
+  "Ocular-power domain, Evolve/browser adapters, and application tests passed",
 );

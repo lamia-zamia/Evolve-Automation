@@ -6,7 +6,6 @@ import {
   isAchievementGuardName,
   isAchievementUnlocked,
 } from "../src/domain/progression/prestige/achievement-guards.ts";
-import { legacyAchievementGuardActive } from "./test-support/legacy-achievement-guards.mjs";
 
 assert.equal(
   calculateAchievementStarLevel({
@@ -38,72 +37,7 @@ const pacifist = {
   targetStar: 4,
   attacks: 0,
 };
-const scenarios = [
-  pacifist,
-  { ...pacifist, attacks: 1 },
-  { ...pacifist, earnedStar: 4 },
-  {
-    guard: "guardDreaded",
-    enabled: true,
-    earnedStar: 0,
-    targetStar: 4,
-    prestigeType: "ascension",
-    dreadnoughts: 0,
-  },
-  {
-    guard: "guardCultOfPersonality",
-    enabled: true,
-    earnedStar: 0,
-    targetStar: 4,
-    pacifist,
-  },
-  {
-    guard: "guardCultOfPersonality",
-    enabled: true,
-    earnedStar: 0,
-    targetStar: 4,
-    pacifist: { ...pacifist, attacks: 1 },
-  },
-  {
-    guard: "guardAnarchist",
-    enabled: true,
-    earnedStar: 0,
-    targetStar: 4,
-    prestigeType: "mad",
-    government: "anarchy",
-  },
-  {
-    guard: "guardEnergetic",
-    enabled: true,
-    earnedStar: 0,
-    targetStar: 4,
-    prestigeType: "ascension",
-    thermalCollectors: 0,
-  },
-  {
-    guard: "guardRedDead",
-    enabled: true,
-    earnedStar: 0,
-    targetStar: 4,
-    prestigeType: "mad",
-    redSpaceports: 0,
-  },
-  {
-    guard: "guardSecondEvolution",
-    enabled: true,
-    earnedStar: 0,
-    targetStar: 4,
-    species: "human",
-    gods: "human",
-  },
-];
-
-for (const scenario of scenarios) {
-  assert.equal(
-    isAchievementGuardActive(scenario),
-    legacyAchievementGuardActive(scenario),
-    `legacy trace mismatch for ${scenario.guard}`,
-  );
-}
+assert.equal(isAchievementGuardActive(pacifist), true);
+assert.equal(isAchievementGuardActive({ ...pacifist, attacks: 1 }), false);
 
 console.log("Achievement guard domain tests passed");

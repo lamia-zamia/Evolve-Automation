@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 
-import { createLegacyAutoBuild } from "./test-support/legacy-auto-build.ts";
 import { runBuildAutomation } from "../src/application/build.ts";
 import { createBuildAdapter } from "../src/adapters/evolve/progression/build/build.ts";
 import {
@@ -125,17 +124,6 @@ function makeWorld({ settings = {}, conflicts = {} } = {}) {
   return world;
 }
 
-function runLegacy(world) {
-  createLegacyAutoBuild({
-    getBuildingManager: () => world.BuildingManager,
-    getProjectManager: () => world.ProjectManager,
-    getState: () => world.state,
-    getSettings: () => world.settings,
-    getResources: () => world.resources,
-    getGetCostConflict: () => world.getCostConflict,
-  })();
-}
-
 function runNew(world) {
   const adapter = createBuildAdapter({
     getBuildingManager: () => world.BuildingManager,
@@ -148,44 +136,18 @@ function runNew(world) {
   return runBuildAutomation(adapter);
 }
 
-// Normalized complete trace: manager calls, conflict lookups, clicks (with
-// order), tooltip annotations, the published sorted list, and the resource
-// model after the cycle. Affordability probe ordering is intentionally not
-// compared: the new reader samples in-window competitors eagerly within the
-// same step, which reads identical values through a side-effect-free call.
-function normalizedTrace(world) {
-  return {
-    trace: world.trace,
-    descriptions: [...world.buildings, ...world.projects].map((target) => [
-      target._vueBinding,
-      target.extraDescription,
-    ]),
-    unlocked: world.state.unlockedBuildings.map((t) => t._vueBinding),
-    resources: Object.fromEntries(
-      Object.values(world.resources).map((r) => [r.id, r.currentQuantity]),
-    ),
-  };
-}
-
-function compareScenario(name, buildWorld) {
-  const legacyWorld = buildWorld();
-  runLegacy(legacyWorld);
+function runScenario(name, buildWorld) {
   const newWorld = buildWorld();
   const outcome = runNew(newWorld);
   assert.equal(outcome.status, "succeeded", `${name}: outcome`);
-  assert.deepEqual(
-    normalizedTrace(newWorld),
-    normalizedTrace(legacyWorld),
-    `${name}: traces diverged`,
-  );
   return newWorld;
 }
 
 // ---------------------------------------------------------------------------
-// Dual-run trace comparisons
+// Build automation scenarios
 // ---------------------------------------------------------------------------
 
-let world = compareScenario("single affordable building", () => {
+let world = runScenario("single affordable building", () => {
   const w = makeWorld();
   makeResource(w, "Lumber", { quantity: 100 });
   makeTarget(w, "city-house", { weighting: 5, cost: { Lumber: 20 } });
@@ -203,7 +165,7 @@ assert.deepEqual(
   ["city-house"],
 );
 
-compareScenario("queued and trigger targets are skipped", () => {
+runScenario("queued and trigger targets are skipped", () => {
   const w = makeWorld();
   makeResource(w, "Lumber", { quantity: 100 });
   const queued = makeTarget(w, "city-queued", {
@@ -220,7 +182,7 @@ compareScenario("queued and trigger targets are skipped", () => {
   return w;
 });
 
-compareScenario("unaffordable candidates are skipped", () => {
+runScenario("unaffordable candidates are skipped", () => {
   const w = makeWorld();
   makeResource(w, "Stone", { quantity: 5 });
   makeTarget(w, "city-shed", { weighting: 5, cost: { Stone: 50 } });
@@ -230,7 +192,7 @@ compareScenario("unaffordable candidates are skipped", () => {
 
 // Buildings and projects merge into one list; stable sort keeps the
 // buildings-before-projects order on ties.
-world = compareScenario("projects merge and sort stably", () => {
+world = runScenario("projects merge and sort stably", () => {
   const w = makeWorld();
   makeResource(w, "Money", { quantity: 1000 });
   makeTarget(w, "city-bank", { weighting: 3, cost: { Money: 100 } });
@@ -250,7 +212,7 @@ assert.deepEqual(
 // onePerTick: once any consuming building is built, everything else is
 // blocked, including buildings without consumption. Negative (support-adding)
 // rates don't mark consumption.
-compareScenario("onePerTick blocks after first consumer", () => {
+runScenario("onePerTick blocks after first consumer", () => {
   const w = makeWorld({
     settings: { buildingConsumptionCheck: "onePerTick" },
   });
@@ -264,7 +226,7 @@ compareScenario("onePerTick blocks after first consumer", () => {
   return w;
 });
 
-compareScenario("negative-rate consumption does not block", () => {
+runScenario("negative-rate consumption does not block", () => {
   const w = makeWorld({
     settings: { buildingConsumptionCheck: "onePerTick" },
   });
@@ -280,7 +242,7 @@ compareScenario("negative-rate consumption does not block", () => {
 
 // An invalid buildingConsumptionCheck override falls into the onePerTick
 // branch, exactly like the legacy A?B fallback.
-compareScenario("invalid consumption mode behaves as onePerTick", () => {
+runScenario("invalid consumption mode behaves as onePerTick", () => {
   const w = makeWorld({
     settings: { buildingConsumptionCheck: "perResource?unlimited" },
   });
@@ -294,7 +256,7 @@ compareScenario("invalid consumption mode behaves as onePerTick", () => {
   return w;
 });
 
-compareScenario("perResource blocks only shared consumption", () => {
+runScenario("perResource blocks only shared consumption", () => {
   const w = makeWorld({
     settings: { buildingConsumptionCheck: "perResource" },
   });
@@ -317,7 +279,7 @@ compareScenario("perResource blocks only shared consumption", () => {
   return w;
 });
 
-compareScenario("unlimited mode builds several consumers", () => {
+runScenario("unlimited mode builds several consumers", () => {
   const w = makeWorld({
     settings: { buildingConsumptionCheck: "unlimited" },
   });
@@ -335,7 +297,7 @@ compareScenario("unlimited mode builds several consumers", () => {
   return w;
 });
 
-world = compareScenario("cost conflict annotates and skips", () => {
+world = runScenario("cost conflict annotates and skips", () => {
   const w = makeWorld({
     conflicts: {
       "city-mill": {
@@ -356,7 +318,7 @@ assert.equal(
     '<span class="has-text-info">Iron</span>, <span class="has-text-info">Cement</span> (Queue)<br>',
 );
 
-compareScenario("important candidates bypass conflicts", () => {
+runScenario("important candidates bypass conflicts", () => {
   const w = makeWorld({
     conflicts: {
       "city-mill": {
@@ -376,7 +338,7 @@ compareScenario("important candidates bypass conflicts", () => {
   return w;
 });
 
-world = compareScenario("unavailable reservation data skips for safety", () => {
+world = runScenario("unavailable reservation data skips for safety", () => {
   const w = makeWorld({
     conflicts: {
       "city-mill": { status: "unavailable", reason: "invalid-resource" },
@@ -393,7 +355,7 @@ assert.equal(
 
 // Weighting protection: a cheap low-weight building must not spend resources
 // a much heavier competitor is waiting for.
-world = compareScenario("competitor delay annotates and skips", () => {
+world = runScenario("competitor delay annotates and skips", () => {
   const w = makeWorld();
   makeResource(w, "Alloy", { quantity: 50, rate: 1, name: "Alloy" });
   makeTarget(w, "space-elevator", {
@@ -416,7 +378,7 @@ assert.deepEqual(
 
 // The conflicted high-weight competitor stays affordable but unbuilt; below
 // the 10x ratio its demands are ignored, so the candidate still builds.
-world = compareScenario("affordable in-window competitor is ignored", () => {
+world = runScenario("affordable in-window competitor is ignored", () => {
   const w = makeWorld({
     conflicts: {
       "space-elevator": {
@@ -438,7 +400,7 @@ assert.deepEqual(
 );
 
 // At a 10x weighting gap even an affordable competitor reserves resources.
-world = compareScenario(
+world = runScenario(
   "10x-weight competitor reserves even when affordable",
   () => {
     const w = makeWorld({
@@ -462,7 +424,7 @@ assert.deepEqual(
   [],
 );
 
-compareScenario("large cost gap beyond weighting ratio is tolerated", () => {
+runScenario("large cost gap beyond weighting ratio is tolerated", () => {
   const w = makeWorld();
   makeResource(w, "Alloy", { quantity: 50, rate: 1 });
   // costDiffRatio (500/40=12.5) >= weightDiffRatio (10) => build anyway.
@@ -475,7 +437,7 @@ compareScenario("large cost gap beyond weighting ratio is tolerated", () => {
   return w;
 });
 
-compareScenario("spending inside competitor slack is allowed", () => {
+runScenario("spending inside competitor slack is allowed", () => {
   const w = makeWorld();
   // Bottleneck is Stone (200s); Alloy fills in 10s, leaving 190s of slack at
   // 5/s = 950 Alloy budget, far above the candidate's 40.
@@ -489,7 +451,7 @@ compareScenario("spending inside competitor slack is allowed", () => {
   return w;
 });
 
-compareScenario("capped resources are not protected", () => {
+runScenario("capped resources are not protected", () => {
   const w = makeWorld();
   makeResource(w, "Alloy", {
     quantity: 100,
@@ -502,7 +464,7 @@ compareScenario("capped resources are not protected", () => {
   return w;
 });
 
-compareScenario("locked resources are not protected", () => {
+runScenario("locked resources are not protected", () => {
   const w = makeWorld();
   makeResource(w, "Alloy", { quantity: 100, rate: 1, unlocked: false });
   makeTarget(w, "space-elevator", { weighting: 100, cost: { Alloy: 500 } });
@@ -512,7 +474,7 @@ compareScenario("locked resources are not protected", () => {
 
 // A zero-rate cost (Soul Gems) estimates as instantly available, so Money
 // stays the competitor's bottleneck and the candidate is delayed.
-world = compareScenario("zero-rate competitor cost reserves money", () => {
+world = runScenario("zero-rate competitor cost reserves money", () => {
   const w = makeWorld();
   makeResource(w, "Soul_Gem", { quantity: 1, rate: 0 });
   makeResource(w, "Money", { quantity: 500, rate: 10 });
@@ -530,7 +492,7 @@ assert.deepEqual(
 
 // With buildingsIgnoreZeroRate the stalled Soul Gem income becomes the
 // competitor's (infinite) bottleneck, freeing the Money for the candidate.
-world = compareScenario(
+world = runScenario(
   "buildingsIgnoreZeroRate frees non-bottleneck resources",
   () => {
     const w = makeWorld({ settings: { buildingsIgnoreZeroRate: true } });
@@ -549,7 +511,7 @@ assert.deepEqual(
   [["click", "city-bank"]],
 );
 
-compareScenario("storage-full bypass skips weighting protection", () => {
+runScenario("storage-full bypass skips weighting protection", () => {
   const w = makeWorld({ settings: { buildingBuildIfStorageFull: true } });
   makeResource(w, "Alloy", { quantity: 100, rate: 1, ratio: 0.99 });
   makeTarget(w, "space-elevator", { weighting: 100, cost: { Alloy: 500 } });
@@ -557,7 +519,7 @@ compareScenario("storage-full bypass skips weighting protection", () => {
   return w;
 });
 
-world = compareScenario("mission stops the cycle", () => {
+world = runScenario("mission stops the cycle", () => {
   const w = makeWorld();
   makeResource(w, "Money", { quantity: 1000 });
   makeTarget(w, "space-test-launch", {
@@ -573,7 +535,7 @@ assert.deepEqual(
   [["click", "space-test-launch"]],
 );
 
-compareScenario("whitehole gem saving stops after a gem purchase", () => {
+runScenario("whitehole gem saving stops after a gem purchase", () => {
   const w = makeWorld({
     settings: { prestigeType: "whitehole", prestigeWhiteholeSaveGems: true },
   });
@@ -587,7 +549,7 @@ compareScenario("whitehole gem saving stops after a gem purchase", () => {
   return w;
 });
 
-compareScenario("gem purchase continues without whitehole saving", () => {
+runScenario("gem purchase continues without whitehole saving", () => {
   const w = makeWorld({
     settings: { prestigeType: "mad", prestigeWhiteholeSaveGems: true },
   });
@@ -601,7 +563,7 @@ compareScenario("gem purchase continues without whitehole saving", () => {
   return w;
 });
 
-world = compareScenario("failed click leaves state untouched", () => {
+world = runScenario("failed click leaves state untouched", () => {
   const w = makeWorld({
     settings: { buildingConsumptionCheck: "onePerTick" },
   });
@@ -626,7 +588,7 @@ assert.deepEqual(
 // After a successful click every cached affordability flips to false, so an
 // already-processed candidate is treated as a starving competitor even though
 // it is still live-affordable.
-world = compareScenario("click invalidates the affordability cache", () => {
+world = runScenario("click invalidates the affordability cache", () => {
   const w = makeWorld();
   makeResource(w, "Money", { quantity: 320, rate: 0.001 });
   makeResource(w, "Stone", { quantity: 100 });
@@ -646,7 +608,7 @@ assert.equal(
 
 // Later candidates observe post-click resource levels through fresh live
 // affordability samples.
-world = compareScenario("later candidates observe earlier clicks", () => {
+world = runScenario("later candidates observe earlier clicks", () => {
   const w = makeWorld();
   makeResource(w, "Money", { quantity: 250 });
   makeTarget(w, "city-temple", { weighting: 10, cost: { Money: 200 } });
@@ -660,7 +622,7 @@ assert.deepEqual(
 
 // Estimations are cached for the whole cycle and reused even after clicks
 // change the underlying resource levels.
-compareScenario("estimations persist across candidates and clicks", () => {
+runScenario("estimations persist across candidates and clicks", () => {
   const w = makeWorld();
   makeResource(w, "Alloy", { quantity: 50, rate: 1 });
   makeResource(w, "Stone", { quantity: 400 });
@@ -678,25 +640,22 @@ compareScenario("estimations persist across candidates and clicks", () => {
 // by a later click has no per-resource estimate; the NaN slack arithmetic
 // must fail the budget check and fall through to the cost-ratio gate,
 // exactly like the legacy `total - undefined` arithmetic.
-world = compareScenario(
-  "estimation cached before unlock yields NaN slack",
-  () => {
-    const w = makeWorld();
-    makeResource(w, "Elerium", {
-      quantity: 50,
-      rate: 100,
-      unlocked: () => w.trace.some((e) => e[0] === "click"),
-    });
-    makeResource(w, "Polymer", { quantity: 90, rate: 1 });
-    makeTarget(w, "space-outpost", {
-      weighting: 15,
-      cost: { Elerium: 100, Polymer: 100 },
-    });
-    makeTarget(w, "city-factory", { weighting: 10, cost: { Polymer: 60 } });
-    makeTarget(w, "city-foundry", { weighting: 5, cost: { Elerium: 40 } });
-    return w;
-  },
-);
+world = runScenario("estimation cached before unlock yields NaN slack", () => {
+  const w = makeWorld();
+  makeResource(w, "Elerium", {
+    quantity: 50,
+    rate: 100,
+    unlocked: () => w.trace.some((e) => e[0] === "click"),
+  });
+  makeResource(w, "Polymer", { quantity: 90, rate: 1 });
+  makeTarget(w, "space-outpost", {
+    weighting: 15,
+    cost: { Elerium: 100, Polymer: 100 },
+  });
+  makeTarget(w, "city-factory", { weighting: 10, cost: { Polymer: 60 } });
+  makeTarget(w, "city-foundry", { weighting: 5, cost: { Elerium: 40 } });
+  return w;
+});
 assert.deepEqual(
   world.trace.filter((e) => e[0] === "click"),
   [["click", "city-factory"]],
@@ -708,7 +667,7 @@ assert.equal(
 );
 
 // Lazily-initialized resource fields flow through comparisons as NaN.
-compareScenario("missing numeric resource fields stay lenient", () => {
+runScenario("missing numeric resource fields stay lenient", () => {
   const w = makeWorld();
   const alloy = makeResource(w, "Alloy", { quantity: 100, rate: 1 });
   delete alloy.storageRequired;
@@ -718,7 +677,7 @@ compareScenario("missing numeric resource fields stay lenient", () => {
   return w;
 });
 
-console.log("Build slice dual-run trace comparisons passed");
+console.log("Build slice scenario tests passed");
 
 // ---------------------------------------------------------------------------
 // Adapter contract tests

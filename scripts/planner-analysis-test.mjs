@@ -7,7 +7,6 @@ import {
   recordPlannerSample,
   selectPlannerStats,
 } from "../src/domain/planner-analysis.ts";
-import { legacyPlannerLimit } from "./test-support/legacy-planner-analysis.mjs";
 
 function requirement(resourceId, overrides = {}) {
   return {
@@ -87,11 +86,6 @@ const cases = [
 for (const testCase of cases) {
   const modern = findPlannerLimit(testCase.input);
   assert.deepEqual(modern, testCase.expected, testCase.name);
-  assert.deepEqual(
-    modern,
-    legacyPlannerLimit(testCase.input),
-    `${testCase.name}: legacy comparison`,
-  );
   if (modern !== null) assert.ok(Object.isFrozen(modern));
 }
 

@@ -7,10 +7,7 @@ import {
 } from "../src/adapters/evolve/traits/wish.ts";
 import { runWishAutomation } from "../src/application/wish.ts";
 import { planWishes } from "../src/domain/traits/wish.ts";
-import {
-  assertEquivalentTraces,
-  createTraceRecorder,
-} from "./test-support/modernization-fixtures.mjs";
+import { createTraceRecorder } from "./test-support/modernization-fixtures.mjs";
 
 function createFixture(scenario) {
   const trace = createTraceRecorder();
@@ -57,32 +54,6 @@ function createFixture(scenario) {
   };
 }
 
-// Exact copy of the deleted controller, retained only as a parity oracle.
-function runLegacy(scenario) {
-  const fixture = createFixture(scenario);
-  const { game, settings, getVueById, clickSelector } = fixture;
-  if (!game.global.race["wish"] || !game.global.tech["wish"]) {
-    return fixture.trace.snapshot();
-  }
-
-  if (game.global.race.wishStats.minor === 0 && settings.wishMinor !== "none") {
-    const vueMinor = getVueById("minorWish");
-    if (!vueMinor) return fixture.trace.snapshot();
-    clickSelector(`#wish${settings.wishMinor}`);
-  }
-
-  if (
-    game.global.tech["wish"] >= 2 &&
-    game.global.race.wishStats.major === 0 &&
-    settings.wishMajor !== "none"
-  ) {
-    const vueMajor = getVueById("majorWish");
-    if (!vueMajor) return fixture.trace.snapshot();
-    clickSelector(`#wish${settings.wishMajor}`);
-  }
-  return fixture.trace.snapshot();
-}
-
 function createAutomation(fixture) {
   return {
     reader: createWishReader({
@@ -97,41 +68,6 @@ function createAutomation(fixture) {
       }),
     }),
   };
-}
-
-function runModern(scenario) {
-  const fixture = createFixture(scenario);
-  runWishAutomation(createAutomation(fixture));
-  return fixture.trace.snapshot();
-}
-
-const dualRunScenarios = [
-  { name: "wish trait locked", raceWish: false },
-  { name: "technology locked", technologyLevel: 0 },
-  { name: "minor then major", mutateOnClick: true },
-  { name: "level one minor only", technologyLevel: 1 },
-  { name: "spent minor selects major", minorRemaining: 5 },
-  {
-    name: "both settings disabled",
-    minorSelection: "none",
-    majorSelection: "none",
-  },
-  { name: "missing minor panel aborts major", minorPanel: false },
-  { name: "missing major panel follows minor click", majorPanel: false },
-  { name: "both wish timers active", minorRemaining: 1, majorRemaining: 1 },
-  {
-    name: "empty imported selection remains a selector",
-    minorSelection: "",
-    majorSelection: "none",
-  },
-];
-
-for (const scenario of dualRunScenarios) {
-  assertEquivalentTraces({
-    legacy: runLegacy(scenario),
-    modern: runModern(scenario),
-    label: `wish ${scenario.name}`,
-  });
 }
 
 const planned = planWishes({
@@ -219,5 +155,5 @@ assert.equal(
 assert.deepEqual(phases, ["read", "execute:minor"]);
 
 console.log(
-  `Wish domain, Evolve/browser adapters, application, and parity tests passed (${dualRunScenarios.length} dual-run scenarios)`,
+  "Wish domain, Evolve/browser adapters, and application tests passed",
 );

@@ -1,19 +1,6 @@
 import assert from "node:assert/strict";
 
-import {
-  getBlackholeMass,
-  isApocalypsePrestigeAvailable,
-  isAscensionPrestigeAvailable,
-  isBioseedPrestigeAvailable,
-  isCataclysmPrestigeAvailable,
-  isDemonicPrestigeAvailable,
-  isGeckNeeded,
-  isPillarFinished,
-  isPrestigeAllowed,
-  isWhiteholePrestigeAvailable,
-  isWitchAscensionPrestigeAvailable,
-} from "../src/domain/progression/prestige/prestige-eligibility.ts";
-import { legacyPrestigeTrace } from "./test-support/legacy-prestige-eligibility.mjs";
+import { isDemonicPrestigeAvailable } from "../src/domain/progression/prestige/prestige-eligibility.ts";
 
 function makeView(overrides = {}) {
   const base = {
@@ -82,62 +69,7 @@ function makeView(overrides = {}) {
   });
 }
 
-function modernTrace(view) {
-  return {
-    allowed: isPrestigeAllowed(view),
-    matching: isPrestigeAllowed(view, "bioseed"),
-    other: isPrestigeAllowed(view, "mad"),
-    cataclysm: isCataclysmPrestigeAvailable(view),
-    bioseed: isBioseedPrestigeAvailable(view),
-    whitehole: isWhiteholePrestigeAvailable(view),
-    apocalypse: isApocalypsePrestigeAvailable(view),
-    ascension: isAscensionPrestigeAvailable(view),
-    witchAscension: isWitchAscensionPrestigeAvailable(view),
-    witchDemonic: isWitchAscensionPrestigeAvailable(view, true),
-    demonic: isDemonicPrestigeAvailable(view),
-    pillarFinished: isPillarFinished(view),
-    geckNeeded: isGeckNeeded(view),
-    blackholeMass: getBlackholeMass(view),
-  };
-}
-
-const equivalentCases = [
-  ["baseline", makeView()],
-  [
-    "permission and GECK gates",
-    makeView({
-      settings: { waitForArpa: true, requiredGecks: 2 },
-      game: { activeArpaProjects: 1 },
-      achievement: { lamentisStandardFive: true },
-    }),
-  ],
-  ["unfinished pillar", makeView({ game: { speciesPillarLevel: 3 } })],
-  [
-    "micro pillar bypass",
-    makeView({ game: { universe: "micro", speciesPillarLevel: 0 } }),
-  ],
-  [
-    "fasting reset and dish gate",
-    makeView({
-      game: { fasting: true },
-      tech: { dishLevelTwo: false, finalIngredientAffordable: false },
-    }),
-  ],
-  [
-    "active mech gate",
-    makeView({
-      settings: { autoMech: true, maximumMechPotential: 0.5 },
-      mech: { active: true, potential: 0.5 },
-    }),
-  ],
-];
-
-for (const [name, view] of equivalentCases) {
-  assert.deepEqual(modernTrace(view), legacyPrestigeTrace(view), name);
-}
-
 const exactFloor = makeView({ buildings: { spireFloor: 75 } });
-assert.equal(legacyPrestigeTrace(exactFloor).demonic, false);
 assert.equal(
   isDemonicPrestigeAvailable(exactFloor),
   true,

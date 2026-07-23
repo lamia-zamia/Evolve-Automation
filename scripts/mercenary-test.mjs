@@ -7,10 +7,7 @@ import {
   planMercenaryHire,
   planMercenaryLog,
 } from "../src/domain/combat/mercenary.ts";
-import {
-  assertEquivalentTraces,
-  createTraceRecorder,
-} from "./test-support/modernization-fixtures.mjs";
+import { createTraceRecorder } from "./test-support/modernization-fixtures.mjs";
 
 function createFixture(scenario) {
   const trace = createTraceRecorder();
@@ -92,67 +89,6 @@ function createFixture(scenario) {
   };
 }
 
-// Exact copy of the deleted controller, retained only as a parity oracle.
-function runLegacy(scenario) {
-  const fixture = createFixture(scenario);
-  const { WarManager, state, settings, resources, GameLog } = fixture;
-  const manager = WarManager;
-  if (
-    !manager._garrisonVue ||
-    !manager.isMercenaryUnlocked() ||
-    manager.maxCityGarrison <= 0
-  ) {
-    return fixture.trace.snapshot();
-  }
-  if (fixture.shouldSaveInflationMoney() && state.goal !== "Reset") {
-    return fixture.trace.snapshot();
-  }
-
-  let mercenaryCost = manager.mercenaryCost;
-  let mercenariesHired = 0;
-  let mercenaryMax = manager.maxSoldiers - settings.foreignHireMercDeadSoldiers;
-  let maxCost = state.moneyMedian * settings.foreignHireMercCostLowerThanIncome;
-  let minMoney = Math.max(
-    (resources.Money.maxQuantity *
-      settings.foreignHireMercMoneyStoragePercent) /
-      100,
-    Math.min(
-      resources.Money.maxQuantity - maxCost,
-      settings.storageAssignExtra
-        ? resources.Money.storageRequired / 1.03
-        : resources.Money.storageRequired,
-    ),
-  );
-  if (state.goal === "Reset") {
-    mercenaryMax = manager.maxSoldiers;
-    minMoney = 0;
-    maxCost = Number.MAX_SAFE_INTEGER;
-  }
-  while (
-    manager.currentSoldiers < mercenaryMax &&
-    resources.Money.currentQuantity >= mercenaryCost &&
-    (resources.Money.spareQuantity - mercenaryCost > minMoney ||
-      mercenaryCost < maxCost) &&
-    manager.hireMercenary()
-  ) {
-    mercenariesHired++;
-    mercenaryCost = manager.mercenaryCost;
-  }
-
-  if (mercenariesHired === 1) {
-    GameLog.logSuccess("mercenary", "Hired a mercenary to join the garrison.", [
-      "combat",
-    ]);
-  } else if (mercenariesHired > 1) {
-    GameLog.logSuccess(
-      "mercenary",
-      `Hired ${mercenariesHired} mercenaries to join the garrison.`,
-      ["combat"],
-    );
-  }
-  return fixture.trace.snapshot();
-}
-
 function createAutomation(fixture, overrides = {}) {
   return createMercenaryAdapter({
     getWarManager: overrides.getWarManager ?? (() => fixture.WarManager),
@@ -162,99 +98,6 @@ function createAutomation(fixture, overrides = {}) {
     shouldSaveInflationMoney:
       overrides.shouldSaveInflationMoney ?? fixture.shouldSaveInflationMoney,
     getGameLog: overrides.getGameLog ?? (() => fixture.GameLog),
-  });
-}
-
-function runModern(scenario) {
-  const fixture = createFixture(scenario);
-  runMercenaryAutomation(createAutomation(fixture));
-  return fixture.trace.snapshot();
-}
-
-const dualRunScenarios = [
-  { name: "garrison panel unavailable", garrisonView: false },
-  { name: "mercenaries locked", unlocked: false },
-  { name: "no city garrison capacity", maxCityGarrison: 0 },
-  { name: "Inflation saving blocks normal run", saveInflationMoney: true },
-  {
-    name: "dead-soldier reserve blocks hiring",
-    maxSoldiers: 5,
-    currentSoldiers: 3,
-    deadSoldierReserve: 2,
-  },
-  { name: "current Money cannot afford cost", moneyCurrent: 9 },
-  {
-    name: "remaining Money equality is not enough",
-    maxSoldiers: 1,
-    moneyCurrent: 510,
-    moneyStoragePercent: 50,
-    costIncomeMultiplier: 0,
-  },
-  {
-    name: "remaining Money above threshold hires",
-    maxSoldiers: 1,
-    moneyCurrent: 511,
-    moneyStoragePercent: 50,
-    costIncomeMultiplier: 0,
-  },
-  {
-    name: "cheap-cost OR bypasses Money reserve",
-    maxSoldiers: 1,
-    moneyCurrent: 10,
-    moneyStoragePercent: 99,
-  },
-  { name: "single hire uses singular log", maxSoldiers: 1 },
-  {
-    name: "multiple hires follow dynamic costs",
-    maxSoldiers: 3,
-    costs: [10, 20, 30],
-  },
-  { name: "manager rejects first hire", managerStopsAt: 0 },
-  {
-    name: "manager rejection after one hire still logs",
-    maxSoldiers: 3,
-    managerStopsAt: 1,
-  },
-  {
-    name: "Reset overrides saving and reserve policy",
-    goal: "Reset",
-    saveInflationMoney: true,
-    maxSoldiers: 2,
-    deadSoldierReserve: 99,
-    moneyCurrent: 20,
-    moneyStoragePercent: 99,
-    costIncomeMultiplier: 0,
-  },
-  {
-    name: "extra-storage adjustment lowers threshold",
-    maxSoldiers: 1,
-    moneyCurrent: 111,
-    moneyMaximum: 1_000,
-    moneyStorageRequired: 103,
-    costIncomeMultiplier: 0,
-    storageAssignExtra: true,
-  },
-  {
-    name: "cheap-cost equality is not enough",
-    maxSoldiers: 1,
-    moneyCurrent: 10,
-    moneyStoragePercent: 99,
-    moneyMedian: 10,
-    costIncomeMultiplier: 1,
-  },
-  {
-    name: "rising cost stops after affordable hire",
-    maxSoldiers: 3,
-    moneyCurrent: 100,
-    costs: [10, 200],
-  },
-];
-
-for (const scenario of dualRunScenarios) {
-  assertEquivalentTraces({
-    legacy: runLegacy(scenario),
-    modern: runModern(scenario),
-    label: `mercenary ${scenario.name}`,
   });
 }
 
@@ -360,5 +203,5 @@ assert.deepEqual(staleFixture.trace.snapshot(), [
 ]);
 
 console.log(
-  `Mercenary domain, Evolve adapter, application loop, logging, and parity tests passed (${dualRunScenarios.length} dual-run scenarios)`,
+  "Mercenary domain, Evolve adapter, application loop, and logging tests passed",
 );

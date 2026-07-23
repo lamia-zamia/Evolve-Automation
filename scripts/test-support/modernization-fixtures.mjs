@@ -1,5 +1,3 @@
-import assert from "node:assert/strict";
-
 function isPlainObject(value) {
   if (typeof value !== "object" || value === null) return false;
   const prototype = Object.getPrototypeOf(value);
@@ -88,30 +86,5 @@ export function createTraceRecorder() {
     stateChange: (name, details) => record("state-change", name, details),
     log: (name, details) => record("log", name, details),
     snapshot: () => deepFreeze(cloneData(events, "trace")),
-  });
-}
-
-export function assertEquivalentTraces({
-  legacy,
-  modern,
-  normalizeEvent = (event) => event,
-  label = "old-versus-new trace",
-}) {
-  const normalize = (trace) => {
-    const normalized = [];
-    trace.forEach((event, index) => {
-      const result = normalizeEvent(cloneData(event), index);
-      if (result !== undefined) {
-        normalized.push(cloneData(result, `${label}[${index}]`));
-      }
-    });
-    return normalized;
-  };
-  const normalizedLegacy = deepFreeze(normalize(legacy));
-  const normalizedModern = deepFreeze(normalize(modern));
-  assert.deepEqual(normalizedModern, normalizedLegacy, `${label} differs`);
-  return Object.freeze({
-    legacy: normalizedLegacy,
-    modern: normalizedModern,
   });
 }

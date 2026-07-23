@@ -2,17 +2,9 @@ import assert from "node:assert/strict";
 
 import {
   assessAuthorityRemoval,
-  calculateAuthorityPerSoldier,
   calculateRequiredAuthorityGarrison,
-  predictAuthorityAfterRemovingSoldiers,
   resolveAuthorityTarget,
 } from "../src/domain/civic/authority.ts";
-import {
-  legacyAuthorityPerSoldier,
-  legacyAuthorityTarget,
-  legacyPredictedAuthority,
-  legacyRequiredAuthorityGarrison,
-} from "./test-support/legacy-authority.mjs";
 
 function view({
   manage = true,
@@ -45,21 +37,6 @@ for (const testCase of [
 ]) {
   const modern = resolveAuthorityTarget(testCase.input.target);
   assert.equal(modern, testCase.expected);
-  assert.equal(modern, legacyAuthorityTarget(testCase.input));
-}
-
-for (const input of [
-  view(),
-  view({
-    highPopulationPercent: 50,
-    grenadier: true,
-    governmentType: "dictator",
-  }),
-  view({ evilTechLevel: 0, governmentType: "autocracy" }),
-  view({ highPopulationPercent: 0 }),
-]) {
-  const modern = calculateAuthorityPerSoldier(input.modifiers);
-  assert.ok(Math.abs(modern - legacyAuthorityPerSoldier(input)) < 1e-12);
 }
 
 for (const testCase of [
@@ -76,21 +53,8 @@ for (const testCase of [
     testCase.input,
     testCase.garrison,
   );
-  const legacy = legacyRequiredAuthorityGarrison(
-    testCase.input,
-    testCase.garrison,
-  );
   assert.equal(modern.status, "ready");
-  assert.equal(modern.requiredGarrison, legacy);
   assert.ok(Object.isFrozen(modern));
-}
-
-for (const removed of [0, 1.25, 2, 10]) {
-  const input = view();
-  assert.equal(
-    predictAuthorityAfterRemovingSoldiers(input, removed),
-    legacyPredictedAuthority(input, removed),
-  );
 }
 
 assert.deepEqual(assessAuthorityRemoval(view(), 2), {

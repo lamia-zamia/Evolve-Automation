@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import { calculateTargetTiming } from "../src/domain/target-timing.ts";
 import { readTargetTimingInput } from "../src/adapters/evolve/target-timing.ts";
-import { legacyGetMultiSegmentedTimeLeft } from "./test-support/legacy-target-timing.mjs";
 
 function modernTiming({ game, target, isProject, timeFormat }) {
   const readResult = readTargetTimingInput(game, target, isProject);
@@ -82,12 +81,7 @@ const cases = [
 for (const testCase of cases) {
   const timeFormat = (seconds) => `${seconds}s`;
   const modern = modernTiming({ ...testCase, timeFormat });
-  const legacy = legacyGetMultiSegmentedTimeLeft({
-    ...testCase,
-    timeFormat,
-  });
   assert.deepEqual(modern, testCase.expected, testCase.name);
-  assert.deepEqual(modern, legacy, `${testCase.name}: legacy comparison`);
 }
 
 console.log("Target timing module tests passed");

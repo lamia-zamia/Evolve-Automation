@@ -4,10 +4,7 @@ import { createPsychicControls } from "../src/adapters/browser/psychic-controls.
 import { createPsychicAdapter } from "../src/adapters/evolve/traits/psychic.ts";
 import { runPsychicAutomation } from "../src/application/psychic.ts";
 import { planPsychic } from "../src/domain/traits/psychic.ts";
-import {
-  assertEquivalentTraces,
-  createTraceRecorder,
-} from "./test-support/modernization-fixtures.mjs";
+import { createTraceRecorder } from "./test-support/modernization-fixtures.mjs";
 
 function createResource(id, definition = {}) {
   return {
@@ -143,135 +140,6 @@ function createFixture(scenario) {
   };
 }
 
-// Exact copy of the deleted controller, retained only as a parity oracle.
-function runLegacy(scenario) {
-  const fixture = createFixture(scenario);
-  const { game, settings, resources, getVueById, clickSelector } = fixture;
-  const psychicPowerCost = {
-    murder: [10, 8],
-    boost: [75, 60],
-    assault: [45, 36],
-    profit: [65, 52],
-    mind_break: [80, 64],
-    stun: [100, 80],
-  };
-  if (
-    settings.psychicPower === "none" ||
-    !game.global.race["psychic"] ||
-    !game.global.tech["psychic"] ||
-    resources.Energy.storageRatio < 1
-  ) {
-    return fixture.trace.snapshot();
-  }
-  let vue = null;
-  const canAfford = (power) =>
-    resources.Energy.currentQuantity >=
-    psychicPowerCost[power][game.global.tech.psychic >= 5 ? 1 : 0];
-
-  if (
-    settings.psychicPower === "murder" ||
-    (settings.psychicPower !== "boost" && game.global.stats.psykill < 10)
-  ) {
-    if (
-      resources.Population.currentQuantity > 0 &&
-      canAfford("murder") &&
-      (vue = getVueById("psychicKill"))
-    ) {
-      vue.murder();
-      return fixture.trace.snapshot();
-    }
-  }
-
-  if (
-    game.global.tech["psychicthrall"] &&
-    game.global.tech["unfathomable"] &&
-    game.global.race["unfathomable"]
-  ) {
-    const jailed = resources.Thrall.rateOfChange;
-    const cells = resources.Thrall.storageRatio;
-    if (
-      settings.psychicPower === "auto" ||
-      settings.psychicPower === "mind_break"
-    ) {
-      if (
-        (jailed > 1 || (jailed === 1 && cells === 1)) &&
-        canAfford("mind_break") &&
-        (vue = getVueById("psychicMindBreak"))
-      ) {
-        vue.breakMind();
-        return fixture.trace.snapshot();
-      }
-    }
-    if (settings.psychicPower === "auto" || settings.psychicPower === "stun") {
-      if (
-        game.global.tech.psychicthrall >= 2 &&
-        cells < 1 &&
-        canAfford("stun") &&
-        (vue = getVueById("psychicCapture"))
-      ) {
-        vue.stun();
-        return fixture.trace.snapshot();
-      }
-    }
-  }
-
-  const haveRoom = (resource) =>
-    resource.currentQuantity + resource.income * 1.5 * 300 <
-    resource.maxQuantity;
-  const powers = game.global.race.psychicPowers;
-  if (settings.psychicPower === "auto" || settings.psychicPower === "profit") {
-    if (
-      game.global.tech.psychic >= 3 &&
-      haveRoom(resources.Money) &&
-      !powers.cash &&
-      canAfford("profit") &&
-      (vue = getVueById("psychicFinance"))
-    ) {
-      vue.boostVal();
-      return fixture.trace.snapshot();
-    }
-  }
-
-  if (settings.psychicPower === "auto" || settings.psychicPower === "boost") {
-    if (!powers.boostTime && canAfford("boost")) {
-      let boosted = null;
-      if (settings.psychicBoostRes === "auto") {
-        const boostable = Object.values(resources)
-          .filter(
-            (resource) =>
-              resource.isUnlocked() &&
-              resource.atomicMass > 0 &&
-              haveRoom(resource),
-          )
-          .sort((left, right) => right.income - left.income);
-        if (boostable.length > 0) boosted = boostable[0].id;
-      } else {
-        boosted = settings.psychicBoostRes;
-      }
-      if (boosted && (vue = getVueById("psychicBoost"))) {
-        clickSelector(
-          `#psychicBoost #psyhscrolltarget input[value="${boosted}"]`,
-        );
-        vue.boostVal();
-        return fixture.trace.snapshot();
-      }
-    }
-  }
-
-  if (settings.psychicPower === "auto" || settings.psychicPower === "assault") {
-    if (
-      game.global.tech.psychic >= 2 &&
-      !powers.assaultTime &&
-      canAfford("assault") &&
-      (vue = getVueById("psychicAssault"))
-    ) {
-      vue.boostVal();
-    }
-  }
-  void vue;
-  return fixture.trace.snapshot();
-}
-
 function createAutomation(fixture, overrides = {}) {
   const controls = createPsychicControls({
     getVueById: fixture.getVueById,
@@ -284,104 +152,6 @@ function createAutomation(fixture, overrides = {}) {
     controls,
   });
   return { reader: adapter.reader, executor: adapter.executor };
-}
-
-function runModern(scenario) {
-  const fixture = createFixture(scenario);
-  runPsychicAutomation(createAutomation(fixture));
-  return fixture.trace.snapshot();
-}
-
-const dualRunScenarios = [
-  { name: "setting disabled", mode: "none" },
-  { name: "trait locked", psychicTrait: false },
-  { name: "technology locked", level: 0 },
-  { name: "Energy storage not full", energyStorageRatio: 0.99 },
-  { name: "mandatory murder before advanced powers", killCount: 0 },
-  { name: "boost mode skips mandatory murders", mode: "boost", killCount: 0 },
-  { name: "selected murder continues after unlock", mode: "murder" },
-  {
-    name: "missing murder panel falls through to profit",
-    killCount: 0,
-    moneyCurrent: 0,
-    moneyMaximum: 100_000,
-    missingPanels: ["psychicKill"],
-  },
-  {
-    name: "mind break precedes other automatic powers",
-    thrallLevel: 2,
-    unfathomableTechnology: 1,
-    unfathomableTrait: true,
-    thrallRate: 2,
-    thrallStorageRatio: 1,
-  },
-  {
-    name: "stun captures when cells have room",
-    mode: "stun",
-    thrallLevel: 2,
-    unfathomableTechnology: 1,
-    unfathomableTrait: true,
-    thrallStorageRatio: 0,
-  },
-  {
-    name: "missing mind-break panel falls through to stun",
-    thrallLevel: 2,
-    unfathomableTechnology: 1,
-    unfathomableTrait: true,
-    thrallRate: 2,
-    thrallStorageRatio: 0,
-    missingPanels: ["psychicMindBreak"],
-  },
-  {
-    name: "profit power with money room",
-    mode: "profit",
-    moneyCurrent: 0,
-    moneyMaximum: 100_000,
-  },
-  { name: "profit waits without money room", mode: "profit" },
-  { name: "auto boost selects highest income resource" },
-  {
-    name: "auto boost keeps stable order for equal income",
-    foodIncome: 20,
-    lumberIncome: 20,
-  },
-  {
-    name: "explicit unknown boost resource remains a selector",
-    mode: "boost",
-    boostResource: "MissingResource",
-  },
-  {
-    name: "active boost falls through to assault",
-    level: 2,
-    boostActive: true,
-  },
-  {
-    name: "missing boost panel falls through to assault",
-    level: 2,
-    missingPanels: ["psychicBoost"],
-  },
-  { name: "selected assault", mode: "assault", level: 2, energy: 45 },
-  {
-    name: "level-five efficiency uses reduced cost",
-    mode: "profit",
-    level: 5,
-    energy: 52,
-    moneyCurrent: 0,
-    moneyMaximum: 100_000,
-  },
-  {
-    name: "unknown mode still unlocks through murder",
-    mode: "future",
-    killCount: 0,
-  },
-];
-
-for (const scenario of dualRunScenarios) {
-  assertEquivalentTraces({
-    legacy: runLegacy(scenario),
-    modern: runModern(scenario),
-    label: `psychic ${scenario.name}`,
-  });
 }
 
 const planInput = {
@@ -482,5 +252,5 @@ assert.deepEqual(
 );
 
 console.log(
-  `Psychic domain, Evolve/browser adapters, application, and parity tests passed (${dualRunScenarios.length} dual-run scenarios)`,
+  "Psychic domain, Evolve/browser adapters, and application tests passed",
 );

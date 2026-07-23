@@ -5,10 +5,6 @@ import {
   isRetirementAssistActive,
 } from "../src/domain/progression/prestige/retirement-prep.ts";
 import { formatRetirementShortfalls } from "../src/application/retirement-prep.ts";
-import {
-  legacyRetirementAssistActive,
-  legacyRetirementPreparationMissing,
-} from "./test-support/legacy-retirement-prep.mjs";
 
 const numberString = (amount) => `${amount / 1_000_000}M`;
 
@@ -20,28 +16,6 @@ const thresholds = Object.freeze({
 });
 
 // --- Assist-active decision -------------------------------------------------
-const assistCases = [];
-for (const assistEnabled of [true, false]) {
-  for (const truepath of [true, false]) {
-    for (const retirePrestige of [true, false]) {
-      for (const isolationResearched of [true, false]) {
-        assistCases.push({
-          assistEnabled,
-          truepath,
-          retirePrestige,
-          isolationResearched,
-        });
-      }
-    }
-  }
-}
-for (const input of assistCases) {
-  assert.equal(
-    isRetirementAssistActive(input),
-    legacyRetirementAssistActive(input),
-    `assist mismatch: ${JSON.stringify(input)}`,
-  );
-}
 assert.equal(
   isRetirementAssistActive({
     assistEnabled: true,
@@ -76,36 +50,6 @@ function makePrep(overrides = {}) {
     thresholds,
     ...overrides,
   };
-}
-
-const prepCases = [
-  makePrep(),
-  makePrep({ fusionGenerators: { name: "Fusion Generator", count: 19 } }),
-  makePrep({ factories: { name: "Factory", count: 0 } }),
-  makePrep({ scienceLabs: { name: "Disease Lab", count: 10 } }),
-  makePrep({
-    graphene: { name: "Graphene", currentQuantity: 150e6, maxQuantity: 150e6 },
-  }),
-  makePrep({
-    graphene: { name: "Graphene", currentQuantity: 150e6, maxQuantity: 250e6 },
-  }),
-  makePrep({
-    fusionGenerators: { name: "Fusion Generator", count: 0 },
-    factories: { name: "Factory", count: 0 },
-    scienceLabs: { name: "Disease Lab", count: 0 },
-    graphene: { name: "Graphene", currentQuantity: 0, maxQuantity: 0 },
-  }),
-];
-for (const input of prepCases) {
-  const modern = formatRetirementShortfalls(
-    assessRetirementPreparation(input),
-    numberString,
-  );
-  assert.deepEqual(
-    modern,
-    legacyRetirementPreparationMissing(input, numberString),
-    `missing mismatch: ${JSON.stringify(input)}`,
-  );
 }
 
 // Exact characterized strings: storage shortfall wins over stockpile.

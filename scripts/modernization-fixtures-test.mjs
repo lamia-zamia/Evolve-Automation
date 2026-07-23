@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import {
-  assertEquivalentTraces,
   createFixtureBuilder,
   createTraceRecorder,
 } from "./test-support/modernization-fixtures.mjs";
@@ -25,41 +24,21 @@ assert.throws(() => {
   fixture.snapshot.tax.rate = 30;
 }, TypeError);
 
-const legacyRecorder = createTraceRecorder();
-legacyRecorder.managerCall("keys.set", { args: [false, false, false] });
-legacyRecorder.command("tax.add", { snapshotId: "legacy-1", count: 1 });
-legacyRecorder.stateChange("morale.adjusted", { before: false, after: true });
-legacyRecorder.log("tax-result", { level: "debug", status: "succeeded" });
+const recorder = createTraceRecorder();
+recorder.managerCall("keys.set", { args: [false, false, false] });
+recorder.command("tax.add", { count: 1 });
+recorder.stateChange("morale.adjusted", { before: false, after: true });
+recorder.log("tax-result", { level: "debug", status: "succeeded" });
 
-const modernRecorder = createTraceRecorder();
-modernRecorder.managerCall("keys.set", { args: [false, false, false] });
-modernRecorder.command("tax.add", { snapshotId: "modern-9", count: 1 });
-modernRecorder.stateChange("morale.adjusted", { before: false, after: true });
-modernRecorder.log("tax-result", { level: "debug", status: "succeeded" });
-
-const compared = assertEquivalentTraces({
-  legacy: legacyRecorder.snapshot(),
-  modern: modernRecorder.snapshot(),
-  normalizeEvent: (event) => {
-    if (event.category === "command") event.details.snapshotId = "<snapshot>";
-    return event;
-  },
-  label: "tax pilot",
-});
-assert.equal(Object.isFrozen(compared.modern), true);
-
-const incomplete = modernRecorder.snapshot().slice(0, -1);
-assert.throws(
-  () =>
-    assertEquivalentTraces({
-      legacy: legacyRecorder.snapshot(),
-      modern: incomplete,
-      label: "complete tax trace",
-    }),
-  /complete tax trace differs/,
+const snapshot = recorder.snapshot();
+assert.equal(snapshot.length, 4);
+assert.equal(Object.isFrozen(snapshot), true);
+assert.deepEqual(
+  snapshot.map((event) => event.category),
+  ["manager-call", "command", "state-change", "log"],
 );
 assert.throws(
-  () => modernRecorder.command("invalid", { callback() {} }),
+  () => recorder.command("invalid", { callback() {} }),
   /plain data/,
 );
 

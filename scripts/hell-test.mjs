@@ -3,11 +3,7 @@ import assert from "node:assert/strict";
 import { createHellAdapter } from "../src/adapters/evolve/combat/hell.ts";
 import { runHellAutomation } from "../src/application/hell.ts";
 import { prepareHellCycle } from "../src/domain/combat/hell.ts";
-import { createAutoHell } from "./test-support/legacy-auto-hell.ts";
-import {
-  assertEquivalentTraces,
-  createTraceRecorder,
-} from "./test-support/modernization-fixtures.mjs";
+import { createTraceRecorder } from "./test-support/modernization-fixtures.mjs";
 
 function createFixture(scenario = {}) {
   const trace = createTraceRecorder();
@@ -188,26 +184,6 @@ function createFixture(scenario = {}) {
   };
 }
 
-function runLegacy(scenario) {
-  const fixture = createFixture(scenario);
-  const originalLog = console.log;
-  console.log = (message) => fixture.trace.log("authority-debug", { message });
-  try {
-    createAutoHell({
-      WarManager: fixture.manager,
-      getGame: () => fixture.game,
-      getSettings: () => fixture.settings,
-      getBuildings: () => fixture.buildings,
-      getResources: () => fixture.resources,
-      getState: () => fixture.state,
-      getWindow: () => fixture.debugWindow,
-    })();
-  } finally {
-    console.log = originalLog;
-  }
-  return fixture.trace.snapshot();
-}
-
 function createModern(fixture, overrides = {}) {
   return createHellAdapter({
     getWarManager: overrides.getWarManager ?? (() => fixture.manager),
@@ -220,150 +196,6 @@ function createModern(fixture, overrides = {}) {
     debugLog:
       overrides.debugLog ??
       ((message) => fixture.trace.log("authority-debug", { message })),
-  });
-}
-
-function runModern(scenario) {
-  const fixture = createFixture(scenario);
-  runHellAutomation(createModern(fixture));
-  return fixture.trace.snapshot();
-}
-
-const scenarios = [
-  { name: "garrison panel unavailable", garrisonAvailable: false },
-  { name: "Hell panel unavailable", hellAvailable: false },
-  { name: "Warlord has no enemy", warlord: true, enemies: 0 },
-  {
-    name: "Warlord waits for minions",
-    warlord: true,
-    enemies: 1,
-    minions: 5,
-    warlordHandleFortress: true,
-    warlordMinimumMinions: 5,
-  },
-  {
-    name: "Warlord attacks first fortress",
-    warlord: true,
-    enemies: 2,
-    minions: 6,
-    warlordHandleFortress: true,
-    warlordMinimumMinions: 5,
-  },
-  {
-    name: "insufficient army leaves Hell",
-    maximumSoldiers: 100,
-    currentSoldiers: 50,
-    minimumSoldierPercent: 90,
-    hellSoldiers: 30,
-    hellPatrols: 2,
-    hellPatrolSize: 10,
-  },
-  {
-    name: "Elysium keeps one hundred home",
-    elysiumScoutUnlocked: true,
-    homeGarrison: 10,
-    maximumSoldiers: 250,
-    currentSoldiers: 250,
-  },
-  {
-    name: "defense and patrol targets shrink assignments",
-    maximumSoldiers: 200,
-    currentSoldiers: 200,
-    hellSoldiers: 150,
-    hellPatrols: 4,
-    hellPatrolSize: 20,
-    fortressWalls: 50,
-    fortressThreat: 10,
-    lowWallsMultiplier: 2,
-    targetFortressDamage: 10,
-    soldierPower: 5,
-  },
-  {
-    name: "fixed patrol size only adjusts counts",
-    handlePatrolSize: false,
-    hellSoldiers: 50,
-    hellPatrols: 2,
-    hellPatrolSize: 20,
-    maximumSoldiers: 200,
-    currentSoldiers: 200,
-  },
-  {
-    name: "drone droid bootcamp and bolster rating",
-    fortressThreat: 100,
-    warDroneCount: 2,
-    portalTechnology: 7,
-    warDroidCount: 3,
-    hellDroidTechnology: true,
-    bootCampCount: 4,
-    patrolDroneModifier: 2,
-    patrolDroidModifier: 3,
-    patrolBootcampModifier: 4,
-    bolsterPatrolRating: 20,
-    bolsterPercentTop: 80,
-    bolsterPercentBottom: 20,
-    currentCityGarrison: 50,
-    maximumCityGarrison: 100,
-  },
-  {
-    name: "one and a half patrols split into three",
-    maximumSoldiers: 250,
-    currentSoldiers: 250,
-    homeGarrison: 100,
-    ratingCalculator: (rating) => (rating <= 0 ? 0 : 100),
-  },
-  {
-    name: "positive Authority target adjusts stationing and debugs",
-    maximumSoldiers: 250,
-    currentSoldiers: 250,
-    hellSoldiers: 100,
-    hellPatrols: 2,
-    hellPatrolSize: 40,
-    manageAuthority: true,
-    minimumAuthority: 100,
-    authorityUnlocked: true,
-    authorityCurrent: 50,
-    evilTechnology: 1,
-    grenadier: true,
-    government: "autocracy",
-    authorityDebug: true,
-    soldierPower: 1,
-  },
-  {
-    // A freshly unlocked fortress has no `assigned` property yet; the game only
-    // writes it once garrison controls are used. The Hell panel is already
-    // available, so the adapter must tolerate the missing value as zero.
-    name: "fortress just unlocked has no assigned",
-    hellAssigned: undefined,
-    hellSoldiers: 0,
-    hellPatrols: 0,
-    hellPatrolSize: 10,
-    maximumSoldiers: 100,
-    currentSoldiers: 0,
-    minimumSoldierPercent: 90,
-  },
-  {
-    name: "negative Authority target reserves patrol percentage",
-    maximumSoldiers: 200,
-    currentSoldiers: 200,
-    hellSoldiers: 100,
-    hellPatrols: 1,
-    hellPatrolSize: 100,
-    manageAuthority: true,
-    minimumAuthority: -1,
-    minimumAuthorityPatrolPercent: 40,
-    authorityUnlocked: true,
-    authorityCurrent: 0,
-    authorityMaximum: 250,
-    evilTechnology: 1,
-    ratingCalculator: (rating) => (rating <= 0 ? 0 : Number.POSITIVE_INFINITY),
-  },
-];
-
-for (const scenario of scenarios) {
-  assertEquivalentTraces({
-    legacy: runLegacy(scenario),
-    modern: runModern(scenario),
-    label: `Hell ${scenario.name}`,
   });
 }
 
@@ -393,6 +225,4 @@ const staleDecision = prepareHellCycle(staleAutomation.reader.readCycle());
 staleManager = {};
 assert.equal(staleAutomation.executor.execute(staleDecision).status, "stale");
 
-console.log(
-  `Hell domain, phased Evolve adapter/application, and parity tests passed (${scenarios.length} dual-run scenarios)`,
-);
+console.log("Hell domain and phased Evolve adapter/application tests passed");

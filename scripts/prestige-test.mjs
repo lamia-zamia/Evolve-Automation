@@ -6,7 +6,6 @@ import {
 } from "../src/adapters/evolve/progression/prestige/prestige.ts";
 import { runPrestige } from "../src/application/prestige.ts";
 import { planPrestige } from "../src/domain/progression/prestige/prestige.ts";
-import { createLegacyAutoPrestige } from "./test-support/legacy-auto-prestige.ts";
 
 // --- Shared fixtures ---------------------------------------------------------
 
@@ -131,32 +130,6 @@ function buildFixture(scenario) {
   };
 }
 
-function runLegacy(scenario) {
-  const f = buildFixture(scenario);
-  createLegacyAutoPrestige({
-    getState: () => f.state,
-    getSettings: () => f.settings,
-    getGame: () => f.game,
-    getResources: () => f.resources,
-    getBuildings: () => f.buildings,
-    getWarManager: () => f.WarManager,
-    getHaveTech: () => f.haveTech,
-    getVueById: f.getVueById,
-    logPrestige: f.logPrestige,
-    getIsBioseederPrestigeAvailable: () => f.eligible,
-    isCataclysmPrestigeAvailable: f.eligible,
-    loadQueuedSettings: f.loadQueuedSettings,
-    getTechIds: () => f.techIds,
-    isWhiteholePrestigeAvailable: f.eligible,
-    isApocalypsePrestigeAvailable: f.eligible,
-    isWitchAscensionPrestigeAvailable: () => f.eligible(),
-    isAscensionPrestigeAvailable: f.eligible,
-    KeyManager: f.KeyManager,
-    isDemonicPrestigeAvailable: f.eligible,
-  })();
-  return f.trace;
-}
-
 function runModern(scenario) {
   const f = buildFixture(scenario);
   runPrestige({
@@ -194,11 +167,9 @@ function runModern(scenario) {
 }
 
 function dualRun(name, scenario, expected) {
-  const legacy = runLegacy(scenario);
   const modern = runModern(scenario);
-  assert.deepEqual(modern, legacy, `${name}: traces diverge`);
   if (expected !== undefined) {
-    assert.deepEqual(legacy, expected, `${name}: unexpected trace`);
+    assert.deepEqual(modern, expected, `${name}: unexpected trace`);
   }
 }
 
@@ -443,7 +414,7 @@ dualRun(
   [["goal", "Reset"]],
 );
 
-console.log("Prestige dual-run comparisons passed");
+console.log("Prestige scenario and adapter tests passed");
 
 // --- Planner unit tests ------------------------------------------------------
 

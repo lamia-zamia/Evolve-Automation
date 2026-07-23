@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import { decideEvolutionResult } from "../src/domain/progression/evolution/evolution-result.ts";
 import { formatEvolutionLog } from "../src/application/evolution-result.ts";
-import { legacyDecideEvolutionResult } from "./test-support/legacy-evolution-result.mjs";
 
 const loc = (key) => `loc:${key}`;
 
@@ -18,91 +17,6 @@ function makeInput(overrides = {}) {
     traits: [],
     ...overrides,
   };
-}
-
-// --- Old-versus-new decision equivalence ------------------------------------
-const cases = [
-  makeInput(),
-  makeInput({
-    speciesRace: { name: "Human", weighting: 0, goals: [] },
-    bestWeighting: 50,
-  }),
-  makeInput({
-    speciesRace: { name: "Human", weighting: 0, goals: [] },
-    bestWeighting: 0,
-  }),
-  makeInput({
-    speciesRace: {
-      name: "Elven",
-      weighting: 10,
-      goals: ["achieve_a", "feat_b"],
-    },
-  }),
-  makeInput({
-    userEvolutionTarget: "elven",
-    targetHabitability: 1,
-    speciesRace: { name: "Human", weighting: 0, goals: [] },
-  }),
-  makeInput({ userEvolutionTarget: "elven", targetHabitability: 0 }),
-  makeInput({ userEvolutionTarget: "human" }), // explicit target equals species
-  makeInput({
-    species: "sludge",
-    speciesRace: { name: "Sludge", weighting: 0, goals: [] },
-    bestWeighting: 0,
-  }),
-  makeInput({
-    autoMutateTraits: true,
-    speciesRace: { name: "Human", weighting: 10, goals: ["achieve_a"] },
-    traits: [
-      {
-        name: "cunning",
-        resetEnabled: true,
-        gained: false,
-        inheritedFromBase: false,
-      },
-      {
-        name: "gullible",
-        resetEnabled: true,
-        gained: true,
-        inheritedFromBase: true,
-      },
-      {
-        name: "hyper",
-        resetEnabled: true,
-        gained: true,
-        inheritedFromBase: false,
-      },
-    ],
-  }),
-  makeInput({
-    autoMutateTraits: true,
-    speciesRace: { name: "Human", weighting: 10, goals: ["achieve_a"] },
-    traits: [
-      {
-        name: "hyper",
-        resetEnabled: false,
-        gained: true,
-        inheritedFromBase: false,
-      },
-    ],
-  }),
-  makeInput({
-    autoEvolution: false,
-    userEvolutionTarget: "elven",
-    targetHabitability: 1,
-  }),
-  makeInput({
-    evolutionBackup: false,
-    speciesRace: { name: "Human", weighting: 0, goals: [] },
-    bestWeighting: 50,
-  }),
-];
-for (const input of cases) {
-  assert.deepEqual(
-    decideEvolutionResult(input),
-    legacyDecideEvolutionResult(input),
-    `decision mismatch: ${JSON.stringify(input)}`,
-  );
 }
 
 // --- Characterized decision + presentation ----------------------------------

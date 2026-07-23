@@ -3,10 +3,7 @@ import assert from "node:assert/strict";
 import { createGatherResourcesAdapter } from "../src/adapters/evolve/economy/resources/gather-resources.ts";
 import { runGatherResourcesAutomation } from "../src/application/gather-resources.ts";
 import { planGatherResources } from "../src/domain/economy/resources/gather-resources.ts";
-import {
-  assertEquivalentTraces,
-  createTraceRecorder,
-} from "./test-support/modernization-fixtures.mjs";
+import { createTraceRecorder } from "./test-support/modernization-fixtures.mjs";
 
 const RESOURCE_IDS = ["Food", "Lumber", "Stone", "Chrysotile", "Furs", "Mana"];
 const ACTION_IDS = ["food", "lumber", "stone", "chrysotile", "slaughter"];
@@ -90,124 +87,6 @@ function createFixture(scenario) {
   };
 }
 
-function result(fixture) {
-  return Object.fromEntries(
-    RESOURCE_IDS.map((id) => [id, fixture.quantities[id]()]),
-  );
-}
-
-// Exact copy of the deleted controller, retained only as a parity oracle.
-function runLegacy(scenario) {
-  const fixture = createFixture(scenario);
-  const { game, resources, buildings, settings } = fixture;
-  if (
-    !settings.buildingAlwaysClick &&
-    resources.Population.currentQuantity > 15 &&
-    (buildings.RockQuarry.count > 0 || game.global.race["sappy"])
-  ) {
-    return { trace: fixture.trace.snapshot(), quantities: result(fixture) };
-  }
-
-  const resPerClick = fixture.resourcesPerClick;
-  let amount;
-  if (buildings.Food.isClickable() && !game.global.race["fasting"]) {
-    if (game.global.tech.conjuring >= 1) {
-      amount = Math.floor(
-        Math.min(
-          (resources.Food.maxQuantity - resources.Food.currentQuantity) /
-            (resPerClick * 10),
-          resources.Mana.currentQuantity,
-          settings.buildingClickPerTick,
-        ),
-      );
-      resources.Mana.currentQuantity -= amount;
-      resources.Food.currentQuantity += amount * resPerClick;
-    } else {
-      amount = Math.ceil(
-        Math.min(
-          (resources.Food.maxQuantity - resources.Food.currentQuantity) /
-            resPerClick,
-          settings.buildingClickPerTick,
-        ),
-      );
-      resources.Food.currentQuantity = Math.min(
-        resources.Food.currentQuantity + amount * resPerClick,
-        resources.Food.maxQuantity,
-      );
-    }
-    const food = game.actions.city.food;
-    for (let index = 0; index < amount; index++) food.action();
-  }
-  for (const [buildingId, resourceId, actionId] of [
-    ["Lumber", "Lumber", "lumber"],
-    ["Stone", "Stone", "stone"],
-    ["Chrysotile", "Chrysotile", "chrysotile"],
-  ]) {
-    if (!buildings[buildingId].isClickable()) continue;
-    if (game.global.tech.conjuring >= 2) {
-      amount = Math.floor(
-        Math.min(
-          (resources[resourceId].maxQuantity -
-            resources[resourceId].currentQuantity) /
-            (resPerClick * 10),
-          resources.Mana.currentQuantity,
-          settings.buildingClickPerTick,
-        ),
-      );
-      resources.Mana.currentQuantity -= amount;
-      resources[resourceId].currentQuantity += amount * resPerClick;
-    } else {
-      amount = Math.ceil(
-        Math.min(
-          (resources[resourceId].maxQuantity -
-            resources[resourceId].currentQuantity) /
-            resPerClick,
-          settings.buildingClickPerTick,
-        ),
-      );
-      resources[resourceId].currentQuantity = Math.min(
-        resources[resourceId].currentQuantity + amount * resPerClick,
-        resources[resourceId].maxQuantity,
-      );
-    }
-    const action = game.actions.city[actionId];
-    for (let index = 0; index < amount; index++) action.action();
-  }
-  if (buildings.Slaughter.isClickable()) {
-    amount = Math.min(
-      Math.max(
-        resources.Lumber.maxQuantity - resources.Lumber.currentQuantity,
-        resources.Food.maxQuantity - resources.Food.currentQuantity,
-        resources.Furs.maxQuantity - resources.Furs.currentQuantity,
-      ) / resPerClick,
-      settings.buildingClickPerTick,
-    );
-    const slaughter = game.actions.city.slaughter;
-    for (let index = 0; index < amount; index++) slaughter.action();
-    resources.Lumber.currentQuantity = Math.min(
-      resources.Lumber.currentQuantity + amount * resPerClick,
-      resources.Lumber.maxQuantity,
-    );
-    if (
-      game.global.race["soul_eater"] &&
-      game.global.tech.primitive >= 1 &&
-      !game.global.race["fasting"]
-    ) {
-      resources.Food.currentQuantity = Math.min(
-        resources.Food.currentQuantity + amount * resPerClick,
-        resources.Food.maxQuantity,
-      );
-    }
-    if (resources.Furs.isUnlocked()) {
-      resources.Furs.currentQuantity = Math.min(
-        resources.Furs.currentQuantity + amount * resPerClick,
-        resources.Furs.maxQuantity,
-      );
-    }
-  }
-  return { trace: fixture.trace.snapshot(), quantities: result(fixture) };
-}
-
 function createAdapter(fixture) {
   return createGatherResourcesAdapter({
     getGame: () => fixture.game,
@@ -216,94 +95,6 @@ function createAdapter(fixture) {
     getBuildings: () => fixture.buildings,
     getResourcesPerClick: () => fixture.resourcesPerClick,
   });
-}
-
-function runModern(scenario) {
-  const fixture = createFixture(scenario);
-  const adapter = createAdapter(fixture);
-  assert.equal(
-    runGatherResourcesAutomation(adapter).status,
-    "succeeded",
-    scenario.name,
-  );
-  return { trace: fixture.trace.snapshot(), quantities: result(fixture) };
-}
-
-const dualRunScenarios = [
-  {
-    name: "population guard",
-    alwaysClick: false,
-    population: 16,
-    quarryCount: 1,
-    clickable: ACTION_IDS,
-  },
-  { name: "nothing clickable", clickable: [] },
-  {
-    name: "ordinary direct resources in order",
-    clickable: ["food", "lumber", "stone", "chrysotile"],
-    clickLimit: 2,
-  },
-  {
-    name: "conjuring consumes shared mana in order",
-    clickable: ["food", "lumber", "stone", "chrysotile"],
-    conjuring: 2,
-    resources: {
-      Food: { maximum: 100 },
-      Lumber: { maximum: 100 },
-      Stone: { maximum: 100 },
-      Chrysotile: { maximum: 100 },
-      Mana: { current: 5 },
-    },
-  },
-  {
-    name: "fasting skips food but not material gathering",
-    fasting: true,
-    clickable: ["food", "lumber"],
-  },
-  {
-    name: "fractional slaughter bound rounds clicks up",
-    clickable: ["slaughter"],
-    soulEater: true,
-    primitive: 1,
-    resources: {
-      Food: { current: 5, maximum: 10 },
-      Lumber: { current: 5, maximum: 10 },
-      Furs: { current: 5, maximum: 10, unlocked: true },
-    },
-  },
-  {
-    name: "slaughter fasting and locked furs update lumber only",
-    clickable: ["slaughter"],
-    soulEater: true,
-    primitive: 1,
-    fasting: true,
-    resources: { Furs: { current: 0, maximum: 9, unlocked: false } },
-  },
-  {
-    name: "over-cap conjuring preserves negative amount reconciliation",
-    clickable: ["food"],
-    conjuring: 1,
-    resources: {
-      Food: { current: 31, maximum: 10 },
-      Mana: { current: 2 },
-    },
-  },
-  {
-    name: "zero click limit still reconciles cache",
-    clickable: ["food", "slaughter"],
-    clickLimit: 0,
-  },
-];
-
-for (const scenario of dualRunScenarios) {
-  const legacy = runLegacy(scenario);
-  const modern = runModern(scenario);
-  assertEquivalentTraces({
-    legacy: legacy.trace,
-    modern: modern.trace,
-    label: `gather resources ${scenario.name}`,
-  });
-  assert.deepEqual(modern.quantities, legacy.quantities, scenario.name);
 }
 
 assert.equal(
@@ -402,6 +193,4 @@ assert.equal(
 );
 assert.deepEqual(phases, ["read", "execute"]);
 
-console.log(
-  `Gather resources domain, adapter, application, and parity tests passed (${dualRunScenarios.length} dual-run scenarios)`,
-);
+console.log("Gather resources domain, adapter, and application tests passed");

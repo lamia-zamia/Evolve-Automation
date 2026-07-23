@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import { isCostAffordable } from "../src/domain/cost-affordability.ts";
-import { legacyCheckAffordableCustom } from "./test-support/legacy-queue-items.mjs";
 
 const cases = [
   {
@@ -66,15 +65,6 @@ for (const testCase of cases) {
   });
   const modern = isCostAffordable(input);
   assert.equal(modern, testCase.expected, testCase.name);
-  assert.equal(
-    modern,
-    legacyCheckAffordableCustom(
-      testCase.cost,
-      testCase.resources,
-      testCase.maximum,
-    ),
-    `${testCase.name}: legacy comparison`,
-  );
 }
 
 console.log("Queue cost affordability domain tests passed");

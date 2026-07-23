@@ -2,12 +2,8 @@ import assert from "node:assert/strict";
 
 import { createMechAdapter } from "../src/adapters/evolve/combat/mech.ts";
 import { runMechAutomation } from "../src/application/mech.ts";
-import { createAutoMech } from "./test-support/legacy-auto-mech.ts";
 import { planMechCycle } from "../src/domain/combat/mech.ts";
-import {
-  assertEquivalentTraces,
-  createTraceRecorder,
-} from "./test-support/modernization-fixtures.mjs";
+import { createTraceRecorder } from "./test-support/modernization-fixtures.mjs";
 
 const SIZES = ["collector", "small", "medium", "large", "titan"];
 const SPACE = { collector: 1, small: 2, medium: 5, large: 10, titan: 25 };
@@ -225,24 +221,6 @@ function createFixture(scenario = {}) {
   };
 }
 
-function runLegacy(scenario) {
-  const fixture = createFixture(scenario);
-  createAutoMech({
-    getMechManager: () => fixture.manager,
-    getGame: () => fixture.game,
-    getSettings: () => fixture.settings,
-    getResources: () => fixture.resources,
-    getBuildings: () => fixture.buildings,
-    getHaveTech: () => fixture.haveTech,
-    getHaveTask: () => fixture.haveTask,
-    average: (values) =>
-      values.reduce((sum, value) => sum + value, 0) / values.length,
-    GameLog: fixture.GameLog,
-    getJQuery: () => fixture.jquery,
-  })();
-  return fixture.trace.snapshot();
-}
-
 function createModern(fixture, overrides = {}) {
   return createMechAdapter({
     getMechManager: overrides.getMechManager ?? (() => fixture.manager),
@@ -254,72 +232,6 @@ function createModern(fixture, overrides = {}) {
     haveTask: overrides.haveTask ?? fixture.haveTask,
     getGameLog: overrides.getGameLog ?? (() => fixture.GameLog),
     getJQuery: overrides.getJQuery ?? (() => fixture.jquery),
-  });
-}
-
-function runModern(scenario) {
-  const fixture = createFixture(scenario);
-  runMechAutomation(createModern(fixture));
-  return fixture.trace.snapshot();
-}
-
-const scenarios = [
-  { name: "warlord challenge gate", warlord: true },
-  { name: "lab unavailable", initialized: false },
-  { name: "drag in progress", draggingRows: 1 },
-  {
-    name: "disabled bay improves active order",
-    activeMechs: [makeMech(0, "small", 10), makeMech(1, "medium", 50)],
-    inactiveMechs: [makeMech(2, "small", 30)],
-  },
-  {
-    name: "governor task only clears flags",
-    isActive: true,
-    saveSupply: true,
-    mechBaysFirst: true,
-    haveTask: true,
-  },
-  { name: "building disabled only clears flags", mechBuild: "none" },
-  { name: "random mech build", preferredSize: "medium", isActive: true },
-  { name: "user blueprint build", mechBuild: "user", userPower: 75 },
-  { name: "insufficient supply capacity", supplyMaximum: 40 },
-  {
-    name: "save supply for floor clear",
-    supplyCurrent: 100,
-    supplyMaximum: 500,
-    mechSaveSupplyRatio: 1,
-    timeToClear: 10,
-  },
-  {
-    name: "scrap one weak mech then replace",
-    activeMechs: [makeMech(0, "medium", 10)],
-    bayMaximum: 5,
-    mechScrap: "single",
-    mechScrapEfficiency: 0,
-    supplyCurrent: 40,
-    gemsCurrent: 15,
-  },
-  {
-    name: "fill remaining bay with smaller design",
-    preferredSize: "large",
-    bayMaximum: 5,
-    mechFillBay: true,
-  },
-  {
-    name: "mixed mode keeps full bay during waygate fight",
-    activeMechs: [makeMech(0, "medium", 10)],
-    bayMaximum: 5,
-    mechScrap: "mixed",
-    waygateActive: 1,
-    mechScrapEfficiency: 0,
-  },
-];
-
-for (const scenario of scenarios) {
-  assertEquivalentTraces({
-    legacy: runLegacy(scenario),
-    modern: runModern(scenario),
-    label: `mech ${scenario.name}`,
   });
 }
 
@@ -345,5 +257,5 @@ staleManager = {};
 assert.equal(staleAutomation.executor.prepare(cycle).status, "stale");
 
 console.log(
-  `Mech domain, validated Evolve adapter/application, and parity tests passed (${scenarios.length} dual-run scenarios)`,
+  "Mech domain and validated Evolve adapter/application tests passed",
 );

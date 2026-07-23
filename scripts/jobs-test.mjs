@@ -1,11 +1,8 @@
 import assert from "node:assert/strict";
 
-import { createLegacyAutoJobs } from "./test-support/legacy-auto-jobs.ts";
 import { runJobsAutomation } from "../src/application/jobs.ts";
 import { createJobsAdapter } from "../src/adapters/evolve/civic/jobs.ts";
 import { planJobs } from "../src/domain/civic/jobs.ts";
-
-const createAutoJobs = createLegacyAutoJobs;
 
 function createNewAutoJobs(dependencies) {
   const haveTech = dependencies.getHaveTech();
@@ -35,50 +32,6 @@ function createNewAutoJobs(dependencies) {
   return (craftOnly) => runJobsAutomation(adapter, craftOnly);
 }
 
-const craftingJob = {
-  workers: 0,
-  is: { split: false },
-  isDefault: () => false,
-  breakpointEmployees: () => assert.fail("crafting jobs must be skipped"),
-};
-let typeChecks = 0;
-const autoJobs = createAutoJobs({
-  getJobManager: () => ({
-    managedPriorityList: () => [craftingJob],
-    craftingMax: () => 0,
-  }),
-  getGame: () => ({
-    global: { race: {}, civic: { crew: { max: 0, workers: 0 } } },
-  }),
-  getJobs: () => ({}),
-  isDemonRace: () => false,
-  isLumberRace: () => false,
-  getSettings: () => ({
-    autoCraftsmen: false,
-    jobManageServants: false,
-    jobSetDefault: false,
-  }),
-  traitVal: () => 1,
-  getCrafter: () => ({}),
-  getWindow: () => ({}),
-  getBuildings: () => ({ GatewayStarbase: { count: 0 } }),
-  getHaveTech: () => () => false,
-  getResources: () => ({ Population: { currentQuantity: 0 } }),
-  ticksPerSecond: () => 1,
-  getState: () => ({}),
-  findRequiredResourceWeight: () => 0,
-  getPoly: () => ({}),
-  getHaveTask: () => () => false,
-  getFoodConsume: () => 1,
-  isCraftingJob: (job) => {
-    typeChecks++;
-    return job === craftingJob;
-  },
-});
-
-assert.doesNotThrow(() => autoJobs(true));
-assert.equal(typeChecks, 1);
-
 function runEntertainerCase({
   authority = 57,
   authorityManage = true,
@@ -92,7 +45,7 @@ function runEntertainerCase({
   moralePotential = 164,
   superstar = false,
   taxRate = 50,
-  factory = createLegacyAutoJobs,
+  factory = createNewAutoJobs,
 } = {}) {
   const entertainer = {
     id: "entertainer",
@@ -290,44 +243,6 @@ for (const disabled of [{ authorityManage: false }, { authorityTarget: 0 }]) {
   );
 }
 
-for (const fixture of [
-  {},
-  { taxRate: 49 },
-  { authoritySoldiersAdjusted: true },
-  { authorityEntertainerCap: 5, taxRate: 49 },
-  {
-    authority: 107,
-    authorityEntertainerCap: 5,
-    entertainerWorkers: 5,
-    morale: 114,
-    moralePotential: 114,
-  },
-  { authority: 100 },
-  { superstar: true },
-  { authorityManage: false, authorityEntertainerCap: 5 },
-  { authorityTarget: 0, authorityEntertainerCap: 5 },
-]) {
-  const legacy = runEntertainerCase(fixture);
-  const modern = runEntertainerCase({ ...fixture, factory: createNewAutoJobs });
-  assert.deepEqual(
-    {
-      workers: modern.entertainer.workers,
-      authorityCap: modern.state.authorityEntertainerCap,
-      moraleAdjusted: modern.resources.Morale.incomeAdusted,
-      lastPopulation: modern.state.lastPopulationCount,
-      lastFarmers: modern.state.lastFarmerCount,
-    },
-    {
-      workers: legacy.entertainer.workers,
-      authorityCap: legacy.state.authorityEntertainerCap,
-      moraleAdjusted: legacy.resources.Morale.incomeAdusted,
-      lastPopulation: legacy.state.lastPopulationCount,
-      lastFarmers: legacy.state.lastFarmerCount,
-    },
-    `old/new entertainer trace mismatch for ${JSON.stringify(fixture)}`,
-  );
-}
-
 function runCraftDistribution(factory, specialBuilding = false) {
   const trace = [];
   const makeResource = (id, currentQuantity) => ({
@@ -451,159 +366,6 @@ function runCraftDistribution(factory, specialBuilding = false) {
     },
   };
 }
-
-assert.deepEqual(
-  runCraftDistribution(createNewAutoJobs),
-  runCraftDistribution(createLegacyAutoJobs),
-  "craft focus, remove-before-add ordering, and state trace remain equivalent",
-);
-assert.deepEqual(
-  runCraftDistribution(createNewAutoJobs, true),
-  runCraftDistribution(createLegacyAutoJobs, true),
-  "building-bound crafting does not over-assign beyond the sampled craftsman pool",
-);
-
-function runSplitAllocation(
-  factory,
-  externalDefault = false,
-  smartSetting = false,
-) {
-  const trace = [];
-  const makeJob = (id, workers, weight) => ({
-    id,
-    workers,
-    servants: 0,
-    max: Number.MAX_SAFE_INTEGER,
-    is: { split: true, serve: false },
-    isSmartEnabled: smartSetting === null ? undefined : smartSetting,
-    isDefault: () => false,
-    isManaged: () => !externalDefault,
-    isUnlocked: () => true,
-    get count() {
-      return this.workers;
-    },
-    getBreakpoint: (pass) => [2, 4, -1][pass],
-    breakpointEmployees: (pass) => [2, 4, Number.MAX_SAFE_INTEGER][pass],
-    removeWorkers(count) {
-      trace.push(`remove:${id}:${count}`);
-      this.workers -= count;
-    },
-    addWorkers(count) {
-      trace.push(`add:${id}:${count}`);
-      this.workers += count;
-    },
-    setAsDefault() {
-      trace.push(`default:${id}`);
-    },
-    weight,
-  });
-  const lumberjack = makeJob("lumberjack", 6, 1);
-  const quarry = makeJob("quarry", 0, 2);
-  const unavailableDefault = {
-    isManaged: () => false,
-    isUnlocked: () => false,
-  };
-  const jobs = {
-    Lumberjack: lumberjack,
-    QuarryWorker: quarry,
-    CrystalMiner: unavailableDefault,
-    Forager: unavailableDefault,
-    Hunter: unavailableDefault,
-    Farmer: unavailableDefault,
-    Teamster: unavailableDefault,
-    Unemployed: unavailableDefault,
-    ...(externalDefault
-      ? {
-          Scavenger: {
-            isManaged: () => false,
-            isUnlocked: () => true,
-            setAsDefault: () => trace.push("default:scavenger"),
-          },
-        }
-      : {}),
-  };
-  const manager = {
-    craftingJobs: [],
-    craftingMax: () => 0,
-    managedPriorityList: () => [lumberjack, quarry],
-  };
-  const game = {
-    global: {
-      civic: { crew: { max: 0, workers: 0 } },
-      genes: {},
-      race: {},
-      tech: {},
-    },
-  };
-  const settings = {
-    authorityManage: false,
-    autoCraftsmen: false,
-    autoTax: false,
-    generalMinimumAuthority: 0,
-    generalRequestedTaxRate: -1,
-    jobDisableMiners: false,
-    jobManageServants: false,
-    jobSetDefault: true,
-    jobLumberWeighting: 1,
-    jobQuarryWeighting: 2,
-    productionCraftsmen: "always",
-    productionFoundryWeighting: "other",
-    useDemanded: false,
-  };
-  const state = {
-    astroSign: "",
-    lastFarmerCount: 0,
-    lastPopulationCount: 10,
-    unlockedBuildings: [],
-  };
-  const resources = {
-    Horseshoe: { usefulRatio: 1 },
-    Population: { currentQuantity: 10, storageRatio: 1 },
-  };
-  const automate = factory({
-    getJobManager: () => manager,
-    getGame: () => game,
-    getJobs: () => jobs,
-    isDemonRace: () => false,
-    isLumberRace: () => false,
-    getSettings: () => settings,
-    traitVal: () => 1,
-    getCrafter: () => ({}),
-    getWindow: () => ({}),
-    getBuildings: () => ({ GatewayStarbase: { count: 0 } }),
-    getHaveTech: () => () => false,
-    getResources: () => resources,
-    ticksPerSecond: () => 1,
-    getState: () => state,
-    findRequiredResourceWeight: () => 0,
-    getPoly: () => ({ taxCap: () => 50 }),
-    isCraftingJob: () => false,
-    getHaveTask: () => () => false,
-    getFoodConsume: () => 1,
-  });
-  automate(false);
-  return {
-    trace,
-    workers: [lumberjack.workers, quarry.workers],
-    lastPopulationCount: state.lastPopulationCount,
-  };
-}
-
-assert.deepEqual(
-  runSplitAllocation(createNewAutoJobs),
-  runSplitAllocation(createLegacyAutoJobs),
-  "weighted split allocation, remove-before-add, and default selection remain equivalent",
-);
-assert.deepEqual(
-  runSplitAllocation(createNewAutoJobs, true),
-  runSplitAllocation(createLegacyAutoJobs, true),
-  "an unlocked unmanaged fallback can become default outside the managed allocation list",
-);
-assert.deepEqual(
-  runSplitAllocation(createNewAutoJobs, false, null),
-  runSplitAllocation(createLegacyAutoJobs, false, null),
-  "an absent smart-job setting is normalized to disabled like the legacy truthiness check",
-);
 
 let staleOutcome;
 const staleFactory = (dependencies) => {

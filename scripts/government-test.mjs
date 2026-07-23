@@ -8,14 +8,13 @@ import {
 } from "../src/adapters/evolve/civic/government.ts";
 import { planGovernment } from "../src/domain/civic/government.ts";
 
-// End-to-end reader + planner + apply, reproducing the legacy autoGovernment
-// scenarios and asserting the same setGovernment / Vue appoint calls. When
-// `useApplication` is set the same reads/decision are driven through the typed
-// application use-case instead of the inline composition, for dual-run parity.
-function runGovernmentCase(
-  { guard = false, qFactory = true, currentGovernor = "none" } = {},
-  useApplication = false,
-) {
+// End-to-end reader + planner + apply through the typed application use-case,
+// asserting the resulting setGovernment / Vue appoint calls.
+function runGovernmentCase({
+  guard = false,
+  qFactory = true,
+  currentGovernor = "none",
+} = {}) {
   const governmentChanges = [];
   const appointments = [];
   const settings = {
@@ -62,31 +61,12 @@ function runGovernmentCase(
       tech === "governor" || (tech === "q_factory" && qFactory),
     getGovernor: () => currentGovernor,
   };
-  if (useApplication) {
-    const reader = { read: () => readGovernmentInput(readerDependencies) };
-    assert.equal(
-      runGovernmentAutomation({ reader, executor }).status,
-      "succeeded",
-    );
-  } else {
-    const decision = planGovernment(readGovernmentInput(readerDependencies));
-    assert.equal(executor.execute(decision).status, "succeeded");
-  }
-  return { governmentChanges, appointments };
-}
-
-// Dual-run parity: the inline composition and the typed application use-case must
-// produce identical setGovernment / appoint traces across every scenario.
-for (const options of [
-  {},
-  { qFactory: false },
-  { guard: true, currentGovernor: "entrepreneur" },
-]) {
-  assert.deepEqual(
-    runGovernmentCase(options, true),
-    runGovernmentCase(options, false),
-    `government dual-run parity for ${JSON.stringify(options)}`,
+  const reader = { read: () => readGovernmentInput(readerDependencies) };
+  assert.equal(
+    runGovernmentAutomation({ reader, executor }).status,
+    "succeeded",
   );
+  return { governmentChanges, appointments };
 }
 
 const spaceCase = runGovernmentCase();

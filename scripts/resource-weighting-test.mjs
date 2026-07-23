@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 
 import { findRequiredResourceWeight } from "../src/domain/economy/resources/resource-weighting.ts";
-import { legacyFindRequiredResourceWeight } from "./test-support/legacy-resource-weighting.mjs";
 
 const cases = [
   {
@@ -47,12 +46,7 @@ for (const testCase of cases) {
     testCase.requirements,
     testCase.resource,
   );
-  const legacy = legacyFindRequiredResourceWeight(
-    testCase.requirements,
-    testCase.resource,
-  );
   assert.equal(modern, testCase.expected, testCase.name);
-  assert.equal(modern, legacy, `${testCase.name}: legacy comparison`);
 }
 
 console.log("Resource weighting module tests passed");

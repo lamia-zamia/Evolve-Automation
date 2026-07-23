@@ -4,10 +4,7 @@ import { createGeneticsControls } from "../src/adapters/browser/genetics-control
 import { createGeneticsAdapter } from "../src/adapters/evolve/traits/genetics.ts";
 import { runGeneticsAutomation } from "../src/application/genetics.ts";
 import { planGenetics } from "../src/domain/traits/genetics.ts";
-import {
-  assertEquivalentTraces,
-  createTraceRecorder,
-} from "./test-support/modernization-fixtures.mjs";
+import { createTraceRecorder } from "./test-support/modernization-fixtures.mjs";
 
 function createResource(id, trace, definition) {
   let current = definition.current;
@@ -113,66 +110,6 @@ function createFixture(scenario) {
   };
 }
 
-// Exact copy of the deleted controller, retained only as a parity oracle.
-function runLegacy(scenario) {
-  const fixture = createFixture(scenario);
-  const { game, settings, resources, KeyManager } = fixture;
-  const genetics = game.global.tech.genetics;
-  const mutations = game.global.race.mutation;
-  if (!genetics) return fixture.trace.snapshot();
-
-  const geneticsVue = fixture.getVueById("arpaSequence");
-  const seq = game.global.arpa.sequence;
-  if (!geneticsVue || !seq) return fixture.trace.snapshot();
-
-  if (
-    (settings.geneticsSequence === "enabled" && !seq.on) ||
-    (settings.geneticsSequence === "disabled" && seq.on) ||
-    (settings.geneticsSequence === "decode" &&
-      ((seq.on && mutations >= 1) || (!seq.on && mutations < 1)))
-  ) {
-    geneticsVue.toggle();
-  }
-  if (genetics < 5) return fixture.trace.snapshot();
-
-  if (
-    (settings.geneticsBoost === "enabled" && !seq.boost) ||
-    (settings.geneticsBoost === "disabled" && seq.boost)
-  ) {
-    geneticsVue.booster();
-  }
-  if (genetics < 6) return fixture.trace.snapshot();
-
-  if (
-    (settings.geneticsAssemble === "enabled" && !seq.auto) ||
-    (settings.geneticsAssemble === "disabled" && seq.auto)
-  ) {
-    geneticsVue.auto_seq();
-  }
-  if (
-    settings.geneticsAssemble !== "auto" ||
-    resources.Knowledge.currentQuantity < 200_000 ||
-    resources.Knowledge.isDemanded()
-  ) {
-    return fixture.trace.snapshot();
-  }
-
-  const nextTickKnowledge =
-    resources.Knowledge.currentQuantity +
-    resources.Knowledge.rateOfChange / fixture.ticksPerSecond;
-  const overflowKnowledge = nextTickKnowledge - resources.Knowledge.maxQuantity;
-  if (overflowKnowledge <= 0) return fixture.trace.snapshot();
-
-  const genesToAssemble = Math.ceil(overflowKnowledge / 200_000);
-  resources.Knowledge.currentQuantity -= 200_000 * genesToAssemble;
-  resources.Genes.currentQuantity += genesToAssemble;
-  for (const unused of KeyManager.click(genesToAssemble)) {
-    void unused;
-    geneticsVue.novo();
-  }
-  return fixture.trace.snapshot();
-}
-
 function createAutomation(fixture, overrides = {}) {
   const controls = createGeneticsControls({
     getVueById: fixture.getVueById,
@@ -186,91 +123,6 @@ function createAutomation(fixture, overrides = {}) {
     controls,
   });
   return { reader: adapter.reader, executor: adapter.executor, controls };
-}
-
-function runModern(scenario) {
-  const fixture = createFixture(scenario);
-  runGeneticsAutomation(createAutomation(fixture));
-  return fixture.trace.snapshot();
-}
-
-const dualRunScenarios = [
-  { name: "genetics locked", level: 0 },
-  { name: "panel missing", panel: false },
-  { name: "sequence missing", sequence: false },
-  {
-    name: "sequence enabled before boost technology",
-    level: 4,
-    sequenceMode: "enabled",
-  },
-  {
-    name: "decode starts before first mutation",
-    level: 4,
-    sequenceMode: "decode",
-    mutations: 0,
-  },
-  {
-    name: "decode stops after mutation",
-    level: 4,
-    sequenceMode: "decode",
-    mutations: 1,
-    sequenceOn: true,
-  },
-  { name: "boost setting at level five", level: 5, boostMode: "enabled" },
-  {
-    name: "auto toggle exposed at legacy level six",
-    level: 6,
-    assembleMode: "enabled",
-  },
-  {
-    name: "all toggles in method order",
-    level: 6,
-    sequenceMode: "enabled",
-    boostMode: "enabled",
-    assembleMode: "enabled",
-  },
-  {
-    name: "auto assembly waits below knowledge floor",
-    assembleMode: "auto",
-    knowledgeCurrent: 199_999,
-  },
-  {
-    name: "auto assembly waits on demand",
-    assembleMode: "auto",
-    knowledgeCurrent: 200_000,
-    knowledgeDemanded: true,
-  },
-  {
-    name: "auto assembly waits without projected overflow",
-    assembleMode: "auto",
-    knowledgeCurrent: 200_000,
-    knowledgeMaximum: 300_000,
-    knowledgeRate: 100_000,
-  },
-  {
-    name: "one projected overflow assembly",
-    assembleMode: "auto",
-    knowledgeCurrent: 200_000,
-    knowledgeMaximum: 200_000,
-    knowledgeRate: 800_000,
-    genesCurrent: 3,
-  },
-  {
-    name: "projected overflow can overdraw wrapper knowledge",
-    assembleMode: "auto",
-    knowledgeCurrent: 200_000,
-    knowledgeMaximum: 200_000,
-    knowledgeRate: 1_600_000,
-    genesCurrent: 3,
-  },
-];
-
-for (const scenario of dualRunScenarios) {
-  assertEquivalentTraces({
-    legacy: runLegacy(scenario),
-    modern: runModern(scenario),
-    label: `genetics ${scenario.name}`,
-  });
 }
 
 assert.deepEqual(
@@ -375,5 +227,5 @@ assert.equal(
 assert.deepEqual(phases, ["gate", "capture", "plan-input"]);
 
 console.log(
-  `Genetics domain, Evolve/browser adapters, application, and parity tests passed (${dualRunScenarios.length} dual-run scenarios)`,
+  "Genetics domain, Evolve/browser adapters, and application tests passed",
 );

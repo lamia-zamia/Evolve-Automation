@@ -11,7 +11,6 @@ import {
   planPlanetSelection,
   shouldSelectPlanet,
 } from "../src/domain/progression/evolution/planet-selection.ts";
-import { createLegacyAutoPlanetSelection } from "./test-support/legacy-auto-planet-selection.ts";
 
 // Static lists copied from the composition root.
 const PLANET_BIOMES = [
@@ -27,23 +26,6 @@ const PLANET_BIOMES = [
   "grassland",
   "desert",
   "hellscape",
-];
-const PLANET_TRAITS = [
-  "elliptical",
-  "magnetic",
-  "permafrost",
-  "rage",
-  "retrograde",
-  "none",
-  "stormy",
-  "toxic",
-  "trashed",
-  "dense",
-  "unstable",
-  "ozone",
-  "mellow",
-  "flare",
-  "kamikaze",
 ];
 const PLANET_BIOME_GENUS = {
   hellscape: "demonic",
@@ -125,26 +107,6 @@ function buildFixtures(scenario, trace, queried) {
   return { game, settings, document, generatePlanets, isAchievementUnlocked };
 }
 
-function runLegacy(scenario) {
-  const trace = [];
-  const queried = [];
-  const fixture = buildFixtures(scenario, trace, queried);
-  createLegacyAutoPlanetSelection({
-    getGame: () => fixture.game,
-    getSettings: () => fixture.settings,
-    getGeneratePlanets: () => fixture.generatePlanets,
-    getStarLevel: () => scenario.starLevel ?? 1,
-    getIsAchievementUnlocked: () => fixture.isAchievementUnlocked,
-    getPlanetBiomeGenus: () => PLANET_BIOME_GENUS,
-    getRaces: () => scenario.races ?? {},
-    getPlanetBiomes: () => PLANET_BIOMES,
-    getPlanetTraits: () => PLANET_TRAITS,
-    getDocument: () => fixture.document,
-    getMouseEvent: () => FakeMouseEvent,
-  })();
-  return { trace, queried };
-}
-
 function runModern(scenario) {
   const trace = [];
   const queried = [];
@@ -172,22 +134,15 @@ function runModern(scenario) {
 }
 
 function dualRun(name, scenario, expectedClicks) {
-  const legacy = runLegacy(scenario);
   const modern = runModern(scenario);
-  assert.deepEqual(modern.trace, legacy.trace, `${name}: traces diverge`);
-  assert.deepEqual(
-    [...new Set(modern.queried)].sort(),
-    [...new Set(legacy.queried)].sort(),
-    `${name}: achievement queries diverge`,
-  );
   if (expectedClicks !== undefined) {
     assert.deepEqual(
-      legacy.trace.filter((entry) => entry[0] === "click").map((e) => e[1]),
+      modern.trace.filter((entry) => entry[0] === "click").map((e) => e[1]),
       expectedClicks,
       `${name}: unexpected selection`,
     );
   }
-  return legacy;
+  return modern;
 }
 
 const planet = (id, biome, overrides = {}) => ({
@@ -437,7 +392,7 @@ const missingDom = dualRun("missing DOM element clicks nothing", {
 });
 assert.deepEqual(missingDom.trace, [["generate"]]);
 
-console.log("Planet selection dual-run comparisons passed");
+console.log("Planet selection scenario and adapter tests passed");
 
 // --- Planner unit tests ---
 

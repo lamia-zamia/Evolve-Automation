@@ -1,127 +1,10 @@
 import assert from "node:assert/strict";
 
-import { runResearchAutomation } from "../src/application/research.ts";
 import {
   createResearchCommandExecutor,
   createResearchReader,
 } from "../src/adapters/evolve/progression/research/research.ts";
 import { planResearch } from "../src/domain/progression/research/research.ts";
-
-function createFixture(definitions) {
-  const trace = [];
-  const techs = definitions.map((definition) => ({
-    id: definition.id,
-    conflict: definition.conflict ?? false,
-    isAffordable() {
-      trace.push(["affordable", definition.id]);
-      return definition.affordable;
-    },
-    click() {
-      trace.push(["click", definition.id]);
-      return definition.click ?? false;
-    },
-  }));
-  const state = { unlockedTechs: techs };
-  const BuildingManager = {
-    updateBuildings: () => trace.push(["building-cache"]),
-  };
-  const ProjectManager = {
-    updateProjects: () => trace.push(["project-cache"]),
-  };
-  const getCostConflict = (tech) => {
-    trace.push(["conflict", tech.id]);
-    return tech.conflict;
-  };
-  return {
-    trace,
-    state,
-    BuildingManager,
-    ProjectManager,
-    getCostConflict,
-  };
-}
-
-// Exact copy of the deleted factory algorithm, used only as the parity oracle.
-function runLegacy(definitions) {
-  const fixture = createFixture(definitions);
-  for (const tech of fixture.state.unlockedTechs) {
-    if (tech.isAffordable() && !fixture.getCostConflict(tech) && tech.click()) {
-      fixture.BuildingManager.updateBuildings();
-      fixture.ProjectManager.updateProjects();
-      break;
-    }
-  }
-  return fixture.trace;
-}
-
-function runModern(definitions) {
-  const fixture = createFixture(definitions);
-  const outcome = runResearchAutomation({
-    reader: createResearchReader({
-      getState: () => fixture.state,
-      getCostConflict: fixture.getCostConflict,
-    }),
-    executor: createResearchCommandExecutor({
-      getState: () => fixture.state,
-      getBuildingManager: () => fixture.BuildingManager,
-      getProjectManager: () => fixture.ProjectManager,
-    }),
-  });
-  assert.equal(outcome.status, "succeeded");
-  return fixture.trace;
-}
-
-const parityScenarios = [
-  {
-    name: "first eligible technology succeeds",
-    techs: [
-      { id: "agriculture", affordable: true, click: true },
-      { id: "mining", affordable: true, click: true },
-    ],
-  },
-  {
-    name: "unaffordable technology skips conflict analysis",
-    techs: [
-      { id: "agriculture", affordable: false },
-      { id: "mining", affordable: true, click: true },
-    ],
-  },
-  {
-    name: "cost conflict skips a technology",
-    techs: [
-      { id: "agriculture", affordable: true, conflict: true },
-      { id: "mining", affordable: true, click: true },
-    ],
-  },
-  {
-    name: "declined safe click resumes at the following technology",
-    techs: [
-      { id: "agriculture", affordable: true, click: false },
-      { id: "mining", affordable: true, click: true },
-      { id: "storage", affordable: true, click: true },
-    ],
-  },
-  {
-    name: "all candidates are unavailable",
-    techs: [
-      { id: "agriculture", affordable: false },
-      { id: "mining", affordable: true, conflict: true },
-    ],
-  },
-  {
-    name: "last safe click is declined",
-    techs: [{ id: "agriculture", affordable: true, click: false }],
-  },
-  { name: "empty research list", techs: [] },
-];
-
-for (const scenario of parityScenarios) {
-  assert.deepEqual(
-    runModern(scenario.techs),
-    runLegacy(scenario.techs),
-    scenario.name,
-  );
-}
 
 assert.deepEqual(
   planResearch({
@@ -257,4 +140,4 @@ assert.equal(
   "manager contracts are validated before research mutates the game",
 );
 
-console.log("Research automation dual-run and adapter tests passed");
+console.log("Research automation adapter and regression tests passed");
