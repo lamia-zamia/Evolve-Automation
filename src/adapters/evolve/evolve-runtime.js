@@ -322,9 +322,7 @@ import {
   createUniverseSelectionControls,
 } from "../browser/progression-controls.ts";
 import { planShapeshift } from "../../domain/traits/shapeshift.ts";
-import { runWishAutomation } from "../../application/wish.ts";
-import { createWishCommandExecutor, createWishReader } from "./traits/wish.ts";
-import { createWishControls } from "../browser/wish-controls.ts";
+import { createWishControl } from "../../bootstrap/wish-control.ts";
 import { createGeneticsControl } from "../../bootstrap/genetics-control.ts";
 import { createMercenaryControl } from "../../bootstrap/mercenary-control.ts";
 import { createPsychicControl } from "../../bootstrap/psychic-control.ts";
@@ -352,11 +350,7 @@ import {
   readUniverseSelectionInput,
 } from "./progression/evolution/universe-selection.ts";
 import { planUniverseSelection } from "../../domain/progression/evolution/universe-selection.ts";
-import { runCraftAutomation } from "../../application/craft.ts";
-import {
-  createCraftCommandExecutor,
-  createCraftReader,
-} from "./economy/production/craft.ts";
+import { createCraftControl } from "../../bootstrap/craft-control.ts";
 import { createSpyControl } from "../../bootstrap/spy-control.ts";
 import {
   createPrestigeReader,
@@ -3806,19 +3800,18 @@ function startEvolveRuntimeComposition(
       executor: planetSelectionExecutor,
     });
 
-  const autoCraft = () =>
-    runCraftAutomation({
-      reader: createCraftReader({
-        getResources: () => resources,
-        getGame: () => game,
-        getFoundryList: () => foundryList,
-        ticksPerSecond,
-      }),
-      executor: createCraftCommandExecutor({
-        getResources: () => resources,
-        getFoundryList: () => foundryList,
-      }),
-    });
+  const { autoCraft } = createCraftControl({
+    reader: {
+      getResources: () => resources,
+      getGame: () => game,
+      getFoundryList: () => foundryList,
+      ticksPerSecond,
+    },
+    executor: {
+      getResources: () => resources,
+      getFoundryList: () => foundryList,
+    },
+  });
 
   const { autoGovernment } = createGovernmentControl({
     reader: {
@@ -4343,19 +4336,19 @@ function startEvolveRuntimeComposition(
       { id: "Greatness", loc: "wish_greatness" },
     ],
   };
-  const wishReader = createWishReader({
-    getGame: () => game,
-    getSettings: () => settings,
+  const { autoWish } = createWishControl({
+    reader: {
+      getGame: () => game,
+      getSettings: () => settings,
+    },
+    executor: {
+      getGame: () => game,
+      controls: {
+        getVueById,
+        clickSelector: (selector) => $(selector).click(),
+      },
+    },
   });
-  const wishExecutor = createWishCommandExecutor({
-    getGame: () => game,
-    controls: createWishControls({
-      getVueById,
-      clickSelector: (selector) => $(selector).click(),
-    }),
-  });
-  const autoWish = () =>
-    runWishAutomation({ reader: wishReader, executor: wishExecutor });
 
   const { autoGenetics } = createGeneticsControl({
     controls: {

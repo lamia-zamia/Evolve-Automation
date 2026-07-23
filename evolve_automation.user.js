@@ -29657,41 +29657,16 @@
     return input.shifterGenus;
   }
 
-  // src/domain/traits/wish.ts
-  function planWishes(input) {
-    if (!input.unlocked) return Object.freeze([]);
-    const decisions = [];
-    if (input.minorRemaining === 0 && input.minorSelection !== "none") {
-      decisions.push(
-        Object.freeze({
-          tier: "minor",
-          wishId: input.minorSelection,
-          expectedRemaining: 0
-        })
-      );
-    }
-    if (input.technologyLevel >= 2 && input.majorRemaining === 0 && input.majorSelection !== "none") {
-      decisions.push(
-        Object.freeze({
-          tier: "major",
-          wishId: input.majorSelection,
-          expectedRemaining: 0
-        })
-      );
-    }
-    return Object.freeze(decisions);
-  }
-
-  // src/application/wish.ts
-  var SUCCEEDED6 = Object.freeze({
-    status: "succeeded"
-  });
-  function runWishAutomation(dependencies) {
-    for (const decision2 of planWishes(dependencies.reader.read())) {
-      const outcome = dependencies.executor.execute(decision2);
-      if (outcome.status !== "succeeded") return outcome;
-    }
-    return SUCCEEDED6;
+  // src/adapters/browser/wish-controls.ts
+  function createWishControls(dependencies) {
+    return Object.freeze({
+      select(tier, wishId) {
+        const panelId = tier === "minor" ? "minorWish" : "majorWish";
+        if (!dependencies.getVueById(panelId)) return false;
+        dependencies.clickSelector(`#wish${wishId}`);
+        return true;
+      }
+    });
   }
 
   // src/adapters/evolve/traits/wish.ts
@@ -29805,15 +29780,52 @@
     });
   }
 
-  // src/adapters/browser/wish-controls.ts
-  function createWishControls(dependencies) {
+  // src/domain/traits/wish.ts
+  function planWishes(input) {
+    if (!input.unlocked) return Object.freeze([]);
+    const decisions = [];
+    if (input.minorRemaining === 0 && input.minorSelection !== "none") {
+      decisions.push(
+        Object.freeze({
+          tier: "minor",
+          wishId: input.minorSelection,
+          expectedRemaining: 0
+        })
+      );
+    }
+    if (input.technologyLevel >= 2 && input.majorRemaining === 0 && input.majorSelection !== "none") {
+      decisions.push(
+        Object.freeze({
+          tier: "major",
+          wishId: input.majorSelection,
+          expectedRemaining: 0
+        })
+      );
+    }
+    return Object.freeze(decisions);
+  }
+
+  // src/application/wish.ts
+  var SUCCEEDED6 = Object.freeze({
+    status: "succeeded"
+  });
+  function runWishAutomation(dependencies) {
+    for (const decision2 of planWishes(dependencies.reader.read())) {
+      const outcome = dependencies.executor.execute(decision2);
+      if (outcome.status !== "succeeded") return outcome;
+    }
+    return SUCCEEDED6;
+  }
+
+  // src/bootstrap/wish-control.ts
+  function createWishControl(dependencies) {
+    const reader = createWishReader(dependencies.reader);
+    const executor = createWishCommandExecutor({
+      getGame: dependencies.executor.getGame,
+      controls: createWishControls(dependencies.executor.controls)
+    });
     return Object.freeze({
-      select(tier, wishId) {
-        const panelId = tier === "minor" ? "minorWish" : "majorWish";
-        if (!dependencies.getVueById(panelId)) return false;
-        dependencies.clickSelector(`#wish${wishId}`);
-        return true;
-      }
+      autoWish: () => runWishAutomation({ reader, executor })
     });
   }
 
@@ -37768,83 +37780,6 @@
     return input.targetName;
   }
 
-  // src/domain/economy/production/craft.ts
-  function shouldRunCraft(input) {
-    return input.populationUnlocked && !input.noCraft;
-  }
-  function planCraft(input) {
-    if (!input.unlocked || !input.autoCraftEnabled || input.craftableId === null || input.materials.length === 0) {
-      return null;
-    }
-    let affordableAmount = Number.MAX_SAFE_INTEGER;
-    for (const material of input.materials) {
-      affordableAmount = Math.min(
-        affordableAmount,
-        Math.ceil(
-          (material.currentQuantity - material.maxQuantity * material.craftPreserve) / material.costPerCraft
-        )
-      );
-      if (material.mode === "blocked") {
-        return null;
-      }
-      if (material.mode === "demanded" || material.mode === "required") {
-        affordableAmount = Math.min(
-          affordableAmount,
-          material.availableQuantity / material.costPerCraft
-        );
-      } else if (material.mode === "income") {
-        affordableAmount = Math.min(
-          affordableAmount,
-          Math.ceil(
-            material.rateOfChange / material.ticksPerSecond / material.costPerCraft
-          )
-        );
-      }
-    }
-    const count2 = Math.floor(affordableAmount);
-    if (count2 < 1) {
-      return null;
-    }
-    return Object.freeze({
-      index: input.index,
-      craftableId: input.craftableId,
-      count: count2,
-      spend: Object.freeze(
-        input.materials.map(
-          (material) => Object.freeze({
-            resourceId: material.resourceId,
-            expectedCurrentQuantity: material.currentQuantity,
-            amount: material.costPerCraft * count2
-          })
-        )
-      )
-    });
-  }
-
-  // src/application/craft.ts
-  var SUCCEEDED19 = Object.freeze({
-    status: "succeeded"
-  });
-  function runCraftAutomation(dependencies) {
-    if (!shouldRunCraft(dependencies.reader.readGate())) {
-      return SUCCEEDED19;
-    }
-    for (let index = 0; ; index++) {
-      const candidate = dependencies.reader.readCandidate(index);
-      if (candidate === null) {
-        return SUCCEEDED19;
-      }
-      const decision2 = planCraft(candidate);
-      if (decision2 === null) {
-        continue;
-      }
-      const outcome = dependencies.executor.execute(decision2);
-      if (outcome.status !== "succeeded") {
-        return outcome;
-      }
-    }
-  }
-
   // src/adapters/evolve/economy/production/craft.ts
   function callBoolean17(record, name, path) {
     return Boolean(
@@ -38106,6 +38041,93 @@
         }
         return SUCCEEDED;
       }
+    });
+  }
+
+  // src/domain/economy/production/craft.ts
+  function shouldRunCraft(input) {
+    return input.populationUnlocked && !input.noCraft;
+  }
+  function planCraft(input) {
+    if (!input.unlocked || !input.autoCraftEnabled || input.craftableId === null || input.materials.length === 0) {
+      return null;
+    }
+    let affordableAmount = Number.MAX_SAFE_INTEGER;
+    for (const material of input.materials) {
+      affordableAmount = Math.min(
+        affordableAmount,
+        Math.ceil(
+          (material.currentQuantity - material.maxQuantity * material.craftPreserve) / material.costPerCraft
+        )
+      );
+      if (material.mode === "blocked") {
+        return null;
+      }
+      if (material.mode === "demanded" || material.mode === "required") {
+        affordableAmount = Math.min(
+          affordableAmount,
+          material.availableQuantity / material.costPerCraft
+        );
+      } else if (material.mode === "income") {
+        affordableAmount = Math.min(
+          affordableAmount,
+          Math.ceil(
+            material.rateOfChange / material.ticksPerSecond / material.costPerCraft
+          )
+        );
+      }
+    }
+    const count2 = Math.floor(affordableAmount);
+    if (count2 < 1) {
+      return null;
+    }
+    return Object.freeze({
+      index: input.index,
+      craftableId: input.craftableId,
+      count: count2,
+      spend: Object.freeze(
+        input.materials.map(
+          (material) => Object.freeze({
+            resourceId: material.resourceId,
+            expectedCurrentQuantity: material.currentQuantity,
+            amount: material.costPerCraft * count2
+          })
+        )
+      )
+    });
+  }
+
+  // src/application/craft.ts
+  var SUCCEEDED19 = Object.freeze({
+    status: "succeeded"
+  });
+  function runCraftAutomation(dependencies) {
+    if (!shouldRunCraft(dependencies.reader.readGate())) {
+      return SUCCEEDED19;
+    }
+    for (let index = 0; ; index++) {
+      const candidate = dependencies.reader.readCandidate(index);
+      if (candidate === null) {
+        return SUCCEEDED19;
+      }
+      const decision2 = planCraft(candidate);
+      if (decision2 === null) {
+        continue;
+      }
+      const outcome = dependencies.executor.execute(decision2);
+      if (outcome.status !== "succeeded") {
+        return outcome;
+      }
+    }
+  }
+
+  // src/bootstrap/craft-control.ts
+  function createCraftControl(dependencies) {
+    return Object.freeze({
+      autoCraft: () => runCraftAutomation({
+        reader: createCraftReader(dependencies.reader),
+        executor: createCraftCommandExecutor(dependencies.executor)
+      })
     });
   }
 
@@ -55227,17 +55249,17 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       reader: planetSelectionReader,
       executor: planetSelectionExecutor
     });
-    const autoCraft = () => runCraftAutomation({
-      reader: createCraftReader({
+    const { autoCraft } = createCraftControl({
+      reader: {
         getResources: () => resources,
         getGame: () => game,
         getFoundryList: () => foundryList,
         ticksPerSecond
-      }),
-      executor: createCraftCommandExecutor({
+      },
+      executor: {
         getResources: () => resources,
         getFoundryList: () => foundryList
-      })
+      }
     });
     const { autoGovernment } = createGovernmentControl({
       reader: {
@@ -55712,18 +55734,19 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         { id: "Greatness", loc: "wish_greatness" }
       ]
     };
-    const wishReader = createWishReader({
-      getGame: () => game,
-      getSettings: () => settings
+    const { autoWish } = createWishControl({
+      reader: {
+        getGame: () => game,
+        getSettings: () => settings
+      },
+      executor: {
+        getGame: () => game,
+        controls: {
+          getVueById,
+          clickSelector: (selector) => $(selector).click()
+        }
+      }
     });
-    const wishExecutor = createWishCommandExecutor({
-      getGame: () => game,
-      controls: createWishControls({
-        getVueById,
-        clickSelector: (selector) => $(selector).click()
-      })
-    });
-    const autoWish = () => runWishAutomation({ reader: wishReader, executor: wishExecutor });
     const { autoGenetics } = createGeneticsControl({
       controls: {
         getVueById,
