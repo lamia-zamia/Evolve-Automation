@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { runGovernmentAutomation } from "../src/application/government.ts";
 import { createGovernmentControls } from "../src/adapters/browser/government-controls.ts";
 import {
   createGovernmentCommandExecutor,
@@ -8,12 +9,13 @@ import {
 import { planGovernment } from "../src/domain/civic/government.ts";
 
 // End-to-end reader + planner + apply, reproducing the legacy autoGovernment
-// scenarios and asserting the same setGovernment / Vue appoint calls.
-function runGovernmentCase({
-  guard = false,
-  qFactory = true,
-  currentGovernor = "none",
-} = {}) {
+// scenarios and asserting the same setGovernment / Vue appoint calls. When
+// `useApplication` is set the same reads/decision are driven through the typed
+// application use-case instead of the inline composition, for dual-run parity.
+function runGovernmentCase(
+  { guard = false, qFactory = true, currentGovernor = "none" } = {},
+  useApplication = false,
+) {
   const governmentChanges = [];
   const appointments = [];
   const settings = {
@@ -51,19 +53,40 @@ function runGovernmentCase({
     controls: createGovernmentControls(getVueById),
   });
 
-  const decision = planGovernment(
-    readGovernmentInput({
-      getGovernmentManager: () => GovernmentManager,
-      getSettings: () => settings,
-      getGame: () => game,
-      guardActive: (setting) => setting === "guardAnarchist" && guard,
-      haveTech: (tech) =>
-        tech === "governor" || (tech === "q_factory" && qFactory),
-      getGovernor: () => currentGovernor,
-    }),
-  );
-  assert.equal(executor.execute(decision).status, "succeeded");
+  const readerDependencies = {
+    getGovernmentManager: () => GovernmentManager,
+    getSettings: () => settings,
+    getGame: () => game,
+    guardActive: (setting) => setting === "guardAnarchist" && guard,
+    haveTech: (tech) =>
+      tech === "governor" || (tech === "q_factory" && qFactory),
+    getGovernor: () => currentGovernor,
+  };
+  if (useApplication) {
+    const reader = { read: () => readGovernmentInput(readerDependencies) };
+    assert.equal(
+      runGovernmentAutomation({ reader, executor }).status,
+      "succeeded",
+    );
+  } else {
+    const decision = planGovernment(readGovernmentInput(readerDependencies));
+    assert.equal(executor.execute(decision).status, "succeeded");
+  }
   return { governmentChanges, appointments };
+}
+
+// Dual-run parity: the inline composition and the typed application use-case must
+// produce identical setGovernment / appoint traces across every scenario.
+for (const options of [
+  {},
+  { qFactory: false },
+  { guard: true, currentGovernor: "entrepreneur" },
+]) {
+  assert.deepEqual(
+    runGovernmentCase(options, true),
+    runGovernmentCase(options, false),
+    `government dual-run parity for ${JSON.stringify(options)}`,
+  );
 }
 
 const spaceCase = runGovernmentCase();

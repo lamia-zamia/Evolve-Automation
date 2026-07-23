@@ -265,12 +265,7 @@ import { createBuildingWeightingPolicy } from "../../policies/building-weighting
 import { readTradeRoutesInput } from "./economy/market/trade-routes.ts";
 import { planTradeRoutes } from "../../domain/economy/market/trade-routes.ts";
 import { createHellControl } from "../../bootstrap/hell-control.ts";
-import {
-  createGovernmentCommandExecutor,
-  readGovernmentInput,
-} from "./civic/government.ts";
-import { createGovernmentControls } from "../browser/government-controls.ts";
-import { planGovernment } from "../../domain/civic/government.ts";
+import { createGovernmentControl } from "../../bootstrap/government-control.ts";
 import { createBattleControl } from "../../bootstrap/battle-control.ts";
 import { createTaxAutomation } from "../../application/tax.ts";
 import { createUserscriptEnvironment } from "../userscript/environment.ts";
@@ -3830,26 +3825,22 @@ function startEvolveRuntimeComposition(
       }),
     });
 
-  const governmentExecutor = createGovernmentCommandExecutor({
-    getGovernmentManager: () => GovernmentManager,
-    getGame: () => game,
-    getGovernor,
-    controls: createGovernmentControls(getVueById),
+  const { autoGovernment } = createGovernmentControl({
+    reader: {
+      getGovernmentManager: () => GovernmentManager,
+      getSettings: () => settings,
+      getGame: () => game,
+      guardActive,
+      haveTech,
+      getGovernor,
+    },
+    executor: {
+      getGovernmentManager: () => GovernmentManager,
+      getGame: () => game,
+      getGovernor,
+      getVueById,
+    },
   });
-  const autoGovernment = function autoGovernment() {
-    governmentExecutor.execute(
-      planGovernment(
-        readGovernmentInput({
-          getGovernmentManager: () => GovernmentManager,
-          getSettings: () => settings,
-          getGame: () => game,
-          guardActive,
-          haveTech,
-          getGovernor,
-        }),
-      ),
-    );
-  };
 
   const { autoMerc } = createMercenaryControl({
     getWarManager: () => WarManager,

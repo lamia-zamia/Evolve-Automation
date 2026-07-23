@@ -25331,6 +25331,32 @@
     return Object.freeze({ autoHell: () => runHellAutomation(adapter) });
   }
 
+  // src/adapters/browser/government-controls.ts
+  function createGovernmentControls(getVueById) {
+    function candidateView() {
+      const value = getVueById("candidates");
+      return typeof value === "object" && value !== null ? requireRecord(value, "candidate controls") : null;
+    }
+    return Object.freeze({
+      isCandidateAppointmentAvailable: () => {
+        const view = candidateView();
+        return view !== null && typeof view["appoint"] === "function";
+      },
+      appointCandidate: (index) => {
+        const view = candidateView();
+        if (view === null || typeof view["appoint"] !== "function") {
+          return false;
+        }
+        const appoint = requireFunction(
+          view["appoint"],
+          "candidate controls.appoint"
+        );
+        Reflect.apply(appoint, view, [index]);
+        return true;
+      }
+    });
+  }
+
   // src/adapters/evolve/civic/government.ts
   function governmentUnlocked(types, type, path) {
     if (type === "none") {
@@ -25521,32 +25547,6 @@
     return Object.freeze({ execute: execute2 });
   }
 
-  // src/adapters/browser/government-controls.ts
-  function createGovernmentControls(getVueById) {
-    function candidateView() {
-      const value = getVueById("candidates");
-      return typeof value === "object" && value !== null ? requireRecord(value, "candidate controls") : null;
-    }
-    return Object.freeze({
-      isCandidateAppointmentAvailable: () => {
-        const view = candidateView();
-        return view !== null && typeof view["appoint"] === "function";
-      },
-      appointCandidate: (index) => {
-        const view = candidateView();
-        if (view === null || typeof view["appoint"] !== "function") {
-          return false;
-        }
-        const appoint = requireFunction(
-          view["appoint"],
-          "candidate controls.appoint"
-        );
-        Reflect.apply(appoint, view, [index]);
-        return true;
-      }
-    });
-  }
-
   // src/domain/civic/government.ts
   function planGovernment(input) {
     let government = null;
@@ -25574,6 +25574,29 @@
       government,
       appointCandidate,
       appointCandidateBackground
+    });
+  }
+
+  // src/application/government.ts
+  function runGovernmentAutomation(dependencies) {
+    return dependencies.executor.execute(
+      planGovernment(dependencies.reader.read())
+    );
+  }
+
+  // src/bootstrap/government-control.ts
+  function createGovernmentControl(dependencies) {
+    const reader = {
+      read: () => readGovernmentInput(dependencies.reader)
+    };
+    const executor = createGovernmentCommandExecutor({
+      getGovernmentManager: dependencies.executor.getGovernmentManager,
+      getGame: dependencies.executor.getGame,
+      getGovernor: dependencies.executor.getGovernor,
+      controls: createGovernmentControls(dependencies.executor.getVueById)
+    });
+    return Object.freeze({
+      autoGovernment: () => runGovernmentAutomation({ reader, executor })
     });
   }
 
@@ -55193,26 +55216,22 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getFoundryList: () => foundryList
       })
     });
-    const governmentExecutor = createGovernmentCommandExecutor({
-      getGovernmentManager: () => GovernmentManager,
-      getGame: () => game,
-      getGovernor,
-      controls: createGovernmentControls(getVueById)
+    const { autoGovernment } = createGovernmentControl({
+      reader: {
+        getGovernmentManager: () => GovernmentManager,
+        getSettings: () => settings,
+        getGame: () => game,
+        guardActive,
+        haveTech,
+        getGovernor
+      },
+      executor: {
+        getGovernmentManager: () => GovernmentManager,
+        getGame: () => game,
+        getGovernor,
+        getVueById
+      }
     });
-    const autoGovernment = function autoGovernment2() {
-      governmentExecutor.execute(
-        planGovernment(
-          readGovernmentInput({
-            getGovernmentManager: () => GovernmentManager,
-            getSettings: () => settings,
-            getGame: () => game,
-            guardActive,
-            haveTech,
-            getGovernor
-          })
-        )
-      );
-    };
     const { autoMerc } = createMercenaryControl({
       getWarManager: () => WarManager,
       getState: () => state,
