@@ -29732,6 +29732,949 @@
     });
   }
 
+  // src/adapters/evolve/progression/evolution/evolution.ts
+  function race(game) {
+    return requireRecord(
+      requireRecord(requireRecord(game, "game")["global"], "game.global")["race"],
+      "game.global.race"
+    );
+  }
+  function globalStats(game) {
+    return requireRecord(
+      requireRecord(requireRecord(game, "game")["global"], "game.global")["stats"],
+      "game.global.stats"
+    );
+  }
+  function toNumber3(value) {
+    return Number(value);
+  }
+  function raceObjects(getRaces) {
+    const races = requireRecord(getRaces(), "races");
+    return Object.values(races).map(
+      (value) => (
+        // Adapter edge: the game's Race instances are opaque; the reader only
+        // reads documented getters/methods and never mutates them.
+        value
+      )
+    );
+  }
+  function evolutionActions(getEvolutions) {
+    return requireRecord(getEvolutions(), "evolutions");
+  }
+  function resolveEvolutionTree(getRaces, getSettings, targetId) {
+    const races = requireRecord(getRaces(), "races");
+    const target = requireRecord(races[targetId], `races.${targetId}`);
+    const tree = requireRecord(
+      target["evolutionTree"],
+      `races.${targetId}.evolutionTree`
+    );
+    const settings = requireRecord(getSettings(), "settings");
+    const genus = settings["userEvolutionGenus"];
+    const branch = (typeof genus === "string" ? tree[genus] : void 0) ?? tree[Object.keys(tree)[0]];
+    if (!Array.isArray(branch)) {
+      throw new TypeError(
+        `races.${targetId}.evolutionTree branch is not an array`
+      );
+    }
+    return branch;
+  }
+  function createEvolutionReader(dependencies) {
+    const challengeTraitById = /* @__PURE__ */ new Map();
+    for (const group of dependencies.challengeGroups) {
+      for (const member of group.members) {
+        challengeTraitById.set(member.id, member.trait);
+      }
+    }
+    const resourceLevel = (id) => {
+      const resources = requireRecord(dependencies.getResources(), "resources");
+      const resource2 = requireRecord(resources[id], `resources.${id}`);
+      return {
+        current: toNumber3(resource2["currentQuantity"]),
+        max: toNumber3(resource2["maxQuantity"])
+      };
+    };
+    return Object.freeze({
+      sampleSpecies() {
+        const species = race(dependencies.getGame())["species"];
+        return typeof species === "string" ? species : "";
+      },
+      sampleLandingGate() {
+        const current = race(dependencies.getGame());
+        const universe = current["universe"];
+        return Object.freeze({
+          universe: typeof universe === "string" ? universe : null,
+          seeded: Boolean(current["seeded"]),
+          chose: Boolean(current["chose"])
+        });
+      },
+      hasStoredTarget() {
+        const state = requireRecord(dependencies.getState(), "state");
+        return state["evolutionTarget"] !== null;
+      },
+      storedTargetId() {
+        const state = requireRecord(dependencies.getState(), "state");
+        const target = state["evolutionTarget"];
+        return typeof target === "string" ? target : null;
+      },
+      sampleTargetSelection() {
+        const settings = requireRecord(dependencies.getSettings(), "settings");
+        const settingsRaw = requireRecord(
+          dependencies.getSettingsRaw(),
+          "settingsRaw"
+        );
+        const state = requireRecord(dependencies.getState(), "state");
+        const stats = globalStats(dependencies.getGame());
+        const achieve = requireRecord(
+          stats["achieve"],
+          "game.global.stats.achieve"
+        );
+        const races = raceObjects(dependencies.getRaces).map(
+          (r) => Object.freeze({
+            id: r.id,
+            weighting: toNumber3(r.getWeighting()),
+            habitability: toNumber3(r.getHabitability()),
+            genus: String(r.genus),
+            name: String(r.name)
+          })
+        );
+        const queue = settingsRaw["evolutionQueue"];
+        const userTarget = settings["userEvolutionTarget"];
+        return Object.freeze({
+          races: Object.freeze(races),
+          userEvolutionTarget: typeof userTarget === "string" ? userTarget : String(userTarget),
+          massExtinction: Boolean(achieve["mass_extinction"]),
+          queueEnabled: Boolean(settings["evolutionQueueEnabled"]),
+          queueLength: Array.isArray(queue) ? queue.length : 0,
+          queueRepeat: Boolean(settings["evolutionQueueRepeat"]),
+          evolutionAttempts: toNumber3(state["evolutionAttempts"])
+        });
+      },
+      sampleRaceTrait(trait2) {
+        const value = race(dependencies.getGame())[trait2];
+        return typeof value === "number" ? value : NaN;
+      },
+      sampleCosts(targetId) {
+        const tree = resolveEvolutionTree(
+          dependencies.getRaces,
+          dependencies.getSettings,
+          targetId
+        );
+        const poly = requireRecord(dependencies.getPoly(), "poly");
+        const adjustCosts = requireFunction(
+          poly["adjustCosts"],
+          "poly.adjustCosts"
+        );
+        let maxRna = 0;
+        let maxDna = 0;
+        for (const action of tree) {
+          const costs = requireRecord(
+            adjustCosts(action.definition),
+            "adjustedCosts"
+          );
+          const rnaCost = costs["RNA"];
+          const dnaCost = costs["DNA"];
+          maxRna = Math.max(
+            maxRna,
+            Number(typeof rnaCost === "function" ? rnaCost() : 0)
+          );
+          maxDna = Math.max(
+            maxDna,
+            Number(typeof dnaCost === "function" ? dnaCost() : 0)
+          );
+        }
+        const rna = resourceLevel("RNA");
+        const dna = resourceLevel("DNA");
+        return Object.freeze({
+          maxRna,
+          maxDna,
+          rnaCurrent: rna.current,
+          rnaMax: rna.max,
+          dnaCurrent: dna.current,
+          dnaMax: dna.max
+        });
+      },
+      sampleEvolutionTree(targetId) {
+        const tree = resolveEvolutionTree(
+          dependencies.getRaces,
+          dependencies.getSettings,
+          targetId
+        );
+        const current = race(dependencies.getGame());
+        return Object.freeze(
+          tree.map((action) => {
+            const trait2 = challengeTraitById.get(action.id);
+            return Object.freeze({
+              id: action.id,
+              unlocked: Boolean(action.isUnlocked()),
+              activeChallenge: trait2 !== void 0 && Boolean(current[trait2])
+            });
+          })
+        );
+      },
+      sampleCells() {
+        const evolutions = evolutionActions(dependencies.getEvolutions);
+        const rna = resourceLevel("RNA");
+        const dna = resourceLevel("DNA");
+        const countOf = (id) => {
+          const action = evolutions[id];
+          if (action === void 0) {
+            throw new TypeError(`evolutions.${id} is missing`);
+          }
+          return toNumber3(action.count);
+        };
+        return Object.freeze({
+          mitochondriaCount: countOf("mitochondria"),
+          eukaryoticCellCount: countOf("eukaryotic_cell"),
+          nucleusCount: countOf("nucleus"),
+          organellesCount: countOf("organelles"),
+          rnaMax: rna.max,
+          dnaMax: dna.max
+        });
+      },
+      sampleImitation() {
+        const current = race(dependencies.getGame());
+        const settings = requireRecord(dependencies.getSettings(), "settings");
+        const imitateRaceValue = settings["imitateRace"];
+        const imitateRace = typeof imitateRaceValue === "string" ? imitateRaceValue : String(imitateRaceValue);
+        const imitations = requireRecord(
+          dependencies.getImitations(),
+          "imitations"
+        );
+        const wanted = `s-${imitateRace}`;
+        const imitationExists = Object.values(imitations).some((value) => {
+          return typeof value === "object" && value !== null && value["id"] === wanted;
+        });
+        return Object.freeze({
+          evoFinalMenu: Boolean(current["evoFinalMenu"]),
+          imitationExists,
+          imitateRace
+        });
+      },
+      sampleChallengeEnabled(groupIds) {
+        const settings = requireRecord(dependencies.getSettings(), "settings");
+        const enabled = {};
+        for (const id of groupIds) {
+          enabled[id] = Boolean(settings[`challenge_${id}`]);
+        }
+        return Object.freeze(enabled);
+      }
+    });
+  }
+  function createEvolutionCommandExecutor(dependencies) {
+    const setResourceCurrent = (id, value) => {
+      const resources = requireRecord(dependencies.getResources(), "resources");
+      const resource2 = requireRecord(resources[id], `resources.${id}`);
+      resource2["currentQuantity"] = value;
+    };
+    return Object.freeze({
+      loadQueuedSettings() {
+        dependencies.loadQueuedSettings();
+      },
+      commitTarget(id, name) {
+        const state = requireRecord(dependencies.getState(), "state");
+        state["evolutionTarget"] = id;
+        dependencies.gameLog.logSuccess(
+          "special",
+          `Attempting evolution of ${name}.`,
+          ["progress"]
+        );
+      },
+      clickEvolution(id) {
+        const evolutions = evolutionActions(dependencies.getEvolutions);
+        const action = evolutions[id];
+        if (action === void 0) {
+          throw new TypeError(`evolutions.${id} is missing`);
+        }
+        return Boolean(action.click());
+      },
+      accumulateResources(command) {
+        const evolution = requireRecord(
+          requireRecord(
+            requireRecord(dependencies.getGame(), "game")["actions"],
+            "game.actions"
+          )["evolution"],
+          "game.actions.evolution"
+        );
+        const rna = requireRecord(evolution["rna"], "game.actions.evolution.rna");
+        const dna = requireRecord(evolution["dna"], "game.actions.evolution.dna");
+        const rnaAction = requireFunction(
+          rna["action"],
+          "game.actions.evolution.rna.action"
+        );
+        const dnaAction = requireFunction(
+          dna["action"],
+          "game.actions.evolution.dna.action"
+        );
+        for (let i = 0; i < command.rnaForDna; i++) {
+          rnaAction();
+        }
+        for (let i = 0; i < command.dnaForEvolution; i++) {
+          dnaAction();
+        }
+        for (let i = 0; i < command.rnaForEvolution; i++) {
+          rnaAction();
+        }
+        setResourceCurrent("RNA", command.newRna);
+        setResourceCurrent("DNA", command.newDna);
+      },
+      clickImitation(imitateRace) {
+        const imitations = requireRecord(
+          dependencies.getImitations(),
+          "imitations"
+        );
+        const wanted = `s-${imitateRace}`;
+        const target = Object.values(imitations).find(
+          (value) => typeof value === "object" && value !== null && value["id"] === wanted
+        );
+        return target !== void 0 ? Boolean(target.click()) : false;
+      },
+      logImitationUnavailable(imitateRace) {
+        dependencies.gameLog.logDanger(
+          "special",
+          `${imitateRace} not avaialble for imitation. Please select an available race.`,
+          ["progress", "achievements"]
+        );
+      },
+      logImitationNoRace() {
+        dependencies.gameLog.logDanger(
+          "special",
+          `No race selected for imitation. Please select an available race to continue.`,
+          ["progress", "achievements"]
+        );
+      }
+    });
+  }
+
+  // src/adapters/evolve/progression/evolution/planet-selection.ts
+  function requireRace(game) {
+    return requireRecord(
+      requireRecord(requireRecord(game, "game")["global"], "game.global")["race"],
+      "game.global.race"
+    );
+  }
+  function achievementLevel(value) {
+    if (!value) {
+      return null;
+    }
+    const level = typeof value === "object" ? value["l"] : void 0;
+    return typeof level === "number" ? level : NaN;
+  }
+  function createPlanetSelectionReader(dependencies) {
+    return Object.freeze({
+      sampleGate() {
+        const race2 = requireRace(dependencies.getGame());
+        const settings = requireRecord(dependencies.getSettings(), "settings");
+        const targetName = settings["userPlanetTargetName"];
+        const universe = race2["universe"];
+        return Object.freeze({
+          universe: typeof universe === "string" ? universe : null,
+          seeded: Boolean(race2["seeded"]),
+          chose: Boolean(race2["chose"]),
+          // Legacy only ever compared this setting with ===; a non-string value
+          // matched neither "none" nor a sort mode, so it stays lenient as null.
+          targetName: typeof targetName === "string" ? targetName : null
+        });
+      },
+      sampleCandidates() {
+        const race2 = requireRace(dependencies.getGame());
+        const settings = requireRecord(dependencies.getSettings(), "settings");
+        const stats = requireRecord(
+          requireRecord(
+            requireRecord(dependencies.getGame(), "game")["global"],
+            "game.global"
+          )["stats"],
+          "game.global.stats"
+        );
+        const achieve = requireRecord(
+          stats["achieve"],
+          "game.global.stats.achieve"
+        );
+        const generate = requireFunction(
+          dependencies.getGeneratePlanets(),
+          "generatePlanets"
+        );
+        const generated = generate();
+        if (!Array.isArray(generated) || generated.length === 0) {
+          throw new TypeError(
+            "generatePlanets must return at least one candidate"
+          );
+        }
+        const planets = generated.map((value, index) => {
+          const planet = requireRecord(value, `planets[${index}]`);
+          const id = planet["id"];
+          if (typeof id !== "string") {
+            throw new TypeError(`planets[${index}].id must be a string`);
+          }
+          const biome = planet["biome"];
+          if (typeof biome !== "string") {
+            throw new TypeError(`planets[${index}].biome must be a string`);
+          }
+          const rawTraits = planet["traits"];
+          if (!Array.isArray(rawTraits)) {
+            throw new TypeError(`planets[${index}].traits must be an array`);
+          }
+          const traits = rawTraits.map((trait2, traitIndex) => {
+            if (typeof trait2 !== "string") {
+              throw new TypeError(
+                `planets[${index}].traits[${traitIndex}] must be a string`
+              );
+            }
+            return trait2;
+          });
+          const rawGeology = requireRecord(
+            planet["geology"],
+            `planets[${index}].geology`
+          );
+          const geology = {};
+          for (const key of Object.keys(rawGeology)) {
+            geology[key] = requireNumber(
+              rawGeology[key],
+              `planets[${index}].geology.${key}`
+            );
+          }
+          return Object.freeze({
+            id,
+            biome,
+            traits: Object.freeze(traits),
+            orbit: requireNumber(planet["orbit"], `planets[${index}].orbit`),
+            geology: Object.freeze(geology)
+          });
+        });
+        const weightOf = (key) => {
+          const value = settings[key];
+          return typeof value === "number" ? value : void 0;
+        };
+        const biomeWeights = {};
+        const traitWeights = {};
+        const geologyWeights = {};
+        for (const planet of planets) {
+          biomeWeights[planet.biome] = weightOf(`biome_w_${planet.biome}`);
+          for (const trait2 of planet.traits) {
+            traitWeights[trait2] = weightOf(`trait_w_${trait2}`);
+          }
+          for (const id of Object.keys(planet.geology)) {
+            geologyWeights[id] = weightOf(`extra_w_${id}`);
+          }
+        }
+        const races = requireRecord(dependencies.getRaces(), "races");
+        const raceGenusById = {};
+        for (const raceId of Object.keys(races)) {
+          const value = races[raceId];
+          const genus = typeof value === "object" && value !== null ? value["genus"] : void 0;
+          raceGenusById[raceId] = typeof genus === "string" ? genus : null;
+        }
+        const getStarLevel = requireFunction(
+          dependencies.getStarLevel(),
+          "getStarLevel"
+        );
+        const gods = race2["gods"];
+        return Object.freeze({
+          planets: Object.freeze(planets),
+          gods: typeof gods === "string" ? gods : null,
+          starLevel: requireNumber(getStarLevel(settings), "starLevel"),
+          raceGenusById: Object.freeze(raceGenusById),
+          biomeGenus: dependencies.biomeGenus,
+          minersDreamLevel: achievementLevel(achieve["miners_dream"]),
+          lamentisLevel: achievementLevel(achieve["lamentis"]),
+          biomeWeights: Object.freeze(biomeWeights),
+          traitWeights: Object.freeze(traitWeights),
+          achievementWeight: weightOf("extra_w_Achievement"),
+          orbitWeight: weightOf("extra_w_Orbit"),
+          geologyWeights: Object.freeze(geologyWeights),
+          biomeOrder: dependencies.biomeOrder
+        });
+      },
+      achievementsUnlocked(ids, starLevel) {
+        const isUnlocked2 = requireFunction(
+          dependencies.getIsAchievementUnlocked(),
+          "isAchievementUnlocked"
+        );
+        const unlocked2 = {};
+        for (const id of ids) {
+          unlocked2[id] = Boolean(isUnlocked2(id, starLevel));
+        }
+        return Object.freeze(unlocked2);
+      }
+    });
+  }
+  function createPlanetSelectionCommandExecutor(dependencies) {
+    return Object.freeze({
+      execute(decision2) {
+        const race2 = requireRace(dependencies.getGame());
+        if (race2["universe"] === "bigbang" || !race2["seeded"] || Boolean(race2["chose"])) {
+          return stale(
+            "planet-selection-unavailable",
+            "planet selection became unavailable"
+          );
+        }
+        if (!dependencies.controls.selectPlanet(decision2.elementId)) {
+          return stale(
+            "planet-control-unavailable",
+            "planet selection control became unavailable"
+          );
+        }
+        return SUCCEEDED;
+      }
+    });
+  }
+
+  // src/adapters/evolve/progression/evolution/universe-selection.ts
+  function readUniverseSelectionInput(dependencies) {
+    const game = requireRecord(dependencies.getGame(), "game");
+    const settings = requireRecord(dependencies.getSettings(), "settings");
+    const race2 = requireRecord(
+      requireRecord(game["global"], "game.global")["race"],
+      "game.global.race"
+    );
+    const targetName = settings["userUniverseTargetName"];
+    if (typeof targetName !== "string") {
+      throw new TypeError("settings.userUniverseTargetName must be a string");
+    }
+    const universe = race2["universe"];
+    return Object.freeze({
+      hasBigbang: Boolean(race2["bigbang"]),
+      universe: typeof universe === "string" ? universe : null,
+      targetName
+    });
+  }
+  function createUniverseSelectionCommandExecutor(dependencies) {
+    return Object.freeze({
+      execute(targetName) {
+        if (targetName === null) {
+          return SUCCEEDED;
+        }
+        const game = requireRecord(dependencies.getGame(), "game");
+        const race2 = requireRecord(
+          requireRecord(game["global"], "game.global")["race"],
+          "game.global.race"
+        );
+        if (!race2["bigbang"] || race2["universe"] !== "bigbang") {
+          return stale(
+            "universe-selection-unavailable",
+            "universe selection became unavailable"
+          );
+        }
+        if (!dependencies.controls.selectUniverse(targetName)) {
+          return stale(
+            "universe-control-unavailable",
+            "universe selection control became unavailable"
+          );
+        }
+        return SUCCEEDED;
+      }
+    });
+  }
+
+  // src/domain/progression/evolution/evolution.ts
+  var CYCLE_ENDING_CHALLENGES = Object.freeze([
+    "junker",
+    "sludge",
+    "ultra_sludge",
+    "warlord"
+  ]);
+  function shouldEvolve(species) {
+    return species === "protoplasm";
+  }
+  function hasLandedSomewhere(gate) {
+    if (gate.universe === "bigbang") {
+      return false;
+    }
+    if (gate.seeded && !gate.chose) {
+      return false;
+    }
+    return true;
+  }
+  function raceById(races, id) {
+    return races.find((race2) => race2.id === id);
+  }
+  function planEvolutionTarget(input) {
+    let target;
+    if (input.userEvolutionTarget === "auto") {
+      const byWeighting = [...input.races].sort(
+        (a, b) => b.weighting - a.weighting
+      );
+      if (input.massExtinction) {
+        target = byWeighting[0];
+      } else {
+        const genusList = input.races.map((race2) => race2.genus).filter((genus, index, all) => all.indexOf(genus) === index);
+        const genusWeights = genusList.map(
+          (genus) => [
+            genus,
+            input.races.filter((race2) => race2.genus === genus).map((race2) => race2.weighting).reduce((sum, next) => sum + next)
+          ]
+        );
+        const bestGenus = [...genusWeights].sort((a, b) => b[1] - a[1])[0][0];
+        target = byWeighting.find((race2) => race2.genus === bestGenus);
+      }
+    } else {
+      const userRace = raceById(input.races, input.userEvolutionTarget);
+      if (userRace && userRace.habitability > 0) {
+        target = userRace;
+      }
+    }
+    if (target === void 0 && input.queueEnabled && input.queueLength > 0 && (!input.queueRepeat || input.evolutionAttempts < input.queueLength)) {
+      return Object.freeze({ kind: "wait" });
+    }
+    if (target === void 0) {
+      const custom = raceById(input.races, "custom");
+      target = custom && custom.habitability > 0 ? custom : raceById(input.races, "entish");
+    }
+    if (target === void 0) {
+      throw new TypeError("evolution target fallback race is unavailable");
+    }
+    return Object.freeze({ kind: "target", id: target.id, name: target.name });
+  }
+  function evolutionChallengeCandidates(groups, enabled) {
+    const candidates = [];
+    for (const group of groups) {
+      const groupId = group.members[0]?.id;
+      if (groupId === void 0 || enabled[groupId] !== true) {
+        continue;
+      }
+      for (const member of group.members) {
+        candidates.push(
+          Object.freeze({
+            id: member.id,
+            trait: member.trait,
+            cycleEnding: CYCLE_ENDING_CHALLENGES.includes(member.id)
+          })
+        );
+      }
+    }
+    return Object.freeze(candidates);
+  }
+  function planResourceAccumulation(maxRna, maxDna, levels) {
+    const dnaForEvolution = Math.min(
+      maxDna - levels.dnaCurrent,
+      levels.dnaMax - levels.dnaCurrent,
+      levels.rnaMax / 2
+    );
+    const rnaForDna = Math.min(
+      dnaForEvolution * 2 - levels.rnaCurrent,
+      levels.rnaMax - levels.rnaCurrent
+    );
+    const rnaRemaining = levels.rnaCurrent + rnaForDna - dnaForEvolution * 2;
+    const rnaForEvolution = Math.min(
+      maxRna - rnaRemaining,
+      levels.rnaMax - rnaRemaining
+    );
+    return Object.freeze({
+      rnaForDna,
+      dnaForEvolution,
+      rnaForEvolution,
+      newRna: rnaRemaining + rnaForEvolution,
+      newDna: levels.dnaCurrent + dnaForEvolution
+    });
+  }
+  function planEvolutionTreeClick(tree) {
+    for (const action of tree) {
+      if (!action.unlocked) {
+        continue;
+      }
+      if (action.activeChallenge) {
+        continue;
+      }
+      return Object.freeze({ kind: "click", id: action.id });
+    }
+    return Object.freeze({ kind: "none" });
+  }
+  function planEvolutionCells(input, maxRna, maxDna) {
+    const clicks = [];
+    if (input.mitochondriaCount < 1 || input.rnaMax < maxRna || input.dnaMax < maxDna) {
+      clicks.push("mitochondria");
+    }
+    if (input.eukaryoticCellCount < 1 || input.dnaMax < maxDna) {
+      clicks.push("eukaryotic_cell");
+    }
+    if (input.rnaMax < maxRna) {
+      clicks.push("membrane");
+    }
+    if (input.nucleusCount < 10) {
+      clicks.push("nucleus");
+    }
+    if (input.organellesCount < 10) {
+      clicks.push("organelles");
+    }
+    return Object.freeze(clicks);
+  }
+  function planImitation(input) {
+    if (!input.evoFinalMenu) {
+      return Object.freeze({ kind: "skip" });
+    }
+    if (!input.imitationExists) {
+      return Object.freeze({ kind: "log-no-race" });
+    }
+    return Object.freeze({ kind: "click", imitateRace: input.imitateRace });
+  }
+
+  // src/application/evolution.ts
+  function runEvolution(dependencies) {
+    const {
+      reader,
+      executor,
+      runUniverseSelection,
+      runPlanetSelection: runPlanetSelection2,
+      challengeGroups
+    } = dependencies;
+    if (!shouldEvolve(reader.sampleSpecies())) {
+      return;
+    }
+    runUniverseSelection();
+    runPlanetSelection2();
+    if (!hasLandedSomewhere(reader.sampleLandingGate())) {
+      return;
+    }
+    if (!reader.hasStoredTarget()) {
+      executor.loadQueuedSettings();
+      const decision2 = planEvolutionTarget(reader.sampleTargetSelection());
+      if (decision2.kind === "wait") {
+        return;
+      }
+      executor.commitTarget(decision2.id, decision2.name);
+    }
+    const groupIds = challengeGroups.map((group) => group.members[0]?.id).filter((id) => id !== void 0);
+    const enabled = reader.sampleChallengeEnabled(groupIds);
+    for (const candidate of evolutionChallengeCandidates(
+      challengeGroups,
+      enabled
+    )) {
+      if (reader.sampleRaceTrait(candidate.trait) !== 1) {
+        const clicked = executor.clickEvolution(candidate.id);
+        if (clicked && candidate.cycleEnding) {
+          return;
+        }
+      }
+    }
+    const targetId = reader.storedTargetId();
+    if (targetId === null) {
+      throw new TypeError("evolution target missing after selection phase");
+    }
+    const costs = reader.sampleCosts(targetId);
+    executor.accumulateResources(
+      planResourceAccumulation(costs.maxRna, costs.maxDna, {
+        rnaCurrent: costs.rnaCurrent,
+        rnaMax: costs.rnaMax,
+        dnaCurrent: costs.dnaCurrent,
+        dnaMax: costs.dnaMax
+      })
+    );
+    const treePlan = planEvolutionTreeClick(reader.sampleEvolutionTree(targetId));
+    if (treePlan.kind === "click" && executor.clickEvolution(treePlan.id)) {
+      return;
+    }
+    for (const id of planEvolutionCells(
+      reader.sampleCells(),
+      costs.maxRna,
+      costs.maxDna
+    )) {
+      executor.clickEvolution(id);
+    }
+    const imitation = planImitation(reader.sampleImitation());
+    if (imitation.kind === "click") {
+      if (!executor.clickImitation(imitation.imitateRace)) {
+        executor.logImitationUnavailable(imitation.imitateRace);
+      }
+    } else if (imitation.kind === "log-no-race") {
+      executor.logImitationNoRace();
+    }
+  }
+
+  // src/domain/progression/evolution/planet-selection.ts
+  function shouldSelectPlanet(gate) {
+    if (gate.universe === "bigbang") {
+      return false;
+    }
+    if (!gate.seeded || gate.chose) {
+      return false;
+    }
+    if (gate.targetName === "none") {
+      return false;
+    }
+    return true;
+  }
+  function planetSelectionAchievementIds(planets, raceGenusById, biomeGenus) {
+    const ids = /* @__PURE__ */ new Set();
+    for (const planet of planets) {
+      ids.add(`biome_${planet.biome}`);
+      for (const trait2 of planet.traits) {
+        if (trait2 !== "none") {
+          ids.add(`atmo_${trait2}`);
+        }
+      }
+      const genus = biomeGenus[planet.biome];
+      if (genus) {
+        for (const raceId of Object.keys(raceGenusById)) {
+          if (raceGenusById[raceId] === genus) {
+            ids.add(`extinct_${raceId}`);
+          }
+        }
+        ids.add(`genus_${genus}`);
+      }
+      ids.add("madagascar_tree");
+    }
+    return Object.freeze([...ids]);
+  }
+  function planPlanetSelection(input) {
+    if (input.planets.length === 0) {
+      throw new TypeError("planet selection requires at least one candidate");
+    }
+    const unlocked2 = (id) => input.achievementUnlocked[id] === true;
+    const weightOf = (value) => value ?? NaN;
+    const scored = input.planets.map((planet) => {
+      let achieve = 0;
+      if (!unlocked2(`biome_${planet.biome}`)) {
+        achieve++;
+      }
+      for (const trait2 of planet.traits) {
+        if (trait2 !== "none" && !unlocked2(`atmo_${trait2}`)) {
+          achieve++;
+        }
+      }
+      const genus = input.biomeGenus[planet.biome];
+      if (genus) {
+        for (const raceId of Object.keys(input.raceGenusById)) {
+          if (input.raceGenusById[raceId] === genus && !unlocked2(`extinct_${raceId}`)) {
+            achieve++;
+          }
+        }
+        if (!unlocked2(`genus_${genus}`)) {
+          achieve++;
+        }
+      }
+      if (!unlocked2("madagascar_tree") && planet.biome === "oceanic" && input.gods !== "sharkin") {
+        achieve++;
+      }
+      let weighting = 0;
+      weighting += weightOf(input.biomeWeights[planet.biome]);
+      for (const trait2 of planet.traits) {
+        weighting += weightOf(input.traitWeights[trait2]);
+      }
+      weighting += achieve * weightOf(input.achievementWeight);
+      weighting += planet.orbit * weightOf(input.orbitWeight);
+      let numShow = input.minersDreamLevel !== null ? input.minersDreamLevel >= 4 ? input.minersDreamLevel * 2 - 3 : input.minersDreamLevel : 0;
+      if ((input.lamentisLevel ?? NaN) >= 0) {
+        numShow++;
+      }
+      for (const id of Object.keys(planet.geology)) {
+        const deposit = planet.geology[id];
+        if (deposit === 0) {
+          continue;
+        }
+        if (numShow-- > 0) {
+          weighting += deposit / 0.01 * weightOf(input.geologyWeights[id]);
+        } else {
+          weighting += (deposit > 0 ? 1 : -1) * weightOf(input.geologyWeights[id]);
+        }
+      }
+      return { planet, achieve, weighting };
+    });
+    const habitability = (entry) => input.biomeOrder.indexOf(entry.planet.biome);
+    const ordered = [...scored];
+    if (input.targetName === "weighting") {
+      ordered.sort((a, b) => b.weighting - a.weighting);
+    }
+    if (input.targetName === "habitable") {
+      ordered.sort((a, b) => habitability(a) - habitability(b));
+    }
+    if (input.targetName === "achieve") {
+      ordered.sort(
+        (a, b) => a.achieve !== b.achieve ? b.achieve - a.achieve : habitability(a) - habitability(b)
+      );
+    }
+    return Object.freeze({ elementId: ordered[0].planet.id });
+  }
+
+  // src/application/planet-selection.ts
+  function runPlanetSelection({
+    reader,
+    executor
+  }) {
+    const gate = reader.sampleGate();
+    if (!shouldSelectPlanet(gate)) {
+      return;
+    }
+    const sample = reader.sampleCandidates();
+    const achievementUnlocked = reader.achievementsUnlocked(
+      planetSelectionAchievementIds(
+        sample.planets,
+        sample.raceGenusById,
+        sample.biomeGenus
+      ),
+      sample.starLevel
+    );
+    executor.execute(
+      planPlanetSelection({
+        planets: sample.planets,
+        targetName: gate.targetName,
+        gods: sample.gods,
+        raceGenusById: sample.raceGenusById,
+        biomeGenus: sample.biomeGenus,
+        achievementUnlocked,
+        minersDreamLevel: sample.minersDreamLevel,
+        lamentisLevel: sample.lamentisLevel,
+        biomeWeights: sample.biomeWeights,
+        traitWeights: sample.traitWeights,
+        achievementWeight: sample.achievementWeight,
+        orbitWeight: sample.orbitWeight,
+        geologyWeights: sample.geologyWeights,
+        biomeOrder: sample.biomeOrder
+      })
+    );
+  }
+
+  // src/domain/progression/evolution/universe-selection.ts
+  function planUniverseSelection(input) {
+    if (!input.hasBigbang || input.universe !== "bigbang" || input.targetName === "none") {
+      return null;
+    }
+    return input.targetName;
+  }
+
+  // src/bootstrap/evolution-controls.ts
+  function createEvolutionControls(dependencies) {
+    const universeSelectionExecutor = createUniverseSelectionCommandExecutor({
+      getGame: dependencies.universeSelection.executor.getGame,
+      controls: createUniverseSelectionControls(
+        dependencies.universeSelection.executor.getDocument
+      )
+    });
+    const autoUniverseSelection = () => universeSelectionExecutor.execute(
+      planUniverseSelection(
+        readUniverseSelectionInput(dependencies.universeSelection.reader)
+      )
+    );
+    const planetSelectionReader = createPlanetSelectionReader(
+      dependencies.planetSelection.reader
+    );
+    const planetSelectionExecutor = createPlanetSelectionCommandExecutor({
+      getGame: dependencies.planetSelection.executor.getGame,
+      controls: createPlanetSelectionControls(
+        dependencies.planetSelection.executor.getDocument,
+        dependencies.planetSelection.executor.getMouseEvent
+      )
+    });
+    const autoPlanetSelection = () => runPlanetSelection({
+      reader: planetSelectionReader,
+      executor: planetSelectionExecutor
+    });
+    const evolutionReader = createEvolutionReader(dependencies.evolutionReader);
+    const evolutionExecutor = createEvolutionCommandExecutor(
+      dependencies.evolutionExecutor
+    );
+    const autoEvolution = () => runEvolution({
+      reader: evolutionReader,
+      executor: evolutionExecutor,
+      runUniverseSelection: autoUniverseSelection,
+      runPlanetSelection: autoPlanetSelection,
+      challengeGroups: dependencies.challengeGroups
+    });
+    return Object.freeze({
+      autoEvolution,
+      autoUniverseSelection,
+      autoPlanetSelection
+    });
+  }
+
   // src/adapters/browser/wish-controls.ts
   function createWishControls(dependencies) {
     return Object.freeze({
@@ -37273,588 +38216,6 @@
     });
   }
 
-  // src/adapters/evolve/progression/evolution/evolution.ts
-  function race(game) {
-    return requireRecord(
-      requireRecord(requireRecord(game, "game")["global"], "game.global")["race"],
-      "game.global.race"
-    );
-  }
-  function globalStats(game) {
-    return requireRecord(
-      requireRecord(requireRecord(game, "game")["global"], "game.global")["stats"],
-      "game.global.stats"
-    );
-  }
-  function toNumber3(value) {
-    return Number(value);
-  }
-  function raceObjects(getRaces) {
-    const races = requireRecord(getRaces(), "races");
-    return Object.values(races).map(
-      (value) => (
-        // Adapter edge: the game's Race instances are opaque; the reader only
-        // reads documented getters/methods and never mutates them.
-        value
-      )
-    );
-  }
-  function evolutionActions(getEvolutions) {
-    return requireRecord(getEvolutions(), "evolutions");
-  }
-  function resolveEvolutionTree(getRaces, getSettings, targetId) {
-    const races = requireRecord(getRaces(), "races");
-    const target = requireRecord(races[targetId], `races.${targetId}`);
-    const tree = requireRecord(
-      target["evolutionTree"],
-      `races.${targetId}.evolutionTree`
-    );
-    const settings = requireRecord(getSettings(), "settings");
-    const genus = settings["userEvolutionGenus"];
-    const branch = (typeof genus === "string" ? tree[genus] : void 0) ?? tree[Object.keys(tree)[0]];
-    if (!Array.isArray(branch)) {
-      throw new TypeError(
-        `races.${targetId}.evolutionTree branch is not an array`
-      );
-    }
-    return branch;
-  }
-  function createEvolutionReader(dependencies) {
-    const challengeTraitById = /* @__PURE__ */ new Map();
-    for (const group of dependencies.challengeGroups) {
-      for (const member of group.members) {
-        challengeTraitById.set(member.id, member.trait);
-      }
-    }
-    const resourceLevel = (id) => {
-      const resources = requireRecord(dependencies.getResources(), "resources");
-      const resource2 = requireRecord(resources[id], `resources.${id}`);
-      return {
-        current: toNumber3(resource2["currentQuantity"]),
-        max: toNumber3(resource2["maxQuantity"])
-      };
-    };
-    return Object.freeze({
-      sampleSpecies() {
-        const species = race(dependencies.getGame())["species"];
-        return typeof species === "string" ? species : "";
-      },
-      sampleLandingGate() {
-        const current = race(dependencies.getGame());
-        const universe = current["universe"];
-        return Object.freeze({
-          universe: typeof universe === "string" ? universe : null,
-          seeded: Boolean(current["seeded"]),
-          chose: Boolean(current["chose"])
-        });
-      },
-      hasStoredTarget() {
-        const state = requireRecord(dependencies.getState(), "state");
-        return state["evolutionTarget"] !== null;
-      },
-      storedTargetId() {
-        const state = requireRecord(dependencies.getState(), "state");
-        const target = state["evolutionTarget"];
-        return typeof target === "string" ? target : null;
-      },
-      sampleTargetSelection() {
-        const settings = requireRecord(dependencies.getSettings(), "settings");
-        const settingsRaw = requireRecord(
-          dependencies.getSettingsRaw(),
-          "settingsRaw"
-        );
-        const state = requireRecord(dependencies.getState(), "state");
-        const stats = globalStats(dependencies.getGame());
-        const achieve = requireRecord(
-          stats["achieve"],
-          "game.global.stats.achieve"
-        );
-        const races = raceObjects(dependencies.getRaces).map(
-          (r) => Object.freeze({
-            id: r.id,
-            weighting: toNumber3(r.getWeighting()),
-            habitability: toNumber3(r.getHabitability()),
-            genus: String(r.genus),
-            name: String(r.name)
-          })
-        );
-        const queue = settingsRaw["evolutionQueue"];
-        const userTarget = settings["userEvolutionTarget"];
-        return Object.freeze({
-          races: Object.freeze(races),
-          userEvolutionTarget: typeof userTarget === "string" ? userTarget : String(userTarget),
-          massExtinction: Boolean(achieve["mass_extinction"]),
-          queueEnabled: Boolean(settings["evolutionQueueEnabled"]),
-          queueLength: Array.isArray(queue) ? queue.length : 0,
-          queueRepeat: Boolean(settings["evolutionQueueRepeat"]),
-          evolutionAttempts: toNumber3(state["evolutionAttempts"])
-        });
-      },
-      sampleRaceTrait(trait2) {
-        const value = race(dependencies.getGame())[trait2];
-        return typeof value === "number" ? value : NaN;
-      },
-      sampleCosts(targetId) {
-        const tree = resolveEvolutionTree(
-          dependencies.getRaces,
-          dependencies.getSettings,
-          targetId
-        );
-        const poly = requireRecord(dependencies.getPoly(), "poly");
-        const adjustCosts = requireFunction(
-          poly["adjustCosts"],
-          "poly.adjustCosts"
-        );
-        let maxRna = 0;
-        let maxDna = 0;
-        for (const action of tree) {
-          const costs = requireRecord(
-            adjustCosts(action.definition),
-            "adjustedCosts"
-          );
-          const rnaCost = costs["RNA"];
-          const dnaCost = costs["DNA"];
-          maxRna = Math.max(
-            maxRna,
-            Number(typeof rnaCost === "function" ? rnaCost() : 0)
-          );
-          maxDna = Math.max(
-            maxDna,
-            Number(typeof dnaCost === "function" ? dnaCost() : 0)
-          );
-        }
-        const rna = resourceLevel("RNA");
-        const dna = resourceLevel("DNA");
-        return Object.freeze({
-          maxRna,
-          maxDna,
-          rnaCurrent: rna.current,
-          rnaMax: rna.max,
-          dnaCurrent: dna.current,
-          dnaMax: dna.max
-        });
-      },
-      sampleEvolutionTree(targetId) {
-        const tree = resolveEvolutionTree(
-          dependencies.getRaces,
-          dependencies.getSettings,
-          targetId
-        );
-        const current = race(dependencies.getGame());
-        return Object.freeze(
-          tree.map((action) => {
-            const trait2 = challengeTraitById.get(action.id);
-            return Object.freeze({
-              id: action.id,
-              unlocked: Boolean(action.isUnlocked()),
-              activeChallenge: trait2 !== void 0 && Boolean(current[trait2])
-            });
-          })
-        );
-      },
-      sampleCells() {
-        const evolutions = evolutionActions(dependencies.getEvolutions);
-        const rna = resourceLevel("RNA");
-        const dna = resourceLevel("DNA");
-        const countOf = (id) => {
-          const action = evolutions[id];
-          if (action === void 0) {
-            throw new TypeError(`evolutions.${id} is missing`);
-          }
-          return toNumber3(action.count);
-        };
-        return Object.freeze({
-          mitochondriaCount: countOf("mitochondria"),
-          eukaryoticCellCount: countOf("eukaryotic_cell"),
-          nucleusCount: countOf("nucleus"),
-          organellesCount: countOf("organelles"),
-          rnaMax: rna.max,
-          dnaMax: dna.max
-        });
-      },
-      sampleImitation() {
-        const current = race(dependencies.getGame());
-        const settings = requireRecord(dependencies.getSettings(), "settings");
-        const imitateRaceValue = settings["imitateRace"];
-        const imitateRace = typeof imitateRaceValue === "string" ? imitateRaceValue : String(imitateRaceValue);
-        const imitations = requireRecord(
-          dependencies.getImitations(),
-          "imitations"
-        );
-        const wanted = `s-${imitateRace}`;
-        const imitationExists = Object.values(imitations).some((value) => {
-          return typeof value === "object" && value !== null && value["id"] === wanted;
-        });
-        return Object.freeze({
-          evoFinalMenu: Boolean(current["evoFinalMenu"]),
-          imitationExists,
-          imitateRace
-        });
-      },
-      sampleChallengeEnabled(groupIds) {
-        const settings = requireRecord(dependencies.getSettings(), "settings");
-        const enabled = {};
-        for (const id of groupIds) {
-          enabled[id] = Boolean(settings[`challenge_${id}`]);
-        }
-        return Object.freeze(enabled);
-      }
-    });
-  }
-  function createEvolutionCommandExecutor(dependencies) {
-    const setResourceCurrent = (id, value) => {
-      const resources = requireRecord(dependencies.getResources(), "resources");
-      const resource2 = requireRecord(resources[id], `resources.${id}`);
-      resource2["currentQuantity"] = value;
-    };
-    return Object.freeze({
-      loadQueuedSettings() {
-        dependencies.loadQueuedSettings();
-      },
-      commitTarget(id, name) {
-        const state = requireRecord(dependencies.getState(), "state");
-        state["evolutionTarget"] = id;
-        dependencies.gameLog.logSuccess(
-          "special",
-          `Attempting evolution of ${name}.`,
-          ["progress"]
-        );
-      },
-      clickEvolution(id) {
-        const evolutions = evolutionActions(dependencies.getEvolutions);
-        const action = evolutions[id];
-        if (action === void 0) {
-          throw new TypeError(`evolutions.${id} is missing`);
-        }
-        return Boolean(action.click());
-      },
-      accumulateResources(command) {
-        const evolution = requireRecord(
-          requireRecord(
-            requireRecord(dependencies.getGame(), "game")["actions"],
-            "game.actions"
-          )["evolution"],
-          "game.actions.evolution"
-        );
-        const rna = requireRecord(evolution["rna"], "game.actions.evolution.rna");
-        const dna = requireRecord(evolution["dna"], "game.actions.evolution.dna");
-        const rnaAction = requireFunction(
-          rna["action"],
-          "game.actions.evolution.rna.action"
-        );
-        const dnaAction = requireFunction(
-          dna["action"],
-          "game.actions.evolution.dna.action"
-        );
-        for (let i = 0; i < command.rnaForDna; i++) {
-          rnaAction();
-        }
-        for (let i = 0; i < command.dnaForEvolution; i++) {
-          dnaAction();
-        }
-        for (let i = 0; i < command.rnaForEvolution; i++) {
-          rnaAction();
-        }
-        setResourceCurrent("RNA", command.newRna);
-        setResourceCurrent("DNA", command.newDna);
-      },
-      clickImitation(imitateRace) {
-        const imitations = requireRecord(
-          dependencies.getImitations(),
-          "imitations"
-        );
-        const wanted = `s-${imitateRace}`;
-        const target = Object.values(imitations).find(
-          (value) => typeof value === "object" && value !== null && value["id"] === wanted
-        );
-        return target !== void 0 ? Boolean(target.click()) : false;
-      },
-      logImitationUnavailable(imitateRace) {
-        dependencies.gameLog.logDanger(
-          "special",
-          `${imitateRace} not avaialble for imitation. Please select an available race.`,
-          ["progress", "achievements"]
-        );
-      },
-      logImitationNoRace() {
-        dependencies.gameLog.logDanger(
-          "special",
-          `No race selected for imitation. Please select an available race to continue.`,
-          ["progress", "achievements"]
-        );
-      }
-    });
-  }
-
-  // src/domain/progression/evolution/evolution.ts
-  var CYCLE_ENDING_CHALLENGES = Object.freeze([
-    "junker",
-    "sludge",
-    "ultra_sludge",
-    "warlord"
-  ]);
-  function shouldEvolve(species) {
-    return species === "protoplasm";
-  }
-  function hasLandedSomewhere(gate) {
-    if (gate.universe === "bigbang") {
-      return false;
-    }
-    if (gate.seeded && !gate.chose) {
-      return false;
-    }
-    return true;
-  }
-  function raceById(races, id) {
-    return races.find((race2) => race2.id === id);
-  }
-  function planEvolutionTarget(input) {
-    let target;
-    if (input.userEvolutionTarget === "auto") {
-      const byWeighting = [...input.races].sort(
-        (a, b) => b.weighting - a.weighting
-      );
-      if (input.massExtinction) {
-        target = byWeighting[0];
-      } else {
-        const genusList = input.races.map((race2) => race2.genus).filter((genus, index, all) => all.indexOf(genus) === index);
-        const genusWeights = genusList.map(
-          (genus) => [
-            genus,
-            input.races.filter((race2) => race2.genus === genus).map((race2) => race2.weighting).reduce((sum, next) => sum + next)
-          ]
-        );
-        const bestGenus = [...genusWeights].sort((a, b) => b[1] - a[1])[0][0];
-        target = byWeighting.find((race2) => race2.genus === bestGenus);
-      }
-    } else {
-      const userRace = raceById(input.races, input.userEvolutionTarget);
-      if (userRace && userRace.habitability > 0) {
-        target = userRace;
-      }
-    }
-    if (target === void 0 && input.queueEnabled && input.queueLength > 0 && (!input.queueRepeat || input.evolutionAttempts < input.queueLength)) {
-      return Object.freeze({ kind: "wait" });
-    }
-    if (target === void 0) {
-      const custom = raceById(input.races, "custom");
-      target = custom && custom.habitability > 0 ? custom : raceById(input.races, "entish");
-    }
-    if (target === void 0) {
-      throw new TypeError("evolution target fallback race is unavailable");
-    }
-    return Object.freeze({ kind: "target", id: target.id, name: target.name });
-  }
-  function evolutionChallengeCandidates(groups, enabled) {
-    const candidates = [];
-    for (const group of groups) {
-      const groupId = group.members[0]?.id;
-      if (groupId === void 0 || enabled[groupId] !== true) {
-        continue;
-      }
-      for (const member of group.members) {
-        candidates.push(
-          Object.freeze({
-            id: member.id,
-            trait: member.trait,
-            cycleEnding: CYCLE_ENDING_CHALLENGES.includes(member.id)
-          })
-        );
-      }
-    }
-    return Object.freeze(candidates);
-  }
-  function planResourceAccumulation(maxRna, maxDna, levels) {
-    const dnaForEvolution = Math.min(
-      maxDna - levels.dnaCurrent,
-      levels.dnaMax - levels.dnaCurrent,
-      levels.rnaMax / 2
-    );
-    const rnaForDna = Math.min(
-      dnaForEvolution * 2 - levels.rnaCurrent,
-      levels.rnaMax - levels.rnaCurrent
-    );
-    const rnaRemaining = levels.rnaCurrent + rnaForDna - dnaForEvolution * 2;
-    const rnaForEvolution = Math.min(
-      maxRna - rnaRemaining,
-      levels.rnaMax - rnaRemaining
-    );
-    return Object.freeze({
-      rnaForDna,
-      dnaForEvolution,
-      rnaForEvolution,
-      newRna: rnaRemaining + rnaForEvolution,
-      newDna: levels.dnaCurrent + dnaForEvolution
-    });
-  }
-  function planEvolutionTreeClick(tree) {
-    for (const action of tree) {
-      if (!action.unlocked) {
-        continue;
-      }
-      if (action.activeChallenge) {
-        continue;
-      }
-      return Object.freeze({ kind: "click", id: action.id });
-    }
-    return Object.freeze({ kind: "none" });
-  }
-  function planEvolutionCells(input, maxRna, maxDna) {
-    const clicks = [];
-    if (input.mitochondriaCount < 1 || input.rnaMax < maxRna || input.dnaMax < maxDna) {
-      clicks.push("mitochondria");
-    }
-    if (input.eukaryoticCellCount < 1 || input.dnaMax < maxDna) {
-      clicks.push("eukaryotic_cell");
-    }
-    if (input.rnaMax < maxRna) {
-      clicks.push("membrane");
-    }
-    if (input.nucleusCount < 10) {
-      clicks.push("nucleus");
-    }
-    if (input.organellesCount < 10) {
-      clicks.push("organelles");
-    }
-    return Object.freeze(clicks);
-  }
-  function planImitation(input) {
-    if (!input.evoFinalMenu) {
-      return Object.freeze({ kind: "skip" });
-    }
-    if (!input.imitationExists) {
-      return Object.freeze({ kind: "log-no-race" });
-    }
-    return Object.freeze({ kind: "click", imitateRace: input.imitateRace });
-  }
-
-  // src/application/evolution.ts
-  function runEvolution(dependencies) {
-    const {
-      reader,
-      executor,
-      runUniverseSelection,
-      runPlanetSelection: runPlanetSelection2,
-      challengeGroups
-    } = dependencies;
-    if (!shouldEvolve(reader.sampleSpecies())) {
-      return;
-    }
-    runUniverseSelection();
-    runPlanetSelection2();
-    if (!hasLandedSomewhere(reader.sampleLandingGate())) {
-      return;
-    }
-    if (!reader.hasStoredTarget()) {
-      executor.loadQueuedSettings();
-      const decision2 = planEvolutionTarget(reader.sampleTargetSelection());
-      if (decision2.kind === "wait") {
-        return;
-      }
-      executor.commitTarget(decision2.id, decision2.name);
-    }
-    const groupIds = challengeGroups.map((group) => group.members[0]?.id).filter((id) => id !== void 0);
-    const enabled = reader.sampleChallengeEnabled(groupIds);
-    for (const candidate of evolutionChallengeCandidates(
-      challengeGroups,
-      enabled
-    )) {
-      if (reader.sampleRaceTrait(candidate.trait) !== 1) {
-        const clicked = executor.clickEvolution(candidate.id);
-        if (clicked && candidate.cycleEnding) {
-          return;
-        }
-      }
-    }
-    const targetId = reader.storedTargetId();
-    if (targetId === null) {
-      throw new TypeError("evolution target missing after selection phase");
-    }
-    const costs = reader.sampleCosts(targetId);
-    executor.accumulateResources(
-      planResourceAccumulation(costs.maxRna, costs.maxDna, {
-        rnaCurrent: costs.rnaCurrent,
-        rnaMax: costs.rnaMax,
-        dnaCurrent: costs.dnaCurrent,
-        dnaMax: costs.dnaMax
-      })
-    );
-    const treePlan = planEvolutionTreeClick(reader.sampleEvolutionTree(targetId));
-    if (treePlan.kind === "click" && executor.clickEvolution(treePlan.id)) {
-      return;
-    }
-    for (const id of planEvolutionCells(
-      reader.sampleCells(),
-      costs.maxRna,
-      costs.maxDna
-    )) {
-      executor.clickEvolution(id);
-    }
-    const imitation = planImitation(reader.sampleImitation());
-    if (imitation.kind === "click") {
-      if (!executor.clickImitation(imitation.imitateRace)) {
-        executor.logImitationUnavailable(imitation.imitateRace);
-      }
-    } else if (imitation.kind === "log-no-race") {
-      executor.logImitationNoRace();
-    }
-  }
-
-  // src/adapters/evolve/progression/evolution/universe-selection.ts
-  function readUniverseSelectionInput(dependencies) {
-    const game = requireRecord(dependencies.getGame(), "game");
-    const settings = requireRecord(dependencies.getSettings(), "settings");
-    const race2 = requireRecord(
-      requireRecord(game["global"], "game.global")["race"],
-      "game.global.race"
-    );
-    const targetName = settings["userUniverseTargetName"];
-    if (typeof targetName !== "string") {
-      throw new TypeError("settings.userUniverseTargetName must be a string");
-    }
-    const universe = race2["universe"];
-    return Object.freeze({
-      hasBigbang: Boolean(race2["bigbang"]),
-      universe: typeof universe === "string" ? universe : null,
-      targetName
-    });
-  }
-  function createUniverseSelectionCommandExecutor(dependencies) {
-    return Object.freeze({
-      execute(targetName) {
-        if (targetName === null) {
-          return SUCCEEDED;
-        }
-        const game = requireRecord(dependencies.getGame(), "game");
-        const race2 = requireRecord(
-          requireRecord(game["global"], "game.global")["race"],
-          "game.global.race"
-        );
-        if (!race2["bigbang"] || race2["universe"] !== "bigbang") {
-          return stale(
-            "universe-selection-unavailable",
-            "universe selection became unavailable"
-          );
-        }
-        if (!dependencies.controls.selectUniverse(targetName)) {
-          return stale(
-            "universe-control-unavailable",
-            "universe selection control became unavailable"
-          );
-        }
-        return SUCCEEDED;
-      }
-    });
-  }
-
-  // src/domain/progression/evolution/universe-selection.ts
-  function planUniverseSelection(input) {
-    if (!input.hasBigbang || input.universe !== "bigbang" || input.targetName === "none") {
-      return null;
-    }
-    return input.targetName;
-  }
-
   // src/adapters/evolve/economy/production/craft.ts
   function callBoolean17(record, name, path) {
     return Boolean(
@@ -38966,322 +39327,6 @@
     for (const command of planPrestige(reader.samplePrestige())) {
       executor.execute(command);
     }
-  }
-
-  // src/adapters/evolve/progression/evolution/planet-selection.ts
-  function requireRace(game) {
-    return requireRecord(
-      requireRecord(requireRecord(game, "game")["global"], "game.global")["race"],
-      "game.global.race"
-    );
-  }
-  function achievementLevel(value) {
-    if (!value) {
-      return null;
-    }
-    const level = typeof value === "object" ? value["l"] : void 0;
-    return typeof level === "number" ? level : NaN;
-  }
-  function createPlanetSelectionReader(dependencies) {
-    return Object.freeze({
-      sampleGate() {
-        const race2 = requireRace(dependencies.getGame());
-        const settings = requireRecord(dependencies.getSettings(), "settings");
-        const targetName = settings["userPlanetTargetName"];
-        const universe = race2["universe"];
-        return Object.freeze({
-          universe: typeof universe === "string" ? universe : null,
-          seeded: Boolean(race2["seeded"]),
-          chose: Boolean(race2["chose"]),
-          // Legacy only ever compared this setting with ===; a non-string value
-          // matched neither "none" nor a sort mode, so it stays lenient as null.
-          targetName: typeof targetName === "string" ? targetName : null
-        });
-      },
-      sampleCandidates() {
-        const race2 = requireRace(dependencies.getGame());
-        const settings = requireRecord(dependencies.getSettings(), "settings");
-        const stats = requireRecord(
-          requireRecord(
-            requireRecord(dependencies.getGame(), "game")["global"],
-            "game.global"
-          )["stats"],
-          "game.global.stats"
-        );
-        const achieve = requireRecord(
-          stats["achieve"],
-          "game.global.stats.achieve"
-        );
-        const generate = requireFunction(
-          dependencies.getGeneratePlanets(),
-          "generatePlanets"
-        );
-        const generated = generate();
-        if (!Array.isArray(generated) || generated.length === 0) {
-          throw new TypeError(
-            "generatePlanets must return at least one candidate"
-          );
-        }
-        const planets = generated.map((value, index) => {
-          const planet = requireRecord(value, `planets[${index}]`);
-          const id = planet["id"];
-          if (typeof id !== "string") {
-            throw new TypeError(`planets[${index}].id must be a string`);
-          }
-          const biome = planet["biome"];
-          if (typeof biome !== "string") {
-            throw new TypeError(`planets[${index}].biome must be a string`);
-          }
-          const rawTraits = planet["traits"];
-          if (!Array.isArray(rawTraits)) {
-            throw new TypeError(`planets[${index}].traits must be an array`);
-          }
-          const traits = rawTraits.map((trait2, traitIndex) => {
-            if (typeof trait2 !== "string") {
-              throw new TypeError(
-                `planets[${index}].traits[${traitIndex}] must be a string`
-              );
-            }
-            return trait2;
-          });
-          const rawGeology = requireRecord(
-            planet["geology"],
-            `planets[${index}].geology`
-          );
-          const geology = {};
-          for (const key of Object.keys(rawGeology)) {
-            geology[key] = requireNumber(
-              rawGeology[key],
-              `planets[${index}].geology.${key}`
-            );
-          }
-          return Object.freeze({
-            id,
-            biome,
-            traits: Object.freeze(traits),
-            orbit: requireNumber(planet["orbit"], `planets[${index}].orbit`),
-            geology: Object.freeze(geology)
-          });
-        });
-        const weightOf = (key) => {
-          const value = settings[key];
-          return typeof value === "number" ? value : void 0;
-        };
-        const biomeWeights = {};
-        const traitWeights = {};
-        const geologyWeights = {};
-        for (const planet of planets) {
-          biomeWeights[planet.biome] = weightOf(`biome_w_${planet.biome}`);
-          for (const trait2 of planet.traits) {
-            traitWeights[trait2] = weightOf(`trait_w_${trait2}`);
-          }
-          for (const id of Object.keys(planet.geology)) {
-            geologyWeights[id] = weightOf(`extra_w_${id}`);
-          }
-        }
-        const races = requireRecord(dependencies.getRaces(), "races");
-        const raceGenusById = {};
-        for (const raceId of Object.keys(races)) {
-          const value = races[raceId];
-          const genus = typeof value === "object" && value !== null ? value["genus"] : void 0;
-          raceGenusById[raceId] = typeof genus === "string" ? genus : null;
-        }
-        const getStarLevel = requireFunction(
-          dependencies.getStarLevel(),
-          "getStarLevel"
-        );
-        const gods = race2["gods"];
-        return Object.freeze({
-          planets: Object.freeze(planets),
-          gods: typeof gods === "string" ? gods : null,
-          starLevel: requireNumber(getStarLevel(settings), "starLevel"),
-          raceGenusById: Object.freeze(raceGenusById),
-          biomeGenus: dependencies.biomeGenus,
-          minersDreamLevel: achievementLevel(achieve["miners_dream"]),
-          lamentisLevel: achievementLevel(achieve["lamentis"]),
-          biomeWeights: Object.freeze(biomeWeights),
-          traitWeights: Object.freeze(traitWeights),
-          achievementWeight: weightOf("extra_w_Achievement"),
-          orbitWeight: weightOf("extra_w_Orbit"),
-          geologyWeights: Object.freeze(geologyWeights),
-          biomeOrder: dependencies.biomeOrder
-        });
-      },
-      achievementsUnlocked(ids, starLevel) {
-        const isUnlocked2 = requireFunction(
-          dependencies.getIsAchievementUnlocked(),
-          "isAchievementUnlocked"
-        );
-        const unlocked2 = {};
-        for (const id of ids) {
-          unlocked2[id] = Boolean(isUnlocked2(id, starLevel));
-        }
-        return Object.freeze(unlocked2);
-      }
-    });
-  }
-  function createPlanetSelectionCommandExecutor(dependencies) {
-    return Object.freeze({
-      execute(decision2) {
-        const race2 = requireRace(dependencies.getGame());
-        if (race2["universe"] === "bigbang" || !race2["seeded"] || Boolean(race2["chose"])) {
-          return stale(
-            "planet-selection-unavailable",
-            "planet selection became unavailable"
-          );
-        }
-        if (!dependencies.controls.selectPlanet(decision2.elementId)) {
-          return stale(
-            "planet-control-unavailable",
-            "planet selection control became unavailable"
-          );
-        }
-        return SUCCEEDED;
-      }
-    });
-  }
-
-  // src/domain/progression/evolution/planet-selection.ts
-  function shouldSelectPlanet(gate) {
-    if (gate.universe === "bigbang") {
-      return false;
-    }
-    if (!gate.seeded || gate.chose) {
-      return false;
-    }
-    if (gate.targetName === "none") {
-      return false;
-    }
-    return true;
-  }
-  function planetSelectionAchievementIds(planets, raceGenusById, biomeGenus) {
-    const ids = /* @__PURE__ */ new Set();
-    for (const planet of planets) {
-      ids.add(`biome_${planet.biome}`);
-      for (const trait2 of planet.traits) {
-        if (trait2 !== "none") {
-          ids.add(`atmo_${trait2}`);
-        }
-      }
-      const genus = biomeGenus[planet.biome];
-      if (genus) {
-        for (const raceId of Object.keys(raceGenusById)) {
-          if (raceGenusById[raceId] === genus) {
-            ids.add(`extinct_${raceId}`);
-          }
-        }
-        ids.add(`genus_${genus}`);
-      }
-      ids.add("madagascar_tree");
-    }
-    return Object.freeze([...ids]);
-  }
-  function planPlanetSelection(input) {
-    if (input.planets.length === 0) {
-      throw new TypeError("planet selection requires at least one candidate");
-    }
-    const unlocked2 = (id) => input.achievementUnlocked[id] === true;
-    const weightOf = (value) => value ?? NaN;
-    const scored = input.planets.map((planet) => {
-      let achieve = 0;
-      if (!unlocked2(`biome_${planet.biome}`)) {
-        achieve++;
-      }
-      for (const trait2 of planet.traits) {
-        if (trait2 !== "none" && !unlocked2(`atmo_${trait2}`)) {
-          achieve++;
-        }
-      }
-      const genus = input.biomeGenus[planet.biome];
-      if (genus) {
-        for (const raceId of Object.keys(input.raceGenusById)) {
-          if (input.raceGenusById[raceId] === genus && !unlocked2(`extinct_${raceId}`)) {
-            achieve++;
-          }
-        }
-        if (!unlocked2(`genus_${genus}`)) {
-          achieve++;
-        }
-      }
-      if (!unlocked2("madagascar_tree") && planet.biome === "oceanic" && input.gods !== "sharkin") {
-        achieve++;
-      }
-      let weighting = 0;
-      weighting += weightOf(input.biomeWeights[planet.biome]);
-      for (const trait2 of planet.traits) {
-        weighting += weightOf(input.traitWeights[trait2]);
-      }
-      weighting += achieve * weightOf(input.achievementWeight);
-      weighting += planet.orbit * weightOf(input.orbitWeight);
-      let numShow = input.minersDreamLevel !== null ? input.minersDreamLevel >= 4 ? input.minersDreamLevel * 2 - 3 : input.minersDreamLevel : 0;
-      if ((input.lamentisLevel ?? NaN) >= 0) {
-        numShow++;
-      }
-      for (const id of Object.keys(planet.geology)) {
-        const deposit = planet.geology[id];
-        if (deposit === 0) {
-          continue;
-        }
-        if (numShow-- > 0) {
-          weighting += deposit / 0.01 * weightOf(input.geologyWeights[id]);
-        } else {
-          weighting += (deposit > 0 ? 1 : -1) * weightOf(input.geologyWeights[id]);
-        }
-      }
-      return { planet, achieve, weighting };
-    });
-    const habitability = (entry) => input.biomeOrder.indexOf(entry.planet.biome);
-    const ordered = [...scored];
-    if (input.targetName === "weighting") {
-      ordered.sort((a, b) => b.weighting - a.weighting);
-    }
-    if (input.targetName === "habitable") {
-      ordered.sort((a, b) => habitability(a) - habitability(b));
-    }
-    if (input.targetName === "achieve") {
-      ordered.sort(
-        (a, b) => a.achieve !== b.achieve ? b.achieve - a.achieve : habitability(a) - habitability(b)
-      );
-    }
-    return Object.freeze({ elementId: ordered[0].planet.id });
-  }
-
-  // src/application/planet-selection.ts
-  function runPlanetSelection({
-    reader,
-    executor
-  }) {
-    const gate = reader.sampleGate();
-    if (!shouldSelectPlanet(gate)) {
-      return;
-    }
-    const sample = reader.sampleCandidates();
-    const achievementUnlocked = reader.achievementsUnlocked(
-      planetSelectionAchievementIds(
-        sample.planets,
-        sample.raceGenusById,
-        sample.biomeGenus
-      ),
-      sample.starLevel
-    );
-    executor.execute(
-      planPlanetSelection({
-        planets: sample.planets,
-        targetName: gate.targetName,
-        gods: sample.gods,
-        raceGenusById: sample.raceGenusById,
-        biomeGenus: sample.biomeGenus,
-        achievementUnlocked,
-        minersDreamLevel: sample.minersDreamLevel,
-        lamentisLevel: sample.lamentisLevel,
-        biomeWeights: sample.biomeWeights,
-        traitWeights: sample.traitWeights,
-        achievementWeight: sample.achievementWeight,
-        orbitWeight: sample.orbitWeight,
-        geologyWeights: sample.geologyWeights,
-        biomeOrder: sample.biomeOrder
-      })
-    );
   }
 
   // src/domain/civic/jobs.ts
@@ -55245,50 +55290,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     const challengeGroups = challenges.map((members) => ({ members }));
-    const evolutionReader = createEvolutionReader({
-      getGame: () => game,
-      getSettings: () => settings,
-      getSettingsRaw: () => settingsRaw,
-      getState: () => state,
-      getRaces: () => races,
-      getEvolutions: () => evolutions,
-      getImitations: () => imitations,
-      getResources: () => resources,
-      getPoly: () => poly,
-      challengeGroups
-    });
-    const evolutionExecutor = createEvolutionCommandExecutor({
-      getGame: () => game,
-      getState: () => state,
-      getResources: () => resources,
-      getEvolutions: () => evolutions,
-      getImitations: () => imitations,
-      loadQueuedSettings,
-      gameLog: GameLog
-    });
-    const autoEvolution = () => runEvolution({
-      reader: evolutionReader,
-      executor: evolutionExecutor,
-      runUniverseSelection: autoUniverseSelection,
-      runPlanetSelection: autoPlanetSelection,
-      challengeGroups
-    });
-    const universeSelectionExecutor = createUniverseSelectionCommandExecutor({
-      getGame: () => game,
-      controls: createUniverseSelectionControls(
-        () => runtimeEnvironment.document
-      )
-    });
-    const autoUniverseSelection = function autoUniverseSelection2() {
-      universeSelectionExecutor.execute(
-        planUniverseSelection(
-          readUniverseSelectionInput({
-            getGame: () => game,
-            getSettings: () => settings
-          })
-        )
-      );
-    };
     let { generatePlanets } = createPlanetGeneration({
       getGame: () => game,
       getPoly: () => poly,
@@ -55303,26 +55304,56 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         isAchievementUnlocked2 = context.isAchievementUnlocked;
       }
     });
-    const planetSelectionReader = createPlanetSelectionReader({
-      getGame: () => game,
-      getSettings: () => settings,
-      getGeneratePlanets: () => generatePlanets,
-      getStarLevel: () => getStarLevel,
-      getIsAchievementUnlocked: () => isAchievementUnlocked2,
-      getRaces: () => races,
-      biomeGenus: planetBiomeGenus,
-      biomeOrder: planetBiomes
-    });
-    const planetSelectionExecutor = createPlanetSelectionCommandExecutor({
-      getGame: () => game,
-      controls: createPlanetSelectionControls(
-        () => runtimeEnvironment.document,
-        () => MouseEvent
-      )
-    });
-    const autoPlanetSelection = () => runPlanetSelection({
-      reader: planetSelectionReader,
-      executor: planetSelectionExecutor
+    const { autoEvolution, autoUniverseSelection, autoPlanetSelection } = createEvolutionControls({
+      evolutionReader: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getSettingsRaw: () => settingsRaw,
+        getState: () => state,
+        getRaces: () => races,
+        getEvolutions: () => evolutions,
+        getImitations: () => imitations,
+        getResources: () => resources,
+        getPoly: () => poly,
+        challengeGroups
+      },
+      evolutionExecutor: {
+        getGame: () => game,
+        getState: () => state,
+        getResources: () => resources,
+        getEvolutions: () => evolutions,
+        getImitations: () => imitations,
+        loadQueuedSettings,
+        gameLog: GameLog
+      },
+      challengeGroups,
+      universeSelection: {
+        reader: {
+          getGame: () => game,
+          getSettings: () => settings
+        },
+        executor: {
+          getGame: () => game,
+          getDocument: () => runtimeEnvironment.document
+        }
+      },
+      planetSelection: {
+        reader: {
+          getGame: () => game,
+          getSettings: () => settings,
+          getGeneratePlanets: () => generatePlanets,
+          getStarLevel: () => getStarLevel,
+          getIsAchievementUnlocked: () => isAchievementUnlocked2,
+          getRaces: () => races,
+          biomeGenus: planetBiomeGenus,
+          biomeOrder: planetBiomes
+        },
+        executor: {
+          getGame: () => game,
+          getDocument: () => runtimeEnvironment.document,
+          getMouseEvent: () => MouseEvent
+        }
+      }
     });
     const { autoCraft } = createCraftControl({
       reader: {

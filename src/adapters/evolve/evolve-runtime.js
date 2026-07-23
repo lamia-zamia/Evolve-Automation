@@ -287,10 +287,7 @@ import { createFactoryControl } from "../../bootstrap/factory-control.ts";
 import { createMiningDroidControl } from "../../bootstrap/mining-droid-control.ts";
 import { createGrapheneControl } from "../../bootstrap/graphene-control.ts";
 import { createShapeshiftControl } from "../../bootstrap/shapeshift-control.ts";
-import {
-  createPlanetSelectionControls,
-  createUniverseSelectionControls,
-} from "../browser/progression-controls.ts";
+import { createEvolutionControls } from "../../bootstrap/evolution-controls.ts";
 import { createWishControl } from "../../bootstrap/wish-control.ts";
 import { createGeneticsControl } from "../../bootstrap/genetics-control.ts";
 import { createMercenaryControl } from "../../bootstrap/mercenary-control.ts";
@@ -309,16 +306,6 @@ import { createStorageAllocationAdapter } from "./economy/storage/storage-alloca
 import { createStorageDebugSource } from "../browser/storage-debug.ts";
 import { createGalaxyMarketControl } from "../../bootstrap/galaxy-market-control.ts";
 import { createGatherResourcesControl } from "../../bootstrap/gather-resources-control.ts";
-import {
-  createEvolutionReader,
-  createEvolutionCommandExecutor,
-} from "./progression/evolution/evolution.ts";
-import { runEvolution } from "../../application/evolution.ts";
-import {
-  createUniverseSelectionCommandExecutor,
-  readUniverseSelectionInput,
-} from "./progression/evolution/universe-selection.ts";
-import { planUniverseSelection } from "../../domain/progression/evolution/universe-selection.ts";
 import { createCraftControl } from "../../bootstrap/craft-control.ts";
 import { createSpyControl } from "../../bootstrap/spy-control.ts";
 import {
@@ -326,11 +313,6 @@ import {
   createPrestigeCommandExecutor,
 } from "./progression/prestige/prestige.ts";
 import { runPrestige } from "../../application/prestige.ts";
-import {
-  createPlanetSelectionCommandExecutor,
-  createPlanetSelectionReader,
-} from "./progression/evolution/planet-selection.ts";
-import { runPlanetSelection } from "../../application/planet-selection.ts";
 import { createJobsControl } from "../../bootstrap/jobs-control.ts";
 import { createBuildControl } from "../../bootstrap/build-control.ts";
 import { createResearchControl } from "../../bootstrap/research-control.ts";
@@ -3681,53 +3663,6 @@ function startEvolveRuntimeComposition(
   });
 
   const challengeGroups = challenges.map((members) => ({ members }));
-  const evolutionReader = createEvolutionReader({
-    getGame: () => game,
-    getSettings: () => settings,
-    getSettingsRaw: () => settingsRaw,
-    getState: () => state,
-    getRaces: () => races,
-    getEvolutions: () => evolutions,
-    getImitations: () => imitations,
-    getResources: () => resources,
-    getPoly: () => poly,
-    challengeGroups,
-  });
-  const evolutionExecutor = createEvolutionCommandExecutor({
-    getGame: () => game,
-    getState: () => state,
-    getResources: () => resources,
-    getEvolutions: () => evolutions,
-    getImitations: () => imitations,
-    loadQueuedSettings,
-    gameLog: GameLog,
-  });
-  const autoEvolution = () =>
-    runEvolution({
-      reader: evolutionReader,
-      executor: evolutionExecutor,
-      runUniverseSelection: autoUniverseSelection,
-      runPlanetSelection: autoPlanetSelection,
-      challengeGroups,
-    });
-
-  const universeSelectionExecutor = createUniverseSelectionCommandExecutor({
-    getGame: () => game,
-    controls: createUniverseSelectionControls(
-      () => runtimeEnvironment.document,
-    ),
-  });
-  const autoUniverseSelection = function autoUniverseSelection() {
-    universeSelectionExecutor.execute(
-      planUniverseSelection(
-        readUniverseSelectionInput({
-          getGame: () => game,
-          getSettings: () => settings,
-        }),
-      ),
-    );
-  };
-
   // function setPlanet from actions.js
   // Produces same set of planets, accurate for v1.0.29
   let { generatePlanets } = createPlanetGeneration({
@@ -3746,27 +3681,57 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const planetSelectionReader = createPlanetSelectionReader({
-    getGame: () => game,
-    getSettings: () => settings,
-    getGeneratePlanets: () => generatePlanets,
-    getStarLevel: () => getStarLevel,
-    getIsAchievementUnlocked: () => isAchievementUnlocked,
-    getRaces: () => races,
-    biomeGenus: planetBiomeGenus,
-    biomeOrder: planetBiomes,
-  });
-  const planetSelectionExecutor = createPlanetSelectionCommandExecutor({
-    getGame: () => game,
-    controls: createPlanetSelectionControls(
-      () => runtimeEnvironment.document,
-      () => MouseEvent,
-    ),
-  });
-  const autoPlanetSelection = () =>
-    runPlanetSelection({
-      reader: planetSelectionReader,
-      executor: planetSelectionExecutor,
+  const { autoEvolution, autoUniverseSelection, autoPlanetSelection } =
+    createEvolutionControls({
+      evolutionReader: {
+        getGame: () => game,
+        getSettings: () => settings,
+        getSettingsRaw: () => settingsRaw,
+        getState: () => state,
+        getRaces: () => races,
+        getEvolutions: () => evolutions,
+        getImitations: () => imitations,
+        getResources: () => resources,
+        getPoly: () => poly,
+        challengeGroups,
+      },
+      evolutionExecutor: {
+        getGame: () => game,
+        getState: () => state,
+        getResources: () => resources,
+        getEvolutions: () => evolutions,
+        getImitations: () => imitations,
+        loadQueuedSettings,
+        gameLog: GameLog,
+      },
+      challengeGroups,
+      universeSelection: {
+        reader: {
+          getGame: () => game,
+          getSettings: () => settings,
+        },
+        executor: {
+          getGame: () => game,
+          getDocument: () => runtimeEnvironment.document,
+        },
+      },
+      planetSelection: {
+        reader: {
+          getGame: () => game,
+          getSettings: () => settings,
+          getGeneratePlanets: () => generatePlanets,
+          getStarLevel: () => getStarLevel,
+          getIsAchievementUnlocked: () => isAchievementUnlocked,
+          getRaces: () => races,
+          biomeGenus: planetBiomeGenus,
+          biomeOrder: planetBiomes,
+        },
+        executor: {
+          getGame: () => game,
+          getDocument: () => runtimeEnvironment.document,
+          getMouseEvent: () => MouseEvent,
+        },
+      },
     });
 
   const { autoCraft } = createCraftControl({
