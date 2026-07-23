@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createSnapshotMetadata } from "../src/domain/snapshot.ts";
-import { planTax } from "../src/domain/tax.ts";
+import { planTax } from "../src/domain/civic/tax.ts";
 import { createFixtureBuilder } from "./test-support/modernization-fixtures.mjs";
 
 const buildSnapshot = createFixtureBuilder({

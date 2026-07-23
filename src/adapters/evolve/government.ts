@@ -1,7 +1,7 @@
 import type {
   GovernmentDecision,
   GovernmentInput,
-} from "../../domain/government.ts";
+} from "../../domain/civic/government.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { GovernmentControls } from "../../ports/government-controls.ts";
 import { stale, SUCCEEDED } from "../command-outcomes.ts";

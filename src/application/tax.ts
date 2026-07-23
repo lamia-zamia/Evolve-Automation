@@ -1,6 +1,10 @@
 import { createCycleRunner, type CycleTrace } from "./cycle-runner.ts";
 import type { AdjustTaxRateCommand } from "../domain/commands.ts";
-import { planTax, type TaxSettings, type TaxSnapshot } from "../domain/tax.ts";
+import {
+  planTax,
+  type TaxSettings,
+  type TaxSnapshot,
+} from "../domain/civic/tax.ts";
 import type { Clock } from "../ports/clock.ts";
 import type { GameCommandExecutor } from "../ports/game-command-executor.ts";
 import type { GameReader } from "../ports/game-reader.ts";

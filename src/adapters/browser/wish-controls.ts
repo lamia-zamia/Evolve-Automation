@@ -1,4 +1,4 @@
-import type { WishTier } from "../../domain/wish.ts";
+import type { WishTier } from "../../domain/traits/wish.ts";
 import type { WishControls } from "../../ports/wish.ts";
 
 export interface WishControlsDependencies {

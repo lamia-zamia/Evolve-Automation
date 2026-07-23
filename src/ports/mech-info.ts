@@ -1,4 +1,4 @@
-import type { MechInfoItem } from "../domain/mech-info.ts";
+import type { MechInfoItem } from "../domain/combat/mech-info.ts";
 
 export interface MechInfoReader {
   ensureLabActive(): boolean;

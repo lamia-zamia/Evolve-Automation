@@ -1,4 +1,4 @@
-import type { MarketSettingsIntent } from "../domain/market-settings.ts";
+import type { MarketSettingsIntent } from "../domain/economy/market/market-settings.ts";
 import type {
   MarketSettingsEffects,
   MarketSettingsIntentHandler,

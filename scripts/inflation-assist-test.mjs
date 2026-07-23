@@ -5,7 +5,7 @@ import {
   isInflationAssistActive,
   isInflationMoneyReachable,
   shouldSaveInflationMoney,
-} from "../src/domain/inflation-assist.ts";
+} from "../src/domain/economy/resources/inflation-assist.ts";
 import {
   legacyInflationSecondsToFinish,
   legacyInflationAssistActive,

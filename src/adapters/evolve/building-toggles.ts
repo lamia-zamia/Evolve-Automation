@@ -1,5 +1,5 @@
 import { requireRecord } from "../validation.ts";
-import type { BuildingToggleItem } from "../../domain/building-toggles.ts";
+import type { BuildingToggleItem } from "../../domain/progression/build/building-toggles.ts";
 import type { BuildingToggleReader } from "../../ports/building-toggles.ts";
 
 export interface BuildingToggleEvolveDependencies {

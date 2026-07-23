@@ -1,4 +1,4 @@
-import type { PlanetSettingsIntent } from "../domain/planet-settings.ts";
+import type { PlanetSettingsIntent } from "../domain/progression/evolution/planet-settings.ts";
 import type {
   PlanetSettingsIntentHandler,
   PlanetSettingsWriter,

@@ -1,7 +1,7 @@
 import type {
   ResearchDecision,
   ResearchTechView,
-} from "../../domain/research.ts";
+} from "../../domain/progression/research/research.ts";
 import type {
   ResearchCommandExecutor,
   ResearchExecutionResult,

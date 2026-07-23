@@ -3,7 +3,7 @@ import type {
   MiningDroidDecision,
   MiningDroidPlanningInput,
   MiningDroidProductionInput,
-} from "../../domain/mining-droid.ts";
+} from "../../domain/economy/production/mining-droid.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { MiningDroidReader } from "../../ports/mining-droid.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";

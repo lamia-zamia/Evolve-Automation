@@ -1,7 +1,7 @@
 import type {
   HellSettingsIntent,
   HellSettingsReadModel,
-} from "../domain/hell-settings.ts";
+} from "../domain/combat/hell-settings.ts";
 
 export interface HellSettingsReader {
   read(): HellSettingsReadModel;

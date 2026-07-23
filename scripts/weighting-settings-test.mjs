@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createWeightingSettingsBrowserAdapter } from "../src/adapters/browser/weighting-settings.ts";
-import { getWeightingSettingsReadModel } from "../src/domain/weighting-settings.ts";
+import { getWeightingSettingsReadModel } from "../src/domain/economy/resources/weighting-settings.ts";
 
 const readModel = getWeightingSettingsReadModel();
 assert.equal(Object.isFrozen(readModel), true);

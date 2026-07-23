@@ -5,7 +5,10 @@ import {
   createMarketCommandExecutor,
   createMarketReader,
 } from "../src/adapters/evolve/market.ts";
-import { planMarketBuy, planMarketSell } from "../src/domain/market.ts";
+import {
+  planMarketBuy,
+  planMarketSell,
+} from "../src/domain/economy/market/market.ts";
 import {
   assertEquivalentTraces,
   createTraceRecorder,

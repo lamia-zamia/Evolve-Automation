@@ -3,7 +3,7 @@ import {
   type JobSettingsControl,
   type JobSettingsReadModel,
   type JobSettingsRow,
-} from "../../domain/job-settings.ts";
+} from "../../domain/civic/job-settings.ts";
 import type { JobSettingsIntentHandler } from "../../ports/job-settings.ts";
 
 interface ScrollDocument {

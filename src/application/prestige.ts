@@ -1,4 +1,4 @@
-import { planPrestige } from "../domain/prestige.ts";
+import { planPrestige } from "../domain/progression/prestige/prestige.ts";
 import type { PrestigeExecutor, PrestigeReader } from "../ports/prestige.ts";
 
 export interface PrestigeCycleDependencies {

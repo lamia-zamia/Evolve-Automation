@@ -1,4 +1,4 @@
-import type { WeightingSettingsIntent } from "../domain/weighting-settings.ts";
+import type { WeightingSettingsIntent } from "../domain/economy/resources/weighting-settings.ts";
 
 /** Receives user intents emitted by the AutoBuild Weighting settings UI. */
 export interface WeightingSettingsIntentHandler {

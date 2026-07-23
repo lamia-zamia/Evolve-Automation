@@ -2,7 +2,7 @@ import {
   createGovernmentSettingsReadModel,
   type GovernmentSettingsOption,
   type GovernmentSettingsReadModel,
-} from "../../domain/government-settings.ts";
+} from "../../domain/civic/government-settings.ts";
 import { requireRecord } from "../validation.ts";
 
 interface GovernmentSettingsEvolveDependencies {

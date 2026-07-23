@@ -1,5 +1,8 @@
-import type { GrapheneFuelView, GrapheneInput } from "../../domain/graphene.ts";
-import type { GrapheneFuelAdjustment } from "../../domain/graphene.ts";
+import type {
+  GrapheneFuelView,
+  GrapheneInput,
+} from "../../domain/economy/production/graphene.ts";
+import type { GrapheneFuelAdjustment } from "../../domain/economy/production/graphene.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";
 import {

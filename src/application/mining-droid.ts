@@ -3,7 +3,7 @@ import {
   planMiningDroidAdjustments,
   planMiningDroidTargets,
   type MiningDroidDecision,
-} from "../domain/mining-droid.ts";
+} from "../domain/economy/production/mining-droid.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type { MiningDroidReader } from "../ports/mining-droid.ts";
 

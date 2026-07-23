@@ -1,4 +1,4 @@
-import type { AchievementGuardSettingsIntent } from "../domain/achievement-guard-settings.ts";
+import type { AchievementGuardSettingsIntent } from "../domain/progression/prestige/achievement-guard-settings.ts";
 import type {
   AchievementGuardSettingsIntentHandler,
   AchievementGuardSettingsWriter,

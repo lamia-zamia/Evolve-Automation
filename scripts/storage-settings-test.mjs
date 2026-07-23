@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createStorageSettingsBrowserAdapter } from "../src/adapters/browser/storage-settings.ts";
-import { createStorageSettingsReadModel } from "../src/domain/storage-settings.ts";
+import { createStorageSettingsReadModel } from "../src/domain/economy/storage/storage-settings.ts";
 
 let document = {
   documentElement: { scrollTop: 0 },

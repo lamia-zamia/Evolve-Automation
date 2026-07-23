@@ -2,7 +2,7 @@ import {
   createProjectSettingsReadModel,
   type ProjectSettingsReadModel,
   type ProjectSettingsRow,
-} from "../../domain/project-settings.ts";
+} from "../../domain/progression/research/project-settings.ts";
 import {
   requireFunction,
   requireRecord,

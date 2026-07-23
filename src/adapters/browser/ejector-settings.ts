@@ -2,7 +2,7 @@ import type {
   EjectorSettingsControl,
   EjectorSettingsReadModel,
   EjectorSettingsRow,
-} from "../../domain/ejector-settings.ts";
+} from "../../domain/economy/resources/ejector-settings.ts";
 import type { EjectorSettingsIntentHandler } from "../../ports/ejector-settings.ts";
 
 interface ScrollDocument {

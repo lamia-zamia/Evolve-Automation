@@ -10,7 +10,7 @@ import {
   planPowerCycle,
   planPowerWarningShutdown,
   recordPowerWarningCap,
-} from "../src/domain/power.ts";
+} from "../src/domain/economy/production/power.ts";
 
 class TestSupport {}
 

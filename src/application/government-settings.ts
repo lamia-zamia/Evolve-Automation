@@ -1,4 +1,4 @@
-import type { GovernmentSettingsIntent } from "../domain/government-settings.ts";
+import type { GovernmentSettingsIntent } from "../domain/civic/government-settings.ts";
 import type {
   GovernmentSettingsEffects,
   GovernmentSettingsIntentHandler,

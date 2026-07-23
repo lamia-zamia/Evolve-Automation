@@ -1,4 +1,4 @@
-import type { WarSettingsIntent } from "../domain/war-settings.ts";
+import type { WarSettingsIntent } from "../domain/combat/war-settings.ts";
 import type {
   WarSettingsEffects,
   WarSettingsIntentHandler,

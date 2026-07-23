@@ -1,5 +1,5 @@
 import { requireRecord } from "../validation.ts";
-import type { SupplyToggleItem } from "../../domain/supply-toggles.ts";
+import type { SupplyToggleItem } from "../../domain/economy/resources/supply-toggles.ts";
 import type { SupplyToggleReader } from "../../ports/supply-toggles.ts";
 
 export interface SupplyToggleEvolveDependencies {

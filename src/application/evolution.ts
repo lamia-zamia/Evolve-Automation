@@ -1,4 +1,4 @@
-import type { ChallengeGroup } from "../domain/evolution.ts";
+import type { ChallengeGroup } from "../domain/progression/evolution/evolution.ts";
 import {
   evolutionChallengeCandidates,
   hasLandedSomewhere,
@@ -8,7 +8,7 @@ import {
   planImitation,
   planResourceAccumulation,
   shouldEvolve,
-} from "../domain/evolution.ts";
+} from "../domain/progression/evolution/evolution.ts";
 import type { EvolutionExecutor, EvolutionReader } from "../ports/evolution.ts";
 
 export interface EvolutionCycleDependencies {

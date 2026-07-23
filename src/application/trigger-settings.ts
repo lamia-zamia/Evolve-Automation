@@ -1,4 +1,4 @@
-import type { TriggerSettingsIntent } from "../domain/trigger-settings.ts";
+import type { TriggerSettingsIntent } from "../domain/progression/build/trigger-settings.ts";
 import type {
   TriggerSettingsEffects,
   TriggerSettingsIntentHandler,

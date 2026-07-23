@@ -2,7 +2,7 @@ import type {
   WishInput,
   WishSelectionDecision,
   WishTier,
-} from "../../domain/wish.ts";
+} from "../../domain/traits/wish.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { WishControls, WishReader } from "../../ports/wish.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";

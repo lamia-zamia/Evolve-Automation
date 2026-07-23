@@ -1,4 +1,4 @@
-import { selectPrestigeTopBarType } from "../../domain/prestige-top-bar.ts";
+import { selectPrestigeTopBarType } from "../../domain/progression/prestige/prestige-top-bar.ts";
 import type {
   PrestigeSettingsBuilder,
   PrestigeTopBarOptionsPort,

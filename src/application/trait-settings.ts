@@ -1,4 +1,4 @@
-import type { TraitSettingsIntent } from "../domain/trait-settings.ts";
+import type { TraitSettingsIntent } from "../domain/traits/trait-settings.ts";
 import type {
   TraitSettingsEffects,
   TraitSettingsIntentHandler,

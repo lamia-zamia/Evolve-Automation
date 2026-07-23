@@ -1,7 +1,7 @@
 import type {
   PrestigeSettingsIntent,
   PrestigeSettingsReadModel,
-} from "../domain/prestige-settings.ts";
+} from "../domain/progression/prestige/prestige-settings.ts";
 
 export interface PrestigeSettingsReader {
   read(): PrestigeSettingsReadModel;

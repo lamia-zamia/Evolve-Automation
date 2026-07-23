@@ -5,7 +5,7 @@ import type {
   MineRatioInput,
   ProductionRatioAdjustment,
   QuarryRatioInput,
-} from "../../domain/resource-ratios.ts";
+} from "../../domain/economy/resources/resource-ratios.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";
 import {

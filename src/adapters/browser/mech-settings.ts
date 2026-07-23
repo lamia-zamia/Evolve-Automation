@@ -1,7 +1,7 @@
 import type {
   MechSettingsControl,
   MechSettingsReadModel,
-} from "../../domain/mech-settings.ts";
+} from "../../domain/combat/mech-settings.ts";
 import type { MechSettingsIntentHandler } from "../../ports/mech-settings.ts";
 interface ScrollDocument {
   documentElement: { scrollTop: number };

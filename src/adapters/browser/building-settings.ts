@@ -2,7 +2,7 @@ import {
   type BuildingSettingsControl,
   type BuildingSettingsReadModel,
   type BuildingSettingsRow,
-} from "../../domain/building-settings.ts";
+} from "../../domain/progression/build/building-settings.ts";
 import type { BuildingSettingsIntentHandler } from "../../ports/building-settings.ts";
 
 interface BuildingElement {

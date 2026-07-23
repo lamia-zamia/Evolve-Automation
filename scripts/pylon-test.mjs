@@ -4,7 +4,7 @@ import {
   createPylonCommandExecutor,
   readPylonInput,
 } from "../src/adapters/evolve/pylon.ts";
-import { planPylon } from "../src/domain/pylon.ts";
+import { planPylon } from "../src/domain/economy/production/pylon.ts";
 
 // Independent transcription of RitualManager.costStep / manaCost from
 // src/game/magic-managers.ts, used by the legacy reference below. If the domain

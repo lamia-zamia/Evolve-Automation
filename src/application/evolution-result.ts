@@ -1,4 +1,4 @@
-import type { EvolutionLogEvent } from "../domain/evolution-result.ts";
+import type { EvolutionLogEvent } from "../domain/progression/evolution/evolution-result.ts";
 
 export interface EvolutionLogMessage {
   readonly level: "danger" | "warning" | "info";

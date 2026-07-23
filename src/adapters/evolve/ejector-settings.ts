@@ -7,7 +7,7 @@ import {
   createEjectorSettingsReadModel,
   type EjectorSettingsReadModel,
   type EjectorSettingsRow,
-} from "../../domain/ejector-settings.ts";
+} from "../../domain/economy/resources/ejector-settings.ts";
 import type { EjectorSettingsReader } from "../../ports/ejector-settings.ts";
 
 export interface EjectorSettingsEvolveDependencies {

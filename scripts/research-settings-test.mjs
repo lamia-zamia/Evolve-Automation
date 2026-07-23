@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createResearchSettingsBrowserAdapter } from "../src/adapters/browser/research-settings.ts";
-import { createResearchSettingsReadModel } from "../src/domain/research-settings.ts";
+import { createResearchSettingsReadModel } from "../src/domain/progression/research/research-settings.ts";
 
 let document = {
   documentElement: { scrollTop: 0 },

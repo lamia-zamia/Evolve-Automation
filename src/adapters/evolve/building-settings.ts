@@ -2,7 +2,7 @@ import {
   createBuildingSettingsReadModel,
   type BuildingSettingsReadModel,
   type BuildingSettingsRow,
-} from "../../domain/building-settings.ts";
+} from "../../domain/progression/build/building-settings.ts";
 import {
   requireFunction,
   requireRecord,

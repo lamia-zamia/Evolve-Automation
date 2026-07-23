@@ -14,7 +14,7 @@ import {
   type MechScrapCandidate,
   type MechScrapDecision,
   type MechSummary,
-} from "../../domain/mech.ts";
+} from "../../domain/combat/mech.ts";
 import type { MechExecutor, MechReader } from "../../ports/mech.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";
 import {

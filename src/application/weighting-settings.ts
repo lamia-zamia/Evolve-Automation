@@ -1,4 +1,4 @@
-import type { WeightingSettingsIntent } from "../domain/weighting-settings.ts";
+import type { WeightingSettingsIntent } from "../domain/economy/resources/weighting-settings.ts";
 import type {
   WeightingSettingsIntentHandler,
   WeightingSettingsWriter,

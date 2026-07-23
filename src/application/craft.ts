@@ -3,7 +3,7 @@ import {
   planCraft,
   shouldRunCraft,
   type CraftDecision,
-} from "../domain/craft.ts";
+} from "../domain/economy/production/craft.ts";
 import type { CraftReader } from "../ports/craft.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 

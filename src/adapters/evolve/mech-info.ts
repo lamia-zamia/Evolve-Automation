@@ -1,4 +1,7 @@
-import { formatMechInfo, type MechInfoItem } from "../../domain/mech-info.ts";
+import {
+  formatMechInfo,
+  type MechInfoItem,
+} from "../../domain/combat/mech-info.ts";
 import type {
   MechInfoObserver,
   MechInfoReader,

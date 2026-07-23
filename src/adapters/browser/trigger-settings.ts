@@ -7,7 +7,7 @@ import {
   type TriggerSettingsReadModel,
   type TriggerSettingsRow,
   type TriggerValue,
-} from "../../domain/trigger-settings.ts";
+} from "../../domain/progression/build/trigger-settings.ts";
 import type { TriggerSettingsIntentHandler } from "../../ports/trigger-settings.ts";
 
 interface ScrollDocument {

@@ -9,7 +9,7 @@ import type {
   DemandPrioritizationSettings,
   DemandTarget,
   DemandTech,
-} from "../../domain/demand-prioritization.ts";
+} from "../../domain/economy/resources/demand-prioritization.ts";
 import {
   requireBoolean,
   requireFunction,

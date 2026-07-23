@@ -2,7 +2,7 @@ import {
   createPlanetSettingsReadModel,
   type PlanetSettingsCell,
   type PlanetSettingsReadModel,
-} from "../../domain/planet-settings.ts";
+} from "../../domain/progression/evolution/planet-settings.ts";
 import { requireRecord } from "../validation.ts";
 
 interface PlanetSettingsEvolveDependencies {

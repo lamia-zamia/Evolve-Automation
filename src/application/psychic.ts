@@ -1,5 +1,5 @@
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import { planPsychic, type PsychicDecision } from "../domain/psychic.ts";
+import { planPsychic, type PsychicDecision } from "../domain/traits/psychic.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type { PsychicReader } from "../ports/psychic.ts";
 

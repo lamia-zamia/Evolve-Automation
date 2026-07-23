@@ -3,7 +3,7 @@ import type {
   MinorTraitPurchaseDecision,
   MinorTraitSummaryInput,
   MinorTraitSummaryView,
-} from "../../domain/minor-trait.ts";
+} from "../../domain/traits/minor-trait.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { MinorTraitReader } from "../../ports/minor-trait.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";

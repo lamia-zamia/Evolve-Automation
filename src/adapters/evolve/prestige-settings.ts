@@ -2,7 +2,7 @@ import {
   createPrestigeSettingsReadModel,
   type PrestigeSettingsOption,
   type PrestigeSettingsReadModel,
-} from "../../domain/prestige-settings.ts";
+} from "../../domain/progression/prestige/prestige-settings.ts";
 import { requireRecord } from "../validation.ts";
 
 interface PrestigeSettingsEvolveDependencies {

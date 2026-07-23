@@ -3,7 +3,7 @@ import {
   type MagicPylonRow,
   type MagicSettingsControl,
   type MagicSettingsReadModel,
-} from "../../domain/magic-settings.ts";
+} from "../../domain/economy/production/magic-settings.ts";
 import type { MagicSettingsIntentHandler } from "../../ports/magic-settings.ts";
 
 interface ScrollDocument {

@@ -1,4 +1,4 @@
-import type { ResearchSettingsIntent } from "../domain/research-settings.ts";
+import type { ResearchSettingsIntent } from "../domain/progression/research/research-settings.ts";
 import type {
   ResearchSettingsEffects,
   ResearchSettingsIntentHandler,

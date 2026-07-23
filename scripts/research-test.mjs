@@ -5,7 +5,7 @@ import {
   createResearchCommandExecutor,
   createResearchReader,
 } from "../src/adapters/evolve/research.ts";
-import { planResearch } from "../src/domain/research.ts";
+import { planResearch } from "../src/domain/progression/research/research.ts";
 
 function createFixture(definitions) {
   const trace = [];

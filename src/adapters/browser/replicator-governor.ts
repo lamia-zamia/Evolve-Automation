@@ -1,7 +1,7 @@
 import type {
   ReplicatorGovernorDecision,
   ReplicatorGovernorSettingsInput,
-} from "../../domain/replicator.ts";
+} from "../../domain/economy/production/replicator.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { ReplicatorGovernorOfficeReader } from "../../ports/replicator.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";

@@ -1,4 +1,4 @@
-import type { StorageSettingsIntent } from "../domain/storage-settings.ts";
+import type { StorageSettingsIntent } from "../domain/economy/storage/storage-settings.ts";
 import type {
   StorageSettingsEffects,
   StorageSettingsIntentHandler,

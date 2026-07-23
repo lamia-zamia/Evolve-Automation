@@ -15,7 +15,7 @@ import {
   type OuterFleetRegionInput,
   type OuterFleetTargetInput,
   type OuterFleetTargetPlan,
-} from "../../domain/fleet-outer.ts";
+} from "../../domain/combat/fleet-outer.ts";
 import type {
   OuterFleetExecutor,
   OuterFleetReader,

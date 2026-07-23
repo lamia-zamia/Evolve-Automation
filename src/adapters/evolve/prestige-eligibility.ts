@@ -5,7 +5,7 @@ import type {
   PrestigeEligibilityView,
   PrestigePermissionView,
   WitchAscensionEligibilityView,
-} from "../../domain/prestige-eligibility.ts";
+} from "../../domain/progression/prestige/prestige-eligibility.ts";
 
 type PrestigeEligibilityUnavailableReason =
   | "inaccessible-data"

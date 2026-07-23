@@ -10,7 +10,7 @@ import {
   planetSelectionAchievementIds,
   planPlanetSelection,
   shouldSelectPlanet,
-} from "../src/domain/planet-selection.ts";
+} from "../src/domain/progression/evolution/planet-selection.ts";
 import { createLegacyAutoPlanetSelection } from "./test-support/legacy-auto-planet-selection.ts";
 
 // Static lists copied from the composition root.

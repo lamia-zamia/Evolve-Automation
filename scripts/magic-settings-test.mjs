@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createMagicSettingsBrowserAdapter } from "../src/adapters/browser/magic-settings.ts";
-import { createMagicSettingsReadModel } from "../src/domain/magic-settings.ts";
+import { createMagicSettingsReadModel } from "../src/domain/economy/production/magic-settings.ts";
 
 let document = {
   documentElement: { scrollTop: 0 },

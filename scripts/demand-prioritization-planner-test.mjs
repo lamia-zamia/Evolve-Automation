@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { readDemandPrioritizationInput } from "../src/adapters/evolve/demand-prioritization.ts";
-import { planDemandPrioritization } from "../src/domain/demand-prioritization.ts";
+import { planDemandPrioritization } from "../src/domain/economy/resources/demand-prioritization.ts";
 
 // Exact copy of the deleted legacy `prioritizeDemandedResources` algorithm,
 // run against identical live fixtures to prove the reader + planner + apply

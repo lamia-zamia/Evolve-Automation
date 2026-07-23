@@ -2,7 +2,7 @@ import type {
   PrestigeBranch,
   PrestigeCommand,
   PrestigeInput,
-} from "../../domain/prestige.ts";
+} from "../../domain/progression/prestige/prestige.ts";
 import type { PrestigeExecutor, PrestigeReader } from "../../ports/prestige.ts";
 import { requireFunction, requireRecord } from "../validation.ts";
 

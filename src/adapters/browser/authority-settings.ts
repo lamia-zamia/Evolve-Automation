@@ -1,7 +1,7 @@
 import {
   getAuthoritySettingsReadModel,
   type AuthoritySettingsControl,
-} from "../../domain/authority-settings.ts";
+} from "../../domain/civic/authority-settings.ts";
 import type { AuthoritySettingsIntentHandler } from "../../ports/authority-settings.ts";
 
 interface ScrollDocument {

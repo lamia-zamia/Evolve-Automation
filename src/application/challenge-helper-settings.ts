@@ -1,4 +1,4 @@
-import type { ChallengeHelperSettingsIntent } from "../domain/challenge-helper-settings.ts";
+import type { ChallengeHelperSettingsIntent } from "../domain/progression/prestige/challenge-helper-settings.ts";
 import type {
   ChallengeHelperSettingsIntentHandler,
   ChallengeHelperSettingsWriter,

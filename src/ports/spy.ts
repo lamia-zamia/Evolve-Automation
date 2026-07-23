@@ -3,7 +3,7 @@ import type {
   SpyDecision,
   SpyEspionageInput,
   SpyTrainingInput,
-} from "../domain/spy.ts";
+} from "../domain/combat/spy.ts";
 import type { DecisionExecutor } from "./decision-executor.ts";
 
 export interface SpyReader {

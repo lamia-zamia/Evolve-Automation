@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { createPrestigeTopBarBrowserAdapter } from "../src/adapters/browser/prestige-top-bar.ts";
 import { createPrestigeTopBarEvolveAdapter } from "../src/adapters/evolve/prestige-top-bar.ts";
-import { selectPrestigeTopBarType } from "../src/domain/prestige-top-bar.ts";
+import { selectPrestigeTopBarType } from "../src/domain/progression/prestige/prestige-top-bar.ts";
 
 const catalog = [
   { value: "none", label: "None", hint: "No prestige" },

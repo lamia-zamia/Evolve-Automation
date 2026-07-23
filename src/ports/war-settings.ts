@@ -1,7 +1,7 @@
 import type {
   WarSettingsIntent,
   WarSettingsReadModel,
-} from "../domain/war-settings.ts";
+} from "../domain/combat/war-settings.ts";
 
 export interface WarSettingsReader {
   read(): WarSettingsReadModel;

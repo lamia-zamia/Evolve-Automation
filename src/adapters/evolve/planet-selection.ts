@@ -2,7 +2,7 @@ import type {
   PlanetCandidate,
   PlanetSelectionDecision,
   PlanetSelectionGate,
-} from "../../domain/planet-selection.ts";
+} from "../../domain/progression/evolution/planet-selection.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type {
   PlanetSelectionCandidatesSample,

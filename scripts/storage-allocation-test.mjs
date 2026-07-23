@@ -7,7 +7,7 @@ import {
   EMPTY_STORAGE_ALLOCATION_STATE,
   finalizeStorageAllocation,
   planStorageAllocation,
-} from "../src/domain/storage-allocation.ts";
+} from "../src/domain/economy/storage/storage-allocation.ts";
 
 function storageResource(id, overrides = {}) {
   return Object.freeze({

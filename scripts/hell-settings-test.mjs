@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { createHellSettingsIntentHandler } from "../src/application/hell-settings.ts";
 import { createHellSettingsBrowserAdapter } from "../src/adapters/browser/hell-settings.ts";
-import { getHellSettingsReadModel } from "../src/domain/hell-settings.ts";
+import { getHellSettingsReadModel } from "../src/domain/combat/hell-settings.ts";
 
 const model = getHellSettingsReadModel();
 assert.deepEqual(

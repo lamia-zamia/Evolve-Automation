@@ -14453,7 +14453,7 @@
     return { runCycle };
   }
 
-  // src/domain/storage-expansion.ts
+  // src/domain/economy/storage/storage-expansion.ts
   function affordableUnits(view) {
     let cap = view.maxQuantity - view.currentQuantity;
     for (const cost of view.costs) {
@@ -14800,7 +14800,7 @@
     };
   }
 
-  // src/domain/storage-requirements.ts
+  // src/domain/economy/storage/storage-requirements.ts
   function planStorageRequirements(input) {
     const bufferMult = input.storageAssignExtra ? 1.03 : 1;
     const acc = /* @__PURE__ */ new Map();
@@ -15166,7 +15166,7 @@
     });
   }
 
-  // src/domain/demand-prioritization.ts
+  // src/domain/economy/resources/demand-prioritization.ts
   function projectDoubles(target) {
     return target.isProject && target.progress !== null && target.progress < 99;
   }
@@ -15431,7 +15431,7 @@
     return { updatePriorityTargets };
   }
 
-  // src/domain/evolution-result.ts
+  // src/domain/progression/evolution/evolution-result.ts
   var INTENTIONAL_SPECIES = [
     "junker",
     "sludge",
@@ -15661,7 +15661,7 @@
     }
   }
 
-  // src/domain/authority.ts
+  // src/domain/civic/authority.ts
   function resolveAuthorityTarget(input) {
     if (!input.manage || input.configuredTarget === 0) return null;
     return input.configuredTarget < 0 ? input.maximum : input.configuredTarget;
@@ -16045,7 +16045,7 @@
     return gameMax - count2;
   }
 
-  // src/domain/resource-weighting.ts
+  // src/domain/economy/resources/resource-weighting.ts
   function findRequiredResourceWeight(orderedRequirements, resource2) {
     return orderedRequirements.find((requirement) => {
       const requiredQuantity = requirement.cost[resource2.id];
@@ -17290,7 +17290,7 @@
     });
   }
 
-  // src/domain/challenge-helper-settings.ts
+  // src/domain/progression/prestige/challenge-helper-settings.ts
   var challengeHelperSettingsReadModel = Object.freeze({
     sectionId: "challengeHelper",
     sectionName: "Challenge Helper",
@@ -17390,7 +17390,7 @@
     });
   }
 
-  // src/domain/achievement-guard-settings.ts
+  // src/domain/progression/prestige/achievement-guard-settings.ts
   var achievementGuardSettingsReadModel = Object.freeze({
     sectionId: "achievementGuard",
     sectionName: "Achievement Guard",
@@ -17517,7 +17517,7 @@
     });
   }
 
-  // src/domain/authority-settings.ts
+  // src/domain/civic/authority-settings.ts
   var authoritySettingsReadModel = Object.freeze({
     sectionId: "authority",
     sectionName: "Authority",
@@ -17835,7 +17835,7 @@
     });
   }
 
-  // src/domain/research-settings.ts
+  // src/domain/progression/research/research-settings.ts
   function freezeOption(option3) {
     return Object.freeze({ ...option3 });
   }
@@ -18246,7 +18246,7 @@
     });
   }
 
-  // src/domain/government-settings.ts
+  // src/domain/civic/government-settings.ts
   function freezeOption2(option3) {
     return Object.freeze({ ...option3 });
   }
@@ -18487,7 +18487,7 @@
     });
   }
 
-  // src/domain/planet-settings.ts
+  // src/domain/progression/evolution/planet-settings.ts
   function freezeCell(cell) {
     return Object.freeze({ ...cell });
   }
@@ -18671,7 +18671,7 @@
     });
   }
 
-  // src/domain/project-settings.ts
+  // src/domain/progression/research/project-settings.ts
   function freezeRow(row) {
     return Object.freeze({ ...row });
   }
@@ -18847,7 +18847,7 @@
     });
   }
 
-  // src/domain/storage-settings.ts
+  // src/domain/economy/storage/storage-settings.ts
   function freezeRow2(row) {
     return Object.freeze({ ...row });
   }
@@ -19047,7 +19047,7 @@
     });
   }
 
-  // src/domain/magic-settings.ts
+  // src/domain/economy/production/magic-settings.ts
   function freezeAlchemyRow(row) {
     return Object.freeze({ ...row });
   }
@@ -19314,7 +19314,7 @@
     });
   }
 
-  // src/domain/job-settings.ts
+  // src/domain/civic/job-settings.ts
   function freezeBreakpoint(breakpoint) {
     return Object.freeze({ ...breakpoint });
   }
@@ -19640,7 +19640,7 @@
     });
   }
 
-  // src/domain/weighting-settings.ts
+  // src/domain/economy/resources/weighting-settings.ts
   var weightingSettingsReadModel = Object.freeze({
     sectionId: "weighting",
     sectionName: "AutoBuild Weighting",
@@ -19904,7 +19904,7 @@
     });
   }
 
-  // src/domain/building-settings.ts
+  // src/domain/progression/build/building-settings.ts
   function freezeRow4(row) {
     return Object.freeze({
       ...row,
@@ -20705,7 +20705,7 @@
     });
   }
 
-  // src/domain/prestige-top-bar.ts
+  // src/domain/progression/prestige/prestige-top-bar.ts
   function selectPrestigeTopBarType(options2, selectedValue) {
     const selected = options2.find((option3) => option3.value === selectedValue);
     return selected ?? {
@@ -21828,7 +21828,7 @@
     });
   }
 
-  // src/domain/retirement-prep.ts
+  // src/domain/progression/prestige/retirement-prep.ts
   function isRetirementAssistActive(input) {
     return input.assistEnabled && input.truepath && input.retirePrestige && !input.isolationResearched;
   }
@@ -21996,7 +21996,7 @@
     );
   }
 
-  // src/domain/achievement-guards.ts
+  // src/domain/progression/prestige/achievement-guards.ts
   var ACHIEVEMENT_GUARD_NAMES = [
     "guardPacifist",
     "guardDreaded",
@@ -22351,7 +22351,7 @@
     }
   }
 
-  // src/domain/banana-republic.ts
+  // src/domain/civic/banana-republic.ts
   var BANANA_OBJECTIVE_IDS = ["b1", "b2", "b3", "b4", "b5"];
   function isBananaObjectiveId(value) {
     return BANANA_OBJECTIVE_IDS.includes(value);
@@ -22539,7 +22539,7 @@
     }
   }
 
-  // src/domain/inflation-assist.ts
+  // src/domain/economy/resources/inflation-assist.ts
   function isInflationAssistActive(input) {
     return input.assistEnabled && input.inflationRun && input.wheelbarrowStar < input.achievementLevel;
   }
@@ -22668,7 +22668,7 @@
     });
   }
 
-  // src/domain/prestige-eligibility.ts
+  // src/domain/progression/prestige/prestige-eligibility.ts
   function isPrestigeAllowed(view, type) {
     return view.settings.autoPrestige && !(view.settings.waitForArpa && view.game.activeArpaProjects > 0) && (type === void 0 || view.settings.selectedType === type);
   }
@@ -23100,7 +23100,7 @@
     }
   }
 
-  // src/domain/tech-conflicts.ts
+  // src/domain/progression/research/tech-conflicts.ts
   var RESET_RESEARCH = /* @__PURE__ */ new Set([
     "tech-exotic_infusion",
     "tech-infusion_check",
@@ -24408,7 +24408,7 @@
     });
   }
 
-  // src/domain/trade-routes.ts
+  // src/domain/economy/market/trade-routes.ts
   function planTradeRoutes(input) {
     const { settings } = input;
     const money = input.money;
@@ -24612,7 +24612,7 @@
     });
   }
 
-  // src/domain/hell.ts
+  // src/domain/combat/hell.ts
   function freezeCommands(commands) {
     return Object.freeze(commands.map((command) => Object.freeze(command)));
   }
@@ -25541,7 +25541,7 @@
     });
   }
 
-  // src/domain/government.ts
+  // src/domain/civic/government.ts
   function planGovernment(input) {
     let government = null;
     if (input.isEnabled && !input.guardAnarchist) {
@@ -25571,7 +25571,7 @@
     });
   }
 
-  // src/domain/battle.ts
+  // src/domain/combat/battle.ts
   function classifyOccupationCandidate(parameters, foreign) {
     if (foreign.policy !== "Occupy" || foreign.occupied) return "skip";
     const capacity = parameters.autoHell && parameters.hellAvailable ? parameters.maximumSoldiers - parameters.hellReservedSoldiers : parameters.maxCityGarrison;
@@ -26188,7 +26188,7 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/domain/tax.ts
+  // src/domain/civic/tax.ts
   function unavailableTaxSnapshot(metadata, reason) {
     return Object.freeze({ metadata, status: "unavailable", reason });
   }
@@ -27167,7 +27167,7 @@
     return Object.freeze({ readSettings: readSettings3 });
   }
 
-  // src/domain/smelter.ts
+  // src/domain/economy/production/smelter.ts
   var EMPTY_DECISION = Object.freeze({
     fuelAdjustments: Object.freeze([]),
     smeltAdjustments: Object.freeze([]),
@@ -27590,7 +27590,7 @@
     return Object.freeze({ execute: execute2 });
   }
 
-  // src/domain/alchemy.ts
+  // src/domain/economy/production/alchemy.ts
   var EMPTY = Object.freeze({
     decrease: Object.freeze([]),
     increase: Object.freeze([])
@@ -27873,7 +27873,7 @@
     return Object.freeze({ execute: execute2 });
   }
 
-  // src/domain/pylon.ts
+  // src/domain/economy/production/pylon.ts
   var EMPTY2 = Object.freeze({
     decrease: Object.freeze([]),
     increase: Object.freeze([])
@@ -28169,7 +28169,7 @@
     return Object.freeze({ quarry, mine, extractor });
   }
 
-  // src/domain/resource-ratios.ts
+  // src/domain/economy/resources/resource-ratios.ts
   var MAX = Number.MAX_SAFE_INTEGER;
   function fullnessWeight(demanded, storageRatio) {
     return demanded ? MAX : 100 - storageRatio * 100;
@@ -28245,7 +28245,7 @@
     );
   }
 
-  // src/domain/factory.ts
+  // src/domain/economy/production/factory.ts
   function setTooltip(tooltips, productionId, value) {
     tooltips.set(`iFactory${productionId}`, value);
   }
@@ -28844,7 +28844,7 @@
     });
   }
 
-  // src/domain/mining-droid.ts
+  // src/domain/economy/production/mining-droid.ts
   function planMiningDroidTargets(input) {
     if (!input.initialised) {
       return null;
@@ -29390,7 +29390,7 @@
     return Object.freeze({ execute: execute2 });
   }
 
-  // src/domain/graphene.ts
+  // src/domain/economy/production/graphene.ts
   function planGraphene(input) {
     if (!input.initialised) {
       return Object.freeze([]);
@@ -29591,7 +29591,7 @@
     });
   }
 
-  // src/domain/shapeshift.ts
+  // src/domain/traits/shapeshift.ts
   function planShapeshift(input) {
     if (!input.isShapeshifter || input.shifterGenus === "ignore" || input.currentGenus === input.shifterGenus) {
       return null;
@@ -29599,7 +29599,7 @@
     return input.shifterGenus;
   }
 
-  // src/domain/wish.ts
+  // src/domain/traits/wish.ts
   function planWishes(input) {
     if (!input.unlocked) return Object.freeze([]);
     const decisions = [];
@@ -29759,7 +29759,7 @@
     });
   }
 
-  // src/domain/genetics.ts
+  // src/domain/traits/genetics.ts
   function configuredTarget(mode) {
     if (mode === "enabled") return true;
     if (mode === "disabled") return false;
@@ -30180,7 +30180,7 @@
     });
   }
 
-  // src/domain/mercenary.ts
+  // src/domain/combat/mercenary.ts
   function planMercenaryCycle(input) {
     if (!input.available || input.saveInflationMoney && input.goal !== "Reset") {
       return null;
@@ -30427,7 +30427,7 @@
     return Object.freeze({ reader, executor, logger });
   }
 
-  // src/domain/psychic.ts
+  // src/domain/traits/psychic.ts
   var POWER_COSTS = Object.freeze({
     murder: [10, 8],
     boost: [75, 60],
@@ -30909,7 +30909,7 @@
     });
   }
 
-  // src/domain/ocular-power.ts
+  // src/domain/traits/ocular-power.ts
   function planOcularPowers(input) {
     if (input.capacity < 1) return Object.freeze([]);
     let enabledCount = 0;
@@ -31124,7 +31124,7 @@
     });
   }
 
-  // src/domain/minor-trait.ts
+  // src/domain/traits/minor-trait.ts
   function summarizeMinorTraits(input) {
     if (!input.unlocked || input.traits.length === 0) {
       return null;
@@ -31328,7 +31328,7 @@
     });
   }
 
-  // src/domain/trigger.ts
+  // src/domain/progression/build/trigger.ts
   function planTrigger(input) {
     if (input.target === null) {
       return null;
@@ -31458,7 +31458,7 @@
     });
   }
 
-  // src/domain/consume.ts
+  // src/domain/economy/resources/consume.ts
   function calculateConsumeKeepRatio(baseRatio, resource2, storageShift, hungryRace) {
     let keepRatio = baseRatio;
     if (keepRatio === -1) {
@@ -31848,7 +31848,7 @@
     });
   }
 
-  // src/domain/replicator.ts
+  // src/domain/economy/production/replicator.ts
   function planReplicatorPriority(input) {
     if (!input.initialised) {
       return null;
@@ -32397,7 +32397,7 @@
     });
   }
 
-  // src/domain/market.ts
+  // src/domain/economy/market/market.ts
   function batchTrade(side, input, maximumUnits) {
     if (maximumUnits <= input.maximumMultiplier) {
       return Object.freeze({
@@ -32890,7 +32890,7 @@
     });
   }
 
-  // src/domain/power.ts
+  // src/domain/economy/production/power.ts
   var POWER_WIDE_OSCILLATION_HOLD_TICKS = 10;
   function mapValue(map, key, label) {
     const value = map.get(key);
@@ -35224,7 +35224,7 @@
     });
   }
 
-  // src/domain/storage-allocation.ts
+  // src/domain/economy/storage/storage-allocation.ts
   var STORAGE_ALLOCATION_DEBOUNCE_TICKS = 3;
   function mapValue2(map, key, label) {
     const value = map.get(key);
@@ -36149,7 +36149,7 @@
     });
   }
 
-  // src/domain/galaxy-market.ts
+  // src/domain/economy/market/galaxy-market.ts
   function planGalaxyMarket(input) {
     if (!input.initialized) return null;
     const priorityGroups = /* @__PURE__ */ new Map();
@@ -36519,7 +36519,7 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/domain/gather-resources.ts
+  // src/domain/economy/resources/gather-resources.ts
   var DIRECT_TARGETS = Object.freeze([
     Object.freeze({ actionId: "food", resourceId: "Food" }),
     Object.freeze({ actionId: "lumber", resourceId: "Lumber" }),
@@ -37296,7 +37296,7 @@
     });
   }
 
-  // src/domain/evolution.ts
+  // src/domain/progression/evolution/evolution.ts
   var CYCLE_ENDING_CHALLENGES = Object.freeze([
     "junker",
     "sludge",
@@ -37557,7 +37557,7 @@
     });
   }
 
-  // src/domain/universe-selection.ts
+  // src/domain/progression/evolution/universe-selection.ts
   function planUniverseSelection(input) {
     if (!input.hasBigbang || input.universe !== "bigbang" || input.targetName === "none") {
       return null;
@@ -37565,7 +37565,7 @@
     return input.targetName;
   }
 
-  // src/domain/craft.ts
+  // src/domain/economy/production/craft.ts
   function shouldRunCraft(input) {
     return input.populationUnlocked && !input.noCraft;
   }
@@ -37906,7 +37906,7 @@
     });
   }
 
-  // src/domain/spy.ts
+  // src/domain/combat/spy.ts
   function planSpyCycle(input) {
     if (!input.available) return null;
     return Object.freeze({
@@ -38559,7 +38559,7 @@
     });
   }
 
-  // src/domain/prestige.ts
+  // src/domain/progression/prestige/prestige.ts
   var WITCH_ASCENSION_ACT = [
     { kind: "reset-modifier-keys" },
     { kind: "log-prestige" },
@@ -38835,7 +38835,7 @@
     });
   }
 
-  // src/domain/planet-selection.ts
+  // src/domain/progression/evolution/planet-selection.ts
   function shouldSelectPlanet(gate) {
     if (gate.universe === "bigbang") {
       return false;
@@ -38978,7 +38978,7 @@
     );
   }
 
-  // src/domain/jobs.ts
+  // src/domain/civic/jobs.ts
   function indexOfToken(input, token) {
     return token === null ? -1 : input.jobs.findIndex((job) => job.token === token);
   }
@@ -40357,7 +40357,7 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/domain/build.ts
+  // src/domain/progression/build/build.ts
   var SKIP_NEEDS = Object.freeze({ kind: "skip" });
   var PROCEED = Object.freeze({ kind: "proceed" });
   function initialBuildLoopState() {
@@ -40959,7 +40959,7 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/domain/research.ts
+  // src/domain/progression/research/research.ts
   function planResearch(input) {
     const tech = input.techs.find(
       (candidate) => candidate.affordable && !candidate.hasCostConflict
@@ -41096,7 +41096,7 @@
     });
   }
 
-  // src/domain/mutation.ts
+  // src/domain/traits/mutation.ts
   function planMutation(input) {
     if (!input.unlocked || input.currency === null) {
       return null;
@@ -41329,7 +41329,7 @@
     });
   }
 
-  // src/domain/fleet-outer.ts
+  // src/domain/combat/fleet-outer.ts
   function status(blueprint, messageBeforeUpdate, messageAfterUpdate, nextShipName = null) {
     return Object.freeze({
       kind: "outer-fleet-status",
@@ -42134,7 +42134,7 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/domain/fleet.ts
+  // src/domain/combat/fleet.ts
   var GALAXY_SHIP_NAMES = Object.freeze([
     "scout_ship",
     "corvette_ship",
@@ -42878,7 +42878,7 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/domain/mech.ts
+  // src/domain/combat/mech.ts
   function planMechCycle(input) {
     if (!input.available) return null;
     let drag = null;
@@ -43824,7 +43824,7 @@
     });
   }
 
-  // src/domain/ejector-settings.ts
+  // src/domain/economy/resources/ejector-settings.ts
   var spendOptions = Object.freeze([
     Object.freeze({ val: "cap", label: "Capped", hint: "Use capped resources" }),
     Object.freeze({
@@ -44185,7 +44185,7 @@
     return Object.freeze({ buildMarketSettings, updateMarketSettingsContent });
   }
 
-  // src/domain/market-settings.ts
+  // src/domain/economy/market/market-settings.ts
   var controls2 = Object.freeze([
     Object.freeze({
       kind: "number",
@@ -44439,7 +44439,7 @@
     return Object.freeze({ buildWarSettings, updateWarSettingsContent });
   }
 
-  // src/domain/war-settings.ts
+  // src/domain/combat/war-settings.ts
   var rivalOptions = Object.freeze([
     Object.freeze({ val: "Ignore", label: "Ignore", hint: "Does nothing" }),
     Object.freeze({
@@ -44713,7 +44713,7 @@
     return Object.freeze({ buildHellSettings, updateHellSettingsContent });
   }
 
-  // src/domain/hell-settings.ts
+  // src/domain/combat/hell-settings.ts
   var controls3 = Object.freeze([
     Object.freeze({ kind: "header", label: "Entering Hell" }),
     Object.freeze({
@@ -44946,7 +44946,7 @@
     return Object.freeze({ buildMechSettings, updateMechSettingsContent });
   }
 
-  // src/domain/mech-settings.ts
+  // src/domain/combat/mech-settings.ts
   var scrapOptions = Object.freeze([
     Object.freeze({
       val: "none",
@@ -45228,7 +45228,7 @@
     });
   }
 
-  // src/domain/trigger-settings.ts
+  // src/domain/progression/build/trigger-settings.ts
   function normalizeTriggerValue(value, path) {
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
       return value;
@@ -45552,7 +45552,7 @@
     });
   }
 
-  // src/domain/fleet-settings.ts
+  // src/domain/combat/fleet-settings.ts
   function freezeOption3(option3) {
     return Object.freeze({ ...option3 });
   }
@@ -46001,7 +46001,7 @@
     });
   }
 
-  // src/domain/prestige-settings.ts
+  // src/domain/progression/prestige/prestige-settings.ts
   function createPrestigeSettingsReadModel(input) {
     const options2 = Object.freeze(
       input.prestigeOptions.map((option3) => Object.freeze({ ...option3 }))
@@ -46377,7 +46377,7 @@
     });
   }
 
-  // src/domain/evolution-settings.ts
+  // src/domain/progression/evolution/evolution-settings.ts
   function createEvolutionSettingsReadModel(input) {
     const freezeOptions2 = (options2) => Object.freeze(options2.map((option3) => Object.freeze({ ...option3 })));
     return Object.freeze({
@@ -46796,7 +46796,7 @@
     });
   }
 
-  // src/domain/production-settings.ts
+  // src/domain/economy/production/production-settings.ts
   function freezeControl(control) {
     return Object.freeze({
       ...control,
@@ -47432,7 +47432,7 @@
     });
   }
 
-  // src/domain/trait-settings.ts
+  // src/domain/traits/trait-settings.ts
   function createTraitSettingsReadModel(input) {
     const freezeOptions2 = (options2) => Object.freeze(options2.map((option3) => Object.freeze({ ...option3 })));
     return Object.freeze({
@@ -48490,7 +48490,7 @@
     };
   }
 
-  // src/domain/mech-info.ts
+  // src/domain/combat/mech-info.ts
   function formatMechInfo(input, formatNumber) {
     const rating = input.power / input.bestPower;
     const ratingText = `${Math.round(rating * 100)}%`;

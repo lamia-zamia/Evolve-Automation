@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createFactoryTooltipPublisher } from "../src/adapters/browser/factory-tooltips.ts";
 import { createFactoryAdapter } from "../src/adapters/evolve/factory.ts";
 import { runFactoryAutomation } from "../src/application/factory.ts";
-import { planFactory } from "../src/domain/factory.ts";
+import { planFactory } from "../src/domain/economy/production/factory.ts";
 import {
   assertEquivalentTraces,
   createTraceRecorder,

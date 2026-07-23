@@ -94,11 +94,11 @@ import { createPlannerStatsLifecycle } from "../../application/planner-stats.ts"
 import { createBuildPlanner } from "../../planning/build-planner.ts";
 import { createStorageExpansion } from "../../application/storage-expansion.ts";
 import { readStorageRequirementsInput } from "./storage-requirements.ts";
-import { planStorageRequirements } from "../../domain/storage-requirements.ts";
+import { planStorageRequirements } from "../../domain/economy/storage/storage-requirements.ts";
 import { readDemandPrioritizationInput } from "./demand-prioritization.ts";
-import { planDemandPrioritization } from "../../domain/demand-prioritization.ts";
+import { planDemandPrioritization } from "../../domain/economy/resources/demand-prioritization.ts";
 import { createPriorityTargets } from "../../planning/priority-targets.ts";
-import { decideEvolutionResult } from "../../domain/evolution-result.ts";
+import { decideEvolutionResult } from "../../domain/progression/evolution/evolution-result.ts";
 import { readEvolutionResultInput } from "./evolution-result.ts";
 import { formatEvolutionLog } from "../../application/evolution-result.ts";
 import {
@@ -107,13 +107,13 @@ import {
   calculateRequiredAuthorityGarrison,
   predictAuthorityAfterRemovingSoldiers,
   resolveAuthorityTarget,
-} from "../../domain/authority.ts";
+} from "../../domain/civic/authority.ts";
 import { readAuthorityPolicyView, readAuthorityQuantity } from "./authority.ts";
 import { isCostAffordable } from "../../domain/cost-affordability.ts";
 import { readCostAffordabilityInput, readQueueTarget } from "./queue-items.ts";
 import { calculateTargetTiming } from "../../domain/target-timing.ts";
 import { readTargetTimingInput } from "./target-timing.ts";
-import { findRequiredResourceWeight as findRequiredResourceWeightPolicy } from "../../domain/resource-weighting.ts";
+import { findRequiredResourceWeight as findRequiredResourceWeightPolicy } from "../../domain/economy/resources/resource-weighting.ts";
 import { createGameActionVerification } from "../../validation/game-actions.ts";
 import { createStateLogLifecycle } from "../../observability/state-log.ts";
 import { createPrestigeLog } from "../../observability/prestige-log.ts";
@@ -194,7 +194,7 @@ import { createActiveTargetsControls } from "../browser/active-targets.ts";
 import {
   assessRetirementPreparation as assessRetirementPreparationPolicy,
   isRetirementAssistActive as isRetirementAssistActivePolicy,
-} from "../../domain/retirement-prep.ts";
+} from "../../domain/progression/prestige/retirement-prep.ts";
 import {
   readRetirementAssistInput,
   readRetirementPreparationInput,
@@ -204,7 +204,7 @@ import {
   calculateAchievementStarLevel,
   isAchievementGuardActive,
   isAchievementUnlocked as isAchievementUnlockedPolicy,
-} from "../../domain/achievement-guards.ts";
+} from "../../domain/progression/prestige/achievement-guards.ts";
 import {
   readAchievementGuardInput,
   readAchievementStar,
@@ -214,7 +214,7 @@ import {
   isBananaRepublicGuardActive as isBananaRepublicGuardActivePolicy,
   isBananaRepublicReadyForUnification as isBananaRepublicReadyForUnificationPolicy,
   isBananaRepublicSmoothieComplete as isBananaRepublicSmoothieCompletePolicy,
-} from "../../domain/banana-republic.ts";
+} from "../../domain/civic/banana-republic.ts";
 import {
   readBananaRepublicGuardInput,
   readBananaRepublicObjective,
@@ -226,7 +226,7 @@ import {
   isInflationAssistActive as isInflationAssistActivePolicy,
   isInflationMoneyReachable as isInflationMoneyReachablePolicy,
   shouldSaveInflationMoney as shouldSaveInflationMoneyPolicy,
-} from "../../domain/inflation-assist.ts";
+} from "../../domain/economy/resources/inflation-assist.ts";
 import {
   readInflationAssistInput,
   readInflationMoneyInput,
@@ -244,7 +244,7 @@ import {
   isPrestigeAllowed as isPrestigeAllowedPolicy,
   isWhiteholePrestigeAvailable as isWhiteholePrestigeAvailablePolicy,
   isWitchAscensionPrestigeAvailable as isWitchAscensionPrestigeAvailablePolicy,
-} from "../../domain/prestige-eligibility.ts";
+} from "../../domain/progression/prestige/prestige-eligibility.ts";
 import {
   readAscensionEligibilityView,
   readGeckEligibilityView,
@@ -253,14 +253,14 @@ import {
   readPrestigePermissionView,
   readWitchAscensionEligibilityView,
 } from "./prestige-eligibility.ts";
-import { findTechConflict } from "../../domain/tech-conflicts.ts";
+import { findTechConflict } from "../../domain/progression/research/tech-conflicts.ts";
 import { readTechConflictInput } from "./tech-conflicts.ts";
 import { formatTechConflict } from "../../application/tech-conflicts.ts";
 import { createBrowserClock } from "../browser/clock.ts";
 import { createBrowserRandomSource } from "../browser/random.ts";
 import { createBuildingWeightingPolicy } from "../../policies/building-weighting.ts";
 import { readTradeRoutesInput } from "./trade-routes.ts";
-import { planTradeRoutes } from "../../domain/trade-routes.ts";
+import { planTradeRoutes } from "../../domain/economy/market/trade-routes.ts";
 import { runHellAutomation } from "../../application/hell.ts";
 import { createHellAdapter } from "./hell.ts";
 import {
@@ -268,7 +268,7 @@ import {
   readGovernmentInput,
 } from "./government.ts";
 import { createGovernmentControls } from "../browser/government-controls.ts";
-import { planGovernment } from "../../domain/government.ts";
+import { planGovernment } from "../../domain/civic/government.ts";
 import { runBattleAutomation } from "../../application/battle.ts";
 import { createBattleAdapter } from "./battle.ts";
 import { createTaxAutomation } from "../../application/tax.ts";
@@ -284,11 +284,11 @@ import { createTaxSettingsReader } from "../storage/tax-settings-reader.ts";
 import { createStorageCommandExecutor } from "./storage-command-executor.ts";
 import { createEvolveStorageExpansionReader } from "./storage-expansion-reader.ts";
 import { createStorageExpansionSettingsReader } from "../storage/storage-expansion-settings-reader.ts";
-import { planSmelter } from "../../domain/smelter.ts";
+import { planSmelter } from "../../domain/economy/production/smelter.ts";
 import { createAlchemyCommandExecutor, readAlchemyInput } from "./alchemy.ts";
-import { planAlchemy } from "../../domain/alchemy.ts";
+import { planAlchemy } from "../../domain/economy/production/alchemy.ts";
 import { createPylonCommandExecutor, readPylonInput } from "./pylon.ts";
-import { planPylon } from "../../domain/pylon.ts";
+import { planPylon } from "../../domain/economy/production/pylon.ts";
 import {
   readQuarryRatioInput,
   readMineRatioInput,
@@ -299,7 +299,7 @@ import {
   planQuarryRatio,
   planMineRatio,
   planExtractorRatios,
-} from "../../domain/resource-ratios.ts";
+} from "../../domain/economy/resources/resource-ratios.ts";
 import { runFactoryAutomation } from "../../application/factory.ts";
 import { createFactoryAdapter } from "./factory.ts";
 import { createFactoryTooltipPublisher } from "../browser/factory-tooltips.ts";
@@ -312,7 +312,7 @@ import {
   createGrapheneCommandExecutor,
   readGrapheneInput,
 } from "./graphene.ts";
-import { planGraphene } from "../../domain/graphene.ts";
+import { planGraphene } from "../../domain/economy/production/graphene.ts";
 import {
   createShapeshiftCommandExecutor,
   readShapeshiftInput,
@@ -322,7 +322,7 @@ import {
   createShapeshiftControls,
   createUniverseSelectionControls,
 } from "../browser/progression-controls.ts";
-import { planShapeshift } from "../../domain/shapeshift.ts";
+import { planShapeshift } from "../../domain/traits/shapeshift.ts";
 import { runWishAutomation } from "../../application/wish.ts";
 import { createWishCommandExecutor, createWishReader } from "./wish.ts";
 import { createWishControls } from "../browser/wish-controls.ts";
@@ -380,7 +380,7 @@ import {
   createUniverseSelectionCommandExecutor,
   readUniverseSelectionInput,
 } from "./universe-selection.ts";
-import { planUniverseSelection } from "../../domain/universe-selection.ts";
+import { planUniverseSelection } from "../../domain/progression/evolution/universe-selection.ts";
 import { runCraftAutomation } from "../../application/craft.ts";
 import { createCraftCommandExecutor, createCraftReader } from "./craft.ts";
 import { runSpyAutomation } from "../../application/spy.ts";
@@ -429,7 +429,7 @@ import { createWarSettingsBrowserAdapter } from "../browser/war-settings.ts";
 import { createWarSettingsEvolveAdapter } from "./war-settings.ts";
 import { createHellSettingsIntentHandler } from "../../application/hell-settings.ts";
 import { createHellSettingsBrowserAdapter } from "../browser/hell-settings.ts";
-import { getHellSettingsReadModel } from "../../domain/hell-settings.ts";
+import { getHellSettingsReadModel } from "../../domain/combat/hell-settings.ts";
 import { createMechSettingsIntentHandler } from "../../application/mech-settings.ts";
 import { createMechSettingsBrowserAdapter } from "../browser/mech-settings.ts";
 import { createMechSettingsEvolveAdapter } from "./mech-settings.ts";

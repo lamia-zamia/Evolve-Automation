@@ -1,4 +1,4 @@
-import type { ArpaToggleItem } from "../../domain/arpa-toggles.ts";
+import type { ArpaToggleItem } from "../../domain/progression/research/arpa-toggles.ts";
 import type { ArpaToggleReader } from "../../ports/arpa-toggles.ts";
 
 interface JQueryNode {

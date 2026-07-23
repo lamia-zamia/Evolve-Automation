@@ -1,4 +1,4 @@
-import type { EjectorSettingsIntent } from "../domain/ejector-settings.ts";
+import type { EjectorSettingsIntent } from "../domain/economy/resources/ejector-settings.ts";
 import type {
   EjectorSettingsEffects,
   EjectorSettingsIntentHandler,

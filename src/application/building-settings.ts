@@ -1,4 +1,4 @@
-import type { BuildingSettingsIntent } from "../domain/building-settings.ts";
+import type { BuildingSettingsIntent } from "../domain/progression/build/building-settings.ts";
 import type {
   BuildingSettingsEffects,
   BuildingSettingsIntentHandler,

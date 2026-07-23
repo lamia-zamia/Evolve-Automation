@@ -1,4 +1,4 @@
-import type { TechConflict } from "../domain/tech-conflicts.ts";
+import type { TechConflict } from "../domain/progression/research/tech-conflicts.ts";
 
 export function formatTechConflict(
   conflict: Readonly<TechConflict>,

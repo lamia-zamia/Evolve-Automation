@@ -2,7 +2,7 @@ import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import {
   planGalaxyMarket,
   type GalaxyMarketDecision,
-} from "../domain/galaxy-market.ts";
+} from "../domain/economy/market/galaxy-market.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type { GalaxyMarketReader } from "../ports/galaxy-market.ts";
 

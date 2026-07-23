@@ -2,8 +2,8 @@ import type {
   InflationAssistActiveInput,
   InflationMoneyInput,
   InflationSaveInput,
-} from "../../domain/inflation-assist.ts";
-import { isInflationAssistActive } from "../../domain/inflation-assist.ts";
+} from "../../domain/economy/resources/inflation-assist.ts";
+import { isInflationAssistActive } from "../../domain/economy/resources/inflation-assist.ts";
 
 type InflationReadReason =
   | "inaccessible-data"

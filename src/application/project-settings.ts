@@ -1,4 +1,4 @@
-import type { ProjectSettingsIntent } from "../domain/project-settings.ts";
+import type { ProjectSettingsIntent } from "../domain/progression/research/project-settings.ts";
 import type {
   ProjectSettingsEffects,
   ProjectSettingsIntentHandler,

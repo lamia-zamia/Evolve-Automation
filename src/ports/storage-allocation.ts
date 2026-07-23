@@ -1,4 +1,4 @@
-import type { StorageAllocationInput } from "../domain/storage-allocation.ts";
+import type { StorageAllocationInput } from "../domain/economy/storage/storage-allocation.ts";
 
 export interface StorageAllocationReader {
   read(): StorageAllocationInput;

@@ -12,7 +12,7 @@ import {
   isPrestigeAllowed,
   isWhiteholePrestigeAvailable,
   isWitchAscensionPrestigeAvailable,
-} from "../src/domain/prestige-eligibility.ts";
+} from "../src/domain/progression/prestige/prestige-eligibility.ts";
 import { legacyPrestigeTrace } from "./test-support/legacy-prestige-eligibility.mjs";
 
 function makeView(overrides = {}) {

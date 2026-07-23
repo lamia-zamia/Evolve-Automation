@@ -1,4 +1,4 @@
-import type { ProjectSettingsIntent } from "../domain/project-settings.ts";
+import type { ProjectSettingsIntent } from "../domain/progression/research/project-settings.ts";
 
 /** Receives user intents emitted by the A.R.P.A. settings UI. */
 export interface ProjectSettingsIntentHandler {

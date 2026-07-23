@@ -3,7 +3,7 @@ import {
   createWarSettingsReadModel,
   type WarSettingsReadModel,
   type WarSettingsOption,
-} from "../../domain/war-settings.ts";
+} from "../../domain/combat/war-settings.ts";
 import type { WarSettingsReader } from "../../ports/war-settings.ts";
 
 export interface WarSettingsEvolveDependencies {

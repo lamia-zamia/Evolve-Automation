@@ -1,4 +1,7 @@
-import type { PsychicDecision, PsychicInput } from "../domain/psychic.ts";
+import type {
+  PsychicDecision,
+  PsychicInput,
+} from "../domain/traits/psychic.ts";
 
 export interface PsychicGate {
   readonly unlocked: boolean;

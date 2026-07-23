@@ -1,4 +1,4 @@
-import type { EjectToggleItem } from "../domain/eject-toggles.ts";
+import type { EjectToggleItem } from "../domain/economy/resources/eject-toggles.ts";
 
 export interface EjectToggleReader {
   readItems(): readonly EjectToggleItem[];

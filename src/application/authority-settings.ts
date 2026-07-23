@@ -1,4 +1,4 @@
-import type { AuthoritySettingsIntent } from "../domain/authority-settings.ts";
+import type { AuthoritySettingsIntent } from "../domain/civic/authority-settings.ts";
 import type {
   AuthoritySettingsIntentHandler,
   AuthoritySettingsWriter,

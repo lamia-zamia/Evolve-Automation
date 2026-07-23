@@ -1,4 +1,4 @@
-import type { PlanetSettingsIntent } from "../domain/planet-settings.ts";
+import type { PlanetSettingsIntent } from "../domain/progression/evolution/planet-settings.ts";
 
 /** Receives user intents emitted by the Planet Weighting settings UI. */
 export interface PlanetSettingsIntentHandler {

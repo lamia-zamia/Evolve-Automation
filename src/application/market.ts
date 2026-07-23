@@ -3,7 +3,7 @@ import {
   planMarketBuy,
   planMarketSell,
   type MarketDecision,
-} from "../domain/market.ts";
+} from "../domain/economy/market/market.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type { MarketReader, TradeRouteAdjuster } from "../ports/market.ts";
 

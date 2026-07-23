@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { readStorageRequirementsInput } from "../src/adapters/evolve/storage-requirements.ts";
 import { calculateKnowledgeRequirements } from "../src/domain/knowledge-requirements.ts";
-import { planStorageRequirements } from "../src/domain/storage-requirements.ts";
+import { planStorageRequirements } from "../src/domain/economy/storage/storage-requirements.ts";
 
 // Exact copy of the deleted src/planning/storage-requirements.ts logic.
 function legacyRequestStorageFor(ctx, list) {

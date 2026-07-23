@@ -1,7 +1,7 @@
 import type {
   HellSettingsControl,
   HellSettingsReadModel,
-} from "../../domain/hell-settings.ts";
+} from "../../domain/combat/hell-settings.ts";
 import type { HellSettingsIntentHandler } from "../../ports/hell-settings.ts";
 
 interface ScrollDocument {

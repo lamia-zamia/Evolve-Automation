@@ -1,7 +1,7 @@
 import {
   type ProductionSettingsControl,
   type ProductionSettingsReadModel,
-} from "../../domain/production-settings.ts";
+} from "../../domain/economy/production/production-settings.ts";
 import type { ProductionSettingsIntentHandler } from "../../ports/production-settings.ts";
 
 interface ScrollDocument {

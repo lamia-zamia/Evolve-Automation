@@ -1,7 +1,7 @@
-import type { TriggerSettingsIntent } from "../domain/trigger-settings.ts";
+import type { TriggerSettingsIntent } from "../domain/progression/build/trigger-settings.ts";
 
 export interface TriggerSettingsReader {
-  read(): import("../domain/trigger-settings.ts").TriggerSettingsReadModel;
+  read(): import("../domain/progression/build/trigger-settings.ts").TriggerSettingsReadModel;
 }
 
 export interface TriggerSettingsIntentHandler {
@@ -14,7 +14,7 @@ export interface TriggerSettingsWriter {
   update(
     seq: number,
     field: Extract<TriggerSettingsIntent, { type: "update-trigger" }>["field"],
-    value: import("../domain/trigger-settings.ts").TriggerValue,
+    value: import("../domain/progression/build/trigger-settings.ts").TriggerValue,
   ): void;
   remove(seq: number): void;
   duplicate(seq: number): void;

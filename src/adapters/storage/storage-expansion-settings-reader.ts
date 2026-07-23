@@ -1,4 +1,4 @@
-import type { StorageExpansionSettings } from "../../domain/storage-expansion.ts";
+import type { StorageExpansionSettings } from "../../domain/economy/storage/storage-expansion.ts";
 import type { SettingsReader } from "../../ports/settings-reader.ts";
 import { requireBoolean, requireRecord } from "../validation.ts";
 

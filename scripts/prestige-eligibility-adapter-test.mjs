@@ -12,7 +12,7 @@ import {
   isAscensionPrestigeAvailable,
   isDemonicPrestigeAvailable,
   isWitchAscensionPrestigeAvailable,
-} from "../src/domain/prestige-eligibility.ts";
+} from "../src/domain/progression/prestige/prestige-eligibility.ts";
 
 function tech(unlocked = false, affordable = false) {
   const value = {

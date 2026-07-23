@@ -4,7 +4,7 @@ import type {
   ReplicatorMetric,
   ReplicatorPlanningInput,
   ReplicatorPriorityPlan,
-} from "../domain/replicator.ts";
+} from "../domain/economy/production/replicator.ts";
 
 export interface ReplicatorSelectionReader {
   readPlanningInput(): ReplicatorPlanningInput;

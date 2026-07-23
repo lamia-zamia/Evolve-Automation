@@ -1,4 +1,4 @@
-import type { ProductionSettingsIntent } from "../domain/production-settings.ts";
+import type { ProductionSettingsIntent } from "../domain/economy/production/production-settings.ts";
 import type {
   ProductionSettingsEffects,
   ProductionSettingsIntentHandler,

@@ -1,7 +1,7 @@
 import type {
   PlanetCandidate,
   PlanetSelectionGate,
-} from "../domain/planet-selection.ts";
+} from "../domain/progression/evolution/planet-selection.ts";
 
 export interface PlanetSelectionCandidatesSample {
   readonly planets: readonly PlanetCandidate[];

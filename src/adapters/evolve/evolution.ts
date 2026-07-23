@@ -6,7 +6,7 @@ import type {
   ImitationInput,
   RaceView,
   TargetSelectionInput,
-} from "../../domain/evolution.ts";
+} from "../../domain/progression/evolution/evolution.ts";
 import type {
   EvolutionCostsSample,
   EvolutionExecutor,

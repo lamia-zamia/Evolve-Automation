@@ -2,7 +2,7 @@ import {
   type StorageSettingsControl,
   type StorageSettingsReadModel,
   type StorageSettingsRow,
-} from "../../domain/storage-settings.ts";
+} from "../../domain/economy/storage/storage-settings.ts";
 import type { StorageSettingsIntentHandler } from "../../ports/storage-settings.ts";
 
 interface ScrollDocument {

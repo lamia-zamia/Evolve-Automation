@@ -8,7 +8,7 @@ import type {
   MechDesign,
   MechPlanningInput,
   MechScrapDecision,
-} from "../domain/mech.ts";
+} from "../domain/combat/mech.ts";
 
 export interface MechReader {
   readCycle(): MechCycleInput;

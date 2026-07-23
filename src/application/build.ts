@@ -7,7 +7,7 @@ import {
   planBuildConflict,
   planBuildGate,
   type BuildCandidateSample,
-} from "../domain/build.ts";
+} from "../domain/progression/build/build.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import type { BuildExecutor, BuildReader } from "../ports/build.ts";
 

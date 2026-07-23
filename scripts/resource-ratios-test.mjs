@@ -10,7 +10,7 @@ import {
   planExtractorRatios,
   planMineRatio,
   planQuarryRatio,
-} from "../src/domain/resource-ratios.ts";
+} from "../src/domain/economy/resources/resource-ratios.ts";
 
 function resource(storageRatio, demanded = false) {
   return { storageRatio, isDemanded: () => demanded };

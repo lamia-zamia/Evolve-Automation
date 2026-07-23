@@ -1,4 +1,4 @@
-import type { MutationInput } from "../domain/mutation.ts";
+import type { MutationInput } from "../domain/traits/mutation.ts";
 
 export interface MutationReader {
   read(): MutationInput;

@@ -5,7 +5,7 @@ import type {
   MutationInput,
   MutationKind,
   MutationTraitView,
-} from "../../domain/mutation.ts";
+} from "../../domain/traits/mutation.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { MutationReader } from "../../ports/mutation.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";

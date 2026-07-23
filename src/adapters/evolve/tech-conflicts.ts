@@ -1,4 +1,4 @@
-import type { TechConflictInput } from "../../domain/tech-conflicts.ts";
+import type { TechConflictInput } from "../../domain/progression/research/tech-conflicts.ts";
 import type { Clock } from "../../ports/clock.ts";
 
 type TechConflictUnavailableReason =

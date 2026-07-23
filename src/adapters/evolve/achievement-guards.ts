@@ -2,11 +2,11 @@ import type {
   AchievementGuardInput,
   AchievementGuardName,
   AchievementStarLevelContext,
-} from "../../domain/achievement-guards.ts";
+} from "../../domain/progression/prestige/achievement-guards.ts";
 import {
   isAchievementGuardActive,
   isAchievementGuardName,
-} from "../../domain/achievement-guards.ts";
+} from "../../domain/progression/prestige/achievement-guards.ts";
 
 type AchievementReadReason =
   | "inaccessible-data"

@@ -9,7 +9,7 @@ import {
   competitionSampleRequest,
   initialBuildLoopState,
   planBuildCompetition,
-} from "../src/domain/build.ts";
+} from "../src/domain/progression/build/build.ts";
 
 // ---------------------------------------------------------------------------
 // Fixture world

@@ -1,5 +1,8 @@
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import { planFactory, type FactoryDecision } from "../domain/factory.ts";
+import {
+  planFactory,
+  type FactoryDecision,
+} from "../domain/economy/production/factory.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type {
   FactoryReader,

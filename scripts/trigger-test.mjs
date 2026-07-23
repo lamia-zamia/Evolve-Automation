@@ -5,7 +5,7 @@ import {
   createTriggerCommandExecutor,
   createTriggerReader,
 } from "../src/adapters/evolve/trigger.ts";
-import { planTrigger } from "../src/domain/trigger.ts";
+import { planTrigger } from "../src/domain/progression/build/trigger.ts";
 
 function createFixture(scenario) {
   const trace = [];

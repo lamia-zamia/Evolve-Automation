@@ -2,7 +2,7 @@ import {
   type PlanetSettingsCell,
   type PlanetSettingsReadModel,
   type PlanetSettingsRow,
-} from "../../domain/planet-settings.ts";
+} from "../../domain/progression/evolution/planet-settings.ts";
 import type { PlanetSettingsIntentHandler } from "../../ports/planet-settings.ts";
 
 interface ScrollDocument {

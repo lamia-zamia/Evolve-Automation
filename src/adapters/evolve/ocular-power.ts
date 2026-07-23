@@ -2,7 +2,7 @@ import type {
   OcularPowerDecision,
   OcularPowerInput,
   OcularPowerSetting,
-} from "../../domain/ocular-power.ts";
+} from "../../domain/traits/ocular-power.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type {
   OcularPowerControls,

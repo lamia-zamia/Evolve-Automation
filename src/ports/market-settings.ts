@@ -1,7 +1,7 @@
 import type {
   MarketSettingsIntent,
   MarketSettingsReadModel,
-} from "../domain/market-settings.ts";
+} from "../domain/economy/market/market-settings.ts";
 
 export interface MarketSettingsReader {
   read(): MarketSettingsReadModel;

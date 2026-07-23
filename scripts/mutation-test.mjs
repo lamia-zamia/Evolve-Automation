@@ -5,7 +5,7 @@ import {
   createMutationCommandExecutor,
   createMutationReader,
 } from "../src/adapters/evolve/mutation.ts";
-import { planMutation } from "../src/domain/mutation.ts";
+import { planMutation } from "../src/domain/traits/mutation.ts";
 
 function createFixture(scenario) {
   const trace = [];

@@ -4,7 +4,7 @@ import {
   type TraitSettingsControl,
   type TraitSettingsMutableRow,
   type TraitSettingsSelectOption,
-} from "../../domain/trait-settings.ts";
+} from "../../domain/traits/trait-settings.ts";
 import {
   requireFunction,
   requireRecord,

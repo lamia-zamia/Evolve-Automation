@@ -3,7 +3,7 @@ import type {
   AlchemyDecision,
   AlchemyInput,
   AlchemyResourceView,
-} from "../../domain/alchemy.ts";
+} from "../../domain/economy/production/alchemy.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";
 import {

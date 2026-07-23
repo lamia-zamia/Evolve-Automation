@@ -1,4 +1,4 @@
-import type { AuthorityPolicyView } from "../../domain/authority.ts";
+import type { AuthorityPolicyView } from "../../domain/civic/authority.ts";
 
 export type AuthorityUnavailableReason =
   | "inaccessible-data"

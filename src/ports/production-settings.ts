@@ -1,4 +1,4 @@
-import type { ProductionSettingsIntent } from "../domain/production-settings.ts";
+import type { ProductionSettingsIntent } from "../domain/economy/production/production-settings.ts";
 
 export interface ProductionSettingsIntentHandler {
   handle(intent: ProductionSettingsIntent): void;

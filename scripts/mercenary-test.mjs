@@ -6,7 +6,7 @@ import {
   planMercenaryCycle,
   planMercenaryHire,
   planMercenaryLog,
-} from "../src/domain/mercenary.ts";
+} from "../src/domain/combat/mercenary.ts";
 import {
   assertEquivalentTraces,
   createTraceRecorder,

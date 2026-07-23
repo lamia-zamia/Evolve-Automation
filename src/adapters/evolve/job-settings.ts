@@ -3,7 +3,7 @@ import {
   type JobSettingsBreakpoint,
   type JobSettingsReadModel,
   type JobSettingsRow,
-} from "../../domain/job-settings.ts";
+} from "../../domain/civic/job-settings.ts";
 import {
   requireFunction,
   requireRecord,

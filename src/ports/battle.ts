@@ -3,7 +3,7 @@ import type {
   BattlefieldInput,
   BattleCycleInput,
   LaunchBattleDecision,
-} from "../domain/battle.ts";
+} from "../domain/combat/battle.ts";
 import type { DecisionExecutor } from "./decision-executor.ts";
 
 export interface BattleReader {

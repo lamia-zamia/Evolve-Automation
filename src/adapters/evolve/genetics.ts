@@ -5,7 +5,7 @@ import type {
   GeneticsInput,
   GeneticsToggle,
   GeneticsToggleDecision,
-} from "../../domain/genetics.ts";
+} from "../../domain/traits/genetics.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { GeneticsControls, GeneticsReader } from "../../ports/genetics.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";

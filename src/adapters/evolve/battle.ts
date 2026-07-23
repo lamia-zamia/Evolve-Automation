@@ -9,7 +9,7 @@ import {
   type BattleTacticValues,
   type BattlefieldInput,
   type LaunchBattleDecision,
-} from "../../domain/battle.ts";
+} from "../../domain/combat/battle.ts";
 import type { BattleExecutor, BattleReader } from "../../ports/battle.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";
 import {

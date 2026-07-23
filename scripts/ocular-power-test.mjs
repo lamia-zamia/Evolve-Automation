@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createOcularPowerControls } from "../src/adapters/browser/ocular-power-controls.ts";
 import { createOcularPowerAdapter } from "../src/adapters/evolve/ocular-power.ts";
 import { runOcularPowerAutomation } from "../src/application/ocular-power.ts";
-import { planOcularPowers } from "../src/domain/ocular-power.ts";
+import { planOcularPowers } from "../src/domain/traits/ocular-power.ts";
 import {
   assertEquivalentTraces,
   createTraceRecorder,

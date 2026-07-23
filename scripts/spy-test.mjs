@@ -6,7 +6,7 @@ import {
   planSpyCycle,
   planSpyEspionage,
   planSpyTraining,
-} from "../src/domain/spy.ts";
+} from "../src/domain/combat/spy.ts";
 import {
   assertEquivalentTraces,
   createTraceRecorder,

@@ -1,7 +1,7 @@
 import type {
   WarSettingsControl,
   WarSettingsReadModel,
-} from "../../domain/war-settings.ts";
+} from "../../domain/combat/war-settings.ts";
 import type { WarSettingsIntentHandler } from "../../ports/war-settings.ts";
 
 interface ScrollDocument {

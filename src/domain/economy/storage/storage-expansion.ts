@@ -2,8 +2,8 @@ import type {
   ConstructStorageCommand,
   StorageResourceDelta,
   StorageUnit,
-} from "./commands.ts";
-import type { GameSnapshot } from "./snapshot.ts";
+} from "../../commands.ts";
+import type { GameSnapshot } from "../../snapshot.ts";
 
 export interface StorageResourceCost {
   readonly resourceId: string;

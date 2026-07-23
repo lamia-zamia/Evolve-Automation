@@ -4,7 +4,7 @@ import {
   type EvolutionSettingsControl,
   type EvolutionSettingsOption,
   type EvolutionSettingsReadModel,
-} from "../../domain/evolution-settings.ts";
+} from "../../domain/progression/evolution/evolution-settings.ts";
 import { requireRecord } from "../validation.ts";
 interface EvolutionSettingsEvolveDependencies {
   readonly getGame: () => unknown;

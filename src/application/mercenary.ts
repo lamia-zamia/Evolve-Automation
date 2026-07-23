@@ -3,7 +3,7 @@ import {
   planMercenaryCycle,
   planMercenaryHire,
   planMercenaryLog,
-} from "../domain/mercenary.ts";
+} from "../domain/combat/mercenary.ts";
 import type {
   MercenaryExecutor,
   MercenaryLogger,

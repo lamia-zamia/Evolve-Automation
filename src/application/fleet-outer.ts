@@ -6,7 +6,7 @@ import {
   planOuterFleetCycle,
   planOuterFleetTarget,
   type OuterFleetDecision,
-} from "../domain/fleet-outer.ts";
+} from "../domain/combat/fleet-outer.ts";
 import type {
   OuterFleetExecutor,
   OuterFleetReader,

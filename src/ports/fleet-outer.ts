@@ -9,7 +9,7 @@ import type {
   OuterFleetReadinessPlan,
   OuterFleetTargetInput,
   OuterFleetTargetPlan,
-} from "../domain/fleet-outer.ts";
+} from "../domain/combat/fleet-outer.ts";
 import type { DecisionExecutor } from "./decision-executor.ts";
 
 export interface OuterFleetReader {

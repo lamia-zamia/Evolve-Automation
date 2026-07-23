@@ -1,5 +1,5 @@
 import { requireRecord } from "../validation.ts";
-import type { EjectToggleItem } from "../../domain/eject-toggles.ts";
+import type { EjectToggleItem } from "../../domain/economy/resources/eject-toggles.ts";
 import type { EjectToggleReader } from "../../ports/eject-toggles.ts";
 
 export interface EjectToggleEvolveDependencies {

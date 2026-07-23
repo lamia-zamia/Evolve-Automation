@@ -3,7 +3,7 @@ import type {
   MarketGateInput,
   MarketSellInput,
   MarketSessionInput,
-} from "../domain/market.ts";
+} from "../domain/economy/market/market.ts";
 
 export interface MarketReader {
   readGate(): MarketGateInput;

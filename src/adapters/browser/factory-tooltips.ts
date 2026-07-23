@@ -1,4 +1,4 @@
-import type { FactoryTooltip } from "../../domain/factory.ts";
+import type { FactoryTooltip } from "../../domain/economy/production/factory.ts";
 import type { FactoryTooltipPublisher } from "../../ports/factory.ts";
 
 export function createFactoryTooltipPublisher(

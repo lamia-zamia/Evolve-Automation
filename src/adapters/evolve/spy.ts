@@ -5,7 +5,7 @@ import {
   type SpyDecision,
   type SpyEspionageInput,
   type SpyTrainingInput,
-} from "../../domain/spy.ts";
+} from "../../domain/combat/spy.ts";
 import type { SpyExecutor, SpyReader } from "../../ports/spy.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";
 import {

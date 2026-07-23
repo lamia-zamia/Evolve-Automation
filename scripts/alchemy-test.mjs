@@ -4,7 +4,7 @@ import {
   createAlchemyCommandExecutor,
   readAlchemyInput,
 } from "../src/adapters/evolve/alchemy.ts";
-import { planAlchemy } from "../src/domain/alchemy.ts";
+import { planAlchemy } from "../src/domain/economy/production/alchemy.ts";
 
 // Exact copy of the deleted legacy `autoAlchemy` algorithm, run against
 // identical live fixtures to prove the reader + planner + apply path produces a

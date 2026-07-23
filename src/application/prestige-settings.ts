@@ -1,4 +1,4 @@
-import type { PrestigeSettingsIntent } from "../domain/prestige-settings.ts";
+import type { PrestigeSettingsIntent } from "../domain/progression/prestige/prestige-settings.ts";
 import type {
   PrestigeSettingsEffects,
   PrestigeSettingsIntentHandler,

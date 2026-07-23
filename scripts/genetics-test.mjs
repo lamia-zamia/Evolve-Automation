@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createGeneticsControls } from "../src/adapters/browser/genetics-controls.ts";
 import { createGeneticsAdapter } from "../src/adapters/evolve/genetics.ts";
 import { runGeneticsAutomation } from "../src/application/genetics.ts";
-import { planGenetics } from "../src/domain/genetics.ts";
+import { planGenetics } from "../src/domain/traits/genetics.ts";
 import {
   assertEquivalentTraces,
   createTraceRecorder,

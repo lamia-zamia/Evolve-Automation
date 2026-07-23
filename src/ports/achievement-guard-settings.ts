@@ -1,4 +1,4 @@
-import type { AchievementGuardSettingsIntent } from "../domain/achievement-guard-settings.ts";
+import type { AchievementGuardSettingsIntent } from "../domain/progression/prestige/achievement-guard-settings.ts";
 
 /** Receives user intents emitted by the Achievement Guard settings UI. */
 export interface AchievementGuardSettingsIntentHandler {

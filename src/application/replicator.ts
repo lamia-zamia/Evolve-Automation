@@ -7,7 +7,7 @@ import {
   shouldConfigureReplicatorGovernor,
   type ReplicatorGovernorDecision,
   type ReplicatorSelectionDecision,
-} from "../domain/replicator.ts";
+} from "../domain/economy/production/replicator.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type {
   ReplicatorGovernorGameReader,

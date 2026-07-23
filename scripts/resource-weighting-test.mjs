@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { findRequiredResourceWeight } from "../src/domain/resource-weighting.ts";
+import { findRequiredResourceWeight } from "../src/domain/economy/resources/resource-weighting.ts";
 import { legacyFindRequiredResourceWeight } from "./test-support/legacy-resource-weighting.mjs";
 
 const cases = [

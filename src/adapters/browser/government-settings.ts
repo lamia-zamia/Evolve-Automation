@@ -1,7 +1,7 @@
 import {
   type GovernmentSettingsControl,
   type GovernmentSettingsReadModel,
-} from "../../domain/government-settings.ts";
+} from "../../domain/civic/government-settings.ts";
 import type { GovernmentSettingsIntentHandler } from "../../ports/government-settings.ts";
 
 interface ScrollDocument {

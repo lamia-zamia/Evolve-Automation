@@ -1,7 +1,7 @@
 import {
   type EvolutionSettingsControl,
   type EvolutionSettingsReadModel,
-} from "../../domain/evolution-settings.ts";
+} from "../../domain/progression/evolution/evolution-settings.ts";
 import type { EvolutionSettingsIntentHandler } from "../../ports/evolution-settings.ts";
 interface ScrollDocument {
   documentElement: { scrollTop: number };

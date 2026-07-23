@@ -1,4 +1,4 @@
-import type { EvolutionSettingsIntent } from "../domain/evolution-settings.ts";
+import type { EvolutionSettingsIntent } from "../domain/progression/evolution/evolution-settings.ts";
 import type {
   EvolutionSettingsEffects,
   EvolutionSettingsIntentHandler,

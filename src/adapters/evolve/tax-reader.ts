@@ -3,7 +3,7 @@ import {
   unavailableTaxSnapshot,
   type ReadyTaxSnapshot,
   type TaxSnapshot,
-} from "../../domain/tax.ts";
+} from "../../domain/civic/tax.ts";
 import type { Clock } from "../../ports/clock.ts";
 import type { GameReader } from "../../ports/game-reader.ts";
 import type { TaxControls } from "../../ports/tax-controls.ts";

@@ -3,7 +3,7 @@ import type {
   TradeResourceView,
   TradeRoutesInput,
   TradeRoutesSettings,
-} from "../../domain/trade-routes.ts";
+} from "../../domain/economy/market/trade-routes.ts";
 import {
   requireFunction,
   requireNumber,

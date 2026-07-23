@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createBuildingSettingsBrowserAdapter } from "../src/adapters/browser/building-settings.ts";
-import { createBuildingSettingsReadModel } from "../src/domain/building-settings.ts";
+import { createBuildingSettingsReadModel } from "../src/domain/progression/build/building-settings.ts";
 
 const trace = [];
 const handlers = [];

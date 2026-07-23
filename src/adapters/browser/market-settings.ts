@@ -2,7 +2,7 @@ import type {
   MarketSettingsControl,
   MarketSettingsReadModel,
   MarketSettingsRow,
-} from "../../domain/market-settings.ts";
+} from "../../domain/economy/market/market-settings.ts";
 import type { MarketSettingsIntentHandler } from "../../ports/market-settings.ts";
 
 interface ScrollDocument {

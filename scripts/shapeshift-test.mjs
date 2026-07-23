@@ -5,7 +5,7 @@ import {
   createShapeshiftCommandExecutor,
   readShapeshiftInput,
 } from "../src/adapters/evolve/shapeshift.ts";
-import { planShapeshift } from "../src/domain/shapeshift.ts";
+import { planShapeshift } from "../src/domain/traits/shapeshift.ts";
 
 // End-to-end reader + planner + apply, matching the legacy autoShapeshift.
 function run(scenario) {

@@ -5,7 +5,7 @@ import {
   createUniverseSelectionCommandExecutor,
   readUniverseSelectionInput,
 } from "../src/adapters/evolve/universe-selection.ts";
-import { planUniverseSelection } from "../src/domain/universe-selection.ts";
+import { planUniverseSelection } from "../src/domain/progression/evolution/universe-selection.ts";
 
 // End-to-end reader + planner + apply, matching the legacy autoUniverseSelection.
 function run(scenario) {

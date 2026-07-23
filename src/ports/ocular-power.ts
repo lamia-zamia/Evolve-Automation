@@ -1,4 +1,4 @@
-import type { OcularPowerInput } from "../domain/ocular-power.ts";
+import type { OcularPowerInput } from "../domain/traits/ocular-power.ts";
 
 export interface OcularPowerGate {
   readonly unlocked: boolean;

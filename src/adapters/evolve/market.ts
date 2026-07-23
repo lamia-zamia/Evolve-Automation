@@ -4,7 +4,7 @@ import type {
   MarketGateInput,
   MarketSellInput,
   MarketSessionInput,
-} from "../../domain/market.ts";
+} from "../../domain/economy/market/market.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { MarketReader } from "../../ports/market.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";

@@ -2,7 +2,7 @@ import type {
   RetirementAssistInput,
   RetirementPreparationInput,
   RetirementThresholds,
-} from "../../domain/retirement-prep.ts";
+} from "../../domain/progression/prestige/retirement-prep.ts";
 
 type RetirementReadReason =
   | "inaccessible-data"

@@ -3,11 +3,11 @@ import type {
   BananaRepublicGuardInput,
   BananaRepublicProgress,
   BananaSmoothieInput,
-} from "../../domain/banana-republic.ts";
+} from "../../domain/civic/banana-republic.ts";
 import {
   BANANA_OBJECTIVE_IDS,
   isBananaObjectiveId,
-} from "../../domain/banana-republic.ts";
+} from "../../domain/civic/banana-republic.ts";
 
 type BananaRepublicUnavailableReason =
   | "inaccessible-data"

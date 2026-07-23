@@ -3,7 +3,7 @@ import {
   type MagicAlchemyRow,
   type MagicPylonRow,
   type MagicSettingsReadModel,
-} from "../../domain/magic-settings.ts";
+} from "../../domain/economy/production/magic-settings.ts";
 import {
   requireFunction,
   requireNumber,

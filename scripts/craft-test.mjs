@@ -5,7 +5,10 @@ import {
   createCraftCommandExecutor,
   createCraftReader,
 } from "../src/adapters/evolve/craft.ts";
-import { planCraft, shouldRunCraft } from "../src/domain/craft.ts";
+import {
+  planCraft,
+  shouldRunCraft,
+} from "../src/domain/economy/production/craft.ts";
 
 function createFixture(scenario) {
   const trace = [];

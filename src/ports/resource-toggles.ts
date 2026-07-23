@@ -1,7 +1,7 @@
 import type {
   MarketToggleView,
   StorageToggleView,
-} from "../domain/resource-toggles.ts";
+} from "../domain/economy/resources/resource-toggles.ts";
 
 export interface ResourceToggleReader {
   readMarket(): MarketToggleView;

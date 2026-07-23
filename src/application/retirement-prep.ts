@@ -1,4 +1,4 @@
-import type { RetirementShortfall } from "../domain/retirement-prep.ts";
+import type { RetirementShortfall } from "../domain/progression/prestige/retirement-prep.ts";
 
 /** Renders one shortfall to its established user-facing progress string. */
 export function formatRetirementShortfall(

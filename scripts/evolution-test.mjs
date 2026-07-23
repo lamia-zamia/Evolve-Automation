@@ -12,7 +12,7 @@ import {
   planEvolutionTreeClick,
   planImitation,
   planResourceAccumulation,
-} from "../src/domain/evolution.ts";
+} from "../src/domain/progression/evolution/evolution.ts";
 import { createLegacyAutoEvolution } from "./test-support/legacy-auto-evolution.ts";
 
 // Representative subset of the composition-root challenge table: two multi- and

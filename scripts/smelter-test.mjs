@@ -4,7 +4,7 @@ import {
   createSmelterCommandExecutor,
   readSmelterInput,
 } from "../src/adapters/evolve/smelter.ts";
-import { planSmelter } from "../src/domain/smelter.ts";
+import { planSmelter } from "../src/domain/economy/production/smelter.ts";
 import { CONSUMPTION_BALANCE_MIN } from "../src/config.ts";
 
 // Exact copy of the deleted `autoSmelter` body, used as the old-versus-new

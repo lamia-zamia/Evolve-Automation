@@ -2,7 +2,7 @@ import {
   createProductionSettingsReadModel,
   type ProductionSettingsReadModel,
   type ProductionSettingsRow,
-} from "../../domain/production-settings.ts";
+} from "../../domain/economy/production/production-settings.ts";
 import {
   requireFunction,
   requireRecord,

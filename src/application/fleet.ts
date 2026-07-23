@@ -1,5 +1,5 @@
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import { planFleet } from "../domain/fleet.ts";
+import { planFleet } from "../domain/combat/fleet.ts";
 import type { FleetExecutor, FleetReader } from "../ports/fleet.ts";
 
 export interface FleetAutomationDependencies {

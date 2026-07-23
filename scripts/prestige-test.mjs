@@ -5,7 +5,7 @@ import {
   createPrestigeReader,
 } from "../src/adapters/evolve/prestige.ts";
 import { runPrestige } from "../src/application/prestige.ts";
-import { planPrestige } from "../src/domain/prestige.ts";
+import { planPrestige } from "../src/domain/progression/prestige/prestige.ts";
 import { createLegacyAutoPrestige } from "./test-support/legacy-auto-prestige.ts";
 
 // --- Shared fixtures ---------------------------------------------------------

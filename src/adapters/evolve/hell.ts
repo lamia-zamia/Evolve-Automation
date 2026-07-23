@@ -8,7 +8,7 @@ import {
   type HellDecision,
   type HellManageDecision,
   type HellTargetRequest,
-} from "../../domain/hell.ts";
+} from "../../domain/combat/hell.ts";
 import type { HellExecutor, HellReader } from "../../ports/hell.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";
 import {

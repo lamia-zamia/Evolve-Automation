@@ -4,7 +4,7 @@ import {
   type FleetSettingsOption,
   type FleetSettingsReadModel,
   type FleetSettingsRegion,
-} from "../../domain/fleet-settings.ts";
+} from "../../domain/combat/fleet-settings.ts";
 import { requireRecord } from "../validation.ts";
 
 interface FleetSettingsEvolveDependencies {

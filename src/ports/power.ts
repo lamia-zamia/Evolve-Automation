@@ -1,7 +1,7 @@
 import type {
   PowerCycleInput,
   PowerWarnBuildingInput,
-} from "../domain/power.ts";
+} from "../domain/economy/production/power.ts";
 
 export interface PowerReader {
   readCycle(): PowerCycleInput;

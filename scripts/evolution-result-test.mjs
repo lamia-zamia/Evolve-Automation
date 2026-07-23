@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { decideEvolutionResult } from "../src/domain/evolution-result.ts";
+import { decideEvolutionResult } from "../src/domain/progression/evolution/evolution-result.ts";
 import { formatEvolutionLog } from "../src/application/evolution-result.ts";
 import { legacyDecideEvolutionResult } from "./test-support/legacy-evolution-result.mjs";
 

@@ -4,7 +4,7 @@ import type {
   StorageRequestTarget,
   StorageRequirementsInput,
   StorageResourceState,
-} from "../../domain/storage-requirements.ts";
+} from "../../domain/economy/storage/storage-requirements.ts";
 import {
   requireBoolean,
   requireFunction,

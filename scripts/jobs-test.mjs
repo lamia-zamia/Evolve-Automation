@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createLegacyAutoJobs } from "./test-support/legacy-auto-jobs.ts";
 import { runJobsAutomation } from "../src/application/jobs.ts";
 import { createJobsAdapter } from "../src/adapters/evolve/jobs.ts";
-import { planJobs } from "../src/domain/jobs.ts";
+import { planJobs } from "../src/domain/civic/jobs.ts";
 
 const createAutoJobs = createLegacyAutoJobs;
 

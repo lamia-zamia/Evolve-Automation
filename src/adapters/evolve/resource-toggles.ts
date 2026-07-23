@@ -4,7 +4,7 @@ import type {
   MarketToggleView,
   StorageToggleItem,
   StorageToggleView,
-} from "../../domain/resource-toggles.ts";
+} from "../../domain/economy/resources/resource-toggles.ts";
 import type { ResourceToggleReader } from "../../ports/resource-toggles.ts";
 
 export interface ResourceToggleEvolveDependencies {

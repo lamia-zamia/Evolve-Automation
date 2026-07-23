@@ -1,4 +1,4 @@
-import type { BuildingToggleItem } from "../domain/building-toggles.ts";
+import type { BuildingToggleItem } from "../domain/progression/build/building-toggles.ts";
 
 export interface BuildingToggleReader {
   readVisible(): boolean;

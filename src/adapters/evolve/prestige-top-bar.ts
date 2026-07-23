@@ -1,5 +1,5 @@
 import { requireRecord } from "../validation.ts";
-import type { PrestigeTopBarTypeOption } from "../../domain/prestige-top-bar.ts";
+import type { PrestigeTopBarTypeOption } from "../../domain/progression/prestige/prestige-top-bar.ts";
 import type { PrestigeTopBarReader } from "../../ports/prestige-top-bar.ts";
 
 export interface PrestigeTopBarEvolveDependencies {

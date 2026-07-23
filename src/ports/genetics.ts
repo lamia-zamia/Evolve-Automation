@@ -1,4 +1,7 @@
-import type { GeneticsInput, GeneticsToggle } from "../domain/genetics.ts";
+import type {
+  GeneticsInput,
+  GeneticsToggle,
+} from "../domain/traits/genetics.ts";
 
 export interface GeneticsGate {
   readonly unlocked: boolean;

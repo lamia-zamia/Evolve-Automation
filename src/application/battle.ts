@@ -1,5 +1,5 @@
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import { planBattle, prepareBattle } from "../domain/battle.ts";
+import { planBattle, prepareBattle } from "../domain/combat/battle.ts";
 import type { BattleExecutor, BattleReader } from "../ports/battle.ts";
 
 export interface BattleAutomationDependencies {

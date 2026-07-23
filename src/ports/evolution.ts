@@ -4,7 +4,7 @@ import type {
   EvolutionTreeAction,
   ImitationInput,
   TargetSelectionInput,
-} from "../domain/evolution.ts";
+} from "../domain/progression/evolution/evolution.ts";
 
 export interface EvolutionCostsSample {
   readonly maxRna: number;

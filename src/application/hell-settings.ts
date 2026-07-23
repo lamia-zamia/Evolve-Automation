@@ -1,4 +1,4 @@
-import type { HellSettingsIntent } from "../domain/hell-settings.ts";
+import type { HellSettingsIntent } from "../domain/combat/hell-settings.ts";
 import type {
   HellSettingsEffects,
   HellSettingsIntentHandler,

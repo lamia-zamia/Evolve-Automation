@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createGovernmentSettingsBrowserAdapter } from "../src/adapters/browser/government-settings.ts";
-import { createGovernmentSettingsReadModel } from "../src/domain/government-settings.ts";
+import { createGovernmentSettingsReadModel } from "../src/domain/civic/government-settings.ts";
 
 let document = {
   documentElement: { scrollTop: 0 },

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { readTradeRoutesInput } from "../src/adapters/evolve/trade-routes.ts";
-import { planTradeRoutes } from "../src/domain/trade-routes.ts";
+import { planTradeRoutes } from "../src/domain/economy/market/trade-routes.ts";
 
 // Exact copy of the deleted legacy `adjustTradeRoutes` algorithm, run against
 // identical live fixtures to prove the reader + planner + apply path produces a

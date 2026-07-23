@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createPlanetSettingsBrowserAdapter } from "../src/adapters/browser/planet-settings.ts";
-import { createPlanetSettingsReadModel } from "../src/domain/planet-settings.ts";
+import { createPlanetSettingsReadModel } from "../src/domain/progression/evolution/planet-settings.ts";
 
 let document = {
   documentElement: { scrollTop: 0 },

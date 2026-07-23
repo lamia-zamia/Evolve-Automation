@@ -1,5 +1,8 @@
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import { planWishes, type WishSelectionDecision } from "../domain/wish.ts";
+import {
+  planWishes,
+  type WishSelectionDecision,
+} from "../domain/traits/wish.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type { WishReader } from "../ports/wish.ts";
 

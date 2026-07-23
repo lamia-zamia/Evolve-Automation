@@ -1,4 +1,4 @@
-import type { SupplyToggleItem } from "../domain/supply-toggles.ts";
+import type { SupplyToggleItem } from "../domain/economy/resources/supply-toggles.ts";
 
 export interface SupplyToggleReader {
   readItems(): readonly SupplyToggleItem[];

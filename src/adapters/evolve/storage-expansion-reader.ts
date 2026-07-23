@@ -3,7 +3,7 @@ import type {
   CraftableStorageView,
   StorageExpansionSnapshot,
   StorageResourceCost,
-} from "../../domain/storage-expansion.ts";
+} from "../../domain/economy/storage/storage-expansion.ts";
 import type { Clock } from "../../ports/clock.ts";
 import type { GameReader } from "../../ports/game-reader.ts";
 import {

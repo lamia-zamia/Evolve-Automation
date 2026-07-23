@@ -1,4 +1,7 @@
-import type { PrestigeCommand, PrestigeInput } from "../domain/prestige.ts";
+import type {
+  PrestigeCommand,
+  PrestigeInput,
+} from "../domain/progression/prestige/prestige.ts";
 
 /**
  * Samples the selected prestige branch once per cycle. Eligibility for the

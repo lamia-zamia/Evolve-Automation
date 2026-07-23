@@ -3,7 +3,7 @@ import type {
   HellDecision,
   HellCycleInput,
   HellTargetRequest,
-} from "../domain/hell.ts";
+} from "../domain/combat/hell.ts";
 import type { DecisionExecutor } from "./decision-executor.ts";
 
 export interface HellReader {

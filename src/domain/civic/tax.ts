@@ -1,8 +1,8 @@
 import type {
   AdjustTaxRateCommand,
   TaxAdjustmentOperation,
-} from "./commands.ts";
-import type { GameSnapshot, SnapshotMetadata } from "./snapshot.ts";
+} from "../commands.ts";
+import type { GameSnapshot, SnapshotMetadata } from "../snapshot.ts";
 
 export type TaxUnavailableReason =
   "morale-already-adjusted" | "controls-unavailable" | "taxes-hidden";

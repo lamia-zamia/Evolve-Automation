@@ -10,7 +10,7 @@ import type {
   PowerSpireBuildingInput,
   PowerSpireInput,
   PowerWarnBuildingInput,
-} from "../../domain/power.ts";
+} from "../../domain/economy/production/power.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { PowerReader } from "../../ports/power.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";

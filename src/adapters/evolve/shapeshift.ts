@@ -1,4 +1,4 @@
-import type { ShapeshiftInput } from "../../domain/shapeshift.ts";
+import type { ShapeshiftInput } from "../../domain/traits/shapeshift.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { ShapeshiftControls } from "../../ports/progression-controls.ts";
 import { stale, SUCCEEDED } from "../command-outcomes.ts";

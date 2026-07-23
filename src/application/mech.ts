@@ -6,7 +6,7 @@ import {
   smallerMechFits,
   type MechCost,
   type MechDesign,
-} from "../domain/mech.ts";
+} from "../domain/combat/mech.ts";
 import type { MechExecutor, MechReader } from "../ports/mech.ts";
 
 export interface MechAutomationDependencies {

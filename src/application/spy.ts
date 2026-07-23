@@ -3,7 +3,7 @@ import {
   planSpyCycle,
   planSpyEspionage,
   planSpyTraining,
-} from "../domain/spy.ts";
+} from "../domain/combat/spy.ts";
 import type { SpyExecutor, SpyReader } from "../ports/spy.ts";
 
 export interface SpyAutomationDependencies {

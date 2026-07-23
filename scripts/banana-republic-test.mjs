@@ -7,7 +7,7 @@ import {
   isBananaRepublicObjectiveComplete,
   isBananaRepublicReadyForUnification,
   isBananaRepublicSmoothieComplete,
-} from "../src/domain/banana-republic.ts";
+} from "../src/domain/civic/banana-republic.ts";
 import { legacyBananaRepublicTrace } from "./test-support/legacy-banana-republic.mjs";
 
 function makeProgress(overrides = {}) {

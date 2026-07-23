@@ -1,7 +1,7 @@
 import {
   getChallengeHelperSettingsReadModel,
   type ChallengeHelperSettingsControl,
-} from "../../domain/challenge-helper-settings.ts";
+} from "../../domain/progression/prestige/challenge-helper-settings.ts";
 import type { ChallengeHelperSettingsIntentHandler } from "../../ports/challenge-helper-settings.ts";
 
 interface ScrollDocument {

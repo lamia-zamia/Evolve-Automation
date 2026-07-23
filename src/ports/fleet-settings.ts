@@ -1,4 +1,4 @@
-import type { FleetSettingsIntent } from "../domain/fleet-settings.ts";
+import type { FleetSettingsIntent } from "../domain/combat/fleet-settings.ts";
 
 export interface FleetSettingsIntentHandler {
   handle(intent: FleetSettingsIntent): void;

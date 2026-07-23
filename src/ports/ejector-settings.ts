@@ -1,7 +1,7 @@
 import type {
   EjectorSettingsIntent,
   EjectorSettingsReadModel,
-} from "../domain/ejector-settings.ts";
+} from "../domain/economy/resources/ejector-settings.ts";
 
 export interface EjectorSettingsReader {
   read(): EjectorSettingsReadModel;

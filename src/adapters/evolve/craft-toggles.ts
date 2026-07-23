@@ -1,5 +1,5 @@
 import { requireRecord } from "../validation.ts";
-import type { CraftToggleItem } from "../../domain/craft-toggles.ts";
+import type { CraftToggleItem } from "../../domain/economy/production/craft-toggles.ts";
 import type { CraftToggleReader } from "../../ports/craft-toggles.ts";
 
 export interface CraftToggleEvolveDependencies {

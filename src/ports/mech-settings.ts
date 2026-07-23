@@ -1,7 +1,7 @@
 import type {
   MechSettingsIntent,
   MechSettingsReadModel,
-} from "../domain/mech-settings.ts";
+} from "../domain/combat/mech-settings.ts";
 export interface MechSettingsReader {
   read(): MechSettingsReadModel;
 }

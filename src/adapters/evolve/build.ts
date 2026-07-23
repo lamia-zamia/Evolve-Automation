@@ -12,7 +12,7 @@ import type {
   BuildCycleSetup,
   BuildResourceView,
   BuildSampleRequest,
-} from "../../domain/build.ts";
+} from "../../domain/progression/build/build.ts";
 import type {
   BuildClickResult,
   BuildExecutor,

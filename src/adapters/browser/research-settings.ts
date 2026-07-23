@@ -2,7 +2,7 @@ import {
   type ResearchSettingsControl,
   type ResearchSettingsReadModel,
   type ResearchSettingsTechnologyCatalog,
-} from "../../domain/research-settings.ts";
+} from "../../domain/progression/research/research-settings.ts";
 import type { ResearchSettingsIntentHandler } from "../../ports/research-settings.ts";
 
 interface ScrollDocument {

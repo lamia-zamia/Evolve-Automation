@@ -5,7 +5,7 @@ import {
   type TriggerSettingsCheck,
   type TriggerSettingsReadModel,
   type TriggerSettingsRow,
-} from "../../domain/trigger-settings.ts";
+} from "../../domain/progression/build/trigger-settings.ts";
 import { requireRecord } from "../validation.ts";
 
 interface TriggerSettingsEvolveDependencies {

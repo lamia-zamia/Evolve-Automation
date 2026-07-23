@@ -4,7 +4,7 @@ import type {
   MercenaryCycleInput,
   MercenaryLogEvent,
   MercenaryState,
-} from "../domain/mercenary.ts";
+} from "../domain/combat/mercenary.ts";
 
 export interface MercenaryReader {
   readCycle(): MercenaryCycleInput;

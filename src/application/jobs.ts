@@ -1,5 +1,5 @@
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import { planJobs } from "../domain/jobs.ts";
+import { planJobs } from "../domain/civic/jobs.ts";
 import type { JobsExecutor, JobsReader } from "../ports/jobs.ts";
 
 export interface JobsAutomationDependencies {

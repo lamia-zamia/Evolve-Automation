@@ -5,7 +5,7 @@ import {
   type PsychicDecision,
   type PsychicInput,
   type PsychicRoomView,
-} from "../../domain/psychic.ts";
+} from "../../domain/traits/psychic.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { PsychicControls, PsychicReader } from "../../ports/psychic.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";

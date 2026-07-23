@@ -1,4 +1,4 @@
-import type { UniverseSelectionInput } from "../../domain/universe-selection.ts";
+import type { UniverseSelectionInput } from "../../domain/progression/evolution/universe-selection.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { UniverseSelectionControls } from "../../ports/progression-controls.ts";
 import { stale, SUCCEEDED } from "../command-outcomes.ts";

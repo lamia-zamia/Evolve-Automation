@@ -1,4 +1,4 @@
-import type { MagicSettingsIntent } from "../domain/magic-settings.ts";
+import type { MagicSettingsIntent } from "../domain/economy/production/magic-settings.ts";
 import type {
   MagicSettingsEffects,
   MagicSettingsIntentHandler,

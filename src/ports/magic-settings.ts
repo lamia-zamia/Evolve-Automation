@@ -1,4 +1,4 @@
-import type { MagicSettingsIntent } from "../domain/magic-settings.ts";
+import type { MagicSettingsIntent } from "../domain/economy/production/magic-settings.ts";
 
 /** Receives user intents emitted by the Magic settings UI. */
 export interface MagicSettingsIntentHandler {

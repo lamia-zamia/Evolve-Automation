@@ -1,9 +1,9 @@
-import type { PlanetSelectionDecision } from "../domain/planet-selection.ts";
+import type { PlanetSelectionDecision } from "../domain/progression/evolution/planet-selection.ts";
 import {
   planetSelectionAchievementIds,
   planPlanetSelection,
   shouldSelectPlanet,
-} from "../domain/planet-selection.ts";
+} from "../domain/progression/evolution/planet-selection.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type { PlanetSelectionReader } from "../ports/planet-selection.ts";
 

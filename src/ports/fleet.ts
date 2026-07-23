@@ -1,4 +1,4 @@
-import type { FleetDecision, FleetInput } from "../domain/fleet.ts";
+import type { FleetDecision, FleetInput } from "../domain/combat/fleet.ts";
 import type { DecisionExecutor } from "./decision-executor.ts";
 
 export interface FleetReader {

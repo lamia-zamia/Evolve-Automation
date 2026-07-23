@@ -1,4 +1,7 @@
-import type { FactoryInput, FactoryTooltip } from "../domain/factory.ts";
+import type {
+  FactoryInput,
+  FactoryTooltip,
+} from "../domain/economy/production/factory.ts";
 
 export interface FactoryReader {
   read(): FactoryInput;

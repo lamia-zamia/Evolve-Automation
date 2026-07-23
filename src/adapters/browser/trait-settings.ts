@@ -1,7 +1,7 @@
 import {
   type TraitSettingsControl,
   type TraitSettingsReadModel,
-} from "../../domain/trait-settings.ts";
+} from "../../domain/traits/trait-settings.ts";
 import type { TraitSettingsIntentHandler } from "../../ports/trait-settings.ts";
 
 interface TraitSettingsDependencies {

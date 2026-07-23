@@ -1,7 +1,7 @@
 import type {
   EvolutionResultInput,
   EvolutionTraitView,
-} from "../../domain/evolution-result.ts";
+} from "../../domain/progression/evolution/evolution-result.ts";
 
 type EvolutionReadReason =
   | "inaccessible-data"

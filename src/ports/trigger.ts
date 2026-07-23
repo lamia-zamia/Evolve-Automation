@@ -1,5 +1,8 @@
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import type { TriggerClickDecision, TriggerInput } from "../domain/trigger.ts";
+import type {
+  TriggerClickDecision,
+  TriggerInput,
+} from "../domain/progression/build/trigger.ts";
 
 /** Reads one trigger phase from the ordered target list. */
 export interface TriggerReader {

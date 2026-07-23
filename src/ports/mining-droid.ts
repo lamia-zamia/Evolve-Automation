@@ -1,7 +1,7 @@
 import type {
   MiningDroidCurrent,
   MiningDroidPlanningInput,
-} from "../domain/mining-droid.ts";
+} from "../domain/economy/production/mining-droid.ts";
 
 export interface MiningDroidReader {
   readPlanningInput(): MiningDroidPlanningInput;

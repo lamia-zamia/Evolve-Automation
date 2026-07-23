@@ -2,7 +2,7 @@ import {
   createStorageSettingsReadModel,
   type StorageSettingsReadModel,
   type StorageSettingsRow,
-} from "../../domain/storage-settings.ts";
+} from "../../domain/economy/storage/storage-settings.ts";
 import {
   requireFunction,
   requireRecord,

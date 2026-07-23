@@ -1,4 +1,4 @@
-import type { TaxSettings } from "../../domain/tax.ts";
+import type { TaxSettings } from "../../domain/civic/tax.ts";
 import type { SettingsReader } from "../../ports/settings-reader.ts";
 import { requireBoolean, requireNumber, requireRecord } from "../validation.ts";
 

@@ -2,7 +2,7 @@ import {
   createResearchSettingsReadModel,
   type ResearchSettingsReadModel,
   type ResearchSettingsTechnology,
-} from "../../domain/research-settings.ts";
+} from "../../domain/progression/research/research-settings.ts";
 import { requireFunction, requireRecord } from "../validation.ts";
 
 interface ResearchSettingsEvolveDependencies {

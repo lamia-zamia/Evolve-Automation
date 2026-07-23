@@ -1,4 +1,4 @@
-import type { JobSettingsIntent } from "../domain/job-settings.ts";
+import type { JobSettingsIntent } from "../domain/civic/job-settings.ts";
 import type {
   JobSettingsEffects,
   JobSettingsIntentHandler,

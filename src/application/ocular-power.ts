@@ -2,7 +2,7 @@ import type { CommandExecutionOutcome } from "../domain/commands.ts";
 import {
   planOcularPowers,
   type OcularPowerDecision,
-} from "../domain/ocular-power.ts";
+} from "../domain/traits/ocular-power.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type {
   OcularPowerControls,

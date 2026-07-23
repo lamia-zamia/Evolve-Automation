@@ -8,7 +8,7 @@ import {
   type JobsDefaultCandidate,
   type JobsJobInput,
   type JobsSplitInput,
-} from "../../domain/jobs.ts";
+} from "../../domain/civic/jobs.ts";
 import type { JobsExecutor, JobsReader } from "../../ports/jobs.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";
 import {

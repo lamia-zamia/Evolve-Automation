@@ -1,7 +1,7 @@
 import {
   type FleetSettingsControl,
   type FleetSettingsReadModel,
-} from "../../domain/fleet-settings.ts";
+} from "../../domain/combat/fleet-settings.ts";
 import type { FleetSettingsIntentHandler } from "../../ports/fleet-settings.ts";
 
 interface ScrollDocument {

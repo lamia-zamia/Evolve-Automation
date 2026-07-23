@@ -1,4 +1,4 @@
-import type { WishInput, WishTier } from "../domain/wish.ts";
+import type { WishInput, WishTier } from "../domain/traits/wish.ts";
 
 export interface WishReader {
   read(): WishInput;

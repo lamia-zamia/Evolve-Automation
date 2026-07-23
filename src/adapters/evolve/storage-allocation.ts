@@ -5,7 +5,7 @@ import type {
   StorageCostInput,
   StorageTargetInput,
   StorageTargetSourceInput,
-} from "../../domain/storage-allocation.ts";
+} from "../../domain/economy/storage/storage-allocation.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { StorageAllocationReader } from "../../ports/storage-allocation.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";

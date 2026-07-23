@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { createJobSettingsBrowserAdapter } from "../src/adapters/browser/job-settings.ts";
-import { createJobSettingsReadModel } from "../src/domain/job-settings.ts";
+import { createJobSettingsReadModel } from "../src/domain/civic/job-settings.ts";
 
 const trace = [];
 let document = { documentElement: { scrollTop: 0 }, body: { scrollTop: 18 } };

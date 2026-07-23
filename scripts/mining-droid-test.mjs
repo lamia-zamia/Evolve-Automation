@@ -8,7 +8,7 @@ import {
 import {
   planMiningDroidAdjustments,
   planMiningDroidTargets,
-} from "../src/domain/mining-droid.ts";
+} from "../src/domain/economy/production/mining-droid.ts";
 import {
   assertEquivalentTraces,
   createTraceRecorder,

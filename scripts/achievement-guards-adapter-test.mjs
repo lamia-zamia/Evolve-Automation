@@ -8,7 +8,7 @@ import {
 import {
   calculateAchievementStarLevel,
   isAchievementGuardActive,
-} from "../src/domain/achievement-guards.ts";
+} from "../src/domain/progression/prestige/achievement-guards.ts";
 
 function makeInput() {
   const input = {

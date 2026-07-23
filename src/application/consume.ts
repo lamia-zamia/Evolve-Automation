@@ -1,5 +1,8 @@
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import { planConsume, type ConsumeDecision } from "../domain/consume.ts";
+import {
+  planConsume,
+  type ConsumeDecision,
+} from "../domain/economy/resources/consume.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type { ConsumeReader } from "../ports/consume.ts";
 

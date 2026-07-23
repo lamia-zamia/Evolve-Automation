@@ -8,7 +8,7 @@ import {
 import {
   calculateConsumeKeepRatio,
   planConsume,
-} from "../src/domain/consume.ts";
+} from "../src/domain/economy/resources/consume.ts";
 
 function createFixture(scenario) {
   const actions = [];

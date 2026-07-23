@@ -3,7 +3,7 @@ import {
   type WeightingSettingsControl,
   type WeightingSettingsReadModel,
   type WeightingSettingsRule,
-} from "../../domain/weighting-settings.ts";
+} from "../../domain/economy/resources/weighting-settings.ts";
 import type { WeightingSettingsIntentHandler } from "../../ports/weighting-settings.ts";
 
 interface ScrollDocument {

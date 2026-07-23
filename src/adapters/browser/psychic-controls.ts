@@ -1,4 +1,7 @@
-import type { PsychicDecision, PsychicPower } from "../../domain/psychic.ts";
+import type {
+  PsychicDecision,
+  PsychicPower,
+} from "../../domain/traits/psychic.ts";
 import type { PsychicControls } from "../../ports/psychic.ts";
 import { requireFunction, requireRecord } from "../validation.ts";
 

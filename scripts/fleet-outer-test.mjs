@@ -5,7 +5,7 @@ import { runOuterFleetAutomation } from "../src/application/fleet-outer.ts";
 import {
   calculateOuterFleetDefenseTarget,
   planOuterFleetCycle,
-} from "../src/domain/fleet-outer.ts";
+} from "../src/domain/combat/fleet-outer.ts";
 import {
   assertEquivalentTraces,
   createTraceRecorder,

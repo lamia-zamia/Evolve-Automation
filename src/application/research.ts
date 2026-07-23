@@ -1,5 +1,5 @@
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import { planResearch } from "../domain/research.ts";
+import { planResearch } from "../domain/progression/research/research.ts";
 import type {
   ResearchCommandExecutor,
   ResearchReader,

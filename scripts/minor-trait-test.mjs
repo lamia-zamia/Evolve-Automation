@@ -8,7 +8,7 @@ import {
 import {
   planMinorTraitPurchase,
   summarizeMinorTraits,
-} from "../src/domain/minor-trait.ts";
+} from "../src/domain/traits/minor-trait.ts";
 
 function createFixture(scenario) {
   const trace = [];

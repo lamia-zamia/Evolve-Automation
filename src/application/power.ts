@@ -6,7 +6,7 @@ import {
   recordPowerWarningCap,
   type PowerAutomationState,
   type PowerDecision,
-} from "../domain/power.ts";
+} from "../domain/economy/production/power.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type { PowerReader, PowerWarningSource } from "../ports/power.ts";
 

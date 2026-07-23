@@ -1,7 +1,7 @@
 import {
   type PrestigeSettingsControl,
   type PrestigeSettingsReadModel,
-} from "../../domain/prestige-settings.ts";
+} from "../../domain/progression/prestige/prestige-settings.ts";
 import type { PrestigeSettingsIntentHandler } from "../../ports/prestige-settings.ts";
 interface ScrollDocument {
   documentElement: { scrollTop: number };

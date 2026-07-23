@@ -4,7 +4,7 @@ import {
   type ConsumeDecision,
   type ConsumeInput,
   type ConsumeResourceView,
-} from "../../domain/consume.ts";
+} from "../../domain/economy/resources/consume.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { ConsumeReader } from "../../ports/consume.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";

@@ -1,7 +1,7 @@
 import type {
   TriggerClickDecision,
   TriggerTargetView,
-} from "../../domain/trigger.ts";
+} from "../../domain/progression/build/trigger.ts";
 import type {
   TriggerCommandExecutor,
   TriggerExecutionResult,

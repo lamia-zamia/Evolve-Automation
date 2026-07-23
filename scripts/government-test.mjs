@@ -5,7 +5,7 @@ import {
   createGovernmentCommandExecutor,
   readGovernmentInput,
 } from "../src/adapters/evolve/government.ts";
-import { planGovernment } from "../src/domain/government.ts";
+import { planGovernment } from "../src/domain/civic/government.ts";
 
 // End-to-end reader + planner + apply, reproducing the legacy autoGovernment
 // scenarios and asserting the same setGovernment / Vue appoint calls.

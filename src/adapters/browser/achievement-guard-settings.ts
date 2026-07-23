@@ -1,7 +1,7 @@
 import {
   getAchievementGuardSettingsReadModel,
   type AchievementGuardSettingsControl,
-} from "../../domain/achievement-guard-settings.ts";
+} from "../../domain/progression/prestige/achievement-guard-settings.ts";
 import type { AchievementGuardSettingsIntentHandler } from "../../ports/achievement-guard-settings.ts";
 
 interface ScrollDocument {

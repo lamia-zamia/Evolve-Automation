@@ -12,7 +12,7 @@ import {
   planReplicatorGovernorTask,
   planReplicatorPriority,
   planReplicatorSelection,
-} from "../src/domain/replicator.ts";
+} from "../src/domain/economy/production/replicator.ts";
 import {
   assertEquivalentTraces,
   createTraceRecorder,

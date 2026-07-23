@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   assessRetirementPreparation,
   isRetirementAssistActive,
-} from "../src/domain/retirement-prep.ts";
+} from "../src/domain/progression/prestige/retirement-prep.ts";
 import { formatRetirementShortfalls } from "../src/application/retirement-prep.ts";
 import {
   legacyRetirementAssistActive,

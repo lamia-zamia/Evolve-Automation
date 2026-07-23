@@ -1,7 +1,7 @@
 import type {
   EvolutionSettingsIntent,
   EvolutionSettingsReadModel,
-} from "../domain/evolution-settings.ts";
+} from "../domain/progression/evolution/evolution-settings.ts";
 export interface EvolutionSettingsReader {
   read(): EvolutionSettingsReadModel;
 }

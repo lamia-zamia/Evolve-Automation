@@ -4,7 +4,7 @@ import type {
   SmelterFuelView,
   SmelterInput,
   SmelterProductionId,
-} from "../../domain/smelter.ts";
+} from "../../domain/economy/production/smelter.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";
 import {

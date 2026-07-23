@@ -1,5 +1,8 @@
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import { planMutation, type MutationDecision } from "../domain/mutation.ts";
+import {
+  planMutation,
+  type MutationDecision,
+} from "../domain/traits/mutation.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type { MutationReader } from "../ports/mutation.ts";
 

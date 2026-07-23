@@ -1,4 +1,4 @@
-import type { MechSettingsIntent } from "../domain/mech-settings.ts";
+import type { MechSettingsIntent } from "../domain/combat/mech-settings.ts";
 import type {
   MechSettingsEffects,
   MechSettingsIntentHandler,

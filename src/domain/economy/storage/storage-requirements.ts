@@ -2,7 +2,7 @@ import {
   calculateKnowledgeRequirements,
   type KnowledgeRequirements,
   type KnowledgeRequirementsInput,
-} from "./knowledge-requirements.ts";
+} from "../../knowledge-requirements.ts";
 
 export interface StorageResourceState {
   readonly id: string;

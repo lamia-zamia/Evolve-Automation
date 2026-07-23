@@ -1,4 +1,4 @@
-import type { GeneticsToggle } from "../../domain/genetics.ts";
+import type { GeneticsToggle } from "../../domain/traits/genetics.ts";
 import type { GeneticsControls } from "../../ports/genetics.ts";
 import {
   requireFunction,

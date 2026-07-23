@@ -1,5 +1,5 @@
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import { planTrigger } from "../domain/trigger.ts";
+import { planTrigger } from "../domain/progression/build/trigger.ts";
 import type {
   TriggerCommandExecutor,
   TriggerReader,

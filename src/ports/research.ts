@@ -1,5 +1,8 @@
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import type { ResearchDecision, ResearchInput } from "../domain/research.ts";
+import type {
+  ResearchDecision,
+  ResearchInput,
+} from "../domain/progression/research/research.ts";
 
 /** Reads one ordered research phase, beginning at the supplied list index. */
 export interface ResearchReader {

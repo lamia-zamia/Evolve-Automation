@@ -3,7 +3,7 @@ import type {
   PylonInput,
   PylonRitualAdjustment,
   PylonSpellView,
-} from "../../domain/pylon.ts";
+} from "../../domain/economy/production/pylon.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";
 import {

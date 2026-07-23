@@ -6,7 +6,7 @@ import {
   calculateRequiredAuthorityGarrison,
   predictAuthorityAfterRemovingSoldiers,
   resolveAuthorityTarget,
-} from "../src/domain/authority.ts";
+} from "../src/domain/civic/authority.ts";
 import {
   legacyAuthorityPerSoldier,
   legacyAuthorityTarget,

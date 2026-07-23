@@ -3,7 +3,7 @@ import type {
   FactoryInput,
   FactoryMaterialInput,
   FactoryProductionInput,
-} from "../../domain/factory.ts";
+} from "../../domain/economy/production/factory.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { FactoryReader } from "../../ports/factory.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";

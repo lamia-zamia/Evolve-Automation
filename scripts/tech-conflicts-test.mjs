@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { formatTechConflict } from "../src/application/tech-conflicts.ts";
-import { findTechConflict } from "../src/domain/tech-conflicts.ts";
+import { findTechConflict } from "../src/domain/progression/research/tech-conflicts.ts";
 
 function makeInput(overrides = {}) {
   const base = {

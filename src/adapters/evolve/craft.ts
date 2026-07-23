@@ -3,7 +3,7 @@ import type {
   CraftDecision,
   CraftGateInput,
   CraftMaterialView,
-} from "../../domain/craft.ts";
+} from "../../domain/economy/production/craft.ts";
 import type { CraftReader } from "../../ports/craft.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";

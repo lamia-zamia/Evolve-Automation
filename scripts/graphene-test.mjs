@@ -4,7 +4,7 @@ import {
   createGrapheneCommandExecutor,
   readGrapheneInput,
 } from "../src/adapters/evolve/graphene.ts";
-import { planGraphene } from "../src/domain/graphene.ts";
+import { planGraphene } from "../src/domain/economy/production/graphene.ts";
 
 const CONSUMPTION_BALANCE_MIN = 60;
 

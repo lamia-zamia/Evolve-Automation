@@ -9,7 +9,7 @@ import {
   type GalaxyShipCounts,
   type GalaxyShipInput,
   type GalaxyShipName,
-} from "../../domain/fleet.ts";
+} from "../../domain/combat/fleet.ts";
 import type { FleetExecutor, FleetReader } from "../../ports/fleet.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";
 import {

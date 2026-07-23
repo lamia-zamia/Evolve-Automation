@@ -5,7 +5,7 @@ import type {
   GatherResourceId,
   GatherResourcesDecision,
   GatherResourcesInput,
-} from "../../domain/gather-resources.ts";
+} from "../../domain/economy/resources/gather-resources.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { GatherResourcesReader } from "../../ports/gather-resources.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";

@@ -8,7 +8,7 @@ import type {
   BuildConflictSample,
   BuildCycleSetup,
   BuildSampleRequest,
-} from "../domain/build.ts";
+} from "../domain/progression/build/build.ts";
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
 
 /**

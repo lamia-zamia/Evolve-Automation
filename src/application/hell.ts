@@ -4,7 +4,7 @@ import {
   prepareHellCycle,
   type HellDecision,
   type HellTargetRequest,
-} from "../domain/hell.ts";
+} from "../domain/combat/hell.ts";
 import type { HellExecutor, HellReader } from "../ports/hell.ts";
 
 export interface HellAutomationDependencies {

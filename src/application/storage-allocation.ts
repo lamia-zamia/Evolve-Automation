@@ -5,7 +5,7 @@ import {
   planStorageAllocation,
   type ApplyStorageAllocationDecision,
   type StorageAllocationState,
-} from "../domain/storage-allocation.ts";
+} from "../domain/economy/storage/storage-allocation.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type {
   StorageAllocationReader,

@@ -6,7 +6,7 @@ import {
   createWishReader,
 } from "../src/adapters/evolve/wish.ts";
 import { runWishAutomation } from "../src/application/wish.ts";
-import { planWishes } from "../src/domain/wish.ts";
+import { planWishes } from "../src/domain/traits/wish.ts";
 import {
   assertEquivalentTraces,
   createTraceRecorder,

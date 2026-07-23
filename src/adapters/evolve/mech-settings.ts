@@ -3,7 +3,7 @@ import {
   createMechSettingsReadModel,
   type MechSettingsReadModel,
   type MechSettingsOption,
-} from "../../domain/mech-settings.ts";
+} from "../../domain/combat/mech-settings.ts";
 import type { MechSettingsReader } from "../../ports/mech-settings.ts";
 export interface MechSettingsEvolveDependencies {
   readonly getMechManager: () => unknown;

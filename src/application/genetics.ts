@@ -1,5 +1,8 @@
 import type { CommandExecutionOutcome } from "../domain/commands.ts";
-import { planGenetics, type GeneticsDecision } from "../domain/genetics.ts";
+import {
+  planGenetics,
+  type GeneticsDecision,
+} from "../domain/traits/genetics.ts";
 import type { DecisionExecutor } from "../ports/decision-executor.ts";
 import type { GeneticsControls, GeneticsReader } from "../ports/genetics.ts";
 
