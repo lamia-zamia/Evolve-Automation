@@ -28856,124 +28856,6 @@
     });
   }
 
-  // src/domain/economy/production/mining-droid.ts
-  function planMiningDroidTargets(input) {
-    if (!input.initialised) {
-      return null;
-    }
-    const priorityGroups = /* @__PURE__ */ new Map();
-    const targets = new Map(
-      input.productions.map((production) => [production.id, 0])
-    );
-    for (const production of input.productions) {
-      if (production.weighting <= 0) {
-        continue;
-      }
-      const priority = production.demanded ? Math.max(production.priority, 100) : production.priority;
-      if (priority === 0) {
-        continue;
-      }
-      const group = priorityGroups.get(priority) ?? [];
-      group.push(production);
-      priorityGroups.set(priority, group);
-    }
-    const priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group);
-    const supplementary = priorityGroups.get(-1);
-    if (supplementary !== void 0 && priorityList.length > 1) {
-      priorityList.splice(priorityList.indexOf(supplementary, 1));
-      priorityList[0]?.push(...supplementary);
-    }
-    let remaining = input.maximum;
-    for (let groupIndex = 0; groupIndex < priorityList.length && remaining > 0; groupIndex++) {
-      const products = [...priorityList[groupIndex] ?? []].sort(
-        (left, right) => left.weighting - right.weighting
-      );
-      while (remaining > 0) {
-        const beforeDistribution = remaining;
-        const totalWeight = products.reduce(
-          (sum, production) => sum + production.weighting,
-          0
-        );
-        for (let index = products.length - 1; index >= 0 && remaining > 0; index--) {
-          const production = products[index];
-          if (production === void 0) {
-            continue;
-          }
-          const requested = Math.min(
-            remaining,
-            Math.max(
-              1,
-              Math.floor(
-                beforeDistribution / totalWeight * production.weighting
-              )
-            )
-          );
-          const assigned = production.useful ? requested : 0;
-          if (assigned > 0) {
-            remaining -= assigned;
-            targets.set(
-              production.id,
-              (targets.get(production.id) ?? 0) + assigned
-            );
-          }
-          if (assigned < requested) {
-            products.splice(index, 1);
-          }
-        }
-        if (beforeDistribution === remaining) {
-          break;
-        }
-      }
-    }
-    if (remaining > 0) {
-      return null;
-    }
-    return Object.freeze(
-      input.productions.map(
-        (production) => Object.freeze({
-          productionId: production.id,
-          target: targets.get(production.id) ?? 0
-        })
-      )
-    );
-  }
-  function planMiningDroidAdjustments(targets, current) {
-    const currentById = new Map(
-      current.map((production) => [production.productionId, production.count])
-    );
-    return Object.freeze({
-      adjustments: Object.freeze(
-        targets.map((target) => {
-          const expectedCurrent = currentById.get(target.productionId) ?? 0;
-          return Object.freeze({
-            productionId: target.productionId,
-            expectedCurrent,
-            delta: target.target - expectedCurrent
-          });
-        })
-      )
-    });
-  }
-
-  // src/application/mining-droid.ts
-  var SUCCEEDED5 = Object.freeze({
-    status: "succeeded"
-  });
-  function runMiningDroidAutomation(dependencies) {
-    const targets = planMiningDroidTargets(
-      dependencies.reader.readPlanningInput()
-    );
-    if (targets === null) {
-      return SUCCEEDED5;
-    }
-    const current = dependencies.reader.readCurrent(
-      targets.map((target) => target.productionId)
-    );
-    return dependencies.executor.execute(
-      planMiningDroidAdjustments(targets, current)
-    );
-  }
-
   // src/adapters/evolve/economy/production/mining-droid.ts
   function callBoolean8(record, name, path) {
     return Boolean(
@@ -29210,6 +29092,134 @@
         }
         return SUCCEEDED;
       }
+    });
+  }
+
+  // src/domain/economy/production/mining-droid.ts
+  function planMiningDroidTargets(input) {
+    if (!input.initialised) {
+      return null;
+    }
+    const priorityGroups = /* @__PURE__ */ new Map();
+    const targets = new Map(
+      input.productions.map((production) => [production.id, 0])
+    );
+    for (const production of input.productions) {
+      if (production.weighting <= 0) {
+        continue;
+      }
+      const priority = production.demanded ? Math.max(production.priority, 100) : production.priority;
+      if (priority === 0) {
+        continue;
+      }
+      const group = priorityGroups.get(priority) ?? [];
+      group.push(production);
+      priorityGroups.set(priority, group);
+    }
+    const priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group);
+    const supplementary = priorityGroups.get(-1);
+    if (supplementary !== void 0 && priorityList.length > 1) {
+      priorityList.splice(priorityList.indexOf(supplementary, 1));
+      priorityList[0]?.push(...supplementary);
+    }
+    let remaining = input.maximum;
+    for (let groupIndex = 0; groupIndex < priorityList.length && remaining > 0; groupIndex++) {
+      const products = [...priorityList[groupIndex] ?? []].sort(
+        (left, right) => left.weighting - right.weighting
+      );
+      while (remaining > 0) {
+        const beforeDistribution = remaining;
+        const totalWeight = products.reduce(
+          (sum, production) => sum + production.weighting,
+          0
+        );
+        for (let index = products.length - 1; index >= 0 && remaining > 0; index--) {
+          const production = products[index];
+          if (production === void 0) {
+            continue;
+          }
+          const requested = Math.min(
+            remaining,
+            Math.max(
+              1,
+              Math.floor(
+                beforeDistribution / totalWeight * production.weighting
+              )
+            )
+          );
+          const assigned = production.useful ? requested : 0;
+          if (assigned > 0) {
+            remaining -= assigned;
+            targets.set(
+              production.id,
+              (targets.get(production.id) ?? 0) + assigned
+            );
+          }
+          if (assigned < requested) {
+            products.splice(index, 1);
+          }
+        }
+        if (beforeDistribution === remaining) {
+          break;
+        }
+      }
+    }
+    if (remaining > 0) {
+      return null;
+    }
+    return Object.freeze(
+      input.productions.map(
+        (production) => Object.freeze({
+          productionId: production.id,
+          target: targets.get(production.id) ?? 0
+        })
+      )
+    );
+  }
+  function planMiningDroidAdjustments(targets, current) {
+    const currentById = new Map(
+      current.map((production) => [production.productionId, production.count])
+    );
+    return Object.freeze({
+      adjustments: Object.freeze(
+        targets.map((target) => {
+          const expectedCurrent = currentById.get(target.productionId) ?? 0;
+          return Object.freeze({
+            productionId: target.productionId,
+            expectedCurrent,
+            delta: target.target - expectedCurrent
+          });
+        })
+      )
+    });
+  }
+
+  // src/application/mining-droid.ts
+  var SUCCEEDED5 = Object.freeze({
+    status: "succeeded"
+  });
+  function runMiningDroidAutomation(dependencies) {
+    const targets = planMiningDroidTargets(
+      dependencies.reader.readPlanningInput()
+    );
+    if (targets === null) {
+      return SUCCEEDED5;
+    }
+    const current = dependencies.reader.readCurrent(
+      targets.map((target) => target.productionId)
+    );
+    return dependencies.executor.execute(
+      planMiningDroidAdjustments(targets, current)
+    );
+  }
+
+  // src/bootstrap/mining-droid-control.ts
+  function createMiningDroidControl(getManager) {
+    return Object.freeze({
+      autoMiningDroid: () => runMiningDroidAutomation({
+        reader: createMiningDroidReader(getManager),
+        executor: createMiningDroidCommandExecutor(getManager)
+      })
     });
   }
 
@@ -31144,82 +31154,6 @@
     });
   }
 
-  // src/domain/traits/minor-trait.ts
-  function summarizeMinorTraits(input) {
-    if (!input.unlocked || input.traits.length === 0) {
-      return null;
-    }
-    return Object.freeze({
-      traits: input.traits,
-      totalWeighting: input.traits.reduce(
-        (total, trait2) => total + trait2.weighting,
-        0
-      ),
-      totalGeneCost: input.traits.reduce(
-        (total, trait2) => total + trait2.initialGeneCost,
-        0
-      )
-    });
-  }
-  function planMinorTraitPurchase(summary, candidate) {
-    const summaryTrait = summary.traits[candidate.index];
-    if (summaryTrait === void 0 || summaryTrait.traitName !== candidate.traitName) {
-      return null;
-    }
-    if (!(summaryTrait.weighting / summary.totalWeighting >= candidate.geneCost / summary.totalGeneCost && candidate.currentGenes >= candidate.geneCost)) {
-      return null;
-    }
-    return Object.freeze({
-      traitName: candidate.traitName,
-      geneCost: candidate.geneCost,
-      expectedGenes: candidate.currentGenes
-    });
-  }
-
-  // src/application/minor-trait.ts
-  var SUCCEEDED11 = Object.freeze({
-    status: "succeeded"
-  });
-  function staleCandidate(index, expectedTraitName, actualTraitName) {
-    return {
-      status: "stale",
-      failure: {
-        code: "stale-minor-trait-candidate",
-        message: "managed minor-trait list changed",
-        context: { index, expectedTraitName, actualTraitName }
-      }
-    };
-  }
-  function runMinorTraitAutomation(dependencies) {
-    const summary = summarizeMinorTraits(dependencies.reader.readSummary());
-    if (summary === null) {
-      return SUCCEEDED11;
-    }
-    for (let index = 0; index < summary.traits.length; index++) {
-      const expected = summary.traits[index];
-      if (expected === void 0) {
-        continue;
-      }
-      const candidate = dependencies.reader.readCandidate(index);
-      if (candidate === null || candidate.traitName !== expected.traitName) {
-        return staleCandidate(
-          index,
-          expected.traitName,
-          candidate?.traitName ?? null
-        );
-      }
-      const decision2 = planMinorTraitPurchase(summary, candidate);
-      if (decision2 === null) {
-        continue;
-      }
-      const outcome = dependencies.executor.execute(decision2);
-      if (outcome.status !== "succeeded") {
-        return outcome;
-      }
-    }
-    return SUCCEEDED11;
-  }
-
   // src/adapters/evolve/traits/minor-trait.ts
   function readManagedList(manager) {
     const managedPriorityList = requireFunction(
@@ -31345,6 +31279,91 @@
         genes["currentQuantity"] = actualGenes - decision2.geneCost;
         return SUCCEEDED;
       }
+    });
+  }
+
+  // src/domain/traits/minor-trait.ts
+  function summarizeMinorTraits(input) {
+    if (!input.unlocked || input.traits.length === 0) {
+      return null;
+    }
+    return Object.freeze({
+      traits: input.traits,
+      totalWeighting: input.traits.reduce(
+        (total, trait2) => total + trait2.weighting,
+        0
+      ),
+      totalGeneCost: input.traits.reduce(
+        (total, trait2) => total + trait2.initialGeneCost,
+        0
+      )
+    });
+  }
+  function planMinorTraitPurchase(summary, candidate) {
+    const summaryTrait = summary.traits[candidate.index];
+    if (summaryTrait === void 0 || summaryTrait.traitName !== candidate.traitName) {
+      return null;
+    }
+    if (!(summaryTrait.weighting / summary.totalWeighting >= candidate.geneCost / summary.totalGeneCost && candidate.currentGenes >= candidate.geneCost)) {
+      return null;
+    }
+    return Object.freeze({
+      traitName: candidate.traitName,
+      geneCost: candidate.geneCost,
+      expectedGenes: candidate.currentGenes
+    });
+  }
+
+  // src/application/minor-trait.ts
+  var SUCCEEDED11 = Object.freeze({
+    status: "succeeded"
+  });
+  function staleCandidate(index, expectedTraitName, actualTraitName) {
+    return {
+      status: "stale",
+      failure: {
+        code: "stale-minor-trait-candidate",
+        message: "managed minor-trait list changed",
+        context: { index, expectedTraitName, actualTraitName }
+      }
+    };
+  }
+  function runMinorTraitAutomation(dependencies) {
+    const summary = summarizeMinorTraits(dependencies.reader.readSummary());
+    if (summary === null) {
+      return SUCCEEDED11;
+    }
+    for (let index = 0; index < summary.traits.length; index++) {
+      const expected = summary.traits[index];
+      if (expected === void 0) {
+        continue;
+      }
+      const candidate = dependencies.reader.readCandidate(index);
+      if (candidate === null || candidate.traitName !== expected.traitName) {
+        return staleCandidate(
+          index,
+          expected.traitName,
+          candidate?.traitName ?? null
+        );
+      }
+      const decision2 = planMinorTraitPurchase(summary, candidate);
+      if (decision2 === null) {
+        continue;
+      }
+      const outcome = dependencies.executor.execute(decision2);
+      if (outcome.status !== "succeeded") {
+        return outcome;
+      }
+    }
+    return SUCCEEDED11;
+  }
+
+  // src/bootstrap/minor-trait-control.ts
+  function createMinorTraitControl(dependencies) {
+    const reader = createMinorTraitReader(dependencies.reader);
+    const executor = createMinorTraitCommandExecutor(dependencies.executor);
+    return Object.freeze({
+      autoMinorTrait: () => runMinorTraitAutomation({ reader, executor })
     });
   }
 
@@ -36169,87 +36188,6 @@
     });
   }
 
-  // src/domain/economy/market/galaxy-market.ts
-  function planGalaxyMarket(input) {
-    if (!input.initialized) return null;
-    const priorityGroups = /* @__PURE__ */ new Map();
-    const targets = /* @__PURE__ */ new Map();
-    for (const offer of input.offers) {
-      if (offer.weighting > 0) {
-        const priority = offer.demanded ? Math.max(offer.priority, 100) : offer.priority;
-        if (priority !== 0) {
-          const group = priorityGroups.get(priority) ?? [];
-          group.push(offer);
-          priorityGroups.set(priority, group);
-        }
-      }
-      targets.set(offer.buyResourceId, 0);
-    }
-    const priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group);
-    const supplementary = priorityGroups.get(-1);
-    if (supplementary !== void 0 && priorityList.length > 1) {
-      priorityList.splice(priorityList.indexOf(supplementary, 1));
-      priorityList[0]?.push(...supplementary);
-    }
-    let remaining = input.maximum;
-    for (let groupIndex = 0; groupIndex < priorityList.length && remaining > 0; groupIndex++) {
-      const offers = [...priorityList[groupIndex] ?? []].sort(
-        (left, right) => left.weighting - right.weighting
-      );
-      while (remaining > 0) {
-        const beforeDistribution = remaining;
-        const totalWeight = offers.reduce(
-          (sum, offer) => sum + offer.weighting,
-          0
-        );
-        for (let index = offers.length - 1; index >= 0 && remaining > 0; index--) {
-          const offer = offers[index];
-          if (offer === void 0) continue;
-          const requested = Math.min(
-            remaining,
-            Math.max(
-              1,
-              Math.floor(beforeDistribution / totalWeight * offer.weighting)
-            )
-          );
-          const assigned = offer.useful && !offer.sellDemanded && offer.sellStorageRatio >= input.minimumIngredientRatio ? requested : 0;
-          if (assigned > 0) {
-            remaining -= assigned;
-            targets.set(
-              offer.buyResourceId,
-              (targets.get(offer.buyResourceId) ?? 0) + assigned
-            );
-          }
-          if (assigned < requested) offers.splice(index, 1);
-        }
-        if (beforeDistribution === remaining) break;
-      }
-    }
-    return Object.freeze({
-      expectedMaximum: input.maximum,
-      adjustments: Object.freeze(
-        input.offers.map(
-          (offer) => Object.freeze({
-            offerIndex: offer.index,
-            buyResourceId: offer.buyResourceId,
-            sellResourceId: offer.sellResourceId,
-            expectedCurrent: offer.current,
-            delta: (targets.get(offer.buyResourceId) ?? 0) - offer.current
-          })
-        )
-      )
-    });
-  }
-
-  // src/application/galaxy-market.ts
-  var SUCCEEDED17 = Object.freeze({
-    status: "succeeded"
-  });
-  function runGalaxyMarketAutomation(dependencies) {
-    const decision2 = planGalaxyMarket(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED17 : dependencies.executor.execute(decision2);
-  }
-
   // src/adapters/evolve/economy/market/galaxy-market.ts
   function callBoolean15(record, name, path) {
     return Boolean(
@@ -36539,136 +36477,96 @@
     return Object.freeze({ reader, executor });
   }
 
-  // src/domain/economy/resources/gather-resources.ts
-  var DIRECT_TARGETS = Object.freeze([
-    Object.freeze({ actionId: "food", resourceId: "Food" }),
-    Object.freeze({ actionId: "lumber", resourceId: "Lumber" }),
-    Object.freeze({ actionId: "stone", resourceId: "Stone" }),
-    Object.freeze({ actionId: "chrysotile", resourceId: "Chrysotile" })
-  ]);
-  function planGatherResources(input) {
-    if (input.stopped) return null;
-    const quantities = {
-      Food: input.resources.Food.currentQuantity,
-      Lumber: input.resources.Lumber.currentQuantity,
-      Stone: input.resources.Stone.currentQuantity,
-      Chrysotile: input.resources.Chrysotile.currentQuantity,
-      Furs: input.resources.Furs.currentQuantity,
-      Mana: input.resources.Mana.currentQuantity
-    };
-    const operations = [];
-    for (const target of DIRECT_TARGETS) {
-      if (!input.clickable[target.actionId]) continue;
-      if (target.actionId === "food" && input.fasting) continue;
-      const resource2 = input.resources[target.resourceId];
-      const current = quantities[target.resourceId];
-      const conjuring = target.actionId === "food" ? input.foodConjuring : input.materialConjuring;
-      let amount;
-      const beforeAction = [];
-      if (conjuring) {
-        amount = Math.floor(
-          Math.min(
-            (resource2.maxQuantity - current) / (input.resourcesPerClick * 10),
-            quantities.Mana,
-            input.clickLimit
-          )
-        );
-        const manaQuantity = quantities.Mana - amount;
-        beforeAction.push(
-          Object.freeze({
-            resourceId: "Mana",
-            expectedQuantity: quantities.Mana,
-            quantity: manaQuantity
-          })
-        );
-        quantities.Mana = manaQuantity;
-        const resourceQuantity = current + amount * input.resourcesPerClick;
-        beforeAction.push(
-          Object.freeze({
-            resourceId: target.resourceId,
-            expectedQuantity: current,
-            quantity: resourceQuantity
-          })
-        );
-        quantities[target.resourceId] = resourceQuantity;
-      } else {
-        amount = Math.ceil(
-          Math.min(
-            (resource2.maxQuantity - current) / input.resourcesPerClick,
-            input.clickLimit
-          )
-        );
-        const resourceQuantity = Math.min(
-          current + amount * input.resourcesPerClick,
-          resource2.maxQuantity
-        );
-        beforeAction.push(
-          Object.freeze({
-            resourceId: target.resourceId,
-            expectedQuantity: current,
-            quantity: resourceQuantity
-          })
-        );
-        quantities[target.resourceId] = resourceQuantity;
+  // src/domain/economy/market/galaxy-market.ts
+  function planGalaxyMarket(input) {
+    if (!input.initialized) return null;
+    const priorityGroups = /* @__PURE__ */ new Map();
+    const targets = /* @__PURE__ */ new Map();
+    for (const offer of input.offers) {
+      if (offer.weighting > 0) {
+        const priority = offer.demanded ? Math.max(offer.priority, 100) : offer.priority;
+        if (priority !== 0) {
+          const group = priorityGroups.get(priority) ?? [];
+          group.push(offer);
+          priorityGroups.set(priority, group);
+        }
       }
-      operations.push(
-        Object.freeze({
-          actionId: target.actionId,
-          amount,
-          beforeAction: Object.freeze(beforeAction),
-          afterAction: Object.freeze([])
-        })
-      );
+      targets.set(offer.buyResourceId, 0);
     }
-    if (input.clickable.slaughter) {
-      const amount = Math.min(
-        Math.max(
-          input.resources.Lumber.maxQuantity - quantities.Lumber,
-          input.resources.Food.maxQuantity - quantities.Food,
-          input.resources.Furs.maxQuantity - quantities.Furs
-        ) / input.resourcesPerClick,
-        input.clickLimit
+    const priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group);
+    const supplementary = priorityGroups.get(-1);
+    if (supplementary !== void 0 && priorityList.length > 1) {
+      priorityList.splice(priorityList.indexOf(supplementary, 1));
+      priorityList[0]?.push(...supplementary);
+    }
+    let remaining = input.maximum;
+    for (let groupIndex = 0; groupIndex < priorityList.length && remaining > 0; groupIndex++) {
+      const offers = [...priorityList[groupIndex] ?? []].sort(
+        (left, right) => left.weighting - right.weighting
       );
-      const afterAction = [];
-      const assignCapped = (resourceId3) => {
-        const current = quantities[resourceId3];
-        const quantity = Math.min(
-          current + amount * input.resourcesPerClick,
-          input.resources[resourceId3].maxQuantity
+      while (remaining > 0) {
+        const beforeDistribution = remaining;
+        const totalWeight = offers.reduce(
+          (sum, offer) => sum + offer.weighting,
+          0
         );
-        afterAction.push(
-          Object.freeze({
-            resourceId: resourceId3,
-            expectedQuantity: current,
-            quantity
-          })
-        );
-        quantities[resourceId3] = quantity;
-      };
-      assignCapped("Lumber");
-      if (input.soulEater && input.primitive && !input.fasting) {
-        assignCapped("Food");
+        for (let index = offers.length - 1; index >= 0 && remaining > 0; index--) {
+          const offer = offers[index];
+          if (offer === void 0) continue;
+          const requested = Math.min(
+            remaining,
+            Math.max(
+              1,
+              Math.floor(beforeDistribution / totalWeight * offer.weighting)
+            )
+          );
+          const assigned = offer.useful && !offer.sellDemanded && offer.sellStorageRatio >= input.minimumIngredientRatio ? requested : 0;
+          if (assigned > 0) {
+            remaining -= assigned;
+            targets.set(
+              offer.buyResourceId,
+              (targets.get(offer.buyResourceId) ?? 0) + assigned
+            );
+          }
+          if (assigned < requested) offers.splice(index, 1);
+        }
+        if (beforeDistribution === remaining) break;
       }
-      if (input.fursUnlocked) assignCapped("Furs");
-      operations.push(
-        Object.freeze({
-          actionId: "slaughter",
-          amount,
-          beforeAction: Object.freeze([]),
-          afterAction: Object.freeze(afterAction)
-        })
-      );
     }
-    return operations.length === 0 ? null : Object.freeze({ operations: Object.freeze(operations) });
+    return Object.freeze({
+      expectedMaximum: input.maximum,
+      adjustments: Object.freeze(
+        input.offers.map(
+          (offer) => Object.freeze({
+            offerIndex: offer.index,
+            buyResourceId: offer.buyResourceId,
+            sellResourceId: offer.sellResourceId,
+            expectedCurrent: offer.current,
+            delta: (targets.get(offer.buyResourceId) ?? 0) - offer.current
+          })
+        )
+      )
+    });
   }
 
-  // src/application/gather-resources.ts
-  var SUCCEEDED18 = Object.freeze({
+  // src/application/galaxy-market.ts
+  var SUCCEEDED17 = Object.freeze({
     status: "succeeded"
   });
-  function runGatherResourcesAutomation(dependencies) {
-    const decision2 = planGatherResources(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED18 : dependencies.executor.execute(decision2);
+  function runGalaxyMarketAutomation(dependencies) {
+    const decision2 = planGalaxyMarket(dependencies.reader.read());
+    return decision2 === null ? SUCCEEDED17 : dependencies.executor.execute(decision2);
+  }
+
+  // src/bootstrap/galaxy-market-control.ts
+  function createGalaxyMarketControl(dependencies) {
+    const adapter = createGalaxyMarketAdapter(dependencies);
+    return Object.freeze({
+      autoGalaxyMarket: () => runGalaxyMarketAutomation({
+        reader: adapter.reader,
+        executor: adapter.executor
+      })
+    });
   }
 
   // src/adapters/evolve/economy/resources/gather-resources.ts
@@ -37001,6 +36899,149 @@
       }
     });
     return Object.freeze({ reader, executor });
+  }
+
+  // src/domain/economy/resources/gather-resources.ts
+  var DIRECT_TARGETS = Object.freeze([
+    Object.freeze({ actionId: "food", resourceId: "Food" }),
+    Object.freeze({ actionId: "lumber", resourceId: "Lumber" }),
+    Object.freeze({ actionId: "stone", resourceId: "Stone" }),
+    Object.freeze({ actionId: "chrysotile", resourceId: "Chrysotile" })
+  ]);
+  function planGatherResources(input) {
+    if (input.stopped) return null;
+    const quantities = {
+      Food: input.resources.Food.currentQuantity,
+      Lumber: input.resources.Lumber.currentQuantity,
+      Stone: input.resources.Stone.currentQuantity,
+      Chrysotile: input.resources.Chrysotile.currentQuantity,
+      Furs: input.resources.Furs.currentQuantity,
+      Mana: input.resources.Mana.currentQuantity
+    };
+    const operations = [];
+    for (const target of DIRECT_TARGETS) {
+      if (!input.clickable[target.actionId]) continue;
+      if (target.actionId === "food" && input.fasting) continue;
+      const resource2 = input.resources[target.resourceId];
+      const current = quantities[target.resourceId];
+      const conjuring = target.actionId === "food" ? input.foodConjuring : input.materialConjuring;
+      let amount;
+      const beforeAction = [];
+      if (conjuring) {
+        amount = Math.floor(
+          Math.min(
+            (resource2.maxQuantity - current) / (input.resourcesPerClick * 10),
+            quantities.Mana,
+            input.clickLimit
+          )
+        );
+        const manaQuantity = quantities.Mana - amount;
+        beforeAction.push(
+          Object.freeze({
+            resourceId: "Mana",
+            expectedQuantity: quantities.Mana,
+            quantity: manaQuantity
+          })
+        );
+        quantities.Mana = manaQuantity;
+        const resourceQuantity = current + amount * input.resourcesPerClick;
+        beforeAction.push(
+          Object.freeze({
+            resourceId: target.resourceId,
+            expectedQuantity: current,
+            quantity: resourceQuantity
+          })
+        );
+        quantities[target.resourceId] = resourceQuantity;
+      } else {
+        amount = Math.ceil(
+          Math.min(
+            (resource2.maxQuantity - current) / input.resourcesPerClick,
+            input.clickLimit
+          )
+        );
+        const resourceQuantity = Math.min(
+          current + amount * input.resourcesPerClick,
+          resource2.maxQuantity
+        );
+        beforeAction.push(
+          Object.freeze({
+            resourceId: target.resourceId,
+            expectedQuantity: current,
+            quantity: resourceQuantity
+          })
+        );
+        quantities[target.resourceId] = resourceQuantity;
+      }
+      operations.push(
+        Object.freeze({
+          actionId: target.actionId,
+          amount,
+          beforeAction: Object.freeze(beforeAction),
+          afterAction: Object.freeze([])
+        })
+      );
+    }
+    if (input.clickable.slaughter) {
+      const amount = Math.min(
+        Math.max(
+          input.resources.Lumber.maxQuantity - quantities.Lumber,
+          input.resources.Food.maxQuantity - quantities.Food,
+          input.resources.Furs.maxQuantity - quantities.Furs
+        ) / input.resourcesPerClick,
+        input.clickLimit
+      );
+      const afterAction = [];
+      const assignCapped = (resourceId3) => {
+        const current = quantities[resourceId3];
+        const quantity = Math.min(
+          current + amount * input.resourcesPerClick,
+          input.resources[resourceId3].maxQuantity
+        );
+        afterAction.push(
+          Object.freeze({
+            resourceId: resourceId3,
+            expectedQuantity: current,
+            quantity
+          })
+        );
+        quantities[resourceId3] = quantity;
+      };
+      assignCapped("Lumber");
+      if (input.soulEater && input.primitive && !input.fasting) {
+        assignCapped("Food");
+      }
+      if (input.fursUnlocked) assignCapped("Furs");
+      operations.push(
+        Object.freeze({
+          actionId: "slaughter",
+          amount,
+          beforeAction: Object.freeze([]),
+          afterAction: Object.freeze(afterAction)
+        })
+      );
+    }
+    return operations.length === 0 ? null : Object.freeze({ operations: Object.freeze(operations) });
+  }
+
+  // src/application/gather-resources.ts
+  var SUCCEEDED18 = Object.freeze({
+    status: "succeeded"
+  });
+  function runGatherResourcesAutomation(dependencies) {
+    const decision2 = planGatherResources(dependencies.reader.read());
+    return decision2 === null ? SUCCEEDED18 : dependencies.executor.execute(decision2);
+  }
+
+  // src/bootstrap/gather-resources-control.ts
+  function createGatherResourcesControl(dependencies) {
+    const adapter = createGatherResourcesAdapter(dependencies);
+    return Object.freeze({
+      autoGatherResources: () => runGatherResourcesAutomation({
+        reader: adapter.reader,
+        executor: adapter.executor
+      })
+    });
   }
 
   // src/adapters/evolve/progression/evolution/evolution.ts
@@ -41122,38 +41163,6 @@
     });
   }
 
-  // src/domain/traits/mutation.ts
-  function planMutation(input) {
-    if (!input.unlocked || input.currency === null) {
-      return null;
-    }
-    for (const trait2 of input.traits) {
-      const kind = trait2.canGain ? "gain" : trait2.canPurge ? "purge" : null;
-      if (kind !== null && trait2.traitName !== null && trait2.displayName !== null && trait2.mutationCost !== null) {
-        return Object.freeze({
-          kind,
-          index: trait2.index,
-          traitName: trait2.traitName,
-          displayName: trait2.displayName,
-          mutationCost: trait2.mutationCost,
-          currencyId: input.currency.id,
-          currencyName: input.currency.name,
-          expectedCurrencyQuantity: input.currency.currentQuantity
-        });
-      }
-    }
-    return null;
-  }
-
-  // src/application/mutation.ts
-  var SUCCEEDED24 = Object.freeze({
-    status: "succeeded"
-  });
-  function runMutationAutomation(dependencies) {
-    const decision2 = planMutation(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED24 : dependencies.executor.execute(decision2);
-  }
-
   // src/adapters/evolve/traits/mutation.ts
   function currencyIdFromGame(getGame) {
     const game = requireRecord(getGame(), "game");
@@ -41352,6 +41361,47 @@
         currency["currentQuantity"] = actualQuantity - decision2.mutationCost;
         return SUCCEEDED;
       }
+    });
+  }
+
+  // src/domain/traits/mutation.ts
+  function planMutation(input) {
+    if (!input.unlocked || input.currency === null) {
+      return null;
+    }
+    for (const trait2 of input.traits) {
+      const kind = trait2.canGain ? "gain" : trait2.canPurge ? "purge" : null;
+      if (kind !== null && trait2.traitName !== null && trait2.displayName !== null && trait2.mutationCost !== null) {
+        return Object.freeze({
+          kind,
+          index: trait2.index,
+          traitName: trait2.traitName,
+          displayName: trait2.displayName,
+          mutationCost: trait2.mutationCost,
+          currencyId: input.currency.id,
+          currencyName: input.currency.name,
+          expectedCurrencyQuantity: input.currency.currentQuantity
+        });
+      }
+    }
+    return null;
+  }
+
+  // src/application/mutation.ts
+  var SUCCEEDED24 = Object.freeze({
+    status: "succeeded"
+  });
+  function runMutationAutomation(dependencies) {
+    const decision2 = planMutation(dependencies.reader.read());
+    return decision2 === null ? SUCCEEDED24 : dependencies.executor.execute(decision2);
+  }
+
+  // src/bootstrap/mutation-control.ts
+  function createMutationControl(dependencies) {
+    const reader = createMutationReader(dependencies.reader);
+    const executor = createMutationCommandExecutor(dependencies.executor);
+    return Object.freeze({
+      autoMutateTrait: () => runMutationAutomation({ reader, executor })
     });
   }
 
@@ -55226,10 +55276,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       factorySettings: settings,
       factoryState: state
     });
-    const autoMiningDroid = () => runMiningDroidAutomation({
-      reader: createMiningDroidReader(() => DroidManager),
-      executor: createMiningDroidCommandExecutor(() => DroidManager)
-    });
+    const { autoMiningDroid } = createMiningDroidControl(() => DroidManager);
     const grapheneExecutor = createGrapheneCommandExecutor(() => GrapheneManager);
     const autoGraphenePlant = function autoGraphenePlant2() {
       grapheneExecutor.execute(
@@ -55570,26 +55617,18 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       bulkSell,
       ignoreSellRatio
     );
-    const galaxyMarketAdapter = createGalaxyMarketAdapter({
+    const { autoGalaxyMarket } = createGalaxyMarketControl({
       getManager: () => GalaxyTradeManager,
       getOffers: () => poly.galaxyOffers,
       getResources: () => resources,
       getSettings: () => settings
     });
-    const autoGalaxyMarket = () => runGalaxyMarketAutomation({
-      reader: galaxyMarketAdapter.reader,
-      executor: galaxyMarketAdapter.executor
-    });
-    const gatherResourcesAdapter = createGatherResourcesAdapter({
+    const { autoGatherResources } = createGatherResourcesControl({
       getGame: () => game,
       getSettings: () => settings,
       getResources: () => resources,
       getBuildings: () => buildings,
       getResourcesPerClick: () => getResourcesPerClick()
-    });
-    const autoGatherResources = () => runGatherResourcesAutomation({
-      reader: gatherResourcesAdapter.reader,
-      executor: gatherResourcesAdapter.executor
     });
     publishTestSurface({
       autoConsume,
@@ -55776,36 +55815,32 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       expansion: { expand: expandStorage }
     });
     const autoStorage = () => storageAllocationAutomation.run();
-    const minorTraitReader = createMinorTraitReader({
-      getMinorTraitManager: () => MinorTraitManager,
-      getResources: () => resources
-    });
-    const minorTraitExecutor = createMinorTraitCommandExecutor({
-      getMinorTraitManager: () => MinorTraitManager,
-      getResources: () => resources
-    });
-    const autoMinorTrait = () => runMinorTraitAutomation({
-      reader: minorTraitReader,
-      executor: minorTraitExecutor
+    const { autoMinorTrait } = createMinorTraitControl({
+      reader: {
+        getMinorTraitManager: () => MinorTraitManager,
+        getResources: () => resources
+      },
+      executor: {
+        getMinorTraitManager: () => MinorTraitManager,
+        getResources: () => resources
+      }
     });
     publishTestSurface({
       autoMinorTrait,
       MinorTraitManager
     });
-    const mutationReader = createMutationReader({
-      getMutableTraitManager: () => MutableTraitManager,
-      getGame: () => game,
-      getResources: () => resources
-    });
-    const mutationExecutor = createMutationCommandExecutor({
-      getMutableTraitManager: () => MutableTraitManager,
-      getGame: () => game,
-      getResources: () => resources,
-      getGameLog: () => GameLog
-    });
-    const autoMutateTrait = () => runMutationAutomation({
-      reader: mutationReader,
-      executor: mutationExecutor
+    const { autoMutateTrait } = createMutationControl({
+      reader: {
+        getMutableTraitManager: () => MutableTraitManager,
+        getGame: () => game,
+        getResources: () => resources
+      },
+      executor: {
+        getMutableTraitManager: () => MutableTraitManager,
+        getGame: () => game,
+        getResources: () => resources,
+        getGameLog: () => GameLog
+      }
     });
     publishTestSurface({
       autoPlanetSelection,

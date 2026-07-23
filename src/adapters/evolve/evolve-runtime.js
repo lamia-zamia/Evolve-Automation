@@ -313,11 +313,7 @@ import {
 import { runFactoryAutomation } from "../../application/factory.ts";
 import { createFactoryAdapter } from "./economy/production/factory.ts";
 import { createFactoryTooltipPublisher } from "../browser/factory-tooltips.ts";
-import { runMiningDroidAutomation } from "../../application/mining-droid.ts";
-import {
-  createMiningDroidCommandExecutor,
-  createMiningDroidReader,
-} from "./economy/production/mining-droid.ts";
+import { createMiningDroidControl } from "../../bootstrap/mining-droid-control.ts";
 import {
   createGrapheneCommandExecutor,
   readGrapheneInput,
@@ -346,11 +342,7 @@ import { createPsychicControls } from "../browser/psychic-controls.ts";
 import { runOcularPowerAutomation } from "../../application/ocular-power.ts";
 import { createOcularPowerAdapter } from "./traits/ocular-power.ts";
 import { createOcularPowerControls } from "../browser/ocular-power-controls.ts";
-import { runMinorTraitAutomation } from "../../application/minor-trait.ts";
-import {
-  createMinorTraitCommandExecutor,
-  createMinorTraitReader,
-} from "./traits/minor-trait.ts";
+import { createMinorTraitControl } from "../../bootstrap/minor-trait-control.ts";
 import { runTriggerAutomation } from "../../application/trigger.ts";
 import {
   createTriggerCommandExecutor,
@@ -379,10 +371,8 @@ import { createPowerWarningSource } from "../browser/power-warnings.ts";
 import { createStorageAllocationAutomation } from "../../application/storage-allocation.ts";
 import { createStorageAllocationAdapter } from "./economy/storage/storage-allocation.ts";
 import { createStorageDebugSource } from "../browser/storage-debug.ts";
-import { runGalaxyMarketAutomation } from "../../application/galaxy-market.ts";
-import { createGalaxyMarketAdapter } from "./economy/market/galaxy-market.ts";
-import { runGatherResourcesAutomation } from "../../application/gather-resources.ts";
-import { createGatherResourcesAdapter } from "./economy/resources/gather-resources.ts";
+import { createGalaxyMarketControl } from "../../bootstrap/galaxy-market-control.ts";
+import { createGatherResourcesControl } from "../../bootstrap/gather-resources-control.ts";
 import {
   createEvolutionReader,
   createEvolutionCommandExecutor,
@@ -418,11 +408,7 @@ import {
   createResearchCommandExecutor,
   createResearchReader,
 } from "./progression/research/research.ts";
-import { runMutationAutomation } from "../../application/mutation.ts";
-import {
-  createMutationCommandExecutor,
-  createMutationReader,
-} from "./traits/mutation.ts";
+import { createMutationControl } from "../../bootstrap/mutation-control.ts";
 import { createOuterFleetControl } from "../../bootstrap/fleet-outer-control.ts";
 import { createFleetControl } from "../../bootstrap/fleet-control.ts";
 import { runMechAutomation } from "../../application/mech.ts";
@@ -4110,11 +4096,7 @@ function startEvolveRuntimeComposition(
     factoryState: state,
   });
 
-  const autoMiningDroid = () =>
-    runMiningDroidAutomation({
-      reader: createMiningDroidReader(() => DroidManager),
-      executor: createMiningDroidCommandExecutor(() => DroidManager),
-    });
+  const { autoMiningDroid } = createMiningDroidControl(() => DroidManager);
 
   const grapheneExecutor = createGrapheneCommandExecutor(() => GrapheneManager);
   const autoGraphenePlant = function autoGraphenePlant() {
@@ -4501,30 +4483,20 @@ function startEvolveRuntimeComposition(
       ignoreSellRatio,
     );
 
-  const galaxyMarketAdapter = createGalaxyMarketAdapter({
+  const { autoGalaxyMarket } = createGalaxyMarketControl({
     getManager: () => GalaxyTradeManager,
     getOffers: () => poly.galaxyOffers,
     getResources: () => resources,
     getSettings: () => settings,
   });
-  const autoGalaxyMarket = () =>
-    runGalaxyMarketAutomation({
-      reader: galaxyMarketAdapter.reader,
-      executor: galaxyMarketAdapter.executor,
-    });
 
-  const gatherResourcesAdapter = createGatherResourcesAdapter({
+  const { autoGatherResources } = createGatherResourcesControl({
     getGame: () => game,
     getSettings: () => settings,
     getResources: () => resources,
     getBuildings: () => buildings,
     getResourcesPerClick: () => getResourcesPerClick(),
   });
-  const autoGatherResources = () =>
-    runGatherResourcesAutomation({
-      reader: gatherResourcesAdapter.reader,
-      executor: gatherResourcesAdapter.executor,
-    });
 
   publishTestSurface({
     autoConsume,
@@ -4729,41 +4701,35 @@ function startEvolveRuntimeComposition(
   });
   const autoStorage = () => storageAllocationAutomation.run();
 
-  const minorTraitReader = createMinorTraitReader({
-    getMinorTraitManager: () => MinorTraitManager,
-    getResources: () => resources,
+  const { autoMinorTrait } = createMinorTraitControl({
+    reader: {
+      getMinorTraitManager: () => MinorTraitManager,
+      getResources: () => resources,
+    },
+    executor: {
+      getMinorTraitManager: () => MinorTraitManager,
+      getResources: () => resources,
+    },
   });
-  const minorTraitExecutor = createMinorTraitCommandExecutor({
-    getMinorTraitManager: () => MinorTraitManager,
-    getResources: () => resources,
-  });
-  const autoMinorTrait = () =>
-    runMinorTraitAutomation({
-      reader: minorTraitReader,
-      executor: minorTraitExecutor,
-    });
 
   publishTestSurface({
     autoMinorTrait,
     MinorTraitManager,
   });
 
-  const mutationReader = createMutationReader({
-    getMutableTraitManager: () => MutableTraitManager,
-    getGame: () => game,
-    getResources: () => resources,
+  const { autoMutateTrait } = createMutationControl({
+    reader: {
+      getMutableTraitManager: () => MutableTraitManager,
+      getGame: () => game,
+      getResources: () => resources,
+    },
+    executor: {
+      getMutableTraitManager: () => MutableTraitManager,
+      getGame: () => game,
+      getResources: () => resources,
+      getGameLog: () => GameLog,
+    },
   });
-  const mutationExecutor = createMutationCommandExecutor({
-    getMutableTraitManager: () => MutableTraitManager,
-    getGame: () => game,
-    getResources: () => resources,
-    getGameLog: () => GameLog,
-  });
-  const autoMutateTrait = () =>
-    runMutationAutomation({
-      reader: mutationReader,
-      executor: mutationExecutor,
-    });
 
   publishTestSurface({
     autoPlanetSelection,
