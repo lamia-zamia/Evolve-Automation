@@ -31632,11 +31632,6 @@
     return Object.freeze({ adjustments: Object.freeze(adjustments) });
   }
 
-  // src/application/consume.ts
-  function runConsumeAutomation(dependencies) {
-    return dependencies.executor.execute(planConsume(dependencies.reader.read()));
-  }
-
   // src/adapters/evolve/economy/resources/consume.ts
   function callBoolean10(record, name, path, ...args) {
     return Boolean(
@@ -31925,6 +31920,25 @@
         }
         return SUCCEEDED;
       }
+    });
+  }
+
+  // src/application/consume.ts
+  function runConsumeAutomation(dependencies) {
+    return dependencies.executor.execute(planConsume(dependencies.reader.read()));
+  }
+
+  // src/bootstrap/consume-control.ts
+  function createConsumeControl(dependencies) {
+    return Object.freeze({
+      autoConsume: (manager) => runConsumeAutomation({
+        reader: createConsumeReader({
+          getManager: () => manager,
+          getResources: dependencies.getResources,
+          isHungryRace: dependencies.isHungryRace
+        }),
+        executor: createConsumeCommandExecutor(() => manager)
+      })
     });
   }
 
@@ -32477,112 +32491,6 @@
     });
   }
 
-  // src/domain/economy/market/market.ts
-  function batchTrade(side, input, maximumUnits) {
-    if (maximumUnits <= input.maximumMultiplier) {
-      return Object.freeze({
-        kind: "trade",
-        side,
-        index: input.index,
-        resourceId: input.resourceId,
-        expectedMoneyCurrent: input.moneyCurrent,
-        expectedResourceCurrent: input.currentQuantity,
-        expectedUnitPrice: input.unitPrice,
-        multiplier: maximumUnits,
-        repetitions: 1
-      });
-    }
-    return Object.freeze({
-      kind: "trade",
-      side,
-      index: input.index,
-      resourceId: input.resourceId,
-      expectedMoneyCurrent: input.moneyCurrent,
-      expectedResourceCurrent: input.currentQuantity,
-      expectedUnitPrice: input.unitPrice,
-      multiplier: input.maximumMultiplier,
-      repetitions: Math.min(
-        5,
-        Math.floor(maximumUnits / input.maximumMultiplier)
-      )
-    });
-  }
-  function planMarketSell(input) {
-    if (!input.eligible || !input.autoSellEnabled || !input.ignoreSellRatio && input.storageRatio < input.autoSellRatio) {
-      return null;
-    }
-    let maximumUnits = Math.floor(
-      (input.moneyMaximum - input.moneyCurrent) / input.unitPrice
-    );
-    maximumUnits = Math.min(
-      maximumUnits,
-      input.storageRatio > input.autoSellRatio ? Math.floor(
-        input.currentQuantity - input.autoSellRatio * input.maxQuantity
-      ) : Math.floor(input.income * 2 / input.ticksPerSecond)
-    );
-    return batchTrade("sell", input, maximumUnits);
-  }
-  function planMarketBuy(input) {
-    if (!input.eligible || !input.autoBuyEnabled || input.storageRatio >= input.autoBuyRatio || input.moneyDemanded) {
-      return null;
-    }
-    const storableAmount = Math.floor(
-      (input.autoBuyRatio - input.storageRatio) * input.maxQuantity
-    );
-    const affordableAmount = Math.floor(
-      (input.moneyCurrent - input.minimumMoneyAllowed) / input.unitPrice
-    );
-    const maximumUnits = Math.min(storableAmount, affordableAmount);
-    return maximumUnits > 0 ? batchTrade("buy", input, maximumUnits) : null;
-  }
-
-  // src/application/market.ts
-  var SUCCEEDED14 = Object.freeze({
-    status: "succeeded"
-  });
-  function runMarketAutomation(dependencies, bulkSell = false, ignoreSellRatio = false) {
-    const gate = dependencies.reader.readGate();
-    if (!gate.unlocked) {
-      return SUCCEEDED14;
-    }
-    dependencies.tradeRoutes.adjust();
-    if (gate.noTrade) {
-      return SUCCEEDED14;
-    }
-    const session = dependencies.reader.readSession();
-    let outcome = SUCCEEDED14;
-    for (let index = 0; ; index++) {
-      const sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
-      if (sellInput === null) {
-        break;
-      }
-      const sell = planMarketSell(sellInput);
-      if (sell !== null) {
-        outcome = dependencies.executor.execute(sell);
-        if (outcome.status !== "succeeded") {
-          break;
-        }
-      }
-      if (bulkSell === true || !sellInput.eligible) {
-        continue;
-      }
-      const buy = planMarketBuy(
-        dependencies.reader.readBuy(index, session.minimumMoneyAllowed)
-      );
-      if (buy !== null) {
-        outcome = dependencies.executor.execute(buy);
-        if (outcome.status !== "succeeded") {
-          break;
-        }
-      }
-    }
-    const restore = dependencies.executor.execute({
-      kind: "restore-multiplier",
-      multiplier: session.originalMultiplier
-    });
-    return outcome.status === "succeeded" ? restore : outcome;
-  }
-
   // src/adapters/evolve/economy/market/market.ts
   function callBoolean12(record, name, path, ...args) {
     return Boolean(
@@ -32967,6 +32875,127 @@
         }
         return SUCCEEDED;
       }
+    });
+  }
+
+  // src/domain/economy/market/market.ts
+  function batchTrade(side, input, maximumUnits) {
+    if (maximumUnits <= input.maximumMultiplier) {
+      return Object.freeze({
+        kind: "trade",
+        side,
+        index: input.index,
+        resourceId: input.resourceId,
+        expectedMoneyCurrent: input.moneyCurrent,
+        expectedResourceCurrent: input.currentQuantity,
+        expectedUnitPrice: input.unitPrice,
+        multiplier: maximumUnits,
+        repetitions: 1
+      });
+    }
+    return Object.freeze({
+      kind: "trade",
+      side,
+      index: input.index,
+      resourceId: input.resourceId,
+      expectedMoneyCurrent: input.moneyCurrent,
+      expectedResourceCurrent: input.currentQuantity,
+      expectedUnitPrice: input.unitPrice,
+      multiplier: input.maximumMultiplier,
+      repetitions: Math.min(
+        5,
+        Math.floor(maximumUnits / input.maximumMultiplier)
+      )
+    });
+  }
+  function planMarketSell(input) {
+    if (!input.eligible || !input.autoSellEnabled || !input.ignoreSellRatio && input.storageRatio < input.autoSellRatio) {
+      return null;
+    }
+    let maximumUnits = Math.floor(
+      (input.moneyMaximum - input.moneyCurrent) / input.unitPrice
+    );
+    maximumUnits = Math.min(
+      maximumUnits,
+      input.storageRatio > input.autoSellRatio ? Math.floor(
+        input.currentQuantity - input.autoSellRatio * input.maxQuantity
+      ) : Math.floor(input.income * 2 / input.ticksPerSecond)
+    );
+    return batchTrade("sell", input, maximumUnits);
+  }
+  function planMarketBuy(input) {
+    if (!input.eligible || !input.autoBuyEnabled || input.storageRatio >= input.autoBuyRatio || input.moneyDemanded) {
+      return null;
+    }
+    const storableAmount = Math.floor(
+      (input.autoBuyRatio - input.storageRatio) * input.maxQuantity
+    );
+    const affordableAmount = Math.floor(
+      (input.moneyCurrent - input.minimumMoneyAllowed) / input.unitPrice
+    );
+    const maximumUnits = Math.min(storableAmount, affordableAmount);
+    return maximumUnits > 0 ? batchTrade("buy", input, maximumUnits) : null;
+  }
+
+  // src/application/market.ts
+  var SUCCEEDED14 = Object.freeze({
+    status: "succeeded"
+  });
+  function runMarketAutomation(dependencies, bulkSell = false, ignoreSellRatio = false) {
+    const gate = dependencies.reader.readGate();
+    if (!gate.unlocked) {
+      return SUCCEEDED14;
+    }
+    dependencies.tradeRoutes.adjust();
+    if (gate.noTrade) {
+      return SUCCEEDED14;
+    }
+    const session = dependencies.reader.readSession();
+    let outcome = SUCCEEDED14;
+    for (let index = 0; ; index++) {
+      const sellInput = dependencies.reader.readSell(index, ignoreSellRatio);
+      if (sellInput === null) {
+        break;
+      }
+      const sell = planMarketSell(sellInput);
+      if (sell !== null) {
+        outcome = dependencies.executor.execute(sell);
+        if (outcome.status !== "succeeded") {
+          break;
+        }
+      }
+      if (bulkSell === true || !sellInput.eligible) {
+        continue;
+      }
+      const buy = planMarketBuy(
+        dependencies.reader.readBuy(index, session.minimumMoneyAllowed)
+      );
+      if (buy !== null) {
+        outcome = dependencies.executor.execute(buy);
+        if (outcome.status !== "succeeded") {
+          break;
+        }
+      }
+    }
+    const restore = dependencies.executor.execute({
+      kind: "restore-multiplier",
+      multiplier: session.originalMultiplier
+    });
+    return outcome.status === "succeeded" ? restore : outcome;
+  }
+
+  // src/bootstrap/market-control.ts
+  function createMarketControl(dependencies) {
+    return Object.freeze({
+      autoMarket: (bulkSell, ignoreSellRatio) => runMarketAutomation(
+        {
+          reader: createMarketReader(dependencies.reader),
+          executor: createMarketCommandExecutor(dependencies.executor),
+          tradeRoutes: dependencies.tradeRoutes
+        },
+        bulkSell,
+        ignoreSellRatio
+      )
     });
   }
 
@@ -39456,15 +39485,6 @@
     });
   }
 
-  // src/application/jobs.ts
-  var SUCCEEDED21 = Object.freeze({
-    status: "succeeded"
-  });
-  function runJobsAutomation(dependencies, craftOnly = false) {
-    const decision2 = planJobs(dependencies.reader.readCycle(craftOnly));
-    return decision2 === null ? SUCCEEDED21 : dependencies.executor.execute(decision2);
-  }
-
   // src/adapters/evolve/civic/jobs.ts
   function requireString20(value, path) {
     if (typeof value !== "string")
@@ -40463,6 +40483,23 @@
       }
     });
     return Object.freeze({ reader, executor });
+  }
+
+  // src/application/jobs.ts
+  var SUCCEEDED21 = Object.freeze({
+    status: "succeeded"
+  });
+  function runJobsAutomation(dependencies, craftOnly = false) {
+    const decision2 = planJobs(dependencies.reader.readCycle(craftOnly));
+    return decision2 === null ? SUCCEEDED21 : dependencies.executor.execute(decision2);
+  }
+
+  // src/bootstrap/jobs-control.ts
+  function createJobsControl(dependencies) {
+    const adapter = createJobsAdapter(dependencies);
+    return Object.freeze({
+      autoJobs: (craftOnly = false) => runJobsAutomation(adapter, craftOnly)
+    });
   }
 
   // src/domain/progression/build/build.ts
@@ -43159,40 +43196,6 @@
     });
   }
 
-  // src/application/mech.ts
-  var SUCCEEDED26 = Object.freeze({
-    status: "succeeded"
-  });
-  function runMechAutomation(dependencies) {
-    const cycle = planMechCycle(dependencies.reader.readCycle());
-    if (cycle === null) return SUCCEEDED26;
-    const prepared = dependencies.executor.prepare(cycle);
-    if (prepared.status !== "succeeded" || !cycle.proceed) return prepared;
-    const planning = dependencies.reader.readPlanning(cycle);
-    if (planning === null) return SUCCEEDED26;
-    const continuation = planMechContinuation(planning);
-    if (continuation.scrap !== null) {
-      const scrapped = dependencies.executor.scrap(continuation.scrap);
-      if (scrapped.status !== "succeeded") return scrapped;
-    }
-    if (continuation.halt) return SUCCEEDED26;
-    let design = planning.design;
-    let cost = planning.cost;
-    if (continuation.trySmaller) {
-      for (let index = planning.sizeOrder.indexOf(design.size) - 1; index >= 0; index--) {
-        const size = planning.sizeOrder[index];
-        if (size === void 0) continue;
-        cost = dependencies.reader.readSmallerCost(size);
-        if (smallerMechFits(continuation, cost)) {
-          design = dependencies.reader.readSmallerDesign(size);
-          break;
-        }
-      }
-    }
-    const build = planMechBuild(continuation, design, cost);
-    return build === null ? SUCCEEDED26 : dependencies.executor.build(build, continuation);
-  }
-
   // src/adapters/evolve/combat/mech.ts
   function requireString24(value, path) {
     if (typeof value !== "string") {
@@ -43828,6 +43831,54 @@
     return Object.freeze({
       gems: requireNumber(values[0], `${path}[0]`),
       supply: requireNumber(values[1], `${path}[1]`)
+    });
+  }
+
+  // src/application/mech.ts
+  var SUCCEEDED26 = Object.freeze({
+    status: "succeeded"
+  });
+  function runMechAutomation(dependencies) {
+    const cycle = planMechCycle(dependencies.reader.readCycle());
+    if (cycle === null) return SUCCEEDED26;
+    const prepared = dependencies.executor.prepare(cycle);
+    if (prepared.status !== "succeeded" || !cycle.proceed) return prepared;
+    const planning = dependencies.reader.readPlanning(cycle);
+    if (planning === null) return SUCCEEDED26;
+    const continuation = planMechContinuation(planning);
+    if (continuation.scrap !== null) {
+      const scrapped = dependencies.executor.scrap(continuation.scrap);
+      if (scrapped.status !== "succeeded") return scrapped;
+    }
+    if (continuation.halt) return SUCCEEDED26;
+    let design = planning.design;
+    let cost = planning.cost;
+    if (continuation.trySmaller) {
+      for (let index = planning.sizeOrder.indexOf(design.size) - 1; index >= 0; index--) {
+        const size = planning.sizeOrder[index];
+        if (size === void 0) continue;
+        cost = dependencies.reader.readSmallerCost(size);
+        if (smallerMechFits(continuation, cost)) {
+          design = dependencies.reader.readSmallerDesign(size);
+          break;
+        }
+      }
+    }
+    const build = planMechBuild(continuation, design, cost);
+    return build === null ? SUCCEEDED26 : dependencies.executor.build(build, continuation);
+  }
+
+  // src/bootstrap/mech-control.ts
+  function createMechControl(dependencies) {
+    const adapter = createMechAdapter(dependencies.adapter);
+    return Object.freeze({
+      autoMech: () => {
+        const outcome = runMechAutomation(adapter);
+        if (dependencies.readDebugEnabled() && outcome.status !== "succeeded") {
+          dependencies.log("[mech] outcome:", outcome);
+        }
+        return outcome;
+      }
     });
   }
 
@@ -55161,7 +55212,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       debugLog: (message) => runtimeEnvironment.log(message)
     });
     publishTestSurface({ autoHell });
-    const jobsAdapter = createJobsAdapter({
+    const { autoJobs } = createJobsControl({
       getJobManager: () => JobManager,
       getGame: () => game,
       getJobs: () => jobs,
@@ -55183,7 +55234,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getFoodConsume,
       log: (message) => runtimeEnvironment.log(message)
     });
-    const autoJobs = (craftOnly = false) => runJobsAutomation(jobsAdapter, craftOnly);
     const taxClock = Object.freeze({ nowMs: () => browserClock.nowMs() });
     const taxControls = createBrowserTaxControls(getVueById);
     const { autoTax } = createTaxAutomation({
@@ -55330,13 +55380,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         )
       );
     };
-    const autoConsume = (manager) => runConsumeAutomation({
-      reader: createConsumeReader({
-        getManager: () => manager,
-        getResources: () => resources,
-        isHungryRace
-      }),
-      executor: createConsumeCommandExecutor(() => manager)
+    const { autoConsume } = createConsumeControl({
+      getResources: () => resources,
+      isHungryRace
     });
     const replicatorSelectionReader = createReplicatorSelectionReader({
       getManager: () => ReplicatorManager,
@@ -55629,24 +55675,20 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         win = context.win;
       }
     });
-    const autoMarket = (bulkSell, ignoreSellRatio) => runMarketAutomation(
-      {
-        reader: createMarketReader({
-          getManager: () => MarketManager,
-          getGame: () => game,
-          getResources: () => resources,
-          getSettings: () => settings,
-          ticksPerSecond
-        }),
-        executor: createMarketCommandExecutor({
-          getManager: () => MarketManager,
-          getResources: () => resources
-        }),
-        tradeRoutes: { adjust: () => adjustTradeRoutes() }
+    const { autoMarket } = createMarketControl({
+      reader: {
+        getManager: () => MarketManager,
+        getGame: () => game,
+        getResources: () => resources,
+        getSettings: () => settings,
+        ticksPerSecond
       },
-      bulkSell,
-      ignoreSellRatio
-    );
+      executor: {
+        getManager: () => MarketManager,
+        getResources: () => resources
+      },
+      tradeRoutes: { adjust: () => adjustTradeRoutes() }
+    });
     const { autoGalaxyMarket } = createGalaxyMarketControl({
       getManager: () => GalaxyTradeManager,
       getOffers: () => poly.galaxyOffers,
@@ -55958,26 +56000,23 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       guardActive,
       galaxyAssaultPending
     });
-    const mechAdapter = createMechAdapter({
-      getMechManager: () => MechManager,
-      getGame: () => game,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      haveTech,
-      haveTask,
-      getGameLog: () => GameLog,
-      getJQuery: () => $,
+    const { autoMech } = createMechControl({
+      adapter: {
+        getMechManager: () => MechManager,
+        getGame: () => game,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getBuildings: () => buildings,
+        haveTech,
+        haveTask,
+        getGameLog: () => GameLog,
+        getJQuery: () => $,
+        readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
+        debugLog: (message) => runtimeEnvironment.log(message)
+      },
       readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
-      debugLog: (message) => runtimeEnvironment.log(message)
+      log: (label, outcome) => runtimeEnvironment.log(label, outcome)
     });
-    const autoMech = () => {
-      const outcome = runMechAutomation(mechAdapter);
-      if (diagnostics.readMechDebugEnabled() && outcome.status !== "succeeded") {
-        runtimeEnvironment.log("[mech] outcome:", outcome);
-      }
-      return outcome;
-    };
     let scriptDataTestActions;
     const { updateScriptData, finalizeScriptData } = createScriptDataLifecycle({
       getSettings: () => settings,

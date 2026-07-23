@@ -342,11 +342,7 @@ import {
   createTriggerCommandExecutor,
   createTriggerReader,
 } from "./progression/build/trigger.ts";
-import { runConsumeAutomation } from "../../application/consume.ts";
-import {
-  createConsumeCommandExecutor,
-  createConsumeReader,
-} from "./economy/resources/consume.ts";
+import { createConsumeControl } from "../../bootstrap/consume-control.ts";
 import { runReplicatorAutomation } from "../../application/replicator.ts";
 import {
   createReplicatorGovernorGameReader,
@@ -354,11 +350,7 @@ import {
   createReplicatorSelectionReader,
 } from "./economy/production/replicator.ts";
 import { createReplicatorGovernorOffice } from "../browser/replicator-governor.ts";
-import { runMarketAutomation } from "../../application/market.ts";
-import {
-  createMarketCommandExecutor,
-  createMarketReader,
-} from "./economy/market/market.ts";
+import { createMarketControl } from "../../bootstrap/market-control.ts";
 import { createPowerAutomation } from "../../application/power.ts";
 import { createPowerAdapter } from "./economy/production/power.ts";
 import { createPowerWarningSource } from "../browser/power-warnings.ts";
@@ -393,8 +385,7 @@ import {
   createPlanetSelectionReader,
 } from "./progression/evolution/planet-selection.ts";
 import { runPlanetSelection } from "../../application/planet-selection.ts";
-import { runJobsAutomation } from "../../application/jobs.ts";
-import { createJobsAdapter } from "./civic/jobs.ts";
+import { createJobsControl } from "../../bootstrap/jobs-control.ts";
 import { runBuildAutomation } from "../../application/build.ts";
 import { createBuildAdapter } from "./progression/build/build.ts";
 import { runResearchAutomation } from "../../application/research.ts";
@@ -405,8 +396,7 @@ import {
 import { createMutationControl } from "../../bootstrap/mutation-control.ts";
 import { createOuterFleetControl } from "../../bootstrap/fleet-outer-control.ts";
 import { createFleetControl } from "../../bootstrap/fleet-control.ts";
-import { runMechAutomation } from "../../application/mech.ts";
-import { createMechAdapter } from "./combat/mech.ts";
+import { createMechControl } from "../../bootstrap/mech-control.ts";
 import { createEjectorSettingsIntentHandler } from "../../application/ejector-settings.ts";
 import { createEjectorSettingsBrowserAdapter } from "../browser/ejector-settings.ts";
 import { createEjectorSettingsEvolveAdapter } from "./economy/resources/ejector-settings.ts";
@@ -3923,7 +3913,7 @@ function startEvolveRuntimeComposition(
 
   publishTestSurface({ autoHell });
 
-  const jobsAdapter = createJobsAdapter({
+  const { autoJobs } = createJobsControl({
     getJobManager: () => JobManager,
     getGame: () => game,
     getJobs: () => jobs,
@@ -3945,8 +3935,6 @@ function startEvolveRuntimeComposition(
     getFoodConsume,
     log: (message) => runtimeEnvironment.log(message),
   });
-  const autoJobs = (craftOnly = false) =>
-    runJobsAutomation(jobsAdapter, craftOnly);
 
   const taxClock = Object.freeze({ nowMs: () => browserClock.nowMs() });
   const taxControls = createBrowserTaxControls(getVueById);
@@ -4106,15 +4094,10 @@ function startEvolveRuntimeComposition(
   };
 
   // TODO: Allow configuring priorities between eject\supply\nanite
-  const autoConsume = (manager) =>
-    runConsumeAutomation({
-      reader: createConsumeReader({
-        getManager: () => manager,
-        getResources: () => resources,
-        isHungryRace,
-      }),
-      executor: createConsumeCommandExecutor(() => manager),
-    });
+  const { autoConsume } = createConsumeControl({
+    getResources: () => resources,
+    isHungryRace,
+  });
 
   const replicatorSelectionReader = createReplicatorSelectionReader({
     getManager: () => ReplicatorManager,
@@ -4443,25 +4426,20 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const autoMarket = (bulkSell, ignoreSellRatio) =>
-    runMarketAutomation(
-      {
-        reader: createMarketReader({
-          getManager: () => MarketManager,
-          getGame: () => game,
-          getResources: () => resources,
-          getSettings: () => settings,
-          ticksPerSecond,
-        }),
-        executor: createMarketCommandExecutor({
-          getManager: () => MarketManager,
-          getResources: () => resources,
-        }),
-        tradeRoutes: { adjust: () => adjustTradeRoutes() },
-      },
-      bulkSell,
-      ignoreSellRatio,
-    );
+  const { autoMarket } = createMarketControl({
+    reader: {
+      getManager: () => MarketManager,
+      getGame: () => game,
+      getResources: () => resources,
+      getSettings: () => settings,
+      ticksPerSecond,
+    },
+    executor: {
+      getManager: () => MarketManager,
+      getResources: () => resources,
+    },
+    tradeRoutes: { adjust: () => adjustTradeRoutes() },
+  });
 
   const { autoGalaxyMarket } = createGalaxyMarketControl({
     getManager: () => GalaxyTradeManager,
@@ -4803,26 +4781,23 @@ function startEvolveRuntimeComposition(
     galaxyAssaultPending,
   });
 
-  const mechAdapter = createMechAdapter({
-    getMechManager: () => MechManager,
-    getGame: () => game,
-    getSettings: () => settings,
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    haveTech,
-    haveTask,
-    getGameLog: () => GameLog,
-    getJQuery: () => $,
+  const { autoMech } = createMechControl({
+    adapter: {
+      getMechManager: () => MechManager,
+      getGame: () => game,
+      getSettings: () => settings,
+      getResources: () => resources,
+      getBuildings: () => buildings,
+      haveTech,
+      haveTask,
+      getGameLog: () => GameLog,
+      getJQuery: () => $,
+      readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
+      debugLog: (message) => runtimeEnvironment.log(message),
+    },
     readDebugEnabled: () => diagnostics.readMechDebugEnabled(),
-    debugLog: (message) => runtimeEnvironment.log(message),
+    log: (label, outcome) => runtimeEnvironment.log(label, outcome),
   });
-  const autoMech = () => {
-    const outcome = runMechAutomation(mechAdapter);
-    if (diagnostics.readMechDebugEnabled() && outcome.status !== "succeeded") {
-      runtimeEnvironment.log("[mech] outcome:", outcome);
-    }
-    return outcome;
-  };
 
   let scriptDataTestActions;
   const { updateScriptData, finalizeScriptData } = createScriptDataLifecycle({
