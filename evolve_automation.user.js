@@ -40574,6 +40574,296 @@
     });
   }
 
+  // src/adapters/evolve/progression/build/build.ts
+  function requireString21(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
+  function requireArray2(value, path) {
+    if (!Array.isArray(value)) {
+      throw new TypeError(`${path} must be an array`);
+    }
+    return value;
+  }
+  function callMethod(target, name, path) {
+    return requireFunction(target[name], `${path}.${name}`).call(target);
+  }
+  var UNAVAILABLE_CONFLICT = Object.freeze({
+    unavailable: true,
+    targetNames: Object.freeze([]),
+    resourceNames: Object.freeze([]),
+    targetCause: ""
+  });
+  var EMPTY_CONSUMPTION = Object.freeze([]);
+  function sampleConsumption(entity, path) {
+    const list = requireArray2(entity["consumption"], `${path}.consumption`);
+    return Object.freeze(
+      list.map((raw, index) => {
+        const entryPath = `${path}.consumption[${index}]`;
+        const entry = requireRecord(raw, entryPath);
+        const resource2 = requireRecord(
+          entry["resource"],
+          `${entryPath}.resource`
+        );
+        return Object.freeze({
+          resourceId: String(resource2["_id"]),
+          nonNegativeRate: Number(entry["rate"]) >= 0
+        });
+      })
+    );
+  }
+  function createBuildAdapter(dependencies) {
+    let cycle = null;
+    function capturedEntity(index, key) {
+      if (cycle === null) {
+        throw new TypeError("no active build cycle");
+      }
+      const entity = cycle.entities[index];
+      if (entity === void 0) {
+        throw new TypeError(`no build candidate at index ${index}`);
+      }
+      if (key !== void 0 && entity["_vueBinding"] !== key) {
+        throw new TypeError(`build candidate at index ${index} is not ${key}`);
+      }
+      return entity;
+    }
+    const reader = Object.freeze({
+      beginCycle() {
+        const buildingManager = requireRecord(
+          dependencies.getBuildingManager(),
+          "BuildingManager"
+        );
+        const projectManager = requireRecord(
+          dependencies.getProjectManager(),
+          "ProjectManager"
+        );
+        callMethod(buildingManager, "updateWeighting", "BuildingManager");
+        callMethod(projectManager, "updateWeighting", "ProjectManager");
+        const state = requireRecord(dependencies.getState(), "state");
+        const queuedTargets = requireArray2(
+          state["queuedTargets"],
+          "state.queuedTargets"
+        );
+        const triggerTargets = requireArray2(
+          state["triggerTargets"],
+          "state.triggerTargets"
+        );
+        const entities = [
+          ...requireArray2(
+            callMethod(buildingManager, "managedPriorityList", "BuildingManager"),
+            "BuildingManager.managedPriorityList()"
+          ),
+          ...requireArray2(
+            callMethod(projectManager, "managedPriorityList", "ProjectManager"),
+            "ProjectManager.managedPriorityList()"
+          )
+        ].map((entry, index) => requireRecord(entry, `buildList[${index}]`));
+        entities.sort((a, b) => Number(b["weighting"]) - Number(a["weighting"]));
+        state["unlockedBuildings"] = entities;
+        const byKey = /* @__PURE__ */ new Map();
+        const candidates = entities.map((entity, index) => {
+          const path = `buildList[${index}]`;
+          const key = requireString21(entity["_vueBinding"], `${path}._vueBinding`);
+          byKey.set(key, entity);
+          const rawCost = requireRecord(entity["cost"], `${path}.cost`);
+          const cost = {};
+          for (const resourceId3 of Object.keys(rawCost)) {
+            cost[resourceId3] = requireNumber(
+              rawCost[resourceId3],
+              `${path}.cost.${resourceId3}`
+            );
+          }
+          return Object.freeze({
+            key,
+            weighting: requireNumber(entity["weighting"], `${path}.weighting`),
+            cost: Object.freeze(cost),
+            ignored: queuedTargets.includes(entity) || triggerTargets.includes(entity)
+          });
+        });
+        const settings = requireRecord(dependencies.getSettings(), "settings");
+        const rawMode = settings["buildingConsumptionCheck"];
+        const consumptionMode = rawMode === "perResource" ? "perResource" : rawMode === "unlimited" ? "unlimited" : "onePerTick";
+        cycle = Object.freeze({ entities: Object.freeze(entities), byKey });
+        return Object.freeze({
+          candidates: Object.freeze(candidates),
+          consumptionMode,
+          buildIfStorageFull: Boolean(settings["buildingBuildIfStorageFull"]),
+          ignoreZeroRate: Boolean(settings["buildingsIgnoreZeroRate"]),
+          saveWhiteholeGems: settings["prestigeType"] === "whitehole" && Boolean(settings["prestigeWhiteholeSaveGems"])
+        });
+      },
+      sampleCandidate(index, request) {
+        const entity = capturedEntity(index);
+        const path = `buildList[${index}]`;
+        const sample = {};
+        if (request.needAffordability) {
+          sample.affordable = Boolean(callMethod(entity, "isAffordable", path));
+        }
+        if (request.needConsumption) {
+          sample.consumption = sampleConsumption(entity, path);
+        }
+        return Object.freeze(sample);
+      },
+      sampleConflict(index) {
+        const entity = capturedEntity(index);
+        const path = `buildList[${index}]`;
+        const raw = dependencies.getCostConflict(entity);
+        let conflict2 = null;
+        if (raw) {
+          const record = requireRecord(raw, "costConflict");
+          conflict2 = record["status"] === "unavailable" ? UNAVAILABLE_CONFLICT : Object.freeze({
+            unavailable: false,
+            targetNames: Object.freeze(
+              requireArray2(
+                record["targetNames"],
+                "costConflict.targetNames"
+              ).map((name) => String(name))
+            ),
+            resourceNames: Object.freeze(
+              requireArray2(
+                record["resourceNames"],
+                "costConflict.resourceNames"
+              ).map((name) => String(name))
+            ),
+            targetCause: String(record["targetCause"])
+          });
+        }
+        return Object.freeze({
+          conflict: conflict2,
+          important: Boolean(
+            requireRecord(entity["is"], `${path}.is`)["important"]
+          )
+        });
+      },
+      sampleCompetition(index, request) {
+        capturedEntity(index);
+        const capture = cycle;
+        const affordability = {};
+        for (const key of request.affordabilityKeys) {
+          const entity = capture.byKey.get(key);
+          if (entity === void 0) {
+            throw new TypeError(`unknown build candidate ${key}`);
+          }
+          affordability[key] = Boolean(
+            callMethod(entity, "isAffordable", `buildList[${key}]`)
+          );
+        }
+        const resources = requireRecord(dependencies.getResources(), "resources");
+        const resourceViews = {};
+        for (const resourceId3 of request.resourceIds) {
+          const path = `resources.${resourceId3}`;
+          const resource2 = requireRecord(resources[resourceId3], path);
+          resourceViews[resourceId3] = Object.freeze({
+            unlocked: Boolean(callMethod(resource2, "isUnlocked", path)),
+            currentQuantity: Number(resource2["currentQuantity"]),
+            rateOfChange: Number(resource2["rateOfChange"]),
+            storageRatio: Number(resource2["storageRatio"]),
+            storageRequired: Number(resource2["storageRequired"])
+          });
+        }
+        return Object.freeze({
+          affordability: Object.freeze(affordability),
+          resources: Object.freeze(resourceViews)
+        });
+      }
+    });
+    function staleTarget(index, key) {
+      return stale("stale-build-target", "build candidate list changed", {
+        key,
+        index
+      });
+    }
+    function candidateFor(index, key) {
+      if (cycle === null) {
+        return null;
+      }
+      const entity = cycle.entities[index];
+      if (entity === void 0 || entity["_vueBinding"] !== key) {
+        return null;
+      }
+      return entity;
+    }
+    const executor = Object.freeze({
+      annotate(annotation) {
+        if (cycle === null) {
+          return rejected(
+            "no-build-cycle",
+            "annotate requires an active build cycle"
+          );
+        }
+        const entity = candidateFor(annotation.index, annotation.key);
+        if (entity === null) {
+          return staleTarget(annotation.index, annotation.key);
+        }
+        let text;
+        if (annotation.kind === "text") {
+          text = annotation.text;
+        } else {
+          const other = cycle.byKey.get(annotation.otherKey);
+          if (other === void 0) {
+            return staleTarget(annotation.index, annotation.otherKey);
+          }
+          const resources = requireRecord(
+            dependencies.getResources(),
+            "resources"
+          );
+          const resource2 = requireRecord(
+            resources[annotation.resourceId],
+            `resources.${annotation.resourceId}`
+          );
+          text = `Conflicts with <span class="has-text-info">${String(
+            other["title"]
+          )}</span> for <span class="has-text-info">${String(
+            resource2["name"]
+          )}</span><br>`;
+        }
+        entity["extraDescription"] = String(entity["extraDescription"]) + text;
+        return SUCCEEDED;
+      },
+      executeClick(decision2) {
+        if (cycle === null) {
+          return Object.freeze({
+            outcome: rejected(
+              "no-build-cycle",
+              "executeClick requires an active build cycle"
+            ),
+            clicked: false,
+            mission: false,
+            consumption: EMPTY_CONSUMPTION
+          });
+        }
+        const entity = candidateFor(decision2.index, decision2.key);
+        if (entity === null) {
+          return Object.freeze({
+            outcome: staleTarget(decision2.index, decision2.key),
+            clicked: false,
+            mission: false,
+            consumption: EMPTY_CONSUMPTION
+          });
+        }
+        const path = `buildList[${decision2.index}]`;
+        const clicked = Boolean(callMethod(entity, "click", path));
+        if (!clicked) {
+          return Object.freeze({
+            outcome: SUCCEEDED,
+            clicked: false,
+            mission: false,
+            consumption: EMPTY_CONSUMPTION
+          });
+        }
+        return Object.freeze({
+          outcome: SUCCEEDED,
+          clicked: true,
+          mission: Boolean(callMethod(entity, "isMission", path)),
+          consumption: sampleConsumption(entity, path)
+        });
+      }
+    });
+    return Object.freeze({ reader, executor });
+  }
+
   // src/domain/progression/build/build.ts
   var SKIP_NEEDS = Object.freeze({ kind: "skip" });
   var PROCEED = Object.freeze({ kind: "proceed" });
@@ -40886,294 +41176,15 @@
     return SUCCEEDED22;
   }
 
-  // src/adapters/evolve/progression/build/build.ts
-  function requireString21(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
-  function requireArray2(value, path) {
-    if (!Array.isArray(value)) {
-      throw new TypeError(`${path} must be an array`);
-    }
-    return value;
-  }
-  function callMethod(target, name, path) {
-    return requireFunction(target[name], `${path}.${name}`).call(target);
-  }
-  var UNAVAILABLE_CONFLICT = Object.freeze({
-    unavailable: true,
-    targetNames: Object.freeze([]),
-    resourceNames: Object.freeze([]),
-    targetCause: ""
-  });
-  var EMPTY_CONSUMPTION = Object.freeze([]);
-  function sampleConsumption(entity, path) {
-    const list = requireArray2(entity["consumption"], `${path}.consumption`);
-    return Object.freeze(
-      list.map((raw, index) => {
-        const entryPath = `${path}.consumption[${index}]`;
-        const entry = requireRecord(raw, entryPath);
-        const resource2 = requireRecord(
-          entry["resource"],
-          `${entryPath}.resource`
-        );
-        return Object.freeze({
-          resourceId: String(resource2["_id"]),
-          nonNegativeRate: Number(entry["rate"]) >= 0
-        });
-      })
-    );
-  }
-  function createBuildAdapter(dependencies) {
-    let cycle = null;
-    function capturedEntity(index, key) {
-      if (cycle === null) {
-        throw new TypeError("no active build cycle");
-      }
-      const entity = cycle.entities[index];
-      if (entity === void 0) {
-        throw new TypeError(`no build candidate at index ${index}`);
-      }
-      if (key !== void 0 && entity["_vueBinding"] !== key) {
-        throw new TypeError(`build candidate at index ${index} is not ${key}`);
-      }
-      return entity;
-    }
-    const reader = Object.freeze({
-      beginCycle() {
-        const buildingManager = requireRecord(
-          dependencies.getBuildingManager(),
-          "BuildingManager"
-        );
-        const projectManager = requireRecord(
-          dependencies.getProjectManager(),
-          "ProjectManager"
-        );
-        callMethod(buildingManager, "updateWeighting", "BuildingManager");
-        callMethod(projectManager, "updateWeighting", "ProjectManager");
-        const state = requireRecord(dependencies.getState(), "state");
-        const queuedTargets = requireArray2(
-          state["queuedTargets"],
-          "state.queuedTargets"
-        );
-        const triggerTargets = requireArray2(
-          state["triggerTargets"],
-          "state.triggerTargets"
-        );
-        const entities = [
-          ...requireArray2(
-            callMethod(buildingManager, "managedPriorityList", "BuildingManager"),
-            "BuildingManager.managedPriorityList()"
-          ),
-          ...requireArray2(
-            callMethod(projectManager, "managedPriorityList", "ProjectManager"),
-            "ProjectManager.managedPriorityList()"
-          )
-        ].map((entry, index) => requireRecord(entry, `buildList[${index}]`));
-        entities.sort((a, b) => Number(b["weighting"]) - Number(a["weighting"]));
-        state["unlockedBuildings"] = entities;
-        const byKey = /* @__PURE__ */ new Map();
-        const candidates = entities.map((entity, index) => {
-          const path = `buildList[${index}]`;
-          const key = requireString21(entity["_vueBinding"], `${path}._vueBinding`);
-          byKey.set(key, entity);
-          const rawCost = requireRecord(entity["cost"], `${path}.cost`);
-          const cost = {};
-          for (const resourceId3 of Object.keys(rawCost)) {
-            cost[resourceId3] = requireNumber(
-              rawCost[resourceId3],
-              `${path}.cost.${resourceId3}`
-            );
-          }
-          return Object.freeze({
-            key,
-            weighting: requireNumber(entity["weighting"], `${path}.weighting`),
-            cost: Object.freeze(cost),
-            ignored: queuedTargets.includes(entity) || triggerTargets.includes(entity)
-          });
-        });
-        const settings = requireRecord(dependencies.getSettings(), "settings");
-        const rawMode = settings["buildingConsumptionCheck"];
-        const consumptionMode = rawMode === "perResource" ? "perResource" : rawMode === "unlimited" ? "unlimited" : "onePerTick";
-        cycle = Object.freeze({ entities: Object.freeze(entities), byKey });
-        return Object.freeze({
-          candidates: Object.freeze(candidates),
-          consumptionMode,
-          buildIfStorageFull: Boolean(settings["buildingBuildIfStorageFull"]),
-          ignoreZeroRate: Boolean(settings["buildingsIgnoreZeroRate"]),
-          saveWhiteholeGems: settings["prestigeType"] === "whitehole" && Boolean(settings["prestigeWhiteholeSaveGems"])
-        });
-      },
-      sampleCandidate(index, request) {
-        const entity = capturedEntity(index);
-        const path = `buildList[${index}]`;
-        const sample = {};
-        if (request.needAffordability) {
-          sample.affordable = Boolean(callMethod(entity, "isAffordable", path));
-        }
-        if (request.needConsumption) {
-          sample.consumption = sampleConsumption(entity, path);
-        }
-        return Object.freeze(sample);
-      },
-      sampleConflict(index) {
-        const entity = capturedEntity(index);
-        const path = `buildList[${index}]`;
-        const raw = dependencies.getCostConflict(entity);
-        let conflict2 = null;
-        if (raw) {
-          const record = requireRecord(raw, "costConflict");
-          conflict2 = record["status"] === "unavailable" ? UNAVAILABLE_CONFLICT : Object.freeze({
-            unavailable: false,
-            targetNames: Object.freeze(
-              requireArray2(
-                record["targetNames"],
-                "costConflict.targetNames"
-              ).map((name) => String(name))
-            ),
-            resourceNames: Object.freeze(
-              requireArray2(
-                record["resourceNames"],
-                "costConflict.resourceNames"
-              ).map((name) => String(name))
-            ),
-            targetCause: String(record["targetCause"])
-          });
-        }
-        return Object.freeze({
-          conflict: conflict2,
-          important: Boolean(
-            requireRecord(entity["is"], `${path}.is`)["important"]
-          )
-        });
-      },
-      sampleCompetition(index, request) {
-        capturedEntity(index);
-        const capture = cycle;
-        const affordability = {};
-        for (const key of request.affordabilityKeys) {
-          const entity = capture.byKey.get(key);
-          if (entity === void 0) {
-            throw new TypeError(`unknown build candidate ${key}`);
-          }
-          affordability[key] = Boolean(
-            callMethod(entity, "isAffordable", `buildList[${key}]`)
-          );
-        }
-        const resources = requireRecord(dependencies.getResources(), "resources");
-        const resourceViews = {};
-        for (const resourceId3 of request.resourceIds) {
-          const path = `resources.${resourceId3}`;
-          const resource2 = requireRecord(resources[resourceId3], path);
-          resourceViews[resourceId3] = Object.freeze({
-            unlocked: Boolean(callMethod(resource2, "isUnlocked", path)),
-            currentQuantity: Number(resource2["currentQuantity"]),
-            rateOfChange: Number(resource2["rateOfChange"]),
-            storageRatio: Number(resource2["storageRatio"]),
-            storageRequired: Number(resource2["storageRequired"])
-          });
-        }
-        return Object.freeze({
-          affordability: Object.freeze(affordability),
-          resources: Object.freeze(resourceViews)
-        });
+  // src/bootstrap/build-control.ts
+  function createBuildControl(dependencies) {
+    const adapter = createBuildAdapter(dependencies.adapter);
+    return Object.freeze({
+      autoBuild: () => {
+        if (!dependencies.isGovernReady()) return;
+        runBuildAutomation(adapter);
       }
     });
-    function staleTarget(index, key) {
-      return stale("stale-build-target", "build candidate list changed", {
-        key,
-        index
-      });
-    }
-    function candidateFor(index, key) {
-      if (cycle === null) {
-        return null;
-      }
-      const entity = cycle.entities[index];
-      if (entity === void 0 || entity["_vueBinding"] !== key) {
-        return null;
-      }
-      return entity;
-    }
-    const executor = Object.freeze({
-      annotate(annotation) {
-        if (cycle === null) {
-          return rejected(
-            "no-build-cycle",
-            "annotate requires an active build cycle"
-          );
-        }
-        const entity = candidateFor(annotation.index, annotation.key);
-        if (entity === null) {
-          return staleTarget(annotation.index, annotation.key);
-        }
-        let text;
-        if (annotation.kind === "text") {
-          text = annotation.text;
-        } else {
-          const other = cycle.byKey.get(annotation.otherKey);
-          if (other === void 0) {
-            return staleTarget(annotation.index, annotation.otherKey);
-          }
-          const resources = requireRecord(
-            dependencies.getResources(),
-            "resources"
-          );
-          const resource2 = requireRecord(
-            resources[annotation.resourceId],
-            `resources.${annotation.resourceId}`
-          );
-          text = `Conflicts with <span class="has-text-info">${String(
-            other["title"]
-          )}</span> for <span class="has-text-info">${String(
-            resource2["name"]
-          )}</span><br>`;
-        }
-        entity["extraDescription"] = String(entity["extraDescription"]) + text;
-        return SUCCEEDED;
-      },
-      executeClick(decision2) {
-        if (cycle === null) {
-          return Object.freeze({
-            outcome: rejected(
-              "no-build-cycle",
-              "executeClick requires an active build cycle"
-            ),
-            clicked: false,
-            mission: false,
-            consumption: EMPTY_CONSUMPTION
-          });
-        }
-        const entity = candidateFor(decision2.index, decision2.key);
-        if (entity === null) {
-          return Object.freeze({
-            outcome: staleTarget(decision2.index, decision2.key),
-            clicked: false,
-            mission: false,
-            consumption: EMPTY_CONSUMPTION
-          });
-        }
-        const path = `buildList[${decision2.index}]`;
-        const clicked = Boolean(callMethod(entity, "click", path));
-        if (!clicked) {
-          return Object.freeze({
-            outcome: SUCCEEDED,
-            clicked: false,
-            mission: false,
-            consumption: EMPTY_CONSUMPTION
-          });
-        }
-        return Object.freeze({
-          outcome: SUCCEEDED,
-          clicked: true,
-          mission: Boolean(callMethod(entity, "isMission", path)),
-          consumption: sampleConsumption(entity, path)
-        });
-      }
-    });
-    return Object.freeze({ reader, executor });
   }
 
   // src/adapters/evolve/progression/research/research.ts
@@ -55784,18 +55795,17 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getResourcesPerClick = context.getResourcesPerClick;
       }
     });
-    const buildAdapter = createBuildAdapter({
-      getBuildingManager: () => BuildingManager,
-      getProjectManager: () => ProjectManager,
-      getState: () => state,
-      getSettings: () => settings,
-      getResources: () => resources,
-      getCostConflict: (target) => getCostConflict(target)
+    const { autoBuild } = createBuildControl({
+      adapter: {
+        getBuildingManager: () => BuildingManager,
+        getProjectManager: () => ProjectManager,
+        getState: () => state,
+        getSettings: () => settings,
+        getResources: () => resources,
+        getCostConflict: (target) => getCostConflict(target)
+      },
+      isGovernReady: () => Boolean(game?.global?.civic?.govern)
     });
-    const autoBuild = () => {
-      if (!game?.global?.civic?.govern) return;
-      runBuildAutomation(buildAdapter);
-    };
     let techConflictClock = browserClock;
     const getTechConflict = (tech) => {
       const readResult = readTechConflictInput(

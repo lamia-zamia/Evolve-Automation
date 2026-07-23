@@ -369,8 +369,7 @@ import {
 } from "./progression/evolution/planet-selection.ts";
 import { runPlanetSelection } from "../../application/planet-selection.ts";
 import { createJobsControl } from "../../bootstrap/jobs-control.ts";
-import { runBuildAutomation } from "../../application/build.ts";
-import { createBuildAdapter } from "./progression/build/build.ts";
+import { createBuildControl } from "../../bootstrap/build-control.ts";
 import { createResearchControl } from "../../bootstrap/research-control.ts";
 import { createMutationControl } from "../../bootstrap/mutation-control.ts";
 import { createOuterFleetControl } from "../../bootstrap/fleet-outer-control.ts";
@@ -4435,20 +4434,17 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const buildAdapter = createBuildAdapter({
-    getBuildingManager: () => BuildingManager,
-    getProjectManager: () => ProjectManager,
-    getState: () => state,
-    getSettings: () => settings,
-    getResources: () => resources,
-    getCostConflict: (target) => getCostConflict(target),
+  const { autoBuild } = createBuildControl({
+    adapter: {
+      getBuildingManager: () => BuildingManager,
+      getProjectManager: () => ProjectManager,
+      getState: () => state,
+      getSettings: () => settings,
+      getResources: () => resources,
+      getCostConflict: (target) => getCostConflict(target),
+    },
+    isGovernReady: () => Boolean(game?.global?.civic?.govern),
   });
-  const autoBuild = () => {
-    // Evolve initializes civic.govern lazily on a fresh game, but its build
-    // click path assumes the object already exists. Retry on the next tick.
-    if (!game?.global?.civic?.govern) return;
-    runBuildAutomation(buildAdapter);
-  };
 
   let techConflictClock = browserClock;
   const getTechConflict = (tech) => {
