@@ -53,3 +53,15 @@ export function runTriggerAutomation(
     index = decision.index + 1;
   }
 }
+
+/**
+ * Whether the trigger phase should be treated as active for the tick's
+ * research/build spending guard. A stale or rejected outcome is treated as
+ * active so those phases cannot spend resources after an uncertain trigger
+ * phase.
+ */
+export function triggerPhaseActive(
+  result: Readonly<TriggerAutomationResult>,
+): boolean {
+  return result.outcome.status === "succeeded" ? result.active : true;
+}

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-import { runTriggerAutomation } from "../src/application/trigger.ts";
+import {
+  runTriggerAutomation,
+  triggerPhaseActive,
+} from "../src/application/trigger.ts";
 import {
   createTriggerCommandExecutor,
   createTriggerReader,
@@ -228,6 +231,32 @@ assert.equal(
   priorActiveResult.active,
   true,
   "a later stale result retains prior trigger activity",
+);
+
+// Phase-active gate consumed by the tick's research/build spending guard: a
+// succeeded outcome reports the observed activity, while a stale or rejected
+// outcome forces active so those phases cannot spend afterward.
+assert.equal(
+  triggerPhaseActive({ outcome: { status: "succeeded" }, active: true }),
+  true,
+);
+assert.equal(
+  triggerPhaseActive({ outcome: { status: "succeeded" }, active: false }),
+  false,
+);
+assert.equal(
+  triggerPhaseActive({
+    outcome: { status: "stale", failure: { code: "changed", message: "x" } },
+    active: false,
+  }),
+  true,
+);
+assert.equal(
+  triggerPhaseActive({
+    outcome: { status: "rejected", failure: { code: "invalid", message: "x" } },
+    active: false,
+  }),
+  true,
 );
 
 console.log("Trigger automation dual-run and adapter tests passed");

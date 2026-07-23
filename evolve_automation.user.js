@@ -31444,44 +31444,6 @@
     });
   }
 
-  // src/domain/progression/build/trigger.ts
-  function planTrigger(input) {
-    if (input.target === null) {
-      return null;
-    }
-    return Object.freeze({
-      kind: input.target.shouldSaveMoney && input.target.hasPositiveMoneyCost ? "skip" : "click",
-      index: input.target.index,
-      targetId: input.target.id
-    });
-  }
-
-  // src/application/trigger.ts
-  var SUCCEEDED12 = Object.freeze({
-    status: "succeeded"
-  });
-  function result(outcome, active) {
-    return Object.freeze({ outcome, active });
-  }
-  function runTriggerAutomation(dependencies) {
-    let index = 0;
-    let active = false;
-    while (true) {
-      const decision2 = planTrigger(dependencies.reader.read(index));
-      if (decision2 === null) {
-        return result(SUCCEEDED12, active);
-      }
-      if (decision2.kind === "click") {
-        const execution = dependencies.executor.execute(decision2);
-        if (execution.outcome.status !== "succeeded") {
-          return result(execution.outcome, active);
-        }
-        active ||= execution.clicked;
-      }
-      index = decision2.index + 1;
-    }
-  }
-
   // src/adapters/evolve/progression/build/trigger.ts
   function readTriggerTargets(getState) {
     const state = requireRecord(getState(), "state");
@@ -31571,6 +31533,56 @@
           Boolean(Reflect.apply(click, target, []))
         );
       }
+    });
+  }
+
+  // src/domain/progression/build/trigger.ts
+  function planTrigger(input) {
+    if (input.target === null) {
+      return null;
+    }
+    return Object.freeze({
+      kind: input.target.shouldSaveMoney && input.target.hasPositiveMoneyCost ? "skip" : "click",
+      index: input.target.index,
+      targetId: input.target.id
+    });
+  }
+
+  // src/application/trigger.ts
+  var SUCCEEDED12 = Object.freeze({
+    status: "succeeded"
+  });
+  function result(outcome, active) {
+    return Object.freeze({ outcome, active });
+  }
+  function runTriggerAutomation(dependencies) {
+    let index = 0;
+    let active = false;
+    while (true) {
+      const decision2 = planTrigger(dependencies.reader.read(index));
+      if (decision2 === null) {
+        return result(SUCCEEDED12, active);
+      }
+      if (decision2.kind === "click") {
+        const execution = dependencies.executor.execute(decision2);
+        if (execution.outcome.status !== "succeeded") {
+          return result(execution.outcome, active);
+        }
+        active ||= execution.clicked;
+      }
+      index = decision2.index + 1;
+    }
+  }
+  function triggerPhaseActive(result2) {
+    return result2.outcome.status === "succeeded" ? result2.active : true;
+  }
+
+  // src/bootstrap/trigger-control.ts
+  function createTriggerControl(dependencies) {
+    const reader = createTriggerReader(dependencies.reader);
+    const executor = createTriggerCommandExecutor(dependencies.executor);
+    return Object.freeze({
+      autoTrigger: () => triggerPhaseActive(runTriggerAutomation({ reader, executor }))
     });
   }
 
@@ -55820,20 +55832,15 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         techConflictClock = context.clock ?? browserClock;
       }
     });
-    const triggerReader = createTriggerReader({
-      getState: () => state,
-      shouldSaveInflationMoney: inflationChallengeShouldSaveMoney
+    const { autoTrigger } = createTriggerControl({
+      reader: {
+        getState: () => state,
+        shouldSaveInflationMoney: inflationChallengeShouldSaveMoney
+      },
+      executor: {
+        getState: () => state
+      }
     });
-    const triggerExecutor = createTriggerCommandExecutor({
-      getState: () => state
-    });
-    const autoTrigger = () => {
-      const result2 = runTriggerAutomation({
-        reader: triggerReader,
-        executor: triggerExecutor
-      });
-      return result2.outcome.status === "succeeded" ? result2.active : true;
-    };
     publishTestSurface({
       autoMerc,
       WarManager,

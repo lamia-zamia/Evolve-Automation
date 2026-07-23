@@ -330,11 +330,7 @@ import { createMercenaryControl } from "../../bootstrap/mercenary-control.ts";
 import { createPsychicControl } from "../../bootstrap/psychic-control.ts";
 import { createOcularPowerControl } from "../../bootstrap/ocular-power-control.ts";
 import { createMinorTraitControl } from "../../bootstrap/minor-trait-control.ts";
-import { runTriggerAutomation } from "../../application/trigger.ts";
-import {
-  createTriggerCommandExecutor,
-  createTriggerReader,
-} from "./progression/build/trigger.ts";
+import { createTriggerControl } from "../../bootstrap/trigger-control.ts";
 import { createConsumeControl } from "../../bootstrap/consume-control.ts";
 import { createReplicatorControl } from "../../bootstrap/replicator-control.ts";
 import { createMarketControl } from "../../bootstrap/market-control.ts";
@@ -4494,22 +4490,15 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const triggerReader = createTriggerReader({
-    getState: () => state,
-    shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
+  const { autoTrigger } = createTriggerControl({
+    reader: {
+      getState: () => state,
+      shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
+    },
+    executor: {
+      getState: () => state,
+    },
   });
-  const triggerExecutor = createTriggerCommandExecutor({
-    getState: () => state,
-  });
-  const autoTrigger = () => {
-    const result = runTriggerAutomation({
-      reader: triggerReader,
-      executor: triggerExecutor,
-    });
-    // A stale/rejected trigger is treated as active so research/build cannot
-    // spend resources after an uncertain trigger phase.
-    return result.outcome.status === "succeeded" ? result.active : true;
-  };
 
   publishTestSurface({
     autoMerc,
