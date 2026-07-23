@@ -5,10 +5,11 @@ import type { LegacyRuntimeEnvironment } from "../browser/legacy-runtime-environ
 export type EvolveCharacterizationSurface = Record<string, unknown>;
 
 /**
- * TRANSITIONAL: The current Evolve/Vue 2 composition is kept behind this
- * adapter until its remaining legacy wiring is replaced by typed application
- * composition. Production and characterization entry points are deliberately
- * separate so test-only mutable surfaces cannot enter the userscript root.
+ * Evolve compatibility composition boundary. The current Vue 2 integration is
+ * intentionally dynamic at this external adapter edge; typed domain and
+ * application contracts do not escape into the game surface. Production and
+ * characterization entry points are deliberately separate so test-only
+ * mutable surfaces cannot enter the userscript root.
  */
 export declare function startEvolveRuntime(
   jquery: JQueryGlobal,
