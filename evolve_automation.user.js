@@ -30180,78 +30180,6 @@
     });
   }
 
-  // src/domain/combat/mercenary.ts
-  function planMercenaryCycle(input) {
-    if (!input.available || input.saveInflationMoney && input.goal !== "Reset") {
-      return null;
-    }
-    if (input.goal === "Reset") {
-      return Object.freeze({
-        soldierLimit: input.maxSoldiers,
-        minimumMoney: 0,
-        maximumCheapCost: Number.MAX_SAFE_INTEGER
-      });
-    }
-    const maximumCheapCost = input.moneyMedian * input.costIncomeMultiplier;
-    const minimumMoney = Math.max(
-      input.moneyMaximum * input.moneyStoragePercent / 100,
-      Math.min(
-        input.moneyMaximum - maximumCheapCost,
-        input.storageAssignExtra ? input.moneyStorageRequired / 1.03 : input.moneyStorageRequired
-      )
-    );
-    return Object.freeze({
-      soldierLimit: input.maxSoldiers - input.deadSoldierReserve,
-      minimumMoney,
-      maximumCheapCost
-    });
-  }
-  function planMercenaryHire(cycle, state) {
-    if (state.currentSoldiers >= cycle.soldierLimit || state.moneyCurrent < state.mercenaryCost || !(state.moneySpare - state.mercenaryCost > cycle.minimumMoney || state.mercenaryCost < cycle.maximumCheapCost)) {
-      return null;
-    }
-    return Object.freeze({
-      kind: "hire-mercenary",
-      expectedSoldiers: state.currentSoldiers,
-      expectedCost: state.mercenaryCost,
-      expectedMoneyCurrent: state.moneyCurrent,
-      expectedMoneySpare: state.moneySpare
-    });
-  }
-  function planMercenaryLog(count2) {
-    if (count2 <= 0) return null;
-    return Object.freeze({
-      id: "mercenary",
-      message: count2 === 1 ? "Hired a mercenary to join the garrison." : `Hired ${count2} mercenaries to join the garrison.`,
-      categories: Object.freeze(["combat"])
-    });
-  }
-
-  // src/application/mercenary.ts
-  var SUCCEEDED8 = Object.freeze({
-    status: "succeeded"
-  });
-  function runMercenaryAutomation(dependencies) {
-    const cycle = planMercenaryCycle(dependencies.reader.readCycle());
-    if (cycle === null) return SUCCEEDED8;
-    let hired = 0;
-    let outcome = SUCCEEDED8;
-    while (true) {
-      const decision2 = planMercenaryHire(cycle, dependencies.reader.readState());
-      if (decision2 === null) break;
-      const result2 = dependencies.executor.hire(decision2);
-      if (result2.status === "hired") {
-        hired++;
-        continue;
-      }
-      if (result2.status !== "not-hired") outcome = result2;
-      break;
-    }
-    const event = planMercenaryLog(hired);
-    if (event !== null) dependencies.logger.write(event);
-    return outcome;
-  }
-
   // src/adapters/evolve/combat/mercenary.ts
   function unavailableInput2() {
     return Object.freeze({
@@ -30425,6 +30353,86 @@
       }
     });
     return Object.freeze({ reader, executor, logger });
+  }
+
+  // src/domain/combat/mercenary.ts
+  function planMercenaryCycle(input) {
+    if (!input.available || input.saveInflationMoney && input.goal !== "Reset") {
+      return null;
+    }
+    if (input.goal === "Reset") {
+      return Object.freeze({
+        soldierLimit: input.maxSoldiers,
+        minimumMoney: 0,
+        maximumCheapCost: Number.MAX_SAFE_INTEGER
+      });
+    }
+    const maximumCheapCost = input.moneyMedian * input.costIncomeMultiplier;
+    const minimumMoney = Math.max(
+      input.moneyMaximum * input.moneyStoragePercent / 100,
+      Math.min(
+        input.moneyMaximum - maximumCheapCost,
+        input.storageAssignExtra ? input.moneyStorageRequired / 1.03 : input.moneyStorageRequired
+      )
+    );
+    return Object.freeze({
+      soldierLimit: input.maxSoldiers - input.deadSoldierReserve,
+      minimumMoney,
+      maximumCheapCost
+    });
+  }
+  function planMercenaryHire(cycle, state) {
+    if (state.currentSoldiers >= cycle.soldierLimit || state.moneyCurrent < state.mercenaryCost || !(state.moneySpare - state.mercenaryCost > cycle.minimumMoney || state.mercenaryCost < cycle.maximumCheapCost)) {
+      return null;
+    }
+    return Object.freeze({
+      kind: "hire-mercenary",
+      expectedSoldiers: state.currentSoldiers,
+      expectedCost: state.mercenaryCost,
+      expectedMoneyCurrent: state.moneyCurrent,
+      expectedMoneySpare: state.moneySpare
+    });
+  }
+  function planMercenaryLog(count2) {
+    if (count2 <= 0) return null;
+    return Object.freeze({
+      id: "mercenary",
+      message: count2 === 1 ? "Hired a mercenary to join the garrison." : `Hired ${count2} mercenaries to join the garrison.`,
+      categories: Object.freeze(["combat"])
+    });
+  }
+
+  // src/application/mercenary.ts
+  var SUCCEEDED8 = Object.freeze({
+    status: "succeeded"
+  });
+  function runMercenaryAutomation(dependencies) {
+    const cycle = planMercenaryCycle(dependencies.reader.readCycle());
+    if (cycle === null) return SUCCEEDED8;
+    let hired = 0;
+    let outcome = SUCCEEDED8;
+    while (true) {
+      const decision2 = planMercenaryHire(cycle, dependencies.reader.readState());
+      if (decision2 === null) break;
+      const result2 = dependencies.executor.hire(decision2);
+      if (result2.status === "hired") {
+        hired++;
+        continue;
+      }
+      if (result2.status !== "not-hired") outcome = result2;
+      break;
+    }
+    const event = planMercenaryLog(hired);
+    if (event !== null) dependencies.logger.write(event);
+    return outcome;
+  }
+
+  // src/bootstrap/mercenary-control.ts
+  function createMercenaryControl(dependencies) {
+    const adapter = createMercenaryAdapter(dependencies);
+    return Object.freeze({
+      autoMerc: () => runMercenaryAutomation(adapter)
+    });
   }
 
   // src/domain/traits/psychic.ts
@@ -54985,7 +54993,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         )
       );
     };
-    const mercenaryAdapter = createMercenaryAdapter({
+    const { autoMerc } = createMercenaryControl({
       getWarManager: () => WarManager,
       getState: () => state,
       getSettings: () => settings,
@@ -54993,7 +55001,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
       getGameLog: () => GameLog
     });
-    const autoMerc = () => runMercenaryAutomation(mercenaryAdapter);
     const spyAdapter = createSpyAdapter({
       getSpyManager: () => SpyManager,
       getWarManager: () => WarManager,

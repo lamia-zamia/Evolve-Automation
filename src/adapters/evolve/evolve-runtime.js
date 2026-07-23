@@ -341,8 +341,7 @@ import { createWishControls } from "../browser/wish-controls.ts";
 import { runGeneticsAutomation } from "../../application/genetics.ts";
 import { createGeneticsAdapter } from "./traits/genetics.ts";
 import { createGeneticsControls } from "../browser/genetics-controls.ts";
-import { runMercenaryAutomation } from "../../application/mercenary.ts";
-import { createMercenaryAdapter } from "./combat/mercenary.ts";
+import { createMercenaryControl } from "../../bootstrap/mercenary-control.ts";
 import { runPsychicAutomation } from "../../application/psychic.ts";
 import { createPsychicAdapter } from "./traits/psychic.ts";
 import { createPsychicControls } from "../browser/psychic-controls.ts";
@@ -3899,7 +3898,7 @@ function startEvolveRuntimeComposition(
     );
   };
 
-  const mercenaryAdapter = createMercenaryAdapter({
+  const { autoMerc } = createMercenaryControl({
     getWarManager: () => WarManager,
     getState: () => state,
     getSettings: () => settings,
@@ -3907,7 +3906,6 @@ function startEvolveRuntimeComposition(
     shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
     getGameLog: () => GameLog,
   });
-  const autoMerc = () => runMercenaryAutomation(mercenaryAdapter);
 
   const spyAdapter = createSpyAdapter({
     getSpyManager: () => SpyManager,
