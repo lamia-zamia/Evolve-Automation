@@ -24807,27 +24807,8 @@
     );
   }
 
-  // src/application/hell.ts
-  var SUCCEEDED = Object.freeze({
-    status: "succeeded"
-  });
-  function runHellAutomation(dependencies) {
-    const prepared = prepareHellCycle(dependencies.reader.readCycle());
-    if (prepared === null) return SUCCEEDED;
-    let decision2;
-    if (prepared.kind === "calculate-hell-targets") {
-      decision2 = planHell(
-        prepared,
-        dependencies.reader.readCalculation(prepared)
-      );
-    } else {
-      decision2 = prepared;
-    }
-    return decision2 === null ? SUCCEEDED : dependencies.executor.execute(decision2);
-  }
-
   // src/adapters/command-outcomes.ts
-  var SUCCEEDED2 = Object.freeze({
+  var SUCCEEDED = Object.freeze({
     status: "succeeded"
   });
   function rejected(code, message) {
@@ -25263,7 +25244,7 @@
           );
           session = null;
           Reflect.apply(attack, active.manager, [decision2.enemyIndex]);
-          return SUCCEEDED2;
+          return SUCCEEDED;
         }
         const methods = /* @__PURE__ */ new Map();
         for (const command of decision2.commands) {
@@ -25303,7 +25284,7 @@
             command.count
           ]);
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
@@ -25323,6 +25304,31 @@
       case "add-patrol":
         return "addHellPatrol";
     }
+  }
+
+  // src/application/hell.ts
+  var SUCCEEDED2 = Object.freeze({
+    status: "succeeded"
+  });
+  function runHellAutomation(dependencies) {
+    const prepared = prepareHellCycle(dependencies.reader.readCycle());
+    if (prepared === null) return SUCCEEDED2;
+    let decision2;
+    if (prepared.kind === "calculate-hell-targets") {
+      decision2 = planHell(
+        prepared,
+        dependencies.reader.readCalculation(prepared)
+      );
+    } else {
+      decision2 = prepared;
+    }
+    return decision2 === null ? SUCCEEDED2 : dependencies.executor.execute(decision2);
+  }
+
+  // src/bootstrap/hell-control.ts
+  function createHellControl(dependencies) {
+    const adapter = createHellAdapter(dependencies);
+    return Object.freeze({ autoHell: () => runHellAutomation(adapter) });
   }
 
   // src/adapters/evolve/civic/government.ts
@@ -25446,7 +25452,7 @@
   function createGovernmentCommandExecutor(dependencies) {
     function execute2(decision2) {
       if (decision2.government === null && decision2.appointCandidate === null) {
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
       const manager = requireRecord(
         dependencies.getGovernmentManager(),
@@ -25510,7 +25516,7 @@
           "governor appointment controls became unavailable"
         );
       }
-      return SUCCEEDED2;
+      return SUCCEEDED;
     }
     return Object.freeze({ execute: execute2 });
   }
@@ -25709,20 +25715,6 @@
       hellPatrolsToRemove: Math.max(0, hellPatrolsToRemove),
       hellGarrisonToRemove
     });
-  }
-
-  // src/application/battle.ts
-  var SUCCEEDED3 = Object.freeze({
-    status: "succeeded"
-  });
-  function runBattleAutomation(dependencies) {
-    const parameters = prepareBattle(dependencies.reader.readCycle());
-    if (parameters === null) return SUCCEEDED3;
-    const decision2 = planBattle(
-      parameters,
-      dependencies.reader.readBattlefield(parameters)
-    );
-    return decision2 === null ? SUCCEEDED3 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/combat/battle.ts
@@ -26182,10 +26174,30 @@
           ["combat"]
         ]);
         Reflect.apply(launchCampaign, active.manager, [decision2.governmentId]);
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
+  }
+
+  // src/application/battle.ts
+  var SUCCEEDED3 = Object.freeze({
+    status: "succeeded"
+  });
+  function runBattleAutomation(dependencies) {
+    const parameters = prepareBattle(dependencies.reader.readCycle());
+    if (parameters === null) return SUCCEEDED3;
+    const decision2 = planBattle(
+      parameters,
+      dependencies.reader.readBattlefield(parameters)
+    );
+    return decision2 === null ? SUCCEEDED3 : dependencies.executor.execute(decision2);
+  }
+
+  // src/bootstrap/battle-control.ts
+  function createBattleControl(dependencies) {
+    const adapter = createBattleAdapter(dependencies);
+    return Object.freeze({ autoBattle: () => runBattleAutomation(adapter) });
   }
 
   // src/domain/civic/tax.ts
@@ -26642,7 +26654,7 @@
   function createSmelterCommandExecutor(getSmelterManager) {
     function execute2(decision2) {
       if (decision2.fuelAdjustments.length === 0 && decision2.smeltAdjustments.length === 0) {
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
       const manager = requireRecord(getSmelterManager(), "SmelterManager");
       const fuels = requireRecord(manager["Fuels"], "SmelterManager.Fuels");
@@ -26751,7 +26763,7 @@
           Reflect.apply(increaseSmelting, manager, [productionId, delta]);
         }
       }
-      return SUCCEEDED2;
+      return SUCCEEDED;
     }
     return Object.freeze({ execute: execute2 });
   }
@@ -27541,7 +27553,7 @@
   function createAlchemyCommandExecutor(getAlchemyManager) {
     function execute2(decision2) {
       if (decision2.decrease.length === 0 && decision2.increase.length === 0) {
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
       const manager = requireRecord(getAlchemyManager(), "AlchemyManager");
       const currentCount = requireFunction(
@@ -27585,7 +27597,7 @@
       for (const adjustment of decision2.increase) {
         Reflect.apply(transmuteMore, manager, [adjustment.id, adjustment.count]);
       }
-      return SUCCEEDED2;
+      return SUCCEEDED;
     }
     return Object.freeze({ execute: execute2 });
   }
@@ -27796,7 +27808,7 @@
   function createPylonCommandExecutor(getRitualManager) {
     function execute2(decision2) {
       if (decision2.decrease.length === 0 && decision2.increase.length === 0) {
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
       const manager = requireRecord(getRitualManager(), "RitualManager");
       const productions = requireRecord(
@@ -27868,7 +27880,7 @@
           Reflect.apply(increaseRitual, manager, [spell, adjustment.count]);
         }
       }
-      return SUCCEEDED2;
+      return SUCCEEDED;
     }
     return Object.freeze({ execute: execute2 });
   }
@@ -28113,7 +28125,7 @@
         `${managerName}.increaseProduction`
       );
       Reflect.apply(increase, manager, [adjustment.delta]);
-      return SUCCEEDED2;
+      return SUCCEEDED;
     }
     return Object.freeze({ execute: execute2 });
   }
@@ -28129,7 +28141,7 @@
     const extractor = Object.freeze({
       execute(adjustments) {
         if (adjustments.length === 0) {
-          return SUCCEEDED2;
+          return SUCCEEDED;
         }
         const manager = requireRecord(
           dependencies.getExtractorManager(),
@@ -28163,7 +28175,7 @@
         for (const adjustment of adjustments) {
           Reflect.apply(increase, manager, [adjustment.id, adjustment.delta]);
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
     return Object.freeze({ quarry, mine, extractor });
@@ -28818,7 +28830,7 @@
             ]);
           }
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
@@ -29134,7 +29146,7 @@
           (adjustment) => adjustment.delta !== 0
         );
         if (active.length === 0) {
-          return SUCCEEDED2;
+          return SUCCEEDED;
         }
         const manager = requireRecord(getManager(), "DroidManager");
         const productions = readProductions(manager).byId;
@@ -29196,7 +29208,7 @@
             ]);
           }
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
   }
@@ -29334,7 +29346,7 @@
   function createGrapheneCommandExecutor(getGrapheneManager) {
     function execute2(adjustments) {
       if (adjustments.length === 0) {
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
       const manager = requireRecord(getGrapheneManager(), "GrapheneManager");
       const fuels = requireRecord(manager["Fuels"], "GrapheneManager.Fuels");
@@ -29385,7 +29397,7 @@
           Reflect.apply(increaseFuel, manager, [fuel, adjustment.delta]);
         }
       }
-      return SUCCEEDED2;
+      return SUCCEEDED;
     }
     return Object.freeze({ execute: execute2 });
   }
@@ -29457,7 +29469,7 @@
     return Object.freeze({
       execute(targetGenus) {
         if (targetGenus === null) {
-          return SUCCEEDED2;
+          return SUCCEEDED;
         }
         const game = requireRecord(dependencies.getGame(), "game");
         const race2 = requireRecord(
@@ -29479,7 +29491,7 @@
             "shapeshift controls became unavailable"
           );
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
   }
@@ -29742,7 +29754,7 @@
             `${decision2.tier} wish controls became unavailable`
           );
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
   }
@@ -30037,8 +30049,8 @@
           actual
         });
       }
-      if (actual === decision2.enabled) return SUCCEEDED2;
-      return dependencies.controls.toggle(decision2.toggle) ? SUCCEEDED2 : stale(
+      if (actual === decision2.enabled) return SUCCEEDED;
+      return dependencies.controls.toggle(decision2.toggle) ? SUCCEEDED : stale(
         "genetics-toggle-unavailable",
         `genetics ${decision2.toggle} control became unavailable`
       );
@@ -30077,7 +30089,7 @@
           "genetics assembly control became unavailable"
         );
       }
-      return SUCCEEDED2;
+      return SUCCEEDED;
     };
     const executor = Object.freeze({
       execute(decision2) {
@@ -30849,7 +30861,7 @@
           "psychic assault state changed"
         );
       }
-      return SUCCEEDED2;
+      return SUCCEEDED;
     }
     const executor = Object.freeze({
       execute(decision2) {
@@ -30874,7 +30886,7 @@
             `psychic ${decision2.power} control is unavailable`
           );
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
@@ -31072,14 +31084,14 @@
             "ocular power controls became unavailable"
           );
         }
-        if (current === decision2.enabled) return SUCCEEDED2;
+        if (current === decision2.enabled) return SUCCEEDED;
         if (!dependencies.controls.toggle(decision2.id)) {
           return stale(
             "ocular-toggle-unavailable",
             `ocular power ${decision2.id} control became unavailable`
           );
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
@@ -31331,7 +31343,7 @@
         );
         Reflect.apply(buyTrait, manager, [decision2.traitName]);
         genes["currentQuantity"] = actualGenes - decision2.geneCost;
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
   }
@@ -31459,7 +31471,7 @@
           `state.triggerTargets[${decision2.index}].click`
         );
         return executionResult(
-          SUCCEEDED2,
+          SUCCEEDED,
           Boolean(Reflect.apply(click, target, []))
         );
       }
@@ -31799,7 +31811,7 @@
           (adjustment) => adjustment.delta !== 0
         );
         if (activeAdjustments.length === 0) {
-          return SUCCEEDED2;
+          return SUCCEEDED;
         }
         const manager = requireRecord(getManager(), "ConsumeManager");
         const currentConsume = requireFunction(
@@ -31851,7 +31863,7 @@
             ]);
           }
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
   }
@@ -32217,7 +32229,7 @@
           "ReplicatorManager.setResource"
         );
         Reflect.apply(setResource, manager, [decision2.productionId]);
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
   }
@@ -32364,7 +32376,7 @@
               "governorOffice.setTask"
             );
             Reflect.apply(setTask, office, ["replicate", decision2.taskIndex]);
-            return SUCCEEDED2;
+            return SUCCEEDED;
           }
           const current = readGovernorSettings(office);
           if (current === null) {
@@ -32399,7 +32411,7 @@
             current.power["cap"] = 1e12;
           }
           Reflect.apply(forceUpdate, office, []);
-          return SUCCEEDED2;
+          return SUCCEEDED;
         }
       })
     });
@@ -32839,7 +32851,7 @@
             "MarketManager.setMultiplier"
           );
           Reflect.apply(setMultiplier2, manager2, [decision2.multiplier]);
-          return SUCCEEDED2;
+          return SUCCEEDED;
         }
         if (!Number.isSafeInteger(decision2.repetitions) || decision2.repetitions < 1 || !Number.isSafeInteger(decision2.multiplier)) {
           return rejected(
@@ -32893,7 +32905,7 @@
         for (let index = 0; index < decision2.repetitions; index++) {
           Reflect.apply(trade, manager, [resource2]);
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
   }
@@ -35180,7 +35192,7 @@
             return stale("power-precondition-changed", failure2);
           }
           applyOperations(active, decision2.operations);
-          return SUCCEEDED2;
+          return SUCCEEDED;
         }
         if (decision2.kind !== "shutdown-warned-building") {
           return rejected("invalid-power-decision", "Unsupported power decision");
@@ -35209,7 +35221,7 @@
           building3,
           [-1]
         );
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
@@ -36141,7 +36153,7 @@
             ) + adjustment.containerDelta;
           }
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
@@ -36521,7 +36533,7 @@
             ]);
           }
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
@@ -36985,7 +36997,7 @@
           }
           applyAssignments(entry.operation.afterAction);
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
@@ -37541,7 +37553,7 @@
     return Object.freeze({
       execute(targetName) {
         if (targetName === null) {
-          return SUCCEEDED2;
+          return SUCCEEDED;
         }
         const game = requireRecord(dependencies.getGame(), "game");
         const race2 = requireRecord(
@@ -37560,7 +37572,7 @@
             "universe selection control became unavailable"
           );
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
   }
@@ -37909,7 +37921,7 @@
         for (const write of writes) {
           write.resource["currentQuantity"] = write.nextQuantity;
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
   }
@@ -37980,31 +37992,6 @@
       });
     }
     return null;
-  }
-
-  // src/application/spy.ts
-  var SUCCEEDED20 = Object.freeze({
-    status: "succeeded"
-  });
-  function runSpyAutomation(dependencies) {
-    const cycle = planSpyCycle(dependencies.reader.readCycle());
-    if (cycle === null) return SUCCEEDED20;
-    if (cycle.trainEnabled) {
-      for (let index = 0; index < cycle.foreignCount; index++) {
-        const decision2 = planSpyTraining(dependencies.reader.readTraining(index));
-        if (decision2 === null) continue;
-        const outcome = dependencies.executor.execute(decision2);
-        if (outcome.status !== "succeeded") return outcome;
-      }
-    }
-    if (!cycle.espionageEnabled) return SUCCEEDED20;
-    for (let index = 0; index < cycle.foreignCount; index++) {
-      const decision2 = planSpyEspionage(dependencies.reader.readEspionage(index));
-      if (decision2 === null) continue;
-      const outcome = dependencies.executor.execute(decision2);
-      if (outcome.status !== "succeeded") return outcome;
-    }
-    return SUCCEEDED20;
   }
 
   // src/adapters/evolve/combat/spy.ts
@@ -38308,7 +38295,7 @@
             ["spy"]
           ]);
           Reflect.apply(train, active.view, [decision2.governmentId]);
-          return SUCCEEDED2;
+          return SUCCEEDED;
         }
         if (sampled.kind !== "espionage") {
           return rejected("invalid-spy-phase", "spy espionage phase changed");
@@ -38324,7 +38311,7 @@
           );
           Reflect.apply(release, warManager, [decision2.governmentId]);
           sampled.foreign["released"] = true;
-          return SUCCEEDED2;
+          return SUCCEEDED;
         }
         if (decision2.kind === "perform-espionage") {
           const performEspionage = requireFunction(
@@ -38336,12 +38323,43 @@
             decision2.missionId,
             decision2.secondaryTarget
           ]);
-          return SUCCEEDED2;
+          return SUCCEEDED;
         }
         return rejected("invalid-spy-decision", "spy decision is invalid");
       }
     });
     return Object.freeze({ reader, executor });
+  }
+
+  // src/application/spy.ts
+  var SUCCEEDED20 = Object.freeze({
+    status: "succeeded"
+  });
+  function runSpyAutomation(dependencies) {
+    const cycle = planSpyCycle(dependencies.reader.readCycle());
+    if (cycle === null) return SUCCEEDED20;
+    if (cycle.trainEnabled) {
+      for (let index = 0; index < cycle.foreignCount; index++) {
+        const decision2 = planSpyTraining(dependencies.reader.readTraining(index));
+        if (decision2 === null) continue;
+        const outcome = dependencies.executor.execute(decision2);
+        if (outcome.status !== "succeeded") return outcome;
+      }
+    }
+    if (!cycle.espionageEnabled) return SUCCEEDED20;
+    for (let index = 0; index < cycle.foreignCount; index++) {
+      const decision2 = planSpyEspionage(dependencies.reader.readEspionage(index));
+      if (decision2 === null) continue;
+      const outcome = dependencies.executor.execute(decision2);
+      if (outcome.status !== "succeeded") return outcome;
+    }
+    return SUCCEEDED20;
+  }
+
+  // src/bootstrap/spy-control.ts
+  function createSpyControl(dependencies) {
+    const adapter = createSpyAdapter(dependencies);
+    return Object.freeze({ autoSpy: () => runSpyAutomation(adapter) });
   }
 
   // src/adapters/evolve/progression/prestige/prestige.ts
@@ -38838,7 +38856,7 @@
             "planet selection control became unavailable"
           );
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
   }
@@ -40359,7 +40377,7 @@
             defaultJob,
             []
           );
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
@@ -40923,7 +40941,7 @@
           )}</span><br>`;
         }
         entity["extraDescription"] = String(entity["extraDescription"]) + text;
-        return SUCCEEDED2;
+        return SUCCEEDED;
       },
       executeClick(decision2) {
         if (cycle === null) {
@@ -40950,14 +40968,14 @@
         const clicked = Boolean(callMethod(entity, "click", path));
         if (!clicked) {
           return Object.freeze({
-            outcome: SUCCEEDED2,
+            outcome: SUCCEEDED,
             clicked: false,
             mission: false,
             consumption: EMPTY_CONSUMPTION
           });
         }
         return Object.freeze({
-          outcome: SUCCEEDED2,
+          outcome: SUCCEEDED,
           clicked: true,
           mission: Boolean(callMethod(entity, "isMission", path)),
           consumption: sampleConsumption(entity, path)
@@ -41095,11 +41113,11 @@
           "ProjectManager.updateProjects"
         );
         if (!Reflect.apply(click, tech, [])) {
-          return executionResult2(SUCCEEDED2, false);
+          return executionResult2(SUCCEEDED, false);
         }
         Reflect.apply(updateBuildings, buildingManager, []);
         Reflect.apply(updateProjects, projectManager, []);
-        return executionResult2(SUCCEEDED2, true);
+        return executionResult2(SUCCEEDED, true);
       }
     });
   }
@@ -41332,7 +41350,7 @@
           ["progress"]
         ]);
         currency["currentQuantity"] = actualQuantity - decision2.mutationCost;
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
   }
@@ -41498,40 +41516,6 @@
       shipCrew: input.plan.shipCrew,
       nextShipName: input.plan.nextShipName
     });
-  }
-
-  // src/application/fleet-outer.ts
-  function execute(executor, decision2) {
-    return executor.execute(decision2);
-  }
-  function runOuterFleetAutomation(dependencies) {
-    const cycle = planOuterFleetCycle(dependencies.reader.readCycle());
-    if (cycle.kind === "outer-fleet-status") {
-      return execute(dependencies.executor, cycle);
-    }
-    const target = planOuterFleetTarget(
-      cycle,
-      dependencies.reader.readTargeting(cycle)
-    );
-    if (target.kind === "outer-fleet-status") {
-      return execute(dependencies.executor, target);
-    }
-    const candidate = planOuterFleetBlueprint(
-      dependencies.reader.readBlueprint(target)
-    );
-    if (candidate.kind === "outer-fleet-status") {
-      return execute(dependencies.executor, candidate);
-    }
-    const readiness = planOuterFleetCandidate(
-      dependencies.reader.readCandidate(candidate)
-    );
-    if (readiness.kind === "outer-fleet-status") {
-      return execute(dependencies.executor, readiness);
-    }
-    return execute(
-      dependencies.executor,
-      planOuterFleetBuild(dependencies.reader.readBuildReadiness(readiness))
-    );
   }
 
   // src/adapters/evolve/combat/fleet-outer.ts
@@ -42118,13 +42102,13 @@
         if (decision2.kind === "outer-fleet-status" && decision2.messageAfterUpdate !== null) {
           active.manager["nextShipMsg"] = decision2.messageAfterUpdate;
         }
-        if (decision2.kind === "outer-fleet-status") return SUCCEEDED2;
+        if (decision2.kind === "outer-fleet-status") return SUCCEEDED;
         if (!Reflect.apply(build, active.manager, [
           blueprint,
           decision2.targetRegion
         ])) {
           active.manager["nextShipMsg"] = `Invalid design! Next ship(${decision2.nextShipName}) is missing power`;
-          return SUCCEEDED2;
+          return SUCCEEDED;
         }
         const gameLog = requireRecord(dependencies.getGameLog(), "GameLog");
         const logSuccess = requireFunction(
@@ -42136,10 +42120,52 @@
           `${decision2.shipName} has been assembled, and dispatched to ${decision2.targetLocationName}.`,
           ["combat"]
         ]);
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
+  }
+
+  // src/application/fleet-outer.ts
+  function execute(executor, decision2) {
+    return executor.execute(decision2);
+  }
+  function runOuterFleetAutomation(dependencies) {
+    const cycle = planOuterFleetCycle(dependencies.reader.readCycle());
+    if (cycle.kind === "outer-fleet-status") {
+      return execute(dependencies.executor, cycle);
+    }
+    const target = planOuterFleetTarget(
+      cycle,
+      dependencies.reader.readTargeting(cycle)
+    );
+    if (target.kind === "outer-fleet-status") {
+      return execute(dependencies.executor, target);
+    }
+    const candidate = planOuterFleetBlueprint(
+      dependencies.reader.readBlueprint(target)
+    );
+    if (candidate.kind === "outer-fleet-status") {
+      return execute(dependencies.executor, candidate);
+    }
+    const readiness = planOuterFleetCandidate(
+      dependencies.reader.readCandidate(candidate)
+    );
+    if (readiness.kind === "outer-fleet-status") {
+      return execute(dependencies.executor, readiness);
+    }
+    return execute(
+      dependencies.executor,
+      planOuterFleetBuild(dependencies.reader.readBuildReadiness(readiness))
+    );
+  }
+
+  // src/bootstrap/fleet-outer-control.ts
+  function createOuterFleetControl(dependencies) {
+    const adapter = createOuterFleetAdapter(dependencies);
+    return Object.freeze({
+      autoFleetOuter: () => runOuterFleetAutomation(adapter)
+    });
   }
 
   // src/domain/combat/fleet.ts
@@ -42465,15 +42491,6 @@
       neededShips,
       commands: freezeCommands2([...removals, ...additions])
     });
-  }
-
-  // src/application/fleet.ts
-  var SUCCEEDED25 = Object.freeze({
-    status: "succeeded"
-  });
-  function runFleetAutomation(dependencies) {
-    const decision2 = planFleet(dependencies.reader.read());
-    return decision2 === null ? SUCCEEDED25 : dependencies.executor.execute(decision2);
   }
 
   // src/adapters/evolve/combat/fleet.ts
@@ -42880,10 +42897,25 @@
         if (clickMission !== null && mission !== null) {
           Reflect.apply(clickMission, mission, []);
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
+  }
+
+  // src/application/fleet.ts
+  var SUCCEEDED25 = Object.freeze({
+    status: "succeeded"
+  });
+  function runFleetAutomation(dependencies) {
+    const decision2 = planFleet(dependencies.reader.read());
+    return decision2 === null ? SUCCEEDED25 : dependencies.executor.execute(decision2);
+  }
+
+  // src/bootstrap/fleet-control.ts
+  function createFleetControl(dependencies) {
+    const adapter = createFleetAdapter(dependencies);
+    return Object.freeze({ autoFleet: () => runFleetAutomation(adapter) });
   }
 
   // src/domain/combat/mech.ts
@@ -43588,7 +43620,7 @@
             decision2.drag.newId
           ]);
         }
-        return SUCCEEDED2;
+        return SUCCEEDED;
       },
       scrap(decision2) {
         const active = session;
@@ -43656,7 +43688,7 @@
           gems["currentQuantity"],
           "resources.Soul_Gem.currentQuantity"
         ) + decision2.gemsGained;
-        return SUCCEEDED2;
+        return SUCCEEDED;
       },
       build(decision2, continuation) {
         const active = session;
@@ -43695,7 +43727,7 @@
         gems["currentQuantity"] = continuation.gemsCurrent - decision2.cost.gems;
         active.manager["isActive"] = decision2.prolongActive;
         session = null;
-        return SUCCEEDED2;
+        return SUCCEEDED;
       }
     });
     return Object.freeze({ reader, executor });
@@ -55001,7 +55033,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       shouldSaveInflationMoney: inflationChallengeShouldSaveMoney,
       getGameLog: () => GameLog
     });
-    const spyAdapter = createSpyAdapter({
+    const { autoSpy } = createSpyControl({
       getSpyManager: () => SpyManager,
       getWarManager: () => WarManager,
       getHaveTask: () => haveTask,
@@ -55014,8 +55046,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGovName,
       getGame: () => game
     });
-    const autoSpy = () => runSpyAutomation(spyAdapter);
-    const battleAdapter = createBattleAdapter({
+    const { autoBattle } = createBattleControl({
       getSpyManager: () => SpyManager,
       getWarManager: () => WarManager,
       getGameLog: () => GameLog,
@@ -55028,8 +55059,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getOccupationCost: getOccCosts,
       getGovernmentName: getGovName
     });
-    const autoBattle = () => runBattleAutomation(battleAdapter);
-    const hellAdapter = createHellAdapter({
+    const { autoHell } = createHellControl({
       getWarManager: () => WarManager,
       getGame: () => game,
       getSettings: () => settings,
@@ -55039,7 +55069,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getDebugWindow: () => runtimeEnvironment.window,
       debugLog: (message) => runtimeEnvironment.log(message)
     });
-    const autoHell = () => runHellAutomation(hellAdapter);
     publishTestSurface({ autoHell });
     const jobsAdapter = createJobsAdapter({
       getJobManager: () => JobManager,
@@ -55828,7 +55857,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         MarketManager = context.MarketManager;
       }
     });
-    const outerFleetAdapter = createOuterFleetAdapter({
+    const { autoFleetOuter } = createOuterFleetControl({
       getFleetManagerOuter: () => FleetManagerOuter,
       getWarManager: () => WarManager,
       getGame: () => game,
@@ -55838,7 +55867,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       assessAuthorityRemoval: assessAuthorityRemoval2,
       getGameLog: () => GameLog
     });
-    const autoFleetOuter = () => runOuterFleetAutomation(outerFleetAdapter);
     publishTestSurface({
       galaxyIntelligence: {
         getGalaxyCombatShipPower,
@@ -55855,7 +55883,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         traitVal = context.traitVal;
       }
     });
-    const fleetAdapter = createFleetAdapter({
+    const { autoFleet } = createFleetControl({
       getFleetManager: () => FleetManager,
       getGame: () => game,
       getSettings: () => settings,
@@ -55865,7 +55893,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       guardActive,
       galaxyAssaultPending
     });
-    const autoFleet = () => runFleetAutomation(fleetAdapter);
     const mechAdapter = createMechAdapter({
       getMechManager: () => MechManager,
       getGame: () => game,

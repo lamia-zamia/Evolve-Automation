@@ -264,16 +264,14 @@ import { createBrowserRandomSource } from "../browser/random.ts";
 import { createBuildingWeightingPolicy } from "../../policies/building-weighting.ts";
 import { readTradeRoutesInput } from "./economy/market/trade-routes.ts";
 import { planTradeRoutes } from "../../domain/economy/market/trade-routes.ts";
-import { runHellAutomation } from "../../application/hell.ts";
-import { createHellAdapter } from "./combat/hell.ts";
+import { createHellControl } from "../../bootstrap/hell-control.ts";
 import {
   createGovernmentCommandExecutor,
   readGovernmentInput,
 } from "./civic/government.ts";
 import { createGovernmentControls } from "../browser/government-controls.ts";
 import { planGovernment } from "../../domain/civic/government.ts";
-import { runBattleAutomation } from "../../application/battle.ts";
-import { createBattleAdapter } from "./combat/battle.ts";
+import { createBattleControl } from "../../bootstrap/battle-control.ts";
 import { createTaxAutomation } from "../../application/tax.ts";
 import { createUserscriptEnvironment } from "../userscript/environment.ts";
 import {
@@ -400,8 +398,7 @@ import {
   createCraftCommandExecutor,
   createCraftReader,
 } from "./economy/production/craft.ts";
-import { runSpyAutomation } from "../../application/spy.ts";
-import { createSpyAdapter } from "./combat/spy.ts";
+import { createSpyControl } from "../../bootstrap/spy-control.ts";
 import {
   createPrestigeReader,
   createPrestigeCommandExecutor,
@@ -426,10 +423,8 @@ import {
   createMutationCommandExecutor,
   createMutationReader,
 } from "./traits/mutation.ts";
-import { runOuterFleetAutomation } from "../../application/fleet-outer.ts";
-import { createOuterFleetAdapter } from "./combat/fleet-outer.ts";
-import { runFleetAutomation } from "../../application/fleet.ts";
-import { createFleetAdapter } from "./combat/fleet.ts";
+import { createOuterFleetControl } from "../../bootstrap/fleet-outer-control.ts";
+import { createFleetControl } from "../../bootstrap/fleet-control.ts";
 import { runMechAutomation } from "../../application/mech.ts";
 import { createMechAdapter } from "./combat/mech.ts";
 import { createEjectorSettingsIntentHandler } from "../../application/ejector-settings.ts";
@@ -3907,7 +3902,7 @@ function startEvolveRuntimeComposition(
     getGameLog: () => GameLog,
   });
 
-  const spyAdapter = createSpyAdapter({
+  const { autoSpy } = createSpyControl({
     getSpyManager: () => SpyManager,
     getWarManager: () => WarManager,
     getHaveTask: () => haveTask,
@@ -3920,9 +3915,8 @@ function startEvolveRuntimeComposition(
     getGovName,
     getGame: () => game,
   });
-  const autoSpy = () => runSpyAutomation(spyAdapter);
 
-  const battleAdapter = createBattleAdapter({
+  const { autoBattle } = createBattleControl({
     getSpyManager: () => SpyManager,
     getWarManager: () => WarManager,
     getGameLog: () => GameLog,
@@ -3935,9 +3929,8 @@ function startEvolveRuntimeComposition(
     getOccupationCost: getOccCosts,
     getGovernmentName: getGovName,
   });
-  const autoBattle = () => runBattleAutomation(battleAdapter);
 
-  const hellAdapter = createHellAdapter({
+  const { autoHell } = createHellControl({
     getWarManager: () => WarManager,
     getGame: () => game,
     getSettings: () => settings,
@@ -3947,7 +3940,6 @@ function startEvolveRuntimeComposition(
     getDebugWindow: () => runtimeEnvironment.window,
     debugLog: (message) => runtimeEnvironment.log(message),
   });
-  const autoHell = () => runHellAutomation(hellAdapter);
 
   publishTestSurface({ autoHell });
 
@@ -4826,7 +4818,7 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const outerFleetAdapter = createOuterFleetAdapter({
+  const { autoFleetOuter } = createOuterFleetControl({
     getFleetManagerOuter: () => FleetManagerOuter,
     getWarManager: () => WarManager,
     getGame: () => game,
@@ -4836,7 +4828,6 @@ function startEvolveRuntimeComposition(
     assessAuthorityRemoval,
     getGameLog: () => GameLog,
   });
-  const autoFleetOuter = () => runOuterFleetAutomation(outerFleetAdapter);
 
   publishTestSurface({
     galaxyIntelligence: {
@@ -4855,7 +4846,7 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const fleetAdapter = createFleetAdapter({
+  const { autoFleet } = createFleetControl({
     getFleetManager: () => FleetManager,
     getGame: () => game,
     getSettings: () => settings,
@@ -4865,7 +4856,6 @@ function startEvolveRuntimeComposition(
     guardActive,
     galaxyAssaultPending,
   });
-  const autoFleet = () => runFleetAutomation(fleetAdapter);
 
   const mechAdapter = createMechAdapter({
     getMechManager: () => MechManager,
