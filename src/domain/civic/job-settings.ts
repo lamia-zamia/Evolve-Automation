@@ -1,6 +1,6 @@
 /** Immutable description of the Jobs settings panel. */
 export type JobSettingsControl = Readonly<{
-  kind: "number" | "toggle";
+  kind: "number" | "toggle" | "string";
   settingName: string;
   label: string;
   hint: string;
@@ -120,6 +120,12 @@ export function createJobSettingsReadModel({
         settingName: "jobDisableMiners",
         label: "Disable miners in Andromeda",
         hint: "Disable Miners and Coal Miners after reaching Andromeda",
+      }),
+      Object.freeze({
+        kind: "string",
+        settingName: "crewReserve",
+        label: "Crew reserve (workers or %)",
+        hint: "Civilians kept out of ship crew and available for jobs. Enter an absolute count (e.g. 800) or a percentage of population (e.g. 50%). When ship crew exceeds population minus this reserve, the lowest-value crewed ships (trade freighters first, combat ships last) are idled to return workers to jobs. 0 disables it.",
       }),
     ]),
     rows: Object.freeze(rows.map(freezeRow)),

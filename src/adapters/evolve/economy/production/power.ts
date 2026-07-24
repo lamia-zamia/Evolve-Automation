@@ -64,6 +64,51 @@ export interface PowerAdapterDependencies {
   readonly log: (message: string) => void;
 }
 
+/**
+ * Order in which crewed ships are idled to honor the crew reserve: the lowest
+ * rank is shed first. Keyed by the building's game id. Trade freighters (money,
+ * usually the least missed) go first; galaxy combat ships (piracy defense) last.
+ * Crewed ships not listed default to the mid rank.
+ */
+const CREW_SHED_RANK: Readonly<Record<string, number>> = Object.freeze({
+  freighter: 0,
+  super_freighter: 0,
+  bolognium_ship: 1,
+  armed_miner: 1,
+  raider: 1,
+  minelayer: 1,
+  scavenger: 1,
+  bireme: 2,
+  transport: 2,
+  scout_ship: 3,
+  corvette_ship: 3,
+  frigate_ship: 3,
+  cruiser_ship: 3,
+  dreadnought: 3,
+});
+const DEFAULT_CREW_SHED_RANK = 1;
+
+/**
+ * Resolve the crew-reserve setting to an absolute worker count. Accepts a number
+ * or a string that is either a plain count ("800") or a percentage of the
+ * civilian population ("50%"). Anything unparseable disables the reserve (0).
+ */
+function resolveCrewReserve(raw: unknown, population: number): number {
+  if (typeof raw === "number") {
+    return Number.isFinite(raw) ? raw : 0;
+  }
+  if (typeof raw !== "string") {
+    return 0;
+  }
+  const trimmed = raw.trim();
+  if (trimmed.endsWith("%")) {
+    const percent = Number(trimmed.slice(0, -1));
+    return Number.isFinite(percent) ? (population * percent) / 100 : 0;
+  }
+  const absolute = Number(trimmed);
+  return Number.isFinite(absolute) ? absolute : 0;
+}
+
 function readString(value: unknown, path: string): string {
   if (typeof value !== "string" || value.length === 0) {
     throw new TypeError(`${path} must be a non-empty string`);
@@ -1042,10 +1087,13 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
           banquetStateOn: 0,
           debug: false,
           consumptionBalanceMinimum: dependencies.consumptionBalanceMinimum,
+          civilianPopulation: 0,
+          currentCrew: 0,
           settings: Object.freeze({
             showGalactic: true,
             limitPowered: false,
             autoFleet: false,
+            crewReserve: 0,
           }),
           resources: Object.freeze([]),
           buildings: Object.freeze([]),
@@ -1094,10 +1142,13 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
           banquetStateOn: 0,
           debug: false,
           consumptionBalanceMinimum: dependencies.consumptionBalanceMinimum,
+          civilianPopulation: 0,
+          currentCrew: 0,
           settings: Object.freeze({
             showGalactic: true,
             limitPowered: false,
             autoFleet: false,
+            crewReserve: 0,
           }),
           resources: Object.freeze([...registry.inputs.values()]),
           buildings: Object.freeze([]),
@@ -1143,6 +1194,7 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
           seenBuildings.set(id, building);
         }
       };
+      const globalState = requireRecord(game["global"], "game.global");
       const inputs: PowerBuildingInput[] = managedRecords.map(
         (building, index) => {
           const path = `BuildingManager state list[${index}]`;
@@ -1242,6 +1294,24 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
             smartCategory: Boolean(is["smart"]),
             smartEnabled: Boolean(building["autoStateSmart"]),
             ship: Boolean(is["ship"]),
+            // A crewed ship is any building whose game struct carries a numeric
+            // `crew` field (galaxy/portal ships); those draw from the civilian
+            // pool the crew reserve protects.
+            crewShip: (() => {
+              const tab =
+                typeof building["_tab"] === "string" ? building["_tab"] : "";
+              const areaState = globalState[tab];
+              if (typeof areaState !== "object" || areaState === null) {
+                return false;
+              }
+              const shipState = (areaState as UnknownRecord)[id];
+              return (
+                typeof shipState === "object" &&
+                shipState !== null &&
+                typeof (shipState as UnknownRecord)["crew"] === "number"
+              );
+            })(),
+            crewValueRank: CREW_SHED_RANK[id] ?? DEFAULT_CREW_SHED_RANK,
             singleState: identity(buildings, "Banquet", building),
             ignorePositivePowerCap: identity(
               buildings,
@@ -1405,6 +1475,27 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
           ),
         ),
       });
+      // civic.crew (and its workers) is lazily initialized — absent until the
+      // first crewed ship exists — so read the whole path leniently and coerce a
+      // missing value to 0 (no crew assigned yet), matching legacy tolerance.
+      const civicRecord = global["civic"];
+      const crewRecord =
+        typeof civicRecord === "object" && civicRecord !== null
+          ? (civicRecord as UnknownRecord)["crew"]
+          : undefined;
+      const crewWorkers =
+        typeof crewRecord === "object" && crewRecord !== null
+          ? (crewRecord as UnknownRecord)["workers"]
+          : undefined;
+      const currentCrew =
+        typeof crewWorkers === "number" && Number.isFinite(crewWorkers)
+          ? crewWorkers
+          : 0;
+      const civilianPopulation = finiteProperty(
+        namedRecord(resources, "Population", "resources"),
+        "currentQuantity",
+        "resources.Population",
+      );
       return Object.freeze({
         powerUnlocked: true,
         powerResourceId: resourceId(power, "resources.Power"),
@@ -1436,10 +1527,18 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
         ),
         debug: dependencies.readDebugEnabled(),
         consumptionBalanceMinimum: dependencies.consumptionBalanceMinimum,
+        civilianPopulation,
+        currentCrew,
         settings: Object.freeze({
           showGalactic: Boolean(gameSettings["showGalactic"]),
           limitPowered: readBooleanSetting(settings, "buildingsLimitPowered"),
           autoFleet: readBooleanSetting(settings, "autoFleet"),
+          // Resolved to absolute workers here (accepts "800" or "50%"); absent on
+          // saves predating the setting, in which case it disables the reserve.
+          crewReserve: resolveCrewReserve(
+            settings["crewReserve"],
+            civilianPopulation,
+          ),
         }),
         resources: Object.freeze([...registry.inputs.values()]),
         buildings: Object.freeze(inputs),

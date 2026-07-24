@@ -142,6 +142,10 @@ function makeFixture(spec = {}) {
         storageRatio: spec.fuelStorageRatio ?? 0.5,
         isUseful: () => spec.fuelUseful ?? true,
       });
+  const Population = resource("Population", trace, {
+    currentQuantity: spec.population ?? 0,
+    maxQuantity: spec.population ?? 0,
+  });
   const managed = (spec.buildings ?? []).map((entry) =>
     building(entry.id, trace, {
       ...entry,
@@ -165,6 +169,7 @@ function makeFixture(spec = {}) {
   const settings = {
     buildingsLimitPowered: spec.limitPowered ?? false,
     autoFleet: false,
+    crewReserve: spec.crewReserve,
   };
   const game = {
     global: {
@@ -181,7 +186,7 @@ function makeFixture(spec = {}) {
     game,
     settings,
     state: {},
-    resources: { Power, Fuel },
+    resources: { Power, Fuel, Population },
     buildings: catalog,
     jobs: {},
     manager,
@@ -253,6 +258,8 @@ function domainBuilding(id, overrides = {}) {
     smartCategory: false,
     smartEnabled: false,
     ship: false,
+    crewShip: false,
+    crewValueRank: 1,
     singleState: false,
     ignorePositivePowerCap: false,
     skipGroup: "none",
@@ -277,10 +284,13 @@ function domainCycle(overrides = {}) {
     banquetStateOn: 0,
     debug: false,
     consumptionBalanceMinimum: 60,
+    civilianPopulation: 0,
+    currentCrew: 0,
     settings: Object.freeze({
       showGalactic: true,
       limitPowered: false,
       autoFleet: false,
+      crewReserve: 0,
     }),
     resources: Object.freeze([
       domainResource("Power", { currentQuantity: 10, rateOfChange: 10 }),
@@ -956,5 +966,93 @@ const warningSource = createPowerWarningSource(
 );
 assert.equal(warningSource.readDebugEnabled(), true);
 assert.deepEqual(warningSource.readWarnedBuildingDomIds(), ["one", ""]);
+
+// Crew reserve: idle the lowest-value crewed ship when civilian crew exceeds the
+// labor budget (population - reserve), shedding one step per tick; disabled at 0.
+{
+  const crewShipA = domainBuilding("A", {
+    binding: "a",
+    count: 5,
+    stateOn: 5,
+    crewShip: true,
+    crewValueRank: 0, // shed first
+  });
+  const crewShipB = domainBuilding("B", {
+    binding: "b",
+    count: 5,
+    stateOn: 5,
+    crewShip: true,
+    crewValueRank: 3, // shed last
+  });
+  const reserveSettings = (crewReserve) => ({
+    showGalactic: true,
+    limitPowered: false,
+    autoFleet: false,
+    crewReserve,
+  });
+  const adjustFor = (plan, binding) =>
+    plan.decision.operations.find(
+      (op) => op.kind === "adjust-building" && op.binding === binding,
+    );
+
+  // Over budget (crew 80 > population 100 - reserve 30 = 70): shed the low-rank ship.
+  const shed = planPowerCycle(
+    domainCycle({
+      civilianPopulation: 100,
+      currentCrew: 80,
+      settings: reserveSettings(30),
+      buildings: Object.freeze([crewShipA, crewShipB]),
+    }),
+    EMPTY_POWER_AUTOMATION_STATE,
+  );
+  assert.equal(adjustFor(shed, "a").amount, -1);
+  assert.equal(adjustFor(shed, "b").amount, 0);
+
+  // Exactly at budget (crew 70 <= 70): no shedding.
+  const within = planPowerCycle(
+    domainCycle({
+      civilianPopulation: 100,
+      currentCrew: 70,
+      settings: reserveSettings(30),
+      buildings: Object.freeze([crewShipA, crewShipB]),
+    }),
+    EMPTY_POWER_AUTOMATION_STATE,
+  );
+  assert.equal(adjustFor(within, "a").amount, 0);
+
+  // Reserve disabled (0): never sheds, even with crew far over population.
+  const disabled = planPowerCycle(
+    domainCycle({
+      civilianPopulation: 100,
+      currentCrew: 999,
+      settings: reserveSettings(0),
+      buildings: Object.freeze([crewShipA, crewShipB]),
+    }),
+    EMPTY_POWER_AUTOMATION_STATE,
+  );
+  assert.equal(adjustFor(disabled, "a").amount, 0);
+}
+
+// Crew reserve setting resolves absolute counts, percentages, numbers, and junk.
+{
+  const cycleFor = (crewReserve) =>
+    createPowerAdapter(
+      adapterDependencies(
+        makeFixture({
+          population: 1000,
+          crewReserve,
+          buildings: [{ id: "A", count: 1, powered: 1 }],
+        }),
+      ),
+    ).reader.readCycle();
+
+  assert.equal(cycleFor("250").settings.crewReserve, 250);
+  assert.equal(cycleFor("40%").settings.crewReserve, 400);
+  assert.equal(cycleFor(300).settings.crewReserve, 300);
+  assert.equal(cycleFor("0").settings.crewReserve, 0);
+  assert.equal(cycleFor("garbage").settings.crewReserve, 0);
+  assert.equal(cycleFor(undefined).settings.crewReserve, 0);
+  assert.equal(cycleFor("40%").civilianPopulation, 1000);
+}
 
 console.log("Power domain, adapters, and application tests passed");

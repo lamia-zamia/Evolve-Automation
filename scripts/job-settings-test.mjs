@@ -87,6 +87,9 @@ const actions = {
   addSettingsToggle(_node, settingName) {
     trace.push(`toggle:${settingName}`);
   },
+  addSettingsString(_node, settingName) {
+    trace.push(`string:${settingName}`);
+  },
   addTableInput(_node, settingName) {
     trace.push(`input:${settingName}`);
   },
@@ -116,7 +119,7 @@ const settings = createJobSettingsBrowserAdapter({
 settings.updateJobSettingsContent();
 assert.deepEqual(
   trace.filter((entry) =>
-    /^(number|toggle|input|table-toggle|callbacks):/.test(entry),
+    /^(number|toggle|string|input|table-toggle|callbacks):/.test(entry),
   ),
   [
     "toggle:jobSetDefault",
@@ -128,6 +131,7 @@ assert.deepEqual(
     "number:jobRaiderWeighting",
     "number:jobForagerWeighting",
     "toggle:jobDisableMiners",
+    "string:crewReserve",
     "callbacks:job_smelter",
     "callbacks:job_forager",
     "input:job_b1_forager",

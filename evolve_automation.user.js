@@ -999,6 +999,9 @@
       autoCraftsmen: false,
       jobSetDefault: true,
       jobManageServants: true,
+      // Civilians kept out of ship crew and available for jobs. Absolute count
+      // ("800") or a percentage of population ("50%"). "0" = disabled.
+      crewReserve: "0",
       jobLumberWeighting: 50,
       jobQuarryWeighting: 50,
       jobCrystalWeighting: 50,
@@ -19193,6 +19196,12 @@
           settingName: "jobDisableMiners",
           label: "Disable miners in Andromeda",
           hint: "Disable Miners and Coal Miners after reaching Andromeda"
+        }),
+        Object.freeze({
+          kind: "string",
+          settingName: "crewReserve",
+          label: "Crew reserve (workers or %)",
+          hint: "Civilians kept out of ship crew and available for jobs. Enter an absolute count (e.g. 800) or a percentage of population (e.g. 50%). When ship crew exceeds population minus this reserve, the lowest-value crewed ships (trade freighters first, combat ships last) are idled to return workers to jobs. 0 disables it."
         })
       ]),
       rows: Object.freeze(rows.map(freezeRow3))
@@ -19280,6 +19289,15 @@
     function renderControl2(node, control, actions) {
       if (control.kind === "number") {
         actions.addSettingsNumber(
+          node,
+          control.settingName,
+          control.label,
+          control.hint
+        );
+        return;
+      }
+      if (control.kind === "string") {
+        actions.addSettingsString(
           node,
           control.settingName,
           control.label,
@@ -34219,6 +34237,38 @@
   }
 
   // src/adapters/evolve/economy/production/power.ts
+  var CREW_SHED_RANK = Object.freeze({
+    freighter: 0,
+    super_freighter: 0,
+    bolognium_ship: 1,
+    armed_miner: 1,
+    raider: 1,
+    minelayer: 1,
+    scavenger: 1,
+    bireme: 2,
+    transport: 2,
+    scout_ship: 3,
+    corvette_ship: 3,
+    frigate_ship: 3,
+    cruiser_ship: 3,
+    dreadnought: 3
+  });
+  var DEFAULT_CREW_SHED_RANK = 1;
+  function resolveCrewReserve(raw, population) {
+    if (typeof raw === "number") {
+      return Number.isFinite(raw) ? raw : 0;
+    }
+    if (typeof raw !== "string") {
+      return 0;
+    }
+    const trimmed = raw.trim();
+    if (trimmed.endsWith("%")) {
+      const percent = Number(trimmed.slice(0, -1));
+      return Number.isFinite(percent) ? population * percent / 100 : 0;
+    }
+    const absolute = Number(trimmed);
+    return Number.isFinite(absolute) ? absolute : 0;
+  }
   function readString2(value, path) {
     if (typeof value !== "string" || value.length === 0) {
       throw new TypeError(`${path} must be a non-empty string`);
@@ -35032,10 +35082,13 @@
             banquetStateOn: 0,
             debug: false,
             consumptionBalanceMinimum: dependencies.consumptionBalanceMinimum,
+            civilianPopulation: 0,
+            currentCrew: 0,
             settings: Object.freeze({
               showGalactic: true,
               limitPowered: false,
-              autoFleet: false
+              autoFleet: false,
+              crewReserve: 0
             }),
             resources: Object.freeze([]),
             buildings: Object.freeze([]),
@@ -35083,10 +35136,13 @@
             banquetStateOn: 0,
             debug: false,
             consumptionBalanceMinimum: dependencies.consumptionBalanceMinimum,
+            civilianPopulation: 0,
+            currentCrew: 0,
             settings: Object.freeze({
               showGalactic: true,
               limitPowered: false,
-              autoFleet: false
+              autoFleet: false,
+              crewReserve: 0
             }),
             resources: Object.freeze([...registry.inputs.values()]),
             buildings: Object.freeze([]),
@@ -35121,6 +35177,7 @@
             seenBuildings.set(id, building3);
           }
         };
+        const globalState = requireRecord(game["global"], "game.global");
         const inputs = managedRecords.map(
           (building3, index) => {
             const path = `BuildingManager state list[${index}]`;
@@ -35199,6 +35256,19 @@
               smartCategory: Boolean(is["smart"]),
               smartEnabled: Boolean(building3["autoStateSmart"]),
               ship: Boolean(is["ship"]),
+              // A crewed ship is any building whose game struct carries a numeric
+              // `crew` field (galaxy/portal ships); those draw from the civilian
+              // pool the crew reserve protects.
+              crewShip: (() => {
+                const tab = typeof building3["_tab"] === "string" ? building3["_tab"] : "";
+                const areaState = globalState[tab];
+                if (typeof areaState !== "object" || areaState === null) {
+                  return false;
+                }
+                const shipState = areaState[id];
+                return typeof shipState === "object" && shipState !== null && typeof shipState["crew"] === "number";
+              })(),
+              crewValueRank: CREW_SHED_RANK[id] ?? DEFAULT_CREW_SHED_RANK,
               singleState: identity(buildings, "Banquet", building3),
               ignorePositivePowerCap: identity(
                 buildings,
@@ -35354,6 +35424,15 @@
             )
           )
         });
+        const civicRecord = global["civic"];
+        const crewRecord = typeof civicRecord === "object" && civicRecord !== null ? civicRecord["crew"] : void 0;
+        const crewWorkers = typeof crewRecord === "object" && crewRecord !== null ? crewRecord["workers"] : void 0;
+        const currentCrew = typeof crewWorkers === "number" && Number.isFinite(crewWorkers) ? crewWorkers : 0;
+        const civilianPopulation = finiteProperty(
+          namedRecord(resources, "Population", "resources"),
+          "currentQuantity",
+          "resources.Population"
+        );
         return Object.freeze({
           powerUnlocked: true,
           powerResourceId: resourceId(power, "resources.Power"),
@@ -35377,10 +35456,18 @@
           ),
           debug: dependencies.readDebugEnabled(),
           consumptionBalanceMinimum: dependencies.consumptionBalanceMinimum,
+          civilianPopulation,
+          currentCrew,
           settings: Object.freeze({
             showGalactic: Boolean(gameSettings["showGalactic"]),
             limitPowered: readBooleanSetting(settings, "buildingsLimitPowered"),
-            autoFleet: readBooleanSetting(settings, "autoFleet")
+            autoFleet: readBooleanSetting(settings, "autoFleet"),
+            // Resolved to absolute workers here (accepts "800" or "50%"); absent on
+            // saves predating the setting, in which case it disables the reserve.
+            crewReserve: resolveCrewReserve(
+              settings["crewReserve"],
+              civilianPopulation
+            )
           }),
           resources: Object.freeze([...registry.inputs.values()]),
           buildings: Object.freeze(inputs),
@@ -36171,6 +36258,24 @@
       producerReserve.set(building3.binding, reserve);
       reservedPower += reserve;
     }
+    let crewShedBinding = null;
+    if (input.settings.crewReserve > 0) {
+      const crewBudget = input.civilianPopulation - input.settings.crewReserve;
+      if (input.currentCrew > crewBudget) {
+        let target = null;
+        for (const building3 of input.buildings) {
+          if (!building3.crewShip || building3.stateOn <= 0) {
+            continue;
+          }
+          if (target === null || building3.crewValueRank < target.crewValueRank) {
+            target = building3;
+          }
+        }
+        if (target !== null) {
+          crewShedBinding = target.binding;
+        }
+      }
+    }
     for (const building3 of input.buildings) {
       let maximum = building3.count;
       const current = building3.stateOn;
@@ -36281,6 +36386,9 @@
       }
       if (building3.powered < 0) {
         maximum = Math.max(maximum, current - 1);
+      }
+      if (building3.binding === crewShedBinding) {
+        maximum = Math.min(maximum, current - 1);
       }
       maximum = Math.max(0, Math.floor(maximum));
       const oscillation = oscillations[building3.binding] ?? (oscillations[building3.binding] = {});
@@ -53179,6 +53287,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const jobSettingsActions = {
       buildSettingsSection,
       addSettingsNumber,
+      addSettingsString,
       addSettingsToggle,
       addTableInput,
       addTableToggle,

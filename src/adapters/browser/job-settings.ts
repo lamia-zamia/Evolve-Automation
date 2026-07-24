@@ -44,6 +44,12 @@ export interface JobSettingsBrowserActions {
     labelText: string,
     hintText: string,
   ) => unknown;
+  readonly addSettingsString: (
+    node: JQueryNode,
+    settingName: string,
+    labelText: string,
+    hintText: string,
+  ) => unknown;
   readonly addTableInput: (node: JQueryNode, settingName: string) => void;
   readonly addTableToggle: (node: JQueryNode, settingName: string) => void;
   readonly addToggleCallbacks: (
@@ -162,6 +168,15 @@ export function createJobSettingsBrowserAdapter({
   ): void {
     if (control.kind === "number") {
       actions.addSettingsNumber(
+        node,
+        control.settingName,
+        control.label,
+        control.hint,
+      );
+      return;
+    }
+    if (control.kind === "string") {
+      actions.addSettingsString(
         node,
         control.settingName,
         control.label,

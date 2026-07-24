@@ -192,6 +192,16 @@ export interface PowerBuildingInput {
   readonly smartCategory: boolean;
   readonly smartEnabled: boolean;
   readonly ship: boolean;
+  /**
+   * True when this building draws civilian ship crew (its game struct carries a
+   * `crew` field). Only these are eligible for crew-reserve shedding.
+   */
+  readonly crewShip: boolean;
+  /**
+   * Ordering for crew-reserve shedding: the lowest rank is idled first. Ignored
+   * unless `crewShip` is true.
+   */
+  readonly crewValueRank: number;
   readonly singleState: boolean;
   readonly ignorePositivePowerCap: boolean;
   readonly skipGroup: "none" | "lake" | "spire";
@@ -206,6 +216,11 @@ export interface PowerSettingsInput {
   readonly showGalactic: boolean;
   readonly limitPowered: boolean;
   readonly autoFleet: boolean;
+  /**
+   * Civilians to keep out of ship crew and available for jobs. 0 disables the
+   * crew-reserve balancing entirely (legacy behavior). See planPowerCycle.
+   */
+  readonly crewReserve: number;
 }
 
 export interface PowerSpireBuildingInput {
@@ -265,6 +280,10 @@ export interface PowerCycleInput {
   readonly banquetStateOn: number;
   readonly debug: boolean;
   readonly consumptionBalanceMinimum: number;
+  /** Civilian workforce shared between jobs and ship crew. */
+  readonly civilianPopulation: number;
+  /** Civilians currently assigned as ship crew (`civic.crew.workers`). */
+  readonly currentCrew: number;
   readonly settings: PowerSettingsInput;
   readonly resources: readonly PowerResourceInput[];
   readonly buildings: readonly PowerBuildingInput[];
@@ -994,6 +1013,30 @@ export function planPowerCycle(
     reservedPower += reserve;
   }
 
+  // Crew reserve: ship crew is drawn from the same civilian pool as jobs, so when
+  // it exceeds the labor budget we idle the lowest-value crewed ship one step this
+  // tick. Gradual shedding converges over ticks without oscillating against power's
+  // own on/off decisions (debouncePower absorbs the rest); currentCrew lags the
+  // on-counts by design, so re-checking each tick self-terminates at the budget.
+  let crewShedBinding: string | null = null;
+  if (input.settings.crewReserve > 0) {
+    const crewBudget = input.civilianPopulation - input.settings.crewReserve;
+    if (input.currentCrew > crewBudget) {
+      let target: Readonly<PowerBuildingInput> | null = null;
+      for (const building of input.buildings) {
+        if (!building.crewShip || building.stateOn <= 0) {
+          continue;
+        }
+        if (target === null || building.crewValueRank < target.crewValueRank) {
+          target = building;
+        }
+      }
+      if (target !== null) {
+        crewShedBinding = target.binding;
+      }
+    }
+  }
+
   for (const building of input.buildings) {
     let maximum = building.count;
     const current = building.stateOn;
@@ -1133,6 +1176,9 @@ export function planPowerCycle(
 
     if (building.powered < 0) {
       maximum = Math.max(maximum, current - 1);
+    }
+    if (building.binding === crewShedBinding) {
+      maximum = Math.min(maximum, current - 1);
     }
     maximum = Math.max(0, Math.floor(maximum));
     const oscillation =

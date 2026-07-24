@@ -849,6 +849,7 @@ function startEvolveRuntimeComposition(
   const jobSettingsActions = {
     buildSettingsSection,
     addSettingsNumber,
+    addSettingsString,
     addSettingsToggle,
     addTableInput,
     addTableToggle,

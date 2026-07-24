@@ -118,6 +118,9 @@ const actions = {
   addSettingsToggle(_node, settingName) {
     trace.push(`toggle:${settingName}`);
   },
+  addSettingsString(_node, settingName) {
+    trace.push(`string:${settingName}`);
+  },
   addTableInput(_node, settingName) {
     trace.push(`input:${settingName}`);
   },

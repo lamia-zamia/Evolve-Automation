@@ -662,6 +662,9 @@ export function computeJobDefaults(context: JobResetContext): ResetPlan {
     autoCraftsmen: false,
     jobSetDefault: true,
     jobManageServants: true,
+    // Civilians kept out of ship crew and available for jobs. Absolute count
+    // ("800") or a percentage of population ("50%"). "0" = disabled.
+    crewReserve: "0",
     jobLumberWeighting: 50,
     jobQuarryWeighting: 50,
     jobCrystalWeighting: 50,
