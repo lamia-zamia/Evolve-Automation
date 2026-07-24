@@ -54,6 +54,8 @@ export interface RaceView {
   readonly weighting: number;
   /** Race.getHabitability(); 0 when the race cannot be evolved here. */
   readonly habitability: number;
+  /** The game's race evolution action is unlocked in the current run. */
+  readonly evolvable: boolean;
   /** Race.genus (game.races[id].type). */
   readonly genus: string;
   /** Race.name, used only for the log line. */
@@ -82,6 +84,10 @@ function raceById(
   return races.find((race) => race.id === id);
 }
 
+function isReachable(race: RaceView): boolean {
+  return race.habitability > 0 && race.evolvable;
+}
+
 export function planEvolutionTarget(
   input: Readonly<TargetSelectionInput>,
 ): TargetSelectionDecision {
@@ -89,23 +95,25 @@ export function planEvolutionTarget(
 
   if (input.userEvolutionTarget === "auto") {
     // Weightings are stable within a cycle, so sorting the sampled values
-    // reproduces the legacy repeated getWeighting() sort.
-    const byWeighting = [...input.races].sort(
-      (a, b) => b.weighting - a.weighting,
-    );
+    // reproduces the legacy repeated getWeighting() sort. An achievement or
+    // planet can make a race look suitable even when its race action is not
+    // unlocked for this run, so those candidates must not enter the ranking.
+    const byWeighting = input.races
+      .filter(isReachable)
+      .sort((a, b) => b.weighting - a.weighting);
     if (input.massExtinction) {
-      // With Mass Extinction any race is reachable; take the best one.
+      // With Mass Extinction every unlocked race is reachable; take the best.
       target = byWeighting[0];
     } else {
       // Otherwise commit to the genus with the greatest total weight.
-      const genusList = input.races
+      const genusList = byWeighting
         .map((race) => race.genus)
         .filter((genus, index, all) => all.indexOf(genus) === index);
       const genusWeights = genusList.map(
         (genus) =>
           [
             genus,
-            input.races
+            byWeighting
               .filter((race) => race.genus === genus)
               .map((race) => race.weighting)
               .reduce((sum, next) => sum + next),
@@ -117,7 +125,7 @@ export function planEvolutionTarget(
   } else {
     // Auto achievements disabled: honour the user-specified race if reachable.
     const userRace = raceById(input.races, input.userEvolutionTarget);
-    if (userRace && userRace.habitability > 0) {
+    if (userRace && isReachable(userRace)) {
       target = userRace;
     }
   }
@@ -135,14 +143,16 @@ export function planEvolutionTarget(
   // Final fallback: a reachable custom race, else the Entish default.
   if (target === undefined) {
     const custom = raceById(input.races, "custom");
-    target =
-      custom && custom.habitability > 0
-        ? custom
-        : raceById(input.races, "entish");
+    if (custom && isReachable(custom)) {
+      target = custom;
+    } else {
+      const entish = raceById(input.races, "entish");
+      target = entish && isReachable(entish) ? entish : undefined;
+    }
   }
 
   if (target === undefined) {
-    throw new TypeError("evolution target fallback race is unavailable");
+    return Object.freeze({ kind: "wait" });
   }
   return Object.freeze({ kind: "target", id: target.id, name: target.name });
 }

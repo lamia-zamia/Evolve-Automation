@@ -68,6 +68,36 @@ function raceObjects(getRaces: () => unknown): RaceObject[] {
   );
 }
 
+function raceActionUnlocked(
+  target: RaceObject,
+  userEvolutionGenus: unknown,
+): boolean {
+  const tree = target.evolutionTree;
+  const selectedBranch =
+    (typeof userEvolutionGenus === "string"
+      ? tree[userEvolutionGenus]
+      : undefined) ?? tree[Object.keys(tree)[0] as string];
+  if (!Array.isArray(selectedBranch)) {
+    return false;
+  }
+
+  const action = selectedBranch.find((value) => {
+    const candidate = requireRecord(
+      value,
+      `races.${target.id}.evolutionTree action`,
+    );
+    return candidate["id"] === target.id;
+  });
+  if (action === undefined) {
+    return false;
+  }
+
+  // Adapter edge: the action is an opaque game object; its method must retain
+  // the game object as `this` while the boolean stays inside the adapter.
+  const evolutionAction = action as unknown as EvolutionActionObject;
+  return Boolean(evolutionAction.isUnlocked());
+}
+
 function evolutionActions(
   getEvolutions: () => unknown,
 ): Record<string, EvolutionActionObject> {
@@ -175,11 +205,13 @@ export function createEvolutionReader(
         stats["achieve"],
         "game.global.stats.achieve",
       );
+      const userEvolutionGenus = settings["userEvolutionGenus"];
       const races: RaceView[] = raceObjects(dependencies.getRaces).map((r) =>
         Object.freeze({
           id: r.id,
           weighting: toNumber(r.getWeighting()),
           habitability: toNumber(r.getHabitability()),
+          evolvable: raceActionUnlocked(r, userEvolutionGenus),
           genus: String(r.genus),
           name: String(r.name),
         }),

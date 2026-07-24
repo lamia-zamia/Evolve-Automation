@@ -29876,6 +29876,25 @@
       )
     );
   }
+  function raceActionUnlocked(target, userEvolutionGenus) {
+    const tree = target.evolutionTree;
+    const selectedBranch = (typeof userEvolutionGenus === "string" ? tree[userEvolutionGenus] : void 0) ?? tree[Object.keys(tree)[0]];
+    if (!Array.isArray(selectedBranch)) {
+      return false;
+    }
+    const action = selectedBranch.find((value) => {
+      const candidate = requireRecord(
+        value,
+        `races.${target.id}.evolutionTree action`
+      );
+      return candidate["id"] === target.id;
+    });
+    if (action === void 0) {
+      return false;
+    }
+    const evolutionAction = action;
+    return Boolean(evolutionAction.isUnlocked());
+  }
   function evolutionActions(getEvolutions) {
     return requireRecord(getEvolutions(), "evolutions");
   }
@@ -29946,11 +29965,13 @@
           stats["achieve"],
           "game.global.stats.achieve"
         );
+        const userEvolutionGenus = settings["userEvolutionGenus"];
         const races = raceObjects(dependencies.getRaces).map(
           (r) => Object.freeze({
             id: r.id,
             weighting: toNumber3(r.getWeighting()),
             habitability: toNumber3(r.getHabitability()),
+            evolvable: raceActionUnlocked(r, userEvolutionGenus),
             genus: String(r.genus),
             name: String(r.name)
           })
@@ -30405,20 +30426,21 @@
   function raceById(races, id) {
     return races.find((race2) => race2.id === id);
   }
+  function isReachable(race2) {
+    return race2.habitability > 0 && race2.evolvable;
+  }
   function planEvolutionTarget(input) {
     let target;
     if (input.userEvolutionTarget === "auto") {
-      const byWeighting = [...input.races].sort(
-        (a, b) => b.weighting - a.weighting
-      );
+      const byWeighting = input.races.filter(isReachable).sort((a, b) => b.weighting - a.weighting);
       if (input.massExtinction) {
         target = byWeighting[0];
       } else {
-        const genusList = input.races.map((race2) => race2.genus).filter((genus, index, all) => all.indexOf(genus) === index);
+        const genusList = byWeighting.map((race2) => race2.genus).filter((genus, index, all) => all.indexOf(genus) === index);
         const genusWeights = genusList.map(
           (genus) => [
             genus,
-            input.races.filter((race2) => race2.genus === genus).map((race2) => race2.weighting).reduce((sum, next) => sum + next)
+            byWeighting.filter((race2) => race2.genus === genus).map((race2) => race2.weighting).reduce((sum, next) => sum + next)
           ]
         );
         const bestGenus = [...genusWeights].sort((a, b) => b[1] - a[1])[0][0];
@@ -30426,7 +30448,7 @@
       }
     } else {
       const userRace = raceById(input.races, input.userEvolutionTarget);
-      if (userRace && userRace.habitability > 0) {
+      if (userRace && isReachable(userRace)) {
         target = userRace;
       }
     }
@@ -30435,10 +30457,15 @@
     }
     if (target === void 0) {
       const custom = raceById(input.races, "custom");
-      target = custom && custom.habitability > 0 ? custom : raceById(input.races, "entish");
+      if (custom && isReachable(custom)) {
+        target = custom;
+      } else {
+        const entish = raceById(input.races, "entish");
+        target = entish && isReachable(entish) ? entish : void 0;
+      }
     }
     if (target === void 0) {
-      throw new TypeError("evolution target fallback race is unavailable");
+      return Object.freeze({ kind: "wait" });
     }
     return Object.freeze({ kind: "target", id: target.id, name: target.name });
   }

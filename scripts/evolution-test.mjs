@@ -8,6 +8,7 @@ import {
   planImitation,
   planResourceAccumulation,
 } from "../src/domain/progression/evolution/evolution.ts";
+import { createEvolutionReader } from "../src/adapters/evolve/progression/evolution/evolution.ts";
 
 const CHALLENGES = [
   [
@@ -92,6 +93,7 @@ assert.deepStrictEqual(
         id: "custom",
         weighting: -1,
         habitability: 0,
+        evolvable: false,
         genus: "custom",
         name: "C",
       },
@@ -99,6 +101,7 @@ assert.deepStrictEqual(
         id: "entish",
         weighting: 1,
         habitability: 1,
+        evolvable: true,
         genus: "plant",
         name: "E",
       },
@@ -111,6 +114,86 @@ assert.deepStrictEqual(
     evolutionAttempts: 0,
   }),
   { kind: "wait" },
+);
+
+// Auto Achievement must skip an attractive race whose race action is not unlocked
+// in this run. Eye-Spector is the representative hybrid: its genus achievement can
+// make habitability positive even when the race's extinction/seed gate is absent.
+assert.deepStrictEqual(
+  planEvolutionTarget({
+    races: [
+      {
+        id: "beholder",
+        weighting: 100,
+        habitability: 1,
+        evolvable: false,
+        genus: "hybrid",
+        name: "Eye-Spector",
+      },
+      {
+        id: "entish",
+        weighting: 1,
+        habitability: 1,
+        evolvable: true,
+        genus: "plant",
+        name: "Entish",
+      },
+    ],
+    userEvolutionTarget: "auto",
+    massExtinction: false,
+    queueEnabled: false,
+    queueLength: 0,
+    queueRepeat: false,
+    evolutionAttempts: 0,
+  }),
+  { kind: "target", id: "entish", name: "Entish" },
+);
+
+// The adapter samples the game action gate into the immutable selection input.
+const beholderAction = { id: "beholder", isUnlocked: () => false };
+const entishAction = { id: "entish", isUnlocked: () => true };
+const reader = createEvolutionReader({
+  getGame: () => ({
+    global: {
+      race: { universe: "evil" },
+      stats: { achieve: {} },
+    },
+  }),
+  getSettings: () => ({
+    userEvolutionTarget: "auto",
+    evolutionQueueEnabled: false,
+    evolutionQueueRepeat: false,
+  }),
+  getSettingsRaw: () => ({ evolutionQueue: [] }),
+  getState: () => ({ evolutionAttempts: 0 }),
+  getRaces: () => ({
+    beholder: {
+      id: "beholder",
+      genus: "hybrid",
+      name: "Eye-Spector",
+      getWeighting: () => 100,
+      getHabitability: () => 1,
+      evolutionTree: { eldritch: [beholderAction] },
+    },
+    entish: {
+      id: "entish",
+      genus: "plant",
+      name: "Entish",
+      getWeighting: () => 1,
+      getHabitability: () => 1,
+      evolutionTree: { plant: [entishAction] },
+    },
+  }),
+  getEvolutions: () => ({}),
+  getImitations: () => ({}),
+  getResources: () => ({}),
+  getPoly: () => ({}),
+  challengeGroups: [],
+});
+const sampledTargetSelection = reader.sampleTargetSelection();
+assert.equal(
+  sampledTargetSelection.races.find((race) => race.id === "beholder").evolvable,
+  false,
 );
 
 // Imitation planning branches.
