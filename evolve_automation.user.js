@@ -8346,34 +8346,44 @@
         }
         let unboundMod = readGame().global.blood.unbound >= 4 ? 0.95 : readGame().global.blood.unbound >= 2 ? 0.9 : readGame().global.blood.unbound >= 1 ? 0.8 : 0;
         let shadowMod = readGame().global.blood.unbound >= 3 ? unboundMod : 0;
-        switch (this.genus) {
-          case "aquatic":
-            return ["swamp", "oceanic"].includes(readGame().global.city.biome) ? 1 : unboundMod;
-          case "fey":
-            return ["forest", "swamp", "taiga"].includes(
-              readGame().global.city.biome
-            ) ? 1 : unboundMod;
-          case "sand":
-            return ["ashland", "desert"].includes(readGame().global.city.biome) ? 1 : unboundMod;
-          case "heat":
-            return ["ashland", "volcanic"].includes(readGame().global.city.biome) ? 1 : unboundMod;
-          case "polar":
-            return ["tundra", "taiga"].includes(readGame().global.city.biome) ? 1 : unboundMod;
-          case "demonic":
-            return readGame().global.city.biome === "hellscape" ? 1 : shadowMod;
-          case "angelic":
-            return readGame().global.city.biome === "eden" ? 1 : shadowMod;
-          case "synthetic":
-            return readGame().global.stats.achieve["obsolete"]?.l >= 5 ? 1 : 0;
-          case "eldritch":
-            return readGame().global.stats.achieve["nightmare"]?.mg ? 1 : 0;
-          case "hybrid":
-            return readGame().global.stats.achieve["godslayer"] ? 1 : 0;
-          case void 0:
+        const genusHabitability = (genus) => {
+          switch (genus) {
+            case "aquatic":
+              return ["swamp", "oceanic"].includes(readGame().global.city.biome) ? 1 : unboundMod;
+            case "fey":
+              return ["forest", "swamp", "taiga"].includes(
+                readGame().global.city.biome
+              ) ? 1 : unboundMod;
+            case "sand":
+              return ["ashland", "desert"].includes(readGame().global.city.biome) ? 1 : unboundMod;
+            case "heat":
+              return ["ashland", "volcanic"].includes(
+                readGame().global.city.biome
+              ) ? 1 : unboundMod;
+            case "polar":
+              return ["tundra", "taiga"].includes(readGame().global.city.biome) ? 1 : unboundMod;
+            case "demonic":
+              return readGame().global.city.biome === "hellscape" ? 1 : shadowMod;
+            case "angelic":
+              return readGame().global.city.biome === "eden" ? 1 : shadowMod;
+            case "synthetic":
+              return readGame().global.stats.achieve["obsolete"]?.l >= 5 ? 1 : 0;
+            case "eldritch":
+              return readGame().global.stats.achieve["nightmare"]?.mg ? 1 : 0;
+            case void 0:
+              return 0;
+            default:
+              return 1;
+          }
+        };
+        if (this.genus === "hybrid") {
+          if (!readGame().global.stats.achieve["godslayer"]) {
             return 0;
-          default:
-            return 1;
+          }
+          const hybrid = readGame().races[this.id].hybrid;
+          return Array.isArray(hybrid) && hybrid.length > 0 ? Math.max(...hybrid.map((genus) => genusHabitability(genus))) : 1;
         }
+        return genusHabitability(this.genus);
       }
       getCondition() {
         switch (this.id) {

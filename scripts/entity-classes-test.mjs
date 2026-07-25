@@ -142,4 +142,45 @@ context.normalizeProperties = (flags) => ({ wrapped: flags });
 const nextJob = new classes.Job("farmer", "fallback", { basic: true });
 assert.equal(nextJob.is.wrapped.basic, true);
 
+// Hybrid-race habitability accounts for biome via the constituent genera.
+// Regression: Nephilim (demonic+angelic) was scored reachable on any planet
+// with godslayer, so the automation committed to it and stalled forever when
+// neither genus action could render. Its genera only render on hellscape/eden
+// (or unbound blood >= 3); beholder (eldritch+giant) stays reachable anywhere
+// because giant has no biome gate.
+context.game = {
+  global: {
+    stats: { achieve: { godslayer: { e: 5 } } },
+    blood: { unbound: 0 },
+    city: { biome: "grassland" },
+  },
+  races: {
+    nephilim: { type: "hybrid", hybrid: ["demonic", "angelic"] },
+    beholder: { type: "hybrid", hybrid: ["eldritch", "giant"] },
+  },
+};
+const nephilim = new classes.Race("nephilim");
+const beholder = new classes.Race("beholder");
+
+// Wrong biome, no unbound blood: Nephilim unevolvable -> unreachable.
+assert.equal(nephilim.getHabitability(), 0);
+// giant hits the default habitability, so beholder is reachable anywhere.
+assert.equal(beholder.getHabitability(), 1);
+
+// Correct biomes render one of Nephilim's genus actions.
+context.game.global.city.biome = "hellscape";
+assert.equal(nephilim.getHabitability(), 1);
+context.game.global.city.biome = "eden";
+assert.equal(nephilim.getHabitability(), 1);
+
+// Unbound blood >= 3 lets shadow genera evolve off-biome.
+context.game.global.city.biome = "grassland";
+context.game.global.blood.unbound = 3;
+assert.equal(nephilim.getHabitability(), 0.9);
+
+// No godslayer: no hybrid is reachable.
+context.game.global.stats.achieve = {};
+assert.equal(nephilim.getHabitability(), 0);
+assert.equal(beholder.getHabitability(), 0);
+
 console.log("Entity classes module tests passed");
