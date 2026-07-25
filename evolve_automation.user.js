@@ -29876,27 +29876,22 @@
       )
     );
   }
-  function raceActionUnlocked(target, userEvolutionGenus) {
-    const tree = target.evolutionTree;
-    const selectedBranch = (typeof userEvolutionGenus === "string" ? tree[userEvolutionGenus] : void 0) ?? tree[Object.keys(tree)[0]];
-    if (!Array.isArray(selectedBranch)) {
-      return false;
-    }
-    const action = selectedBranch.find((value) => {
-      const candidate = requireRecord(
-        value,
-        `races.${target.id}.evolutionTree action`
-      );
-      return candidate["id"] === target.id;
-    });
-    if (action === void 0) {
-      return false;
-    }
-    const evolutionAction = action;
-    return Boolean(evolutionAction.isUnlocked());
-  }
   function evolutionActions(getEvolutions) {
     return requireRecord(getEvolutions(), "evolutions");
+  }
+  function selectUsableHybridBranch(branches) {
+    for (const key of Object.keys(branches)) {
+      const branch = branches[key];
+      if (branch === void 0) {
+        continue;
+      }
+      const sentienceIndex = branch.findIndex((a) => a.id === "sentience");
+      const genusAction = sentienceIndex >= 0 ? branch[sentienceIndex + 1] : void 0;
+      if (genusAction !== void 0 && genusAction.unlocked) {
+        return key;
+      }
+    }
+    return null;
   }
   function resolveEvolutionTree(getRaces, getSettings, targetId) {
     const races = requireRecord(getRaces(), "races");
@@ -29907,7 +29902,24 @@
     );
     const settings = requireRecord(getSettings(), "settings");
     const genus = settings["userEvolutionGenus"];
-    const branch = (typeof genus === "string" ? tree[genus] : void 0) ?? tree[Object.keys(tree)[0]];
+    const keys = Object.keys(tree);
+    const preferred = typeof genus === "string" ? tree[genus] : void 0;
+    const fallback = tree[keys[0]];
+    let branch = preferred ?? fallback;
+    if (keys.length > 1) {
+      const branchViews = {};
+      for (const k of keys) {
+        const b = tree[k];
+        branchViews[k] = Array.isArray(b) ? b.map((action) => ({
+          id: String(action.id),
+          unlocked: Boolean(action.isUnlocked())
+        })) : [];
+      }
+      const usable = selectUsableHybridBranch(branchViews);
+      if (usable !== null) {
+        branch = tree[usable];
+      }
+    }
     if (!Array.isArray(branch)) {
       throw new TypeError(
         `races.${targetId}.evolutionTree branch is not an array`
@@ -29965,13 +29977,11 @@
           stats["achieve"],
           "game.global.stats.achieve"
         );
-        const userEvolutionGenus = settings["userEvolutionGenus"];
         const races = raceObjects(dependencies.getRaces).map(
           (r) => Object.freeze({
             id: r.id,
             weighting: toNumber3(r.getWeighting()),
             habitability: toNumber3(r.getHabitability()),
-            evolvable: raceActionUnlocked(r, userEvolutionGenus),
             genus: String(r.genus),
             name: String(r.name)
           })
@@ -30427,7 +30437,7 @@
     return races.find((race2) => race2.id === id);
   }
   function isReachable(race2) {
-    return race2.habitability > 0 && race2.evolvable;
+    return race2.habitability > 0;
   }
   function planEvolutionTarget(input) {
     let target;
@@ -30604,14 +30614,17 @@
       })
     );
     const treePlan = planEvolutionTreeClick(reader.sampleEvolutionTree(targetId));
-    if (treePlan.kind === "click" && executor.clickEvolution(treePlan.id)) {
-      return;
+    if (treePlan.kind === "click") {
+      if (executor.clickEvolution(treePlan.id)) {
+        return;
+      }
     }
-    for (const id of planEvolutionCells(
+    const cellClicks = planEvolutionCells(
       reader.sampleCells(),
       costs.maxRna,
       costs.maxDna
-    )) {
+    );
+    for (const id of cellClicks) {
       executor.clickEvolution(id);
     }
     const imitation = planImitation(reader.sampleImitation());

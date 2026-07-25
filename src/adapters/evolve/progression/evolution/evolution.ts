@@ -68,36 +68,6 @@ function raceObjects(getRaces: () => unknown): RaceObject[] {
   );
 }
 
-function raceActionUnlocked(
-  target: RaceObject,
-  userEvolutionGenus: unknown,
-): boolean {
-  const tree = target.evolutionTree;
-  const selectedBranch =
-    (typeof userEvolutionGenus === "string"
-      ? tree[userEvolutionGenus]
-      : undefined) ?? tree[Object.keys(tree)[0] as string];
-  if (!Array.isArray(selectedBranch)) {
-    return false;
-  }
-
-  const action = selectedBranch.find((value) => {
-    const candidate = requireRecord(
-      value,
-      `races.${target.id}.evolutionTree action`,
-    );
-    return candidate["id"] === target.id;
-  });
-  if (action === undefined) {
-    return false;
-  }
-
-  // Adapter edge: the action is an opaque game object; its method must retain
-  // the game object as `this` while the boolean stays inside the adapter.
-  const evolutionAction = action as unknown as EvolutionActionObject;
-  return Boolean(evolutionAction.isUnlocked());
-}
-
 function evolutionActions(
   getEvolutions: () => unknown,
 ): Record<string, EvolutionActionObject> {
@@ -106,6 +76,39 @@ function evolutionActions(
     string,
     EvolutionActionObject
   >;
+}
+
+interface BranchActionView {
+  readonly id: string;
+  readonly unlocked: boolean;
+}
+
+/**
+ * A hybrid race exposes one evolution-tree branch per genus, all sharing the
+ * bunker/race/sentience prefix; the genus-confirming action is the one right
+ * after `sentience`. Its id is NOT the genus key — `giant` confirms with
+ * `gigantism`, `small` with `dwarfism`, `insectoid` with `athropods`, etc. A
+ * branch becomes usable once that action is unlocked (the game renders it only
+ * when its reqs — e.g. an achievement — are met). Returns the first usable
+ * branch key, or null when none is ready yet (early in the tree, before the
+ * genus choice renders).
+ */
+export function selectUsableHybridBranch(
+  branches: Readonly<Record<string, readonly BranchActionView[]>>,
+): string | null {
+  for (const key of Object.keys(branches)) {
+    const branch = branches[key];
+    if (branch === undefined) {
+      continue;
+    }
+    const sentienceIndex = branch.findIndex((a) => a.id === "sentience");
+    const genusAction =
+      sentienceIndex >= 0 ? branch[sentienceIndex + 1] : undefined;
+    if (genusAction !== undefined && genusAction.unlocked) {
+      return key;
+    }
+  }
+  return null;
 }
 
 function resolveEvolutionTree(
@@ -121,9 +124,35 @@ function resolveEvolutionTree(
   );
   const settings = requireRecord(getSettings(), "settings");
   const genus = settings["userEvolutionGenus"];
-  const branch =
-    (typeof genus === "string" ? tree[genus] : undefined) ??
-    tree[Object.keys(tree)[0] as string];
+  const keys = Object.keys(tree);
+  const preferred = typeof genus === "string" ? tree[genus] : undefined;
+  const fallback = tree[keys[0] as string];
+
+  // Hybrid races have one branch per hybrid genus. A genus branch is only
+  // usable when its genus-confirming action is unlocked (visible in the DOM) —
+  // if the player lacks the achievement for that genus the action never
+  // appears and the tree clicker would stall. Pick the first branch whose
+  // genus action is unlocked; if none are ready yet (early in the tree), fall
+  // back to the user preference or the first branch so the shared early
+  // actions can progress.
+  let branch: unknown = preferred ?? fallback;
+  if (keys.length > 1) {
+    const branchViews: Record<string, BranchActionView[]> = {};
+    for (const k of keys) {
+      const b = tree[k];
+      branchViews[k] = Array.isArray(b)
+        ? (b as EvolutionActionObject[]).map((action) => ({
+            id: String(action.id),
+            unlocked: Boolean(action.isUnlocked()),
+          }))
+        : [];
+    }
+    const usable = selectUsableHybridBranch(branchViews);
+    if (usable !== null) {
+      branch = tree[usable];
+    }
+  }
+
   if (!Array.isArray(branch)) {
     throw new TypeError(
       `races.${targetId}.evolutionTree branch is not an array`,
@@ -205,13 +234,11 @@ export function createEvolutionReader(
         stats["achieve"],
         "game.global.stats.achieve",
       );
-      const userEvolutionGenus = settings["userEvolutionGenus"];
       const races: RaceView[] = raceObjects(dependencies.getRaces).map((r) =>
         Object.freeze({
           id: r.id,
           weighting: toNumber(r.getWeighting()),
           habitability: toNumber(r.getHabitability()),
-          evolvable: raceActionUnlocked(r, userEvolutionGenus),
           genus: String(r.genus),
           name: String(r.name),
         }),

@@ -54,8 +54,6 @@ export interface RaceView {
   readonly weighting: number;
   /** Race.getHabitability(); 0 when the race cannot be evolved here. */
   readonly habitability: number;
-  /** The game's race evolution action is unlocked in the current run. */
-  readonly evolvable: boolean;
   /** Race.genus (game.races[id].type). */
   readonly genus: string;
   /** Race.name, used only for the log line. */
@@ -85,7 +83,7 @@ function raceById(
 }
 
 function isReachable(race: RaceView): boolean {
-  return race.habitability > 0 && race.evolvable;
+  return race.habitability > 0;
 }
 
 export function planEvolutionTarget(
@@ -95,14 +93,12 @@ export function planEvolutionTarget(
 
   if (input.userEvolutionTarget === "auto") {
     // Weightings are stable within a cycle, so sorting the sampled values
-    // reproduces the legacy repeated getWeighting() sort. An achievement or
-    // planet can make a race look suitable even when its race action is not
-    // unlocked for this run, so those candidates must not enter the ranking.
+    // reproduces the legacy repeated getWeighting() sort.
     const byWeighting = input.races
       .filter(isReachable)
       .sort((a, b) => b.weighting - a.weighting);
     if (input.massExtinction) {
-      // With Mass Extinction every unlocked race is reachable; take the best.
+      // With Mass Extinction any race is reachable; take the best one.
       target = byWeighting[0];
     } else {
       // Otherwise commit to the genus with the greatest total weight.

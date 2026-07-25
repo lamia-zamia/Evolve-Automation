@@ -88,15 +88,18 @@ export function runEvolution(dependencies: EvolutionCycleDependencies): void {
   );
 
   const treePlan = planEvolutionTreeClick(reader.sampleEvolutionTree(targetId));
-  if (treePlan.kind === "click" && executor.clickEvolution(treePlan.id)) {
-    return;
+  if (treePlan.kind === "click") {
+    if (executor.clickEvolution(treePlan.id)) {
+      return;
+    }
   }
 
-  for (const id of planEvolutionCells(
+  const cellClicks = planEvolutionCells(
     reader.sampleCells(),
     costs.maxRna,
     costs.maxDna,
-  )) {
+  );
+  for (const id of cellClicks) {
     executor.clickEvolution(id);
   }
 
