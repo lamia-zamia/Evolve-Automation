@@ -10,6 +10,12 @@ type ForeignAffairsManagerDependencies = {
   getDocument: () => AnyRecord;
   getPoly: () => AnyRecord;
   getVueById: (id: string) => any;
+  callVueMethod: (
+    view: unknown,
+    methodName: string,
+    args: readonly unknown[],
+    legacyFilterName?: string,
+  ) => unknown;
   getWindowManager: () => AnyRecord;
   getGameLog: () => AnyRecord;
   getKeyManager: () => AnyRecord;
@@ -32,6 +38,7 @@ export function createForeignAffairsManagers({
   getDocument,
   getPoly,
   getVueById,
+  callVueMethod,
   getWindowManager,
   getGameLog,
   getKeyManager,
@@ -572,7 +579,7 @@ export function createForeignAffairsManagers({
     },
 
     getCampaignTitle(tactic: number) {
-      return this._garrisonVue.$options.filters.tactics(tactic);
+      return callVueMethod(this._garrisonVue, "tactics", [tactic]) as string;
     },
 
     addBattalion(count: number) {

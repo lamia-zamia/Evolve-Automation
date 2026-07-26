@@ -2662,6 +2662,7 @@
     getResources,
     getBuildings,
     getVueById,
+    callVueMethod,
     getKeyManager,
     haveTech,
     isLumberRace,
@@ -2830,7 +2831,7 @@
         return getGame().global.city.smelter.Star;
       },
       currentFueled() {
-        return this._industryVue.$options.filters.on();
+        return callVueMethod(this._industryVue, "on_f", [], "on");
       }
     };
     const FactoryManager = {
@@ -3560,6 +3561,7 @@
     getDocument,
     getPoly,
     getVueById,
+    callVueMethod,
     getWindowManager,
     getGameLog,
     getKeyManager,
@@ -3916,7 +3918,7 @@
         }
       },
       getCampaignTitle(tactic) {
-        return this._garrisonVue.$options.filters.tactics(tactic);
+        return callVueMethod(this._garrisonVue, "tactics", [tactic]);
       },
       addBattalion(count2) {
         const KeyManager = getKeyManager();
@@ -4504,6 +4506,7 @@
     getUpdateDebugData,
     getCreateMechInfo,
     getVueById,
+    getVueElement,
     kCombinations,
     cloneIntoPage,
     createMutationObserver,
@@ -5023,12 +5026,13 @@
           newDraggableIndex: newId,
           from: { querySelectorAll: () => [], insertBefore: () => false }
         };
+        const listElement = getVueElement(this._listVue);
         if (needSandboxBypass) {
-          win.Sortable.get(this._listVue.$el).options.onEnd(
+          win.Sortable.get(listElement).options.onEnd(
             cloneIntoPage(sortObj, { cloneFunctions: true })
           );
         } else {
-          Sortable.get(this._listVue.$el).options.onEnd(sortObj);
+          Sortable.get(listElement).options.onEnd(sortObj);
         }
       }
     };
@@ -16284,7 +16288,29 @@
         Reflect.apply(querySelector, document, ["#mainColumn > div:first-child"])
       );
     }
-    return Object.freeze({ getVueById, getMainVue });
+    const resolveVueMethod = (view, methodName, legacyFilterName = methodName) => {
+      const method = readProperty(view, methodName);
+      if (typeof method === "function") {
+        return (...args) => Reflect.apply(method, view, args);
+      }
+      const filters = readProperty(readProperty(view, "$options"), "filters");
+      const legacyFilter = readProperty(filters, legacyFilterName);
+      if (typeof legacyFilter === "function") {
+        return (...args) => Reflect.apply(legacyFilter, filters, args);
+      }
+      throw new TypeError(`${methodName} must be a function`);
+    };
+    const callVueMethod = (view, methodName, args, legacyFilterName = methodName) => resolveVueMethod(view, methodName, legacyFilterName)(...Array.from(args));
+    function getVueElement(view) {
+      return readProperty(view, "$el");
+    }
+    return Object.freeze({
+      callVueMethod,
+      getMainVue,
+      getVueById,
+      getVueElement,
+      resolveVueMethod
+    });
   }
 
   // src/browser/runtime.ts
@@ -16295,7 +16321,13 @@
     getBlobConstructor,
     schedule
   }) {
-    const { getVueById, getMainVue } = createVueAdapter({ getWin });
+    const {
+      callVueMethod,
+      getMainVue,
+      getVueById,
+      getVueElement,
+      resolveVueMethod
+    } = createVueAdapter({ getWin });
     function triggerFileDownload(contents, filename) {
       const UrlApi = getUrlApi();
       const BlobConstructor = getBlobConstructor();
@@ -16308,7 +16340,14 @@
         UrlApi.revokeObjectURL(url);
       }, 60 * 1e3);
     }
-    return { getVueById, getMainVue, triggerFileDownload };
+    return {
+      callVueMethod,
+      getMainVue,
+      getVueById,
+      getVueElement,
+      resolveVueMethod,
+      triggerFileDownload
+    };
   }
 
   // src/ui/mech-stats.ts
@@ -33396,7 +33435,7 @@
   function settingsMatch(actual, expected) {
     return actual.powerOn === expected.powerOn && actual.focusQueue === expected.focusQueue && actual.focusNegative === expected.focusNegative && actual.switchOnCap === expected.switchOnCap && actual.powerCap === expected.powerCap;
   }
-  function createReplicatorGovernorOffice(getOffice) {
+  function createReplicatorGovernorOffice(getOffice, resolveVueMethod) {
     let office = null;
     return Object.freeze({
       reader: Object.freeze({
@@ -33466,10 +33505,7 @@
               "replicator governor settings changed"
             );
           }
-          const forceUpdate = requireFunction(
-            office["$forceUpdate"],
-            "governorOffice.$forceUpdate"
-          );
+          const forceUpdate = resolveVueMethod(office, "$forceUpdate");
           if (decision2.enablePower) {
             current.power["on"] = true;
           }
@@ -33485,7 +33521,7 @@
           if (decision2.raisePowerCap) {
             current.power["cap"] = 1e12;
           }
-          Reflect.apply(forceUpdate, office, []);
+          forceUpdate();
           return SUCCEEDED;
         }
       })
@@ -33907,7 +33943,8 @@
       dependencies.governorGameReader
     );
     const governorOffice = createReplicatorGovernorOffice(
-      dependencies.getGovernorOffice
+      dependencies.getGovernorOffice,
+      dependencies.resolveVueMethod
     );
     return Object.freeze({
       autoReplicator: () => runReplicatorAutomation({
@@ -54703,7 +54740,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const userscriptEnvironment = createUserscriptEnvironment(
       runtimeEnvironment.window
     );
-    const { getVueById, getMainVue, triggerFileDownload } = createBrowserRuntime({
+    const {
+      callVueMethod,
+      getVueById,
+      getMainVue,
+      getVueElement,
+      resolveVueMethod,
+      triggerFileDownload
+    } = createBrowserRuntime({
       getWin: () => win,
       getDocument: () => runtimeEnvironment.document,
       getUrlApi: () => runtimeEnvironment.urlApi,
@@ -55274,6 +55318,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getResources: () => resources,
       getBuildings: () => buildings,
       getVueById: (id) => getVueById(id),
+      callVueMethod,
       getKeyManager: () => KeyManager,
       haveTech,
       isLumberRace,
@@ -55305,6 +55350,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getDocument: () => runtimeEnvironment.document,
       getPoly: () => poly,
       getVueById: (id) => getVueById(id),
+      callVueMethod,
       getWindowManager: () => WindowManager,
       getGameLog: () => GameLog,
       getKeyManager: () => KeyManager,
@@ -55377,6 +55423,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getUpdateDebugData: () => updateDebugData,
       getCreateMechInfo: () => createMechInfo,
       getVueById: (id) => getVueById(id),
+      getVueElement,
       kCombinations: k_combinations,
       cloneIntoPage: (value, options2) => userscriptEnvironment.cloneIntoPage(value, options2),
       createMutationObserver: (callback) => new runtimeEnvironment.MutationObserver(callback),
@@ -56045,7 +56092,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getGame: () => game
       },
       getReplicatorManager: () => ReplicatorManager,
-      getGovernorOffice: () => getVueById("govOffice")
+      getGovernorOffice: () => getVueById("govOffice"),
+      resolveVueMethod
     });
     let prestigeLogTestActions;
     const { formatLogString, logPrestige } = createPrestigeLog({
@@ -58069,7 +58117,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     publishTestSurface({
-      browserRuntime: { getVueById, getMainVue, triggerFileDownload },
+      browserRuntime: {
+        callVueMethod,
+        getMainVue,
+        getVueById,
+        getVueElement,
+        resolveVueMethod,
+        triggerFileDownload
+      },
       setBrowserRuntimeTestContext(context) {
         win = context.win;
       }

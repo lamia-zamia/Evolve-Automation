@@ -16,6 +16,7 @@ type MechManagerDependencies = {
   getUpdateDebugData: () => AnyFunction;
   getCreateMechInfo: () => AnyFunction;
   getVueById: (id: string) => any;
+  getVueElement: (view: unknown) => unknown;
   kCombinations: (values: any[], size: number) => any[][];
   cloneIntoPage: (value: unknown, options?: AnyRecord) => any;
   createMutationObserver: (callback: (...args: any[]) => void) => unknown;
@@ -35,6 +36,7 @@ export function createMechManager({
   getUpdateDebugData,
   getCreateMechInfo,
   getVueById,
+  getVueElement,
   kCombinations,
   cloneIntoPage,
   createMutationObserver,
@@ -701,13 +703,14 @@ export function createMechManager({
         newDraggableIndex: newId,
         from: { querySelectorAll: () => [], insertBefore: () => false },
       };
+      const listElement = getVueElement(this._listVue);
       if (needSandboxBypass) {
         // Yet another FF fix
-        win.Sortable.get(this._listVue.$el).options.onEnd(
+        win.Sortable.get(listElement).options.onEnd(
           cloneIntoPage(sortObj, { cloneFunctions: true }),
         );
       } else {
-        Sortable.get(this._listVue.$el).options.onEnd(sortObj);
+        Sortable.get(listElement).options.onEnd(sortObj);
       }
     },
   };

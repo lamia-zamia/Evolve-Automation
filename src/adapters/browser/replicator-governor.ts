@@ -4,6 +4,7 @@ import type {
 } from "../../domain/economy/production/replicator.ts";
 import type { DecisionExecutor } from "../../ports/decision-executor.ts";
 import type { ReplicatorGovernorOfficeReader } from "../../ports/replicator.ts";
+import type { VueMethodResolver } from "./vue.ts";
 import { rejected, stale, SUCCEEDED } from "../command-outcomes.ts";
 import {
   requireBoolean,
@@ -82,7 +83,10 @@ function settingsMatch(
  * Browser-owned bridge for the current Vue 2 governor office. The reader and
  * executor share only one explicitly opened office session per automation run.
  */
-export function createReplicatorGovernorOffice(getOffice: () => unknown): {
+export function createReplicatorGovernorOffice(
+  getOffice: () => unknown,
+  resolveVueMethod: VueMethodResolver,
+): {
   readonly reader: ReplicatorGovernorOfficeReader;
   readonly executor: DecisionExecutor<ReplicatorGovernorDecision>;
 } {
@@ -162,10 +166,7 @@ export function createReplicatorGovernorOffice(getOffice: () => unknown): {
             "replicator governor settings changed",
           );
         }
-        const forceUpdate = requireFunction(
-          office["$forceUpdate"],
-          "governorOffice.$forceUpdate",
-        );
+        const forceUpdate = resolveVueMethod(office, "$forceUpdate");
         if (decision.enablePower) {
           current.power["on"] = true;
         }
@@ -181,7 +182,7 @@ export function createReplicatorGovernorOffice(getOffice: () => unknown): {
         if (decision.raisePowerCap) {
           current.power["cap"] = 1e12;
         }
-        Reflect.apply(forceUpdate, office, []);
+        forceUpdate();
         return SUCCEEDED;
       },
     }),

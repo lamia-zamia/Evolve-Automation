@@ -8,6 +8,12 @@ interface ProductionManagersDependencies {
   getResources: () => Record<string, any>;
   getBuildings: () => Record<string, any>;
   getVueById: (id: string) => any;
+  callVueMethod: (
+    view: unknown,
+    methodName: string,
+    args: readonly unknown[],
+    legacyFilterName?: string,
+  ) => unknown;
   getKeyManager: () => KeyManagerContract;
   haveTech: (tech: string, level?: number) => boolean;
   isLumberRace: () => boolean;
@@ -26,6 +32,7 @@ export function createProductionManagers({
   getResources,
   getBuildings,
   getVueById,
+  callVueMethod,
   getKeyManager,
   haveTech,
   isLumberRace,
@@ -239,7 +246,7 @@ export function createProductionManagers({
     },
 
     currentFueled() {
-      return this._industryVue.$options.filters.on();
+      return callVueMethod(this._industryVue, "on_f", [], "on") as number;
     },
   };
 

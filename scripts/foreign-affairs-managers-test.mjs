@@ -27,6 +27,17 @@ const { SpyManager, WarManager } = createForeignAffairsManagers({
   }),
   getPoly: () => poly,
   getVueById: (id) => vueById[id],
+  callVueMethod: (view, methodName, args, legacyFilterName = methodName) => {
+    const method = view[methodName];
+    if (typeof method === "function") {
+      return method(...args);
+    }
+    const filter = view.$options?.filters?.[legacyFilterName];
+    if (typeof filter === "function") {
+      return filter(...args);
+    }
+    throw new TypeError(`${methodName} must be a function`);
+  },
   getWindowManager: () => ({
     isOpen: () => false,
     openModalWindowWithCallback: (_node, title, callback) => {

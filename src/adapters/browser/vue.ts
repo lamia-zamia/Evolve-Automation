@@ -13,6 +13,19 @@ export interface VueAdapterDependencies {
   };
 }
 
+export type VueMethodCaller = (
+  view: unknown,
+  methodName: string,
+  args: readonly unknown[],
+  legacyFilterName?: string,
+) => unknown;
+
+export type VueMethodResolver = (
+  view: unknown,
+  methodName: string,
+  legacyFilterName?: string,
+) => (...args: unknown[]) => unknown;
+
 function asRecord(value: unknown): BrowserRecord | undefined {
   return (typeof value === "object" && value !== null) ||
     typeof value === "function"
@@ -62,5 +75,42 @@ export function createVueAdapter({ getWin }: VueAdapterDependencies) {
     );
   }
 
-  return Object.freeze({ getVueById, getMainVue });
+  const resolveVueMethod: VueMethodResolver = (
+    view,
+    methodName,
+    legacyFilterName = methodName,
+  ) => {
+    const method = readProperty(view, methodName);
+    if (typeof method === "function") {
+      return (...args) => Reflect.apply(method, view, args);
+    }
+
+    const filters = readProperty(readProperty(view, "$options"), "filters");
+    const legacyFilter = readProperty(filters, legacyFilterName);
+    if (typeof legacyFilter === "function") {
+      return (...args) => Reflect.apply(legacyFilter, filters, args);
+    }
+
+    throw new TypeError(`${methodName} must be a function`);
+  };
+
+  const callVueMethod: VueMethodCaller = (
+    view,
+    methodName,
+    args,
+    legacyFilterName = methodName,
+  ): unknown =>
+    resolveVueMethod(view, methodName, legacyFilterName)(...Array.from(args));
+
+  function getVueElement(view: unknown): unknown {
+    return readProperty(view, "$el");
+  }
+
+  return Object.freeze({
+    callVueMethod,
+    getMainVue,
+    getVueById,
+    getVueElement,
+    resolveVueMethod,
+  });
 }

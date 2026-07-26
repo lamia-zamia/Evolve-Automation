@@ -38,6 +38,10 @@ assert.equal(runtime.getVueById("id").id, "replacement");
 assert.equal(runtime.getMainVue().id, "main");
 element = { __vue_app__: { _instance: { proxy: { id: "app" } } } };
 assert.equal(runtime.getVueById("id").id, "app");
+assert.equal(
+  runtime.resolveVueMethod({ value: () => "method" }, "value")(),
+  "method",
+);
 runtime.triggerFileDownload("data", "file.txt");
 assert.equal(trace[0], "data");
 assert.equal(scheduled.delay, 60_000);

@@ -27,6 +27,7 @@ const { MechManager } = createMechManager({
   getUpdateDebugData: () => () => trace.push(["debug"]),
   getCreateMechInfo: () => () => trace.push(["info"]),
   getVueById: (id) => vueById[id],
+  getVueElement: (view) => view?.$el,
   kCombinations: (values, size) => {
     if (size === 0) return [[]];
     if (size === 1) return values.map((value) => [value]);

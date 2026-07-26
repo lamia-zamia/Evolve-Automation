@@ -81,6 +81,7 @@ const {
   getResources: () => resources,
   getBuildings: () => buildings,
   getVueById: (id) => vueLookup(id),
+  callVueMethod: () => 0,
   getKeyManager: () => ({
     click: (count) => Array.from({ length: count }, (_, i) => i),
   }),

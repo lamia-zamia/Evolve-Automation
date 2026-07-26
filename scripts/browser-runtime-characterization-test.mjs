@@ -61,6 +61,9 @@ vm.runInNewContext(source, sandbox, {
 assert.equal(typeof hooks.setBrowserRuntimeTestContext, "function");
 assert.equal(typeof hooks.browserRuntime?.getVueById, "function");
 assert.equal(typeof hooks.browserRuntime?.getMainVue, "function");
+assert.equal(typeof hooks.browserRuntime?.callVueMethod, "function");
+assert.equal(typeof hooks.browserRuntime?.getVueElement, "function");
+assert.equal(typeof hooks.browserRuntime?.resolveVueMethod, "function");
 assert.equal(typeof hooks.browserRuntime?.triggerFileDownload, "function");
 
 const vue = { id: "vue" };
@@ -88,6 +91,14 @@ assert.equal(hooks.browserRuntime.getVueById("app"), vue);
 assert.equal(hooks.browserRuntime.getVueById("plain"), undefined);
 assert.equal(hooks.browserRuntime.getVueById("missing"), undefined);
 assert.equal(hooks.browserRuntime.getMainVue(), mainVue);
+const element = {};
+const view = {
+  value: () => "method",
+  $el: element,
+};
+assert.equal(hooks.browserRuntime.callVueMethod(view, "value", []), "method");
+assert.equal(hooks.browserRuntime.resolveVueMethod(view, "value")(), "method");
+assert.equal(hooks.browserRuntime.getVueElement(view), element);
 
 hooks.browserRuntime.triggerFileDownload("contents", "save.json");
 assert.deepEqual(trace, [

@@ -2458,7 +2458,14 @@ function startEvolveRuntimeComposition(
   const userscriptEnvironment = createUserscriptEnvironment(
     runtimeEnvironment.window,
   );
-  const { getVueById, getMainVue, triggerFileDownload } = createBrowserRuntime({
+  const {
+    callVueMethod,
+    getVueById,
+    getMainVue,
+    getVueElement,
+    resolveVueMethod,
+    triggerFileDownload,
+  } = createBrowserRuntime({
     getWin: () => win,
     getDocument: () => runtimeEnvironment.document,
     getUrlApi: () => runtimeEnvironment.urlApi,
@@ -3074,6 +3081,7 @@ function startEvolveRuntimeComposition(
     getResources: () => resources,
     getBuildings: () => buildings,
     getVueById: (id) => getVueById(id),
+    callVueMethod,
     getKeyManager: () => KeyManager,
     haveTech,
     isLumberRace,
@@ -3108,6 +3116,7 @@ function startEvolveRuntimeComposition(
     getDocument: () => runtimeEnvironment.document,
     getPoly: () => poly,
     getVueById: (id) => getVueById(id),
+    callVueMethod,
     getWindowManager: () => WindowManager,
     getGameLog: () => GameLog,
     getKeyManager: () => KeyManager,
@@ -3186,6 +3195,7 @@ function startEvolveRuntimeComposition(
     getUpdateDebugData: () => updateDebugData,
     getCreateMechInfo: () => createMechInfo,
     getVueById: (id) => getVueById(id),
+    getVueElement,
     kCombinations: k_combinations,
     cloneIntoPage: (value, options) =>
       userscriptEnvironment.cloneIntoPage(value, options),
@@ -3957,6 +3967,7 @@ function startEvolveRuntimeComposition(
     },
     getReplicatorManager: () => ReplicatorManager,
     getGovernorOffice: () => getVueById("govOffice"),
+    resolveVueMethod,
   });
 
   let prestigeLogTestActions;
@@ -6205,7 +6216,14 @@ function startEvolveRuntimeComposition(
   });
 
   publishTestSurface({
-    browserRuntime: { getVueById, getMainVue, triggerFileDownload },
+    browserRuntime: {
+      callVueMethod,
+      getMainVue,
+      getVueById,
+      getVueElement,
+      resolveVueMethod,
+      triggerFileDownload,
+    },
     setBrowserRuntimeTestContext(context) {
       win = context.win;
     },

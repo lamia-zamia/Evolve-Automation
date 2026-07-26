@@ -14,6 +14,14 @@ import {
 } from "../src/domain/economy/production/replicator.ts";
 import { createTraceRecorder } from "./test-support/modernization-fixtures.mjs";
 
+function resolveVueMethod(view, methodName) {
+  const method = view?.[methodName];
+  if (typeof method !== "function") {
+    throw new TypeError(`${methodName} must be a function`);
+  }
+  return (...args) => method(...args);
+}
+
 function createGovernorConfig(definition, trace) {
   if (definition === null) return null;
   const state = {
@@ -339,7 +347,10 @@ assert.throws(
   /tasks\[0\] must be a string/,
 );
 
-const closedOffice = createReplicatorGovernorOffice(() => null);
+const closedOffice = createReplicatorGovernorOffice(
+  () => null,
+  resolveVueMethod,
+);
 assert.equal(closedOffice.reader.open(), false);
 assert.throws(() => closedOffice.reader.readSettings(), /must be opened/);
 assert.equal(
@@ -352,11 +363,14 @@ assert.equal(
 );
 
 const staleTaskCalls = [];
-const staleTaskOffice = createReplicatorGovernorOffice(() => ({
-  t: { t0: "market" },
-  c: {},
-  setTask: (...args) => staleTaskCalls.push(args),
-}));
+const staleTaskOffice = createReplicatorGovernorOffice(
+  () => ({
+    t: { t0: "market" },
+    c: {},
+    setTask: (...args) => staleTaskCalls.push(args),
+  }),
+  resolveVueMethod,
+);
 assert.equal(staleTaskOffice.reader.open(), true);
 assert.equal(
   staleTaskOffice.executor.execute({
@@ -374,6 +388,7 @@ const staleSettingsFixture = createFixture({
 });
 const staleSettingsOffice = createReplicatorGovernorOffice(
   () => staleSettingsFixture.office,
+  resolveVueMethod,
 );
 staleSettingsOffice.reader.open();
 const sampledSettings = staleSettingsOffice.reader.readSettings();
@@ -388,10 +403,13 @@ const preflightConfig = {
   pow: { on: false, cap: 1 },
   res: { que: true, neg: true, cap: true },
 };
-const preflightOffice = createReplicatorGovernorOffice(() => ({
-  t: { t0: "replicate" },
-  c: { replicate: preflightConfig },
-}));
+const preflightOffice = createReplicatorGovernorOffice(
+  () => ({
+    t: { t0: "replicate" },
+    c: { replicate: preflightConfig },
+  }),
+  resolveVueMethod,
+);
 preflightOffice.reader.open();
 const preflightDecision = planReplicatorGovernorSettings(
   preflightOffice.reader.readSettings(),

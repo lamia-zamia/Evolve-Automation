@@ -16,6 +16,7 @@ export function createReplicatorControl(dependencies: {
   governorGameReader: ReplicatorGovernorGameReaderDependencies;
   getReplicatorManager: Parameters<typeof createReplicatorSelectionExecutor>[0];
   getGovernorOffice: Parameters<typeof createReplicatorGovernorOffice>[0];
+  resolveVueMethod: Parameters<typeof createReplicatorGovernorOffice>[1];
 }) {
   const selectionReader = createReplicatorSelectionReader(
     dependencies.selectionReader,
@@ -25,6 +26,7 @@ export function createReplicatorControl(dependencies: {
   );
   const governorOffice = createReplicatorGovernorOffice(
     dependencies.getGovernorOffice,
+    dependencies.resolveVueMethod,
   );
   return Object.freeze({
     autoReplicator: () =>
