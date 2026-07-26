@@ -18,6 +18,7 @@ const wr = { g: 0, i: 1, d: 2, m: 3 };
 const weightingRules = [
   [() => true, (b) => (b.boost ? "boosted" : false), () => "note", () => 2],
 ];
+let niceNumberCalls = 0;
 
 class Trigger {
   constructor(seq, priority, rType, rId, rCount, aType, aId, aCount) {
@@ -41,7 +42,10 @@ const { JobManager, BuildingManager, ProjectManager, TriggerManager } =
     getState: () => state,
     getBuildings: () => buildings,
     getProjects: () => projects,
-    getNiceNumber: (n) => String(n),
+    getNiceNumber: (n) => {
+      niceNumberCalls++;
+      return String(n);
+    },
     weightingRules,
     wrGlobalCondition: wr.g,
     wrIndividualCondition: wr.i,
@@ -114,6 +118,12 @@ assert.match(
   BuildingManager.priorityList[0].extraDescription,
   /AutoBuild weighting/,
 );
+assert.equal(niceNumberCalls, 2);
+BuildingManager.priorityList.forEach((building) => {
+  building.extraDescription = "";
+});
+BuildingManager.updateWeighting();
+assert.equal(niceNumberCalls, 2); // unchanged numeric weightings reuse formatting
 assert.equal(BuildingManager.managedPriorityList().length, 2);
 
 BuildingManager.statePriorityList = [

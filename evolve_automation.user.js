@@ -5673,6 +5673,7 @@
     Trigger,
     getWindow
   }) {
+    const niceWeightingCache = /* @__PURE__ */ new Map();
     const JobManager = {
       priorityList: [],
       craftingJobs: [],
@@ -5765,7 +5766,18 @@
               Number.MIN_VALUE,
               building3.weighting - 1e-7 * building3.count
             );
-            building3.extraDescription = "AutoBuild weighting: " + getNiceNumber(building3.weighting) + "<br>" + building3.extraDescription;
+            const cached = niceWeightingCache.get(building3);
+            let text;
+            if (cached !== void 0 && cached.value === building3.weighting) {
+              text = cached.text;
+            } else {
+              text = getNiceNumber(building3.weighting);
+              niceWeightingCache.set(building3, {
+                value: building3.weighting,
+                text
+              });
+            }
+            building3.extraDescription = "AutoBuild weighting: " + text + "<br>" + building3.extraDescription;
           }
         }
       },

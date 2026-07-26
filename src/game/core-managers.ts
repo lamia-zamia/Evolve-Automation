@@ -38,6 +38,7 @@ export function createCoreManagers({
   Trigger,
   getWindow,
 }: CoreManagersDependencies) {
+  const niceWeightingCache = new Map<any, { value: number; text: string }>();
   const JobManager = {
     priorityList: [] as any[],
     craftingJobs: [] as any[],
@@ -150,11 +151,19 @@ export function createCoreManagers({
             Number.MIN_VALUE,
             building.weighting - 1e-7 * building.count,
           );
+          const cached = niceWeightingCache.get(building);
+          let text: string;
+          if (cached !== undefined && cached.value === building.weighting) {
+            text = cached.text;
+          } else {
+            text = getNiceNumber(building.weighting);
+            niceWeightingCache.set(building, {
+              value: building.weighting,
+              text,
+            });
+          }
           building.extraDescription =
-            "AutoBuild weighting: " +
-            getNiceNumber(building.weighting) +
-            "<br>" +
-            building.extraDescription;
+            "AutoBuild weighting: " + text + "<br>" + building.extraDescription;
         }
       }
     },
