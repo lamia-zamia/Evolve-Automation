@@ -37638,28 +37638,32 @@
   }
   function buildAllocationItems(input, managedIds) {
     const result2 = [];
+    const managedIndexes = new Map(
+      managedIds.map((resourceId3, index) => [resourceId3, index])
+    );
     for (const source of input.targetSources) {
       if (!sourceEnabled(source, input)) continue;
-      const groups = new Map(
-        managedIds.map((id) => [id, []])
-      );
+      const groups = managedIds.map(() => []);
       for (const target of source.targets) {
         if (!targetEligible(source, target)) continue;
         const costs = new Map(
           target.costs.map((cost) => [cost.resourceId, cost.quantity])
         );
-        for (const resourceId3 of managedIds) {
-          if (costs.get(resourceId3)) {
-            mapValue2(groups, resourceId3, `storage group ${resourceId3}`).push({
-              target,
-              costs
-            });
-            break;
+        let firstManagedIndex;
+        for (const [resourceId3, quantity] of costs) {
+          if (!quantity) continue;
+          const managedIndex = managedIndexes.get(resourceId3);
+          if (managedIndex !== void 0 && (firstManagedIndex === void 0 || managedIndex < firstManagedIndex)) {
+            firstManagedIndex = managedIndex;
           }
         }
+        if (firstManagedIndex !== void 0) {
+          groups[firstManagedIndex].push({ target, costs });
+        }
       }
-      for (const resourceId3 of managedIds) {
-        const group = mapValue2(groups, resourceId3, `storage group ${resourceId3}`);
+      for (let index = 0; index < managedIds.length; index++) {
+        const resourceId3 = managedIds[index];
+        const group = groups[index];
         group.sort(
           (left, right) => (right.costs.get(resourceId3) ?? 0) - (left.costs.get(resourceId3) ?? 0)
         );

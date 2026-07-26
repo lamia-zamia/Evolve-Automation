@@ -167,28 +167,35 @@ function buildAllocationItems(
   managedIds: readonly string[],
 ): readonly AllocationItem[] {
   const result: AllocationItem[] = [];
+  const managedIndexes = new Map(
+    managedIds.map((resourceId, index) => [resourceId, index]),
+  );
   for (const source of input.targetSources) {
     if (!sourceEnabled(source, input)) continue;
-    const groups = new Map(
-      managedIds.map((id) => [id, [] as AllocationItem[]]),
-    );
+    const groups: AllocationItem[][] = managedIds.map(() => []);
     for (const target of source.targets) {
       if (!targetEligible(source, target)) continue;
       const costs = new Map(
         target.costs.map((cost) => [cost.resourceId, cost.quantity]),
       );
-      for (const resourceId of managedIds) {
-        if (costs.get(resourceId)) {
-          mapValue(groups, resourceId, `storage group ${resourceId}`).push({
-            target,
-            costs,
-          });
-          break;
+      let firstManagedIndex: number | undefined;
+      for (const [resourceId, quantity] of costs) {
+        if (!quantity) continue;
+        const managedIndex = managedIndexes.get(resourceId);
+        if (
+          managedIndex !== undefined &&
+          (firstManagedIndex === undefined || managedIndex < firstManagedIndex)
+        ) {
+          firstManagedIndex = managedIndex;
         }
       }
+      if (firstManagedIndex !== undefined) {
+        groups[firstManagedIndex]!.push({ target, costs });
+      }
     }
-    for (const resourceId of managedIds) {
-      const group = mapValue(groups, resourceId, `storage group ${resourceId}`);
+    for (let index = 0; index < managedIds.length; index++) {
+      const resourceId = managedIds[index]!;
+      const group = groups[index]!;
       group.sort(
         (left, right) =>
           (right.costs.get(resourceId) ?? 0) -
