@@ -1,6 +1,6 @@
 {
   "name": "evolve-automation",
-  "version": "3.3.2-1",
+  "version": "3.3.3",
   "private": true,
   "type": "module",
   "engines": {
@@ -17,6 +17,10 @@
     "format:check": "prettier . --check",
     "check": "npm run typecheck && npm run lint:check && npm run format:check && node scripts/test.mjs",
     "dev": "node build.mjs --watch",
+    "version": "node scripts/update-version.mjs",
+    "release:patch": "npm version patch --no-git-tag-version",
+    "release:minor": "npm version minor --no-git-tag-version",
+    "release:major": "npm version major --no-git-tag-version",
     "prepare": "node scripts/setup-hooks.mjs",
     "verify": "npm run build && npm run check && git diff --exit-code -- evolve_automation.user.js evolve_automation.meta.js"
   },
