@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import type { TickDiagnostics } from "../ports/tick.ts";
+
 interface CoreManagersDependencies {
   getGame: () => any;
   getSettings: () => Record<string, any>;
@@ -17,6 +19,7 @@ interface CoreManagersDependencies {
   getInflationChallengeAssistActive: () => () => boolean;
   Trigger: any;
   getWindow: () => any;
+  diagnostics?: TickDiagnostics | undefined;
 }
 
 export function createCoreManagers({
@@ -37,6 +40,7 @@ export function createCoreManagers({
   getInflationChallengeAssistActive,
   Trigger,
   getWindow,
+  diagnostics,
 }: CoreManagersDependencies) {
   const niceWeightingCache = new Map<any, { value: number; text: string }>();
   const JobManager = {
@@ -120,52 +124,73 @@ export function createCoreManagers({
     },
 
     updateWeighting() {
+      const profiling = diagnostics;
+      const measure = <T>(phase: string, action: () => T): T => {
+        if (profiling === undefined || !profiling.readPerformanceEnabled()) {
+          return action();
+        }
+        const startedAtMs = profiling.nowMs();
+        try {
+          return action();
+        } finally {
+          profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
+        }
+      };
       // Check generic conditions, and multiplier - x1 have no effect, so skip them too.
-      let activeRules = weightingRules.filter(
-        (rule) => rule[wrGlobalCondition]() && rule[wrMultiplier]() !== 1,
+      const activeRules = measure(
+        "autoBuild.beginCycle.updateBuildingWeighting.selectRules",
+        () =>
+          weightingRules.filter(
+            (rule) => rule[wrGlobalCondition]() && rule[wrMultiplier]() !== 1,
+          ),
       );
 
       // Iterate over buildings
-      for (let building of this.priorityList) {
-        building.weighting = building._weighting;
+      measure("autoBuild.beginCycle.updateBuildingWeighting.applyRules", () => {
+        for (let building of this.priorityList) {
+          building.weighting = building._weighting;
 
-        // Apply weighting rules
-        for (let j = 0; j < activeRules.length; j++) {
-          let result = activeRules[j][wrIndividualCondition](building);
-          // Rule passed
-          if (result) {
-            let note = activeRules[j][wrDescription](result, building);
-            if (note !== "") {
-              building.extraDescription += note + "<br>";
-            }
-            building.weighting *= activeRules[j][wrMultiplier](result);
+          // Apply weighting rules
+          for (let j = 0; j < activeRules.length; j++) {
+            let result = activeRules[j][wrIndividualCondition](building);
+            // Rule passed
+            if (result) {
+              let note = activeRules[j][wrDescription](result, building);
+              if (note !== "") {
+                building.extraDescription += note + "<br>";
+              }
+              building.weighting *= activeRules[j][wrMultiplier](result);
 
-            // Last rule disabled building, no need to check the rest
-            if (building.weighting <= 0) {
-              break;
+              // Last rule disabled building, no need to check the rest
+              if (building.weighting <= 0) {
+                break;
+              }
             }
           }
-        }
-        if (building.weighting > 0) {
-          building.weighting = Math.max(
-            Number.MIN_VALUE,
-            building.weighting - 1e-7 * building.count,
-          );
-          const cached = niceWeightingCache.get(building);
-          let text: string;
-          if (cached !== undefined && cached.value === building.weighting) {
-            text = cached.text;
-          } else {
-            text = getNiceNumber(building.weighting);
-            niceWeightingCache.set(building, {
-              value: building.weighting,
-              text,
-            });
+          if (building.weighting > 0) {
+            building.weighting = Math.max(
+              Number.MIN_VALUE,
+              building.weighting - 1e-7 * building.count,
+            );
+            const cached = niceWeightingCache.get(building);
+            let text: string;
+            if (cached !== undefined && cached.value === building.weighting) {
+              text = cached.text;
+            } else {
+              text = getNiceNumber(building.weighting);
+              niceWeightingCache.set(building, {
+                value: building.weighting,
+                text,
+              });
+            }
+            building.extraDescription =
+              "AutoBuild weighting: " +
+              text +
+              "<br>" +
+              building.extraDescription;
           }
-          building.extraDescription =
-            "AutoBuild weighting: " + text + "<br>" + building.extraDescription;
         }
-      }
+      });
     },
 
     sortByPriority() {

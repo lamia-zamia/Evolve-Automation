@@ -3239,6 +3239,7 @@ function startEvolveRuntimeComposition(
       getInflationChallengeAssistActive: () => inflationChallengeAssistActive,
       Trigger,
       getWindow: () => win,
+      diagnostics,
     }));
 
   let WindowManager, KeyManager, GameLog;

@@ -5671,7 +5671,8 @@
     getBananaRepublicObjectiveComplete,
     getInflationChallengeAssistActive,
     Trigger,
-    getWindow
+    getWindow,
+    diagnostics
   }) {
     const niceWeightingCache = /* @__PURE__ */ new Map();
     const JobManager = {
@@ -5743,43 +5744,60 @@
         }
       },
       updateWeighting() {
-        let activeRules = weightingRules.filter(
-          (rule) => rule[wrGlobalCondition]() && rule[wrMultiplier]() !== 1
+        const profiling = diagnostics;
+        const measure = (phase, action) => {
+          if (profiling === void 0 || !profiling.readPerformanceEnabled()) {
+            return action();
+          }
+          const startedAtMs = profiling.nowMs();
+          try {
+            return action();
+          } finally {
+            profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
+          }
+        };
+        const activeRules = measure(
+          "autoBuild.beginCycle.updateBuildingWeighting.selectRules",
+          () => weightingRules.filter(
+            (rule) => rule[wrGlobalCondition]() && rule[wrMultiplier]() !== 1
+          )
         );
-        for (let building3 of this.priorityList) {
-          building3.weighting = building3._weighting;
-          for (let j = 0; j < activeRules.length; j++) {
-            let result2 = activeRules[j][wrIndividualCondition](building3);
-            if (result2) {
-              let note = activeRules[j][wrDescription](result2, building3);
-              if (note !== "") {
-                building3.extraDescription += note + "<br>";
-              }
-              building3.weighting *= activeRules[j][wrMultiplier](result2);
-              if (building3.weighting <= 0) {
-                break;
+        measure("autoBuild.beginCycle.updateBuildingWeighting.applyRules", () => {
+          for (let building3 of this.priorityList) {
+            building3.weighting = building3._weighting;
+            for (let j = 0; j < activeRules.length; j++) {
+              let result2 = activeRules[j][wrIndividualCondition](building3);
+              if (result2) {
+                let note = activeRules[j][wrDescription](result2, building3);
+                if (note !== "") {
+                  building3.extraDescription += note + "<br>";
+                }
+                building3.weighting *= activeRules[j][wrMultiplier](result2);
+                if (building3.weighting <= 0) {
+                  break;
+                }
               }
             }
-          }
-          if (building3.weighting > 0) {
-            building3.weighting = Math.max(
-              Number.MIN_VALUE,
-              building3.weighting - 1e-7 * building3.count
-            );
-            const cached = niceWeightingCache.get(building3);
-            let text;
-            if (cached !== void 0 && cached.value === building3.weighting) {
-              text = cached.text;
-            } else {
-              text = getNiceNumber(building3.weighting);
-              niceWeightingCache.set(building3, {
-                value: building3.weighting,
-                text
-              });
+            if (building3.weighting > 0) {
+              building3.weighting = Math.max(
+                Number.MIN_VALUE,
+                building3.weighting - 1e-7 * building3.count
+              );
+              const cached = niceWeightingCache.get(building3);
+              let text;
+              if (cached !== void 0 && cached.value === building3.weighting) {
+                text = cached.text;
+              } else {
+                text = getNiceNumber(building3.weighting);
+                niceWeightingCache.set(building3, {
+                  value: building3.weighting,
+                  text
+                });
+              }
+              building3.extraDescription = "AutoBuild weighting: " + text + "<br>" + building3.extraDescription;
             }
-            building3.extraDescription = "AutoBuild weighting: " + text + "<br>" + building3.extraDescription;
           }
-        }
+        });
       },
       sortByPriority() {
         this.priorityList.sort((a, b) => a.priority - b.priority);
@@ -55780,7 +55798,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getBananaRepublicObjectiveComplete: () => bananaRepublicObjectiveComplete,
       getInflationChallengeAssistActive: () => inflationChallengeAssistActive,
       Trigger,
-      getWindow: () => win
+      getWindow: () => win,
+      diagnostics
     }));
     let WindowManager, KeyManager, GameLog;
     ({ WindowManager, KeyManager, GameLog } = createInfrastructureManagers({
