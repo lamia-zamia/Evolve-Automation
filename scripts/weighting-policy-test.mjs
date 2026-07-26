@@ -254,7 +254,11 @@ context = {
   },
   resources: {
     Supply: { maxQuantity: 1_000 },
-    Soul_Gem: { currentQuantity: 41, spareQuantity: -209 },
+    Soul_Gem: {
+      currentQuantity: 41,
+      spareQuantity: -209,
+      rateOfChange: 0.01,
+    },
   },
   MechManager: {
     isActive: false,
@@ -264,8 +268,15 @@ context = {
 };
 assert.equal(
   mechSavingRule[policy.wrIndividualCondition]({ cost: { Supply: 1 } }),
+  "Saving supplies for new mech",
+  "distant reservations should not block an otherwise affordable mech",
+);
+context.resources.Soul_Gem.rateOfChange = 0.02;
+context.resources.Soul_Gem.spareQuantity = 0;
+assert.equal(
+  mechSavingRule[policy.wrIndividualCondition]({ cost: { Supply: 1 } }),
   undefined,
-  "reserved gems must not block Supply buildings when the mech is not spare-affordable",
+  "near-term reservations must still release Supply buildings",
 );
 context.resources.Soul_Gem.spareQuantity = 1;
 assert.equal(

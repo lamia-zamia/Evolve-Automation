@@ -15,8 +15,9 @@ const COST = {
   titan: [100, 200],
 };
 
-function createResource(trace, name, current, maximum, rate) {
+function createResource(trace, name, current, maximum, rate, spare = current) {
   let amount = current;
+  const reserved = current - spare;
   return {
     get currentQuantity() {
       return amount;
@@ -27,9 +28,9 @@ function createResource(trace, name, current, maximum, rate) {
     },
     maxQuantity: maximum,
     get spareQuantity() {
-      return amount;
+      return amount - reserved;
     },
-    spareMaxQuantity: maximum,
+    spareMaxQuantity: maximum - reserved,
     rateOfChange: rate,
     get storageRatio() {
       return maximum === 0 ? 0 : amount / maximum;
@@ -142,6 +143,7 @@ function createFixture(scenario = {}) {
     scenario.supplyCurrent ?? 500,
     scenario.supplyMaximum ?? 500,
     scenario.supplyRate ?? 10,
+    scenario.supplySpare ?? scenario.supplyCurrent ?? 500,
   );
   const gems = createResource(
     trace,
@@ -149,6 +151,7 @@ function createFixture(scenario = {}) {
     scenario.gemsCurrent ?? 500,
     scenario.gemsMaximum ?? 500,
     scenario.gemsRate ?? 10,
+    scenario.gemsSpare ?? scenario.gemsCurrent ?? 500,
   );
   const resources = { Supply: supply, Soul_Gem: gems };
   const bayMaximum = scenario.bayMaximum ?? 50;
@@ -255,6 +258,40 @@ const staleAutomation = createModern(staleFixture, {
 const cycle = planMechCycle(staleAutomation.reader.readCycle());
 staleManager = {};
 assert.equal(staleAutomation.executor.prepare(cycle).status, "stale");
+
+// A distant Soul Gem reservation may be spent by a mech when the current
+// quantity covers the cost, but a near-term reservation remains a hard gate.
+const distantReservation = createFixture({
+  mechBuild: "user",
+  blueprint: { size: "small", power: 70 },
+  gemsCurrent: 41,
+  gemsSpare: -209,
+  gemsRate: 0.01,
+});
+runMechAutomation(createModern(distantReservation));
+assert.deepEqual(
+  distantReservation.trace
+    .snapshot()
+    .filter((entry) => entry.category === "command")
+    .map((entry) => entry.name),
+  ["build-mech"],
+);
+
+const nearReservation = createFixture({
+  mechBuild: "user",
+  blueprint: { size: "small", power: 70 },
+  gemsCurrent: 41,
+  gemsSpare: 0,
+  gemsRate: 0.02,
+});
+runMechAutomation(createModern(nearReservation));
+assert.deepEqual(
+  nearReservation.trace
+    .snapshot()
+    .filter((entry) => entry.category === "command")
+    .map((entry) => entry.name),
+  [],
+);
 
 console.log(
   "Mech domain and validated Evolve adapter/application tests passed",

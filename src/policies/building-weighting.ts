@@ -1,5 +1,6 @@
 import type { RandomSource } from "../ports/randomness.ts";
 import type { ForeignAchievementGoal } from "../domain/combat/foreign-achievements.ts";
+import { canSpendWithDistantReservation } from "../domain/economy/resources/reservation.ts";
 
 type LooseFunction = (...args: any[]) => any;
 type LooseObject = Record<PropertyKey, any>;
@@ -336,7 +337,14 @@ export function createBuildingWeightingPolicy({
           if (
             newSpace <= mechBay.max - mechBay.bay &&
             newSupply <= getResources().Supply.maxQuantity &&
-            newGems <= getResources().Soul_Gem.spareQuantity
+            canSpendWithDistantReservation(
+              {
+                current: getResources().Soul_Gem.currentQuantity,
+                spare: getResources().Soul_Gem.spareQuantity,
+                rate: getResources().Soul_Gem.rateOfChange,
+              },
+              newGems,
+            )
           ) {
             return "Saving supplies for new mech";
           }

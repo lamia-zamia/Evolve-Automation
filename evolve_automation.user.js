@@ -23652,6 +23652,15 @@
     return Object.freeze({ nextUnit: () => Math.random() });
   }
 
+  // src/domain/economy/resources/reservation.ts
+  var DEFAULT_RESERVATION_HORIZON_SECONDS = 4 * 60 * 60;
+  function canSpendWithDistantReservation(resource2, cost, horizonSeconds = DEFAULT_RESERVATION_HORIZON_SECONDS) {
+    if (cost <= 0 || resource2.spare >= cost) return true;
+    if (resource2.current < cost || resource2.rate <= 0) return false;
+    const secondsToRestoreSpare = (cost - resource2.spare) / resource2.rate;
+    return secondsToRestoreSpare > horizonSeconds;
+  }
+
   // src/policies/building-weighting.ts
   function createBuildingWeightingPolicy({
     getGame,
@@ -23895,7 +23904,14 @@
             let [newGems, newSupply, newSpace] = getMechManager().getMechCost({
               size: newSize
             });
-            if (newSpace <= mechBay.max - mechBay.bay && newSupply <= getResources().Supply.maxQuantity && newGems <= getResources().Soul_Gem.spareQuantity) {
+            if (newSpace <= mechBay.max - mechBay.bay && newSupply <= getResources().Supply.maxQuantity && canSpendWithDistantReservation(
+              {
+                current: getResources().Soul_Gem.currentQuantity,
+                spare: getResources().Soul_Gem.spareQuantity,
+                rate: getResources().Soul_Gem.rateOfChange
+              },
+              newGems
+            )) {
               return "Saving supplies for new mech";
             }
           }
@@ -44271,7 +44287,14 @@
   }
   function shouldReadMechScrapCandidates(input) {
     const mode = resolveMechScrapMode(input);
-    return input.cost.supply < input.supply.spareMaximum && (mode === "single" && input.baySpace < input.cost.space || mode === "all" && (input.baySpace < input.cost.space || input.supply.spare < input.cost.supply || input.gems.spare < input.cost.gems));
+    return canSpendWithDistantReservation(
+      {
+        current: input.supply.current,
+        spare: input.supply.spareMaximum,
+        rate: input.supply.rate
+      },
+      input.cost.supply
+    ) && (mode === "single" && input.baySpace < input.cost.space || mode === "all" && (input.baySpace < input.cost.space || !canSpendWithDistantReservation(input.supply, input.cost.supply) || !canSpendWithDistantReservation(input.gems, input.cost.gems)));
   }
   function planMechContinuation(input) {
     const scrapMode = resolveMechScrapMode(input);
@@ -44296,7 +44319,22 @@
       let extraScouts = input.rebuildScouts ? Number.MAX_SAFE_INTEGER : input.scouts - input.bayMaximum * input.scoutsRatio / 2;
       const trash = [];
       let powerLost = 0;
-      for (let index = 0; index < candidates.length && (input.baySpace + spaceGained < input.cost.space || scrapMode === "all" && (input.supply.spare + supplyGained < input.cost.supply || input.gems.spare + gemsGained < input.cost.gems)); index++) {
+      const canReplaceWithRefunds = () => canSpendWithDistantReservation(
+        {
+          current: input.supply.current + supplyGained,
+          spare: input.supply.spare + supplyGained,
+          rate: input.supply.rate
+        },
+        input.cost.supply
+      ) && canSpendWithDistantReservation(
+        {
+          current: input.gems.current + gemsGained,
+          spare: input.gems.spare + gemsGained,
+          rate: input.gems.rate
+        },
+        input.cost.gems
+      );
+      for (let index = 0; index < candidates.length && (input.baySpace + spaceGained < input.cost.space || scrapMode === "all" && !canReplaceWithRefunds()); index++) {
         const mech = candidates[index];
         if (mech === void 0) continue;
         if (mech.size === "small") {
@@ -44309,7 +44347,7 @@
         powerLost += mech.power;
         trash.push(mech);
       }
-      const enoughForReplacement = input.baySpace + spaceGained >= input.cost.space && input.supply.spare + supplyGained >= input.cost.supply && input.gems.spare + gemsGained >= input.cost.gems;
+      const enoughForReplacement = input.baySpace + spaceGained >= input.cost.space && canReplaceWithRefunds();
       if (trash.length > 0 && (input.forceBuild || powerLost / spaceGained < input.design.efficiency) && enoughForReplacement) {
         const sorted = [...trash].sort((left, right) => right.id - left.id);
         scrap = Object.freeze({
@@ -44342,8 +44380,10 @@
         input.supply.maximum
       ),
       supplySpare: input.supply.spare + supplyGained,
+      supplyRate: input.supply.rate,
       gemsCurrent: input.gems.current + gemsGained,
       gemsSpare: input.gems.spare + gemsGained,
+      gemsRate: input.gems.rate,
       supplyMaximum: input.supply.maximum,
       prolongActive: input.prolongActive
     });
@@ -44352,7 +44392,21 @@
     return cost.space <= continuation.baySpace && cost.supply <= continuation.supplyMaximum;
   }
   function planMechBuild(continuation, design, cost) {
-    if (continuation.halt || continuation.gemsSpare < cost.gems || continuation.supplySpare < cost.supply || continuation.baySpace < cost.space) {
+    if (continuation.halt || !canSpendWithDistantReservation(
+      {
+        current: continuation.gemsCurrent,
+        spare: continuation.gemsSpare,
+        rate: continuation.gemsRate
+      },
+      cost.gems
+    ) || !canSpendWithDistantReservation(
+      {
+        current: continuation.supplyCurrent,
+        spare: continuation.supplySpare,
+        rate: continuation.supplyRate
+      },
+      cost.supply
+    ) || continuation.baySpace < cost.space) {
       return null;
     }
     return Object.freeze({
