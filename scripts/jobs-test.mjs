@@ -547,6 +547,147 @@ assert.equal(
   "ordinary jobs receive their breakpoint before virtual Hunter fallback",
 );
 
+function runFarmerCapacityCase(farmCount) {
+  const trace = [];
+  const makeJob = ({ id, workers, smart, serves, breakpoint = 0 }) => ({
+    id,
+    workers,
+    servants: 0,
+    max: Number.MAX_SAFE_INTEGER,
+    is: { split: false, serve: serves },
+    isSmartEnabled: smart,
+    isDefault: () => false,
+    isManaged: () => true,
+    isUnlocked: () => true,
+    get count() {
+      return this.workers;
+    },
+    getBreakpoint: () => breakpoint,
+    breakpointEmployees: () => breakpoint,
+    removeWorkers(count) {
+      trace.push(`remove:${id}:${count}`);
+      this.workers -= count;
+    },
+    addWorkers(count) {
+      trace.push(`add:${id}:${count}`);
+      this.workers += count;
+    },
+    removeServants: () => assert.fail("servants are disabled"),
+    addServants: () => assert.fail("servants are disabled"),
+  });
+  const farmer = makeJob({
+    id: "farmer",
+    workers: 10,
+    smart: true,
+    serves: true,
+  });
+  const scientist = makeJob({
+    id: "scientist",
+    workers: 0,
+    smart: false,
+    serves: false,
+    breakpoint: 2,
+  });
+  const jobs = { Farmer: farmer };
+  const manager = {
+    craftingJobs: [],
+    craftingMax: () => 0,
+    managedPriorityList: () => [farmer, scientist],
+  };
+  const settings = {
+    authorityManage: false,
+    autoCraftsmen: false,
+    autoTax: false,
+    generalMinimumAuthority: 0,
+    generalRequestedTaxRate: -1,
+    jobDisableMiners: false,
+    jobManageServants: false,
+    jobSetDefault: false,
+    jobLumberWeighting: 0,
+    jobQuarryWeighting: 0,
+    jobCrystalWeighting: 0,
+    jobScavengerWeighting: 0,
+    jobRaiderWeighting: 0,
+    jobForagerWeighting: 0,
+    productionCraftsmen: "always",
+    productionFoundryWeighting: "other",
+    useDemanded: false,
+  };
+  const game = {
+    global: {
+      civic: {
+        crew: { max: 0, workers: 0 },
+        govern: { type: "republic" },
+        taxes: { display: true, tax_rate: 0 },
+      },
+      genes: {},
+      race: {},
+      tech: {},
+    },
+  };
+  const resources = {
+    Horseshoe: { usefulRatio: 1 },
+    Population: { currentQuantity: 10, storageRatio: 1 },
+    Food: {
+      currentQuantity: 50,
+      maxQuantity: 100,
+      rateOfChange: 0,
+      isCapped: () => false,
+    },
+  };
+  const state = {
+    astroSign: "",
+    lastFarmerCount: 10,
+    lastPopulationCount: 10,
+    unlockedBuildings: [],
+  };
+  const adapter = createJobsAdapter({
+    getJobManager: () => manager,
+    getGame: () => game,
+    getJobs: () => jobs,
+    getCrafter: () => ({}),
+    getSettings: () => settings,
+    getBuildings: () => ({
+      GatewayStarbase: { count: 0 },
+      Farm: { count: farmCount },
+    }),
+    getResources: () => resources,
+    getState: () => state,
+    getDebugWindow: () => ({}),
+    isDemonRace: () => false,
+    isLumberRace: () => false,
+    traitValue: () => 1,
+    haveTech: () => false,
+    haveTask: () => false,
+    ticksPerSecond: () => 1,
+    findRequiredResourceWeight: () => 0,
+    taxCap: () => 50,
+    isCraftingJob: () => false,
+    getFoodConsume: () => 1,
+    log: () => {},
+  });
+
+  const input = adapter.reader.readCycle(false);
+  assert.equal(input.jobs[0].smartMaximum, 4);
+  const decision = planJobs(input);
+  assert.equal(decision.assignments[0].workers, 4);
+  assert.equal(decision.assignments[1].workers, 2);
+  runJobsAutomation(adapter, false);
+  return { farmer, scientist, trace };
+}
+
+const farmerCapacity = runFarmerCapacityCase(3);
+assert.equal(
+  farmerCapacity.farmer.workers,
+  4,
+  "farmers stop at farm capacity with a one-worker buffer",
+);
+assert.equal(
+  farmerCapacity.scientist.workers,
+  2,
+  "other jobs keep their configured breakpoint while farmers stay capped",
+);
+
 function runDefaultTransferCase() {
   const trace = [];
   const game = {

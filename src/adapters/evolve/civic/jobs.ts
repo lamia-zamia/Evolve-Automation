@@ -287,6 +287,21 @@ function jobSmartMaximum(
       }
       farmerMinimum = maximum;
     }
+    if (kind === "farmer" && !race["artifical"] && !race["unfathomable"]) {
+      // Evolve gives full farmer output through Farm capacity; surplus
+      // farmers use the reduced extra-worker rate. Keep one worker as a
+      // small buffer, but do not let smart farming consume every worker.
+      const farmCount = requireNumber(
+        building(buildings, "Farm")["count"],
+        "buildings.Farm.count",
+      );
+      const farmerCapacity =
+        farmCount > 0
+          ? Math.ceil(farmCount * trait(dependencies, "high_pop", 0, 1)) + 1
+          : 0;
+      maximum = Math.min(maximum ?? Number.MAX_SAFE_INTEGER, farmerCapacity);
+      farmerMinimum = maximum;
+    }
     if (race["unfathomable"]) {
       maximum = Number.MAX_SAFE_INTEGER;
     } else if (kind === "hunter") {

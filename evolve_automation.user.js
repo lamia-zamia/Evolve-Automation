@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Evolve
 // @namespace    http://tampermonkey.net/
-// @version      3.3.3
+// @version      3.3.4
 // @description  try to take over the world!
 // @downloadURL  https://github.com/lamia-zamia/Evolve-Automation/raw/master/evolve_automation.user.js
 // @updateURL    https://github.com/lamia-zamia/Evolve-Automation/raw/master/evolve_automation.meta.js
@@ -40550,10 +40550,19 @@
     while ((availableWorkers > 0 || availableServants > 0) && fallback.length > 0) {
       const index = indexOfToken(jobIndex, fallback.pop() ?? null);
       if (index !== -1) {
-        requiredWorkers[index] += availableWorkers;
-        requiredServants[index] += availableServants;
-        availableWorkers = 0;
-        availableServants = 0;
+        const maximum = jobMaximums[index] ?? Number.MAX_SAFE_INTEGER;
+        const currentEmployees = requiredWorkers[index] + requiredServants[index] * input.servantModifier;
+        let remaining = Math.max(0, maximum - currentEmployees);
+        const servants = Math.min(
+          availableServants,
+          Math.floor(remaining / input.servantModifier)
+        );
+        requiredServants[index] += servants;
+        availableServants -= servants;
+        remaining -= servants * input.servantModifier;
+        const workers = Math.min(availableWorkers, remaining);
+        requiredWorkers[index] += workers;
+        availableWorkers -= workers;
       }
     }
     const entertainerIndex = indexOfToken(jobIndex, input.entertainerToken);
@@ -40742,6 +40751,15 @@
         } else {
           maximum = count2;
         }
+        farmerMinimum = maximum;
+      }
+      if (kind === "farmer" && !race2["artifical"] && !race2["unfathomable"]) {
+        const farmCount = requireNumber(
+          building(buildings, "Farm")["count"],
+          "buildings.Farm.count"
+        );
+        const farmerCapacity = farmCount > 0 ? Math.ceil(farmCount * trait(dependencies, "high_pop", 0, 1)) + 1 : 0;
+        maximum = Math.min(maximum ?? Number.MAX_SAFE_INTEGER, farmerCapacity);
         farmerMinimum = maximum;
       }
       if (race2["unfathomable"]) {

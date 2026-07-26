@@ -602,10 +602,21 @@ export function planJobs(
   ) {
     const index = indexOfToken(jobIndex, fallback.pop() ?? null);
     if (index !== -1) {
-      requiredWorkers[index]! += availableWorkers;
-      requiredServants[index]! += availableServants;
-      availableWorkers = 0;
-      availableServants = 0;
+      const maximum = jobMaximums[index] ?? Number.MAX_SAFE_INTEGER;
+      const currentEmployees =
+        requiredWorkers[index]! +
+        requiredServants[index]! * input.servantModifier;
+      let remaining = Math.max(0, maximum - currentEmployees);
+      const servants = Math.min(
+        availableServants,
+        Math.floor(remaining / input.servantModifier),
+      );
+      requiredServants[index]! += servants;
+      availableServants -= servants;
+      remaining -= servants * input.servantModifier;
+      const workers = Math.min(availableWorkers, remaining);
+      requiredWorkers[index]! += workers;
+      availableWorkers -= workers;
     }
   }
 
