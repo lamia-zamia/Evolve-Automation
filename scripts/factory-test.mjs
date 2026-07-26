@@ -129,6 +129,64 @@ const noOp = planFactory({
 });
 assert.equal(noOp, null);
 
+const customPriorityDecision = planFactory({
+  initialized: true,
+  maximum: 2,
+  weightingMode: "none",
+  hasUnlockedBuildings: false,
+  useDemandedMaterials: false,
+  minimumIngredientRatio: 0,
+  consumptionBalanceMinimum: 60,
+  bioseedConstruct: false,
+  truepath: false,
+  neutroniumCurrent: 0,
+  neutroniumName: "Neutronium",
+  productions: [
+    {
+      id: "supplementary",
+      outputResourceId: "Supplementary",
+      unlocked: true,
+      enabled: true,
+      weighting: 1,
+      priority: -1,
+      demanded: false,
+      useful: true,
+      currentQuantity: 0,
+      storageRequired: 0,
+      buildingWeight: 1,
+      currentProduction: 0,
+      isNanoTube: false,
+      costs: [],
+    },
+    {
+      id: "lower-priority",
+      outputResourceId: "LowerPriority",
+      unlocked: true,
+      enabled: true,
+      weighting: 1,
+      priority: -2,
+      demanded: false,
+      useful: true,
+      currentQuantity: 0,
+      storageRequired: 0,
+      buildingWeight: 1,
+      currentProduction: 0,
+      isNanoTube: false,
+      costs: [],
+    },
+  ],
+});
+assert.deepEqual(
+  customPriorityDecision.adjustments.map(({ productionId, delta }) => ({
+    productionId,
+    delta,
+  })),
+  [
+    { productionId: "supplementary", delta: 1 },
+    { productionId: "lower-priority", delta: 1 },
+  ],
+);
+
 const phaseFixture = createFixture({
   maximum: 0,
   productions: [{ id: "A", enabled: false }],
