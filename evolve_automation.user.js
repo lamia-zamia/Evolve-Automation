@@ -41321,6 +41321,8 @@
           state["triggerTargets"],
           "state.triggerTargets"
         );
+        const queuedTargetSet = new Set(queuedTargets);
+        const triggerTargetSet = new Set(triggerTargets);
         const entities = [
           ...requireArray2(
             callMethod(buildingManager, "managedPriorityList", "BuildingManager"),
@@ -41350,7 +41352,7 @@
             key,
             weighting: requireNumber(entity["weighting"], `${path}.weighting`),
             cost: Object.freeze(cost),
-            ignored: queuedTargets.includes(entity) || triggerTargets.includes(entity)
+            ignored: queuedTargetSet.has(entity) || triggerTargetSet.has(entity)
           });
         });
         const settings = requireRecord(dependencies.getSettings(), "settings");

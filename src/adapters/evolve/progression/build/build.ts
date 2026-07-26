@@ -140,6 +140,11 @@ export function createBuildAdapter(
         state["triggerTargets"],
         "state.triggerTargets",
       );
+      // The legacy loop checked these arrays for every managed candidate. Sets
+      // preserve the same object-identity membership semantics without making
+      // large end-game target lists rescan both arrays repeatedly.
+      const queuedTargetSet = new Set(queuedTargets);
+      const triggerTargetSet = new Set(triggerTargets);
 
       const entities = [
         ...requireArray(
@@ -176,8 +181,7 @@ export function createBuildAdapter(
           key,
           weighting: requireNumber(entity["weighting"], `${path}.weighting`),
           cost: Object.freeze(cost),
-          ignored:
-            queuedTargets.includes(entity) || triggerTargets.includes(entity),
+          ignored: queuedTargetSet.has(entity) || triggerTargetSet.has(entity),
         });
       });
 
