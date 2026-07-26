@@ -23753,6 +23753,34 @@
       getBuildings().CruiserShip,
       getBuildings().Dreadnought
     ];
+    const authorityCapBuildingSet = new Set(authorityCapBuildings);
+    const inflationMoneyStorageBuildingSet = new Set(
+      inflationMoneyStorageBuildings
+    );
+    const inflationMoneyIncomeBuildingSet = new Set(
+      inflationMoneyIncomeBuildings
+    );
+    const galaxyCombatShipSet = new Set(galaxyCombatShips);
+    let queuedTargets;
+    let queuedTargetSet = /* @__PURE__ */ new Set();
+    let triggerTargets;
+    let triggerTargetSet = /* @__PURE__ */ new Set();
+    const isQueuedTarget = (building3) => {
+      const targets = getState().queuedTargets;
+      if (targets !== queuedTargets) {
+        queuedTargets = targets;
+        queuedTargetSet = new Set(targets);
+      }
+      return queuedTargetSet.has(building3);
+    };
+    const isTriggerTarget = (building3) => {
+      const targets = getState().triggerTargets;
+      if (targets !== triggerTargets) {
+        triggerTargets = targets;
+        triggerTargetSet = new Set(targets);
+      }
+      return triggerTargetSet.has(building3);
+    };
     const weightingRules = [
       [
         () => !getSettings().autoBuild,
@@ -23770,13 +23798,13 @@
       ],
       [
         () => true,
-        (building3) => getState().queuedTargets.includes(building3),
+        (building3) => isQueuedTarget(building3),
         () => "Queued building, processing...",
         () => 0
       ],
       [
         () => true,
-        (building3) => getState().triggerTargets.includes(building3),
+        (building3) => isTriggerTarget(building3),
         () => "Active trigger, processing...",
         () => 0
       ],
@@ -23837,7 +23865,7 @@
       [
         () => getSettings().autoFleet && getGame().global.tech["piracy"] && !galaxyAssaultPending(),
         (building3) => {
-          if (galaxyCombatShips.includes(building3)) {
+          if (galaxyCombatShipSet.has(building3)) {
             let totalNeed = getGalaxyRegions().reduce(
               (sum, region) => sum + (region.useful ? Math.max(0, region.piracy - region.armada) : 0),
               0
@@ -24165,7 +24193,7 @@
         // amount of tax/soldier management can fix the production penalty, so prioritize the
         // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
         () => getSettings().authorityManage && getSettings().generalMinimumAuthority > 0 && getResources().Authority.isUnlocked() && getResources().Authority.maxQuantity < getSettings().generalMinimumAuthority,
-        (building3) => authorityCapBuildings.includes(building3),
+        (building3) => authorityCapBuildingSet.has(building3),
         () => "Raises Authority cap, currently below target",
         () => getSettings().buildingWeightingAuthority
       ],
@@ -24178,10 +24206,10 @@
       [
         () => inflationChallengeAssistActive(),
         (building3) => {
-          if (!inflationChallengeMoneyReachable() && inflationMoneyStorageBuildings.includes(building3)) {
+          if (!inflationChallengeMoneyReachable() && inflationMoneyStorageBuildingSet.has(building3)) {
             return "storage";
           }
-          if (inflationChallengeMoneyReachable() && inflationMoneyIncomeBuildings.includes(building3)) {
+          if (inflationChallengeMoneyReachable() && inflationMoneyIncomeBuildingSet.has(building3)) {
             return "income";
           }
           return false;

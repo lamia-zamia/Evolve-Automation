@@ -160,6 +160,34 @@ export function createBuildingWeightingPolicy({
     getBuildings().CruiserShip,
     getBuildings().Dreadnought,
   ];
+  const authorityCapBuildingSet = new Set(authorityCapBuildings);
+  const inflationMoneyStorageBuildingSet = new Set(
+    inflationMoneyStorageBuildings,
+  );
+  const inflationMoneyIncomeBuildingSet = new Set(
+    inflationMoneyIncomeBuildings,
+  );
+  const galaxyCombatShipSet = new Set(galaxyCombatShips);
+  let queuedTargets: LooseObject | undefined;
+  let queuedTargetSet = new Set<LooseObject>();
+  let triggerTargets: LooseObject | undefined;
+  let triggerTargetSet = new Set<LooseObject>();
+  const isQueuedTarget = (building: LooseObject): boolean => {
+    const targets = getState().queuedTargets;
+    if (targets !== queuedTargets) {
+      queuedTargets = targets;
+      queuedTargetSet = new Set(targets);
+    }
+    return queuedTargetSet.has(building);
+  };
+  const isTriggerTarget = (building: LooseObject): boolean => {
+    const targets = getState().triggerTargets;
+    if (targets !== triggerTargets) {
+      triggerTargets = targets;
+      triggerTargetSet = new Set(targets);
+    }
+    return triggerTargetSet.has(building);
+  };
   const weightingRules = [
     [
       () => !getSettings().autoBuild,
@@ -175,13 +203,13 @@ export function createBuildingWeightingPolicy({
     ],
     [
       () => true,
-      (building: any) => getState().queuedTargets.includes(building),
+      (building: any) => isQueuedTarget(building),
       () => "Queued building, processing...",
       () => 0,
     ],
     [
       () => true,
-      (building: any) => getState().triggerTargets.includes(building),
+      (building: any) => isTriggerTarget(building),
       () => "Active trigger, processing...",
       () => 0,
     ],
@@ -267,7 +295,7 @@ export function createBuildingWeightingPolicy({
         getGame().global.tech["piracy"] &&
         !galaxyAssaultPending(),
       (building: any) => {
-        if (galaxyCombatShips.includes(building)) {
+        if (galaxyCombatShipSet.has(building)) {
           let totalNeed = getGalaxyRegions().reduce(
             (sum: any, region: any) =>
               sum +
@@ -734,7 +762,7 @@ export function createBuildingWeightingPolicy({
         getResources().Authority.isUnlocked() &&
         getResources().Authority.maxQuantity <
           getSettings().generalMinimumAuthority,
-      (building: any) => authorityCapBuildings.includes(building),
+      (building: any) => authorityCapBuildingSet.has(building),
       () => "Raises Authority cap, currently below target",
       () => getSettings().buildingWeightingAuthority,
     ],
@@ -754,13 +782,13 @@ export function createBuildingWeightingPolicy({
       (building: any) => {
         if (
           !inflationChallengeMoneyReachable() &&
-          inflationMoneyStorageBuildings.includes(building)
+          inflationMoneyStorageBuildingSet.has(building)
         ) {
           return "storage";
         }
         if (
           inflationChallengeMoneyReachable() &&
-          inflationMoneyIncomeBuildings.includes(building)
+          inflationMoneyIncomeBuildingSet.has(building)
         ) {
           return "income";
         }
