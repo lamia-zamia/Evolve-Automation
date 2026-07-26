@@ -24692,7 +24692,8 @@
     const priorityList = Object.keys(priorityGroups).sort((a, b) => Number(b) - Number(a)).map((key) => priorityGroups[key]);
     const negativeGroup = priorityGroups["-1"];
     if (negativeGroup && priorityList.length > 1) {
-      priorityList.splice(priorityList.indexOf(negativeGroup, 1));
+      const negativeIndex = priorityList.indexOf(negativeGroup);
+      priorityList.splice(negativeIndex, 1);
       priorityList[0].push(...negativeGroup);
     }
     const required = (id) => requiredTradeRoutes.get(id) ?? 0;

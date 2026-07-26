@@ -187,4 +187,38 @@ const resultC = runScenario({
 assert.deepEqual(resultC.calls, [["remove", "Gold", 10]]);
 assert.equal(resultC.money, 100);
 
+// Scenario D: custom priorities below -1 must remain eligible after the -1
+// supplementary group is merged into the highest remaining group.
+const supplementary = makeResource("Supplementary", {
+  buy: true,
+  priority: -1,
+});
+const lowerPriority = makeResource("LowerPriority", {
+  buy: true,
+  priority: -2,
+});
+const moneyD = {
+  id: "Money",
+  name: "Money",
+  rateOfChange: 0,
+  maxQuantity: 1_000_000_000,
+  currentQuantity: 0,
+  isDemanded: () => false,
+};
+const resultD = runScenario({
+  settings: { ...baseSettings },
+  resources: {
+    Supplementary: supplementary,
+    LowerPriority: lowerPriority,
+    Money: moneyD,
+  },
+  priorityList: [supplementary, lowerPriority],
+  maxTradeRoutes: 2,
+});
+assert.deepEqual(resultD.calls, [
+  ["add", "Supplementary", 1],
+  ["add", "LowerPriority", 1],
+]);
+assert.equal(resultD.money, 0);
+
 console.log("Trade routes bundled characterization tests passed");

@@ -6,9 +6,9 @@
  * applies the operations and the money rate.
  *
  * The algorithm — including the sort comparators, the priority-group ordering,
- * the verbatim `priorityList.splice(indexOf(..., 1))` quirk, the entrepreneur
- * unassign step, and the two-phase adjust-toward-zero-then-rest ordering — is
- * ported line-for-line so the operation trace is byte-identical to the original.
+ * the entrepreneur unassign step, and the two-phase
+ * adjust-toward-zero-then-rest ordering — is ported line-for-line so the
+ * operation trace is byte-identical to the original for supported settings.
  */
 
 export interface TradeResourceView {
@@ -209,11 +209,8 @@ export function planTradeRoutes(
     .map((key) => priorityGroups[key]!);
   const negativeGroup = priorityGroups["-1"];
   if (negativeGroup && priorityList.length > 1) {
-    // Preserved verbatim: the "1" is indexOf's fromIndex, and splice receives a
-    // single argument, so this removes from that index to the end of the list.
-    // Benign in every reachable state but fragile; see the trade-route priority
-    // grouping item in docs/feature-backlog.md before rewriting.
-    priorityList.splice(priorityList.indexOf(negativeGroup, 1));
+    const negativeIndex = priorityList.indexOf(negativeGroup);
+    priorityList.splice(negativeIndex, 1);
     priorityList[0]!.push(...negativeGroup);
   }
 
