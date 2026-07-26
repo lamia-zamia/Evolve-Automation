@@ -928,6 +928,20 @@ export function planPowerCycle(
   }
 
   const operations: PowerOperation[] = [];
+  const descriptionByBuildingId = new Map<string, string>();
+  const appendDescription = (
+    buildingId: string,
+    expected: string,
+    value: string,
+  ) => {
+    operations.push({
+      kind: "set-description",
+      buildingId,
+      expected,
+      value,
+    });
+    descriptionByBuildingId.set(buildingId, value);
+  };
   const resources = new Map<string, MutableResource>();
   for (const resource of input.resources) {
     if (resources.has(resource.id)) {
@@ -1072,14 +1086,13 @@ export function planPowerCycle(
         building.rule.kind === "terraformer") &&
       availablePower < building.powered
     ) {
-      operations.push({
-        kind: "set-description",
-        buildingId: building.id,
-        expected: building.extraDescription,
-        value: `Missing ${Math.ceil(
+      appendDescription(
+        building.id,
+        building.extraDescription,
+        `Missing ${Math.ceil(
           building.powered - availablePower,
         )} MW to power on<br>${building.extraDescription}`,
-      });
+      );
     }
 
     if (building.skipGroup !== "none") {
@@ -1108,18 +1121,7 @@ export function planPowerCycle(
     }
 
     let description =
-      operations
-        .filter(
-          (
-            operation,
-          ): operation is Extract<
-            PowerOperation,
-            { readonly kind: "set-description" }
-          > =>
-            operation.kind === "set-description" &&
-            operation.buildingId === building.id,
-        )
-        .at(-1)?.value ?? building.extraDescription;
+      descriptionByBuildingId.get(building.id) ?? building.extraDescription;
     for (const consumption of building.consumptions) {
       const resource = mapValue(
         resources,
@@ -1160,12 +1162,7 @@ export function planPowerCycle(
         maximum = Math.min(maximum, supported);
         if (missingProducer[resource.input.id]) {
           const value = `Make sure all ${resource.input.title} producers are above consumers in buildings list!<br>${description}`;
-          operations.push({
-            kind: "set-description",
-            buildingId: building.id,
-            expected: description,
-            value,
-          });
+          appendDescription(building.id, description, value);
           description = value;
         }
       } else if (missingProducer[resource.input.id] && consumption.rate < 0) {
@@ -1331,26 +1328,13 @@ export function planPowerCycle(
       maximumCamps,
     );
     const purifierDescription =
-      operations
-        .filter(
-          (
-            operation,
-          ): operation is Extract<
-            PowerOperation,
-            { readonly kind: "set-description" }
-          > =>
-            operation.kind === "set-description" &&
-            operation.buildingId === spire.purifier.buildingId,
-        )
-        .at(-1)?.value ?? spire.purifierDescription;
-    operations.push({
-      kind: "set-description",
-      buildingId: spire.purifier.buildingId,
-      expected: purifierDescription,
-      value: `Supported Supplies: ${Math.floor(bestSupplies)}<br>${
-        purifierDescription
-      }`,
-    });
+      descriptionByBuildingId.get(spire.purifier.buildingId) ??
+      spire.purifierDescription;
+    appendDescription(
+      spire.purifier.buildingId,
+      purifierDescription,
+      `Supported Supplies: ${Math.floor(bestSupplies)}<br>${purifierDescription}`,
+    );
     const nextCost =
       spire.mechQueued && nextMechCost <= bestSupplies
         ? nextMechCost

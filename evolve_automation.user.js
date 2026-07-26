@@ -36517,6 +36517,16 @@
       return Object.freeze({ decision: null, nextState: state });
     }
     const operations = [];
+    const descriptionByBuildingId = /* @__PURE__ */ new Map();
+    const appendDescription = (buildingId2, expected, value) => {
+      operations.push({
+        kind: "set-description",
+        buildingId: buildingId2,
+        expected,
+        value
+      });
+      descriptionByBuildingId.set(buildingId2, value);
+    };
     const resources = /* @__PURE__ */ new Map();
     for (const resource2 of input.resources) {
       if (resources.has(resource2.id)) {
@@ -36630,14 +36640,13 @@
         );
       }
       if ((building3.rule.kind === "ascension-trigger" || building3.rule.kind === "terraformer") && availablePower < building3.powered) {
-        operations.push({
-          kind: "set-description",
-          buildingId: building3.id,
-          expected: building3.extraDescription,
-          value: `Missing ${Math.ceil(
+        appendDescription(
+          building3.id,
+          building3.extraDescription,
+          `Missing ${Math.ceil(
             building3.powered - availablePower
           )} MW to power on<br>${building3.extraDescription}`
-        });
+        );
       }
       if (building3.skipGroup !== "none") {
         continue;
@@ -36662,9 +36671,7 @@
           maximum = Math.min(maximum, building3.fleetMaximum);
         }
       }
-      let description = operations.filter(
-        (operation2) => operation2.kind === "set-description" && operation2.buildingId === building3.id
-      ).at(-1)?.value ?? building3.extraDescription;
+      let description = descriptionByBuildingId.get(building3.id) ?? building3.extraDescription;
       for (const consumption of building3.consumptions) {
         const resource2 = mapValue(
           resources,
@@ -36699,12 +36706,7 @@
           maximum = Math.min(maximum, supported);
           if (missingProducer[resource2.input.id]) {
             const value = `Make sure all ${resource2.input.title} producers are above consumers in buildings list!<br>${description}`;
-            operations.push({
-              kind: "set-description",
-              buildingId: building3.id,
-              expected: description,
-              value
-            });
+            appendDescription(building3.id, description, value);
             description = value;
           }
         } else if (missingProducer[resource2.input.id] && consumption.rate < 0) {
@@ -36820,15 +36822,12 @@
         maximumPorts,
         maximumCamps
       );
-      const purifierDescription = operations.filter(
-        (operation2) => operation2.kind === "set-description" && operation2.buildingId === spire.purifier.buildingId
-      ).at(-1)?.value ?? spire.purifierDescription;
-      operations.push({
-        kind: "set-description",
-        buildingId: spire.purifier.buildingId,
-        expected: purifierDescription,
-        value: `Supported Supplies: ${Math.floor(bestSupplies)}<br>${purifierDescription}`
-      });
+      const purifierDescription = descriptionByBuildingId.get(spire.purifier.buildingId) ?? spire.purifierDescription;
+      appendDescription(
+        spire.purifier.buildingId,
+        purifierDescription,
+        `Supported Supplies: ${Math.floor(bestSupplies)}<br>${purifierDescription}`
+      );
       const nextCost = spire.mechQueued && nextMechCost <= bestSupplies ? nextMechCost : spire.purifierQueued && nextPurifierCost <= bestSupplies ? nextPurifierCost : Math.min(nextMechCost, nextPurifierCost);
       operations.push({
         kind: "set-mech-save-supply",
