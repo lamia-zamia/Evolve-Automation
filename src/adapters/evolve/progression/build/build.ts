@@ -18,6 +18,7 @@ import type {
   BuildExecutor,
   BuildReader,
 } from "../../../../ports/build.ts";
+import type { TickDiagnostics } from "../../../../ports/tick.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
   requireFunction,
@@ -33,6 +34,7 @@ export interface BuildAdapterDependencies {
   readonly getSettings: () => unknown;
   readonly getResources: () => unknown;
   readonly getCostConflict: (target: unknown) => unknown;
+  readonly diagnostics?: TickDiagnostics | undefined;
 }
 
 export interface BuildAdapter {
@@ -120,6 +122,21 @@ export function createBuildAdapter(
 
   const reader: BuildReader = Object.freeze({
     beginCycle(): BuildCycleSetup {
+      const profiling =
+        dependencies.diagnostics?.readPerformanceEnabled() === true
+          ? dependencies.diagnostics
+          : undefined;
+      const measure = <T>(phase: string, action: () => T): T => {
+        if (profiling === undefined) {
+          return action();
+        }
+        const startedAtMs = profiling.nowMs();
+        try {
+          return action();
+        } finally {
+          profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
+        }
+      };
       const buildingManager = requireRecord(
         dependencies.getBuildingManager(),
         "BuildingManager",
@@ -128,8 +145,12 @@ export function createBuildAdapter(
         dependencies.getProjectManager(),
         "ProjectManager",
       );
-      callMethod(buildingManager, "updateWeighting", "BuildingManager");
-      callMethod(projectManager, "updateWeighting", "ProjectManager");
+      measure("autoBuild.beginCycle.updateBuildingWeighting", () =>
+        callMethod(buildingManager, "updateWeighting", "BuildingManager"),
+      );
+      measure("autoBuild.beginCycle.updateProjectWeighting", () =>
+        callMethod(projectManager, "updateWeighting", "ProjectManager"),
+      );
 
       const state = requireRecord(dependencies.getState(), "state");
       const queuedTargets = requireArray(
@@ -146,44 +167,67 @@ export function createBuildAdapter(
       const queuedTargetSet = new Set(queuedTargets);
       const triggerTargetSet = new Set(triggerTargets);
 
-      const entities = [
-        ...requireArray(
-          callMethod(buildingManager, "managedPriorityList", "BuildingManager"),
-          "BuildingManager.managedPriorityList()",
-        ),
-        ...requireArray(
-          callMethod(projectManager, "managedPriorityList", "ProjectManager"),
-          "ProjectManager.managedPriorityList()",
-        ),
-      ].map((entry, index) => requireRecord(entry, `buildList[${index}]`));
+      const entities = measure("autoBuild.beginCycle.readCandidateLists", () =>
+        [
+          ...requireArray(
+            callMethod(
+              buildingManager,
+              "managedPriorityList",
+              "BuildingManager",
+            ),
+            "BuildingManager.managedPriorityList()",
+          ),
+          ...requireArray(
+            callMethod(projectManager, "managedPriorityList", "ProjectManager"),
+            "ProjectManager.managedPriorityList()",
+          ),
+        ].map((entry, index) => requireRecord(entry, `buildList[${index}]`)),
+      );
       // Highest weighting first; stable sort keeps the legacy tie order.
-      entities.sort((a, b) => Number(b["weighting"]) - Number(a["weighting"]));
+      measure("autoBuild.beginCycle.sortCandidates", () =>
+        entities.sort(
+          (a, b) => Number(b["weighting"]) - Number(a["weighting"]),
+        ),
+      );
       // TRANSITIONAL: the sorted entity list is still published to
       // state.unlockedBuildings for the build planner UI, the state log,
       // resource weighting, and the jobs/factory adapters until those
       // consumers stop reading the legacy state bag.
-      state["unlockedBuildings"] = entities;
+      measure("autoBuild.beginCycle.publishCandidates", () => {
+        state["unlockedBuildings"] = entities;
+      });
 
       const byKey = new Map<string, UnknownRecord>();
-      const candidates: BuildCandidateView[] = entities.map((entity, index) => {
-        const path = `buildList[${index}]`;
-        const key = requireString(entity["_vueBinding"], `${path}._vueBinding`);
-        byKey.set(key, entity);
-        const rawCost = requireRecord(entity["cost"], `${path}.cost`);
-        const cost: Record<string, number> = {};
-        for (const resourceId of Object.keys(rawCost)) {
-          cost[resourceId] = requireNumber(
-            rawCost[resourceId],
-            `${path}.cost.${resourceId}`,
-          );
-        }
-        return Object.freeze({
-          key,
-          weighting: requireNumber(entity["weighting"], `${path}.weighting`),
-          cost: Object.freeze(cost),
-          ignored: queuedTargetSet.has(entity) || triggerTargetSet.has(entity),
-        });
-      });
+      const candidates = measure(
+        "autoBuild.beginCycle.normalizeCandidates",
+        () =>
+          entities.map((entity, index) => {
+            const path = `buildList[${index}]`;
+            const key = requireString(
+              entity["_vueBinding"],
+              `${path}._vueBinding`,
+            );
+            byKey.set(key, entity);
+            const rawCost = requireRecord(entity["cost"], `${path}.cost`);
+            const cost: Record<string, number> = {};
+            for (const resourceId of Object.keys(rawCost)) {
+              cost[resourceId] = requireNumber(
+                rawCost[resourceId],
+                `${path}.cost.${resourceId}`,
+              );
+            }
+            return Object.freeze({
+              key,
+              weighting: requireNumber(
+                entity["weighting"],
+                `${path}.weighting`,
+              ),
+              cost: Object.freeze(cost),
+              ignored:
+                queuedTargetSet.has(entity) || triggerTargetSet.has(entity),
+            });
+          }),
+      );
 
       const settings = requireRecord(dependencies.getSettings(), "settings");
       // Legacy read these settings loosely: overrides may yield non-boolean

@@ -132,6 +132,7 @@ function runNew(world, diagnostics) {
     getSettings: () => world.settings,
     getResources: () => world.resources,
     getCostConflict: (target) => world.getCostConflict(target),
+    diagnostics,
   });
   return runBuildAutomation({ ...adapter, diagnostics });
 }
@@ -179,6 +180,12 @@ assert.deepEqual(
   });
   assert.equal(outcome.status, "succeeded");
   assert.deepEqual(phases, [
+    "autoBuild.beginCycle.updateBuildingWeighting",
+    "autoBuild.beginCycle.updateProjectWeighting",
+    "autoBuild.beginCycle.readCandidateLists",
+    "autoBuild.beginCycle.sortCandidates",
+    "autoBuild.beginCycle.publishCandidates",
+    "autoBuild.beginCycle.normalizeCandidates",
     "autoBuild.beginCycle",
     "autoBuild.sampleNeeds",
     "autoBuild.sampleCandidate",

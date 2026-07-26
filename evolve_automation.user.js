@@ -41382,6 +41382,18 @@
     }
     const reader = Object.freeze({
       beginCycle() {
+        const profiling = dependencies.diagnostics?.readPerformanceEnabled() === true ? dependencies.diagnostics : void 0;
+        const measure = (phase, action) => {
+          if (profiling === void 0) {
+            return action();
+          }
+          const startedAtMs = profiling.nowMs();
+          try {
+            return action();
+          } finally {
+            profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
+          }
+        };
         const buildingManager = requireRecord(
           dependencies.getBuildingManager(),
           "BuildingManager"
@@ -41390,8 +41402,14 @@
           dependencies.getProjectManager(),
           "ProjectManager"
         );
-        callMethod(buildingManager, "updateWeighting", "BuildingManager");
-        callMethod(projectManager, "updateWeighting", "ProjectManager");
+        measure(
+          "autoBuild.beginCycle.updateBuildingWeighting",
+          () => callMethod(buildingManager, "updateWeighting", "BuildingManager")
+        );
+        measure(
+          "autoBuild.beginCycle.updateProjectWeighting",
+          () => callMethod(projectManager, "updateWeighting", "ProjectManager")
+        );
         const state = requireRecord(dependencies.getState(), "state");
         const queuedTargets = requireArray2(
           state["queuedTargets"],
@@ -41403,38 +41421,61 @@
         );
         const queuedTargetSet = new Set(queuedTargets);
         const triggerTargetSet = new Set(triggerTargets);
-        const entities = [
-          ...requireArray2(
-            callMethod(buildingManager, "managedPriorityList", "BuildingManager"),
-            "BuildingManager.managedPriorityList()"
-          ),
-          ...requireArray2(
-            callMethod(projectManager, "managedPriorityList", "ProjectManager"),
-            "ProjectManager.managedPriorityList()"
+        const entities = measure(
+          "autoBuild.beginCycle.readCandidateLists",
+          () => [
+            ...requireArray2(
+              callMethod(
+                buildingManager,
+                "managedPriorityList",
+                "BuildingManager"
+              ),
+              "BuildingManager.managedPriorityList()"
+            ),
+            ...requireArray2(
+              callMethod(projectManager, "managedPriorityList", "ProjectManager"),
+              "ProjectManager.managedPriorityList()"
+            )
+          ].map((entry, index) => requireRecord(entry, `buildList[${index}]`))
+        );
+        measure(
+          "autoBuild.beginCycle.sortCandidates",
+          () => entities.sort(
+            (a, b) => Number(b["weighting"]) - Number(a["weighting"])
           )
-        ].map((entry, index) => requireRecord(entry, `buildList[${index}]`));
-        entities.sort((a, b) => Number(b["weighting"]) - Number(a["weighting"]));
-        state["unlockedBuildings"] = entities;
-        const byKey = /* @__PURE__ */ new Map();
-        const candidates = entities.map((entity, index) => {
-          const path = `buildList[${index}]`;
-          const key = requireString21(entity["_vueBinding"], `${path}._vueBinding`);
-          byKey.set(key, entity);
-          const rawCost = requireRecord(entity["cost"], `${path}.cost`);
-          const cost = {};
-          for (const resourceId3 of Object.keys(rawCost)) {
-            cost[resourceId3] = requireNumber(
-              rawCost[resourceId3],
-              `${path}.cost.${resourceId3}`
-            );
-          }
-          return Object.freeze({
-            key,
-            weighting: requireNumber(entity["weighting"], `${path}.weighting`),
-            cost: Object.freeze(cost),
-            ignored: queuedTargetSet.has(entity) || triggerTargetSet.has(entity)
-          });
+        );
+        measure("autoBuild.beginCycle.publishCandidates", () => {
+          state["unlockedBuildings"] = entities;
         });
+        const byKey = /* @__PURE__ */ new Map();
+        const candidates = measure(
+          "autoBuild.beginCycle.normalizeCandidates",
+          () => entities.map((entity, index) => {
+            const path = `buildList[${index}]`;
+            const key = requireString21(
+              entity["_vueBinding"],
+              `${path}._vueBinding`
+            );
+            byKey.set(key, entity);
+            const rawCost = requireRecord(entity["cost"], `${path}.cost`);
+            const cost = {};
+            for (const resourceId3 of Object.keys(rawCost)) {
+              cost[resourceId3] = requireNumber(
+                rawCost[resourceId3],
+                `${path}.cost.${resourceId3}`
+              );
+            }
+            return Object.freeze({
+              key,
+              weighting: requireNumber(
+                entity["weighting"],
+                `${path}.weighting`
+              ),
+              cost: Object.freeze(cost),
+              ignored: queuedTargetSet.has(entity) || triggerTargetSet.has(entity)
+            });
+          })
+        );
         const settings = requireRecord(dependencies.getSettings(), "settings");
         const rawMode = settings["buildingConsumptionCheck"];
         const consumptionMode = rawMode === "perResource" ? "perResource" : rawMode === "unlimited" ? "unlimited" : "onePerTick";
@@ -41986,7 +42027,10 @@
 
   // src/bootstrap/build-control.ts
   function createBuildControl(dependencies) {
-    const adapter = createBuildAdapter(dependencies.adapter);
+    const adapter = createBuildAdapter({
+      ...dependencies.adapter,
+      diagnostics: dependencies.diagnostics
+    });
     return Object.freeze({
       autoBuild: () => {
         if (!dependencies.isGovernReady()) return;

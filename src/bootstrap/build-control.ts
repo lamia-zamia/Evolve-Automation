@@ -14,7 +14,10 @@ export function createBuildControl(dependencies: {
   isGovernReady: () => boolean;
   diagnostics?: TickDiagnostics | undefined;
 }) {
-  const adapter = createBuildAdapter(dependencies.adapter);
+  const adapter = createBuildAdapter({
+    ...dependencies.adapter,
+    diagnostics: dependencies.diagnostics,
+  });
   return Object.freeze({
     autoBuild: () => {
       // Evolve initializes civic.govern lazily on a fresh game, but its build
