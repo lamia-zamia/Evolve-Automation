@@ -1897,26 +1897,11 @@ export function createEntityClasses({
         readResources()[res].currentQuantity -= this.cost[res];
       }
 
-      // Research actions redraw the entire technology panel. When the panel is
-      // not active, that redraw cannot affect visible UI and is especially
-      // expensive in late game. Keep the existing hack opt-in and leave the
-      // active research tab untouched.
-      const mainVue = readMainVue();
-      if (
-        readSettings().performanceHackAvoidDrawTech &&
-        mainVue?.s !== undefined &&
-        mainVue.s.civTabs !== 3
-      ) {
-        const oldTabLoad = mainVue.s.tabLoad;
-        try {
-          mainVue.s.tabLoad = false;
-          getVueById(this._vueBinding).action();
-        } finally {
-          mainVue.s.tabLoad = oldTabLoad;
-        }
-      } else {
-        getVueById(this._vueBinding).action();
-      }
+      // Research automation depends on the preloaded off-tab Vue bindings.
+      // Keep the game's preload flag enabled here: its post-research drawTech
+      // call removes the completed target and exposes the next one even when
+      // the research tab is not active.
+      getVueById(this._vueBinding).action();
 
       let def = this.definition;
       let title = typeof def.title === "function" ? def.title() : def.title;

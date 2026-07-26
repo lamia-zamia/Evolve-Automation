@@ -147,12 +147,16 @@ const technology = new classes.Technology("mad");
 technology.cost = { Knowledge: 1 };
 assert.equal(technology.click(), true);
 assert.deepEqual(technologyActions, ["action"]);
-assert.deepEqual(observedTabLoads, [false]);
+assert.deepEqual(
+  observedTabLoads,
+  [true],
+  "off-tab research keeps preloaded Vue content available for drawTech",
+);
 assert.equal(context.mainVue.s.tabLoad, true);
 
 context.mainVue.s.civTabs = 3;
 assert.equal(technology.click(), true);
-assert.deepEqual(observedTabLoads, [false, true]);
+assert.deepEqual(observedTabLoads, [true, true]);
 
 context.game = {
   global: {
