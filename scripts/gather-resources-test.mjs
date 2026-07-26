@@ -116,6 +116,44 @@ assert.equal(
   null,
 );
 
+const fractionalSlaughterFixture = createFixture({
+  clickable: ["slaughter"],
+  soulEater: true,
+  primitive: 1,
+  resources: {
+    Food: { current: 5, maximum: 10 },
+    Lumber: { current: 5, maximum: 10 },
+    Furs: { current: 5, maximum: 10 },
+  },
+  resourcesPerClick: 2,
+  clickLimit: 3,
+});
+const fractionalSlaughterAdapter = createAdapter(fractionalSlaughterFixture);
+const fractionalSlaughterDecision = planGatherResources(
+  fractionalSlaughterAdapter.reader.read(),
+);
+assert.equal(fractionalSlaughterDecision.operations[0].amount, 2.5);
+assert.equal(
+  fractionalSlaughterAdapter.executor.execute(fractionalSlaughterDecision)
+    .status,
+  "succeeded",
+);
+assert.equal(
+  fractionalSlaughterFixture.trace
+    .snapshot()
+    .filter((entry) => entry.category === "command").length,
+  3,
+);
+assert.deepEqual(
+  Object.fromEntries(
+    ["Food", "Lumber", "Furs"].map((id) => [
+      id,
+      fractionalSlaughterFixture.quantities[id](),
+    ]),
+  ),
+  { Food: 10, Lumber: 10, Furs: 10 },
+);
+
 const staleFixture = createFixture({ clickable: ["food"] });
 const staleAdapter = createAdapter(staleFixture);
 const staleDecision = planGatherResources(staleAdapter.reader.read());
