@@ -73,11 +73,11 @@ function constructCommand(
 }
 
 /**
- * Pure equivalent of the legacy `expandStorage`. Emits an always-present crate
- * command (matching the unconditional `constructCrate` call) and a container
- * command only when storage is still missing after crates, exactly as before.
- * Non-positive counts are preserved so the executor reconciles the resource
- * model identically, including the over-cap negative-count case.
+ * Pure equivalent of the legacy `expandStorage`, with one deliberate policy
+ * correction: when the pre-MAD limiter is disabled during the early game,
+ * affordable containers are preferred for the shortfall. Non-positive counts
+ * are preserved so the executor reconciles the resource model identically,
+ * including the over-cap negative-count case.
  */
 export function planStorageExpansion(
   snapshot: Readonly<StorageExpansionSnapshot>,
@@ -104,14 +104,32 @@ export function planStorageExpansion(
 
   const commands: ConstructStorageCommand[] = [];
 
+  // With the pre-MAD limiter disabled, an early-game container is the useful
+  // unit for a small shortfall. Prefer it when Steel can actually pay for one;
+  // otherwise retain the crate fallback so storage can still progress while
+  // Steel is below the container cost.
+  const preferContainers = !settings.storageLimitPreMad && snapshot.isEarlyGame;
+  if (preferContainers && missing > 0) {
+    const containersToBuild = Math.min(
+      Math.floor(containerCap),
+      Math.ceil(missing / snapshot.containers.storagePerUnit),
+    );
+    commands.push(
+      constructCommand("container", snapshot.containers, containersToBuild),
+    );
+    missing -= containersToBuild * snapshot.containers.storagePerUnit;
+  }
+
   const cratesToBuild = Math.min(
     Math.floor(crateCap),
-    Math.ceil(missing / snapshot.crates.storagePerUnit),
+    preferContainers && missing <= 0
+      ? 0
+      : Math.ceil(missing / snapshot.crates.storagePerUnit),
   );
   commands.push(constructCommand("crate", snapshot.crates, cratesToBuild));
   missing -= cratesToBuild * snapshot.crates.storagePerUnit;
 
-  if (missing > 0) {
+  if (!preferContainers && missing > 0) {
     const containersToBuild = Math.min(
       Math.floor(containerCap),
       Math.ceil(missing / snapshot.containers.storagePerUnit),

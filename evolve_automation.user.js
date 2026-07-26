@@ -3261,6 +3261,38 @@
   }
 
   // src/game/economy-managers.ts
+  function applyDirectStorageAssignment(game, resource2, count2, unit, storageValue, direction) {
+    if (!Number.isFinite(count2) || count2 <= 0) {
+      return false;
+    }
+    const resourceTable = game?.global?.resource;
+    const target = resourceTable?.[resource2.id];
+    const available = resourceTable?.[unit === "crate" ? "Crates" : "Containers"];
+    const storageKey = unit === "crate" ? "crates" : "containers";
+    if (target === void 0 || available === void 0) {
+      return false;
+    }
+    const current = Number(direction > 0 ? available.amount : target[storageKey]);
+    const availableMax = Number(available.max);
+    const targetCount = Number(target[storageKey]);
+    const targetMax = Number(target.max);
+    if (!Number.isFinite(current) || !Number.isFinite(availableMax) || !Number.isFinite(targetCount) || !Number.isFinite(targetMax) || !Number.isFinite(storageValue) || current <= 0) {
+      return false;
+    }
+    const amount = Math.min(count2, current);
+    if (direction > 0) {
+      available.amount = current - amount;
+      available.max = availableMax - amount;
+      target[storageKey] = targetCount + amount;
+      target.max = targetMax + storageValue * amount;
+    } else {
+      target[storageKey] = targetCount - amount;
+      target.max = targetMax - storageValue * amount;
+      available.amount = current + amount;
+      available.max = availableMax + amount;
+    }
+    return amount === count2;
+  }
   function createEconomyManagers({
     getGame,
     getResources,
@@ -3555,7 +3587,14 @@
       assignCrate(resource2, count2) {
         let vue = getVueById(resource2._stackVueBinding);
         if (vue === void 0) {
-          return false;
+          return applyDirectStorageAssignment(
+            getGame(),
+            resource2,
+            count2,
+            "crate",
+            this.crateValue,
+            1
+          );
         }
         const KeyManager = getKeyManager();
         for (let m of KeyManager.click(count2)) {
@@ -3565,7 +3604,14 @@
       unassignCrate(resource2, count2) {
         let vue = getVueById(resource2._stackVueBinding);
         if (vue === void 0) {
-          return false;
+          return applyDirectStorageAssignment(
+            getGame(),
+            resource2,
+            count2,
+            "crate",
+            this.crateValue,
+            -1
+          );
         }
         const KeyManager = getKeyManager();
         for (let m of KeyManager.click(count2)) {
@@ -3575,7 +3621,14 @@
       assignContainer(resource2, count2) {
         let vue = getVueById(resource2._stackVueBinding);
         if (vue === void 0) {
-          return false;
+          return applyDirectStorageAssignment(
+            getGame(),
+            resource2,
+            count2,
+            "container",
+            this.containerValue,
+            1
+          );
         }
         const KeyManager = getKeyManager();
         for (let m of KeyManager.click(count2)) {
@@ -3585,7 +3638,14 @@
       unassignContainer(resource2, count2) {
         let vue = getVueById(resource2._stackVueBinding);
         if (vue === void 0) {
-          return false;
+          return applyDirectStorageAssignment(
+            getGame(),
+            resource2,
+            count2,
+            "container",
+            this.containerValue,
+            -1
+          );
         }
         const KeyManager = getKeyManager();
         for (let m of KeyManager.click(count2)) {
@@ -27799,13 +27859,24 @@
       }
     }
     const commands = [];
+    const preferContainers = !settings.storageLimitPreMad && snapshot.isEarlyGame;
+    if (preferContainers && missing > 0) {
+      const containersToBuild = Math.min(
+        Math.floor(containerCap),
+        Math.ceil(missing / snapshot.containers.storagePerUnit)
+      );
+      commands.push(
+        constructCommand("container", snapshot.containers, containersToBuild)
+      );
+      missing -= containersToBuild * snapshot.containers.storagePerUnit;
+    }
     const cratesToBuild = Math.min(
       Math.floor(crateCap),
-      Math.ceil(missing / snapshot.crates.storagePerUnit)
+      preferContainers && missing <= 0 ? 0 : Math.ceil(missing / snapshot.crates.storagePerUnit)
     );
     commands.push(constructCommand("crate", snapshot.crates, cratesToBuild));
     missing -= cratesToBuild * snapshot.crates.storagePerUnit;
-    if (missing > 0) {
+    if (!preferContainers && missing > 0) {
       const containersToBuild = Math.min(
         Math.floor(containerCap),
         Math.ceil(missing / snapshot.containers.storagePerUnit)
@@ -37683,10 +37754,9 @@
           }
           resolved.push({ adjustment, resource: resource2 });
         }
-        for (const message of decision2.logs) dependencies.log(message);
         for (const { adjustment, resource: resource2 } of resolved) {
           if (adjustment.crateDelta < 0) {
-            Reflect.apply(
+            const result2 = Reflect.apply(
               requireFunction(
                 active.manager["unassignCrate"],
                 "StorageManager.unassignCrate"
@@ -37694,6 +37764,12 @@
               active.manager,
               [resource2, adjustment.crateDelta * -1]
             );
+            if (result2 === false) {
+              return rejected(
+                "storage-assignment-unavailable",
+                `Unable to unassign crates from ${adjustment.resourceId}`
+              );
+            }
             resource2["maxQuantity"] = finiteProperty2(
               resource2,
               "maxQuantity",
@@ -37706,7 +37782,7 @@
             ) - adjustment.crateDelta;
           }
           if (adjustment.containerDelta < 0) {
-            Reflect.apply(
+            const result2 = Reflect.apply(
               requireFunction(
                 active.manager["unassignContainer"],
                 "StorageManager.unassignContainer"
@@ -37714,6 +37790,12 @@
               active.manager,
               [resource2, adjustment.containerDelta * -1]
             );
+            if (result2 === false) {
+              return rejected(
+                "storage-assignment-unavailable",
+                `Unable to unassign containers from ${adjustment.resourceId}`
+              );
+            }
             resource2["maxQuantity"] = finiteProperty2(
               resource2,
               "maxQuantity",
@@ -37728,7 +37810,7 @@
         }
         for (const { adjustment, resource: resource2 } of resolved) {
           if (adjustment.crateDelta > 0) {
-            Reflect.apply(
+            const result2 = Reflect.apply(
               requireFunction(
                 active.manager["assignCrate"],
                 "StorageManager.assignCrate"
@@ -37736,6 +37818,12 @@
               active.manager,
               [resource2, adjustment.crateDelta]
             );
+            if (result2 === false) {
+              return rejected(
+                "storage-assignment-unavailable",
+                `Unable to assign crates to ${adjustment.resourceId}`
+              );
+            }
             resource2["maxQuantity"] = finiteProperty2(
               resource2,
               "maxQuantity",
@@ -37748,7 +37836,7 @@
             ) + adjustment.crateDelta;
           }
           if (adjustment.containerDelta > 0) {
-            Reflect.apply(
+            const result2 = Reflect.apply(
               requireFunction(
                 active.manager["assignContainer"],
                 "StorageManager.assignContainer"
@@ -37756,6 +37844,12 @@
               active.manager,
               [resource2, adjustment.containerDelta]
             );
+            if (result2 === false) {
+              return rejected(
+                "storage-assignment-unavailable",
+                `Unable to assign containers to ${adjustment.resourceId}`
+              );
+            }
             resource2["maxQuantity"] = finiteProperty2(
               resource2,
               "maxQuantity",
@@ -37768,6 +37862,7 @@
             ) + adjustment.containerDelta;
           }
         }
+        for (const message of decision2.logs) dependencies.log(message);
         return SUCCEEDED;
       }
     });

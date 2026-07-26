@@ -72,8 +72,8 @@ let context = makeContext();
 hooks.setStorageExpansionTestContext(context);
 assert.equal(hooks.expandStorage(300), true);
 assert.deepEqual(context.calls, [
-  ["crate", 2],
-  ["container", 1],
+  ["container", 2],
+  ["crate", 0],
 ]);
 assert.deepEqual(
   {
@@ -82,7 +82,7 @@ assert.deepEqual(
     wood: context.resources.Wood.currentQuantity,
     steel: context.resources.Steel.currentQuantity,
   },
-  { crates: 4, containers: 2, wood: 5, steel: 80 },
+  { crates: 2, containers: 3, wood: 25, steel: 60 },
 );
 
 context = makeContext();
@@ -91,8 +91,8 @@ context.resources.Steel.currentQuantity = 0;
 hooks.setStorageExpansionTestContext(context);
 assert.equal(hooks.expandStorage(300), false);
 assert.deepEqual(context.calls, [
-  ["crate", 0],
   ["container", 0],
+  ["crate", 0],
 ]);
 
 context = makeContext({ preMad: true });
@@ -124,6 +124,7 @@ assert.deepEqual(context.calls, [
 context = makeContext();
 context.resources.Crates.currentQuantity = 5; // over the max of 10? no: raise max-current negative
 context.resources.Crates.maxQuantity = 2;
+context.game.global.race.cataclysm = true; // keep this signed-count characterization out of early-game preference
 hooks.setStorageExpansionTestContext(context);
 assert.equal(hooks.expandStorage(300), true);
 assert.deepEqual(context.calls, [

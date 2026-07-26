@@ -648,10 +648,9 @@ export function createStorageAllocationAdapter(
           resolved.push({ adjustment, resource });
         }
 
-        for (const message of decision.logs) dependencies.log(message);
         for (const { adjustment, resource } of resolved) {
           if (adjustment.crateDelta < 0) {
-            Reflect.apply(
+            const result = Reflect.apply(
               requireFunction(
                 active.manager["unassignCrate"],
                 "StorageManager.unassignCrate",
@@ -659,6 +658,12 @@ export function createStorageAllocationAdapter(
               active.manager,
               [resource, adjustment.crateDelta * -1],
             );
+            if (result === false) {
+              return rejected(
+                "storage-assignment-unavailable",
+                `Unable to unassign crates from ${adjustment.resourceId}`,
+              );
+            }
             resource["maxQuantity"] =
               finiteProperty(
                 resource,
@@ -674,7 +679,7 @@ export function createStorageAllocationAdapter(
               ) - adjustment.crateDelta;
           }
           if (adjustment.containerDelta < 0) {
-            Reflect.apply(
+            const result = Reflect.apply(
               requireFunction(
                 active.manager["unassignContainer"],
                 "StorageManager.unassignContainer",
@@ -682,6 +687,12 @@ export function createStorageAllocationAdapter(
               active.manager,
               [resource, adjustment.containerDelta * -1],
             );
+            if (result === false) {
+              return rejected(
+                "storage-assignment-unavailable",
+                `Unable to unassign containers from ${adjustment.resourceId}`,
+              );
+            }
             resource["maxQuantity"] =
               finiteProperty(
                 resource,
@@ -699,7 +710,7 @@ export function createStorageAllocationAdapter(
         }
         for (const { adjustment, resource } of resolved) {
           if (adjustment.crateDelta > 0) {
-            Reflect.apply(
+            const result = Reflect.apply(
               requireFunction(
                 active.manager["assignCrate"],
                 "StorageManager.assignCrate",
@@ -707,6 +718,12 @@ export function createStorageAllocationAdapter(
               active.manager,
               [resource, adjustment.crateDelta],
             );
+            if (result === false) {
+              return rejected(
+                "storage-assignment-unavailable",
+                `Unable to assign crates to ${adjustment.resourceId}`,
+              );
+            }
             resource["maxQuantity"] =
               finiteProperty(
                 resource,
@@ -724,7 +741,7 @@ export function createStorageAllocationAdapter(
               ) + adjustment.crateDelta;
           }
           if (adjustment.containerDelta > 0) {
-            Reflect.apply(
+            const result = Reflect.apply(
               requireFunction(
                 active.manager["assignContainer"],
                 "StorageManager.assignContainer",
@@ -732,6 +749,12 @@ export function createStorageAllocationAdapter(
               active.manager,
               [resource, adjustment.containerDelta],
             );
+            if (result === false) {
+              return rejected(
+                "storage-assignment-unavailable",
+                `Unable to assign containers to ${adjustment.resourceId}`,
+              );
+            }
             resource["maxQuantity"] =
               finiteProperty(
                 resource,
@@ -747,6 +770,7 @@ export function createStorageAllocationAdapter(
               ) + adjustment.containerDelta;
           }
         }
+        for (const message of decision.logs) dependencies.log(message);
         return SUCCEEDED;
       },
     });

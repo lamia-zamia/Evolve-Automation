@@ -233,4 +233,41 @@ assert.equal(
   false,
 );
 
+// Off-screen storage rows have no Vue instance. The model fallback still
+// applies the same game-side assignment so automation does not retry forever.
+StorageManager.crateValue = 100;
+StorageManager.containerValue = 500;
+game = {
+  global: {
+    resource: {
+      X: { amount: 0, max: 100, crates: 0, containers: 0 },
+      Crates: { amount: 1, max: 1 },
+      Containers: { amount: 1, max: 1 },
+    },
+  },
+};
+assert.equal(
+  StorageManager.assignCrate({ id: "X", _stackVueBinding: "missing" }, 1),
+  true,
+);
+assert.deepEqual(game.global.resource, {
+  X: { amount: 0, max: 200, crates: 1, containers: 0 },
+  Crates: { amount: 0, max: 0 },
+  Containers: { amount: 1, max: 1 },
+});
+assert.equal(
+  StorageManager.assignContainer({ id: "X", _stackVueBinding: "missing" }, 1),
+  true,
+);
+assert.equal(
+  StorageManager.unassignContainer({ id: "X", _stackVueBinding: "missing" }, 1),
+  true,
+);
+assert.deepEqual(game.global.resource.X, {
+  amount: 0,
+  max: 200,
+  crates: 1,
+  containers: 0,
+});
+
 console.log("Economy managers module tests passed");

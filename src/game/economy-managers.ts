@@ -16,6 +16,73 @@ interface EconomyManagersDependencies {
   traitVal: (trait: string, index: number, sign?: string) => number;
 }
 
+interface StorageModelResource {
+  amount: number;
+  max: number;
+  crates: number;
+  containers: number;
+}
+
+interface StorageGameModel {
+  readonly global?: {
+    readonly resource?: Record<string, StorageModelResource>;
+  };
+}
+
+interface StorageAssignmentResource {
+  readonly id: string;
+}
+
+function applyDirectStorageAssignment(
+  game: StorageGameModel | null | undefined,
+  resource: StorageAssignmentResource,
+  count: number,
+  unit: "crate" | "container",
+  storageValue: number,
+  direction: 1 | -1,
+): boolean {
+  if (!Number.isFinite(count) || count <= 0) {
+    return false;
+  }
+
+  const resourceTable = game?.global?.resource;
+  const target = resourceTable?.[resource.id];
+  const available = resourceTable?.[unit === "crate" ? "Crates" : "Containers"];
+  const storageKey = unit === "crate" ? "crates" : "containers";
+  if (target === undefined || available === undefined) {
+    return false;
+  }
+
+  const current = Number(direction > 0 ? available.amount : target[storageKey]);
+  const availableMax = Number(available.max);
+  const targetCount = Number(target[storageKey]);
+  const targetMax = Number(target.max);
+  if (
+    !Number.isFinite(current) ||
+    !Number.isFinite(availableMax) ||
+    !Number.isFinite(targetCount) ||
+    !Number.isFinite(targetMax) ||
+    !Number.isFinite(storageValue) ||
+    current <= 0
+  ) {
+    return false;
+  }
+
+  const amount = Math.min(count, current);
+  if (direction > 0) {
+    available.amount = current - amount;
+    available.max = availableMax - amount;
+    target[storageKey] = targetCount + amount;
+    target.max = targetMax + storageValue * amount;
+  } else {
+    target[storageKey] = targetCount - amount;
+    target.max = targetMax - storageValue * amount;
+    available.amount = current + amount;
+    available.max = availableMax + amount;
+  }
+  return amount === count;
+}
+
 export function createEconomyManagers({
   getGame,
   getResources,
@@ -384,7 +451,17 @@ export function createEconomyManagers({
     assignCrate(resource: any, count: number) {
       let vue = getVueById(resource._stackVueBinding);
       if (vue === undefined) {
-        return false;
+        // TRANSITIONAL: The current game only mounts stack-row Vue controls
+        // for the visible storage tab. Keep automation working when a row is
+        // off-screen by applying the same narrow model change directly.
+        return applyDirectStorageAssignment(
+          getGame(),
+          resource,
+          count,
+          "crate",
+          this.crateValue,
+          1,
+        );
       }
 
       const KeyManager = getKeyManager();
@@ -396,7 +473,14 @@ export function createEconomyManagers({
     unassignCrate(resource: any, count: number) {
       let vue = getVueById(resource._stackVueBinding);
       if (vue === undefined) {
-        return false;
+        return applyDirectStorageAssignment(
+          getGame(),
+          resource,
+          count,
+          "crate",
+          this.crateValue,
+          -1,
+        );
       }
 
       const KeyManager = getKeyManager();
@@ -408,7 +492,14 @@ export function createEconomyManagers({
     assignContainer(resource: any, count: number) {
       let vue = getVueById(resource._stackVueBinding);
       if (vue === undefined) {
-        return false;
+        return applyDirectStorageAssignment(
+          getGame(),
+          resource,
+          count,
+          "container",
+          this.containerValue,
+          1,
+        );
       }
 
       const KeyManager = getKeyManager();
@@ -420,7 +511,14 @@ export function createEconomyManagers({
     unassignContainer(resource: any, count: number) {
       let vue = getVueById(resource._stackVueBinding);
       if (vue === undefined) {
-        return false;
+        return applyDirectStorageAssignment(
+          getGame(),
+          resource,
+          count,
+          "container",
+          this.containerValue,
+          -1,
+        );
       }
 
       const KeyManager = getKeyManager();

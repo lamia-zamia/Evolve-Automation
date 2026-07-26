@@ -250,6 +250,34 @@ assert.deepEqual(containerFixture.trace, [
 ]);
 assert.equal(containerFixture.resources.Containers.currentQuantity, 2);
 
+const failedFixture = liveFixture();
+failedFixture.manager.assignCrate = (resource, count) => {
+  failedFixture.trace.push(["assign-crate-failed", resource.id, count]);
+  return false;
+};
+const failedAdapter = createStorageAllocationAdapter(
+  liveDependencies(failedFixture),
+);
+const failedAutomation = createStorageAllocationAutomation({
+  reader: failedAdapter.reader,
+  executor: failedAdapter.executor,
+  expansion: { expand: () => false },
+});
+let failedOutcome;
+for (let tick = 0; tick < 3; tick++) {
+  failedOutcome = failedAutomation.run();
+}
+assert.equal(failedOutcome.status, "rejected");
+assert.deepEqual(failedFixture.trace, [
+  ["init"],
+  ["init"],
+  ["init"],
+  ["assign-crate-failed", "Iron", 2],
+]);
+assert.equal(failedFixture.resources.Iron.currentCrates, 0);
+assert.equal(failedFixture.resources.Iron.maxQuantity, 100);
+assert.equal(failedFixture.resources.Crates.currentQuantity, 2);
+
 const expandingFixture = liveFixture();
 expandingFixture.resources.Iron.minStorage = 1000;
 const expandingAdapter = createStorageAllocationAdapter(
