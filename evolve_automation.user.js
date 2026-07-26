@@ -15241,6 +15241,8 @@
       state.triggerTargets = [];
       state.unlockedTechs = [];
       state.unlockedBuildings = [];
+      const queuedTargetsAll = /* @__PURE__ */ new Set();
+      const triggerTargets = /* @__PURE__ */ new Set();
       const queueSave = settings.prioritizeQueue.includes("save");
       [
         { type: "queue", noorder: "qAny" },
@@ -15270,6 +15272,7 @@
             }
             if (obj) {
               state.queuedTargetsAll.push(obj);
+              queuedTargetsAll.add(obj);
               if (maximumAffordable) {
                 state.queuedTargets.push(obj);
                 if (queueSave) {
@@ -15337,6 +15340,7 @@
           const obj = arpaIds[id] || buildingIds[id] || techIds[id];
           if (obj) {
             state.triggerTargets.push(obj);
+            triggerTargets.add(obj);
             if (triggerSave) {
               state.conflictTargets.push({
                 name: obj.title,
@@ -15349,6 +15353,7 @@
         if (buildings.GorddonEmbassy.isAutoBuildable() && resources.Knowledge.maxQuantity >= settings.fleetEmbassyKnowledge) {
           const obj = buildings.GorddonEmbassy;
           state.triggerTargets.push(obj);
+          triggerTargets.add(obj);
           state.conflictTargets.push({
             name: obj.title,
             cause: "Knowledge",
@@ -15358,6 +15363,7 @@
         if (buildings.TauStarEden.isAutoBuildable() && isPrestigeAllowed2("eden")) {
           const obj = buildings.TauStarEden;
           state.triggerTargets.push(obj);
+          triggerTargets.add(obj);
           state.conflictTargets.push({
             name: obj.title,
             cause: "Prestige",
@@ -15367,6 +15373,7 @@
         if (buildings.TauGas2MatrioshkaBrain.count >= 1e3 && buildings.TauGas2IgniteGasGiant.isAutoBuildable() && isPrestigeAllowed2("retire")) {
           const obj = buildings.TauGas2IgniteGasGiant;
           state.triggerTargets.push(obj);
+          triggerTargets.add(obj);
           state.conflictTargets.push({
             name: obj.title,
             cause: "Prestige",
@@ -15377,7 +15384,7 @@
       getJQuery()("#tech .action").each(function() {
         const tech = techIds[this.id];
         tech.updateResourceRequirements();
-        if (!getTechConflict(tech) || state.triggerTargets.includes(tech) || state.queuedTargetsAll.includes(tech)) {
+        if (!getTechConflict(tech) || triggerTargets.has(tech) || queuedTargetsAll.has(tech)) {
           state.unlockedTechs.push(tech);
         }
       });

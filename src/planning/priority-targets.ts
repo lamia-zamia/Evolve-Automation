@@ -144,6 +144,8 @@ export function createPriorityTargets({
     state.triggerTargets = [];
     state.unlockedTechs = [];
     state.unlockedBuildings = [];
+    const queuedTargetsAll = new Set<PriorityTarget>();
+    const triggerTargets = new Set<PriorityTarget>();
 
     // Building and research queues
     const queueSave = settings.prioritizeQueue.includes("save");
@@ -186,6 +188,7 @@ export function createPriorityTargets({
           }
           if (obj) {
             state.queuedTargetsAll.push(obj);
+            queuedTargetsAll.add(obj);
             if (maximumAffordable) {
               state.queuedTargets.push(obj);
               if (queueSave) {
@@ -276,6 +279,7 @@ export function createPriorityTargets({
         const obj = arpaIds[id] || buildingIds[id] || techIds[id];
         if (obj) {
           state.triggerTargets.push(obj);
+          triggerTargets.add(obj);
           if (triggerSave) {
             state.conflictTargets.push({
               name: obj.title,
@@ -293,6 +297,7 @@ export function createPriorityTargets({
       ) {
         const obj = buildings.GorddonEmbassy;
         state.triggerTargets.push(obj);
+        triggerTargets.add(obj);
         state.conflictTargets.push({
           name: obj.title,
           cause: "Knowledge",
@@ -306,6 +311,7 @@ export function createPriorityTargets({
       ) {
         const obj = buildings.TauStarEden;
         state.triggerTargets.push(obj);
+        triggerTargets.add(obj);
         state.conflictTargets.push({
           name: obj.title,
           cause: "Prestige",
@@ -320,6 +326,7 @@ export function createPriorityTargets({
       ) {
         const obj = buildings.TauGas2IgniteGasGiant;
         state.triggerTargets.push(obj);
+        triggerTargets.add(obj);
         state.conflictTargets.push({
           name: obj.title,
           cause: "Prestige",
@@ -333,8 +340,8 @@ export function createPriorityTargets({
       tech.updateResourceRequirements();
       if (
         !getTechConflict(tech) ||
-        state.triggerTargets.includes(tech) ||
-        state.queuedTargetsAll.includes(tech)
+        triggerTargets.has(tech) ||
+        queuedTargetsAll.has(tech)
       ) {
         state.unlockedTechs.push(tech);
       }
