@@ -41882,55 +41882,98 @@
   });
   var EMPTY_SAMPLE = Object.freeze({});
   function runBuildAutomation(dependencies) {
-    const { reader, executor } = dependencies;
-    const setup = reader.beginCycle();
+    const { reader, executor, diagnostics } = dependencies;
+    const profiling = diagnostics?.readPerformanceEnabled() === true ? diagnostics : void 0;
+    const measure = (phase, action) => {
+      if (profiling === void 0) {
+        return action();
+      }
+      const startedAtMs = profiling.nowMs();
+      try {
+        return action();
+      } finally {
+        profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
+      }
+    };
+    const setup = measure("autoBuild.beginCycle", () => reader.beginCycle());
     let state = initialBuildLoopState();
     for (let index = 0; index < setup.candidates.length; index++) {
-      const needs = candidateSampleNeeds(setup, state, index);
+      const needs = measure(
+        "autoBuild.sampleNeeds",
+        () => candidateSampleNeeds(setup, state, index)
+      );
       if (needs.kind === "skip") {
         continue;
       }
       const request = needs.request;
-      const sample = request.needAffordability || request.needConsumption ? reader.sampleCandidate(index, request) : EMPTY_SAMPLE;
-      const gate = planBuildGate(setup, index, sample, state);
+      const sample = request.needAffordability || request.needConsumption ? measure(
+        "autoBuild.sampleCandidate",
+        () => reader.sampleCandidate(index, request)
+      ) : EMPTY_SAMPLE;
+      const gate = measure(
+        "autoBuild.planGate",
+        () => planBuildGate(setup, index, sample, state)
+      );
       state = gate.state;
       if (gate.kind === "skip") {
         continue;
       }
-      const conflict2 = planBuildConflict(
-        setup,
-        index,
-        reader.sampleConflict(index)
+      const conflict2 = measure(
+        "autoBuild.planConflict",
+        () => planBuildConflict(
+          setup,
+          index,
+          measure("autoBuild.sampleConflict", () => reader.sampleConflict(index))
+        )
       );
       if (conflict2.kind === "skip") {
-        const outcome = executor.annotate(conflict2.annotation);
+        const outcome = measure(
+          "autoBuild.annotate",
+          () => executor.annotate(conflict2.annotation)
+        );
         if (outcome.status !== "succeeded") {
           return outcome;
         }
         continue;
       }
-      const competition = planBuildCompetition(
-        setup,
-        index,
-        reader.sampleCompetition(
+      const competitionRequest = measure(
+        "autoBuild.sampleRequest",
+        () => competitionSampleRequest(setup, state, index)
+      );
+      const competition = measure(
+        "autoBuild.planCompetition",
+        () => planBuildCompetition(
+          setup,
           index,
-          competitionSampleRequest(setup, state, index)
-        ),
-        state
+          measure(
+            "autoBuild.sampleCompetition",
+            () => reader.sampleCompetition(index, competitionRequest)
+          ),
+          state
+        )
       );
       state = competition.state;
       if (competition.kind === "delay") {
-        const outcome = executor.annotate(competition.annotation);
+        const outcome = measure(
+          "autoBuild.annotate",
+          () => executor.annotate(competition.annotation)
+        );
         if (outcome.status !== "succeeded") {
           return outcome;
         }
         continue;
       }
-      const result2 = executor.executeClick(competition.decision);
+      const result2 = measure(
+        "autoBuild.executeClick",
+        () => executor.executeClick(competition.decision)
+      );
       if (result2.outcome.status !== "succeeded") {
         return result2.outcome;
       }
-      const application = applyBuildClickResult(setup, index, result2, state);
+      const application = measure(
+        "autoBuild.applyClickResult",
+        () => applyBuildClickResult(setup, index, result2, state)
+      );
       state = application.state;
       if (application.stop) {
         break;
@@ -41945,7 +41988,7 @@
     return Object.freeze({
       autoBuild: () => {
         if (!dependencies.isGovernReady()) return;
-        runBuildAutomation(adapter);
+        runBuildAutomation({ ...adapter, diagnostics: dependencies.diagnostics });
       }
     });
   }
@@ -56522,7 +56565,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getResources: () => resources,
         getCostConflict: (target) => getCostConflict(target)
       },
-      isGovernReady: () => Boolean(game?.global?.civic?.govern)
+      isGovernReady: () => Boolean(game?.global?.civic?.govern),
+      diagnostics
     });
     let techConflictClock = browserClock;
     const getTechConflict = (tech) => {

@@ -4326,6 +4326,7 @@ function startEvolveRuntimeComposition(
       getCostConflict: (target) => getCostConflict(target),
     },
     isGovernReady: () => Boolean(game?.global?.civic?.govern),
+    diagnostics,
   });
 
   let techConflictClock = browserClock;

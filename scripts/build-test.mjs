@@ -124,7 +124,7 @@ function makeWorld({ settings = {}, conflicts = {} } = {}) {
   return world;
 }
 
-function runNew(world) {
+function runNew(world, diagnostics) {
   const adapter = createBuildAdapter({
     getBuildingManager: () => world.BuildingManager,
     getProjectManager: () => world.ProjectManager,
@@ -133,7 +133,7 @@ function runNew(world) {
     getResources: () => world.resources,
     getCostConflict: (target) => world.getCostConflict(target),
   });
-  return runBuildAutomation(adapter);
+  return runBuildAutomation({ ...adapter, diagnostics });
 }
 
 function runScenario(name, buildWorld) {
@@ -164,6 +164,34 @@ assert.deepEqual(
   world.state.unlockedBuildings.map((t) => t._vueBinding),
   ["city-house"],
 );
+
+// Opt-in profiling separates the build adapter reads from pure planning and execution.
+{
+  const phases = [];
+  const w = makeWorld();
+  makeResource(w, "Lumber", { quantity: 100 });
+  makeTarget(w, "profiled-house", { weighting: 5, cost: { Lumber: 20 } });
+  const outcome = runNew(w, {
+    readPerformanceEnabled: () => true,
+    nowMs: () => 0,
+    recordPerformance: (phase) => phases.push(phase),
+    flushPerformance: () => {},
+  });
+  assert.equal(outcome.status, "succeeded");
+  assert.deepEqual(phases, [
+    "autoBuild.beginCycle",
+    "autoBuild.sampleNeeds",
+    "autoBuild.sampleCandidate",
+    "autoBuild.planGate",
+    "autoBuild.sampleConflict",
+    "autoBuild.planConflict",
+    "autoBuild.sampleRequest",
+    "autoBuild.sampleCompetition",
+    "autoBuild.planCompetition",
+    "autoBuild.executeClick",
+    "autoBuild.applyClickResult",
+  ]);
+}
 
 runScenario("queued and trigger targets are skipped", () => {
   const w = makeWorld();
