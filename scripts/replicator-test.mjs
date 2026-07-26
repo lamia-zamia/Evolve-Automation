@@ -218,6 +218,36 @@ const legacyPriorityPlan = planReplicatorPriority({
 assert.deepEqual(planReplicatorSelection(legacyPriorityPlan, []), {
   productionId: "Iron",
 });
+const demandPriorityPlan = planReplicatorPriority({
+  initialised: true,
+  assignGovernorTask: false,
+  scoreMode: "weight",
+  selectHighestScore: true,
+  productions: [
+    {
+      id: "DemandedPriorityOne",
+      unlocked: true,
+      enabled: true,
+      weighting: 1,
+      priority: 1,
+      demanded: true,
+      useful: true,
+    },
+    {
+      id: "OrdinaryPriorityTen",
+      unlocked: true,
+      enabled: true,
+      weighting: 1,
+      priority: 10,
+      demanded: false,
+      useful: true,
+    },
+  ],
+});
+assert.deepEqual(
+  demandPriorityPlan.candidates.map((candidate) => candidate.productionId),
+  ["DemandedPriorityOne", "OrdinaryPriorityTen"],
+);
 assert.deepEqual(planReplicatorGovernorTask(["market", "none"]), {
   status: "ready",
   assignment: {
