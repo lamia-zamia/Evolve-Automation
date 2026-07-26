@@ -85,7 +85,11 @@ function makeContext({
       },
       // haveTech(name, level) mirrors the main-script signature: a bare name means level 1.
       haveTech: (name, level = 1) => (techLevels[name] ?? 0) >= level,
-      win: { $: () => [{ __vue__: mainVue }] },
+      win: {
+        document: {
+          querySelector: () => ({ __vue_proxy__: mainVue }),
+        },
+      },
     },
   };
 }

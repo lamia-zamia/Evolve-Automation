@@ -24,6 +24,7 @@ const dependencyNames = [
   "KeyManager",
   "logIgnore",
   "logPrestige",
+  "mainVue",
   "MutableTraitManager",
   "mutationCostMultipliers",
   "mutationCostMultipliersGenus",
@@ -41,7 +42,6 @@ const dependencyNames = [
   "traitVal",
   "TriggerManager",
   "WarManager",
-  "win",
   "WindowManager",
 ];
 
@@ -93,6 +93,7 @@ const classes = createEntityClasses({
   readKeyManager: () => context.KeyManager,
   readLogIgnore: () => context.logIgnore,
   readLogPrestige: () => context.logPrestige,
+  readMainVue: () => context.mainVue,
   readMutableTraitManager: () => context.MutableTraitManager,
   readMutationCostMultipliers: () => context.mutationCostMultipliers,
   readMutationCostMultipliersGenus: () => context.mutationCostMultipliersGenus,
@@ -110,7 +111,6 @@ const classes = createEntityClasses({
   readTraitVal: () => context.traitVal,
   readTriggerManager: () => context.TriggerManager,
   readWarManager: () => context.WarManager,
-  readWin: () => context.win,
   readWindowManager: () => context.WindowManager,
 });
 

@@ -1,11 +1,9 @@
-interface BrowserElement {
-  __vue__?: unknown;
-}
+import {
+  createVueAdapter,
+  type VueAdapterDependencies,
+} from "../adapters/browser/vue.ts";
 
-interface BrowserRuntimeDependencies {
-  getWin: () => {
-    document: { getElementById(id: string): BrowserElement | null };
-  };
+interface BrowserRuntimeDependencies extends VueAdapterDependencies {
   getDocument: () => {
     createElement(name: "a"): {
       download: string;
@@ -28,13 +26,7 @@ export function createBrowserRuntime({
   getBlobConstructor,
   schedule,
 }: BrowserRuntimeDependencies) {
-  function getVueById(elementId: string) {
-    const element = getWin().document.getElementById(elementId);
-    if (element === null || !element.__vue__) {
-      return undefined;
-    }
-    return element.__vue__;
-  }
+  const { getVueById, getMainVue } = createVueAdapter({ getWin });
 
   function triggerFileDownload(contents: string, filename: string) {
     const UrlApi = getUrlApi();
@@ -49,5 +41,5 @@ export function createBrowserRuntime({
     }, 60 * 1000);
   }
 
-  return { getVueById, triggerFileDownload };
+  return { getVueById, getMainVue, triggerFileDownload };
 }

@@ -60,20 +60,34 @@ vm.runInNewContext(source, sandbox, {
 
 assert.equal(typeof hooks.setBrowserRuntimeTestContext, "function");
 assert.equal(typeof hooks.browserRuntime?.getVueById, "function");
+assert.equal(typeof hooks.browserRuntime?.getMainVue, "function");
 assert.equal(typeof hooks.browserRuntime?.triggerFileDownload, "function");
 
 const vue = { id: "vue" };
+const mainVue = { id: "main" };
 hooks.setBrowserRuntimeTestContext({
   win: {
     document: {
       getElementById: (id) =>
-        id === "present" ? { __vue__: vue } : id === "plain" ? {} : null,
+        id === "present"
+          ? { __vue_proxy__: vue }
+          : id === "legacy"
+            ? { __vue__: vue }
+            : id === "app"
+              ? { __vue_app__: { _instance: { proxy: vue } } }
+              : id === "plain"
+                ? {}
+                : null,
+      querySelector: () => ({ __vue_proxy__: mainVue }),
     },
   },
 });
 assert.equal(hooks.browserRuntime.getVueById("present"), vue);
+assert.equal(hooks.browserRuntime.getVueById("legacy"), vue);
+assert.equal(hooks.browserRuntime.getVueById("app"), vue);
 assert.equal(hooks.browserRuntime.getVueById("plain"), undefined);
 assert.equal(hooks.browserRuntime.getVueById("missing"), undefined);
+assert.equal(hooks.browserRuntime.getMainVue(), mainVue);
 
 hooks.browserRuntime.triggerFileDownload("contents", "save.json");
 assert.deepEqual(trace, [

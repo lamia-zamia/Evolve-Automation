@@ -2458,7 +2458,7 @@ function startEvolveRuntimeComposition(
   const userscriptEnvironment = createUserscriptEnvironment(
     runtimeEnvironment.window,
   );
-  const { getVueById, triggerFileDownload } = createBrowserRuntime({
+  const { getVueById, getMainVue, triggerFileDownload } = createBrowserRuntime({
     getWin: () => win,
     getDocument: () => runtimeEnvironment.document,
     getUrlApi: () => runtimeEnvironment.urlApi,
@@ -2538,6 +2538,7 @@ function startEvolveRuntimeComposition(
     readKeyManager: () => KeyManager,
     readLogIgnore: () => logIgnore,
     readLogPrestige: () => logPrestige,
+    readMainVue: () => getMainVue(),
     readMutableTraitManager: () => MutableTraitManager,
     readMutationCostMultipliers: () => mutationCostMultipliers,
     readMutationCostMultipliersGenus: () => mutationCostMultipliersGenus,
@@ -2555,7 +2556,6 @@ function startEvolveRuntimeComposition(
     readTraitVal: () => traitVal,
     readTriggerManager: () => TriggerManager,
     readWarManager: () => WarManager,
-    readWin: () => win,
     readWindowManager: () => WindowManager,
   });
 
@@ -4847,7 +4847,7 @@ function startEvolveRuntimeComposition(
     getBuildings: () => buildings,
     getResources: () => resources,
     getHaveTech: () => haveTech,
-    getMainVue: () => win.$("#mainColumn > div:first-child")[0].__vue__,
+    getMainVue,
   });
 
   publishTestSurface({
@@ -6205,7 +6205,7 @@ function startEvolveRuntimeComposition(
   });
 
   publishTestSurface({
-    browserRuntime: { getVueById, triggerFileDownload },
+    browserRuntime: { getVueById, getMainVue, triggerFileDownload },
     setBrowserRuntimeTestContext(context) {
       win = context.win;
     },

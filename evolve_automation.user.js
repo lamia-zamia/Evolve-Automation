@@ -6864,6 +6864,7 @@
     readKeyManager,
     readLogIgnore,
     readLogPrestige,
+    readMainVue,
     readMutableTraitManager,
     readMutationCostMultipliers,
     readMutationCostMultipliersGenus,
@@ -6881,7 +6882,6 @@
     readTraitVal,
     readTriggerManager,
     readWarManager,
-    readWin,
     readWindowManager
   }) {
     const $ = (...args) => readJQuery()(...args);
@@ -8064,7 +8064,7 @@
         }
         readKeyManager().set(false, false, false);
         if (readSettings3().performanceHackAvoidDrawTech && this.count >= 10 && !(this.id === "syphon" && this.count >= 79)) {
-          let mainVue = readWin().$("#mainColumn > div:first-child")[0]?.__vue__;
+          let mainVue = readMainVue();
           if (mainVue) {
             let oldTabLoad = mainVue.s.tabLoad;
             try {
@@ -16245,6 +16245,48 @@
     return { buildFilterRegExp, filterLog };
   }
 
+  // src/adapters/browser/vue.ts
+  function asRecord(value) {
+    return typeof value === "object" && value !== null || typeof value === "function" ? value : void 0;
+  }
+  function readProperty(owner, key) {
+    return asRecord(owner)?.[key];
+  }
+  function isPresent(value) {
+    return value !== void 0 && value !== null;
+  }
+  function readVueProxy(element) {
+    const customProxy = readProperty(element, "__vue_proxy__");
+    if (isPresent(customProxy)) {
+      return customProxy;
+    }
+    const app = readProperty(element, "__vue_app__");
+    const instance = readProperty(app, "_instance");
+    const appProxy = readProperty(instance, "proxy");
+    if (isPresent(appProxy)) {
+      return appProxy;
+    }
+    const legacyVue = readProperty(element, "__vue__");
+    return isPresent(legacyVue) ? legacyVue : void 0;
+  }
+  function createVueAdapter({ getWin }) {
+    function getVueById(elementId) {
+      const element = getWin().document.getElementById(elementId);
+      return readVueProxy(element);
+    }
+    function getMainVue() {
+      const document = getWin().document;
+      const querySelector = document.querySelector;
+      if (typeof querySelector !== "function") {
+        return void 0;
+      }
+      return readVueProxy(
+        Reflect.apply(querySelector, document, ["#mainColumn > div:first-child"])
+      );
+    }
+    return Object.freeze({ getVueById, getMainVue });
+  }
+
   // src/browser/runtime.ts
   function createBrowserRuntime({
     getWin,
@@ -16253,13 +16295,7 @@
     getBlobConstructor,
     schedule
   }) {
-    function getVueById(elementId) {
-      const element = getWin().document.getElementById(elementId);
-      if (element === null || !element.__vue__) {
-        return void 0;
-      }
-      return element.__vue__;
-    }
+    const { getVueById, getMainVue } = createVueAdapter({ getWin });
     function triggerFileDownload(contents, filename) {
       const UrlApi = getUrlApi();
       const BlobConstructor = getBlobConstructor();
@@ -16272,7 +16308,7 @@
         UrlApi.revokeObjectURL(url);
       }, 60 * 1e3);
     }
-    return { getVueById, triggerFileDownload };
+    return { getVueById, getMainVue, triggerFileDownload };
   }
 
   // src/ui/mech-stats.ts
@@ -54667,7 +54703,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const userscriptEnvironment = createUserscriptEnvironment(
       runtimeEnvironment.window
     );
-    const { getVueById, triggerFileDownload } = createBrowserRuntime({
+    const { getVueById, getMainVue, triggerFileDownload } = createBrowserRuntime({
       getWin: () => win,
       getDocument: () => runtimeEnvironment.document,
       getUrlApi: () => runtimeEnvironment.urlApi,
@@ -54739,6 +54775,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readKeyManager: () => KeyManager,
       readLogIgnore: () => logIgnore,
       readLogPrestige: () => logPrestige,
+      readMainVue: () => getMainVue(),
       readMutableTraitManager: () => MutableTraitManager,
       readMutationCostMultipliers: () => mutationCostMultipliers,
       readMutationCostMultipliersGenus: () => mutationCostMultipliersGenus,
@@ -54756,7 +54793,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readTraitVal: () => traitVal,
       readTriggerManager: () => TriggerManager,
       readWarManager: () => WarManager,
-      readWin: () => win,
       readWindowManager: () => WindowManager
     });
     if (characterizationSurface)
@@ -56815,7 +56851,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getBuildings: () => buildings,
       getResources: () => resources,
       getHaveTech: () => haveTech,
-      getMainVue: () => win.$("#mainColumn > div:first-child")[0].__vue__
+      getMainVue
     });
     publishTestSurface({
       updateTabs: (update) => updateTabs(update),
@@ -58033,7 +58069,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     publishTestSurface({
-      browserRuntime: { getVueById, triggerFileDownload },
+      browserRuntime: { getVueById, getMainVue, triggerFileDownload },
       setBrowserRuntimeTestContext(context) {
         win = context.win;
       }
@@ -58110,14 +58146,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
   }
 
   // src/adapters/browser/legacy-runtime-environment.ts
-  function asRecord(value) {
+  function asRecord2(value) {
     return typeof value === "object" && value !== null || typeof value === "function" ? value : void 0;
   }
-  function readProperty(owner, key) {
-    return asRecord(owner)?.[key];
+  function readProperty2(owner, key) {
+    return asRecord2(owner)?.[key];
   }
   function bindFunction(owner, key, fallback) {
-    const candidate = readProperty(owner, key);
+    const candidate = readProperty2(owner, key);
     return typeof candidate === "function" ? (...args) => Reflect.apply(candidate, owner, args) : fallback;
   }
   var noOperation = () => void 0;
@@ -58134,9 +58170,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     }
   };
   function readUrlApi(globalObject) {
-    const candidate = readProperty(globalObject, "URL");
-    const createObjectURL = readProperty(candidate, "createObjectURL");
-    const revokeObjectURL = readProperty(candidate, "revokeObjectURL");
+    const candidate = readProperty2(globalObject, "URL");
+    const createObjectURL = readProperty2(candidate, "createObjectURL");
+    const revokeObjectURL = readProperty2(candidate, "revokeObjectURL");
     if (typeof createObjectURL !== "function" || typeof revokeObjectURL !== "function") {
       return unavailableUrlApi;
     }
@@ -58148,28 +58184,28 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
   }
   function readBlobConstructor(globalObject) {
-    const candidate = readProperty(globalObject, "Blob");
+    const candidate = readProperty2(globalObject, "Blob");
     return typeof candidate === "function" ? candidate : UnavailableBlob;
   }
   function createLegacyRuntimeEnvironment(globalObject) {
-    const window = readProperty(globalObject, "window") ?? globalObject;
-    const document = readProperty(globalObject, "document");
-    const consoleObject = readProperty(globalObject, "console");
+    const window = readProperty2(globalObject, "window") ?? globalObject;
+    const document = readProperty2(globalObject, "document");
+    const consoleObject = readProperty2(globalObject, "console");
     return Object.freeze({
       document,
       window,
-      storage: readProperty(globalObject, "localStorage"),
+      storage: readProperty2(globalObject, "localStorage"),
       createDate: () => /* @__PURE__ */ new Date(),
       urlApi: readUrlApi(globalObject),
       BlobConstructor: readBlobConstructor(globalObject),
       schedule: bindFunction(globalObject, "setTimeout", noOperation),
       repeat: bindFunction(globalObject, "setInterval", noOperation),
-      MutationObserver: readProperty(globalObject, "MutationObserver"),
-      ResizeObserver: readProperty(globalObject, "ResizeObserver"),
-      HTMLElement: readProperty(globalObject, "HTMLElement"),
-      KeyboardEvent: readProperty(globalObject, "KeyboardEvent"),
-      Node: readProperty(globalObject, "Node"),
-      Sortable: readProperty(globalObject, "Sortable"),
+      MutationObserver: readProperty2(globalObject, "MutationObserver"),
+      ResizeObserver: readProperty2(globalObject, "ResizeObserver"),
+      HTMLElement: readProperty2(globalObject, "HTMLElement"),
+      KeyboardEvent: readProperty2(globalObject, "KeyboardEvent"),
+      Node: readProperty2(globalObject, "Node"),
+      Sortable: readProperty2(globalObject, "Sortable"),
       alert: bindFunction(globalObject, "alert", noOperation),
       confirm: bindFunction(globalObject, "confirm", confirmByDefault),
       log: bindFunction(consoleObject, "log", noOperation),

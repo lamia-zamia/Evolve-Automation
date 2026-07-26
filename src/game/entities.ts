@@ -28,6 +28,7 @@ interface EntityClassesDependencies {
   readKeyManager: () => LooseRecord;
   readLogIgnore: () => Loose[];
   readLogPrestige: () => LooseFunction;
+  readMainVue: () => Loose;
   readMutableTraitManager: () => LooseRecord;
   readMutationCostMultipliers: () => LooseRecord;
   readMutationCostMultipliersGenus: () => LooseRecord;
@@ -45,7 +46,6 @@ interface EntityClassesDependencies {
   readTraitVal: () => LooseFunction;
   readTriggerManager: () => LooseRecord;
   readWarManager: () => LooseRecord;
-  readWin: () => LooseRecord;
   readWindowManager: () => LooseRecord;
 }
 
@@ -72,6 +72,7 @@ export function createEntityClasses({
   readKeyManager,
   readLogIgnore,
   readLogPrestige,
+  readMainVue,
   readMutableTraitManager,
   readMutationCostMultipliers,
   readMutationCostMultipliersGenus,
@@ -89,7 +90,6 @@ export function createEntityClasses({
   readTraitVal,
   readTriggerManager,
   readWarManager,
-  readWin,
   readWindowManager,
 }: EntityClassesDependencies) {
   const $: LooseFunction = (...args) => readJQuery()(...args);
@@ -1784,7 +1784,7 @@ export function createEntityClasses({
         this.count >= 10 &&
         !(this.id === "syphon" && this.count >= 79)
       ) {
-        let mainVue = readWin().$("#mainColumn > div:first-child")[0]?.__vue__;
+        let mainVue = readMainVue();
         if (mainVue) {
           let oldTabLoad = mainVue.s.tabLoad;
           try {
