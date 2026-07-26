@@ -68,10 +68,8 @@ export function planMiningDroidTargets(
     .map(([, group]) => group);
   const supplementary = priorityGroups.get(-1);
   if (supplementary !== undefined && priorityList.length > 1) {
-    // Preserve the legacy one-argument splice and its from-index lookup. For
-    // configured priorities below -1 this removes the suffix, even though the
-    // usual UI-generated priorities make -1 the final group.
-    priorityList.splice(priorityList.indexOf(supplementary, 1));
+    const supplementaryIndex = priorityList.indexOf(supplementary);
+    priorityList.splice(supplementaryIndex, 1);
     priorityList[0]?.push(...supplementary);
   }
 

@@ -63,6 +63,31 @@ assert.equal(
   null,
 );
 
+const customPriorityTargets = planMiningDroidTargets({
+  initialised: true,
+  maximum: 2,
+  productions: [
+    {
+      id: "supplementary",
+      weighting: 1,
+      priority: -1,
+      demanded: false,
+      useful: true,
+    },
+    {
+      id: "lower-priority",
+      weighting: 1,
+      priority: -2,
+      demanded: false,
+      useful: true,
+    },
+  ],
+});
+assert.deepEqual(customPriorityTargets, [
+  { productionId: "supplementary", target: 1 },
+  { productionId: "lower-priority", target: 1 },
+]);
+
 let incompleteCurrentRead = false;
 let incompleteExecution = false;
 assert.equal(

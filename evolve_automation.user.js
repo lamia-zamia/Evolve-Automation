@@ -29729,7 +29729,8 @@
     const priorityList = [...priorityGroups.entries()].sort(([left], [right]) => right - left).map(([, group]) => group);
     const supplementary = priorityGroups.get(-1);
     if (supplementary !== void 0 && priorityList.length > 1) {
-      priorityList.splice(priorityList.indexOf(supplementary, 1));
+      const supplementaryIndex = priorityList.indexOf(supplementary);
+      priorityList.splice(supplementaryIndex, 1);
       priorityList[0]?.push(...supplementary);
     }
     let remaining = input.maximum;
