@@ -74,6 +74,15 @@ assert.equal(catalog.checkTypes.SettingDefault.fn("example"), 3);
 assert.equal(catalog.checkTypes.SettingCurrent.fn("example"), 7);
 assert.equal(catalog.checkTypes.BuildingCount.fn("farm"), 2);
 assert.equal(catalog.checkTypes.Eval.fn("x + 1"), "eval:x + 1");
+assert.ok(Number.isNaN(catalog.checkTypes.Other.fn("mrelay")));
+context.game = {
+  ...context.game,
+  global: {
+    ...context.game.global,
+    space: { m_relay: { charged: 5000 } },
+  },
+};
+assert.equal(catalog.checkTypes.Other.fn("mrelay"), 0.5);
 context.game = {
   ...context.game,
   global: { ...context.game.global, civic: {} },

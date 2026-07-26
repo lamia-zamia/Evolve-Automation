@@ -57,9 +57,8 @@ export function createOverrideCatalog({
   const fastEval: AnyFunction = (...args) => readFastEval()(...args);
   const getGovernor: AnyFunction = (...args) => readGovernor()(...args);
   const historicalRelayChargeRatio = () => {
-    // @ts-expect-error Preserve the bundled implementation's historical NaN result when charged is absent.
-    // eslint-disable-next-line no-constant-binary-expression
-    return readGame().global.space.m_relay?.charged / 10000.0 ?? 0;
+    // Preserve the bundled implementation's historical NaN result when charged is absent.
+    return readGame().global.space.m_relay?.charged / 10000.0;
   };
   const prestigeTypes = [
     { val: "none", label: "None", hint: "Endless game" },
