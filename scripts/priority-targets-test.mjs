@@ -127,6 +127,23 @@ assert.deepEqual(context.state.conflictTargets, [
   { name: "city-mine", cause: "Queue", cost: { Lumber: 10 } },
 ]);
 
+// A well-formed queue entry whose catalog object disappeared is treated as a
+// recoverable stale entry; later known queue entries still participate normally.
+context.game.global.queue.queue = [
+  { id: "missing-after-reset" },
+  { id: "city-mine" },
+];
+updatePriorityTargets();
+assert.equal(context.state.queueDataUnavailable, false);
+assert.deepEqual(
+  context.state.queuedTargetsAll.map((t) => t.id),
+  ["city-mine"],
+);
+assert.deepEqual(context.state.conflictTargets, [
+  { name: "city-mine", cause: "Queue", cost: { Lumber: 10 } },
+]);
+context.game.global.queue.queue = [{ id: "city-mine" }];
+
 // The Inflation "Wheelbarrow" reservation, which the bundled characterization
 // leaves inert, is driven here through the injected guard.
 saveMoney = true;

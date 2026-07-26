@@ -361,6 +361,37 @@ assert.deepEqual(scenarioA.unlockedTechs, [
   "tech-ignored_but_triggered",
 ]);
 
+// A well-formed ordinary queue item missing from both catalogs is stale-entry
+// recovery: it is skipped without poisoning unrelated queue reservations.
+const scenarioStaleQueue = runScenario({
+  settings: baseSettings({
+    prioritizeUnify: [],
+    prioritizeTriggers: [],
+    prioritizeOuterFleet: [],
+    autoFleet: false,
+    autoMech: false,
+    autoTrigger: false,
+  }),
+  queue: {
+    display: true,
+    queue: [{ id: "missing-after-reset" }, { id: "city-lumber_yard" }],
+  },
+  buildings: {
+    AsphodelEncampment: makeBuilding("AsphodelEncampment"),
+    GorddonEmbassy: makeBuilding("GorddonEmbassy"),
+    TauStarEden: makeBuilding("TauStarEden"),
+    TauGas2MatrioshkaBrain: makeBuilding("TauGas2MatrioshkaBrain"),
+    TauGas2IgniteGasGiant: makeBuilding("TauGas2IgniteGasGiant"),
+  },
+  techIds: { "tech-unification": unification },
+  buildingIds: { "city-lumber_yard": lumberYard },
+});
+assert.deepEqual(scenarioStaleQueue.queuedAll, ["city-lumber_yard"]);
+assert.deepEqual(scenarioStaleQueue.queued, ["city-lumber_yard"]);
+assert.deepEqual(scenarioStaleQueue.conflicts, [
+  { name: "Lumber Yard", cause: "Queue", cost: { Lumber: 100 } },
+]);
+
 // Scenario B: triggers disabled, no "save" prioritization, a governor mech task
 // (titan blueprint), and the Ignition fake trigger gated behind prestigeType.
 const scenarioB = runScenario({
