@@ -88,6 +88,52 @@ const CREW_SHED_RANK: Readonly<Record<string, number>> = Object.freeze({
 });
 const DEFAULT_CREW_SHED_RANK = 1;
 
+// These tables are fixed game metadata. Keep them outside readBuildingRule so
+// each managed building does not allocate fresh arrays during every power tick.
+const JOB_DEPENDENT_BUILDINGS = [
+  ["CementPlant", "CementWorker"],
+  ["Mine", "Miner"],
+  ["CoalMine", "CoalMiner"],
+] as const;
+const SAVING_BUSY_BUILDINGS = [
+  ["GasMining", "Helium_3", "space_gas_mining_title"],
+  ["GasMoonOilExtractor", "Oil", "space_gas_moon_oil_extractor_title"],
+] as const;
+const KUIPER_BUSY_BUILDINGS = [
+  ["KuiperOrichalcum", "Orichalcum"],
+  ["KuiperUranium", "Uranium"],
+  ["KuiperNeutronium", "Neutronium"],
+  ["KuiperElerium", "Elerium"],
+] as const;
+const BELT_BUSY_BUILDINGS = [
+  ["BeltIridiumShip", "Iridium"],
+  ["BeltIronShip", "Iron"],
+] as const;
+const ORDINARY_BUSY_BUILDINGS = [
+  ["BeltEleriumShip", "Elerium", "job_space_miner"],
+  ["MoonIridiumMine", "Iridium", "space_moon_iridium_mine_title"],
+  ["MoonHeliumMine", "Helium_3", "space_moon_helium_mine_title"],
+  ["Alien1VitreloyPlant", "Vitreloy", "galaxy_vitreloy_plant_bd"],
+  ["ChthonianExcavator", "Orichalcum", "galaxy_excavator"],
+  ["EnceladusWaterFreighter", "Water", "space_water_freighter_title"],
+  ["AsphodelHarvester", "Asphodel_Powder", "eden_asphodel_harvester_title"],
+] as const;
+const ARMED_MINER_RESOURCES = [
+  ["Bolognium", "galaxy_armed_miner_bd"],
+  ["Adamantite", "galaxy_armed_miner_bd"],
+  ["Iridium", "galaxy_armed_miner_bd"],
+] as const;
+const CHTHONIAN_RAIDER_RESOURCES = [
+  ["Vitreloy", "galaxy_raider"],
+  ["Polymer", "galaxy_raider"],
+  ["Neutronium", "galaxy_raider"],
+  ["Deuterium", "galaxy_raider"],
+] as const;
+const NEBULA_HARVESTER_RESOURCES = [
+  ["Deuterium", "interstellar_harvester_title"],
+  ["Helium_3", "interstellar_harvester_title"],
+] as const;
+
 /**
  * Resolve the crew-reserve setting to an absolute worker count. Accepts a number
  * or a string that is either a plain count ("800") or a percentage of the
@@ -444,11 +490,7 @@ function readBuildingRule(
       ),
     });
   }
-  for (const [buildingName, jobName] of [
-    ["CementPlant", "CementWorker"],
-    ["Mine", "Miner"],
-    ["CoalMine", "CoalMiner"],
-  ] as const) {
+  for (const [buildingName, jobName] of JOB_DEPENDENT_BUILDINGS) {
     if (identity(buildings, buildingName, building)) {
       return Object.freeze({
         kind: "job-dependent",
@@ -474,11 +516,7 @@ function readBuildingRule(
   if (identity(buildings, "LakeHarbor", building)) {
     return Object.freeze({ kind: "lake-harbor" });
   }
-  const busyRules = [
-    ["GasMining", "Helium_3", "space_gas_mining_title"],
-    ["GasMoonOilExtractor", "Oil", "space_gas_moon_oil_extractor_title"],
-  ] as const;
-  for (const [buildingName, resourceName, source] of busyRules) {
+  for (const [buildingName, resourceName, source] of SAVING_BUSY_BUILDINGS) {
     if (identity(buildings, buildingName, building)) {
       const resource = namedRecord(resources, resourceName, "resources");
       return Object.freeze({
@@ -494,12 +532,7 @@ function readBuildingRule(
       });
     }
   }
-  for (const [buildingName, resourceName] of [
-    ["KuiperOrichalcum", "Orichalcum"],
-    ["KuiperUranium", "Uranium"],
-    ["KuiperNeutronium", "Neutronium"],
-    ["KuiperElerium", "Elerium"],
-  ] as const) {
+  for (const [buildingName, resourceName] of KUIPER_BUSY_BUILDINGS) {
     if (identity(buildings, buildingName, building)) {
       const resource = namedRecord(resources, resourceName, "resources");
       const title = registry.register(
@@ -520,10 +553,7 @@ function readBuildingRule(
       });
     }
   }
-  for (const [buildingName, resourceName] of [
-    ["BeltIridiumShip", "Iridium"],
-    ["BeltIronShip", "Iron"],
-  ] as const) {
+  for (const [buildingName, resourceName] of BELT_BUSY_BUILDINGS) {
     if (identity(buildings, buildingName, building)) {
       const resource = namedRecord(resources, resourceName, "resources");
       const elerium = namedRecord(resources, "Elerium", "resources");
@@ -540,16 +570,7 @@ function readBuildingRule(
       });
     }
   }
-  const ordinaryBusyRules = [
-    ["BeltEleriumShip", "Elerium", "job_space_miner"],
-    ["MoonIridiumMine", "Iridium", "space_moon_iridium_mine_title"],
-    ["MoonHeliumMine", "Helium_3", "space_moon_helium_mine_title"],
-    ["Alien1VitreloyPlant", "Vitreloy", "galaxy_vitreloy_plant_bd"],
-    ["ChthonianExcavator", "Orichalcum", "galaxy_excavator"],
-    ["EnceladusWaterFreighter", "Water", "space_water_freighter_title"],
-    ["AsphodelHarvester", "Asphodel_Powder", "eden_asphodel_harvester_title"],
-  ] as const;
-  for (const [buildingName, resourceName, source] of ordinaryBusyRules) {
+  for (const [buildingName, resourceName, source] of ORDINARY_BUSY_BUILDINGS) {
     if (identity(buildings, buildingName, building)) {
       return Object.freeze({
         kind: "busy-resource",
@@ -776,13 +797,7 @@ function readBuildingRule(
     return Object.freeze({
       kind: "armed-miner",
       observations: Object.freeze(
-        (
-          [
-            ["Bolognium", "galaxy_armed_miner_bd"],
-            ["Adamantite", "galaxy_armed_miner_bd"],
-            ["Iridium", "galaxy_armed_miner_bd"],
-          ] as const
-        ).map(([name, source]) =>
+        ARMED_MINER_RESOURCES.map(([name, source]) =>
           busyObservation(
             registry,
             namedRecord(resources, name, "resources"),
@@ -830,14 +845,7 @@ function readBuildingRule(
     });
   }
   if (identity(buildings, "ChthonianRaider", building)) {
-    const observations = (
-      [
-        ["Vitreloy", "galaxy_raider"],
-        ["Polymer", "galaxy_raider"],
-        ["Neutronium", "galaxy_raider"],
-        ["Deuterium", "galaxy_raider"],
-      ] as const
-    ).map(([name, source]) =>
+    const observations = CHTHONIAN_RAIDER_RESOURCES.map(([name, source]) =>
       busyObservation(
         registry,
         namedRecord(resources, name, "resources"),
@@ -861,12 +869,7 @@ function readBuildingRule(
     });
   }
   if (identity(buildings, "NebulaHarvester", building)) {
-    const observations = (
-      [
-        ["Deuterium", "interstellar_harvester_title"],
-        ["Helium_3", "interstellar_harvester_title"],
-      ] as const
-    ).map(([name, source]) =>
+    const observations = NEBULA_HARVESTER_RESOURCES.map(([name, source]) =>
       busyObservation(
         registry,
         namedRecord(resources, name, "resources"),

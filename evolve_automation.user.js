@@ -34583,6 +34583,49 @@
     dreadnought: 3
   });
   var DEFAULT_CREW_SHED_RANK = 1;
+  var JOB_DEPENDENT_BUILDINGS = [
+    ["CementPlant", "CementWorker"],
+    ["Mine", "Miner"],
+    ["CoalMine", "CoalMiner"]
+  ];
+  var SAVING_BUSY_BUILDINGS = [
+    ["GasMining", "Helium_3", "space_gas_mining_title"],
+    ["GasMoonOilExtractor", "Oil", "space_gas_moon_oil_extractor_title"]
+  ];
+  var KUIPER_BUSY_BUILDINGS = [
+    ["KuiperOrichalcum", "Orichalcum"],
+    ["KuiperUranium", "Uranium"],
+    ["KuiperNeutronium", "Neutronium"],
+    ["KuiperElerium", "Elerium"]
+  ];
+  var BELT_BUSY_BUILDINGS = [
+    ["BeltIridiumShip", "Iridium"],
+    ["BeltIronShip", "Iron"]
+  ];
+  var ORDINARY_BUSY_BUILDINGS = [
+    ["BeltEleriumShip", "Elerium", "job_space_miner"],
+    ["MoonIridiumMine", "Iridium", "space_moon_iridium_mine_title"],
+    ["MoonHeliumMine", "Helium_3", "space_moon_helium_mine_title"],
+    ["Alien1VitreloyPlant", "Vitreloy", "galaxy_vitreloy_plant_bd"],
+    ["ChthonianExcavator", "Orichalcum", "galaxy_excavator"],
+    ["EnceladusWaterFreighter", "Water", "space_water_freighter_title"],
+    ["AsphodelHarvester", "Asphodel_Powder", "eden_asphodel_harvester_title"]
+  ];
+  var ARMED_MINER_RESOURCES = [
+    ["Bolognium", "galaxy_armed_miner_bd"],
+    ["Adamantite", "galaxy_armed_miner_bd"],
+    ["Iridium", "galaxy_armed_miner_bd"]
+  ];
+  var CHTHONIAN_RAIDER_RESOURCES = [
+    ["Vitreloy", "galaxy_raider"],
+    ["Polymer", "galaxy_raider"],
+    ["Neutronium", "galaxy_raider"],
+    ["Deuterium", "galaxy_raider"]
+  ];
+  var NEBULA_HARVESTER_RESOURCES = [
+    ["Deuterium", "interstellar_harvester_title"],
+    ["Helium_3", "interstellar_harvester_title"]
+  ];
   function resolveCrewReserve(raw, population) {
     if (typeof raw === "number") {
       return Number.isFinite(raw) ? raw : 0;
@@ -34825,11 +34868,7 @@
         )
       });
     }
-    for (const [buildingName, jobName] of [
-      ["CementPlant", "CementWorker"],
-      ["Mine", "Miner"],
-      ["CoalMine", "CoalMiner"]
-    ]) {
+    for (const [buildingName, jobName] of JOB_DEPENDENT_BUILDINGS) {
       if (identity(buildings, buildingName, building3)) {
         return Object.freeze({
           kind: "job-dependent",
@@ -34855,11 +34894,7 @@
     if (identity(buildings, "LakeHarbor", building3)) {
       return Object.freeze({ kind: "lake-harbor" });
     }
-    const busyRules = [
-      ["GasMining", "Helium_3", "space_gas_mining_title"],
-      ["GasMoonOilExtractor", "Oil", "space_gas_moon_oil_extractor_title"]
-    ];
-    for (const [buildingName, resourceName, source] of busyRules) {
+    for (const [buildingName, resourceName, source] of SAVING_BUSY_BUILDINGS) {
       if (identity(buildings, buildingName, building3)) {
         const resource2 = namedRecord(resources, resourceName, "resources");
         return Object.freeze({
@@ -34875,12 +34910,7 @@
         });
       }
     }
-    for (const [buildingName, resourceName] of [
-      ["KuiperOrichalcum", "Orichalcum"],
-      ["KuiperUranium", "Uranium"],
-      ["KuiperNeutronium", "Neutronium"],
-      ["KuiperElerium", "Elerium"]
-    ]) {
+    for (const [buildingName, resourceName] of KUIPER_BUSY_BUILDINGS) {
       if (identity(buildings, buildingName, building3)) {
         const resource2 = namedRecord(resources, resourceName, "resources");
         const title = registry.register(
@@ -34901,10 +34931,7 @@
         });
       }
     }
-    for (const [buildingName, resourceName] of [
-      ["BeltIridiumShip", "Iridium"],
-      ["BeltIronShip", "Iron"]
-    ]) {
+    for (const [buildingName, resourceName] of BELT_BUSY_BUILDINGS) {
       if (identity(buildings, buildingName, building3)) {
         const resource2 = namedRecord(resources, resourceName, "resources");
         const elerium = namedRecord(resources, "Elerium", "resources");
@@ -34921,16 +34948,7 @@
         });
       }
     }
-    const ordinaryBusyRules = [
-      ["BeltEleriumShip", "Elerium", "job_space_miner"],
-      ["MoonIridiumMine", "Iridium", "space_moon_iridium_mine_title"],
-      ["MoonHeliumMine", "Helium_3", "space_moon_helium_mine_title"],
-      ["Alien1VitreloyPlant", "Vitreloy", "galaxy_vitreloy_plant_bd"],
-      ["ChthonianExcavator", "Orichalcum", "galaxy_excavator"],
-      ["EnceladusWaterFreighter", "Water", "space_water_freighter_title"],
-      ["AsphodelHarvester", "Asphodel_Powder", "eden_asphodel_harvester_title"]
-    ];
-    for (const [buildingName, resourceName, source] of ordinaryBusyRules) {
+    for (const [buildingName, resourceName, source] of ORDINARY_BUSY_BUILDINGS) {
       if (identity(buildings, buildingName, building3)) {
         return Object.freeze({
           kind: "busy-resource",
@@ -35141,11 +35159,7 @@
       return Object.freeze({
         kind: "armed-miner",
         observations: Object.freeze(
-          [
-            ["Bolognium", "galaxy_armed_miner_bd"],
-            ["Adamantite", "galaxy_armed_miner_bd"],
-            ["Iridium", "galaxy_armed_miner_bd"]
-          ].map(
+          ARMED_MINER_RESOURCES.map(
             ([name, source]) => busyObservation(
               registry,
               namedRecord(resources, name, "resources"),
@@ -35189,12 +35203,7 @@
       });
     }
     if (identity(buildings, "ChthonianRaider", building3)) {
-      const observations = [
-        ["Vitreloy", "galaxy_raider"],
-        ["Polymer", "galaxy_raider"],
-        ["Neutronium", "galaxy_raider"],
-        ["Deuterium", "galaxy_raider"]
-      ].map(
+      const observations = CHTHONIAN_RAIDER_RESOURCES.map(
         ([name, source]) => busyObservation(
           registry,
           namedRecord(resources, name, "resources"),
@@ -35213,10 +35222,7 @@
       });
     }
     if (identity(buildings, "NebulaHarvester", building3)) {
-      const observations = [
-        ["Deuterium", "interstellar_harvester_title"],
-        ["Helium_3", "interstellar_harvester_title"]
-      ].map(
+      const observations = NEBULA_HARVESTER_RESOURCES.map(
         ([name, source]) => busyObservation(
           registry,
           namedRecord(resources, name, "resources"),
