@@ -5,7 +5,11 @@ import type {
 import type { DecisionExecutor } from "../../../ports/decision-executor.ts";
 import type { GovernmentControls } from "../../../ports/government-controls.ts";
 import { stale, SUCCEEDED } from "../../command-outcomes.ts";
-import { requireFunction, requireRecord } from "../../validation.ts";
+import {
+  requireFunction,
+  requireRecord,
+  type UnknownRecord,
+} from "../../validation.ts";
 
 export interface GovernmentReaderDependencies {
   readonly getGovernmentManager: () => unknown;
@@ -14,6 +18,30 @@ export interface GovernmentReaderDependencies {
   readonly guardActive: (setting: string) => boolean;
   readonly haveTech: (tech: string) => boolean;
   readonly getGovernor: () => string;
+  readonly isTradeFederationAchievementUnlocked: () => boolean;
+}
+
+function readTradeRouteCount(game: UnknownRecord, path: string): number | null {
+  const global = game["global"];
+  if (typeof global !== "object" || global === null) return null;
+  const root = global as UnknownRecord;
+  const pathParts = path.split(".");
+  let value: unknown = root;
+  for (const part of pathParts.slice(1)) {
+    if (typeof value !== "object" || value === null) return null;
+    value = (value as UnknownRecord)[part];
+  }
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function hasTradeFederationRoutes(game: UnknownRecord): boolean {
+  // These counters are absent before their game systems initialize; absent is
+  // the legacy-equivalent "not ready" state for an achievement target.
+  const cityRoutes = readTradeRouteCount(game, "global.city.market.trade");
+  const galaxyRoutes = readTradeRouteCount(game, "global.galaxy.trade.cur");
+  return cityRoutes !== null && galaxyRoutes !== null
+    ? cityRoutes >= 750 && galaxyRoutes >= 50
+    : false;
 }
 
 /** `GovernmentManager.Types[type].isUnlocked()`, sampled only for a configured type. */
@@ -87,6 +115,7 @@ export function readGovernmentInput(
 
   const enabled = Boolean(Reflect.apply(isEnabled, manager, []));
   let guardAnarchist = false;
+  let tradeFederationReady = false;
   let haveQFactory = false;
   let govSpaceUnlocked = false;
   let govFinalUnlocked = false;
@@ -95,6 +124,20 @@ export function readGovernmentInput(
   if (enabled) {
     guardAnarchist = dependencies.guardActive("guardAnarchist");
     if (!guardAnarchist) {
+      const tradeFederationEnabled =
+        settings["achievementGuards"] !== false &&
+        settings["guardTradeFederation"] !== false;
+      if (
+        tradeFederationEnabled &&
+        !dependencies.isTradeFederationAchievementUnlocked() &&
+        hasTradeFederationRoutes(game)
+      ) {
+        tradeFederationReady = governmentUnlocked(
+          manager["Types"],
+          "federation",
+          "GovernmentManager",
+        );
+      }
       if (govSpace !== "none") {
         haveQFactory = dependencies.haveTech("q_factory");
         if (haveQFactory) {
@@ -148,6 +191,7 @@ export function readGovernmentInput(
     govSpaceUnlocked,
     govFinalUnlocked,
     govInterimUnlocked,
+    tradeFederationReady,
     candidateBackgrounds,
   });
 }

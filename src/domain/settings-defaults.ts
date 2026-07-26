@@ -150,6 +150,7 @@ export function computeAchievementGuardDefaults(): ResetPlan {
       guardEnergetic: true,
       guardRedDead: true,
       guardSecondEvolution: true,
+      guardTradeFederation: true,
       guardBananaRepublic: true,
     },
   };

@@ -627,6 +627,7 @@
         guardEnergetic: true,
         guardRedDead: true,
         guardSecondEvolution: true,
+        guardTradeFederation: true,
         guardBananaRepublic: true
       }
     };
@@ -17255,13 +17256,19 @@
         kind: "toggle",
         settingName: "guardRedDead",
         label: "Red Dead",
-        hint: "Never build a Spaceport during MAD runs (Cataclysm scenario)."
+        hint: "Never build a Red Spaceport during Whitehole or Vacuum Collapse runs."
       }),
       Object.freeze({
         kind: "toggle",
         settingName: "guardSecondEvolution",
         label: "Second Evolution",
         hint: "Research Fanaticism instead of Anthropology while worshipping own species as gods."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardTradeFederation",
+        label: "Trade Federation",
+        hint: "When Trade Federation is still unearned and 750 city plus 50 galactic trade routes are already active, temporarily switch to Federation without changing route allocation. The preferred government resumes afterward."
       }),
       Object.freeze({
         kind: "toggle",
@@ -21887,7 +21894,7 @@
       case "guardEnergetic":
         return input.prestigeType === "ascension" && input.thermalCollectors === 0;
       case "guardRedDead":
-        return input.prestigeType === "mad" && input.redSpaceports === 0;
+        return (input.prestigeType === "whitehole" || input.prestigeType === "vacuum") && input.redSpaceports === 0;
       case "guardSecondEvolution":
         return input.gods === input.species;
     }
@@ -25216,6 +25223,23 @@
   }
 
   // src/adapters/evolve/civic/government.ts
+  function readTradeRouteCount(game, path) {
+    const global = game["global"];
+    if (typeof global !== "object" || global === null) return null;
+    const root = global;
+    const pathParts = path.split(".");
+    let value = root;
+    for (const part of pathParts.slice(1)) {
+      if (typeof value !== "object" || value === null) return null;
+      value = value[part];
+    }
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+  function hasTradeFederationRoutes(game) {
+    const cityRoutes = readTradeRouteCount(game, "global.city.market.trade");
+    const galaxyRoutes = readTradeRouteCount(game, "global.galaxy.trade.cur");
+    return cityRoutes !== null && galaxyRoutes !== null ? cityRoutes >= 750 && galaxyRoutes >= 50 : false;
+  }
   function governmentUnlocked(types, type, path) {
     if (type === "none") {
       return false;
@@ -25272,6 +25296,7 @@
     const govGovernor = readString(settings, "govGovernor");
     const enabled = Boolean(Reflect.apply(isEnabled, manager, []));
     let guardAnarchist = false;
+    let tradeFederationReady = false;
     let haveQFactory = false;
     let govSpaceUnlocked = false;
     let govFinalUnlocked = false;
@@ -25279,6 +25304,14 @@
     if (enabled) {
       guardAnarchist = dependencies.guardActive("guardAnarchist");
       if (!guardAnarchist) {
+        const tradeFederationEnabled = settings["achievementGuards"] !== false && settings["guardTradeFederation"] !== false;
+        if (tradeFederationEnabled && !dependencies.isTradeFederationAchievementUnlocked() && hasTradeFederationRoutes(game)) {
+          tradeFederationReady = governmentUnlocked(
+            manager["Types"],
+            "federation",
+            "GovernmentManager"
+          );
+        }
         if (govSpace !== "none") {
           haveQFactory = dependencies.haveTech("q_factory");
           if (haveQFactory) {
@@ -25330,6 +25363,7 @@
       govSpaceUnlocked,
       govFinalUnlocked,
       govInterimUnlocked,
+      tradeFederationReady,
       candidateBackgrounds
     });
   }
@@ -25409,7 +25443,9 @@
   function planGovernment(input) {
     let government = null;
     if (input.isEnabled && !input.guardAnarchist) {
-      if (input.govSpace !== "none" && input.haveQFactory && input.govSpaceUnlocked) {
+      if (input.tradeFederationReady) {
+        government = "federation";
+      } else if (input.govSpace !== "none" && input.haveQFactory && input.govSpaceUnlocked) {
         government = input.govSpace;
       } else if (input.govFinal !== "none" && input.govFinalUnlocked) {
         government = input.govFinal;
@@ -55696,7 +55732,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getGame: () => game,
         guardActive,
         haveTech,
-        getGovernor
+        getGovernor,
+        isTradeFederationAchievementUnlocked: () => isAchievementUnlocked2("trade", 1)
       },
       executor: {
         getGovernmentManager: () => GovernmentManager,

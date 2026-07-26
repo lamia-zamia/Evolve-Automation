@@ -18,6 +18,8 @@ export interface GovernmentInput {
   readonly govSpaceUnlocked: boolean;
   readonly govFinalUnlocked: boolean;
   readonly govInterimUnlocked: boolean;
+  /** Routes already satisfy Trade Federation and Federation is available. */
+  readonly tradeFederationReady: boolean;
   /** `game.global.race.governor?.candidates ?? []` background ids, in order. */
   readonly candidateBackgrounds: readonly string[];
 }
@@ -36,7 +38,9 @@ export function planGovernment(
 ): GovernmentDecision {
   let government: string | null = null;
   if (input.isEnabled && !input.guardAnarchist) {
-    if (
+    if (input.tradeFederationReady) {
+      government = "federation";
+    } else if (
       input.govSpace !== "none" &&
       input.haveQFactory &&
       input.govSpaceUnlocked

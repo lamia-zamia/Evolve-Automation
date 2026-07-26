@@ -61,13 +61,19 @@ const achievementGuardSettingsReadModel: AchievementGuardSettingsReadModel =
         kind: "toggle",
         settingName: "guardRedDead",
         label: "Red Dead",
-        hint: "Never build a Spaceport during MAD runs (Cataclysm scenario).",
+        hint: "Never build a Red Spaceport during Whitehole or Vacuum Collapse runs.",
       }),
       Object.freeze({
         kind: "toggle",
         settingName: "guardSecondEvolution",
         label: "Second Evolution",
         hint: "Research Fanaticism instead of Anthropology while worshipping own species as gods.",
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardTradeFederation",
+        label: "Trade Federation",
+        hint: "When Trade Federation is still unearned and 750 city plus 50 galactic trade routes are already active, temporarily switch to Federation without changing route allocation. The preferred government resumes afterward.",
       }),
       Object.freeze({
         kind: "toggle",

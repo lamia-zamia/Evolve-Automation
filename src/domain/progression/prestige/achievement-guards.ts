@@ -103,7 +103,11 @@ export function isAchievementGuardActive(
         input.prestigeType === "ascension" && input.thermalCollectors === 0
       );
     case "guardRedDead":
-      return input.prestigeType === "mad" && input.redSpaceports === 0;
+      return (
+        (input.prestigeType === "whitehole" ||
+          input.prestigeType === "vacuum") &&
+        input.redSpaceports === 0
+      );
     case "guardSecondEvolution":
       return input.gods === input.species;
   }

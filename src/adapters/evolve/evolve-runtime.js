@@ -3746,6 +3746,8 @@ function startEvolveRuntimeComposition(
       guardActive,
       haveTech,
       getGovernor,
+      isTradeFederationAchievementUnlocked: () =>
+        isAchievementUnlocked("trade", 1),
     },
     executor: {
       getGovernmentManager: () => GovernmentManager,

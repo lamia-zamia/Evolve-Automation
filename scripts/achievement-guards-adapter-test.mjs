@@ -80,6 +80,35 @@ let guard = readAchievementGuardInput(
 assert.equal(guard.status, "ready");
 assert.equal(isAchievementGuardActive(guard.input), true);
 
+input.settings.prestigeType = "whitehole";
+guard = readAchievementGuardInput(
+  input.settings,
+  input.game,
+  input.poly,
+  input.buildings,
+  "guardRedDead",
+);
+assert.equal(guard.status, "ready");
+assert.equal(isAchievementGuardActive(guard.input), true);
+input.settings.prestigeType = "vacuum";
+guard = readAchievementGuardInput(
+  input.settings,
+  input.game,
+  input.poly,
+  input.buildings,
+  "guardRedDead",
+);
+assert.equal(isAchievementGuardActive(guard.input), true);
+input.settings.prestigeType = "mad";
+guard = readAchievementGuardInput(
+  input.settings,
+  input.game,
+  input.poly,
+  input.buildings,
+  "guardRedDead",
+);
+assert.equal(isAchievementGuardActive(guard.input), false);
+
 guard = readAchievementGuardInput(
   input.settings,
   input.game,

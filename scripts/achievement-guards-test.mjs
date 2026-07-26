@@ -40,4 +40,22 @@ const pacifist = {
 assert.equal(isAchievementGuardActive(pacifist), true);
 assert.equal(isAchievementGuardActive({ ...pacifist, attacks: 1 }), false);
 
+const redDead = {
+  guard: "guardRedDead",
+  enabled: true,
+  earnedStar: 0,
+  targetStar: 1,
+  prestigeType: "whitehole",
+  redSpaceports: 0,
+};
+assert.equal(isAchievementGuardActive(redDead), true);
+assert.equal(
+  isAchievementGuardActive({ ...redDead, prestigeType: "vacuum" }),
+  true,
+);
+assert.equal(
+  isAchievementGuardActive({ ...redDead, prestigeType: "mad" }),
+  false,
+);
+
 console.log("Achievement guard domain tests passed");

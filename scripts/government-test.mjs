@@ -14,11 +14,17 @@ function runGovernmentCase({
   guard = false,
   qFactory = true,
   currentGovernor = "none",
+  achievementGuards = false,
+  tradeRoutesSatisfied = false,
+  tradeAchievementUnlocked = false,
+  govSpace = "federation",
 } = {}) {
   const governmentChanges = [];
   const appointments = [];
   const settings = {
-    govSpace: "federation",
+    achievementGuards,
+    guardTradeFederation: true,
+    govSpace,
     govFinal: "democracy",
     govInterim: "republic",
     govGovernor: "entrepreneur",
@@ -30,11 +36,18 @@ function runGovernmentCase({
           candidates: [{ bg: "criminal" }, { bg: "entrepreneur" }],
         },
       },
+      city: {
+        market: { trade: tradeRoutesSatisfied ? 750 : 0 },
+      },
+      galaxy: {
+        trade: { cur: tradeRoutesSatisfied ? 50 : 0 },
+      },
     },
   };
   const GovernmentManager = {
     Types: {
       federation: { isUnlocked: () => true },
+      corpocracy: { isUnlocked: () => true },
       democracy: { isUnlocked: () => true },
       republic: { isUnlocked: () => true },
     },
@@ -60,6 +73,7 @@ function runGovernmentCase({
     haveTech: (tech) =>
       tech === "governor" || (tech === "q_factory" && qFactory),
     getGovernor: () => currentGovernor,
+    isTradeFederationAchievementUnlocked: () => tradeAchievementUnlocked,
   };
   const reader = { read: () => readGovernmentInput(readerDependencies) };
   assert.equal(
@@ -75,6 +89,29 @@ assert.deepEqual(spaceCase.appointments, [1]);
 
 const preSpaceCase = runGovernmentCase({ qFactory: false });
 assert.deepEqual(preSpaceCase.governmentChanges, ["democracy"]);
+
+const tradeFederationCase = runGovernmentCase({
+  achievementGuards: true,
+  tradeRoutesSatisfied: true,
+  govSpace: "corpocracy",
+});
+assert.deepEqual(
+  tradeFederationCase.governmentChanges,
+  ["federation"],
+  "Trade Federation should opportunistically use Federation once routes already satisfy the achievement",
+);
+
+const earnedTradeCase = runGovernmentCase({
+  achievementGuards: true,
+  tradeRoutesSatisfied: true,
+  tradeAchievementUnlocked: true,
+  govSpace: "corpocracy",
+});
+assert.deepEqual(
+  earnedTradeCase.governmentChanges,
+  ["corpocracy"],
+  "an earned Trade Federation achievement should restore the preferred government",
+);
 
 const guardedCase = runGovernmentCase({
   guard: true,
@@ -106,6 +143,7 @@ assert.deepEqual(
     govSpaceUnlocked: true,
     govFinalUnlocked: false,
     govInterimUnlocked: true,
+    tradeFederationReady: false,
     candidateBackgrounds: ["criminal", "entrepreneur"],
   }),
   {
@@ -114,6 +152,31 @@ assert.deepEqual(
     appointCandidateBackground: null,
   },
   "space needs q_factory; final is none so interim wins; no scientist candidate",
+);
+
+assert.deepEqual(
+  planGovernment({
+    isEnabled: true,
+    guardAnarchist: false,
+    haveQFactory: true,
+    haveGovernorTech: false,
+    currentGovernor: "none",
+    govSpace: "corpocracy",
+    govFinal: "democracy",
+    govInterim: "republic",
+    govGovernor: "none",
+    govSpaceUnlocked: true,
+    govFinalUnlocked: true,
+    govInterimUnlocked: true,
+    tradeFederationReady: true,
+    candidateBackgrounds: [],
+  }),
+  {
+    government: "federation",
+    appointCandidate: null,
+    appointCandidateBackground: null,
+  },
+  "Trade Federation takes precedence only after the adapter confirms the target is ready",
 );
 
 assert.deepEqual(
@@ -130,6 +193,7 @@ assert.deepEqual(
     govSpaceUnlocked: true,
     govFinalUnlocked: true,
     govInterimUnlocked: true,
+    tradeFederationReady: false,
     candidateBackgrounds: ["entrepreneur"],
   }),
   {
@@ -157,6 +221,7 @@ assert.deepEqual(
     guardActive: () => false,
     haveTech: () => false,
     getGovernor: () => "none",
+    isTradeFederationAchievementUnlocked: () => false,
   });
   assert.deepEqual(input.candidateBackgrounds, []);
   assert.equal(input.govSpaceUnlocked, false);
@@ -186,6 +251,9 @@ assert.deepEqual(
     haveTech: (tech) => (calls.push(`tech:${tech}`), false),
     getGovernor: () => {
       throw new Error("governor must not be read when unavailable");
+    },
+    isTradeFederationAchievementUnlocked: () => {
+      throw new Error("achievement must not be read when unavailable");
     },
   });
   assert.equal(input.isEnabled, false);

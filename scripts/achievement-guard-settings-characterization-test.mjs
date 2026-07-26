@@ -102,6 +102,7 @@ assert.deepEqual(actionTrace, [
   "toggle:guardEnergetic",
   "toggle:guardRedDead",
   "toggle:guardSecondEvolution",
+  "toggle:guardTradeFederation",
   "toggle:guardBananaRepublic",
 ]);
 assert.equal(document.documentElement.scrollTop, 44);
@@ -130,6 +131,7 @@ assert.deepEqual(actionTrace, [
   "toggle:guardEnergetic",
   "toggle:guardRedDead",
   "toggle:guardSecondEvolution",
+  "toggle:guardTradeFederation",
   "toggle:guardBananaRepublic",
 ]);
 

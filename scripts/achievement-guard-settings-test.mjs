@@ -54,6 +54,7 @@ assert.deepEqual(
     "guardEnergetic",
     "guardRedDead",
     "guardSecondEvolution",
+    "guardTradeFederation",
     "guardBananaRepublic",
   ],
 );
