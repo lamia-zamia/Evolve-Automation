@@ -28351,9 +28351,27 @@
       spells: Object.freeze(readCurrentSpells(manager, unlockedSpells))
     });
   }
-  function createPylonCommandExecutor(getRitualManager) {
+  function createPylonCommandExecutor(getRitualManager, getResources) {
     function execute2(decision2) {
+      let mana;
+      if (decision2.manaRateAdjustment !== null) {
+        const resources = requireRecord(getResources(), "resources");
+        mana = requireRecord(resources["Mana"], "resources.Mana");
+        const actual = requireNumber(
+          mana["rateOfChange"],
+          "resources.Mana.rateOfChange"
+        );
+        if (actual !== decision2.manaRateAdjustment.expected) {
+          return stale("stale-pylon-mana-rate", "Mana rate-of-change changed", {
+            expected: decision2.manaRateAdjustment.expected,
+            actual
+          });
+        }
+      }
       if (decision2.decrease.length === 0 && decision2.increase.length === 0) {
+        if (mana !== void 0 && decision2.manaRateAdjustment !== null) {
+          Reflect.set(mana, "rateOfChange", decision2.manaRateAdjustment.value);
+        }
         return SUCCEEDED;
       }
       const manager = requireRecord(getRitualManager(), "RitualManager");
@@ -28426,6 +28444,9 @@
           Reflect.apply(increaseRitual, manager, [spell, adjustment.count]);
         }
       }
+      if (mana !== void 0 && decision2.manaRateAdjustment !== null) {
+        Reflect.set(mana, "rateOfChange", decision2.manaRateAdjustment.value);
+      }
       return SUCCEEDED;
     }
     return Object.freeze({ execute: execute2 });
@@ -28434,7 +28455,8 @@
   // src/domain/economy/production/pylon.ts
   var EMPTY2 = Object.freeze({
     decrease: Object.freeze([]),
-    increase: Object.freeze([])
+    increase: Object.freeze([]),
+    manaRateAdjustment: null
   });
   function manaCost(level) {
     return level * (1.0025 ** level - 1);
@@ -28455,6 +28477,7 @@
       adjustments.set(spell.id, 0);
     }
     let manaToUse = input.manaRateOfChange * (input.manaStorageRatio > 0.99 ? 1 : input.ritualManaUse);
+    const usableMana = manaToUse;
     let maxRituals = input.ritualSafe && input.witchHunter ? input.priestCount * (input.haveRoguemagic4 ? 4 : 1) : Number.MAX_SAFE_INTEGER;
     const spellSorter = (a, b) => (adjustments.get(a.id) ?? 0) / a.weighting - (adjustments.get(b.id) ?? 0) / b.weighting || b.weighting - a.weighting;
     const remainingSpells = input.spells.filter(
@@ -28503,15 +28526,23 @@
         );
       }
     }
+    const manaSpent = usableMana - manaToUse;
     return Object.freeze({
       decrease: Object.freeze(decrease),
-      increase: Object.freeze(increase)
+      increase: Object.freeze(increase),
+      manaRateAdjustment: manaSpent === 0 ? null : Object.freeze({
+        expected: input.manaRateOfChange,
+        value: input.manaRateOfChange - manaSpent
+      })
     });
   }
 
   // src/bootstrap/pylon-control.ts
   function createPylonControl(dependencies) {
-    const executor = createPylonCommandExecutor(dependencies.getRitualManager);
+    const executor = createPylonCommandExecutor(
+      dependencies.getRitualManager,
+      dependencies.getResources
+    );
     return Object.freeze({
       autoPylon: () => executor.execute(planPylon(readPylonInput(dependencies)))
     });

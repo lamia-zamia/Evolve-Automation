@@ -174,9 +174,28 @@ export function readPylonInput(
 
 export function createPylonCommandExecutor(
   getRitualManager: () => unknown,
+  getResources: () => unknown,
 ): DecisionExecutor<PylonDecision> {
   function execute(decision: Readonly<PylonDecision>) {
+    let mana: UnknownRecord | undefined;
+    if (decision.manaRateAdjustment !== null) {
+      const resources = requireRecord(getResources(), "resources");
+      mana = requireRecord(resources["Mana"], "resources.Mana");
+      const actual = requireNumber(
+        mana["rateOfChange"],
+        "resources.Mana.rateOfChange",
+      );
+      if (actual !== decision.manaRateAdjustment.expected) {
+        return stale("stale-pylon-mana-rate", "Mana rate-of-change changed", {
+          expected: decision.manaRateAdjustment.expected,
+          actual,
+        });
+      }
+    }
     if (decision.decrease.length === 0 && decision.increase.length === 0) {
+      if (mana !== undefined && decision.manaRateAdjustment !== null) {
+        Reflect.set(mana, "rateOfChange", decision.manaRateAdjustment.value);
+      }
       return SUCCEEDED;
     }
     const manager = requireRecord(getRitualManager(), "RitualManager");
@@ -253,6 +272,9 @@ export function createPylonCommandExecutor(
       if (!decreases.has(adjustment)) {
         Reflect.apply(increaseRitual, manager, [spell, adjustment.count]);
       }
+    }
+    if (mana !== undefined && decision.manaRateAdjustment !== null) {
+      Reflect.set(mana, "rateOfChange", decision.manaRateAdjustment.value);
     }
     return SUCCEEDED;
   }

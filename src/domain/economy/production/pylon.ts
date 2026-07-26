@@ -4,11 +4,9 @@
  * ritual adjustments. The composition root calls `decreaseRitual` /
  * `increaseRitual`; this function performs no reads or mutations.
  *
- * NOTE: the legacy code contains the statement
- *   `resources.Mana.rateOfChange - (usableMana - manaToUse);`
- * whose result is discarded — a no-op that almost certainly meant `-=`. The
- * behavior (Mana rate-of-change is NOT adjusted) is preserved here; see the
- * pylon mana rate-of-change item in docs/feature-backlog.md.
+ * The legacy controller reduces Mana's rate-of-change by the ritual budget it
+ * commits. That live write is returned as an explicit command for the adapter
+ * to apply after validating the sampled rate.
  */
 
 export interface PylonSpellView {
@@ -38,14 +36,21 @@ export interface PylonRitualAdjustment {
   readonly count: number;
 }
 
+export interface PylonManaRateAdjustment {
+  readonly expected: number;
+  readonly value: number;
+}
+
 export interface PylonDecision {
   readonly decrease: readonly PylonRitualAdjustment[];
   readonly increase: readonly PylonRitualAdjustment[];
+  readonly manaRateAdjustment: PylonManaRateAdjustment | null;
 }
 
 const EMPTY: PylonDecision = Object.freeze({
   decrease: Object.freeze([]),
   increase: Object.freeze([]),
+  manaRateAdjustment: null,
 });
 
 /** Legacy `manaCost(level)` from industry.js. */
@@ -75,6 +80,7 @@ export function planPylon(input: Readonly<PylonInput>): PylonDecision {
   let manaToUse =
     input.manaRateOfChange *
     (input.manaStorageRatio > 0.99 ? 1 : input.ritualManaUse);
+  const usableMana = manaToUse;
   let maxRituals =
     input.ritualSafe && input.witchHunter
       ? input.priestCount * (input.haveRoguemagic4 ? 4 : 1)
@@ -139,8 +145,16 @@ export function planPylon(input: Readonly<PylonInput>): PylonDecision {
     }
   }
 
+  const manaSpent = usableMana - manaToUse;
   return Object.freeze({
     decrease: Object.freeze(decrease),
     increase: Object.freeze(increase),
+    manaRateAdjustment:
+      manaSpent === 0
+        ? null
+        : Object.freeze({
+            expected: input.manaRateOfChange,
+            value: input.manaRateOfChange - manaSpent,
+          }),
   });
 }

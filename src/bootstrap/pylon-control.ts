@@ -9,7 +9,10 @@ import { planPylon } from "../domain/economy/production/pylon.ts";
 export function createPylonControl(
   dependencies: Parameters<typeof readPylonInput>[0],
 ) {
-  const executor = createPylonCommandExecutor(dependencies.getRitualManager);
+  const executor = createPylonCommandExecutor(
+    dependencies.getRitualManager,
+    dependencies.getResources,
+  );
   return Object.freeze({
     autoPylon: () => executor.execute(planPylon(readPylonInput(dependencies))),
   });
