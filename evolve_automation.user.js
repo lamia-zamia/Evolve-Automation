@@ -35862,43 +35862,45 @@
           "stateOnCount",
           "buildings.LakeTransport"
         );
-        return Object.freeze(
-          domIds.flatMap((domId) => {
-            if (domId.length === 0 || buildingIds[domId] === void 0) {
-              return [];
-            }
-            const building3 = requireRecord(
-              buildingIds[domId],
-              `buildingIds.${domId}`
-            );
-            const path = `buildingIds.${domId}`;
-            const is = requireRecord(building3["is"] ?? {}, `${path}.is`);
-            const warningKind = identity(buildings, "BeltEleriumShip", building3) ? "belt-elerium" : identity(buildings, "BeltIridiumShip", building3) ? "belt-iridium" : identity(buildings, "BeltIronShip", building3) ? "belt-iron" : identity(buildings, "LakeBireme", building3) ? "lake-bireme" : identity(buildings, "LakeTransport", building3) ? "lake-transport" : identity(buildings, "TauBeltWhalingShip", building3) ? "tau-whaling" : identity(buildings, "TauBeltMiningShip", building3) ? "tau-mining" : "ordinary";
-            return [
-              Object.freeze({
-                domId,
-                buildingId: buildingId(building3, path),
-                binding: buildingBinding(building3, path),
-                stateOn: finiteProperty(building3, "stateOnCount", path),
-                autoStateEnabled: Boolean(building3["autoStateEnabled"]),
-                ship: Boolean(is["ship"]),
-                warningKind,
-                beltSupportNeeded: beltNeeded,
-                beltSupportMaximum: finiteProperty(
-                  namedRecord(resources, "Belt_Support", "resources"),
-                  "maxQuantity",
-                  "resources.Belt_Support"
-                ),
-                lakeSupportNeeded: lakeNeeded,
-                lakeSupportMaximum: finiteProperty(
-                  namedRecord(resources, "Lake_Support", "resources"),
-                  "maxQuantity",
-                  "resources.Lake_Support"
-                )
-              })
-            ];
-          })
+        const beltSupportMaximum = finiteProperty(
+          namedRecord(resources, "Belt_Support", "resources"),
+          "maxQuantity",
+          "resources.Belt_Support"
         );
+        const lakeSupportMaximum = finiteProperty(
+          namedRecord(resources, "Lake_Support", "resources"),
+          "maxQuantity",
+          "resources.Lake_Support"
+        );
+        const warnings = [];
+        for (const domId of domIds) {
+          if (domId.length === 0 || buildingIds[domId] === void 0) {
+            continue;
+          }
+          const building3 = requireRecord(
+            buildingIds[domId],
+            `buildingIds.${domId}`
+          );
+          const path = `buildingIds.${domId}`;
+          const is = requireRecord(building3["is"] ?? {}, `${path}.is`);
+          const warningKind = identity(buildings, "BeltEleriumShip", building3) ? "belt-elerium" : identity(buildings, "BeltIridiumShip", building3) ? "belt-iridium" : identity(buildings, "BeltIronShip", building3) ? "belt-iron" : identity(buildings, "LakeBireme", building3) ? "lake-bireme" : identity(buildings, "LakeTransport", building3) ? "lake-transport" : identity(buildings, "TauBeltWhalingShip", building3) ? "tau-whaling" : identity(buildings, "TauBeltMiningShip", building3) ? "tau-mining" : "ordinary";
+          warnings.push(
+            Object.freeze({
+              domId,
+              buildingId: buildingId(building3, path),
+              binding: buildingBinding(building3, path),
+              stateOn: finiteProperty(building3, "stateOnCount", path),
+              autoStateEnabled: Boolean(building3["autoStateEnabled"]),
+              ship: Boolean(is["ship"]),
+              warningKind,
+              beltSupportNeeded: beltNeeded,
+              beltSupportMaximum,
+              lakeSupportNeeded: lakeNeeded,
+              lakeSupportMaximum
+            })
+          );
+        }
+        return Object.freeze(warnings);
       },
       readStateOn(binding) {
         if (session === null) {

@@ -1590,57 +1590,59 @@ export function createPowerAdapter(dependencies: PowerAdapterDependencies): {
           "stateOnCount",
           "buildings.LakeTransport",
         );
-      return Object.freeze(
-        domIds.flatMap((domId) => {
-          if (domId.length === 0 || buildingIds[domId] === undefined) {
-            return [];
-          }
-          const building = requireRecord(
-            buildingIds[domId],
-            `buildingIds.${domId}`,
-          );
-          const path = `buildingIds.${domId}`;
-          const is = requireRecord(building["is"] ?? {}, `${path}.is`);
-          const warningKind = identity(buildings, "BeltEleriumShip", building)
-            ? "belt-elerium"
-            : identity(buildings, "BeltIridiumShip", building)
-              ? "belt-iridium"
-              : identity(buildings, "BeltIronShip", building)
-                ? "belt-iron"
-                : identity(buildings, "LakeBireme", building)
-                  ? "lake-bireme"
-                  : identity(buildings, "LakeTransport", building)
-                    ? "lake-transport"
-                    : identity(buildings, "TauBeltWhalingShip", building)
-                      ? "tau-whaling"
-                      : identity(buildings, "TauBeltMiningShip", building)
-                        ? "tau-mining"
-                        : "ordinary";
-          return [
-            Object.freeze({
-              domId,
-              buildingId: buildingId(building, path),
-              binding: buildingBinding(building, path),
-              stateOn: finiteProperty(building, "stateOnCount", path),
-              autoStateEnabled: Boolean(building["autoStateEnabled"]),
-              ship: Boolean(is["ship"]),
-              warningKind,
-              beltSupportNeeded: beltNeeded,
-              beltSupportMaximum: finiteProperty(
-                namedRecord(resources, "Belt_Support", "resources"),
-                "maxQuantity",
-                "resources.Belt_Support",
-              ),
-              lakeSupportNeeded: lakeNeeded,
-              lakeSupportMaximum: finiteProperty(
-                namedRecord(resources, "Lake_Support", "resources"),
-                "maxQuantity",
-                "resources.Lake_Support",
-              ),
-            }),
-          ];
-        }),
+      const beltSupportMaximum = finiteProperty(
+        namedRecord(resources, "Belt_Support", "resources"),
+        "maxQuantity",
+        "resources.Belt_Support",
       );
+      const lakeSupportMaximum = finiteProperty(
+        namedRecord(resources, "Lake_Support", "resources"),
+        "maxQuantity",
+        "resources.Lake_Support",
+      );
+      const warnings: PowerWarnBuildingInput[] = [];
+      for (const domId of domIds) {
+        if (domId.length === 0 || buildingIds[domId] === undefined) {
+          continue;
+        }
+        const building = requireRecord(
+          buildingIds[domId],
+          `buildingIds.${domId}`,
+        );
+        const path = `buildingIds.${domId}`;
+        const is = requireRecord(building["is"] ?? {}, `${path}.is`);
+        const warningKind = identity(buildings, "BeltEleriumShip", building)
+          ? "belt-elerium"
+          : identity(buildings, "BeltIridiumShip", building)
+            ? "belt-iridium"
+            : identity(buildings, "BeltIronShip", building)
+              ? "belt-iron"
+              : identity(buildings, "LakeBireme", building)
+                ? "lake-bireme"
+                : identity(buildings, "LakeTransport", building)
+                  ? "lake-transport"
+                  : identity(buildings, "TauBeltWhalingShip", building)
+                    ? "tau-whaling"
+                    : identity(buildings, "TauBeltMiningShip", building)
+                      ? "tau-mining"
+                      : "ordinary";
+        warnings.push(
+          Object.freeze({
+            domId,
+            buildingId: buildingId(building, path),
+            binding: buildingBinding(building, path),
+            stateOn: finiteProperty(building, "stateOnCount", path),
+            autoStateEnabled: Boolean(building["autoStateEnabled"]),
+            ship: Boolean(is["ship"]),
+            warningKind,
+            beltSupportNeeded: beltNeeded,
+            beltSupportMaximum,
+            lakeSupportNeeded: lakeNeeded,
+            lakeSupportMaximum,
+          }),
+        );
+      }
+      return Object.freeze(warnings);
     },
 
     readStateOn(binding: string): number {
