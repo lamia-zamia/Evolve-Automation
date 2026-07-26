@@ -141,6 +141,30 @@ assert.equal(
   }),
   null,
 );
+const zeroSellDecision = planMarketSell({
+  index: 0,
+  resourceId: "Iron",
+  eligible: true,
+  autoSellEnabled: true,
+  ignoreSellRatio: true,
+  storageRatio: 1,
+  autoSellRatio: 0,
+  moneyMaximum: 100,
+  moneyCurrent: 100,
+  unitPrice: 1,
+  currentQuantity: 100,
+  maxQuantity: 100,
+  income: 0,
+  ticksPerSecond: 10,
+  maximumMultiplier: 10,
+});
+assert.deepEqual(
+  {
+    multiplier: zeroSellDecision.multiplier,
+    repetitions: zeroSellDecision.repetitions,
+  },
+  { multiplier: 0, repetitions: 1 },
+);
 assert.equal(
   planMarketBuy({
     index: 0,
