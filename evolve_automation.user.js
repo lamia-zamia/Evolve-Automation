@@ -36467,9 +36467,13 @@
     );
     let availablePower = input.powerCurrent;
     const missingProducer = {};
+    const consumedResourceIds = /* @__PURE__ */ new Set();
     for (const building3 of input.buildings) {
       availablePower += building3.powered * building3.stateOn;
       for (const consumption of building3.consumptions) {
+        if (consumption.rate > 0) {
+          consumedResourceIds.add(consumption.resourceId);
+        }
         const resource2 = mapValue(
           resources,
           consumption.resourceId,
@@ -36489,11 +36493,7 @@
         continue;
       }
       const consumed = building3.produces.some(
-        (resourceId3) => input.buildings.some(
-          (candidate) => candidate.consumptions.some(
-            (consumption) => consumption.resourceId === resourceId3 && consumption.rate > 0
-          )
-        )
+        (resourceId3) => consumedResourceIds.has(resourceId3)
       );
       if (!consumed) {
         continue;

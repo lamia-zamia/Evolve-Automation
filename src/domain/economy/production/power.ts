@@ -959,9 +959,13 @@ export function planPowerCycle(
 
   let availablePower = input.powerCurrent;
   const missingProducer: Record<string, number> = {};
+  const consumedResourceIds = new Set<string>();
   for (const building of input.buildings) {
     availablePower += building.powered * building.stateOn;
     for (const consumption of building.consumptions) {
+      if (consumption.rate > 0) {
+        consumedResourceIds.add(consumption.resourceId);
+      }
       const resource = mapValue(
         resources,
         consumption.resourceId,
@@ -988,12 +992,7 @@ export function planPowerCycle(
       continue;
     }
     const consumed = building.produces.some((resourceId) =>
-      input.buildings.some((candidate) =>
-        candidate.consumptions.some(
-          (consumption) =>
-            consumption.resourceId === resourceId && consumption.rate > 0,
-        ),
-      ),
+      consumedResourceIds.has(resourceId),
     );
     if (!consumed) {
       continue;
