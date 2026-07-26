@@ -63,6 +63,14 @@ export interface TickReader {
   sampleAutomation(): TickAutomationSnapshot;
 }
 
+/** Optional, explicitly enabled timing sink for live performance diagnosis. */
+export interface TickDiagnostics {
+  readPerformanceEnabled(): boolean;
+  nowMs(): number;
+  recordPerformance(phase: string, durationMs: number): void;
+  flushPerformance(): void;
+}
+
 /**
  * The tick's effectful surface: the script's controllers, the key manager, the consumption managers,
  * and the tick bookkeeping writes. The runner owns the order these are called in; updateTabs,

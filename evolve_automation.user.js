@@ -30,6 +30,11 @@
     const readMechDebugEnabled = () => isRecord(globalObject) && globalObject["mechDebug"] === true;
     const performance = isRecord(globalObject) && isRecord(globalObject["performance"]) ? globalObject["performance"] : void 0;
     const performanceNow = performance?.["now"];
+    const consoleObject = isRecord(globalObject) && isRecord(globalObject["console"]) ? globalObject["console"] : void 0;
+    const consoleLog = consoleObject?.["log"];
+    const samples = /* @__PURE__ */ new Map();
+    let pendingTicks = 0;
+    const readPerformanceEnabled = () => isRecord(globalObject) && globalObject["eaPerformance"] === true;
     const nowMs = () => {
       if (typeof performanceNow === "function") {
         try {
@@ -40,9 +45,54 @@
       }
       return Date.now();
     };
+    const recordPerformance = (phase, durationMs) => {
+      if (!readPerformanceEnabled() || !Number.isFinite(durationMs)) {
+        return;
+      }
+      const sample = samples.get(phase) ?? { count: 0, totalMs: 0, maxMs: 0 };
+      sample.count++;
+      sample.totalMs += durationMs;
+      sample.maxMs = Math.max(sample.maxMs, durationMs);
+      samples.set(phase, sample);
+      if (phase === "tick") {
+        pendingTicks++;
+      }
+    };
+    const flushPerformance = () => {
+      if (!readPerformanceEnabled()) {
+        samples.clear();
+        pendingTicks = 0;
+        return;
+      }
+      if (pendingTicks < 25 || typeof consoleLog !== "function") {
+        return;
+      }
+      const summary = Object.fromEntries(
+        [...samples.entries()].map(([phase, sample]) => [
+          phase,
+          {
+            count: sample.count,
+            averageMs: Number((sample.totalMs / sample.count).toFixed(2)),
+            maxMs: Number(sample.maxMs.toFixed(2))
+          }
+        ])
+      );
+      try {
+        Reflect.apply(consoleLog, consoleObject, [
+          `[EA perf] ${pendingTicks} work ticks`,
+          summary
+        ]);
+      } catch {
+      }
+      samples.clear();
+      pendingTicks = 0;
+    };
     return Object.freeze({
       readMechDebugEnabled,
-      nowMs
+      nowMs,
+      readPerformanceEnabled,
+      recordPerformance,
+      flushPerformance
     });
   }
 
@@ -21388,6 +21438,7 @@
   function runTick({
     reader,
     controls: controls4,
+    diagnostics,
     updateState
   }) {
     const preamble = reader.samplePreamble();
@@ -21400,33 +21451,55 @@
     if (isThrottledTick(scriptTick, preamble.tickRate, preamble.accelerated)) {
       return false;
     }
-    controls4.updateScriptData();
-    controls4.updateOverrides();
-    controls4.finalizeScriptData();
-    if (controls4.updateTabs()) {
+    const profiling = diagnostics?.readPerformanceEnabled() === true ? diagnostics : void 0;
+    const workStartedAtMs = profiling?.nowMs();
+    const measure = (phase, action) => {
+      if (profiling === void 0) {
+        return action();
+      }
+      const startedAtMs = profiling.nowMs();
+      try {
+        return action();
+      } finally {
+        profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
+      }
+    };
+    const finishProfile = () => {
+      if (profiling !== void 0 && workStartedAtMs !== void 0) {
+        profiling.recordPerformance("tick", profiling.nowMs() - workStartedAtMs);
+        profiling.flushPerformance();
+      }
+    };
+    measure("updateScriptData", () => controls4.updateScriptData());
+    measure("updateOverrides", () => controls4.updateOverrides());
+    measure("finalizeScriptData", () => controls4.finalizeScriptData());
+    if (measure("updateTabs", () => controls4.updateTabs())) {
+      finishProfile();
       return true;
     }
-    (updateState ?? controls4.updateState)();
-    controls4.updateUI();
+    measure("updateState", () => (updateState ?? controls4.updateState)());
+    measure("updateUI", () => controls4.updateUI());
     controls4.keyManagerReset();
     const s = reader.sampleAutomation();
     if (!s.masterScriptToggle) {
+      finishProfile();
       return true;
     }
     if (s.goal === "Evolution") {
       if (s.autoEvolution) {
-        controls4.autoEvolution();
+        measure("autoEvolution", () => controls4.autoEvolution());
       }
+      finishProfile();
       return true;
     }
     if (s.buildingAlwaysClick || s.autoBuild) {
-      controls4.autoGatherResources();
+      measure("autoGatherResources", () => controls4.autoGatherResources());
     }
     if (s.autoMarket) {
-      controls4.autoMarket();
+      measure("autoMarket", () => controls4.autoMarket());
     }
     if (s.autoHell) {
-      controls4.autoHell();
+      measure("autoHell", () => controls4.autoHell());
     }
     if (s.autoGalaxyMarket) {
       controls4.autoGalaxyMarket();
@@ -21456,17 +21529,17 @@
       controls4.autoSmelter();
     }
     if (s.autoStorage) {
-      controls4.autoStorage();
+      measure("autoStorage", () => controls4.autoStorage());
     }
     if (s.autoReplicator) {
       controls4.autoReplicator();
     }
     if (!s.autoTrigger || !controls4.autoTrigger()) {
       if (s.autoResearch) {
-        controls4.autoResearch();
+        measure("autoResearch", () => controls4.autoResearch());
       }
       if (s.autoBuild || s.autoARPA) {
-        controls4.autoBuild();
+        measure("autoBuild", () => controls4.autoBuild());
         controls4.setPlannerFreshTick(scriptTick);
       }
     }
@@ -21474,19 +21547,19 @@
       controls4.autoFactory();
     }
     if (s.autoJobs) {
-      controls4.autoJobs();
+      measure("autoJobs", () => controls4.autoJobs());
     } else if (s.autoCraftsmen) {
-      controls4.autoJobs(true);
+      measure("autoJobs", () => controls4.autoJobs(true));
     }
     if (s.autoFleet) {
       if (s.truepath) {
-        controls4.autoFleetOuter();
+        measure("autoFleetOuter", () => controls4.autoFleetOuter());
       } else {
-        controls4.autoFleet();
+        measure("autoFleet", () => controls4.autoFleet());
       }
     }
     if (s.autoMech) {
-      controls4.autoMech();
+      measure("autoMech", () => controls4.autoMech());
     }
     if (s.autoGenetics) {
       controls4.autoGenetics();
@@ -21495,18 +21568,20 @@
       controls4.autoMinorTrait();
     }
     if (s.autoCraft) {
-      controls4.autoCraft();
+      measure("autoCraft", () => controls4.autoCraft());
     }
     if (s.autoFight) {
-      controls4.autoMerc();
-      controls4.autoSpy();
-      controls4.autoBattle();
+      measure("autoFight", () => {
+        controls4.autoMerc();
+        controls4.autoSpy();
+        controls4.autoBattle();
+      });
     }
     if (s.autoTax) {
       controls4.autoTax();
     }
     if (s.autoGovernment) {
-      controls4.autoGovernment();
+      measure("autoGovernment", () => controls4.autoGovernment());
     }
     if (s.autoNanite) {
       controls4.consumeNanite();
@@ -21518,10 +21593,10 @@
       controls4.consumeEject();
     }
     if (s.autoPower) {
-      controls4.autoPower();
+      measure("autoPower", () => controls4.autoPower());
     }
     if (controls4.isPrestigeAllowed()) {
-      controls4.autoPrestige();
+      measure("autoPrestige", () => controls4.autoPrestige());
     }
     if (s.autoMinorTrait) {
       controls4.autoShapeshift();
@@ -21532,7 +21607,7 @@
     if (s.autoMutateTraits) {
       controls4.autoMutateTrait();
     }
-    controls4.updateBuildPlanner();
+    measure("updateBuildPlanner", () => controls4.updateBuildPlanner());
     if (s.stateLogEnabled) {
       const { next, record } = advanceStateLog(
         s.stateLogTick,
@@ -21545,6 +21620,7 @@
     }
     controls4.keyManagerFinish();
     controls4.recordSoulGem();
+    finishProfile();
     return true;
   }
 
@@ -21552,12 +21628,14 @@
   function createApplicationRunner({
     reader,
     controls: controls4,
+    diagnostics,
     updateState
   }) {
     return Object.freeze({
       runCycle: () => runTick({
         reader,
         controls: controls4,
+        diagnostics,
         updateState
       })
     });
@@ -21573,6 +21651,7 @@
     const applicationRunner = createApplicationRunner({
       reader,
       controls: controls4,
+      diagnostics: dependencies.diagnostics,
       updateState: () => {
         const testControllers = dependencies.getTestControllers();
         if (testControllers?.updateState) {
@@ -57438,7 +57517,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getEjectManager: () => EjectManager
       },
       controllers: tickControllers,
-      getTestControllers: () => tickTestControllers
+      getTestControllers: () => tickTestControllers,
+      diagnostics
     });
     publishTestSurface({
       automate: () => automate(),

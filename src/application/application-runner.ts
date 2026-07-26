@@ -20,6 +20,7 @@ export interface ApplicationRunnerDependencies extends Omit<
 export function createApplicationRunner({
   reader,
   controls,
+  diagnostics,
   updateState,
 }: ApplicationRunnerDependencies): ApplicationRunner {
   return Object.freeze({
@@ -27,6 +28,7 @@ export function createApplicationRunner({
       runTick({
         reader,
         controls,
+        diagnostics,
         updateState,
       }),
   });

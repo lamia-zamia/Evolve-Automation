@@ -5428,6 +5428,7 @@ function startEvolveRuntimeComposition(
     },
     controllers: tickControllers,
     getTestControllers: () => tickTestControllers,
+    diagnostics,
   });
 
   publishTestSurface({

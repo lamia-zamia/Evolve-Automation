@@ -6,6 +6,7 @@ import {
   type TickReaderDependencies,
 } from "../adapters/evolve/tick.ts";
 import { createApplicationRunner } from "../application/application-runner.ts";
+import type { TickDiagnostics } from "../ports/tick.ts";
 
 // Composition seam for the tick runner: assembles the typed tick reader, tick
 // controls, and application runner, returning the `automate` entry point. The
@@ -19,6 +20,7 @@ export function createTickRunner(dependencies: {
   controls: Omit<TickControlsDependencies, "getControllers">;
   controllers: TickControllerBag;
   getTestControllers: () => TickControllerBag | undefined;
+  diagnostics?: TickDiagnostics | undefined;
 }) {
   const reader = createTickReader(dependencies.reader);
   const controls = createTickControls({
@@ -29,6 +31,7 @@ export function createTickRunner(dependencies: {
   const applicationRunner = createApplicationRunner({
     reader,
     controls,
+    diagnostics: dependencies.diagnostics,
     updateState: () => {
       const testControllers = dependencies.getTestControllers();
       if (testControllers?.updateState) {

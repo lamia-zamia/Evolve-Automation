@@ -7,6 +7,7 @@ import {
   advanceStateLog,
 } from "../src/domain/tick.ts";
 import { createTickReader } from "../src/adapters/evolve/tick.ts";
+import { runTick } from "../src/application/tick.ts";
 // --- Pure domain unit tests ---------------------------------------------------------------------
 
 assert.equal(
@@ -101,5 +102,55 @@ assert.throws(() =>
     getGame: () => ({ global: { race: {}, settings: {} } }),
   }).samplePreamble(),
 );
+
+// Opt-in diagnostics measure a working tick, while the default path remains untouched.
+const measuredPhases = [];
+let diagnosticClock = 0;
+const diagnosticReader = {
+  samplePreamble: () => ({
+    goal: "Standard",
+    forcedUpdate: false,
+    gameTicked: true,
+    scriptTick: 0,
+    tickRate: 1,
+    accelerated: false,
+  }),
+  sampleAutomation: () => ({ masterScriptToggle: false, goal: "Standard" }),
+};
+const diagnosticControls = {
+  markGameTickConsumed() {},
+  setScriptTick() {},
+  updateScriptData() {},
+  updateOverrides() {},
+  finalizeScriptData() {},
+  updateTabs: () => false,
+  updateState() {},
+  updateUI() {},
+  keyManagerReset() {},
+};
+const diagnostics = {
+  readPerformanceEnabled: () => true,
+  nowMs: () => diagnosticClock++,
+  recordPerformance: (phase) => measuredPhases.push(phase),
+  flushPerformance: () => measuredPhases.push("flush"),
+};
+assert.equal(
+  runTick({
+    reader: diagnosticReader,
+    controls: diagnosticControls,
+    diagnostics,
+  }),
+  true,
+);
+assert.deepEqual(measuredPhases, [
+  "updateScriptData",
+  "updateOverrides",
+  "finalizeScriptData",
+  "updateTabs",
+  "updateState",
+  "updateUI",
+  "tick",
+  "flush",
+]);
 
 console.log("Tick orchestration slice tests passed");
