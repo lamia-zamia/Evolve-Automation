@@ -41757,8 +41757,20 @@
   }
   function planBuildCompetition(setup, index, sample, state) {
     const candidate = candidateAt(setup, index);
-    const affordable2 = { ...state.affordable };
-    const estimations = { ...state.estimations };
+    let affordable2 = state.affordable;
+    let estimations = state.estimations;
+    let affordableCopy;
+    let estimationsCopy;
+    const cacheAffordable = (key, value) => {
+      affordableCopy ??= { ...affordable2 };
+      affordableCopy[key] = value;
+      affordable2 = affordableCopy;
+    };
+    const cacheEstimation = (key, value) => {
+      estimationsCopy ??= { ...estimations };
+      estimationsCopy[key] = value;
+      estimations = estimationsCopy;
+    };
     const finish = (outcome) => Object.freeze({
       ...outcome,
       state: Object.freeze({
@@ -41791,7 +41803,7 @@
             );
           }
           otherAffordable = sampled;
-          affordable2[other.key] = otherAffordable;
+          cacheAffordable(other.key, otherAffordable);
         }
         if (otherAffordable) {
           continue;
@@ -41800,7 +41812,7 @@
       let estimation = estimations[other.key];
       if (estimation === void 0) {
         estimation = estimateBuildTime(setup, other, sample);
-        estimations[other.key] = estimation;
+        cacheEstimation(other.key, estimation);
       }
       for (const [resourceId3, thisQuantity] of Object.entries(candidate.cost)) {
         const resource2 = resourceViewOf(sample, resourceId3);

@@ -375,8 +375,24 @@ export function planBuildCompetition(
   state: Readonly<BuildLoopState>,
 ): BuildCompetitionPlan {
   const candidate = candidateAt(setup, index);
-  const affordable: Record<string, boolean> = { ...state.affordable };
-  const estimations: Record<string, BuildEstimation> = { ...state.estimations };
+  // Most candidates do not add anything to either cache. Keep the immutable
+  // records shared in that case, cloning only when this phase writes a value.
+  let affordable: Readonly<Record<string, boolean>> = state.affordable;
+  let estimations: Readonly<Record<string, BuildEstimation>> =
+    state.estimations;
+  let affordableCopy: Record<string, boolean> | undefined;
+  let estimationsCopy: Record<string, BuildEstimation> | undefined;
+
+  const cacheAffordable = (key: string, value: boolean) => {
+    affordableCopy ??= { ...affordable };
+    affordableCopy[key] = value;
+    affordable = affordableCopy;
+  };
+  const cacheEstimation = (key: string, value: BuildEstimation) => {
+    estimationsCopy ??= { ...estimations };
+    estimationsCopy[key] = value;
+    estimations = estimationsCopy;
+  };
 
   const finish = (
     outcome:
@@ -427,7 +443,7 @@ export function planBuildCompetition(
           );
         }
         otherAffordable = sampled;
-        affordable[other.key] = otherAffordable;
+        cacheAffordable(other.key, otherAffordable);
       }
       if (otherAffordable) {
         continue;
@@ -437,7 +453,7 @@ export function planBuildCompetition(
     let estimation = estimations[other.key];
     if (estimation === undefined) {
       estimation = estimateBuildTime(setup, other, sample);
-      estimations[other.key] = estimation;
+      cacheEstimation(other.key, estimation);
     }
 
     for (const [resourceId, thisQuantity] of Object.entries(candidate.cost)) {
