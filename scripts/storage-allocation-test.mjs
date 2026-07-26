@@ -227,6 +227,29 @@ assert.equal(fixture.resources.Iron.maxQuantity, 300);
 // Pinned legacy cache behavior: assignment increases the cached free count.
 assert.equal(fixture.resources.Crates.currentQuantity, 4);
 
+const containerFixture = liveFixture();
+containerFixture.resources.Crates.currentQuantity = 0;
+containerFixture.resources.Containers.currentQuantity = 1;
+containerFixture.resources.Iron.minStorage = 500;
+const containerAdapter = createStorageAllocationAdapter(
+  liveDependencies(containerFixture),
+);
+const containerAutomation = createStorageAllocationAutomation({
+  reader: containerAdapter.reader,
+  executor: containerAdapter.executor,
+  expansion: { expand: () => false },
+});
+for (let tick = 0; tick < 3; tick++) {
+  assert.equal(containerAutomation.run().status, "succeeded");
+}
+assert.deepEqual(containerFixture.trace, [
+  ["init"],
+  ["init"],
+  ["init"],
+  ["assign-container", "Iron", 1],
+]);
+assert.equal(containerFixture.resources.Containers.currentQuantity, 2);
+
 const expandingFixture = liveFixture();
 expandingFixture.resources.Iron.minStorage = 1000;
 const expandingAdapter = createStorageAllocationAdapter(
