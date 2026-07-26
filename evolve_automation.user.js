@@ -39843,10 +39843,20 @@
   }
 
   // src/domain/civic/jobs.ts
-  function indexOfToken(input, token) {
-    return token === null ? -1 : input.jobs.findIndex((job) => job.token === token);
+  function createJobIndex(input) {
+    const index = /* @__PURE__ */ new Map();
+    for (let position = 0; position < input.jobs.length; position++) {
+      const token = input.jobs[position].token;
+      if (!index.has(token)) {
+        index.set(token, position);
+      }
+    }
+    return index;
   }
-  function craftPlan(input, initialWorkers, initialCraftsmen) {
+  function indexOfToken(index, token) {
+    return token === null ? -1 : index.get(token) ?? -1;
+  }
+  function craftPlan(input, initialWorkers, initialCraftsmen, jobIndex) {
     const workers = /* @__PURE__ */ new Map();
     const servants = /* @__PURE__ */ new Map();
     let availableWorkers = initialWorkers;
@@ -39884,7 +39894,7 @@
       } else if (affordableAmount >= totalCraftsmen) {
         available.push(craft);
       } else if (input.craftDebug && affordableAmount > 0) {
-        const job = input.jobs.find((entry) => entry.token === craft.jobToken);
+        const job = input.jobs[indexOfToken(jobIndex, craft.jobToken)];
         excluded.push(
           `${job.id}(inputs:${affordableAmount.toFixed(1)}<${totalCraftsmen})`
         );
@@ -39936,11 +39946,11 @@
       servants.set(craft.jobToken, shareServants.get(craft.jobToken) ?? 0);
     }
     if (filtered.length === 0) availableWorkers += availableCraftsmen;
-    const focus = [...shareWorkers.keys()].map((token) => input.jobs.find((job) => job.token === token).id).join("+") || "none";
+    const focus = [...shareWorkers.keys()].map((token) => input.jobs[indexOfToken(jobIndex, token)].id).join("+") || "none";
     let debugMessage = null;
     if (input.craftDebug && input.lastCraftWinner !== focus) {
       const detail = filtered.map((craft) => {
-        const job = input.jobs.find((entry) => entry.token === craft.jobToken);
+        const job = input.jobs[indexOfToken(jobIndex, craft.jobToken)];
         const assigned = `→${shareWorkers.get(craft.jobToken) ?? 0}` + (input.skilledServantsMaximum > 0 ? `+${shareServants.get(craft.jobToken) ?? 0}s` : "");
         const key = (craft.currentQuantity / craft.weighting).toFixed(1);
         return input.foundryWeighting === "buildings" ? `${job.id} q=${craft.currentQuantity.toFixed(0)} key=${key} (${craft.driver ?? "no building"})${assigned}` : `${job.id} q=${craft.currentQuantity.toFixed(0)} key=${key}${assigned}`;
@@ -39956,14 +39966,14 @@
       debugMessage
     };
   }
-  function authorityMaximum(input) {
+  function authorityMaximum(input, jobIndex) {
     const authority = input.authority;
     if (!authority.enabled) {
       return { cap: Number.MAX_SAFE_INTEGER, storedCap: null, debug: null };
     }
     let storedCap = authority.previousCap;
     let debug = null;
-    const entertainerIndex = indexOfToken(input, input.entertainerToken);
+    const entertainerIndex = indexOfToken(jobIndex, input.entertainerToken);
     const entertainer = input.jobs[entertainerIndex];
     if (authority.moraleCeiling !== null && entertainer !== void 0) {
       const limits = [];
@@ -39997,13 +40007,14 @@
   }
   function planJobs(input) {
     if (!input.available || input.jobs.length === 0) return null;
+    const jobIndex = createJobIndex(input);
     const requiredWorkers = input.jobs.map(() => 0);
     const requiredServants = input.jobs.map(() => 0);
     let availableWorkers = input.jobs.reduce((sum, job) => sum + job.workers, 0);
     let availableServants = input.manageServants ? input.servantsMaximum : 0;
     let availableCraftsmen = input.craftsmenMaximum;
-    const farmerIndex = indexOfToken(input, input.farmerToken);
-    const defaultIndex = indexOfToken(input, input.defaultJobToken);
+    const farmerIndex = indexOfToken(jobIndex, input.farmerToken);
+    const defaultIndex = indexOfToken(jobIndex, input.defaultJobToken);
     if (input.craftOnly) {
       availableCraftsmen = availableWorkers;
       availableWorkers = 0;
@@ -40013,22 +40024,27 @@
     } else {
       availableCraftsmen = 0;
     }
-    const craft = craftPlan(input, availableWorkers, availableCraftsmen);
+    const craft = craftPlan(
+      input,
+      availableWorkers,
+      availableCraftsmen,
+      jobIndex
+    );
     availableWorkers = craft.availableWorkers;
     for (const [token, count2] of craft.workers) {
-      const index = indexOfToken(input, token);
+      const index = indexOfToken(jobIndex, token);
       if (index !== -1) requiredWorkers[index] = count2;
     }
     for (const [token, count2] of craft.servants) {
-      const index = indexOfToken(input, token);
+      const index = indexOfToken(jobIndex, token);
       if (index !== -1) requiredServants[index] = count2;
     }
-    const minerIndex = indexOfToken(input, input.minerToken);
+    const minerIndex = indexOfToken(jobIndex, input.minerToken);
     if (input.reserveMiner && availableWorkers > 1 && minerIndex !== -1 && input.jobs[minerIndex].smart) {
       requiredWorkers[minerIndex] = 1;
       availableWorkers--;
     }
-    const authority = authorityMaximum(input);
+    const authority = authorityMaximum(input, jobIndex);
     let minimumFarmers = 0;
     let maximumSpaceMiners = 0;
     const jobMaximums = input.jobs.map((job) => job.smartMaximum);
@@ -40055,7 +40071,7 @@
             const maximum = jobMaximums[index] ?? Number.MAX_SAFE_INTEGER;
             minimumFarmers = job.farmerMinimum ?? maximum;
             if (job.demonicLumber) {
-              const lumberIndex = indexOfToken(input, input.lumberjackToken);
+              const lumberIndex = indexOfToken(jobIndex, input.lumberjackToken);
               const lumberBreakpoint = lumberIndex === -1 ? 0 : input.jobs[lumberIndex].breakpoints[pass];
               jobsToAssign = Math.min(
                 availableEmployees,
@@ -40107,7 +40123,7 @@
     }
     const splitJobs = input.splitEntries.map((entry) => ({
       entry,
-      index: indexOfToken(input, entry.jobToken)
+      index: indexOfToken(jobIndex, entry.jobToken)
     })).filter(({ index }) => index !== -1);
     if (splitJobs.length > 0) {
       for (const { index } of splitJobs) {
@@ -40169,7 +40185,7 @@
       input.scavengerToken
     ];
     while ((availableWorkers > 0 || availableServants > 0) && fallback.length > 0) {
-      const index = indexOfToken(input, fallback.pop() ?? null);
+      const index = indexOfToken(jobIndex, fallback.pop() ?? null);
       if (index !== -1) {
         requiredWorkers[index] += availableWorkers;
         requiredServants[index] += availableServants;
@@ -40177,11 +40193,11 @@
         availableServants = 0;
       }
     }
-    const entertainerIndex = indexOfToken(input, input.entertainerToken);
+    const entertainerIndex = indexOfToken(jobIndex, input.entertainerToken);
     let selectedDefaultToken = null;
     if (!input.craftOnly && input.setDefault) {
       selectedDefaultToken = input.defaultPreference.find((candidate) => {
-        const index = indexOfToken(input, candidate.allocationToken);
+        const index = indexOfToken(jobIndex, candidate.allocationToken);
         if (candidate.requirement === "managed-with-workers") {
           return candidate.managed && index !== -1 && requiredWorkers[index] > 0;
         }
