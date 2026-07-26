@@ -4,10 +4,12 @@ import type {
   ResearchCommandExecutor,
   ResearchReader,
 } from "../ports/research.ts";
+import type { TickDiagnostics } from "../ports/tick.ts";
 
 export interface ResearchAutomationDependencies {
   readonly reader: ResearchReader;
   readonly executor: ResearchCommandExecutor;
+  readonly diagnostics?: TickDiagnostics | undefined;
 }
 
 const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
@@ -22,14 +24,33 @@ const SUCCEEDED: CommandExecutionOutcome = Object.freeze({
 export function runResearchAutomation(
   dependencies: ResearchAutomationDependencies,
 ): CommandExecutionOutcome {
+  const profiling = dependencies.diagnostics;
+  const measure = <T>(phase: string, action: () => T): T => {
+    if (profiling === undefined || !profiling.readPerformanceEnabled()) {
+      return action();
+    }
+    const startedAtMs = profiling.nowMs();
+    try {
+      return action();
+    } finally {
+      profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
+    }
+  };
   let startIndex = 0;
   while (true) {
-    const decision = planResearch(dependencies.reader.read(startIndex));
+    const observation = measure("autoResearch.read", () =>
+      dependencies.reader.read(startIndex),
+    );
+    const decision = measure("autoResearch.plan", () =>
+      planResearch(observation),
+    );
     if (decision === null) {
       return SUCCEEDED;
     }
 
-    const result = dependencies.executor.execute(decision);
+    const result = measure("autoResearch.execute", () =>
+      dependencies.executor.execute(decision),
+    );
     if (result.outcome.status !== "succeeded" || result.researched) {
       return result.outcome;
     }

@@ -42223,13 +42223,35 @@
     status: "succeeded"
   });
   function runResearchAutomation(dependencies) {
+    const profiling = dependencies.diagnostics;
+    const measure = (phase, action) => {
+      if (profiling === void 0 || !profiling.readPerformanceEnabled()) {
+        return action();
+      }
+      const startedAtMs = profiling.nowMs();
+      try {
+        return action();
+      } finally {
+        profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
+      }
+    };
     let startIndex = 0;
     while (true) {
-      const decision2 = planResearch(dependencies.reader.read(startIndex));
+      const observation = measure(
+        "autoResearch.read",
+        () => dependencies.reader.read(startIndex)
+      );
+      const decision2 = measure(
+        "autoResearch.plan",
+        () => planResearch(observation)
+      );
       if (decision2 === null) {
         return SUCCEEDED23;
       }
-      const result2 = dependencies.executor.execute(decision2);
+      const result2 = measure(
+        "autoResearch.execute",
+        () => dependencies.executor.execute(decision2)
+      );
       if (result2.outcome.status !== "succeeded" || result2.researched) {
         return result2.outcome;
       }
@@ -42242,7 +42264,11 @@
     const reader = createResearchReader(dependencies.reader);
     const executor = createResearchCommandExecutor(dependencies.executor);
     return Object.freeze({
-      autoResearch: () => runResearchAutomation({ reader, executor })
+      autoResearch: () => runResearchAutomation({
+        reader,
+        executor,
+        diagnostics: dependencies.diagnostics
+      })
     });
   }
 
@@ -56742,7 +56768,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getState: () => state,
         getBuildingManager: () => BuildingManager,
         getProjectManager: () => ProjectManager
-      }
+      },
+      diagnostics
     });
     const { autoPower } = createPowerControl({
       warnings: {

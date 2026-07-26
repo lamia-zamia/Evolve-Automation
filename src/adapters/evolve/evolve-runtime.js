@@ -4403,6 +4403,7 @@ function startEvolveRuntimeComposition(
       getBuildingManager: () => BuildingManager,
       getProjectManager: () => ProjectManager,
     },
+    diagnostics,
   });
 
   const { autoPower } = createPowerControl({
