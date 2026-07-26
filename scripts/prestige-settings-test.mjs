@@ -28,6 +28,14 @@ const adapter = createPrestigeSettingsEvolveAdapter({
 });
 const model = adapter.read();
 assert.equal(model.controls.length > 10, true);
+assert.match(
+  model.controls.find(
+    (control) =>
+      control.kind === "number" &&
+      control.settingName === "prestigeDemonicPotential",
+  ).hint,
+  /^Perform reset only if current mech team potential at or below given amount\./,
+);
 assert.equal(
   model.controls.find(
     (control) =>

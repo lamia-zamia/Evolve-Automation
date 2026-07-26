@@ -47430,7 +47430,7 @@
         kind: "number",
         settingName: "prestigeDemonicPotential",
         label: "Maximum mech potential for reset",
-        hint: "Perform reset only if current mech team potential below given amount. Full bay of best mechs will have `1` potential. This allows postponing reset if your team is still good after reaching target floor, and can quickly clear another floor"
+        hint: "Perform reset only if current mech team potential at or below given amount. Full bay of best mechs will have `1` potential. This allows postponing reset if your team is still good after reaching target floor, and can quickly clear another floor"
       },
       {
         kind: "toggle",
