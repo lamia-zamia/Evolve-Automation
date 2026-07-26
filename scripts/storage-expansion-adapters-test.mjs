@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import { createStorageCommandExecutor } from "../src/adapters/evolve/economy/storage/storage-command-executor.ts";
 import { createEvolveStorageExpansionReader } from "../src/adapters/evolve/economy/storage/storage-expansion-reader.ts";
+import { planStorageExpansion } from "../src/domain/economy/storage/storage-expansion.ts";
 
 const clock = Object.freeze({ nowMs: () => 5 });
 
@@ -43,6 +44,39 @@ assert.equal(snapshot.isLumberRace, false);
 assert.equal(snapshot.library.plywoodCost, 100);
 assert.ok(Object.isFrozen(snapshot));
 assert.ok(Object.isFrozen(snapshot.crates));
+
+const overCapPlan = planStorageExpansion(
+  {
+    storageToBuild: 300,
+    crates: {
+      resourceId: "Crates",
+      maxQuantity: 2,
+      currentQuantity: 5,
+      storagePerUnit: 50,
+      costs: [{ resourceId: "Wood", costPerUnit: 10, available: 25 }],
+    },
+    containers: {
+      resourceId: "Containers",
+      maxQuantity: 5,
+      currentQuantity: 1,
+      storagePerUnit: 200,
+      costs: [{ resourceId: "Steel", costPerUnit: 20, available: 100 }],
+    },
+    isEarlyGame: false,
+    isLumberRace: false,
+    steel: { storageRatio: 0.9, maxQuantity: 1000, storageRequired: 500 },
+    library: { count: 10, plywoodCost: 100 },
+    plywoodAvailable: 200,
+  },
+  { storageLimitPreMad: false },
+);
+assert.deepEqual(
+  overCapPlan.map(({ unit, count }) => ({ unit, count })),
+  [
+    { unit: "crate", count: -3 },
+    { unit: "container", count: 3 },
+  ],
+);
 
 // Absent / malformed Plywood cost maps to null (preserving `undefined > x === false`).
 assert.equal(
