@@ -193,6 +193,8 @@ export function createCoreManagers({
       const projects = getProjects();
       const state = getState();
       const game = getGame();
+      const queuedTargetSet = new Set(state.queuedTargets);
+      const triggerTargetSet = new Set(state.triggerTargets);
       const isPrestigeAllowed = getIsPrestigeAllowed();
       const bananaRepublicObjectiveComplete =
         getBananaRepublicObjectiveComplete();
@@ -221,11 +223,11 @@ export function createCoreManagers({
           project.weighting = 0;
           project.extraDescription = "Projects ignored Pre-MAD<br>";
         }
-        if (state.queuedTargets.includes(project)) {
+        if (queuedTargetSet.has(project)) {
           project.weighting = 0;
           project.extraDescription = "Queued project, processing...<br>";
         }
-        if (state.triggerTargets.includes(project)) {
+        if (triggerTargetSet.has(project)) {
           project.weighting = 0;
           project.extraDescription = "Active trigger, processing...<br>";
         }

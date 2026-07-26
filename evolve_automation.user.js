@@ -5795,6 +5795,8 @@
         const projects = getProjects();
         const state = getState();
         const game = getGame();
+        const queuedTargetSet = new Set(state.queuedTargets);
+        const triggerTargetSet = new Set(state.triggerTargets);
         const isPrestigeAllowed2 = getIsPrestigeAllowed();
         const bananaRepublicObjectiveComplete = getBananaRepublicObjectiveComplete();
         const inflationChallengeAssistActive = getInflationChallengeAssistActive();
@@ -5816,11 +5818,11 @@
             project.weighting = 0;
             project.extraDescription = "Projects ignored Pre-MAD<br>";
           }
-          if (state.queuedTargets.includes(project)) {
+          if (queuedTargetSet.has(project)) {
             project.weighting = 0;
             project.extraDescription = "Queued project, processing...<br>";
           }
-          if (state.triggerTargets.includes(project)) {
+          if (triggerTargetSet.has(project)) {
             project.weighting = 0;
             project.extraDescription = "Active trigger, processing...<br>";
           }
