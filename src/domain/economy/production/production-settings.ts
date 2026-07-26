@@ -233,7 +233,7 @@ const productionSettingsControls = [
       {
         val: "legacy",
         label: "Legacy (deprecated)",
-        hint: "Legacy mode, similar to previous script behavior. Only the resource with the highest weighting is picked. If multiple resources have the same weighting then it will focus exclusively on one of those resources. This mode exists only to give you time to migrate your config to using the priority field.",
+        hint: "Legacy mode, similar to previous script behavior. Only the resource with the lowest weighting is picked. If multiple resources have the same weighting then it will focus exclusively on one of those resources. This mode exists only to give you time to migrate your config to using the priority field.",
       },
     ],
   },

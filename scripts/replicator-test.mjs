@@ -189,6 +189,35 @@ assert.deepEqual(
   ]),
   { productionId: "Coal" },
 );
+const legacyPriorityPlan = planReplicatorPriority({
+  initialised: true,
+  assignGovernorTask: false,
+  scoreMode: "weight",
+  selectHighestScore: false,
+  productions: [
+    {
+      id: "Iron",
+      unlocked: true,
+      enabled: true,
+      weighting: 1,
+      priority: 1,
+      demanded: false,
+      useful: true,
+    },
+    {
+      id: "Coal",
+      unlocked: true,
+      enabled: true,
+      weighting: 2,
+      priority: 1,
+      demanded: false,
+      useful: true,
+    },
+  ],
+});
+assert.deepEqual(planReplicatorSelection(legacyPriorityPlan, []), {
+  productionId: "Iron",
+});
 assert.deepEqual(planReplicatorGovernorTask(["market", "none"]), {
   status: "ready",
   assignment: {

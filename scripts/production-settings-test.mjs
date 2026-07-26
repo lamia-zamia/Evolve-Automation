@@ -123,6 +123,16 @@ intents = createProductionSettingsIntentHandler({
 });
 
 productionSettings.updateProductionSettingsContent();
+const replicatorControl = evolveAdapter
+  .readProductionSettingsReadModel()
+  .controls.find(
+    (control) => control.settingName === "replicatorWeightingMode",
+  );
+assert.equal(replicatorControl?.kind, "select");
+assert.equal(
+  replicatorControl?.options.find((option) => option.val === "legacy")?.hint,
+  "Legacy mode, similar to previous script behavior. Only the resource with the lowest weighting is picked. If multiple resources have the same weighting then it will focus exclusively on one of those resources. This mode exists only to give you time to migrate your config to using the priority field.",
+);
 assert.deepEqual(
   trace.filter((entry) => entry.startsWith("heading:")),
   [
