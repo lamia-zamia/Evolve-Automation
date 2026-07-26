@@ -1,4 +1,5 @@
 import type { RandomSource } from "../ports/randomness.ts";
+import type { ForeignAchievementGoal } from "../domain/combat/foreign-achievements.ts";
 
 type LooseFunction = (...args: any[]) => any;
 type LooseObject = Record<PropertyKey, any>;
@@ -29,6 +30,7 @@ type BuildingWeightingDependencies = {
   getRetirementChallengeAssistActive: () => LooseFunction;
   getRetirementPreparationMissing: () => LooseFunction;
   getGuardActive: () => LooseFunction;
+  getForeignAchievementGoal: () => ForeignAchievementGoal | null;
   getIsHellSupressUseful: () => LooseFunction;
   getBestSupplyRatioFn: () => LooseFunction;
   getIsGECKNeeded: () => LooseFunction;
@@ -64,6 +66,7 @@ export function createBuildingWeightingPolicy({
   getRetirementChallengeAssistActive,
   getRetirementPreparationMissing,
   getGuardActive,
+  getForeignAchievementGoal,
   getIsHellSupressUseful,
   getBestSupplyRatioFn,
   getIsGECKNeeded,
@@ -99,6 +102,7 @@ export function createBuildingWeightingPolicy({
   const retirementPreparationMissing: LooseFunction = (...args) =>
     getRetirementPreparationMissing()(...args);
   const guardActive: LooseFunction = (...args) => getGuardActive()(...args);
+  const foreignAchievementGoal = () => getForeignAchievementGoal();
   const isHellSupressUseful: LooseFunction = (...args) =>
     getIsHellSupressUseful()(...args);
   const getBestSupplyRatio: LooseFunction = (...args) =>
@@ -829,6 +833,8 @@ export function createBuildingWeightingPolicy({
         `Retirement preparation: build ${target} ${building.name}`,
       () => getSettings().buildingWeightingRetirementPrep,
     ],
+    // Red Spaceport unlocks unification research. Let an active unification
+    // achievement build this prerequisite so Red Dead can release afterward.
     [
       () => getSettings().achievementGuards,
       (building: any) =>
@@ -838,7 +844,9 @@ export function createBuildingWeightingPolicy({
               guardActive("guardEnergetic")
             ? "Energetic"
             : building === getBuildings().RedSpaceport &&
-                guardActive("guardRedDead")
+                guardActive("guardRedDead") &&
+                !guardActive("guardPacifist") &&
+                foreignAchievementGoal() === null
               ? "Red Dead"
               : false,
       (name: any) => `${name} achievement guard`,

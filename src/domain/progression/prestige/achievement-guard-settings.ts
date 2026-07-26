@@ -61,7 +61,7 @@ const achievementGuardSettingsReadModel: AchievementGuardSettingsReadModel =
         kind: "toggle",
         settingName: "guardRedDead",
         label: "Red Dead",
-        hint: "Never build a Red Spaceport during Whitehole or Vacuum Collapse runs.",
+        hint: "Never build a Red Spaceport during Whitehole or Vacuum Collapse runs, unless an active Pacifist, World Domination, or Syndicate guard needs it to unlock unification.",
       }),
       Object.freeze({
         kind: "toggle",

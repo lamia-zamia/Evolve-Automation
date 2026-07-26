@@ -35,6 +35,8 @@ let context = {
 };
 let haveTech = () => false;
 const neutralFunction = () => false;
+let guardActive = neutralFunction;
+let foreignAchievementGoal = null;
 
 const policy = createBuildingWeightingPolicy({
   getGame: () => context.game,
@@ -60,7 +62,8 @@ const policy = createBuildingWeightingPolicy({
   getInflationChallengeMoneyReachable: () => neutralFunction,
   getRetirementChallengeAssistActive: () => neutralFunction,
   getRetirementPreparationMissing: () => neutralFunction,
-  getGuardActive: () => neutralFunction,
+  getGuardActive: () => guardActive,
+  getForeignAchievementGoal: () => foreignAchievementGoal,
   getIsHellSupressUseful: () => neutralFunction,
   getBestSupplyRatioFn: () => neutralFunction,
   getIsGECKNeeded: () => neutralFunction,
@@ -269,6 +272,46 @@ assert.equal(
   mechSavingRule[policy.wrIndividualCondition]({ cost: { Supply: 1 } }),
   "Saving supplies for new mech",
   "spare-affordable mechs should still protect Supply buildings",
+);
+
+context.settings.achievementGuards = true;
+guardActive = (setting) => setting === "guardRedDead";
+const achievementGuardRule = policy.weightingRules.find((rule) => {
+  try {
+    return (
+      rule[policy.wrIndividualCondition](context.buildings.RedSpaceport) ===
+      "Red Dead"
+    );
+  } catch {
+    return false;
+  }
+});
+assert.ok(achievementGuardRule, "achievement guard weighting rule missing");
+assert.equal(
+  achievementGuardRule[policy.wrIndividualCondition](
+    context.buildings.RedSpaceport,
+  ),
+  "Red Dead",
+);
+for (const goal of ["world-domination", "syndicate"]) {
+  foreignAchievementGoal = goal;
+  assert.equal(
+    achievementGuardRule[policy.wrIndividualCondition](
+      context.buildings.RedSpaceport,
+    ),
+    false,
+    `${goal} must be able to build the Red Spaceport needed to unlock unification`,
+  );
+}
+foreignAchievementGoal = null;
+guardActive = (setting) =>
+  setting === "guardRedDead" || setting === "guardPacifist";
+assert.equal(
+  achievementGuardRule[policy.wrIndividualCondition](
+    context.buildings.RedSpaceport,
+  ),
+  false,
+  "Pacifist must be able to build the Red Spaceport needed for unification",
 );
 
 console.log("Weighting policy module tests passed");

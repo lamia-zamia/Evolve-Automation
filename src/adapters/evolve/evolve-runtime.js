@@ -2995,6 +2995,13 @@ function startEvolveRuntimeComposition(
     getRetirementChallengeAssistActive: () => retirementChallengeAssistActive,
     getRetirementPreparationMissing: () => retirementPreparationMissing,
     getGuardActive: () => guardActive,
+    getForeignAchievementGoal: () =>
+      readForeignAchievementGoal({
+        getSettings: () => settings,
+        getGame: () => game,
+        isAchievementUnlocked: (achievement, level) =>
+          isAchievementUnlocked(achievement, level),
+      }),
     getIsHellSupressUseful: () => isHellSupressUseful,
     getBestSupplyRatioFn: () => getBestSupplyRatio,
     getIsGECKNeeded: () => isGECKNeeded,

@@ -17513,7 +17513,7 @@
         kind: "toggle",
         settingName: "guardRedDead",
         label: "Red Dead",
-        hint: "Never build a Red Spaceport during Whitehole or Vacuum Collapse runs."
+        hint: "Never build a Red Spaceport during Whitehole or Vacuum Collapse runs, unless an active Pacifist, World Domination, or Syndicate guard needs it to unlock unification."
       }),
       Object.freeze({
         kind: "toggle",
@@ -23678,6 +23678,7 @@
     getRetirementChallengeAssistActive,
     getRetirementPreparationMissing,
     getGuardActive,
+    getForeignAchievementGoal,
     getIsHellSupressUseful,
     getBestSupplyRatioFn,
     getIsGECKNeeded,
@@ -23703,6 +23704,7 @@
     const retirementChallengeAssistActive = (...args) => getRetirementChallengeAssistActive()(...args);
     const retirementPreparationMissing = (...args) => getRetirementPreparationMissing()(...args);
     const guardActive = (...args) => getGuardActive()(...args);
+    const foreignAchievementGoal = () => getForeignAchievementGoal();
     const isHellSupressUseful = (...args) => getIsHellSupressUseful()(...args);
     const getBestSupplyRatio = (...args) => getBestSupplyRatioFn()(...args);
     const isGECKNeeded = (...args) => getIsGECKNeeded()(...args);
@@ -24239,9 +24241,11 @@
         (target, building3) => `Retirement preparation: build ${target} ${building3.name}`,
         () => getSettings().buildingWeightingRetirementPrep
       ],
+      // Red Spaceport unlocks unification research. Let an active unification
+      // achievement build this prerequisite so Red Dead can release afterward.
       [
         () => getSettings().achievementGuards,
-        (building3) => building3 === getBuildings().Dreadnought && guardActive("guardDreaded") ? "Dreaded" : building3 === getBuildings().SiriusThermalCollector && guardActive("guardEnergetic") ? "Energetic" : building3 === getBuildings().RedSpaceport && guardActive("guardRedDead") ? "Red Dead" : false,
+        (building3) => building3 === getBuildings().Dreadnought && guardActive("guardDreaded") ? "Dreaded" : building3 === getBuildings().SiriusThermalCollector && guardActive("guardEnergetic") ? "Energetic" : building3 === getBuildings().RedSpaceport && guardActive("guardRedDead") && !guardActive("guardPacifist") && foreignAchievementGoal() === null ? "Red Dead" : false,
         (name) => `${name} achievement guard`,
         () => 0
       ],
@@ -55656,6 +55660,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getRetirementChallengeAssistActive: () => retirementChallengeAssistActive,
       getRetirementPreparationMissing: () => retirementPreparationMissing,
       getGuardActive: () => guardActive,
+      getForeignAchievementGoal: () => readForeignAchievementGoal({
+        getSettings: () => settings,
+        getGame: () => game,
+        isAchievementUnlocked: (achievement, level) => isAchievementUnlocked2(achievement, level)
+      }),
       getIsHellSupressUseful: () => isHellSupressUseful,
       getBestSupplyRatioFn: () => getBestSupplyRatio,
       getIsGECKNeeded: () => isGECKNeeded,
