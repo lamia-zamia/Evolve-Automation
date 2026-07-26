@@ -4435,6 +4435,7 @@ function startEvolveRuntimeComposition(
       getBuildingIds: () => buildingIds,
       log: (message) => runtimeEnvironment.log(message),
     },
+    diagnostics,
   });
 
   publishTestSurface({

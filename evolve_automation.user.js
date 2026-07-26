@@ -36975,26 +36975,55 @@
   });
   function createPowerAutomation(dependencies) {
     let state = EMPTY_POWER_AUTOMATION_STATE;
+    const profiling = dependencies.diagnostics;
+    const measure = (phase, action) => {
+      if (profiling === void 0 || !profiling.readPerformanceEnabled()) {
+        return action();
+      }
+      const startedAtMs = profiling.nowMs();
+      try {
+        return action();
+      } finally {
+        profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
+      }
+    };
     return Object.freeze({
       run() {
-        const plan = planPowerCycle(dependencies.reader.readCycle(), state);
-        if (plan.decision === null) {
+        const cycle = measure(
+          "autoPower.readCycle",
+          () => dependencies.reader.readCycle()
+        );
+        const plan = measure(
+          "autoPower.planCycle",
+          () => planPowerCycle(cycle, state)
+        );
+        const decision2 = plan.decision;
+        if (decision2 === null) {
           return SUCCEEDED15;
         }
-        const cycleOutcome = dependencies.executor.execute(plan.decision);
+        const cycleOutcome = measure(
+          "autoPower.executeCycle",
+          () => dependencies.executor.execute(decision2)
+        );
         if (cycleOutcome.status !== "succeeded") {
           return cycleOutcome;
         }
         state = plan.nextState;
         const warning = planPowerWarningShutdown(
-          dependencies.reader.readWarnings(
-            dependencies.warnings.readWarnedBuildingDomIds()
+          measure(
+            "autoPower.readWarnings",
+            () => dependencies.reader.readWarnings(
+              dependencies.warnings.readWarnedBuildingDomIds()
+            )
           )
         );
         if (warning === null) {
           return SUCCEEDED15;
         }
-        const warningOutcome = dependencies.executor.execute(warning);
+        const warningOutcome = measure(
+          "autoPower.executeWarning",
+          () => dependencies.executor.execute(warning)
+        );
         if (warningOutcome.status !== "succeeded") {
           return warningOutcome;
         }
@@ -37024,7 +37053,8 @@
     const automation = createPowerAutomation({
       reader: adapter.reader,
       executor: adapter.executor,
-      warnings
+      warnings,
+      diagnostics: dependencies.diagnostics
     });
     return Object.freeze({ autoPower: () => automation.run() });
   }
@@ -56741,7 +56771,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         isPillarFinished: isPillarFinished2,
         getBuildingIds: () => buildingIds,
         log: (message) => runtimeEnvironment.log(message)
-      }
+      },
+      diagnostics
     });
     publishTestSurface({
       powerSupport: {
