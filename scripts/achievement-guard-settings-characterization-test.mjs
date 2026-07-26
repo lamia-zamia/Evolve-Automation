@@ -102,6 +102,8 @@ assert.deepEqual(actionTrace, [
   "toggle:guardEnergetic",
   "toggle:guardRedDead",
   "toggle:guardSecondEvolution",
+  "toggle:guardWorldDomination",
+  "toggle:guardSyndicate",
   "toggle:guardTradeFederation",
   "toggle:guardBananaRepublic",
 ]);
@@ -131,6 +133,8 @@ assert.deepEqual(actionTrace, [
   "toggle:guardEnergetic",
   "toggle:guardRedDead",
   "toggle:guardSecondEvolution",
+  "toggle:guardWorldDomination",
+  "toggle:guardSyndicate",
   "toggle:guardTradeFederation",
   "toggle:guardBananaRepublic",
 ]);

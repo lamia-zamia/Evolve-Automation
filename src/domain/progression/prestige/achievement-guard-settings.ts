@@ -71,6 +71,18 @@ const achievementGuardSettingsReadModel: AchievementGuardSettingsReadModel =
       }),
       Object.freeze({
         kind: "toggle",
+        settingName: "guardWorldDomination",
+        label: "World Domination",
+        hint: "While unearned and still possible, prefer Occupy for the three core foreign powers. Existing foreign policy settings resume if the path is lost or the achievement is earned. If both World Domination and Syndicate are enabled on a clean slate, World Domination is selected.",
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardSyndicate",
+        label: "Syndicate",
+        hint: "While unearned and still possible, prefer Purchase for the three core foreign powers. Existing foreign policy settings resume if the path is lost or the achievement is earned. Disable World Domination to select Syndicate from a clean slate.",
+      }),
+      Object.freeze({
+        kind: "toggle",
         settingName: "guardTradeFederation",
         label: "Trade Federation",
         hint: "When Trade Federation is still unearned and 750 city plus 50 galactic trade routes are already active, temporarily switch to Federation without changing route allocation. The preferred government resumes afterward.",

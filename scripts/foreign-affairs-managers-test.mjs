@@ -9,6 +9,7 @@ let buildings;
 let poly;
 let haveTech = () => false;
 let guardActive = () => false;
+let foreignAchievementGoal = null;
 let traitVal = () => 1;
 const vueById = {};
 const selectors = {};
@@ -42,6 +43,7 @@ const { SpyManager, WarManager } = createForeignAffairsManagers({
   }),
   getHaveTech: () => haveTech,
   getGuardActive: () => guardActive,
+  getForeignAchievementGoal: () => foreignAchievementGoal,
   getTraitVal: () => traitVal,
   getGovPower: (index) => game.global.civic.foreign[`gov${index}`].mil,
   getGovName: (index) => `government-${index}`,
@@ -133,6 +135,46 @@ assert.deepEqual(
 assert.equal(SpyManager.foreignTarget.id, 2);
 assert.deepEqual(SpyManager.purchaseForeigngs, [0, 1]);
 assert.equal(SpyManager.purchaseMoney, 1_100);
+
+foreignAchievementGoal = "world-domination";
+settings.foreignPolicyInferior = "Ignore";
+settings.foreignPolicySuperior = "Ignore";
+settings.foreignOccupyLast = false;
+SpyManager.updateForeigns();
+assert.deepEqual(
+  SpyManager.foreignActive.map(({ id, policy }) => ({ id, policy })),
+  [
+    { id: 0, policy: "Occupy" },
+    { id: 1, policy: "Occupy" },
+    { id: 2, policy: "Occupy" },
+  ],
+);
+
+foreignAchievementGoal = "syndicate";
+SpyManager.updateForeigns();
+assert.deepEqual(
+  SpyManager.foreignActive.map(({ id, policy }) => ({ id, policy })),
+  [
+    { id: 0, policy: "Purchase" },
+    { id: 1, policy: "Purchase" },
+    { id: 2, policy: "Ignore" },
+  ],
+);
+assert.deepEqual(SpyManager.purchaseForeigngs, [0, 1]);
+game.global.civic.foreign.gov0.buy = true;
+game.global.civic.foreign.gov1.buy = true;
+settings.foreignOccupyLast = true;
+settings.foreignPolicySuperior = "Sabotage";
+SpyManager.updateForeigns();
+assert.deepEqual(
+  SpyManager.foreignActive.map(({ id, policy }) => ({ id, policy })),
+  [
+    { id: 0, policy: "Purchase" },
+    { id: 1, policy: "Purchase" },
+    { id: 2, policy: "Purchase" },
+  ],
+);
+assert.deepEqual(SpyManager.purchaseForeigngs, [2]);
 
 // Tech and guard lookups stay live after factory construction.
 haveTech = (id) => id === "world_control";

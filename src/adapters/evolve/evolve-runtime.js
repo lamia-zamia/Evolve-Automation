@@ -62,6 +62,7 @@ import { createDisposalManagers } from "../../game/disposal-managers.ts";
 import { createProductionManagers } from "../../game/production-managers.ts";
 import { createEconomyManagers } from "../../game/economy-managers.ts";
 import { createForeignAffairsManagers } from "../../game/foreign-affairs-managers.ts";
+import { readForeignAchievementGoal } from "./combat/foreign-achievements.ts";
 import { createFleetManagers } from "../../game/fleet-managers.ts";
 import { createMechManager } from "../../game/mech-manager.ts";
 import { createInfrastructureManagers } from "../../game/infrastructure-managers.ts";
@@ -3112,6 +3113,13 @@ function startEvolveRuntimeComposition(
     getKeyManager: () => KeyManager,
     getHaveTech: () => haveTech,
     getGuardActive: () => guardActive,
+    getForeignAchievementGoal: () =>
+      readForeignAchievementGoal({
+        getSettings: () => settings,
+        getGame: () => game,
+        isAchievementUnlocked: (achievement, level) =>
+          isAchievementUnlocked(achievement, level),
+      }),
     getTraitVal: () => traitVal,
     getGovPower,
     getGovName,

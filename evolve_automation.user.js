@@ -627,6 +627,8 @@
         guardEnergetic: true,
         guardRedDead: true,
         guardSecondEvolution: true,
+        guardWorldDomination: true,
+        guardSyndicate: true,
         guardTradeFederation: true,
         guardBananaRepublic: true
       }
@@ -3563,6 +3565,7 @@
     getKeyManager,
     getHaveTech,
     getGuardActive,
+    getForeignAchievementGoal,
     getTraitVal,
     getGovPower,
     getGovName,
@@ -3612,6 +3615,9 @@
         this._foreignVue = getVueById("foreign");
         let foreignUnlocked = this._foreignVue?.vis();
         if (foreignUnlocked) {
+          const achievementGoal = getForeignAchievementGoal();
+          const achievementPolicy = achievementGoal === "world-domination" ? "Occupy" : achievementGoal === "syndicate" ? "Purchase" : null;
+          const unificationRequested = settings.foreignUnification || achievementGoal !== null;
           let currentTarget = null;
           let controlledForeigns = 0;
           let unlockedForeigns = [];
@@ -3627,7 +3633,7 @@
           }));
           for (let foreign of activeForeigns) {
             let rank = foreign.id === 3 ? "Rival" : getGovPower(foreign.id) <= settings.foreignPowerRequired ? "Inferior" : "Superior";
-            foreign.policy = settings[`foreignPolicy${rank}`];
+            foreign.policy = foreign.id < 3 && achievementPolicy !== null ? achievementPolicy : settings[`foreignPolicy${rank}`];
             if (foreign.gov.anx && foreign.policy === "Annex" || foreign.gov.buy && foreign.policy === "Purchase" || foreign.gov.occ && foreign.policy === "Occupy") {
               controlledForeigns++;
             }
@@ -3637,7 +3643,7 @@
           }
           if (activeForeigns.length > 0 && !settings.foreignPacifist && !guardActive("guardPacifist")) {
             currentTarget = currentTarget ?? activeForeigns.find((f) => f.gov.occ) ?? activeForeigns[0];
-            let readyToUnify = settings.foreignUnification && controlledForeigns >= 2 && game.global.tech["unify"] === 1;
+            let readyToUnify = unificationRequested && controlledForeigns >= 2 && game.global.tech["unify"] === 1;
             if (!readyToUnify && ["Annex", "Purchase"].includes(currentTarget.policy) && SpyManager.isEspionageUseful(
               currentTarget.id,
               SpyManager.Types[currentTarget.policy].id
@@ -3650,17 +3656,17 @@
             )) {
               currentTarget.policy = "Sabotage";
             }
-            if (settings.foreignUnification && settings.foreignOccupyLast && !haveTech("world_control")) {
+            if (unificationRequested && settings.foreignOccupyLast && !haveTech("world_control")) {
               let lastTarget = ["Occupy", "Sabotage"].includes(
                 settings.foreignPolicySuperior
               ) ? 2 : currentTarget.id;
-              activeForeigns[lastTarget].policy = readyToUnify ? "Occupy" : "Sabotage";
+              activeForeigns[lastTarget].policy = readyToUnify ? achievementPolicy ?? "Occupy" : "Sabotage";
             }
             if (currentTarget.policy === "Influence" || readyToUnify && currentTarget.policy !== "Occupy" || currentTarget.policy === "Betrayal" && currentTarget.gov.mil > 75) {
               currentTarget = null;
             }
           }
-          if (game.global.tech["unify"] === 1 && (settings.foreignUnification || guardActive("guardPacifist")) && settings.autoFight) {
+          if (game.global.tech["unify"] === 1 && (unificationRequested || guardActive("guardPacifist")) && settings.autoFight) {
             for (let foreign of activeForeigns) {
               if (foreign.policy === "Purchase" && !foreign.gov.buy && foreign.gov.act !== "purchase") {
                 let moneyNeeded = Math.max(
@@ -4046,6 +4052,103 @@
       }
     };
     return { SpyManager, WarManager };
+  }
+
+  // src/domain/combat/foreign-achievements.ts
+  function planForeignAchievementGoal(input) {
+    if (input.foreignStates.length !== 3) return null;
+    const worldPossible = input.guardWorldDomination && !input.worldDominationUnlocked && input.foreignStates.every((state) => !state.annexed && !state.purchased);
+    const syndicatePossible = input.guardSyndicate && !input.syndicateUnlocked && input.foreignStates.every((state) => !state.annexed && !state.occupied);
+    if (!worldPossible && !syndicatePossible) return null;
+    if (worldPossible && input.foreignStates.some((state) => state.occupied)) {
+      return "world-domination";
+    }
+    if (syndicatePossible && input.foreignStates.some((state) => state.purchased)) {
+      return "syndicate";
+    }
+    return worldPossible ? "world-domination" : "syndicate";
+  }
+
+  // src/adapters/validation.ts
+  function requireRecord(value, path) {
+    if (typeof value !== "object" || value === null) {
+      throw new TypeError(`${path} must be an object`);
+    }
+    return value;
+  }
+  function requireNumber(value, path) {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new TypeError(`${path} must be a finite number`);
+    }
+    return value;
+  }
+  function requireBoolean(value, path) {
+    if (typeof value !== "boolean") {
+      throw new TypeError(`${path} must be a boolean`);
+    }
+    return value;
+  }
+  function requireFunction(value, path) {
+    if (typeof value !== "function") {
+      throw new TypeError(`${path} must be a function`);
+    }
+    return value;
+  }
+
+  // src/adapters/evolve/combat/foreign-achievements.ts
+  function readForeignStates(game) {
+    const global = requireRecord(game["global"], "game.global");
+    const civic = requireRecord(global["civic"], "game.global.civic");
+    const foreign = requireRecord(civic["foreign"], "game.global.civic.foreign");
+    return [0, 1, 2].map((index) => {
+      const government = requireRecord(
+        foreign[`gov${index}`],
+        `game.global.civic.foreign.gov${index}`
+      );
+      return Object.freeze({
+        occupied: Boolean(government["occ"]),
+        annexed: Boolean(government["anx"]),
+        purchased: Boolean(government["buy"])
+      });
+    });
+  }
+  function readGuardSetting(settings, name) {
+    const value = settings[name];
+    if (value !== void 0 && typeof value !== "boolean") {
+      throw new TypeError(`settings.${name} must be a boolean`);
+    }
+    return value !== false;
+  }
+  function readAchievement(dependencies, id) {
+    const result2 = dependencies.isAchievementUnlocked(id, 1);
+    if (typeof result2 !== "boolean") {
+      throw new TypeError(`isAchievementUnlocked(${id}) must return a boolean`);
+    }
+    return result2;
+  }
+  function readForeignAchievementGoal(dependencies) {
+    try {
+      const settings = requireRecord(dependencies.getSettings(), "settings");
+      if (settings["achievementGuards"] !== true) return null;
+      const guardWorldDomination = readGuardSetting(
+        settings,
+        "guardWorldDomination"
+      );
+      const guardSyndicate = readGuardSetting(settings, "guardSyndicate");
+      if (!guardWorldDomination && !guardSyndicate) return null;
+      const foreignStates = readForeignStates(
+        requireRecord(dependencies.getGame(), "game")
+      );
+      return planForeignAchievementGoal({
+        guardWorldDomination,
+        guardSyndicate,
+        worldDominationUnlocked: guardWorldDomination ? readAchievement(dependencies, "world_domination") : false,
+        syndicateUnlocked: guardSyndicate ? readAchievement(dependencies, "syndicate") : false,
+        foreignStates
+      });
+    } catch {
+      return null;
+    }
   }
 
   // src/game/fleet-managers.ts
@@ -14341,32 +14444,6 @@
     return { updateBuildPlanner };
   }
 
-  // src/adapters/validation.ts
-  function requireRecord(value, path) {
-    if (typeof value !== "object" || value === null) {
-      throw new TypeError(`${path} must be an object`);
-    }
-    return value;
-  }
-  function requireNumber(value, path) {
-    if (typeof value !== "number" || !Number.isFinite(value)) {
-      throw new TypeError(`${path} must be a finite number`);
-    }
-    return value;
-  }
-  function requireBoolean(value, path) {
-    if (typeof value !== "boolean") {
-      throw new TypeError(`${path} must be a boolean`);
-    }
-    return value;
-  }
-  function requireFunction(value, path) {
-    if (typeof value !== "function") {
-      throw new TypeError(`${path} must be a function`);
-    }
-    return value;
-  }
-
   // src/adapters/evolve/economy/storage/storage-requirements.ts
   function readCosts(value) {
     if (typeof value !== "object" || value === null) return [];
@@ -17263,6 +17340,18 @@
         settingName: "guardSecondEvolution",
         label: "Second Evolution",
         hint: "Research Fanaticism instead of Anthropology while worshipping own species as gods."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardWorldDomination",
+        label: "World Domination",
+        hint: "While unearned and still possible, prefer Occupy for the three core foreign powers. Existing foreign policy settings resume if the path is lost or the achievement is earned. If both World Domination and Syndicate are enabled on a clean slate, World Domination is selected."
+      }),
+      Object.freeze({
+        kind: "toggle",
+        settingName: "guardSyndicate",
+        label: "Syndicate",
+        hint: "While unearned and still possible, prefer Purchase for the three core foreign powers. Existing foreign policy settings resume if the path is lost or the achievement is earned. Disable World Domination to select Syndicate from a clean slate."
       }),
       Object.freeze({
         kind: "toggle",
@@ -55185,6 +55274,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getKeyManager: () => KeyManager,
       getHaveTech: () => haveTech,
       getGuardActive: () => guardActive,
+      getForeignAchievementGoal: () => readForeignAchievementGoal({
+        getSettings: () => settings,
+        getGame: () => game,
+        isAchievementUnlocked: (achievement, level) => isAchievementUnlocked2(achievement, level)
+      }),
       getTraitVal: () => traitVal,
       getGovPower,
       getGovName,

@@ -15,6 +15,7 @@ type ForeignAffairsManagerDependencies = {
   getKeyManager: () => AnyRecord;
   getHaveTech: () => AnyFunction;
   getGuardActive: () => AnyFunction;
+  getForeignAchievementGoal: () => "world-domination" | "syndicate" | null;
   getTraitVal: () => AnyFunction;
   getGovPower: (govIndex: number) => number;
   getGovName: (govIndex: number) => string;
@@ -36,6 +37,7 @@ export function createForeignAffairsManagers({
   getKeyManager,
   getHaveTech,
   getGuardActive,
+  getForeignAchievementGoal,
   getTraitVal,
   getGovPower,
   getGovName,
@@ -91,6 +93,15 @@ export function createForeignAffairsManagers({
       this._foreignVue = getVueById("foreign");
       let foreignUnlocked = this._foreignVue?.vis();
       if (foreignUnlocked) {
+        const achievementGoal = getForeignAchievementGoal();
+        const achievementPolicy =
+          achievementGoal === "world-domination"
+            ? "Occupy"
+            : achievementGoal === "syndicate"
+              ? "Purchase"
+              : null;
+        const unificationRequested =
+          settings.foreignUnification || achievementGoal !== null;
         let currentTarget = null;
         let controlledForeigns = 0;
 
@@ -116,7 +127,10 @@ export function createForeignAffairsManagers({
                 ? "Inferior"
                 : "Superior";
 
-          foreign.policy = settings[`foreignPolicy${rank}`];
+          foreign.policy =
+            foreign.id < 3 && achievementPolicy !== null
+              ? achievementPolicy
+              : settings[`foreignPolicy${rank}`];
 
           if (
             (foreign.gov.anx && foreign.policy === "Annex") ||
@@ -150,7 +164,7 @@ export function createForeignAffairsManagers({
             activeForeigns[0];
 
           let readyToUnify =
-            settings.foreignUnification &&
+            unificationRequested &&
             controlledForeigns >= 2 &&
             game.global.tech["unify"] === 1;
 
@@ -179,9 +193,10 @@ export function createForeignAffairsManagers({
             currentTarget.policy = "Sabotage";
           }
 
-          // Set last foreign to sabotage only, and then switch to occupy once we're ready to unify
+          // Set last foreign to sabotage only, then switch to the selected
+          // achievement policy once we're ready to unify.
           if (
-            settings.foreignUnification &&
+            unificationRequested &&
             settings.foreignOccupyLast &&
             !haveTech("world_control")
           ) {
@@ -191,7 +206,7 @@ export function createForeignAffairsManagers({
               ? 2
               : currentTarget.id;
             activeForeigns[lastTarget].policy = readyToUnify
-              ? "Occupy"
+              ? (achievementPolicy ?? "Occupy")
               : "Sabotage";
           }
 
@@ -208,7 +223,7 @@ export function createForeignAffairsManagers({
         // Request money for unify, make sure we have autoFight and autoResearch
         if (
           game.global.tech["unify"] === 1 &&
-          (settings.foreignUnification || guardActive("guardPacifist")) &&
+          (unificationRequested || guardActive("guardPacifist")) &&
           settings.autoFight
         ) {
           for (let foreign of activeForeigns) {
