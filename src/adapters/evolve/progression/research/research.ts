@@ -7,6 +7,7 @@ import type {
   ResearchExecutionResult,
   ResearchReader,
 } from "../../../../ports/research.ts";
+import type { TickDiagnostics } from "../../../../ports/tick.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
   requireFunction,
@@ -23,6 +24,7 @@ export interface ResearchExecutorDependencies {
   readonly getState: () => unknown;
   readonly getBuildingManager: () => unknown;
   readonly getProjectManager: () => unknown;
+  readonly diagnostics?: TickDiagnostics | undefined;
 }
 
 function readUnlockedTechs(getState: () => unknown): unknown[] {
@@ -94,6 +96,19 @@ function executionResult(
 export function createResearchCommandExecutor(
   dependencies: ResearchExecutorDependencies,
 ): ResearchCommandExecutor {
+  const profiling = dependencies.diagnostics;
+  const measure = <T>(phase: string, action: () => T): T => {
+    if (profiling === undefined || !profiling.readPerformanceEnabled()) {
+      return action();
+    }
+    const startedAtMs = profiling.nowMs();
+    try {
+      return action();
+    } finally {
+      profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
+    }
+  };
+
   return Object.freeze({
     execute(decision: Readonly<ResearchDecision>) {
       if (!Number.isSafeInteger(decision.index) || decision.index < 0) {
@@ -148,11 +163,19 @@ export function createResearchCommandExecutor(
         "ProjectManager.updateProjects",
       );
 
-      if (!Reflect.apply(click, tech, [])) {
+      if (
+        !measure("autoResearch.executeClick", () =>
+          Reflect.apply(click, tech, []),
+        )
+      ) {
         return executionResult(SUCCEEDED, false);
       }
-      Reflect.apply(updateBuildings, buildingManager, []);
-      Reflect.apply(updateProjects, projectManager, []);
+      measure("autoResearch.executeBuildings", () =>
+        Reflect.apply(updateBuildings, buildingManager, []),
+      );
+      measure("autoResearch.executeProjects", () =>
+        Reflect.apply(updateProjects, projectManager, []),
+      );
       return executionResult(SUCCEEDED, true);
     },
   });

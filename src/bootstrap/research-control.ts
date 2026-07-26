@@ -16,7 +16,10 @@ export function createResearchControl(dependencies: {
   diagnostics?: TickDiagnostics | undefined;
 }) {
   const reader = createResearchReader(dependencies.reader);
-  const executor = createResearchCommandExecutor(dependencies.executor);
+  const executor = createResearchCommandExecutor({
+    ...dependencies.executor,
+    diagnostics: dependencies.diagnostics,
+  });
   return Object.freeze({
     autoResearch: () =>
       runResearchAutomation({

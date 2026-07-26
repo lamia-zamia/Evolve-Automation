@@ -66,6 +66,36 @@ assert.equal(
   "unaffordable and post-candidate technologies do not run conflict checks",
 );
 
+const successfulActions = [];
+const researchPhases = [];
+let researchClock = 0;
+const successfulResult = createResearchCommandExecutor({
+  getState: () => ({
+    unlockedTechs: [
+      { id: "ready", click: () => successfulActions.push("click") || true },
+    ],
+  }),
+  getBuildingManager: () => ({
+    updateBuildings: () => successfulActions.push("buildings"),
+  }),
+  getProjectManager: () => ({
+    updateProjects: () => successfulActions.push("projects"),
+  }),
+  diagnostics: {
+    readPerformanceEnabled: () => true,
+    nowMs: () => ++researchClock,
+    recordPerformance: (phase) => researchPhases.push(phase),
+    flushPerformance: () => {},
+  },
+}).execute({ index: 0, techId: "ready" });
+assert.equal(successfulResult.researched, true);
+assert.deepEqual(successfulActions, ["click", "buildings", "projects"]);
+assert.deepEqual(researchPhases, [
+  "autoResearch.executeClick",
+  "autoResearch.executeBuildings",
+  "autoResearch.executeProjects",
+]);
+
 assert.throws(
   () =>
     createResearchReader({

@@ -42155,6 +42155,18 @@
     return Object.freeze({ outcome, researched });
   }
   function createResearchCommandExecutor(dependencies) {
+    const profiling = dependencies.diagnostics;
+    const measure = (phase, action) => {
+      if (profiling === void 0 || !profiling.readPerformanceEnabled()) {
+        return action();
+      }
+      const startedAtMs = profiling.nowMs();
+      try {
+        return action();
+      } finally {
+        profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
+      }
+    };
     return Object.freeze({
       execute(decision2) {
         if (!Number.isSafeInteger(decision2.index) || decision2.index < 0) {
@@ -42200,11 +42212,20 @@
           projectManager["updateProjects"],
           "ProjectManager.updateProjects"
         );
-        if (!Reflect.apply(click, tech, [])) {
+        if (!measure(
+          "autoResearch.executeClick",
+          () => Reflect.apply(click, tech, [])
+        )) {
           return executionResult2(SUCCEEDED, false);
         }
-        Reflect.apply(updateBuildings, buildingManager, []);
-        Reflect.apply(updateProjects, projectManager, []);
+        measure(
+          "autoResearch.executeBuildings",
+          () => Reflect.apply(updateBuildings, buildingManager, [])
+        );
+        measure(
+          "autoResearch.executeProjects",
+          () => Reflect.apply(updateProjects, projectManager, [])
+        );
         return executionResult2(SUCCEEDED, true);
       }
     });
@@ -42262,7 +42283,10 @@
   // src/bootstrap/research-control.ts
   function createResearchControl(dependencies) {
     const reader = createResearchReader(dependencies.reader);
-    const executor = createResearchCommandExecutor(dependencies.executor);
+    const executor = createResearchCommandExecutor({
+      ...dependencies.executor,
+      diagnostics: dependencies.diagnostics
+    });
     return Object.freeze({
       autoResearch: () => runResearchAutomation({
         reader,
