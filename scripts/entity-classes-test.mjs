@@ -119,6 +119,50 @@ assert.equal(classes.BasicJob.prototype instanceof classes.Job, true);
 assert.equal(classes.SoulGem.prototype instanceof classes.Resource, true);
 assert.equal(classes.CityAction.prototype instanceof classes.Action, true);
 
+const technologyActions = [];
+const observedTabLoads = [];
+context.document = { querySelector: () => ({}) };
+context.getVueById = () => ({
+  action: () => {
+    technologyActions.push("action");
+    observedTabLoads.push(context.mainVue.s.tabLoad);
+  },
+});
+context.game = {
+  global: {
+    settings: { civTabs: 2 },
+    resource: { Knowledge: { currentQuantity: 100 } },
+    tech: {},
+    race: {},
+  },
+  actions: { tech: { mad: { title: "Mad" } } },
+  checkAffordable: () => true,
+};
+context.resources = context.game.global.resource;
+context.settings = { performanceHackAvoidDrawTech: true };
+context.mainVue = { s: { civTabs: 2, tabLoad: true } };
+context.poly = { loc: () => "researched" };
+context.GameLog = { logSuccess: () => {} };
+const technology = new classes.Technology("mad");
+technology.cost = { Knowledge: 1 };
+assert.equal(technology.click(), true);
+assert.deepEqual(technologyActions, ["action"]);
+assert.deepEqual(observedTabLoads, [false]);
+assert.equal(context.mainVue.s.tabLoad, true);
+
+context.mainVue.s.civTabs = 3;
+assert.equal(technology.click(), true);
+assert.deepEqual(observedTabLoads, [false, true]);
+
+context.game = {
+  global: {
+    civic: {
+      farmer: { job: "farmer", name: "Farmer", display: true },
+    },
+    resource: { Iron: {} },
+  },
+};
+context.settings = { craftIron: true };
 const job = new classes.Job("farmer", "fallback", { basic: true });
 assert.equal(job.name, "Farmer");
 assert.equal(job.is.basic, true);

@@ -8225,7 +8225,18 @@
         for (let res in this.cost) {
           readResources2()[res].currentQuantity -= this.cost[res];
         }
-        getVueById(this._vueBinding).action();
+        const mainVue = readMainVue();
+        if (readSettings3().performanceHackAvoidDrawTech && mainVue?.s !== void 0 && mainVue.s.civTabs !== 3) {
+          const oldTabLoad = mainVue.s.tabLoad;
+          try {
+            mainVue.s.tabLoad = false;
+            getVueById(this._vueBinding).action();
+          } finally {
+            mainVue.s.tabLoad = oldTabLoad;
+          }
+        } else {
+          getVueById(this._vueBinding).action();
+        }
         let def = this.definition;
         let title = typeof def.title === "function" ? def.title() : def.title;
         readGameLog().logSuccess(
