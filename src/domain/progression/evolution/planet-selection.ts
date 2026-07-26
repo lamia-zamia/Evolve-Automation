@@ -86,6 +86,8 @@ export interface PlanetSelectionInput {
   readonly geologyWeights: Readonly<Record<string, number | undefined>>;
   /** Biomes ordered from most to least habitable. */
   readonly biomeOrder: readonly string[];
+  /** Traits ordered from most to least habitable. */
+  readonly planetTraitOrder: readonly string[];
 }
 
 export interface PlanetSelectionDecision {
@@ -174,12 +176,15 @@ export function planPlanetSelection(
     return { planet, achieve, weighting };
   });
 
-  // Legacy habitability tie-break added `planetTraits.indexOf(planet.trait)`,
-  // but planets carry `traits`; the term was always -1 on both sides and
-  // cancelled, so habitability reduces to the biome order alone. See the
-  // behavior review queue in docs/feature-backlog.md before changing this.
-  const habitability = (entry: ScoredPlanet) =>
-    input.biomeOrder.indexOf(entry.planet.biome);
+  const habitability = (entry: ScoredPlanet) => {
+    const traitRanks = entry.planet.traits.map((trait) =>
+      input.planetTraitOrder.indexOf(trait),
+    );
+    // A generated planet normally has at least `none`; retaining -1 for an
+    // empty or unknown-only list matches the legacy indexOf fallback.
+    const bestTraitRank = traitRanks.length > 0 ? Math.min(...traitRanks) : -1;
+    return input.biomeOrder.indexOf(entry.planet.biome) + bestTraitRank;
+  };
 
   const ordered = [...scored];
   if (input.targetName === "weighting") {

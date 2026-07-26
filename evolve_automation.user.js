@@ -23888,7 +23888,7 @@
             let [newGems, newSupply, newSpace] = getMechManager().getMechCost({
               size: newSize
             });
-            if (newSpace <= mechBay.max - mechBay.bay && newSupply <= getResources().Supply.maxQuantity && newGems <= getResources().Soul_Gem.currentQuantity) {
+            if (newSpace <= mechBay.max - mechBay.bay && newSupply <= getResources().Supply.maxQuantity && newGems <= getResources().Soul_Gem.spareQuantity) {
               return "Saving supplies for new mech";
             }
           }
@@ -30697,7 +30697,8 @@
           achievementWeight: weightOf("extra_w_Achievement"),
           orbitWeight: weightOf("extra_w_Orbit"),
           geologyWeights: Object.freeze(geologyWeights),
-          biomeOrder: dependencies.biomeOrder
+          biomeOrder: dependencies.biomeOrder,
+          planetTraitOrder: dependencies.planetTraitOrder
         });
       },
       achievementsUnlocked(ids, starLevel) {
@@ -31093,7 +31094,13 @@
       }
       return { planet, achieve, weighting };
     });
-    const habitability = (entry) => input.biomeOrder.indexOf(entry.planet.biome);
+    const habitability = (entry) => {
+      const traitRanks = entry.planet.traits.map(
+        (trait2) => input.planetTraitOrder.indexOf(trait2)
+      );
+      const bestTraitRank = traitRanks.length > 0 ? Math.min(...traitRanks) : -1;
+      return input.biomeOrder.indexOf(entry.planet.biome) + bestTraitRank;
+    };
     const ordered = [...scored];
     if (input.targetName === "weighting") {
       ordered.sort((a, b) => b.weighting - a.weighting);
@@ -31142,7 +31149,8 @@
         achievementWeight: sample.achievementWeight,
         orbitWeight: sample.orbitWeight,
         geologyWeights: sample.geologyWeights,
-        biomeOrder: sample.biomeOrder
+        biomeOrder: sample.biomeOrder,
+        planetTraitOrder: sample.planetTraitOrder
       })
     );
   }
@@ -56247,7 +56255,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           getIsAchievementUnlocked: () => isAchievementUnlocked2,
           getRaces: () => races,
           biomeGenus: planetBiomeGenus,
-          biomeOrder: planetBiomes
+          biomeOrder: planetBiomes,
+          planetTraitOrder: planetTraits
         },
         executor: {
           getGame: () => game,

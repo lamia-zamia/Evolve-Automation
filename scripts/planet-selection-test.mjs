@@ -27,6 +27,23 @@ const PLANET_BIOMES = [
   "desert",
   "hellscape",
 ];
+const PLANET_TRAITS = [
+  "elliptical",
+  "magnetic",
+  "permafrost",
+  "rage",
+  "retrograde",
+  "none",
+  "stormy",
+  "toxic",
+  "trashed",
+  "dense",
+  "unstable",
+  "ozone",
+  "mellow",
+  "flare",
+  "kamikaze",
+];
 const PLANET_BIOME_GENUS = {
   hellscape: "demonic",
   eden: "angelic",
@@ -121,6 +138,7 @@ function runModern(scenario) {
       getRaces: () => scenario.races ?? {},
       biomeGenus: PLANET_BIOME_GENUS,
       biomeOrder: PLANET_BIOMES,
+      planetTraitOrder: PLANET_TRAITS,
     }),
     executor: createPlanetSelectionCommandExecutor({
       getGame: () => fixture.game,
@@ -320,16 +338,26 @@ dualRun(
   ["Tundra2"],
 );
 
-// Legacy compared planetTraits.indexOf(planet.trait) with a field that does
-// not exist, so traits never break biome ties; generation order does.
 dualRun(
-  "habitable biome ties keep generation order regardless of traits",
+  "habitable biome ties prefer the more habitable trait",
   {
     targetName: "habitable",
     planets: [
       planet("Oceanic1", "oceanic", { traits: ["stormy"] }),
       planet("Oceanic2", "oceanic", { traits: ["elliptical"] }),
       planet("Desert3", "desert"),
+    ],
+  },
+  ["Oceanic2"],
+);
+
+dualRun(
+  "habitable ties use the best trait on a multi-trait planet",
+  {
+    targetName: "habitable",
+    planets: [
+      planet("Oceanic1", "oceanic", { traits: ["elliptical", "kamikaze"] }),
+      planet("Oceanic2", "oceanic", { traits: ["magnetic"] }),
     ],
   },
   ["Oceanic1"],
@@ -352,6 +380,18 @@ dualRun(
     locked: ["biome_desert", "biome_grassland"],
   },
   ["Grassland2"],
+);
+dualRun(
+  "achieve habitability ties prefer the more habitable trait",
+  {
+    targetName: "achieve",
+    planets: [
+      planet("Oceanic1", "oceanic", { traits: ["stormy"] }),
+      planet("Oceanic2", "oceanic", { traits: ["elliptical"] }),
+    ],
+    locked: ["atmo_stormy", "atmo_elliptical"],
+  },
+  ["Oceanic2"],
 );
 
 // --- Lenient edges ---
@@ -492,6 +532,7 @@ assert.throws(
       orbitWeight: 0,
       geologyWeights: {},
       biomeOrder: PLANET_BIOMES,
+      planetTraitOrder: PLANET_TRAITS,
     }),
   TypeError,
   "empty candidate list is rejected",
@@ -516,6 +557,7 @@ const contractReader = (overrides = {}) =>
     getRaces: () => ({}),
     biomeGenus: PLANET_BIOME_GENUS,
     biomeOrder: PLANET_BIOMES,
+    planetTraitOrder: PLANET_TRAITS,
     ...overrides,
   });
 

@@ -332,7 +332,7 @@ export function createBuildingWeightingPolicy({
           if (
             newSpace <= mechBay.max - mechBay.bay &&
             newSupply <= getResources().Supply.maxQuantity &&
-            newGems <= getResources().Soul_Gem.currentQuantity
+            newGems <= getResources().Soul_Gem.spareQuantity
           ) {
             return "Saving supplies for new mech";
           }

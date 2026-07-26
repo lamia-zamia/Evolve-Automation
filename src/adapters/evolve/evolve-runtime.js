@@ -3735,6 +3735,7 @@ function startEvolveRuntimeComposition(
           getRaces: () => races,
           biomeGenus: planetBiomeGenus,
           biomeOrder: planetBiomes,
+          planetTraitOrder: planetTraits,
         },
         executor: {
           getGame: () => game,

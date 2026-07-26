@@ -224,4 +224,51 @@ assert.equal(
   false,
 );
 
+// A reserved Soul Gem target can leave currentQuantity affordable while the
+// mech itself is not affordable from the spare quantity. Supply buildings
+// must remain buildable in that state instead of being pinned for a mech that
+// cannot yet be built.
+const mechSavingRule = policy.weightingRules[12];
+assert.ok(mechSavingRule, "mech-saving weighting rule missing");
+context = {
+  ...context,
+  settings: {
+    ...context.settings,
+    autoMech: true,
+    mechBuild: "user",
+    buildingMechsFirst: true,
+  },
+  game: {
+    ...context.game,
+    global: {
+      ...context.game.global,
+      portal: { mechbay: { max: 10, bay: 0, blueprint: { size: "small" } } },
+    },
+  },
+  buildings: {
+    ...context.buildings,
+    SpireMechBay: { count: 1, stateOffCount: 0 },
+  },
+  resources: {
+    Supply: { maxQuantity: 1_000 },
+    Soul_Gem: { currentQuantity: 41, spareQuantity: -209 },
+  },
+  MechManager: {
+    isActive: false,
+    getMechCost: () => [1, 20, 1],
+    getPreferredSize: () => ["small"],
+  },
+};
+assert.equal(
+  mechSavingRule[policy.wrIndividualCondition]({ cost: { Supply: 1 } }),
+  undefined,
+  "reserved gems must not block Supply buildings when the mech is not spare-affordable",
+);
+context.resources.Soul_Gem.spareQuantity = 1;
+assert.equal(
+  mechSavingRule[policy.wrIndividualCondition]({ cost: { Supply: 1 } }),
+  "Saving supplies for new mech",
+  "spare-affordable mechs should still protect Supply buildings",
+);
+
 console.log("Weighting policy module tests passed");

@@ -50,6 +50,7 @@ export function runPlanetSelection({
       orbitWeight: sample.orbitWeight,
       geologyWeights: sample.geologyWeights,
       biomeOrder: sample.biomeOrder,
+      planetTraitOrder: sample.planetTraitOrder,
     }),
   );
 }

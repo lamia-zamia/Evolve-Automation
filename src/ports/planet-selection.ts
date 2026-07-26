@@ -17,6 +17,7 @@ export interface PlanetSelectionCandidatesSample {
   readonly orbitWeight: number | undefined;
   readonly geologyWeights: Readonly<Record<string, number | undefined>>;
   readonly biomeOrder: readonly string[];
+  readonly planetTraitOrder: readonly string[];
 }
 
 export interface PlanetSelectionReader {

@@ -33,6 +33,7 @@ export interface PlanetSelectionReaderDependencies {
   readonly getRaces: () => unknown;
   readonly biomeGenus: Readonly<Record<string, string>>;
   readonly biomeOrder: readonly string[];
+  readonly planetTraitOrder: readonly string[];
 }
 
 function requireRace(game: unknown): Record<string, unknown> {
@@ -195,6 +196,7 @@ export function createPlanetSelectionReader(
         orbitWeight: weightOf("extra_w_Orbit"),
         geologyWeights: Object.freeze(geologyWeights),
         biomeOrder: dependencies.biomeOrder,
+        planetTraitOrder: dependencies.planetTraitOrder,
       });
     },
 
