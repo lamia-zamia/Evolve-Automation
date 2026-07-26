@@ -433,4 +433,271 @@ const unavailableAdapter = createJobsAdapter({
 });
 assert.equal(planJobs(unavailableAdapter.reader.readCycle(false)), null);
 
+// Carnivore-style Hunter is the game's unemployed pool. Its unlimited
+// breakpoint must not consume the worker pool before ordinary jobs receive
+// their configured breakpoints.
+const virtualHunterDecision = planJobs({
+  available: true,
+  craftOnly: false,
+  hunterActsAsUnemployed: true,
+  autoCraftsmen: false,
+  autoCraftWithoutBuilding: false,
+  craftsmenMode: "other",
+  foundryWeighting: "other",
+  manageServants: false,
+  setDefault: false,
+  servantModifier: 1,
+  servantsMaximum: 0,
+  skilledServantsMaximum: 0,
+  craftsmenMaximum: 0,
+  minimumDefault: 0,
+  reserveMiner: false,
+  defaultJobToken: 0,
+  hunterToken: 0,
+  farmerToken: 0,
+  lumberjackToken: null,
+  quarryToken: null,
+  crystalMinerToken: null,
+  scavengerToken: null,
+  foragerToken: null,
+  entertainerToken: null,
+  minerToken: null,
+  population: 100,
+  craftDebug: false,
+  lastCraftWinner: null,
+  authority: {
+    enabled: false,
+    current: 0,
+    morale: 0,
+    moralePotential: 0,
+    moraleMaximum: 0,
+    moraleCeiling: null,
+    entertainerMorale: 0,
+    superstarMorale: 0,
+    previousCap: null,
+    debug: false,
+  },
+  jobs: [
+    {
+      token: 0,
+      id: "hunter",
+      kind: "hunter",
+      workers: 100,
+      servants: 0,
+      count: 100,
+      maximum: Number.MAX_SAFE_INTEGER,
+      managed: true,
+      unlocked: true,
+      smart: true,
+      crafting: false,
+      serves: false,
+      split: false,
+      isDefault: true,
+      breakpoints: [
+        Number.MAX_SAFE_INTEGER,
+        Number.MAX_SAFE_INTEGER,
+        Number.MAX_SAFE_INTEGER,
+      ],
+      uncappedBreakpoints: [
+        Number.MAX_SAFE_INTEGER,
+        Number.MAX_SAFE_INTEGER,
+        Number.MAX_SAFE_INTEGER,
+      ],
+      smartMaximum: 100,
+      farmerMinimum: 100,
+      demonicLumber: false,
+      warlordMiner: false,
+    },
+    {
+      token: 1,
+      id: "scientist",
+      kind: "other",
+      workers: 0,
+      servants: 0,
+      count: 0,
+      maximum: Number.MAX_SAFE_INTEGER,
+      managed: true,
+      unlocked: true,
+      smart: false,
+      crafting: false,
+      serves: false,
+      split: false,
+      isDefault: false,
+      breakpoints: [6, 10, 10],
+      uncappedBreakpoints: [6, 10, 10],
+      smartMaximum: null,
+      farmerMinimum: null,
+      demonicLumber: false,
+      warlordMiner: false,
+    },
+  ],
+  crafting: [],
+  splitEntries: [],
+  defaultPreference: [],
+});
+assert.notEqual(virtualHunterDecision, null);
+assert.equal(
+  virtualHunterDecision.assignments[0].workers,
+  90,
+  "virtual Hunter keeps only the workers left after ordinary breakpoints",
+);
+assert.equal(
+  virtualHunterDecision.assignments[1].workers,
+  10,
+  "ordinary jobs receive their breakpoint before virtual Hunter fallback",
+);
+
+function runDefaultTransferCase() {
+  const trace = [];
+  const game = {
+    global: {
+      civic: {
+        d_job: "unemployed",
+        crew: { max: 0, workers: 0 },
+        govern: { type: "republic" },
+        taxes: { display: true, tax_rate: 0 },
+      },
+      genes: {},
+      race: {},
+      tech: {},
+    },
+  };
+  const makeJob = ({
+    id,
+    workers,
+    breakpoint,
+    managed = true,
+    unlocked = true,
+  }) => ({
+    id,
+    workers,
+    servants: 0,
+    max: Number.MAX_SAFE_INTEGER,
+    is: { split: false, serve: false },
+    isSmartEnabled: false,
+    isDefault: () => game.global.civic.d_job === id,
+    isManaged: () => managed,
+    isUnlocked: () => unlocked,
+    get count() {
+      return this.workers;
+    },
+    getBreakpoint: () => breakpoint,
+    breakpointEmployees: () => breakpoint,
+    removeWorkers(count) {
+      if (this.isDefault()) return false;
+      trace.push(`remove:${id}:${count}`);
+      this.workers -= count;
+      return true;
+    },
+    addWorkers(count) {
+      if (this.isDefault()) return false;
+      trace.push(`add:${id}:${count}`);
+      this.workers += count;
+      return true;
+    },
+    removeServants: () => false,
+    addServants: () => false,
+    setAsDefault() {
+      trace.push(`default:${id}`);
+      game.global.civic.d_job = id;
+    },
+  });
+  const unemployed = makeJob({ id: "unemployed", workers: 10, breakpoint: 0 });
+  const quarry = makeJob({ id: "quarry_worker", workers: 0, breakpoint: 1 });
+  const inactive = makeJob({
+    id: "inactive",
+    workers: 0,
+    breakpoint: 0,
+    managed: false,
+    unlocked: false,
+  });
+  const jobs = {
+    Unemployed: unemployed,
+    QuarryWorker: quarry,
+    Lumberjack: inactive,
+    CrystalMiner: inactive,
+    Scavenger: inactive,
+    Forager: inactive,
+    Hunter: inactive,
+    Farmer: inactive,
+    Teamster: inactive,
+  };
+  const settings = {
+    authorityManage: false,
+    autoCraftsmen: false,
+    autoTax: false,
+    generalMinimumAuthority: 0,
+    generalRequestedTaxRate: -1,
+    jobDisableMiners: false,
+    jobManageServants: false,
+    jobSetDefault: true,
+    jobLumberWeighting: 0,
+    jobQuarryWeighting: 0,
+    jobCrystalWeighting: 0,
+    jobScavengerWeighting: 0,
+    jobRaiderWeighting: 0,
+    jobForagerWeighting: 0,
+    productionCraftsmen: "always",
+    productionFoundryWeighting: "other",
+    useDemanded: false,
+  };
+  const resources = {
+    Horseshoe: { usefulRatio: 1 },
+    Population: { currentQuantity: 10, storageRatio: 1 },
+    Stone: {
+      isUnlocked: () => true,
+      isUseful: () => true,
+      storageRatio: 1,
+      currentQuantity: 10,
+      rateOfChange: 0,
+      maxQuantity: 100,
+      getBusyWorkers: () => 0,
+    },
+  };
+  const manager = {
+    craftingJobs: [],
+    craftingMax: () => 0,
+    managedPriorityList: () => [unemployed, quarry],
+  };
+  const automate = createNewAutoJobs({
+    getJobManager: () => manager,
+    getGame: () => game,
+    getJobs: () => jobs,
+    isDemonRace: () => false,
+    isLumberRace: () => false,
+    getSettings: () => settings,
+    traitVal: () => 1,
+    getCrafter: () => ({}),
+    getWindow: () => ({}),
+    getBuildings: () => ({ GatewayStarbase: { count: 0 } }),
+    getHaveTech: () => () => false,
+    getResources: () => resources,
+    ticksPerSecond: () => 1,
+    getState: () => ({
+      astroSign: "",
+      lastFarmerCount: 0,
+      lastPopulationCount: 10,
+      unlockedBuildings: [],
+    }),
+    findRequiredResourceWeight: () => 0,
+    getPoly: () => ({ taxCap: () => 50 }),
+    isCraftingJob: () => false,
+    getHaveTask: () => () => false,
+    getFoodConsume: () => 1,
+  });
+  automate(false);
+  return { quarry, trace };
+}
+
+const defaultTransfer = runDefaultTransferCase();
+assert.equal(
+  defaultTransfer.quarry.workers,
+  10,
+  "default selection happens after worker additions",
+);
+assert.deepEqual(defaultTransfer.trace, [
+  "add:quarry_worker:10",
+  "default:quarry_worker",
+]);
+
 console.log("Jobs automation regression tests passed");

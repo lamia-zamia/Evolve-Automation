@@ -584,6 +584,7 @@ function unavailableInput(craftOnly: boolean): Readonly<JobsCycleInput> {
   return Object.freeze({
     available: false,
     craftOnly,
+    hunterActsAsUnemployed: false,
     autoCraftsmen: false,
     autoCraftWithoutBuilding: false,
     craftsmenMode: "other",
@@ -597,6 +598,7 @@ function unavailableInput(craftOnly: boolean): Readonly<JobsCycleInput> {
     minimumDefault: 0,
     reserveMiner: false,
     defaultJobToken: null,
+    hunterToken: null,
     farmerToken: null,
     lumberjackToken: null,
     quarryToken: null,
@@ -1078,6 +1080,11 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
       });
 
       const token = (name: string) => tokenOf(jobs[name]);
+      const hunterActsAsUnemployed =
+        (Boolean(race["carnivore"]) && !race["herbivore"]) ||
+        Boolean(race["soul_eater"]) ||
+        Boolean(race["unfathomable"]);
+      const hunterToken = token("Hunter");
       const defaultCandidates: JobsDefaultCandidate[] = [];
       const defaultJobs = new Map<number, UnknownRecord>();
       let nextDefaultToken = rawJobs.length;
@@ -1127,7 +1134,9 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
         jobInputs.find((job) => job.isDefault)?.token ?? null;
       const farmerToken = race["artifical"]
         ? null
-        : Math.max(token("Hunter") ?? -1, token("Farmer") ?? -1);
+        : hunterActsAsUnemployed
+          ? hunterToken
+          : Math.max(token("Hunter") ?? -1, token("Farmer") ?? -1);
       const normalizedFarmerToken = farmerToken === -1 ? null : farmerToken;
       const lumberjackToken = demonLumber
         ? normalizedFarmerToken
@@ -1178,6 +1187,7 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
       const input: JobsCycleInput = Object.freeze({
         available: true,
         craftOnly,
+        hunterActsAsUnemployed,
         autoCraftsmen: booleanSetting(settings, "autoCraftsmen"),
         autoCraftWithoutBuilding:
           craftsmenMode === "always" ||
@@ -1223,6 +1233,7 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
               resourceNumber(resources, "Population", "storageRatio") < 1)) &&
           !minersDisabled,
         defaultJobToken: currentDefault,
+        hunterToken,
         farmerToken: normalizedFarmerToken,
         lumberjackToken,
         quarryToken: token("QuarryWorker"),
@@ -1323,11 +1334,6 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
         decision.selectedDefaultToken === null
           ? null
           : active.defaultJobs.get(decision.selectedDefaultToken);
-      if (defaultJob !== null && defaultJob !== undefined)
-        requireFunction(
-          defaultJob["setAsDefault"],
-          "selected job.setAsDefault",
-        );
       const morale = decision.moraleIncomeAdjusted
         ? resource(active.resources, "Morale")
         : null;

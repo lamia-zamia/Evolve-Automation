@@ -63,6 +63,8 @@ export interface JobsAuthorityInput {
 export interface JobsCycleInput {
   readonly available: boolean;
   readonly craftOnly: boolean;
+  /** In Carnivore/Soul Eater/Unfathomable runs, Hunter is the game's unemployed pool. */
+  readonly hunterActsAsUnemployed: boolean;
   readonly autoCraftsmen: boolean;
   readonly autoCraftWithoutBuilding: boolean;
   readonly craftsmenMode: "always" | "nocraft" | "servants" | "other";
@@ -76,6 +78,7 @@ export interface JobsCycleInput {
   readonly minimumDefault: number;
   readonly reserveMiner: boolean;
   readonly defaultJobToken: number | null;
+  readonly hunterToken: number | null;
   readonly farmerToken: number | null;
   readonly lumberjackToken: number | null;
   readonly quarryToken: number | null;
@@ -370,6 +373,7 @@ export function planJobs(
   let availableServants = input.manageServants ? input.servantsMaximum : 0;
   let availableCraftsmen = input.craftsmenMaximum;
   const farmerIndex = indexOfToken(jobIndex, input.farmerToken);
+  const hunterIndex = indexOfToken(jobIndex, input.hunterToken);
   const defaultIndex = indexOfToken(jobIndex, input.defaultJobToken);
 
   if (input.craftOnly) {
@@ -419,7 +423,12 @@ export function planJobs(
   for (let pass = 0; pass < 3; pass++) {
     for (let index = 0; index < input.jobs.length; index++) {
       const job = input.jobs[index]!;
-      if ((pass === 2 && job.split) || job.crafting) continue;
+      if (
+        (pass === 2 && job.split) ||
+        job.crafting ||
+        (input.hunterActsAsUnemployed && index === hunterIndex)
+      )
+        continue;
       availableWorkers += requiredWorkers[index]!;
       let currentEmployees = requiredWorkers[index]!;
       let availableEmployees = availableWorkers;

@@ -40263,6 +40263,7 @@
     let availableServants = input.manageServants ? input.servantsMaximum : 0;
     let availableCraftsmen = input.craftsmenMaximum;
     const farmerIndex = indexOfToken(jobIndex, input.farmerToken);
+    const hunterIndex = indexOfToken(jobIndex, input.hunterToken);
     const defaultIndex = indexOfToken(jobIndex, input.defaultJobToken);
     if (input.craftOnly) {
       availableCraftsmen = availableWorkers;
@@ -40300,7 +40301,8 @@
     for (let pass = 0; pass < 3; pass++) {
       for (let index = 0; index < input.jobs.length; index++) {
         const job = input.jobs[index];
-        if (pass === 2 && job.split || job.crafting) continue;
+        if (pass === 2 && job.split || job.crafting || input.hunterActsAsUnemployed && index === hunterIndex)
+          continue;
         availableWorkers += requiredWorkers[index];
         let currentEmployees = requiredWorkers[index];
         let availableEmployees = availableWorkers;
@@ -40828,6 +40830,7 @@
     return Object.freeze({
       available: false,
       craftOnly,
+      hunterActsAsUnemployed: false,
       autoCraftsmen: false,
       autoCraftWithoutBuilding: false,
       craftsmenMode: "other",
@@ -40841,6 +40844,7 @@
       minimumDefault: 0,
       reserveMiner: false,
       defaultJobToken: null,
+      hunterToken: null,
       farmerToken: null,
       lumberjackToken: null,
       quarryToken: null,
@@ -41214,6 +41218,8 @@
           debug: Boolean(debugWindow["authorityDebug"])
         });
         const token = (name) => tokenOf(jobs[name]);
+        const hunterActsAsUnemployed = Boolean(race2["carnivore"]) && !race2["herbivore"] || Boolean(race2["soul_eater"]) || Boolean(race2["unfathomable"]);
+        const hunterToken = token("Hunter");
         const defaultCandidates = [];
         const defaultJobs = /* @__PURE__ */ new Map();
         let nextDefaultToken = rawJobs.length;
@@ -41257,7 +41263,7 @@
           addDefault("Unemployed", "unlocked");
         }
         const currentDefault = jobInputs.find((job) => job.isDefault)?.token ?? null;
-        const farmerToken = race2["artifical"] ? null : Math.max(token("Hunter") ?? -1, token("Farmer") ?? -1);
+        const farmerToken = race2["artifical"] ? null : hunterActsAsUnemployed ? hunterToken : Math.max(token("Hunter") ?? -1, token("Farmer") ?? -1);
         const normalizedFarmerToken = farmerToken === -1 ? null : farmerToken;
         const lumberjackToken = demonLumber ? normalizedFarmerToken : token("Lumberjack");
         const splitEntries = [];
@@ -41300,6 +41306,7 @@
         const input = Object.freeze({
           available: true,
           craftOnly,
+          hunterActsAsUnemployed,
           autoCraftsmen: booleanSetting2(settings, "autoCraftsmen"),
           autoCraftWithoutBuilding: craftsmenMode === "always" || craftsmenMode === "nocraft" && Boolean(race2["no_craft"]),
           craftsmenMode,
@@ -41326,6 +41333,7 @@
           minimumDefault: requireNumber(crew["max"], "crew.max") - requireNumber(crew["workers"], "crew.workers") > 0 ? requireNumber(crew["max"], "crew.max") - requireNumber(crew["workers"], "crew.workers") + 1 : 0,
           reserveMiner: (Boolean(race2["hooved"]) && resourceNumber(resources, "Horseshoe", "usefulRatio") < 1 || Boolean(race2["artifical"]) && !race2["deconstructor"] && resourceNumber(resources, "Population", "storageRatio") < 1) && !minersDisabled,
           defaultJobToken: currentDefault,
+          hunterToken,
           farmerToken: normalizedFarmerToken,
           lumberjackToken,
           quarryToken: token("QuarryWorker"),
@@ -41415,11 +41423,6 @@
           }
         }
         const defaultJob = decision2.selectedDefaultToken === null ? null : active.defaultJobs.get(decision2.selectedDefaultToken);
-        if (defaultJob !== null && defaultJob !== void 0)
-          requireFunction(
-            defaultJob["setAsDefault"],
-            "selected job.setAsDefault"
-          );
         const morale = decision2.moraleIncomeAdjusted ? resource(active.resources, "Morale") : null;
         const iron = decision2.ironIncomeAdjusted ? resource(active.resources, "Iron") : null;
         session = null;
