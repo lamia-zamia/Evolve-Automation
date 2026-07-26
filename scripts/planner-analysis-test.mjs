@@ -58,13 +58,26 @@ const cases = [
     },
   },
   {
-    name: "locked and satisfied requirements are skipped",
+    name: "locked requirement is a blocker even when another cost is satisfied",
     input: {
       affordable: false,
       requirements: [
         requirement("Locked", { unlocked: false }),
         requirement("Full", { currentQuantity: 100 }),
       ],
+    },
+    expected: {
+      resourceId: "Locked",
+      resourceTitle: "Locked",
+      time: Number.MAX_SAFE_INTEGER,
+      blocker: "locked",
+    },
+  },
+  {
+    name: "satisfied requirements leave prerequisite-only target without a resource limit",
+    input: {
+      affordable: false,
+      requirements: [requirement("Full", { currentQuantity: 100 })],
     },
     expected: null,
   },

@@ -193,6 +193,10 @@ const incomeTarget = target("Copper Mine", {
   isAffordable: () => false,
 });
 const readyTarget = target("Ready House");
+const lockedTarget = target("Locked Resource", {
+  cost: { Locked: 100 },
+  isAffordable: () => false,
+});
 const cappedOut = target("Ninth Target");
 const renderedTargets = [
   {
@@ -208,6 +212,7 @@ const renderedTargets = [
   target("Fifth", { weighting: 5 }),
   target("Sixth", { weighting: 4 }),
   target("Seventh", { weighting: 3 }),
+  { ...lockedTarget, weighting: 2 },
   target("Eighth", { weighting: 2 }),
   cappedOut,
 ];
@@ -217,6 +222,7 @@ context = makeContext({
     Iron: resource("Iron", { maxQuantity: 50 }),
     Crystal: resource("Crystal", { income: 0 }),
     Copper: resource("Copper", { income: 2 }),
+    Locked: resource("Locked", { isUnlocked: () => false }),
   },
   state: {
     queuedTargets: [renderedTargets[0]],
@@ -241,7 +247,7 @@ const trace = run(context);
 assert.deepEqual(trace, [
   [
     "#script_planner-list",
-    '<li> <div class="planner-row"> <span class="planner-name">Storage Tower #2 <span class="has-text-special">(queued)</span></span> <span class="planner-weight has-text-advanced">12</span> <span class="planner-time has-text-danger">Iron (storage)</span> </div> <div class="planner-note">First reason · Second reason</div> </li><li> <div class="planner-row"> <span class="planner-name">Stalled Lab <span class="has-text-special">(trigger)</span></span> <span class="planner-weight has-text-advanced">8</span> <span class="planner-time has-text-danger">Crystal (no income)</span> </div> </li><li> <div class="planner-row"> <span class="planner-name">Copper Mine</span> <span class="planner-weight has-text-advanced">7</span> <span class="planner-time has-text-warning">T50 (Copper)</span> </div> </li><li> <div class="planner-row"> <span class="planner-name">Ready House</span> <span class="planner-weight has-text-advanced">6</span> <span class="planner-time has-text-success">ready</span> </div> </li><li> <div class="planner-row"> <span class="planner-name">Fifth</span> <span class="planner-weight has-text-advanced">5</span> <span class="planner-time has-text-success">ready</span> </div> </li><li> <div class="planner-row"> <span class="planner-name">Sixth</span> <span class="planner-weight has-text-advanced">4</span> <span class="planner-time has-text-success">ready</span> </div> </li><li> <div class="planner-row"> <span class="planner-name">Seventh</span> <span class="planner-weight has-text-advanced">3</span> <span class="planner-time has-text-success">ready</span> </div> </li><li> <div class="planner-row"> <span class="planner-name">Eighth</span> <span class="planner-weight has-text-advanced">2</span> <span class="planner-time has-text-success">ready</span> </div> </li>',
+    '<li> <div class="planner-row"> <span class="planner-name">Storage Tower #2 <span class="has-text-special">(queued)</span></span> <span class="planner-weight has-text-advanced">12</span> <span class="planner-time has-text-danger">Iron (storage)</span> </div> <div class="planner-note">First reason · Second reason</div> </li><li> <div class="planner-row"> <span class="planner-name">Stalled Lab <span class="has-text-special">(trigger)</span></span> <span class="planner-weight has-text-advanced">8</span> <span class="planner-time has-text-danger">Crystal (no income)</span> </div> </li><li> <div class="planner-row"> <span class="planner-name">Copper Mine</span> <span class="planner-weight has-text-advanced">7</span> <span class="planner-time has-text-warning">T50 (Copper)</span> </div> </li><li> <div class="planner-row"> <span class="planner-name">Ready House</span> <span class="planner-weight has-text-advanced">6</span> <span class="planner-time has-text-success">ready</span> </div> </li><li> <div class="planner-row"> <span class="planner-name">Fifth</span> <span class="planner-weight has-text-advanced">5</span> <span class="planner-time has-text-success">ready</span> </div> </li><li> <div class="planner-row"> <span class="planner-name">Sixth</span> <span class="planner-weight has-text-advanced">4</span> <span class="planner-time has-text-success">ready</span> </div> </li><li> <div class="planner-row"> <span class="planner-name">Seventh</span> <span class="planner-weight has-text-advanced">3</span> <span class="planner-time has-text-success">ready</span> </div> </li><li> <div class="planner-row"> <span class="planner-name">Locked Resource</span> <span class="planner-weight has-text-advanced">2</span> <span class="planner-time has-text-danger">Locked (locked)</span> </div> </li>',
   ],
   [
     "#script_planner-stats-text",

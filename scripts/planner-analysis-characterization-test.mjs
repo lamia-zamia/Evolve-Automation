@@ -67,13 +67,14 @@ assert.equal(
   planner.plannerLimitingResource({ isAffordable: () => true, cost: {} }),
   null,
 );
-assert.equal(
-  planner.plannerLimitingResource({
-    isAffordable: () => false,
-    cost: { Locked: 100, Full: 100 },
-  }),
-  null,
-);
+let lockedLimit = planner.plannerLimitingResource({
+  isAffordable: () => false,
+  cost: { Locked: 100, Full: 100 },
+});
+assert.equal(lockedLimit.resourceId, "Locked");
+assert.equal(lockedLimit.resourceTitle, "Locked");
+assert.equal(lockedLimit.time, Number.MAX_SAFE_INTEGER);
+assert.equal(lockedLimit.blocker, "locked");
 
 let limit = planner.plannerLimitingResource({
   isAffordable: () => false,

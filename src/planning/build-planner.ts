@@ -130,6 +130,9 @@ export function createBuildPlanner({
         } else if (limit.blocker === "stalled") {
           status = `${limit.resourceTitle} (no income)`;
           statusClass = "has-text-danger";
+        } else if (limit.blocker === "locked") {
+          status = `${limit.resourceTitle} (locked)`;
+          statusClass = "has-text-danger";
         } else {
           status = `${getPoly().timeFormat(limit.time)} (${limit.resourceTitle})`;
           statusClass = "has-text-warning";

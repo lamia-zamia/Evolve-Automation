@@ -17,7 +17,7 @@ export interface PlannerLimit {
   readonly resourceId: string;
   readonly resourceTitle: string;
   readonly time: number;
-  readonly blocker: "storage" | "income" | "stalled";
+  readonly blocker: "storage" | "income" | "stalled" | "locked";
 }
 
 export interface PlannerRun {
@@ -55,11 +55,23 @@ export function findPlannerLimit(
   if (input.affordable) return null;
 
   let worst: PlannerLimit | null = null;
+  let locked: PlannerLimit | null = null;
   for (const requirement of input.requirements) {
-    if (
-      !requirement.unlocked ||
-      requirement.currentQuantity >= requirement.requiredQuantity
-    ) {
+    if (!requirement.unlocked) {
+      if (
+        locked === null &&
+        requirement.currentQuantity < requirement.requiredQuantity
+      ) {
+        locked = {
+          resourceId: requirement.resourceId,
+          resourceTitle: requirement.resourceTitle,
+          time: Number.MAX_SAFE_INTEGER,
+          blocker: "locked",
+        };
+      }
+      continue;
+    }
+    if (requirement.currentQuantity >= requirement.requiredQuantity) {
       continue;
     }
 
@@ -89,7 +101,8 @@ export function findPlannerLimit(
     }
   }
 
-  return worst === null ? null : Object.freeze(worst);
+  const result = locked ?? worst;
+  return result === null ? null : Object.freeze(result);
 }
 
 export function createPlannerStats(

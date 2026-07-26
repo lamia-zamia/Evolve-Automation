@@ -19,7 +19,7 @@ type StateLogBlocker =
   | [
       string,
       string | null,
-      "ready" | "storage" | "income" | "stalled" | "unavailable",
+      "ready" | "storage" | "income" | "stalled" | "locked" | "unavailable",
       number,
     ];
 
@@ -75,7 +75,7 @@ type StateLogDependencies = {
         resourceId: string;
         resourceTitle: string;
         time: number;
-        blocker: "storage" | "income" | "stalled";
+        blocker: "storage" | "income" | "stalled" | "locked";
       }
     | {
         status: "unavailable";

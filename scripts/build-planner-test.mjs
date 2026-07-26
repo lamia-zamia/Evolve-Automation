@@ -135,4 +135,18 @@ assert.equal(context.state.plannerStats.samples["data unavailable"], 1);
 assert.match(context.html[0][1], /planner data unavailable/);
 assert.match(context.html[0][1], /has-text-danger/);
 
+context = makeContext();
+const locked = target("Locked");
+locked.limit = {
+  resourceId: "Locked",
+  resourceTitle: "Locked",
+  time: Number.MAX_SAFE_INTEGER,
+  blocker: "locked",
+};
+context.state.unlockedBuildings = [locked];
+updateBuildPlanner();
+assert.equal(context.state.plannerStats.samples.Locked, 1);
+assert.match(context.html[0][1], /Locked \(locked\)/);
+assert.match(context.html[0][1], /has-text-danger/);
+
 console.log("Build planner module tests passed");

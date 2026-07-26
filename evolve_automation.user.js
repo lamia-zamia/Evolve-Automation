@@ -14170,8 +14170,20 @@
   function findPlannerLimit(input) {
     if (input.affordable) return null;
     let worst = null;
+    let locked = null;
     for (const requirement of input.requirements) {
-      if (!requirement.unlocked || requirement.currentQuantity >= requirement.requiredQuantity) {
+      if (!requirement.unlocked) {
+        if (locked === null && requirement.currentQuantity < requirement.requiredQuantity) {
+          locked = {
+            resourceId: requirement.resourceId,
+            resourceTitle: requirement.resourceTitle,
+            time: Number.MAX_SAFE_INTEGER,
+            blocker: "locked"
+          };
+        }
+        continue;
+      }
+      if (requirement.currentQuantity >= requirement.requiredQuantity) {
         continue;
       }
       let time;
@@ -14195,7 +14207,8 @@
         };
       }
     }
-    return worst === null ? null : Object.freeze(worst);
+    const result2 = locked ?? worst;
+    return result2 === null ? null : Object.freeze(result2);
   }
   function createPlannerStats(run) {
     if (!isNonNegativeSafeInteger(run.day) || !isNonNegativeSafeInteger(run.reset)) {
@@ -14493,6 +14506,9 @@
             statusClass = "has-text-danger";
           } else if (limit.blocker === "stalled") {
             status2 = `${limit.resourceTitle} (no income)`;
+            statusClass = "has-text-danger";
+          } else if (limit.blocker === "locked") {
+            status2 = `${limit.resourceTitle} (locked)`;
             statusClass = "has-text-danger";
           } else {
             status2 = `${getPoly().timeFormat(limit.time)} (${limit.resourceTitle})`;
