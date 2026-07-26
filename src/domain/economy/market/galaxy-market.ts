@@ -59,9 +59,8 @@ export function planGalaxyMarket(
     .map(([, group]) => group);
   const supplementary = priorityGroups.get(-1);
   if (supplementary !== undefined && priorityList.length > 1) {
-    // Preserve the legacy one-argument splice and from-index lookup. Custom
-    // priorities below -1 can therefore remove a different suffix.
-    priorityList.splice(priorityList.indexOf(supplementary, 1));
+    const supplementaryIndex = priorityList.indexOf(supplementary);
+    priorityList.splice(supplementaryIndex, 1);
     priorityList[0]?.push(...supplementary);
   }
 

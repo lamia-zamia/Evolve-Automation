@@ -83,6 +83,48 @@ const immutableInput = Object.freeze({
 assert.equal(planGalaxyMarket(immutableInput).adjustments[0].delta, 1);
 assert.equal(planGalaxyMarket({ ...immutableInput, initialized: false }), null);
 
+const customPriorityDecision = planGalaxyMarket({
+  initialized: true,
+  maximum: 2,
+  minimumIngredientRatio: 0,
+  offers: [
+    {
+      index: 0,
+      buyResourceId: "Supplementary",
+      sellResourceId: "FuelA",
+      weighting: 1,
+      priority: -1,
+      demanded: false,
+      useful: true,
+      sellDemanded: false,
+      sellStorageRatio: 1,
+      current: 0,
+    },
+    {
+      index: 1,
+      buyResourceId: "LowerPriority",
+      sellResourceId: "FuelB",
+      weighting: 1,
+      priority: -2,
+      demanded: false,
+      useful: true,
+      sellDemanded: false,
+      sellStorageRatio: 1,
+      current: 0,
+    },
+  ],
+});
+assert.deepEqual(
+  customPriorityDecision.adjustments.map(({ offerIndex, delta }) => ({
+    offerIndex,
+    delta,
+  })),
+  [
+    { offerIndex: 0, delta: 1 },
+    { offerIndex: 1, delta: 1 },
+  ],
+);
+
 let offersRead = false;
 const lockedAdapter = createGalaxyMarketAdapter({
   getManager: () => ({ initIndustry: () => false }),
