@@ -47699,6 +47699,19 @@
         control.hint,
         control.options
       );
+      if (control.settingName === "prestigeCustomRaceMode") {
+        const button = getJQuery()(
+          '<button class="button" type="button" style="margin:6px 0;">Edit custom race presets…</button>'
+        );
+        button.on(
+          "click",
+          () => actions.openOptionsModal(
+            "Custom Race Presets",
+            actions.buildCustomRacePresetEditor
+          )
+        );
+        node.append(button);
+      }
       if (control.settingName === "prestigeType") {
         const select = getJQuery()(`.script_${control.settingName}`).find(
           "select"

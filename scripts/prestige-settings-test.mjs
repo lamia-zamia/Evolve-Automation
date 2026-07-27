@@ -99,6 +99,8 @@ assert.deepEqual(trace, [
 ]);
 
 const registrations = [];
+const buttonClicks = [];
+const appended = [];
 const node = {
   empty() {
     return this;
@@ -106,7 +108,8 @@ const node = {
   off() {
     return this;
   },
-  append() {
+  append(content) {
+    appended.push(content);
     return this;
   },
   find() {
@@ -122,12 +125,20 @@ const node = {
     return this;
   },
 };
+const button = {
+  on(events, handler) {
+    if (events === "click") buttonClicks.push(handler);
+    return this;
+  },
+};
+const optionsModalCalls = [];
 const browser = createPrestigeSettingsBrowserAdapter({
   getDocument: () => ({
     documentElement: { scrollTop: 0 },
     body: { scrollTop: 0 },
   }),
-  getJQuery: () => node,
+  getJQuery: () => (selector) =>
+    selector.startsWith("<button") ? button : node,
   reader: { read: () => model },
   intents: intentHandler,
   getActions: () => ({
@@ -137,7 +148,8 @@ const browser = createPrestigeSettingsBrowserAdapter({
     addSettingsSelect: () => {},
     addSettingsToggle: () => {},
     openOverrideModal: () => {},
-    openOptionsModal: () => {},
+    openOptionsModal: (title, editor) =>
+      optionsModalCalls.push([title, editor]),
     buildCustomRacePresetEditor: {},
   }),
 });
@@ -147,6 +159,11 @@ assert.deepEqual(registrations[0].slice(1, 4), [
   "prestige",
   "Prestige",
 ]);
+browser.updatePrestigeSettingsContent("secondary-");
+assert.equal(appended.length, 1);
+assert.equal(buttonClicks.length, 1);
+buttonClicks[0]();
+assert.deepEqual(optionsModalCalls, [["Custom Race Presets", {}]]);
 
 console.log(
   "Prestige settings domain, Evolve, browser, and application tests passed",
