@@ -688,6 +688,155 @@ assert.equal(
   "other jobs keep their configured breakpoint while farmers stay capped",
 );
 
+function runBankerStorageCase({
+  moneyCurrent,
+  moneyStorageRequired,
+  moneyCapped = false,
+  taxRate = 50,
+  banking = 1,
+}) {
+  const trace = [];
+  const banker = {
+    id: "banker",
+    workers: 10,
+    servants: 0,
+    max: Number.MAX_SAFE_INTEGER,
+    is: { split: false, serve: false },
+    isSmartEnabled: true,
+    isDefault: () => false,
+    isManaged: () => true,
+    isUnlocked: () => true,
+    get count() {
+      return this.workers;
+    },
+    breakpointEmployees: (pass) => [3, 5, -1][pass],
+    removeWorkers(count) {
+      trace.push(`remove:${count}`);
+      this.workers -= count;
+    },
+    addWorkers(count) {
+      trace.push(`add:${count}`);
+      this.workers += count;
+    },
+    removeServants: () => assert.fail("servants are disabled"),
+    addServants: () => assert.fail("servants are disabled"),
+  };
+  const manager = {
+    craftingJobs: [],
+    craftingMax: () => 0,
+    managedPriorityList: () => [banker],
+  };
+  const game = {
+    global: {
+      civic: {
+        crew: { max: 0, workers: 0 },
+        govern: { type: "republic" },
+        taxes: { display: true, tax_rate: taxRate },
+      },
+      genes: {},
+      race: {},
+      tech: { banking },
+    },
+  };
+  const settings = {
+    authorityManage: false,
+    autoCraftsmen: false,
+    autoTax: false,
+    generalMinimumAuthority: 0,
+    generalRequestedTaxRate: -1,
+    jobDisableMiners: false,
+    jobManageServants: false,
+    jobSetDefault: false,
+    jobLumberWeighting: 0,
+    jobQuarryWeighting: 0,
+    jobCrystalWeighting: 0,
+    jobScavengerWeighting: 0,
+    jobRaiderWeighting: 0,
+    jobForagerWeighting: 0,
+    productionCraftsmen: "always",
+    productionFoundryWeighting: "other",
+    useDemanded: false,
+  };
+  const resources = {
+    Horseshoe: { usefulRatio: 1 },
+    Money: {
+      currentQuantity: moneyCurrent,
+      storageRequired: moneyStorageRequired,
+      isCapped: () => moneyCapped,
+    },
+    Population: { currentQuantity: 10, storageRatio: 1 },
+  };
+  const jobs = { Banker: banker };
+  const state = {
+    astroSign: "",
+    lastFarmerCount: 0,
+    lastPopulationCount: 10,
+    unlockedBuildings: [],
+  };
+  const adapter = createJobsAdapter({
+    getJobManager: () => manager,
+    getGame: () => game,
+    getJobs: () => jobs,
+    getCrafter: () => ({}),
+    getSettings: () => settings,
+    getBuildings: () => ({ GatewayStarbase: { count: 0 } }),
+    getResources: () => resources,
+    getState: () => state,
+    getDebugWindow: () => ({}),
+    isDemonRace: () => false,
+    isLumberRace: () => false,
+    traitValue: () => 1,
+    haveTech: (technology, rank = 1) =>
+      technology === "banking" && banking >= rank,
+    haveTask: () => false,
+    ticksPerSecond: () => 1,
+    findRequiredResourceWeight: () => 0,
+    taxCap: () => 50,
+    isCraftingJob: () => false,
+    getFoodConsume: () => 1,
+    log: () => {},
+  });
+  const input = adapter.reader.readCycle(false);
+  const decision = planJobs(input);
+  assert.notEqual(decision, null);
+  runJobsAutomation(adapter, false);
+  return { input, banker, trace };
+}
+
+const bankerStillNeeded = runBankerStorageCase({
+  moneyCurrent: 9,
+  moneyStorageRequired: 10,
+});
+assert.equal(
+  bankerStillNeeded.input.jobs[0].smartMaximum,
+  null,
+  "bankers remain available while planned Money storage is still short",
+);
+assert.equal(bankerStillNeeded.banker.workers, 5);
+
+const bankerSurplus = runBankerStorageCase({
+  moneyCurrent: 10,
+  moneyStorageRequired: 10,
+});
+assert.equal(
+  bankerSurplus.input.jobs[0].smartMaximum,
+  0,
+  "satisfied Money storage marks bankers as surplus",
+);
+assert.equal(bankerSurplus.banker.workers, 0);
+assert.deepEqual(bankerSurplus.trace, ["remove:10"]);
+
+const bankerStorageGuarded = runBankerStorageCase({
+  moneyCurrent: 10,
+  moneyStorageRequired: 10,
+  banking: 7,
+});
+assert.equal(
+  bankerStorageGuarded.input.jobs[0].smartMaximum,
+  null,
+  "Banking 7 keeps bankers because they also provide Money capacity",
+);
+
 function runDefaultTransferCase() {
   const trace = [];
   const game = {

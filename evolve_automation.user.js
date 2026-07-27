@@ -40903,7 +40903,15 @@
     } else if (job === jobs["Banker"]) {
       const civic = requireRecord(global["civic"], "game.global.civic");
       const taxes = requireRecord(civic["taxes"], "game.global.civic.taxes");
-      maximum = (resourceFlag(resources, "Money", "isCapped") || requireNumber(taxes["tax_rate"], "taxes.tax_rate") <= 0) && !technology(dependencies, "banking", 7) ? 0 : null;
+      const money = resource(resources, "Money");
+      const moneyStorageSatisfied = requireNumber(
+        money["currentQuantity"],
+        "resources.Money.currentQuantity"
+      ) >= requireNumber(
+        money["storageRequired"],
+        "resources.Money.storageRequired"
+      );
+      maximum = (resourceFlag(resources, "Money", "isCapped") || moneyStorageSatisfied || requireNumber(taxes["tax_rate"], "taxes.tax_rate") <= 0) && !technology(dependencies, "banking", 7) ? 0 : null;
     } else if (job === jobs["Scientist"]) {
       maximum = Number.MAX_SAFE_INTEGER;
       if (race2["universe"] !== "magic" && resourceFlag(resources, "Knowledge", "isCapped") && !race2["intelligent"] && !technology(dependencies, "science", 5) && !technology(dependencies, "genetics", 5))
