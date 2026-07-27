@@ -47,6 +47,19 @@ settings = { logEnabled: false, log_special: true };
 poly = { messageQueue: (...args) => trace.push(["message", ...args]) };
 win = { document: documentStub, $: { _data: () => ({ events: {} }) } };
 
+// Keep a script-owned callback pending while Vue has created the modal shell
+// but has not rendered its title yet.
+let callbackRan = false;
+WindowManager.openedByScript = true;
+WindowManager._callbackWindowTitle = "Gas Space Dock";
+WindowManager._callbackFunction = () => {
+  callbackRan = true;
+};
+delete elements.modalBoxTitle;
+WindowManager.checkCallbacks();
+assert.equal(callbackRan, false);
+assert.equal(WindowManager.openedByScript, true);
+
 // Modal mismatch restores the user modal and clears script state.
 selectors[".modal"] = { style: { display: "none" } };
 WindowManager.openedByScript = true;

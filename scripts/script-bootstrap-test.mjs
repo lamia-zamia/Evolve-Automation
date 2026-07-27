@@ -154,9 +154,12 @@ const scriptModal = {
   classList: { contains: () => true },
   style: {},
 };
+delete elements.modalBox;
 context.WindowManager.openedByScript = true;
 bodyObserver.callback([{ addedNodes: [scriptModal] }]);
 assert.equal(scriptModal.style.display, "none");
+assert.equal(observers.at(-1).target, scriptModal);
+assert.equal(observers.at(-1).options.subtree, true);
 assert.equal(observers.at(-1).callback, context.WindowManager.checkCallbacks);
 const userModal = {
   nodeType: 1,

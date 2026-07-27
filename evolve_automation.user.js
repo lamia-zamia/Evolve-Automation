@@ -5230,6 +5230,9 @@
         return this.openedByScript || document.getElementById("modalBox") !== null || document.getElementById("scriptModal")?.style.display === "block";
       },
       checkCallbacks() {
+        if (WindowManager.openedByScript && WindowManager.currentModalWindowTitle() === "") {
+          return;
+        }
         if (WindowManager.currentModalWindowTitle() === WindowManager._callbackWindowTitle && WindowManager.openedByScript && WindowManager._callbackFunction) {
           WindowManager._callbackFunction();
           let modalCloseBtn = document.querySelector(".modal .modal-close");
@@ -5583,10 +5586,10 @@
             if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains("modal")) {
               if (WindowManager.openedByScript) {
                 node.style.display = "none";
-                new MutationObserver(WindowManager.checkCallbacks).observe(
-                  document.getElementById("modalBox"),
-                  { childList: true }
-                );
+                new MutationObserver(WindowManager.checkCallbacks).observe(node, {
+                  childList: true,
+                  subtree: true
+                });
               } else {
                 new MutationObserver(actions.tooltipObserverCallback).observe(
                   node,

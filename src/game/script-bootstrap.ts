@@ -206,10 +206,13 @@ export function createScriptBootstrap({
           ) {
             if (WindowManager.openedByScript) {
               node.style.display = "none"; // Hide splash
-              new MutationObserver(WindowManager.checkCallbacks).observe(
-                document.getElementById("modalBox"),
-                { childList: true },
-              );
+              // TRANSITIONAL: the current Vue 2 modal mounts #modalBox after
+              // the shell; observe the shell subtree until the Vue 3 update
+              // provides a stable modal-content lifecycle hook.
+              new MutationObserver(WindowManager.checkCallbacks).observe(node, {
+                childList: true,
+                subtree: true,
+              });
             } else {
               new MutationObserver(actions.tooltipObserverCallback).observe(
                 node,

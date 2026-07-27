@@ -88,6 +88,17 @@ export function createInfrastructureManagers({
     },
 
     checkCallbacks() {
+      // Vue can create the modal shell before rendering its content. Keep the
+      // script-owned callback alive until the title identifies the requested
+      // window; otherwise an empty intermediate mutation exposes the modal and
+      // leaves the Space Dock actions uncached.
+      if (
+        WindowManager.openedByScript &&
+        WindowManager.currentModalWindowTitle() === ""
+      ) {
+        return;
+      }
+
       // We only care if the script itself opened the modal. If the user did it then ignore it.
       // There must be a call back function otherwise there is nothing to do.
       if (
