@@ -241,6 +241,13 @@ export function planBattle(
 
   if (currentTarget === null) return null;
 
+  // An occupied power whose policy is still Occupy is already at its desired
+  // state. Treating it as a plunder target would release it and immediately
+  // launch the same siege again on the next cycle.
+  if (currentTarget.occupied && currentTarget.policy === "Occupy") {
+    return null;
+  }
+
   if (requiredTactic !== 4) {
     const plunderTarget = battlefield.currentTarget;
     if (plunderTarget === null) return null;

@@ -25987,6 +25987,9 @@
       break;
     }
     if (currentTarget === null) return null;
+    if (currentTarget.occupied && currentTarget.policy === "Occupy") {
+      return null;
+    }
     if (requiredTactic !== 4) {
       const plunderTarget = battlefield.currentTarget;
       if (plunderTarget === null) return null;

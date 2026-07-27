@@ -251,4 +251,18 @@ assert.deepEqual(
   [],
 );
 
+const alreadyOccupied = createFixture({
+  target: { policy: "Occupy", occupied: true },
+});
+const alreadyOccupiedAutomation = createAutomation(alreadyOccupied);
+assert.deepEqual(runBattleAutomation(alreadyOccupiedAutomation), {
+  status: "succeeded",
+});
+assert.deepEqual(
+  alreadyOccupied.trace
+    .snapshot()
+    .filter((event) => event.category !== "manager-call"),
+  [],
+);
+
 console.log("Battle domain and phased Evolve adapter/application tests passed");
