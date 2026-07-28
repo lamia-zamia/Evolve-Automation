@@ -570,6 +570,13 @@
     return { reader, effects };
   }
 
+  // src/domain/progression/prestige/vacuum.ts
+  var DEFAULT_VACUUM_MANA_REQUIREMENT = 10;
+  var DEFAULT_VACUUM_WEIGHTING_MULTIPLIER = 10;
+  function isVacuumCollapseManaStageReady(input) {
+    return input.prestigeType === "vacuum" && Number.isFinite(input.manaRate) && Number.isFinite(input.requiredManaRate) && input.manaRate >= input.requiredManaRate;
+  }
+
   // src/domain/settings-defaults.ts
   function computeWarDefaults() {
     return {
@@ -717,7 +724,8 @@
         prestigeDemonicFloor: 100,
         prestigeDemonicPotential: 0.6,
         prestigeDemonicBomb: false,
-        prestigeVaxStrat: "none"
+        prestigeVaxStrat: "none",
+        prestigeVacuumMana: DEFAULT_VACUUM_MANA_REQUIREMENT
       }
     };
   }
@@ -746,6 +754,7 @@
       def: {
         buildingBuildIfStorageFull: false,
         buildingWeightingNew: 3,
+        buildingWeightingVacuumCollapse: DEFAULT_VACUUM_WEIGHTING_MULTIPLIER,
         buildingWeightingUselessPowerPlant: 0.01,
         buildingWeightingNeedfulPowerPlant: 3,
         buildingWeightingUnderpowered: 0.8,
@@ -5723,6 +5732,7 @@
     getState,
     getBuildings,
     getProjects,
+    isVacuumSyphonStage,
     getNiceNumber,
     weightingRules,
     wrGlobalCondition,
@@ -5926,6 +5936,10 @@
           if (project === projects.ManaSyphon && settings.prestigeBioseedConstruct && settings.prestigeType !== "vacuum" && game.global.race["witch_hunter"]) {
             project.weighting = 0;
             project.extraDescription = "Not needed for current prestige<br>";
+          }
+          if (project === projects.ManaSyphon && isVacuumSyphonStage() && project.weighting > 0) {
+            project.weighting *= settings.buildingWeightingVacuumCollapse ?? 10;
+            project.extraDescription += "Vacuum Collapse Mana Syphon multiplier<br>";
           }
           if (project.weighting > 0 && settings.achievementGuards && settings.guardBananaRepublic && game.global.race["banana"] && project === projects.Monument && !bananaRepublicObjectiveComplete("b5")) {
             project.weighting *= settings.buildingWeightingBananaObjective;
@@ -19938,6 +19952,11 @@
         settingName: "buildingWeightingSolar"
       }),
       Object.freeze({
+        target: "Mana Pylons and Mana Syphon",
+        condition: "Vacuum Collapse",
+        settingName: "buildingWeightingVacuumCollapse"
+      }),
+      Object.freeze({
         target: "Eris Control Relays, Tanks, and Android Troopers",
         condition: "The True Path Digsite is not yet secured",
         settingName: "buildingWeightingTruepathDigsite"
@@ -24550,6 +24569,12 @@
         (building3) => (building3._tab === "city" || building3._tab === "space" || building3._tab === "starDock") && !(building3 instanceof ResourceAction),
         () => "Solar System building",
         () => getSettings().buildingWeightingSolar
+      ],
+      [
+        () => getSettings().prestigeType === "vacuum",
+        (building3) => building3 === getBuildings().Pylon || building3 === getBuildings().RedPylon || building3 === getBuildings().TauPylon,
+        () => "Vacuum Collapse Mana producer",
+        () => getSettings().buildingWeightingVacuumCollapse ?? 10
       ]
     ];
     return {
@@ -40210,6 +40235,16 @@
   }
 
   // src/domain/civic/jobs.ts
+  function focusCrystalMinerWeighting(configuredWeighting, competingWeightings, vacuumSyphonStage) {
+    if (!vacuumSyphonStage) {
+      return configuredWeighting;
+    }
+    const competingTotal = competingWeightings.reduce(
+      (total, weighting) => Number.isFinite(weighting) && weighting > 0 ? total + weighting : total,
+      0
+    );
+    return Math.max(configuredWeighting, competingTotal + 1);
+  }
   function createJobIndex(input) {
     const index = /* @__PURE__ */ new Map();
     for (let position = 0; position < input.jobs.length; position++) {
@@ -40623,6 +40658,24 @@
   }
   function numberSetting2(settings, key) {
     return requireNumber(settings[key], `settings.${key}`);
+  }
+  function optionalNumberSetting(settings, key, fallback) {
+    const value = settings[key];
+    return value === void 0 ? fallback : requireNumber(value, `settings.${key}`);
+  }
+  function readVacuumCollapseManaStageReady(settingsValue, resourcesValue) {
+    const settings = requireRecord(settingsValue, "settings");
+    const resources = requireRecord(resourcesValue, "resources");
+    if (settings["prestigeType"] !== "vacuum") return false;
+    return isVacuumCollapseManaStageReady({
+      prestigeType: "vacuum",
+      manaRate: resourceNumber(resources, "Mana", "rateOfChange"),
+      requiredManaRate: optionalNumberSetting(
+        settings,
+        "prestigeVacuumMana",
+        DEFAULT_VACUUM_MANA_REQUIREMENT
+      )
+    });
   }
   function trait(dependencies, name, index = 0, operation2) {
     return requireNumber(
@@ -41410,10 +41463,55 @@
         const farmerToken = race2["artifical"] ? null : hunterActsAsUnemployed ? hunterToken : Math.max(token("Hunter") ?? -1, token("Farmer") ?? -1);
         const normalizedFarmerToken = farmerToken === -1 ? null : farmerToken;
         const lumberjackToken = demonLumber ? normalizedFarmerToken : token("Lumberjack");
+        const vacuumSyphonStage = readVacuumCollapseManaStageReady(
+          settings,
+          resources
+        );
+        const splitSpecs = [
+          ...race2["unfathomable"] ? [
+            {
+              jobToken: normalizedFarmerToken,
+              name: "Hunter",
+              setting: "jobRaiderWeighting"
+            }
+          ] : [],
+          {
+            jobToken: lumberjackToken,
+            name: "Lumberjack",
+            setting: "jobLumberWeighting"
+          },
+          {
+            jobToken: token("QuarryWorker"),
+            name: "QuarryWorker",
+            setting: "jobQuarryWeighting"
+          },
+          {
+            jobToken: token("CrystalMiner"),
+            name: "CrystalMiner",
+            setting: "jobCrystalWeighting"
+          },
+          {
+            jobToken: token("Scavenger"),
+            name: "Scavenger",
+            setting: "jobScavengerWeighting"
+          },
+          {
+            jobToken: token("Forager"),
+            name: "Forager",
+            setting: "jobForagerWeighting"
+          }
+        ];
+        const competingSplitWeightings = splitSpecs.filter(
+          (spec) => spec.name !== "CrystalMiner" && spec.jobToken !== null
+        ).map((spec) => numberSetting2(settings, spec.setting));
         const splitEntries = [];
         const addSplit = (jobToken, name, setting) => {
           if (jobToken === null) return;
-          const weighting = numberSetting2(settings, setting);
+          const weighting = name === "CrystalMiner" ? focusCrystalMinerWeighting(
+            numberSetting2(settings, setting),
+            competingSplitWeightings,
+            vacuumSyphonStage
+          ) : numberSetting2(settings, setting);
           if (weighting <= 0) return;
           const raw = requireRecord(jobs[name], `jobs.${name}`);
           const breakpoints = [0, 1, 2].map((pass) => {
@@ -41439,14 +41537,9 @@
             })
           );
         };
-        if (race2["unfathomable"]) {
-          addSplit(normalizedFarmerToken, "Hunter", "jobRaiderWeighting");
+        for (const spec of splitSpecs) {
+          addSplit(spec.jobToken, spec.name, spec.setting);
         }
-        addSplit(lumberjackToken, "Lumberjack", "jobLumberWeighting");
-        addSplit(token("QuarryWorker"), "QuarryWorker", "jobQuarryWeighting");
-        addSplit(token("CrystalMiner"), "CrystalMiner", "jobCrystalWeighting");
-        addSplit(token("Scavenger"), "Scavenger", "jobScavengerWeighting");
-        addSplit(token("Forager"), "Forager", "jobForagerWeighting");
         const input = Object.freeze({
           available: true,
           craftOnly,
@@ -47587,6 +47680,13 @@
         settingName: "prestigeGECK",
         label: "Required G.E.C.K",
         hint: "Required number of G.E.C.K. for Bioseed. Unlike any other buildings G.E.C.K. won't ever be constructed during inappropriate runs, or above this number. To prevent losing plasmids. It can, however, be built with triggers - you should not build G.E.C.K with triggers, unless you absolutely sure you know what you're doing."
+      },
+      { kind: "header", label: "Vacuum Collapse" },
+      {
+        kind: "number",
+        settingName: "prestigeVacuumMana",
+        label: "Required Mana regeneration",
+        hint: "Begin prioritizing Mana Syphons after net Mana regeneration reaches this value"
       },
       { kind: "header", label: "Whitehole" },
       {
@@ -55872,6 +55972,13 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       ResourceAction,
       randomSource
     });
+    const isVacuumSyphonStage = () => isVacuumCollapseManaStageReady({
+      prestigeType: String(settings["prestigeType"] ?? ""),
+      manaRate: Number(resources?.Mana?.rateOfChange),
+      requiredManaRate: Number(
+        settings["prestigeVacuumMana"] ?? DEFAULT_VACUUM_MANA_REQUIREMENT
+      )
+    });
     publishTestSurface({
       weightingPolicy: {
         wrGlobalCondition,
@@ -56069,6 +56176,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getState: () => state,
       getBuildings: () => buildings,
       getProjects: () => projects,
+      isVacuumSyphonStage,
       getNiceNumber,
       weightingRules,
       wrGlobalCondition,

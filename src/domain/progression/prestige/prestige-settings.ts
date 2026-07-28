@@ -90,6 +90,13 @@ export function createPrestigeSettingsReadModel(input: {
       label: "Required G.E.C.K",
       hint: "Required number of G.E.C.K. for Bioseed. Unlike any other buildings G.E.C.K. won't ever be constructed during inappropriate runs, or above this number. To prevent losing plasmids. It can, however, be built with triggers - you should not build G.E.C.K with triggers, unless you absolutely sure you know what you're doing.",
     },
+    { kind: "header", label: "Vacuum Collapse" },
+    {
+      kind: "number",
+      settingName: "prestigeVacuumMana",
+      label: "Required Mana regeneration",
+      hint: "Begin prioritizing Mana Syphons after net Mana regeneration reaches this value",
+    },
     { kind: "header", label: "Whitehole" },
     {
       kind: "toggle",

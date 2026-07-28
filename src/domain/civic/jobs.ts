@@ -103,6 +103,28 @@ export interface JobsSplitInput {
   readonly breakpoints: readonly [number, number, number];
 }
 
+/**
+ * Raise Crystal Miner priority only for the final Vacuum Collapse stage.
+ * The stage deliberately overrides a disabled configured weighting so Crystal
+ * Miners receive more of the normal weighted split than all competitors
+ * combined, without bypassing the planner's breakpoint and capacity rules.
+ */
+export function focusCrystalMinerWeighting(
+  configuredWeighting: number,
+  competingWeightings: readonly number[],
+  vacuumSyphonStage: boolean,
+): number {
+  if (!vacuumSyphonStage) {
+    return configuredWeighting;
+  }
+  const competingTotal = competingWeightings.reduce(
+    (total, weighting) =>
+      Number.isFinite(weighting) && weighting > 0 ? total + weighting : total,
+    0,
+  );
+  return Math.max(configuredWeighting, competingTotal + 1);
+}
+
 export interface JobsDefaultCandidate {
   readonly jobToken: number;
   readonly allocationToken: number | null;

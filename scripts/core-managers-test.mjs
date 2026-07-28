@@ -10,6 +10,7 @@ let prestigeAllowed = () => false;
 let bananaComplete = () => true;
 let inflationActive = () => false;
 let earlyGame = false;
+let vacuumSyphonStage = false;
 const prompts = [];
 
 // wr* indices: rule = [globalCond, individualCond, description, multiplier]
@@ -42,6 +43,7 @@ const { JobManager, BuildingManager, ProjectManager, TriggerManager } =
     getState: () => state,
     getBuildings: () => buildings,
     getProjects: () => projects,
+    isVacuumSyphonStage: () => vacuumSyphonStage,
     getNiceNumber: (n) => {
       niceNumberCalls++;
       return String(n);
@@ -160,6 +162,19 @@ settings = { autoARPA: true };
 ProjectManager.priorityList = [Other];
 ProjectManager.updateWeighting();
 assert.equal(Other.weighting, 10); // _weighting * currentStep, no penalties
+
+settings = {
+  autoARPA: true,
+  prestigeType: "vacuum",
+  buildingWeightingVacuumCollapse: 10,
+};
+vacuumSyphonStage = true;
+ProjectManager.priorityList = [ManaSyphon];
+ProjectManager.updateWeighting();
+assert.equal(ManaSyphon.weighting, 100);
+assert.match(ManaSyphon.extraDescription, /AutoARPA weighting: 100/);
+vacuumSyphonStage = false;
+ProjectManager.priorityList = [Other];
 
 // Locked project zeroes out.
 Other.isUnlocked = () => false;

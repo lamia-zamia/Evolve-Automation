@@ -99,8 +99,8 @@ assert.deepEqual(
     ships: bindings(policy.galaxyCombatShips),
   },
   {
-    rules: 71,
-    hash: "dd5cd51ce8c627c4d91e2a2fec8f7fef88512f9b5b3fd1d7343322d9969d136b",
+    rules: 72,
+    hash: "eb4584f77e2771384b3484b6bba63dd0daf9623b94acfc4bb24a926031748913",
     authority: [
       "city-garrison",
       "city-temple",

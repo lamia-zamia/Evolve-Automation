@@ -87,7 +87,7 @@ assert.deepEqual(trace.slice(0, 3), [
   "persist",
   "toggle:buildingBuildIfStorageFull",
 ]);
-assert.equal(trace.filter((entry) => entry.startsWith("input:")).length, 27);
+assert.equal(trace.filter((entry) => entry.startsWith("input:")).length, 28);
 assert.equal(trace.at(-1), "input:buildingWeightingRetirementPrep");
 
 console.log("Weighting settings bundled characterization tests passed");

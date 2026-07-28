@@ -7,6 +7,7 @@ interface CoreManagersDependencies {
   getState: () => any;
   getBuildings: () => Record<string, any>;
   getProjects: () => Record<string, any>;
+  isVacuumSyphonStage: () => boolean;
   getNiceNumber: (value: number) => string;
   weightingRules: any[];
   wrGlobalCondition: number;
@@ -28,6 +29,7 @@ export function createCoreManagers({
   getState,
   getBuildings,
   getProjects,
+  isVacuumSyphonStage,
   getNiceNumber,
   weightingRules,
   wrGlobalCondition,
@@ -277,6 +279,15 @@ export function createCoreManagers({
         ) {
           project.weighting = 0;
           project.extraDescription = "Not needed for current prestige<br>";
+        }
+        if (
+          project === projects.ManaSyphon &&
+          isVacuumSyphonStage() &&
+          project.weighting > 0
+        ) {
+          project.weighting *= settings.buildingWeightingVacuumCollapse ?? 10;
+          project.extraDescription +=
+            "Vacuum Collapse Mana Syphon multiplier<br>";
         }
         if (
           project.weighting > 0 &&

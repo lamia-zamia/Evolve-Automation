@@ -1233,6 +1233,15 @@ export function createBuildingWeightingPolicy({
       () => "Solar System building",
       () => getSettings().buildingWeightingSolar,
     ],
+    [
+      () => getSettings().prestigeType === "vacuum",
+      (building: LooseObject) =>
+        building === getBuildings().Pylon ||
+        building === getBuildings().RedPylon ||
+        building === getBuildings().TauPylon,
+      () => "Vacuum Collapse Mana producer",
+      () => getSettings().buildingWeightingVacuumCollapse ?? 10,
+    ],
   ];
 
   return {

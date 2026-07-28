@@ -1,8 +1,43 @@
 import assert from "node:assert/strict";
 
 import { runJobsAutomation } from "../src/application/jobs.ts";
-import { createJobsAdapter } from "../src/adapters/evolve/civic/jobs.ts";
-import { planJobs } from "../src/domain/civic/jobs.ts";
+import {
+  createJobsAdapter,
+  readVacuumCollapseManaStageReady,
+} from "../src/adapters/evolve/civic/jobs.ts";
+import {
+  focusCrystalMinerWeighting,
+  planJobs,
+} from "../src/domain/civic/jobs.ts";
+
+assert.equal(focusCrystalMinerWeighting(50, [50, 50, 75, 125], false), 50);
+assert.equal(focusCrystalMinerWeighting(0, [50, 50, 75, 125], true), 301);
+assert.equal(focusCrystalMinerWeighting(50, [50, 50, 75, 125], true), 301);
+assert.equal(focusCrystalMinerWeighting(400, [50, 50, 75, 125], true), 400);
+
+const vacuumSettings = {
+  prestigeType: "vacuum",
+  prestigeVacuumMana: 10,
+};
+assert.equal(
+  readVacuumCollapseManaStageReady(vacuumSettings, {
+    Mana: { rateOfChange: 9 },
+  }),
+  false,
+);
+assert.equal(
+  readVacuumCollapseManaStageReady(vacuumSettings, {
+    Mana: { rateOfChange: 10 },
+  }),
+  true,
+);
+assert.equal(
+  readVacuumCollapseManaStageReady(
+    { ...vacuumSettings, prestigeType: "mad" },
+    { Mana: { rateOfChange: 10 } },
+  ),
+  false,
+);
 
 function createNewAutoJobs(dependencies) {
   const haveTech = dependencies.getHaveTech();

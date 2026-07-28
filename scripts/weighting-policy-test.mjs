@@ -74,7 +74,7 @@ const policy = createBuildingWeightingPolicy({
   randomSource: { nextUnit: () => 0.5 },
 });
 
-assert.equal(policy.weightingRules.length, 71);
+assert.equal(policy.weightingRules.length, 72);
 assert.deepEqual(
   [
     policy.wrGlobalCondition,
@@ -324,5 +324,28 @@ assert.equal(
   false,
   "Pacifist must be able to build the Red Spaceport needed for unification",
 );
+
+const vacuumManaRule = policy.weightingRules.at(-1);
+context.settings = {
+  ...context.settings,
+  prestigeType: "vacuum",
+  buildingWeightingVacuumCollapse: 10,
+};
+assert.equal(vacuumManaRule[policy.wrGlobalCondition](), true);
+assert.equal(
+  vacuumManaRule[policy.wrIndividualCondition](context.buildings.Pylon),
+  true,
+);
+assert.equal(
+  vacuumManaRule[policy.wrIndividualCondition](context.buildings.Bank),
+  false,
+);
+assert.equal(
+  vacuumManaRule[policy.wrDescription](),
+  "Vacuum Collapse Mana producer",
+);
+assert.equal(vacuumManaRule[policy.wrMultiplier](), 10);
+context.settings.prestigeType = "mad";
+assert.equal(vacuumManaRule[policy.wrGlobalCondition](), false);
 
 console.log("Weighting policy module tests passed");

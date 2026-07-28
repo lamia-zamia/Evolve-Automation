@@ -6,7 +6,19 @@ import { getWeightingSettingsReadModel } from "../src/domain/economy/resources/w
 const readModel = getWeightingSettingsReadModel();
 assert.equal(Object.isFrozen(readModel), true);
 assert.equal(readModel.controls.length, 1);
-assert.equal(readModel.rules.length, 27);
+assert.equal(
+  readModel.rules.find(
+    (rule) => rule.settingName === "buildingWeightingVacuumCollapse",
+  ).target,
+  "Mana Pylons and Mana Syphon",
+);
+assert.equal(
+  readModel.rules.find(
+    (rule) => rule.settingName === "buildingWeightingVacuumCollapse",
+  ).condition,
+  "Vacuum Collapse",
+);
+assert.equal(readModel.rules.length, 28);
 assert.equal(readModel.rules[0].settingName, "buildingWeightingNew");
 assert.equal(
   readModel.rules.at(-1).settingName,

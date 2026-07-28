@@ -1,4 +1,9 @@
 import {
+  DEFAULT_VACUUM_MANA_REQUIREMENT,
+  isVacuumCollapseManaStageReady,
+} from "../../../domain/progression/prestige/vacuum.ts";
+import {
+  focusCrystalMinerWeighting,
   planJobs,
   type JobKind,
   type JobsAuthorityInput,
@@ -90,6 +95,35 @@ function booleanSetting(settings: UnknownRecord, key: string): boolean {
 
 function numberSetting(settings: UnknownRecord, key: string): number {
   return requireNumber(settings[key], `settings.${key}`);
+}
+
+function optionalNumberSetting(
+  settings: UnknownRecord,
+  key: string,
+  fallback: number,
+): number {
+  const value = settings[key];
+  return value === undefined
+    ? fallback
+    : requireNumber(value, `settings.${key}`);
+}
+
+export function readVacuumCollapseManaStageReady(
+  settingsValue: unknown,
+  resourcesValue: unknown,
+): boolean {
+  const settings = requireRecord(settingsValue, "settings");
+  const resources = requireRecord(resourcesValue, "resources");
+  if (settings["prestigeType"] !== "vacuum") return false;
+  return isVacuumCollapseManaStageReady({
+    prestigeType: "vacuum",
+    manaRate: resourceNumber(resources, "Mana", "rateOfChange"),
+    requiredManaRate: optionalNumberSetting(
+      settings,
+      "prestigeVacuumMana",
+      DEFAULT_VACUUM_MANA_REQUIREMENT,
+    ),
+  });
 }
 
 function trait(
@@ -1170,6 +1204,51 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
       const lumberjackToken = demonLumber
         ? normalizedFarmerToken
         : token("Lumberjack");
+      const vacuumSyphonStage = readVacuumCollapseManaStageReady(
+        settings,
+        resources,
+      );
+      const splitSpecs = [
+        ...(race["unfathomable"]
+          ? [
+              {
+                jobToken: normalizedFarmerToken,
+                name: "Hunter",
+                setting: "jobRaiderWeighting",
+              },
+            ]
+          : []),
+        {
+          jobToken: lumberjackToken,
+          name: "Lumberjack",
+          setting: "jobLumberWeighting",
+        },
+        {
+          jobToken: token("QuarryWorker"),
+          name: "QuarryWorker",
+          setting: "jobQuarryWeighting",
+        },
+        {
+          jobToken: token("CrystalMiner"),
+          name: "CrystalMiner",
+          setting: "jobCrystalWeighting",
+        },
+        {
+          jobToken: token("Scavenger"),
+          name: "Scavenger",
+          setting: "jobScavengerWeighting",
+        },
+        {
+          jobToken: token("Forager"),
+          name: "Forager",
+          setting: "jobForagerWeighting",
+        },
+      ] as const;
+      const competingSplitWeightings = splitSpecs
+        .filter(
+          (spec) => spec.name !== "CrystalMiner" && spec.jobToken !== null,
+        )
+        .map((spec) => numberSetting(settings, spec.setting));
       const splitEntries: JobsSplitInput[] = [];
       const addSplit = (
         jobToken: number | null,
@@ -1177,7 +1256,14 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
         setting: string,
       ) => {
         if (jobToken === null) return;
-        const weighting = numberSetting(settings, setting);
+        const weighting =
+          name === "CrystalMiner"
+            ? focusCrystalMinerWeighting(
+                numberSetting(settings, setting),
+                competingSplitWeightings,
+                vacuumSyphonStage,
+              )
+            : numberSetting(settings, setting);
         if (weighting <= 0) return;
         const raw = requireRecord(jobs[name], `jobs.${name}`);
         const breakpoints = [0, 1, 2].map((pass) => {
@@ -1205,14 +1291,9 @@ export function createJobsAdapter(dependencies: JobsAdapterDependencies): {
           }),
         );
       };
-      if (race["unfathomable"]) {
-        addSplit(normalizedFarmerToken, "Hunter", "jobRaiderWeighting");
+      for (const spec of splitSpecs) {
+        addSplit(spec.jobToken, spec.name, spec.setting);
       }
-      addSplit(lumberjackToken, "Lumberjack", "jobLumberWeighting");
-      addSplit(token("QuarryWorker"), "QuarryWorker", "jobQuarryWeighting");
-      addSplit(token("CrystalMiner"), "CrystalMiner", "jobCrystalWeighting");
-      addSplit(token("Scavenger"), "Scavenger", "jobScavengerWeighting");
-      addSplit(token("Forager"), "Forager", "jobForagerWeighting");
       const input: JobsCycleInput = Object.freeze({
         available: true,
         craftOnly,

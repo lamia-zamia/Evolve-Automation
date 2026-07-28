@@ -146,6 +146,11 @@ const weightingSettingsReadModel: WeightingSettingsReadModel = Object.freeze({
       settingName: "buildingWeightingSolar",
     }),
     Object.freeze({
+      target: "Mana Pylons and Mana Syphon",
+      condition: "Vacuum Collapse",
+      settingName: "buildingWeightingVacuumCollapse",
+    }),
+    Object.freeze({
       target: "Eris Control Relays, Tanks, and Android Troopers",
       condition: "The True Path Digsite is not yet secured",
       settingName: "buildingWeightingTruepathDigsite",

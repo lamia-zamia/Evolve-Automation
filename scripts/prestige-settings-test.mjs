@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createPrestigeSettingsIntentHandler } from "../src/application/prestige-settings.ts";
 import { createPrestigeSettingsBrowserAdapter } from "../src/adapters/browser/prestige-settings.ts";
 import { createPrestigeSettingsEvolveAdapter } from "../src/adapters/evolve/progression/prestige/prestige-settings.ts";
+import { computePrestigeDefaults } from "../src/domain/settings-defaults.ts";
 
 const types = [
   { val: "none", label: "None", hint: "Endless" },
@@ -28,6 +29,12 @@ const adapter = createPrestigeSettingsEvolveAdapter({
 });
 const model = adapter.read();
 assert.equal(model.controls.length > 10, true);
+assert.equal(
+  model.controls.find((control) => control.settingName === "prestigeVacuumMana")
+    .label,
+  "Required Mana regeneration",
+);
+assert.equal(computePrestigeDefaults().def.prestigeVacuumMana, 10);
 assert.match(
   model.controls.find(
     (control) =>

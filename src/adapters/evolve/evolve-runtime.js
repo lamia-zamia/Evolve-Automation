@@ -222,6 +222,10 @@ import {
   isBananaRepublicSmoothieComplete as isBananaRepublicSmoothieCompletePolicy,
 } from "../../domain/civic/banana-republic.ts";
 import {
+  DEFAULT_VACUUM_MANA_REQUIREMENT,
+  isVacuumCollapseManaStageReady,
+} from "../../domain/progression/prestige/vacuum.ts";
+import {
   readBananaRepublicGuardInput,
   readBananaRepublicObjective,
   readBananaRepublicProgress,
@@ -3012,6 +3016,15 @@ function startEvolveRuntimeComposition(
     randomSource,
   });
 
+  const isVacuumSyphonStage = () =>
+    isVacuumCollapseManaStageReady({
+      prestigeType: String(settings["prestigeType"] ?? ""),
+      manaRate: Number(resources?.Mana?.rateOfChange),
+      requiredManaRate: Number(
+        settings["prestigeVacuumMana"] ?? DEFAULT_VACUUM_MANA_REQUIREMENT,
+      ),
+    });
+
   publishTestSurface({
     weightingPolicy: {
       wrGlobalCondition,
@@ -3234,6 +3247,7 @@ function startEvolveRuntimeComposition(
       getState: () => state,
       getBuildings: () => buildings,
       getProjects: () => projects,
+      isVacuumSyphonStage,
       getNiceNumber,
       weightingRules,
       wrGlobalCondition,

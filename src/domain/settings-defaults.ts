@@ -9,6 +9,11 @@
 // Faithful port of the legacy getter-bag `reset-settings.ts`; the values below match it
 // verbatim and the ordering quirks are preserved deliberately.
 
+import {
+  DEFAULT_VACUUM_MANA_REQUIREMENT,
+  DEFAULT_VACUUM_WEIGHTING_MULTIPLIER,
+} from "./progression/prestige/vacuum.ts";
+
 /** Managers whose priority list a reset rebuilds. */
 export type PriorityManagerKey =
   | "market"
@@ -193,6 +198,7 @@ export function computePrestigeDefaults(): ResetPlan {
       prestigeDemonicPotential: 0.6,
       prestigeDemonicBomb: false,
       prestigeVaxStrat: "none",
+      prestigeVacuumMana: DEFAULT_VACUUM_MANA_REQUIREMENT,
     },
   };
 }
@@ -224,6 +230,7 @@ export function computeWeightingDefaults(): ResetPlan {
     def: {
       buildingBuildIfStorageFull: false,
       buildingWeightingNew: 3,
+      buildingWeightingVacuumCollapse: DEFAULT_VACUUM_WEIGHTING_MULTIPLIER,
       buildingWeightingUselessPowerPlant: 0.01,
       buildingWeightingNeedfulPowerPlant: 3,
       buildingWeightingUnderpowered: 0.8,
