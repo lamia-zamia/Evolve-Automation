@@ -12,6 +12,8 @@
     "src/domain/**/*.ts",
     "src/ports/**/*.ts",
     "src/adapters/**/*.ts",
-    "src/bootstrap/**/*.ts"
+    "src/bootstrap/**/*.ts",
+    "src/config.ts",
+    "src/main.ts"
   ]
 }

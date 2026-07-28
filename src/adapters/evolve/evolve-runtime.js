@@ -125,7 +125,7 @@ import { createGameActionVerification } from "../../validation/game-actions.ts";
 import { createStateLogLifecycle } from "../../observability/state-log.ts";
 import { createPrestigeLog } from "../../observability/prestige-log.ts";
 import { createLogFilter } from "../../observability/log-filter.ts";
-import { createBrowserRuntime } from "../../browser/runtime.ts";
+import { createBrowserRuntime } from "../browser/runtime.ts";
 import { createMechStats } from "../../ui/mech-stats.ts";
 import { createSortHelper } from "../../ui/sort-helper.ts";
 import { createTabRefresh } from "../../ui/tab-refresh.ts";
@@ -1420,8 +1420,6 @@ function startEvolveRuntimeComposition(
     getPrestigeTypes: () =>
       prestigeSettingsTestContext?.prestigeTypes ?? prestigeTypes,
     getGame: () => prestigeSettingsTestContext?.game ?? game,
-    getSettingsRaw: () =>
-      prestigeSettingsTestContext?.settingsRaw ?? settingsRaw,
     getBuildings: () => prestigeSettingsTestContext?.buildings ?? buildings,
     isPrestigeAllowed: () =>
       (prestigeSettingsTestContext?.isPrestigeAllowed ?? isPrestigeAllowed)(),

@@ -435,7 +435,6 @@ function readBuildingRule(
   const global = requireRecord(game["global"], "game.global");
   const race = requireRecord(global["race"], "game.global.race");
   const tech = requireRecord(global["tech"], "game.global.tech");
-  const stateOn = finiteProperty(building, "stateOnCount", path);
 
   if (identity(buildings, "NeutronCitadel", building)) {
     return Object.freeze({

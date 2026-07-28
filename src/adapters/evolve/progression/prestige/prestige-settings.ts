@@ -8,7 +8,6 @@ import { requireRecord } from "../../../validation.ts";
 interface PrestigeSettingsEvolveDependencies {
   readonly getPrestigeTypes: () => unknown;
   readonly getGame: () => unknown;
-  readonly getSettingsRaw: () => unknown;
   readonly getBuildings: () => unknown;
   readonly isPrestigeAllowed: () => unknown;
   readonly haveTech: (...args: unknown[]) => unknown;
@@ -79,7 +78,6 @@ export function createPrestigeSettingsEvolveAdapter(
   deps: PrestigeSettingsEvolveDependencies,
 ): PrestigeSettingsEvolveAdapter {
   function read(): PrestigeSettingsReadModel {
-    const settings = requireRecord(deps.getSettingsRaw(), "settingsRaw");
     const game = requireRecord(deps.getGame(), "game");
     const rawLoc = game["loc"];
     if (typeof rawLoc !== "function")

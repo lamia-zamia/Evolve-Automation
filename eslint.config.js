@@ -66,15 +66,33 @@ export default defineConfig(
     },
   },
   {
+    // Folders whose explicit-`any` and unused-variable debt is already zero. src/game,
+    // src/policies, src/settings, and src/ui join this list as their migrations complete.
     files: [
       "src/application/**/*.ts",
       "src/domain/**/*.ts",
       "src/ports/**/*.ts",
       "src/adapters/**/*.ts",
       "src/bootstrap/**/*.ts",
+      "src/formatting/**/*.ts",
+      "src/observability/**/*.ts",
+      "src/planning/**/*.ts",
+      "src/utils/**/*.ts",
+      "src/validation/**/*.ts",
+      "src/*.ts",
     ],
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-unused-expressions": "error",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          args: "all",
+          argsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+        },
+      ],
     },
   },
   {
@@ -83,6 +101,11 @@ export default defineConfig(
       "src/domain/**/*.ts",
       "src/ports/**/*.ts",
       "src/bootstrap/**/*.ts",
+      "src/formatting/**/*.ts",
+      "src/observability/**/*.ts",
+      "src/planning/**/*.ts",
+      "src/utils/**/*.ts",
+      "src/validation/**/*.ts",
     ],
     rules: {
       "no-restricted-globals": [

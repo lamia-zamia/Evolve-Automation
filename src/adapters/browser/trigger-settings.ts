@@ -1,6 +1,5 @@
 import {
   normalizeTriggerValue,
-  type TriggerSettingsActionInput,
   type TriggerSettingsInput,
   type TriggerSettingsCheck,
   type TriggerSettingsIntent,
@@ -63,12 +62,6 @@ function optionsForChecks(
   model: TriggerSettingsReadModel,
 ): readonly [string, TriggerSettingsCheck][] {
   return Object.entries(model.checks);
-}
-
-function actionOptions(
-  model: TriggerSettingsReadModel,
-): readonly [string, TriggerSettingsActionInput][] {
-  return Object.entries(model.actionInputs);
 }
 
 export function createTriggerSettingsBrowserAdapter({
@@ -157,11 +150,7 @@ export function createTriggerSettingsBrowserAdapter({
     }
   }
 
-  function buildActionType(
-    row: TriggerSettingsRow,
-    node: JQueryNode,
-    model: TriggerSettingsReadModel,
-  ): void {
+  function buildActionType(row: TriggerSettingsRow, node: JQueryNode): void {
     node.empty().off("*");
     const select = getJQuery()(
       `<select style="width: 100%"><option value="research" title="Research technology">Research</option><option value="build" title="Build buildings up to 'count' amount">Build</option><option value="arpa" title="Build projects up to 'count' amount">A.R.P.A.</option></select>`,
@@ -243,7 +232,7 @@ export function createTriggerSettingsBrowserAdapter({
     buildRequirementType(row, cells.eq(0), model);
     buildRequirementId(row, cells.eq(1), model);
     buildRequirementCount(row, cells.eq(2), model);
-    buildActionType(row, cells.eq(3), model);
+    buildActionType(row, cells.eq(3));
     buildActionId(row, cells.eq(4), model);
     buildActionCount(row, cells.eq(5), model);
     buildActions(row, cells.eq(6));

@@ -15,7 +15,6 @@ const adapter = createPrestigeSettingsEvolveAdapter({
     loc: (key) => key,
     global: { race: { witch_hunter: false } },
   }),
-  getSettingsRaw: () => ({}),
   getBuildings: () => ({ TauStarBluePill: { isUnlocked: () => true } }),
   isPrestigeAllowed: () => true,
   haveTech: (id) => id === "mad",
@@ -63,7 +62,6 @@ assert.throws(
     createPrestigeSettingsEvolveAdapter({
       getPrestigeTypes: () => ({}),
       getGame: () => ({ loc: (key) => key }),
-      getSettingsRaw: () => ({}),
       getBuildings: () => ({}),
       isPrestigeAllowed: () => false,
       haveTech: () => false,

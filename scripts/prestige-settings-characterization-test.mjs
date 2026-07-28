@@ -60,7 +60,6 @@ hooks.setPrestigeSettingsTestContext({
   prestigeTypes: [{ val: "none", label: "None", hint: "Endless" }],
   game: { loc: (key) => key, global: { race: { witch_hunter: false } } },
   buildings: {},
-  settingsRaw: {},
   actions: {
     buildSettingsSection2: (...args) => registrations.push(args),
     addSettingsHeader1: () => {},

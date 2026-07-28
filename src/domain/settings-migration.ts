@@ -458,16 +458,16 @@ export function migrateSettingsRecord(
   }
   // Garbage collection
   crafterOriginalIds.forEach((originalId) => {
-    (delete settingsRaw["job_p_" + originalId],
-      delete settingsRaw["job_b1_" + originalId],
-      delete settingsRaw["job_b2_" + originalId],
-      delete settingsRaw["job_b3_" + originalId]);
+    delete settingsRaw["job_p_" + originalId];
+    delete settingsRaw["job_b1_" + originalId];
+    delete settingsRaw["job_b2_" + originalId];
+    delete settingsRaw["job_b3_" + originalId];
   });
   // Remove deprecated post-overrides settings
   ["res_containers_m_", "res_crates_m_"].forEach((id) =>
     resourceIds.forEach((resourceId) => {
-      (delete settingsRaw[id + resourceId],
-        delete settingsRaw.overrides[id + resourceId]);
+      delete settingsRaw[id + resourceId];
+      delete settingsRaw.overrides[id + resourceId];
     }),
   );
   [
@@ -489,6 +489,7 @@ export function migrateSettingsRecord(
     "smelter_fuel_p_Star",
     "replicatorResource",
   ].forEach((id) => {
-    (delete settingsRaw[id], delete settingsRaw.overrides[id]);
+    delete settingsRaw[id];
+    delete settingsRaw.overrides[id];
   });
 }

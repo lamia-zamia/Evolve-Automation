@@ -281,9 +281,6 @@ export function createBuildingSettingsBrowserAdapter({
     jquery: JQuery,
     enabledToggle: boolean,
   ): JQueryNode {
-    const settingName = enabledToggle
-      ? "buildingEnabledAll"
-      : "buildingStateAll";
     const inputClass = enabledToggle
       ? "script_buildingEnabledAll"
       : "script_buildingStateAll";

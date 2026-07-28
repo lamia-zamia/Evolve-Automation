@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { createBrowserRuntime } from "../src/browser/runtime.ts";
+import { createBrowserRuntime } from "../src/adapters/browser/runtime.ts";
 
 let element = { __vue__: { id: "first" } };
 let mainElement = { __vue_proxy__: { id: "main" } };

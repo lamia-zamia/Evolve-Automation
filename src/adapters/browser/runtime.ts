@@ -1,7 +1,4 @@
-import {
-  createVueAdapter,
-  type VueAdapterDependencies,
-} from "../adapters/browser/vue.ts";
+import { createVueAdapter, type VueAdapterDependencies } from "./vue.ts";
 
 interface BrowserRuntimeDependencies extends VueAdapterDependencies {
   getDocument: () => {

@@ -71,7 +71,6 @@ export function createPrestigeSettingsBrowserAdapter({
 }: PrestigeSettingsBrowserDependencies): PrestigeSettingsBrowserAdapter {
   function renderControl(
     node: JQueryNode,
-    prefix: string,
     control: PrestigeSettingsControl,
     actions: PrestigeSettingsBrowserActions,
   ): void {
@@ -146,8 +145,7 @@ export function createPrestigeSettingsBrowserAdapter({
     const actions = getActions();
     const node = getJQuery()(`#script_${prefix}${model.sectionId}Content`);
     node.empty().off("*");
-    for (const control of model.controls)
-      renderControl(node, prefix, control, actions);
+    for (const control of model.controls) renderControl(node, control, actions);
     const prestigeRow = node.find(".script_bg_prestigeType");
     prestigeRow.toggleClass("inactive-row", false).on(
       "click",

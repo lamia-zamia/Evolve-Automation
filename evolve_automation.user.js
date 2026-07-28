@@ -1672,11 +1672,15 @@
       });
     }
     crafterOriginalIds.forEach((originalId) => {
-      delete settingsRaw["job_p_" + originalId], delete settingsRaw["job_b1_" + originalId], delete settingsRaw["job_b2_" + originalId], delete settingsRaw["job_b3_" + originalId];
+      delete settingsRaw["job_p_" + originalId];
+      delete settingsRaw["job_b1_" + originalId];
+      delete settingsRaw["job_b2_" + originalId];
+      delete settingsRaw["job_b3_" + originalId];
     });
     ["res_containers_m_", "res_crates_m_"].forEach(
       (id) => resourceIds.forEach((resourceId3) => {
-        delete settingsRaw[id + resourceId3], delete settingsRaw.overrides[id + resourceId3];
+        delete settingsRaw[id + resourceId3];
+        delete settingsRaw.overrides[id + resourceId3];
       })
     );
     [
@@ -1698,7 +1702,8 @@
       "smelter_fuel_p_Star",
       "replicatorResource"
     ].forEach((id) => {
-      delete settingsRaw[id], delete settingsRaw.overrides[id];
+      delete settingsRaw[id];
+      delete settingsRaw.overrides[id];
     });
   }
 
@@ -16479,7 +16484,7 @@
     });
   }
 
-  // src/browser/runtime.ts
+  // src/adapters/browser/runtime.ts
   function createBrowserRuntime({
     getWin,
     getDocument,
@@ -20305,7 +20310,6 @@
       }
     }
     function buildAllToggle(readModel, actions, jquery, enabledToggle) {
-      const settingName = enabledToggle ? "buildingEnabledAll" : "buildingStateAll";
       const inputClass = enabledToggle ? "script_buildingEnabledAll" : "script_buildingStateAll";
       const checked = enabledToggle ? readModel.allEnabled : readModel.allState;
       const label = enabledToggle ? `<label tabindex="0" class="switch" style="position:absolute; margin-top: 8px; margin-left: 10px;">
@@ -35047,7 +35051,6 @@
     const global = requireRecord(game["global"], "game.global");
     const race2 = requireRecord(global["race"], "game.global.race");
     const tech = requireRecord(global["tech"], "game.global.tech");
-    const stateOn = finiteProperty(building3, "stateOnCount", path);
     if (identity(buildings, "NeutronCitadel", building3)) {
       return Object.freeze({
         kind: "neutron-citadel",
@@ -46857,9 +46860,6 @@
   function optionsForChecks(model) {
     return Object.entries(model.checks);
   }
-  function actionOptions(model) {
-    return Object.entries(model.actionInputs);
-  }
   function createTriggerSettingsBrowserAdapter({
     getDocument,
     getJQuery,
@@ -46919,7 +46919,7 @@
         );
       }
     }
-    function buildActionType(row, node, model) {
+    function buildActionType(row, node) {
       node.empty().off("*");
       const select = getJQuery()(
         `<select style="width: 100%"><option value="research" title="Research technology">Research</option><option value="build" title="Build buildings up to 'count' amount">Build</option><option value="arpa" title="Build projects up to 'count' amount">A.R.P.A.</option></select>`
@@ -46982,7 +46982,7 @@
       buildRequirementType(row, cells.eq(0), model);
       buildRequirementId(row, cells.eq(1), model);
       buildRequirementCount(row, cells.eq(2), model);
-      buildActionType(row, cells.eq(3), model);
+      buildActionType(row, cells.eq(3));
       buildActionId(row, cells.eq(4), model);
       buildActionCount(row, cells.eq(5), model);
       buildActions(row, cells.eq(6));
@@ -47761,7 +47761,7 @@
     intents,
     getActions
   }) {
-    function renderControl2(node, prefix, control, actions) {
+    function renderControl2(node, control, actions) {
       if (control.kind === "header")
         return void actions.addSettingsHeader1(node, control.label);
       if (control.kind === "number")
@@ -47833,8 +47833,7 @@
       const actions = getActions();
       const node = getJQuery()(`#script_${prefix}${model.sectionId}Content`);
       node.empty().off("*");
-      for (const control of model.controls)
-        renderControl2(node, prefix, control, actions);
+      for (const control of model.controls) renderControl2(node, control, actions);
       const prestigeRow = node.find(".script_bg_prestigeType");
       prestigeRow.toggleClass("inactive-row", false).on(
         "click",
@@ -47892,7 +47891,6 @@
   }
   function createPrestigeSettingsEvolveAdapter(deps) {
     function read() {
-      const settings = requireRecord(deps.getSettingsRaw(), "settingsRaw");
       const game = requireRecord(deps.getGame(), "game");
       const rawLoc = game["loc"];
       if (typeof rawLoc !== "function")
@@ -54647,7 +54645,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     const prestigeSettingsReader = createPrestigeSettingsEvolveAdapter({
       getPrestigeTypes: () => prestigeSettingsTestContext?.prestigeTypes ?? prestigeTypes,
       getGame: () => prestigeSettingsTestContext?.game ?? game,
-      getSettingsRaw: () => prestigeSettingsTestContext?.settingsRaw ?? settingsRaw,
       getBuildings: () => prestigeSettingsTestContext?.buildings ?? buildings,
       isPrestigeAllowed: () => (prestigeSettingsTestContext?.isPrestigeAllowed ?? isPrestigeAllowed2)(),
       haveTech: (...args) => (prestigeSettingsTestContext?.haveTech ?? haveTech)(...args),
