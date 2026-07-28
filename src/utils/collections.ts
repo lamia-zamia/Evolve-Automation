@@ -12,9 +12,10 @@ export function k_combinations<T>(set: T[], k: number): T[][] {
 
   const combinations: T[][] = [];
   for (let i = 0; i < set.length - k + 1; i++) {
+    const head = set.slice(i, i + 1);
     const tailCombinations = k_combinations(set.slice(i + 1), k - 1);
     for (const tail of tailCombinations) {
-      combinations.push([set[i], ...tail]);
+      combinations.push([...head, ...tail]);
     }
   }
   return combinations;

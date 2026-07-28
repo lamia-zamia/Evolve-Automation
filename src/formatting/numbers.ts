@@ -12,21 +12,26 @@ export function createNumberFormatting({
 
     let numericPortion = parseFloat(amountText);
     const lastChar = amountText[amountText.length - 1];
+    const magnitude =
+      lastChar === undefined ? undefined : numberSuffix[lastChar];
 
-    if (numberSuffix[lastChar] !== undefined) {
-      numericPortion *= numberSuffix[lastChar];
+    if (magnitude !== undefined) {
+      numericPortion *= magnitude;
     }
 
     return numericPortion;
   }
 
   function getNumberString(amountValue: number) {
-    const suffixes = Object.keys(numberSuffix);
+    const suffixes = Object.entries(numberSuffix);
     for (let i = suffixes.length - 1; i >= 0; i--) {
-      if (amountValue > numberSuffix[suffixes[i]]) {
-        return (
-          (amountValue / numberSuffix[suffixes[i]]).toFixed(1) + suffixes[i]
-        );
+      const entry = suffixes[i];
+      if (entry === undefined) {
+        continue;
+      }
+      const [suffix, magnitude] = entry;
+      if (amountValue > magnitude) {
+        return (amountValue / magnitude).toFixed(1) + suffix;
       }
     }
     return Math.ceil(amountValue);

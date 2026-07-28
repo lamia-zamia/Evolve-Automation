@@ -13,6 +13,11 @@
     "src/ports/**/*.ts",
     "src/adapters/**/*.ts",
     "src/bootstrap/**/*.ts",
+    "src/formatting/**/*.ts",
+    "src/observability/**/*.ts",
+    "src/planning/**/*.ts",
+    "src/utils/**/*.ts",
+    "src/validation/**/*.ts",
     "src/config.ts",
     "src/main.ts"
   ]

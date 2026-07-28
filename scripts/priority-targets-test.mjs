@@ -181,6 +181,14 @@ context.buildings.AsphodelEncampment = makeBuilding(
 updatePriorityTargets();
 assert.deepEqual(context.state.conflictTargets, []);
 
+// A registry with no Asphodel Encampment entry at all reads as "none built" and
+// keeps reserving gems instead of failing the whole update.
+delete context.buildings.AsphodelEncampment;
+updatePriorityTargets();
+assert.deepEqual(context.state.conflictTargets, [
+  { name: "Next mech (collector)", cause: "Mech", cost: { Soul_Gem: 7 } },
+]);
+
 // The tech sweep reads live techIds and keeps conflict-free techs.
 context = makeContext({ settings: { prioritizeQueue: [] } });
 context.techIds["tech-mining"] = makeTarget("tech-mining");
@@ -190,6 +198,32 @@ assert.deepEqual(
   context.state.unlockedTechs.map((t) => t.id),
   ["tech-mining"],
 );
+
+// A swept element whose id has no catalog entry is skipped, so the mapped techs
+// after it are still collected.
+techSweep.length = 0;
+context = makeContext({ settings: { prioritizeQueue: [] } });
+context.techIds["tech-mining"] = makeTarget("tech-mining");
+techSweep.push({ id: "tech-vanished" }, { id: "tech-mining" });
+updatePriorityTargets();
+assert.deepEqual(
+  context.state.unlockedTechs.map((t) => t.id),
+  ["tech-mining"],
+);
+
+// The fake Embassy/Eden/Ignition triggers are skipped when their buildings are
+// absent from the registry rather than aborting the trigger pass.
+techSweep.length = 0;
+context = makeContext({
+  settings: { prioritizeQueue: [], autoTrigger: true },
+});
+delete context.buildings.GorddonEmbassy;
+delete context.buildings.TauStarEden;
+delete context.buildings.TauGas2MatrioshkaBrain;
+delete context.buildings.TauGas2IgniteGasGiant;
+updatePriorityTargets();
+assert.deepEqual(context.state.triggerTargets, []);
+assert.deepEqual(context.state.conflictTargets, []);
 
 // Malformed visible queue data fails closed through a sentinel reservation and
 // is explicitly marked instead of aborting the complete state update.

@@ -137,7 +137,10 @@ export function createStateLogLifecycle({
   }
 
   // [added, removed] between a previous and current set (as arrays).
-  function stateLogDiff(previous: string[], current: string[]) {
+  function stateLogDiff(
+    previous: string[],
+    current: string[],
+  ): [string[], string[]] {
     const previousSet = new Set(previous);
     const currentSet = new Set(current);
     return [
@@ -176,8 +179,7 @@ export function createStateLogLifecycle({
     // projection, so resources hovering at the cap don't flicker every sample.
     const capped: string[] = [];
     const stalled: string[] = [];
-    for (const resourceId in resources) {
-      const resource = resources[resourceId];
+    for (const resource of Object.values(resources)) {
       if (!resource.isUnlocked()) {
         continue;
       }

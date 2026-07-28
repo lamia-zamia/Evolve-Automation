@@ -80,19 +80,19 @@ export function createGameActionVerification({
     }
 
     let scriptActionFound = false;
-    for (let i = 0; i < scriptKeys.length; i++) {
-      const scriptAction = scriptObject[scriptKeys[i]];
-      if (scriptAction.id === gameActionKey) {
+    for (const scriptKey of scriptKeys) {
+      if (scriptObject[scriptKey]?.id === gameActionKey) {
         scriptActionFound = true;
         break;
       }
     }
 
     if (!scriptActionFound) {
+      const gameAction = gameObject[gameActionKey];
       log(
-        `Game action key not found in script: ${gameActionKey} (${gameObject[gameActionKey].id})`,
+        `Game action key not found in script: ${gameActionKey} (${gameAction?.id})`,
       );
-      log(gameObject[gameActionKey]);
+      log(gameAction);
     }
   }
 

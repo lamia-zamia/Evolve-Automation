@@ -208,9 +208,14 @@ export function createPriorityTargets({
     });
 
     const SpyManager = getSpyManager();
-    if (SpyManager.purchaseMoney && settings.prioritizeUnify.includes("save")) {
+    const unification = techIds["tech-unification"];
+    if (
+      SpyManager.purchaseMoney &&
+      settings.prioritizeUnify.includes("save") &&
+      unification !== undefined
+    ) {
       state.conflictTargets.push({
-        name: techIds["tech-unification"].title,
+        name: unification.title,
         cause: "Purchase",
         cost: { Money: SpyManager.purchaseMoney },
       });
@@ -242,18 +247,18 @@ export function createPriorityTargets({
     if (
       settings.autoMech &&
       MechManager.initLab() &&
-      buildings.AsphodelEncampment.count === 0
+      (buildings.AsphodelEncampment?.count ?? 0) === 0
     ) {
       const mechBay = game.global.portal.mechbay;
       const baySpace = mechBay.max - mechBay.bay;
 
       // only reserve gems if we have bay space
       if (baySpace > 0) {
-        const newSize = !haveTask("mech")
-          ? settings.mechBuild === "random"
-            ? MechManager.getPreferredSize()[0]
-            : mechBay.blueprint.size
-          : "titan";
+        const newSize = haveTask("mech")
+          ? "titan"
+          : settings.mechBuild === "random"
+            ? (MechManager.getPreferredSize()[0] ?? mechBay.blueprint.size)
+            : mechBay.blueprint.size;
         const [newGems] = MechManager.getMechCost({ size: newSize });
 
         if (newGems > 0) {
@@ -291,52 +296,60 @@ export function createPriorityTargets({
       }
 
       // Fake trigger for Embassy
+      const embassy = buildings.GorddonEmbassy;
+      const knowledge = resources.Knowledge;
       if (
-        buildings.GorddonEmbassy.isAutoBuildable() &&
-        resources.Knowledge.maxQuantity >= settings.fleetEmbassyKnowledge
+        embassy !== undefined &&
+        knowledge !== undefined &&
+        embassy.isAutoBuildable() &&
+        knowledge.maxQuantity >= settings.fleetEmbassyKnowledge
       ) {
-        const obj = buildings.GorddonEmbassy;
-        state.triggerTargets.push(obj);
-        triggerTargets.add(obj);
+        state.triggerTargets.push(embassy);
+        triggerTargets.add(embassy);
         state.conflictTargets.push({
-          name: obj.title,
+          name: embassy.title,
           cause: "Knowledge",
-          cost: obj.cost,
+          cost: embassy.cost,
         });
       }
       // Fake trigger for Eden
+      const eden = buildings.TauStarEden;
       if (
-        buildings.TauStarEden.isAutoBuildable() &&
+        eden !== undefined &&
+        eden.isAutoBuildable() &&
         isPrestigeAllowed("eden")
       ) {
-        const obj = buildings.TauStarEden;
-        state.triggerTargets.push(obj);
-        triggerTargets.add(obj);
+        state.triggerTargets.push(eden);
+        triggerTargets.add(eden);
         state.conflictTargets.push({
-          name: obj.title,
+          name: eden.title,
           cause: "Prestige",
-          cost: obj.cost,
+          cost: eden.cost,
         });
       }
       // Fake trigger for Ignition
+      const ignition = buildings.TauGas2IgniteGasGiant;
       if (
-        buildings.TauGas2MatrioshkaBrain.count >= 1000 &&
-        buildings.TauGas2IgniteGasGiant.isAutoBuildable() &&
+        ignition !== undefined &&
+        (buildings.TauGas2MatrioshkaBrain?.count ?? 0) >= 1000 &&
+        ignition.isAutoBuildable() &&
         isPrestigeAllowed("retire")
       ) {
-        const obj = buildings.TauGas2IgniteGasGiant;
-        state.triggerTargets.push(obj);
-        triggerTargets.add(obj);
+        state.triggerTargets.push(ignition);
+        triggerTargets.add(ignition);
         state.conflictTargets.push({
-          name: obj.title,
+          name: ignition.title,
           cause: "Prestige",
-          cost: obj.cost,
+          cost: ignition.cost,
         });
       }
     }
 
     getJQuery()("#tech .action").each(function (this: { id: string }) {
       const tech = techIds[this.id];
+      if (tech === undefined) {
+        return;
+      }
       tech.updateResourceRequirements();
       if (
         !getTechConflict(tech) ||

@@ -45,9 +45,9 @@ export function createPropertyHelpers({
     props: PropertyDefinition[],
   ) {
     for (const item of Object.values(list)) {
-      for (let i = 0; i < props.length; i++) {
-        const settingKey = props[i].s + id(item);
-        const propertyKey = props[i].p;
+      for (const prop of props) {
+        const settingKey = prop.s + id(item);
+        const propertyKey = prop.p;
         Object.defineProperty(item, propertyKey, {
           configurable: true,
           enumerable: true,

@@ -29,7 +29,7 @@ export function createLogFilter({
     const validIds: string[] = [];
     const strings = settingsRaw.logFilter.split(/[^0-9a-z_%]/g).filter(Boolean);
     for (const string of strings) {
-      const [id, ...rawParams] = string.split("%");
+      const [id = "", ...rawParams] = string.split("%");
       const params = rawParams.map(poly.loc);
       const message =
         poly.loc(id, params.length ? params : undefined) +

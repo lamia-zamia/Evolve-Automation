@@ -132,9 +132,10 @@
     }
     const combinations = [];
     for (let i = 0; i < set.length - k + 1; i++) {
+      const head = set.slice(i, i + 1);
       const tailCombinations = k_combinations(set.slice(i + 1), k - 1);
       for (const tail of tailCombinations) {
-        combinations.push([set[i], ...tail]);
+        combinations.push([...head, ...tail]);
       }
     }
     return combinations;
@@ -172,9 +173,9 @@
     }
     function addProps(list, id, props) {
       for (const item of Object.values(list)) {
-        for (let i = 0; i < props.length; i++) {
-          const settingKey = props[i].s + id(item);
-          const propertyKey = props[i].p;
+        for (const prop of props) {
+          const settingKey = prop.s + id(item);
+          const propertyKey = prop.p;
           Object.defineProperty(item, propertyKey, {
             configurable: true,
             enumerable: true,
@@ -227,16 +228,22 @@
       }
       let numericPortion = parseFloat(amountText);
       const lastChar = amountText[amountText.length - 1];
-      if (numberSuffix2[lastChar] !== void 0) {
-        numericPortion *= numberSuffix2[lastChar];
+      const magnitude = lastChar === void 0 ? void 0 : numberSuffix2[lastChar];
+      if (magnitude !== void 0) {
+        numericPortion *= magnitude;
       }
       return numericPortion;
     }
     function getNumberString(amountValue) {
-      const suffixes = Object.keys(numberSuffix2);
+      const suffixes = Object.entries(numberSuffix2);
       for (let i = suffixes.length - 1; i >= 0; i--) {
-        if (amountValue > numberSuffix2[suffixes[i]]) {
-          return (amountValue / numberSuffix2[suffixes[i]]).toFixed(1) + suffixes[i];
+        const entry = suffixes[i];
+        if (entry === void 0) {
+          continue;
+        }
+        const [suffix, magnitude] = entry;
+        if (amountValue > magnitude) {
+          return (amountValue / magnitude).toFixed(1) + suffix;
         }
       }
       return Math.ceil(amountValue);
@@ -14518,11 +14525,12 @@
       const shouldDraw = !getDocument().hidden;
       const buildRan = state.plannerFreshTick === state.scriptTick;
       const targets = state.unlockedBuildings ?? [];
-      if (shouldSample && buildRan && targets.length > 0) {
+      const topTarget = targets[0];
+      if (shouldSample && buildRan && topTarget !== void 0) {
         state.plannerStats ??= loadPlannerStats();
         const stats2 = state.plannerStats;
         if (stats2 !== null) {
-          const limit = plannerLimitingResource(targets[0]);
+          const limit = plannerLimitingResource(topTarget);
           const bucket = limit === null ? "not blocked" : "status" in limit ? "data unavailable" : limit.resourceTitle;
           const updated = recordPlannerSample(
             stats2,
@@ -15403,9 +15411,10 @@
         }
       });
       const SpyManager = getSpyManager();
-      if (SpyManager.purchaseMoney && settings.prioritizeUnify.includes("save")) {
+      const unification = techIds["tech-unification"];
+      if (SpyManager.purchaseMoney && settings.prioritizeUnify.includes("save") && unification !== void 0) {
         state.conflictTargets.push({
-          name: techIds["tech-unification"].title,
+          name: unification.title,
           cause: "Purchase",
           cost: { Money: SpyManager.purchaseMoney }
         });
@@ -15426,11 +15435,11 @@
         });
       }
       const MechManager = getMechManager();
-      if (settings.autoMech && MechManager.initLab() && buildings.AsphodelEncampment.count === 0) {
+      if (settings.autoMech && MechManager.initLab() && (buildings.AsphodelEncampment?.count ?? 0) === 0) {
         const mechBay = game.global.portal.mechbay;
         const baySpace = mechBay.max - mechBay.bay;
         if (baySpace > 0) {
-          const newSize = !haveTask("mech") ? settings.mechBuild === "random" ? MechManager.getPreferredSize()[0] : mechBay.blueprint.size : "titan";
+          const newSize = haveTask("mech") ? "titan" : settings.mechBuild === "random" ? MechManager.getPreferredSize()[0] ?? mechBay.blueprint.size : mechBay.blueprint.size;
           const [newGems] = MechManager.getMechCost({ size: newSize });
           if (newGems > 0) {
             state.conflictTargets.push({
@@ -15462,39 +15471,43 @@
             }
           }
         }
-        if (buildings.GorddonEmbassy.isAutoBuildable() && resources.Knowledge.maxQuantity >= settings.fleetEmbassyKnowledge) {
-          const obj = buildings.GorddonEmbassy;
-          state.triggerTargets.push(obj);
-          triggerTargets.add(obj);
+        const embassy = buildings.GorddonEmbassy;
+        const knowledge = resources.Knowledge;
+        if (embassy !== void 0 && knowledge !== void 0 && embassy.isAutoBuildable() && knowledge.maxQuantity >= settings.fleetEmbassyKnowledge) {
+          state.triggerTargets.push(embassy);
+          triggerTargets.add(embassy);
           state.conflictTargets.push({
-            name: obj.title,
+            name: embassy.title,
             cause: "Knowledge",
-            cost: obj.cost
+            cost: embassy.cost
           });
         }
-        if (buildings.TauStarEden.isAutoBuildable() && isPrestigeAllowed2("eden")) {
-          const obj = buildings.TauStarEden;
-          state.triggerTargets.push(obj);
-          triggerTargets.add(obj);
+        const eden = buildings.TauStarEden;
+        if (eden !== void 0 && eden.isAutoBuildable() && isPrestigeAllowed2("eden")) {
+          state.triggerTargets.push(eden);
+          triggerTargets.add(eden);
           state.conflictTargets.push({
-            name: obj.title,
+            name: eden.title,
             cause: "Prestige",
-            cost: obj.cost
+            cost: eden.cost
           });
         }
-        if (buildings.TauGas2MatrioshkaBrain.count >= 1e3 && buildings.TauGas2IgniteGasGiant.isAutoBuildable() && isPrestigeAllowed2("retire")) {
-          const obj = buildings.TauGas2IgniteGasGiant;
-          state.triggerTargets.push(obj);
-          triggerTargets.add(obj);
+        const ignition = buildings.TauGas2IgniteGasGiant;
+        if (ignition !== void 0 && (buildings.TauGas2MatrioshkaBrain?.count ?? 0) >= 1e3 && ignition.isAutoBuildable() && isPrestigeAllowed2("retire")) {
+          state.triggerTargets.push(ignition);
+          triggerTargets.add(ignition);
           state.conflictTargets.push({
-            name: obj.title,
+            name: ignition.title,
             cause: "Prestige",
-            cost: obj.cost
+            cost: ignition.cost
           });
         }
       }
       getJQuery()("#tech .action").each(function() {
         const tech = techIds[this.id];
+        if (tech === void 0) {
+          return;
+        }
         tech.updateResourceRequirements();
         if (!getTechConflict(tech) || triggerTargets.has(tech) || queuedTargetsAll.has(tech)) {
           state.unlockedTechs.push(tech);
@@ -16173,18 +16186,18 @@
         return;
       }
       let scriptActionFound = false;
-      for (let i = 0; i < scriptKeys.length; i++) {
-        const scriptAction = scriptObject[scriptKeys[i]];
-        if (scriptAction.id === gameActionKey) {
+      for (const scriptKey of scriptKeys) {
+        if (scriptObject[scriptKey]?.id === gameActionKey) {
           scriptActionFound = true;
           break;
         }
       }
       if (!scriptActionFound) {
+        const gameAction = gameObject[gameActionKey];
         log(
-          `Game action key not found in script: ${gameActionKey} (${gameObject[gameActionKey].id})`
+          `Game action key not found in script: ${gameActionKey} (${gameAction?.id})`
         );
-        log(gameObject[gameActionKey]);
+        log(gameAction);
       }
     }
     return {
@@ -16265,8 +16278,7 @@
       const resources = getResources();
       const capped = [];
       const stalled = [];
-      for (const resourceId3 in resources) {
-        const resource2 = resources[resourceId3];
+      for (const resource2 of Object.values(resources)) {
         if (!resource2.isUnlocked()) {
           continue;
         }
@@ -16390,7 +16402,7 @@
       const validIds = [];
       const strings = settingsRaw.logFilter.split(/[^0-9a-z_%]/g).filter(Boolean);
       for (const string2 of strings) {
-        const [id, ...rawParams] = string2.split("%");
+        const [id = "", ...rawParams] = string2.split("%");
         const params = rawParams.map(poly.loc);
         const message = poly.loc(id, params.length ? params : void 0) + (id === "civics_garrison_gained" ? "%0" : "");
         if (message === id) continue;

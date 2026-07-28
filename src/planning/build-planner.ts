@@ -79,11 +79,13 @@ export function createBuildPlanner({
     const buildRan = state.plannerFreshTick === state.scriptTick;
     const targets = state.unlockedBuildings ?? [];
 
-    if (shouldSample && buildRan && targets.length > 0) {
+    const topTarget = targets[0];
+
+    if (shouldSample && buildRan && topTarget !== undefined) {
       state.plannerStats ??= loadPlannerStats();
       const stats = state.plannerStats;
       if (stats !== null) {
-        const limit = plannerLimitingResource(targets[0]);
+        const limit = plannerLimitingResource(topTarget);
         const bucket =
           limit === null
             ? "not blocked"
