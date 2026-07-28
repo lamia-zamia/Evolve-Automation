@@ -3,11 +3,7 @@ import {
   type ProductionSettingsReadModel,
   type ProductionSettingsRow,
 } from "../../../../domain/economy/production/production-settings.ts";
-import {
-  requireFunction,
-  requireRecord,
-  type UnknownRecord,
-} from "../../../validation.ts";
+import { requireFunction, requireRecord } from "../../../validation.ts";
 
 interface ProductionSettingsEvolveDependencies {
   readonly getResources: () => unknown;

@@ -19,22 +19,3 @@ export function k_combinations<T>(set: T[], k: number): T[][] {
   }
   return combinations;
 }
-
-// https://stackoverflow.com/a/44012184
-function* cartesianGroups<T>(groups: T[][]): Generator<T[]> {
-  const [head, ...tail] = groups;
-  if (!head) return;
-  if (tail.length === 0) {
-    for (const headItem of head) yield [headItem];
-    return;
-  }
-  for (const remainderItem of cartesianGroups(tail)) {
-    for (const headItem of head) {
-      yield [headItem, ...remainderItem];
-    }
-  }
-}
-
-export function* cartesian<T>(head: T[], ...tail: T[][]): Generator<T[]> {
-  yield* cartesianGroups([head, ...tail]);
-}

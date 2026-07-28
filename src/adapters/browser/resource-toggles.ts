@@ -2,7 +2,6 @@ import type {
   MarketToggleItem,
   MarketToggleView,
   StorageToggleItem,
-  StorageToggleView,
 } from "../../domain/economy/resources/resource-toggles.ts";
 import type { ResourceToggleReader } from "../../ports/resource-toggles.ts";
 

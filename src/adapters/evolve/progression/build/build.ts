@@ -1,7 +1,6 @@
 import type {
   BuildAnnotation,
   BuildCandidateSample,
-  BuildCandidateView,
   BuildClickDecision,
   BuildCompetitionRequest,
   BuildCompetitionSample,

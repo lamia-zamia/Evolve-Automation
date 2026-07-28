@@ -139,22 +139,6 @@
     }
     return combinations;
   }
-  function* cartesianGroups(groups) {
-    const [head, ...tail] = groups;
-    if (!head) return;
-    if (tail.length === 0) {
-      for (const headItem of head) yield [headItem];
-      return;
-    }
-    for (const remainderItem of cartesianGroups(tail)) {
-      for (const headItem of head) {
-        yield [headItem, ...remainderItem];
-      }
-    }
-  }
-  function* cartesian(head, ...tail) {
-    yield* cartesianGroups([head, ...tail]);
-  }
 
   // src/utils/math.ts
   var Fibonacci = /* @__PURE__ */ ((memo) => function fibonacci(n) {
@@ -54202,7 +54186,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         removeStorageToggles: () => (storageSettingsTestContext?.removeStorageToggles ?? removeStorageToggles)()
       }
     });
-    const { buildStorageSettings, updateStorageSettingsContent } = storageSettingsBrowserAdapter;
+    const { buildStorageSettings } = storageSettingsBrowserAdapter;
     let magicSettingsTestContext;
     const magicSettingsActions = {
       buildSettingsSection,
@@ -54244,7 +54228,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         )
       }
     });
-    const { buildMagicSettings, updateMagicSettingsContent } = magicSettingsBrowserAdapter;
+    const { buildMagicSettings } = magicSettingsBrowserAdapter;
     let jobSettingsTestContext;
     const jobSettingsActions = {
       buildSettingsSection,
@@ -54289,7 +54273,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         )
       }
     });
-    const { buildJobSettings, updateJobSettingsContent } = jobSettingsBrowserAdapter;
+    const { buildJobSettings } = jobSettingsBrowserAdapter;
     let weightingSettingsTestContext;
     const weightingSettingsActions = {
       buildSettingsSection,
@@ -54314,7 +54298,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       },
       renderSettingsContent: () => weightingSettingsBrowserAdapter.updateWeightingSettingsContent()
     });
-    const { buildWeightingSettings, updateWeightingSettingsContent } = weightingSettingsBrowserAdapter;
+    const { buildWeightingSettings } = weightingSettingsBrowserAdapter;
     let buildingSettingsTestContext;
     const buildingSettingsActions = {
       buildSettingsSection,
@@ -54369,11 +54353,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         removeBuildingToggles: () => (buildingSettingsTestContext?.removeBuildingToggles ?? removeBuildingToggles)()
       }
     });
-    const {
-      buildBuildingSettings,
-      updateBuildingSettingsContent,
-      filterBuildingSettingsTable
-    } = buildingSettingsBrowserAdapter;
+    const { buildBuildingSettings, filterBuildingSettingsTable } = buildingSettingsBrowserAdapter;
     let projectSettingsTestContext;
     const projectSettingsActions = {
       buildSettingsSection,
@@ -54411,7 +54391,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         )
       }
     });
-    const { buildProjectSettings, updateProjectSettingsContent } = projectSettingsBrowserAdapter;
+    const { buildProjectSettings } = projectSettingsBrowserAdapter;
     let loggingSettingsTestContext;
     const loggingSettingsActions = {
       buildSettingsSection2,
@@ -54450,7 +54430,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         buildFilterRegExp: () => (loggingSettingsTestContext?.buildFilterRegExp ?? buildFilterRegExp)()
       }
     });
-    const { buildLoggingSettings, updateLoggingSettingsContent } = loggingSettingsBrowserAdapter;
+    const { buildLoggingSettings } = loggingSettingsBrowserAdapter;
     let optionsModalTestContext;
     const optionsModalBrowserAdapter = createOptionsModalBrowserAdapter({
       getDocument: () => runtimeEnvironment.document,
@@ -54501,7 +54481,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       },
       buildPrestigeSettings: (...args) => (prestigeTopBarTestContext?.buildPrestigeSettings ?? buildPrestigeSettings)(...args)
     });
-    const { updatePrestigeInTopBar, removePrestigeFromTopBar } = prestigeTopBarBrowserAdapter;
+    const { updatePrestigeInTopBar } = prestigeTopBarBrowserAdapter;
     let totalDaysTopBarTestContext;
     const totalDaysTopBarReader = createTotalDaysTopBarEvolveAdapter({
       getSettings: () => totalDaysTopBarTestContext?.settings ?? settings,
@@ -54512,11 +54492,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getJQuery: () => $,
       reader: totalDaysTopBarReader
     });
-    const {
-      updateTotalDaysInTopBar,
-      addTotalDaysToTopBar,
-      removeTotalDaysFromTopBar
-    } = totalDaysTopBarBrowserAdapter;
+    const { updateTotalDaysInTopBar } = totalDaysTopBarBrowserAdapter;
     let arpaTogglesTestContext;
     const arpaToggleReader = createArpaToggleEvolveAdapter({
       getProjectManager: () => arpaTogglesTestContext?.ProjectManager ?? ProjectManager,
@@ -54621,7 +54597,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         )
       }
     });
-    const { buildGeneralSettings, updateGeneralSettingsContent } = generalSettingsBrowserAdapter;
+    const { buildGeneralSettings } = generalSettingsBrowserAdapter;
     let achievementGuardSettingsTestActions;
     const achievementGuardSettingsActions = {
       buildSettingsSection,
@@ -54643,10 +54619,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       },
       renderSettingsContent: () => achievementGuardSettingsBrowserAdapter.updateAchievementGuardSettingsContent()
     });
-    const {
-      buildAchievementGuardSettings,
-      updateAchievementGuardSettingsContent
-    } = achievementGuardSettingsBrowserAdapter;
+    const { buildAchievementGuardSettings } = achievementGuardSettingsBrowserAdapter;
     let challengeHelperSettingsTestActions;
     const challengeHelperSettingsActions = {
       buildSettingsSection,
@@ -54669,7 +54642,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       },
       renderSettingsContent: () => challengeHelperSettingsBrowserAdapter.updateChallengeHelperSettingsContent()
     });
-    const { buildChallengeHelperSettings, updateChallengeHelperSettingsContent } = challengeHelperSettingsBrowserAdapter;
+    const { buildChallengeHelperSettings } = challengeHelperSettingsBrowserAdapter;
     let prestigeSettingsTestContext;
     const prestigeSettingsReader = createPrestigeSettingsEvolveAdapter({
       getPrestigeTypes: () => prestigeSettingsTestContext?.prestigeTypes ?? prestigeTypes,
@@ -54728,7 +54701,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         )
       }
     });
-    const { buildPrestigeSettings, updatePrestigeSettingsContent } = prestigeSettingsBrowserAdapter;
+    const { buildPrestigeSettings } = prestigeSettingsBrowserAdapter;
     let governmentSettingsTestContext;
     const governmentSettingsActions = {
       buildSettingsSection2,
@@ -54767,7 +54740,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         )
       }
     });
-    const { buildGovernmentSettings, updateGovernmentSettingsContent } = governmentSettingsBrowserAdapter;
+    const { buildGovernmentSettings } = governmentSettingsBrowserAdapter;
     let authoritySettingsTestActions;
     const authoritySettingsActions = {
       buildSettingsSection,
@@ -54792,7 +54765,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       },
       renderSettingsContent: () => authoritySettingsBrowserAdapter.updateAuthoritySettingsContent()
     });
-    const { buildAuthoritySettings, updateAuthoritySettingsContent } = authoritySettingsBrowserAdapter;
+    const { buildAuthoritySettings } = authoritySettingsBrowserAdapter;
     let evolutionSettingsTestContext;
     const evolutionSettingsReader = createEvolutionSettingsEvolveAdapter({
       getGame: () => evolutionSettingsTestContext?.game ?? game,
@@ -54876,7 +54849,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       type: "add-evolution",
       prestigeType: "auto"
     });
-    const { buildEvolutionSettings, updateEvolutionSettingsContent } = evolutionSettingsBrowserAdapter;
+    const { buildEvolutionSettings } = evolutionSettingsBrowserAdapter;
     let planetSettingsTestContext;
     const planetSettingsActions = {
       buildSettingsSection,
@@ -54908,7 +54881,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       },
       renderSettingsContent: () => planetSettingsBrowserAdapter.updatePlanetSettingsContent()
     });
-    const { buildPlanetSettings, updatePlanetSettingsContent } = planetSettingsBrowserAdapter;
+    const { buildPlanetSettings } = planetSettingsBrowserAdapter;
     let triggerSettingsTestContext;
     const triggerSettingsReader = createTriggerSettingsEvolveAdapter({
       getTriggerManager: () => triggerSettingsTestContext?.TriggerManager ?? TriggerManager,
@@ -55006,7 +54979,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         )
       }
     });
-    const { buildResearchSettings, updateResearchSettingsContent } = researchSettingsBrowserAdapter;
+    const { buildResearchSettings } = researchSettingsBrowserAdapter;
     let warSettingsTestContext;
     const warSettingsReader = createWarSettingsEvolveAdapter({
       getSpyManager: () => warSettingsTestContext?.SpyManager ?? SpyManager,
@@ -55109,7 +55082,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         resetCheckbox: () => (fleetSettingsTestContext?.resetCheckbox ?? resetCheckbox)("autoFleet")
       }
     });
-    const { buildFleetSettings, updateFleetSettingsContent } = fleetSettingsBrowserAdapter;
+    const { buildFleetSettings } = fleetSettingsBrowserAdapter;
     let mechSettingsTestContext;
     const mechSettingsReader = createMechSettingsEvolveAdapter({
       getMechManager: () => mechSettingsTestContext?.MechManager ?? MechManager,

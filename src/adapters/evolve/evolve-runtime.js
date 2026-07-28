@@ -38,7 +38,7 @@ import {
   numberSuffix,
   universes,
 } from "../../config.ts";
-import { cartesian, k_combinations } from "../../utils/collections.ts";
+import { k_combinations } from "../../utils/collections.ts";
 import { Fibonacci, average } from "../../utils/math.ts";
 import { createPropertyHelpers } from "../../utils/properties.ts";
 import { createCustomExpressionAdapter } from "./custom-expression.ts";
@@ -794,8 +794,7 @@ function startEvolveRuntimeComposition(
         )(),
     },
   });
-  const { buildStorageSettings, updateStorageSettingsContent } =
-    storageSettingsBrowserAdapter;
+  const { buildStorageSettings } = storageSettingsBrowserAdapter;
 
   let magicSettingsTestContext;
   const magicSettingsActions = {
@@ -847,8 +846,7 @@ function startEvolveRuntimeComposition(
         ),
     },
   });
-  const { buildMagicSettings, updateMagicSettingsContent } =
-    magicSettingsBrowserAdapter;
+  const { buildMagicSettings } = magicSettingsBrowserAdapter;
 
   let jobSettingsTestContext;
   const jobSettingsActions = {
@@ -901,8 +899,7 @@ function startEvolveRuntimeComposition(
         ),
     },
   });
-  const { buildJobSettings, updateJobSettingsContent } =
-    jobSettingsBrowserAdapter;
+  const { buildJobSettings } = jobSettingsBrowserAdapter;
 
   let weightingSettingsTestContext;
   const weightingSettingsActions = {
@@ -938,8 +935,7 @@ function startEvolveRuntimeComposition(
     renderSettingsContent: () =>
       weightingSettingsBrowserAdapter.updateWeightingSettingsContent(),
   });
-  const { buildWeightingSettings, updateWeightingSettingsContent } =
-    weightingSettingsBrowserAdapter;
+  const { buildWeightingSettings } = weightingSettingsBrowserAdapter;
 
   let buildingSettingsTestContext;
   const buildingSettingsActions = {
@@ -1024,11 +1020,8 @@ function startEvolveRuntimeComposition(
         )(),
     },
   });
-  const {
-    buildBuildingSettings,
-    updateBuildingSettingsContent,
-    filterBuildingSettingsTable,
-  } = buildingSettingsBrowserAdapter;
+  const { buildBuildingSettings, filterBuildingSettingsTable } =
+    buildingSettingsBrowserAdapter;
 
   let projectSettingsTestContext;
   const projectSettingsActions = {
@@ -1082,8 +1075,7 @@ function startEvolveRuntimeComposition(
         ),
     },
   });
-  const { buildProjectSettings, updateProjectSettingsContent } =
-    projectSettingsBrowserAdapter;
+  const { buildProjectSettings } = projectSettingsBrowserAdapter;
 
   let loggingSettingsTestContext;
   const loggingSettingsActions = {
@@ -1136,8 +1128,7 @@ function startEvolveRuntimeComposition(
         (loggingSettingsTestContext?.buildFilterRegExp ?? buildFilterRegExp)(),
     },
   });
-  const { buildLoggingSettings, updateLoggingSettingsContent } =
-    loggingSettingsBrowserAdapter;
+  const { buildLoggingSettings } = loggingSettingsBrowserAdapter;
 
   let optionsModalTestContext;
   const optionsModalBrowserAdapter = createOptionsModalBrowserAdapter({
@@ -1202,8 +1193,7 @@ function startEvolveRuntimeComposition(
         buildPrestigeSettings
       )(...args),
   });
-  const { updatePrestigeInTopBar, removePrestigeFromTopBar } =
-    prestigeTopBarBrowserAdapter;
+  const { updatePrestigeInTopBar } = prestigeTopBarBrowserAdapter;
 
   let totalDaysTopBarTestContext;
   const totalDaysTopBarReader = createTotalDaysTopBarEvolveAdapter({
@@ -1215,11 +1205,7 @@ function startEvolveRuntimeComposition(
     getJQuery: () => $,
     reader: totalDaysTopBarReader,
   });
-  const {
-    updateTotalDaysInTopBar,
-    addTotalDaysToTopBar,
-    removeTotalDaysFromTopBar,
-  } = totalDaysTopBarBrowserAdapter;
+  const { updateTotalDaysInTopBar } = totalDaysTopBarBrowserAdapter;
 
   let arpaTogglesTestContext;
   const arpaToggleReader = createArpaToggleEvolveAdapter({
@@ -1353,8 +1339,7 @@ function startEvolveRuntimeComposition(
         ),
     },
   });
-  const { buildGeneralSettings, updateGeneralSettingsContent } =
-    generalSettingsBrowserAdapter;
+  const { buildGeneralSettings } = generalSettingsBrowserAdapter;
 
   let achievementGuardSettingsTestActions;
   const achievementGuardSettingsActions = {
@@ -1390,10 +1375,8 @@ function startEvolveRuntimeComposition(
       renderSettingsContent: () =>
         achievementGuardSettingsBrowserAdapter.updateAchievementGuardSettingsContent(),
     });
-  const {
-    buildAchievementGuardSettings,
-    updateAchievementGuardSettingsContent,
-  } = achievementGuardSettingsBrowserAdapter;
+  const { buildAchievementGuardSettings } =
+    achievementGuardSettingsBrowserAdapter;
 
   let challengeHelperSettingsTestActions;
   const challengeHelperSettingsActions = {
@@ -1429,7 +1412,7 @@ function startEvolveRuntimeComposition(
       renderSettingsContent: () =>
         challengeHelperSettingsBrowserAdapter.updateChallengeHelperSettingsContent(),
     });
-  const { buildChallengeHelperSettings, updateChallengeHelperSettingsContent } =
+  const { buildChallengeHelperSettings } =
     challengeHelperSettingsBrowserAdapter;
 
   let prestigeSettingsTestContext;
@@ -1533,8 +1516,7 @@ function startEvolveRuntimeComposition(
         ),
     },
   });
-  const { buildPrestigeSettings, updatePrestigeSettingsContent } =
-    prestigeSettingsBrowserAdapter;
+  const { buildPrestigeSettings } = prestigeSettingsBrowserAdapter;
 
   let governmentSettingsTestContext;
   const governmentSettingsActions = {
@@ -1588,8 +1570,7 @@ function startEvolveRuntimeComposition(
         ),
     },
   });
-  const { buildGovernmentSettings, updateGovernmentSettingsContent } =
-    governmentSettingsBrowserAdapter;
+  const { buildGovernmentSettings } = governmentSettingsBrowserAdapter;
 
   let authoritySettingsTestActions;
   const authoritySettingsActions = {
@@ -1625,8 +1606,7 @@ function startEvolveRuntimeComposition(
     renderSettingsContent: () =>
       authoritySettingsBrowserAdapter.updateAuthoritySettingsContent(),
   });
-  const { buildAuthoritySettings, updateAuthoritySettingsContent } =
-    authoritySettingsBrowserAdapter;
+  const { buildAuthoritySettings } = authoritySettingsBrowserAdapter;
 
   let evolutionSettingsTestContext;
   const evolutionSettingsReader = createEvolutionSettingsEvolveAdapter({
@@ -1732,8 +1712,7 @@ function startEvolveRuntimeComposition(
       type: "add-evolution",
       prestigeType: "auto",
     });
-  const { buildEvolutionSettings, updateEvolutionSettingsContent } =
-    evolutionSettingsBrowserAdapter;
+  const { buildEvolutionSettings } = evolutionSettingsBrowserAdapter;
 
   let planetSettingsTestContext;
   const planetSettingsActions = {
@@ -1774,8 +1753,7 @@ function startEvolveRuntimeComposition(
     renderSettingsContent: () =>
       planetSettingsBrowserAdapter.updatePlanetSettingsContent(),
   });
-  const { buildPlanetSettings, updatePlanetSettingsContent } =
-    planetSettingsBrowserAdapter;
+  const { buildPlanetSettings } = planetSettingsBrowserAdapter;
 
   let triggerSettingsTestContext;
   const triggerSettingsReader = createTriggerSettingsEvolveAdapter({
@@ -1913,8 +1891,7 @@ function startEvolveRuntimeComposition(
         ),
     },
   });
-  const { buildResearchSettings, updateResearchSettingsContent } =
-    researchSettingsBrowserAdapter;
+  const { buildResearchSettings } = researchSettingsBrowserAdapter;
 
   let warSettingsTestContext;
   const warSettingsReader = createWarSettingsEvolveAdapter({
@@ -2046,8 +2023,7 @@ function startEvolveRuntimeComposition(
         (fleetSettingsTestContext?.resetCheckbox ?? resetCheckbox)("autoFleet"),
     },
   });
-  const { buildFleetSettings, updateFleetSettingsContent } =
-    fleetSettingsBrowserAdapter;
+  const { buildFleetSettings } = fleetSettingsBrowserAdapter;
 
   let mechSettingsTestContext;
   const mechSettingsReader = createMechSettingsEvolveAdapter({

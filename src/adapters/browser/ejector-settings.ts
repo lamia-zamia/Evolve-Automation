@@ -1,7 +1,6 @@
 import type {
   EjectorSettingsControl,
   EjectorSettingsReadModel,
-  EjectorSettingsRow,
 } from "../../domain/economy/resources/ejector-settings.ts";
 import type { EjectorSettingsIntentHandler } from "../../ports/ejector-settings.ts";
 

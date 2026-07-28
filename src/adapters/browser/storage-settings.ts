@@ -1,7 +1,6 @@
 import {
   type StorageSettingsControl,
   type StorageSettingsReadModel,
-  type StorageSettingsRow,
 } from "../../domain/economy/storage/storage-settings.ts";
 import type { StorageSettingsIntentHandler } from "../../ports/storage-settings.ts";
 

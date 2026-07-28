@@ -1,7 +1,4 @@
-import {
-  type ProjectSettingsReadModel,
-  type ProjectSettingsRow,
-} from "../../domain/progression/research/project-settings.ts";
+import { type ProjectSettingsReadModel } from "../../domain/progression/research/project-settings.ts";
 import type { ProjectSettingsIntentHandler } from "../../ports/project-settings.ts";
 
 interface ScrollDocument {

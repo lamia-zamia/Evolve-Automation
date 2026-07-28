@@ -5,7 +5,6 @@ import {
   type FleetInput,
   type GalaxyDefenseRegionInput,
   type GalaxyMission,
-  type GalaxyRegionInput,
   type GalaxyShipCounts,
   type GalaxyShipInput,
   type GalaxyShipName,
