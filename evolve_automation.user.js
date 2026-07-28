@@ -5731,10 +5731,6 @@
     isVacuumSyphonStage,
     getNiceNumber,
     weightingRules,
-    wrGlobalCondition,
-    wrIndividualCondition,
-    wrDescription,
-    wrMultiplier,
     isEarlyGame,
     getIsPrestigeAllowed,
     getBananaRepublicObjectiveComplete,
@@ -5828,20 +5824,20 @@
         const activeRules = measure(
           "autoBuild.beginCycle.updateBuildingWeighting.selectRules",
           () => weightingRules.filter(
-            (rule) => rule[wrGlobalCondition]() && rule[wrMultiplier]() !== 1
+            (rule) => rule.enabled() && rule.multiplier() !== 1
           )
         );
         measure("autoBuild.beginCycle.updateBuildingWeighting.applyRules", () => {
           for (let building3 of this.priorityList) {
             building3.weighting = building3._weighting;
-            for (let j = 0; j < activeRules.length; j++) {
-              let result2 = activeRules[j][wrIndividualCondition](building3);
+            for (const rule of activeRules) {
+              const result2 = rule.match(building3);
               if (result2) {
-                let note = activeRules[j][wrDescription](result2, building3);
+                const note = rule.describe(result2, building3);
                 if (note !== "") {
                   building3.extraDescription += note + "<br>";
                 }
-                building3.weighting *= activeRules[j][wrMultiplier](result2);
+                building3.weighting *= rule.multiplier(result2);
                 if (building3.weighting <= 0) {
                   break;
                 }
@@ -23802,10 +23798,6 @@
     const isPrestigeAllowed2 = (...args) => getIsPrestigeAllowed()(...args);
     const isPillarFinished2 = (...args) => getIsPillarFinished()(...args);
     const getCitadelConsumption = (...args) => getCitadelConsumptionFn()(...args);
-    const wrGlobalCondition = 0;
-    const wrIndividualCondition = 1;
-    const wrDescription = 2;
-    const wrMultiplier = 3;
     const authorityCapBuildings = [
       getBuildings().Barracks,
       getBuildings().Temple,
@@ -23880,54 +23872,62 @@
       return triggerTargetSet.has(building3);
     };
     const weightingRules = [
-      [
-        () => !getSettings().autoBuild,
-        () => true,
-        () => "",
-        () => 0
+      {
         // Set weighting to zero right away, and skip all checks if autoBuild is disabled
-      ],
-      [
-        () => true,
-        (building3) => !building3.isUnlocked(),
-        () => "Locked",
-        () => 0
+        id: "autobuild-off",
+        enabled: () => !getSettings().autoBuild,
+        match: () => true,
+        describe: () => "",
+        multiplier: () => 0
+      },
+      {
         // Should always be on top, processing locked building may lead to issues
-      ],
-      [
-        () => true,
-        (building3) => isQueuedTarget(building3),
-        () => "Queued building, processing...",
-        () => 0
-      ],
-      [
-        () => true,
-        (building3) => isTriggerTarget(building3),
-        () => "Active trigger, processing...",
-        () => 0
-      ],
-      [
-        () => true,
-        (building3) => !building3.autoBuildEnabled,
-        () => "AutoBuild disabled",
-        () => 0
-      ],
-      [
-        () => true,
-        (building3) => building3.count >= building3.autoMax,
-        () => "Maximum amount reached",
-        () => 0
-      ],
-      [
-        () => true,
-        (building3) => !building3.isAffordable(true),
-        () => "",
-        () => 0
+        id: "locked",
+        enabled: () => true,
+        match: (building3) => !building3.isUnlocked(),
+        describe: () => "Locked",
+        multiplier: () => 0
+      },
+      {
+        id: "queued-target",
+        enabled: () => true,
+        match: (building3) => isQueuedTarget(building3),
+        describe: () => "Queued building, processing...",
+        multiplier: () => 0
+      },
+      {
+        id: "trigger-target",
+        enabled: () => true,
+        match: (building3) => isTriggerTarget(building3),
+        describe: () => "Active trigger, processing...",
+        multiplier: () => 0
+      },
+      {
+        id: "autobuild-disabled",
+        enabled: () => true,
+        match: (building3) => !building3.autoBuildEnabled,
+        describe: () => "AutoBuild disabled",
+        multiplier: () => 0
+      },
+      {
+        id: "maximum-amount-reached",
+        enabled: () => true,
+        match: (building3) => building3.count >= building3.autoMax,
+        describe: () => "Maximum amount reached",
+        multiplier: () => 0
+      },
+      {
         // Red buildings need to be filtered out, so they won't prevent affordable buildings with lower weight from building
-      ],
-      [
-        () => getGame().global.race["truepath"] && getBuildings().SpaceTestLaunch.isUnlocked() && !haveTech("world_control"),
-        (building3) => {
+        id: "unaffordable",
+        enabled: () => true,
+        match: (building3) => !building3.isAffordable(true),
+        describe: () => "",
+        multiplier: () => 0
+      },
+      {
+        id: "truepath-test-launch-sabotage",
+        enabled: () => getGame().global.race["truepath"] && getBuildings().SpaceTestLaunch.isUnlocked() && !haveTech("world_control"),
+        match: (building3) => {
           if (building3 === getBuildings().SpaceTestLaunch) {
             let sabotage = 1;
             for (let i = 0; i < 3; i++) {
@@ -23939,30 +23939,34 @@
             return 1 / (sabotage + 1);
           }
         },
-        (chance) => `${Math.round(chance * 100)}% chance of successful launch`,
-        (chance) => chance < 0.5 ? chance : 0
-      ],
-      [
-        () => getGame().global.race["truepath"] && getBuildings().ErisDigsite.isUnlocked() && getBuildings().ErisDigsite.count < 100,
-        (building3) => building3 === getBuildings().ErisDrone || building3 === getBuildings().ErisTank || building3 === getBuildings().ErisTrooper,
-        () => "Eris Digsite is not yet secured",
-        () => getSettings().buildingWeightingTruepathDigsite
-      ],
-      [
-        () => getSettings().jobDisableMiners && getBuildings().GatewayStarbase.count > 0,
-        (building3) => building3 === getBuildings().CoalMine || building3 === getBuildings().Mine && !(getGame().global.race["sappy"] && getGame().global.race["smoldering"]),
-        () => "Miners disabled in Andromeda",
-        () => 0
-      ],
-      [
-        () => haveTech("piracy"),
-        (building3) => building3 === getBuildings().StargateDefensePlatform && getBuildings().StargateDefensePlatform.count * 20 >= (getGame().global.race["instinct"] ? 0.09 : 0.1) * getGame().global.tech.piracy * getPiracyMultiplier(),
-        () => "Piracy fully supressed",
-        () => 0
-      ],
-      [
-        () => getSettings().autoFleet && getGame().global.tech["piracy"] && !galaxyAssaultPending(),
-        (building3) => {
+        describe: (chance) => `${Math.round(chance * 100)}% chance of successful launch`,
+        multiplier: (chance) => chance < 0.5 ? chance : 0
+      },
+      {
+        id: "eris-digsite-unsecured",
+        enabled: () => getGame().global.race["truepath"] && getBuildings().ErisDigsite.isUnlocked() && getBuildings().ErisDigsite.count < 100,
+        match: (building3) => building3 === getBuildings().ErisDrone || building3 === getBuildings().ErisTank || building3 === getBuildings().ErisTrooper,
+        describe: () => "Eris Digsite is not yet secured",
+        multiplier: () => getSettings().buildingWeightingTruepathDigsite
+      },
+      {
+        id: "andromeda-miners-disabled",
+        enabled: () => getSettings().jobDisableMiners && getBuildings().GatewayStarbase.count > 0,
+        match: (building3) => building3 === getBuildings().CoalMine || building3 === getBuildings().Mine && !(getGame().global.race["sappy"] && getGame().global.race["smoldering"]),
+        describe: () => "Miners disabled in Andromeda",
+        multiplier: () => 0
+      },
+      {
+        id: "piracy-fully-supressed",
+        enabled: () => haveTech("piracy"),
+        match: (building3) => building3 === getBuildings().StargateDefensePlatform && getBuildings().StargateDefensePlatform.count * 20 >= (getGame().global.race["instinct"] ? 0.09 : 0.1) * getGame().global.tech.piracy * getPiracyMultiplier(),
+        describe: () => "Piracy fully supressed",
+        multiplier: () => 0
+      },
+      {
+        id: "piracy-covered-by-fleet",
+        enabled: () => getSettings().autoFleet && getGame().global.tech["piracy"] && !galaxyAssaultPending(),
+        match: (building3) => {
           if (galaxyCombatShipSet.has(building3)) {
             let totalNeed = getGalaxyRegions().reduce(
               (sum, region) => sum + (region.useful ? Math.max(0, region.piracy - region.armada) : 0),
@@ -23971,12 +23975,13 @@
             return getGalaxyCombatShipPower() >= totalNeed;
           }
         },
-        () => "Piracy fully covered by fleet",
-        () => 0
-      ],
-      [
-        () => getSettings().autoMech && getSettings().mechBuild !== "none" && getSettings().buildingMechsFirst && getBuildings().SpireMechBay.count > 0 && getBuildings().SpireMechBay.stateOffCount === 0,
-        (building3) => {
+        describe: () => "Piracy fully covered by fleet",
+        multiplier: () => 0
+      },
+      {
+        id: "mech-supply-saving",
+        enabled: () => getSettings().autoMech && getSettings().mechBuild !== "none" && getSettings().buildingMechsFirst && getBuildings().SpireMechBay.count > 0 && getBuildings().SpireMechBay.stateOffCount === 0,
+        match: (building3) => {
           if (building3.cost["Supply"]) {
             if (getMechManager().isActive) {
               return "Building mechs...";
@@ -23998,36 +24003,40 @@
             }
           }
         },
-        (note) => note,
-        () => 0
-      ],
-      [
-        () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "ascension" && !getGame().global.race["witch_hunter"],
-        (building3) => building3 === getBuildings().GateEastTower || building3 === getBuildings().GateWestTower,
-        () => "Not needed for Ascension prestige",
-        () => 0
-      ],
-      [
-        () => getBuildings().GateEastTower.isUnlocked() && getBuildings().GateWestTower.isUnlocked() && getPoly().hellSupression("gate").supress < getSettings().buildingTowerSuppression / 100,
-        (building3) => building3 === getBuildings().GateEastTower || building3 === getBuildings().GateWestTower,
-        () => "Too low gate supression",
-        () => 0
-      ],
-      [
-        () => getSettings().prestigeType === "whitehole" && getSettings().prestigeWhiteholeSaveGems,
-        (building3) => {
+        describe: (note) => note,
+        multiplier: () => 0
+      },
+      {
+        id: "prestige-unneeded-ascension-towers",
+        enabled: () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "ascension" && !getGame().global.race["witch_hunter"],
+        match: (building3) => building3 === getBuildings().GateEastTower || building3 === getBuildings().GateWestTower,
+        describe: () => "Not needed for Ascension prestige",
+        multiplier: () => 0
+      },
+      {
+        id: "gate-supression-too-low",
+        enabled: () => getBuildings().GateEastTower.isUnlocked() && getBuildings().GateWestTower.isUnlocked() && getPoly().hellSupression("gate").supress < getSettings().buildingTowerSuppression / 100,
+        match: (building3) => building3 === getBuildings().GateEastTower || building3 === getBuildings().GateWestTower,
+        describe: () => "Too low gate supression",
+        multiplier: () => 0
+      },
+      {
+        id: "saving-soul-gems-for-prestige",
+        enabled: () => getSettings().prestigeType === "whitehole" && getSettings().prestigeWhiteholeSaveGems,
+        match: (building3) => {
           if (building3.cost["Soul_Gem"] > getResources().Soul_Gem.currentQuantity - 10) {
             return true;
           }
         },
-        () => "Saving up Soul Gems for prestige",
-        () => 0
-      ],
-      [
-        () => {
+        describe: () => "Saving up Soul Gems for prestige",
+        multiplier: () => 0
+      },
+      {
+        id: "best-freighter",
+        enabled: () => {
           return getBuildings().GorddonFreighter.isAutoBuildable() && getBuildings().GorddonFreighter.isAffordable(true) && getBuildings().Alien1SuperFreighter.isAutoBuildable() && getBuildings().Alien1SuperFreighter.isAffordable(true);
         },
-        (building3) => {
+        match: (building3) => {
           if (building3 === getBuildings().GorddonFreighter || building3 === getBuildings().Alien1SuperFreighter) {
             let regCount = getBuildings().GorddonFreighter.count;
             let regTotal = (1 + (regCount + 1) * 0.03) / (1 + regCount * 0.03) - 1;
@@ -24043,15 +24052,15 @@
             }
           }
         },
-        (other) => `${other.title} gives more Money`,
-        () => getSettings().buildingsBestFreighter ? 0 : 1
-        // Find what's better - Freighter or Super Freighter
-      ],
-      [
-        () => {
+        describe: (other) => `${other.title} gives more Money`,
+        multiplier: () => getSettings().buildingsBestFreighter ? 0 : 1
+      },
+      {
+        id: "lake-transport-vs-bireme",
+        enabled: () => {
           return getBuildings().LakeBireme.isAutoBuildable() && getBuildings().LakeBireme.isAffordable(true) && getBuildings().LakeTransport.isAutoBuildable() && getBuildings().LakeTransport.isAffordable(true) && getResources().Lake_Support.rateOfChange <= 1;
         },
-        (building3) => {
+        match: (building3) => {
           if (building3 === getBuildings().LakeBireme || building3 === getBuildings().LakeTransport) {
             let biremeCount = getBuildings().LakeBireme.count;
             let transportCount = getBuildings().LakeTransport.count;
@@ -24071,15 +24080,15 @@
             }
           }
         },
-        (other) => `${other.title} gives more Supplies`,
-        () => 0
-        // Find what's better - Bireme or Transport
-      ],
-      [
-        () => {
+        describe: (other) => `${other.title} gives more Supplies`,
+        multiplier: () => 0
+      },
+      {
+        id: "spire-port-vs-base-camp",
+        enabled: () => {
           return getBuildings().SpirePort.isAutoBuildable() && getBuildings().SpirePort.isAffordable(true) && getBuildings().SpireBaseCamp.isAutoBuildable() && getBuildings().SpireBaseCamp.isAffordable(true);
         },
-        (building3) => {
+        match: (building3) => {
           if (building3 === getBuildings().SpirePort || building3 === getBuildings().SpireBaseCamp) {
             let portCount = getBuildings().SpirePort.count;
             let baseCount = getBuildings().SpireBaseCamp.count;
@@ -24093,27 +24102,30 @@
             }
           }
         },
-        (other) => `${other.title} gives more Max Supplies`,
-        () => 0
-        // Find what's better - Port or Base
-      ],
-      [
-        () => haveTech("waygate", 2),
-        (building3) => building3 === getBuildings().SpireWaygate,
-        () => "",
-        () => 0
+        describe: (other) => `${other.title} gives more Max Supplies`,
+        multiplier: () => 0
+      },
+      {
         // We can't limit waygate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
-      ],
-      [
-        () => haveTech("edenic", 3),
-        (building3) => building3 === getBuildings().SpireEdenicGate,
-        () => "",
-        () => 0
+        id: "spire-waygate-done",
+        enabled: () => haveTech("waygate", 2),
+        match: (building3) => building3 === getBuildings().SpireWaygate,
+        describe: () => "",
+        multiplier: () => 0
+      },
+      {
         // We can't limit edenic gate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
-      ],
-      [
-        () => haveTech("elysium", 8),
-        (building3) => {
+        id: "spire-edenic-gate-done",
+        enabled: () => haveTech("edenic", 3),
+        match: (building3) => building3 === getBuildings().SpireEdenicGate,
+        describe: () => "",
+        multiplier: () => 0
+      },
+      {
+        // Build up to 100, and then fire after researching cannon
+        id: "elysium-fire-support-base-blocked",
+        enabled: () => haveTech("elysium", 8),
+        match: (building3) => {
           if (building3 === getBuildings().ElysiumFireSupportBase) {
             if (haveTech("isle", 2)) {
               return "Garrison is destroyed";
@@ -24123,46 +24135,51 @@
             }
           }
         },
-        (note) => note,
-        () => 0
-        // Build up to 100, and then fire after researching cannon
-      ],
-      [
-        () => haveTech("asphodel", 8),
-        (building3) => building3 === getBuildings().AsphodelStabilizer && building3.count >= getBuildings().AsphodelWarehouse.count,
-        () => "Can not exceed amount of Warehouses",
-        () => 0
-      ],
-      [
-        () => haveTech("hell_spire", 8) || getGame().global.race["warlord"],
-        (building3) => building3 === getBuildings().SpireSphinx,
-        () => "",
-        () => 0
+        describe: (note) => note,
+        multiplier: () => 0
+      },
+      {
+        id: "warehouse-cap",
+        enabled: () => haveTech("asphodel", 8),
+        match: (building3) => building3 === getBuildings().AsphodelStabilizer && building3.count >= getBuildings().AsphodelWarehouse.count,
+        describe: () => "Can not exceed amount of Warehouses",
+        multiplier: () => 0
+      },
+      {
         // Sphinx not usable after solving / Harmachis not usable during Warlord
-      ],
-      [
-        () => getGame().global.race["artifical"] && haveTech("focus_cure", 7),
-        (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Population && building3 !== getBuildings().TauCloning,
-        () => "Assembling is not possible",
-        () => 0
-      ],
-      [
-        () => getGame().global.race["artifical"],
-        (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Population && getResources().Population.storageRatio === 1,
-        () => "No empty housings",
-        () => 0
-      ],
-      [
-        () => getBuildings().GorddonEmbassy.count === 0 && getResources().Knowledge.maxQuantity < getSettings().fleetEmbassyKnowledge,
-        (building3) => building3 === getBuildings().GorddonEmbassy,
-        () => `${getNumberString(
+        id: "spire-sphinx-done",
+        enabled: () => haveTech("hell_spire", 8) || getGame().global.race["warlord"],
+        match: (building3) => building3 === getBuildings().SpireSphinx,
+        describe: () => "",
+        multiplier: () => 0
+      },
+      {
+        id: "assembling-not-possible",
+        enabled: () => getGame().global.race["artifical"] && haveTech("focus_cure", 7),
+        match: (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Population && building3 !== getBuildings().TauCloning,
+        describe: () => "Assembling is not possible",
+        multiplier: () => 0
+      },
+      {
+        id: "no-empty-housings",
+        enabled: () => getGame().global.race["artifical"],
+        match: (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Population && getResources().Population.storageRatio === 1,
+        describe: () => "No empty housings",
+        multiplier: () => 0
+      },
+      {
+        id: "embassy-knowledge-required",
+        enabled: () => getBuildings().GorddonEmbassy.count === 0 && getResources().Knowledge.maxQuantity < getSettings().fleetEmbassyKnowledge,
+        match: (building3) => building3 === getBuildings().GorddonEmbassy,
+        describe: () => `${getNumberString(
           getSettings().fleetEmbassyKnowledge
         )} Max Knowledge required`,
-        () => 0
-      ],
-      [
-        () => getGame().global.race["magnificent"] && getSettings().buildingShrineType !== "any",
-        (building3) => {
+        multiplier: () => 0
+      },
+      {
+        id: "wrong-shrine",
+        enabled: () => getGame().global.race["magnificent"] && getSettings().buildingShrineType !== "any",
+        match: (building3) => {
           if (building3.id && building3.id.includes("shrine")) {
             let bonus = null;
             if (getGame().global.city.calendar.moon > 0 && getGame().global.city.calendar.moon < 7) {
@@ -24191,12 +24208,13 @@
             }
           }
         },
-        () => "Wrong shrine",
-        () => 0
-      ],
-      [
-        () => getGame().global.race["slaver"],
-        (building3) => {
+        describe: () => "Wrong shrine",
+        multiplier: () => 0
+      },
+      {
+        id: "slave-market-blocked",
+        enabled: () => getGame().global.race["slaver"],
+        match: (building3) => {
           if (building3 === getBuildings().SlaveMarket) {
             if (getResources().Slave.currentQuantity >= getResources().Slave.maxQuantity) {
               return "Slave pens already full";
@@ -24206,13 +24224,13 @@
             }
           }
         },
-        (note) => note,
-        () => 0
-        // Slave Market
-      ],
-      [
-        () => getGame().global.race["cannibalize"],
-        (building3) => {
+        describe: (note) => note,
+        multiplier: () => 0
+      },
+      {
+        id: "sacrificial-altar-blocked",
+        enabled: () => getGame().global.race["cannibalize"],
+        match: (building3) => {
           if (building3._id === "s_alter" && building3.count > 0) {
             if (getResources().Population.currentQuantity < 1) {
               return "Too low population";
@@ -24231,31 +24249,34 @@
             }
           }
         },
-        (note) => note,
-        () => 0
-        // Sacrificial Altar
-      ],
-      [
-        () => true,
-        (building3) => building3.getMissingConsumption(),
-        (resource2) => `Missing ${resource2.name} to operate`,
-        () => getSettings().buildingWeightingMissingSupply
-      ],
-      [
-        () => true,
-        (building3) => building3.getMissingSupport(),
-        (support) => `Missing ${support.name} to operate`,
-        () => getSettings().buildingWeightingMissingSupport
-      ],
-      [
-        () => true,
-        (building3) => building3.getUselessSupport(),
-        (support) => `Provided ${support.name} not currently needed`,
-        () => getSettings().buildingWeightingUselessSupport
-      ],
-      [
-        () => getGame().global.race["truepath"] && getResources().Tau_Belt_Support.maxQuantity <= getResources().Tau_Belt_Support.currentQuantity,
-        (building3) => {
+        describe: (note) => note,
+        multiplier: () => 0
+      },
+      {
+        id: "missing-consumption",
+        enabled: () => true,
+        match: (building3) => building3.getMissingConsumption(),
+        describe: (resource2) => `Missing ${resource2.name} to operate`,
+        multiplier: () => getSettings().buildingWeightingMissingSupply
+      },
+      {
+        id: "missing-support",
+        enabled: () => true,
+        match: (building3) => building3.getMissingSupport(),
+        describe: (support) => `Missing ${support.name} to operate`,
+        multiplier: () => getSettings().buildingWeightingMissingSupport
+      },
+      {
+        id: "useless-support",
+        enabled: () => true,
+        match: (building3) => building3.getUselessSupport(),
+        describe: (support) => `Provided ${support.name} not currently needed`,
+        multiplier: () => getSettings().buildingWeightingUselessSupport
+      },
+      {
+        id: "tau-belt-ship-efficiency",
+        enabled: () => getGame().global.race["truepath"] && getResources().Tau_Belt_Support.maxQuantity <= getResources().Tau_Belt_Support.currentQuantity,
+        match: (building3) => {
           if (building3 === getBuildings().TauBeltWhalingShip || building3 === getBuildings().TauBeltMiningShip) {
             let s_max = getResources().Tau_Belt_Support.maxQuantity;
             let s_cur = getResources().Tau_Belt_Support.currentQuantity;
@@ -24264,13 +24285,14 @@
             return nextEff * (s_cur + 1) - currentEff * s_cur;
           }
         },
-        (eff) => `Low security, new ship will be ${getNiceNumber(eff * 100)}% efficient`,
-        (eff) => eff ?? -1
-      ],
-      [
-        () => getGame().global.race["truepath"],
+        describe: (eff) => `Low security, new ship will be ${getNiceNumber(eff * 100)}% efficient`,
+        multiplier: (eff) => eff ?? -1
+      },
+      {
+        id: "womling-overlord-guard",
         // "&& getGame().global.tech.tau_red === 4" doesn't want to work for some reason.
-        (building3) => {
+        enabled: () => getGame().global.race["truepath"],
+        match: (building3) => {
           if (building3 === getBuildings().TauRedContact || building3 === getBuildings().TauRedIntroduce || building3 === getBuildings().TauRedSubjugate) {
             let missing = null;
             for (let [id, stat] of Object.entries({
@@ -24290,27 +24312,30 @@
             return missing;
           }
         },
-        (id) => `Overlord achievement is missing ${getBuildings()[id].name}`,
-        () => getSettings().buildingWeightingOverlord
-      ],
-      [
+        describe: (id) => `Overlord achievement is missing ${getBuildings()[id].name}`,
+        multiplier: () => getSettings().buildingWeightingOverlord
+      },
+      {
         // Evil universe: Authority amount is capped by Authority max. When max is below target no
         // amount of tax/soldier management can fix the production penalty, so prioritize the
         // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
-        () => getSettings().authorityManage && getSettings().generalMinimumAuthority > 0 && getResources().Authority.isUnlocked() && getResources().Authority.maxQuantity < getSettings().generalMinimumAuthority,
-        (building3) => authorityCapBuildingSet.has(building3),
-        () => "Raises Authority cap, currently below target",
-        () => getSettings().buildingWeightingAuthority
-      ],
-      [
-        () => getSettings().achievementGuards && getSettings().guardBananaRepublic && getGame().global.race["banana"],
-        (building3) => building3 === getBuildings().DwarfWorldCollider && !bananaRepublicObjectiveComplete("b2"),
-        () => "Banana Republic objective",
-        () => getSettings().buildingWeightingBananaObjective
-      ],
-      [
-        () => inflationChallengeAssistActive(),
-        (building3) => {
+        id: "authority-cap",
+        enabled: () => getSettings().authorityManage && getSettings().generalMinimumAuthority > 0 && getResources().Authority.isUnlocked() && getResources().Authority.maxQuantity < getSettings().generalMinimumAuthority,
+        match: (building3) => authorityCapBuildingSet.has(building3),
+        describe: () => "Raises Authority cap, currently below target",
+        multiplier: () => getSettings().buildingWeightingAuthority
+      },
+      {
+        id: "banana-republic-objective",
+        enabled: () => getSettings().achievementGuards && getSettings().guardBananaRepublic && getGame().global.race["banana"],
+        match: (building3) => building3 === getBuildings().DwarfWorldCollider && !bananaRepublicObjectiveComplete("b2"),
+        describe: () => "Banana Republic objective",
+        multiplier: () => getSettings().buildingWeightingBananaObjective
+      },
+      {
+        id: "inflation-money",
+        enabled: () => inflationChallengeAssistActive(),
+        match: (building3) => {
           if (!inflationChallengeMoneyReachable() && inflationMoneyStorageBuildingSet.has(building3)) {
             return "storage";
           }
@@ -24319,12 +24344,13 @@
           }
           return false;
         },
-        (kind) => kind === "storage" ? "Inflation challenge needs Money storage" : "Inflation challenge needs Money income",
-        () => getSettings().buildingWeightingInflationMoney
-      ],
-      [
-        () => retirementChallengeAssistActive() && retirementPreparationMissing().length > 0,
-        (building3) => {
+        describe: (kind) => kind === "storage" ? "Inflation challenge needs Money storage" : "Inflation challenge needs Money income",
+        multiplier: () => getSettings().buildingWeightingInflationMoney
+      },
+      {
+        id: "retirement-preparation",
+        enabled: () => retirementChallengeAssistActive() && retirementPreparationMissing().length > 0,
+        match: (building3) => {
           if (building3 === getBuildings().TauFusionGenerator && building3.count < RETIREMENT_PREP.fusionGenerators) {
             return RETIREMENT_PREP.fusionGenerators;
           }
@@ -24336,26 +24362,29 @@
           }
           return false;
         },
-        (target, building3) => `Retirement preparation: build ${target} ${building3.name}`,
-        () => getSettings().buildingWeightingRetirementPrep
-      ],
-      // Red Spaceport unlocks unification research. Let an active unification
-      // achievement build this prerequisite so Red Dead can release afterward.
-      [
-        () => getSettings().achievementGuards,
-        (building3) => building3 === getBuildings().Dreadnought && guardActive("guardDreaded") ? "Dreaded" : building3 === getBuildings().SiriusThermalCollector && guardActive("guardEnergetic") ? "Energetic" : building3 === getBuildings().RedSpaceport && guardActive("guardRedDead") && !guardActive("guardPacifist") && foreignAchievementGoal() === null ? "Red Dead" : false,
-        (name) => `${name} achievement guard`,
-        () => 0
-      ],
-      [
-        () => true,
-        (building3) => building3._tab === "city" && building3 !== getBuildings().Mill && building3 !== getBuildings().Banquet && building3.stateOffCount > 0,
-        () => "Still have some non operating buildings",
-        () => getSettings().buildingWeightingNonOperatingCity
-      ],
-      [
-        () => true,
-        (building3) => {
+        describe: (target, building3) => `Retirement preparation: build ${target} ${building3.name}`,
+        multiplier: () => getSettings().buildingWeightingRetirementPrep
+      },
+      {
+        // Red Spaceport unlocks unification research. Let an active unification
+        // achievement build this prerequisite so Red Dead can release afterward.
+        id: "achievement-guard",
+        enabled: () => getSettings().achievementGuards,
+        match: (building3) => building3 === getBuildings().Dreadnought && guardActive("guardDreaded") ? "Dreaded" : building3 === getBuildings().SiriusThermalCollector && guardActive("guardEnergetic") ? "Energetic" : building3 === getBuildings().RedSpaceport && guardActive("guardRedDead") && !guardActive("guardPacifist") && foreignAchievementGoal() === null ? "Red Dead" : false,
+        describe: (name) => `${name} achievement guard`,
+        multiplier: () => 0
+      },
+      {
+        id: "non-operating-city-buildings",
+        enabled: () => true,
+        match: (building3) => building3._tab === "city" && building3 !== getBuildings().Mill && building3 !== getBuildings().Banquet && building3.stateOffCount > 0,
+        describe: () => "Still have some non operating buildings",
+        multiplier: () => getSettings().buildingWeightingNonOperatingCity
+      },
+      {
+        id: "non-operating-buildings",
+        enabled: () => true,
+        match: (building3) => {
           if (building3 === getBuildings().BlackholeStellarEngine) {
             return false;
           }
@@ -24387,201 +24416,227 @@
             return true;
           }
         },
-        () => "Still have some non operating buildings",
-        () => getSettings().buildingWeightingNonOperating
-      ],
-      [
-        () => getSettings().prestigeType !== "bioseed" || !isGECKNeeded(),
-        (building3) => building3 === getBuildings().GasSpaceDockGECK,
-        () => "Max allowed amount of G.E.C.K reached",
-        () => 0
-      ],
-      [
-        () => getGame().global.race["lone_survivor"] && !isPrestigeAllowed2("eden"),
-        (building3) => building3 === getBuildings().TauStarEden,
-        () => "Prestiging not currently allowed",
-        () => 0
-      ],
-      [
-        () => getGame().global.race["truepath"] && (!isPrestigeAllowed2("retire") || getBuildings().TauGas2MatrioshkaBrain.count < 1e3),
-        (building3) => building3 === getBuildings().TauGas2IgniteGasGiant,
-        () => "Prestiging not currently allowed",
-        () => 0
-      ],
-      [
-        () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType !== "bioseed",
-        (building3) => building3 === getBuildings().GasSpaceDock || building3 === getBuildings().GasSpaceDockShipSegment || building3 === getBuildings().GasSpaceDockProbe,
-        () => "Not needed for current prestige",
-        () => 0
-      ],
-      [
-        () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "bioseed",
-        (building3) => building3 === getBuildings().DwarfWorldCollider || building3 === getBuildings().TitanMission,
-        () => "Not needed for Bioseed prestige",
-        () => 0
-      ],
-      [
-        () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "whitehole",
-        (building3) => building3 === getBuildings().BlackholeJumpShip,
-        () => "Not needed for Whitehole prestige",
-        () => 0
-      ],
-      [
-        () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "vacuum",
-        (building3) => building3 === getBuildings().BlackholeStellarEngine,
-        () => "Not needed for Vacuum Collapse prestige",
-        () => 0
-      ],
-      [
-        () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "ascension" && isPillarFinished2() && !getGame().global.race["witch_hunter"],
-        (building3) => building3 === getBuildings().PitMission || building3 === getBuildings().RuinsMission,
-        () => "Not needed for Ascension prestige",
-        () => 0
-      ],
-      [
-        () => getGame().global.race["witch_hunter"] && getSettings().prestigeType === "ascension",
-        (building3) => building3 === getBuildings().SpireWaygate,
-        () => "Not needed for Witch Hunter's Ascension prestige",
-        () => 0
-      ],
-      [
-        () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "terraform",
-        (building3) => building3 === getBuildings().PitMission || building3 === getBuildings().RuinsMission,
-        () => "Not needed for Terraform prestige",
-        () => 0
-      ],
-      [
-        () => getSettings().autoPrestige && getSettings().prestigeType === "mad" && (haveTech("mad") || getTechIds()["tech-mad"].isUnlocked() && getTechIds()["tech-mad"].isAffordable(true)),
-        (building3) => !building3.is.housing && !building3.is.garrison && !building3.cost["Knowledge"] && building3 !== getBuildings().OilWell,
-        () => "Awaiting MAD prestige",
-        () => getSettings().buildingWeightingMADUseless
-      ],
-      [
-        () => true,
-        (building3) => !(building3 instanceof ResourceAction) && building3.count === 0,
-        () => "New building",
-        () => getSettings().buildingWeightingNew
-      ],
-      [
-        () => getResources().Power.isUnlocked() && getResources().Power.currentQuantity < getResources().Power.maxQuantity,
-        (building3) => building3 === getBuildings().LakeCoolingTower || building3.powered < 0,
-        () => "Need more energy",
-        () => getSettings().buildingWeightingNeedfulPowerPlant
-      ],
-      [
-        () => getResources().Power.isUnlocked() && getResources().Power.currentQuantity > getResources().Power.maxQuantity,
-        (building3) => building3 !== getBuildings().Mill && (building3 === getBuildings().LakeCoolingTower || building3.powered < 0),
-        () => "No need for more energy",
-        () => getSettings().buildingWeightingUselessPowerPlant
-      ],
-      [
-        () => getResources().Power.isUnlocked(),
-        (building3) => building3 !== getBuildings().LakeCoolingTower && building3.powered > 0 && (building3 === getBuildings().NeutronCitadel ? getCitadelConsumption(building3.count + 1) - getCitadelConsumption(building3.count) : building3.powered) > getResources().Power.currentQuantity,
-        () => "Not enough energy",
-        () => getSettings().buildingWeightingUnderpowered
-      ],
-      [
-        () => Math.max(
+        describe: () => "Still have some non operating buildings",
+        multiplier: () => getSettings().buildingWeightingNonOperating
+      },
+      {
+        id: "geck-limit",
+        enabled: () => getSettings().prestigeType !== "bioseed" || !isGECKNeeded(),
+        match: (building3) => building3 === getBuildings().GasSpaceDockGECK,
+        describe: () => "Max allowed amount of G.E.C.K reached",
+        multiplier: () => 0
+      },
+      {
+        id: "prestige-blocked-eden",
+        enabled: () => getGame().global.race["lone_survivor"] && !isPrestigeAllowed2("eden"),
+        match: (building3) => building3 === getBuildings().TauStarEden,
+        describe: () => "Prestiging not currently allowed",
+        multiplier: () => 0
+      },
+      {
+        id: "prestige-blocked-ignition",
+        enabled: () => getGame().global.race["truepath"] && (!isPrestigeAllowed2("retire") || getBuildings().TauGas2MatrioshkaBrain.count < 1e3),
+        match: (building3) => building3 === getBuildings().TauGas2IgniteGasGiant,
+        describe: () => "Prestiging not currently allowed",
+        multiplier: () => 0
+      },
+      {
+        id: "prestige-unneeded",
+        enabled: () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType !== "bioseed",
+        match: (building3) => building3 === getBuildings().GasSpaceDock || building3 === getBuildings().GasSpaceDockShipSegment || building3 === getBuildings().GasSpaceDockProbe,
+        describe: () => "Not needed for current prestige",
+        multiplier: () => 0
+      },
+      {
+        id: "prestige-unneeded-bioseed",
+        enabled: () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "bioseed",
+        match: (building3) => building3 === getBuildings().DwarfWorldCollider || building3 === getBuildings().TitanMission,
+        describe: () => "Not needed for Bioseed prestige",
+        multiplier: () => 0
+      },
+      {
+        id: "prestige-unneeded-whitehole",
+        enabled: () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "whitehole",
+        match: (building3) => building3 === getBuildings().BlackholeJumpShip,
+        describe: () => "Not needed for Whitehole prestige",
+        multiplier: () => 0
+      },
+      {
+        id: "prestige-unneeded-vacuum",
+        enabled: () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "vacuum",
+        match: (building3) => building3 === getBuildings().BlackholeStellarEngine,
+        describe: () => "Not needed for Vacuum Collapse prestige",
+        multiplier: () => 0
+      },
+      {
+        id: "prestige-unneeded-ascension-missions",
+        enabled: () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "ascension" && isPillarFinished2() && !getGame().global.race["witch_hunter"],
+        match: (building3) => building3 === getBuildings().PitMission || building3 === getBuildings().RuinsMission,
+        describe: () => "Not needed for Ascension prestige",
+        multiplier: () => 0
+      },
+      {
+        id: "prestige-unneeded-witch-hunter",
+        enabled: () => getGame().global.race["witch_hunter"] && getSettings().prestigeType === "ascension",
+        match: (building3) => building3 === getBuildings().SpireWaygate,
+        describe: () => "Not needed for Witch Hunter's Ascension prestige",
+        multiplier: () => 0
+      },
+      {
+        id: "prestige-unneeded-terraform",
+        enabled: () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "terraform",
+        match: (building3) => building3 === getBuildings().PitMission || building3 === getBuildings().RuinsMission,
+        describe: () => "Not needed for Terraform prestige",
+        multiplier: () => 0
+      },
+      {
+        id: "awaiting-mad-prestige",
+        enabled: () => getSettings().autoPrestige && getSettings().prestigeType === "mad" && (haveTech("mad") || getTechIds()["tech-mad"].isUnlocked() && getTechIds()["tech-mad"].isAffordable(true)),
+        match: (building3) => !building3.is.housing && !building3.is.garrison && !building3.cost["Knowledge"] && building3 !== getBuildings().OilWell,
+        describe: () => "Awaiting MAD prestige",
+        multiplier: () => getSettings().buildingWeightingMADUseless
+      },
+      {
+        id: "new-building",
+        enabled: () => true,
+        match: (building3) => !(building3 instanceof ResourceAction) && building3.count === 0,
+        describe: () => "New building",
+        multiplier: () => getSettings().buildingWeightingNew
+      },
+      {
+        id: "need-more-energy",
+        enabled: () => getResources().Power.isUnlocked() && getResources().Power.currentQuantity < getResources().Power.maxQuantity,
+        match: (building3) => building3 === getBuildings().LakeCoolingTower || building3.powered < 0,
+        describe: () => "Need more energy",
+        multiplier: () => getSettings().buildingWeightingNeedfulPowerPlant
+      },
+      {
+        id: "no-need-for-more-energy",
+        enabled: () => getResources().Power.isUnlocked() && getResources().Power.currentQuantity > getResources().Power.maxQuantity,
+        match: (building3) => building3 !== getBuildings().Mill && (building3 === getBuildings().LakeCoolingTower || building3.powered < 0),
+        describe: () => "No need for more energy",
+        multiplier: () => getSettings().buildingWeightingUselessPowerPlant
+      },
+      {
+        id: "not-enough-energy",
+        enabled: () => getResources().Power.isUnlocked(),
+        match: (building3) => building3 !== getBuildings().LakeCoolingTower && building3.powered > 0 && (building3 === getBuildings().NeutronCitadel ? getCitadelConsumption(building3.count + 1) - getCitadelConsumption(building3.count) : building3.powered) > getResources().Power.currentQuantity,
+        describe: () => "Not enough energy",
+        multiplier: () => getSettings().buildingWeightingUnderpowered
+      },
+      {
+        id: "no-need-for-more-knowledge",
+        enabled: () => Math.max(
           getState().knowledgeRequiredByTechs,
           getState().knowledgeRequiredByBuildTargets
         ) <= getResources().Knowledge.maxQuantity,
-        (building3) => building3.is.knowledge && building3 !== getBuildings().Wardenclyffe && (building3 !== getBuildings().StargateTelemetryBeacon || building3.count > 0),
+        match: (building3) => building3.is.knowledge && building3 !== getBuildings().Wardenclyffe && (building3 !== getBuildings().StargateTelemetryBeacon || building3.count > 0),
         // We want Wardenclyffe for morale; first beacon required for progress
-        () => "No need for more knowledge",
-        () => getSettings().buildingWeightingUselessKnowledge
-      ],
-      [
-        () => getState().cheapestTechKnowledge > getResources().Knowledge.maxQuantity || getState().knowledgeRequiredByBuildTargets > getResources().Knowledge.maxQuantity,
-        (building3) => building3.is.knowledge,
-        () => "Need more knowledge",
-        () => getSettings().buildingWeightingNeedfulKnowledge
-      ],
-      [
-        () => getBuildings().BlackholeMassEjector.count > 0 && getBuildings().BlackholeMassEjector.count * 1e3 - getGame().global.interstellar.mass_ejector.total > 100,
-        (building3) => building3 === getBuildings().BlackholeMassEjector,
-        () => "Still have some unused ejectors",
-        () => getSettings().buildingWeightingUnusedEjectors
-      ],
-      [
-        () => getResources().Crates.storageRatio < 1 || getResources().Containers.storageRatio < 1,
-        (building3) => building3 === getBuildings().StorageYard || building3 === getBuildings().Warehouse || building3 === getBuildings().EnceladusMunitions,
-        () => "Still have some unused storage",
-        () => getSettings().buildingWeightingCrateUseless
-      ],
-      [
-        () => getResources().Oil.maxQuantity < getResources().Oil.techMissionMaxCost && getBuildings().OilWell.count <= 0 && getBuildings().GasMoonOilExtractor.count <= 0,
-        (building3) => building3 === getBuildings().OilWell || building3 === getBuildings().GasMoonOilExtractor,
-        () => "Need more fuel",
-        () => getSettings().buildingWeightingMissingFuel
-      ],
-      [
-        () => getResources().Helium_3.isUnlocked() && getResources().Helium_3.maxQuantity < getResources().Helium_3.techMissionMaxCost || getResources().Oil.maxQuantity < getResources().Oil.techMissionMaxCost,
-        (building3) => building3 === getBuildings().OilDepot || building3 === getBuildings().SpacePropellantDepot || building3 === getBuildings().GasStorage,
-        () => "Need more fuel",
-        () => getSettings().buildingWeightingMissingFuel
-      ],
-      [
-        () => getGame().global.race.hooved && getResources().Horseshoe.spareQuantity >= getResources().Horseshoe.storageRequired,
-        (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Horseshoe,
-        () => `No more ${getResources().Horseshoe.title} needed`,
-        () => getSettings().buildingWeightingHorseshoeUseless
-      ],
-      [
-        () => getGame().global.race.calm && getResources().Zen.currentQuantity < getResources().Zen.maxQuantity,
-        (building3) => building3.id.includes("meditation"),
-        () => "No more Meditation Space needed",
-        () => getSettings().buildingWeightingZenUseless
-      ],
-      [
-        () => getBuildings().GateTurret.isUnlocked() && getPoly().hellSupression("gate").rating > 7501 + getGame().armyRating(traitVal("high_pop", 0, 1), "hellArmy", 0) * traitVal("holy", 1, "+"),
-        (building3) => building3 === getBuildings().GateTurret,
-        () => "Gate demons fully supressed",
-        () => getSettings().buildingWeightingGateTurret
-      ],
-      [
-        () => (getResources().Containers.isUnlocked() || getResources().Crates.isUnlocked()) && getResources().Containers.storageRatio === 1 && getResources().Crates.storageRatio === 1,
-        (building3) => building3 === getBuildings().Shed || building3 === getBuildings().RedGarage || building3 === getBuildings().AlphaWarehouse || building3 === getBuildings().ProximaCargoYard || building3 === getBuildings().TitanStorehouse,
-        () => "Need more storage",
-        () => getSettings().buildingWeightingNeedStorage
-      ],
-      [
-        () => getResources().Population.maxQuantity > 50 && getResources().Population.storageRatio < 0.9,
-        (building3) => building3.is.housing && building3 !== getBuildings().Alien1Consulate && building3 !== getBuildings().Transmitter && !(building3 instanceof ResourceAction),
-        () => "No more houses needed",
-        () => getSettings().buildingWeightingUselessHousing
-      ],
-      [
-        () => getGame().global.race["orbit_decay"] && !getGame().global.race["orbit_decayed"],
-        (building3) => (building3._tab === "city" || building3._location === "spc_moon") && !(building3 instanceof ResourceAction),
-        () => "Will be destroyed after impact",
-        () => getSettings().buildingWeightingTemporal
-      ],
-      [
-        () => getGame().global.tech.tau_gas === 1,
+        describe: () => "No need for more knowledge",
+        multiplier: () => getSettings().buildingWeightingUselessKnowledge
+      },
+      {
+        id: "need-more-knowledge",
+        enabled: () => getState().cheapestTechKnowledge > getResources().Knowledge.maxQuantity || getState().knowledgeRequiredByBuildTargets > getResources().Knowledge.maxQuantity,
+        match: (building3) => building3.is.knowledge,
+        describe: () => "Need more knowledge",
+        multiplier: () => getSettings().buildingWeightingNeedfulKnowledge
+      },
+      {
+        id: "unused-ejectors",
+        enabled: () => getBuildings().BlackholeMassEjector.count > 0 && getBuildings().BlackholeMassEjector.count * 1e3 - getGame().global.interstellar.mass_ejector.total > 100,
+        match: (building3) => building3 === getBuildings().BlackholeMassEjector,
+        describe: () => "Still have some unused ejectors",
+        multiplier: () => getSettings().buildingWeightingUnusedEjectors
+      },
+      {
+        id: "unused-storage",
+        enabled: () => getResources().Crates.storageRatio < 1 || getResources().Containers.storageRatio < 1,
+        match: (building3) => building3 === getBuildings().StorageYard || building3 === getBuildings().Warehouse || building3 === getBuildings().EnceladusMunitions,
+        describe: () => "Still have some unused storage",
+        multiplier: () => getSettings().buildingWeightingCrateUseless
+      },
+      {
+        id: "need-more-fuel-production",
+        enabled: () => getResources().Oil.maxQuantity < getResources().Oil.techMissionMaxCost && getBuildings().OilWell.count <= 0 && getBuildings().GasMoonOilExtractor.count <= 0,
+        match: (building3) => building3 === getBuildings().OilWell || building3 === getBuildings().GasMoonOilExtractor,
+        describe: () => "Need more fuel",
+        multiplier: () => getSettings().buildingWeightingMissingFuel
+      },
+      {
+        id: "need-more-fuel-storage",
+        enabled: () => getResources().Helium_3.isUnlocked() && getResources().Helium_3.maxQuantity < getResources().Helium_3.techMissionMaxCost || getResources().Oil.maxQuantity < getResources().Oil.techMissionMaxCost,
+        match: (building3) => building3 === getBuildings().OilDepot || building3 === getBuildings().SpacePropellantDepot || building3 === getBuildings().GasStorage,
+        describe: () => "Need more fuel",
+        multiplier: () => getSettings().buildingWeightingMissingFuel
+      },
+      {
+        id: "horseshoes-useless",
+        enabled: () => getGame().global.race.hooved && getResources().Horseshoe.spareQuantity >= getResources().Horseshoe.storageRequired,
+        match: (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Horseshoe,
+        describe: () => `No more ${getResources().Horseshoe.title} needed`,
+        multiplier: () => getSettings().buildingWeightingHorseshoeUseless
+      },
+      {
+        id: "meditation-space-unneeded",
+        enabled: () => getGame().global.race.calm && getResources().Zen.currentQuantity < getResources().Zen.maxQuantity,
+        match: (building3) => building3.id.includes("meditation"),
+        describe: () => "No more Meditation Space needed",
+        multiplier: () => getSettings().buildingWeightingZenUseless
+      },
+      {
+        id: "gate-demons-supressed",
+        enabled: () => getBuildings().GateTurret.isUnlocked() && getPoly().hellSupression("gate").rating > 7501 + getGame().armyRating(traitVal("high_pop", 0, 1), "hellArmy", 0) * traitVal("holy", 1, "+"),
+        match: (building3) => building3 === getBuildings().GateTurret,
+        describe: () => "Gate demons fully supressed",
+        multiplier: () => getSettings().buildingWeightingGateTurret
+      },
+      {
+        id: "need-more-storage",
+        enabled: () => (getResources().Containers.isUnlocked() || getResources().Crates.isUnlocked()) && getResources().Containers.storageRatio === 1 && getResources().Crates.storageRatio === 1,
+        match: (building3) => building3 === getBuildings().Shed || building3 === getBuildings().RedGarage || building3 === getBuildings().AlphaWarehouse || building3 === getBuildings().ProximaCargoYard || building3 === getBuildings().TitanStorehouse,
+        describe: () => "Need more storage",
+        multiplier: () => getSettings().buildingWeightingNeedStorage
+      },
+      {
+        id: "no-more-houses-needed",
+        enabled: () => getResources().Population.maxQuantity > 50 && getResources().Population.storageRatio < 0.9,
+        match: (building3) => building3.is.housing && building3 !== getBuildings().Alien1Consulate && building3 !== getBuildings().Transmitter && !(building3 instanceof ResourceAction),
+        describe: () => "No more houses needed",
+        multiplier: () => getSettings().buildingWeightingUselessHousing
+      },
+      {
+        id: "destroyed-after-impact",
+        enabled: () => getGame().global.race["orbit_decay"] && !getGame().global.race["orbit_decayed"],
+        match: (building3) => (building3._tab === "city" || building3._location === "spc_moon") && !(building3 instanceof ResourceAction),
+        describe: () => "Will be destroyed after impact",
+        multiplier: () => getSettings().buildingWeightingTemporal
+      },
+      {
+        id: "randomized-weighting",
+        enabled: () => getGame().global.tech.tau_gas === 1,
         // Only used for name contest, no need to check at other game stages
-        (building3) => building3.is.random,
-        () => "Randomized weighting",
-        () => 1 + randomSource.nextUnit()
+        match: (building3) => building3.is.random,
+        describe: () => "Randomized weighting",
+        multiplier: () => 1 + randomSource.nextUnit()
         // Fluctuate weight to pick random item
-      ],
-      [
-        () => getGame().global.race["truepath"] && haveTech("tauceti", 2),
-        (building3) => (building3._tab === "city" || building3._tab === "space" || building3._tab === "starDock") && !(building3 instanceof ResourceAction),
-        () => "Solar System building",
-        () => getSettings().buildingWeightingSolar
-      ],
-      [
-        () => getSettings().prestigeType === "vacuum",
-        (building3) => building3 === getBuildings().Pylon || building3 === getBuildings().RedPylon || building3 === getBuildings().TauPylon,
-        () => "Vacuum Collapse Mana producer",
-        () => getSettings().buildingWeightingVacuumCollapse ?? 10
-      ]
+      },
+      {
+        id: "solar-system-building",
+        enabled: () => getGame().global.race["truepath"] && haveTech("tauceti", 2),
+        match: (building3) => (building3._tab === "city" || building3._tab === "space" || building3._tab === "starDock") && !(building3 instanceof ResourceAction),
+        describe: () => "Solar System building",
+        multiplier: () => getSettings().buildingWeightingSolar
+      },
+      {
+        id: "vacuum-collapse-mana-producer",
+        enabled: () => getSettings().prestigeType === "vacuum",
+        match: (building3) => building3 === getBuildings().Pylon || building3 === getBuildings().RedPylon || building3 === getBuildings().TauPylon,
+        describe: () => "Vacuum Collapse Mana producer",
+        multiplier: () => getSettings().buildingWeightingVacuumCollapse ?? 10
+      }
     ];
     return {
-      wrGlobalCondition,
-      wrIndividualCondition,
-      wrDescription,
-      wrMultiplier,
       authorityCapBuildings,
       INFLATION_CHALLENGE_MONEY,
       RETIREMENT_PREP,
@@ -55904,10 +55959,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     const {
-      wrGlobalCondition,
-      wrIndividualCondition,
-      wrDescription,
-      wrMultiplier,
       authorityCapBuildings,
       INFLATION_CHALLENGE_MONEY,
       RETIREMENT_PREP,
@@ -55963,10 +56014,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     publishTestSurface({
       weightingPolicy: {
-        wrGlobalCondition,
-        wrIndividualCondition,
-        wrDescription,
-        wrMultiplier,
         authorityCapBuildings,
         INFLATION_CHALLENGE_MONEY,
         RETIREMENT_PREP,
@@ -56161,10 +56208,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       isVacuumSyphonStage,
       getNiceNumber,
       weightingRules,
-      wrGlobalCondition,
-      wrIndividualCondition,
-      wrDescription,
-      wrMultiplier,
       isEarlyGame,
       getIsPrestigeAllowed: () => isPrestigeAllowed2,
       getBananaRepublicObjectiveComplete: () => bananaRepublicObjectiveComplete,

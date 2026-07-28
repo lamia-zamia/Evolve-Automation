@@ -13,11 +13,15 @@ let earlyGame = false;
 let vacuumSyphonStage = false;
 const prompts = [];
 
-// wr* indices: rule = [globalCond, individualCond, description, multiplier]
-const wr = { g: 0, i: 1, d: 2, m: 3 };
 // One active rule: doubles weighting for buildings flagged `boost`.
 const weightingRules = [
-  [() => true, (b) => (b.boost ? "boosted" : false), () => "note", () => 2],
+  {
+    id: "boost",
+    enabled: () => true,
+    match: (b) => (b.boost ? "boosted" : false),
+    describe: () => "note",
+    multiplier: () => 2,
+  },
 ];
 let niceNumberCalls = 0;
 
@@ -49,10 +53,6 @@ const { JobManager, BuildingManager, ProjectManager, TriggerManager } =
       return String(n);
     },
     weightingRules,
-    wrGlobalCondition: wr.g,
-    wrIndividualCondition: wr.i,
-    wrDescription: wr.d,
-    wrMultiplier: wr.m,
     isEarlyGame: () => earlyGame,
     getIsPrestigeAllowed: () => prestigeAllowed,
     getBananaRepublicObjectiveComplete: () => bananaComplete,

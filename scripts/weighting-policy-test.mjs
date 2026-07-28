@@ -75,44 +75,59 @@ const policy = createBuildingWeightingPolicy({
 });
 
 assert.equal(policy.weightingRules.length, 72);
-assert.deepEqual(
-  [
-    policy.wrGlobalCondition,
-    policy.wrIndividualCondition,
-    policy.wrDescription,
-    policy.wrMultiplier,
-  ],
-  [0, 1, 2, 3],
+assert.equal(
+  policy.weightingRules.every(
+    (rule) =>
+      typeof rule.id === "string" &&
+      rule.id !== "" &&
+      typeof rule.enabled === "function" &&
+      typeof rule.match === "function" &&
+      typeof rule.describe === "function" &&
+      typeof rule.multiplier === "function",
+  ),
+  true,
+  "every weighting rule exposes a stable id and the four named phases",
 );
+assert.equal(
+  new Set(policy.weightingRules.map((rule) => rule.id)).size,
+  policy.weightingRules.length,
+  "weighting rule ids are unique",
+);
+
+const ruleById = (id) => {
+  const rule = policy.weightingRules.find((candidate) => candidate.id === id);
+  assert.ok(rule, `weighting rule "${id}" missing`);
+  return rule;
+};
 assert.equal(policy.authorityCapBuildings[0], buildings.Barracks);
 assert.equal(policy.authorityCapBuildings.at(-1), buildings.AsphodelBunker);
 assert.equal(policy.galaxyCombatShips[0], buildings.ScoutShip);
 assert.equal(policy.galaxyCombatShips.at(-1), buildings.Dreadnought);
 
-const disabledRule = policy.weightingRules[0];
-assert.equal(disabledRule[policy.wrGlobalCondition](), true);
+const disabledRule = ruleById("autobuild-off");
+assert.equal(disabledRule.enabled(), true);
 context = {
   ...context,
   settings: { ...context.settings, autoBuild: true },
 };
-assert.equal(disabledRule[policy.wrGlobalCondition](), false);
-assert.equal(disabledRule[policy.wrIndividualCondition](), true);
-assert.equal(disabledRule[policy.wrMultiplier](), 0);
+assert.equal(disabledRule.enabled(), false);
+assert.equal(disabledRule.match(), true);
+assert.equal(disabledRule.multiplier(), 0);
 
 const candidate = { name: "candidate" };
-const queuedRule = policy.weightingRules[2];
+const queuedRule = ruleById("queued-target");
 context = {
   ...context,
   state: { queuedTargets: [candidate], triggerTargets: [] },
 };
-assert.equal(queuedRule[policy.wrIndividualCondition](candidate), true);
+assert.equal(queuedRule.match(candidate), true);
 context = {
   ...context,
   state: { queuedTargets: [], triggerTargets: [] },
 };
-assert.equal(queuedRule[policy.wrIndividualCondition](candidate), false);
+assert.equal(queuedRule.match(candidate), false);
 
-const digsiteRule = policy.weightingRules[8];
+const digsiteRule = ruleById("eris-digsite-unsecured");
 context = {
   ...context,
   game: {
@@ -128,41 +143,17 @@ context = {
   },
 };
 buildings.ErisDigsite.count = 42;
-assert.equal(digsiteRule[policy.wrGlobalCondition](), true);
-assert.equal(
-  digsiteRule[policy.wrIndividualCondition](buildings.ErisDrone),
-  true,
-);
-assert.equal(
-  digsiteRule[policy.wrIndividualCondition](buildings.ErisTank),
-  true,
-);
-assert.equal(
-  digsiteRule[policy.wrIndividualCondition](buildings.ErisTrooper),
-  true,
-);
-assert.equal(
-  digsiteRule[policy.wrIndividualCondition](buildings.ErisMission),
-  false,
-);
-assert.equal(
-  digsiteRule[policy.wrDescription](),
-  "Eris Digsite is not yet secured",
-);
-assert.equal(digsiteRule[policy.wrMultiplier](), 10);
+assert.equal(digsiteRule.enabled(), true);
+assert.equal(digsiteRule.match(buildings.ErisDrone), true);
+assert.equal(digsiteRule.match(buildings.ErisTank), true);
+assert.equal(digsiteRule.match(buildings.ErisTrooper), true);
+assert.equal(digsiteRule.match(buildings.ErisMission), false);
+assert.equal(digsiteRule.describe(), "Eris Digsite is not yet secured");
+assert.equal(digsiteRule.multiplier(), 10);
 buildings.ErisDigsite.count = 100;
-assert.equal(digsiteRule[policy.wrGlobalCondition](), false);
+assert.equal(digsiteRule.enabled(), false);
 
-const authorityRule = policy.weightingRules.find((rule) => {
-  try {
-    return (
-      rule[policy.wrDescription]() ===
-      "Raises Authority cap, currently below target"
-    );
-  } catch {
-    return false;
-  }
-});
+const authorityRule = ruleById("authority-cap");
 context = {
   ...context,
   settings: {
@@ -178,32 +169,20 @@ context = {
     },
   },
 };
-assert.equal(authorityRule[policy.wrGlobalCondition](), true);
-assert.equal(
-  authorityRule[policy.wrIndividualCondition](buildings.Barracks),
-  true,
-);
+assert.equal(authorityRule.enabled(), true);
+assert.equal(authorityRule.match(buildings.Barracks), true);
 context.settings.authorityManage = false;
-assert.equal(authorityRule[policy.wrGlobalCondition](), false);
+assert.equal(authorityRule.enabled(), false);
 
-const piracyRule = policy.weightingRules[10];
+const piracyRule = ruleById("piracy-fully-supressed");
 haveTech = (id) => id === "piracy";
-assert.equal(piracyRule[policy.wrGlobalCondition](), true);
+assert.equal(piracyRule.enabled(), true);
 haveTech = () => false;
-assert.equal(piracyRule[policy.wrGlobalCondition](), false);
+assert.equal(piracyRule.enabled(), false);
 
 // Fuel-depot rule triggers on techMissionMaxCost, not the broad maxCost. A high
 // maxCost from late-game buildings/projects with no tech/mission demand must not fire it.
-const fuelDepotRule = policy.weightingRules.find((rule) => {
-  try {
-    return (
-      rule[policy.wrDescription]() === "Need more fuel" &&
-      rule[policy.wrIndividualCondition](buildings.OilDepot) === true
-    );
-  } catch {
-    return false;
-  }
-});
+const fuelDepotRule = ruleById("need-more-fuel-storage");
 context = {
   ...context,
   resources: {
@@ -215,24 +194,17 @@ context = {
     Oil: { maxQuantity: 100, maxCost: 999999, techMissionMaxCost: 0 },
   },
 };
-assert.equal(fuelDepotRule[policy.wrGlobalCondition](), false);
+assert.equal(fuelDepotRule.enabled(), false);
 context.resources.Oil.techMissionMaxCost = 500;
-assert.equal(fuelDepotRule[policy.wrGlobalCondition](), true);
-assert.equal(
-  fuelDepotRule[policy.wrIndividualCondition](buildings.SpacePropellantDepot),
-  true,
-);
-assert.equal(
-  fuelDepotRule[policy.wrIndividualCondition](buildings.Mine),
-  false,
-);
+assert.equal(fuelDepotRule.enabled(), true);
+assert.equal(fuelDepotRule.match(buildings.SpacePropellantDepot), true);
+assert.equal(fuelDepotRule.match(buildings.Mine), false);
 
 // A reserved Soul Gem target can leave currentQuantity affordable while the
 // mech itself is not affordable from the spare quantity. Supply buildings
 // must remain buildable in that state instead of being pinned for a mech that
 // cannot yet be built.
-const mechSavingRule = policy.weightingRules[12];
-assert.ok(mechSavingRule, "mech-saving weighting rule missing");
+const mechSavingRule = ruleById("mech-supply-saving");
 context = {
   ...context,
   settings: {
@@ -267,49 +239,35 @@ context = {
   },
 };
 assert.equal(
-  mechSavingRule[policy.wrIndividualCondition]({ cost: { Supply: 1 } }),
+  mechSavingRule.match({ cost: { Supply: 1 } }),
   "Saving supplies for new mech",
   "distant reservations should not block an otherwise affordable mech",
 );
 context.resources.Soul_Gem.rateOfChange = 0.02;
 context.resources.Soul_Gem.spareQuantity = 0;
 assert.equal(
-  mechSavingRule[policy.wrIndividualCondition]({ cost: { Supply: 1 } }),
+  mechSavingRule.match({ cost: { Supply: 1 } }),
   undefined,
   "near-term reservations must still release Supply buildings",
 );
 context.resources.Soul_Gem.spareQuantity = 1;
 assert.equal(
-  mechSavingRule[policy.wrIndividualCondition]({ cost: { Supply: 1 } }),
+  mechSavingRule.match({ cost: { Supply: 1 } }),
   "Saving supplies for new mech",
   "spare-affordable mechs should still protect Supply buildings",
 );
 
 context.settings.achievementGuards = true;
 guardActive = (setting) => setting === "guardRedDead";
-const achievementGuardRule = policy.weightingRules.find((rule) => {
-  try {
-    return (
-      rule[policy.wrIndividualCondition](context.buildings.RedSpaceport) ===
-      "Red Dead"
-    );
-  } catch {
-    return false;
-  }
-});
-assert.ok(achievementGuardRule, "achievement guard weighting rule missing");
+const achievementGuardRule = ruleById("achievement-guard");
 assert.equal(
-  achievementGuardRule[policy.wrIndividualCondition](
-    context.buildings.RedSpaceport,
-  ),
+  achievementGuardRule.match(context.buildings.RedSpaceport),
   "Red Dead",
 );
 for (const goal of ["world-domination", "syndicate"]) {
   foreignAchievementGoal = goal;
   assert.equal(
-    achievementGuardRule[policy.wrIndividualCondition](
-      context.buildings.RedSpaceport,
-    ),
+    achievementGuardRule.match(context.buildings.RedSpaceport),
     false,
     `${goal} must be able to build the Red Spaceport needed to unlock unification`,
   );
@@ -318,34 +276,23 @@ foreignAchievementGoal = null;
 guardActive = (setting) =>
   setting === "guardRedDead" || setting === "guardPacifist";
 assert.equal(
-  achievementGuardRule[policy.wrIndividualCondition](
-    context.buildings.RedSpaceport,
-  ),
+  achievementGuardRule.match(context.buildings.RedSpaceport),
   false,
   "Pacifist must be able to build the Red Spaceport needed for unification",
 );
 
-const vacuumManaRule = policy.weightingRules.at(-1);
+const vacuumManaRule = ruleById("vacuum-collapse-mana-producer");
 context.settings = {
   ...context.settings,
   prestigeType: "vacuum",
   buildingWeightingVacuumCollapse: 10,
 };
-assert.equal(vacuumManaRule[policy.wrGlobalCondition](), true);
-assert.equal(
-  vacuumManaRule[policy.wrIndividualCondition](context.buildings.Pylon),
-  true,
-);
-assert.equal(
-  vacuumManaRule[policy.wrIndividualCondition](context.buildings.Bank),
-  false,
-);
-assert.equal(
-  vacuumManaRule[policy.wrDescription](),
-  "Vacuum Collapse Mana producer",
-);
-assert.equal(vacuumManaRule[policy.wrMultiplier](), 10);
+assert.equal(vacuumManaRule.enabled(), true);
+assert.equal(vacuumManaRule.match(context.buildings.Pylon), true);
+assert.equal(vacuumManaRule.match(context.buildings.Bank), false);
+assert.equal(vacuumManaRule.describe(), "Vacuum Collapse Mana producer");
+assert.equal(vacuumManaRule.multiplier(), 10);
 context.settings.prestigeType = "mad";
-assert.equal(vacuumManaRule[policy.wrGlobalCondition](), false);
+assert.equal(vacuumManaRule.enabled(), false);
 
 console.log("Weighting policy module tests passed");

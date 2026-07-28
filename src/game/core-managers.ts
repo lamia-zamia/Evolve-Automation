@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { TickDiagnostics } from "../ports/tick.ts";
+import type { BuildingWeightingRule } from "../ports/building-weighting.ts";
 
 interface CoreManagersDependencies {
   getGame: () => any;
@@ -9,11 +10,7 @@ interface CoreManagersDependencies {
   getProjects: () => Record<string, any>;
   isVacuumSyphonStage: () => boolean;
   getNiceNumber: (value: number) => string;
-  weightingRules: any[];
-  wrGlobalCondition: number;
-  wrIndividualCondition: number;
-  wrDescription: number;
-  wrMultiplier: number;
+  weightingRules: readonly BuildingWeightingRule[];
   isEarlyGame: () => boolean;
   getIsPrestigeAllowed: () => (prestige: string) => boolean;
   getBananaRepublicObjectiveComplete: () => (objective: string) => boolean;
@@ -32,10 +29,6 @@ export function createCoreManagers({
   isVacuumSyphonStage,
   getNiceNumber,
   weightingRules,
-  wrGlobalCondition,
-  wrIndividualCondition,
-  wrDescription,
-  wrMultiplier,
   isEarlyGame,
   getIsPrestigeAllowed,
   getBananaRepublicObjectiveComplete,
@@ -143,7 +136,7 @@ export function createCoreManagers({
         "autoBuild.beginCycle.updateBuildingWeighting.selectRules",
         () =>
           weightingRules.filter(
-            (rule) => rule[wrGlobalCondition]() && rule[wrMultiplier]() !== 1,
+            (rule) => rule.enabled() && rule.multiplier() !== 1,
           ),
       );
 
@@ -153,15 +146,15 @@ export function createCoreManagers({
           building.weighting = building._weighting;
 
           // Apply weighting rules
-          for (let j = 0; j < activeRules.length; j++) {
-            let result = activeRules[j][wrIndividualCondition](building);
+          for (const rule of activeRules) {
+            const result = rule.match(building);
             // Rule passed
             if (result) {
-              let note = activeRules[j][wrDescription](result, building);
+              const note = rule.describe(result, building);
               if (note !== "") {
                 building.extraDescription += note + "<br>";
               }
-              building.weighting *= activeRules[j][wrMultiplier](result);
+              building.weighting *= rule.multiplier(result);
 
               // Last rule disabled building, no need to check the rest
               if (building.weighting <= 0) {

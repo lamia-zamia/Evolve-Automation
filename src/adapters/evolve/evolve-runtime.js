@@ -2937,10 +2937,6 @@ function startEvolveRuntimeComposition(
   });
 
   const {
-    wrGlobalCondition,
-    wrIndividualCondition,
-    wrDescription,
-    wrMultiplier,
     authorityCapBuildings,
     INFLATION_CHALLENGE_MONEY,
     RETIREMENT_PREP,
@@ -3001,10 +2997,6 @@ function startEvolveRuntimeComposition(
 
   publishTestSurface({
     weightingPolicy: {
-      wrGlobalCondition,
-      wrIndividualCondition,
-      wrDescription,
-      wrMultiplier,
       authorityCapBuildings,
       INFLATION_CHALLENGE_MONEY,
       RETIREMENT_PREP,
@@ -3224,10 +3216,6 @@ function startEvolveRuntimeComposition(
       isVacuumSyphonStage,
       getNiceNumber,
       weightingRules,
-      wrGlobalCondition,
-      wrIndividualCondition,
-      wrDescription,
-      wrMultiplier,
       isEarlyGame,
       getIsPrestigeAllowed: () => isPrestigeAllowed,
       getBananaRepublicObjectiveComplete: () => bananaRepublicObjectiveComplete,
