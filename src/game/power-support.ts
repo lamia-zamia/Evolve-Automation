@@ -3,17 +3,28 @@ type ActiveEntry = { stateOnCount: number };
 type AdjustableEntry = ActiveEntry & {
   tryAdjustState: (amount: number) => void;
 };
+type SmartEntry = { isSmartManaged: () => boolean };
+type PrebuiltEntry = CountEntry & { autoMax: number };
+
+/** Whether each spire building is still short of its prebuild target. */
+export type SpirePrebuildShortfall = {
+  ports: boolean;
+  baseCamps: boolean;
+};
 
 type PowerSupportDependencies = {
   getGame: () => { global: { race: Record<string, unknown> } };
   getJobs: () => { Archaeologist: CountEntry };
   getCrafter: () => { Scarletite: CountEntry };
+  getResources: () => { Spire_Support: { maxQuantity: number } };
   getBuildings: () => {
     RuinsArcology: ActiveEntry;
     GateInferniteMine: ActiveEntry;
-    SpireMechBay: AdjustableEntry;
-    SpirePort: AdjustableEntry;
-    SpireBaseCamp: AdjustableEntry;
+    NeutronCitadel: CountEntry;
+    SpireMechBay: AdjustableEntry & SmartEntry;
+    SpirePurifier: SmartEntry;
+    SpirePort: AdjustableEntry & PrebuiltEntry;
+    SpireBaseCamp: AdjustableEntry & PrebuiltEntry;
   };
 };
 
@@ -21,6 +32,7 @@ export function createPowerSupport({
   getGame,
   getJobs,
   getCrafter,
+  getResources,
   getBuildings,
 }: PowerSupportDependencies) {
   function getCitadelConsumption(amount: number) {
@@ -76,10 +88,42 @@ export function createPowerSupport({
     return [supplies, bestPort, bestCamp];
   }
 
+  // Power one more Neutron Citadel would draw. Consumption grows superlinearly
+  // with the built count, so the draw of the next one is the difference between
+  // the totals either side of it.
+  function nextCitadelPowerDraw(): number {
+    const count = getBuildings().NeutronCitadel.count;
+    return getCitadelConsumption(count + 1) - getCitadelConsumption(count);
+  }
+
+  // Ports and base camps are worth prebuilding to their optimal supply ratio so
+  // they are ready when smart logic enables them. When neither the mech bay nor
+  // the purifier is smart managed that never happens, so nothing is prebuilt.
+  function spirePrebuildShortfall(): SpirePrebuildShortfall {
+    const buildings = getBuildings();
+    if (
+      !buildings.SpireMechBay.isSmartManaged() &&
+      !buildings.SpirePurifier.isSmartManaged()
+    ) {
+      return { ports: false, baseCamps: false };
+    }
+    const [, bestPorts, bestCamps] = getBestSupplyRatio(
+      getResources().Spire_Support.maxQuantity,
+      buildings.SpirePort.autoMax,
+      buildings.SpireBaseCamp.autoMax,
+    );
+    return {
+      ports: buildings.SpirePort.count < bestPorts,
+      baseCamps: buildings.SpireBaseCamp.count < bestCamps,
+    };
+  }
+
   return {
     getCitadelConsumption,
     isHellSupressUseful,
     adjustSpire,
     getBestSupplyRatio,
+    nextCitadelPowerDraw,
+    spirePrebuildShortfall,
   };
 }

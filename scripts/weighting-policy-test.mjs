@@ -55,6 +55,9 @@ const snapshotOf = (overrides = {}) =>
     gateTowerSupressionTooLow: false,
     gateDemonsSupressed: false,
     hellGuardPostPrebuildIncomplete: false,
+    spirePortPrebuildIncomplete: false,
+    spireBaseCampPrebuildIncomplete: false,
+    nextCitadelPowerDraw: 0,
     geckNeeded: false,
     prestigeEdenAllowed: false,
     prestigeRetireAllowed: false,
@@ -68,7 +71,6 @@ const snapshotOf = (overrides = {}) =>
   });
 const emptySnapshot = snapshotOf();
 let haveTech = () => false;
-const neutralFunction = () => false;
 
 const policy = createBuildingWeightingPolicy({
   getGame: () => context.game,
@@ -78,8 +80,6 @@ const policy = createBuildingWeightingPolicy({
   getHaveTech: () => haveTech,
   getNumberStringFn: () => String,
   getNiceNumberFn: () => String,
-  getBestSupplyRatioFn: () => neutralFunction,
-  getCitadelConsumptionFn: () => neutralFunction,
   ResourceAction,
   randomSource: { nextUnit: () => 0.5 },
 });
@@ -561,5 +561,57 @@ assert.equal(vacuumManaRule.describe(), "Vacuum Collapse Mana producer");
 assert.equal(vacuumManaRule.multiplier(), 10);
 context.settings.prestigeType = "mad";
 assert.equal(vacuumManaRule.enabled(), false);
+
+// Spire ports and base camps below their prebuild target are exempt from the
+// non-operating penalty, and each reads only the answer that names it.
+context.buildings = {
+  ...context.buildings,
+  SpirePort: { _vueBinding: "SpirePort", _tab: "portal", stateOffCount: 1 },
+  SpireBaseCamp: {
+    _vueBinding: "SpireBaseCamp",
+    _tab: "portal",
+    stateOffCount: 1,
+  },
+};
+const spirePort = context.buildings.SpirePort;
+const spireBaseCamp = context.buildings.SpireBaseCamp;
+const portShort = snapshotOf({ spirePortPrebuildIncomplete: true });
+const campShort = snapshotOf({ spireBaseCampPrebuildIncomplete: true });
+assert.equal(nonOperatingRule.match(spirePort, emptySnapshot), true);
+assert.equal(nonOperatingRule.match(spirePort, portShort), false);
+assert.equal(nonOperatingRule.match(spirePort, campShort), true);
+assert.equal(nonOperatingRule.match(spireBaseCamp, emptySnapshot), true);
+assert.equal(nonOperatingRule.match(spireBaseCamp, campShort), false);
+assert.equal(nonOperatingRule.match(spireBaseCamp, portShort), true);
+
+// The Neutron Citadel is judged by the snapshot's marginal draw; every other
+// powered building by its own consumption.
+context.resources = {
+  ...context.resources,
+  Power: { isUnlocked: () => true, currentQuantity: 50 },
+};
+context.buildings = {
+  ...context.buildings,
+  NeutronCitadel: { _vueBinding: "NeutronCitadel", powered: 5 },
+};
+const energyRule = ruleById("not-enough-energy");
+const citadel = context.buildings.NeutronCitadel;
+assert.equal(energyRule.enabled(), true);
+assert.equal(
+  energyRule.match(citadel, snapshotOf({ nextCitadelPowerDraw: 60 })),
+  true,
+);
+assert.equal(
+  energyRule.match(citadel, snapshotOf({ nextCitadelPowerDraw: 40 })),
+  false,
+);
+assert.equal(
+  energyRule.match({ _vueBinding: "Factory", powered: 60 }, emptySnapshot),
+  true,
+);
+assert.equal(
+  energyRule.match({ _vueBinding: "Factory", powered: 40 }, emptySnapshot),
+  false,
+);
 
 console.log("Weighting policy module tests passed");

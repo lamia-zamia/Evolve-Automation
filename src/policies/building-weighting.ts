@@ -16,8 +16,6 @@ type BuildingWeightingDependencies = {
   getHaveTech: () => LooseFunction;
   getNumberStringFn: () => LooseFunction;
   getNiceNumberFn: () => LooseFunction;
-  getBestSupplyRatioFn: () => LooseFunction;
-  getCitadelConsumptionFn: () => LooseFunction;
   ResourceAction: LooseConstructor;
   randomSource: RandomSource;
 };
@@ -30,8 +28,6 @@ export function createBuildingWeightingPolicy({
   getHaveTech,
   getNumberStringFn,
   getNiceNumberFn,
-  getBestSupplyRatioFn,
-  getCitadelConsumptionFn,
   ResourceAction,
   randomSource,
 }: BuildingWeightingDependencies) {
@@ -39,10 +35,6 @@ export function createBuildingWeightingPolicy({
   const getNumberString: LooseFunction = (...args) =>
     getNumberStringFn()(...args);
   const getNiceNumber: LooseFunction = (...args) => getNiceNumberFn()(...args);
-  const getBestSupplyRatio: LooseFunction = (...args) =>
-    getBestSupplyRatioFn()(...args);
-  const getCitadelConsumption: LooseFunction = (...args) =>
-    getCitadelConsumptionFn()(...args);
 
   const authorityCapBuildings = [
     getBuildings().Barracks,
@@ -804,28 +796,14 @@ export function createBuildingWeightingPolicy({
           // Prebuild guard posts. Even if we don't need supression right now they will be useful soon enough
           return false;
         }
-        let supplyIndex =
-          building === getBuildings().SpirePort
-            ? 1
-            : building === getBuildings().SpireBaseCamp
-              ? 2
-              : -1;
         if (
-          supplyIndex > 0 &&
-          (getBuildings().SpireMechBay.isSmartManaged() ||
-            getBuildings().SpirePurifier.isSmartManaged())
+          (building === getBuildings().SpirePort &&
+            snapshot.spirePortPrebuildIncomplete) ||
+          (building === getBuildings().SpireBaseCamp &&
+            snapshot.spireBaseCampPrebuildIncomplete)
         ) {
-          // Prebuild ports and base camps to their optimal ratios, they will be enabled when needed. Unless mech bay and purifiers both have their smarts disabled, which means it won't ever happen.
-          if (
-            building.count <
-            getBestSupplyRatio(
-              getResources().Spire_Support.maxQuantity,
-              getBuildings().SpirePort.autoMax,
-              getBuildings().SpireBaseCamp.autoMax,
-            )[supplyIndex]
-          ) {
-            return false;
-          }
+          // Prebuild ports and base camps to their optimal ratios, they will be enabled when needed.
+          return false;
         }
         if (building._tab !== "city" && building.stateOffCount > 0) {
           // This thing not from city, switchable, and some of them disabled. We dont't need more at the moment.
@@ -980,12 +958,11 @@ export function createBuildingWeightingPolicy({
     {
       id: "not-enough-energy",
       enabled: () => getResources().Power.isUnlocked(),
-      match: (building: any) =>
+      match: (building: any, snapshot) =>
         building !== getBuildings().LakeCoolingTower &&
         building.powered > 0 &&
         (building === getBuildings().NeutronCitadel
-          ? getCitadelConsumption(building.count + 1) -
-            getCitadelConsumption(building.count)
+          ? snapshot.nextCitadelPowerDraw
           : building.powered) > getResources().Power.currentQuantity,
       describe: () => "Not enough energy",
       multiplier: () => getSettings().buildingWeightingUnderpowered,

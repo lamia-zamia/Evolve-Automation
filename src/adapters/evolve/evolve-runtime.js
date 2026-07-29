@@ -2435,10 +2435,13 @@ function startEvolveRuntimeComposition(
     isHellSupressUseful,
     adjustSpire,
     getBestSupplyRatio,
+    nextCitadelPowerDraw,
+    spirePrebuildShortfall,
   } = createPowerSupport({
     getGame: () => game,
     getJobs: () => jobs,
     getCrafter: () => crafter,
+    getResources: () => resources,
     getBuildings: () => buildings,
   });
   let {
@@ -2979,8 +2982,6 @@ function startEvolveRuntimeComposition(
     getHaveTech: () => haveTech,
     getNumberStringFn: () => getNumberString,
     getNiceNumberFn: () => getNiceNumber,
-    getBestSupplyRatioFn: () => getBestSupplyRatio,
-    getCitadelConsumptionFn: () => getCitadelConsumption,
     ResourceAction,
     randomSource,
   });
@@ -3247,6 +3248,8 @@ function startEvolveRuntimeComposition(
         isGateTowerSupressionTooLow: () => gateTowerSupressionTooLow(),
         isGateDemonsSupressed: () => gateDemonsSupressed(),
         isGuardPostPrebuildIncomplete: () => guardPostPrebuildIncomplete(),
+        getSpirePrebuildShortfall: () => spirePrebuildShortfall(),
+        getNextCitadelPowerDraw: () => nextCitadelPowerDraw(),
         isGECKNeeded: () => isGECKNeeded(),
         isPrestigeAllowed: (prestige) => isPrestigeAllowed(prestige),
         isPillarFinished: () => isPillarFinished(),

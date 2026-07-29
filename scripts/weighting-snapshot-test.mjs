@@ -28,6 +28,8 @@ const defaultGates = () => ({
   isGateTowerSupressionTooLow: off,
   isGateDemonsSupressed: off,
   isGuardPostPrebuildIncomplete: off,
+  getSpirePrebuildShortfall: () => ({ ports: false, baseCamps: false }),
+  getNextCitadelPowerDraw: () => 30,
   isGECKNeeded: off,
   isPrestigeAllowed: off,
   isPillarFinished: off,
@@ -72,6 +74,9 @@ assert.equal(empty.hellSupressUseful, false);
 assert.equal(empty.gateTowerSupressionTooLow, false);
 assert.equal(empty.gateDemonsSupressed, false);
 assert.equal(empty.hellGuardPostPrebuildIncomplete, false);
+assert.equal(empty.spirePortPrebuildIncomplete, false);
+assert.equal(empty.spireBaseCampPrebuildIncomplete, false);
+assert.equal(empty.nextCitadelPowerDraw, 30);
 assert.equal(empty.geckNeeded, false);
 assert.equal(empty.prestigeEdenAllowed, false);
 assert.equal(empty.prestigeRetireAllowed, false);
@@ -134,6 +139,8 @@ gates = {
   isGateTowerSupressionTooLow: () => true,
   isGateDemonsSupressed: () => true,
   isGuardPostPrebuildIncomplete: () => true,
+  getSpirePrebuildShortfall: () => ({ ports: true, baseCamps: false }),
+  getNextCitadelPowerDraw: () => 172.5,
   isGECKNeeded: () => true,
   isPrestigeAllowed: (prestige) => {
     askedPrestiges.push(prestige);
@@ -172,6 +179,9 @@ assert.equal(gated.hellSupressUseful, true);
 assert.equal(gated.gateTowerSupressionTooLow, true);
 assert.equal(gated.gateDemonsSupressed, true);
 assert.equal(gated.hellGuardPostPrebuildIncomplete, true);
+assert.equal(gated.spirePortPrebuildIncomplete, true);
+assert.equal(gated.spireBaseCampPrebuildIncomplete, false);
+assert.equal(gated.nextCitadelPowerDraw, 172.5);
 assert.equal(gated.geckNeeded, true);
 assert.equal(gated.prestigeEdenAllowed, true);
 assert.equal(gated.prestigeRetireAllowed, false);
@@ -280,6 +290,26 @@ rejectsGate(
     getRetirementPreparationMissing: () => "none",
   },
   "getRetirementPreparationMissing() must be an array",
+);
+rejectsGate(
+  { getSpirePrebuildShortfall: () => null },
+  "getSpirePrebuildShortfall() must be an object",
+);
+rejectsGate(
+  { getSpirePrebuildShortfall: () => ({ baseCamps: false }) },
+  "getSpirePrebuildShortfall().ports must be a boolean",
+);
+rejectsGate(
+  { getSpirePrebuildShortfall: () => ({ ports: true, baseCamps: 1 }) },
+  "getSpirePrebuildShortfall().baseCamps must be a boolean",
+);
+rejectsGate(
+  { getNextCitadelPowerDraw: () => Number.NaN },
+  "getNextCitadelPowerDraw() must be a finite number",
+);
+rejectsGate(
+  { getNextCitadelPowerDraw: () => "30" },
+  "getNextCitadelPowerDraw() must be a finite number",
 );
 rejectsGate(
   { isMadPrestigeAwaited: () => "mad" },

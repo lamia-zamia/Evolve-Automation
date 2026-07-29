@@ -27,6 +27,8 @@ export interface WeightingSnapshotDependencies {
   readonly isGateTowerSupressionTooLow: () => unknown;
   readonly isGateDemonsSupressed: () => unknown;
   readonly isGuardPostPrebuildIncomplete: () => unknown;
+  readonly getSpirePrebuildShortfall: () => unknown;
+  readonly getNextCitadelPowerDraw: () => unknown;
   readonly isGECKNeeded: () => unknown;
   readonly isPrestigeAllowed: (prestige: string) => unknown;
   readonly isPillarFinished: () => unknown;
@@ -103,6 +105,8 @@ export function createWeightingSnapshotReader({
   isGateTowerSupressionTooLow,
   isGateDemonsSupressed,
   isGuardPostPrebuildIncomplete,
+  getSpirePrebuildShortfall,
+  getNextCitadelPowerDraw,
   isGECKNeeded,
   isPrestigeAllowed,
   isPillarFinished,
@@ -115,6 +119,10 @@ export function createWeightingSnapshotReader({
     const retirementAssistActive = requireBoolean(
       isRetirementAssistActive(),
       "isRetirementAssistActive()",
+    );
+    const spirePrebuild = requireRecord(
+      getSpirePrebuildShortfall(),
+      "getSpirePrebuildShortfall()",
     );
     return Object.freeze({
       queuedTargets: new Set(
@@ -203,6 +211,18 @@ export function createWeightingSnapshotReader({
       hellGuardPostPrebuildIncomplete: requireBoolean(
         isGuardPostPrebuildIncomplete(),
         "isGuardPostPrebuildIncomplete()",
+      ),
+      spirePortPrebuildIncomplete: requireBoolean(
+        spirePrebuild["ports"],
+        "getSpirePrebuildShortfall().ports",
+      ),
+      spireBaseCampPrebuildIncomplete: requireBoolean(
+        spirePrebuild["baseCamps"],
+        "getSpirePrebuildShortfall().baseCamps",
+      ),
+      nextCitadelPowerDraw: requireNumber(
+        getNextCitadelPowerDraw(),
+        "getNextCitadelPowerDraw()",
       ),
       geckNeeded: requireBoolean(isGECKNeeded(), "isGECKNeeded()"),
       prestigeEdenAllowed: requireBoolean(

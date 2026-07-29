@@ -6451,6 +6451,7 @@
     getGame,
     getJobs,
     getCrafter,
+    getResources,
     getBuildings
   }) {
     function getCitadelConsumption(amount) {
@@ -6488,11 +6489,32 @@
       const supplies = Math.round(bestPort * (1 + bestCamp * 0.4) * 1e4 + 100);
       return [supplies, bestPort, bestCamp];
     }
+    function nextCitadelPowerDraw() {
+      const count2 = getBuildings().NeutronCitadel.count;
+      return getCitadelConsumption(count2 + 1) - getCitadelConsumption(count2);
+    }
+    function spirePrebuildShortfall() {
+      const buildings = getBuildings();
+      if (!buildings.SpireMechBay.isSmartManaged() && !buildings.SpirePurifier.isSmartManaged()) {
+        return { ports: false, baseCamps: false };
+      }
+      const [, bestPorts, bestCamps] = getBestSupplyRatio(
+        getResources().Spire_Support.maxQuantity,
+        buildings.SpirePort.autoMax,
+        buildings.SpireBaseCamp.autoMax
+      );
+      return {
+        ports: buildings.SpirePort.count < bestPorts,
+        baseCamps: buildings.SpireBaseCamp.count < bestCamps
+      };
+    }
     return {
       getCitadelConsumption,
       isHellSupressUseful,
       adjustSpire,
-      getBestSupplyRatio
+      getBestSupplyRatio,
+      nextCitadelPowerDraw,
+      spirePrebuildShortfall
     };
   }
 
@@ -23795,16 +23817,12 @@
     getHaveTech,
     getNumberStringFn,
     getNiceNumberFn,
-    getBestSupplyRatioFn,
-    getCitadelConsumptionFn,
     ResourceAction,
     randomSource
   }) {
     const haveTech = (...args) => getHaveTech()(...args);
     const getNumberString = (...args) => getNumberStringFn()(...args);
     const getNiceNumber = (...args) => getNiceNumberFn()(...args);
-    const getBestSupplyRatio = (...args) => getBestSupplyRatioFn()(...args);
-    const getCitadelConsumption = (...args) => getCitadelConsumptionFn()(...args);
     const authorityCapBuildings = [
       getBuildings().Barracks,
       getBuildings().Temple,
@@ -24352,15 +24370,8 @@
           if (building3 === getBuildings().RuinsGuardPost && building3.isSmartManaged() && !snapshot.hellSupressUseful && snapshot.hellGuardPostPrebuildIncomplete) {
             return false;
           }
-          let supplyIndex = building3 === getBuildings().SpirePort ? 1 : building3 === getBuildings().SpireBaseCamp ? 2 : -1;
-          if (supplyIndex > 0 && (getBuildings().SpireMechBay.isSmartManaged() || getBuildings().SpirePurifier.isSmartManaged())) {
-            if (building3.count < getBestSupplyRatio(
-              getResources().Spire_Support.maxQuantity,
-              getBuildings().SpirePort.autoMax,
-              getBuildings().SpireBaseCamp.autoMax
-            )[supplyIndex]) {
-              return false;
-            }
+          if (building3 === getBuildings().SpirePort && snapshot.spirePortPrebuildIncomplete || building3 === getBuildings().SpireBaseCamp && snapshot.spireBaseCampPrebuildIncomplete) {
+            return false;
           }
           if (building3._tab !== "city" && building3.stateOffCount > 0) {
             return true;
@@ -24470,7 +24481,7 @@
       {
         id: "not-enough-energy",
         enabled: () => getResources().Power.isUnlocked(),
-        match: (building3) => building3 !== getBuildings().LakeCoolingTower && building3.powered > 0 && (building3 === getBuildings().NeutronCitadel ? getCitadelConsumption(building3.count + 1) - getCitadelConsumption(building3.count) : building3.powered) > getResources().Power.currentQuantity,
+        match: (building3, snapshot) => building3 !== getBuildings().LakeCoolingTower && building3.powered > 0 && (building3 === getBuildings().NeutronCitadel ? snapshot.nextCitadelPowerDraw : building3.powered) > getResources().Power.currentQuantity,
         describe: () => "Not enough energy",
         multiplier: () => getSettings().buildingWeightingUnderpowered
       },
@@ -24643,6 +24654,8 @@
     isGateTowerSupressionTooLow,
     isGateDemonsSupressed,
     isGuardPostPrebuildIncomplete,
+    getSpirePrebuildShortfall,
+    getNextCitadelPowerDraw,
     isGECKNeeded,
     isPrestigeAllowed: isPrestigeAllowed2,
     isPillarFinished: isPillarFinished2,
@@ -24655,6 +24668,10 @@
       const retirementAssistActive = requireBoolean(
         isRetirementAssistActive2(),
         "isRetirementAssistActive()"
+      );
+      const spirePrebuild = requireRecord(
+        getSpirePrebuildShortfall(),
+        "getSpirePrebuildShortfall()"
       );
       return Object.freeze({
         queuedTargets: new Set(
@@ -24741,6 +24758,18 @@
         hellGuardPostPrebuildIncomplete: requireBoolean(
           isGuardPostPrebuildIncomplete(),
           "isGuardPostPrebuildIncomplete()"
+        ),
+        spirePortPrebuildIncomplete: requireBoolean(
+          spirePrebuild["ports"],
+          "getSpirePrebuildShortfall().ports"
+        ),
+        spireBaseCampPrebuildIncomplete: requireBoolean(
+          spirePrebuild["baseCamps"],
+          "getSpirePrebuildShortfall().baseCamps"
+        ),
+        nextCitadelPowerDraw: requireNumber(
+          getNextCitadelPowerDraw(),
+          "getNextCitadelPowerDraw()"
         ),
         geckNeeded: requireBoolean(isGECKNeeded(), "isGECKNeeded()"),
         prestigeEdenAllowed: requireBoolean(
@@ -55479,11 +55508,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getCitadelConsumption,
       isHellSupressUseful,
       adjustSpire,
-      getBestSupplyRatio
+      getBestSupplyRatio,
+      nextCitadelPowerDraw,
+      spirePrebuildShortfall
     } = createPowerSupport({
       getGame: () => game,
       getJobs: () => jobs,
       getCrafter: () => crafter,
+      getResources: () => resources,
       getBuildings: () => buildings
     });
     let {
@@ -55991,8 +56023,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => haveTech,
       getNumberStringFn: () => getNumberString,
       getNiceNumberFn: () => getNiceNumber,
-      getBestSupplyRatioFn: () => getBestSupplyRatio,
-      getCitadelConsumptionFn: () => getCitadelConsumption,
       ResourceAction,
       randomSource
     });
@@ -56228,6 +56258,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         isGateTowerSupressionTooLow: () => gateTowerSupressionTooLow(),
         isGateDemonsSupressed: () => gateDemonsSupressed(),
         isGuardPostPrebuildIncomplete: () => guardPostPrebuildIncomplete(),
+        getSpirePrebuildShortfall: () => spirePrebuildShortfall(),
+        getNextCitadelPowerDraw: () => nextCitadelPowerDraw(),
         isGECKNeeded: () => isGECKNeeded(),
         isPrestigeAllowed: (prestige) => isPrestigeAllowed2(prestige),
         isPillarFinished: () => isPillarFinished2(),

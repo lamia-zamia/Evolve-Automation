@@ -49,6 +49,15 @@ export type BuildingWeightingSnapshot = {
   readonly gateDemonsSupressed: boolean;
   /** Ruins Guard Posts have not yet reached their prebuild supression target. */
   readonly hellGuardPostPrebuildIncomplete: boolean;
+  /** Spire Ports are still below the port share of the optimal supply ratio. */
+  readonly spirePortPrebuildIncomplete: boolean;
+  /** Spire Base Camps are still below the camp share of the optimal supply ratio. */
+  readonly spireBaseCampPrebuildIncomplete: boolean;
+  /**
+   * Power one more Neutron Citadel would draw. Only the citadel candidate reads
+   * it; the value is still defined, and meaningless, before the citadel exists.
+   */
+  readonly nextCitadelPowerDraw: number;
   readonly geckNeeded: boolean;
   readonly prestigeEdenAllowed: boolean;
   readonly prestigeRetireAllowed: boolean;
