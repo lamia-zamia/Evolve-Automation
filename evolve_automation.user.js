@@ -6291,11 +6291,31 @@
       }
       return allRegions;
     }
+    function stargatePiracySupressed() {
+      const piracy = getGame().global.tech.piracy;
+      if (!piracy) {
+        return false;
+      }
+      const instinct = getGame().global.race["instinct"];
+      return getBuildings().StargateDefensePlatform.count * 20 >= (instinct ? 0.09 : 0.1) * piracy * getPiracyMultiplier();
+    }
+    function galaxyPiracyCoveredByFleet() {
+      if (!getGame().global.tech.piracy) {
+        return false;
+      }
+      const totalNeed = getGalaxyRegions().reduce(
+        (sum, region) => sum + (region.useful ? Math.max(0, region.piracy - region.armada) : 0),
+        0
+      );
+      return getGalaxyCombatShipPower() >= totalNeed;
+    }
     return {
       getGalaxyCombatShipPower,
       getPiracyMultiplier,
       galaxyAssaultPending,
-      getGalaxyRegions
+      getGalaxyRegions,
+      stargatePiracySupressed,
+      galaxyPiracyCoveredByFleet
     };
   }
 
@@ -23762,9 +23782,6 @@
     getTraitVal,
     getHaveTech,
     getHaveTask,
-    getPiracyMultiplierFn,
-    getGalaxyRegionsFn,
-    getGalaxyCombatShipPowerFn,
     getNumberStringFn,
     getNiceNumberFn,
     getBestSupplyRatioFn,
@@ -23775,9 +23792,6 @@
     const traitVal = (...args) => getTraitVal()(...args);
     const haveTech = (...args) => getHaveTech()(...args);
     const haveTask = (...args) => getHaveTask()(...args);
-    const getPiracyMultiplier = (...args) => getPiracyMultiplierFn()(...args);
-    const getGalaxyRegions = (...args) => getGalaxyRegionsFn()(...args);
-    const getGalaxyCombatShipPower = (...args) => getGalaxyCombatShipPowerFn()(...args);
     const getNumberString = (...args) => getNumberStringFn()(...args);
     const getNiceNumber = (...args) => getNiceNumberFn()(...args);
     const getBestSupplyRatio = (...args) => getBestSupplyRatioFn()(...args);
@@ -23922,23 +23936,15 @@
       },
       {
         id: "piracy-fully-supressed",
-        enabled: () => haveTech("piracy"),
-        match: (building3) => building3 === getBuildings().StargateDefensePlatform && getBuildings().StargateDefensePlatform.count * 20 >= (getGame().global.race["instinct"] ? 0.09 : 0.1) * getGame().global.tech.piracy * getPiracyMultiplier(),
+        enabled: (snapshot) => snapshot.stargatePiracySupressed,
+        match: (building3) => building3 === getBuildings().StargateDefensePlatform,
         describe: () => "Piracy fully supressed",
         multiplier: () => 0
       },
       {
         id: "piracy-covered-by-fleet",
-        enabled: (snapshot) => getSettings().autoFleet && getGame().global.tech["piracy"] && !snapshot.galaxyAssaultPending,
-        match: (building3) => {
-          if (galaxyCombatShipSet.has(building3)) {
-            let totalNeed = getGalaxyRegions().reduce(
-              (sum, region) => sum + (region.useful ? Math.max(0, region.piracy - region.armada) : 0),
-              0
-            );
-            return getGalaxyCombatShipPower() >= totalNeed;
-          }
-        },
+        enabled: (snapshot) => getSettings().autoFleet && snapshot.galaxyPiracyCoveredByFleet && !snapshot.galaxyAssaultPending,
+        match: (building3) => galaxyCombatShipSet.has(building3),
         describe: () => "Piracy fully covered by fleet",
         multiplier: () => 0
       },
@@ -24630,6 +24636,8 @@
   function createWeightingSnapshotReader({
     getState,
     isGalaxyAssaultPending,
+    isStargatePiracySupressed,
+    isGalaxyPiracyCoveredByFleet,
     isLumberRace,
     isBananaRepublicObjectiveComplete: isBananaRepublicObjectiveComplete2,
     isInflationAssistActive: isInflationAssistActive2,
@@ -24671,6 +24679,14 @@
         galaxyAssaultPending: requireBoolean(
           isGalaxyAssaultPending(),
           "isGalaxyAssaultPending()"
+        ),
+        stargatePiracySupressed: requireBoolean(
+          isStargatePiracySupressed(),
+          "isStargatePiracySupressed()"
+        ),
+        galaxyPiracyCoveredByFleet: requireBoolean(
+          isGalaxyPiracyCoveredByFleet(),
+          "isGalaxyPiracyCoveredByFleet()"
         ),
         lumberRace: requireBoolean(isLumberRace(), "isLumberRace()"),
         bananaColliderObjectiveComplete: requireBoolean(
@@ -55525,7 +55541,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGalaxyCombatShipPower,
       getPiracyMultiplier,
       galaxyAssaultPending,
-      getGalaxyRegions
+      getGalaxyRegions,
+      stargatePiracySupressed,
+      galaxyPiracyCoveredByFleet
     } = createGalaxyIntelligence({
       getGame: () => game,
       getBuildings: () => buildings,
@@ -56053,9 +56071,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getTraitVal: () => traitVal,
       getHaveTech: () => haveTech,
       getHaveTask: () => haveTask,
-      getPiracyMultiplierFn: () => getPiracyMultiplier,
-      getGalaxyRegionsFn: () => getGalaxyRegions,
-      getGalaxyCombatShipPowerFn: () => getGalaxyCombatShipPower,
       getNumberStringFn: () => getNumberString,
       getNiceNumberFn: () => getNiceNumber,
       getBestSupplyRatioFn: () => getBestSupplyRatio,
@@ -56269,6 +56284,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       readWeightingSnapshot: createWeightingSnapshotReader({
         getState: () => state,
         isGalaxyAssaultPending: () => galaxyAssaultPending(),
+        isStargatePiracySupressed: () => stargatePiracySupressed(),
+        isGalaxyPiracyCoveredByFleet: () => galaxyPiracyCoveredByFleet(),
         isLumberRace: () => isLumberRace(),
         isBananaRepublicObjectiveComplete: (objective) => bananaRepublicObjectiveComplete(objective),
         isInflationAssistActive: () => inflationChallengeAssistActive(),

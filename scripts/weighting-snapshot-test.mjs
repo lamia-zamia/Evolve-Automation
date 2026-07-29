@@ -14,6 +14,8 @@ let gates = {};
 const off = () => false;
 const defaultGates = () => ({
   isGalaxyAssaultPending: off,
+  isStargatePiracySupressed: off,
+  isGalaxyPiracyCoveredByFleet: off,
   isLumberRace: off,
   isBananaRepublicObjectiveComplete: off,
   isInflationAssistActive: off,
@@ -48,6 +50,8 @@ assert.equal(empty.knowledgeRequiredByTechs, 0);
 assert.equal(empty.knowledgeRequiredByBuildTargets, 0);
 assert.equal(empty.cheapestTechKnowledge, 0);
 assert.equal(empty.galaxyAssaultPending, false);
+assert.equal(empty.stargatePiracySupressed, false);
+assert.equal(empty.galaxyPiracyCoveredByFleet, false);
 assert.equal(empty.lumberRace, false);
 assert.equal(empty.bananaColliderObjectiveComplete, false);
 assert.equal(empty.inflationAssistActive, false);
@@ -97,6 +101,8 @@ const askedPrestiges = [];
 gates = {
   ...defaultGates(),
   isGalaxyAssaultPending: () => true,
+  isStargatePiracySupressed: () => true,
+  isGalaxyPiracyCoveredByFleet: () => true,
   isLumberRace: () => true,
   isBananaRepublicObjectiveComplete: (objective) => {
     askedObjectives.push(objective);
@@ -127,6 +133,8 @@ assert.deepEqual(askedGuards, [
 ]);
 assert.deepEqual(askedPrestiges, ["eden", "retire"]);
 assert.equal(gated.galaxyAssaultPending, true);
+assert.equal(gated.stargatePiracySupressed, true);
+assert.equal(gated.galaxyPiracyCoveredByFleet, true);
 assert.equal(gated.lumberRace, true);
 assert.equal(gated.bananaColliderObjectiveComplete, true);
 assert.equal(gated.inflationAssistActive, true);
@@ -195,6 +203,14 @@ const rejectsGate = (overrides, message) => {
 rejectsGate(
   { isGalaxyAssaultPending: () => undefined },
   "isGalaxyAssaultPending() must be a boolean",
+);
+rejectsGate(
+  { isStargatePiracySupressed: () => 0 },
+  "isStargatePiracySupressed() must be a boolean",
+);
+rejectsGate(
+  { isGalaxyPiracyCoveredByFleet: () => null },
+  "isGalaxyPiracyCoveredByFleet() must be a boolean",
 );
 rejectsGate({ isLumberRace: () => 1 }, "isLumberRace() must be a boolean");
 rejectsGate(

@@ -2396,6 +2396,8 @@ function startEvolveRuntimeComposition(
     getPiracyMultiplier,
     galaxyAssaultPending,
     getGalaxyRegions,
+    stargatePiracySupressed,
+    galaxyPiracyCoveredByFleet,
   } = createGalaxyIntelligence({
     getGame: () => game,
     getBuildings: () => buildings,
@@ -2956,9 +2958,6 @@ function startEvolveRuntimeComposition(
     getTraitVal: () => traitVal,
     getHaveTech: () => haveTech,
     getHaveTask: () => haveTask,
-    getPiracyMultiplierFn: () => getPiracyMultiplier,
-    getGalaxyRegionsFn: () => getGalaxyRegions,
-    getGalaxyCombatShipPowerFn: () => getGalaxyCombatShipPower,
     getNumberStringFn: () => getNumberString,
     getNiceNumberFn: () => getNiceNumber,
     getBestSupplyRatioFn: () => getBestSupplyRatio,
@@ -3200,6 +3199,8 @@ function startEvolveRuntimeComposition(
       readWeightingSnapshot: createWeightingSnapshotReader({
         getState: () => state,
         isGalaxyAssaultPending: () => galaxyAssaultPending(),
+        isStargatePiracySupressed: () => stargatePiracySupressed(),
+        isGalaxyPiracyCoveredByFleet: () => galaxyPiracyCoveredByFleet(),
         isLumberRace: () => isLumberRace(),
         isBananaRepublicObjectiveComplete: (objective) =>
           bananaRepublicObjectiveComplete(objective),

@@ -10,6 +10,8 @@ import {
 export interface WeightingSnapshotDependencies {
   readonly getState: () => unknown;
   readonly isGalaxyAssaultPending: () => unknown;
+  readonly isStargatePiracySupressed: () => unknown;
+  readonly isGalaxyPiracyCoveredByFleet: () => unknown;
   readonly isLumberRace: () => unknown;
   readonly isBananaRepublicObjectiveComplete: (objective: string) => unknown;
   readonly isInflationAssistActive: () => unknown;
@@ -60,6 +62,8 @@ function requireForeignAchievementGoal(
 export function createWeightingSnapshotReader({
   getState,
   isGalaxyAssaultPending,
+  isStargatePiracySupressed,
+  isGalaxyPiracyCoveredByFleet,
   isLumberRace,
   isBananaRepublicObjectiveComplete,
   isInflationAssistActive,
@@ -101,6 +105,14 @@ export function createWeightingSnapshotReader({
       galaxyAssaultPending: requireBoolean(
         isGalaxyAssaultPending(),
         "isGalaxyAssaultPending()",
+      ),
+      stargatePiracySupressed: requireBoolean(
+        isStargatePiracySupressed(),
+        "isStargatePiracySupressed()",
+      ),
+      galaxyPiracyCoveredByFleet: requireBoolean(
+        isGalaxyPiracyCoveredByFleet(),
+        "isGalaxyPiracyCoveredByFleet()",
       ),
       lumberRace: requireBoolean(isLumberRace(), "isLumberRace()"),
       bananaColliderObjectiveComplete: requireBoolean(

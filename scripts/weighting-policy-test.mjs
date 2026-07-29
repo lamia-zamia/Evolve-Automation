@@ -42,6 +42,8 @@ const snapshotOf = (overrides = {}) =>
     knowledgeRequiredByBuildTargets: 0,
     cheapestTechKnowledge: 0,
     galaxyAssaultPending: false,
+    stargatePiracySupressed: false,
+    galaxyPiracyCoveredByFleet: false,
     lumberRace: false,
     bananaColliderObjectiveComplete: false,
     inflationAssistActive: false,
@@ -74,9 +76,6 @@ const policy = createBuildingWeightingPolicy({
   getTraitVal: () => neutralFunction,
   getHaveTech: () => haveTech,
   getHaveTask: () => neutralFunction,
-  getPiracyMultiplierFn: () => neutralFunction,
-  getGalaxyRegionsFn: () => () => [],
-  getGalaxyCombatShipPowerFn: () => neutralFunction,
   getNumberStringFn: () => String,
   getNiceNumberFn: () => String,
   getBestSupplyRatioFn: () => neutralFunction,
@@ -230,11 +229,36 @@ assert.equal(authorityRule.match(buildings.Barracks), true);
 context.settings.authorityManage = false;
 assert.equal(authorityRule.enabled(), false);
 
+// Both piracy rules ask the snapshot whether more hardware could still help,
+// and then only identify the buildings that hardware is.
 const piracyRule = ruleById("piracy-fully-supressed");
-haveTech = (id) => id === "piracy";
-assert.equal(piracyRule.enabled(), true);
-haveTech = () => false;
-assert.equal(piracyRule.enabled(), false);
+assert.equal(piracyRule.enabled(emptySnapshot), false);
+assert.equal(
+  piracyRule.enabled(snapshotOf({ stargatePiracySupressed: true })),
+  true,
+);
+assert.equal(piracyRule.match(buildings.StargateDefensePlatform), true);
+assert.equal(piracyRule.match(buildings.GatewayStarbase), false);
+
+const fleetPiracyRule = ruleById("piracy-covered-by-fleet");
+const coveredSnapshot = snapshotOf({ galaxyPiracyCoveredByFleet: true });
+context.settings.autoFleet = true;
+assert.equal(fleetPiracyRule.enabled(coveredSnapshot), true);
+assert.equal(fleetPiracyRule.enabled(emptySnapshot), false);
+// An accumulating assault fleet is exempt: its ships are wanted regardless.
+assert.equal(
+  fleetPiracyRule.enabled(
+    snapshotOf({
+      galaxyPiracyCoveredByFleet: true,
+      galaxyAssaultPending: true,
+    }),
+  ),
+  false,
+);
+context.settings.autoFleet = false;
+assert.equal(fleetPiracyRule.enabled(coveredSnapshot), false);
+assert.equal(fleetPiracyRule.match(buildings.Dreadnought), true);
+assert.equal(fleetPiracyRule.match(buildings.GatewayStarbase), false);
 
 // Fuel-depot rule triggers on techMissionMaxCost, not the broad maxCost. A high
 // maxCost from late-game buildings/projects with no tech/mission demand must not fire it.

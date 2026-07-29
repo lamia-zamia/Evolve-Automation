@@ -20,9 +20,6 @@ type BuildingWeightingDependencies = {
   getTraitVal: () => LooseFunction;
   getHaveTech: () => LooseFunction;
   getHaveTask: () => LooseFunction;
-  getPiracyMultiplierFn: () => LooseFunction;
-  getGalaxyRegionsFn: () => LooseFunction;
-  getGalaxyCombatShipPowerFn: () => LooseFunction;
   getNumberStringFn: () => LooseFunction;
   getNiceNumberFn: () => LooseFunction;
   getBestSupplyRatioFn: () => LooseFunction;
@@ -42,9 +39,6 @@ export function createBuildingWeightingPolicy({
   getTraitVal,
   getHaveTech,
   getHaveTask,
-  getPiracyMultiplierFn,
-  getGalaxyRegionsFn,
-  getGalaxyCombatShipPowerFn,
   getNumberStringFn,
   getNiceNumberFn,
   getBestSupplyRatioFn,
@@ -55,12 +49,6 @@ export function createBuildingWeightingPolicy({
   const traitVal: LooseFunction = (...args) => getTraitVal()(...args);
   const haveTech: LooseFunction = (...args) => getHaveTech()(...args);
   const haveTask: LooseFunction = (...args) => getHaveTask()(...args);
-  const getPiracyMultiplier: LooseFunction = (...args) =>
-    getPiracyMultiplierFn()(...args);
-  const getGalaxyRegions: LooseFunction = (...args) =>
-    getGalaxyRegionsFn()(...args);
-  const getGalaxyCombatShipPower: LooseFunction = (...args) =>
-    getGalaxyCombatShipPowerFn()(...args);
   const getNumberString: LooseFunction = (...args) =>
     getNumberStringFn()(...args);
   const getNiceNumber: LooseFunction = (...args) => getNiceNumberFn()(...args);
@@ -229,13 +217,9 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "piracy-fully-supressed",
-      enabled: () => haveTech("piracy"),
+      enabled: (snapshot) => snapshot.stargatePiracySupressed,
       match: (building: any) =>
-        building === getBuildings().StargateDefensePlatform &&
-        getBuildings().StargateDefensePlatform.count * 20 >=
-          (getGame().global.race["instinct"] ? 0.09 : 0.1) *
-            getGame().global.tech.piracy *
-            getPiracyMultiplier(),
+        building === getBuildings().StargateDefensePlatform,
       describe: () => "Piracy fully supressed",
       multiplier: () => 0,
     },
@@ -243,19 +227,9 @@ export function createBuildingWeightingPolicy({
       id: "piracy-covered-by-fleet",
       enabled: (snapshot) =>
         getSettings().autoFleet &&
-        getGame().global.tech["piracy"] &&
+        snapshot.galaxyPiracyCoveredByFleet &&
         !snapshot.galaxyAssaultPending,
-      match: (building: any) => {
-        if (galaxyCombatShipSet.has(building)) {
-          let totalNeed = getGalaxyRegions().reduce(
-            (sum: any, region: any) =>
-              sum +
-              (region.useful ? Math.max(0, region.piracy - region.armada) : 0),
-            0,
-          );
-          return getGalaxyCombatShipPower() >= totalNeed;
-        }
-      },
+      match: (building: any) => galaxyCombatShipSet.has(building),
       describe: () => "Piracy fully covered by fleet",
       multiplier: () => 0,
     },

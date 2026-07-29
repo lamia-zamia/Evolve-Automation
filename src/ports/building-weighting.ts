@@ -19,6 +19,10 @@ export type BuildingWeightingSnapshot = {
   readonly cheapestTechKnowledge: number;
   /** A fleet is being accumulated for an assault mission. */
   readonly galaxyAssaultPending: boolean;
+  /** Built defense platforms already out-defend all stargate piracy. */
+  readonly stargatePiracySupressed: boolean;
+  /** The built fleet already out-rates the unmet piracy of every useful region. */
+  readonly galaxyPiracyCoveredByFleet: boolean;
   /** Race harvests lumber, so the Sacrificial Altar harvest bonus applies. */
   readonly lumberRace: boolean;
   /** Banana Republic objective "b2", the one the Dwarf World Collider serves. */

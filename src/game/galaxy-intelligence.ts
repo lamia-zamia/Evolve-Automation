@@ -16,7 +16,7 @@ type GalaxyBuildings = {
   Dreadnought: CountBuilding;
   ChthonianMission: MissionBuilding;
   Alien2Mission: MissionBuilding;
-  StargateDefensePlatform: ActiveBuilding;
+  StargateDefensePlatform: ActiveBuilding & CountBuilding;
   GatewayStarbase: ActiveBuilding;
   BologniumShip: ActiveBuilding;
   GorddonSymposium: ActiveBuilding;
@@ -228,10 +228,41 @@ export function createGalaxyIntelligence({
     return allRegions;
   }
 
+  // Built defense platforms already out-defend all stargate piracy, so more of
+  // them cannot help. Without the piracy tech there is nothing to defend
+  // against and `tech.piracy` is absent, so the comparison is skipped.
+  function stargatePiracySupressed(): boolean {
+    const piracy = getGame().global.tech.piracy;
+    if (!piracy) {
+      return false;
+    }
+    const instinct = getGame().global.race["instinct"];
+    return (
+      getBuildings().StargateDefensePlatform.count * 20 >=
+      (instinct ? 0.09 : 0.1) * piracy * getPiracyMultiplier()
+    );
+  }
+
+  // The built fleet already out-rates the unmet piracy of every region whose
+  // output the current cycle needs, so more combat ships cannot help.
+  function galaxyPiracyCoveredByFleet(): boolean {
+    if (!getGame().global.tech.piracy) {
+      return false;
+    }
+    const totalNeed = getGalaxyRegions().reduce(
+      (sum, region) =>
+        sum + (region.useful ? Math.max(0, region.piracy - region.armada) : 0),
+      0,
+    );
+    return getGalaxyCombatShipPower() >= totalNeed;
+  }
+
   return {
     getGalaxyCombatShipPower,
     getPiracyMultiplier,
     galaxyAssaultPending,
     getGalaxyRegions,
+    stargatePiracySupressed,
+    galaxyPiracyCoveredByFleet,
   };
 }

@@ -30,7 +30,7 @@ let buildings = {
   Dreadnought: count(1),
   ChthonianMission: mission(false),
   Alien2Mission: mission(false),
-  StargateDefensePlatform: active(0),
+  StargateDefensePlatform: { stateOnCount: 0, count: 0 },
   GatewayStarbase: active(0),
   BologniumShip: active(0),
   GorddonFreighter: active(0),
@@ -45,7 +45,7 @@ let buildings = {
   ChthonianExcavator: active(0),
 };
 let settings = { fleetChthonianLoses: "ignore" };
-const resources = Object.fromEntries(
+let resources = Object.fromEntries(
   [
     "Adamantite",
     "Bolognium",
@@ -74,5 +74,38 @@ buildings = { ...buildings, Alien2Mission: mission(true), ScoutShip: count(3) };
 settings = { fleetChthonianLoses: "allow" };
 assert.equal(intelligence.getGalaxyCombatShipPower(), 7);
 assert.equal(intelligence.galaxyAssaultPending(), true);
+
+// Stargate piracy counts as supressed once the built defense platforms out-defend it.
+game = { ...game, global: { ...game.global, tech: { piracy: 1000 } } };
+buildings = {
+  ...buildings,
+  StargateDefensePlatform: { stateOnCount: 0, count: 4 },
+};
+assert.equal(intelligence.stargatePiracySupressed(), false);
+buildings = {
+  ...buildings,
+  StargateDefensePlatform: { stateOnCount: 0, count: 5 },
+};
+assert.equal(intelligence.stargatePiracySupressed(), true);
+
+// Without the piracy tech there is nothing to supress or to cover.
+game = { ...game, global: { ...game.global, tech: {} } };
+assert.equal(intelligence.stargatePiracySupressed(), false);
+assert.equal(intelligence.galaxyPiracyCoveredByFleet(), false);
+
+// No region the current cycle needs leaves nothing for the fleet to cover.
+game = { ...game, global: { ...game.global, tech: { piracy: 1000 } } };
+assert.equal(intelligence.galaxyPiracyCoveredByFleet(), true);
+
+// A needed region the fleet cannot out-rate is not covered. Bolognium demand
+// makes the gateway region useful, and stargate piracy multiplies it.
+resources = {
+  ...resources,
+  Bolognium: { isUseful: () => true, storageRatio: 0 },
+};
+buildings = { ...buildings, BologniumShip: active(1) };
+assert.equal(intelligence.galaxyPiracyCoveredByFleet(), false);
+buildings = { ...buildings, Dreadnought: count(200) };
+assert.equal(intelligence.galaxyPiracyCoveredByFleet(), true);
 
 console.log("Galaxy intelligence module tests passed");
