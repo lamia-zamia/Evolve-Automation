@@ -32,7 +32,8 @@ let context = {
   MechManager: {},
   techIds: {},
 };
-// Rules read script state only through the phase snapshot the executor samples.
+// Rules read script state and phase-constant game gates only through the phase
+// snapshot the executor samples.
 const snapshotOf = (overrides = {}) =>
   Object.freeze({
     queuedTargets: new Set(),
@@ -40,13 +41,27 @@ const snapshotOf = (overrides = {}) =>
     knowledgeRequiredByTechs: 0,
     knowledgeRequiredByBuildTargets: 0,
     cheapestTechKnowledge: 0,
+    galaxyAssaultPending: false,
+    lumberRace: false,
+    bananaColliderObjectiveComplete: false,
+    inflationAssistActive: false,
+    inflationMoneyReachable: false,
+    retirementPreparationIncomplete: false,
+    guardDreadedActive: false,
+    guardEnergeticActive: false,
+    guardRedDeadActive: false,
+    guardPacifistActive: false,
+    foreignAchievementGoal: null,
+    hellSupressUseful: false,
+    geckNeeded: false,
+    prestigeEdenAllowed: false,
+    prestigeRetireAllowed: false,
+    pillarFinished: false,
     ...overrides,
   });
 const emptySnapshot = snapshotOf();
 let haveTech = () => false;
 const neutralFunction = () => false;
-let guardActive = neutralFunction;
-let foreignAchievementGoal = null;
 
 const policy = createBuildingWeightingPolicy({
   getGame: () => context.game,
@@ -60,24 +75,11 @@ const policy = createBuildingWeightingPolicy({
   getHaveTech: () => haveTech,
   getHaveTask: () => neutralFunction,
   getPiracyMultiplierFn: () => neutralFunction,
-  getGalaxyAssaultPending: () => neutralFunction,
   getGalaxyRegionsFn: () => () => [],
   getGalaxyCombatShipPowerFn: () => neutralFunction,
   getNumberStringFn: () => String,
   getNiceNumberFn: () => String,
-  getIsLumberRace: () => neutralFunction,
-  getBananaRepublicObjectiveComplete: () => neutralFunction,
-  getInflationChallengeAssistActive: () => neutralFunction,
-  getInflationChallengeMoneyReachable: () => neutralFunction,
-  getRetirementChallengeAssistActive: () => neutralFunction,
-  getRetirementPreparationMissing: () => neutralFunction,
-  getGuardActive: () => guardActive,
-  getForeignAchievementGoal: () => foreignAchievementGoal,
-  getIsHellSupressUseful: () => neutralFunction,
   getBestSupplyRatioFn: () => neutralFunction,
-  getIsGECKNeeded: () => neutralFunction,
-  getIsPrestigeAllowed: () => neutralFunction,
-  getIsPillarFinished: () => neutralFunction,
   getCitadelConsumptionFn: () => neutralFunction,
   ResourceAction,
   randomSource: { nextUnit: () => 0.5 },
@@ -312,28 +314,110 @@ assert.equal(
 );
 
 context.settings.achievementGuards = true;
-guardActive = (setting) => setting === "guardRedDead";
 const achievementGuardRule = ruleById("achievement-guard");
+const redDeadSnapshot = snapshotOf({ guardRedDeadActive: true });
 assert.equal(
-  achievementGuardRule.match(context.buildings.RedSpaceport),
+  achievementGuardRule.match(context.buildings.RedSpaceport, redDeadSnapshot),
   "Red Dead",
 );
+assert.equal(
+  achievementGuardRule.match(
+    context.buildings.Dreadnought,
+    snapshotOf({ guardDreadedActive: true }),
+  ),
+  "Dreaded",
+);
+assert.equal(
+  achievementGuardRule.match(
+    context.buildings.SiriusThermalCollector,
+    snapshotOf({ guardEnergeticActive: true }),
+  ),
+  "Energetic",
+);
 for (const goal of ["world-domination", "syndicate"]) {
-  foreignAchievementGoal = goal;
   assert.equal(
-    achievementGuardRule.match(context.buildings.RedSpaceport),
+    achievementGuardRule.match(
+      context.buildings.RedSpaceport,
+      snapshotOf({ guardRedDeadActive: true, foreignAchievementGoal: goal }),
+    ),
     false,
     `${goal} must be able to build the Red Spaceport needed to unlock unification`,
   );
 }
-foreignAchievementGoal = null;
-guardActive = (setting) =>
-  setting === "guardRedDead" || setting === "guardPacifist";
 assert.equal(
-  achievementGuardRule.match(context.buildings.RedSpaceport),
+  achievementGuardRule.match(
+    context.buildings.RedSpaceport,
+    snapshotOf({ guardRedDeadActive: true, guardPacifistActive: true }),
+  ),
   false,
   "Pacifist must be able to build the Red Spaceport needed for unification",
 );
+
+// Challenge and prestige gates come from the snapshot, not from live reads.
+const inflationRule = ruleById("inflation-money");
+assert.equal(inflationRule.enabled(emptySnapshot), false);
+const inflationOn = snapshotOf({ inflationAssistActive: true });
+assert.equal(inflationRule.enabled(inflationOn), true);
+assert.equal(
+  inflationRule.match(policy.inflationMoneyStorageBuildings[0], inflationOn),
+  "storage",
+);
+assert.equal(
+  inflationRule.match(policy.inflationMoneyIncomeBuildings[0], inflationOn),
+  false,
+);
+const inflationReachable = snapshotOf({
+  inflationAssistActive: true,
+  inflationMoneyReachable: true,
+});
+assert.equal(
+  inflationRule.match(
+    policy.inflationMoneyIncomeBuildings[0],
+    inflationReachable,
+  ),
+  "income",
+);
+assert.equal(
+  inflationRule.match(
+    policy.inflationMoneyStorageBuildings[0],
+    inflationReachable,
+  ),
+  false,
+);
+
+const retirementRule = ruleById("retirement-preparation");
+assert.equal(retirementRule.enabled(emptySnapshot), false);
+assert.equal(
+  retirementRule.enabled(snapshotOf({ retirementPreparationIncomplete: true })),
+  true,
+);
+
+const bananaRule = ruleById("banana-republic-objective");
+assert.equal(
+  bananaRule.match(context.buildings.DwarfWorldCollider, emptySnapshot),
+  true,
+);
+assert.equal(
+  bananaRule.match(
+    context.buildings.DwarfWorldCollider,
+    snapshotOf({ bananaColliderObjectiveComplete: true }),
+  ),
+  false,
+);
+
+context.settings = { ...context.settings, prestigeType: "bioseed" };
+const geckRule = ruleById("geck-limit");
+assert.equal(geckRule.enabled(emptySnapshot), true);
+assert.equal(geckRule.enabled(snapshotOf({ geckNeeded: true })), false);
+
+context.game.global.race.lone_survivor = true;
+const edenRule = ruleById("prestige-blocked-eden");
+assert.equal(edenRule.enabled(emptySnapshot), true);
+assert.equal(
+  edenRule.enabled(snapshotOf({ prestigeEdenAllowed: true })),
+  false,
+);
+delete context.game.global.race.lone_survivor;
 
 const vacuumManaRule = ruleById("vacuum-collapse-mana-producer");
 context.settings = {

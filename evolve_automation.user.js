@@ -23763,24 +23763,11 @@
     getHaveTech,
     getHaveTask,
     getPiracyMultiplierFn,
-    getGalaxyAssaultPending,
     getGalaxyRegionsFn,
     getGalaxyCombatShipPowerFn,
     getNumberStringFn,
     getNiceNumberFn,
-    getIsLumberRace,
-    getBananaRepublicObjectiveComplete,
-    getInflationChallengeAssistActive,
-    getInflationChallengeMoneyReachable,
-    getRetirementChallengeAssistActive,
-    getRetirementPreparationMissing,
-    getGuardActive,
-    getForeignAchievementGoal,
-    getIsHellSupressUseful,
     getBestSupplyRatioFn,
-    getIsGECKNeeded,
-    getIsPrestigeAllowed,
-    getIsPillarFinished,
     getCitadelConsumptionFn,
     ResourceAction,
     randomSource
@@ -23789,24 +23776,11 @@
     const haveTech = (...args) => getHaveTech()(...args);
     const haveTask = (...args) => getHaveTask()(...args);
     const getPiracyMultiplier = (...args) => getPiracyMultiplierFn()(...args);
-    const galaxyAssaultPending = (...args) => getGalaxyAssaultPending()(...args);
     const getGalaxyRegions = (...args) => getGalaxyRegionsFn()(...args);
     const getGalaxyCombatShipPower = (...args) => getGalaxyCombatShipPowerFn()(...args);
     const getNumberString = (...args) => getNumberStringFn()(...args);
     const getNiceNumber = (...args) => getNiceNumberFn()(...args);
-    const isLumberRace = (...args) => getIsLumberRace()(...args);
-    const bananaRepublicObjectiveComplete = (...args) => getBananaRepublicObjectiveComplete()(...args);
-    const inflationChallengeAssistActive = (...args) => getInflationChallengeAssistActive()(...args);
-    const inflationChallengeMoneyReachable = (...args) => getInflationChallengeMoneyReachable()(...args);
-    const retirementChallengeAssistActive = (...args) => getRetirementChallengeAssistActive()(...args);
-    const retirementPreparationMissing = (...args) => getRetirementPreparationMissing()(...args);
-    const guardActive = (...args) => getGuardActive()(...args);
-    const foreignAchievementGoal = () => getForeignAchievementGoal();
-    const isHellSupressUseful = (...args) => getIsHellSupressUseful()(...args);
     const getBestSupplyRatio = (...args) => getBestSupplyRatioFn()(...args);
-    const isGECKNeeded = (...args) => getIsGECKNeeded()(...args);
-    const isPrestigeAllowed2 = (...args) => getIsPrestigeAllowed()(...args);
-    const isPillarFinished2 = (...args) => getIsPillarFinished()(...args);
     const getCitadelConsumption = (...args) => getCitadelConsumptionFn()(...args);
     const authorityCapBuildings = [
       getBuildings().Barracks,
@@ -23955,7 +23929,7 @@
       },
       {
         id: "piracy-covered-by-fleet",
-        enabled: () => getSettings().autoFleet && getGame().global.tech["piracy"] && !galaxyAssaultPending(),
+        enabled: (snapshot) => getSettings().autoFleet && getGame().global.tech["piracy"] && !snapshot.galaxyAssaultPending,
         match: (building3) => {
           if (galaxyCombatShipSet.has(building3)) {
             let totalNeed = getGalaxyRegions().reduce(
@@ -24220,7 +24194,7 @@
       {
         id: "sacrificial-altar-blocked",
         enabled: () => getGame().global.race["cannibalize"],
-        match: (building3) => {
+        match: (building3, snapshot) => {
           if (building3._id === "s_alter" && building3.count > 0) {
             if (getResources().Population.currentQuantity < 1) {
               return "Too low population";
@@ -24234,7 +24208,7 @@
             if (getGame().global.civic[getGame().global.civic.d_job].workers < 1) {
               return "No default workers to sacrifice";
             }
-            if (getGame().global.city.s_alter.rage >= 3600 && getGame().global.city.s_alter.regen >= 3600 && getGame().global.city.s_alter.mind >= 3600 && getGame().global.city.s_alter.mine >= 3600 && (!isLumberRace() || getGame().global.city.s_alter.harvest >= 3600)) {
+            if (getGame().global.city.s_alter.rage >= 3600 && getGame().global.city.s_alter.regen >= 3600 && getGame().global.city.s_alter.mind >= 3600 && getGame().global.city.s_alter.mine >= 3600 && (!snapshot.lumberRace || getGame().global.city.s_alter.harvest >= 3600)) {
               return "Sacrifice bonus already high enough";
             }
           }
@@ -24318,18 +24292,18 @@
       {
         id: "banana-republic-objective",
         enabled: () => getSettings().achievementGuards && getSettings().guardBananaRepublic && getGame().global.race["banana"],
-        match: (building3) => building3 === getBuildings().DwarfWorldCollider && !bananaRepublicObjectiveComplete("b2"),
+        match: (building3, snapshot) => building3 === getBuildings().DwarfWorldCollider && !snapshot.bananaColliderObjectiveComplete,
         describe: () => "Banana Republic objective",
         multiplier: () => getSettings().buildingWeightingBananaObjective
       },
       {
         id: "inflation-money",
-        enabled: () => inflationChallengeAssistActive(),
-        match: (building3) => {
-          if (!inflationChallengeMoneyReachable() && inflationMoneyStorageBuildingSet.has(building3)) {
+        enabled: (snapshot) => snapshot.inflationAssistActive,
+        match: (building3, snapshot) => {
+          if (!snapshot.inflationMoneyReachable && inflationMoneyStorageBuildingSet.has(building3)) {
             return "storage";
           }
-          if (inflationChallengeMoneyReachable() && inflationMoneyIncomeBuildingSet.has(building3)) {
+          if (snapshot.inflationMoneyReachable && inflationMoneyIncomeBuildingSet.has(building3)) {
             return "income";
           }
           return false;
@@ -24339,7 +24313,7 @@
       },
       {
         id: "retirement-preparation",
-        enabled: () => retirementChallengeAssistActive() && retirementPreparationMissing().length > 0,
+        enabled: (snapshot) => snapshot.retirementPreparationIncomplete,
         match: (building3) => {
           if (building3 === getBuildings().TauFusionGenerator && building3.count < RETIREMENT_PREP.fusionGenerators) {
             return RETIREMENT_PREP.fusionGenerators;
@@ -24360,7 +24334,7 @@
         // achievement build this prerequisite so Red Dead can release afterward.
         id: "achievement-guard",
         enabled: () => getSettings().achievementGuards,
-        match: (building3) => building3 === getBuildings().Dreadnought && guardActive("guardDreaded") ? "Dreaded" : building3 === getBuildings().SiriusThermalCollector && guardActive("guardEnergetic") ? "Energetic" : building3 === getBuildings().RedSpaceport && guardActive("guardRedDead") && !guardActive("guardPacifist") && foreignAchievementGoal() === null ? "Red Dead" : false,
+        match: (building3, snapshot) => building3 === getBuildings().Dreadnought && snapshot.guardDreadedActive ? "Dreaded" : building3 === getBuildings().SiriusThermalCollector && snapshot.guardEnergeticActive ? "Energetic" : building3 === getBuildings().RedSpaceport && snapshot.guardRedDeadActive && !snapshot.guardPacifistActive && snapshot.foreignAchievementGoal === null ? "Red Dead" : false,
         describe: (name) => `${name} achievement guard`,
         multiplier: () => 0
       },
@@ -24374,14 +24348,14 @@
       {
         id: "non-operating-buildings",
         enabled: () => true,
-        match: (building3) => {
+        match: (building3, snapshot) => {
           if (building3 === getBuildings().BlackholeStellarEngine) {
             return false;
           }
           if ((building3 === getBuildings().BadlandsAttractor || building3 === getBuildings().SpireMechBay) && building3.isSmartManaged()) {
             return false;
           }
-          if (building3 === getBuildings().RuinsGuardPost && building3.isSmartManaged() && !isHellSupressUseful()) {
+          if (building3 === getBuildings().RuinsGuardPost && building3.isSmartManaged() && !snapshot.hellSupressUseful) {
             if (building3.count < Math.ceil(
               5e3 / (getGame().armyRating(
                 traitVal("high_pop", 0, 1),
@@ -24411,21 +24385,21 @@
       },
       {
         id: "geck-limit",
-        enabled: () => getSettings().prestigeType !== "bioseed" || !isGECKNeeded(),
+        enabled: (snapshot) => getSettings().prestigeType !== "bioseed" || !snapshot.geckNeeded,
         match: (building3) => building3 === getBuildings().GasSpaceDockGECK,
         describe: () => "Max allowed amount of G.E.C.K reached",
         multiplier: () => 0
       },
       {
         id: "prestige-blocked-eden",
-        enabled: () => getGame().global.race["lone_survivor"] && !isPrestigeAllowed2("eden"),
+        enabled: (snapshot) => getGame().global.race["lone_survivor"] && !snapshot.prestigeEdenAllowed,
         match: (building3) => building3 === getBuildings().TauStarEden,
         describe: () => "Prestiging not currently allowed",
         multiplier: () => 0
       },
       {
         id: "prestige-blocked-ignition",
-        enabled: () => getGame().global.race["truepath"] && (!isPrestigeAllowed2("retire") || getBuildings().TauGas2MatrioshkaBrain.count < 1e3),
+        enabled: (snapshot) => getGame().global.race["truepath"] && (!snapshot.prestigeRetireAllowed || getBuildings().TauGas2MatrioshkaBrain.count < 1e3),
         match: (building3) => building3 === getBuildings().TauGas2IgniteGasGiant,
         describe: () => "Prestiging not currently allowed",
         multiplier: () => 0
@@ -24460,7 +24434,7 @@
       },
       {
         id: "prestige-unneeded-ascension-missions",
-        enabled: () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "ascension" && isPillarFinished2() && !getGame().global.race["witch_hunter"],
+        enabled: (snapshot) => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "ascension" && snapshot.pillarFinished && !getGame().global.race["witch_hunter"],
         match: (building3) => building3 === getBuildings().PitMission || building3 === getBuildings().RuinsMission,
         describe: () => "Not needed for Ascension prestige",
         multiplier: () => 0
@@ -24638,11 +24612,43 @@
   }
 
   // src/adapters/evolve/progression/build/weighting-snapshot.ts
+  var FOREIGN_ACHIEVEMENT_GOALS = /* @__PURE__ */ new Set([
+    "world-domination",
+    "syndicate"
+  ]);
+  function requireForeignAchievementGoal(value, path) {
+    if (value === null) {
+      return null;
+    }
+    if (typeof value === "string" && FOREIGN_ACHIEVEMENT_GOALS.has(value)) {
+      return value;
+    }
+    throw new TypeError(
+      `${path} must be null, "world-domination", or "syndicate"`
+    );
+  }
   function createWeightingSnapshotReader({
-    getState
+    getState,
+    isGalaxyAssaultPending,
+    isLumberRace,
+    isBananaRepublicObjectiveComplete: isBananaRepublicObjectiveComplete2,
+    isInflationAssistActive: isInflationAssistActive2,
+    isInflationMoneyReachable: isInflationMoneyReachable2,
+    isRetirementAssistActive: isRetirementAssistActive2,
+    getRetirementPreparationMissing,
+    isAchievementGuardActive: isAchievementGuardActive2,
+    getForeignAchievementGoal,
+    isHellSupressUseful,
+    isGECKNeeded,
+    isPrestigeAllowed: isPrestigeAllowed2,
+    isPillarFinished: isPillarFinished2
   }) {
     return () => {
       const state = requireRecord(getState(), "state");
+      const retirementAssistActive = requireBoolean(
+        isRetirementAssistActive2(),
+        "isRetirementAssistActive()"
+      );
       return Object.freeze({
         queuedTargets: new Set(
           requireArray(state["queuedTargets"], "state.queuedTargets")
@@ -24661,7 +24667,64 @@
         cheapestTechKnowledge: requireNumber(
           state["cheapestTechKnowledge"],
           "state.cheapestTechKnowledge"
-        )
+        ),
+        galaxyAssaultPending: requireBoolean(
+          isGalaxyAssaultPending(),
+          "isGalaxyAssaultPending()"
+        ),
+        lumberRace: requireBoolean(isLumberRace(), "isLumberRace()"),
+        bananaColliderObjectiveComplete: requireBoolean(
+          isBananaRepublicObjectiveComplete2("b2"),
+          'isBananaRepublicObjectiveComplete("b2")'
+        ),
+        inflationAssistActive: requireBoolean(
+          isInflationAssistActive2(),
+          "isInflationAssistActive()"
+        ),
+        inflationMoneyReachable: requireBoolean(
+          isInflationMoneyReachable2(),
+          "isInflationMoneyReachable()"
+        ),
+        // The preparation read is skipped when the assist is off, which is the
+        // short circuit the rule's own `enabled` used to provide.
+        retirementPreparationIncomplete: retirementAssistActive && requireArray(
+          getRetirementPreparationMissing(),
+          "getRetirementPreparationMissing()"
+        ).length > 0,
+        guardDreadedActive: requireBoolean(
+          isAchievementGuardActive2("guardDreaded"),
+          'isAchievementGuardActive("guardDreaded")'
+        ),
+        guardEnergeticActive: requireBoolean(
+          isAchievementGuardActive2("guardEnergetic"),
+          'isAchievementGuardActive("guardEnergetic")'
+        ),
+        guardRedDeadActive: requireBoolean(
+          isAchievementGuardActive2("guardRedDead"),
+          'isAchievementGuardActive("guardRedDead")'
+        ),
+        guardPacifistActive: requireBoolean(
+          isAchievementGuardActive2("guardPacifist"),
+          'isAchievementGuardActive("guardPacifist")'
+        ),
+        foreignAchievementGoal: requireForeignAchievementGoal(
+          getForeignAchievementGoal(),
+          "getForeignAchievementGoal()"
+        ),
+        hellSupressUseful: requireBoolean(
+          isHellSupressUseful(),
+          "isHellSupressUseful()"
+        ),
+        geckNeeded: requireBoolean(isGECKNeeded(), "isGECKNeeded()"),
+        prestigeEdenAllowed: requireBoolean(
+          isPrestigeAllowed2("eden"),
+          'isPrestigeAllowed("eden")'
+        ),
+        prestigeRetireAllowed: requireBoolean(
+          isPrestigeAllowed2("retire"),
+          'isPrestigeAllowed("retire")'
+        ),
+        pillarFinished: requireBoolean(isPillarFinished2(), "isPillarFinished()")
       });
     };
   }
@@ -55991,28 +56054,11 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getHaveTech: () => haveTech,
       getHaveTask: () => haveTask,
       getPiracyMultiplierFn: () => getPiracyMultiplier,
-      getGalaxyAssaultPending: () => galaxyAssaultPending,
       getGalaxyRegionsFn: () => getGalaxyRegions,
       getGalaxyCombatShipPowerFn: () => getGalaxyCombatShipPower,
       getNumberStringFn: () => getNumberString,
       getNiceNumberFn: () => getNiceNumber,
-      getIsLumberRace: () => isLumberRace,
-      getBananaRepublicObjectiveComplete: () => bananaRepublicObjectiveComplete,
-      getInflationChallengeAssistActive: () => inflationChallengeAssistActive,
-      getInflationChallengeMoneyReachable: () => inflationChallengeMoneyReachable,
-      getRetirementChallengeAssistActive: () => retirementChallengeAssistActive,
-      getRetirementPreparationMissing: () => retirementPreparationMissing,
-      getGuardActive: () => guardActive,
-      getForeignAchievementGoal: () => readForeignAchievementGoal({
-        getSettings: () => settings,
-        getGame: () => game,
-        isAchievementUnlocked: (achievement, level) => isAchievementUnlocked2(achievement, level)
-      }),
-      getIsHellSupressUseful: () => isHellSupressUseful,
       getBestSupplyRatioFn: () => getBestSupplyRatio,
-      getIsGECKNeeded: () => isGECKNeeded,
-      getIsPrestigeAllowed: () => isPrestigeAllowed2,
-      getIsPillarFinished: () => isPillarFinished2,
       getCitadelConsumptionFn: () => getCitadelConsumption,
       ResourceAction,
       randomSource
@@ -56221,7 +56267,24 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getNiceNumber,
       weightingRules,
       readWeightingSnapshot: createWeightingSnapshotReader({
-        getState: () => state
+        getState: () => state,
+        isGalaxyAssaultPending: () => galaxyAssaultPending(),
+        isLumberRace: () => isLumberRace(),
+        isBananaRepublicObjectiveComplete: (objective) => bananaRepublicObjectiveComplete(objective),
+        isInflationAssistActive: () => inflationChallengeAssistActive(),
+        isInflationMoneyReachable: () => inflationChallengeMoneyReachable(),
+        isRetirementAssistActive: () => retirementChallengeAssistActive(),
+        getRetirementPreparationMissing: () => retirementPreparationMissing(),
+        isAchievementGuardActive: (guard) => guardActive(guard),
+        getForeignAchievementGoal: () => readForeignAchievementGoal({
+          getSettings: () => settings,
+          getGame: () => game,
+          isAchievementUnlocked: (achievement, level) => isAchievementUnlocked2(achievement, level)
+        }),
+        isHellSupressUseful: () => isHellSupressUseful(),
+        isGECKNeeded: () => isGECKNeeded(),
+        isPrestigeAllowed: (prestige) => isPrestigeAllowed2(prestige),
+        isPillarFinished: () => isPillarFinished2()
       }),
       isEarlyGame,
       getIsPrestigeAllowed: () => isPrestigeAllowed2,

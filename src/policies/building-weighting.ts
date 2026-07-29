@@ -3,7 +3,6 @@ import type {
   BuildingWeightingSnapshot,
 } from "../ports/building-weighting.ts";
 import type { RandomSource } from "../ports/randomness.ts";
-import type { ForeignAchievementGoal } from "../domain/combat/foreign-achievements.ts";
 import { canSpendWithDistantReservation } from "../domain/economy/resources/reservation.ts";
 
 type LooseFunction = (...args: any[]) => any;
@@ -22,24 +21,11 @@ type BuildingWeightingDependencies = {
   getHaveTech: () => LooseFunction;
   getHaveTask: () => LooseFunction;
   getPiracyMultiplierFn: () => LooseFunction;
-  getGalaxyAssaultPending: () => LooseFunction;
   getGalaxyRegionsFn: () => LooseFunction;
   getGalaxyCombatShipPowerFn: () => LooseFunction;
   getNumberStringFn: () => LooseFunction;
   getNiceNumberFn: () => LooseFunction;
-  getIsLumberRace: () => LooseFunction;
-  getBananaRepublicObjectiveComplete: () => LooseFunction;
-  getInflationChallengeAssistActive: () => LooseFunction;
-  getInflationChallengeMoneyReachable: () => LooseFunction;
-  getRetirementChallengeAssistActive: () => LooseFunction;
-  getRetirementPreparationMissing: () => LooseFunction;
-  getGuardActive: () => LooseFunction;
-  getForeignAchievementGoal: () => ForeignAchievementGoal | null;
-  getIsHellSupressUseful: () => LooseFunction;
   getBestSupplyRatioFn: () => LooseFunction;
-  getIsGECKNeeded: () => LooseFunction;
-  getIsPrestigeAllowed: () => LooseFunction;
-  getIsPillarFinished: () => LooseFunction;
   getCitadelConsumptionFn: () => LooseFunction;
   ResourceAction: LooseConstructor;
   randomSource: RandomSource;
@@ -57,24 +43,11 @@ export function createBuildingWeightingPolicy({
   getHaveTech,
   getHaveTask,
   getPiracyMultiplierFn,
-  getGalaxyAssaultPending,
   getGalaxyRegionsFn,
   getGalaxyCombatShipPowerFn,
   getNumberStringFn,
   getNiceNumberFn,
-  getIsLumberRace,
-  getBananaRepublicObjectiveComplete,
-  getInflationChallengeAssistActive,
-  getInflationChallengeMoneyReachable,
-  getRetirementChallengeAssistActive,
-  getRetirementPreparationMissing,
-  getGuardActive,
-  getForeignAchievementGoal,
-  getIsHellSupressUseful,
   getBestSupplyRatioFn,
-  getIsGECKNeeded,
-  getIsPrestigeAllowed,
-  getIsPillarFinished,
   getCitadelConsumptionFn,
   ResourceAction,
   randomSource,
@@ -84,8 +57,6 @@ export function createBuildingWeightingPolicy({
   const haveTask: LooseFunction = (...args) => getHaveTask()(...args);
   const getPiracyMultiplier: LooseFunction = (...args) =>
     getPiracyMultiplierFn()(...args);
-  const galaxyAssaultPending: LooseFunction = (...args) =>
-    getGalaxyAssaultPending()(...args);
   const getGalaxyRegions: LooseFunction = (...args) =>
     getGalaxyRegionsFn()(...args);
   const getGalaxyCombatShipPower: LooseFunction = (...args) =>
@@ -93,28 +64,8 @@ export function createBuildingWeightingPolicy({
   const getNumberString: LooseFunction = (...args) =>
     getNumberStringFn()(...args);
   const getNiceNumber: LooseFunction = (...args) => getNiceNumberFn()(...args);
-  const isLumberRace: LooseFunction = (...args) => getIsLumberRace()(...args);
-  const bananaRepublicObjectiveComplete: LooseFunction = (...args) =>
-    getBananaRepublicObjectiveComplete()(...args);
-  const inflationChallengeAssistActive: LooseFunction = (...args) =>
-    getInflationChallengeAssistActive()(...args);
-  const inflationChallengeMoneyReachable: LooseFunction = (...args) =>
-    getInflationChallengeMoneyReachable()(...args);
-  const retirementChallengeAssistActive: LooseFunction = (...args) =>
-    getRetirementChallengeAssistActive()(...args);
-  const retirementPreparationMissing: LooseFunction = (...args) =>
-    getRetirementPreparationMissing()(...args);
-  const guardActive: LooseFunction = (...args) => getGuardActive()(...args);
-  const foreignAchievementGoal = () => getForeignAchievementGoal();
-  const isHellSupressUseful: LooseFunction = (...args) =>
-    getIsHellSupressUseful()(...args);
   const getBestSupplyRatio: LooseFunction = (...args) =>
     getBestSupplyRatioFn()(...args);
-  const isGECKNeeded: LooseFunction = (...args) => getIsGECKNeeded()(...args);
-  const isPrestigeAllowed: LooseFunction = (...args) =>
-    getIsPrestigeAllowed()(...args);
-  const isPillarFinished: LooseFunction = (...args) =>
-    getIsPillarFinished()(...args);
   const getCitadelConsumption: LooseFunction = (...args) =>
     getCitadelConsumptionFn()(...args);
 
@@ -290,10 +241,10 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "piracy-covered-by-fleet",
-      enabled: () =>
+      enabled: (snapshot) =>
         getSettings().autoFleet &&
         getGame().global.tech["piracy"] &&
-        !galaxyAssaultPending(),
+        !snapshot.galaxyAssaultPending,
       match: (building: any) => {
         if (galaxyCombatShipSet.has(building)) {
           let totalNeed = getGalaxyRegions().reduce(
@@ -676,7 +627,7 @@ export function createBuildingWeightingPolicy({
     {
       id: "sacrificial-altar-blocked",
       enabled: () => getGame().global.race["cannibalize"],
-      match: (building: any) => {
+      match: (building: any, snapshot) => {
         if (building._id === "s_alter" && building.count > 0) {
           if (getResources().Population.currentQuantity < 1) {
             return "Too low population";
@@ -704,7 +655,8 @@ export function createBuildingWeightingPolicy({
             getGame().global.city.s_alter.regen >= 3600 &&
             getGame().global.city.s_alter.mind >= 3600 &&
             getGame().global.city.s_alter.mine >= 3600 &&
-            (!isLumberRace() || getGame().global.city.s_alter.harvest >= 3600)
+            (!snapshot.lumberRace ||
+              getGame().global.city.s_alter.harvest >= 3600)
           ) {
             return "Sacrifice bonus already high enough";
           }
@@ -812,24 +764,24 @@ export function createBuildingWeightingPolicy({
         getSettings().achievementGuards &&
         getSettings().guardBananaRepublic &&
         getGame().global.race["banana"],
-      match: (building: any) =>
+      match: (building: any, snapshot) =>
         building === getBuildings().DwarfWorldCollider &&
-        !bananaRepublicObjectiveComplete("b2"),
+        !snapshot.bananaColliderObjectiveComplete,
       describe: () => "Banana Republic objective",
       multiplier: () => getSettings().buildingWeightingBananaObjective,
     },
     {
       id: "inflation-money",
-      enabled: () => inflationChallengeAssistActive(),
-      match: (building: any) => {
+      enabled: (snapshot) => snapshot.inflationAssistActive,
+      match: (building: any, snapshot) => {
         if (
-          !inflationChallengeMoneyReachable() &&
+          !snapshot.inflationMoneyReachable &&
           inflationMoneyStorageBuildingSet.has(building)
         ) {
           return "storage";
         }
         if (
-          inflationChallengeMoneyReachable() &&
+          snapshot.inflationMoneyReachable &&
           inflationMoneyIncomeBuildingSet.has(building)
         ) {
           return "income";
@@ -844,9 +796,7 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "retirement-preparation",
-      enabled: () =>
-        retirementChallengeAssistActive() &&
-        retirementPreparationMissing().length > 0,
+      enabled: (snapshot) => snapshot.retirementPreparationIncomplete,
       match: (building: any) => {
         if (
           building === getBuildings().TauFusionGenerator &&
@@ -877,16 +827,16 @@ export function createBuildingWeightingPolicy({
       // achievement build this prerequisite so Red Dead can release afterward.
       id: "achievement-guard",
       enabled: () => getSettings().achievementGuards,
-      match: (building: any) =>
-        building === getBuildings().Dreadnought && guardActive("guardDreaded")
+      match: (building: any, snapshot) =>
+        building === getBuildings().Dreadnought && snapshot.guardDreadedActive
           ? "Dreaded"
           : building === getBuildings().SiriusThermalCollector &&
-              guardActive("guardEnergetic")
+              snapshot.guardEnergeticActive
             ? "Energetic"
             : building === getBuildings().RedSpaceport &&
-                guardActive("guardRedDead") &&
-                !guardActive("guardPacifist") &&
-                foreignAchievementGoal() === null
+                snapshot.guardRedDeadActive &&
+                !snapshot.guardPacifistActive &&
+                snapshot.foreignAchievementGoal === null
               ? "Red Dead"
               : false,
       describe: (name: any) => `${name} achievement guard`,
@@ -906,7 +856,7 @@ export function createBuildingWeightingPolicy({
     {
       id: "non-operating-buildings",
       enabled: () => true,
-      match: (building: any) => {
+      match: (building: any, snapshot) => {
         if (building === getBuildings().BlackholeStellarEngine) {
           // `stateOffCount` is missleading for powered multisegmented getBuildings(). This rule shouldn't ever apply to Stellar Engine, just ignore it
           // TODO: Might be better to ignore all multisegmented buildings, or making `stateOffCount` return 0 for multisegmented buildings, but i'm not sure about possible side effects at the moment - that would work as a hot fix
@@ -923,7 +873,7 @@ export function createBuildingWeightingPolicy({
         if (
           building === getBuildings().RuinsGuardPost &&
           building.isSmartManaged() &&
-          !isHellSupressUseful()
+          !snapshot.hellSupressUseful
         ) {
           // Prebuild guard posts. Even if we don't need supression right now they will be useful soon enough
           if (
@@ -974,25 +924,25 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "geck-limit",
-      enabled: () =>
-        getSettings().prestigeType !== "bioseed" || !isGECKNeeded(),
+      enabled: (snapshot) =>
+        getSettings().prestigeType !== "bioseed" || !snapshot.geckNeeded,
       match: (building: any) => building === getBuildings().GasSpaceDockGECK,
       describe: () => "Max allowed amount of G.E.C.K reached",
       multiplier: () => 0,
     },
     {
       id: "prestige-blocked-eden",
-      enabled: () =>
-        getGame().global.race["lone_survivor"] && !isPrestigeAllowed("eden"),
+      enabled: (snapshot) =>
+        getGame().global.race["lone_survivor"] && !snapshot.prestigeEdenAllowed,
       match: (building: any) => building === getBuildings().TauStarEden,
       describe: () => "Prestiging not currently allowed",
       multiplier: () => 0,
     },
     {
       id: "prestige-blocked-ignition",
-      enabled: () =>
+      enabled: (snapshot) =>
         getGame().global.race["truepath"] &&
-        (!isPrestigeAllowed("retire") ||
+        (!snapshot.prestigeRetireAllowed ||
           getBuildings().TauGas2MatrioshkaBrain.count < 1000),
       match: (building: any) =>
         building === getBuildings().TauGas2IgniteGasGiant,
@@ -1043,10 +993,10 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "prestige-unneeded-ascension-missions",
-      enabled: () =>
+      enabled: (snapshot) =>
         getSettings().prestigeBioseedConstruct &&
         getSettings().prestigeType === "ascension" &&
-        isPillarFinished() &&
+        snapshot.pillarFinished &&
         !getGame().global.race["witch_hunter"],
       match: (building: any) =>
         building === getBuildings().PitMission ||

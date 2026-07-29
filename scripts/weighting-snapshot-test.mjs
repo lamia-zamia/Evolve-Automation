@@ -10,7 +10,33 @@ const validState = () => ({
 });
 
 let state = validState();
-const read = createWeightingSnapshotReader({ getState: () => state });
+let gates = {};
+const off = () => false;
+const defaultGates = () => ({
+  isGalaxyAssaultPending: off,
+  isLumberRace: off,
+  isBananaRepublicObjectiveComplete: off,
+  isInflationAssistActive: off,
+  isInflationMoneyReachable: off,
+  isRetirementAssistActive: off,
+  getRetirementPreparationMissing: () => [],
+  isAchievementGuardActive: off,
+  getForeignAchievementGoal: () => null,
+  isHellSupressUseful: off,
+  isGECKNeeded: off,
+  isPrestigeAllowed: off,
+  isPillarFinished: off,
+});
+gates = defaultGates();
+const read = createWeightingSnapshotReader({
+  getState: () => state,
+  ...Object.fromEntries(
+    Object.keys(defaultGates()).map((name) => [
+      name,
+      (...args) => gates[name](...args),
+    ]),
+  ),
+});
 
 // The uninitialized state the runtime installs before the first cycle reads as
 // a valid empty snapshot.
@@ -21,6 +47,22 @@ assert.equal(empty.triggerTargets.size, 0);
 assert.equal(empty.knowledgeRequiredByTechs, 0);
 assert.equal(empty.knowledgeRequiredByBuildTargets, 0);
 assert.equal(empty.cheapestTechKnowledge, 0);
+assert.equal(empty.galaxyAssaultPending, false);
+assert.equal(empty.lumberRace, false);
+assert.equal(empty.bananaColliderObjectiveComplete, false);
+assert.equal(empty.inflationAssistActive, false);
+assert.equal(empty.inflationMoneyReachable, false);
+assert.equal(empty.retirementPreparationIncomplete, false);
+assert.equal(empty.guardDreadedActive, false);
+assert.equal(empty.guardEnergeticActive, false);
+assert.equal(empty.guardRedDeadActive, false);
+assert.equal(empty.guardPacifistActive, false);
+assert.equal(empty.foreignAchievementGoal, null);
+assert.equal(empty.hellSupressUseful, false);
+assert.equal(empty.geckNeeded, false);
+assert.equal(empty.prestigeEdenAllowed, false);
+assert.equal(empty.prestigeRetireAllowed, false);
+assert.equal(empty.pillarFinished, false);
 
 // Membership is by wrapper identity, not by name or index.
 const queued = { _vueBinding: "city-bank" };
@@ -46,8 +88,84 @@ state.queuedTargets.push(triggered);
 assert.equal(sample.queuedTargets.has(triggered), false);
 assert.equal(read().queuedTargets.has(triggered), true);
 
+state = validState();
+
+// Each gate is asked exactly the question its snapshot field names.
+const askedObjectives = [];
+const askedGuards = [];
+const askedPrestiges = [];
+gates = {
+  ...defaultGates(),
+  isGalaxyAssaultPending: () => true,
+  isLumberRace: () => true,
+  isBananaRepublicObjectiveComplete: (objective) => {
+    askedObjectives.push(objective);
+    return true;
+  },
+  isInflationAssistActive: () => true,
+  isInflationMoneyReachable: () => true,
+  isAchievementGuardActive: (guard) => {
+    askedGuards.push(guard);
+    return guard !== "guardPacifist";
+  },
+  getForeignAchievementGoal: () => "syndicate",
+  isHellSupressUseful: () => true,
+  isGECKNeeded: () => true,
+  isPrestigeAllowed: (prestige) => {
+    askedPrestiges.push(prestige);
+    return prestige === "eden";
+  },
+  isPillarFinished: () => true,
+};
+const gated = read();
+assert.deepEqual(askedObjectives, ["b2"]);
+assert.deepEqual(askedGuards, [
+  "guardDreaded",
+  "guardEnergetic",
+  "guardRedDead",
+  "guardPacifist",
+]);
+assert.deepEqual(askedPrestiges, ["eden", "retire"]);
+assert.equal(gated.galaxyAssaultPending, true);
+assert.equal(gated.lumberRace, true);
+assert.equal(gated.bananaColliderObjectiveComplete, true);
+assert.equal(gated.inflationAssistActive, true);
+assert.equal(gated.inflationMoneyReachable, true);
+assert.equal(gated.guardDreadedActive, true);
+assert.equal(gated.guardEnergeticActive, true);
+assert.equal(gated.guardRedDeadActive, true);
+assert.equal(gated.guardPacifistActive, false);
+assert.equal(gated.foreignAchievementGoal, "syndicate");
+assert.equal(gated.hellSupressUseful, true);
+assert.equal(gated.geckNeeded, true);
+assert.equal(gated.prestigeEdenAllowed, true);
+assert.equal(gated.prestigeRetireAllowed, false);
+assert.equal(gated.pillarFinished, true);
+
+// The retirement preparation read is skipped while the assist is inactive, and
+// an empty shortfall list still reads as prepared.
+let preparationReads = 0;
+const countedPreparation = (missing) => ({
+  ...defaultGates(),
+  isRetirementAssistActive: () => missing !== null,
+  getRetirementPreparationMissing: () => {
+    preparationReads++;
+    return missing ?? [];
+  },
+});
+gates = countedPreparation(null);
+assert.equal(read().retirementPreparationIncomplete, false);
+assert.equal(preparationReads, 0);
+gates = countedPreparation([]);
+assert.equal(read().retirementPreparationIncomplete, false);
+assert.equal(preparationReads, 1);
+gates = countedPreparation(["20 Fusion Generator"]);
+assert.equal(read().retirementPreparationIncomplete, true);
+assert.equal(preparationReads, 2);
+
 const rejects = (mutate, message) => {
   state = validState();
+  gates = defaultGates();
   mutate(state);
   assert.throws(read, { name: "TypeError", message });
 };
@@ -69,9 +187,55 @@ rejects(
   "state.cheapestTechKnowledge must be a finite number",
 );
 
-assert.throws(createWeightingSnapshotReader({ getState: () => null }), {
-  name: "TypeError",
-  message: "state must be an object",
-});
+const rejectsGate = (overrides, message) => {
+  state = validState();
+  gates = { ...defaultGates(), ...overrides };
+  assert.throws(read, { name: "TypeError", message });
+};
+rejectsGate(
+  { isGalaxyAssaultPending: () => undefined },
+  "isGalaxyAssaultPending() must be a boolean",
+);
+rejectsGate({ isLumberRace: () => 1 }, "isLumberRace() must be a boolean");
+rejectsGate(
+  { isBananaRepublicObjectiveComplete: () => "yes" },
+  'isBananaRepublicObjectiveComplete("b2") must be a boolean',
+);
+rejectsGate(
+  { isAchievementGuardActive: (guard) => guard !== "guardRedDead" || null },
+  'isAchievementGuardActive("guardRedDead") must be a boolean',
+);
+rejectsGate(
+  { isPrestigeAllowed: (prestige) => prestige === "eden" && "yes" },
+  'isPrestigeAllowed("eden") must be a boolean',
+);
+rejectsGate(
+  {
+    isRetirementAssistActive: () => true,
+    getRetirementPreparationMissing: () => "none",
+  },
+  "getRetirementPreparationMissing() must be an array",
+);
+rejectsGate(
+  { getForeignAchievementGoal: () => "unification" },
+  'getForeignAchievementGoal() must be null, "world-domination", or "syndicate"',
+);
+rejectsGate(
+  { getForeignAchievementGoal: () => undefined },
+  'getForeignAchievementGoal() must be null, "world-domination", or "syndicate"',
+);
+
+state = validState();
+gates = defaultGates();
+assert.throws(
+  createWeightingSnapshotReader({
+    getState: () => null,
+    ...defaultGates(),
+  }),
+  {
+    name: "TypeError",
+    message: "state must be an object",
+  },
+);
 
 console.log("Building weighting snapshot adapter tests passed");
