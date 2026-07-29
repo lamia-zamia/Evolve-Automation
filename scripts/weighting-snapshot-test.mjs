@@ -32,6 +32,7 @@ const defaultGates = () => ({
   isPrestigeAllowed: off,
   isPillarFinished: off,
   isMadPrestigeAwaited: off,
+  getMechSupplySavingReason: () => null,
   isWomlingStatEarned: off,
 });
 gates = defaultGates();
@@ -76,6 +77,7 @@ assert.equal(empty.prestigeEdenAllowed, false);
 assert.equal(empty.prestigeRetireAllowed, false);
 assert.equal(empty.pillarFinished, false);
 assert.equal(empty.madPrestigeAwaited, false);
+assert.equal(empty.mechSupplySaving, null);
 assert.equal(empty.womlingFriendEarned, false);
 assert.equal(empty.womlingGodEarned, false);
 assert.equal(empty.womlingLordEarned, false);
@@ -139,6 +141,7 @@ gates = {
   },
   isPillarFinished: () => true,
   isMadPrestigeAwaited: () => true,
+  getMechSupplySavingReason: () => "saving",
   isWomlingStatEarned: (stat) => {
     askedWomlingStats.push(stat);
     return stat !== "lord";
@@ -174,10 +177,15 @@ assert.equal(gated.prestigeEdenAllowed, true);
 assert.equal(gated.prestigeRetireAllowed, false);
 assert.equal(gated.pillarFinished, true);
 assert.equal(gated.madPrestigeAwaited, true);
+assert.equal(gated.mechSupplySaving, "saving");
 assert.deepEqual(askedWomlingStats, ["friend", "god", "lord"]);
 assert.equal(gated.womlingFriendEarned, true);
 assert.equal(gated.womlingGodEarned, true);
 assert.equal(gated.womlingLordEarned, false);
+
+// The other mech-saving reason survives the same validation.
+gates = { ...defaultGates(), getMechSupplySavingReason: () => "building" };
+assert.equal(read().mechSupplySaving, "building");
 
 // The retirement preparation read is skipped while the assist is inactive, and
 // an empty shortfall list still reads as prepared.
@@ -280,6 +288,14 @@ rejectsGate(
 rejectsGate(
   { isWomlingStatEarned: (stat) => (stat === "god" ? 3 : true) },
   'isWomlingStatEarned("god") must be a boolean',
+);
+rejectsGate(
+  { getMechSupplySavingReason: () => "hoarding" },
+  'getMechSupplySavingReason() must be null, "building", or "saving"',
+);
+rejectsGate(
+  { getMechSupplySavingReason: () => false },
+  'getMechSupplySavingReason() must be null, "building", or "saving"',
 );
 rejectsGate(
   { getForeignAchievementGoal: () => "unification" },

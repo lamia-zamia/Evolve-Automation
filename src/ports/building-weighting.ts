@@ -1,6 +1,12 @@
 import type { ForeignAchievementGoal } from "../domain/combat/foreign-achievements.ts";
 
 /**
+ * Why Supply is being withheld from buildings for the mech bay: a mech is
+ * already under construction, or the next affordable one is being saved for.
+ */
+export type MechSupplySavingReason = "building" | "saving";
+
+/**
  * Script state and phase-constant game gates that the building-weighting rules
  * read, sampled and frozen once per weighting phase.
  *
@@ -49,6 +55,8 @@ export type BuildingWeightingSnapshot = {
   readonly pillarFinished: boolean;
   /** Auto prestige targets MAD and its tech is researched or affordable now. */
   readonly madPrestigeAwaited: boolean;
+  /** Supply is being withheld for the mech bay, or `null` when it is not. */
+  readonly mechSupplySaving: MechSupplySavingReason | null;
   /** Overlord achievement: the womling friend stat is earned in this universe. */
   readonly womlingFriendEarned: boolean;
   /** Overlord achievement: the womling god stat is earned in this universe. */

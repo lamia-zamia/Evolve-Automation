@@ -1,5 +1,8 @@
 import type { ForeignAchievementGoal } from "../../../../domain/combat/foreign-achievements.ts";
-import type { BuildingWeightingSnapshot } from "../../../../ports/building-weighting.ts";
+import type {
+  BuildingWeightingSnapshot,
+  MechSupplySavingReason,
+} from "../../../../ports/building-weighting.ts";
 import {
   requireArray,
   requireBoolean,
@@ -28,6 +31,7 @@ export interface WeightingSnapshotDependencies {
   readonly isPrestigeAllowed: (prestige: string) => unknown;
   readonly isPillarFinished: () => unknown;
   readonly isMadPrestigeAwaited: () => unknown;
+  readonly getMechSupplySavingReason: () => unknown;
   readonly isWomlingStatEarned: (stat: string) => unknown;
 }
 
@@ -49,6 +53,24 @@ function requireForeignAchievementGoal(
   throw new TypeError(
     `${path} must be null, "world-domination", or "syndicate"`,
   );
+}
+
+const MECH_SUPPLY_SAVING_REASONS: ReadonlySet<string> = new Set([
+  "building",
+  "saving",
+]);
+
+function requireMechSupplySavingReason(
+  value: unknown,
+  path: string,
+): MechSupplySavingReason | null {
+  if (value === null) {
+    return null;
+  }
+  if (typeof value === "string" && MECH_SUPPLY_SAVING_REASONS.has(value)) {
+    return value as MechSupplySavingReason;
+  }
+  throw new TypeError(`${path} must be null, "building", or "saving"`);
 }
 
 /**
@@ -85,6 +107,7 @@ export function createWeightingSnapshotReader({
   isPrestigeAllowed,
   isPillarFinished,
   isMadPrestigeAwaited,
+  getMechSupplySavingReason,
   isWomlingStatEarned,
 }: WeightingSnapshotDependencies): () => BuildingWeightingSnapshot {
   return () => {
@@ -194,6 +217,10 @@ export function createWeightingSnapshotReader({
       madPrestigeAwaited: requireBoolean(
         isMadPrestigeAwaited(),
         "isMadPrestigeAwaited()",
+      ),
+      mechSupplySaving: requireMechSupplySavingReason(
+        getMechSupplySavingReason(),
+        "getMechSupplySavingReason()",
       ),
       womlingFriendEarned: requireBoolean(
         isWomlingStatEarned("friend"),

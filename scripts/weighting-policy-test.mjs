@@ -28,7 +28,6 @@ let context = {
   settings: { autoBuild: false },
   resources: {},
   buildings,
-  MechManager: {},
 };
 // Rules read script state and phase-constant game gates only through the phase
 // snapshot the executor samples.
@@ -61,6 +60,7 @@ const snapshotOf = (overrides = {}) =>
     prestigeRetireAllowed: false,
     pillarFinished: false,
     madPrestigeAwaited: false,
+    mechSupplySaving: null,
     womlingFriendEarned: false,
     womlingGodEarned: false,
     womlingLordEarned: false,
@@ -75,9 +75,7 @@ const policy = createBuildingWeightingPolicy({
   getSettings: () => context.settings,
   getResources: () => context.resources,
   getBuildings: () => context.buildings,
-  getMechManager: () => context.MechManager,
   getHaveTech: () => haveTech,
-  getHaveTask: () => neutralFunction,
   getNumberStringFn: () => String,
   getNiceNumberFn: () => String,
   getBestSupplyRatioFn: () => neutralFunction,
@@ -282,62 +280,36 @@ assert.equal(fuelDepotRule.enabled(), true);
 assert.equal(fuelDepotRule.match(buildings.SpacePropellantDepot), true);
 assert.equal(fuelDepotRule.match(buildings.Mine), false);
 
-// A reserved Soul Gem target can leave currentQuantity affordable while the
-// mech itself is not affordable from the spare quantity. Supply buildings
-// must remain buildable in that state instead of being pinned for a mech that
-// cannot yet be built.
+// Whether Supply is being withheld for the mech bay is a fact about the run;
+// the rule only asks whether the candidate spends Supply at all.
 const mechSavingRule = ruleById("mech-supply-saving");
-context = {
-  ...context,
-  settings: {
-    ...context.settings,
-    autoMech: true,
-    mechBuild: "user",
-    buildingMechsFirst: true,
-  },
-  game: {
-    ...context.game,
-    global: {
-      ...context.game.global,
-      portal: { mechbay: { max: 10, bay: 0, blueprint: { size: "small" } } },
-    },
-  },
-  buildings: {
-    ...context.buildings,
-    SpireMechBay: { count: 1, stateOffCount: 0 },
-  },
-  resources: {
-    Supply: { maxQuantity: 1_000 },
-    Soul_Gem: {
-      currentQuantity: 41,
-      spareQuantity: -209,
-      rateOfChange: 0.01,
-    },
-  },
-  MechManager: {
-    isActive: false,
-    getMechCost: () => [1, 20, 1],
-    getPreferredSize: () => ["small"],
-  },
-};
+const savingSnapshot = snapshotOf({ mechSupplySaving: "saving" });
+const buildingSnapshot = snapshotOf({ mechSupplySaving: "building" });
+assert.equal(mechSavingRule.enabled(emptySnapshot), false);
+assert.equal(mechSavingRule.enabled(savingSnapshot), true);
+assert.equal(mechSavingRule.enabled(buildingSnapshot), true);
 assert.equal(
-  mechSavingRule.match({ cost: { Supply: 1 } }),
-  "Saving supplies for new mech",
-  "distant reservations should not block an otherwise affordable mech",
+  mechSavingRule.match({ cost: { Supply: 1 } }, savingSnapshot),
+  "saving",
 );
-context.resources.Soul_Gem.rateOfChange = 0.02;
-context.resources.Soul_Gem.spareQuantity = 0;
 assert.equal(
-  mechSavingRule.match({ cost: { Supply: 1 } }),
+  mechSavingRule.match({ cost: { Money: 1 } }, savingSnapshot),
   undefined,
-  "near-term reservations must still release Supply buildings",
+  "buildings that do not spend Supply are never pinned for a mech",
 );
-context.resources.Soul_Gem.spareQuantity = 1;
 assert.equal(
-  mechSavingRule.match({ cost: { Supply: 1 } }),
+  mechSavingRule.describe(
+    mechSavingRule.match({ cost: { Supply: 1 } }, savingSnapshot),
+  ),
   "Saving supplies for new mech",
-  "spare-affordable mechs should still protect Supply buildings",
 );
+assert.equal(
+  mechSavingRule.describe(
+    mechSavingRule.match({ cost: { Supply: 1 } }, buildingSnapshot),
+  ),
+  "Building mechs...",
+);
+assert.equal(mechSavingRule.multiplier(), 0);
 
 context.settings.achievementGuards = true;
 const achievementGuardRule = ruleById("achievement-guard");

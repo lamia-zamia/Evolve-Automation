@@ -3,7 +3,6 @@ import type {
   BuildingWeightingSnapshot,
 } from "../ports/building-weighting.ts";
 import type { RandomSource } from "../ports/randomness.ts";
-import { canSpendWithDistantReservation } from "../domain/economy/resources/reservation.ts";
 
 type LooseFunction = (...args: any[]) => any;
 type LooseObject = Record<PropertyKey, any>;
@@ -14,9 +13,7 @@ type BuildingWeightingDependencies = {
   getSettings: () => LooseObject;
   getResources: () => LooseObject;
   getBuildings: () => LooseObject;
-  getMechManager: () => LooseObject;
   getHaveTech: () => LooseFunction;
-  getHaveTask: () => LooseFunction;
   getNumberStringFn: () => LooseFunction;
   getNiceNumberFn: () => LooseFunction;
   getBestSupplyRatioFn: () => LooseFunction;
@@ -30,9 +27,7 @@ export function createBuildingWeightingPolicy({
   getSettings,
   getResources,
   getBuildings,
-  getMechManager,
   getHaveTech,
-  getHaveTask,
   getNumberStringFn,
   getNiceNumberFn,
   getBestSupplyRatioFn,
@@ -41,7 +36,6 @@ export function createBuildingWeightingPolicy({
   randomSource,
 }: BuildingWeightingDependencies) {
   const haveTech: LooseFunction = (...args) => getHaveTech()(...args);
-  const haveTask: LooseFunction = (...args) => getHaveTask()(...args);
   const getNumberString: LooseFunction = (...args) =>
     getNumberStringFn()(...args);
   const getNiceNumber: LooseFunction = (...args) => getNiceNumberFn()(...args);
@@ -228,43 +222,13 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "mech-supply-saving",
-      enabled: () =>
-        getSettings().autoMech &&
-        getSettings().mechBuild !== "none" &&
-        getSettings().buildingMechsFirst &&
-        getBuildings().SpireMechBay.count > 0 &&
-        getBuildings().SpireMechBay.stateOffCount === 0,
-      match: (building: any) => {
-        if (building.cost["Supply"]) {
-          if (getMechManager().isActive) {
-            return "Building mechs...";
-          }
-          let mechBay = getGame().global.portal.mechbay;
-          let newSize = !haveTask("mech")
-            ? getSettings().mechBuild === "random"
-              ? getMechManager().getPreferredSize()[0]
-              : mechBay.blueprint.size
-            : "titan";
-          let [newGems, newSupply, newSpace] = getMechManager().getMechCost({
-            size: newSize,
-          });
-          if (
-            newSpace <= mechBay.max - mechBay.bay &&
-            newSupply <= getResources().Supply.maxQuantity &&
-            canSpendWithDistantReservation(
-              {
-                current: getResources().Soul_Gem.currentQuantity,
-                spare: getResources().Soul_Gem.spareQuantity,
-                rate: getResources().Soul_Gem.rateOfChange,
-              },
-              newGems,
-            )
-          ) {
-            return "Saving supplies for new mech";
-          }
-        }
-      },
-      describe: (note: any) => note,
+      enabled: (snapshot) => snapshot.mechSupplySaving !== null,
+      match: (building: any, snapshot) =>
+        building.cost["Supply"] ? snapshot.mechSupplySaving : undefined,
+      describe: (reason: any) =>
+        reason === "building"
+          ? "Building mechs..."
+          : "Saving supplies for new mech",
       multiplier: () => 0,
     },
     {

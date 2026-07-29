@@ -72,6 +72,7 @@ import { createRaceProfile } from "../../game/race-profile.ts";
 import { createForeignGovernment } from "../../game/foreign-government.ts";
 import { createGalaxyIntelligence } from "../../game/galaxy-intelligence.ts";
 import { createHellIntelligence } from "../../game/hell-intelligence.ts";
+import { createMechIntelligence } from "../../game/mech-intelligence.ts";
 import { createPrestigeIntelligence } from "../../game/prestige-intelligence.ts";
 import { createWomlingAchievements } from "../../game/womling-achievements.ts";
 import { createPowerSupport } from "../../game/power-support.ts";
@@ -2975,9 +2976,7 @@ function startEvolveRuntimeComposition(
     getSettings: () => settings,
     getResources: () => resources,
     getBuildings: () => buildings,
-    getMechManager: () => MechManager,
     getHaveTech: () => haveTech,
-    getHaveTask: () => haveTask,
     getNumberStringFn: () => getNumberString,
     getNiceNumberFn: () => getNiceNumber,
     getBestSupplyRatioFn: () => getBestSupplyRatio,
@@ -3189,6 +3188,14 @@ function startEvolveRuntimeComposition(
       new runtimeEnvironment.MutationObserver(callback),
     randomSource,
   });
+  const { mechSupplySavingReason } = createMechIntelligence({
+    getGame: () => game,
+    getSettings: () => settings,
+    getBuildings: () => buildings,
+    getResources: () => resources,
+    getMechManager: () => MechManager,
+    getHaveTask: () => haveTask,
+  });
 
   publishTestSurface({
     MechManager,
@@ -3244,6 +3251,7 @@ function startEvolveRuntimeComposition(
         isPrestigeAllowed: (prestige) => isPrestigeAllowed(prestige),
         isPillarFinished: () => isPillarFinished(),
         isMadPrestigeAwaited: () => madPrestigeAwaited(),
+        getMechSupplySavingReason: () => mechSupplySavingReason(),
         isWomlingStatEarned: (stat) => womlingStatEarned(stat),
       }),
       isEarlyGame,

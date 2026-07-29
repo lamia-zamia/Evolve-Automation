@@ -6360,6 +6360,54 @@
     };
   }
 
+  // src/domain/economy/resources/reservation.ts
+  var DEFAULT_RESERVATION_HORIZON_SECONDS = 4 * 60 * 60;
+  function canSpendWithDistantReservation(resource2, cost, horizonSeconds = DEFAULT_RESERVATION_HORIZON_SECONDS) {
+    if (cost <= 0 || resource2.spare >= cost) return true;
+    if (resource2.current < cost || resource2.rate <= 0) return false;
+    const secondsToRestoreSpare = (cost - resource2.spare) / resource2.rate;
+    return secondsToRestoreSpare > horizonSeconds;
+  }
+
+  // src/game/mech-intelligence.ts
+  function createMechIntelligence({
+    getGame,
+    getSettings,
+    getBuildings,
+    getResources,
+    getMechManager,
+    getHaveTask
+  }) {
+    function mechSupplySavingReason() {
+      const settings = getSettings();
+      if (!settings.autoMech || settings.mechBuild === "none" || !settings.buildingMechsFirst) {
+        return null;
+      }
+      const spireMechBay = getBuildings().SpireMechBay;
+      if (spireMechBay.count === 0 || spireMechBay.stateOffCount !== 0) {
+        return null;
+      }
+      const manager = getMechManager();
+      if (manager.isActive) {
+        return "building";
+      }
+      const mechbay = getGame().global.portal.mechbay;
+      const size = getHaveTask()("mech") ? "titan" : settings.mechBuild === "random" ? manager.getPreferredSize()[0] : mechbay.blueprint.size;
+      const [gems, supply, space] = manager.getMechCost({ size });
+      const resources = getResources();
+      const affordable2 = space <= mechbay.max - mechbay.bay && supply <= resources.Supply.maxQuantity && canSpendWithDistantReservation(
+        {
+          current: resources.Soul_Gem.currentQuantity,
+          spare: resources.Soul_Gem.spareQuantity,
+          rate: resources.Soul_Gem.rateOfChange
+        },
+        gems
+      );
+      return affordable2 ? "saving" : null;
+    }
+    return { mechSupplySavingReason };
+  }
+
   // src/game/prestige-intelligence.ts
   function createPrestigeIntelligence({
     getSettings,
@@ -23834,24 +23882,13 @@
     return Object.freeze({ nextUnit: () => Math.random() });
   }
 
-  // src/domain/economy/resources/reservation.ts
-  var DEFAULT_RESERVATION_HORIZON_SECONDS = 4 * 60 * 60;
-  function canSpendWithDistantReservation(resource2, cost, horizonSeconds = DEFAULT_RESERVATION_HORIZON_SECONDS) {
-    if (cost <= 0 || resource2.spare >= cost) return true;
-    if (resource2.current < cost || resource2.rate <= 0) return false;
-    const secondsToRestoreSpare = (cost - resource2.spare) / resource2.rate;
-    return secondsToRestoreSpare > horizonSeconds;
-  }
-
   // src/policies/building-weighting.ts
   function createBuildingWeightingPolicy({
     getGame,
     getSettings,
     getResources,
     getBuildings,
-    getMechManager,
     getHaveTech,
-    getHaveTask,
     getNumberStringFn,
     getNiceNumberFn,
     getBestSupplyRatioFn,
@@ -23860,7 +23897,6 @@
     randomSource
   }) {
     const haveTech = (...args) => getHaveTech()(...args);
-    const haveTask = (...args) => getHaveTask()(...args);
     const getNumberString = (...args) => getNumberStringFn()(...args);
     const getNiceNumber = (...args) => getNiceNumberFn()(...args);
     const getBestSupplyRatio = (...args) => getBestSupplyRatioFn()(...args);
@@ -24019,30 +24055,9 @@
       },
       {
         id: "mech-supply-saving",
-        enabled: () => getSettings().autoMech && getSettings().mechBuild !== "none" && getSettings().buildingMechsFirst && getBuildings().SpireMechBay.count > 0 && getBuildings().SpireMechBay.stateOffCount === 0,
-        match: (building3) => {
-          if (building3.cost["Supply"]) {
-            if (getMechManager().isActive) {
-              return "Building mechs...";
-            }
-            let mechBay = getGame().global.portal.mechbay;
-            let newSize = !haveTask("mech") ? getSettings().mechBuild === "random" ? getMechManager().getPreferredSize()[0] : mechBay.blueprint.size : "titan";
-            let [newGems, newSupply, newSpace] = getMechManager().getMechCost({
-              size: newSize
-            });
-            if (newSpace <= mechBay.max - mechBay.bay && newSupply <= getResources().Supply.maxQuantity && canSpendWithDistantReservation(
-              {
-                current: getResources().Soul_Gem.currentQuantity,
-                spare: getResources().Soul_Gem.spareQuantity,
-                rate: getResources().Soul_Gem.rateOfChange
-              },
-              newGems
-            )) {
-              return "Saving supplies for new mech";
-            }
-          }
-        },
-        describe: (note) => note,
+        enabled: (snapshot) => snapshot.mechSupplySaving !== null,
+        match: (building3, snapshot) => building3.cost["Supply"] ? snapshot.mechSupplySaving : void 0,
+        describe: (reason) => reason === "building" ? "Building mechs..." : "Saving supplies for new mech",
         multiplier: () => 0
       },
       {
@@ -24694,6 +24709,19 @@
       `${path} must be null, "world-domination", or "syndicate"`
     );
   }
+  var MECH_SUPPLY_SAVING_REASONS = /* @__PURE__ */ new Set([
+    "building",
+    "saving"
+  ]);
+  function requireMechSupplySavingReason(value, path) {
+    if (value === null) {
+      return null;
+    }
+    if (typeof value === "string" && MECH_SUPPLY_SAVING_REASONS.has(value)) {
+      return value;
+    }
+    throw new TypeError(`${path} must be null, "building", or "saving"`);
+  }
   function createWeightingSnapshotReader({
     getState,
     isGalaxyAssaultPending,
@@ -24715,6 +24743,7 @@
     isPrestigeAllowed: isPrestigeAllowed2,
     isPillarFinished: isPillarFinished2,
     isMadPrestigeAwaited,
+    getMechSupplySavingReason,
     isWomlingStatEarned
   }) {
     return () => {
@@ -24822,6 +24851,10 @@
         madPrestigeAwaited: requireBoolean(
           isMadPrestigeAwaited(),
           "isMadPrestigeAwaited()"
+        ),
+        mechSupplySaving: requireMechSupplySavingReason(
+          getMechSupplySavingReason(),
+          "getMechSupplySavingReason()"
         ),
         womlingFriendEarned: requireBoolean(
           isWomlingStatEarned("friend"),
@@ -56179,9 +56212,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getSettings: () => settings,
       getResources: () => resources,
       getBuildings: () => buildings,
-      getMechManager: () => MechManager,
       getHaveTech: () => haveTech,
-      getHaveTask: () => haveTask,
       getNumberStringFn: () => getNumberString,
       getNiceNumberFn: () => getNiceNumber,
       getBestSupplyRatioFn: () => getBestSupplyRatio,
@@ -56368,6 +56399,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       createMutationObserver: (callback) => new runtimeEnvironment.MutationObserver(callback),
       randomSource
     });
+    const { mechSupplySavingReason } = createMechIntelligence({
+      getGame: () => game,
+      getSettings: () => settings,
+      getBuildings: () => buildings,
+      getResources: () => resources,
+      getMechManager: () => MechManager,
+      getHaveTask: () => haveTask
+    });
     publishTestSurface({
       MechManager,
       setMechManagerTestContext(context) {
@@ -56417,6 +56456,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         isPrestigeAllowed: (prestige) => isPrestigeAllowed2(prestige),
         isPillarFinished: () => isPillarFinished2(),
         isMadPrestigeAwaited: () => madPrestigeAwaited(),
+        getMechSupplySavingReason: () => mechSupplySavingReason(),
         isWomlingStatEarned: (stat) => womlingStatEarned(stat)
       }),
       isEarlyGame,
