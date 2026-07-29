@@ -71,6 +71,7 @@ import { createCoreManagers } from "../../game/core-managers.ts";
 import { createRaceProfile } from "../../game/race-profile.ts";
 import { createForeignGovernment } from "../../game/foreign-government.ts";
 import { createGalaxyIntelligence } from "../../game/galaxy-intelligence.ts";
+import { createHellIntelligence } from "../../game/hell-intelligence.ts";
 import { createPowerSupport } from "../../game/power-support.ts";
 import { createGameRates } from "../../game/rates.ts";
 import { createPlanetGeneration } from "../../game/planet-generation.ts";
@@ -2407,6 +2408,17 @@ function startEvolveRuntimeComposition(
     getTraitVal: () => traitVal,
   });
   const {
+    gateTowerSupressionTooLow,
+    gateDemonsSupressed,
+    guardPostPrebuildIncomplete,
+  } = createHellIntelligence({
+    getGame: () => game,
+    getBuildings: () => buildings,
+    getPoly: () => poly,
+    getSettings: () => settings,
+    getTraitVal: () => traitVal,
+  });
+  const {
     getCitadelConsumption,
     isHellSupressUseful,
     adjustSpire,
@@ -2955,7 +2967,6 @@ function startEvolveRuntimeComposition(
     getPoly: () => poly,
     getMechManager: () => MechManager,
     getTechIds: () => techIds,
-    getTraitVal: () => traitVal,
     getHaveTech: () => haveTech,
     getHaveTask: () => haveTask,
     getNumberStringFn: () => getNumberString,
@@ -3217,6 +3228,9 @@ function startEvolveRuntimeComposition(
               isAchievementUnlocked(achievement, level),
           }),
         isHellSupressUseful: () => isHellSupressUseful(),
+        isGateTowerSupressionTooLow: () => gateTowerSupressionTooLow(),
+        isGateDemonsSupressed: () => gateDemonsSupressed(),
+        isGuardPostPrebuildIncomplete: () => guardPostPrebuildIncomplete(),
         isGECKNeeded: () => isGECKNeeded(),
         isPrestigeAllowed: (prestige) => isPrestigeAllowed(prestige),
         isPillarFinished: () => isPillarFinished(),

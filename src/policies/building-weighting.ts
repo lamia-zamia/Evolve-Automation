@@ -17,7 +17,6 @@ type BuildingWeightingDependencies = {
   getPoly: () => LooseObject;
   getMechManager: () => LooseObject;
   getTechIds: () => LooseObject;
-  getTraitVal: () => LooseFunction;
   getHaveTech: () => LooseFunction;
   getHaveTask: () => LooseFunction;
   getNumberStringFn: () => LooseFunction;
@@ -36,7 +35,6 @@ export function createBuildingWeightingPolicy({
   getPoly,
   getMechManager,
   getTechIds,
-  getTraitVal,
   getHaveTech,
   getHaveTask,
   getNumberStringFn,
@@ -46,7 +44,6 @@ export function createBuildingWeightingPolicy({
   ResourceAction,
   randomSource,
 }: BuildingWeightingDependencies) {
-  const traitVal: LooseFunction = (...args) => getTraitVal()(...args);
   const haveTech: LooseFunction = (...args) => getHaveTech()(...args);
   const haveTask: LooseFunction = (...args) => getHaveTask()(...args);
   const getNumberString: LooseFunction = (...args) =>
@@ -288,11 +285,7 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "gate-supression-too-low",
-      enabled: () =>
-        getBuildings().GateEastTower.isUnlocked() &&
-        getBuildings().GateWestTower.isUnlocked() &&
-        getPoly().hellSupression("gate").supress <
-          getSettings().buildingTowerSuppression / 100,
+      enabled: (snapshot) => snapshot.gateTowerSupressionTooLow,
       match: (building: any) =>
         building === getBuildings().GateEastTower ||
         building === getBuildings().GateWestTower,
@@ -847,23 +840,11 @@ export function createBuildingWeightingPolicy({
         if (
           building === getBuildings().RuinsGuardPost &&
           building.isSmartManaged() &&
-          !snapshot.hellSupressUseful
+          !snapshot.hellSupressUseful &&
+          snapshot.hellGuardPostPrebuildIncomplete
         ) {
           // Prebuild guard posts. Even if we don't need supression right now they will be useful soon enough
-          if (
-            building.count <
-            Math.ceil(
-              5000 /
-                (getGame().armyRating(
-                  traitVal("high_pop", 0, 1),
-                  "hellArmy",
-                  0,
-                ) *
-                  traitVal("holy", 1, "+")),
-            )
-          ) {
-            return false;
-          }
+          return false;
         }
         let supplyIndex =
           building === getBuildings().SpirePort
@@ -1155,12 +1136,7 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "gate-demons-supressed",
-      enabled: () =>
-        getBuildings().GateTurret.isUnlocked() &&
-        getPoly().hellSupression("gate").rating >
-          7501 +
-            getGame().armyRating(traitVal("high_pop", 0, 1), "hellArmy", 0) *
-              traitVal("holy", 1, "+"),
+      enabled: (snapshot) => snapshot.gateDemonsSupressed,
       match: (building: any) => building === getBuildings().GateTurret,
       describe: () => "Gate demons fully supressed",
       multiplier: () => getSettings().buildingWeightingGateTurret,

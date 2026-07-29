@@ -21,6 +21,9 @@ export interface WeightingSnapshotDependencies {
   readonly isAchievementGuardActive: (guard: string) => unknown;
   readonly getForeignAchievementGoal: () => unknown;
   readonly isHellSupressUseful: () => unknown;
+  readonly isGateTowerSupressionTooLow: () => unknown;
+  readonly isGateDemonsSupressed: () => unknown;
+  readonly isGuardPostPrebuildIncomplete: () => unknown;
   readonly isGECKNeeded: () => unknown;
   readonly isPrestigeAllowed: (prestige: string) => unknown;
   readonly isPillarFinished: () => unknown;
@@ -73,6 +76,9 @@ export function createWeightingSnapshotReader({
   isAchievementGuardActive,
   getForeignAchievementGoal,
   isHellSupressUseful,
+  isGateTowerSupressionTooLow,
+  isGateDemonsSupressed,
+  isGuardPostPrebuildIncomplete,
   isGECKNeeded,
   isPrestigeAllowed,
   isPillarFinished,
@@ -158,6 +164,18 @@ export function createWeightingSnapshotReader({
       hellSupressUseful: requireBoolean(
         isHellSupressUseful(),
         "isHellSupressUseful()",
+      ),
+      gateTowerSupressionTooLow: requireBoolean(
+        isGateTowerSupressionTooLow(),
+        "isGateTowerSupressionTooLow()",
+      ),
+      gateDemonsSupressed: requireBoolean(
+        isGateDemonsSupressed(),
+        "isGateDemonsSupressed()",
+      ),
+      hellGuardPostPrebuildIncomplete: requireBoolean(
+        isGuardPostPrebuildIncomplete(),
+        "isGuardPostPrebuildIncomplete()",
       ),
       geckNeeded: requireBoolean(isGECKNeeded(), "isGECKNeeded()"),
       prestigeEdenAllowed: requireBoolean(

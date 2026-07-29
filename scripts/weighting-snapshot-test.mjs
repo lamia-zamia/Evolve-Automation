@@ -25,6 +25,9 @@ const defaultGates = () => ({
   isAchievementGuardActive: off,
   getForeignAchievementGoal: () => null,
   isHellSupressUseful: off,
+  isGateTowerSupressionTooLow: off,
+  isGateDemonsSupressed: off,
+  isGuardPostPrebuildIncomplete: off,
   isGECKNeeded: off,
   isPrestigeAllowed: off,
   isPillarFinished: off,
@@ -63,6 +66,9 @@ assert.equal(empty.guardRedDeadActive, false);
 assert.equal(empty.guardPacifistActive, false);
 assert.equal(empty.foreignAchievementGoal, null);
 assert.equal(empty.hellSupressUseful, false);
+assert.equal(empty.gateTowerSupressionTooLow, false);
+assert.equal(empty.gateDemonsSupressed, false);
+assert.equal(empty.hellGuardPostPrebuildIncomplete, false);
 assert.equal(empty.geckNeeded, false);
 assert.equal(empty.prestigeEdenAllowed, false);
 assert.equal(empty.prestigeRetireAllowed, false);
@@ -116,6 +122,9 @@ gates = {
   },
   getForeignAchievementGoal: () => "syndicate",
   isHellSupressUseful: () => true,
+  isGateTowerSupressionTooLow: () => true,
+  isGateDemonsSupressed: () => true,
+  isGuardPostPrebuildIncomplete: () => true,
   isGECKNeeded: () => true,
   isPrestigeAllowed: (prestige) => {
     askedPrestiges.push(prestige);
@@ -145,6 +154,9 @@ assert.equal(gated.guardRedDeadActive, true);
 assert.equal(gated.guardPacifistActive, false);
 assert.equal(gated.foreignAchievementGoal, "syndicate");
 assert.equal(gated.hellSupressUseful, true);
+assert.equal(gated.gateTowerSupressionTooLow, true);
+assert.equal(gated.gateDemonsSupressed, true);
+assert.equal(gated.hellGuardPostPrebuildIncomplete, true);
 assert.equal(gated.geckNeeded, true);
 assert.equal(gated.prestigeEdenAllowed, true);
 assert.equal(gated.prestigeRetireAllowed, false);
@@ -213,6 +225,18 @@ rejectsGate(
   "isGalaxyPiracyCoveredByFleet() must be a boolean",
 );
 rejectsGate({ isLumberRace: () => 1 }, "isLumberRace() must be a boolean");
+rejectsGate(
+  { isGateTowerSupressionTooLow: () => 0.5 },
+  "isGateTowerSupressionTooLow() must be a boolean",
+);
+rejectsGate(
+  { isGateDemonsSupressed: () => "yes" },
+  "isGateDemonsSupressed() must be a boolean",
+);
+rejectsGate(
+  { isGuardPostPrebuildIncomplete: () => undefined },
+  "isGuardPostPrebuildIncomplete() must be a boolean",
+);
 rejectsGate(
   { isBananaRepublicObjectiveComplete: () => "yes" },
   'isBananaRepublicObjectiveComplete("b2") must be a boolean',

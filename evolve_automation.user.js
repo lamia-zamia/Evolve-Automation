@@ -6319,6 +6319,47 @@
     };
   }
 
+  // src/game/hell-intelligence.ts
+  var RUINS_SUPRESSION_RATING = 5e3;
+  var GATE_SUPRESSION_RATING = 7501;
+  function createHellIntelligence({
+    getGame,
+    getBuildings,
+    getPoly,
+    getSettings,
+    getTraitVal
+  }) {
+    function getGuardPostRating() {
+      const traitVal = getTraitVal();
+      return getGame().armyRating(traitVal("high_pop", 0, 1), "hellArmy", 0) * traitVal("holy", 1, "+");
+    }
+    function gateTowerSupressionTooLow() {
+      const buildings = getBuildings();
+      if (!buildings.GateEastTower.isUnlocked() || !buildings.GateWestTower.isUnlocked()) {
+        return false;
+      }
+      return getPoly().hellSupression("gate").supress < getSettings().buildingTowerSuppression / 100;
+    }
+    function gateDemonsSupressed() {
+      if (!getBuildings().GateTurret.isUnlocked()) {
+        return false;
+      }
+      return getPoly().hellSupression("gate").rating > GATE_SUPRESSION_RATING + getGuardPostRating();
+    }
+    function guardPostPrebuildIncomplete() {
+      const guardPost = getBuildings().RuinsGuardPost;
+      if (!guardPost.isUnlocked()) {
+        return false;
+      }
+      return guardPost.count < Math.ceil(RUINS_SUPRESSION_RATING / getGuardPostRating());
+    }
+    return {
+      gateTowerSupressionTooLow,
+      gateDemonsSupressed,
+      guardPostPrebuildIncomplete
+    };
+  }
+
   // src/game/power-support.ts
   function createPowerSupport({
     getGame,
@@ -23779,7 +23820,6 @@
     getPoly,
     getMechManager,
     getTechIds,
-    getTraitVal,
     getHaveTech,
     getHaveTask,
     getNumberStringFn,
@@ -23789,7 +23829,6 @@
     ResourceAction,
     randomSource
   }) {
-    const traitVal = (...args) => getTraitVal()(...args);
     const haveTech = (...args) => getHaveTech()(...args);
     const haveTask = (...args) => getHaveTask()(...args);
     const getNumberString = (...args) => getNumberStringFn()(...args);
@@ -23985,7 +24024,7 @@
       },
       {
         id: "gate-supression-too-low",
-        enabled: () => getBuildings().GateEastTower.isUnlocked() && getBuildings().GateWestTower.isUnlocked() && getPoly().hellSupression("gate").supress < getSettings().buildingTowerSuppression / 100,
+        enabled: (snapshot) => snapshot.gateTowerSupressionTooLow,
         match: (building3) => building3 === getBuildings().GateEastTower || building3 === getBuildings().GateWestTower,
         describe: () => "Too low gate supression",
         multiplier: () => 0
@@ -24361,16 +24400,8 @@
           if ((building3 === getBuildings().BadlandsAttractor || building3 === getBuildings().SpireMechBay) && building3.isSmartManaged()) {
             return false;
           }
-          if (building3 === getBuildings().RuinsGuardPost && building3.isSmartManaged() && !snapshot.hellSupressUseful) {
-            if (building3.count < Math.ceil(
-              5e3 / (getGame().armyRating(
-                traitVal("high_pop", 0, 1),
-                "hellArmy",
-                0
-              ) * traitVal("holy", 1, "+"))
-            )) {
-              return false;
-            }
+          if (building3 === getBuildings().RuinsGuardPost && building3.isSmartManaged() && !snapshot.hellSupressUseful && snapshot.hellGuardPostPrebuildIncomplete) {
+            return false;
           }
           let supplyIndex = building3 === getBuildings().SpirePort ? 1 : building3 === getBuildings().SpireBaseCamp ? 2 : -1;
           if (supplyIndex > 0 && (getBuildings().SpireMechBay.isSmartManaged() || getBuildings().SpirePurifier.isSmartManaged())) {
@@ -24556,7 +24587,7 @@
       },
       {
         id: "gate-demons-supressed",
-        enabled: () => getBuildings().GateTurret.isUnlocked() && getPoly().hellSupression("gate").rating > 7501 + getGame().armyRating(traitVal("high_pop", 0, 1), "hellArmy", 0) * traitVal("holy", 1, "+"),
+        enabled: (snapshot) => snapshot.gateDemonsSupressed,
         match: (building3) => building3 === getBuildings().GateTurret,
         describe: () => "Gate demons fully supressed",
         multiplier: () => getSettings().buildingWeightingGateTurret
@@ -24647,6 +24678,9 @@
     isAchievementGuardActive: isAchievementGuardActive2,
     getForeignAchievementGoal,
     isHellSupressUseful,
+    isGateTowerSupressionTooLow,
+    isGateDemonsSupressed,
+    isGuardPostPrebuildIncomplete,
     isGECKNeeded,
     isPrestigeAllowed: isPrestigeAllowed2,
     isPillarFinished: isPillarFinished2
@@ -24730,6 +24764,18 @@
         hellSupressUseful: requireBoolean(
           isHellSupressUseful(),
           "isHellSupressUseful()"
+        ),
+        gateTowerSupressionTooLow: requireBoolean(
+          isGateTowerSupressionTooLow(),
+          "isGateTowerSupressionTooLow()"
+        ),
+        gateDemonsSupressed: requireBoolean(
+          isGateDemonsSupressed(),
+          "isGateDemonsSupressed()"
+        ),
+        hellGuardPostPrebuildIncomplete: requireBoolean(
+          isGuardPostPrebuildIncomplete(),
+          "isGuardPostPrebuildIncomplete()"
         ),
         geckNeeded: requireBoolean(isGECKNeeded(), "isGECKNeeded()"),
         prestigeEdenAllowed: requireBoolean(
@@ -55553,6 +55599,17 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getTraitVal: () => traitVal
     });
     const {
+      gateTowerSupressionTooLow,
+      gateDemonsSupressed,
+      guardPostPrebuildIncomplete
+    } = createHellIntelligence({
+      getGame: () => game,
+      getBuildings: () => buildings,
+      getPoly: () => poly,
+      getSettings: () => settings,
+      getTraitVal: () => traitVal
+    });
+    const {
       getCitadelConsumption,
       isHellSupressUseful,
       adjustSpire,
@@ -56068,7 +56125,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getPoly: () => poly,
       getMechManager: () => MechManager,
       getTechIds: () => techIds,
-      getTraitVal: () => traitVal,
       getHaveTech: () => haveTech,
       getHaveTask: () => haveTask,
       getNumberStringFn: () => getNumberString,
@@ -56299,6 +56355,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           isAchievementUnlocked: (achievement, level) => isAchievementUnlocked2(achievement, level)
         }),
         isHellSupressUseful: () => isHellSupressUseful(),
+        isGateTowerSupressionTooLow: () => gateTowerSupressionTooLow(),
+        isGateDemonsSupressed: () => gateDemonsSupressed(),
+        isGuardPostPrebuildIncomplete: () => guardPostPrebuildIncomplete(),
         isGECKNeeded: () => isGECKNeeded(),
         isPrestigeAllowed: (prestige) => isPrestigeAllowed2(prestige),
         isPillarFinished: () => isPillarFinished2()

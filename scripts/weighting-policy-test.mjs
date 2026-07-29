@@ -55,6 +55,9 @@ const snapshotOf = (overrides = {}) =>
     guardPacifistActive: false,
     foreignAchievementGoal: null,
     hellSupressUseful: false,
+    gateTowerSupressionTooLow: false,
+    gateDemonsSupressed: false,
+    hellGuardPostPrebuildIncomplete: false,
     geckNeeded: false,
     prestigeEdenAllowed: false,
     prestigeRetireAllowed: false,
@@ -73,7 +76,6 @@ const policy = createBuildingWeightingPolicy({
   getPoly: () => context.poly,
   getMechManager: () => context.MechManager,
   getTechIds: () => context.techIds,
-  getTraitVal: () => neutralFunction,
   getHaveTech: () => haveTech,
   getHaveTask: () => neutralFunction,
   getNumberStringFn: () => String,
@@ -442,6 +444,70 @@ assert.equal(
   false,
 );
 delete context.game.global.race.lone_survivor;
+
+// The two gate rules are enabled purely by their snapshot answer; the unlock
+// checks and the supression reads they used to make now live in the adapter.
+context.buildings = {
+  ...context.buildings,
+  GateEastTower: { _vueBinding: "GateEastTower" },
+  GateWestTower: { _vueBinding: "GateWestTower" },
+  GateTurret: { _vueBinding: "GateTurret" },
+  RuinsGuardPost: {
+    _vueBinding: "RuinsGuardPost",
+    _tab: "portal",
+    count: 0,
+    stateOffCount: 1,
+    isSmartManaged: () => true,
+  },
+};
+const towerRule = ruleById("gate-supression-too-low");
+assert.equal(towerRule.enabled(emptySnapshot), false);
+assert.equal(
+  towerRule.enabled(snapshotOf({ gateTowerSupressionTooLow: true })),
+  true,
+);
+assert.equal(towerRule.match(context.buildings.GateEastTower), true);
+assert.equal(towerRule.match(context.buildings.GateWestTower), true);
+assert.equal(towerRule.match(context.buildings.GateTurret), false);
+
+const demonRule = ruleById("gate-demons-supressed");
+assert.equal(demonRule.enabled(emptySnapshot), false);
+assert.equal(
+  demonRule.enabled(snapshotOf({ gateDemonsSupressed: true })),
+  true,
+);
+assert.equal(demonRule.match(context.buildings.GateTurret), true);
+
+// Guard posts still short of their prebuild target are exempt from the
+// non-operating penalty, but only while supression is not already useful.
+const nonOperatingRule = ruleById("non-operating-buildings");
+const guardPost = context.buildings.RuinsGuardPost;
+assert.equal(nonOperatingRule.match(guardPost, emptySnapshot), true);
+assert.equal(
+  nonOperatingRule.match(
+    guardPost,
+    snapshotOf({ hellGuardPostPrebuildIncomplete: true }),
+  ),
+  false,
+);
+assert.equal(
+  nonOperatingRule.match(
+    guardPost,
+    snapshotOf({
+      hellGuardPostPrebuildIncomplete: true,
+      hellSupressUseful: true,
+    }),
+  ),
+  true,
+);
+guardPost.isSmartManaged = () => false;
+assert.equal(
+  nonOperatingRule.match(
+    guardPost,
+    snapshotOf({ hellGuardPostPrebuildIncomplete: true }),
+  ),
+  true,
+);
 
 const vacuumManaRule = ruleById("vacuum-collapse-mana-producer");
 context.settings = {

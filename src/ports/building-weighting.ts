@@ -37,6 +37,12 @@ export type BuildingWeightingSnapshot = {
   readonly guardPacifistActive: boolean;
   readonly foreignAchievementGoal: ForeignAchievementGoal | null;
   readonly hellSupressUseful: boolean;
+  /** Gate supression is under the configured floor, so more towers still help. */
+  readonly gateTowerSupressionTooLow: boolean;
+  /** The gate's demons are fully supressed, so another turret cannot help. */
+  readonly gateDemonsSupressed: boolean;
+  /** Ruins Guard Posts have not yet reached their prebuild supression target. */
+  readonly hellGuardPostPrebuildIncomplete: boolean;
   readonly geckNeeded: boolean;
   readonly prestigeEdenAllowed: boolean;
   readonly prestigeRetireAllowed: boolean;
