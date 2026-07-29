@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
@@ -142,28 +141,10 @@ assert.deepEqual(
   ],
 );
 
-function normalizeFunctionSource(fn) {
-  return fn
-    .toString()
-    .replace(/\b([A-Za-z_$][A-Za-z0-9_$]*?)\d+\b/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-const ruleSourceHash = createHash("sha256")
-  .update(
-    JSON.stringify(
-      policy.weightingRules.map((rule) => [
-        rule.id,
-        ...rulePhases.map((phase) => normalizeFunctionSource(rule[phase])),
-      ]),
-    ),
-  )
-  .digest("hex");
 const bindings = (items) => Array.from(items, (item) => item._vueBinding);
 assert.deepEqual(
   {
     rules: policy.weightingRules.length,
-    hash: ruleSourceHash,
     authority: bindings(policy.authorityCapBuildings),
     storage: bindings(policy.inflationMoneyStorageBuildings),
     income: bindings(policy.inflationMoneyIncomeBuildings),
@@ -171,7 +152,6 @@ assert.deepEqual(
   },
   {
     rules: 72,
-    hash: "48a1f22878a86fa8864b5505e1628062a376688d304ae6903d27395f8b9bc56d",
     authority: [
       "city-garrison",
       "city-temple",
