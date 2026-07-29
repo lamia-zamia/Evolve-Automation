@@ -21,6 +21,13 @@ export function requireBoolean(value: unknown, path: string): boolean {
   return value;
 }
 
+export function requireArray(value: unknown, path: string): readonly unknown[] {
+  if (!Array.isArray(value)) {
+    throw new TypeError(`${path} must be an array`);
+  }
+  return value;
+}
+
 export function requireFunction(
   value: unknown,
   path: string,

@@ -1,4 +1,7 @@
-import type { BuildingWeightingRule } from "../ports/building-weighting.ts";
+import type {
+  BuildingWeightingRule,
+  BuildingWeightingSnapshot,
+} from "../ports/building-weighting.ts";
 import type { RandomSource } from "../ports/randomness.ts";
 import type { ForeignAchievementGoal } from "../domain/combat/foreign-achievements.ts";
 import { canSpendWithDistantReservation } from "../domain/economy/resources/reservation.ts";
@@ -10,7 +13,6 @@ type LooseConstructor = new (...args: any[]) => any;
 type BuildingWeightingDependencies = {
   getGame: () => LooseObject;
   getSettings: () => LooseObject;
-  getState: () => LooseObject;
   getResources: () => LooseObject;
   getBuildings: () => LooseObject;
   getPoly: () => LooseObject;
@@ -46,7 +48,6 @@ type BuildingWeightingDependencies = {
 export function createBuildingWeightingPolicy({
   getGame,
   getSettings,
-  getState,
   getResources,
   getBuildings,
   getPoly,
@@ -170,26 +171,6 @@ export function createBuildingWeightingPolicy({
     inflationMoneyIncomeBuildings,
   );
   const galaxyCombatShipSet = new Set(galaxyCombatShips);
-  let queuedTargets: LooseObject | undefined;
-  let queuedTargetSet = new Set<LooseObject>();
-  let triggerTargets: LooseObject | undefined;
-  let triggerTargetSet = new Set<LooseObject>();
-  const isQueuedTarget = (building: LooseObject): boolean => {
-    const targets = getState().queuedTargets;
-    if (targets !== queuedTargets) {
-      queuedTargets = targets;
-      queuedTargetSet = new Set(targets);
-    }
-    return queuedTargetSet.has(building);
-  };
-  const isTriggerTarget = (building: LooseObject): boolean => {
-    const targets = getState().triggerTargets;
-    if (targets !== triggerTargets) {
-      triggerTargets = targets;
-      triggerTargetSet = new Set(targets);
-    }
-    return triggerTargetSet.has(building);
-  };
   const weightingRules: readonly BuildingWeightingRule[] = [
     {
       // Set weighting to zero right away, and skip all checks if autoBuild is disabled
@@ -210,14 +191,16 @@ export function createBuildingWeightingPolicy({
     {
       id: "queued-target",
       enabled: () => true,
-      match: (building: any) => isQueuedTarget(building),
+      match: (building: any, snapshot: BuildingWeightingSnapshot) =>
+        snapshot.queuedTargets.has(building),
       describe: () => "Queued building, processing...",
       multiplier: () => 0,
     },
     {
       id: "trigger-target",
       enabled: () => true,
-      match: (building: any) => isTriggerTarget(building),
+      match: (building: any, snapshot: BuildingWeightingSnapshot) =>
+        snapshot.triggerTargets.has(building),
       describe: () => "Active trigger, processing...",
       multiplier: () => 0,
     },
@@ -1151,10 +1134,10 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "no-need-for-more-knowledge",
-      enabled: () =>
+      enabled: (snapshot: BuildingWeightingSnapshot) =>
         Math.max(
-          getState().knowledgeRequiredByTechs,
-          getState().knowledgeRequiredByBuildTargets,
+          snapshot.knowledgeRequiredByTechs,
+          snapshot.knowledgeRequiredByBuildTargets,
         ) <= getResources().Knowledge.maxQuantity,
       match: (building: any) =>
         building.is.knowledge &&
@@ -1166,10 +1149,9 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "need-more-knowledge",
-      enabled: () =>
-        getState().cheapestTechKnowledge >
-          getResources().Knowledge.maxQuantity ||
-        getState().knowledgeRequiredByBuildTargets >
+      enabled: (snapshot: BuildingWeightingSnapshot) =>
+        snapshot.cheapestTechKnowledge > getResources().Knowledge.maxQuantity ||
+        snapshot.knowledgeRequiredByBuildTargets >
           getResources().Knowledge.maxQuantity,
       match: (building: any) => building.is.knowledge,
       describe: () => "Need more knowledge",

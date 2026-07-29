@@ -26,13 +26,23 @@ let context = {
     },
   },
   settings: { autoBuild: false },
-  state: { queuedTargets: [], triggerTargets: [] },
   resources: {},
   buildings,
   poly: {},
   MechManager: {},
   techIds: {},
 };
+// Rules read script state only through the phase snapshot the executor samples.
+const snapshotOf = (overrides = {}) =>
+  Object.freeze({
+    queuedTargets: new Set(),
+    triggerTargets: new Set(),
+    knowledgeRequiredByTechs: 0,
+    knowledgeRequiredByBuildTargets: 0,
+    cheapestTechKnowledge: 0,
+    ...overrides,
+  });
+const emptySnapshot = snapshotOf();
 let haveTech = () => false;
 const neutralFunction = () => false;
 let guardActive = neutralFunction;
@@ -41,7 +51,6 @@ let foreignAchievementGoal = null;
 const policy = createBuildingWeightingPolicy({
   getGame: () => context.game,
   getSettings: () => context.settings,
-  getState: () => context.state,
   getResources: () => context.resources,
   getBuildings: () => context.buildings,
   getPoly: () => context.poly,
@@ -116,16 +125,61 @@ assert.equal(disabledRule.multiplier(), 0);
 
 const candidate = { name: "candidate" };
 const queuedRule = ruleById("queued-target");
-context = {
-  ...context,
-  state: { queuedTargets: [candidate], triggerTargets: [] },
-};
-assert.equal(queuedRule.match(candidate), true);
-context = {
-  ...context,
-  state: { queuedTargets: [], triggerTargets: [] },
-};
-assert.equal(queuedRule.match(candidate), false);
+const triggerRule = ruleById("trigger-target");
+assert.equal(
+  queuedRule.match(
+    candidate,
+    snapshotOf({ queuedTargets: new Set([candidate]) }),
+  ),
+  true,
+);
+assert.equal(queuedRule.match(candidate, emptySnapshot), false);
+assert.equal(
+  triggerRule.match(
+    candidate,
+    snapshotOf({ triggerTargets: new Set([candidate]) }),
+  ),
+  true,
+);
+assert.equal(triggerRule.match(candidate, emptySnapshot), false);
+
+// Knowledge rules compare the phase snapshot against live Knowledge storage.
+const uselessKnowledgeRule = ruleById("no-need-for-more-knowledge");
+const needfulKnowledgeRule = ruleById("need-more-knowledge");
+context = { ...context, resources: { Knowledge: { maxQuantity: 100 } } };
+assert.equal(
+  uselessKnowledgeRule.enabled(
+    snapshotOf({
+      knowledgeRequiredByTechs: 100,
+      knowledgeRequiredByBuildTargets: 50,
+    }),
+  ),
+  true,
+);
+assert.equal(
+  uselessKnowledgeRule.enabled(
+    snapshotOf({ knowledgeRequiredByBuildTargets: 101 }),
+  ),
+  false,
+  "a build target above storage still needs more knowledge",
+);
+assert.equal(
+  needfulKnowledgeRule.enabled(snapshotOf({ cheapestTechKnowledge: 101 })),
+  true,
+);
+assert.equal(
+  needfulKnowledgeRule.enabled(
+    snapshotOf({ knowledgeRequiredByBuildTargets: 101 }),
+  ),
+  true,
+);
+assert.equal(
+  needfulKnowledgeRule.enabled(
+    snapshotOf({ cheapestTechKnowledge: 100, knowledgeRequiredByTechs: 1e9 }),
+  ),
+  false,
+  "an unreachable far-future tech must not force knowledge weighting",
+);
 
 const digsiteRule = ruleById("eris-digsite-unsecured");
 context = {

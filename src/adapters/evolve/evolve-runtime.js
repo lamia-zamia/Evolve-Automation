@@ -269,6 +269,7 @@ import { formatTechConflict } from "../../application/tech-conflicts.ts";
 import { createBrowserClock } from "../browser/clock.ts";
 import { createBrowserRandomSource } from "../browser/random.ts";
 import { createBuildingWeightingPolicy } from "../../policies/building-weighting.ts";
+import { createWeightingSnapshotReader } from "./progression/build/weighting-snapshot.ts";
 import { readTradeRoutesInput } from "./economy/market/trade-routes.ts";
 import { planTradeRoutes } from "../../domain/economy/market/trade-routes.ts";
 import { createHellControl } from "../../bootstrap/hell-control.ts";
@@ -2947,7 +2948,6 @@ function startEvolveRuntimeComposition(
   } = createBuildingWeightingPolicy({
     getGame: () => game,
     getSettings: () => settings,
-    getState: () => state,
     getResources: () => resources,
     getBuildings: () => buildings,
     getPoly: () => poly,
@@ -3216,6 +3216,9 @@ function startEvolveRuntimeComposition(
       isVacuumSyphonStage,
       getNiceNumber,
       weightingRules,
+      readWeightingSnapshot: createWeightingSnapshotReader({
+        getState: () => state,
+      }),
       isEarlyGame,
       getIsPrestigeAllowed: () => isPrestigeAllowed,
       getBananaRepublicObjectiveComplete: () => bananaRepublicObjectiveComplete,

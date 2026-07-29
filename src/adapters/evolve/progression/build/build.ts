@@ -20,6 +20,7 @@ import type {
 import type { TickDiagnostics } from "../../../../ports/tick.ts";
 import { rejected, stale, SUCCEEDED } from "../../../command-outcomes.ts";
 import {
+  requireArray,
   requireFunction,
   requireNumber,
   requireRecord,
@@ -49,13 +50,6 @@ interface BuildCycleCapture {
 function requireString(value: unknown, path: string): string {
   if (typeof value !== "string") {
     throw new TypeError(`${path} must be a string`);
-  }
-  return value;
-}
-
-function requireArray(value: unknown, path: string): readonly unknown[] {
-  if (!Array.isArray(value)) {
-    throw new TypeError(`${path} must be an array`);
   }
   return value;
 }

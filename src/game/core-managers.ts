@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { TickDiagnostics } from "../ports/tick.ts";
-import type { BuildingWeightingRule } from "../ports/building-weighting.ts";
+import type {
+  BuildingWeightingRule,
+  BuildingWeightingSnapshot,
+} from "../ports/building-weighting.ts";
 
 interface CoreManagersDependencies {
   getGame: () => any;
@@ -11,6 +14,7 @@ interface CoreManagersDependencies {
   isVacuumSyphonStage: () => boolean;
   getNiceNumber: (value: number) => string;
   weightingRules: readonly BuildingWeightingRule[];
+  readWeightingSnapshot: () => BuildingWeightingSnapshot;
   isEarlyGame: () => boolean;
   getIsPrestigeAllowed: () => (prestige: string) => boolean;
   getBananaRepublicObjectiveComplete: () => (objective: string) => boolean;
@@ -29,6 +33,7 @@ export function createCoreManagers({
   isVacuumSyphonStage,
   getNiceNumber,
   weightingRules,
+  readWeightingSnapshot,
   isEarlyGame,
   getIsPrestigeAllowed,
   getBananaRepublicObjectiveComplete,
@@ -131,12 +136,17 @@ export function createCoreManagers({
           profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
         }
       };
+      // One sample for the whole phase, so every rule sees the same state.
+      const snapshot = measure(
+        "autoBuild.beginCycle.updateBuildingWeighting.readSnapshot",
+        () => readWeightingSnapshot(),
+      );
       // Check generic conditions, and multiplier - x1 have no effect, so skip them too.
       const activeRules = measure(
         "autoBuild.beginCycle.updateBuildingWeighting.selectRules",
         () =>
           weightingRules.filter(
-            (rule) => rule.enabled() && rule.multiplier() !== 1,
+            (rule) => rule.enabled(snapshot) && rule.multiplier() !== 1,
           ),
       );
 
@@ -147,7 +157,7 @@ export function createCoreManagers({
 
           // Apply weighting rules
           for (const rule of activeRules) {
-            const result = rule.match(building);
+            const result = rule.match(building, snapshot);
             // Rule passed
             if (result) {
               const note = rule.describe(result, building);

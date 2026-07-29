@@ -4205,6 +4205,12 @@
     }
     return value;
   }
+  function requireArray(value, path) {
+    if (!Array.isArray(value)) {
+      throw new TypeError(`${path} must be an array`);
+    }
+    return value;
+  }
   function requireFunction(value, path) {
     if (typeof value !== "function") {
       throw new TypeError(`${path} must be a function`);
@@ -5731,6 +5737,7 @@
     isVacuumSyphonStage,
     getNiceNumber,
     weightingRules,
+    readWeightingSnapshot,
     isEarlyGame,
     getIsPrestigeAllowed,
     getBananaRepublicObjectiveComplete,
@@ -5821,17 +5828,21 @@
             profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
           }
         };
+        const snapshot = measure(
+          "autoBuild.beginCycle.updateBuildingWeighting.readSnapshot",
+          () => readWeightingSnapshot()
+        );
         const activeRules = measure(
           "autoBuild.beginCycle.updateBuildingWeighting.selectRules",
           () => weightingRules.filter(
-            (rule) => rule.enabled() && rule.multiplier() !== 1
+            (rule) => rule.enabled(snapshot) && rule.multiplier() !== 1
           )
         );
         measure("autoBuild.beginCycle.updateBuildingWeighting.applyRules", () => {
           for (let building3 of this.priorityList) {
             building3.weighting = building3._weighting;
             for (const rule of activeRules) {
-              const result2 = rule.match(building3);
+              const result2 = rule.match(building3, snapshot);
               if (result2) {
                 const note = rule.describe(result2, building3);
                 if (note !== "") {
@@ -14648,7 +14659,7 @@
       Reflect.apply(method, target, [])
     );
   }
-  function requireArray(value, path) {
+  function requireArray2(value, path) {
     if (!Array.isArray(value)) {
       throw new TypeError(`${path} must be an array`);
     }
@@ -14661,7 +14672,7 @@
     return value;
   }
   function targetList(value, path) {
-    return requireArray(value, path).map(
+    return requireArray2(value, path).map(
       (entry, index) => requireRecord(entry, `${path}[${index}]`)
     );
   }
@@ -23743,7 +23754,6 @@
   function createBuildingWeightingPolicy({
     getGame,
     getSettings,
-    getState,
     getResources,
     getBuildings,
     getPoly,
@@ -23851,26 +23861,6 @@
       inflationMoneyIncomeBuildings
     );
     const galaxyCombatShipSet = new Set(galaxyCombatShips);
-    let queuedTargets;
-    let queuedTargetSet = /* @__PURE__ */ new Set();
-    let triggerTargets;
-    let triggerTargetSet = /* @__PURE__ */ new Set();
-    const isQueuedTarget = (building3) => {
-      const targets = getState().queuedTargets;
-      if (targets !== queuedTargets) {
-        queuedTargets = targets;
-        queuedTargetSet = new Set(targets);
-      }
-      return queuedTargetSet.has(building3);
-    };
-    const isTriggerTarget = (building3) => {
-      const targets = getState().triggerTargets;
-      if (targets !== triggerTargets) {
-        triggerTargets = targets;
-        triggerTargetSet = new Set(targets);
-      }
-      return triggerTargetSet.has(building3);
-    };
     const weightingRules = [
       {
         // Set weighting to zero right away, and skip all checks if autoBuild is disabled
@@ -23891,14 +23881,14 @@
       {
         id: "queued-target",
         enabled: () => true,
-        match: (building3) => isQueuedTarget(building3),
+        match: (building3, snapshot) => snapshot.queuedTargets.has(building3),
         describe: () => "Queued building, processing...",
         multiplier: () => 0
       },
       {
         id: "trigger-target",
         enabled: () => true,
-        match: (building3) => isTriggerTarget(building3),
+        match: (building3, snapshot) => snapshot.triggerTargets.has(building3),
         describe: () => "Active trigger, processing...",
         multiplier: () => 0
       },
@@ -24526,9 +24516,9 @@
       },
       {
         id: "no-need-for-more-knowledge",
-        enabled: () => Math.max(
-          getState().knowledgeRequiredByTechs,
-          getState().knowledgeRequiredByBuildTargets
+        enabled: (snapshot) => Math.max(
+          snapshot.knowledgeRequiredByTechs,
+          snapshot.knowledgeRequiredByBuildTargets
         ) <= getResources().Knowledge.maxQuantity,
         match: (building3) => building3.is.knowledge && building3 !== getBuildings().Wardenclyffe && (building3 !== getBuildings().StargateTelemetryBeacon || building3.count > 0),
         // We want Wardenclyffe for morale; first beacon required for progress
@@ -24537,7 +24527,7 @@
       },
       {
         id: "need-more-knowledge",
-        enabled: () => getState().cheapestTechKnowledge > getResources().Knowledge.maxQuantity || getState().knowledgeRequiredByBuildTargets > getResources().Knowledge.maxQuantity,
+        enabled: (snapshot) => snapshot.cheapestTechKnowledge > getResources().Knowledge.maxQuantity || snapshot.knowledgeRequiredByBuildTargets > getResources().Knowledge.maxQuantity,
         match: (building3) => building3.is.knowledge,
         describe: () => "Need more knowledge",
         multiplier: () => getSettings().buildingWeightingNeedfulKnowledge
@@ -24644,6 +24634,35 @@
       inflationMoneyIncomeBuildings,
       galaxyCombatShips,
       weightingRules
+    };
+  }
+
+  // src/adapters/evolve/progression/build/weighting-snapshot.ts
+  function createWeightingSnapshotReader({
+    getState
+  }) {
+    return () => {
+      const state = requireRecord(getState(), "state");
+      return Object.freeze({
+        queuedTargets: new Set(
+          requireArray(state["queuedTargets"], "state.queuedTargets")
+        ),
+        triggerTargets: new Set(
+          requireArray(state["triggerTargets"], "state.triggerTargets")
+        ),
+        knowledgeRequiredByTechs: requireNumber(
+          state["knowledgeRequiredByTechs"],
+          "state.knowledgeRequiredByTechs"
+        ),
+        knowledgeRequiredByBuildTargets: requireNumber(
+          state["knowledgeRequiredByBuildTargets"],
+          "state.knowledgeRequiredByBuildTargets"
+        ),
+        cheapestTechKnowledge: requireNumber(
+          state["cheapestTechKnowledge"],
+          "state.cheapestTechKnowledge"
+        )
+      });
     };
   }
 
@@ -41795,12 +41814,6 @@
     }
     return value;
   }
-  function requireArray2(value, path) {
-    if (!Array.isArray(value)) {
-      throw new TypeError(`${path} must be an array`);
-    }
-    return value;
-  }
   function callMethod(target, name, path) {
     return requireFunction(target[name], `${path}.${name}`).call(target);
   }
@@ -41812,7 +41825,7 @@
   });
   var EMPTY_CONSUMPTION = Object.freeze([]);
   function sampleConsumption(entity, path) {
-    const list = requireArray2(entity["consumption"], `${path}.consumption`);
+    const list = requireArray(entity["consumption"], `${path}.consumption`);
     return Object.freeze(
       list.map((raw, index) => {
         const entryPath = `${path}.consumption[${index}]`;
@@ -41874,11 +41887,11 @@
           () => callMethod(projectManager, "updateWeighting", "ProjectManager")
         );
         const state = requireRecord(dependencies.getState(), "state");
-        const queuedTargets = requireArray2(
+        const queuedTargets = requireArray(
           state["queuedTargets"],
           "state.queuedTargets"
         );
-        const triggerTargets = requireArray2(
+        const triggerTargets = requireArray(
           state["triggerTargets"],
           "state.triggerTargets"
         );
@@ -41887,7 +41900,7 @@
         const entities = measure(
           "autoBuild.beginCycle.readCandidateLists",
           () => [
-            ...requireArray2(
+            ...requireArray(
               callMethod(
                 buildingManager,
                 "managedPriorityList",
@@ -41895,7 +41908,7 @@
               ),
               "BuildingManager.managedPriorityList()"
             ),
-            ...requireArray2(
+            ...requireArray(
               callMethod(projectManager, "managedPriorityList", "ProjectManager"),
               "ProjectManager.managedPriorityList()"
             )
@@ -41973,13 +41986,13 @@
           conflict2 = record["status"] === "unavailable" ? UNAVAILABLE_CONFLICT : Object.freeze({
             unavailable: false,
             targetNames: Object.freeze(
-              requireArray2(
+              requireArray(
                 record["targetNames"],
                 "costConflict.targetNames"
               ).map((name) => String(name))
             ),
             resourceNames: Object.freeze(
-              requireArray2(
+              requireArray(
                 record["resourceNames"],
                 "costConflict.resourceNames"
               ).map((name) => String(name))
@@ -55969,7 +55982,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     } = createBuildingWeightingPolicy({
       getGame: () => game,
       getSettings: () => settings,
-      getState: () => state,
       getResources: () => resources,
       getBuildings: () => buildings,
       getPoly: () => poly,
@@ -56208,6 +56220,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       isVacuumSyphonStage,
       getNiceNumber,
       weightingRules,
+      readWeightingSnapshot: createWeightingSnapshotReader({
+        getState: () => state
+      }),
       isEarlyGame,
       getIsPrestigeAllowed: () => isPrestigeAllowed2,
       getBananaRepublicObjectiveComplete: () => bananaRepublicObjectiveComplete,

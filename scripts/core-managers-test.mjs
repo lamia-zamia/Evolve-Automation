@@ -13,16 +13,35 @@ let earlyGame = false;
 let vacuumSyphonStage = false;
 const prompts = [];
 
-// One active rule: doubles weighting for buildings flagged `boost`.
+// One active rule: doubles weighting for buildings flagged `boost`. It records
+// the snapshot it was handed so the sample-once-per-phase contract is checked.
+const seenSnapshots = [];
 const weightingRules = [
   {
     id: "boost",
-    enabled: () => true,
-    match: (b) => (b.boost ? "boosted" : false),
+    enabled: (snapshot) => {
+      seenSnapshots.push(snapshot);
+      return true;
+    },
+    match: (b, snapshot) => {
+      seenSnapshots.push(snapshot);
+      return b.boost ? "boosted" : false;
+    },
     describe: () => "note",
     multiplier: () => 2,
   },
 ];
+let weightingSnapshotReads = 0;
+const readWeightingSnapshot = () => {
+  weightingSnapshotReads++;
+  return Object.freeze({
+    queuedTargets: new Set(),
+    triggerTargets: new Set(),
+    knowledgeRequiredByTechs: 0,
+    knowledgeRequiredByBuildTargets: 0,
+    cheapestTechKnowledge: 0,
+  });
+};
 let niceNumberCalls = 0;
 
 class Trigger {
@@ -53,6 +72,7 @@ const { JobManager, BuildingManager, ProjectManager, TriggerManager } =
       return String(n);
     },
     weightingRules,
+    readWeightingSnapshot,
     isEarlyGame: () => earlyGame,
     getIsPrestigeAllowed: () => prestigeAllowed,
     getBananaRepublicObjectiveComplete: () => bananaComplete,
@@ -121,6 +141,13 @@ assert.match(
   /AutoBuild weighting/,
 );
 assert.equal(niceNumberCalls, 2);
+assert.equal(weightingSnapshotReads, 1, "state is sampled once per phase");
+assert.equal(
+  new Set(seenSnapshots).size,
+  1,
+  "every rule phase receives the same snapshot instance",
+);
+assert.equal(Object.isFrozen(seenSnapshots[0]), true);
 BuildingManager.priorityList.forEach((building) => {
   building.extraDescription = "";
 });
