@@ -29,6 +29,7 @@ export interface WeightingSnapshotDependencies {
   readonly isGuardPostPrebuildIncomplete: () => unknown;
   readonly getSpirePrebuildShortfall: () => unknown;
   readonly getNextCitadelPowerDraw: () => unknown;
+  readonly isTechResearched: (research: string, level: number) => unknown;
   readonly isGECKNeeded: () => unknown;
   readonly isPrestigeAllowed: (prestige: string) => unknown;
   readonly isPillarFinished: () => unknown;
@@ -107,6 +108,7 @@ export function createWeightingSnapshotReader({
   isGuardPostPrebuildIncomplete,
   getSpirePrebuildShortfall,
   getNextCitadelPowerDraw,
+  isTechResearched,
   isGECKNeeded,
   isPrestigeAllowed,
   isPillarFinished,
@@ -124,6 +126,12 @@ export function createWeightingSnapshotReader({
       getSpirePrebuildShortfall(),
       "getSpirePrebuildShortfall()",
     );
+    // `global.tech[research]` is absent until a run starts that research and is
+    // `0` while it sits at level 0, so the game's own `haveTech` answers
+    // `undefined` or `0` rather than `false`. The tech gates keep that lenient
+    // coercion; every other gate in this snapshot is an exact boolean contract.
+    const researched = (research: string, level: number): boolean =>
+      Boolean(isTechResearched(research, level));
     return Object.freeze({
       queuedTargets: new Set(
         requireArray(state["queuedTargets"], "state.queuedTargets"),
@@ -224,6 +232,16 @@ export function createWeightingSnapshotReader({
         getNextCitadelPowerDraw(),
         "getNextCitadelPowerDraw()",
       ),
+      worldUnified: researched("world_control", 1),
+      spireWaygateComplete: researched("waygate", 2),
+      spireEdenicGateComplete: researched("edenic", 3),
+      elysiumFireSupportUnlocked: researched("elysium", 8),
+      elysiumGarrisonDestroyed: researched("isle", 2),
+      eleriumCannonResearched: researched("elysium", 10),
+      asphodelStabilizerUnlocked: researched("asphodel", 8),
+      spireSphinxSolved: researched("hell_spire", 8),
+      assemblyCureComplete: researched("focus_cure", 7),
+      tauCetiReached: researched("tauceti", 2),
       geckNeeded: requireBoolean(isGECKNeeded(), "isGECKNeeded()"),
       prestigeEdenAllowed: requireBoolean(
         isPrestigeAllowed("eden"),

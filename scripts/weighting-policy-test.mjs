@@ -58,6 +58,16 @@ const snapshotOf = (overrides = {}) =>
     spirePortPrebuildIncomplete: false,
     spireBaseCampPrebuildIncomplete: false,
     nextCitadelPowerDraw: 0,
+    worldUnified: false,
+    spireWaygateComplete: false,
+    spireEdenicGateComplete: false,
+    elysiumFireSupportUnlocked: false,
+    elysiumGarrisonDestroyed: false,
+    eleriumCannonResearched: false,
+    asphodelStabilizerUnlocked: false,
+    spireSphinxSolved: false,
+    assemblyCureComplete: false,
+    tauCetiReached: false,
     geckNeeded: false,
     prestigeEdenAllowed: false,
     prestigeRetireAllowed: false,
@@ -70,14 +80,12 @@ const snapshotOf = (overrides = {}) =>
     ...overrides,
   });
 const emptySnapshot = snapshotOf();
-let haveTech = () => false;
 
 const policy = createBuildingWeightingPolicy({
   getGame: () => context.game,
   getSettings: () => context.settings,
   getResources: () => context.resources,
   getBuildings: () => context.buildings,
-  getHaveTech: () => haveTech,
   getNumberStringFn: () => String,
   getNiceNumberFn: () => String,
   ResourceAction,
@@ -613,5 +621,118 @@ assert.equal(
   energyRule.match({ _vueBinding: "Factory", powered: 40 }, emptySnapshot),
   false,
 );
+
+// The tech gates are snapshot answers; the race checks that share an `enabled`
+// with one of them stay live reads of the candidate-independent race bag.
+context.buildings = {
+  ...context.buildings,
+  SpaceTestLaunch: { _vueBinding: "SpaceTestLaunch", isUnlocked: () => true },
+  SpireWaygate: { _vueBinding: "SpireWaygate" },
+  SpireEdenicGate: { _vueBinding: "SpireEdenicGate" },
+  SpireSphinx: { _vueBinding: "SpireSphinx" },
+  ElysiumFireSupportBase: { _vueBinding: "ElysiumFireSupportBase", count: 100 },
+  AsphodelStabilizer: { _vueBinding: "AsphodelStabilizer", count: 5 },
+  AsphodelWarehouse: { _vueBinding: "AsphodelWarehouse", count: 5 },
+};
+
+const sabotageRule = ruleById("truepath-test-launch-sabotage");
+context.game.global.race.truepath = true;
+assert.equal(sabotageRule.enabled(emptySnapshot), true);
+assert.equal(
+  sabotageRule.enabled(snapshotOf({ worldUnified: true })),
+  false,
+  "a unified world can no longer be sabotaged",
+);
+delete context.game.global.race.truepath;
+assert.equal(sabotageRule.enabled(emptySnapshot), undefined);
+
+const waygateRule = ruleById("spire-waygate-done");
+assert.equal(waygateRule.enabled(emptySnapshot), false);
+assert.equal(
+  waygateRule.enabled(snapshotOf({ spireWaygateComplete: true })),
+  true,
+);
+assert.equal(waygateRule.match(context.buildings.SpireWaygate), true);
+
+const edenicGateRule = ruleById("spire-edenic-gate-done");
+assert.equal(edenicGateRule.enabled(emptySnapshot), false);
+assert.equal(
+  edenicGateRule.enabled(snapshotOf({ spireEdenicGateComplete: true })),
+  true,
+);
+assert.equal(edenicGateRule.match(context.buildings.SpireEdenicGate), true);
+
+const sphinxRule = ruleById("spire-sphinx-done");
+assert.equal(sphinxRule.enabled(emptySnapshot), undefined);
+assert.equal(sphinxRule.enabled(snapshotOf({ spireSphinxSolved: true })), true);
+context.game.global.race.warlord = true;
+assert.equal(
+  sphinxRule.enabled(emptySnapshot),
+  true,
+  "Harmachis is unusable during Warlord even before the Sphinx is solved",
+);
+delete context.game.global.race.warlord;
+assert.equal(sphinxRule.match(context.buildings.SpireSphinx), true);
+
+const warehouseRule = ruleById("warehouse-cap");
+assert.equal(warehouseRule.enabled(emptySnapshot), false);
+assert.equal(
+  warehouseRule.enabled(snapshotOf({ asphodelStabilizerUnlocked: true })),
+  true,
+);
+assert.equal(warehouseRule.match(context.buildings.AsphodelStabilizer), true);
+
+// The Fire Support Base reports the reason it is blocked, and the cap only
+// applies once a hundred of them exist.
+const fireSupportRule = ruleById("elysium-fire-support-base-blocked");
+const fireSupportBase = context.buildings.ElysiumFireSupportBase;
+assert.equal(fireSupportRule.enabled(emptySnapshot), false);
+assert.equal(
+  fireSupportRule.enabled(snapshotOf({ elysiumFireSupportUnlocked: true })),
+  true,
+);
+assert.equal(
+  fireSupportRule.match(
+    fireSupportBase,
+    snapshotOf({ elysiumGarrisonDestroyed: true }),
+  ),
+  "Garrison is destroyed",
+);
+assert.equal(
+  fireSupportRule.match(fireSupportBase, emptySnapshot),
+  "Missing Elerium Cannon tech",
+);
+assert.equal(
+  fireSupportRule.match(
+    fireSupportBase,
+    snapshotOf({ eleriumCannonResearched: true }),
+  ),
+  undefined,
+);
+fireSupportBase.count = 99;
+assert.equal(fireSupportRule.match(fireSupportBase, emptySnapshot), undefined);
+assert.equal(
+  fireSupportRule.match(
+    context.buildings.SpireWaygate,
+    snapshotOf({ elysiumGarrisonDestroyed: true }),
+  ),
+  undefined,
+);
+
+const assemblingRule = ruleById("assembling-not-possible");
+const cured = snapshotOf({ assemblyCureComplete: true });
+assert.equal(assemblingRule.enabled(cured), undefined);
+context.game.global.race.artifical = true;
+assert.equal(assemblingRule.enabled(cured), true);
+assert.equal(assemblingRule.enabled(emptySnapshot), false);
+delete context.game.global.race.artifical;
+
+const solarRule = ruleById("solar-system-building");
+const tauReached = snapshotOf({ tauCetiReached: true });
+assert.equal(solarRule.enabled(tauReached), undefined);
+context.game.global.race.truepath = true;
+assert.equal(solarRule.enabled(tauReached), true);
+assert.equal(solarRule.enabled(emptySnapshot), false);
+delete context.game.global.race.truepath;
 
 console.log("Weighting policy module tests passed");

@@ -58,6 +58,26 @@ export type BuildingWeightingSnapshot = {
    * it; the value is still defined, and meaningless, before the citadel exists.
    */
   readonly nextCitadelPowerDraw: number;
+  /** Unification is researched, so the Test Launch can no longer be sabotaged. */
+  readonly worldUnified: boolean;
+  /** The Spire Waygate is finished, so no more of them are wanted. */
+  readonly spireWaygateComplete: boolean;
+  /** The Spire Edenic Gate is finished, so no more of them are wanted. */
+  readonly spireEdenicGateComplete: boolean;
+  /** The Elysium Fire Support Base is unlocked, so its build limits apply. */
+  readonly elysiumFireSupportUnlocked: boolean;
+  /** The Elysium garrison is destroyed, so Fire Support Bases are useless. */
+  readonly elysiumGarrisonDestroyed: boolean;
+  /** The Elerium Cannon is researched, lifting the Fire Support Base cap. */
+  readonly eleriumCannonResearched: boolean;
+  /** The Asphodel Stabilizer is unlocked, so its Warehouse cap applies. */
+  readonly asphodelStabilizerUnlocked: boolean;
+  /** The Spire Sphinx is solved and cannot be used again. */
+  readonly spireSphinxSolved: boolean;
+  /** Cure research has reached the level that ends population assembly. */
+  readonly assemblyCureComplete: boolean;
+  /** Tau Ceti is reached, so the solar system is no longer the frontier. */
+  readonly tauCetiReached: boolean;
   readonly geckNeeded: boolean;
   readonly prestigeEdenAllowed: boolean;
   readonly prestigeRetireAllowed: boolean;

@@ -23814,13 +23814,11 @@
     getSettings,
     getResources,
     getBuildings,
-    getHaveTech,
     getNumberStringFn,
     getNiceNumberFn,
     ResourceAction,
     randomSource
   }) {
-    const haveTech = (...args) => getHaveTech()(...args);
     const getNumberString = (...args) => getNumberStringFn()(...args);
     const getNiceNumber = (...args) => getNiceNumberFn()(...args);
     const authorityCapBuildings = [
@@ -23931,7 +23929,7 @@
       },
       {
         id: "truepath-test-launch-sabotage",
-        enabled: () => getGame().global.race["truepath"] && getBuildings().SpaceTestLaunch.isUnlocked() && !haveTech("world_control"),
+        enabled: (snapshot) => getGame().global.race["truepath"] && getBuildings().SpaceTestLaunch.isUnlocked() && !snapshot.worldUnified,
         match: (building3) => {
           if (building3 === getBuildings().SpaceTestLaunch) {
             let sabotage = 1;
@@ -24084,7 +24082,7 @@
       {
         // We can't limit waygate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
         id: "spire-waygate-done",
-        enabled: () => haveTech("waygate", 2),
+        enabled: (snapshot) => snapshot.spireWaygateComplete,
         match: (building3) => building3 === getBuildings().SpireWaygate,
         describe: () => "",
         multiplier: () => 0
@@ -24092,7 +24090,7 @@
       {
         // We can't limit edenic gate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
         id: "spire-edenic-gate-done",
-        enabled: () => haveTech("edenic", 3),
+        enabled: (snapshot) => snapshot.spireEdenicGateComplete,
         match: (building3) => building3 === getBuildings().SpireEdenicGate,
         describe: () => "",
         multiplier: () => 0
@@ -24100,13 +24098,13 @@
       {
         // Build up to 100, and then fire after researching cannon
         id: "elysium-fire-support-base-blocked",
-        enabled: () => haveTech("elysium", 8),
-        match: (building3) => {
+        enabled: (snapshot) => snapshot.elysiumFireSupportUnlocked,
+        match: (building3, snapshot) => {
           if (building3 === getBuildings().ElysiumFireSupportBase) {
-            if (haveTech("isle", 2)) {
+            if (snapshot.elysiumGarrisonDestroyed) {
               return "Garrison is destroyed";
             }
-            if (!haveTech("elysium", 10) && building3.count >= 100) {
+            if (!snapshot.eleriumCannonResearched && building3.count >= 100) {
               return "Missing Elerium Cannon tech";
             }
           }
@@ -24116,7 +24114,7 @@
       },
       {
         id: "warehouse-cap",
-        enabled: () => haveTech("asphodel", 8),
+        enabled: (snapshot) => snapshot.asphodelStabilizerUnlocked,
         match: (building3) => building3 === getBuildings().AsphodelStabilizer && building3.count >= getBuildings().AsphodelWarehouse.count,
         describe: () => "Can not exceed amount of Warehouses",
         multiplier: () => 0
@@ -24124,14 +24122,14 @@
       {
         // Sphinx not usable after solving / Harmachis not usable during Warlord
         id: "spire-sphinx-done",
-        enabled: () => haveTech("hell_spire", 8) || getGame().global.race["warlord"],
+        enabled: (snapshot) => snapshot.spireSphinxSolved || getGame().global.race["warlord"],
         match: (building3) => building3 === getBuildings().SpireSphinx,
         describe: () => "",
         multiplier: () => 0
       },
       {
         id: "assembling-not-possible",
-        enabled: () => getGame().global.race["artifical"] && haveTech("focus_cure", 7),
+        enabled: (snapshot) => getGame().global.race["artifical"] && snapshot.assemblyCureComplete,
         match: (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Population && building3 !== getBuildings().TauCloning,
         describe: () => "Assembling is not possible",
         multiplier: () => 0
@@ -24584,7 +24582,7 @@
       },
       {
         id: "solar-system-building",
-        enabled: () => getGame().global.race["truepath"] && haveTech("tauceti", 2),
+        enabled: (snapshot) => getGame().global.race["truepath"] && snapshot.tauCetiReached,
         match: (building3) => (building3._tab === "city" || building3._tab === "space" || building3._tab === "starDock") && !(building3 instanceof ResourceAction),
         describe: () => "Solar System building",
         multiplier: () => getSettings().buildingWeightingSolar
@@ -24656,6 +24654,7 @@
     isGuardPostPrebuildIncomplete,
     getSpirePrebuildShortfall,
     getNextCitadelPowerDraw,
+    isTechResearched,
     isGECKNeeded,
     isPrestigeAllowed: isPrestigeAllowed2,
     isPillarFinished: isPillarFinished2,
@@ -24673,6 +24672,7 @@
         getSpirePrebuildShortfall(),
         "getSpirePrebuildShortfall()"
       );
+      const researched = (research, level) => Boolean(isTechResearched(research, level));
       return Object.freeze({
         queuedTargets: new Set(
           requireArray(state["queuedTargets"], "state.queuedTargets")
@@ -24771,6 +24771,16 @@
           getNextCitadelPowerDraw(),
           "getNextCitadelPowerDraw()"
         ),
+        worldUnified: researched("world_control", 1),
+        spireWaygateComplete: researched("waygate", 2),
+        spireEdenicGateComplete: researched("edenic", 3),
+        elysiumFireSupportUnlocked: researched("elysium", 8),
+        elysiumGarrisonDestroyed: researched("isle", 2),
+        eleriumCannonResearched: researched("elysium", 10),
+        asphodelStabilizerUnlocked: researched("asphodel", 8),
+        spireSphinxSolved: researched("hell_spire", 8),
+        assemblyCureComplete: researched("focus_cure", 7),
+        tauCetiReached: researched("tauceti", 2),
         geckNeeded: requireBoolean(isGECKNeeded(), "isGECKNeeded()"),
         prestigeEdenAllowed: requireBoolean(
           isPrestigeAllowed2("eden"),
@@ -56020,7 +56030,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getSettings: () => settings,
       getResources: () => resources,
       getBuildings: () => buildings,
-      getHaveTech: () => haveTech,
       getNumberStringFn: () => getNumberString,
       getNiceNumberFn: () => getNiceNumber,
       ResourceAction,
@@ -56260,6 +56269,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         isGuardPostPrebuildIncomplete: () => guardPostPrebuildIncomplete(),
         getSpirePrebuildShortfall: () => spirePrebuildShortfall(),
         getNextCitadelPowerDraw: () => nextCitadelPowerDraw(),
+        isTechResearched: (research, level) => haveTech(research, level),
         isGECKNeeded: () => isGECKNeeded(),
         isPrestigeAllowed: (prestige) => isPrestigeAllowed2(prestige),
         isPillarFinished: () => isPillarFinished2(),

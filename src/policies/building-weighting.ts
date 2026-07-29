@@ -13,7 +13,6 @@ type BuildingWeightingDependencies = {
   getSettings: () => LooseObject;
   getResources: () => LooseObject;
   getBuildings: () => LooseObject;
-  getHaveTech: () => LooseFunction;
   getNumberStringFn: () => LooseFunction;
   getNiceNumberFn: () => LooseFunction;
   ResourceAction: LooseConstructor;
@@ -25,13 +24,11 @@ export function createBuildingWeightingPolicy({
   getSettings,
   getResources,
   getBuildings,
-  getHaveTech,
   getNumberStringFn,
   getNiceNumberFn,
   ResourceAction,
   randomSource,
 }: BuildingWeightingDependencies) {
-  const haveTech: LooseFunction = (...args) => getHaveTech()(...args);
   const getNumberString: LooseFunction = (...args) =>
     getNumberStringFn()(...args);
   const getNiceNumber: LooseFunction = (...args) => getNiceNumberFn()(...args);
@@ -146,10 +143,10 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "truepath-test-launch-sabotage",
-      enabled: () =>
+      enabled: (snapshot) =>
         getGame().global.race["truepath"] &&
         getBuildings().SpaceTestLaunch.isUnlocked() &&
-        !haveTech("world_control"),
+        !snapshot.worldUnified,
       match: (building: any) => {
         if (building === getBuildings().SpaceTestLaunch) {
           let sabotage = 1;
@@ -389,7 +386,7 @@ export function createBuildingWeightingPolicy({
     {
       // We can't limit waygate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
       id: "spire-waygate-done",
-      enabled: () => haveTech("waygate", 2),
+      enabled: (snapshot) => snapshot.spireWaygateComplete,
       match: (building: any) => building === getBuildings().SpireWaygate,
       describe: () => "",
       multiplier: () => 0,
@@ -397,7 +394,7 @@ export function createBuildingWeightingPolicy({
     {
       // We can't limit edenic gate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
       id: "spire-edenic-gate-done",
-      enabled: () => haveTech("edenic", 3),
+      enabled: (snapshot) => snapshot.spireEdenicGateComplete,
       match: (building: any) => building === getBuildings().SpireEdenicGate,
       describe: () => "",
       multiplier: () => 0,
@@ -405,13 +402,13 @@ export function createBuildingWeightingPolicy({
     {
       // Build up to 100, and then fire after researching cannon
       id: "elysium-fire-support-base-blocked",
-      enabled: () => haveTech("elysium", 8),
-      match: (building: any) => {
+      enabled: (snapshot) => snapshot.elysiumFireSupportUnlocked,
+      match: (building: any, snapshot) => {
         if (building === getBuildings().ElysiumFireSupportBase) {
-          if (haveTech("isle", 2)) {
+          if (snapshot.elysiumGarrisonDestroyed) {
             return "Garrison is destroyed";
           }
-          if (!haveTech("elysium", 10) && building.count >= 100) {
+          if (!snapshot.eleriumCannonResearched && building.count >= 100) {
             return "Missing Elerium Cannon tech";
           }
         }
@@ -421,7 +418,7 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "warehouse-cap",
-      enabled: () => haveTech("asphodel", 8),
+      enabled: (snapshot) => snapshot.asphodelStabilizerUnlocked,
       match: (building: any) =>
         building === getBuildings().AsphodelStabilizer &&
         building.count >= getBuildings().AsphodelWarehouse.count,
@@ -431,16 +428,16 @@ export function createBuildingWeightingPolicy({
     {
       // Sphinx not usable after solving / Harmachis not usable during Warlord
       id: "spire-sphinx-done",
-      enabled: () =>
-        haveTech("hell_spire", 8) || getGame().global.race["warlord"],
+      enabled: (snapshot) =>
+        snapshot.spireSphinxSolved || getGame().global.race["warlord"],
       match: (building: any) => building === getBuildings().SpireSphinx,
       describe: () => "",
       multiplier: () => 0,
     },
     {
       id: "assembling-not-possible",
-      enabled: () =>
-        getGame().global.race["artifical"] && haveTech("focus_cure", 7),
+      enabled: (snapshot) =>
+        getGame().global.race["artifical"] && snapshot.assemblyCureComplete,
       match: (building: any) =>
         building instanceof ResourceAction &&
         building.resource === getResources().Population &&
@@ -1120,8 +1117,8 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "solar-system-building",
-      enabled: () =>
-        getGame().global.race["truepath"] && haveTech("tauceti", 2),
+      enabled: (snapshot) =>
+        getGame().global.race["truepath"] && snapshot.tauCetiReached,
       match: (building: any) =>
         (building._tab === "city" ||
           building._tab === "space" ||

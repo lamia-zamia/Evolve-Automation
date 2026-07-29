@@ -30,6 +30,7 @@ const defaultGates = () => ({
   isGuardPostPrebuildIncomplete: off,
   getSpirePrebuildShortfall: () => ({ ports: false, baseCamps: false }),
   getNextCitadelPowerDraw: () => 30,
+  isTechResearched: off,
   isGECKNeeded: off,
   isPrestigeAllowed: off,
   isPillarFinished: off,
@@ -77,6 +78,16 @@ assert.equal(empty.hellGuardPostPrebuildIncomplete, false);
 assert.equal(empty.spirePortPrebuildIncomplete, false);
 assert.equal(empty.spireBaseCampPrebuildIncomplete, false);
 assert.equal(empty.nextCitadelPowerDraw, 30);
+assert.equal(empty.worldUnified, false);
+assert.equal(empty.spireWaygateComplete, false);
+assert.equal(empty.spireEdenicGateComplete, false);
+assert.equal(empty.elysiumFireSupportUnlocked, false);
+assert.equal(empty.elysiumGarrisonDestroyed, false);
+assert.equal(empty.eleriumCannonResearched, false);
+assert.equal(empty.asphodelStabilizerUnlocked, false);
+assert.equal(empty.spireSphinxSolved, false);
+assert.equal(empty.assemblyCureComplete, false);
+assert.equal(empty.tauCetiReached, false);
 assert.equal(empty.geckNeeded, false);
 assert.equal(empty.prestigeEdenAllowed, false);
 assert.equal(empty.prestigeRetireAllowed, false);
@@ -118,6 +129,7 @@ const askedObjectives = [];
 const askedGuards = [];
 const askedPrestiges = [];
 const askedWomlingStats = [];
+const askedTechs = [];
 gates = {
   ...defaultGates(),
   isGalaxyAssaultPending: () => true,
@@ -141,6 +153,10 @@ gates = {
   isGuardPostPrebuildIncomplete: () => true,
   getSpirePrebuildShortfall: () => ({ ports: true, baseCamps: false }),
   getNextCitadelPowerDraw: () => 172.5,
+  isTechResearched: (research, level) => {
+    askedTechs.push(`${research}:${level}`);
+    return research !== "isle";
+  },
   isGECKNeeded: () => true,
   isPrestigeAllowed: (prestige) => {
     askedPrestiges.push(prestige);
@@ -182,6 +198,28 @@ assert.equal(gated.hellGuardPostPrebuildIncomplete, true);
 assert.equal(gated.spirePortPrebuildIncomplete, true);
 assert.equal(gated.spireBaseCampPrebuildIncomplete, false);
 assert.equal(gated.nextCitadelPowerDraw, 172.5);
+assert.deepEqual(askedTechs, [
+  "world_control:1",
+  "waygate:2",
+  "edenic:3",
+  "elysium:8",
+  "isle:2",
+  "elysium:10",
+  "asphodel:8",
+  "hell_spire:8",
+  "focus_cure:7",
+  "tauceti:2",
+]);
+assert.equal(gated.worldUnified, true);
+assert.equal(gated.spireWaygateComplete, true);
+assert.equal(gated.spireEdenicGateComplete, true);
+assert.equal(gated.elysiumFireSupportUnlocked, true);
+assert.equal(gated.elysiumGarrisonDestroyed, false);
+assert.equal(gated.eleriumCannonResearched, true);
+assert.equal(gated.asphodelStabilizerUnlocked, true);
+assert.equal(gated.spireSphinxSolved, true);
+assert.equal(gated.assemblyCureComplete, true);
+assert.equal(gated.tauCetiReached, true);
 assert.equal(gated.geckNeeded, true);
 assert.equal(gated.prestigeEdenAllowed, true);
 assert.equal(gated.prestigeRetireAllowed, false);
@@ -192,6 +230,16 @@ assert.deepEqual(askedWomlingStats, ["friend", "god", "lord"]);
 assert.equal(gated.womlingFriendEarned, true);
 assert.equal(gated.womlingGodEarned, true);
 assert.equal(gated.womlingLordEarned, false);
+
+// The tech gates keep the game's lenient coercion: `haveTech` answers
+// `undefined` for a research the run has never started and `0` for one recorded
+// at level 0, and neither may become a malformed-input rejection.
+for (const absent of [undefined, 0, false]) {
+  gates = { ...defaultGates(), isTechResearched: () => absent };
+  assert.equal(read().tauCetiReached, false);
+}
+gates = { ...defaultGates(), isTechResearched: () => true };
+assert.equal(read().tauCetiReached, true);
 
 // The other mech-saving reason survives the same validation.
 gates = { ...defaultGates(), getMechSupplySavingReason: () => "building" };
