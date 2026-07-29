@@ -27,6 +27,8 @@ export interface WeightingSnapshotDependencies {
   readonly isGECKNeeded: () => unknown;
   readonly isPrestigeAllowed: (prestige: string) => unknown;
   readonly isPillarFinished: () => unknown;
+  readonly isMadPrestigeAwaited: () => unknown;
+  readonly isWomlingStatEarned: (stat: string) => unknown;
 }
 
 const FOREIGN_ACHIEVEMENT_GOALS: ReadonlySet<string> = new Set([
@@ -82,6 +84,8 @@ export function createWeightingSnapshotReader({
   isGECKNeeded,
   isPrestigeAllowed,
   isPillarFinished,
+  isMadPrestigeAwaited,
+  isWomlingStatEarned,
 }: WeightingSnapshotDependencies): () => BuildingWeightingSnapshot {
   return () => {
     const state = requireRecord(getState(), "state");
@@ -187,6 +191,22 @@ export function createWeightingSnapshotReader({
         'isPrestigeAllowed("retire")',
       ),
       pillarFinished: requireBoolean(isPillarFinished(), "isPillarFinished()"),
+      madPrestigeAwaited: requireBoolean(
+        isMadPrestigeAwaited(),
+        "isMadPrestigeAwaited()",
+      ),
+      womlingFriendEarned: requireBoolean(
+        isWomlingStatEarned("friend"),
+        'isWomlingStatEarned("friend")',
+      ),
+      womlingGodEarned: requireBoolean(
+        isWomlingStatEarned("god"),
+        'isWomlingStatEarned("god")',
+      ),
+      womlingLordEarned: requireBoolean(
+        isWomlingStatEarned("lord"),
+        'isWomlingStatEarned("lord")',
+      ),
     });
   };
 }

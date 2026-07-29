@@ -47,6 +47,14 @@ export type BuildingWeightingSnapshot = {
   readonly prestigeEdenAllowed: boolean;
   readonly prestigeRetireAllowed: boolean;
   readonly pillarFinished: boolean;
+  /** Auto prestige targets MAD and its tech is researched or affordable now. */
+  readonly madPrestigeAwaited: boolean;
+  /** Overlord achievement: the womling friend stat is earned in this universe. */
+  readonly womlingFriendEarned: boolean;
+  /** Overlord achievement: the womling god stat is earned in this universe. */
+  readonly womlingGodEarned: boolean;
+  /** Overlord achievement: the womling lord stat is earned in this universe. */
+  readonly womlingLordEarned: boolean;
 };
 
 /**

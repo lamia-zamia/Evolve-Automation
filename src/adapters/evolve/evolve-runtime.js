@@ -72,6 +72,8 @@ import { createRaceProfile } from "../../game/race-profile.ts";
 import { createForeignGovernment } from "../../game/foreign-government.ts";
 import { createGalaxyIntelligence } from "../../game/galaxy-intelligence.ts";
 import { createHellIntelligence } from "../../game/hell-intelligence.ts";
+import { createPrestigeIntelligence } from "../../game/prestige-intelligence.ts";
+import { createWomlingAchievements } from "../../game/womling-achievements.ts";
 import { createPowerSupport } from "../../game/power-support.ts";
 import { createGameRates } from "../../game/rates.ts";
 import { createPlanetGeneration } from "../../game/planet-generation.ts";
@@ -2418,6 +2420,15 @@ function startEvolveRuntimeComposition(
     getSettings: () => settings,
     getTraitVal: () => traitVal,
   });
+  const { womlingStatEarned } = createWomlingAchievements({
+    getGame: () => game,
+    getPoly: () => poly,
+  });
+  const { madPrestigeAwaited } = createPrestigeIntelligence({
+    getSettings: () => settings,
+    getTechIds: () => techIds,
+    getHaveTech: () => haveTech,
+  });
   const {
     getCitadelConsumption,
     isHellSupressUseful,
@@ -2964,9 +2975,7 @@ function startEvolveRuntimeComposition(
     getSettings: () => settings,
     getResources: () => resources,
     getBuildings: () => buildings,
-    getPoly: () => poly,
     getMechManager: () => MechManager,
-    getTechIds: () => techIds,
     getHaveTech: () => haveTech,
     getHaveTask: () => haveTask,
     getNumberStringFn: () => getNumberString,
@@ -3234,6 +3243,8 @@ function startEvolveRuntimeComposition(
         isGECKNeeded: () => isGECKNeeded(),
         isPrestigeAllowed: (prestige) => isPrestigeAllowed(prestige),
         isPillarFinished: () => isPillarFinished(),
+        isMadPrestigeAwaited: () => madPrestigeAwaited(),
+        isWomlingStatEarned: (stat) => womlingStatEarned(stat),
       }),
       isEarlyGame,
       getIsPrestigeAllowed: () => isPrestigeAllowed,

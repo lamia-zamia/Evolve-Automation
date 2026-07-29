@@ -6360,6 +6360,38 @@
     };
   }
 
+  // src/game/prestige-intelligence.ts
+  function createPrestigeIntelligence({
+    getSettings,
+    getTechIds,
+    getHaveTech
+  }) {
+    function madPrestigeAwaited() {
+      const settings = getSettings();
+      if (!settings.autoPrestige || settings.prestigeType !== "mad") {
+        return false;
+      }
+      if (getHaveTech()("mad")) {
+        return true;
+      }
+      const mad = getTechIds()["tech-mad"];
+      return mad.isUnlocked() && mad.isAffordable(true);
+    }
+    return { madPrestigeAwaited };
+  }
+
+  // src/game/womling-achievements.ts
+  function createWomlingAchievements({
+    getGame,
+    getPoly
+  }) {
+    function womlingStatEarned(stat) {
+      const universe = getPoly().universeAffix();
+      return Boolean(getGame().global.stats.womling?.[stat]?.[universe]);
+    }
+    return { womlingStatEarned };
+  }
+
   // src/game/power-support.ts
   function createPowerSupport({
     getGame,
@@ -23817,9 +23849,7 @@
     getSettings,
     getResources,
     getBuildings,
-    getPoly,
     getMechManager,
-    getTechIds,
     getHaveTech,
     getHaveTask,
     getNumberStringFn,
@@ -24301,15 +24331,15 @@
         id: "womling-overlord-guard",
         // "&& getGame().global.tech.tau_red === 4" doesn't want to work for some reason.
         enabled: () => getGame().global.race["truepath"],
-        match: (building3) => {
+        match: (building3, snapshot) => {
           if (building3 === getBuildings().TauRedContact || building3 === getBuildings().TauRedIntroduce || building3 === getBuildings().TauRedSubjugate) {
             let missing = null;
-            for (let [id, stat] of Object.entries({
-              TauRedContact: "friend",
-              TauRedIntroduce: "god",
-              TauRedSubjugate: "lord"
-            })) {
-              if (!getGame().global.stats.womling[stat][getPoly().universeAffix()]) {
+            for (let [id, earned] of [
+              ["TauRedContact", snapshot.womlingFriendEarned],
+              ["TauRedIntroduce", snapshot.womlingGodEarned],
+              ["TauRedSubjugate", snapshot.womlingLordEarned]
+            ]) {
+              if (!earned) {
                 if (building3 === getBuildings()[id]) {
                   return false;
                 }
@@ -24492,7 +24522,7 @@
       },
       {
         id: "awaiting-mad-prestige",
-        enabled: () => getSettings().autoPrestige && getSettings().prestigeType === "mad" && (haveTech("mad") || getTechIds()["tech-mad"].isUnlocked() && getTechIds()["tech-mad"].isAffordable(true)),
+        enabled: (snapshot) => snapshot.madPrestigeAwaited,
         match: (building3) => !building3.is.housing && !building3.is.garrison && !building3.cost["Knowledge"] && building3 !== getBuildings().OilWell,
         describe: () => "Awaiting MAD prestige",
         multiplier: () => getSettings().buildingWeightingMADUseless
@@ -24683,7 +24713,9 @@
     isGuardPostPrebuildIncomplete,
     isGECKNeeded,
     isPrestigeAllowed: isPrestigeAllowed2,
-    isPillarFinished: isPillarFinished2
+    isPillarFinished: isPillarFinished2,
+    isMadPrestigeAwaited,
+    isWomlingStatEarned
   }) {
     return () => {
       const state = requireRecord(getState(), "state");
@@ -24786,7 +24818,23 @@
           isPrestigeAllowed2("retire"),
           'isPrestigeAllowed("retire")'
         ),
-        pillarFinished: requireBoolean(isPillarFinished2(), "isPillarFinished()")
+        pillarFinished: requireBoolean(isPillarFinished2(), "isPillarFinished()"),
+        madPrestigeAwaited: requireBoolean(
+          isMadPrestigeAwaited(),
+          "isMadPrestigeAwaited()"
+        ),
+        womlingFriendEarned: requireBoolean(
+          isWomlingStatEarned("friend"),
+          'isWomlingStatEarned("friend")'
+        ),
+        womlingGodEarned: requireBoolean(
+          isWomlingStatEarned("god"),
+          'isWomlingStatEarned("god")'
+        ),
+        womlingLordEarned: requireBoolean(
+          isWomlingStatEarned("lord"),
+          'isWomlingStatEarned("lord")'
+        )
       });
     };
   }
@@ -55609,6 +55657,15 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getSettings: () => settings,
       getTraitVal: () => traitVal
     });
+    const { womlingStatEarned } = createWomlingAchievements({
+      getGame: () => game,
+      getPoly: () => poly
+    });
+    const { madPrestigeAwaited } = createPrestigeIntelligence({
+      getSettings: () => settings,
+      getTechIds: () => techIds,
+      getHaveTech: () => haveTech
+    });
     const {
       getCitadelConsumption,
       isHellSupressUseful,
@@ -56122,9 +56179,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getSettings: () => settings,
       getResources: () => resources,
       getBuildings: () => buildings,
-      getPoly: () => poly,
       getMechManager: () => MechManager,
-      getTechIds: () => techIds,
       getHaveTech: () => haveTech,
       getHaveTask: () => haveTask,
       getNumberStringFn: () => getNumberString,
@@ -56360,7 +56415,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         isGuardPostPrebuildIncomplete: () => guardPostPrebuildIncomplete(),
         isGECKNeeded: () => isGECKNeeded(),
         isPrestigeAllowed: (prestige) => isPrestigeAllowed2(prestige),
-        isPillarFinished: () => isPillarFinished2()
+        isPillarFinished: () => isPillarFinished2(),
+        isMadPrestigeAwaited: () => madPrestigeAwaited(),
+        isWomlingStatEarned: (stat) => womlingStatEarned(stat)
       }),
       isEarlyGame,
       getIsPrestigeAllowed: () => isPrestigeAllowed2,

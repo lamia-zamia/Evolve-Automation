@@ -28,9 +28,7 @@ let context = {
   settings: { autoBuild: false },
   resources: {},
   buildings,
-  poly: {},
   MechManager: {},
-  techIds: {},
 };
 // Rules read script state and phase-constant game gates only through the phase
 // snapshot the executor samples.
@@ -62,6 +60,10 @@ const snapshotOf = (overrides = {}) =>
     prestigeEdenAllowed: false,
     prestigeRetireAllowed: false,
     pillarFinished: false,
+    madPrestigeAwaited: false,
+    womlingFriendEarned: false,
+    womlingGodEarned: false,
+    womlingLordEarned: false,
     ...overrides,
   });
 const emptySnapshot = snapshotOf();
@@ -73,9 +75,7 @@ const policy = createBuildingWeightingPolicy({
   getSettings: () => context.settings,
   getResources: () => context.resources,
   getBuildings: () => context.buildings,
-  getPoly: () => context.poly,
   getMechManager: () => context.MechManager,
-  getTechIds: () => context.techIds,
   getHaveTech: () => haveTech,
   getHaveTask: () => neutralFunction,
   getNumberStringFn: () => String,
@@ -444,6 +444,73 @@ assert.equal(
   false,
 );
 delete context.game.global.race.lone_survivor;
+
+// The Overlord guard reads the three womling stats from the snapshot; only the
+// candidate's own buildability is still a live building read.
+const womlingRule = ruleById("womling-overlord-guard");
+const womlingBuilding = (id, autoBuildable) => ({
+  _vueBinding: id,
+  name: id,
+  isAutoBuildable: () => autoBuildable,
+});
+context.buildings = {
+  ...context.buildings,
+  TauRedContact: womlingBuilding("TauRedContact", true),
+  TauRedIntroduce: womlingBuilding("TauRedIntroduce", true),
+  TauRedSubjugate: womlingBuilding("TauRedSubjugate", false),
+};
+context.game.global.race.truepath = 1;
+assert.equal(womlingRule.enabled(emptySnapshot), 1);
+assert.equal(womlingRule.match(candidate, emptySnapshot), undefined);
+// An unearned stat means the candidate that earns it is the one to build.
+assert.equal(
+  womlingRule.match(context.buildings.TauRedContact, emptySnapshot),
+  false,
+);
+// With its own stat earned, the candidate defers to the last unearned stat that
+// is still buildable; the unbuildable Subjugate cannot claim it.
+const friendEarned = snapshotOf({ womlingFriendEarned: true });
+assert.equal(
+  womlingRule.match(context.buildings.TauRedContact, friendEarned),
+  "TauRedIntroduce",
+);
+assert.equal(
+  womlingRule.describe("TauRedIntroduce"),
+  "Overlord achievement is missing TauRedIntroduce",
+);
+context.settings = { ...context.settings, buildingWeightingOverlord: 0.5 };
+assert.equal(womlingRule.multiplier(), 0.5);
+assert.equal(
+  womlingRule.match(
+    context.buildings.TauRedContact,
+    snapshotOf({
+      womlingFriendEarned: true,
+      womlingGodEarned: true,
+      womlingLordEarned: true,
+    }),
+  ),
+  null,
+);
+delete context.game.global.race.truepath;
+
+// Awaiting MAD is one snapshot answer; the settings and tech reads it used to
+// make now live in the adapter. Housing, garrisons, knowledge buildings, and the
+// Oil Well stay worth building through the reset.
+const madRule = ruleById("awaiting-mad-prestige");
+assert.equal(madRule.enabled(emptySnapshot), false);
+assert.equal(madRule.enabled(snapshotOf({ madPrestigeAwaited: true })), true);
+const uselessThroughMad = { is: {}, cost: {} };
+assert.equal(madRule.match(uselessThroughMad), true);
+assert.equal(madRule.match({ is: { housing: true }, cost: {} }), false);
+assert.equal(madRule.match({ is: { garrison: true }, cost: {} }), false);
+assert.equal(madRule.match({ is: {}, cost: { Knowledge: 100 } }), false);
+context.buildings = {
+  ...context.buildings,
+  OilWell: { _vueBinding: "OilWell", is: {}, cost: {} },
+};
+assert.equal(madRule.match(context.buildings.OilWell), false);
+context.settings = { ...context.settings, buildingWeightingMADUseless: 0.01 };
+assert.equal(madRule.multiplier(), 0.01);
 
 // The two gate rules are enabled purely by their snapshot answer; the unlock
 // checks and the supression reads they used to make now live in the adapter.

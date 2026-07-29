@@ -14,9 +14,7 @@ type BuildingWeightingDependencies = {
   getSettings: () => LooseObject;
   getResources: () => LooseObject;
   getBuildings: () => LooseObject;
-  getPoly: () => LooseObject;
   getMechManager: () => LooseObject;
-  getTechIds: () => LooseObject;
   getHaveTech: () => LooseFunction;
   getHaveTask: () => LooseFunction;
   getNumberStringFn: () => LooseFunction;
@@ -32,9 +30,7 @@ export function createBuildingWeightingPolicy({
   getSettings,
   getResources,
   getBuildings,
-  getPoly,
   getMechManager,
-  getTechIds,
   getHaveTech,
   getHaveTask,
   getNumberStringFn,
@@ -680,21 +676,19 @@ export function createBuildingWeightingPolicy({
       id: "womling-overlord-guard",
       // "&& getGame().global.tech.tau_red === 4" doesn't want to work for some reason.
       enabled: () => getGame().global.race["truepath"],
-      match: (building: any) => {
+      match: (building: any, snapshot) => {
         if (
           building === getBuildings().TauRedContact ||
           building === getBuildings().TauRedIntroduce ||
           building === getBuildings().TauRedSubjugate
         ) {
           let missing = null;
-          for (let [id, stat] of Object.entries({
-            TauRedContact: "friend",
-            TauRedIntroduce: "god",
-            TauRedSubjugate: "lord",
-          })) {
-            if (
-              !getGame().global.stats.womling[stat][getPoly().universeAffix()]
-            ) {
+          for (let [id, earned] of [
+            ["TauRedContact", snapshot.womlingFriendEarned],
+            ["TauRedIntroduce", snapshot.womlingGodEarned],
+            ["TauRedSubjugate", snapshot.womlingLordEarned],
+          ] as const) {
+            if (!earned) {
               if (building === getBuildings()[id]) {
                 return false; // Unearned stat, go for it
               }
@@ -981,12 +975,7 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "awaiting-mad-prestige",
-      enabled: () =>
-        getSettings().autoPrestige &&
-        getSettings().prestigeType === "mad" &&
-        (haveTech("mad") ||
-          (getTechIds()["tech-mad"].isUnlocked() &&
-            getTechIds()["tech-mad"].isAffordable(true))),
+      enabled: (snapshot) => snapshot.madPrestigeAwaited,
       match: (building: any) =>
         !building.is.housing &&
         !building.is.garrison &&

@@ -31,6 +31,8 @@ const defaultGates = () => ({
   isGECKNeeded: off,
   isPrestigeAllowed: off,
   isPillarFinished: off,
+  isMadPrestigeAwaited: off,
+  isWomlingStatEarned: off,
 });
 gates = defaultGates();
 const read = createWeightingSnapshotReader({
@@ -73,6 +75,10 @@ assert.equal(empty.geckNeeded, false);
 assert.equal(empty.prestigeEdenAllowed, false);
 assert.equal(empty.prestigeRetireAllowed, false);
 assert.equal(empty.pillarFinished, false);
+assert.equal(empty.madPrestigeAwaited, false);
+assert.equal(empty.womlingFriendEarned, false);
+assert.equal(empty.womlingGodEarned, false);
+assert.equal(empty.womlingLordEarned, false);
 
 // Membership is by wrapper identity, not by name or index.
 const queued = { _vueBinding: "city-bank" };
@@ -104,6 +110,7 @@ state = validState();
 const askedObjectives = [];
 const askedGuards = [];
 const askedPrestiges = [];
+const askedWomlingStats = [];
 gates = {
   ...defaultGates(),
   isGalaxyAssaultPending: () => true,
@@ -131,6 +138,11 @@ gates = {
     return prestige === "eden";
   },
   isPillarFinished: () => true,
+  isMadPrestigeAwaited: () => true,
+  isWomlingStatEarned: (stat) => {
+    askedWomlingStats.push(stat);
+    return stat !== "lord";
+  },
 };
 const gated = read();
 assert.deepEqual(askedObjectives, ["b2"]);
@@ -161,6 +173,11 @@ assert.equal(gated.geckNeeded, true);
 assert.equal(gated.prestigeEdenAllowed, true);
 assert.equal(gated.prestigeRetireAllowed, false);
 assert.equal(gated.pillarFinished, true);
+assert.equal(gated.madPrestigeAwaited, true);
+assert.deepEqual(askedWomlingStats, ["friend", "god", "lord"]);
+assert.equal(gated.womlingFriendEarned, true);
+assert.equal(gated.womlingGodEarned, true);
+assert.equal(gated.womlingLordEarned, false);
 
 // The retirement preparation read is skipped while the assist is inactive, and
 // an empty shortfall list still reads as prepared.
@@ -255,6 +272,14 @@ rejectsGate(
     getRetirementPreparationMissing: () => "none",
   },
   "getRetirementPreparationMissing() must be an array",
+);
+rejectsGate(
+  { isMadPrestigeAwaited: () => "mad" },
+  "isMadPrestigeAwaited() must be a boolean",
+);
+rejectsGate(
+  { isWomlingStatEarned: (stat) => (stat === "god" ? 3 : true) },
+  'isWomlingStatEarned("god") must be a boolean',
 );
 rejectsGate(
   { getForeignAchievementGoal: () => "unification" },
