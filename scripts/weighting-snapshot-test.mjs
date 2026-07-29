@@ -17,6 +17,7 @@ const defaultGates = () => ({
   isStargatePiracySupressed: off,
   isGalaxyPiracyCoveredByFleet: off,
   isLumberRace: off,
+  hasRaceTrait: off,
   isBananaRepublicObjectiveComplete: off,
   isInflationAssistActive: off,
   isInflationMoneyReachable: off,
@@ -31,6 +32,7 @@ const defaultGates = () => ({
   getSpirePrebuildShortfall: () => ({ ports: false, baseCamps: false }),
   getNextCitadelPowerDraw: () => 30,
   isTechResearched: off,
+  isShrineBonusUnwanted: off,
   isGECKNeeded: off,
   isPrestigeAllowed: off,
   isPillarFinished: off,
@@ -62,6 +64,19 @@ assert.equal(empty.galaxyAssaultPending, false);
 assert.equal(empty.stargatePiracySupressed, false);
 assert.equal(empty.galaxyPiracyCoveredByFleet, false);
 assert.equal(empty.lumberRace, false);
+assert.equal(empty.truepathRace, false);
+assert.equal(empty.mineIsOnlyChrysotileSource, false);
+assert.equal(empty.witchHunterRace, false);
+assert.equal(empty.warlordRace, false);
+assert.equal(empty.artificialRace, false);
+assert.equal(empty.slaverRace, false);
+assert.equal(empty.cannibalizeRace, false);
+assert.equal(empty.parasiteRace, false);
+assert.equal(empty.bananaRace, false);
+assert.equal(empty.loneSurvivorRace, false);
+assert.equal(empty.hoovedRace, false);
+assert.equal(empty.calmRace, false);
+assert.equal(empty.orbitalDecayImpactPending, false);
 assert.equal(empty.bananaColliderObjectiveComplete, false);
 assert.equal(empty.inflationAssistActive, false);
 assert.equal(empty.inflationMoneyReachable, false);
@@ -88,6 +103,7 @@ assert.equal(empty.asphodelStabilizerUnlocked, false);
 assert.equal(empty.spireSphinxSolved, false);
 assert.equal(empty.assemblyCureComplete, false);
 assert.equal(empty.tauCetiReached, false);
+assert.equal(empty.shrineBonusUnwanted, false);
 assert.equal(empty.geckNeeded, false);
 assert.equal(empty.prestigeEdenAllowed, false);
 assert.equal(empty.prestigeRetireAllowed, false);
@@ -163,6 +179,7 @@ gates = {
     return prestige === "eden";
   },
   isPillarFinished: () => true,
+  isShrineBonusUnwanted: () => true,
   isMadPrestigeAwaited: () => true,
   getMechSupplySavingReason: () => "saving",
   isWomlingStatEarned: (stat) => {
@@ -220,6 +237,7 @@ assert.equal(gated.asphodelStabilizerUnlocked, true);
 assert.equal(gated.spireSphinxSolved, true);
 assert.equal(gated.assemblyCureComplete, true);
 assert.equal(gated.tauCetiReached, true);
+assert.equal(gated.shrineBonusUnwanted, true);
 assert.equal(gated.geckNeeded, true);
 assert.equal(gated.prestigeEdenAllowed, true);
 assert.equal(gated.prestigeRetireAllowed, false);
@@ -244,6 +262,68 @@ assert.equal(read().tauCetiReached, true);
 // The other mech-saving reason survives the same validation.
 gates = { ...defaultGates(), getMechSupplySavingReason: () => "building" };
 assert.equal(read().mechSupplySaving, "building");
+
+// The race gates keep the game's lenient coercion too: `global.race[trait]` is
+// absent unless the race has the trait, and carries a numeric rank when it does.
+const ALL_RACE_TRAITS = [
+  "truepath",
+  "smoldering",
+  "sappy",
+  "witch_hunter",
+  "warlord",
+  "artifical",
+  "slaver",
+  "cannibalize",
+  "parasite",
+  "banana",
+  "lone_survivor",
+  "hooved",
+  "calm",
+  "orbit_decay",
+  "orbit_decayed",
+];
+let askedRaceTraits = [];
+const withTraits = (...owned) => {
+  const held = new Set(owned);
+  askedRaceTraits = [];
+  return {
+    ...defaultGates(),
+    hasRaceTrait: (trait) => {
+      askedRaceTraits.push(trait);
+      return held.has(trait) ? 2 : undefined;
+    },
+  };
+};
+
+gates = withTraits(...ALL_RACE_TRAITS);
+const raced = read();
+assert.deepEqual(askedRaceTraits, ALL_RACE_TRAITS);
+assert.equal(raced.truepathRace, true);
+assert.equal(raced.mineIsOnlyChrysotileSource, true);
+assert.equal(raced.witchHunterRace, true);
+assert.equal(raced.warlordRace, true);
+assert.equal(raced.artificialRace, true);
+assert.equal(raced.slaverRace, true);
+assert.equal(raced.cannibalizeRace, true);
+assert.equal(raced.parasiteRace, true);
+assert.equal(raced.bananaRace, true);
+assert.equal(raced.loneSurvivorRace, true);
+assert.equal(raced.hoovedRace, true);
+assert.equal(raced.calmRace, true);
+// The impact has already happened, so nothing more can be destroyed by it.
+assert.equal(raced.orbitalDecayImpactPending, false);
+
+gates = withTraits("orbit_decay");
+assert.equal(read().orbitalDecayImpactPending, true);
+
+// A smoldering race that still has quarry workers gets its Chrysotile from
+// them, and a race that is not smoldering never has the sappy read taken.
+gates = withTraits("smoldering");
+assert.equal(read().mineIsOnlyChrysotileSource, false);
+assert.equal(askedRaceTraits.includes("sappy"), true);
+gates = withTraits("sappy");
+assert.equal(read().mineIsOnlyChrysotileSource, false);
+assert.equal(askedRaceTraits.includes("sappy"), false);
 
 // The retirement preparation read is skipped while the assist is inactive, and
 // an empty shortfall list still reads as prepared.
@@ -308,6 +388,10 @@ rejectsGate(
   "isGalaxyPiracyCoveredByFleet() must be a boolean",
 );
 rejectsGate({ isLumberRace: () => 1 }, "isLumberRace() must be a boolean");
+rejectsGate(
+  { isShrineBonusUnwanted: () => "know" },
+  "isShrineBonusUnwanted() must be a boolean",
+);
 rejectsGate(
   { isGateTowerSupressionTooLow: () => 0.5 },
   "isGateTowerSupressionTooLow() must be a boolean",

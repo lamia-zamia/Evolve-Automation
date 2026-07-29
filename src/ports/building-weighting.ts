@@ -31,6 +31,36 @@ export type BuildingWeightingSnapshot = {
   readonly galaxyPiracyCoveredByFleet: boolean;
   /** Race harvests lumber, so the Sacrificial Altar harvest bonus applies. */
   readonly lumberRace: boolean;
+  /** The True Path scenario is running. */
+  readonly truepathRace: boolean;
+  /**
+   * Miners are the race's only source of Chrysotile: it is smoldering, so
+   * Chrysotile replaces Stone, and sappy, so it has no quarry workers to mine
+   * it instead.
+   */
+  readonly mineIsOnlyChrysotileSource: boolean;
+  /** The Witch Hunter scenario is running. */
+  readonly witchHunterRace: boolean;
+  /** The Warlord scenario is running. */
+  readonly warlordRace: boolean;
+  /** The race is artificial, so population is assembled rather than grown. */
+  readonly artificialRace: boolean;
+  /** The race enslaves, so the Slave Market is available. */
+  readonly slaverRace: boolean;
+  /** The race cannibalizes, so the Sacrificial Altar is available. */
+  readonly cannibalizeRace: boolean;
+  /** The race is parasitic, so sacrifices depend on the weather. */
+  readonly parasiteRace: boolean;
+  /** The Banana Republic scenario is running. */
+  readonly bananaRace: boolean;
+  /** The Lone Survivor scenario is running. */
+  readonly loneSurvivorRace: boolean;
+  /** The race is hooved, so it needs Horseshoes. */
+  readonly hoovedRace: boolean;
+  /** The race is calm, so it needs Zen from Meditation Spaces. */
+  readonly calmRace: boolean;
+  /** The Cataclysm impact will still destroy the planet's buildings. */
+  readonly orbitalDecayImpactPending: boolean;
   /** Banana Republic objective "b2", the one the Dwarf World Collider serves. */
   readonly bananaColliderObjectiveComplete: boolean;
   readonly inflationAssistActive: boolean;
@@ -78,6 +108,11 @@ export type BuildingWeightingSnapshot = {
   readonly assemblyCureComplete: boolean;
   /** Tau Ceti is reached, so the solar system is no longer the frontier. */
   readonly tauCetiReached: boolean;
+  /**
+   * A Shrine built now would raise a bonus other than the configured one. False
+   * for every race that has no Shrine and whenever any Shrine is acceptable.
+   */
+  readonly shrineBonusUnwanted: boolean;
   readonly geckNeeded: boolean;
   readonly prestigeEdenAllowed: boolean;
   readonly prestigeRetireAllowed: boolean;

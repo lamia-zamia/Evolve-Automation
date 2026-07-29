@@ -42,6 +42,19 @@ const snapshotOf = (overrides = {}) =>
     stargatePiracySupressed: false,
     galaxyPiracyCoveredByFleet: false,
     lumberRace: false,
+    truepathRace: false,
+    mineIsOnlyChrysotileSource: false,
+    witchHunterRace: false,
+    warlordRace: false,
+    artificialRace: false,
+    slaverRace: false,
+    cannibalizeRace: false,
+    parasiteRace: false,
+    bananaRace: false,
+    loneSurvivorRace: false,
+    hoovedRace: false,
+    calmRace: false,
+    orbitalDecayImpactPending: false,
     bananaColliderObjectiveComplete: false,
     inflationAssistActive: false,
     inflationMoneyReachable: false,
@@ -68,6 +81,7 @@ const snapshotOf = (overrides = {}) =>
     spireSphinxSolved: false,
     assemblyCureComplete: false,
     tauCetiReached: false,
+    shrineBonusUnwanted: false,
     geckNeeded: false,
     prestigeEdenAllowed: false,
     prestigeRetireAllowed: false,
@@ -191,22 +205,21 @@ assert.equal(
 );
 
 const digsiteRule = ruleById("eris-digsite-unsecured");
+const truepathSnapshot = snapshotOf({ truepathRace: true });
 context = {
   ...context,
-  game: {
-    ...context.game,
-    global: {
-      ...context.game.global,
-      race: { truepath: true },
-    },
-  },
   settings: {
     ...context.settings,
     buildingWeightingTruepathDigsite: 10,
   },
 };
 buildings.ErisDigsite.count = 42;
-assert.equal(digsiteRule.enabled(), true);
+assert.equal(digsiteRule.enabled(truepathSnapshot), true);
+assert.equal(
+  digsiteRule.enabled(emptySnapshot),
+  false,
+  "the Eris digsite only exists in a True Path run",
+);
 assert.equal(digsiteRule.match(buildings.ErisDrone), true);
 assert.equal(digsiteRule.match(buildings.ErisTank), true);
 assert.equal(digsiteRule.match(buildings.ErisTrooper), true);
@@ -214,7 +227,7 @@ assert.equal(digsiteRule.match(buildings.ErisMission), false);
 assert.equal(digsiteRule.describe(), "Eris Digsite is not yet secured");
 assert.equal(digsiteRule.multiplier(), 10);
 buildings.ErisDigsite.count = 100;
-assert.equal(digsiteRule.enabled(), false);
+assert.equal(digsiteRule.enabled(truepathSnapshot), false);
 
 const authorityRule = ruleById("authority-cap");
 context = {
@@ -416,14 +429,16 @@ const geckRule = ruleById("geck-limit");
 assert.equal(geckRule.enabled(emptySnapshot), true);
 assert.equal(geckRule.enabled(snapshotOf({ geckNeeded: true })), false);
 
-context.game.global.race.lone_survivor = true;
 const edenRule = ruleById("prestige-blocked-eden");
-assert.equal(edenRule.enabled(emptySnapshot), true);
+const loneSurvivor = snapshotOf({ loneSurvivorRace: true });
+assert.equal(edenRule.enabled(loneSurvivor), true);
+assert.equal(edenRule.enabled(emptySnapshot), false);
 assert.equal(
-  edenRule.enabled(snapshotOf({ prestigeEdenAllowed: true })),
+  edenRule.enabled(
+    snapshotOf({ loneSurvivorRace: true, prestigeEdenAllowed: true }),
+  ),
   false,
 );
-delete context.game.global.race.lone_survivor;
 
 // The Overlord guard reads the three womling stats from the snapshot; only the
 // candidate's own buildability is still a live building read.
@@ -439,8 +454,8 @@ context.buildings = {
   TauRedIntroduce: womlingBuilding("TauRedIntroduce", true),
   TauRedSubjugate: womlingBuilding("TauRedSubjugate", false),
 };
-context.game.global.race.truepath = 1;
-assert.equal(womlingRule.enabled(emptySnapshot), 1);
+assert.equal(womlingRule.enabled(truepathSnapshot), true);
+assert.equal(womlingRule.enabled(emptySnapshot), false);
 assert.equal(womlingRule.match(candidate, emptySnapshot), undefined);
 // An unearned stat means the candidate that earns it is the one to build.
 assert.equal(
@@ -471,7 +486,6 @@ assert.equal(
   ),
   null,
 );
-delete context.game.global.race.truepath;
 
 // Awaiting MAD is one snapshot answer; the settings and tech reads it used to
 // make now live in the adapter. Housing, garrisons, knowledge buildings, and the
@@ -622,8 +636,8 @@ assert.equal(
   false,
 );
 
-// The tech gates are snapshot answers; the race checks that share an `enabled`
-// with one of them stay live reads of the candidate-independent race bag.
+// The tech gates and the race gates are both snapshot answers, so an `enabled`
+// that combines them reads nothing live.
 context.buildings = {
   ...context.buildings,
   SpaceTestLaunch: { _vueBinding: "SpaceTestLaunch", isUnlocked: () => true },
@@ -636,15 +650,13 @@ context.buildings = {
 };
 
 const sabotageRule = ruleById("truepath-test-launch-sabotage");
-context.game.global.race.truepath = true;
-assert.equal(sabotageRule.enabled(emptySnapshot), true);
+assert.equal(sabotageRule.enabled(truepathSnapshot), true);
 assert.equal(
-  sabotageRule.enabled(snapshotOf({ worldUnified: true })),
+  sabotageRule.enabled(snapshotOf({ truepathRace: true, worldUnified: true })),
   false,
   "a unified world can no longer be sabotaged",
 );
-delete context.game.global.race.truepath;
-assert.equal(sabotageRule.enabled(emptySnapshot), undefined);
+assert.equal(sabotageRule.enabled(emptySnapshot), false);
 
 const waygateRule = ruleById("spire-waygate-done");
 assert.equal(waygateRule.enabled(emptySnapshot), false);
@@ -663,15 +675,13 @@ assert.equal(
 assert.equal(edenicGateRule.match(context.buildings.SpireEdenicGate), true);
 
 const sphinxRule = ruleById("spire-sphinx-done");
-assert.equal(sphinxRule.enabled(emptySnapshot), undefined);
+assert.equal(sphinxRule.enabled(emptySnapshot), false);
 assert.equal(sphinxRule.enabled(snapshotOf({ spireSphinxSolved: true })), true);
-context.game.global.race.warlord = true;
 assert.equal(
-  sphinxRule.enabled(emptySnapshot),
+  sphinxRule.enabled(snapshotOf({ warlordRace: true })),
   true,
   "Harmachis is unusable during Warlord even before the Sphinx is solved",
 );
-delete context.game.global.race.warlord;
 assert.equal(sphinxRule.match(context.buildings.SpireSphinx), true);
 
 const warehouseRule = ruleById("warehouse-cap");
@@ -720,19 +730,76 @@ assert.equal(
 );
 
 const assemblingRule = ruleById("assembling-not-possible");
-const cured = snapshotOf({ assemblyCureComplete: true });
-assert.equal(assemblingRule.enabled(cured), undefined);
-context.game.global.race.artifical = true;
-assert.equal(assemblingRule.enabled(cured), true);
-assert.equal(assemblingRule.enabled(emptySnapshot), false);
-delete context.game.global.race.artifical;
+assert.equal(
+  assemblingRule.enabled(snapshotOf({ assemblyCureComplete: true })),
+  false,
+);
+assert.equal(
+  assemblingRule.enabled(
+    snapshotOf({ artificialRace: true, assemblyCureComplete: true }),
+  ),
+  true,
+);
+assert.equal(
+  assemblingRule.enabled(snapshotOf({ artificialRace: true })),
+  false,
+);
 
 const solarRule = ruleById("solar-system-building");
-const tauReached = snapshotOf({ tauCetiReached: true });
-assert.equal(solarRule.enabled(tauReached), undefined);
-context.game.global.race.truepath = true;
-assert.equal(solarRule.enabled(tauReached), true);
-assert.equal(solarRule.enabled(emptySnapshot), false);
-delete context.game.global.race.truepath;
+assert.equal(solarRule.enabled(snapshotOf({ tauCetiReached: true })), false);
+assert.equal(
+  solarRule.enabled(snapshotOf({ truepathRace: true, tauCetiReached: true })),
+  true,
+);
+assert.equal(solarRule.enabled(truepathSnapshot), false);
+
+// The Andromeda miner rule spares the Mine only for the race that has no other
+// source of Chrysotile.
+const andromedaRule = ruleById("andromeda-miners-disabled");
+context.settings = { ...context.settings, jobDisableMiners: true };
+context.buildings = {
+  ...context.buildings,
+  CoalMine: { _vueBinding: "CoalMine" },
+  Mine: { _vueBinding: "Mine" },
+  GatewayStarbase: { _vueBinding: "GatewayStarbase", count: 1 },
+};
+const chrysotileOnly = snapshotOf({ mineIsOnlyChrysotileSource: true });
+assert.equal(andromedaRule.enabled(), true);
+assert.equal(
+  andromedaRule.match(context.buildings.CoalMine, emptySnapshot),
+  true,
+);
+assert.equal(andromedaRule.match(context.buildings.Mine, emptySnapshot), true);
+assert.equal(
+  andromedaRule.match(context.buildings.Mine, chrysotileOnly),
+  false,
+);
+assert.equal(
+  andromedaRule.match(context.buildings.CoalMine, chrysotileOnly),
+  true,
+);
+
+// The shrine rule is one snapshot answer too; all it still does per candidate
+// is recognize a Shrine.
+const shrineRule = ruleById("wrong-shrine");
+assert.equal(shrineRule.enabled(emptySnapshot), false);
+assert.equal(
+  shrineRule.enabled(snapshotOf({ shrineBonusUnwanted: true })),
+  true,
+);
+assert.equal(shrineRule.match({ id: "city-shrine" }), true);
+assert.equal(shrineRule.match({ id: "city-temple" }), false);
+assert.equal(shrineRule.match({}), undefined);
+assert.equal(shrineRule.describe(), "Wrong shrine");
+assert.equal(shrineRule.multiplier(), 0);
+
+// The impact rule is one snapshot answer: the planet is decaying and has not
+// yet been hit.
+const impactRule = ruleById("destroyed-after-impact");
+assert.equal(impactRule.enabled(emptySnapshot), false);
+assert.equal(
+  impactRule.enabled(snapshotOf({ orbitalDecayImpactPending: true })),
+  true,
+);
 
 console.log("Weighting policy module tests passed");

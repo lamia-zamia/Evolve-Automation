@@ -16,6 +16,7 @@ export interface WeightingSnapshotDependencies {
   readonly isStargatePiracySupressed: () => unknown;
   readonly isGalaxyPiracyCoveredByFleet: () => unknown;
   readonly isLumberRace: () => unknown;
+  readonly hasRaceTrait: (trait: string) => unknown;
   readonly isBananaRepublicObjectiveComplete: (objective: string) => unknown;
   readonly isInflationAssistActive: () => unknown;
   readonly isInflationMoneyReachable: () => unknown;
@@ -30,6 +31,7 @@ export interface WeightingSnapshotDependencies {
   readonly getSpirePrebuildShortfall: () => unknown;
   readonly getNextCitadelPowerDraw: () => unknown;
   readonly isTechResearched: (research: string, level: number) => unknown;
+  readonly isShrineBonusUnwanted: () => unknown;
   readonly isGECKNeeded: () => unknown;
   readonly isPrestigeAllowed: (prestige: string) => unknown;
   readonly isPillarFinished: () => unknown;
@@ -95,6 +97,7 @@ export function createWeightingSnapshotReader({
   isStargatePiracySupressed,
   isGalaxyPiracyCoveredByFleet,
   isLumberRace,
+  hasRaceTrait,
   isBananaRepublicObjectiveComplete,
   isInflationAssistActive,
   isInflationMoneyReachable,
@@ -109,6 +112,7 @@ export function createWeightingSnapshotReader({
   getSpirePrebuildShortfall,
   getNextCitadelPowerDraw,
   isTechResearched,
+  isShrineBonusUnwanted,
   isGECKNeeded,
   isPrestigeAllowed,
   isPillarFinished,
@@ -132,6 +136,10 @@ export function createWeightingSnapshotReader({
     // coercion; every other gate in this snapshot is an exact boolean contract.
     const researched = (research: string, level: number): boolean =>
       Boolean(isTechResearched(research, level));
+    // `global.race[trait]` is absent unless the race has the trait, and a trait
+    // it does have carries a numeric rank rather than `true`. The game's own
+    // checks are truthiness tests, so the race gates keep that coercion.
+    const trait = (name: string): boolean => Boolean(hasRaceTrait(name));
     return Object.freeze({
       queuedTargets: new Set(
         requireArray(state["queuedTargets"], "state.queuedTargets"),
@@ -164,6 +172,22 @@ export function createWeightingSnapshotReader({
         "isGalaxyPiracyCoveredByFleet()",
       ),
       lumberRace: requireBoolean(isLumberRace(), "isLumberRace()"),
+      truepathRace: trait("truepath"),
+      // The game spells the Entish no-quarry-worker trait "sappy".
+      mineIsOnlyChrysotileSource: trait("smoldering") && trait("sappy"),
+      witchHunterRace: trait("witch_hunter"),
+      warlordRace: trait("warlord"),
+      // The game spells the artificial-population trait "artifical".
+      artificialRace: trait("artifical"),
+      slaverRace: trait("slaver"),
+      cannibalizeRace: trait("cannibalize"),
+      parasiteRace: trait("parasite"),
+      bananaRace: trait("banana"),
+      loneSurvivorRace: trait("lone_survivor"),
+      hoovedRace: trait("hooved"),
+      calmRace: trait("calm"),
+      orbitalDecayImpactPending:
+        trait("orbit_decay") && !trait("orbit_decayed"),
       bananaColliderObjectiveComplete: requireBoolean(
         isBananaRepublicObjectiveComplete("b2"),
         'isBananaRepublicObjectiveComplete("b2")',
@@ -242,6 +266,10 @@ export function createWeightingSnapshotReader({
       spireSphinxSolved: researched("hell_spire", 8),
       assemblyCureComplete: researched("focus_cure", 7),
       tauCetiReached: researched("tauceti", 2),
+      shrineBonusUnwanted: requireBoolean(
+        isShrineBonusUnwanted(),
+        "isShrineBonusUnwanted()",
+      ),
       geckNeeded: requireBoolean(isGECKNeeded(), "isGECKNeeded()"),
       prestigeEdenAllowed: requireBoolean(
         isPrestigeAllowed("eden"),

@@ -74,6 +74,7 @@ import { createGalaxyIntelligence } from "../../game/galaxy-intelligence.ts";
 import { createHellIntelligence } from "../../game/hell-intelligence.ts";
 import { createMechIntelligence } from "../../game/mech-intelligence.ts";
 import { createPrestigeIntelligence } from "../../game/prestige-intelligence.ts";
+import { createShrineIntelligence } from "../../game/shrine-intelligence.ts";
 import { createWomlingAchievements } from "../../game/womling-achievements.ts";
 import { createPowerSupport } from "../../game/power-support.ts";
 import { createGameRates } from "../../game/rates.ts";
@@ -2425,6 +2426,10 @@ function startEvolveRuntimeComposition(
     getGame: () => game,
     getPoly: () => poly,
   });
+  const { shrineBonusUnwanted } = createShrineIntelligence({
+    getGame: () => game,
+    getSettings: () => settings,
+  });
   const { madPrestigeAwaited } = createPrestigeIntelligence({
     getSettings: () => settings,
     getTechIds: () => techIds,
@@ -3229,6 +3234,7 @@ function startEvolveRuntimeComposition(
         isStargatePiracySupressed: () => stargatePiracySupressed(),
         isGalaxyPiracyCoveredByFleet: () => galaxyPiracyCoveredByFleet(),
         isLumberRace: () => isLumberRace(),
+        hasRaceTrait: (trait) => game.global.race[trait],
         isBananaRepublicObjectiveComplete: (objective) =>
           bananaRepublicObjectiveComplete(objective),
         isInflationAssistActive: () => inflationChallengeAssistActive(),
@@ -3250,6 +3256,7 @@ function startEvolveRuntimeComposition(
         getSpirePrebuildShortfall: () => spirePrebuildShortfall(),
         getNextCitadelPowerDraw: () => nextCitadelPowerDraw(),
         isTechResearched: (research, level) => haveTech(research, level),
+        isShrineBonusUnwanted: () => shrineBonusUnwanted(),
         isGECKNeeded: () => isGECKNeeded(),
         isPrestigeAllowed: (prestige) => isPrestigeAllowed(prestige),
         isPillarFinished: () => isPillarFinished(),

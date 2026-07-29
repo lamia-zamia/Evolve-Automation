@@ -6434,6 +6434,47 @@
     return { madPrestigeAwaited };
   }
 
+  // src/game/shrine-intelligence.ts
+  function shrineBonusForMoon(moon) {
+    if (moon > 0 && moon < 7) return "morale";
+    if (moon > 7 && moon < 14) return "metal";
+    if (moon > 14 && moon < 21) return "know";
+    if (moon > 21) return "tax";
+    if (moon === 0 || moon === 7 || moon === 14 || moon === 21) return "rotating";
+    return null;
+  }
+  function createShrineIntelligence({
+    getGame,
+    getSettings
+  }) {
+    function shrineBonusUnwanted() {
+      const wanted = getSettings().buildingShrineType;
+      if (wanted === "any" || !getGame().global.race["magnificent"]) {
+        return false;
+      }
+      const city = getGame().global.city;
+      const shrine = city.shrine;
+      if (shrine === void 0) {
+        return false;
+      }
+      const offered = shrineBonusForMoon(city.calendar.moon);
+      if (wanted !== "equally") {
+        return wanted !== offered;
+      }
+      if (offered === null || offered === "rotating") {
+        return true;
+      }
+      const lowest = Math.min(
+        shrine.morale,
+        shrine.metal,
+        shrine.know,
+        shrine.tax
+      );
+      return shrine[offered] !== lowest;
+    }
+    return { shrineBonusUnwanted };
+  }
+
   // src/game/womling-achievements.ts
   function createWomlingAchievements({
     getGame,
@@ -23929,7 +23970,7 @@
       },
       {
         id: "truepath-test-launch-sabotage",
-        enabled: (snapshot) => getGame().global.race["truepath"] && getBuildings().SpaceTestLaunch.isUnlocked() && !snapshot.worldUnified,
+        enabled: (snapshot) => snapshot.truepathRace && getBuildings().SpaceTestLaunch.isUnlocked() && !snapshot.worldUnified,
         match: (building3) => {
           if (building3 === getBuildings().SpaceTestLaunch) {
             let sabotage = 1;
@@ -23947,7 +23988,7 @@
       },
       {
         id: "eris-digsite-unsecured",
-        enabled: () => getGame().global.race["truepath"] && getBuildings().ErisDigsite.isUnlocked() && getBuildings().ErisDigsite.count < 100,
+        enabled: (snapshot) => snapshot.truepathRace && getBuildings().ErisDigsite.isUnlocked() && getBuildings().ErisDigsite.count < 100,
         match: (building3) => building3 === getBuildings().ErisDrone || building3 === getBuildings().ErisTank || building3 === getBuildings().ErisTrooper,
         describe: () => "Eris Digsite is not yet secured",
         multiplier: () => getSettings().buildingWeightingTruepathDigsite
@@ -23955,7 +23996,7 @@
       {
         id: "andromeda-miners-disabled",
         enabled: () => getSettings().jobDisableMiners && getBuildings().GatewayStarbase.count > 0,
-        match: (building3) => building3 === getBuildings().CoalMine || building3 === getBuildings().Mine && !(getGame().global.race["sappy"] && getGame().global.race["smoldering"]),
+        match: (building3, snapshot) => building3 === getBuildings().CoalMine || building3 === getBuildings().Mine && !snapshot.mineIsOnlyChrysotileSource,
         describe: () => "Miners disabled in Andromeda",
         multiplier: () => 0
       },
@@ -23982,7 +24023,7 @@
       },
       {
         id: "prestige-unneeded-ascension-towers",
-        enabled: () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "ascension" && !getGame().global.race["witch_hunter"],
+        enabled: (snapshot) => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "ascension" && !snapshot.witchHunterRace,
         match: (building3) => building3 === getBuildings().GateEastTower || building3 === getBuildings().GateWestTower,
         describe: () => "Not needed for Ascension prestige",
         multiplier: () => 0
@@ -24122,21 +24163,21 @@
       {
         // Sphinx not usable after solving / Harmachis not usable during Warlord
         id: "spire-sphinx-done",
-        enabled: (snapshot) => snapshot.spireSphinxSolved || getGame().global.race["warlord"],
+        enabled: (snapshot) => snapshot.spireSphinxSolved || snapshot.warlordRace,
         match: (building3) => building3 === getBuildings().SpireSphinx,
         describe: () => "",
         multiplier: () => 0
       },
       {
         id: "assembling-not-possible",
-        enabled: (snapshot) => getGame().global.race["artifical"] && snapshot.assemblyCureComplete,
+        enabled: (snapshot) => snapshot.artificialRace && snapshot.assemblyCureComplete,
         match: (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Population && building3 !== getBuildings().TauCloning,
         describe: () => "Assembling is not possible",
         multiplier: () => 0
       },
       {
         id: "no-empty-housings",
-        enabled: () => getGame().global.race["artifical"],
+        enabled: (snapshot) => snapshot.artificialRace,
         match: (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Population && getResources().Population.storageRatio === 1,
         describe: () => "No empty housings",
         multiplier: () => 0
@@ -24152,42 +24193,14 @@
       },
       {
         id: "wrong-shrine",
-        enabled: () => getGame().global.race["magnificent"] && getSettings().buildingShrineType !== "any",
-        match: (building3) => {
-          if (building3.id && building3.id.includes("shrine")) {
-            let bonus = null;
-            if (getGame().global.city.calendar.moon > 0 && getGame().global.city.calendar.moon < 7) {
-              bonus = "morale";
-            } else if (getGame().global.city.calendar.moon > 7 && getGame().global.city.calendar.moon < 14) {
-              bonus = "metal";
-            } else if (getGame().global.city.calendar.moon > 14 && getGame().global.city.calendar.moon < 21) {
-              bonus = "know";
-            } else if (getGame().global.city.calendar.moon > 21) {
-              bonus = "tax";
-            } else if ([0, 7, 14, 21].includes(getGame().global.city.calendar.moon)) {
-              bonus = "rotating";
-            } else {
-              return true;
-            }
-            if (getSettings().buildingShrineType === "equally") {
-              let minShrine = Math.min(
-                getGame().global.city.shrine.morale,
-                getGame().global.city.shrine.metal,
-                getGame().global.city.shrine.know,
-                getGame().global.city.shrine.tax
-              );
-              return getGame().global.city.shrine[bonus] !== minShrine;
-            } else {
-              return getSettings().buildingShrineType !== bonus;
-            }
-          }
-        },
+        enabled: (snapshot) => snapshot.shrineBonusUnwanted,
+        match: (building3) => building3.id?.includes("shrine"),
         describe: () => "Wrong shrine",
         multiplier: () => 0
       },
       {
         id: "slave-market-blocked",
-        enabled: () => getGame().global.race["slaver"],
+        enabled: (snapshot) => snapshot.slaverRace,
         match: (building3) => {
           if (building3 === getBuildings().SlaveMarket) {
             if (getResources().Slave.currentQuantity >= getResources().Slave.maxQuantity) {
@@ -24203,7 +24216,7 @@
       },
       {
         id: "sacrificial-altar-blocked",
-        enabled: () => getGame().global.race["cannibalize"],
+        enabled: (snapshot) => snapshot.cannibalizeRace,
         match: (building3, snapshot) => {
           if (building3._id === "s_alter" && building3.count > 0) {
             if (getResources().Population.currentQuantity < 1) {
@@ -24212,7 +24225,7 @@
             if (getResources().Population.currentQuantity !== getResources().Population.maxQuantity) {
               return "Sacrifices performed only with full population";
             }
-            if (getGame().global.race["parasite"] && getGame().global.city.calendar.wind === 0) {
+            if (snapshot.parasiteRace && getGame().global.city.calendar.wind === 0) {
               return "Parasites sacrificed only during windy weather";
             }
             if (getGame().global.civic[getGame().global.civic.d_job].workers < 1) {
@@ -24249,7 +24262,7 @@
       },
       {
         id: "tau-belt-ship-efficiency",
-        enabled: () => getGame().global.race["truepath"] && getResources().Tau_Belt_Support.maxQuantity <= getResources().Tau_Belt_Support.currentQuantity,
+        enabled: (snapshot) => snapshot.truepathRace && getResources().Tau_Belt_Support.maxQuantity <= getResources().Tau_Belt_Support.currentQuantity,
         match: (building3) => {
           if (building3 === getBuildings().TauBeltWhalingShip || building3 === getBuildings().TauBeltMiningShip) {
             let s_max = getResources().Tau_Belt_Support.maxQuantity;
@@ -24265,7 +24278,7 @@
       {
         id: "womling-overlord-guard",
         // "&& getGame().global.tech.tau_red === 4" doesn't want to work for some reason.
-        enabled: () => getGame().global.race["truepath"],
+        enabled: (snapshot) => snapshot.truepathRace,
         match: (building3, snapshot) => {
           if (building3 === getBuildings().TauRedContact || building3 === getBuildings().TauRedIntroduce || building3 === getBuildings().TauRedSubjugate) {
             let missing = null;
@@ -24301,7 +24314,7 @@
       },
       {
         id: "banana-republic-objective",
-        enabled: () => getSettings().achievementGuards && getSettings().guardBananaRepublic && getGame().global.race["banana"],
+        enabled: (snapshot) => getSettings().achievementGuards && getSettings().guardBananaRepublic && snapshot.bananaRace,
         match: (building3, snapshot) => building3 === getBuildings().DwarfWorldCollider && !snapshot.bananaColliderObjectiveComplete,
         describe: () => "Banana Republic objective",
         multiplier: () => getSettings().buildingWeightingBananaObjective
@@ -24387,14 +24400,14 @@
       },
       {
         id: "prestige-blocked-eden",
-        enabled: (snapshot) => getGame().global.race["lone_survivor"] && !snapshot.prestigeEdenAllowed,
+        enabled: (snapshot) => snapshot.loneSurvivorRace && !snapshot.prestigeEdenAllowed,
         match: (building3) => building3 === getBuildings().TauStarEden,
         describe: () => "Prestiging not currently allowed",
         multiplier: () => 0
       },
       {
         id: "prestige-blocked-ignition",
-        enabled: (snapshot) => getGame().global.race["truepath"] && (!snapshot.prestigeRetireAllowed || getBuildings().TauGas2MatrioshkaBrain.count < 1e3),
+        enabled: (snapshot) => snapshot.truepathRace && (!snapshot.prestigeRetireAllowed || getBuildings().TauGas2MatrioshkaBrain.count < 1e3),
         match: (building3) => building3 === getBuildings().TauGas2IgniteGasGiant,
         describe: () => "Prestiging not currently allowed",
         multiplier: () => 0
@@ -24429,14 +24442,14 @@
       },
       {
         id: "prestige-unneeded-ascension-missions",
-        enabled: (snapshot) => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "ascension" && snapshot.pillarFinished && !getGame().global.race["witch_hunter"],
+        enabled: (snapshot) => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "ascension" && snapshot.pillarFinished && !snapshot.witchHunterRace,
         match: (building3) => building3 === getBuildings().PitMission || building3 === getBuildings().RuinsMission,
         describe: () => "Not needed for Ascension prestige",
         multiplier: () => 0
       },
       {
         id: "prestige-unneeded-witch-hunter",
-        enabled: () => getGame().global.race["witch_hunter"] && getSettings().prestigeType === "ascension",
+        enabled: (snapshot) => snapshot.witchHunterRace && getSettings().prestigeType === "ascension",
         match: (building3) => building3 === getBuildings().SpireWaygate,
         describe: () => "Not needed for Witch Hunter's Ascension prestige",
         multiplier: () => 0
@@ -24531,14 +24544,14 @@
       },
       {
         id: "horseshoes-useless",
-        enabled: () => getGame().global.race.hooved && getResources().Horseshoe.spareQuantity >= getResources().Horseshoe.storageRequired,
+        enabled: (snapshot) => snapshot.hoovedRace && getResources().Horseshoe.spareQuantity >= getResources().Horseshoe.storageRequired,
         match: (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Horseshoe,
         describe: () => `No more ${getResources().Horseshoe.title} needed`,
         multiplier: () => getSettings().buildingWeightingHorseshoeUseless
       },
       {
         id: "meditation-space-unneeded",
-        enabled: () => getGame().global.race.calm && getResources().Zen.currentQuantity < getResources().Zen.maxQuantity,
+        enabled: (snapshot) => snapshot.calmRace && getResources().Zen.currentQuantity < getResources().Zen.maxQuantity,
         match: (building3) => building3.id.includes("meditation"),
         describe: () => "No more Meditation Space needed",
         multiplier: () => getSettings().buildingWeightingZenUseless
@@ -24566,7 +24579,7 @@
       },
       {
         id: "destroyed-after-impact",
-        enabled: () => getGame().global.race["orbit_decay"] && !getGame().global.race["orbit_decayed"],
+        enabled: (snapshot) => snapshot.orbitalDecayImpactPending,
         match: (building3) => (building3._tab === "city" || building3._location === "spc_moon") && !(building3 instanceof ResourceAction),
         describe: () => "Will be destroyed after impact",
         multiplier: () => getSettings().buildingWeightingTemporal
@@ -24582,7 +24595,7 @@
       },
       {
         id: "solar-system-building",
-        enabled: (snapshot) => getGame().global.race["truepath"] && snapshot.tauCetiReached,
+        enabled: (snapshot) => snapshot.truepathRace && snapshot.tauCetiReached,
         match: (building3) => (building3._tab === "city" || building3._tab === "space" || building3._tab === "starDock") && !(building3 instanceof ResourceAction),
         describe: () => "Solar System building",
         multiplier: () => getSettings().buildingWeightingSolar
@@ -24641,6 +24654,7 @@
     isStargatePiracySupressed,
     isGalaxyPiracyCoveredByFleet,
     isLumberRace,
+    hasRaceTrait,
     isBananaRepublicObjectiveComplete: isBananaRepublicObjectiveComplete2,
     isInflationAssistActive: isInflationAssistActive2,
     isInflationMoneyReachable: isInflationMoneyReachable2,
@@ -24655,6 +24669,7 @@
     getSpirePrebuildShortfall,
     getNextCitadelPowerDraw,
     isTechResearched,
+    isShrineBonusUnwanted,
     isGECKNeeded,
     isPrestigeAllowed: isPrestigeAllowed2,
     isPillarFinished: isPillarFinished2,
@@ -24673,6 +24688,7 @@
         "getSpirePrebuildShortfall()"
       );
       const researched = (research, level) => Boolean(isTechResearched(research, level));
+      const trait2 = (name) => Boolean(hasRaceTrait(name));
       return Object.freeze({
         queuedTargets: new Set(
           requireArray(state["queuedTargets"], "state.queuedTargets")
@@ -24705,6 +24721,21 @@
           "isGalaxyPiracyCoveredByFleet()"
         ),
         lumberRace: requireBoolean(isLumberRace(), "isLumberRace()"),
+        truepathRace: trait2("truepath"),
+        // The game spells the Entish no-quarry-worker trait "sappy".
+        mineIsOnlyChrysotileSource: trait2("smoldering") && trait2("sappy"),
+        witchHunterRace: trait2("witch_hunter"),
+        warlordRace: trait2("warlord"),
+        // The game spells the artificial-population trait "artifical".
+        artificialRace: trait2("artifical"),
+        slaverRace: trait2("slaver"),
+        cannibalizeRace: trait2("cannibalize"),
+        parasiteRace: trait2("parasite"),
+        bananaRace: trait2("banana"),
+        loneSurvivorRace: trait2("lone_survivor"),
+        hoovedRace: trait2("hooved"),
+        calmRace: trait2("calm"),
+        orbitalDecayImpactPending: trait2("orbit_decay") && !trait2("orbit_decayed"),
         bananaColliderObjectiveComplete: requireBoolean(
           isBananaRepublicObjectiveComplete2("b2"),
           'isBananaRepublicObjectiveComplete("b2")'
@@ -24781,6 +24812,10 @@
         spireSphinxSolved: researched("hell_spire", 8),
         assemblyCureComplete: researched("focus_cure", 7),
         tauCetiReached: researched("tauceti", 2),
+        shrineBonusUnwanted: requireBoolean(
+          isShrineBonusUnwanted(),
+          "isShrineBonusUnwanted()"
+        ),
         geckNeeded: requireBoolean(isGECKNeeded(), "isGECKNeeded()"),
         prestigeEdenAllowed: requireBoolean(
           isPrestigeAllowed2("eden"),
@@ -55509,6 +55544,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getGame: () => game,
       getPoly: () => poly
     });
+    const { shrineBonusUnwanted } = createShrineIntelligence({
+      getGame: () => game,
+      getSettings: () => settings
+    });
     const { madPrestigeAwaited } = createPrestigeIntelligence({
       getSettings: () => settings,
       getTechIds: () => techIds,
@@ -56252,6 +56291,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         isStargatePiracySupressed: () => stargatePiracySupressed(),
         isGalaxyPiracyCoveredByFleet: () => galaxyPiracyCoveredByFleet(),
         isLumberRace: () => isLumberRace(),
+        hasRaceTrait: (trait2) => game.global.race[trait2],
         isBananaRepublicObjectiveComplete: (objective) => bananaRepublicObjectiveComplete(objective),
         isInflationAssistActive: () => inflationChallengeAssistActive(),
         isInflationMoneyReachable: () => inflationChallengeMoneyReachable(),
@@ -56270,6 +56310,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getSpirePrebuildShortfall: () => spirePrebuildShortfall(),
         getNextCitadelPowerDraw: () => nextCitadelPowerDraw(),
         isTechResearched: (research, level) => haveTech(research, level),
+        isShrineBonusUnwanted: () => shrineBonusUnwanted(),
         isGECKNeeded: () => isGECKNeeded(),
         isPrestigeAllowed: (prestige) => isPrestigeAllowed2(prestige),
         isPillarFinished: () => isPillarFinished2(),
