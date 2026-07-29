@@ -1,17 +1,10 @@
-import { requireRecord } from "../../../validation.ts";
+import { requireRecord, requireString } from "../../../validation.ts";
 import type { ArpaToggleItem } from "../../../../domain/progression/research/arpa-toggles.ts";
 import type { ArpaToggleReader } from "../../../../ports/arpa-toggles.ts";
 
 export interface ArpaToggleEvolveDependencies {
   readonly getProjectManager: () => unknown;
   readonly getSettingsRaw: () => unknown;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 /** Evolve adapter for the ordered ProjectManager projects and their persisted toggles. */

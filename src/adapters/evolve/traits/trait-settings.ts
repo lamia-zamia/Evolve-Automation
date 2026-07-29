@@ -7,7 +7,9 @@ import {
 } from "../../../domain/traits/trait-settings.ts";
 import {
   requireFunction,
+  requireNumber,
   requireRecord,
+  requireString,
   type UnknownRecord,
 } from "../../validation.ts";
 
@@ -31,19 +33,6 @@ export interface TraitSettingsEvolveAdapter {
   reorderMinorTraits(traitIds: readonly string[]): void;
   reorderMutableTraits(traitIds: readonly string[]): void;
   setBoolean(settingName: string, value: boolean): void;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string")
-    throw new TypeError(`${path} must be a string`);
-  return value;
-}
-
-function requireNumber(value: unknown, path: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new TypeError(`${path} must be a finite number`);
-  }
-  return value;
 }
 
 function callLocalization(

@@ -26,6 +26,7 @@ import {
   requireFunction,
   requireNumber,
   requireRecord,
+  requireString,
   type UnknownRecord,
 } from "../../validation.ts";
 
@@ -65,13 +66,6 @@ const GRENADIER_CREW: Readonly<Record<string, number>> = Object.freeze({
   dreadnought: 6,
   explorer: 6,
 });
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
-}
 
 function decisionMatches(
   expected: Readonly<OuterFleetDecision>,

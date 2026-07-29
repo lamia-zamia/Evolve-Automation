@@ -16,6 +16,7 @@ import {
   requireFunction,
   requireNumber,
   requireRecord,
+  requireString,
   type UnknownRecord,
 } from "../../validation.ts";
 
@@ -44,13 +45,6 @@ interface HellSession {
   readonly cycleInput: Readonly<HellCycleInput>;
   calculation: Readonly<HellCalculationInput> | null;
   request: Readonly<HellTargetRequest> | null;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 function optionalNumber(value: unknown, path: string): number {

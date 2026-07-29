@@ -21,6 +21,7 @@ import {
   requireFunction,
   requireNumber,
   requireRecord,
+  requireString,
   type UnknownRecord,
 } from "../../validation.ts";
 
@@ -68,12 +69,6 @@ interface JobsSession {
 interface SmartMaximum {
   readonly maximum: number | null;
   readonly farmerMinimum: number | null;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string")
-    throw new TypeError(`${path} must be a string`);
-  return value;
 }
 
 function optionalNumber(value: unknown, path: string, fallback = 0): number {

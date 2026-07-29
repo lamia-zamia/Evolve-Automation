@@ -4193,6 +4193,12 @@
     }
     return value;
   }
+  function requireString(value, path) {
+    if (typeof value !== "string") {
+      throw new TypeError(`${path} must be a string`);
+    }
+    return value;
+  }
   function requireNumber(value, path) {
     if (typeof value !== "number" || !Number.isFinite(value)) {
       throw new TypeError(`${path} must be a finite number`);
@@ -14800,12 +14806,6 @@
       Reflect.apply(method, target, [])
     );
   }
-  function requireArray2(value, path) {
-    if (!Array.isArray(value)) {
-      throw new TypeError(`${path} must be an array`);
-    }
-    return value;
-  }
   function readMaxQuantity(value, path) {
     if (typeof value !== "number") {
       throw new TypeError(`${path} must be a number`);
@@ -14813,7 +14813,7 @@
     return value;
   }
   function targetList(value, path) {
-    return requireArray2(value, path).map(
+    return requireArray(value, path).map(
       (entry, index) => requireRecord(entry, `${path}[${index}]`)
     );
   }
@@ -18300,12 +18300,6 @@
     }
     return requireRecord(value, path);
   }
-  function requireString(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function createResearchSettingsEvolveAdapter({
     getGame,
     getTechIds
@@ -18503,12 +18497,6 @@
     }
     return requireRecord(value, path);
   }
-  function requireString2(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function createLoggingSettingsEvolveAdapter({
     getGame,
     getGameLog,
@@ -18521,7 +18509,7 @@
         global["settings"],
         "game.global.settings"
       );
-      const locale = requireString2(
+      const locale = requireString(
         gameSettings["locale"],
         "game.global.settings.locale"
       );
@@ -18531,11 +18519,11 @@
       for (const [id, rawLabel] of Object.entries(rawTypes)) {
         messageTypes.push({
           id,
-          label: requireString2(rawLabel, `GameLog.Types.${id}`)
+          label: requireString(rawLabel, `GameLog.Types.${id}`)
         });
       }
       const settingsRaw = requireObjectRecord2(getSettingsRaw(), "settingsRaw");
-      const logFilter = requireString2(
+      const logFilter = requireString(
         settingsRaw["logFilter"],
         "settingsRaw.logFilter"
       );
@@ -18711,20 +18699,14 @@
     }
     return requireRecord(value, path);
   }
-  function requireString3(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function readLocalizedOption(id, localize2, game) {
     return {
       val: id,
-      label: requireString3(
+      label: requireString(
         Reflect.apply(localize2, game, [`govern_${id}`]),
         `game.loc(govern_${id}) result`
       ),
-      hint: requireString3(
+      hint: requireString(
         Reflect.apply(localize2, game, [`govern_${id}_desc`]),
         `game.loc(govern_${id}_desc) result`
       )
@@ -18759,7 +18741,7 @@
           `GovernmentManager.Types.${key}`
         );
         if (type["selectable"] === false) continue;
-        const id = requireString3(type["id"], `GovernmentManager.Types.${key}.id`);
+        const id = requireString(type["id"], `GovernmentManager.Types.${key}.id`);
         governmentOptions.push(readLocalizedOption(id, localize2, game));
       }
       const rawGovernors = getGovernors();
@@ -18770,14 +18752,14 @@
         { val: "none", label: "None", hint: "Do not select governor" }
       ];
       rawGovernors.forEach((rawGovernor, index) => {
-        const id = requireString3(rawGovernor, `governors[${index}]`);
+        const id = requireString(rawGovernor, `governors[${index}]`);
         governorOptions.push({
           val: id,
-          label: requireString3(
+          label: requireString(
             localize2(`governor_${id}`),
             `game.loc(governor_${id}) result`
           ),
-          hint: requireString3(
+          hint: requireString(
             localize2(`governor_${id}_desc`),
             `game.loc(governor_${id}_desc) result`
           )
@@ -18918,17 +18900,11 @@
   }
 
   // src/adapters/evolve/progression/evolution/planet-settings.ts
-  function requireString4(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function requireStringArray(value, path) {
     if (!Array.isArray(value)) {
       throw new TypeError(`${path} must be an array`);
     }
-    return value.map((item, index) => requireString4(item, `${path}[${index}]`));
+    return value.map((item, index) => requireString(item, `${path}[${index}]`));
   }
   function createPlanetSettingsEvolveAdapter({
     getGame,
@@ -18947,14 +18923,14 @@
       const traitIds = requireStringArray(getTraitList(), "traitList");
       const extraIds = requireStringArray(getExtraList(), "extraList");
       const biomes = biomeIds.map((id) => ({
-        label: requireString4(
+        label: requireString(
           localize2(`biome_${id}_name`),
           `game.loc(biome_${id}_name) result`
         ),
         settingName: `biome_w_${id}`
       }));
       const traits = traitIds.map((id, index) => ({
-        label: index === 0 ? "None" : requireString4(
+        label: index === 0 ? "None" : requireString(
           localize2(`planet_${id}`),
           `game.loc(planet_${id}) result`
         ),
@@ -19087,12 +19063,6 @@
   }
 
   // src/adapters/evolve/progression/research/project-settings.ts
-  function requireString5(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function readPriorityList(manager) {
     const priorityList = manager["priorityList"];
     if (!Array.isArray(priorityList)) {
@@ -19110,13 +19080,13 @@
       const manager = requireRecord(getProjectManager(), "ProjectManager");
       const rows = readPriorityList(manager).map(
         (project, index) => {
-          const id = requireString5(
+          const id = requireString(
             project["id"],
             `ProjectManager.priorityList[${index}].id`
           );
           return {
             id,
-            label: requireString5(
+            label: requireString(
               project["name"],
               `ProjectManager.priorityList[${index}].name`
             ),
@@ -19136,7 +19106,7 @@
         "ProjectManager.sortByPriority"
       );
       projectIds.forEach((projectId, index) => {
-        const id = requireString5(projectId, `projectIds[${index}]`);
+        const id = requireString(projectId, `projectIds[${index}]`);
         settingsRaw[`arpa_p_${id}`] = index;
       });
       Reflect.apply(sortByPriority, manager, []);
@@ -19288,12 +19258,6 @@
   }
 
   // src/adapters/evolve/economy/storage/storage-settings.ts
-  function requireString6(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function readPriorityList2(manager) {
     const priorityList = manager["priorityList"];
     if (!Array.isArray(priorityList)) {
@@ -19311,13 +19275,13 @@
       const manager = requireRecord(getStorageManager(), "StorageManager");
       const rows = readPriorityList2(manager).map(
         (resource2, index) => {
-          const id = requireString6(
+          const id = requireString(
             resource2["id"],
             `StorageManager.priorityList[${index}].id`
           );
           return {
             id,
-            label: requireString6(
+            label: requireString(
               resource2["name"],
               `StorageManager.priorityList[${index}].name`
             ),
@@ -19338,7 +19302,7 @@
         "StorageManager.sortByPriority"
       );
       resourceIds.forEach((resourceId3, index) => {
-        const id = requireString6(resourceId3, `resourceIds[${index}]`);
+        const id = requireString(resourceId3, `resourceIds[${index}]`);
         settingsRaw[`res_storage_p_${id}`] = index;
       });
       Reflect.apply(sortByPriority, manager, []);
@@ -19533,12 +19497,6 @@
   }
 
   // src/adapters/evolve/economy/production/magic-settings.ts
-  function requireString7(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function readPriorityList3(manager) {
     const priorityList = manager["priorityList"];
     if (!Array.isArray(priorityList)) {
@@ -19564,14 +19522,14 @@
       );
       const alchemyRows = resources.map((resource2, index) => {
         const path = `AlchemyManager.priorityList[${index}]`;
-        const id = requireString7(resource2["id"], `${path}.id`);
+        const id = requireString(resource2["id"], `${path}.id`);
         const tier = requireNumber(
           Reflect.apply(transmuteTier, alchemyManager, [resource2]),
           `${path}.transmuteTier result`
         );
         return {
           id,
-          label: requireString7(resource2["name"], `${path}.name`),
+          label: requireString(resource2["name"], `${path}.name`),
           color: tier > 1 ? "has-text-advanced" : "has-text-info",
           enabledSettingName: `res_alchemy_${id}`,
           weightingSettingName: `res_alchemy_w_${id}`
@@ -19588,13 +19546,13 @@
             rawProduction,
             `RitualManager.Productions.${key}`
           );
-          const id = requireString7(
+          const id = requireString(
             production["id"],
             `RitualManager.Productions.${key}.id`
           );
           return {
             id,
-            label: requireString7(
+            label: requireString(
               Reflect.apply(localize2, game, [`modal_pylon_spell_${id}`]),
               `game.loc(modal_pylon_spell_${id}) result`
             ),
@@ -19853,12 +19811,6 @@
   }
 
   // src/adapters/evolve/civic/job-settings.ts
-  function requireString8(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function readPriorityList4(manager) {
     const priorityList = manager["priorityList"];
     if (!Array.isArray(priorityList)) {
@@ -19869,7 +19821,7 @@
     );
   }
   function readJobId(job, path) {
-    return requireString8(job["_originalId"], `${path}._originalId`);
+    return requireString(job["_originalId"], `${path}._originalId`);
   }
   function readJobRows(manager, jobs, settingsRaw, BasicJob, CraftingJob) {
     const overrides = requireRecord(
@@ -19893,7 +19845,7 @@
       const color = job === jobs["Unemployed"] ? "warning" : job instanceof CraftingJob ? "danger" : job instanceof BasicJob ? "info" : "advanced";
       return {
         id,
-        label: requireString8(job["_originalName"], `${path}._originalName`),
+        label: requireString(job["_originalName"], `${path}._originalName`),
         color,
         enabledSettingName: settingName,
         enabled: Boolean(settingsRaw[settingName]),
@@ -19947,7 +19899,7 @@
         "JobManager.sortByPriority"
       );
       jobIds.forEach((jobId, index) => {
-        const id = requireString8(jobId, `jobIds[${index}]`);
+        const id = requireString(jobId, `jobIds[${index}]`);
         settingsRaw[`job_p_${id}`] = index;
       });
       Reflect.apply(sortByPriority, manager, []);
@@ -20549,12 +20501,6 @@
   }
 
   // src/adapters/evolve/progression/build/building-settings.ts
-  function requireString9(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function readPriorityList5(manager) {
     const priorityList = manager["priorityList"];
     if (!Array.isArray(priorityList)) {
@@ -20585,7 +20531,7 @@
       );
       if (set.some((item) => item === building3)) {
         return set.map(
-          (item, itemIndex) => requireString9(
+          (item, itemIndex) => requireString(
             item["_vueBinding"],
             `${path}.linkedBuildings[${setIndex}][${itemIndex}]._vueBinding`
           )
@@ -20601,7 +20547,7 @@
     );
     return readPriorityList5(manager).map((building3, index) => {
       const path = `BuildingManager.priorityList[${index}]`;
-      const id = requireString9(building3["_vueBinding"], `${path}._vueBinding`);
+      const id = requireString(building3["_vueBinding"], `${path}._vueBinding`);
       const flags = requireRecord(building3["is"], `${path}.is`);
       const stateSettingName = Reflect.apply(
         requireFunction(building3["isSwitchable"], `${path}.isSwitchable`),
@@ -20612,7 +20558,7 @@
       const linkedIds = smartSettingName ? readLinkedIds(building3, linkedBuildings, path) : void 0;
       return {
         id,
-        label: requireString9(building3["name"], `${path}.name`),
+        label: requireString(building3["name"], `${path}.name`),
         color: readColor(readOptionalString(building3["_tab"])),
         autoBuildSettingName: `bat${id}`,
         maximumSettingName: `bld_m_${id}`,
@@ -20626,12 +20572,6 @@
         hasSmartOverride: smartSettingName ? Boolean(overrides[smartSettingName]) : false
       };
     });
-  }
-  function requireBoolean2(value, path) {
-    if (typeof value !== "boolean") {
-      throw new TypeError(`${path} must be a boolean`);
-    }
-    return value;
   }
   function createBuildingSettingsEvolveAdapter({
     getBuildingManager,
@@ -20661,7 +20601,7 @@
         ),
         allEnabled: Boolean(settingsRaw["buildingEnabledAll"]),
         allState: Boolean(settingsRaw["buildingStateAll"]),
-        overrideKey: requireString9(getOverrideKey(), "overrideKey")
+        overrideKey: requireString(getOverrideKey(), "overrideKey")
       });
     }
     function filterBuildingSettings(query) {
@@ -20698,7 +20638,7 @@
                 resources[resourceId3],
                 `resources.${resourceId3}`
               );
-              return requireString9(
+              return requireString(
                 resource2["title"],
                 `resources.${resourceId3}.title`
               ).toUpperCase().includes(leftOperand.trim());
@@ -20751,7 +20691,7 @@
       );
       const priorityList = readPriorityList5(manager);
       for (let index = 0; index < priorityList.length; index += 1) {
-        const id = requireString9(
+        const id = requireString(
           priorityList[index]?.["_vueBinding"],
           `BuildingManager.priorityList[${index}]._vueBinding`
         );
@@ -20766,7 +20706,7 @@
         "BuildingManager.sortByPriority"
       );
       buildingIds.forEach((buildingId2, index) => {
-        const id = requireString9(buildingId2, `buildingIds[${index}]`);
+        const id = requireString(buildingId2, `buildingIds[${index}]`);
         settingsRaw[`bld_p_${id}`] = index;
       });
       Reflect.apply(sortByPriority, manager, []);
@@ -20774,9 +20714,9 @@
     function setAllAutoBuild(enabled) {
       const manager = requireRecord(getBuildingManager(), "BuildingManager");
       const settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw");
-      settingsRaw["buildingEnabledAll"] = requireBoolean2(enabled, "enabled");
+      settingsRaw["buildingEnabledAll"] = requireBoolean(enabled, "enabled");
       for (const [index, building3] of readPriorityList5(manager).entries()) {
-        const id = requireString9(
+        const id = requireString(
           building3["_vueBinding"],
           `BuildingManager.priorityList[${index}]._vueBinding`
         );
@@ -20786,9 +20726,9 @@
     function setAllAutoPower(enabled) {
       const manager = requireRecord(getBuildingManager(), "BuildingManager");
       const settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw");
-      settingsRaw["buildingStateAll"] = requireBoolean2(enabled, "enabled");
+      settingsRaw["buildingStateAll"] = requireBoolean(enabled, "enabled");
       for (const [index, building3] of readPriorityList5(manager).entries()) {
-        const id = requireString9(
+        const id = requireString(
           building3["_vueBinding"],
           `BuildingManager.priorityList[${index}]._vueBinding`
         );
@@ -20797,9 +20737,9 @@
     }
     function setLinkedSmartState(buildingIds, enabled) {
       const settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw");
-      const value = requireBoolean2(enabled, "enabled");
+      const value = requireBoolean(enabled, "enabled");
       buildingIds.forEach((buildingId2, index) => {
-        const id = requireString9(buildingId2, `buildingIds[${index}]`);
+        const id = requireString(buildingId2, `buildingIds[${index}]`);
         settingsRaw[`bld_s2_${id}`] = value;
       });
     }
@@ -21118,12 +21058,6 @@
   }
 
   // src/adapters/evolve/progression/prestige/prestige-top-bar.ts
-  function requireString10(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function createPrestigeTopBarEvolveAdapter({
     getSettings,
     getPrestigeTypes
@@ -21135,7 +21069,7 @@
       },
       readSelectedValue() {
         const settings = requireRecord(getSettings(), "settings");
-        return requireString10(settings["prestigeType"], "settings.prestigeType");
+        return requireString(settings["prestigeType"], "settings.prestigeType");
       },
       readTypeOptions() {
         const rawOptions = getPrestigeTypes();
@@ -21146,12 +21080,12 @@
           rawOptions.map((rawOption, index) => {
             const option3 = requireRecord(rawOption, `prestigeTypes[${index}]`);
             return Object.freeze({
-              value: requireString10(option3["val"], `prestigeTypes[${index}].val`),
-              label: requireString10(
+              value: requireString(option3["val"], `prestigeTypes[${index}].val`),
+              label: requireString(
                 option3["label"],
                 `prestigeTypes[${index}].label`
               ),
-              hint: requireString10(option3["hint"], `prestigeTypes[${index}].hint`)
+              hint: requireString(option3["hint"], `prestigeTypes[${index}].hint`)
             });
           })
         );
@@ -21196,12 +21130,6 @@
   }
 
   // src/adapters/evolve/economy/resources/eject-toggles.ts
-  function requireString11(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function createEjectToggleEvolveAdapter({
     getEjectManager,
     getSettingsRaw
@@ -21220,7 +21148,7 @@
               rawResource,
               `EjectManager.priorityList[${index}]`
             );
-            const resourceId3 = requireString11(
+            const resourceId3 = requireString(
               resource2["id"],
               `EjectManager.priorityList[${index}].id`
             );
@@ -21274,12 +21202,6 @@
   }
 
   // src/adapters/evolve/economy/resources/supply-toggles.ts
-  function requireString12(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function createSupplyToggleEvolveAdapter({
     getSupplyManager,
     getSettingsRaw
@@ -21298,7 +21220,7 @@
               rawResource,
               `SupplyManager.priorityList[${index}]`
             );
-            const resourceId3 = requireString12(
+            const resourceId3 = requireString(
               resource2["id"],
               `SupplyManager.priorityList[${index}].id`
             );
@@ -21349,12 +21271,6 @@
   }
 
   // src/adapters/evolve/economy/production/craft-toggles.ts
-  function requireString13(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function createCraftToggleEvolveAdapter({
     getCraftablesList,
     getSettingsRaw
@@ -21372,7 +21288,7 @@
               rawCraftable,
               `craftablesList[${index}]`
             );
-            const craftableId = requireString13(
+            const craftableId = requireString(
               craftable["id"],
               `craftablesList[${index}].id`
             );
@@ -21420,12 +21336,6 @@
   }
 
   // src/adapters/evolve/progression/research/arpa-toggles.ts
-  function requireString14(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function createArpaToggleEvolveAdapter({
     getProjectManager,
     getSettingsRaw
@@ -21444,7 +21354,7 @@
               rawProject,
               `ProjectManager.priorityList[${index}]`
             );
-            const projectId = requireString14(
+            const projectId = requireString(
               project["id"],
               `ProjectManager.priorityList[${index}].id`
             );
@@ -21498,12 +21408,6 @@
   }
 
   // src/adapters/evolve/progression/build/building-toggles.ts
-  function requireString15(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function createBuildingToggleEvolveAdapter({
     getBuildingManager,
     getSettings,
@@ -21527,7 +21431,7 @@
               rawBuilding,
               `BuildingManager.priorityList[${index}]`
             );
-            const binding = requireString15(
+            const binding = requireString(
               building3["_vueBinding"],
               `BuildingManager.priorityList[${index}]._vueBinding`
             );
@@ -25399,12 +25303,6 @@
   }
 
   // src/adapters/evolve/combat/hell.ts
-  function requireString16(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function optionalNumber(value, path) {
     return value === void 0 ? 0 : requireNumber(value, path);
   }
@@ -25696,7 +25594,7 @@
           ),
           evilTechnology: optionalNumber(tech["evil"], "game.global.tech.evil"),
           grenadier: Boolean(race2["grenadier"]),
-          government: requireString16(
+          government: requireString(
             govern["type"],
             "game.global.civic.govern.type"
           )
@@ -26353,12 +26251,6 @@
   }
 
   // src/adapters/evolve/combat/battle.ts
-  function requireString17(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function readTrait(dependencies, trait2, fallback, operation2) {
     return requireNumber(
       dependencies.traitVal(trait2, fallback, operation2),
@@ -26371,7 +26263,7 @@
     return {
       input: Object.freeze({
         governmentId: requireNumber(foreign["id"], `${path}.id`),
-        policy: requireString17(foreign["policy"], `${path}.policy`),
+        policy: requireString(foreign["policy"], `${path}.policy`),
         released: Boolean(foreign["released"]),
         occupied: Boolean(government["occ"]),
         annexed: Boolean(government["anx"]),
@@ -26486,7 +26378,7 @@
         );
         const hellAvailable = Boolean(manager["_hellVue"]);
         const readHell = autoHell && hellAvailable;
-        const protectMode = requireString17(
+        const protectMode = requireString(
           settings["foreignProtect"],
           "settings.foreignProtect"
         );
@@ -26760,7 +26652,7 @@
           gameLog["logSuccess"],
           "GameLog.logSuccess"
         );
-        const governmentName = requireString17(
+        const governmentName = requireString(
           dependencies.getGovernmentName(decision2.governmentId),
           `government name ${decision2.governmentId}`
         );
@@ -26786,7 +26678,7 @@
         if (removeBattalion !== null) {
           Reflect.apply(removeBattalion, active.manager, [-deltaBattalion]);
         }
-        const campaignTitle = requireString17(
+        const campaignTitle = requireString(
           Reflect.apply(getCampaignTitle, active.manager, [decision2.tactic]),
           `campaign title ${decision2.tactic}`
         );
@@ -32271,12 +32163,6 @@
       moneyStorageRequired: 0
     });
   }
-  function requireString18(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function readMercenaryState(manager, money) {
     return Object.freeze({
       currentSoldiers: requireNumber(
@@ -32320,7 +32206,7 @@
         );
         if (maxCityGarrison <= 0) return unavailableInput2();
         const state = requireRecord(dependencies.getState(), "state");
-        const goal = requireString18(state["goal"], "state.goal");
+        const goal = requireString(state["goal"], "state.goal");
         const saveInflationMoney = Boolean(
           dependencies.shouldSaveInflationMoney()
         );
@@ -39833,18 +39719,12 @@
     );
     return { foreign, government };
   }
-  function requireString19(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function readMissionIds(manager) {
     const types = requireRecord(manager["Types"], "SpyManager.Types");
     const ids = {};
     for (const [name, rawType] of Object.entries(types)) {
       const type = requireRecord(rawType, `SpyManager.Types.${name}`);
-      ids[name] = requireString19(type["id"], `SpyManager.Types.${name}.id`);
+      ids[name] = requireString(type["id"], `SpyManager.Types.${name}.id`);
     }
     return Object.freeze(ids);
   }
@@ -39952,7 +39832,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString19(
+        const policy = requireString(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -39973,7 +39853,7 @@
             "resources.Money.maxQuantity"
           );
         }
-        const governmentName = requireString19(
+        const governmentName = requireString(
           dependencies.getGovName(governmentId),
           `government name ${governmentId}`
         );
@@ -40019,7 +39899,7 @@
           foreign["id"],
           `SpyManager.foreignActive[${foreignIndex}].id`
         );
-        const policy = requireString19(
+        const policy = requireString(
           foreign["policy"],
           `SpyManager.foreignActive[${foreignIndex}].policy`
         );
@@ -40921,11 +40801,6 @@
   }
 
   // src/adapters/evolve/civic/jobs.ts
-  function requireString20(value, path) {
-    if (typeof value !== "string")
-      throw new TypeError(`${path} must be a string`);
-    return value;
-  }
   function optionalNumber2(value, path, fallback = 0) {
     return value === void 0 ? fallback : requireNumber(value, path);
   }
@@ -41069,7 +40944,7 @@
           if (count2 === 0) {
             maximum = 1;
           } else {
-            const id = requireString20(job["id"], "job.id");
+            const id = requireString(job["id"], "job.id");
             const production = requireNumber(
               call2(
                 resource(resources, "Food"),
@@ -41440,7 +41315,7 @@
           );
           return Object.freeze({
             token: token2,
-            id: requireString20(job["id"], `jobList[${token2}].id`),
+            id: requireString(job["id"], `jobList[${token2}].id`),
             kind,
             workers: requireNumber(job["workers"], `jobList[${token2}].workers`),
             servants: requireNumber(
@@ -41557,7 +41432,7 @@
                 `craftingJobs[${index}].resource.craftPreserve`
               ))) {
                 affordability = 0;
-                exclusion = `${requireString20(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
+                exclusion = `${requireString(job["id"], `craftingJobs[${index}].id`)}(hold:${resourceId3})`;
                 break;
               }
               affordability = Math.min(
@@ -41589,7 +41464,7 @@
                 craftResource["currentQuantity"],
                 `craftingJobs[${index}].resource.currentQuantity`
               );
-              const resourceId3 = requireString20(
+              const resourceId3 = requireString(
                 craftResource["id"],
                 `craftingJobs[${index}].resource.id`
               );
@@ -41609,7 +41484,7 @@
                 driver = `no building×${craftWeight}`;
               } else {
                 const record = requireRecord(driving, "driving building");
-                driver = `${requireString20(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
+                driver = `${requireString(record["_vueBinding"], "driving building binding")}@${requireNumber(record["weighting"], "driving building weighting").toFixed(1)}×${craftWeight}`;
               }
             }
             return Object.freeze({
@@ -41860,7 +41735,7 @@
           minerToken: token("Miner"),
           population: resourceNumber(resources, "Population", "currentQuantity"),
           craftDebug: Boolean(debugWindow["craftDebug"]),
-          lastCraftWinner: state["lastCraftWinner"] === void 0 ? null : requireString20(state["lastCraftWinner"], "state.lastCraftWinner"),
+          lastCraftWinner: state["lastCraftWinner"] === void 0 ? null : requireString(state["lastCraftWinner"], "state.lastCraftWinner"),
           authority,
           jobs: Object.freeze(jobInputs),
           crafting: Object.freeze(craftingInputs),
@@ -42014,12 +41889,6 @@
   }
 
   // src/adapters/evolve/progression/build/build.ts
-  function requireString21(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function callMethod(target, name, path) {
     return requireFunction(target[name], `${path}.${name}`).call(target);
   }
@@ -42134,7 +42003,7 @@
           "autoBuild.beginCycle.normalizeCandidates",
           () => entities.map((entity, index) => {
             const path = `buildList[${index}]`;
-            const key = requireString21(
+            const key = requireString(
               entity["_vueBinding"],
               `${path}._vueBinding`
             );
@@ -43332,12 +43201,6 @@
     dreadnought: 6,
     explorer: 6
   });
-  function requireString22(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function decisionMatches2(expected, actual) {
     if (expected.kind !== actual.kind || expected.blueprint !== actual.blueprint) {
       return false;
@@ -43352,7 +43215,7 @@
       dependencies.assessAuthorityRemoval(shipCrew),
       "Authority removal assessment"
     );
-    const status2 = requireString22(
+    const status2 = requireString(
       raw["status"],
       "Authority removal assessment.status"
     );
@@ -43421,7 +43284,7 @@
         let manualBlueprintAvailable = false;
         let configuredMinimumCrew = 0;
         if (initialized) {
-          mode = requireString22(
+          mode = requireString(
             settings["fleetOuterShips"],
             "settings.fleetOuterShips"
           );
@@ -43559,7 +43422,7 @@
             "FleetManagerOuter.getMaxDefense"
           );
           for (let index = 0; index < rawRegions.length; index++) {
-            const id = requireString22(
+            const id = requireString(
               rawRegions[index],
               `FleetManagerOuter.Regions[${index}]`
             );
@@ -43718,7 +43581,7 @@
             );
           }
         }
-        const targetLocationName = requireString22(
+        const targetLocationName = requireString(
           Reflect.apply(
             requireFunction(
               active.manager["getLocName"],
@@ -43751,7 +43614,7 @@
             `outer fleet blueprint ${candidate.blueprint} is missing`
           );
         }
-        const shipName = requireString22(
+        const shipName = requireString(
           Reflect.apply(
             requireFunction(
               active.manager["getShipName"],
@@ -43762,7 +43625,7 @@
           ),
           `ship name ${candidate.blueprint}`
         );
-        const shipClass = requireString22(
+        const shipClass = requireString(
           blueprint["class"],
           `${candidate.blueprint} blueprint.class`
         );
@@ -43834,7 +43697,7 @@
         let missingResourceName = null;
         let currentCityGarrison = 0;
         if (missingResource) {
-          const resourceId3 = requireString22(
+          const resourceId3 = requireString(
             missingResource,
             "missing outer-fleet resource id"
           );
@@ -43842,7 +43705,7 @@
             active.resources[resourceId3],
             `resources.${resourceId3}`
           );
-          missingResourceName = requireString22(
+          missingResourceName = requireString(
             resource2["name"],
             `resources.${resourceId3}.name`
           );
@@ -44305,12 +44168,6 @@
     { name: "cruiser_ship", building: "CruiserShip" },
     { name: "dreadnought", building: "Dreadnought" }
   ]);
-  function requireString23(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function emptyCounts() {
     return {
       scout_ship: 0,
@@ -44481,7 +44338,7 @@
         }
         const baseRegions = rawRegions.map((rawRegion, index) => {
           const region = requireRecord(rawRegion, `galaxy regions[${index}]`);
-          const name = requireString23(
+          const name = requireString(
             region["name"],
             `galaxy regions[${index}].name`
           );
@@ -44509,7 +44366,7 @@
         let chthonianLossMode = "ignore";
         let dreadedGuardActive = false;
         if (chthonian.unlocked) {
-          chthonianLossMode = requireString23(
+          chthonianLossMode = requireString(
             settings["fleetChthonianLoses"],
             "settings.fleetChthonianLoses"
           );
@@ -44543,7 +44400,7 @@
               settings["fleetAlien2Knowledge"],
               "settings.fleetAlien2Knowledge"
             );
-            alien2LossMode = requireString23(
+            alien2LossMode = requireString(
               settings["fleetAlien2Loses"],
               "settings.fleetAlien2Loses"
             );
@@ -44911,12 +44768,6 @@
   }
 
   // src/adapters/evolve/combat/mech.ts
-  function requireString24(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function call3(target, key, path, args = []) {
     return Reflect.apply(requireFunction(target[key], path), target, args);
   }
@@ -44930,7 +44781,7 @@
       raw,
       summary: Object.freeze({
         id: requireNumber(raw["id"], `${path}.id`),
-        size: requireString24(raw["size"], `${path}.size`),
+        size: requireString(raw["size"], `${path}.size`),
         infernal: Boolean(raw["infernal"]),
         power: requireNumber(raw["power"], `${path}.power`),
         efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
@@ -44965,7 +44816,7 @@
   function readDesign(raw, token, path) {
     return Object.freeze({
       token,
-      size: requireString24(raw["size"], `${path}.size`),
+      size: requireString(raw["size"], `${path}.size`),
       power: requireNumber(raw["power"], `${path}.power`),
       efficiency: requireNumber(raw["efficiency"], `${path}.efficiency`)
     });
@@ -45082,7 +44933,7 @@
           activeMechs: Object.freeze(activeMechs),
           inactiveMechs: Object.freeze(inactiveMechs),
           hasTask: inactiveMechs.length === 0 ? Boolean(dependencies.haveTask("mech")) : false,
-          buildMode: requireString24(settings["mechBuild"], "settings.mechBuild")
+          buildMode: requireString(settings["mechBuild"], "settings.mechBuild")
         });
         session = {
           manager,
@@ -45117,7 +44968,7 @@
             call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
-          const size = requireString24(preferred[0], "preferred mech size");
+          const size = requireString(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
             call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
@@ -45156,7 +45007,7 @@
           buildings["SpireTower"],
           "buildings.SpireTower"
         );
-        const prestigeType = requireString24(
+        const prestigeType = requireString(
           settings["prestigeType"],
           "settings.prestigeType"
         );
@@ -45245,7 +45096,7 @@
             ) === 0;
           }
         }
-        const configuredScrapMode = requireString24(
+        const configuredScrapMode = requireString(
           settings["mechScrap"],
           "settings.mechScrap"
         );
@@ -45274,7 +45125,7 @@
           );
         }
         const sizeOrder = readArray(manager["Size"], "MechManager.Size").map(
-          (value, index) => requireString24(value, `MechManager.Size[${index}]`)
+          (value, index) => requireString(value, `MechManager.Size[${index}]`)
         );
         const base = {
           design,
@@ -45459,7 +45310,7 @@
             ["hell"]
           ]);
         } else if (rawMechs.length === 1) {
-          const description = requireString24(
+          const description = requireString(
             call3(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
@@ -45790,12 +45641,6 @@
   }
 
   // src/adapters/evolve/economy/resources/ejector-settings.ts
-  function requireString25(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function readConsumable(manager, resource2, path) {
     const isConsumable = requireFunction(
       manager["isConsumable"],
@@ -45812,8 +45657,8 @@
     const rows = [];
     for (const [key, rawResource] of Object.entries(resources)) {
       const resource2 = requireRecord(rawResource, `resources.${key}`);
-      const id = requireString25(resource2["id"], `resources.${key}.id`);
-      const name = requireString25(resource2["name"], `resources.${key}.name`);
+      const id = requireString(resource2["id"], `resources.${key}.id`);
+      const name = requireString(resource2["name"], `resources.${key}.name`);
       const state = requireRecord(resource2["is"], `resources.${key}.is`);
       const atomicMass = requireNumber(
         resource2["atomicMass"],
@@ -46137,17 +45982,11 @@
   }
 
   // src/adapters/evolve/economy/market/market-settings.ts
-  function requireString26(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function readResource3(value, path) {
     const resource2 = requireRecord(value, path);
     return {
-      id: requireString26(resource2["id"], `${path}.id`),
-      name: requireString26(resource2["name"], `${path}.name`)
+      id: requireString(resource2["id"], `${path}.id`),
+      name: requireString(resource2["name"], `${path}.name`)
     };
   }
   function readMarketRows(managerValue) {
@@ -46194,11 +46033,11 @@
           offer["sell"],
           `poly.galaxyOffers[${index}].sell`
         );
-        const buyKey = requireString26(
+        const buyKey = requireString(
           buy["res"],
           `poly.galaxyOffers[${index}].buy.res`
         );
-        const sellKey = requireString26(
+        const sellKey = requireString(
           sell["res"],
           `poly.galaxyOffers[${index}].sell.res`
         );
@@ -46502,11 +46341,6 @@
   }
 
   // src/adapters/evolve/combat/war-settings.ts
-  function requireString27(value, path) {
-    if (typeof value !== "string")
-      throw new TypeError(`${path} must be a string`);
-    return value;
-  }
   function createWarSettingsEvolveAdapter({
     getSpyManager,
     getGame
@@ -46522,10 +46356,10 @@
         ];
         for (const [name, rawTask] of Object.entries(types)) {
           const task = requireRecord(rawTask, `SpyManager.Types.${name}`);
-          const id = requireString27(task["id"], `SpyManager.Types.${name}.id`);
+          const id = requireString(task["id"], `SpyManager.Types.${name}.id`);
           policyOptions.push({
             val: name,
-            label: requireString27(
+            label: requireString(
               Reflect.apply(loc2, game, [`civics_spy_${id}`]),
               `game.loc(civics_spy_${id})`
             ),
@@ -47023,11 +46857,6 @@
   }
 
   // src/adapters/evolve/combat/mech-settings.ts
-  function requireString28(value, path) {
-    if (typeof value !== "string")
-      throw new TypeError(`${path} must be a string`);
-    return value;
-  }
   function createMechSettingsEvolveAdapter({
     getMechManager,
     getGame
@@ -47057,14 +46886,14 @@
           }
         ];
         manager["Size"].forEach((rawId, index) => {
-          const id = requireString28(rawId, `MechManager.Size[${index}]`);
+          const id = requireString(rawId, `MechManager.Size[${index}]`);
           options2.push({
             val: id,
-            label: requireString28(
+            label: requireString(
               Reflect.apply(loc2, game, [`portal_mech_size_${id}`]),
               `game.loc(portal_mech_size_${id})`
             ),
-            hint: requireString28(
+            hint: requireString(
               Reflect.apply(loc2, game, [`portal_mech_size_${id}_desc`]),
               `game.loc(portal_mech_size_${id}_desc)`
             )
@@ -47322,20 +47151,15 @@
   }
 
   // src/adapters/evolve/progression/build/trigger-settings.ts
-  function requireString29(value, path) {
-    if (typeof value !== "string")
-      throw new TypeError(`${path} must be a string`);
-    return value;
-  }
   function readCatalog3(value, path) {
     const record = requireRecord(value, path);
     const result2 = {};
     for (const [id, raw] of Object.entries(record)) {
       const entry = requireRecord(raw, `${path}.${id}`);
       result2[id] = Object.freeze({
-        arg: requireString29(entry["arg"], `${path}.${id}.arg`),
+        arg: requireString(entry["arg"], `${path}.${id}.arg`),
         options: entry["options"] ?? null,
-        description: requireString29(entry["desc"], `${path}.${id}.desc`)
+        description: requireString(entry["desc"], `${path}.${id}.desc`)
       });
     }
     return result2;
@@ -47346,7 +47170,7 @@
     for (const [id, raw] of Object.entries(record)) {
       const entry = requireRecord(raw, `${path}.${id}`);
       result2[id] = Object.freeze({
-        arg: requireString29(entry["arg"], `${path}.${id}.arg`),
+        arg: requireString(entry["arg"], `${path}.${id}.arg`),
         options: entry["options"] ?? null
       });
     }
@@ -47359,7 +47183,7 @@
       const trigger = requireRecord(raw, `TriggerManager.priorityList[${index}]`);
       return Object.freeze({
         seq: typeof trigger["seq"] === "number" ? trigger["seq"] : index,
-        requirementType: requireString29(
+        requirementType: requireString(
           trigger["requirementType"],
           `TriggerManager.priorityList[${index}].requirementType`
         ),
@@ -47371,7 +47195,7 @@
           trigger["requirementCount"],
           `TriggerManager.priorityList[${index}].requirementCount`
         ),
-        actionType: requireString29(
+        actionType: requireString(
           trigger["actionType"],
           `TriggerManager.priorityList[${index}].actionType`
         ),
@@ -47389,7 +47213,7 @@
   function readStringList(value, path) {
     if (!Array.isArray(value)) throw new TypeError(`${path} must be an array`);
     return Object.freeze(
-      value.map((item, index) => requireString29(item, `${path}[${index}]`))
+      value.map((item, index) => requireString(item, `${path}[${index}]`))
     );
   }
   function createTriggerSettingsEvolveAdapter({
@@ -47630,20 +47454,11 @@
   }
 
   // src/adapters/evolve/combat/fleet-settings.ts
-  function requireString30(value, path) {
-    if (typeof value !== "string")
-      throw new TypeError(`${path} must be a string`);
-    return value;
-  }
-  function requireArray3(value, path) {
-    if (!Array.isArray(value)) throw new TypeError(`${path} must be an array`);
-    return value;
-  }
   function localize(game, key) {
     const loc2 = game["loc"];
     if (typeof loc2 !== "function")
       throw new TypeError("game.loc must be a function");
-    return requireString30(
+    return requireString(
       Reflect.apply(loc2, game, [key]),
       `game.loc(${key}) result`
     );
@@ -47661,7 +47476,7 @@
     );
     const rawName = info["name"];
     const name = typeof rawName === "function" ? Reflect.apply(rawName, action, []) : rawName;
-    return requireString30(name, `game.actions.${category}.${id}.info.name`);
+    return requireString(name, `game.actions.${category}.${id}.info.name`);
   }
   var outerControls = Object.freeze([
     {
@@ -47804,13 +47619,13 @@
         );
         const components = {};
         for (const [type, rawParts] of Object.entries(config)) {
-          const parts = requireArray3(
+          const parts = requireArray(
             rawParts,
             `FleetManagerOuter.ShipConfig.${type}`
           );
           components[type] = Object.freeze(
             parts.map((raw, index) => {
-              const id = requireString30(
+              const id = requireString(
                 raw,
                 `FleetManagerOuter.ShipConfig.${type}[${index}]`
               );
@@ -47818,23 +47633,23 @@
             })
           );
         }
-        const rawOuterRegions = requireArray3(
+        const rawOuterRegions = requireArray(
           manager["Regions"],
           "FleetManagerOuter.Regions"
         );
         const outerRegionIds = rawOuterRegions.map(
-          (raw, index) => requireString30(raw, `FleetManagerOuter.Regions[${index}]`)
+          (raw, index) => requireString(raw, `FleetManagerOuter.Regions[${index}]`)
         );
         const outerRegions = outerRegionIds.map((id) => ({
           id,
           label: readName(game, "space", id)
         }));
-        const rawGalaxyRegions = requireArray3(
+        const rawGalaxyRegions = requireArray(
           getGalaxyRegions(),
           "galaxyRegions"
         );
         const galaxyRegions = rawGalaxyRegions.map(
-          (raw, index) => requireString30(raw, `galaxyRegions[${index}]`)
+          (raw, index) => requireString(raw, `galaxyRegions[${index}]`)
         );
         const settings = requireRecord(getSettingsRaw(), "settingsRaw");
         const overrides = requireRecord(
@@ -48140,11 +47955,6 @@
   }
 
   // src/adapters/evolve/progression/prestige/prestige-settings.ts
-  function requireString31(value, path) {
-    if (typeof value !== "string")
-      throw new TypeError(`${path} must be a string`);
-    return value;
-  }
   function readOptions(value) {
     if (!Array.isArray(value))
       throw new TypeError("prestigeTypes must be an array");
@@ -48152,9 +47962,9 @@
       value.map((raw, index) => {
         const option3 = requireRecord(raw, `prestigeTypes[${index}]`);
         return Object.freeze({
-          val: requireString31(option3["val"], `prestigeTypes[${index}].val`),
-          label: requireString31(option3["label"], `prestigeTypes[${index}].label`),
-          hint: requireString31(option3["hint"], `prestigeTypes[${index}].hint`)
+          val: requireString(option3["val"], `prestigeTypes[${index}].val`),
+          label: requireString(option3["label"], `prestigeTypes[${index}].label`),
+          hint: requireString(option3["hint"], `prestigeTypes[${index}].hint`)
         });
       })
     );
@@ -48187,11 +47997,11 @@
       for (const id of ["strat1", "strat2", "strat3", "strat4"])
         vaxOptions.push({
           val: id,
-          label: requireString31(
+          label: requireString(
             Reflect.apply(rawLoc, game, [`tech_vax_${id}`]),
             `game.loc(tech_vax_${id})`
           ),
-          hint: requireString31(
+          hint: requireString(
             Reflect.apply(rawLoc, game, [`tech_vax_${id}_effect`]),
             `game.loc(tech_vax_${id}_effect)`
           )
@@ -49200,16 +49010,11 @@
   }
 
   // src/adapters/evolve/economy/production/production-settings.ts
-  function requireString32(value, path) {
-    if (typeof value !== "string")
-      throw new TypeError(`${path} must be a string`);
-    return value;
-  }
   function readResource4(value, path) {
     const resource2 = requireRecord(value, path);
     return {
-      id: requireString32(resource2["id"], `${path}.id`),
-      label: requireString32(resource2["name"], `${path}.name`)
+      id: requireString(resource2["id"], `${path}.id`),
+      label: requireString(resource2["name"], `${path}.name`)
     };
   }
   function readProductionRows(value, path) {
@@ -49246,7 +49051,7 @@
         fuel,
         `SmelterManager.managedFuelPriorityList()[${index}]`
       );
-      const id = requireString32(
+      const id = requireString(
         record["id"],
         `SmelterManager.managedFuelPriorityList()[${index}].id`
       );
@@ -49296,7 +49101,7 @@
     function reorderSmelterFuels(fuelIds) {
       const settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw");
       fuelIds.forEach((fuelId, index) => {
-        const id = requireString32(fuelId, `fuelIds[${index}]`);
+        const id = requireString(fuelId, `fuelIds[${index}]`);
         settingsRaw[`smelter_fuel_p_${id}`] = index;
       });
     }
@@ -49731,19 +49536,8 @@
   }
 
   // src/adapters/evolve/traits/trait-settings.ts
-  function requireString33(value, path) {
-    if (typeof value !== "string")
-      throw new TypeError(`${path} must be a string`);
-    return value;
-  }
-  function requireNumber2(value, path) {
-    if (typeof value !== "number" || !Number.isFinite(value)) {
-      throw new TypeError(`${path} must be a finite number`);
-    }
-    return value;
-  }
   function callLocalization(game, key, args = []) {
-    return requireString33(
+    return requireString(
       Reflect.apply(requireFunction(game["loc"], "game.loc"), game, [
         key,
         ...args
@@ -49807,12 +49601,12 @@
         ),
         ...Object.entries(races).map(([id, rawRace]) => {
           const race2 = requireRecord(rawRace, `races.${id}`);
-          const raceId = requireString33(race2["id"], `races.${id}.id`);
+          const raceId = requireString(race2["id"], `races.${id}.id`);
           const completed = Boolean(synthRaces[raceId]);
           return option2(
             raceId,
-            completed ? requireString33(race2["name"], `races.${id}.name`) : `--${requireString33(race2["name"], `races.${id}.name`)}--`,
-            requireString33(race2["desc"], `races.${id}.desc`)
+            completed ? requireString(race2["name"], `races.${id}.name`) : `--${requireString(race2["name"], `races.${id}.name`)}--`,
+            requireString(race2["desc"], `races.${id}.desc`)
           );
         })
       ];
@@ -49839,14 +49633,14 @@
         ),
         ...Object.entries(resources).flatMap(([key, rawResource]) => {
           const resource2 = requireRecord(rawResource, `resources.${key}`);
-          const atomicMass = requireNumber2(
+          const atomicMass = requireNumber(
             resource2["atomicMass"],
             `resources.${key}.atomicMass`
           );
           return atomicMass > 0 ? [
             option2(
-              requireString33(resource2["id"], `resources.${key}.id`),
-              requireString33(resource2["title"], `resources.${key}.title`)
+              requireString(resource2["id"], `resources.${key}.id`),
+              requireString(resource2["title"], `resources.${key}.title`)
             )
           ] : [];
         })
@@ -49856,20 +49650,20 @@
         requireRecord(getWishData(), "wishData")[key],
         `wishData.${key}`
       ).map((wish, index) => {
-        const id = requireString33(wish["id"], `wishData.${key}[${index}].id`);
-        const loc2 = requireString33(wish["loc"], `wishData.${key}[${index}].loc`);
+        const id = requireString(wish["id"], `wishData.${key}[${index}].id`);
+        const loc2 = requireString(wish["loc"], `wishData.${key}[${index}].loc`);
         const label = Reflect.apply(polyLoc, poly, [
           "wish_for",
           [Reflect.apply(polyLoc, poly, [loc2])]
         ]);
         return option2(
           id,
-          requireString33(label, `poly.loc(wishData.${key}[${index}])`)
+          requireString(label, `poly.loc(wishData.${key}[${index}])`)
         );
       });
       const ocularRows = readOptions2(getOcularPowerData(), "ocularPowerData").map(
         (power, index) => {
-          const id = requireString33(power["id"], `ocularPowerData[${index}].id`);
+          const id = requireString(power["id"], `ocularPowerData[${index}].id`);
           const locParam = power["locParam"];
           return {
             id,
@@ -49886,7 +49680,7 @@
         requireRecord(getMinorTraitManager(), "MinorTraitManager")["priorityList"],
         "MinorTraitManager.priorityList"
       ).map((trait2, index) => {
-        const id = requireString33(
+        const id = requireString(
           trait2["traitName"],
           `MinorTraitManager.priorityList[${index}].traitName`
         );
@@ -49911,19 +49705,19 @@
         requireRecord(getMutableTraitManager(), "MutableTraitManager")["priorityList"],
         "MutableTraitManager.priorityList"
       ).map((trait2, index) => {
-        const id = requireString33(
+        const id = requireString(
           trait2["traitName"],
           `MutableTraitManager.priorityList[${index}].traitName`
         );
-        const source = requireString33(
+        const source = requireString(
           trait2["source"],
           `MutableTraitManager.priorityList[${index}].source`
         );
-        const type = requireString33(
+        const type = requireString(
           trait2["type"],
           `MutableTraitManager.priorityList[${index}].type`
         );
-        const baseCost = requireNumber2(
+        const baseCost = requireNumber(
           trait2["baseCost"],
           `MutableTraitManager.priorityList[${index}].baseCost`
         );
@@ -49947,14 +49741,14 @@
           sourceLabel,
           sourceHint: type === "major" ? "Major" : "Genus",
           sourceColor: type === "genus" ? "has-text-special" : "has-text",
-          traitLabel: requireString33(
+          traitLabel: requireString(
             trait2["name"],
             `MutableTraitManager.priorityList[${index}].name`
           ),
           traitHint: callLocalization(game, `trait_${id}`),
           traitColor: isPositive ? "has-text-success" : "has-text-danger",
           costLabel: `${baseCost * 5}`,
-          costHint: `${baseCost * 5 * requireNumber2(custom["gain"], "mutationCostMultipliers.custom.gain")} for Custom${id !== "ooze" ? " and Sludge" : ""}`,
+          costHint: `${baseCost * 5 * requireNumber(custom["gain"], "mutationCostMultipliers.custom.gain")} for Custom${id !== "ooze" ? " and Sludge" : ""}`,
           gainable,
           resettable: negRollTraits.includes(id)
         };
@@ -50119,7 +49913,7 @@
         imitateOptions,
         imitateRaceId,
         imitateRaceCompleted: selectedRace === void 0 ? void 0 : Boolean(
-          synthRaces[requireString33(
+          synthRaces[requireString(
             requireRecord(selectedRace, `races.${imitateRaceId}`)["id"],
             `races.${imitateRaceId}.id`
           )]
@@ -50140,7 +49934,7 @@
       const settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw");
       const manager = requireRecord(getMinorTraitManager(), "MinorTraitManager");
       traitIds.forEach((id, index) => {
-        settingsRaw[`mTrait_p_${requireString33(id, `traitIds[${index}]`)}`] = index;
+        settingsRaw[`mTrait_p_${requireString(id, `traitIds[${index}]`)}`] = index;
       });
       Reflect.apply(
         requireFunction(
@@ -50158,7 +49952,7 @@
         "MutableTraitManager"
       );
       traitIds.forEach((id, index) => {
-        settingsRaw[`mutableTrait_p_${requireString33(id, `traitIds[${index}]`)}`] = index;
+        settingsRaw[`mutableTrait_p_${requireString(id, `traitIds[${index}]`)}`] = index;
       });
       Reflect.apply(
         requireFunction(
@@ -50171,7 +49965,7 @@
     }
     function setBoolean(settingName, value) {
       const settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw");
-      settingsRaw[requireString33(settingName, "settingName")] = value;
+      settingsRaw[requireString(settingName, "settingName")] = value;
     }
     return Object.freeze({
       readTraitSettingsReadModel,
@@ -50415,12 +50209,6 @@
   }
 
   // src/adapters/evolve/combat/mech-info.ts
-  function requireString34(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
   function call4(target, key, path, args = []) {
     return Reflect.apply(requireFunction(target[key], path), target, args);
   }
@@ -50461,7 +50249,7 @@
           mechs[index],
           `game.global.portal.mechbay.mechs[${index}]`
         );
-        const size = requireString34(mech["size"], `mechs[${index}].size`);
+        const size = requireString(mech["size"], `mechs[${index}].size`);
         const stats = requireRecord(
           call4(manager, "getMechStats", "MechManager.getMechStats", [mech]),
           `MechManager.getMechStats(${index})`
@@ -50639,18 +50427,6 @@
   }
 
   // src/adapters/evolve/economy/resources/resource-toggles.ts
-  function requireString35(value, path) {
-    if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
-    }
-    return value;
-  }
-  function requireFunction2(value, path) {
-    if (typeof value !== "function") {
-      throw new TypeError(`${path} must be a function`);
-    }
-    return value;
-  }
   function readPriorityList8(value, path) {
     const manager = requireRecord(value, path);
     const priorityList = manager["priorityList"];
@@ -50660,7 +50436,7 @@
     return priorityList;
   }
   function readResourceId3(value, path) {
-    return requireString35(requireRecord(value, path)["id"], `${path}.id`);
+    return requireString(requireRecord(value, path)["id"], `${path}.id`);
   }
   function createResourceToggleEvolveAdapter({
     getGame,
@@ -50674,15 +50450,15 @@
       const race2 = requireRecord(global["race"], "game.global.race");
       const settingsRaw = requireRecord(getSettingsRaw(), "settingsRaw");
       const noTrade = Boolean(race2["no_trade"]);
-      const loc2 = requireFunction2(game["loc"], "game.loc");
+      const loc2 = requireFunction(game["loc"], "game.loc");
       const labels = noTrade ? Object.freeze({ buy: "", sell: "", routes: "", cancelRoutes: "" }) : Object.freeze({
-        buy: requireString35(loc2("resource_market_buy"), "game.loc(buy)"),
-        sell: requireString35(loc2("resource_market_sell"), "game.loc(sell)"),
-        routes: requireString35(
+        buy: requireString(loc2("resource_market_buy"), "game.loc(buy)"),
+        sell: requireString(loc2("resource_market_sell"), "game.loc(sell)"),
+        routes: requireString(
           loc2("resource_market_routes"),
           "game.loc(routes)"
         ),
-        cancelRoutes: requireString35(
+        cancelRoutes: requireString(
           loc2("cancel_routes"),
           "game.loc(cancel_routes)"
         )

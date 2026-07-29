@@ -5,7 +5,11 @@ import {
   type FleetSettingsReadModel,
   type FleetSettingsRegion,
 } from "../../../domain/combat/fleet-settings.ts";
-import { requireRecord } from "../../validation.ts";
+import {
+  requireArray,
+  requireRecord,
+  requireString,
+} from "../../validation.ts";
 
 interface FleetSettingsEvolveDependencies {
   readonly getFleetManagerOuter: () => unknown;
@@ -16,17 +20,6 @@ interface FleetSettingsEvolveDependencies {
 
 export interface FleetSettingsEvolveAdapter {
   read(): FleetSettingsReadModel;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string")
-    throw new TypeError(`${path} must be a string`);
-  return value;
-}
-
-function requireArray(value: unknown, path: string): readonly unknown[] {
-  if (!Array.isArray(value)) throw new TypeError(`${path} must be an array`);
-  return value;
 }
 
 function localize(game: Record<PropertyKey, unknown>, key: string): string {

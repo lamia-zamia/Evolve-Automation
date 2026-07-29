@@ -1,4 +1,4 @@
-import { requireRecord } from "../../../validation.ts";
+import { requireRecord, requireString } from "../../../validation.ts";
 import type { BuildingToggleItem } from "../../../../domain/progression/build/building-toggles.ts";
 import type { BuildingToggleReader } from "../../../../ports/building-toggles.ts";
 
@@ -6,13 +6,6 @@ export interface BuildingToggleEvolveDependencies {
   readonly getBuildingManager: () => unknown;
   readonly getSettings: () => unknown;
   readonly getSettingsRaw: () => unknown;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 /** Evolve adapter for the visible building catalog and its persisted toggles. */

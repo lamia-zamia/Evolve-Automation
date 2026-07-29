@@ -16,6 +16,7 @@ import {
   requireFunction,
   requireNumber,
   requireRecord,
+  requireString,
   type UnknownRecord,
 } from "../../validation.ts";
 
@@ -56,13 +57,6 @@ const SHIP_DEFINITIONS: readonly ShipDefinition[] = Object.freeze([
   { name: "cruiser_ship", building: "CruiserShip" },
   { name: "dreadnought", building: "Dreadnought" },
 ]);
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
-}
 
 function emptyCounts(): Record<GalaxyShipName, number> {
   return {

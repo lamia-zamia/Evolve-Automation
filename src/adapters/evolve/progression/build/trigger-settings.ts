@@ -6,7 +6,7 @@ import {
   type TriggerSettingsReadModel,
   type TriggerSettingsRow,
 } from "../../../../domain/progression/build/trigger-settings.ts";
-import { requireRecord } from "../../../validation.ts";
+import { requireRecord, requireString } from "../../../validation.ts";
 
 interface TriggerSettingsEvolveDependencies {
   readonly getTriggerManager: () => unknown;
@@ -18,12 +18,6 @@ interface TriggerSettingsEvolveDependencies {
 
 export interface TriggerSettingsEvolveAdapter {
   read(): TriggerSettingsReadModel;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string")
-    throw new TypeError(`${path} must be a string`);
-  return value;
 }
 
 function readCatalog(

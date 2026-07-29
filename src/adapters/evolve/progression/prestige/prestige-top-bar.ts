@@ -1,17 +1,10 @@
-import { requireRecord } from "../../../validation.ts";
+import { requireRecord, requireString } from "../../../validation.ts";
 import type { PrestigeTopBarTypeOption } from "../../../../domain/progression/prestige/prestige-top-bar.ts";
 import type { PrestigeTopBarReader } from "../../../../ports/prestige-top-bar.ts";
 
 export interface PrestigeTopBarEvolveDependencies {
   readonly getSettings: () => unknown;
   readonly getPrestigeTypes: () => unknown;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 /** Evolve adapter for the top-bar setting, selected value, and prestige catalog. */

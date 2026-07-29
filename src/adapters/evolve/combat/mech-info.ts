@@ -10,19 +10,13 @@ import {
   requireFunction,
   requireNumber,
   requireRecord,
+  requireString,
 } from "../../validation.ts";
 
 export interface MechInfoEvolveDependencies {
   readonly getGame: () => unknown;
   readonly getMechManager: () => unknown;
   readonly getNiceNumber: (value: number) => string;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 function call(

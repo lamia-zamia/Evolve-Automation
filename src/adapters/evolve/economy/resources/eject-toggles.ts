@@ -1,17 +1,10 @@
-import { requireRecord } from "../../../validation.ts";
+import { requireRecord, requireString } from "../../../validation.ts";
 import type { EjectToggleItem } from "../../../../domain/economy/resources/eject-toggles.ts";
 import type { EjectToggleReader } from "../../../../ports/eject-toggles.ts";
 
 export interface EjectToggleEvolveDependencies {
   readonly getEjectManager: () => unknown;
   readonly getSettingsRaw: () => unknown;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 /** Evolve adapter for the ordered EjectManager resources and their persisted toggles. */

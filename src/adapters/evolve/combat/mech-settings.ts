@@ -1,4 +1,8 @@
-import { requireFunction, requireRecord } from "../../validation.ts";
+import {
+  requireFunction,
+  requireRecord,
+  requireString,
+} from "../../validation.ts";
 import {
   createMechSettingsReadModel,
   type MechSettingsReadModel,
@@ -8,11 +12,6 @@ import type { MechSettingsReader } from "../../../ports/mech-settings.ts";
 export interface MechSettingsEvolveDependencies {
   readonly getMechManager: () => unknown;
   readonly getGame: () => unknown;
-}
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string")
-    throw new TypeError(`${path} must be a string`);
-  return value;
 }
 export function createMechSettingsEvolveAdapter({
   getMechManager,

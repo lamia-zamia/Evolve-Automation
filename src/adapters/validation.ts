@@ -7,6 +7,13 @@ export function requireRecord(value: unknown, path: string): UnknownRecord {
   return value as UnknownRecord;
 }
 
+export function requireString(value: unknown, path: string): string {
+  if (typeof value !== "string") {
+    throw new TypeError(`${path} must be a string`);
+  }
+  return value;
+}
+
 export function requireNumber(value: unknown, path: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw new TypeError(`${path} must be a finite number`);

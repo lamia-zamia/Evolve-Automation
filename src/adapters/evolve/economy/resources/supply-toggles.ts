@@ -1,17 +1,10 @@
-import { requireRecord } from "../../../validation.ts";
+import { requireRecord, requireString } from "../../../validation.ts";
 import type { SupplyToggleItem } from "../../../../domain/economy/resources/supply-toggles.ts";
 import type { SupplyToggleReader } from "../../../../ports/supply-toggles.ts";
 
 export interface SupplyToggleEvolveDependencies {
   readonly getSupplyManager: () => unknown;
   readonly getSettingsRaw: () => unknown;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 /** Evolve adapter for the ordered SupplyManager resources and their persisted toggles. */

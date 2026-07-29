@@ -1,4 +1,8 @@
-import { requireRecord } from "../../../validation.ts";
+import {
+  requireFunction,
+  requireRecord,
+  requireString,
+} from "../../../validation.ts";
 import type {
   MarketToggleItem,
   MarketToggleView,
@@ -12,23 +16,6 @@ export interface ResourceToggleEvolveDependencies {
   readonly getSettingsRaw: () => unknown;
   readonly getMarketManager: () => unknown;
   readonly getStorageManager: () => unknown;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
-}
-
-function requireFunction(
-  value: unknown,
-  path: string,
-): (...args: readonly unknown[]) => unknown {
-  if (typeof value !== "function") {
-    throw new TypeError(`${path} must be a function`);
-  }
-  return value as (...args: readonly unknown[]) => unknown;
 }
 
 function readPriorityList(value: unknown, path: string): readonly unknown[] {

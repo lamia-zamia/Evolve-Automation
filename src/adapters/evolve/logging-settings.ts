@@ -3,7 +3,7 @@ import {
   type LoggingSettingsReadModel,
   type LoggingSettingsMessageType,
 } from "../../domain/logging-settings.ts";
-import { requireRecord } from "../validation.ts";
+import { requireRecord, requireString } from "../validation.ts";
 
 interface LoggingSettingsEvolveDependencies {
   readonly getGame: () => unknown;
@@ -20,13 +20,6 @@ function requireObjectRecord(value: unknown, path: string) {
     throw new TypeError(`${path} must be an object`);
   }
   return requireRecord(value, path);
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 /** Maps volatile Evolve logger/game/settings values to a validated read model. */

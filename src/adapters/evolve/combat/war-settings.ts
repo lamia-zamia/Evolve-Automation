@@ -1,4 +1,8 @@
-import { requireFunction, requireRecord } from "../../validation.ts";
+import {
+  requireFunction,
+  requireRecord,
+  requireString,
+} from "../../validation.ts";
 import {
   createWarSettingsReadModel,
   type WarSettingsReadModel,
@@ -9,12 +13,6 @@ import type { WarSettingsReader } from "../../../ports/war-settings.ts";
 export interface WarSettingsEvolveDependencies {
   readonly getSpyManager: () => unknown;
   readonly getGame: () => unknown;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string")
-    throw new TypeError(`${path} must be a string`);
-  return value;
 }
 
 export function createWarSettingsEvolveAdapter({

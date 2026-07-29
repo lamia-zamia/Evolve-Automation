@@ -1,17 +1,10 @@
-import { requireRecord } from "../../../validation.ts";
+import { requireRecord, requireString } from "../../../validation.ts";
 import type { CraftToggleItem } from "../../../../domain/economy/production/craft-toggles.ts";
 import type { CraftToggleReader } from "../../../../ports/craft-toggles.ts";
 
 export interface CraftToggleEvolveDependencies {
   readonly getCraftablesList: () => unknown;
   readonly getSettingsRaw: () => unknown;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 /** Evolve adapter for the ordered craftables catalog and its persisted toggles. */

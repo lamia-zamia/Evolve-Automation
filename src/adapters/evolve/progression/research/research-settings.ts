@@ -3,7 +3,11 @@ import {
   type ResearchSettingsReadModel,
   type ResearchSettingsTechnology,
 } from "../../../../domain/progression/research/research-settings.ts";
-import { requireFunction, requireRecord } from "../../../validation.ts";
+import {
+  requireFunction,
+  requireRecord,
+  requireString,
+} from "../../../validation.ts";
 
 interface ResearchSettingsEvolveDependencies {
   readonly getGame: () => unknown;
@@ -19,13 +23,6 @@ function requireObjectRecord(value: unknown, path: string) {
     throw new TypeError(`${path} must be an object`);
   }
   return requireRecord(value, path);
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 /** Maps the volatile Evolve localization and technology catalog to a UI read model. */

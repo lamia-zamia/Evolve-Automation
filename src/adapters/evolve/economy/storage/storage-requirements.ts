@@ -7,6 +7,7 @@ import type {
 } from "../../../../domain/economy/storage/storage-requirements.ts";
 import type { FuelDepotDemandInput } from "../../../../domain/economy/storage/fuel-depot-demand.ts";
 import {
+  requireArray,
   requireBoolean,
   requireFunction,
   requireNumber,
@@ -70,13 +71,6 @@ function optionalPredicate(target: UnknownRecord, name: string): boolean {
   return Boolean(
     Reflect.apply(method as (...a: unknown[]) => unknown, target, []),
   );
-}
-
-function requireArray(value: unknown, path: string): readonly unknown[] {
-  if (!Array.isArray(value)) {
-    throw new TypeError(`${path} must be an array`);
-  }
-  return value;
 }
 
 /**

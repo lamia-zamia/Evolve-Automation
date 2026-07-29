@@ -3,7 +3,11 @@ import {
   type ProductionSettingsReadModel,
   type ProductionSettingsRow,
 } from "../../../../domain/economy/production/production-settings.ts";
-import { requireFunction, requireRecord } from "../../../validation.ts";
+import {
+  requireFunction,
+  requireRecord,
+  requireString,
+} from "../../../validation.ts";
 
 interface ProductionSettingsEvolveDependencies {
   readonly getResources: () => unknown;
@@ -19,12 +23,6 @@ interface ProductionSettingsEvolveDependencies {
 export interface ProductionSettingsEvolveAdapter {
   readProductionSettingsReadModel(): ProductionSettingsReadModel;
   reorderSmelterFuels(fuelIds: readonly string[]): void;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string")
-    throw new TypeError(`${path} must be a string`);
-  return value;
 }
 
 function readResource(value: unknown, path: string): ProductionSettingsRow {

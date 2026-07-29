@@ -3,7 +3,7 @@ import {
   type PlanetSettingsCell,
   type PlanetSettingsReadModel,
 } from "../../../../domain/progression/evolution/planet-settings.ts";
-import { requireRecord } from "../../../validation.ts";
+import { requireRecord, requireString } from "../../../validation.ts";
 
 interface PlanetSettingsEvolveDependencies {
   readonly getGame: () => unknown;
@@ -14,13 +14,6 @@ interface PlanetSettingsEvolveDependencies {
 
 export interface PlanetSettingsEvolveAdapter {
   readPlanetSettingsReadModel(): PlanetSettingsReadModel;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 function requireStringArray(value: unknown, path: string): string[] {

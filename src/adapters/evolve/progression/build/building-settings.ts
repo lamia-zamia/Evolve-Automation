@@ -4,8 +4,10 @@ import {
   type BuildingSettingsRow,
 } from "../../../../domain/progression/build/building-settings.ts";
 import {
+  requireBoolean,
   requireFunction,
   requireRecord,
+  requireString,
   type UnknownRecord,
 } from "../../../validation.ts";
 
@@ -29,13 +31,6 @@ export interface BuildingSettingsEvolveAdapter {
   setAllAutoBuild(enabled: boolean): void;
   setAllAutoPower(enabled: boolean): void;
   setLinkedSmartState(buildingIds: readonly string[], enabled: boolean): void;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 function readPriorityList(manager: UnknownRecord): readonly UnknownRecord[] {
@@ -133,13 +128,6 @@ function readRows(
         : false,
     };
   });
-}
-
-function requireBoolean(value: unknown, path: string): boolean {
-  if (typeof value !== "boolean") {
-    throw new TypeError(`${path} must be a boolean`);
-  }
-  return value;
 }
 
 /** Maps volatile Evolve building state and commands for the settings panel. */

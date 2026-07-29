@@ -1,4 +1,8 @@
-import { requireFunction, requireRecord } from "../../../validation.ts";
+import {
+  requireFunction,
+  requireRecord,
+  requireString,
+} from "../../../validation.ts";
 import {
   createMarketSettingsReadModel,
   type MarketSettingsGalaxyRow,
@@ -11,13 +15,6 @@ export interface MarketSettingsEvolveDependencies {
   readonly getMarketManager: () => unknown;
   readonly getResources: () => unknown;
   readonly getPoly: () => unknown;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 function readResource(

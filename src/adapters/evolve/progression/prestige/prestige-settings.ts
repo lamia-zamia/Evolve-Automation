@@ -3,7 +3,7 @@ import {
   type PrestigeSettingsOption,
   type PrestigeSettingsReadModel,
 } from "../../../../domain/progression/prestige/prestige-settings.ts";
-import { requireRecord } from "../../../validation.ts";
+import { requireRecord, requireString } from "../../../validation.ts";
 
 interface PrestigeSettingsEvolveDependencies {
   readonly getPrestigeTypes: () => unknown;
@@ -22,11 +22,6 @@ interface PrestigeSettingsEvolveDependencies {
 export interface PrestigeSettingsEvolveAdapter {
   read(): PrestigeSettingsReadModel;
   getConfirmationText(value: string): string;
-}
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string")
-    throw new TypeError(`${path} must be a string`);
-  return value;
 }
 function readOptions(value: unknown): readonly PrestigeSettingsOption[] {
   if (!Array.isArray(value))

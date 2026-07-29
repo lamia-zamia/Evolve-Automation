@@ -3,7 +3,7 @@ import {
   type GovernmentSettingsOption,
   type GovernmentSettingsReadModel,
 } from "../../../domain/civic/government-settings.ts";
-import { requireRecord } from "../../validation.ts";
+import { requireRecord, requireString } from "../../validation.ts";
 
 interface GovernmentSettingsEvolveDependencies {
   readonly getGame: () => unknown;
@@ -20,13 +20,6 @@ function requireObjectRecord(value: unknown, path: string) {
     throw new TypeError(`${path} must be an object`);
   }
   return requireRecord(value, path);
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 function readLocalizedOption(

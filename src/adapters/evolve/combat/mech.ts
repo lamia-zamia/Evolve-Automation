@@ -22,6 +22,7 @@ import {
   requireFunction,
   requireNumber,
   requireRecord,
+  requireString,
   type UnknownRecord,
 } from "../../validation.ts";
 
@@ -54,13 +55,6 @@ interface MechSession {
   readonly designs: Map<string, UnknownRecord>;
   planningInput: Readonly<MechPlanningInput> | null;
   nextToken: number;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 function call(

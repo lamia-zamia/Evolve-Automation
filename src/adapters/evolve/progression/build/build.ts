@@ -24,6 +24,7 @@ import {
   requireFunction,
   requireNumber,
   requireRecord,
+  requireString,
   type UnknownRecord,
 } from "../../../validation.ts";
 
@@ -45,13 +46,6 @@ export interface BuildAdapter {
 interface BuildCycleCapture {
   readonly entities: readonly UnknownRecord[];
   readonly byKey: ReadonlyMap<string, UnknownRecord>;
-}
-
-function requireString(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new TypeError(`${path} must be a string`);
-  }
-  return value;
 }
 
 function callMethod(
