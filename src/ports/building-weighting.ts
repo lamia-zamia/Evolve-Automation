@@ -7,6 +7,14 @@ import type { ForeignAchievementGoal } from "../domain/combat/foreign-achievemen
 export type MechSupplySavingReason = "building" | "saving";
 
 /**
+ * Why a Sacrificial Altar sacrifice cannot happen: a parasite race needs windy
+ * weather, nobody works the default job, or every sacrifice bonus is already
+ * higher than the script considers worth extending.
+ */
+export type SacrificeBlockedReason =
+  "windless" | "no-default-workers" | "bonus-capped";
+
+/**
  * Script state and phase-constant game gates that the building-weighting rules
  * read, sampled and frozen once per weighting phase.
  *
@@ -29,8 +37,6 @@ export type BuildingWeightingSnapshot = {
   readonly stargatePiracySupressed: boolean;
   /** The built fleet already out-rates the unmet piracy of every useful region. */
   readonly galaxyPiracyCoveredByFleet: boolean;
-  /** Race harvests lumber, so the Sacrificial Altar harvest bonus applies. */
-  readonly lumberRace: boolean;
   /** The True Path scenario is running. */
   readonly truepathRace: boolean;
   /**
@@ -49,8 +55,11 @@ export type BuildingWeightingSnapshot = {
   readonly slaverRace: boolean;
   /** The race cannibalizes, so the Sacrificial Altar is available. */
   readonly cannibalizeRace: boolean;
-  /** The race is parasitic, so sacrifices depend on the weather. */
-  readonly parasiteRace: boolean;
+  /**
+   * Why sacrificing is impossible or pointless right now, or `null` when it is
+   * worth doing. Always `null` for a race that cannot sacrifice at all.
+   */
+  readonly sacrificeBlocked: SacrificeBlockedReason | null;
   /** The Banana Republic scenario is running. */
   readonly bananaRace: boolean;
   /** The Lone Survivor scenario is running. */
@@ -84,12 +93,28 @@ export type BuildingWeightingSnapshot = {
   /** Spire Base Camps are still below the camp share of the optimal supply ratio. */
   readonly spireBaseCampPrebuildIncomplete: boolean;
   /**
+   * Per-Bireme diminishing factor in the Lake supply formula. Bloodstone Spire
+   * rank 2 improves it, so one more Bireme is worth more than it otherwise is.
+   */
+  readonly lakeBiremeSupplyRate: number;
+  /**
    * Power one more Neutron Citadel would draw. Only the citadel candidate reads
    * it; the value is still defined, and meaningless, before the citadel exists.
    */
   readonly nextCitadelPowerDraw: number;
+  /**
+   * Mass Ejector capacity the game has already assigned to resources. `0`
+   * before the first ejector exists.
+   */
+  readonly assignedEjectorCapacity: number;
   /** Unification is researched, so the Test Launch can no longer be sabotaged. */
   readonly worldUnified: boolean;
+  /**
+   * Chance that the True Path Test Launch is not sabotaged, which falls with
+   * every foreign government still outside the player's control. Only the Test
+   * Launch candidate reads it, and it is meaningless outside True Path.
+   */
+  readonly testLaunchSuccessChance: number;
   /** The Spire Waygate is finished, so no more of them are wanted. */
   readonly spireWaygateComplete: boolean;
   /** The Spire Edenic Gate is finished, so no more of them are wanted. */
@@ -108,6 +133,11 @@ export type BuildingWeightingSnapshot = {
   readonly assemblyCureComplete: boolean;
   /** Tau Ceti is reached, so the solar system is no longer the frontier. */
   readonly tauCetiReached: boolean;
+  /**
+   * The Tau Ceti gas giant name contest is open, so its entries are the only
+   * buildings that want randomized weighting.
+   */
+  readonly gasGiantNameContestActive: boolean;
   /**
    * A Shrine built now would raise a bonus other than the configured one. False
    * for every race that has no Shrine and whenever any Shrine is acceptable.

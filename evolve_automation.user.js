@@ -23896,8 +23896,12 @@
   }
 
   // src/policies/building-weighting.ts
+  var SACRIFICE_BLOCKED_NOTES = {
+    windless: "Parasites sacrificed only during windy weather",
+    "no-default-workers": "No default workers to sacrifice",
+    "bonus-capped": "Sacrifice bonus already high enough"
+  };
   function createBuildingWeightingPolicy({
-    getGame,
     getSettings,
     getResources,
     getBuildings,
@@ -24017,16 +24021,9 @@
       {
         id: "truepath-test-launch-sabotage",
         enabled: (snapshot) => snapshot.truepathRace && getBuildings().SpaceTestLaunch.isUnlocked() && !snapshot.worldUnified,
-        match: (building3) => {
+        match: (building3, snapshot) => {
           if (building3 === getBuildings().SpaceTestLaunch) {
-            let sabotage = 1;
-            for (let i = 0; i < 3; i++) {
-              let gov = getGame().global.civic.foreign[`gov${i}`];
-              if (!gov.occ && !gov.anx && !gov.buy) {
-                sabotage++;
-              }
-            }
-            return 1 / (sabotage + 1);
+            return snapshot.testLaunchSuccessChance;
           }
         },
         describe: (chance) => `${Math.round(chance * 100)}% chance of successful launch`,
@@ -24121,11 +24118,11 @@
         enabled: () => {
           return getBuildings().LakeBireme.isAutoBuildable() && getBuildings().LakeBireme.isAffordable(true) && getBuildings().LakeTransport.isAutoBuildable() && getBuildings().LakeTransport.isAffordable(true) && getResources().Lake_Support.rateOfChange <= 1;
         },
-        match: (building3) => {
+        match: (building3, snapshot) => {
           if (building3 === getBuildings().LakeBireme || building3 === getBuildings().LakeTransport) {
             let biremeCount = getBuildings().LakeBireme.count;
             let transportCount = getBuildings().LakeTransport.count;
-            let rating = getGame().global.blood["spire"] && getGame().global.blood.spire >= 2 ? 0.8 : 0.85;
+            let rating = snapshot.lakeBiremeSupplyRate;
             let nextBireme = (1 - rating ** (biremeCount + 1)) * (transportCount * 5);
             let nextTransport = (1 - rating ** biremeCount) * ((transportCount + 1) * 5);
             if (getSettings().buildingsTransportGem) {
@@ -24271,14 +24268,8 @@
             if (getResources().Population.currentQuantity !== getResources().Population.maxQuantity) {
               return "Sacrifices performed only with full population";
             }
-            if (snapshot.parasiteRace && getGame().global.city.calendar.wind === 0) {
-              return "Parasites sacrificed only during windy weather";
-            }
-            if (getGame().global.civic[getGame().global.civic.d_job].workers < 1) {
-              return "No default workers to sacrifice";
-            }
-            if (getGame().global.city.s_alter.rage >= 3600 && getGame().global.city.s_alter.regen >= 3600 && getGame().global.city.s_alter.mind >= 3600 && getGame().global.city.s_alter.mine >= 3600 && (!snapshot.lumberRace || getGame().global.city.s_alter.harvest >= 3600)) {
-              return "Sacrifice bonus already high enough";
+            if (snapshot.sacrificeBlocked) {
+              return SACRIFICE_BLOCKED_NOTES[snapshot.sacrificeBlocked];
             }
           }
         },
@@ -24323,7 +24314,7 @@
       },
       {
         id: "womling-overlord-guard",
-        // "&& getGame().global.tech.tau_red === 4" doesn't want to work for some reason.
+        // Narrowing this to `tau_red` level 4 was tried and did not work.
         enabled: (snapshot) => snapshot.truepathRace,
         match: (building3, snapshot) => {
           if (building3 === getBuildings().TauRedContact || building3 === getBuildings().TauRedIntroduce || building3 === getBuildings().TauRedSubjugate) {
@@ -24562,7 +24553,7 @@
       },
       {
         id: "unused-ejectors",
-        enabled: () => getBuildings().BlackholeMassEjector.count > 0 && getBuildings().BlackholeMassEjector.count * 1e3 - getGame().global.interstellar.mass_ejector.total > 100,
+        enabled: (snapshot) => getBuildings().BlackholeMassEjector.count * 1e3 - snapshot.assignedEjectorCapacity > 100,
         match: (building3) => building3 === getBuildings().BlackholeMassEjector,
         describe: () => "Still have some unused ejectors",
         multiplier: () => getSettings().buildingWeightingUnusedEjectors
@@ -24632,8 +24623,8 @@
       },
       {
         id: "randomized-weighting",
-        enabled: () => getGame().global.tech.tau_gas === 1,
-        // Only used for name contest, no need to check at other game stages
+        // Only used for the gas giant name contest, no need to check at other game stages
+        enabled: (snapshot) => snapshot.gasGiantNameContestActive,
         match: (building3) => building3.is.random,
         describe: () => "Randomized weighting",
         multiplier: () => 1 + randomSource.nextUnit()
@@ -24681,6 +24672,7 @@
       `${path} must be null, "world-domination", or "syndicate"`
     );
   }
+  var SACRIFICE_BONUS_CAP = 3600;
   var MECH_SUPPLY_SAVING_REASONS = /* @__PURE__ */ new Set([
     "building",
     "saving"
@@ -24701,6 +24693,13 @@
     isGalaxyPiracyCoveredByFleet,
     isLumberRace,
     hasRaceTrait,
+    getForeignGovernment,
+    getWindSpeed,
+    getDefaultJobWorkers,
+    getSacrificeBonus,
+    getSpireBloodstoneRank,
+    getAssignedEjectorCapacity,
+    getTechLevel,
     isBananaRepublicObjectiveComplete: isBananaRepublicObjectiveComplete2,
     isInflationAssistActive: isInflationAssistActive2,
     isInflationMoneyReachable: isInflationMoneyReachable2,
@@ -24723,6 +24722,37 @@
     getMechSupplySavingReason,
     isWomlingStatEarned
   }) {
+    const readTestLaunchSuccessChance = () => {
+      let saboteurs = 1;
+      for (let index = 0; index < 3; index++) {
+        const government = requireRecord(
+          getForeignGovernment(index),
+          `getForeignGovernment(${index})`
+        );
+        if (!government["occ"] && !government["anx"] && !government["buy"]) {
+          saboteurs++;
+        }
+      }
+      return 1 / (saboteurs + 1);
+    };
+    const sacrificeBonusCapped = (bonus) => Number(getSacrificeBonus(bonus)) >= SACRIFICE_BONUS_CAP;
+    const readSacrificeBlocked = (parasiteRace, lumberRace) => {
+      if (parasiteRace && requireNumber(getWindSpeed(), "getWindSpeed()") === 0) {
+        return "windless";
+      }
+      if (requireNumber(getDefaultJobWorkers(), "getDefaultJobWorkers()") < 1) {
+        return "no-default-workers";
+      }
+      if (sacrificeBonusCapped("rage") && sacrificeBonusCapped("regen") && sacrificeBonusCapped("mind") && sacrificeBonusCapped("mine") && (!lumberRace || sacrificeBonusCapped("harvest"))) {
+        return "bonus-capped";
+      }
+      return null;
+    };
+    const readLakeBiremeSupplyRate = () => Number(getSpireBloodstoneRank()) >= 2 ? 0.8 : 0.85;
+    const readAssignedEjectorCapacity = () => {
+      const assigned = getAssignedEjectorCapacity();
+      return assigned === void 0 ? 0 : requireNumber(assigned, "getAssignedEjectorCapacity()");
+    };
     return () => {
       const state = requireRecord(getState(), "state");
       const retirementAssistActive = requireBoolean(
@@ -24735,6 +24765,9 @@
       );
       const researched = (research, level) => Boolean(isTechResearched(research, level));
       const trait2 = (name) => Boolean(hasRaceTrait(name));
+      const truepathRace = trait2("truepath");
+      const cannibalizeRace = trait2("cannibalize");
+      const lumberRace = requireBoolean(isLumberRace(), "isLumberRace()");
       return Object.freeze({
         queuedTargets: new Set(
           requireArray(state["queuedTargets"], "state.queuedTargets")
@@ -24766,8 +24799,7 @@
           isGalaxyPiracyCoveredByFleet(),
           "isGalaxyPiracyCoveredByFleet()"
         ),
-        lumberRace: requireBoolean(isLumberRace(), "isLumberRace()"),
-        truepathRace: trait2("truepath"),
+        truepathRace,
         // The game spells the Entish no-quarry-worker trait "sappy".
         mineIsOnlyChrysotileSource: trait2("smoldering") && trait2("sappy"),
         witchHunterRace: trait2("witch_hunter"),
@@ -24775,8 +24807,9 @@
         // The game spells the artificial-population trait "artifical".
         artificialRace: trait2("artifical"),
         slaverRace: trait2("slaver"),
-        cannibalizeRace: trait2("cannibalize"),
-        parasiteRace: trait2("parasite"),
+        cannibalizeRace,
+        // A race that cannot sacrifice never has the altar reads taken.
+        sacrificeBlocked: cannibalizeRace ? readSacrificeBlocked(trait2("parasite"), lumberRace) : null,
         bananaRace: trait2("banana"),
         loneSurvivorRace: trait2("lone_survivor"),
         hoovedRace: trait2("hooved"),
@@ -24844,11 +24877,16 @@
           spirePrebuild["baseCamps"],
           "getSpirePrebuildShortfall().baseCamps"
         ),
+        lakeBiremeSupplyRate: readLakeBiremeSupplyRate(),
         nextCitadelPowerDraw: requireNumber(
           getNextCitadelPowerDraw(),
           "getNextCitadelPowerDraw()"
         ),
+        assignedEjectorCapacity: readAssignedEjectorCapacity(),
         worldUnified: researched("world_control", 1),
+        // Only True Path has a Test Launch, and only its foreign governments can
+        // sabotage one.
+        testLaunchSuccessChance: truepathRace ? readTestLaunchSuccessChance() : 0,
         spireWaygateComplete: researched("waygate", 2),
         spireEdenicGateComplete: researched("edenic", 3),
         elysiumFireSupportUnlocked: researched("elysium", 8),
@@ -24858,6 +24896,9 @@
         spireSphinxSolved: researched("hell_spire", 8),
         assemblyCureComplete: researched("focus_cure", 7),
         tauCetiReached: researched("tauceti", 2),
+        // An exact level test rather than the `haveTech` `>=` the other tech
+        // gates use: the contest closes when the tech advances past level 1.
+        gasGiantNameContestActive: getTechLevel("tau_gas") === 1,
         shrineBonusUnwanted: requireBoolean(
           isShrineBonusUnwanted(),
           "isShrineBonusUnwanted()"
@@ -56111,7 +56152,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       galaxyCombatShips,
       weightingRules
     } = createBuildingWeightingPolicy({
-      getGame: () => game,
       getSettings: () => settings,
       getResources: () => resources,
       getBuildings: () => buildings,
@@ -56338,6 +56378,13 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         isGalaxyPiracyCoveredByFleet: () => galaxyPiracyCoveredByFleet(),
         isLumberRace: () => isLumberRace(),
         hasRaceTrait: (trait2) => game.global.race[trait2],
+        getForeignGovernment: (index) => game.global.civic.foreign[`gov${index}`],
+        getWindSpeed: () => game.global.city.calendar.wind,
+        getDefaultJobWorkers: () => game.global.civic[game.global.civic.d_job].workers,
+        getSacrificeBonus: (bonus) => game.global.city.s_alter?.[bonus],
+        getSpireBloodstoneRank: () => game.global.blood["spire"],
+        getAssignedEjectorCapacity: () => game.global.interstellar.mass_ejector?.total,
+        getTechLevel: (research) => game.global.tech[research],
         isBananaRepublicObjectiveComplete: (objective) => bananaRepublicObjectiveComplete(objective),
         isInflationAssistActive: () => inflationChallengeAssistActive(),
         isInflationMoneyReachable: () => inflationChallengeMoneyReachable(),

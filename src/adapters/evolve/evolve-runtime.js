@@ -2980,7 +2980,6 @@ function startEvolveRuntimeComposition(
     galaxyCombatShips,
     weightingRules,
   } = createBuildingWeightingPolicy({
-    getGame: () => game,
     getSettings: () => settings,
     getResources: () => resources,
     getBuildings: () => buildings,
@@ -3235,6 +3234,16 @@ function startEvolveRuntimeComposition(
         isGalaxyPiracyCoveredByFleet: () => galaxyPiracyCoveredByFleet(),
         isLumberRace: () => isLumberRace(),
         hasRaceTrait: (trait) => game.global.race[trait],
+        getForeignGovernment: (index) =>
+          game.global.civic.foreign[`gov${index}`],
+        getWindSpeed: () => game.global.city.calendar.wind,
+        getDefaultJobWorkers: () =>
+          game.global.civic[game.global.civic.d_job].workers,
+        getSacrificeBonus: (bonus) => game.global.city.s_alter?.[bonus],
+        getSpireBloodstoneRank: () => game.global.blood["spire"],
+        getAssignedEjectorCapacity: () =>
+          game.global.interstellar.mass_ejector?.total,
+        getTechLevel: (research) => game.global.tech[research],
         isBananaRepublicObjectiveComplete: (objective) =>
           bananaRepublicObjectiveComplete(objective),
         isInflationAssistActive: () => inflationChallengeAssistActive(),

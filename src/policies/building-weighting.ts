@@ -1,6 +1,7 @@
 import type {
   BuildingWeightingRule,
   BuildingWeightingSnapshot,
+  SacrificeBlockedReason,
 } from "../ports/building-weighting.ts";
 import type { RandomSource } from "../ports/randomness.ts";
 
@@ -8,8 +9,15 @@ type LooseFunction = (...args: any[]) => any;
 type LooseObject = Record<PropertyKey, any>;
 type LooseConstructor = new (...args: any[]) => any;
 
+const SACRIFICE_BLOCKED_NOTES: Readonly<
+  Record<SacrificeBlockedReason, string>
+> = {
+  windless: "Parasites sacrificed only during windy weather",
+  "no-default-workers": "No default workers to sacrifice",
+  "bonus-capped": "Sacrifice bonus already high enough",
+};
+
 type BuildingWeightingDependencies = {
-  getGame: () => LooseObject;
   getSettings: () => LooseObject;
   getResources: () => LooseObject;
   getBuildings: () => LooseObject;
@@ -20,7 +28,6 @@ type BuildingWeightingDependencies = {
 };
 
 export function createBuildingWeightingPolicy({
-  getGame,
   getSettings,
   getResources,
   getBuildings,
@@ -147,16 +154,9 @@ export function createBuildingWeightingPolicy({
         snapshot.truepathRace &&
         getBuildings().SpaceTestLaunch.isUnlocked() &&
         !snapshot.worldUnified,
-      match: (building: any) => {
+      match: (building: any, snapshot) => {
         if (building === getBuildings().SpaceTestLaunch) {
-          let sabotage = 1;
-          for (let i = 0; i < 3; i++) {
-            let gov = getGame().global.civic.foreign[`gov${i}`];
-            if (!gov.occ && !gov.anx && !gov.buy) {
-              sabotage++;
-            }
-          }
-          return 1 / (sabotage + 1);
+          return snapshot.testLaunchSuccessChance;
         }
       },
       describe: (chance: any) =>
@@ -305,17 +305,14 @@ export function createBuildingWeightingPolicy({
           getResources().Lake_Support.rateOfChange <= 1
         ); // Build any if there's spare support
       },
-      match: (building: any) => {
+      match: (building: any, snapshot) => {
         if (
           building === getBuildings().LakeBireme ||
           building === getBuildings().LakeTransport
         ) {
           let biremeCount = getBuildings().LakeBireme.count;
           let transportCount = getBuildings().LakeTransport.count;
-          let rating =
-            getGame().global.blood["spire"] && getGame().global.blood.spire >= 2
-              ? 0.8
-              : 0.85;
+          let rating = snapshot.lakeBiremeSupplyRate;
           let nextBireme =
             (1 - rating ** (biremeCount + 1)) * (transportCount * 5);
           let nextTransport =
@@ -509,27 +506,8 @@ export function createBuildingWeightingPolicy({
           ) {
             return "Sacrifices performed only with full population";
           }
-          if (
-            snapshot.parasiteRace &&
-            getGame().global.city.calendar.wind === 0
-          ) {
-            return "Parasites sacrificed only during windy weather";
-          }
-          if (
-            getGame().global.civic[getGame().global.civic.d_job].workers < 1
-          ) {
-            return "No default workers to sacrifice";
-          }
-
-          if (
-            getGame().global.city.s_alter.rage >= 3600 &&
-            getGame().global.city.s_alter.regen >= 3600 &&
-            getGame().global.city.s_alter.mind >= 3600 &&
-            getGame().global.city.s_alter.mine >= 3600 &&
-            (!snapshot.lumberRace ||
-              getGame().global.city.s_alter.harvest >= 3600)
-          ) {
-            return "Sacrifice bonus already high enough";
+          if (snapshot.sacrificeBlocked) {
+            return SACRIFICE_BLOCKED_NOTES[snapshot.sacrificeBlocked];
           }
         }
       },
@@ -582,7 +560,7 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "womling-overlord-guard",
-      // "&& getGame().global.tech.tau_red === 4" doesn't want to work for some reason.
+      // Narrowing this to `tau_red` level 4 was tried and did not work.
       enabled: (snapshot) => snapshot.truepathRace,
       match: (building: any, snapshot) => {
         if (
@@ -945,11 +923,10 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "unused-ejectors",
-      enabled: () =>
-        getBuildings().BlackholeMassEjector.count > 0 &&
+      enabled: (snapshot) =>
         getBuildings().BlackholeMassEjector.count * 1000 -
-          getGame().global.interstellar.mass_ejector.total >
-          100,
+          snapshot.assignedEjectorCapacity >
+        100,
       match: (building: any) =>
         building === getBuildings().BlackholeMassEjector,
       describe: () => "Still have some unused ejectors",
@@ -1062,7 +1039,8 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "randomized-weighting",
-      enabled: () => getGame().global.tech.tau_gas === 1, // Only used for name contest, no need to check at other game stages
+      // Only used for the gas giant name contest, no need to check at other game stages
+      enabled: (snapshot) => snapshot.gasGiantNameContestActive,
       match: (building: any) => building.is.random,
       describe: () => "Randomized weighting",
       multiplier: () => 1 + randomSource.nextUnit(), // Fluctuate weight to pick random item

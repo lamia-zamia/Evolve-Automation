@@ -18,13 +18,6 @@ const buildings = new Proxy(buildingCache, {
   },
 });
 let context = {
-  game: {
-    global: {
-      race: {},
-      tech: {},
-      civic: { foreign: { gov0: {}, gov1: {}, gov2: {} } },
-    },
-  },
   settings: { autoBuild: false },
   resources: {},
   buildings,
@@ -41,7 +34,6 @@ const snapshotOf = (overrides = {}) =>
     galaxyAssaultPending: false,
     stargatePiracySupressed: false,
     galaxyPiracyCoveredByFleet: false,
-    lumberRace: false,
     truepathRace: false,
     mineIsOnlyChrysotileSource: false,
     witchHunterRace: false,
@@ -49,7 +41,7 @@ const snapshotOf = (overrides = {}) =>
     artificialRace: false,
     slaverRace: false,
     cannibalizeRace: false,
-    parasiteRace: false,
+    sacrificeBlocked: null,
     bananaRace: false,
     loneSurvivorRace: false,
     hoovedRace: false,
@@ -70,8 +62,11 @@ const snapshotOf = (overrides = {}) =>
     hellGuardPostPrebuildIncomplete: false,
     spirePortPrebuildIncomplete: false,
     spireBaseCampPrebuildIncomplete: false,
+    lakeBiremeSupplyRate: 0.85,
     nextCitadelPowerDraw: 0,
+    assignedEjectorCapacity: 0,
     worldUnified: false,
+    testLaunchSuccessChance: 0.2,
     spireWaygateComplete: false,
     spireEdenicGateComplete: false,
     elysiumFireSupportUnlocked: false,
@@ -81,6 +76,7 @@ const snapshotOf = (overrides = {}) =>
     spireSphinxSolved: false,
     assemblyCureComplete: false,
     tauCetiReached: false,
+    gasGiantNameContestActive: false,
     shrineBonusUnwanted: false,
     geckNeeded: false,
     prestigeEdenAllowed: false,
@@ -96,7 +92,6 @@ const snapshotOf = (overrides = {}) =>
 const emptySnapshot = snapshotOf();
 
 const policy = createBuildingWeightingPolicy({
-  getGame: () => context.game,
   getSettings: () => context.settings,
   getResources: () => context.resources,
   getBuildings: () => context.buildings,
@@ -657,6 +652,25 @@ assert.equal(
   "a unified world can no longer be sabotaged",
 );
 assert.equal(sabotageRule.enabled(emptySnapshot), false);
+assert.equal(
+  sabotageRule.match(
+    context.buildings.SpaceTestLaunch,
+    snapshotOf({ truepathRace: true, testLaunchSuccessChance: 0.25 }),
+  ),
+  0.25,
+  "the launch chance is one snapshot answer, not a per-candidate government scan",
+);
+assert.equal(
+  sabotageRule.match(context.buildings.SpireWaygate, truepathSnapshot),
+  undefined,
+);
+assert.equal(sabotageRule.describe(0.25), "25% chance of successful launch");
+assert.equal(sabotageRule.multiplier(0.25), 0.25);
+assert.equal(
+  sabotageRule.multiplier(0.5),
+  0,
+  "an even chance is not worth building for",
+);
 
 const waygateRule = ruleById("spire-waygate-done");
 assert.equal(waygateRule.enabled(emptySnapshot), false);
@@ -801,5 +815,116 @@ assert.equal(
   impactRule.enabled(snapshotOf({ orbitalDecayImpactPending: true })),
   true,
 );
+
+// The altar's game-side blockers are one snapshot reason; only the population
+// checks are still taken per candidate, and they still win over it.
+const altarRule = ruleById("sacrificial-altar-blocked");
+const altar = { _id: "s_alter", count: 1 };
+const cannibalSnapshot = snapshotOf({ cannibalizeRace: true });
+context = {
+  ...context,
+  resources: {
+    ...context.resources,
+    Population: { currentQuantity: 10, maxQuantity: 10 },
+  },
+};
+assert.equal(altarRule.enabled(emptySnapshot), false);
+assert.equal(altarRule.enabled(cannibalSnapshot), true);
+assert.equal(altarRule.match(altar, cannibalSnapshot), undefined);
+assert.equal(
+  altarRule.match({ _id: "s_alter", count: 0 }, cannibalSnapshot),
+  undefined,
+  "an altar that does not exist yet is not blocked",
+);
+for (const [reason, note] of [
+  ["windless", "Parasites sacrificed only during windy weather"],
+  ["no-default-workers", "No default workers to sacrifice"],
+  ["bonus-capped", "Sacrifice bonus already high enough"],
+]) {
+  assert.equal(
+    altarRule.match(
+      altar,
+      snapshotOf({ cannibalizeRace: true, sacrificeBlocked: reason }),
+    ),
+    note,
+  );
+}
+context.resources.Population.currentQuantity = 9;
+assert.equal(
+  altarRule.match(
+    altar,
+    snapshotOf({ cannibalizeRace: true, sacrificeBlocked: "bonus-capped" }),
+  ),
+  "Sacrifices performed only with full population",
+);
+context.resources.Population.currentQuantity = 0;
+assert.equal(altarRule.match(altar, cannibalSnapshot), "Too low population");
+assert.equal(altarRule.multiplier(), 0);
+
+// The Bireme supply rate is a snapshot answer, and the Bloodstone rank that
+// improves it flips which of the two ships is worth building next.
+const lakeRule = ruleById("lake-transport-vs-bireme");
+const lakeShip = (binding, title, count) => ({
+  _vueBinding: binding,
+  title,
+  count,
+  isAutoBuildable: () => true,
+  isAffordable: () => true,
+  cost: { Soul_Gem: 1 },
+});
+const lakeBireme = lakeShip("LakeBireme", "Bireme Warship", 4);
+const lakeTransport = lakeShip("LakeTransport", "Transport", 7);
+context.buildings = {
+  ...context.buildings,
+  LakeBireme: lakeBireme,
+  LakeTransport: lakeTransport,
+};
+context = {
+  ...context,
+  resources: { ...context.resources, Lake_Support: { rateOfChange: 0 } },
+};
+assert.equal(lakeRule.enabled(), true);
+assert.equal(lakeRule.match(lakeTransport, emptySnapshot), lakeBireme);
+assert.equal(lakeRule.match(lakeBireme, emptySnapshot), undefined);
+const bloodstoneSnapshot = snapshotOf({ lakeBiremeSupplyRate: 0.8 });
+assert.equal(lakeRule.match(lakeBireme, bloodstoneSnapshot), lakeTransport);
+assert.equal(lakeRule.match(lakeTransport, bloodstoneSnapshot), undefined);
+assert.equal(
+  lakeRule.describe(lakeBireme),
+  "Bireme Warship gives more Supplies",
+);
+
+// Unused ejector capacity is built capacity minus the capacity the game has
+// already assigned.
+const ejectorRule = ruleById("unused-ejectors");
+const ejector = { _vueBinding: "BlackholeMassEjector", count: 0 };
+context = {
+  ...context,
+  settings: { ...context.settings, buildingWeightingUnusedEjectors: 0.5 },
+};
+context.buildings = { ...context.buildings, BlackholeMassEjector: ejector };
+assert.equal(
+  ejectorRule.enabled(emptySnapshot),
+  false,
+  "an unbuilt ejector has no unused capacity",
+);
+ejector.count = 1;
+assert.equal(ejectorRule.enabled(emptySnapshot), true);
+assert.equal(
+  ejectorRule.enabled(snapshotOf({ assignedEjectorCapacity: 950 })),
+  false,
+);
+assert.equal(ejectorRule.match(ejector, emptySnapshot), true);
+assert.equal(ejectorRule.multiplier(), 0.5);
+
+// Randomized weighting is only wanted while the gas giant name contest runs.
+const randomRule = ruleById("randomized-weighting");
+assert.equal(randomRule.enabled(emptySnapshot), false);
+assert.equal(
+  randomRule.enabled(snapshotOf({ gasGiantNameContestActive: true })),
+  true,
+);
+assert.equal(randomRule.match({ is: { random: true } }), true);
+assert.equal(randomRule.multiplier(), 1.5);
 
 console.log("Weighting policy module tests passed");

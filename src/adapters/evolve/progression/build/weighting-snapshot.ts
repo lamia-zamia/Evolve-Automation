@@ -2,6 +2,7 @@ import type { ForeignAchievementGoal } from "../../../../domain/combat/foreign-a
 import type {
   BuildingWeightingSnapshot,
   MechSupplySavingReason,
+  SacrificeBlockedReason,
 } from "../../../../ports/building-weighting.ts";
 import {
   requireArray,
@@ -17,6 +18,13 @@ export interface WeightingSnapshotDependencies {
   readonly isGalaxyPiracyCoveredByFleet: () => unknown;
   readonly isLumberRace: () => unknown;
   readonly hasRaceTrait: (trait: string) => unknown;
+  readonly getForeignGovernment: (index: number) => unknown;
+  readonly getWindSpeed: () => unknown;
+  readonly getDefaultJobWorkers: () => unknown;
+  readonly getSacrificeBonus: (bonus: string) => unknown;
+  readonly getSpireBloodstoneRank: () => unknown;
+  readonly getAssignedEjectorCapacity: () => unknown;
+  readonly getTechLevel: (research: string) => unknown;
   readonly isBananaRepublicObjectiveComplete: (objective: string) => unknown;
   readonly isInflationAssistActive: () => unknown;
   readonly isInflationMoneyReachable: () => unknown;
@@ -60,6 +68,9 @@ function requireForeignAchievementGoal(
   );
 }
 
+/** Sacrifice bonuses past an hour of effect are not worth extending further. */
+const SACRIFICE_BONUS_CAP = 3600;
+
 const MECH_SUPPLY_SAVING_REASONS: ReadonlySet<string> = new Set([
   "building",
   "saving",
@@ -98,6 +109,13 @@ export function createWeightingSnapshotReader({
   isGalaxyPiracyCoveredByFleet,
   isLumberRace,
   hasRaceTrait,
+  getForeignGovernment,
+  getWindSpeed,
+  getDefaultJobWorkers,
+  getSacrificeBonus,
+  getSpireBloodstoneRank,
+  getAssignedEjectorCapacity,
+  getTechLevel,
   isBananaRepublicObjectiveComplete,
   isInflationAssistActive,
   isInflationMoneyReachable,
@@ -120,6 +138,64 @@ export function createWeightingSnapshotReader({
   getMechSupplySavingReason,
   isWomlingStatEarned,
 }: WeightingSnapshotDependencies): () => BuildingWeightingSnapshot {
+  // Every foreign government the player does not control can sabotage the Test
+  // Launch. `occ`, `anx`, and `buy` are absent until that government is
+  // occupied, annexed, or bought, so they keep the game's truthiness test.
+  const readTestLaunchSuccessChance = (): number => {
+    let saboteurs = 1;
+    for (let index = 0; index < 3; index++) {
+      const government = requireRecord(
+        getForeignGovernment(index),
+        `getForeignGovernment(${index})`,
+      );
+      if (!government["occ"] && !government["anx"] && !government["buy"]) {
+        saboteurs++;
+      }
+    }
+    return 1 / (saboteurs + 1);
+  };
+
+  // `global.city.s_alter[bonus]` is absent until that bonus is first raised, so
+  // the cap test keeps the game's lenient coercion.
+  const sacrificeBonusCapped = (bonus: string): boolean =>
+    Number(getSacrificeBonus(bonus)) >= SACRIFICE_BONUS_CAP;
+
+  const readSacrificeBlocked = (
+    parasiteRace: boolean,
+    lumberRace: boolean,
+  ): SacrificeBlockedReason | null => {
+    if (parasiteRace && requireNumber(getWindSpeed(), "getWindSpeed()") === 0) {
+      return "windless";
+    }
+    if (requireNumber(getDefaultJobWorkers(), "getDefaultJobWorkers()") < 1) {
+      return "no-default-workers";
+    }
+    if (
+      sacrificeBonusCapped("rage") &&
+      sacrificeBonusCapped("regen") &&
+      sacrificeBonusCapped("mind") &&
+      sacrificeBonusCapped("mine") &&
+      (!lumberRace || sacrificeBonusCapped("harvest"))
+    ) {
+      return "bonus-capped";
+    }
+    return null;
+  };
+
+  // Bloodstone ranks are absent until the first one is earned, so the rank test
+  // keeps the game's lenient coercion.
+  const readLakeBiremeSupplyRate = (): number =>
+    Number(getSpireBloodstoneRank()) >= 2 ? 0.8 : 0.85;
+
+  // `global.interstellar.mass_ejector` is absent until the first Mass Ejector
+  // is built, and nothing can be assigned before then.
+  const readAssignedEjectorCapacity = (): number => {
+    const assigned = getAssignedEjectorCapacity();
+    return assigned === undefined
+      ? 0
+      : requireNumber(assigned, "getAssignedEjectorCapacity()");
+  };
+
   return () => {
     const state = requireRecord(getState(), "state");
     const retirementAssistActive = requireBoolean(
@@ -140,6 +216,9 @@ export function createWeightingSnapshotReader({
     // it does have carries a numeric rank rather than `true`. The game's own
     // checks are truthiness tests, so the race gates keep that coercion.
     const trait = (name: string): boolean => Boolean(hasRaceTrait(name));
+    const truepathRace = trait("truepath");
+    const cannibalizeRace = trait("cannibalize");
+    const lumberRace = requireBoolean(isLumberRace(), "isLumberRace()");
     return Object.freeze({
       queuedTargets: new Set(
         requireArray(state["queuedTargets"], "state.queuedTargets"),
@@ -171,8 +250,7 @@ export function createWeightingSnapshotReader({
         isGalaxyPiracyCoveredByFleet(),
         "isGalaxyPiracyCoveredByFleet()",
       ),
-      lumberRace: requireBoolean(isLumberRace(), "isLumberRace()"),
-      truepathRace: trait("truepath"),
+      truepathRace,
       // The game spells the Entish no-quarry-worker trait "sappy".
       mineIsOnlyChrysotileSource: trait("smoldering") && trait("sappy"),
       witchHunterRace: trait("witch_hunter"),
@@ -180,8 +258,11 @@ export function createWeightingSnapshotReader({
       // The game spells the artificial-population trait "artifical".
       artificialRace: trait("artifical"),
       slaverRace: trait("slaver"),
-      cannibalizeRace: trait("cannibalize"),
-      parasiteRace: trait("parasite"),
+      cannibalizeRace,
+      // A race that cannot sacrifice never has the altar reads taken.
+      sacrificeBlocked: cannibalizeRace
+        ? readSacrificeBlocked(trait("parasite"), lumberRace)
+        : null,
       bananaRace: trait("banana"),
       loneSurvivorRace: trait("lone_survivor"),
       hoovedRace: trait("hooved"),
@@ -252,11 +333,16 @@ export function createWeightingSnapshotReader({
         spirePrebuild["baseCamps"],
         "getSpirePrebuildShortfall().baseCamps",
       ),
+      lakeBiremeSupplyRate: readLakeBiremeSupplyRate(),
       nextCitadelPowerDraw: requireNumber(
         getNextCitadelPowerDraw(),
         "getNextCitadelPowerDraw()",
       ),
+      assignedEjectorCapacity: readAssignedEjectorCapacity(),
       worldUnified: researched("world_control", 1),
+      // Only True Path has a Test Launch, and only its foreign governments can
+      // sabotage one.
+      testLaunchSuccessChance: truepathRace ? readTestLaunchSuccessChance() : 0,
       spireWaygateComplete: researched("waygate", 2),
       spireEdenicGateComplete: researched("edenic", 3),
       elysiumFireSupportUnlocked: researched("elysium", 8),
@@ -266,6 +352,9 @@ export function createWeightingSnapshotReader({
       spireSphinxSolved: researched("hell_spire", 8),
       assemblyCureComplete: researched("focus_cure", 7),
       tauCetiReached: researched("tauceti", 2),
+      // An exact level test rather than the `haveTech` `>=` the other tech
+      // gates use: the contest closes when the tech advances past level 1.
+      gasGiantNameContestActive: getTechLevel("tau_gas") === 1,
       shrineBonusUnwanted: requireBoolean(
         isShrineBonusUnwanted(),
         "isShrineBonusUnwanted()",

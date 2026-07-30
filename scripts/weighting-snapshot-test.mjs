@@ -18,6 +18,13 @@ const defaultGates = () => ({
   isGalaxyPiracyCoveredByFleet: off,
   isLumberRace: off,
   hasRaceTrait: off,
+  getForeignGovernment: () => ({}),
+  getWindSpeed: () => 1,
+  getDefaultJobWorkers: () => 5,
+  getSacrificeBonus: () => 0,
+  getSpireBloodstoneRank: () => undefined,
+  getAssignedEjectorCapacity: () => undefined,
+  getTechLevel: () => undefined,
   isBananaRepublicObjectiveComplete: off,
   isInflationAssistActive: off,
   isInflationMoneyReachable: off,
@@ -63,7 +70,6 @@ assert.equal(empty.cheapestTechKnowledge, 0);
 assert.equal(empty.galaxyAssaultPending, false);
 assert.equal(empty.stargatePiracySupressed, false);
 assert.equal(empty.galaxyPiracyCoveredByFleet, false);
-assert.equal(empty.lumberRace, false);
 assert.equal(empty.truepathRace, false);
 assert.equal(empty.mineIsOnlyChrysotileSource, false);
 assert.equal(empty.witchHunterRace, false);
@@ -71,7 +77,7 @@ assert.equal(empty.warlordRace, false);
 assert.equal(empty.artificialRace, false);
 assert.equal(empty.slaverRace, false);
 assert.equal(empty.cannibalizeRace, false);
-assert.equal(empty.parasiteRace, false);
+assert.equal(empty.sacrificeBlocked, null);
 assert.equal(empty.bananaRace, false);
 assert.equal(empty.loneSurvivorRace, false);
 assert.equal(empty.hoovedRace, false);
@@ -92,8 +98,11 @@ assert.equal(empty.gateDemonsSupressed, false);
 assert.equal(empty.hellGuardPostPrebuildIncomplete, false);
 assert.equal(empty.spirePortPrebuildIncomplete, false);
 assert.equal(empty.spireBaseCampPrebuildIncomplete, false);
+assert.equal(empty.lakeBiremeSupplyRate, 0.85);
 assert.equal(empty.nextCitadelPowerDraw, 30);
+assert.equal(empty.assignedEjectorCapacity, 0);
 assert.equal(empty.worldUnified, false);
+assert.equal(empty.testLaunchSuccessChance, 0);
 assert.equal(empty.spireWaygateComplete, false);
 assert.equal(empty.spireEdenicGateComplete, false);
 assert.equal(empty.elysiumFireSupportUnlocked, false);
@@ -103,6 +112,7 @@ assert.equal(empty.asphodelStabilizerUnlocked, false);
 assert.equal(empty.spireSphinxSolved, false);
 assert.equal(empty.assemblyCureComplete, false);
 assert.equal(empty.tauCetiReached, false);
+assert.equal(empty.gasGiantNameContestActive, false);
 assert.equal(empty.shrineBonusUnwanted, false);
 assert.equal(empty.geckNeeded, false);
 assert.equal(empty.prestigeEdenAllowed, false);
@@ -169,6 +179,9 @@ gates = {
   isGuardPostPrebuildIncomplete: () => true,
   getSpirePrebuildShortfall: () => ({ ports: true, baseCamps: false }),
   getNextCitadelPowerDraw: () => 172.5,
+  getSpireBloodstoneRank: () => 2,
+  getAssignedEjectorCapacity: () => 1_500,
+  getTechLevel: () => 1,
   isTechResearched: (research, level) => {
     askedTechs.push(`${research}:${level}`);
     return research !== "isle";
@@ -199,7 +212,6 @@ assert.deepEqual(askedPrestiges, ["eden", "retire"]);
 assert.equal(gated.galaxyAssaultPending, true);
 assert.equal(gated.stargatePiracySupressed, true);
 assert.equal(gated.galaxyPiracyCoveredByFleet, true);
-assert.equal(gated.lumberRace, true);
 assert.equal(gated.bananaColliderObjectiveComplete, true);
 assert.equal(gated.inflationAssistActive, true);
 assert.equal(gated.inflationMoneyReachable, true);
@@ -214,7 +226,10 @@ assert.equal(gated.gateDemonsSupressed, true);
 assert.equal(gated.hellGuardPostPrebuildIncomplete, true);
 assert.equal(gated.spirePortPrebuildIncomplete, true);
 assert.equal(gated.spireBaseCampPrebuildIncomplete, false);
+assert.equal(gated.lakeBiremeSupplyRate, 0.8);
 assert.equal(gated.nextCitadelPowerDraw, 172.5);
+assert.equal(gated.assignedEjectorCapacity, 1_500);
+assert.equal(gated.gasGiantNameContestActive, true);
 assert.deepEqual(askedTechs, [
   "world_control:1",
   "waygate:2",
@@ -267,13 +282,13 @@ assert.equal(read().mechSupplySaving, "building");
 // absent unless the race has the trait, and carries a numeric rank when it does.
 const ALL_RACE_TRAITS = [
   "truepath",
+  "cannibalize",
   "smoldering",
   "sappy",
   "witch_hunter",
   "warlord",
   "artifical",
   "slaver",
-  "cannibalize",
   "parasite",
   "banana",
   "lone_survivor",
@@ -305,7 +320,7 @@ assert.equal(raced.warlordRace, true);
 assert.equal(raced.artificialRace, true);
 assert.equal(raced.slaverRace, true);
 assert.equal(raced.cannibalizeRace, true);
-assert.equal(raced.parasiteRace, true);
+assert.equal(raced.sacrificeBlocked, null);
 assert.equal(raced.bananaRace, true);
 assert.equal(raced.loneSurvivorRace, true);
 assert.equal(raced.hoovedRace, true);
@@ -345,6 +360,121 @@ assert.equal(preparationReads, 1);
 gates = countedPreparation(["20 Fusion Generator"]);
 assert.equal(read().retirementPreparationIncomplete, true);
 assert.equal(preparationReads, 2);
+
+// The Test Launch chance is only sampled for a True Path run. Every foreign
+// government the player does not control adds one saboteur, and `occ`, `anx`,
+// and `buy` are absent until that government is taken.
+const withGovernments = (...governments) => ({
+  ...defaultGates(),
+  hasRaceTrait: (trait) => trait === "truepath",
+  getForeignGovernment: (index) => governments[index],
+});
+gates = withGovernments({}, {}, {});
+assert.equal(read().testLaunchSuccessChance, 1 / 5);
+gates = withGovernments({ occ: true }, { anx: true }, { buy: true });
+assert.equal(read().testLaunchSuccessChance, 1 / 2);
+gates = withGovernments({ occ: true }, {}, {});
+assert.equal(read().testLaunchSuccessChance, 1 / 4);
+let governmentReads = 0;
+gates = {
+  ...defaultGates(),
+  getForeignGovernment: () => {
+    governmentReads++;
+    return {};
+  },
+};
+assert.equal(read().testLaunchSuccessChance, 0);
+assert.equal(governmentReads, 0, "no other run has a Test Launch to sabotage");
+
+// The altar reads are only taken for a race that can sacrifice, and report the
+// first reason that blocks it.
+const sacrificeGates = (overrides = {}) => ({
+  ...defaultGates(),
+  hasRaceTrait: (trait) => trait === "cannibalize",
+  ...overrides,
+});
+gates = sacrificeGates();
+assert.equal(read().sacrificeBlocked, null);
+gates = sacrificeGates({ getDefaultJobWorkers: () => 0 });
+assert.equal(read().sacrificeBlocked, "no-default-workers");
+gates = sacrificeGates({ getWindSpeed: () => 0 });
+assert.equal(
+  read().sacrificeBlocked,
+  null,
+  "only a parasite race needs windy weather",
+);
+gates = {
+  ...defaultGates(),
+  hasRaceTrait: (trait) => trait === "cannibalize" || trait === "parasite",
+  getWindSpeed: () => 0,
+  getDefaultJobWorkers: () => 0,
+};
+assert.equal(read().sacrificeBlocked, "windless");
+
+// Every bonus over the cap blocks the sacrifice. `s_alter` bonuses are absent
+// until first raised, and the harvest bonus only counts for a lumber race.
+gates = sacrificeGates({ getSacrificeBonus: () => 3_600 });
+assert.equal(read().sacrificeBlocked, "bonus-capped");
+gates = sacrificeGates({
+  getSacrificeBonus: (bonus) => (bonus === "mine" ? 3_599 : 3_600),
+});
+assert.equal(read().sacrificeBlocked, null);
+const withoutHarvest = (bonus) => (bonus === "harvest" ? undefined : 3_600);
+gates = sacrificeGates({ getSacrificeBonus: withoutHarvest });
+assert.equal(read().sacrificeBlocked, "bonus-capped");
+gates = sacrificeGates({
+  getSacrificeBonus: withoutHarvest,
+  isLumberRace: () => true,
+});
+assert.equal(read().sacrificeBlocked, null);
+
+let altarReads = 0;
+gates = {
+  ...defaultGates(),
+  getDefaultJobWorkers: () => {
+    altarReads++;
+    return 5;
+  },
+};
+assert.equal(read().sacrificeBlocked, null);
+assert.equal(
+  altarReads,
+  0,
+  "a race that cannot sacrifice reads no altar state",
+);
+
+// Ejector capacity is absent until the first Mass Ejector is built.
+gates = { ...defaultGates(), getAssignedEjectorCapacity: () => 2_400 };
+assert.equal(read().assignedEjectorCapacity, 2_400);
+gates = { ...defaultGates(), getAssignedEjectorCapacity: () => 0 };
+assert.equal(read().assignedEjectorCapacity, 0);
+
+// Bloodstone ranks are absent until one is earned, and only rank 2 improves the
+// Bireme supply rate.
+for (const rank of [undefined, 0, 1]) {
+  gates = { ...defaultGates(), getSpireBloodstoneRank: () => rank };
+  assert.equal(read().lakeBiremeSupplyRate, 0.85);
+}
+for (const rank of [2, 5]) {
+  gates = { ...defaultGates(), getSpireBloodstoneRank: () => rank };
+  assert.equal(read().lakeBiremeSupplyRate, 0.8);
+}
+
+// The name contest is an exact level test, so it closes as the tech advances.
+const askedTechLevels = [];
+gates = {
+  ...defaultGates(),
+  getTechLevel: (research) => {
+    askedTechLevels.push(research);
+    return 2;
+  },
+};
+assert.equal(read().gasGiantNameContestActive, false);
+assert.deepEqual(askedTechLevels, ["tau_gas"]);
+for (const level of [undefined, 0]) {
+  gates = { ...defaultGates(), getTechLevel: () => level };
+  assert.equal(read().gasGiantNameContestActive, false);
+}
 
 // Validators append ", got <value>" to identify the rejected value; these cases
 // pin the reported path and kind, so they match the message prefix.
@@ -471,6 +601,31 @@ rejectsGate(
 rejectsGate(
   { getForeignAchievementGoal: () => undefined },
   'getForeignAchievementGoal() must be null, "world-domination", or "syndicate"',
+);
+rejectsGate(
+  {
+    hasRaceTrait: (trait) => trait === "truepath",
+    getForeignGovernment: (index) => (index === 1 ? null : {}),
+  },
+  "getForeignGovernment(1) must be an object",
+);
+rejectsGate(
+  {
+    hasRaceTrait: (trait) => trait === "cannibalize" || trait === "parasite",
+    getWindSpeed: () => "calm",
+  },
+  "getWindSpeed() must be a finite number",
+);
+rejectsGate(
+  {
+    hasRaceTrait: (trait) => trait === "cannibalize",
+    getDefaultJobWorkers: () => undefined,
+  },
+  "getDefaultJobWorkers() must be a finite number",
+);
+rejectsGate(
+  { getAssignedEjectorCapacity: () => Number.NaN },
+  "getAssignedEjectorCapacity() must be a finite number",
 );
 
 state = validState();
