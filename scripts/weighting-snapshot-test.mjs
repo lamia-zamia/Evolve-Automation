@@ -12,7 +12,42 @@ const validState = () => ({
 let state = validState();
 let gates = {};
 const off = () => false;
+// Every weighting multiplier is written by the settings defaults on load, so a
+// zero baseline is a valid reading rather than an absent one.
+const WEIGHT_NAMES = [
+  "buildingWeightingNew",
+  "buildingWeightingUnderpowered",
+  "buildingWeightingNeedfulPowerPlant",
+  "buildingWeightingUselessPowerPlant",
+  "buildingWeightingNeedfulKnowledge",
+  "buildingWeightingUselessKnowledge",
+  "buildingWeightingNonOperatingCity",
+  "buildingWeightingNonOperating",
+  "buildingWeightingMissingSupply",
+  "buildingWeightingMissingSupport",
+  "buildingWeightingUselessSupport",
+  "buildingWeightingMissingFuel",
+  "buildingWeightingMADUseless",
+  "buildingWeightingUnusedEjectors",
+  "buildingWeightingCrateUseless",
+  "buildingWeightingHorseshoeUseless",
+  "buildingWeightingZenUseless",
+  "buildingWeightingGateTurret",
+  "buildingWeightingNeedStorage",
+  "buildingWeightingUselessHousing",
+  "buildingWeightingTemporal",
+  "buildingWeightingSolar",
+  "buildingWeightingVacuumCollapse",
+  "buildingWeightingTruepathDigsite",
+  "buildingWeightingOverlord",
+  "buildingWeightingAuthority",
+  "buildingWeightingBananaObjective",
+  "buildingWeightingInflationMoney",
+  "buildingWeightingRetirementPrep",
+];
 const defaultGates = () => ({
+  getWeightingMultiplier: () => 0,
+  isBestFreighterOnly: off,
   isGalaxyAssaultPending: off,
   isStargatePiracySupressed: off,
   isGalaxyPiracyCoveredByFleet: off,
@@ -62,6 +97,13 @@ const read = createWeightingSnapshotReader({
 // a valid empty snapshot.
 const empty = read();
 assert.equal(Object.isFrozen(empty), true);
+assert.equal(Object.isFrozen(empty.weights), true);
+assert.deepEqual(
+  [...Object.keys(empty.weights)].sort(),
+  [...WEIGHT_NAMES].sort(),
+  "the snapshot carries exactly the weighting multipliers the rules read",
+);
+assert.equal(empty.buildBestFreighterOnly, false);
 assert.equal(empty.queuedTargets.size, 0);
 assert.equal(empty.triggerTargets.size, 0);
 assert.equal(empty.knowledgeRequiredByTechs, 0);
@@ -123,6 +165,21 @@ assert.equal(empty.mechSupplySaving, null);
 assert.equal(empty.womlingFriendEarned, false);
 assert.equal(empty.womlingGodEarned, false);
 assert.equal(empty.womlingLordEarned, false);
+
+// Each multiplier is read from its own setting: distinct values must survive
+// the sample unswapped.
+const distinctWeights = Object.fromEntries(
+  WEIGHT_NAMES.map((name, index) => [name, index + 0.5]),
+);
+gates = {
+  ...defaultGates(),
+  getWeightingMultiplier: (setting) => distinctWeights[setting],
+  isBestFreighterOnly: () => true,
+};
+const configured = read();
+assert.deepEqual(configured.weights, distinctWeights);
+assert.equal(configured.buildBestFreighterOnly, true);
+gates = defaultGates();
 
 // Membership is by wrapper identity, not by name or index.
 const queued = { _vueBinding: "city-bank" };
@@ -510,6 +567,24 @@ const rejectsGate = (overrides, message) => {
   gates = { ...defaultGates(), ...overrides };
   assert.throws(read, { name: "TypeError", message: startsWith(message) });
 };
+rejectsGate(
+  {
+    getWeightingMultiplier: (setting) =>
+      setting === "buildingWeightingSolar" ? undefined : 0,
+  },
+  "settings.buildingWeightingSolar must be a finite number",
+);
+rejectsGate(
+  {
+    getWeightingMultiplier: (setting) =>
+      setting === "buildingWeightingAuthority" ? "10" : 0,
+  },
+  "settings.buildingWeightingAuthority must be a finite number",
+);
+rejectsGate(
+  { isBestFreighterOnly: () => undefined },
+  "settings.buildingsBestFreighter must be a boolean",
+);
 rejectsGate(
   { isGalaxyAssaultPending: () => undefined },
   "isGalaxyAssaultPending() must be a boolean",

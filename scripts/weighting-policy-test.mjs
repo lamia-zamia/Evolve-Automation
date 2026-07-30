@@ -22,10 +22,46 @@ let context = {
   resources: {},
   buildings,
 };
+// Every configured weighting multiplier arrives through the snapshot, so the
+// baseline is zero and each rule's own case supplies the value it asserts.
+const WEIGHT_NAMES = [
+  "buildingWeightingNew",
+  "buildingWeightingUnderpowered",
+  "buildingWeightingNeedfulPowerPlant",
+  "buildingWeightingUselessPowerPlant",
+  "buildingWeightingNeedfulKnowledge",
+  "buildingWeightingUselessKnowledge",
+  "buildingWeightingNonOperatingCity",
+  "buildingWeightingNonOperating",
+  "buildingWeightingMissingSupply",
+  "buildingWeightingMissingSupport",
+  "buildingWeightingUselessSupport",
+  "buildingWeightingMissingFuel",
+  "buildingWeightingMADUseless",
+  "buildingWeightingUnusedEjectors",
+  "buildingWeightingCrateUseless",
+  "buildingWeightingHorseshoeUseless",
+  "buildingWeightingZenUseless",
+  "buildingWeightingGateTurret",
+  "buildingWeightingNeedStorage",
+  "buildingWeightingUselessHousing",
+  "buildingWeightingTemporal",
+  "buildingWeightingSolar",
+  "buildingWeightingVacuumCollapse",
+  "buildingWeightingTruepathDigsite",
+  "buildingWeightingOverlord",
+  "buildingWeightingAuthority",
+  "buildingWeightingBananaObjective",
+  "buildingWeightingInflationMoney",
+  "buildingWeightingRetirementPrep",
+];
+const zeroWeights = Object.fromEntries(WEIGHT_NAMES.map((name) => [name, 0]));
 // Rules read script state and phase-constant game gates only through the phase
 // snapshot the executor samples.
-const snapshotOf = (overrides = {}) =>
+const snapshotOf = ({ weights = {}, ...overrides } = {}) =>
   Object.freeze({
+    weights: Object.freeze({ ...zeroWeights, ...weights }),
+    buildBestFreighterOnly: false,
     queuedTargets: new Set(),
     triggerTargets: new Set(),
     knowledgeRequiredByTechs: 0,
@@ -139,7 +175,7 @@ context = {
 };
 assert.equal(disabledRule.enabled(), false);
 assert.equal(disabledRule.match(), true);
-assert.equal(disabledRule.multiplier(), 0);
+assert.equal(disabledRule.multiplier(emptySnapshot), 0);
 
 const candidate = { name: "candidate" };
 const queuedRule = ruleById("queued-target");
@@ -201,13 +237,6 @@ assert.equal(
 
 const digsiteRule = ruleById("eris-digsite-unsecured");
 const truepathSnapshot = snapshotOf({ truepathRace: true });
-context = {
-  ...context,
-  settings: {
-    ...context.settings,
-    buildingWeightingTruepathDigsite: 10,
-  },
-};
 buildings.ErisDigsite.count = 42;
 assert.equal(digsiteRule.enabled(truepathSnapshot), true);
 assert.equal(
@@ -220,7 +249,12 @@ assert.equal(digsiteRule.match(buildings.ErisTank), true);
 assert.equal(digsiteRule.match(buildings.ErisTrooper), true);
 assert.equal(digsiteRule.match(buildings.ErisMission), false);
 assert.equal(digsiteRule.describe(), "Eris Digsite is not yet secured");
-assert.equal(digsiteRule.multiplier(), 10);
+assert.equal(
+  digsiteRule.multiplier(
+    snapshotOf({ weights: { buildingWeightingTruepathDigsite: 10 } }),
+  ),
+  10,
+);
 buildings.ErisDigsite.count = 100;
 assert.equal(digsiteRule.enabled(truepathSnapshot), false);
 
@@ -325,7 +359,7 @@ assert.equal(
   ),
   "Building mechs...",
 );
-assert.equal(mechSavingRule.multiplier(), 0);
+assert.equal(mechSavingRule.multiplier(emptySnapshot), 0);
 
 context.settings.achievementGuards = true;
 const achievementGuardRule = ruleById("achievement-guard");
@@ -468,8 +502,12 @@ assert.equal(
   womlingRule.describe("TauRedIntroduce"),
   "Overlord achievement is missing TauRedIntroduce",
 );
-context.settings = { ...context.settings, buildingWeightingOverlord: 0.5 };
-assert.equal(womlingRule.multiplier(), 0.5);
+assert.equal(
+  womlingRule.multiplier(
+    snapshotOf({ weights: { buildingWeightingOverlord: 0.5 } }),
+  ),
+  0.5,
+);
 assert.equal(
   womlingRule.match(
     context.buildings.TauRedContact,
@@ -498,8 +536,12 @@ context.buildings = {
   OilWell: { _vueBinding: "OilWell", is: {}, cost: {} },
 };
 assert.equal(madRule.match(context.buildings.OilWell), false);
-context.settings = { ...context.settings, buildingWeightingMADUseless: 0.01 };
-assert.equal(madRule.multiplier(), 0.01);
+assert.equal(
+  madRule.multiplier(
+    snapshotOf({ weights: { buildingWeightingMADUseless: 0.01 } }),
+  ),
+  0.01,
+);
 
 // The two gate rules are enabled purely by their snapshot answer; the unlock
 // checks and the supression reads they used to make now live in the adapter.
@@ -569,13 +611,17 @@ const vacuumManaRule = ruleById("vacuum-collapse-mana-producer");
 context.settings = {
   ...context.settings,
   prestigeType: "vacuum",
-  buildingWeightingVacuumCollapse: 10,
 };
 assert.equal(vacuumManaRule.enabled(), true);
 assert.equal(vacuumManaRule.match(context.buildings.Pylon), true);
 assert.equal(vacuumManaRule.match(context.buildings.Bank), false);
 assert.equal(vacuumManaRule.describe(), "Vacuum Collapse Mana producer");
-assert.equal(vacuumManaRule.multiplier(), 10);
+assert.equal(
+  vacuumManaRule.multiplier(
+    snapshotOf({ weights: { buildingWeightingVacuumCollapse: 10 } }),
+  ),
+  10,
+);
 context.settings.prestigeType = "mad";
 assert.equal(vacuumManaRule.enabled(), false);
 
@@ -665,9 +711,9 @@ assert.equal(
   undefined,
 );
 assert.equal(sabotageRule.describe(0.25), "25% chance of successful launch");
-assert.equal(sabotageRule.multiplier(0.25), 0.25);
+assert.equal(sabotageRule.multiplier(emptySnapshot, 0.25), 0.25);
 assert.equal(
-  sabotageRule.multiplier(0.5),
+  sabotageRule.multiplier(emptySnapshot, 0.5),
   0,
   "an even chance is not worth building for",
 );
@@ -805,7 +851,7 @@ assert.equal(shrineRule.match({ id: "city-shrine" }), true);
 assert.equal(shrineRule.match({ id: "city-temple" }), false);
 assert.equal(shrineRule.match({}), undefined);
 assert.equal(shrineRule.describe(), "Wrong shrine");
-assert.equal(shrineRule.multiplier(), 0);
+assert.equal(shrineRule.multiplier(emptySnapshot), 0);
 
 // The impact rule is one snapshot answer: the planet is decaying and has not
 // yet been hit.
@@ -859,7 +905,7 @@ assert.equal(
 );
 context.resources.Population.currentQuantity = 0;
 assert.equal(altarRule.match(altar, cannibalSnapshot), "Too low population");
-assert.equal(altarRule.multiplier(), 0);
+assert.equal(altarRule.multiplier(emptySnapshot), 0);
 
 // The Bireme supply rate is a snapshot answer, and the Bloodstone rank that
 // improves it flips which of the two ships is worth building next.
@@ -898,10 +944,6 @@ assert.equal(
 // already assigned.
 const ejectorRule = ruleById("unused-ejectors");
 const ejector = { _vueBinding: "BlackholeMassEjector", count: 0 };
-context = {
-  ...context,
-  settings: { ...context.settings, buildingWeightingUnusedEjectors: 0.5 },
-};
 context.buildings = { ...context.buildings, BlackholeMassEjector: ejector };
 assert.equal(
   ejectorRule.enabled(emptySnapshot),
@@ -915,7 +957,12 @@ assert.equal(
   false,
 );
 assert.equal(ejectorRule.match(ejector, emptySnapshot), true);
-assert.equal(ejectorRule.multiplier(), 0.5);
+assert.equal(
+  ejectorRule.multiplier(
+    snapshotOf({ weights: { buildingWeightingUnusedEjectors: 0.5 } }),
+  ),
+  0.5,
+);
 
 // Randomized weighting is only wanted while the gas giant name contest runs.
 const randomRule = ruleById("randomized-weighting");
@@ -925,6 +972,36 @@ assert.equal(
   true,
 );
 assert.equal(randomRule.match({ is: { random: true } }), true);
-assert.equal(randomRule.multiplier(), 1.5);
+assert.equal(randomRule.multiplier(emptySnapshot), 1.5);
+
+// Preferring the better freighter is a snapshot answer. With the preference
+// off the rule multiplies by x1, which is how the executor drops it from the
+// phase entirely.
+const freighterRule = ruleById("best-freighter");
+const freighter = { _vueBinding: "GorddonFreighter", count: 0 };
+const superFreighter = {
+  _vueBinding: "Alien1SuperFreighter",
+  title: "Super Freighter",
+  count: 0,
+};
+context.buildings = {
+  ...context.buildings,
+  GorddonFreighter: freighter,
+  Alien1SuperFreighter: superFreighter,
+};
+assert.equal(
+  freighterRule.match(freighter, emptySnapshot),
+  superFreighter,
+  "the Super Freighter carries more Money per crew at equal counts",
+);
+assert.equal(
+  freighterRule.describe(superFreighter),
+  "Super Freighter gives more Money",
+);
+assert.equal(freighterRule.multiplier(emptySnapshot), 1);
+assert.equal(
+  freighterRule.multiplier(snapshotOf({ buildBestFreighterOnly: true })),
+  0,
+);
 
 console.log("Weighting policy module tests passed");

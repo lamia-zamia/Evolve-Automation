@@ -3229,6 +3229,8 @@ function startEvolveRuntimeComposition(
       weightingRules,
       readWeightingSnapshot: createWeightingSnapshotReader({
         getState: () => state,
+        getWeightingMultiplier: (setting) => settings[setting],
+        isBestFreighterOnly: () => settings.buildingsBestFreighter,
         isGalaxyAssaultPending: () => galaxyAssaultPending(),
         isStargatePiracySupressed: () => stargatePiracySupressed(),
         isGalaxyPiracyCoveredByFleet: () => galaxyPiracyCoveredByFleet(),

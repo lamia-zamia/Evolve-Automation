@@ -5887,7 +5887,7 @@
         const activeRules = measure(
           "autoBuild.beginCycle.updateBuildingWeighting.selectRules",
           () => weightingRules.filter(
-            (rule) => rule.enabled(snapshot) && rule.multiplier() !== 1
+            (rule) => rule.enabled(snapshot) && rule.multiplier(snapshot) !== 1
           )
         );
         measure("autoBuild.beginCycle.updateBuildingWeighting.applyRules", () => {
@@ -5900,7 +5900,7 @@
                 if (note !== "") {
                   building3.extraDescription += note + "<br>";
                 }
-                building3.weighting *= rule.multiplier(result2);
+                building3.weighting *= rule.multiplier(snapshot, result2);
                 if (building3.weighting <= 0) {
                   break;
                 }
@@ -24027,14 +24027,14 @@
           }
         },
         describe: (chance) => `${Math.round(chance * 100)}% chance of successful launch`,
-        multiplier: (chance) => chance < 0.5 ? chance : 0
+        multiplier: (_snapshot, chance) => chance < 0.5 ? chance : 0
       },
       {
         id: "eris-digsite-unsecured",
         enabled: (snapshot) => snapshot.truepathRace && getBuildings().ErisDigsite.isUnlocked() && getBuildings().ErisDigsite.count < 100,
         match: (building3) => building3 === getBuildings().ErisDrone || building3 === getBuildings().ErisTank || building3 === getBuildings().ErisTrooper,
         describe: () => "Eris Digsite is not yet secured",
-        multiplier: () => getSettings().buildingWeightingTruepathDigsite
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingTruepathDigsite
       },
       {
         id: "andromeda-miners-disabled",
@@ -24111,7 +24111,7 @@
           }
         },
         describe: (other) => `${other.title} gives more Money`,
-        multiplier: () => getSettings().buildingsBestFreighter ? 0 : 1
+        multiplier: (snapshot) => snapshot.buildBestFreighterOnly ? 0 : 1
       },
       {
         id: "lake-transport-vs-bireme",
@@ -24281,21 +24281,21 @@
         enabled: () => true,
         match: (building3) => building3.getMissingConsumption(),
         describe: (resource2) => `Missing ${resource2.name} to operate`,
-        multiplier: () => getSettings().buildingWeightingMissingSupply
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingMissingSupply
       },
       {
         id: "missing-support",
         enabled: () => true,
         match: (building3) => building3.getMissingSupport(),
         describe: (support) => `Missing ${support.name} to operate`,
-        multiplier: () => getSettings().buildingWeightingMissingSupport
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingMissingSupport
       },
       {
         id: "useless-support",
         enabled: () => true,
         match: (building3) => building3.getUselessSupport(),
         describe: (support) => `Provided ${support.name} not currently needed`,
-        multiplier: () => getSettings().buildingWeightingUselessSupport
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingUselessSupport
       },
       {
         id: "tau-belt-ship-efficiency",
@@ -24310,7 +24310,7 @@
           }
         },
         describe: (eff) => `Low security, new ship will be ${getNiceNumber(eff * 100)}% efficient`,
-        multiplier: (eff) => eff ?? -1
+        multiplier: (_snapshot, eff) => eff ?? -1
       },
       {
         id: "womling-overlord-guard",
@@ -24337,7 +24337,7 @@
           }
         },
         describe: (id) => `Overlord achievement is missing ${getBuildings()[id].name}`,
-        multiplier: () => getSettings().buildingWeightingOverlord
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingOverlord
       },
       {
         // Evil universe: Authority amount is capped by Authority max. When max is below target no
@@ -24347,14 +24347,14 @@
         enabled: () => getSettings().authorityManage && getSettings().generalMinimumAuthority > 0 && getResources().Authority.isUnlocked() && getResources().Authority.maxQuantity < getSettings().generalMinimumAuthority,
         match: (building3) => authorityCapBuildingSet.has(building3),
         describe: () => "Raises Authority cap, currently below target",
-        multiplier: () => getSettings().buildingWeightingAuthority
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingAuthority
       },
       {
         id: "banana-republic-objective",
         enabled: (snapshot) => getSettings().achievementGuards && getSettings().guardBananaRepublic && snapshot.bananaRace,
         match: (building3, snapshot) => building3 === getBuildings().DwarfWorldCollider && !snapshot.bananaColliderObjectiveComplete,
         describe: () => "Banana Republic objective",
-        multiplier: () => getSettings().buildingWeightingBananaObjective
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingBananaObjective
       },
       {
         id: "inflation-money",
@@ -24369,7 +24369,7 @@
           return false;
         },
         describe: (kind) => kind === "storage" ? "Inflation challenge needs Money storage" : "Inflation challenge needs Money income",
-        multiplier: () => getSettings().buildingWeightingInflationMoney
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingInflationMoney
       },
       {
         id: "retirement-preparation",
@@ -24387,7 +24387,7 @@
           return false;
         },
         describe: (target, building3) => `Retirement preparation: build ${target} ${building3.name}`,
-        multiplier: () => getSettings().buildingWeightingRetirementPrep
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingRetirementPrep
       },
       {
         // Red Spaceport unlocks unification research. Let an active unification
@@ -24403,7 +24403,7 @@
         enabled: () => true,
         match: (building3) => building3._tab === "city" && building3 !== getBuildings().Mill && building3 !== getBuildings().Banquet && building3.stateOffCount > 0,
         describe: () => "Still have some non operating buildings",
-        multiplier: () => getSettings().buildingWeightingNonOperatingCity
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingNonOperatingCity
       },
       {
         id: "non-operating-buildings",
@@ -24426,7 +24426,7 @@
           }
         },
         describe: () => "Still have some non operating buildings",
-        multiplier: () => getSettings().buildingWeightingNonOperating
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingNonOperating
       },
       {
         id: "geck-limit",
@@ -24503,35 +24503,35 @@
         enabled: (snapshot) => snapshot.madPrestigeAwaited,
         match: (building3) => !building3.is.housing && !building3.is.garrison && !building3.cost["Knowledge"] && building3 !== getBuildings().OilWell,
         describe: () => "Awaiting MAD prestige",
-        multiplier: () => getSettings().buildingWeightingMADUseless
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingMADUseless
       },
       {
         id: "new-building",
         enabled: () => true,
         match: (building3) => !(building3 instanceof ResourceAction) && building3.count === 0,
         describe: () => "New building",
-        multiplier: () => getSettings().buildingWeightingNew
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingNew
       },
       {
         id: "need-more-energy",
         enabled: () => getResources().Power.isUnlocked() && getResources().Power.currentQuantity < getResources().Power.maxQuantity,
         match: (building3) => building3 === getBuildings().LakeCoolingTower || building3.powered < 0,
         describe: () => "Need more energy",
-        multiplier: () => getSettings().buildingWeightingNeedfulPowerPlant
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingNeedfulPowerPlant
       },
       {
         id: "no-need-for-more-energy",
         enabled: () => getResources().Power.isUnlocked() && getResources().Power.currentQuantity > getResources().Power.maxQuantity,
         match: (building3) => building3 !== getBuildings().Mill && (building3 === getBuildings().LakeCoolingTower || building3.powered < 0),
         describe: () => "No need for more energy",
-        multiplier: () => getSettings().buildingWeightingUselessPowerPlant
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingUselessPowerPlant
       },
       {
         id: "not-enough-energy",
         enabled: () => getResources().Power.isUnlocked(),
         match: (building3, snapshot) => building3 !== getBuildings().LakeCoolingTower && building3.powered > 0 && (building3 === getBuildings().NeutronCitadel ? snapshot.nextCitadelPowerDraw : building3.powered) > getResources().Power.currentQuantity,
         describe: () => "Not enough energy",
-        multiplier: () => getSettings().buildingWeightingUnderpowered
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingUnderpowered
       },
       {
         id: "no-need-for-more-knowledge",
@@ -24542,84 +24542,84 @@
         match: (building3) => building3.is.knowledge && building3 !== getBuildings().Wardenclyffe && (building3 !== getBuildings().StargateTelemetryBeacon || building3.count > 0),
         // We want Wardenclyffe for morale; first beacon required for progress
         describe: () => "No need for more knowledge",
-        multiplier: () => getSettings().buildingWeightingUselessKnowledge
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingUselessKnowledge
       },
       {
         id: "need-more-knowledge",
         enabled: (snapshot) => snapshot.cheapestTechKnowledge > getResources().Knowledge.maxQuantity || snapshot.knowledgeRequiredByBuildTargets > getResources().Knowledge.maxQuantity,
         match: (building3) => building3.is.knowledge,
         describe: () => "Need more knowledge",
-        multiplier: () => getSettings().buildingWeightingNeedfulKnowledge
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingNeedfulKnowledge
       },
       {
         id: "unused-ejectors",
         enabled: (snapshot) => getBuildings().BlackholeMassEjector.count * 1e3 - snapshot.assignedEjectorCapacity > 100,
         match: (building3) => building3 === getBuildings().BlackholeMassEjector,
         describe: () => "Still have some unused ejectors",
-        multiplier: () => getSettings().buildingWeightingUnusedEjectors
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingUnusedEjectors
       },
       {
         id: "unused-storage",
         enabled: () => getResources().Crates.storageRatio < 1 || getResources().Containers.storageRatio < 1,
         match: (building3) => building3 === getBuildings().StorageYard || building3 === getBuildings().Warehouse || building3 === getBuildings().EnceladusMunitions,
         describe: () => "Still have some unused storage",
-        multiplier: () => getSettings().buildingWeightingCrateUseless
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingCrateUseless
       },
       {
         id: "need-more-fuel-production",
         enabled: () => getResources().Oil.maxQuantity < getResources().Oil.techMissionMaxCost && getBuildings().OilWell.count <= 0 && getBuildings().GasMoonOilExtractor.count <= 0,
         match: (building3) => building3 === getBuildings().OilWell || building3 === getBuildings().GasMoonOilExtractor,
         describe: () => "Need more fuel",
-        multiplier: () => getSettings().buildingWeightingMissingFuel
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingMissingFuel
       },
       {
         id: "need-more-fuel-storage",
         enabled: () => getResources().Helium_3.isUnlocked() && getResources().Helium_3.maxQuantity < getResources().Helium_3.techMissionMaxCost || getResources().Oil.maxQuantity < getResources().Oil.techMissionMaxCost,
         match: (building3) => building3 === getBuildings().OilDepot || building3 === getBuildings().SpacePropellantDepot || building3 === getBuildings().GasStorage,
         describe: () => "Need more fuel",
-        multiplier: () => getSettings().buildingWeightingMissingFuel
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingMissingFuel
       },
       {
         id: "horseshoes-useless",
         enabled: (snapshot) => snapshot.hoovedRace && getResources().Horseshoe.spareQuantity >= getResources().Horseshoe.storageRequired,
         match: (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Horseshoe,
         describe: () => `No more ${getResources().Horseshoe.title} needed`,
-        multiplier: () => getSettings().buildingWeightingHorseshoeUseless
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingHorseshoeUseless
       },
       {
         id: "meditation-space-unneeded",
         enabled: (snapshot) => snapshot.calmRace && getResources().Zen.currentQuantity < getResources().Zen.maxQuantity,
         match: (building3) => building3.id.includes("meditation"),
         describe: () => "No more Meditation Space needed",
-        multiplier: () => getSettings().buildingWeightingZenUseless
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingZenUseless
       },
       {
         id: "gate-demons-supressed",
         enabled: (snapshot) => snapshot.gateDemonsSupressed,
         match: (building3) => building3 === getBuildings().GateTurret,
         describe: () => "Gate demons fully supressed",
-        multiplier: () => getSettings().buildingWeightingGateTurret
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingGateTurret
       },
       {
         id: "need-more-storage",
         enabled: () => (getResources().Containers.isUnlocked() || getResources().Crates.isUnlocked()) && getResources().Containers.storageRatio === 1 && getResources().Crates.storageRatio === 1,
         match: (building3) => building3 === getBuildings().Shed || building3 === getBuildings().RedGarage || building3 === getBuildings().AlphaWarehouse || building3 === getBuildings().ProximaCargoYard || building3 === getBuildings().TitanStorehouse,
         describe: () => "Need more storage",
-        multiplier: () => getSettings().buildingWeightingNeedStorage
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingNeedStorage
       },
       {
         id: "no-more-houses-needed",
         enabled: () => getResources().Population.maxQuantity > 50 && getResources().Population.storageRatio < 0.9,
         match: (building3) => building3.is.housing && building3 !== getBuildings().Alien1Consulate && building3 !== getBuildings().Transmitter && !(building3 instanceof ResourceAction),
         describe: () => "No more houses needed",
-        multiplier: () => getSettings().buildingWeightingUselessHousing
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingUselessHousing
       },
       {
         id: "destroyed-after-impact",
         enabled: (snapshot) => snapshot.orbitalDecayImpactPending,
         match: (building3) => (building3._tab === "city" || building3._location === "spc_moon") && !(building3 instanceof ResourceAction),
         describe: () => "Will be destroyed after impact",
-        multiplier: () => getSettings().buildingWeightingTemporal
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingTemporal
       },
       {
         id: "randomized-weighting",
@@ -24635,14 +24635,14 @@
         enabled: (snapshot) => snapshot.truepathRace && snapshot.tauCetiReached,
         match: (building3) => (building3._tab === "city" || building3._tab === "space" || building3._tab === "starDock") && !(building3 instanceof ResourceAction),
         describe: () => "Solar System building",
-        multiplier: () => getSettings().buildingWeightingSolar
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingSolar
       },
       {
         id: "vacuum-collapse-mana-producer",
         enabled: () => getSettings().prestigeType === "vacuum",
         match: (building3) => building3 === getBuildings().Pylon || building3 === getBuildings().RedPylon || building3 === getBuildings().TauPylon,
         describe: () => "Vacuum Collapse Mana producer",
-        multiplier: () => getSettings().buildingWeightingVacuumCollapse ?? 10
+        multiplier: (snapshot) => snapshot.weights.buildingWeightingVacuumCollapse
       }
     ];
     return {
@@ -24688,6 +24688,8 @@
   }
   function createWeightingSnapshotReader({
     getState,
+    getWeightingMultiplier,
+    isBestFreighterOnly,
     isGalaxyAssaultPending,
     isStargatePiracySupressed,
     isGalaxyPiracyCoveredByFleet,
@@ -24749,6 +24751,68 @@
       return null;
     };
     const readLakeBiremeSupplyRate = () => Number(getSpireBloodstoneRank()) >= 2 ? 0.8 : 0.85;
+    const weight = (setting) => requireNumber(getWeightingMultiplier(setting), `settings.${setting}`);
+    const readWeights = () => Object.freeze({
+      buildingWeightingNew: weight("buildingWeightingNew"),
+      buildingWeightingUnderpowered: weight("buildingWeightingUnderpowered"),
+      buildingWeightingNeedfulPowerPlant: weight(
+        "buildingWeightingNeedfulPowerPlant"
+      ),
+      buildingWeightingUselessPowerPlant: weight(
+        "buildingWeightingUselessPowerPlant"
+      ),
+      buildingWeightingNeedfulKnowledge: weight(
+        "buildingWeightingNeedfulKnowledge"
+      ),
+      buildingWeightingUselessKnowledge: weight(
+        "buildingWeightingUselessKnowledge"
+      ),
+      buildingWeightingNonOperatingCity: weight(
+        "buildingWeightingNonOperatingCity"
+      ),
+      buildingWeightingNonOperating: weight("buildingWeightingNonOperating"),
+      buildingWeightingMissingSupply: weight("buildingWeightingMissingSupply"),
+      buildingWeightingMissingSupport: weight(
+        "buildingWeightingMissingSupport"
+      ),
+      buildingWeightingUselessSupport: weight(
+        "buildingWeightingUselessSupport"
+      ),
+      buildingWeightingMissingFuel: weight("buildingWeightingMissingFuel"),
+      buildingWeightingMADUseless: weight("buildingWeightingMADUseless"),
+      buildingWeightingUnusedEjectors: weight(
+        "buildingWeightingUnusedEjectors"
+      ),
+      buildingWeightingCrateUseless: weight("buildingWeightingCrateUseless"),
+      buildingWeightingHorseshoeUseless: weight(
+        "buildingWeightingHorseshoeUseless"
+      ),
+      buildingWeightingZenUseless: weight("buildingWeightingZenUseless"),
+      buildingWeightingGateTurret: weight("buildingWeightingGateTurret"),
+      buildingWeightingNeedStorage: weight("buildingWeightingNeedStorage"),
+      buildingWeightingUselessHousing: weight(
+        "buildingWeightingUselessHousing"
+      ),
+      buildingWeightingTemporal: weight("buildingWeightingTemporal"),
+      buildingWeightingSolar: weight("buildingWeightingSolar"),
+      buildingWeightingVacuumCollapse: weight(
+        "buildingWeightingVacuumCollapse"
+      ),
+      buildingWeightingTruepathDigsite: weight(
+        "buildingWeightingTruepathDigsite"
+      ),
+      buildingWeightingOverlord: weight("buildingWeightingOverlord"),
+      buildingWeightingAuthority: weight("buildingWeightingAuthority"),
+      buildingWeightingBananaObjective: weight(
+        "buildingWeightingBananaObjective"
+      ),
+      buildingWeightingInflationMoney: weight(
+        "buildingWeightingInflationMoney"
+      ),
+      buildingWeightingRetirementPrep: weight(
+        "buildingWeightingRetirementPrep"
+      )
+    });
     const readAssignedEjectorCapacity = () => {
       const assigned = getAssignedEjectorCapacity();
       return assigned === void 0 ? 0 : requireNumber(assigned, "getAssignedEjectorCapacity()");
@@ -24769,6 +24833,11 @@
       const cannibalizeRace = trait2("cannibalize");
       const lumberRace = requireBoolean(isLumberRace(), "isLumberRace()");
       return Object.freeze({
+        weights: readWeights(),
+        buildBestFreighterOnly: requireBoolean(
+          isBestFreighterOnly(),
+          "settings.buildingsBestFreighter"
+        ),
         queuedTargets: new Set(
           requireArray(state["queuedTargets"], "state.queuedTargets")
         ),
@@ -56373,6 +56442,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       weightingRules,
       readWeightingSnapshot: createWeightingSnapshotReader({
         getState: () => state,
+        getWeightingMultiplier: (setting) => settings[setting],
+        isBestFreighterOnly: () => settings.buildingsBestFreighter,
         isGalaxyAssaultPending: () => galaxyAssaultPending(),
         isStargatePiracySupressed: () => stargatePiracySupressed(),
         isGalaxyPiracyCoveredByFleet: () => galaxyPiracyCoveredByFleet(),

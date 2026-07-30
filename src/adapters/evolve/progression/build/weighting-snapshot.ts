@@ -1,6 +1,8 @@
 import type { ForeignAchievementGoal } from "../../../../domain/combat/foreign-achievements.ts";
 import type {
   BuildingWeightingSnapshot,
+  BuildingWeightName,
+  BuildingWeights,
   MechSupplySavingReason,
   SacrificeBlockedReason,
 } from "../../../../ports/building-weighting.ts";
@@ -13,6 +15,8 @@ import {
 
 export interface WeightingSnapshotDependencies {
   readonly getState: () => unknown;
+  readonly getWeightingMultiplier: (setting: BuildingWeightName) => unknown;
+  readonly isBestFreighterOnly: () => unknown;
   readonly isGalaxyAssaultPending: () => unknown;
   readonly isStargatePiracySupressed: () => unknown;
   readonly isGalaxyPiracyCoveredByFleet: () => unknown;
@@ -104,6 +108,8 @@ function requireMechSupplySavingReason(
  */
 export function createWeightingSnapshotReader({
   getState,
+  getWeightingMultiplier,
+  isBestFreighterOnly,
   isGalaxyAssaultPending,
   isStargatePiracySupressed,
   isGalaxyPiracyCoveredByFleet,
@@ -187,6 +193,75 @@ export function createWeightingSnapshotReader({
   const readLakeBiremeSupplyRate = (): number =>
     Number(getSpireBloodstoneRank()) >= 2 ? 0.8 : 0.85;
 
+  // Every weighting multiplier is written by the settings defaults on load, so
+  // a missing or non-numeric one is a corrupt setting rather than a run that
+  // has not reached the feature yet.
+  const weight = (setting: BuildingWeightName): number =>
+    requireNumber(getWeightingMultiplier(setting), `settings.${setting}`);
+
+  const readWeights = (): BuildingWeights =>
+    Object.freeze({
+      buildingWeightingNew: weight("buildingWeightingNew"),
+      buildingWeightingUnderpowered: weight("buildingWeightingUnderpowered"),
+      buildingWeightingNeedfulPowerPlant: weight(
+        "buildingWeightingNeedfulPowerPlant",
+      ),
+      buildingWeightingUselessPowerPlant: weight(
+        "buildingWeightingUselessPowerPlant",
+      ),
+      buildingWeightingNeedfulKnowledge: weight(
+        "buildingWeightingNeedfulKnowledge",
+      ),
+      buildingWeightingUselessKnowledge: weight(
+        "buildingWeightingUselessKnowledge",
+      ),
+      buildingWeightingNonOperatingCity: weight(
+        "buildingWeightingNonOperatingCity",
+      ),
+      buildingWeightingNonOperating: weight("buildingWeightingNonOperating"),
+      buildingWeightingMissingSupply: weight("buildingWeightingMissingSupply"),
+      buildingWeightingMissingSupport: weight(
+        "buildingWeightingMissingSupport",
+      ),
+      buildingWeightingUselessSupport: weight(
+        "buildingWeightingUselessSupport",
+      ),
+      buildingWeightingMissingFuel: weight("buildingWeightingMissingFuel"),
+      buildingWeightingMADUseless: weight("buildingWeightingMADUseless"),
+      buildingWeightingUnusedEjectors: weight(
+        "buildingWeightingUnusedEjectors",
+      ),
+      buildingWeightingCrateUseless: weight("buildingWeightingCrateUseless"),
+      buildingWeightingHorseshoeUseless: weight(
+        "buildingWeightingHorseshoeUseless",
+      ),
+      buildingWeightingZenUseless: weight("buildingWeightingZenUseless"),
+      buildingWeightingGateTurret: weight("buildingWeightingGateTurret"),
+      buildingWeightingNeedStorage: weight("buildingWeightingNeedStorage"),
+      buildingWeightingUselessHousing: weight(
+        "buildingWeightingUselessHousing",
+      ),
+      buildingWeightingTemporal: weight("buildingWeightingTemporal"),
+      buildingWeightingSolar: weight("buildingWeightingSolar"),
+      buildingWeightingVacuumCollapse: weight(
+        "buildingWeightingVacuumCollapse",
+      ),
+      buildingWeightingTruepathDigsite: weight(
+        "buildingWeightingTruepathDigsite",
+      ),
+      buildingWeightingOverlord: weight("buildingWeightingOverlord"),
+      buildingWeightingAuthority: weight("buildingWeightingAuthority"),
+      buildingWeightingBananaObjective: weight(
+        "buildingWeightingBananaObjective",
+      ),
+      buildingWeightingInflationMoney: weight(
+        "buildingWeightingInflationMoney",
+      ),
+      buildingWeightingRetirementPrep: weight(
+        "buildingWeightingRetirementPrep",
+      ),
+    });
+
   // `global.interstellar.mass_ejector` is absent until the first Mass Ejector
   // is built, and nothing can be assigned before then.
   const readAssignedEjectorCapacity = (): number => {
@@ -220,6 +295,11 @@ export function createWeightingSnapshotReader({
     const cannibalizeRace = trait("cannibalize");
     const lumberRace = requireBoolean(isLumberRace(), "isLumberRace()");
     return Object.freeze({
+      weights: readWeights(),
+      buildBestFreighterOnly: requireBoolean(
+        isBestFreighterOnly(),
+        "settings.buildingsBestFreighter",
+      ),
       queuedTargets: new Set(
         requireArray(state["queuedTargets"], "state.queuedTargets"),
       ),

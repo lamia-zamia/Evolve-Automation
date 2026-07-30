@@ -146,7 +146,7 @@ export function createCoreManagers({
         "autoBuild.beginCycle.updateBuildingWeighting.selectRules",
         () =>
           weightingRules.filter(
-            (rule) => rule.enabled(snapshot) && rule.multiplier() !== 1,
+            (rule) => rule.enabled(snapshot) && rule.multiplier(snapshot) !== 1,
           ),
       );
 
@@ -164,7 +164,7 @@ export function createCoreManagers({
               if (note !== "") {
                 building.extraDescription += note + "<br>";
               }
-              building.weighting *= rule.multiplier(result);
+              building.weighting *= rule.multiplier(snapshot, result);
 
               // Last rule disabled building, no need to check the rest
               if (building.weighting <= 0) {

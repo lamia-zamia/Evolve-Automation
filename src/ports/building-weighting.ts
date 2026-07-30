@@ -15,6 +15,44 @@ export type SacrificeBlockedReason =
   "windless" | "no-default-workers" | "bonus-capped";
 
 /**
+ * The AutoBuild weighting multiplier settings, named by the setting each one
+ * comes from so the policy, the defaults, and the settings panel all use one
+ * spelling.
+ */
+export type BuildingWeightName =
+  | "buildingWeightingNew"
+  | "buildingWeightingUnderpowered"
+  | "buildingWeightingNeedfulPowerPlant"
+  | "buildingWeightingUselessPowerPlant"
+  | "buildingWeightingNeedfulKnowledge"
+  | "buildingWeightingUselessKnowledge"
+  | "buildingWeightingNonOperatingCity"
+  | "buildingWeightingNonOperating"
+  | "buildingWeightingMissingSupply"
+  | "buildingWeightingMissingSupport"
+  | "buildingWeightingUselessSupport"
+  | "buildingWeightingMissingFuel"
+  | "buildingWeightingMADUseless"
+  | "buildingWeightingUnusedEjectors"
+  | "buildingWeightingCrateUseless"
+  | "buildingWeightingHorseshoeUseless"
+  | "buildingWeightingZenUseless"
+  | "buildingWeightingGateTurret"
+  | "buildingWeightingNeedStorage"
+  | "buildingWeightingUselessHousing"
+  | "buildingWeightingTemporal"
+  | "buildingWeightingSolar"
+  | "buildingWeightingVacuumCollapse"
+  | "buildingWeightingTruepathDigsite"
+  | "buildingWeightingOverlord"
+  | "buildingWeightingAuthority"
+  | "buildingWeightingBananaObjective"
+  | "buildingWeightingInflationMoney"
+  | "buildingWeightingRetirementPrep";
+
+export type BuildingWeights = Readonly<Record<BuildingWeightName, number>>;
+
+/**
  * Script state and phase-constant game gates that the building-weighting rules
  * read, sampled and frozen once per weighting phase.
  *
@@ -26,6 +64,13 @@ export type SacrificeBlockedReason =
  * their answer cannot change while one weighting phase applies rules.
  */
 export type BuildingWeightingSnapshot = {
+  /** The configured multiplier each weighting rule applies when it matches. */
+  readonly weights: BuildingWeights;
+  /**
+   * Only the freighter with the better Money storage per crew is wanted, so the
+   * other one is not worth building.
+   */
+  readonly buildBestFreighterOnly: boolean;
   readonly queuedTargets: ReadonlySet<unknown>;
   readonly triggerTargets: ReadonlySet<unknown>;
   readonly knowledgeRequiredByTechs: number;
@@ -168,8 +213,8 @@ export type BuildingWeightingSnapshot = {
  * `match` then runs per candidate building; any truthy result applies the rule
  * and is passed back into `describe` and `multiplier`.
  *
- * `enabled` and `match` receive the phase snapshot, which is the only route by
- * which a rule may observe script state. `describe` and `multiplier` do not
+ * `enabled`, `match`, and `multiplier` receive the phase snapshot, which is the
+ * only route by which a rule may observe script state. `describe` does not
  * receive it because no rule needs it there; add it when one does.
  *
  * TRANSITIONAL: the candidate and the match result are still the live
@@ -188,6 +233,9 @@ export type BuildingWeightingRule = {
   ) => unknown;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   readonly describe: (match: any, building: any) => string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readonly multiplier: (match?: any) => number;
+  readonly multiplier: (
+    snapshot: BuildingWeightingSnapshot,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    match?: any,
+  ) => number;
 };
