@@ -346,11 +346,16 @@ gates = countedPreparation(["20 Fusion Generator"]);
 assert.equal(read().retirementPreparationIncomplete, true);
 assert.equal(preparationReads, 2);
 
+// Validators append ", got <value>" to identify the rejected value; these cases
+// pin the reported path and kind, so they match the message prefix.
+const startsWith = (message) =>
+  new RegExp(`^${message.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
+
 const rejects = (mutate, message) => {
   state = validState();
   gates = defaultGates();
   mutate(state);
-  assert.throws(read, { name: "TypeError", message });
+  assert.throws(read, { name: "TypeError", message: startsWith(message) });
 };
 rejects((s) => delete s.queuedTargets, "state.queuedTargets must be an array");
 rejects(
@@ -373,7 +378,7 @@ rejects(
 const rejectsGate = (overrides, message) => {
   state = validState();
   gates = { ...defaultGates(), ...overrides };
-  assert.throws(read, { name: "TypeError", message });
+  assert.throws(read, { name: "TypeError", message: startsWith(message) });
 };
 rejectsGate(
   { isGalaxyAssaultPending: () => undefined },
@@ -477,7 +482,7 @@ assert.throws(
   }),
   {
     name: "TypeError",
-    message: "state must be an object",
+    message: startsWith("state must be an object"),
   },
 );
 

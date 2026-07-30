@@ -4187,39 +4187,85 @@
   }
 
   // src/adapters/validation.ts
+  var MAX_DESCRIBED_STRING_LENGTH = 60;
+  function describeObject(value) {
+    try {
+      const name = value.constructor?.name;
+      return typeof name === "string" && name.length > 0 ? `object ${name}` : "object";
+    } catch {
+      return "object";
+    }
+  }
+  function describeValue(value) {
+    if (value === void 0) {
+      return "undefined";
+    }
+    if (value === null) {
+      return "null";
+    }
+    switch (typeof value) {
+      case "string": {
+        const text = value.length > MAX_DESCRIBED_STRING_LENGTH ? `${value.slice(0, MAX_DESCRIBED_STRING_LENGTH)}…` : value;
+        return `string ${JSON.stringify(text)}`;
+      }
+      case "number":
+      case "boolean":
+      case "bigint":
+      case "symbol":
+        return `${typeof value} ${String(value)}`;
+      case "function": {
+        const name = value.name;
+        return typeof name === "string" && name.length > 0 ? `function ${name}` : "function";
+      }
+      default:
+        return Array.isArray(value) ? `array(${value.length})` : describeObject(value);
+    }
+  }
   function requireRecord(value, path) {
     if (typeof value !== "object" || value === null) {
-      throw new TypeError(`${path} must be an object`);
+      throw new TypeError(
+        `${path} must be an object, got ${describeValue(value)}`
+      );
     }
     return value;
   }
   function requireString(value, path) {
     if (typeof value !== "string") {
-      throw new TypeError(`${path} must be a string`);
+      throw new TypeError(
+        `${path} must be a string, got ${describeValue(value)}`
+      );
     }
     return value;
   }
   function requireNumber(value, path) {
     if (typeof value !== "number" || !Number.isFinite(value)) {
-      throw new TypeError(`${path} must be a finite number`);
+      throw new TypeError(
+        `${path} must be a finite number, got ${describeValue(value)}`
+      );
     }
     return value;
   }
   function requireBoolean(value, path) {
     if (typeof value !== "boolean") {
-      throw new TypeError(`${path} must be a boolean`);
+      throw new TypeError(
+        `${path} must be a boolean, got ${describeValue(value)}`
+      );
     }
     return value;
   }
   function requireArray(value, path) {
     if (!Array.isArray(value)) {
-      throw new TypeError(`${path} must be an array`);
+      throw new TypeError(
+        `${path} must be an array, got ${describeValue(value)}`
+      );
     }
     return value;
   }
   function requireFunction(value, path) {
     if (typeof value !== "function") {
-      throw new TypeError(`${path} must be a function`);
+      throw new TypeError(
+        `${path} must be a function, got ${describeValue(value)}`
+      );
     }
     return value;
   }
