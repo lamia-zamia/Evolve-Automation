@@ -1,4 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import {
+  describeOverrideFailure,
+  resolveOverrides,
+  type OverrideConditionEvaluator,
+  type OverrideConditionFailure,
+} from "../domain/override-resolution.ts";
+
 interface CheckType {
   fn: (arg: unknown) => unknown;
 }
@@ -11,16 +17,21 @@ interface GameLogContract {
   logDanger: (kind: string, message: string, categories: string[]) => void;
 }
 
+/** The one game read this module makes: the messages already on screen, used to avoid log spam. */
+interface RecentMessagesContract {
+  global: { lastMsg: { all: Record<string, { m?: unknown }> } };
+}
+
 interface OverrideEvaluationDependencies {
   getSafeMode: () => boolean;
-  getSettings: () => Record<string, any>;
-  getSettingsRaw: () => Record<string, any>;
+  getSettings: () => Record<string, unknown>;
+  getSettingsRaw: () => Record<string, unknown>;
   getCheckTypes: () => Record<string, CheckType>;
   getCheckCompare: () => Record<string, (a: unknown, b: unknown) => boolean>;
   getCheckCustom: () => Record<string, unknown>;
   getHaveTask: () => (task: string) => boolean;
   getWindowManager: () => WindowManagerContract;
-  getGame: () => any;
+  getGame: () => RecentMessagesContract;
   getGameLog: () => GameLogContract;
   getJQuery: () => (selector: string) => { length: number };
   changeDisplayInputNode: (node: unknown) => void;
@@ -40,115 +51,84 @@ export function createOverrideEvaluation({
   getJQuery,
   changeDisplayInputNode,
 }: OverrideEvaluationDependencies) {
-  function updateOverrides() {
-    const safeMode = getSafeMode();
-    const settings = getSettings();
-    const settingsRaw = getSettingsRaw();
+  function sampleEvaluator(): OverrideConditionEvaluator {
     const checkTypes = getCheckTypes();
     const checkCompare = getCheckCompare();
     const checkCustom = getCheckCustom();
-    const haveTask = getHaveTask();
-    const WindowManager = getWindowManager();
-    const game = getGame();
-    const GameLog = getGameLog();
-    const $ = getJQuery();
+    return {
+      hasOperandType: (operandType) => Boolean(checkTypes[operandType]),
+      readOperand: (operandType, argument) => {
+        const checkType = checkTypes[operandType];
+        if (!checkType) {
+          throw new Error(`${operandType} variable not found`);
+        }
+        return checkType.fn(argument);
+      },
+      hasComparator: (comparator) => Boolean(checkCompare[comparator]),
+      compare: (comparator, left, right) => {
+        const compare = checkCompare[comparator];
+        if (!compare) {
+          throw new Error(`${comparator} comparator not found`);
+        }
+        return compare(left, right);
+      },
+      comparatorReturnsRightOperand: (comparator) =>
+        Boolean(checkCustom[comparator]),
+    };
+  }
+
+  function reportFailures(failures: readonly OverrideConditionFailure[]): void {
+    if (failures.length === 0 || getWindowManager().isOpen()) {
+      return;
+    }
+    const gameLog = getGameLog();
+    // Every message names its setting and condition number, so one pass cannot repeat itself; only
+    // messages left over from an earlier pass need suppressing.
+    const shown = Object.values(getGame().global.lastMsg.all);
+    for (const failure of failures) {
+      const message = describeOverrideFailure(failure);
+      if (!shown.some((entry) => entry.m === message)) {
+        gameLog.logDanger("special", message, ["events", "major_events"]);
+      }
+    }
+  }
+
+  function refreshVisibleOverrideValue(): void {
+    const currentNode = getJQuery()("#script_override_true_value:visible");
+    if (currentNode.length !== 0) {
+      changeDisplayInputNode(currentNode);
+    }
+  }
+
+  function updateOverrides() {
+    const settings = getSettings();
+    const settingsRaw = getSettingsRaw();
 
     // Safe mode doesn't update overrides and always disables script toggle
-    if (safeMode) {
+    if (getSafeMode()) {
       Object.assign(settings, settingsRaw);
       settings.masterScriptToggle = false;
       return;
     }
 
-    let xorLists: Record<string, any[]> = {};
-    let overrides: Record<string, any> = {};
-    for (let key in settingsRaw.overrides) {
-      let conditions = settingsRaw.overrides[key];
-      for (let i = 0; i < conditions.length; i++) {
-        let check = conditions[i];
-        try {
-          if (!checkTypes[check.type1]) {
-            throw `${check.type1} variable not found`;
-          }
-          if (!checkTypes[check.type2]) {
-            throw `${check.type2} variable not found`;
-          }
-          if (!checkCompare[check.cmp]) {
-            throw `${checkCompare[check.cmp]} comparator not found`;
-          }
-          let var1 = checkTypes[check.type1].fn(check.arg1);
-          let var2 = checkTypes[check.type2].fn(check.arg2);
-          if (!checkCompare[check.cmp](var1, var2)) {
-            continue;
-          }
-          let ret = checkCustom[check.cmp] ? var2 : check.ret;
+    const haveTask = getHaveTask();
+    const resolution = resolveOverrides({
+      settingsRaw,
+      evaluator: sampleEvaluator(),
+      activeTasks: {
+        storageTaskActive: haveTask("bal_storage") || haveTask("combo_storage"),
+        trashTaskActive: haveTask("trash"),
+        taxTaskActive: haveTask("tax"),
+      },
+    });
 
-          if (typeof settingsRaw[key] === typeof ret) {
-            // Override single value
-            overrides[key] = ret;
-            break;
-          } else if (typeof settingsRaw[key] === "object") {
-            // Xor lists
-            xorLists[key] = xorLists[key] ?? [];
-            xorLists[key].push(ret);
-          } else {
-            throw `Expected type: ${typeof settingsRaw[
-              key
-            ]}; Override type: ${typeof ret}`;
-          }
-        } catch (error) {
-          let msg = `Condition ${
-            i + 1
-          } for setting ${key} invalid! Fix or remove it. (${error})`;
-          if (
-            !WindowManager.isOpen() &&
-            !Object.values(game.global.lastMsg.all).find(
-              (log: any) => log.m === msg,
-            )
-          ) {
-            // Don't spam with errors
-            GameLog.logDanger("special", msg, ["events", "major_events"]);
-          }
-          continue; // Some argument not valid, skip condition
-        }
-      }
+    Object.assign(settings, settingsRaw, resolution.values);
+    for (const [key, list] of Object.entries(resolution.lists)) {
+      settings[key] = list;
     }
 
-    if (haveTask("bal_storage") || haveTask("combo_storage")) {
-      overrides["autoStorage"] = false;
-    }
-    if (haveTask("trash")) {
-      overrides["autoEject"] = false;
-    }
-    if (haveTask("tax")) {
-      overrides["autoTax"] = false;
-    }
-    let rawTickRate = overrides["tickRate"] ?? settingsRaw["tickRate"];
-    overrides["tickRate"] = Math.min(
-      240,
-      Math.max(1, Math.round(rawTickRate * 2)) / 2,
-    );
-
-    // Apply overrides
-    Object.assign(settings, settingsRaw, overrides);
-
-    // Xor lists
-    for (let key in xorLists) {
-      settings[key] = settingsRaw[key].slice();
-      for (let item of xorLists[key]) {
-        let index = settings[key].indexOf(item);
-        if (index > -1) {
-          settings[key].splice(index, 1);
-        } else {
-          settings[key].push(item);
-        }
-      }
-    }
-
-    let currentNode = $(`#script_override_true_value:visible`);
-    if (currentNode.length !== 0) {
-      changeDisplayInputNode(currentNode);
-    }
+    reportFailures(resolution.failures);
+    refreshVisibleOverrideValue();
   }
 
   return { updateOverrides };

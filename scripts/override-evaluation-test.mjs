@@ -16,7 +16,10 @@ const checkTypes = {
 let probe = {};
 
 let safeMode = false;
+let windowOpen = false;
+let recordShownMessages = false;
 const dangerLog = [];
+const lastMsgAll = {};
 const tasks = new Set();
 let settings;
 let settingsRaw;
@@ -31,10 +34,15 @@ const deps = {
   getCheckCompare: () => checkCompare,
   getCheckCustom: () => checkCustom,
   getHaveTask: () => (task) => tasks.has(task),
-  getWindowManager: () => ({ isOpen: () => false }),
-  getGame: () => ({ global: { lastMsg: { all: {} } } }),
+  getWindowManager: () => ({ isOpen: () => windowOpen }),
+  getGame: () => ({ global: { lastMsg: { all: lastMsgAll } } }),
   getGameLog: () => ({
-    logDanger: (kind, message) => dangerLog.push(message),
+    logDanger: (kind, message) => {
+      dangerLog.push(message);
+      if (recordShownMessages) {
+        lastMsgAll[`m${dangerLog.length}`] = { m: message };
+      }
+    },
   }),
   getJQuery: () => (selector) => ({ length: jqLength, selector }),
   changeDisplayInputNode: (node) => (displayNode = node),
@@ -201,5 +209,42 @@ updateOverrides();
 assert.ok(displayNode);
 assert.equal(displayNode.selector, "#script_override_true_value:visible");
 jqLength = 0;
+
+// --- A message already on screen from an earlier pass is not repeated ---
+settings = {};
+dangerLog.length = 0;
+recordShownMessages = true;
+settingsRaw = {
+  autoBuild: false,
+  tickRate: 1,
+  overrides: {
+    autoBuild: [
+      {
+        type1: "Missing",
+        arg1: true,
+        type2: "Boolean",
+        arg2: true,
+        cmp: "==",
+        ret: true,
+      },
+    ],
+  },
+};
+updateOverrides();
+updateOverrides();
+assert.equal(dangerLog.length, 1);
+recordShownMessages = false;
+for (const key of Object.keys(lastMsgAll)) {
+  delete lastMsgAll[key];
+}
+
+// --- Nothing is logged while a script window is open ---
+settings = {};
+dangerLog.length = 0;
+windowOpen = true;
+updateOverrides();
+assert.equal(dangerLog.length, 0);
+assert.equal(settings.autoBuild, false);
+windowOpen = false;
 
 console.log("Override evaluation module tests passed");

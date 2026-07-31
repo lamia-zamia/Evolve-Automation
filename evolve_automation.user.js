@@ -1780,6 +1780,176 @@
     };
   }
 
+  // src/domain/override-resolution.ts
+  function isKeyedObject(value) {
+    return typeof value === "object" && value !== null;
+  }
+  function parseOverrideCondition(value) {
+    if (!isKeyedObject(value)) {
+      return void 0;
+    }
+    const { type1, type2, cmp } = value;
+    if (typeof type1 !== "string" || typeof type2 !== "string" || typeof cmp !== "string") {
+      return void 0;
+    }
+    return {
+      type1,
+      arg1: value.arg1,
+      type2,
+      arg2: value.arg2,
+      comparator: cmp,
+      result: value.ret
+    };
+  }
+  function evaluateCondition(stored, evaluator) {
+    const condition = parseOverrideCondition(stored);
+    if (condition === void 0) {
+      return { kind: "failure", reason: { kind: "malformed-condition" } };
+    }
+    for (const operandType of [condition.type1, condition.type2]) {
+      if (!evaluator.hasOperandType(operandType)) {
+        return {
+          kind: "failure",
+          reason: { kind: "unknown-operand-type", operandType }
+        };
+      }
+    }
+    if (!evaluator.hasComparator(condition.comparator)) {
+      return {
+        kind: "failure",
+        reason: { kind: "unknown-comparator", comparator: condition.comparator }
+      };
+    }
+    try {
+      const left = evaluator.readOperand(condition.type1, condition.arg1);
+      const right = evaluator.readOperand(condition.type2, condition.arg2);
+      if (!evaluator.compare(condition.comparator, left, right)) {
+        return { kind: "no-match" };
+      }
+      return {
+        kind: "match",
+        value: evaluator.comparatorReturnsRightOperand(condition.comparator) ? right : condition.result
+      };
+    } catch (error) {
+      return {
+        kind: "failure",
+        reason: { kind: "evaluation-error", detail: String(error) }
+      };
+    }
+  }
+  function readStoredConditions(storedOverrides) {
+    if (!isKeyedObject(storedOverrides)) {
+      return [];
+    }
+    const entries = [];
+    for (const [settingKey, conditions] of Object.entries(storedOverrides)) {
+      if (Array.isArray(conditions)) {
+        entries.push([settingKey, conditions]);
+      }
+    }
+    return entries;
+  }
+  function normalizeTickRate(rawTickRate) {
+    return Math.min(240, Math.max(1, Math.round(Number(rawTickRate) * 2)) / 2);
+  }
+  function overridesForcedByActiveTasks(activeTasks) {
+    const forced = {};
+    if (activeTasks.storageTaskActive) {
+      forced.autoStorage = false;
+    }
+    if (activeTasks.trashTaskActive) {
+      forced.autoEject = false;
+    }
+    if (activeTasks.taxTaskActive) {
+      forced.autoTax = false;
+    }
+    return forced;
+  }
+  function describeOverrideFailure(failure2) {
+    return `Condition ${failure2.conditionNumber} for setting ${failure2.settingKey} invalid! Fix or remove it. (${describeFailureReason(failure2.reason)})`;
+  }
+  function describeFailureReason(reason) {
+    switch (reason.kind) {
+      case "malformed-condition":
+        return "condition is not a valid override condition";
+      case "unknown-operand-type":
+        return `${reason.operandType} variable not found`;
+      case "unknown-comparator":
+        return `${reason.comparator} comparator not found`;
+      case "type-mismatch":
+        return `Expected type: ${reason.expected}; Override type: ${reason.actual}`;
+      case "evaluation-error":
+        return reason.detail;
+    }
+  }
+  function resolveOverrides({
+    settingsRaw,
+    evaluator,
+    activeTasks
+  }) {
+    const values = {};
+    const listToggles = /* @__PURE__ */ new Map();
+    const failures = [];
+    for (const [settingKey, conditions] of readStoredConditions(
+      settingsRaw.overrides
+    )) {
+      const base = settingsRaw[settingKey];
+      for (let index = 0; index < conditions.length; index++) {
+        const outcome = evaluateCondition(conditions[index], evaluator);
+        if (outcome.kind === "no-match") {
+          continue;
+        }
+        if (outcome.kind === "failure") {
+          failures.push({
+            settingKey,
+            conditionNumber: index + 1,
+            reason: outcome.reason
+          });
+          continue;
+        }
+        if (typeof base === typeof outcome.value) {
+          values[settingKey] = outcome.value;
+          break;
+        }
+        if (Array.isArray(base)) {
+          const toggles = listToggles.get(settingKey) ?? [];
+          toggles.push(outcome.value);
+          listToggles.set(settingKey, toggles);
+          continue;
+        }
+        failures.push({
+          settingKey,
+          conditionNumber: index + 1,
+          reason: {
+            kind: "type-mismatch",
+            expected: typeof base,
+            actual: typeof outcome.value
+          }
+        });
+      }
+    }
+    Object.assign(values, overridesForcedByActiveTasks(activeTasks));
+    values.tickRate = normalizeTickRate(values.tickRate ?? settingsRaw.tickRate);
+    const lists = {};
+    for (const [settingKey, toggles] of listToggles) {
+      const base = settingsRaw[settingKey];
+      if (!Array.isArray(base)) {
+        continue;
+      }
+      const next = base.slice();
+      for (const item of toggles) {
+        const index = next.indexOf(item);
+        if (index > -1) {
+          next.splice(index, 1);
+        } else {
+          next.push(item);
+        }
+      }
+      lists[settingKey] = next;
+    }
+    return { values, lists, failures };
+  }
+
   // src/settings/override-evaluation.ts
   function createOverrideEvaluation({
     getSafeMode,
@@ -1795,95 +1965,73 @@
     getJQuery,
     changeDisplayInputNode
   }) {
-    function updateOverrides() {
-      const safeMode = getSafeMode();
-      const settings = getSettings();
-      const settingsRaw = getSettingsRaw();
+    function sampleEvaluator() {
       const checkTypes = getCheckTypes();
       const checkCompare = getCheckCompare();
       const checkCustom = getCheckCustom();
-      const haveTask = getHaveTask();
-      const WindowManager = getWindowManager();
-      const game = getGame();
-      const GameLog = getGameLog();
-      const $ = getJQuery();
-      if (safeMode) {
+      return {
+        hasOperandType: (operandType) => Boolean(checkTypes[operandType]),
+        readOperand: (operandType, argument) => {
+          const checkType = checkTypes[operandType];
+          if (!checkType) {
+            throw new Error(`${operandType} variable not found`);
+          }
+          return checkType.fn(argument);
+        },
+        hasComparator: (comparator) => Boolean(checkCompare[comparator]),
+        compare: (comparator, left, right) => {
+          const compare = checkCompare[comparator];
+          if (!compare) {
+            throw new Error(`${comparator} comparator not found`);
+          }
+          return compare(left, right);
+        },
+        comparatorReturnsRightOperand: (comparator) => Boolean(checkCustom[comparator])
+      };
+    }
+    function reportFailures(failures) {
+      if (failures.length === 0 || getWindowManager().isOpen()) {
+        return;
+      }
+      const gameLog = getGameLog();
+      const shown = Object.values(getGame().global.lastMsg.all);
+      for (const failure2 of failures) {
+        const message = describeOverrideFailure(failure2);
+        if (!shown.some((entry) => entry.m === message)) {
+          gameLog.logDanger("special", message, ["events", "major_events"]);
+        }
+      }
+    }
+    function refreshVisibleOverrideValue() {
+      const currentNode = getJQuery()("#script_override_true_value:visible");
+      if (currentNode.length !== 0) {
+        changeDisplayInputNode(currentNode);
+      }
+    }
+    function updateOverrides() {
+      const settings = getSettings();
+      const settingsRaw = getSettingsRaw();
+      if (getSafeMode()) {
         Object.assign(settings, settingsRaw);
         settings.masterScriptToggle = false;
         return;
       }
-      let xorLists = {};
-      let overrides = {};
-      for (let key in settingsRaw.overrides) {
-        let conditions = settingsRaw.overrides[key];
-        for (let i = 0; i < conditions.length; i++) {
-          let check = conditions[i];
-          try {
-            if (!checkTypes[check.type1]) {
-              throw `${check.type1} variable not found`;
-            }
-            if (!checkTypes[check.type2]) {
-              throw `${check.type2} variable not found`;
-            }
-            if (!checkCompare[check.cmp]) {
-              throw `${checkCompare[check.cmp]} comparator not found`;
-            }
-            let var1 = checkTypes[check.type1].fn(check.arg1);
-            let var2 = checkTypes[check.type2].fn(check.arg2);
-            if (!checkCompare[check.cmp](var1, var2)) {
-              continue;
-            }
-            let ret = checkCustom[check.cmp] ? var2 : check.ret;
-            if (typeof settingsRaw[key] === typeof ret) {
-              overrides[key] = ret;
-              break;
-            } else if (typeof settingsRaw[key] === "object") {
-              xorLists[key] = xorLists[key] ?? [];
-              xorLists[key].push(ret);
-            } else {
-              throw `Expected type: ${typeof settingsRaw[key]}; Override type: ${typeof ret}`;
-            }
-          } catch (error) {
-            let msg = `Condition ${i + 1} for setting ${key} invalid! Fix or remove it. (${error})`;
-            if (!WindowManager.isOpen() && !Object.values(game.global.lastMsg.all).find(
-              (log) => log.m === msg
-            )) {
-              GameLog.logDanger("special", msg, ["events", "major_events"]);
-            }
-            continue;
-          }
+      const haveTask = getHaveTask();
+      const resolution = resolveOverrides({
+        settingsRaw,
+        evaluator: sampleEvaluator(),
+        activeTasks: {
+          storageTaskActive: haveTask("bal_storage") || haveTask("combo_storage"),
+          trashTaskActive: haveTask("trash"),
+          taxTaskActive: haveTask("tax")
         }
+      });
+      Object.assign(settings, settingsRaw, resolution.values);
+      for (const [key, list] of Object.entries(resolution.lists)) {
+        settings[key] = list;
       }
-      if (haveTask("bal_storage") || haveTask("combo_storage")) {
-        overrides["autoStorage"] = false;
-      }
-      if (haveTask("trash")) {
-        overrides["autoEject"] = false;
-      }
-      if (haveTask("tax")) {
-        overrides["autoTax"] = false;
-      }
-      let rawTickRate = overrides["tickRate"] ?? settingsRaw["tickRate"];
-      overrides["tickRate"] = Math.min(
-        240,
-        Math.max(1, Math.round(rawTickRate * 2)) / 2
-      );
-      Object.assign(settings, settingsRaw, overrides);
-      for (let key in xorLists) {
-        settings[key] = settingsRaw[key].slice();
-        for (let item of xorLists[key]) {
-          let index = settings[key].indexOf(item);
-          if (index > -1) {
-            settings[key].splice(index, 1);
-          } else {
-            settings[key].push(item);
-          }
-        }
-      }
-      let currentNode = $(`#script_override_true_value:visible`);
-      if (currentNode.length !== 0) {
-        changeDisplayInputNode(currentNode);
-      }
+      reportFailures(resolution.failures);
+      refreshVisibleOverrideValue();
     }
     return { updateOverrides };
   }
