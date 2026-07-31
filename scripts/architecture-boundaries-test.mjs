@@ -25,7 +25,6 @@ const layerOfDirectory = new Map([
   // while they are migrated; remove it once each folder lands in domain or application.
   ["observability", "policy"],
   ["planning", "policy"],
-  ["policies", "policy"],
   ["settings", "policy"],
   // Dependency-free shared foundation. Must not import feature or platform code.
   ["formatting", "shared"],
@@ -238,7 +237,11 @@ for (const [from, to] of [
   ["utils/math.ts", "domain/planner-analysis.ts"],
   ["domain/planner-analysis.ts", "ports/build.ts"],
   ["ports/build.ts", "application/build.ts"],
-  ["policies/building-weighting.ts", "adapters/browser/vue.ts"],
+  ["domain/progression/build/building-weighting-rules.ts", "ports/build.ts"],
+  [
+    "domain/progression/build/building-weighting-rules.ts",
+    "adapters/browser/vue.ts",
+  ],
   ["planning/build-planner.ts", "application/build.ts"],
   ["settings/state.ts", "ui/settings-shell.ts"],
   ["observability/state-log.ts", "adapters/browser/vue.ts"],
@@ -246,7 +249,7 @@ for (const [from, to] of [
   ["adapters/browser/vue.ts", "application/build.ts"],
   ["adapters/browser/vue.ts", "bootstrap/tick-runner.ts"],
   ["game/rates.ts", "settings/state.ts"],
-  ["ui/settings-shell.ts", "policies/building-weighting.ts"],
+  ["ui/settings-shell.ts", "settings/state.ts"],
 ]) {
   assert.notEqual(
     importViolation(from, to),
@@ -256,7 +259,8 @@ for (const [from, to] of [
 }
 for (const [from, to] of [
   ["domain/planner-analysis.ts", "utils/math.ts"],
-  ["policies/building-weighting.ts", "ports/build.ts"],
+  ["settings/state.ts", "ports/build.ts"],
+  ["game/core-managers.ts", "domain/progression/build/building-weighting.ts"],
   ["game/rates.ts", "domain/planner-analysis.ts"],
   ["bootstrap/tick-runner.ts", "adapters/browser/vue.ts"],
   ["adapters/evolve/evolve-runtime.js", "settings/state.ts"],

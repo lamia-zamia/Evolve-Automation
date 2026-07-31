@@ -1,4 +1,4 @@
-import type { ForeignAchievementGoal } from "../domain/combat/foreign-achievements.ts";
+import type { ForeignAchievementGoal } from "../../combat/foreign-achievements.ts";
 
 /**
  * Why Supply is being withheld from buildings for the mech bay: a mech is
@@ -109,6 +109,8 @@ export type BuildingWeightingCandidate = {
   readonly affordable: boolean;
   readonly count: number;
   readonly autoMax: number;
+  /** The configured weight this candidate starts from, before any rule applies. */
+  readonly baseWeight: number;
   /** Power one more would draw; negative for a building that produces power. */
   readonly powered: number;
   /** Built copies the game has switched off. */
@@ -405,4 +407,47 @@ export type BuildingWeightingRule<Match = boolean> = {
     snapshot: BuildingWeightingSnapshot,
     match?: Match,
   ) => number;
+};
+
+/**
+ * One note a matched rule made about a candidate. The note is plain text: what
+ * it looks like in a tooltip is the renderer's decision, not the policy's.
+ */
+export type BuildingWeightingAnnotation = {
+  /** Id of the rule that produced the note. */
+  readonly ruleId: string;
+  readonly note: string;
+};
+
+/**
+ * What the weighting rules decided about one candidate: the weight AutoBuild
+ * sorts by, and the notes explaining it in the order the rules applied.
+ *
+ * A weight of zero means no rule after the one that zeroed it ran, so the
+ * annotations end at that rule.
+ */
+export type BuildingWeightingDecision = {
+  readonly weight: number;
+  readonly annotations: readonly BuildingWeightingAnnotation[];
+};
+
+/**
+ * The rules of one weighting phase, already selected against that phase's
+ * snapshot. Every candidate of the phase is decided by the same one.
+ */
+export type BuildingWeightingPhase = {
+  readonly decide: (
+    candidate: BuildingWeightingCandidate,
+  ) => BuildingWeightingDecision;
+};
+
+/**
+ * Contract between whatever runs a weighting phase and the rules that decide
+ * it. The caller samples the snapshot, begins a phase with it, and decides each
+ * candidate; nothing it receives back can reach the game.
+ */
+export type BuildingWeightingDecider = {
+  readonly beginPhase: (
+    snapshot: BuildingWeightingSnapshot,
+  ) => BuildingWeightingPhase;
 };

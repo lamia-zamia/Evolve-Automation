@@ -2,9 +2,10 @@
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type {
   BuildingWeightingCandidate,
-  BuildingWeightingRule,
+  BuildingWeightingDecider,
+  BuildingWeightingDecision,
   BuildingWeightingSnapshot,
-} from "../ports/building-weighting.ts";
+} from "../domain/progression/build/building-weighting.ts";
 
 interface CoreManagersDependencies {
   getGame: () => any;
@@ -14,9 +15,13 @@ interface CoreManagersDependencies {
   getProjects: () => Record<string, any>;
   isVacuumSyphonStage: () => boolean;
   getNiceNumber: (value: number) => string;
-  weightingRules: readonly BuildingWeightingRule<unknown>[];
+  weightingDecider: BuildingWeightingDecider;
   readWeightingSnapshot: () => BuildingWeightingSnapshot;
   readWeightingCandidate: (building: unknown) => BuildingWeightingCandidate;
+  describeBuildingWeighting: (
+    candidateId: string,
+    decision: BuildingWeightingDecision,
+  ) => string;
   isEarlyGame: () => boolean;
   getIsPrestigeAllowed: () => (prestige: string) => boolean;
   getBananaRepublicObjectiveComplete: () => (objective: string) => boolean;
@@ -34,9 +39,10 @@ export function createCoreManagers({
   getProjects,
   isVacuumSyphonStage,
   getNiceNumber,
-  weightingRules,
+  weightingDecider,
   readWeightingSnapshot,
   readWeightingCandidate,
+  describeBuildingWeighting,
   isEarlyGame,
   getIsPrestigeAllowed,
   getBananaRepublicObjectiveComplete,
@@ -45,7 +51,6 @@ export function createCoreManagers({
   getWindow,
   diagnostics,
 }: CoreManagersDependencies) {
-  const niceWeightingCache = new Map<any, { value: number; text: string }>();
   const JobManager = {
     priorityList: [] as any[],
     craftingJobs: [] as any[],
@@ -144,60 +149,24 @@ export function createCoreManagers({
         "autoBuild.beginCycle.updateBuildingWeighting.readSnapshot",
         () => readWeightingSnapshot(),
       );
-      // Check generic conditions, and multiplier - x1 have no effect, so skip them too.
-      const activeRules = measure(
+      const phase = measure(
         "autoBuild.beginCycle.updateBuildingWeighting.selectRules",
-        () =>
-          weightingRules.filter(
-            (rule) => rule.enabled(snapshot) && rule.multiplier(snapshot) !== 1,
-          ),
+        () => weightingDecider.beginPhase(snapshot),
       );
 
-      // Iterate over buildings
+      // The decision is pure; only these two writes reach the wrapper.
+      // `extraDescription` is assigned rather than appended because
+      // `updateBuildings` cleared it earlier in the same cycle, and the phases
+      // that add their own notes all run after this one.
       measure("autoBuild.beginCycle.updateBuildingWeighting.applyRules", () => {
-        for (let building of this.priorityList) {
-          building.weighting = building._weighting;
+        for (const building of this.priorityList) {
           const candidate = readWeightingCandidate(building);
-
-          // Apply weighting rules
-          for (const rule of activeRules) {
-            const result = rule.match(candidate, snapshot);
-            // Rule passed
-            if (result) {
-              const note = rule.describe(result, candidate, snapshot);
-              if (note !== "") {
-                building.extraDescription += note + "<br>";
-              }
-              building.weighting *= rule.multiplier(snapshot, result);
-
-              // Last rule disabled building, no need to check the rest
-              if (building.weighting <= 0) {
-                break;
-              }
-            }
-          }
-          if (building.weighting > 0) {
-            building.weighting = Math.max(
-              Number.MIN_VALUE,
-              building.weighting - 1e-7 * building.count,
-            );
-            const cached = niceWeightingCache.get(building);
-            let text: string;
-            if (cached !== undefined && cached.value === building.weighting) {
-              text = cached.text;
-            } else {
-              text = getNiceNumber(building.weighting);
-              niceWeightingCache.set(building, {
-                value: building.weighting,
-                text,
-              });
-            }
-            building.extraDescription =
-              "AutoBuild weighting: " +
-              text +
-              "<br>" +
-              building.extraDescription;
-          }
+          const decision = phase.decide(candidate);
+          building.weighting = decision.weight;
+          building.extraDescription = describeBuildingWeighting(
+            candidate.id,
+            decision,
+          );
         }
       });
     },

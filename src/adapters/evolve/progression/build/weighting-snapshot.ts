@@ -8,7 +8,7 @@ import type {
   PrestigeRoute,
   SacrificeBlockedReason,
   WomlingOverlordAction,
-} from "../../../../ports/building-weighting.ts";
+} from "../../../../domain/progression/build/building-weighting.ts";
 import {
   requireArray,
   requireBoolean,

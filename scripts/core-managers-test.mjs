@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createCoreManagers } from "../src/game/core-managers.ts";
+import { createBuildingWeightingDecider } from "../src/domain/progression/build/building-weighting-decision.ts";
 
 let game;
 let settings;
@@ -46,7 +47,18 @@ const readWeightingSnapshot = () => {
 const projectedFrom = [];
 const readWeightingCandidate = (building) => {
   projectedFrom.push(building);
-  return Object.freeze({ id: building.id, boost: building.boost });
+  return Object.freeze({
+    id: building.id,
+    boost: building.boost,
+    baseWeight: building._weighting,
+    count: building.count,
+  });
+};
+// The manager renders nothing itself; it hands each decision to the describer.
+const described = [];
+const describeBuildingWeighting = (candidateId, decision) => {
+  described.push([candidateId, decision]);
+  return `described ${candidateId}`;
 };
 let niceNumberCalls = 0;
 
@@ -77,9 +89,10 @@ const { JobManager, BuildingManager, ProjectManager, TriggerManager } =
       niceNumberCalls++;
       return String(n);
     },
-    weightingRules,
+    weightingDecider: createBuildingWeightingDecider({ weightingRules }),
     readWeightingSnapshot,
     readWeightingCandidate,
+    describeBuildingWeighting,
     isEarlyGame: () => earlyGame,
     getIsPrestigeAllowed: () => prestigeAllowed,
     getBananaRepublicObjectiveComplete: () => bananaComplete,
@@ -137,17 +150,37 @@ BuildingManager.updateBuildings();
 assert.equal(buildings.A.extraDescription, "");
 
 BuildingManager.priorityList = [
-  { _weighting: 5, count: 0, boost: true, weighting: 0, extraDescription: "" },
-  { _weighting: 5, count: 0, boost: false, weighting: 0, extraDescription: "" },
+  {
+    id: "A",
+    _weighting: 5,
+    count: 0,
+    boost: true,
+    weighting: 0,
+    extraDescription: "",
+  },
+  {
+    id: "B",
+    _weighting: 5,
+    count: 0,
+    boost: false,
+    weighting: 0,
+    extraDescription: "",
+  },
 ];
 BuildingManager.updateWeighting();
 assert.equal(BuildingManager.priorityList[0].weighting, 10); // doubled
 assert.equal(BuildingManager.priorityList[1].weighting, 5); // untouched
-assert.match(
+assert.equal(
   BuildingManager.priorityList[0].extraDescription,
-  /AutoBuild weighting/,
+  "described A",
+  "the wrapper carries whatever the describer returned, and nothing else",
 );
-assert.equal(niceNumberCalls, 2);
+assert.deepEqual(
+  described.map(([, decision]) => decision.annotations),
+  [[{ ruleId: "boost", note: "note" }], []],
+  "the describer receives the matched rules' notes as data",
+);
+assert.equal(niceNumberCalls, 0, "buildings are not formatted by the manager");
 assert.equal(weightingSnapshotReads, 1, "state is sampled once per phase");
 assert.equal(
   new Set(seenSnapshots).size,
@@ -164,7 +197,11 @@ BuildingManager.priorityList.forEach((building) => {
   building.extraDescription = "";
 });
 BuildingManager.updateWeighting();
-assert.equal(niceNumberCalls, 2); // unchanged numeric weightings reuse formatting
+assert.equal(
+  BuildingManager.priorityList[0].extraDescription,
+  "described A",
+  "the description is rebuilt from the new decision, not appended to",
+);
 assert.equal(BuildingManager.managedPriorityList().length, 2);
 
 BuildingManager.statePriorityList = [

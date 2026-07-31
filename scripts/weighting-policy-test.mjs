@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createBuildingWeightingPolicy } from "../src/policies/building-weighting.ts";
+import { createBuildingWeightingPolicy } from "../src/domain/progression/build/building-weighting-rules.ts";
 
 // Every configured weighting multiplier arrives through the snapshot, so the
 // baseline is zero and each rule's own case supplies the value it asserts.
@@ -177,7 +177,7 @@ const otherBuilding = named("Mine");
 const policy = createBuildingWeightingPolicy({
   formatNumber: String,
   formatNiceNumber: String,
-  randomSource: { nextUnit: () => 0.5 },
+  nextRandomUnit: () => 0.5,
 });
 
 assert.equal(policy.weightingRules.length, 72);

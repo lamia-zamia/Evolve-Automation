@@ -77,7 +77,6 @@ export default defineConfig(
       "src/formatting/**/*.ts",
       "src/observability/**/*.ts",
       "src/planning/**/*.ts",
-      "src/policies/**/*.ts",
       "src/utils/**/*.ts",
       "src/validation/**/*.ts",
       "src/*.ts",

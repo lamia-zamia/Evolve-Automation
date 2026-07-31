@@ -17,6 +17,7 @@ class BuildingWrapper {
     this.smartManaged = false;
     this.count = 3;
     this.autoMax = Number.MAX_SAFE_INTEGER;
+    this._weighting = 100;
     this.stateOffCount = 1;
     this.powered = 5;
     this.affordable = true;
@@ -69,6 +70,7 @@ assert.deepEqual(
     smartManaged: false,
     count: 3,
     autoMax: Number.MAX_SAFE_INTEGER,
+    baseWeight: 100,
     stateOffCount: 1,
     housing: true,
     garrison: false,
@@ -166,6 +168,10 @@ rejects({ count: "3" }, "buildings.Factory.count must be a finite number");
 rejects(
   { autoMax: undefined },
   "buildings.Factory.autoMax must be a finite number",
+);
+rejects(
+  { _weighting: undefined },
+  "buildings.Factory._weighting must be a finite number",
 );
 rejects(
   { stateOffCount: Number.NaN },

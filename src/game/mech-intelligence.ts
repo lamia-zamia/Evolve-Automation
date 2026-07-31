@@ -1,5 +1,5 @@
 import { canSpendWithDistantReservation } from "../domain/economy/resources/reservation.ts";
-import type { MechSupplySavingReason } from "../ports/building-weighting.ts";
+import type { MechSupplySavingReason } from "../domain/progression/build/building-weighting.ts";
 
 type MechBay = {
   max: number;

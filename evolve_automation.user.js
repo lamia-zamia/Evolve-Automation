@@ -5788,9 +5788,10 @@
     getProjects,
     isVacuumSyphonStage,
     getNiceNumber,
-    weightingRules,
+    weightingDecider,
     readWeightingSnapshot,
     readWeightingCandidate: readWeightingCandidate2,
+    describeBuildingWeighting,
     isEarlyGame,
     getIsPrestigeAllowed,
     getBananaRepublicObjectiveComplete,
@@ -5799,7 +5800,6 @@
     getWindow,
     diagnostics
   }) {
-    const niceWeightingCache = /* @__PURE__ */ new Map();
     const JobManager = {
       priorityList: [],
       craftingJobs: [],
@@ -5870,7 +5870,7 @@
       },
       updateWeighting() {
         const profiling = diagnostics;
-        const measure = (phase, action) => {
+        const measure = (phase2, action) => {
           if (profiling === void 0 || !profiling.readPerformanceEnabled()) {
             return action();
           }
@@ -5878,54 +5878,26 @@
           try {
             return action();
           } finally {
-            profiling.recordPerformance(phase, profiling.nowMs() - startedAtMs);
+            profiling.recordPerformance(phase2, profiling.nowMs() - startedAtMs);
           }
         };
         const snapshot = measure(
           "autoBuild.beginCycle.updateBuildingWeighting.readSnapshot",
           () => readWeightingSnapshot()
         );
-        const activeRules = measure(
+        const phase = measure(
           "autoBuild.beginCycle.updateBuildingWeighting.selectRules",
-          () => weightingRules.filter(
-            (rule) => rule.enabled(snapshot) && rule.multiplier(snapshot) !== 1
-          )
+          () => weightingDecider.beginPhase(snapshot)
         );
         measure("autoBuild.beginCycle.updateBuildingWeighting.applyRules", () => {
-          for (let building3 of this.priorityList) {
-            building3.weighting = building3._weighting;
+          for (const building3 of this.priorityList) {
             const candidate = readWeightingCandidate2(building3);
-            for (const rule of activeRules) {
-              const result2 = rule.match(candidate, snapshot);
-              if (result2) {
-                const note = rule.describe(result2, candidate, snapshot);
-                if (note !== "") {
-                  building3.extraDescription += note + "<br>";
-                }
-                building3.weighting *= rule.multiplier(snapshot, result2);
-                if (building3.weighting <= 0) {
-                  break;
-                }
-              }
-            }
-            if (building3.weighting > 0) {
-              building3.weighting = Math.max(
-                Number.MIN_VALUE,
-                building3.weighting - 1e-7 * building3.count
-              );
-              const cached = niceWeightingCache.get(building3);
-              let text;
-              if (cached !== void 0 && cached.value === building3.weighting) {
-                text = cached.text;
-              } else {
-                text = getNiceNumber(building3.weighting);
-                niceWeightingCache.set(building3, {
-                  value: building3.weighting,
-                  text
-                });
-              }
-              building3.extraDescription = "AutoBuild weighting: " + text + "<br>" + building3.extraDescription;
-            }
+            const decision2 = phase.decide(candidate);
+            building3.weighting = decision2.weight;
+            building3.extraDescription = describeBuildingWeighting(
+              candidate.id,
+              decision2
+            );
           }
         });
       },
@@ -17483,6 +17455,34 @@
     return { updateUI };
   }
 
+  // src/ui/building-weighting-description.ts
+  function createBuildingWeightingDescriber({
+    formatNiceNumber
+  }) {
+    const formattedWeights = /* @__PURE__ */ new Map();
+    function formatWeight(candidateId, weight) {
+      const cached = formattedWeights.get(candidateId);
+      if (cached !== void 0 && cached.weight === weight) {
+        return cached.text;
+      }
+      const text = String(formatNiceNumber(weight));
+      formattedWeights.set(candidateId, { weight, text });
+      return text;
+    }
+    return Object.freeze({
+      describe(candidateId, decision2) {
+        const notes = decision2.annotations.map((annotation) => `${annotation.note}<br>`).join("");
+        if (decision2.weight <= 0) {
+          return notes;
+        }
+        return `AutoBuild weighting: ${formatWeight(
+          candidateId,
+          decision2.weight
+        )}<br>${notes}`;
+      }
+    });
+  }
+
   // src/application/state-log-settings.ts
   function createStateLogSettingsIntentHandler(writer) {
     return Object.freeze({
@@ -23901,7 +23901,7 @@
     return Object.freeze({ nextUnit: () => Math.random() });
   }
 
-  // src/policies/building-weighting.ts
+  // src/domain/progression/build/building-weighting-rules.ts
   var SACRIFICE_BLOCKED_NOTES = {
     windless: "Parasites sacrificed only during windy weather",
     "no-default-workers": "No default workers to sacrifice",
@@ -24058,7 +24058,7 @@
   function createBuildingWeightingPolicy({
     formatNumber,
     formatNiceNumber,
-    randomSource
+    nextRandomUnit
   }) {
     const weightingRules = [
       weightingRule({
@@ -24695,7 +24695,7 @@
         enabled: (snapshot) => snapshot.gasGiantNameContestActive,
         match: (candidate) => candidate.randomlyWeighted,
         describe: () => "Randomized weighting",
-        multiplier: () => 1 + randomSource.nextUnit()
+        multiplier: () => 1 + nextRandomUnit()
         // Fluctuate weight to pick random item
       }),
       weightingRule({
@@ -24723,6 +24723,54 @@
       galaxyCombatShips,
       weightingRules
     };
+  }
+
+  // src/domain/progression/build/building-weighting-decision.ts
+  var NO_ANNOTATIONS = Object.freeze(
+    []
+  );
+  function selectActiveWeightingRules(rules, snapshot) {
+    return rules.filter(
+      (rule) => rule.enabled(snapshot) && rule.multiplier(snapshot) !== 1
+    );
+  }
+  function decideBuildingWeighting(activeRules, candidate, snapshot) {
+    let weight = candidate.baseWeight;
+    let annotations;
+    for (const rule of activeRules) {
+      const match = rule.match(candidate, snapshot);
+      if (!match) {
+        continue;
+      }
+      const note = rule.describe(match, candidate, snapshot);
+      if (note !== "") {
+        annotations ??= [];
+        annotations.push(Object.freeze({ ruleId: rule.id, note }));
+      }
+      weight *= rule.multiplier(snapshot, match);
+      if (weight <= 0) {
+        break;
+      }
+    }
+    if (weight > 0) {
+      weight = Math.max(Number.MIN_VALUE, weight - 1e-7 * candidate.count);
+    }
+    return Object.freeze({
+      weight,
+      annotations: annotations === void 0 ? NO_ANNOTATIONS : Object.freeze(annotations)
+    });
+  }
+  function createBuildingWeightingDecider({
+    weightingRules
+  }) {
+    return Object.freeze({
+      beginPhase(snapshot) {
+        const activeRules = selectActiveWeightingRules(weightingRules, snapshot);
+        return Object.freeze({
+          decide: (candidate) => decideBuildingWeighting(activeRules, candidate, snapshot)
+        });
+      }
+    });
   }
 
   // src/adapters/evolve/progression/build/weighting-candidate.ts
@@ -24763,6 +24811,9 @@
       smartManaged: Boolean(call(record, "isSmartManaged", path)),
       count: requireNumber(record["count"], `${path}.count`),
       autoMax: requireNumber(record["autoMax"], `${path}.autoMax`),
+      // `_weighting` forwards the building's own weight setting, which the
+      // defaults write for every catalog building, so it is always a number.
+      baseWeight: requireNumber(record["_weighting"], `${path}._weighting`),
       stateOffCount: requireNumber(
         record["stateOffCount"],
         `${path}.stateOffCount`
@@ -56585,7 +56636,13 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     } = createBuildingWeightingPolicy({
       formatNumber: getNumberString,
       formatNiceNumber: getNiceNumber,
-      randomSource
+      nextRandomUnit: () => randomSource.nextUnit()
+    });
+    const buildingWeightingDescriber = createBuildingWeightingDescriber({
+      formatNiceNumber: getNiceNumber
+    });
+    const buildingWeightingDecider = createBuildingWeightingDecider({
+      weightingRules
     });
     const isVacuumSyphonStage = () => isVacuumCollapseManaStageReady({
       prestigeType: String(settings["prestigeType"] ?? ""),
@@ -56798,8 +56855,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       getProjects: () => projects,
       isVacuumSyphonStage,
       getNiceNumber,
-      weightingRules,
+      weightingDecider: buildingWeightingDecider,
       readWeightingCandidate,
+      describeBuildingWeighting: buildingWeightingDescriber.describe,
       readWeightingSnapshot: createWeightingSnapshotReader({
         getState: () => state,
         getWeightingMultiplier: (setting) => settings[setting],

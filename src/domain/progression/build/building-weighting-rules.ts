@@ -4,8 +4,7 @@ import type {
   BuildingWeightingRule,
   MechSupplySavingReason,
   SacrificeBlockedReason,
-} from "../ports/building-weighting.ts";
-import type { RandomSource } from "../ports/randomness.ts";
+} from "./building-weighting.ts";
 
 const SACRIFICE_BLOCKED_NOTES: Readonly<
   Record<SacrificeBlockedReason, string>
@@ -201,13 +200,17 @@ type BuildingWeightingDependencies = {
   readonly formatNumber: (value: number) => string;
   /** Formats a fractional number for an annotation, e.g. `12.3`. */
   readonly formatNiceNumber: (value: number) => string;
-  readonly randomSource: RandomSource;
+  /**
+   * A value in the half-open interval [0, 1). Injected so the one randomized
+   * rule stays deterministic in tests.
+   */
+  readonly nextRandomUnit: () => number;
 };
 
 export function createBuildingWeightingPolicy({
   formatNumber,
   formatNiceNumber,
-  randomSource,
+  nextRandomUnit,
 }: BuildingWeightingDependencies) {
   const weightingRules: readonly BuildingWeightingRule<unknown>[] = [
     weightingRule({
@@ -1023,7 +1026,7 @@ export function createBuildingWeightingPolicy({
       enabled: (snapshot) => snapshot.gasGiantNameContestActive,
       match: (candidate) => candidate.randomlyWeighted,
       describe: () => "Randomized weighting",
-      multiplier: () => 1 + randomSource.nextUnit(), // Fluctuate weight to pick random item
+      multiplier: () => 1 + nextRandomUnit(), // Fluctuate weight to pick random item
     }),
     weightingRule({
       id: "solar-system-building",

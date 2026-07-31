@@ -1,4 +1,4 @@
-import type { BuildingWeightingCandidate } from "../../../../ports/building-weighting.ts";
+import type { BuildingWeightingCandidate } from "../../../../domain/progression/build/building-weighting.ts";
 import {
   requireBoolean,
   requireFunction,
@@ -83,6 +83,9 @@ export function readWeightingCandidate(
     smartManaged: Boolean(call(record, "isSmartManaged", path)),
     count: requireNumber(record["count"], `${path}.count`),
     autoMax: requireNumber(record["autoMax"], `${path}.autoMax`),
+    // `_weighting` forwards the building's own weight setting, which the
+    // defaults write for every catalog building, so it is always a number.
+    baseWeight: requireNumber(record["_weighting"], `${path}._weighting`),
     stateOffCount: requireNumber(
       record["stateOffCount"],
       `${path}.stateOffCount`,

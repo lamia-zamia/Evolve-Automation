@@ -139,6 +139,7 @@ import { createPreviousGameStats } from "../../ui/previous-game-stats.ts";
 import { createRuntimeAdapters } from "../../ui/runtime-adapters.ts";
 import { createAutomationContainer } from "../../ui/automation-container.ts";
 import { createUIRefresh } from "../../ui/ui-refresh.ts";
+import { createBuildingWeightingDescriber } from "../../ui/building-weighting-description.ts";
 import { createStateLogSettingsIntentHandler } from "../../application/state-log-settings.ts";
 import { createStateLogSettingsBrowserAdapter } from "../browser/state-log-settings.ts";
 import { createInterfaceSettingsIntentHandler } from "../../application/interface-settings.ts";
@@ -273,7 +274,8 @@ import { readTechConflictInput } from "./progression/research/tech-conflicts.ts"
 import { formatTechConflict } from "../../application/tech-conflicts.ts";
 import { createBrowserClock } from "../browser/clock.ts";
 import { createBrowserRandomSource } from "../browser/random.ts";
-import { createBuildingWeightingPolicy } from "../../policies/building-weighting.ts";
+import { createBuildingWeightingPolicy } from "../../domain/progression/build/building-weighting-rules.ts";
+import { createBuildingWeightingDecider } from "../../domain/progression/build/building-weighting-decision.ts";
 import { readWeightingCandidate } from "./progression/build/weighting-candidate.ts";
 import { createWeightingSnapshotReader } from "./progression/build/weighting-snapshot.ts";
 import { readTradeRoutesInput } from "./economy/market/trade-routes.ts";
@@ -2984,7 +2986,13 @@ function startEvolveRuntimeComposition(
   } = createBuildingWeightingPolicy({
     formatNumber: getNumberString,
     formatNiceNumber: getNiceNumber,
-    randomSource,
+    nextRandomUnit: () => randomSource.nextUnit(),
+  });
+  const buildingWeightingDescriber = createBuildingWeightingDescriber({
+    formatNiceNumber: getNiceNumber,
+  });
+  const buildingWeightingDecider = createBuildingWeightingDecider({
+    weightingRules,
   });
 
   const isVacuumSyphonStage = () =>
@@ -3225,8 +3233,9 @@ function startEvolveRuntimeComposition(
       getProjects: () => projects,
       isVacuumSyphonStage,
       getNiceNumber,
-      weightingRules,
+      weightingDecider: buildingWeightingDecider,
       readWeightingCandidate,
+      describeBuildingWeighting: buildingWeightingDescriber.describe,
       readWeightingSnapshot: createWeightingSnapshotReader({
         getState: () => state,
         getWeightingMultiplier: (setting) => settings[setting],

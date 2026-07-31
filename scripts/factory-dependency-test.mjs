@@ -131,8 +131,11 @@ function getMainFactoryArguments(factoryName) {
 const contractFailures = [];
 for (const file of factoryFiles) {
   const source = fs.readFileSync(file, "utf8");
+  // The destructured parameter object is what this audit checks. A factory may
+  // annotate its return type, so anything between the closing parenthesis and
+  // the body brace is skipped.
   const signature = source.match(
-    /export function (create\w+)\(\{([\s\S]*?)\}\s*(?::[^)]*)?\) \{/,
+    /export function (create\w+)\(\{([\s\S]*?)\}\s*(?::[^)]*)?\)\s*(?::[^{]*)?\{/,
   );
   if (!signature) {
     contractFailures.push(
