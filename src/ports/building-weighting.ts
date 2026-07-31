@@ -53,6 +53,14 @@ export type BuildingWeightName =
 export type BuildingWeights = Readonly<Record<BuildingWeightName, number>>;
 
 /**
+ * The configured prestige route, narrowed to the routes whose construction the
+ * weighting rules treat differently. Every other configured route, including
+ * "none" and any route this script does not yet distinguish, is `"other"`.
+ */
+export type PrestigeRoute =
+  "bioseed" | "whitehole" | "vacuum" | "ascension" | "terraform" | "other";
+
+/**
  * Script state and phase-constant game gates that the building-weighting rules
  * read, sampled and frozen once per weighting phase.
  *
@@ -71,6 +79,30 @@ export type BuildingWeightingSnapshot = {
    * other one is not worth building.
    */
   readonly buildBestFreighterOnly: boolean;
+  /** AutoBuild is running; every candidate is worthless while it is off. */
+  readonly autoBuildEnabled: boolean;
+  /** AutoFleet is running, so it can be trusted to cover galaxy piracy. */
+  readonly autoFleetEnabled: boolean;
+  /** Miner jobs are switched off, so mines cannot be staffed. */
+  readonly minerJobsDisabled: boolean;
+  /** Lake transports are compared by Supplies per Soul Gem instead of per support. */
+  readonly compareTransportsBySoulGems: boolean;
+  readonly prestigeRoute: PrestigeRoute;
+  /** Only build what the configured prestige route actually needs. */
+  readonly limitPrestigeConstruction: boolean;
+  /** Soul Gems are being saved for the Whitehole reset. */
+  readonly saveSoulGemsForPrestige: boolean;
+  /**
+   * Authority cap the script manages toward, or `0` when Authority management
+   * is off and no building should be prioritized for it.
+   */
+  readonly authorityTarget: number;
+  /** Max Knowledge the Gorddon Embassy is worth waiting for. */
+  readonly embassyKnowledgeTarget: number;
+  /** Money income above which buying slaves is considered affordable. */
+  readonly slaveIncomeTarget: number;
+  /** The Banana Republic objective guard is on, so its objectives are worth priority. */
+  readonly bananaRepublicGuardActive: boolean;
   readonly queuedTargets: ReadonlySet<unknown>;
   readonly triggerTargets: ReadonlySet<unknown>;
   readonly knowledgeRequiredByTechs: number;
@@ -213,9 +245,8 @@ export type BuildingWeightingSnapshot = {
  * `match` then runs per candidate building; any truthy result applies the rule
  * and is passed back into `describe` and `multiplier`.
  *
- * `enabled`, `match`, and `multiplier` receive the phase snapshot, which is the
- * only route by which a rule may observe script state. `describe` does not
- * receive it because no rule needs it there; add it when one does.
+ * Every phase receives the snapshot, which is the only route by which a rule
+ * may observe script state.
  *
  * TRANSITIONAL: the candidate and the match result are still the live
  * compatibility building wrapper and an untyped rule payload. They become an
@@ -231,8 +262,13 @@ export type BuildingWeightingRule = {
     building: any,
     snapshot: BuildingWeightingSnapshot,
   ) => unknown;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readonly describe: (match: any, building: any) => string;
+  readonly describe: (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    match: any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    building: any,
+    snapshot: BuildingWeightingSnapshot,
+  ) => string;
   readonly multiplier: (
     snapshot: BuildingWeightingSnapshot,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

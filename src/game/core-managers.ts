@@ -160,7 +160,7 @@ export function createCoreManagers({
             const result = rule.match(building, snapshot);
             // Rule passed
             if (result) {
-              const note = rule.describe(result, building);
+              const note = rule.describe(result, building, snapshot);
               if (note !== "") {
                 building.extraDescription += note + "<br>";
               }

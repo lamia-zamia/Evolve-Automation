@@ -48,6 +48,19 @@ const WEIGHT_NAMES = [
 const defaultGates = () => ({
   getWeightingMultiplier: () => 0,
   isBestFreighterOnly: off,
+  isAutoBuildEnabled: off,
+  isAutoFleetEnabled: off,
+  isMinerJobsDisabled: off,
+  isTransportComparedBySoulGems: off,
+  getPrestigeType: () => "none",
+  isPrestigeConstructionLimited: off,
+  isSavingSoulGemsForPrestige: off,
+  isAuthorityManaged: off,
+  getMinimumAuthority: () => 0,
+  getEmbassyKnowledgeTarget: () => 0,
+  getSlaveIncomeTarget: () => 0,
+  isAchievementGuardsEnabled: off,
+  isBananaRepublicGuardEnabled: off,
   isGalaxyAssaultPending: off,
   isStargatePiracySupressed: off,
   isGalaxyPiracyCoveredByFleet: off,
@@ -104,6 +117,17 @@ assert.deepEqual(
   "the snapshot carries exactly the weighting multipliers the rules read",
 );
 assert.equal(empty.buildBestFreighterOnly, false);
+assert.equal(empty.autoBuildEnabled, false);
+assert.equal(empty.autoFleetEnabled, false);
+assert.equal(empty.minerJobsDisabled, false);
+assert.equal(empty.compareTransportsBySoulGems, false);
+assert.equal(empty.prestigeRoute, "other");
+assert.equal(empty.limitPrestigeConstruction, false);
+assert.equal(empty.saveSoulGemsForPrestige, false);
+assert.equal(empty.authorityTarget, 0);
+assert.equal(empty.embassyKnowledgeTarget, 0);
+assert.equal(empty.slaveIncomeTarget, 0);
+assert.equal(empty.bananaRepublicGuardActive, false);
 assert.equal(empty.queuedTargets.size, 0);
 assert.equal(empty.triggerTargets.size, 0);
 assert.equal(empty.knowledgeRequiredByTechs, 0);
@@ -179,6 +203,61 @@ gates = {
 const configured = read();
 assert.deepEqual(configured.weights, distinctWeights);
 assert.equal(configured.buildBestFreighterOnly, true);
+gates = defaultGates();
+
+// Only the routes the weighting rules distinguish keep their own name.
+for (const route of [
+  "bioseed",
+  "whitehole",
+  "vacuum",
+  "ascension",
+  "terraform",
+]) {
+  gates = { ...defaultGates(), getPrestigeType: () => route };
+  assert.equal(read().prestigeRoute, route);
+}
+for (const route of ["none", "mad", "demonic", "matrix", "apotheosis"]) {
+  gates = { ...defaultGates(), getPrestigeType: () => route };
+  assert.equal(
+    read().prestigeRoute,
+    "other",
+    `${route} is not a route the weighting rules distinguish`,
+  );
+}
+
+// The Authority target folds in the management toggle: an unmanaged cap is no
+// target at all, and the minimum is not even read.
+let authorityReads = 0;
+gates = {
+  ...defaultGates(),
+  getMinimumAuthority: () => {
+    authorityReads++;
+    return 250;
+  },
+};
+assert.equal(read().authorityTarget, 0);
+assert.equal(authorityReads, 0);
+gates = {
+  ...defaultGates(),
+  isAuthorityManaged: () => true,
+  getMinimumAuthority: () => 250,
+};
+assert.equal(read().authorityTarget, 250);
+
+// The Banana Republic guard needs both its own toggle and the master one.
+for (const [guards, banana, active] of [
+  [false, false, false],
+  [true, false, false],
+  [false, true, false],
+  [true, true, true],
+]) {
+  gates = {
+    ...defaultGates(),
+    isAchievementGuardsEnabled: () => guards,
+    isBananaRepublicGuardEnabled: () => banana,
+  };
+  assert.equal(read().bananaRepublicGuardActive, active);
+}
 gates = defaultGates();
 
 // Membership is by wrapper identity, not by name or index.
@@ -584,6 +663,30 @@ rejectsGate(
 rejectsGate(
   { isBestFreighterOnly: () => undefined },
   "settings.buildingsBestFreighter must be a boolean",
+);
+rejectsGate(
+  { getPrestigeType: () => undefined },
+  "settings.prestigeType must be a string",
+);
+rejectsGate(
+  { isAutoBuildEnabled: () => 1 },
+  "settings.autoBuild must be a boolean",
+);
+rejectsGate(
+  { isAuthorityManaged: () => true, getMinimumAuthority: () => "250" },
+  "settings.generalMinimumAuthority must be a finite number",
+);
+rejectsGate(
+  { getEmbassyKnowledgeTarget: () => null },
+  "settings.fleetEmbassyKnowledge must be a finite number",
+);
+// The individual guard is only read when the master toggle is on.
+rejectsGate(
+  {
+    isAchievementGuardsEnabled: () => true,
+    isBananaRepublicGuardEnabled: () => undefined,
+  },
+  "settings.guardBananaRepublic must be a boolean",
 );
 rejectsGate(
   { isGalaxyAssaultPending: () => undefined },

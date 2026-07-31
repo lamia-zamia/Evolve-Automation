@@ -5896,7 +5896,7 @@
             for (const rule of activeRules) {
               const result2 = rule.match(building3, snapshot);
               if (result2) {
-                const note = rule.describe(result2, building3);
+                const note = rule.describe(result2, building3, snapshot);
                 if (note !== "") {
                   building3.extraDescription += note + "<br>";
                 }
@@ -23902,7 +23902,6 @@
     "bonus-capped": "Sacrifice bonus already high enough"
   };
   function createBuildingWeightingPolicy({
-    getSettings,
     getResources,
     getBuildings,
     getNumberStringFn,
@@ -23969,7 +23968,7 @@
       {
         // Set weighting to zero right away, and skip all checks if autoBuild is disabled
         id: "autobuild-off",
-        enabled: () => !getSettings().autoBuild,
+        enabled: (snapshot) => !snapshot.autoBuildEnabled,
         match: () => true,
         describe: () => "",
         multiplier: () => 0
@@ -24038,7 +24037,7 @@
       },
       {
         id: "andromeda-miners-disabled",
-        enabled: () => getSettings().jobDisableMiners && getBuildings().GatewayStarbase.count > 0,
+        enabled: (snapshot) => snapshot.minerJobsDisabled && getBuildings().GatewayStarbase.count > 0,
         match: (building3, snapshot) => building3 === getBuildings().CoalMine || building3 === getBuildings().Mine && !snapshot.mineIsOnlyChrysotileSource,
         describe: () => "Miners disabled in Andromeda",
         multiplier: () => 0
@@ -24052,7 +24051,7 @@
       },
       {
         id: "piracy-covered-by-fleet",
-        enabled: (snapshot) => getSettings().autoFleet && snapshot.galaxyPiracyCoveredByFleet && !snapshot.galaxyAssaultPending,
+        enabled: (snapshot) => snapshot.autoFleetEnabled && snapshot.galaxyPiracyCoveredByFleet && !snapshot.galaxyAssaultPending,
         match: (building3) => galaxyCombatShipSet.has(building3),
         describe: () => "Piracy fully covered by fleet",
         multiplier: () => 0
@@ -24066,7 +24065,7 @@
       },
       {
         id: "prestige-unneeded-ascension-towers",
-        enabled: (snapshot) => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "ascension" && !snapshot.witchHunterRace,
+        enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute === "ascension" && !snapshot.witchHunterRace,
         match: (building3) => building3 === getBuildings().GateEastTower || building3 === getBuildings().GateWestTower,
         describe: () => "Not needed for Ascension prestige",
         multiplier: () => 0
@@ -24080,7 +24079,7 @@
       },
       {
         id: "saving-soul-gems-for-prestige",
-        enabled: () => getSettings().prestigeType === "whitehole" && getSettings().prestigeWhiteholeSaveGems,
+        enabled: (snapshot) => snapshot.prestigeRoute === "whitehole" && snapshot.saveSoulGemsForPrestige,
         match: (building3) => {
           if (building3.cost["Soul_Gem"] > getResources().Soul_Gem.currentQuantity - 10) {
             return true;
@@ -24125,7 +24124,7 @@
             let rating = snapshot.lakeBiremeSupplyRate;
             let nextBireme = (1 - rating ** (biremeCount + 1)) * (transportCount * 5);
             let nextTransport = (1 - rating ** biremeCount) * ((transportCount + 1) * 5);
-            if (getSettings().buildingsTransportGem) {
+            if (snapshot.compareTransportsBySoulGems) {
               let currentSupply = (1 - rating ** biremeCount) * (transportCount * 5);
               nextBireme = (nextBireme - currentSupply) / getBuildings().LakeBireme.cost["Soul_Gem"];
               nextTransport = (nextTransport - currentSupply) / getBuildings().LakeTransport.cost["Soul_Gem"];
@@ -24227,11 +24226,9 @@
       },
       {
         id: "embassy-knowledge-required",
-        enabled: () => getBuildings().GorddonEmbassy.count === 0 && getResources().Knowledge.maxQuantity < getSettings().fleetEmbassyKnowledge,
+        enabled: (snapshot) => getBuildings().GorddonEmbassy.count === 0 && getResources().Knowledge.maxQuantity < snapshot.embassyKnowledgeTarget,
         match: (building3) => building3 === getBuildings().GorddonEmbassy,
-        describe: () => `${getNumberString(
-          getSettings().fleetEmbassyKnowledge
-        )} Max Knowledge required`,
+        describe: (_match, _building, snapshot) => `${getNumberString(snapshot.embassyKnowledgeTarget)} Max Knowledge required`,
         multiplier: () => 0
       },
       {
@@ -24244,12 +24241,12 @@
       {
         id: "slave-market-blocked",
         enabled: (snapshot) => snapshot.slaverRace,
-        match: (building3) => {
+        match: (building3, snapshot) => {
           if (building3 === getBuildings().SlaveMarket) {
             if (getResources().Slave.currentQuantity >= getResources().Slave.maxQuantity) {
               return "Slave pens already full";
             }
-            if (getResources().Money.currentQuantity + getResources().Money.rateOfChange < getResources().Money.maxQuantity && getResources().Money.rateOfChange < getSettings().slaveIncome) {
+            if (getResources().Money.currentQuantity + getResources().Money.rateOfChange < getResources().Money.maxQuantity && getResources().Money.rateOfChange < snapshot.slaveIncomeTarget) {
               return "Buying slaves only with excess money";
             }
           }
@@ -24344,14 +24341,14 @@
         // amount of tax/soldier management can fix the production penalty, so prioritize the
         // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
         id: "authority-cap",
-        enabled: () => getSettings().authorityManage && getSettings().generalMinimumAuthority > 0 && getResources().Authority.isUnlocked() && getResources().Authority.maxQuantity < getSettings().generalMinimumAuthority,
+        enabled: (snapshot) => snapshot.authorityTarget > 0 && getResources().Authority.isUnlocked() && getResources().Authority.maxQuantity < snapshot.authorityTarget,
         match: (building3) => authorityCapBuildingSet.has(building3),
         describe: () => "Raises Authority cap, currently below target",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingAuthority
       },
       {
         id: "banana-republic-objective",
-        enabled: (snapshot) => getSettings().achievementGuards && getSettings().guardBananaRepublic && snapshot.bananaRace,
+        enabled: (snapshot) => snapshot.bananaRepublicGuardActive && snapshot.bananaRace,
         match: (building3, snapshot) => building3 === getBuildings().DwarfWorldCollider && !snapshot.bananaColliderObjectiveComplete,
         describe: () => "Banana Republic objective",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingBananaObjective
@@ -24393,7 +24390,8 @@
         // Red Spaceport unlocks unification research. Let an active unification
         // achievement build this prerequisite so Red Dead can release afterward.
         id: "achievement-guard",
-        enabled: () => getSettings().achievementGuards,
+        // Each guard answer already folds in the master AutoAchievement toggle.
+        enabled: (snapshot) => snapshot.guardDreadedActive || snapshot.guardEnergeticActive || snapshot.guardRedDeadActive,
         match: (building3, snapshot) => building3 === getBuildings().Dreadnought && snapshot.guardDreadedActive ? "Dreaded" : building3 === getBuildings().SiriusThermalCollector && snapshot.guardEnergeticActive ? "Energetic" : building3 === getBuildings().RedSpaceport && snapshot.guardRedDeadActive && !snapshot.guardPacifistActive && snapshot.foreignAchievementGoal === null ? "Red Dead" : false,
         describe: (name) => `${name} achievement guard`,
         multiplier: () => 0
@@ -24430,7 +24428,7 @@
       },
       {
         id: "geck-limit",
-        enabled: (snapshot) => getSettings().prestigeType !== "bioseed" || !snapshot.geckNeeded,
+        enabled: (snapshot) => snapshot.prestigeRoute !== "bioseed" || !snapshot.geckNeeded,
         match: (building3) => building3 === getBuildings().GasSpaceDockGECK,
         describe: () => "Max allowed amount of G.E.C.K reached",
         multiplier: () => 0
@@ -24451,49 +24449,49 @@
       },
       {
         id: "prestige-unneeded",
-        enabled: () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType !== "bioseed",
+        enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute !== "bioseed",
         match: (building3) => building3 === getBuildings().GasSpaceDock || building3 === getBuildings().GasSpaceDockShipSegment || building3 === getBuildings().GasSpaceDockProbe,
         describe: () => "Not needed for current prestige",
         multiplier: () => 0
       },
       {
         id: "prestige-unneeded-bioseed",
-        enabled: () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "bioseed",
+        enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute === "bioseed",
         match: (building3) => building3 === getBuildings().DwarfWorldCollider || building3 === getBuildings().TitanMission,
         describe: () => "Not needed for Bioseed prestige",
         multiplier: () => 0
       },
       {
         id: "prestige-unneeded-whitehole",
-        enabled: () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "whitehole",
+        enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute === "whitehole",
         match: (building3) => building3 === getBuildings().BlackholeJumpShip,
         describe: () => "Not needed for Whitehole prestige",
         multiplier: () => 0
       },
       {
         id: "prestige-unneeded-vacuum",
-        enabled: () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "vacuum",
+        enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute === "vacuum",
         match: (building3) => building3 === getBuildings().BlackholeStellarEngine,
         describe: () => "Not needed for Vacuum Collapse prestige",
         multiplier: () => 0
       },
       {
         id: "prestige-unneeded-ascension-missions",
-        enabled: (snapshot) => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "ascension" && snapshot.pillarFinished && !snapshot.witchHunterRace,
+        enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute === "ascension" && snapshot.pillarFinished && !snapshot.witchHunterRace,
         match: (building3) => building3 === getBuildings().PitMission || building3 === getBuildings().RuinsMission,
         describe: () => "Not needed for Ascension prestige",
         multiplier: () => 0
       },
       {
         id: "prestige-unneeded-witch-hunter",
-        enabled: (snapshot) => snapshot.witchHunterRace && getSettings().prestigeType === "ascension",
+        enabled: (snapshot) => snapshot.witchHunterRace && snapshot.prestigeRoute === "ascension",
         match: (building3) => building3 === getBuildings().SpireWaygate,
         describe: () => "Not needed for Witch Hunter's Ascension prestige",
         multiplier: () => 0
       },
       {
         id: "prestige-unneeded-terraform",
-        enabled: () => getSettings().prestigeBioseedConstruct && getSettings().prestigeType === "terraform",
+        enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute === "terraform",
         match: (building3) => building3 === getBuildings().PitMission || building3 === getBuildings().RuinsMission,
         describe: () => "Not needed for Terraform prestige",
         multiplier: () => 0
@@ -24639,7 +24637,7 @@
       },
       {
         id: "vacuum-collapse-mana-producer",
-        enabled: () => getSettings().prestigeType === "vacuum",
+        enabled: (snapshot) => snapshot.prestigeRoute === "vacuum",
         match: (building3) => building3 === getBuildings().Pylon || building3 === getBuildings().RedPylon || building3 === getBuildings().TauPylon,
         describe: () => "Vacuum Collapse Mana producer",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingVacuumCollapse
@@ -24690,6 +24688,19 @@
     getState,
     getWeightingMultiplier,
     isBestFreighterOnly,
+    isAutoBuildEnabled,
+    isAutoFleetEnabled,
+    isMinerJobsDisabled,
+    isTransportComparedBySoulGems,
+    getPrestigeType,
+    isPrestigeConstructionLimited,
+    isSavingSoulGemsForPrestige,
+    isAuthorityManaged,
+    getMinimumAuthority,
+    getEmbassyKnowledgeTarget,
+    getSlaveIncomeTarget,
+    isAchievementGuardsEnabled,
+    isBananaRepublicGuardEnabled,
     isGalaxyAssaultPending,
     isStargatePiracySupressed,
     isGalaxyPiracyCoveredByFleet,
@@ -24751,6 +24762,17 @@
       return null;
     };
     const readLakeBiremeSupplyRate = () => Number(getSpireBloodstoneRank()) >= 2 ? 0.8 : 0.85;
+    const DISTINGUISHED_ROUTES = /* @__PURE__ */ new Set([
+      "bioseed",
+      "whitehole",
+      "vacuum",
+      "ascension",
+      "terraform"
+    ]);
+    const readPrestigeRoute = () => {
+      const route = requireString(getPrestigeType(), "settings.prestigeType");
+      return DISTINGUISHED_ROUTES.has(route) ? route : "other";
+    };
     const weight = (setting) => requireNumber(getWeightingMultiplier(setting), `settings.${setting}`);
     const readWeights = () => Object.freeze({
       buildingWeightingNew: weight("buildingWeightingNew"),
@@ -24837,6 +24859,54 @@
         buildBestFreighterOnly: requireBoolean(
           isBestFreighterOnly(),
           "settings.buildingsBestFreighter"
+        ),
+        autoBuildEnabled: requireBoolean(
+          isAutoBuildEnabled(),
+          "settings.autoBuild"
+        ),
+        autoFleetEnabled: requireBoolean(
+          isAutoFleetEnabled(),
+          "settings.autoFleet"
+        ),
+        minerJobsDisabled: requireBoolean(
+          isMinerJobsDisabled(),
+          "settings.jobDisableMiners"
+        ),
+        compareTransportsBySoulGems: requireBoolean(
+          isTransportComparedBySoulGems(),
+          "settings.buildingsTransportGem"
+        ),
+        prestigeRoute: readPrestigeRoute(),
+        limitPrestigeConstruction: requireBoolean(
+          isPrestigeConstructionLimited(),
+          "settings.prestigeBioseedConstruct"
+        ),
+        saveSoulGemsForPrestige: requireBoolean(
+          isSavingSoulGemsForPrestige(),
+          "settings.prestigeWhiteholeSaveGems"
+        ),
+        // No building raises the cap toward a target the script is not managing.
+        authorityTarget: requireBoolean(
+          isAuthorityManaged(),
+          "settings.authorityManage"
+        ) ? requireNumber(
+          getMinimumAuthority(),
+          "settings.generalMinimumAuthority"
+        ) : 0,
+        embassyKnowledgeTarget: requireNumber(
+          getEmbassyKnowledgeTarget(),
+          "settings.fleetEmbassyKnowledge"
+        ),
+        slaveIncomeTarget: requireNumber(
+          getSlaveIncomeTarget(),
+          "settings.slaveIncome"
+        ),
+        bananaRepublicGuardActive: requireBoolean(
+          isAchievementGuardsEnabled(),
+          "settings.achievementGuards"
+        ) && requireBoolean(
+          isBananaRepublicGuardEnabled(),
+          "settings.guardBananaRepublic"
         ),
         queuedTargets: new Set(
           requireArray(state["queuedTargets"], "state.queuedTargets")
@@ -56221,7 +56291,6 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       galaxyCombatShips,
       weightingRules
     } = createBuildingWeightingPolicy({
-      getSettings: () => settings,
       getResources: () => resources,
       getBuildings: () => buildings,
       getNumberStringFn: () => getNumberString,
@@ -56444,6 +56513,19 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getState: () => state,
         getWeightingMultiplier: (setting) => settings[setting],
         isBestFreighterOnly: () => settings.buildingsBestFreighter,
+        isAutoBuildEnabled: () => settings.autoBuild,
+        isAutoFleetEnabled: () => settings.autoFleet,
+        isMinerJobsDisabled: () => settings.jobDisableMiners,
+        isTransportComparedBySoulGems: () => settings.buildingsTransportGem,
+        getPrestigeType: () => settings.prestigeType,
+        isPrestigeConstructionLimited: () => settings.prestigeBioseedConstruct,
+        isSavingSoulGemsForPrestige: () => settings.prestigeWhiteholeSaveGems,
+        isAuthorityManaged: () => settings.authorityManage,
+        getMinimumAuthority: () => settings.generalMinimumAuthority,
+        getEmbassyKnowledgeTarget: () => settings.fleetEmbassyKnowledge,
+        getSlaveIncomeTarget: () => settings.slaveIncome,
+        isAchievementGuardsEnabled: () => settings.achievementGuards,
+        isBananaRepublicGuardEnabled: () => settings.guardBananaRepublic,
         isGalaxyAssaultPending: () => galaxyAssaultPending(),
         isStargatePiracySupressed: () => stargatePiracySupressed(),
         isGalaxyPiracyCoveredByFleet: () => galaxyPiracyCoveredByFleet(),

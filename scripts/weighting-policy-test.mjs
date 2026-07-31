@@ -18,7 +18,6 @@ const buildings = new Proxy(buildingCache, {
   },
 });
 let context = {
-  settings: { autoBuild: false },
   resources: {},
   buildings,
 };
@@ -62,6 +61,17 @@ const snapshotOf = ({ weights = {}, ...overrides } = {}) =>
   Object.freeze({
     weights: Object.freeze({ ...zeroWeights, ...weights }),
     buildBestFreighterOnly: false,
+    autoBuildEnabled: false,
+    autoFleetEnabled: false,
+    minerJobsDisabled: false,
+    compareTransportsBySoulGems: false,
+    prestigeRoute: "other",
+    limitPrestigeConstruction: false,
+    saveSoulGemsForPrestige: false,
+    authorityTarget: 0,
+    embassyKnowledgeTarget: 0,
+    slaveIncomeTarget: 0,
+    bananaRepublicGuardActive: false,
     queuedTargets: new Set(),
     triggerTargets: new Set(),
     knowledgeRequiredByTechs: 0,
@@ -128,7 +138,6 @@ const snapshotOf = ({ weights = {}, ...overrides } = {}) =>
 const emptySnapshot = snapshotOf();
 
 const policy = createBuildingWeightingPolicy({
-  getSettings: () => context.settings,
   getResources: () => context.resources,
   getBuildings: () => context.buildings,
   getNumberStringFn: () => String,
@@ -168,12 +177,11 @@ assert.equal(policy.galaxyCombatShips[0], buildings.ScoutShip);
 assert.equal(policy.galaxyCombatShips.at(-1), buildings.Dreadnought);
 
 const disabledRule = ruleById("autobuild-off");
-assert.equal(disabledRule.enabled(), true);
-context = {
-  ...context,
-  settings: { ...context.settings, autoBuild: true },
-};
-assert.equal(disabledRule.enabled(), false);
+assert.equal(disabledRule.enabled(emptySnapshot), true);
+assert.equal(
+  disabledRule.enabled(snapshotOf({ autoBuildEnabled: true })),
+  false,
+);
 assert.equal(disabledRule.match(), true);
 assert.equal(disabledRule.multiplier(emptySnapshot), 0);
 
@@ -258,15 +266,11 @@ assert.equal(
 buildings.ErisDigsite.count = 100;
 assert.equal(digsiteRule.enabled(truepathSnapshot), false);
 
+// An unmanaged Authority cap arrives as a zero target, which is how the rule
+// stays off without reading the management toggle itself.
 const authorityRule = ruleById("authority-cap");
 context = {
   ...context,
-  settings: {
-    ...context.settings,
-    authorityManage: true,
-    generalMinimumAuthority: 100,
-    buildingWeightingAuthority: 10,
-  },
   resources: {
     Authority: {
       maxQuantity: 80,
@@ -274,10 +278,15 @@ context = {
     },
   },
 };
-assert.equal(authorityRule.enabled(), true);
+const authorityShortfall = snapshotOf({ authorityTarget: 100 });
+assert.equal(authorityRule.enabled(authorityShortfall), true);
 assert.equal(authorityRule.match(buildings.Barracks), true);
-context.settings.authorityManage = false;
-assert.equal(authorityRule.enabled(), false);
+assert.equal(authorityRule.enabled(emptySnapshot), false);
+assert.equal(
+  authorityRule.enabled(snapshotOf({ authorityTarget: 80 })),
+  false,
+  "a cap already at target needs no more buildings",
+);
 
 // Both piracy rules ask the snapshot whether more hardware could still help,
 // and then only identify the buildings that hardware is.
@@ -291,22 +300,28 @@ assert.equal(piracyRule.match(buildings.StargateDefensePlatform), true);
 assert.equal(piracyRule.match(buildings.GatewayStarbase), false);
 
 const fleetPiracyRule = ruleById("piracy-covered-by-fleet");
-const coveredSnapshot = snapshotOf({ galaxyPiracyCoveredByFleet: true });
-context.settings.autoFleet = true;
+const coveredSnapshot = snapshotOf({
+  autoFleetEnabled: true,
+  galaxyPiracyCoveredByFleet: true,
+});
 assert.equal(fleetPiracyRule.enabled(coveredSnapshot), true);
 assert.equal(fleetPiracyRule.enabled(emptySnapshot), false);
 // An accumulating assault fleet is exempt: its ships are wanted regardless.
 assert.equal(
   fleetPiracyRule.enabled(
     snapshotOf({
+      autoFleetEnabled: true,
       galaxyPiracyCoveredByFleet: true,
       galaxyAssaultPending: true,
     }),
   ),
   false,
 );
-context.settings.autoFleet = false;
-assert.equal(fleetPiracyRule.enabled(coveredSnapshot), false);
+assert.equal(
+  fleetPiracyRule.enabled(snapshotOf({ galaxyPiracyCoveredByFleet: true })),
+  false,
+  "an idle AutoFleet cannot be trusted to keep piracy covered",
+);
 assert.equal(fleetPiracyRule.match(buildings.Dreadnought), true);
 assert.equal(fleetPiracyRule.match(buildings.GatewayStarbase), false);
 
@@ -361,8 +376,19 @@ assert.equal(
 );
 assert.equal(mechSavingRule.multiplier(emptySnapshot), 0);
 
-context.settings.achievementGuards = true;
+// Each guard answer already folds in the master toggle, so the rule is enabled
+// by the guards it can actually act on.
 const achievementGuardRule = ruleById("achievement-guard");
+assert.equal(achievementGuardRule.enabled(emptySnapshot), false);
+assert.equal(
+  achievementGuardRule.enabled(snapshotOf({ guardEnergeticActive: true })),
+  true,
+);
+assert.equal(
+  achievementGuardRule.enabled(snapshotOf({ guardPacifistActive: true })),
+  false,
+  "the Pacifist guard only suppresses Red Dead; it enables nothing on its own",
+);
 const redDeadSnapshot = snapshotOf({ guardRedDeadActive: true });
 assert.equal(
   achievementGuardRule.match(context.buildings.RedSpaceport, redDeadSnapshot),
@@ -453,10 +479,18 @@ assert.equal(
   false,
 );
 
-context.settings = { ...context.settings, prestigeType: "bioseed" };
 const geckRule = ruleById("geck-limit");
-assert.equal(geckRule.enabled(emptySnapshot), true);
-assert.equal(geckRule.enabled(snapshotOf({ geckNeeded: true })), false);
+const bioseedRun = snapshotOf({ prestigeRoute: "bioseed" });
+assert.equal(geckRule.enabled(bioseedRun), true);
+assert.equal(
+  geckRule.enabled(snapshotOf({ prestigeRoute: "bioseed", geckNeeded: true })),
+  false,
+);
+assert.equal(
+  geckRule.enabled(snapshotOf({ geckNeeded: true })),
+  true,
+  "a G.E.C.K is only worth building on the Bioseed route",
+);
 
 const edenRule = ruleById("prestige-blocked-eden");
 const loneSurvivor = snapshotOf({ loneSurvivorRace: true });
@@ -608,11 +642,8 @@ assert.equal(
 );
 
 const vacuumManaRule = ruleById("vacuum-collapse-mana-producer");
-context.settings = {
-  ...context.settings,
-  prestigeType: "vacuum",
-};
-assert.equal(vacuumManaRule.enabled(), true);
+const vacuumRun = snapshotOf({ prestigeRoute: "vacuum" });
+assert.equal(vacuumManaRule.enabled(vacuumRun), true);
 assert.equal(vacuumManaRule.match(context.buildings.Pylon), true);
 assert.equal(vacuumManaRule.match(context.buildings.Bank), false);
 assert.equal(vacuumManaRule.describe(), "Vacuum Collapse Mana producer");
@@ -622,8 +653,11 @@ assert.equal(
   ),
   10,
 );
-context.settings.prestigeType = "mad";
-assert.equal(vacuumManaRule.enabled(), false);
+assert.equal(
+  vacuumManaRule.enabled(emptySnapshot),
+  false,
+  'every route the rules do not distinguish arrives as "other"',
+);
 
 // Spire ports and base camps below their prebuild target are exempt from the
 // non-operating penalty, and each reads only the answer that names it.
@@ -816,15 +850,19 @@ assert.equal(solarRule.enabled(truepathSnapshot), false);
 // The Andromeda miner rule spares the Mine only for the race that has no other
 // source of Chrysotile.
 const andromedaRule = ruleById("andromeda-miners-disabled");
-context.settings = { ...context.settings, jobDisableMiners: true };
 context.buildings = {
   ...context.buildings,
   CoalMine: { _vueBinding: "CoalMine" },
   Mine: { _vueBinding: "Mine" },
   GatewayStarbase: { _vueBinding: "GatewayStarbase", count: 1 },
 };
-const chrysotileOnly = snapshotOf({ mineIsOnlyChrysotileSource: true });
-assert.equal(andromedaRule.enabled(), true);
+const minersOff = snapshotOf({ minerJobsDisabled: true });
+const chrysotileOnly = snapshotOf({
+  minerJobsDisabled: true,
+  mineIsOnlyChrysotileSource: true,
+});
+assert.equal(andromedaRule.enabled(minersOff), true);
+assert.equal(andromedaRule.enabled(emptySnapshot), false);
 assert.equal(
   andromedaRule.match(context.buildings.CoalMine, emptySnapshot),
   true,
@@ -939,6 +977,13 @@ assert.equal(
   lakeRule.describe(lakeBireme),
   "Bireme Warship gives more Supplies",
 );
+// Comparing by Soul Gems instead of support flips the winner once the ships
+// cost different amounts.
+lakeBireme.cost = { Soul_Gem: 10 };
+const gemComparison = snapshotOf({ compareTransportsBySoulGems: true });
+assert.equal(lakeRule.match(lakeBireme, gemComparison), lakeTransport);
+assert.equal(lakeRule.match(lakeTransport, gemComparison), undefined);
+assert.equal(lakeRule.match(lakeTransport, emptySnapshot), lakeBireme);
 
 // Unused ejector capacity is built capacity minus the capacity the game has
 // already assigned.
@@ -1002,6 +1047,148 @@ assert.equal(freighterRule.multiplier(emptySnapshot), 1);
 assert.equal(
   freighterRule.multiplier(snapshotOf({ buildBestFreighterOnly: true })),
   0,
+);
+
+// The Banana Republic objective guard is one snapshot answer that already
+// folds in the master achievement toggle.
+assert.equal(bananaRule.enabled(emptySnapshot), false);
+assert.equal(
+  bananaRule.enabled(snapshotOf({ bananaRepublicGuardActive: true })),
+  false,
+  "only a Banana Republic run has the objective",
+);
+assert.equal(
+  bananaRule.enabled(
+    snapshotOf({ bananaRepublicGuardActive: true, bananaRace: true }),
+  ),
+  true,
+);
+
+// The prestige-route rules ask the snapshot which route is configured. All but
+// the Witch Hunter one also require the "only build what the route needs"
+// setting, and every one of them is off on a route they do not name.
+const prestigeRouteCases = [
+  ["prestige-unneeded", { prestigeRoute: "whitehole" }],
+  ["prestige-unneeded-bioseed", { prestigeRoute: "bioseed" }],
+  ["prestige-unneeded-whitehole", { prestigeRoute: "whitehole" }],
+  ["prestige-unneeded-vacuum", { prestigeRoute: "vacuum" }],
+  ["prestige-unneeded-terraform", { prestigeRoute: "terraform" }],
+  ["prestige-unneeded-ascension-towers", { prestigeRoute: "ascension" }],
+  [
+    "prestige-unneeded-ascension-missions",
+    { prestigeRoute: "ascension", pillarFinished: true },
+  ],
+];
+for (const [id, answers] of prestigeRouteCases) {
+  const rule = ruleById(id);
+  assert.equal(
+    rule.enabled(snapshotOf({ ...answers, limitPrestigeConstruction: true })),
+    true,
+    `${id} is enabled on its own route`,
+  );
+  assert.equal(
+    rule.enabled(snapshotOf(answers)),
+    false,
+    `${id} respects the prestige construction limit`,
+  );
+  assert.equal(
+    rule.enabled(snapshotOf({ limitPrestigeConstruction: true })),
+    id === "prestige-unneeded",
+    `${id} only fires on the route it names`,
+  );
+}
+// The Witch Hunter Ascension has its own Waygate rule and no construction gate.
+const witchHunterRule = ruleById("prestige-unneeded-witch-hunter");
+assert.equal(
+  witchHunterRule.enabled(
+    snapshotOf({ witchHunterRace: true, prestigeRoute: "ascension" }),
+  ),
+  true,
+);
+assert.equal(
+  witchHunterRule.enabled(snapshotOf({ prestigeRoute: "ascension" })),
+  false,
+);
+// The two Ascension rules stand down for a Witch Hunter run.
+for (const id of [
+  "prestige-unneeded-ascension-towers",
+  "prestige-unneeded-ascension-missions",
+]) {
+  assert.equal(
+    ruleById(id).enabled(
+      snapshotOf({
+        limitPrestigeConstruction: true,
+        prestigeRoute: "ascension",
+        pillarFinished: true,
+        witchHunterRace: true,
+      }),
+    ),
+    false,
+    `${id} stands down for the Witch Hunter Ascension`,
+  );
+}
+
+const soulGemRule = ruleById("saving-soul-gems-for-prestige");
+assert.equal(
+  soulGemRule.enabled(
+    snapshotOf({ prestigeRoute: "whitehole", saveSoulGemsForPrestige: true }),
+  ),
+  true,
+);
+assert.equal(
+  soulGemRule.enabled(snapshotOf({ prestigeRoute: "whitehole" })),
+  false,
+);
+assert.equal(
+  soulGemRule.enabled(snapshotOf({ saveSoulGemsForPrestige: true })),
+  false,
+);
+
+// The Embassy threshold is a snapshot answer, and `describe` reports the same
+// number the gate compared against.
+const embassyRule = ruleById("embassy-knowledge-required");
+context.buildings = {
+  ...context.buildings,
+  GorddonEmbassy: { _vueBinding: "GorddonEmbassy", count: 0 },
+};
+context = {
+  ...context,
+  resources: { ...context.resources, Knowledge: { maxQuantity: 5_000_000 } },
+};
+const embassyWanted = snapshotOf({ embassyKnowledgeTarget: 6_000_000 });
+assert.equal(embassyRule.enabled(embassyWanted), true);
+assert.equal(embassyRule.enabled(emptySnapshot), false);
+assert.equal(
+  embassyRule.describe(true, context.buildings.GorddonEmbassy, embassyWanted),
+  "6000000 Max Knowledge required",
+);
+context.buildings.GorddonEmbassy.count = 1;
+assert.equal(
+  embassyRule.enabled(embassyWanted),
+  false,
+  "one Embassy is all the script wants",
+);
+
+// Buying slaves waits for income above the configured target.
+const slaveRule = ruleById("slave-market-blocked");
+const slaveMarket = { _vueBinding: "SlaveMarket" };
+context.buildings = { ...context.buildings, SlaveMarket: slaveMarket };
+context = {
+  ...context,
+  resources: {
+    ...context.resources,
+    Slave: { currentQuantity: 0, maxQuantity: 10 },
+    Money: { currentQuantity: 100, maxQuantity: 1_000, rateOfChange: 10 },
+  },
+};
+assert.equal(
+  slaveRule.match(slaveMarket, snapshotOf({ slaveIncomeTarget: 100 })),
+  "Buying slaves only with excess money",
+);
+assert.equal(
+  slaveRule.match(slaveMarket, snapshotOf({ slaveIncomeTarget: 5 })),
+  undefined,
+  "income above the target is excess money",
 );
 
 console.log("Weighting policy module tests passed");

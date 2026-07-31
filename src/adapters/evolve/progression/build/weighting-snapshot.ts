@@ -4,6 +4,7 @@ import type {
   BuildingWeightName,
   BuildingWeights,
   MechSupplySavingReason,
+  PrestigeRoute,
   SacrificeBlockedReason,
 } from "../../../../ports/building-weighting.ts";
 import {
@@ -11,12 +12,26 @@ import {
   requireBoolean,
   requireNumber,
   requireRecord,
+  requireString,
 } from "../../../validation.ts";
 
 export interface WeightingSnapshotDependencies {
   readonly getState: () => unknown;
   readonly getWeightingMultiplier: (setting: BuildingWeightName) => unknown;
   readonly isBestFreighterOnly: () => unknown;
+  readonly isAutoBuildEnabled: () => unknown;
+  readonly isAutoFleetEnabled: () => unknown;
+  readonly isMinerJobsDisabled: () => unknown;
+  readonly isTransportComparedBySoulGems: () => unknown;
+  readonly getPrestigeType: () => unknown;
+  readonly isPrestigeConstructionLimited: () => unknown;
+  readonly isSavingSoulGemsForPrestige: () => unknown;
+  readonly isAuthorityManaged: () => unknown;
+  readonly getMinimumAuthority: () => unknown;
+  readonly getEmbassyKnowledgeTarget: () => unknown;
+  readonly getSlaveIncomeTarget: () => unknown;
+  readonly isAchievementGuardsEnabled: () => unknown;
+  readonly isBananaRepublicGuardEnabled: () => unknown;
   readonly isGalaxyAssaultPending: () => unknown;
   readonly isStargatePiracySupressed: () => unknown;
   readonly isGalaxyPiracyCoveredByFleet: () => unknown;
@@ -110,6 +125,19 @@ export function createWeightingSnapshotReader({
   getState,
   getWeightingMultiplier,
   isBestFreighterOnly,
+  isAutoBuildEnabled,
+  isAutoFleetEnabled,
+  isMinerJobsDisabled,
+  isTransportComparedBySoulGems,
+  getPrestigeType,
+  isPrestigeConstructionLimited,
+  isSavingSoulGemsForPrestige,
+  isAuthorityManaged,
+  getMinimumAuthority,
+  getEmbassyKnowledgeTarget,
+  getSlaveIncomeTarget,
+  isAchievementGuardsEnabled,
+  isBananaRepublicGuardEnabled,
   isGalaxyAssaultPending,
   isStargatePiracySupressed,
   isGalaxyPiracyCoveredByFleet,
@@ -192,6 +220,21 @@ export function createWeightingSnapshotReader({
   // keeps the game's lenient coercion.
   const readLakeBiremeSupplyRate = (): number =>
     Number(getSpireBloodstoneRank()) >= 2 ? 0.8 : 0.85;
+
+  // Routes the weighting rules distinguish. Everything else, including "none"
+  // and any route added upstream, weighs the same as no route at all.
+  const DISTINGUISHED_ROUTES: ReadonlySet<string> = new Set([
+    "bioseed",
+    "whitehole",
+    "vacuum",
+    "ascension",
+    "terraform",
+  ]);
+
+  const readPrestigeRoute = (): PrestigeRoute => {
+    const route = requireString(getPrestigeType(), "settings.prestigeType");
+    return DISTINGUISHED_ROUTES.has(route) ? (route as PrestigeRoute) : "other";
+  };
 
   // Every weighting multiplier is written by the settings defaults on load, so
   // a missing or non-numeric one is a corrupt setting rather than a run that
@@ -300,6 +343,58 @@ export function createWeightingSnapshotReader({
         isBestFreighterOnly(),
         "settings.buildingsBestFreighter",
       ),
+      autoBuildEnabled: requireBoolean(
+        isAutoBuildEnabled(),
+        "settings.autoBuild",
+      ),
+      autoFleetEnabled: requireBoolean(
+        isAutoFleetEnabled(),
+        "settings.autoFleet",
+      ),
+      minerJobsDisabled: requireBoolean(
+        isMinerJobsDisabled(),
+        "settings.jobDisableMiners",
+      ),
+      compareTransportsBySoulGems: requireBoolean(
+        isTransportComparedBySoulGems(),
+        "settings.buildingsTransportGem",
+      ),
+      prestigeRoute: readPrestigeRoute(),
+      limitPrestigeConstruction: requireBoolean(
+        isPrestigeConstructionLimited(),
+        "settings.prestigeBioseedConstruct",
+      ),
+      saveSoulGemsForPrestige: requireBoolean(
+        isSavingSoulGemsForPrestige(),
+        "settings.prestigeWhiteholeSaveGems",
+      ),
+      // No building raises the cap toward a target the script is not managing.
+      authorityTarget: requireBoolean(
+        isAuthorityManaged(),
+        "settings.authorityManage",
+      )
+        ? requireNumber(
+            getMinimumAuthority(),
+            "settings.generalMinimumAuthority",
+          )
+        : 0,
+      embassyKnowledgeTarget: requireNumber(
+        getEmbassyKnowledgeTarget(),
+        "settings.fleetEmbassyKnowledge",
+      ),
+      slaveIncomeTarget: requireNumber(
+        getSlaveIncomeTarget(),
+        "settings.slaveIncome",
+      ),
+      bananaRepublicGuardActive:
+        requireBoolean(
+          isAchievementGuardsEnabled(),
+          "settings.achievementGuards",
+        ) &&
+        requireBoolean(
+          isBananaRepublicGuardEnabled(),
+          "settings.guardBananaRepublic",
+        ),
       queuedTargets: new Set(
         requireArray(state["queuedTargets"], "state.queuedTargets"),
       ),

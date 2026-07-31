@@ -18,7 +18,6 @@ const SACRIFICE_BLOCKED_NOTES: Readonly<
 };
 
 type BuildingWeightingDependencies = {
-  getSettings: () => LooseObject;
   getResources: () => LooseObject;
   getBuildings: () => LooseObject;
   getNumberStringFn: () => LooseFunction;
@@ -28,7 +27,6 @@ type BuildingWeightingDependencies = {
 };
 
 export function createBuildingWeightingPolicy({
-  getSettings,
   getResources,
   getBuildings,
   getNumberStringFn,
@@ -97,7 +95,7 @@ export function createBuildingWeightingPolicy({
     {
       // Set weighting to zero right away, and skip all checks if autoBuild is disabled
       id: "autobuild-off",
-      enabled: () => !getSettings().autoBuild,
+      enabled: (snapshot) => !snapshot.autoBuildEnabled,
       match: () => true,
       describe: () => "",
       multiplier: () => 0,
@@ -179,9 +177,8 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "andromeda-miners-disabled",
-      enabled: () =>
-        getSettings().jobDisableMiners &&
-        getBuildings().GatewayStarbase.count > 0,
+      enabled: (snapshot) =>
+        snapshot.minerJobsDisabled && getBuildings().GatewayStarbase.count > 0,
       match: (building: any, snapshot) =>
         building === getBuildings().CoalMine ||
         (building === getBuildings().Mine &&
@@ -200,7 +197,7 @@ export function createBuildingWeightingPolicy({
     {
       id: "piracy-covered-by-fleet",
       enabled: (snapshot) =>
-        getSettings().autoFleet &&
+        snapshot.autoFleetEnabled &&
         snapshot.galaxyPiracyCoveredByFleet &&
         !snapshot.galaxyAssaultPending,
       match: (building: any) => galaxyCombatShipSet.has(building),
@@ -221,8 +218,8 @@ export function createBuildingWeightingPolicy({
     {
       id: "prestige-unneeded-ascension-towers",
       enabled: (snapshot) =>
-        getSettings().prestigeBioseedConstruct &&
-        getSettings().prestigeType === "ascension" &&
+        snapshot.limitPrestigeConstruction &&
+        snapshot.prestigeRoute === "ascension" &&
         !snapshot.witchHunterRace,
       match: (building: any) =>
         building === getBuildings().GateEastTower ||
@@ -241,9 +238,9 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "saving-soul-gems-for-prestige",
-      enabled: () =>
-        getSettings().prestigeType === "whitehole" &&
-        getSettings().prestigeWhiteholeSaveGems,
+      enabled: (snapshot) =>
+        snapshot.prestigeRoute === "whitehole" &&
+        snapshot.saveSoulGemsForPrestige,
       match: (building: any) => {
         if (
           building.cost["Soul_Gem"] >
@@ -318,7 +315,7 @@ export function createBuildingWeightingPolicy({
             (1 - rating ** (biremeCount + 1)) * (transportCount * 5);
           let nextTransport =
             (1 - rating ** biremeCount) * ((transportCount + 1) * 5);
-          if (getSettings().buildingsTransportGem) {
+          if (snapshot.compareTransportsBySoulGems) {
             let currentSupply =
               (1 - rating ** biremeCount) * (transportCount * 5);
             nextBireme =
@@ -451,15 +448,12 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "embassy-knowledge-required",
-      enabled: () =>
+      enabled: (snapshot) =>
         getBuildings().GorddonEmbassy.count === 0 &&
-        getResources().Knowledge.maxQuantity <
-          getSettings().fleetEmbassyKnowledge,
+        getResources().Knowledge.maxQuantity < snapshot.embassyKnowledgeTarget,
       match: (building: any) => building === getBuildings().GorddonEmbassy,
-      describe: () =>
-        `${getNumberString(
-          getSettings().fleetEmbassyKnowledge,
-        )} Max Knowledge required`,
+      describe: (_match, _building, snapshot) =>
+        `${getNumberString(snapshot.embassyKnowledgeTarget)} Max Knowledge required`,
       multiplier: () => 0,
     },
     {
@@ -472,7 +466,7 @@ export function createBuildingWeightingPolicy({
     {
       id: "slave-market-blocked",
       enabled: (snapshot) => snapshot.slaverRace,
-      match: (building: any) => {
+      match: (building: any, snapshot) => {
         if (building === getBuildings().SlaveMarket) {
           if (
             getResources().Slave.currentQuantity >=
@@ -484,7 +478,7 @@ export function createBuildingWeightingPolicy({
             getResources().Money.currentQuantity +
               getResources().Money.rateOfChange <
               getResources().Money.maxQuantity &&
-            getResources().Money.rateOfChange < getSettings().slaveIncome
+            getResources().Money.rateOfChange < snapshot.slaveIncomeTarget
           ) {
             return "Buying slaves only with excess money";
           }
@@ -598,12 +592,10 @@ export function createBuildingWeightingPolicy({
       // amount of tax/soldier management can fix the production penalty, so prioritize the
       // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
       id: "authority-cap",
-      enabled: () =>
-        getSettings().authorityManage &&
-        getSettings().generalMinimumAuthority > 0 &&
+      enabled: (snapshot) =>
+        snapshot.authorityTarget > 0 &&
         getResources().Authority.isUnlocked() &&
-        getResources().Authority.maxQuantity <
-          getSettings().generalMinimumAuthority,
+        getResources().Authority.maxQuantity < snapshot.authorityTarget,
       match: (building: any) => authorityCapBuildingSet.has(building),
       describe: () => "Raises Authority cap, currently below target",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingAuthority,
@@ -611,9 +603,7 @@ export function createBuildingWeightingPolicy({
     {
       id: "banana-republic-objective",
       enabled: (snapshot) =>
-        getSettings().achievementGuards &&
-        getSettings().guardBananaRepublic &&
-        snapshot.bananaRace,
+        snapshot.bananaRepublicGuardActive && snapshot.bananaRace,
       match: (building: any, snapshot) =>
         building === getBuildings().DwarfWorldCollider &&
         !snapshot.bananaColliderObjectiveComplete,
@@ -679,7 +669,11 @@ export function createBuildingWeightingPolicy({
       // Red Spaceport unlocks unification research. Let an active unification
       // achievement build this prerequisite so Red Dead can release afterward.
       id: "achievement-guard",
-      enabled: () => getSettings().achievementGuards,
+      // Each guard answer already folds in the master AutoAchievement toggle.
+      enabled: (snapshot) =>
+        snapshot.guardDreadedActive ||
+        snapshot.guardEnergeticActive ||
+        snapshot.guardRedDeadActive,
       match: (building: any, snapshot) =>
         building === getBuildings().Dreadnought && snapshot.guardDreadedActive
           ? "Dreaded"
@@ -753,7 +747,7 @@ export function createBuildingWeightingPolicy({
     {
       id: "geck-limit",
       enabled: (snapshot) =>
-        getSettings().prestigeType !== "bioseed" || !snapshot.geckNeeded,
+        snapshot.prestigeRoute !== "bioseed" || !snapshot.geckNeeded,
       match: (building: any) => building === getBuildings().GasSpaceDockGECK,
       describe: () => "Max allowed amount of G.E.C.K reached",
       multiplier: () => 0,
@@ -779,9 +773,9 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "prestige-unneeded",
-      enabled: () =>
-        getSettings().prestigeBioseedConstruct &&
-        getSettings().prestigeType !== "bioseed",
+      enabled: (snapshot) =>
+        snapshot.limitPrestigeConstruction &&
+        snapshot.prestigeRoute !== "bioseed",
       match: (building: any) =>
         building === getBuildings().GasSpaceDock ||
         building === getBuildings().GasSpaceDockShipSegment ||
@@ -791,9 +785,9 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "prestige-unneeded-bioseed",
-      enabled: () =>
-        getSettings().prestigeBioseedConstruct &&
-        getSettings().prestigeType === "bioseed",
+      enabled: (snapshot) =>
+        snapshot.limitPrestigeConstruction &&
+        snapshot.prestigeRoute === "bioseed",
       match: (building: any) =>
         building === getBuildings().DwarfWorldCollider ||
         building === getBuildings().TitanMission,
@@ -802,18 +796,18 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "prestige-unneeded-whitehole",
-      enabled: () =>
-        getSettings().prestigeBioseedConstruct &&
-        getSettings().prestigeType === "whitehole",
+      enabled: (snapshot) =>
+        snapshot.limitPrestigeConstruction &&
+        snapshot.prestigeRoute === "whitehole",
       match: (building: any) => building === getBuildings().BlackholeJumpShip,
       describe: () => "Not needed for Whitehole prestige",
       multiplier: () => 0,
     },
     {
       id: "prestige-unneeded-vacuum",
-      enabled: () =>
-        getSettings().prestigeBioseedConstruct &&
-        getSettings().prestigeType === "vacuum",
+      enabled: (snapshot) =>
+        snapshot.limitPrestigeConstruction &&
+        snapshot.prestigeRoute === "vacuum",
       match: (building: any) =>
         building === getBuildings().BlackholeStellarEngine,
       describe: () => "Not needed for Vacuum Collapse prestige",
@@ -822,8 +816,8 @@ export function createBuildingWeightingPolicy({
     {
       id: "prestige-unneeded-ascension-missions",
       enabled: (snapshot) =>
-        getSettings().prestigeBioseedConstruct &&
-        getSettings().prestigeType === "ascension" &&
+        snapshot.limitPrestigeConstruction &&
+        snapshot.prestigeRoute === "ascension" &&
         snapshot.pillarFinished &&
         !snapshot.witchHunterRace,
       match: (building: any) =>
@@ -835,16 +829,16 @@ export function createBuildingWeightingPolicy({
     {
       id: "prestige-unneeded-witch-hunter",
       enabled: (snapshot) =>
-        snapshot.witchHunterRace && getSettings().prestigeType === "ascension",
+        snapshot.witchHunterRace && snapshot.prestigeRoute === "ascension",
       match: (building: any) => building === getBuildings().SpireWaygate,
       describe: () => "Not needed for Witch Hunter's Ascension prestige",
       multiplier: () => 0,
     },
     {
       id: "prestige-unneeded-terraform",
-      enabled: () =>
-        getSettings().prestigeBioseedConstruct &&
-        getSettings().prestigeType === "terraform",
+      enabled: (snapshot) =>
+        snapshot.limitPrestigeConstruction &&
+        snapshot.prestigeRoute === "terraform",
       match: (building: any) =>
         building === getBuildings().PitMission ||
         building === getBuildings().RuinsMission,
@@ -1072,7 +1066,7 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "vacuum-collapse-mana-producer",
-      enabled: () => getSettings().prestigeType === "vacuum",
+      enabled: (snapshot) => snapshot.prestigeRoute === "vacuum",
       match: (building: LooseObject) =>
         building === getBuildings().Pylon ||
         building === getBuildings().RedPylon ||
