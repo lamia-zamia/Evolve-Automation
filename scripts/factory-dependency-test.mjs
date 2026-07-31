@@ -44,6 +44,12 @@ const factoryFiles = findTypeScriptFiles(sourceDirectory).filter((file) => {
 });
 
 const main = fs.readFileSync(mainPath, "utf8");
+// A factory is usually wired by the runtime, but one legacy-layer factory may also compose another.
+// Either call site proves the dependency contract is fully supplied, so both are searched.
+const compositionSources = [
+  main,
+  ...factoryFiles.map((file) => fs.readFileSync(file, "utf8")),
+];
 
 function splitTopLevel(text) {
   const parts = [];
@@ -94,19 +100,21 @@ function splitTopLevel(text) {
   return parts.map((part) => part.trim()).filter(Boolean);
 }
 
-function getMainFactoryArguments(factoryName) {
+function getFactoryArguments(factoryName) {
   const marker = `${factoryName}({`;
-  const factoryCall = main.indexOf(marker);
-  if (factoryCall < 0) {
-    throw new Error(`${factoryName}: main wiring not found`);
+  const source = compositionSources.find(
+    (candidate) => candidate.indexOf(marker) >= 0,
+  );
+  if (source === undefined) {
+    throw new Error(`${factoryName}: wiring not found`);
   }
 
-  const start = factoryCall + marker.length;
+  const start = source.indexOf(marker) + marker.length;
   let depth = 1;
   let quote = null;
   let escape = false;
-  for (let i = start; i < main.length; i++) {
-    const character = main[i];
+  for (let i = start; i < source.length; i++) {
+    const character = source[i];
     if (quote) {
       if (escape) {
         escape = false;
@@ -122,10 +130,10 @@ function getMainFactoryArguments(factoryName) {
     } else if (character === "{") {
       depth++;
     } else if (character === "}" && --depth === 0) {
-      return main.slice(start, i);
+      return source.slice(start, i);
     }
   }
-  throw new Error(`${factoryName}: unterminated main wiring`);
+  throw new Error(`${factoryName}: unterminated wiring`);
 }
 
 const contractFailures = [];
@@ -149,14 +157,14 @@ for (const file of factoryFiles) {
     parameter.split("=")[0].trim(),
   );
   const supplied = new Set(
-    splitTopLevel(getMainFactoryArguments(factoryName))
+    splitTopLevel(getFactoryArguments(factoryName))
       .map((argument) => argument.match(/^([\w$]+)/)?.[1])
       .filter(Boolean),
   );
   const missing = required.filter((parameter) => !supplied.has(parameter));
   if (missing.length > 0) {
     contractFailures.push(
-      `${path.relative(root, file)}: main wiring missing ${missing.join(", ")}`,
+      `${path.relative(root, file)}: wiring missing ${missing.join(", ")}`,
     );
   }
 }

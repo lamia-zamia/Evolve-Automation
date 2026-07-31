@@ -1,27 +1,44 @@
+import {
+  createOverrideOperandInputs,
+  type OverrideOperandBuilding,
+  type OverrideOperandChallenge,
+  type OverrideOperandGame,
+  type OverrideOperandJob,
+  type OverrideOperandProject,
+  type OverrideOperandRace,
+  type OverrideOperandResource,
+} from "./override-operand-inputs.ts";
+
 type AnyRecord = Record<string, any>;
 type AnyFunction = (...args: any[]) => any;
+
+/**
+ * A live game bag: whatever the operand readers still poke at, plus the fields the operand inputs
+ * declare. Only the second half is typed, because only it has been separated out so far.
+ */
+type Live<T> = AnyRecord & T;
 
 interface OverrideCatalogDependencies {
   readSettings: () => AnyRecord;
   readSettingsRaw: () => AnyRecord;
   readState: () => AnyRecord;
-  readGame: () => AnyRecord;
-  readBuildingIds: () => AnyRecord;
+  readGame: () => Live<OverrideOperandGame>;
+  readBuildingIds: () => Record<string, Live<OverrideOperandBuilding>>;
   readBuildings: () => AnyRecord;
-  readResources: () => AnyRecord;
+  readResources: () => Record<string, Live<OverrideOperandResource>>;
   readTechIds: () => AnyRecord;
-  readArpaIds: () => AnyRecord;
-  readJobIds: () => AnyRecord;
-  readRaces: () => AnyRecord;
-  readGovernmentManager: () => AnyRecord;
+  readArpaIds: () => Record<string, Live<OverrideOperandProject>>;
+  readJobIds: () => Record<string, Live<OverrideOperandJob>>;
+  readRaces: () => Record<string, Live<OverrideOperandRace>>;
+  readGovernmentManager: () => Live<{ Types: AnyRecord }>;
   readSmelterManager: () => AnyRecord;
   readFactoryManager: () => AnyRecord;
   readWarManager: () => AnyRecord;
-  readUniverses: () => AnyRecord;
-  readGovernors: () => AnyRecord;
-  readChallenges: () => AnyRecord;
-  readBiomeList: () => AnyRecord;
-  readTraitList: () => AnyRecord;
+  readUniverses: () => string[];
+  readGovernors: () => string[];
+  readChallenges: () => OverrideOperandChallenge[][];
+  readBiomeList: () => string[];
+  readTraitList: () => string[];
   readBuildSelectOptions: () => AnyFunction;
   readFastEval: () => AnyFunction;
   readGovernor: () => AnyFunction;
@@ -152,327 +169,21 @@ export function createOverrideCatalog({
     "!A?B": "Special check, uses Var2 as result if Var1 is falsy",
   };
 
-  const argType = {
-    building_cost: {
-      def: "city-farm.Money",
-      arg: "list_cb",
-      options: () =>
-        Object.fromEntries(
-          Object.keys(readBuildingIds())
-            .map((b) =>
-              Object.keys(readBuildingIds()[b].cost).map((r) => [
-                `${b}.${r}`,
-                {
-                  name: `${readBuildingIds()[b].name} (${readResources()[r].name})`,
-                  id: `${b}.${r}`,
-                },
-              ]),
-            )
-            .flat(),
-        ),
-    },
-    building: {
-      def: "city-farm",
-      arg: "list",
-      options: { list: readBuildingIds(), name: "name", id: "_vueBinding" },
-    },
-    research: {
-      def: "tech-mad",
-      arg: "list",
-      options: { list: readTechIds(), name: "name", id: "_vueBinding" },
-    },
-
-    trait: {
-      def: "kindling_kindred",
-      arg: "list_cb",
-      options: () =>
-        Object.fromEntries(
-          (Object.entries(readGame().traits) as Array<[string, AnyRecord]>).map(
-            ([id, trait]) => [id, { name: trait.name, id: id }],
-          ),
-        ),
-    },
-
-    genus: {
-      def: "humanoid",
-      arg: "select_cb",
-      options: () => [
-        { val: "organism", label: readGame().loc(`race_protoplasm`) },
-        ...(Object.values(readGame().races) as AnyRecord[])
-          .map((r) => r.type)
-          .filter((g, i, a) => g && g !== "organism" && a.indexOf(g) === i)
-          .map((g) => ({
-            val: g,
-            label: readGame().loc(`genelab_genus_${g}`),
-          })),
-      ],
-    },
-    genus_ss: {
-      def: "humanoid",
-      arg: "select_cb",
-      options: () => [
-        { val: "none", label: readGame().loc(`genelab_genus_none`) },
-        ...(Object.values(readGame().races) as AnyRecord[])
-          .map((r) => r.type)
-          .filter(
-            (g, i, a) =>
-              g && g !== "organism" && g !== "synthetic" && a.indexOf(g) === i,
-          )
-          .map((g) => ({
-            val: g,
-            label: readGame().loc(`genelab_genus_${g}`),
-          })),
-      ],
-    },
-    project: {
-      def: "arpalaunch_facility",
-      arg: "select_cb",
-      options: () =>
-        Object.values(readArpaIds()).map((p) => ({
-          val: p._vueBinding,
-          label: p.name,
-        })),
-    },
-    job: {
-      def: "unemployed",
-      arg: "select_cb",
-      options: () =>
-        Object.values(readJobIds()).map((j) => ({
-          val: j._originalId,
-          label: j._originalName,
-        })),
-    },
-    job_servant: {
-      def: "farmer",
-      arg: "select_cb",
-      options: () =>
-        Object.values(readJobIds())
-          .filter((j) => j.is.serve)
-          .map((j) => ({ val: j._originalId, label: j._originalName })),
-    },
-    resource: {
-      def: "Food",
-      arg: "select_cb",
-      options: () =>
-        Object.values(readResources()).map((r) => ({
-          val: r._id,
-          label: r.name,
-        })),
-    },
-    race: {
-      def: "species",
-      arg: "select_cb",
-      options: () => [
-        { val: "species", label: "Current Race", hint: "Current race" },
-        { val: "gods", label: "Fanaticism Race", hint: "Gods race" },
-        { val: "old_gods", label: "Deify Race", hint: "Old gods race" },
-        { val: "srace", label: "Imitation Race", hint: "Imitation trait race" },
-        {
-          val: "protoplasm",
-          label: "Protoplasm",
-          hint: "Race is not chosen yet",
-        },
-        ...Object.values(readRaces()).map((race) => ({
-          val: race.id,
-          label: race.name,
-          hint: race.desc,
-        })),
-      ],
-    },
-    challenge: {
-      def: "junker",
-      arg: "select_cb",
-      options: () =>
-        readChallenges()
-          .flat()
-          .map((c: any) => ({
-            val: c.trait,
-            label: readGame().loc(`evo_challenge_${c.id}`),
-            hint: readGame().loc(`evo_challenge_${c.id}_effect`),
-          })),
-    },
-    universe: {
-      def: "standard",
-      arg: "select_cb",
-      options: () => [
-        {
-          val: "bigbang",
-          label: "Big Bang",
-          hint: "Universe is not chosen yet",
-        },
-        ...readUniverses().map((u: any) => ({
-          val: u,
-          label: readGame().loc(`universe_${u}`),
-          hint: readGame().loc(`universe_${u}_desc`),
-        })),
-      ],
-    },
-    government: {
-      def: "anarchy",
-      arg: "select_cb",
-      options: () =>
-        Object.keys(readGovernmentManager().Types).map((g) => ({
-          val: g,
-          label: readGame().loc(`govern_${g}`),
-          hint: readGame().loc(`govern_${g}_desc`),
-        })),
-    },
-    governor: {
-      def: "none",
-      arg: "select_cb",
-      options: () => [
-        { val: "none", label: "None", hint: "No governor selected" },
-        ...readGovernors().map((id: any) => ({
-          val: id,
-          label: readGame().loc(`governor_${id}`),
-          hint: readGame().loc(`governor_${id}_desc`),
-        })),
-      ],
-    },
-    queue: {
-      def: "queue",
-      arg: "select_cb",
-      options: () => [
-        {
-          val: "queue",
-          label: "Building",
-          hint: "Buildings and projects queue",
-        },
-        { val: "r_queue", label: "Research", hint: "Research queue" },
-        { val: "evo", label: "Evolution", hint: "Evolution queue" },
-      ],
-    },
-    date: {
-      def: "day",
-      arg: "select_cb",
-      options: () => [
-        { val: "day", label: "Day (Year)", hint: "Day of year" },
-        {
-          val: "moon",
-          label: "Day (Month)",
-          hint: "Day of month (0-27 range)",
-        },
-        { val: "total", label: "Day (Total)", hint: "Day of run" },
-        { val: "year", label: "Year", hint: "Year of run" },
-        { val: "orbit", label: "Orbit", hint: "Planet orbit in days" },
-        {
-          val: "season",
-          label: "Season",
-          hint: "Current season (0 - Spring, 1 - Summer, 2 - Fall, 3 - Winter)",
-        },
-        {
-          val: "temp",
-          label: "Temperature",
-          hint: "Current temperature (0 - Cold, 1 - Normal, 2 - Hot)",
-        },
-        {
-          val: "impact",
-          label: "Impact",
-          hint: "Days remaining before Moon Impact, for Orbit Decay scenario",
-        },
-      ],
-    },
-    soldiers: {
-      def: "workers",
-      arg: "select_cb",
-      options: () => [
-        { val: "workers", label: "Total Soldiers" },
-        { val: "max", label: "Total Soldiers Max" },
-        { val: "currentCityGarrison", label: "City Soldiers" },
-        { val: "maxCityGarrison", label: "City Soldiers Max" },
-        { val: "hellSoldiers", label: "Hell Soldiers" },
-        { val: "hellGarrison", label: "Hell Garrison" },
-        { val: "hellPatrols", label: "Hell Patrols" },
-        { val: "hellPatrolSize", label: "Hell Patrol Size" },
-        { val: "wounded", label: "Wounded Soldiers" },
-        { val: "deadSoldiers", label: "Dead Soldiers" },
-        { val: "crew", label: "Ship Crew" },
-        { val: "mercenaryCost", label: "Mercenary Cost" },
-      ],
-    },
-    tab: {
-      def: "civTabs1",
-      arg: "select_cb",
-      options: () => [
-        { val: "civTabs0", label: readGame().loc("tab_evolve") },
-        { val: "civTabs1", label: readGame().loc("tab_civil") },
-        { val: "civTabs2", label: readGame().loc("tab_civics") },
-        { val: "civTabs3", label: readGame().loc("tab_research") },
-        { val: "civTabs4", label: readGame().loc("tab_resources") },
-        { val: "civTabs5", label: readGame().loc("tech_arpa") },
-        { val: "civTabs6", label: readGame().loc("mTabStats") },
-        { val: "civTabs7", label: readGame().loc("tab_settings") },
-      ],
-    },
-    biome: {
-      def: "grassland",
-      arg: "select_cb",
-      options: () =>
-        readBiomeList().map((b: any) => ({
-          val: b,
-          label: readGame().loc(`biome_${b}_name`),
-        })),
-    },
-    ptrait: {
-      def: "",
-      arg: "select_cb",
-      options: () => [
-        { val: "", label: "None", hint: "Planet have no trait" },
-        ...readTraitList()
-          .slice(1)
-          .map((t: any) => ({ val: t, label: readGame().loc(`planet_${t}`) })),
-      ],
-    },
-    industry: {
-      def: "smelters",
-      arg: "select_cb",
-      options: () => [
-        { val: "smelters", label: "Total Smelter Slot Count" },
-        { val: "factories", label: "Total Factory Slot Count" },
-      ],
-    },
-    other: {
-      def: "rname",
-      arg: "select_cb",
-      options: () => [
-        {
-          val: "rname",
-          label: "Race Name",
-          hint: "Ingame name of current race as string.",
-        },
-        {
-          val: "tpfleet",
-          label: "Fleet Size",
-          hint: "Amount of ships in True Path fleet as number.",
-        },
-        {
-          val: "mrelay",
-          label: "Mass Relay charge",
-          hint: "Charge percentage of the Mass Relay (0 = 0%, 0.5 = 50%, 1 = 100%",
-        },
-        {
-          val: "satcost",
-          label: "Satellite Cost",
-          hint: "Money cost of next Swarm Satellite",
-        },
-        {
-          val: "bcar",
-          label: "Broken Cars",
-          hint: "Amount of broken Surveyour Carports",
-        },
-        {
-          val: "alevel",
-          label: "Active challenges",
-          hint: "Amount of active challenges",
-        },
-        {
-          val: "tknow",
-          label: "Tech Knowledge",
-          hint: "Knowledge needed for most expensive unlocked research",
-        },
-      ],
-    },
-  };
+  const argType = createOverrideOperandInputs({
+    readGame,
+    readBuildingIds,
+    readResources,
+    readTechIds,
+    readArpaIds,
+    readJobIds,
+    readRaces,
+    readGovernmentManager,
+    readUniverses,
+    readGovernors,
+    readChallenges,
+    readBiomeList,
+    readTraitList,
+  });
   const argMap = {
     race: (r: any) =>
       r === "species" || r === "gods" || r === "old_gods"

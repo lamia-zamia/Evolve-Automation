@@ -53416,141 +53416,51 @@
     };
   }
 
-  // src/settings/override-catalog.ts
-  function createOverrideCatalog({
-    readSettings: readSettings3,
-    readSettingsRaw,
-    readState,
+  // src/settings/override-operand-inputs.ts
+  function listGenera(races, excluded) {
+    const genera = [];
+    for (const race2 of Object.values(races)) {
+      const genus = race2.type;
+      if (!genus || excluded.includes(genus) || genera.includes(genus)) continue;
+      genera.push(genus);
+    }
+    return genera;
+  }
+  function createOverrideOperandInputs({
     readGame,
     readBuildingIds,
-    readBuildings,
     readResources: readResources2,
     readTechIds,
     readArpaIds,
     readJobIds,
     readRaces,
     readGovernmentManager,
-    readSmelterManager,
-    readFactoryManager,
-    readWarManager,
     readUniverses,
     readGovernors,
     readChallenges,
     readBiomeList,
-    readTraitList,
-    readBuildSelectOptions,
-    readFastEval,
-    readGovernor
+    readTraitList
   }) {
-    const buildSelectOptions = (...args) => readBuildSelectOptions()(...args);
-    const fastEval = (...args) => readFastEval()(...args);
-    const getGovernor = (...args) => readGovernor()(...args);
-    const historicalRelayChargeRatio = () => {
-      return readGame().global.space.m_relay?.charged / 1e4;
-    };
-    const prestigeTypes = [
-      { val: "none", label: "None", hint: "Endless game" },
-      {
-        val: "mad",
-        short_label: "MAD",
-        label: "Mutual Assured Destruction",
-        hint: "MAD prestige once MAD has been researched and all soldiers are home"
-      },
-      {
-        val: "bioseed",
-        label: "Bioseed",
-        hint: "Launches the bioseeder ship to perform prestige when required probes have been constructed"
-      },
-      {
-        val: "cataclysm",
-        label: "Cataclysm",
-        hint: "Perform cataclysm reset by researching Dial It To 11 once available"
-      },
-      {
-        val: "whitehole",
-        label: "Whitehole",
-        hint: "Infuses the blackhole with exotic materials to perform prestige"
-      },
-      {
-        val: "vacuum",
-        short_label: "Vacuum",
-        label: "Vacuum Collapse",
-        hint: "Build Mana Syphons until the end"
-      },
-      {
-        val: "apocalypse",
-        label: "AI Apocalypse",
-        hint: "Perform AI Apocalypse reset by researching Protocol 66 once available"
-      },
-      {
-        val: "ascension",
-        label: "Ascension",
-        hint: "Allows research of Incorporeal Existence and Ascension. Ascension Machine is managed by autoPower. Use Custom race handling in Prestige settings to reuse, pause for editing, or automatically import a race at the post-reset lab."
-      },
-      {
-        val: "demonic",
-        short_label: "DI",
-        label: "Demonic Infusion",
-        hint: "Sacrifice your entire civilization to absorb the essence of a greater demon lord"
-      },
-      {
-        val: "terraform",
-        label: "Terraform",
-        hint: "Create new planet by building and powering Terraformer. Atmosphere Terraformer is managed by autoPower. Disable autoPrestige if you want to change custom planet. Otherwise current one will be used , or default one if there's no current. "
-      },
-      {
-        val: "matrix",
-        label: "Matrix",
-        hint: "Build a computer simulation and trap your entire civilization in it"
-      },
-      {
-        val: "retire",
-        label: "Retirement",
-        hint: "Retire and enjoy the easy life."
-      },
-      { val: "eden", label: "Eden", hint: "Build Garden Of Eden." },
-      { val: "apotheosis", label: "Apotheosis", hint: "Kill the God." }
-    ];
-    const prestigeOptions = buildSelectOptions(prestigeTypes);
-    const checkCompare = {
-      "==": (a, b) => a == b,
-      "!=": (a, b) => a != b,
-      ">": (a, b) => a > b,
-      "<": (a, b) => a < b,
-      ">=": (a, b) => a >= b,
-      "<=": (a, b) => a <= b,
-      "===": (a, b) => a === b,
-      "!==": (a, b) => a !== b,
-      AND: (a, b) => a && b,
-      OR: (a, b) => a || b,
-      NAND: (a, b) => !(a && b),
-      NOR: (a, b) => !(a || b),
-      XOR: (a, b) => !a != !b,
-      XNOR: (a, b) => !a == !b,
-      "AND!": (a, b) => a && !b,
-      "OR!": (a, b) => a || !b,
-      "A?B": (a, b) => a,
-      "!A?B": (a, b) => !a
-    };
-    const checkCustom = {
-      "A?B": "Special check, uses Var2 as result if Var1 is truthy",
-      "!A?B": "Special check, uses Var2 as result if Var1 is falsy"
-    };
-    const argType = {
+    return {
       building_cost: {
         def: "city-farm.Money",
         arg: "list_cb",
-        options: () => Object.fromEntries(
-          Object.keys(readBuildingIds()).map(
-            (b) => Object.keys(readBuildingIds()[b].cost).map((r) => [
-              `${b}.${r}`,
-              {
-                name: `${readBuildingIds()[b].name} (${readResources2()[r].name})`,
-                id: `${b}.${r}`
-              }
-            ])
-          ).flat()
-        )
+        options: () => {
+          const resources = readResources2();
+          const options2 = {};
+          for (const [buildingId2, building3] of Object.entries(
+            readBuildingIds()
+          )) {
+            for (const resourceId3 of Object.keys(building3.cost)) {
+              const id = `${buildingId2}.${resourceId3}`;
+              options2[id] = {
+                name: `${building3.name} (${resources[resourceId3].name})`,
+                id
+              };
+            }
+          }
+          return options2;
+        }
       },
       building: {
         def: "city-farm",
@@ -53567,7 +53477,10 @@
         arg: "list_cb",
         options: () => Object.fromEntries(
           Object.entries(readGame().traits).map(
-            ([id, trait2]) => [id, { name: trait2.name, id }]
+            ([id, trait2]) => [
+              id,
+              { name: trait2.name, id }
+            ]
           )
         )
       },
@@ -53576,9 +53489,9 @@
         arg: "select_cb",
         options: () => [
           { val: "organism", label: readGame().loc(`race_protoplasm`) },
-          ...Object.values(readGame().races).map((r) => r.type).filter((g, i, a) => g && g !== "organism" && a.indexOf(g) === i).map((g) => ({
-            val: g,
-            label: readGame().loc(`genelab_genus_${g}`)
+          ...listGenera(readGame().races, ["organism"]).map((genus) => ({
+            val: genus,
+            label: readGame().loc(`genelab_genus_${genus}`)
           }))
         ]
       },
@@ -53587,12 +53500,12 @@
         arg: "select_cb",
         options: () => [
           { val: "none", label: readGame().loc(`genelab_genus_none`) },
-          ...Object.values(readGame().races).map((r) => r.type).filter(
-            (g, i, a) => g && g !== "organism" && g !== "synthetic" && a.indexOf(g) === i
-          ).map((g) => ({
-            val: g,
-            label: readGame().loc(`genelab_genus_${g}`)
-          }))
+          ...listGenera(readGame().races, ["organism", "synthetic"]).map(
+            (genus) => ({
+              val: genus,
+              label: readGame().loc(`genelab_genus_${genus}`)
+            })
+          )
         ]
       },
       project: {
@@ -53831,6 +53744,143 @@
         ]
       }
     };
+  }
+
+  // src/settings/override-catalog.ts
+  function createOverrideCatalog({
+    readSettings: readSettings3,
+    readSettingsRaw,
+    readState,
+    readGame,
+    readBuildingIds,
+    readBuildings,
+    readResources: readResources2,
+    readTechIds,
+    readArpaIds,
+    readJobIds,
+    readRaces,
+    readGovernmentManager,
+    readSmelterManager,
+    readFactoryManager,
+    readWarManager,
+    readUniverses,
+    readGovernors,
+    readChallenges,
+    readBiomeList,
+    readTraitList,
+    readBuildSelectOptions,
+    readFastEval,
+    readGovernor
+  }) {
+    const buildSelectOptions = (...args) => readBuildSelectOptions()(...args);
+    const fastEval = (...args) => readFastEval()(...args);
+    const getGovernor = (...args) => readGovernor()(...args);
+    const historicalRelayChargeRatio = () => {
+      return readGame().global.space.m_relay?.charged / 1e4;
+    };
+    const prestigeTypes = [
+      { val: "none", label: "None", hint: "Endless game" },
+      {
+        val: "mad",
+        short_label: "MAD",
+        label: "Mutual Assured Destruction",
+        hint: "MAD prestige once MAD has been researched and all soldiers are home"
+      },
+      {
+        val: "bioseed",
+        label: "Bioseed",
+        hint: "Launches the bioseeder ship to perform prestige when required probes have been constructed"
+      },
+      {
+        val: "cataclysm",
+        label: "Cataclysm",
+        hint: "Perform cataclysm reset by researching Dial It To 11 once available"
+      },
+      {
+        val: "whitehole",
+        label: "Whitehole",
+        hint: "Infuses the blackhole with exotic materials to perform prestige"
+      },
+      {
+        val: "vacuum",
+        short_label: "Vacuum",
+        label: "Vacuum Collapse",
+        hint: "Build Mana Syphons until the end"
+      },
+      {
+        val: "apocalypse",
+        label: "AI Apocalypse",
+        hint: "Perform AI Apocalypse reset by researching Protocol 66 once available"
+      },
+      {
+        val: "ascension",
+        label: "Ascension",
+        hint: "Allows research of Incorporeal Existence and Ascension. Ascension Machine is managed by autoPower. Use Custom race handling in Prestige settings to reuse, pause for editing, or automatically import a race at the post-reset lab."
+      },
+      {
+        val: "demonic",
+        short_label: "DI",
+        label: "Demonic Infusion",
+        hint: "Sacrifice your entire civilization to absorb the essence of a greater demon lord"
+      },
+      {
+        val: "terraform",
+        label: "Terraform",
+        hint: "Create new planet by building and powering Terraformer. Atmosphere Terraformer is managed by autoPower. Disable autoPrestige if you want to change custom planet. Otherwise current one will be used , or default one if there's no current. "
+      },
+      {
+        val: "matrix",
+        label: "Matrix",
+        hint: "Build a computer simulation and trap your entire civilization in it"
+      },
+      {
+        val: "retire",
+        label: "Retirement",
+        hint: "Retire and enjoy the easy life."
+      },
+      { val: "eden", label: "Eden", hint: "Build Garden Of Eden." },
+      { val: "apotheosis", label: "Apotheosis", hint: "Kill the God." }
+    ];
+    const prestigeOptions = buildSelectOptions(prestigeTypes);
+    const checkCompare = {
+      "==": (a, b) => a == b,
+      "!=": (a, b) => a != b,
+      ">": (a, b) => a > b,
+      "<": (a, b) => a < b,
+      ">=": (a, b) => a >= b,
+      "<=": (a, b) => a <= b,
+      "===": (a, b) => a === b,
+      "!==": (a, b) => a !== b,
+      AND: (a, b) => a && b,
+      OR: (a, b) => a || b,
+      NAND: (a, b) => !(a && b),
+      NOR: (a, b) => !(a || b),
+      XOR: (a, b) => !a != !b,
+      XNOR: (a, b) => !a == !b,
+      "AND!": (a, b) => a && !b,
+      "OR!": (a, b) => a || !b,
+      "A?B": (a, b) => a,
+      "!A?B": (a, b) => !a
+    };
+    const checkCustom = {
+      "A?B": "Special check, uses Var2 as result if Var1 is truthy",
+      "!A?B": "Special check, uses Var2 as result if Var1 is falsy"
+    };
+    const argType = createOverrideOperandInputs({
+      readGame,
+      readBuildingIds,
+      readResources: readResources2,
+      readTechIds,
+      readArpaIds,
+      readJobIds,
+      readRaces,
+      readGovernmentManager,
+      readUniverses,
+      readGovernors,
+      readChallenges,
+      readBiomeList,
+      readTraitList
+    });
     const argMap = {
       race: (r) => r === "species" || r === "gods" || r === "old_gods" ? readGame().global.race[r] : r === "srace" ? readGame().global.race.srace ?? "protoplasm" : r,
       date: (d) => d === "total" ? readGame().global.stats.days : d === "impact" ? readGame().global.race["orbit_decay"] ? readGame().global.race["orbit_decay"] - readGame().global.stats.days : -1 : readGame().global.city.calendar[d],
