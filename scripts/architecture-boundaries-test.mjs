@@ -242,7 +242,11 @@ for (const [from, to] of [
     "domain/progression/build/building-weighting-rules.ts",
     "adapters/browser/vue.ts",
   ],
-  ["domain/override-resolution.ts", "settings/override-evaluation.ts"],
+  ["domain/override-resolution.ts", "adapters/evolve/override-evaluation.ts"],
+  [
+    "application/override-settings.ts",
+    "adapters/evolve/override-failure-log.ts",
+  ],
   ["planning/build-planner.ts", "application/build.ts"],
   ["settings/state.ts", "ui/settings-shell.ts"],
   ["observability/state-log.ts", "adapters/browser/vue.ts"],
@@ -261,7 +265,8 @@ for (const [from, to] of [
 for (const [from, to] of [
   ["domain/planner-analysis.ts", "utils/math.ts"],
   ["settings/state.ts", "ports/build.ts"],
-  ["settings/override-evaluation.ts", "domain/override-resolution.ts"],
+  ["application/override-settings.ts", "ports/override-settings.ts"],
+  ["adapters/evolve/override-failure-log.ts", "domain/override-resolution.ts"],
   ["game/core-managers.ts", "domain/progression/build/building-weighting.ts"],
   ["game/rates.ts", "domain/planner-analysis.ts"],
   ["bootstrap/tick-runner.ts", "adapters/browser/vue.ts"],

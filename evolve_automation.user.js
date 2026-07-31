@@ -1985,64 +1985,15 @@
     };
   }
 
-  // src/settings/override-evaluation.ts
-  function createOverrideEvaluation({
+  // src/application/override-settings.ts
+  function createOverrideSettings({
     getSafeMode,
     getSettings,
     getSettingsRaw,
-    getCheckTypes,
-    getCheckCompare,
-    getCheckCustom,
-    getHaveTask,
-    getWindowManager,
-    getGame,
-    getGameLog,
-    getJQuery,
-    changeDisplayInputNode
+    source,
+    reporter,
+    display
   }) {
-    function sampleEvaluator() {
-      const checkTypes = getCheckTypes();
-      const checkCompare = getCheckCompare();
-      const checkCustom = getCheckCustom();
-      return {
-        hasOperandType: (operandType) => Boolean(checkTypes[operandType]),
-        readOperand: (operandType, argument) => {
-          const checkType = checkTypes[operandType];
-          if (!checkType) {
-            throw new Error(`${operandType} variable not found`);
-          }
-          return checkType.fn(argument);
-        },
-        hasComparator: (comparator) => Boolean(checkCompare[comparator]),
-        compare: (comparator, left, right) => {
-          const compare = checkCompare[comparator];
-          if (!compare) {
-            throw new Error(`${comparator} comparator not found`);
-          }
-          return compare(left, right);
-        },
-        comparatorReturnsRightOperand: (comparator) => Boolean(checkCustom[comparator])
-      };
-    }
-    function reportFailures(failures) {
-      if (failures.length === 0 || getWindowManager().isOpen()) {
-        return;
-      }
-      const gameLog = getGameLog();
-      const shown = Object.values(getGame().global.lastMsg.all);
-      for (const failure2 of failures) {
-        const message = describeOverrideFailure(failure2);
-        if (!shown.some((entry) => entry.m === message)) {
-          gameLog.logDanger("special", message, ["events", "major_events"]);
-        }
-      }
-    }
-    function refreshVisibleOverrideValue() {
-      const currentNode = getJQuery()("#script_override_true_value:visible");
-      if (currentNode.length !== 0) {
-        changeDisplayInputNode(currentNode);
-      }
-    }
     function updateOverrides() {
       const settings = getSettings();
       const settingsRaw = getSettingsRaw();
@@ -2051,24 +2002,101 @@
         settings.masterScriptToggle = false;
         return;
       }
-      const haveTask = getHaveTask();
       const resolution = resolveOverrides({
         settingsRaw,
-        evaluator: sampleEvaluator(),
-        activeTasks: {
-          storageTaskActive: haveTask("bal_storage") || haveTask("combo_storage"),
-          trashTaskActive: haveTask("trash"),
-          taxTaskActive: haveTask("tax")
-        }
+        evaluator: source.sampleEvaluator(),
+        activeTasks: source.readForcedTasks()
       });
       Object.assign(settings, settingsRaw, resolution.values);
       for (const [key, list] of Object.entries(resolution.lists)) {
         settings[key] = list;
       }
-      reportFailures(resolution.failures);
-      refreshVisibleOverrideValue();
+      reporter.report(resolution.failures);
+      display.publish();
     }
     return { updateOverrides };
+  }
+
+  // src/adapters/evolve/override-evaluation.ts
+  function createOverrideEvaluationSource({
+    getCheckTypes,
+    getCheckCompare,
+    getCheckCustom,
+    getHaveTask
+  }) {
+    return {
+      sampleEvaluator() {
+        const checkTypes = getCheckTypes();
+        const checkCompare = getCheckCompare();
+        const checkCustom = getCheckCustom();
+        return {
+          hasOperandType: (operandType) => Boolean(checkTypes[operandType]),
+          readOperand: (operandType, argument) => {
+            const checkType = checkTypes[operandType];
+            if (!checkType) {
+              throw new Error(`${operandType} variable not found`);
+            }
+            return checkType.fn(argument);
+          },
+          hasComparator: (comparator) => Boolean(checkCompare[comparator]),
+          compare: (comparator, left, right) => {
+            const compare = checkCompare[comparator];
+            if (!compare) {
+              throw new Error(`${comparator} comparator not found`);
+            }
+            return compare(left, right);
+          },
+          comparatorReturnsRightOperand: (comparator) => Boolean(checkCustom[comparator])
+        };
+      },
+      readForcedTasks() {
+        const haveTask = getHaveTask();
+        return {
+          storageTaskActive: haveTask("bal_storage") || haveTask("combo_storage"),
+          trashTaskActive: haveTask("trash"),
+          taxTaskActive: haveTask("tax")
+        };
+      }
+    };
+  }
+
+  // src/adapters/evolve/override-failure-log.ts
+  function createOverrideFailureReporter({
+    getWindowManager,
+    getGame,
+    getGameLog
+  }) {
+    return {
+      report(failures) {
+        if (failures.length === 0 || getWindowManager().isOpen()) {
+          return;
+        }
+        const gameLog = getGameLog();
+        const shown = Object.values(getGame().global.lastMsg.all);
+        for (const failure2 of failures) {
+          const message = describeOverrideFailure(failure2);
+          if (!shown.some((entry) => entry.m === message)) {
+            gameLog.logDanger("special", message, ["events", "major_events"]);
+          }
+        }
+      }
+    };
+  }
+
+  // src/adapters/browser/override-display.ts
+  var EFFECTIVE_VALUE_SELECTOR = "#script_override_true_value:visible";
+  function createOverrideEffectiveValueDisplay({
+    getJQuery,
+    changeDisplayInputNode
+  }) {
+    return {
+      publish() {
+        const currentNode = getJQuery()(EFFECTIVE_VALUE_SELECTOR);
+        if (currentNode.length !== 0) {
+          changeDisplayInputNode(currentNode);
+        }
+      }
+    };
   }
 
   // src/settings/queued-settings.ts
@@ -59129,19 +59157,25 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           FleetManagerOuter = context.FleetManagerOuter;
       }
     });
-    const { updateOverrides } = createOverrideEvaluation({
+    const { updateOverrides } = createOverrideSettings({
       getSafeMode: () => safeMode,
       getSettings: () => settings,
       getSettingsRaw: () => settingsRaw,
-      getCheckTypes: () => checkTypes,
-      getCheckCompare: () => checkCompare,
-      getCheckCustom: () => checkCustom,
-      getHaveTask: () => haveTask,
-      getWindowManager: () => WindowManager,
-      getGame: () => game,
-      getGameLog: () => GameLog,
-      getJQuery: () => $,
-      changeDisplayInputNode
+      source: createOverrideEvaluationSource({
+        getCheckTypes: () => checkTypes,
+        getCheckCompare: () => checkCompare,
+        getCheckCustom: () => checkCustom,
+        getHaveTask: () => haveTask
+      }),
+      reporter: createOverrideFailureReporter({
+        getWindowManager: () => WindowManager,
+        getGame: () => game,
+        getGameLog: () => GameLog
+      }),
+      display: createOverrideEffectiveValueDisplay({
+        getJQuery: () => $,
+        changeDisplayInputNode
+      })
     });
     const customRaceGenusOpposition = {
       humanoid: ["fungi"],

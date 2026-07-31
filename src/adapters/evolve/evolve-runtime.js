@@ -52,7 +52,10 @@ import {
   migrateSettingsRecord,
 } from "../../domain/settings-migration.ts";
 import { describeDroppedOverride } from "../../domain/override-resolution.ts";
-import { createOverrideEvaluation } from "../../settings/override-evaluation.ts";
+import { createOverrideSettings } from "../../application/override-settings.ts";
+import { createOverrideEvaluationSource } from "./override-evaluation.ts";
+import { createOverrideFailureReporter } from "./override-failure-log.ts";
+import { createOverrideEffectiveValueDisplay } from "../browser/override-display.ts";
 import { createQueuedSettings } from "../../settings/queued-settings.ts";
 import { createSettingsTransfer } from "../../settings/transfer.ts";
 import { createRuntimeQueries } from "../../game/runtime-queries.ts";
@@ -5343,19 +5346,25 @@ function startEvolveRuntimeComposition(
     },
   });
 
-  const { updateOverrides } = createOverrideEvaluation({
+  const { updateOverrides } = createOverrideSettings({
     getSafeMode: () => safeMode,
     getSettings: () => settings,
     getSettingsRaw: () => settingsRaw,
-    getCheckTypes: () => checkTypes,
-    getCheckCompare: () => checkCompare,
-    getCheckCustom: () => checkCustom,
-    getHaveTask: () => haveTask,
-    getWindowManager: () => WindowManager,
-    getGame: () => game,
-    getGameLog: () => GameLog,
-    getJQuery: () => $,
-    changeDisplayInputNode,
+    source: createOverrideEvaluationSource({
+      getCheckTypes: () => checkTypes,
+      getCheckCompare: () => checkCompare,
+      getCheckCustom: () => checkCustom,
+      getHaveTask: () => haveTask,
+    }),
+    reporter: createOverrideFailureReporter({
+      getWindowManager: () => WindowManager,
+      getGame: () => game,
+      getGameLog: () => GameLog,
+    }),
+    display: createOverrideEffectiveValueDisplay({
+      getJQuery: () => $,
+      changeDisplayInputNode,
+    }),
   });
 
   const customRaceGenusOpposition = {
