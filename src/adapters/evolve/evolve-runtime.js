@@ -274,6 +274,7 @@ import { formatTechConflict } from "../../application/tech-conflicts.ts";
 import { createBrowserClock } from "../browser/clock.ts";
 import { createBrowserRandomSource } from "../browser/random.ts";
 import { createBuildingWeightingPolicy } from "../../policies/building-weighting.ts";
+import { readWeightingCandidate } from "./progression/build/weighting-candidate.ts";
 import { createWeightingSnapshotReader } from "./progression/build/weighting-snapshot.ts";
 import { readTradeRoutesInput } from "./economy/market/trade-routes.ts";
 import { planTradeRoutes } from "../../domain/economy/market/trade-routes.ts";
@@ -2972,6 +2973,7 @@ function startEvolveRuntimeComposition(
   });
 
   const {
+    namedBuildings,
     authorityCapBuildings,
     INFLATION_CHALLENGE_MONEY,
     RETIREMENT_PREP,
@@ -2980,11 +2982,8 @@ function startEvolveRuntimeComposition(
     galaxyCombatShips,
     weightingRules,
   } = createBuildingWeightingPolicy({
-    getResources: () => resources,
-    getBuildings: () => buildings,
-    getNumberStringFn: () => getNumberString,
-    getNiceNumberFn: () => getNiceNumber,
-    ResourceAction,
+    formatNumber: getNumberString,
+    formatNiceNumber: getNiceNumber,
     randomSource,
   });
 
@@ -2999,6 +2998,7 @@ function startEvolveRuntimeComposition(
 
   publishTestSurface({
     weightingPolicy: {
+      namedBuildings,
       authorityCapBuildings,
       INFLATION_CHALLENGE_MONEY,
       RETIREMENT_PREP,
@@ -3226,6 +3226,7 @@ function startEvolveRuntimeComposition(
       isVacuumSyphonStage,
       getNiceNumber,
       weightingRules,
+      readWeightingCandidate,
       readWeightingSnapshot: createWeightingSnapshotReader({
         getState: () => state,
         getWeightingMultiplier: (setting) => settings[setting],
@@ -3254,6 +3255,10 @@ function startEvolveRuntimeComposition(
           resources[resource].techMissionMaxCost,
         getResourceTitle: (resource) => resources[resource].title,
         getBuildingCount: (building) => buildings[building].count,
+        getBuildingName: (building) => buildings[building].name,
+        getBuildingTitle: (building) => buildings[building].title,
+        getBuildingSoulGemCost: (building) =>
+          buildings[building].cost["Soul_Gem"],
         isBuildingUnlocked: (building) => buildings[building].isUnlocked(),
         isBuildingAutoBuildable: (building) =>
           buildings[building].isAutoBuildable(),

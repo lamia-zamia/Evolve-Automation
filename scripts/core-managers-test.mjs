@@ -23,9 +23,9 @@ const weightingRules = [
       seenSnapshots.push(snapshot);
       return true;
     },
-    match: (b, snapshot) => {
+    match: (candidate, snapshot) => {
       seenSnapshots.push(snapshot);
-      return b.boost ? "boosted" : false;
+      return candidate.boost ? "boosted" : false;
     },
     describe: () => "note",
     multiplier: () => 2,
@@ -41,6 +41,12 @@ const readWeightingSnapshot = () => {
     knowledgeRequiredByBuildTargets: 0,
     cheapestTechKnowledge: 0,
   });
+};
+// Rules only ever see the projected candidate, never the live wrapper.
+const projectedFrom = [];
+const readWeightingCandidate = (building) => {
+  projectedFrom.push(building);
+  return Object.freeze({ id: building.id, boost: building.boost });
 };
 let niceNumberCalls = 0;
 
@@ -73,6 +79,7 @@ const { JobManager, BuildingManager, ProjectManager, TriggerManager } =
     },
     weightingRules,
     readWeightingSnapshot,
+    readWeightingCandidate,
     isEarlyGame: () => earlyGame,
     getIsPrestigeAllowed: () => prestigeAllowed,
     getBananaRepublicObjectiveComplete: () => bananaComplete,
@@ -148,6 +155,11 @@ assert.equal(
   "every rule phase receives the same snapshot instance",
 );
 assert.equal(Object.isFrozen(seenSnapshots[0]), true);
+assert.deepEqual(
+  projectedFrom,
+  BuildingManager.priorityList,
+  "every candidate is projected from its own wrapper, once per phase",
+);
 BuildingManager.priorityList.forEach((building) => {
   building.extraDescription = "";
 });

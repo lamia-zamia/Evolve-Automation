@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { TickDiagnostics } from "../ports/tick.ts";
 import type {
+  BuildingWeightingCandidate,
   BuildingWeightingRule,
   BuildingWeightingSnapshot,
 } from "../ports/building-weighting.ts";
@@ -13,8 +14,9 @@ interface CoreManagersDependencies {
   getProjects: () => Record<string, any>;
   isVacuumSyphonStage: () => boolean;
   getNiceNumber: (value: number) => string;
-  weightingRules: readonly BuildingWeightingRule[];
+  weightingRules: readonly BuildingWeightingRule<unknown>[];
   readWeightingSnapshot: () => BuildingWeightingSnapshot;
+  readWeightingCandidate: (building: unknown) => BuildingWeightingCandidate;
   isEarlyGame: () => boolean;
   getIsPrestigeAllowed: () => (prestige: string) => boolean;
   getBananaRepublicObjectiveComplete: () => (objective: string) => boolean;
@@ -34,6 +36,7 @@ export function createCoreManagers({
   getNiceNumber,
   weightingRules,
   readWeightingSnapshot,
+  readWeightingCandidate,
   isEarlyGame,
   getIsPrestigeAllowed,
   getBananaRepublicObjectiveComplete,
@@ -154,13 +157,14 @@ export function createCoreManagers({
       measure("autoBuild.beginCycle.updateBuildingWeighting.applyRules", () => {
         for (let building of this.priorityList) {
           building.weighting = building._weighting;
+          const candidate = readWeightingCandidate(building);
 
           // Apply weighting rules
           for (const rule of activeRules) {
-            const result = rule.match(building, snapshot);
+            const result = rule.match(candidate, snapshot);
             // Rule passed
             if (result) {
-              const note = rule.describe(result, building, snapshot);
+              const note = rule.describe(result, candidate, snapshot);
               if (note !== "") {
                 building.extraDescription += note + "<br>";
               }

@@ -32,6 +32,7 @@ vm.runInNewContext(source, sandbox, {
 const policy = hooks.weightingPolicy;
 assert.ok(policy, "weighting policy hook missing");
 assert.deepEqual(Array.from(Object.keys(policy)), [
+  "namedBuildings",
   "authorityCapBuildings",
   "INFLATION_CHALLENGE_MONEY",
   "RETIREMENT_PREP",
@@ -141,7 +142,20 @@ assert.deepEqual(
   ],
 );
 
-const bindings = (items) => Array.from(items, (item) => item._vueBinding);
+// The rules identify candidates by catalog key. Resolving each key against the
+// live catalog proves both that the key exists and that it still names the same
+// game action the characterized bindings did.
+const catalog = hooks.entityCatalogs.buildings;
+for (const id of policy.namedBuildings) {
+  assert.ok(catalog[id], `weighting rules name a missing building "${id}"`);
+  assert.equal(catalog[id].catalogKey, id);
+}
+assert.equal(
+  policy.namedBuildings.length,
+  new Set(policy.namedBuildings).size,
+  "no catalog key is declared twice",
+);
+const bindings = (ids) => Array.from(ids, (id) => catalog[id]._vueBinding);
 assert.deepEqual(
   {
     rules: policy.weightingRules.length,

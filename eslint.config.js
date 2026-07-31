@@ -67,7 +67,7 @@ export default defineConfig(
   },
   {
     // Folders whose explicit-`any` and unused-variable debt is already zero. src/game,
-    // src/policies, src/settings, and src/ui join this list as their migrations complete.
+    // src/settings, and src/ui join this list as their migrations complete.
     files: [
       "src/application/**/*.ts",
       "src/domain/**/*.ts",
@@ -77,6 +77,7 @@ export default defineConfig(
       "src/formatting/**/*.ts",
       "src/observability/**/*.ts",
       "src/planning/**/*.ts",
+      "src/policies/**/*.ts",
       "src/utils/**/*.ts",
       "src/validation/**/*.ts",
       "src/*.ts",

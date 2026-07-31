@@ -5790,6 +5790,7 @@
     getNiceNumber,
     weightingRules,
     readWeightingSnapshot,
+    readWeightingCandidate: readWeightingCandidate2,
     isEarlyGame,
     getIsPrestigeAllowed,
     getBananaRepublicObjectiveComplete,
@@ -5893,10 +5894,11 @@
         measure("autoBuild.beginCycle.updateBuildingWeighting.applyRules", () => {
           for (let building3 of this.priorityList) {
             building3.weighting = building3._weighting;
+            const candidate = readWeightingCandidate2(building3);
             for (const rule of activeRules) {
-              const result2 = rule.match(building3, snapshot);
+              const result2 = rule.match(candidate, snapshot);
               if (result2) {
-                const note = rule.describe(result2, building3, snapshot);
+                const note = rule.describe(result2, candidate, snapshot);
                 if (note !== "") {
                   building3.extraDescription += note + "<br>";
                 }
@@ -8091,11 +8093,11 @@
           return;
         }
         let adjustedCosts = readPoly().adjustCosts(this.definition);
-        for (let resourceName in adjustedCosts) {
-          if (readResources2()[resourceName]) {
-            let resourceAmount = Number(adjustedCosts[resourceName]());
+        for (let resourceName2 in adjustedCosts) {
+          if (readResources2()[resourceName2]) {
+            let resourceAmount = Number(adjustedCosts[resourceName2]());
             if (resourceAmount > 0) {
-              this.cost[resourceName] = resourceAmount;
+              this.cost[resourceName2] = resourceAmount;
             }
           }
         }
@@ -8329,6 +8331,7 @@
     class ResourceAction extends Action {
       constructor(name, tab, id, location, res, flags) {
         super(name, tab, id, location, flags);
+        this.resourceKey = res;
         this.resource = readResources2()[res];
       }
       get count() {
@@ -8424,14 +8427,14 @@
           readState().triggerTargets.includes(this) ? 100 : readSettings3().arpaStep
         );
         let adjustedCosts = readPoly().arpaAdjustCosts(this.definition.cost);
-        for (let resourceName in adjustedCosts) {
-          if (readResources2()[resourceName]) {
-            let resourceAmount = Number(adjustedCosts[resourceName]());
+        for (let resourceName2 in adjustedCosts) {
+          if (readResources2()[resourceName2]) {
+            let resourceAmount = Number(adjustedCosts[resourceName2]());
             if (resourceAmount > 0) {
-              this.cost[resourceName] = resourceAmount / 100;
+              this.cost[resourceName2] = resourceAmount / 100;
               maxStep = Math.min(
                 maxStep,
-                readResources2()[resourceName].maxQuantity / this.cost[resourceName]
+                readResources2()[resourceName2].maxQuantity / this.cost[resourceName2]
               );
             }
           }
@@ -8601,11 +8604,11 @@
           return;
         }
         let adjustedCosts = readPoly().adjustCosts(this.definition);
-        for (let resourceName in adjustedCosts) {
-          if (readResources2()[resourceName]) {
-            let resourceAmount = Number(adjustedCosts[resourceName]());
+        for (let resourceName2 in adjustedCosts) {
+          if (readResources2()[resourceName2]) {
+            let resourceAmount = Number(adjustedCosts[resourceName2]());
             if (resourceAmount > 0) {
-              this.cost[resourceName] = resourceAmount;
+              this.cost[resourceName2] = resourceAmount;
             }
           }
         }
@@ -13260,6 +13263,9 @@
         multiSegmented: true
       })
     };
+    for (const [key, building3] of Object.entries(buildings)) {
+      building3.catalogKey = key;
+    }
     const linkedBuildings = [
       [buildings.LakeTransport, buildings.LakeBireme],
       [buildings.SpirePort, buildings.SpireBaseCamp]
@@ -23901,744 +23907,814 @@
     "no-default-workers": "No default workers to sacrifice",
     "bonus-capped": "Sacrifice bonus already high enough"
   };
+  var NAMED_BUILDINGS = [
+    "Alien1Consulate",
+    "AlphaExchange",
+    "AlphaLuxuryCondo",
+    "AlphaWarehouse",
+    "AsphodelBunker",
+    "AsphodelStabilizer",
+    "BadlandsAttractor",
+    "BadlandsMinions",
+    "Bank",
+    "Banquet",
+    "Barracks",
+    "BeltSpaceStation",
+    "BlackholeJumpShip",
+    "BlackholeMassEjector",
+    "BlackholeStellarEngine",
+    "Casino",
+    "CoalMine",
+    "CorvetteShip",
+    "CruiserShip",
+    "Dreadnought",
+    "DwarfWorldCollider",
+    "ElysiumEternalBank",
+    "ElysiumFireSupportBase",
+    "EnceladusMunitions",
+    "ErisDrone",
+    "ErisTank",
+    "ErisTrooper",
+    "FrigateShip",
+    "GasMoonOilExtractor",
+    "GasSpaceDock",
+    "GasSpaceDockGECK",
+    "GasSpaceDockProbe",
+    "GasSpaceDockShipSegment",
+    "GasStorage",
+    "GateEastTower",
+    "GateTurret",
+    "GateWestTower",
+    "GorddonEmbassy",
+    "HellSpaceCasino",
+    "LakeCoolingTower",
+    "Mill",
+    "Mine",
+    "NeutronCitadel",
+    "OilDepot",
+    "OilWell",
+    "PitMission",
+    "ProximaCargoYard",
+    "ProximaCruiser",
+    "Pylon",
+    "RedGarage",
+    "RedPylon",
+    "RedSpaceBarracks",
+    "RedSpaceport",
+    "RuinsGuardPost",
+    "RuinsMission",
+    "RuinsVault",
+    "RuinsWarVault",
+    "ScoutShip",
+    "Shed",
+    "SiriusThermalCollector",
+    "SlaveMarket",
+    "SpaceTestLaunch",
+    "SpacePropellantDepot",
+    "SpireBaseCamp",
+    "SpireEdenicGate",
+    "SpireMechBay",
+    "SpirePort",
+    "SpireSphinx",
+    "SpireWaygate",
+    "StargateDefensePlatform",
+    "StargateTelemetryBeacon",
+    "StorageYard",
+    "TauBeltMiningShip",
+    "TauBeltWhalingShip",
+    "TauCasino",
+    "TauCloning",
+    "TauDiseaseLab",
+    "TauFactory",
+    "TauFusionGenerator",
+    "TauGas2IgniteGasGiant",
+    "TauPylon",
+    "TauRedContact",
+    "TauRedIntroduce",
+    "TauRedSubjugate",
+    "TauStarEden",
+    "Temple",
+    "TitanBank",
+    "TitanMission",
+    "TitanStorehouse",
+    "TouristCenter",
+    "Transmitter",
+    "Wardenclyffe",
+    "Warehouse",
+    "WastelandBrute",
+    "WastelandHellCasino",
+    "WastelandThrone"
+  ];
+  var isBuilding = (candidate, ...ids) => ids.includes(candidate.id);
+  var losesChoice = (candidate, choice) => choice !== null && choice.worseId === candidate.id ? choice.betterTitle : void 0;
+  function weightingRule(rule) {
+    return rule;
+  }
+  var authorityCapBuildings = [
+    "Barracks",
+    "Temple",
+    "RedSpaceBarracks",
+    "ProximaCruiser",
+    "BeltSpaceStation",
+    "WastelandBrute",
+    "BadlandsMinions",
+    "WastelandThrone",
+    "AsphodelBunker"
+  ];
+  var INFLATION_CHALLENGE_MONEY = 25e10;
+  var RETIREMENT_PREP = {
+    fusionGenerators: 20,
+    factories: 18,
+    scienceLabs: 11,
+    graphene: 2e8
+  };
+  var inflationMoneyStorageBuildings = [
+    "Bank",
+    "Casino",
+    "HellSpaceCasino",
+    "TitanBank",
+    "TauCasino",
+    "AlphaExchange",
+    "RuinsVault",
+    "RuinsWarVault",
+    "WastelandHellCasino",
+    "ElysiumEternalBank"
+  ];
+  var inflationMoneyIncomeBuildings = [
+    "TouristCenter",
+    "Casino",
+    "HellSpaceCasino",
+    "TauCasino",
+    "AlphaLuxuryCondo",
+    "WastelandHellCasino"
+  ];
+  var galaxyCombatShips = [
+    "ScoutShip",
+    "CorvetteShip",
+    "FrigateShip",
+    "CruiserShip",
+    "Dreadnought"
+  ];
   function createBuildingWeightingPolicy({
-    getResources,
-    getBuildings,
-    getNumberStringFn,
-    getNiceNumberFn,
-    ResourceAction,
+    formatNumber,
+    formatNiceNumber,
     randomSource
   }) {
-    const getNumberString = (...args) => getNumberStringFn()(...args);
-    const getNiceNumber = (...args) => getNiceNumberFn()(...args);
-    const authorityCapBuildings = [
-      getBuildings().Barracks,
-      getBuildings().Temple,
-      getBuildings().RedSpaceBarracks,
-      getBuildings().ProximaCruiser,
-      getBuildings().BeltSpaceStation,
-      getBuildings().WastelandBrute,
-      getBuildings().BadlandsMinions,
-      getBuildings().WastelandThrone,
-      getBuildings().AsphodelBunker
-    ];
-    const INFLATION_CHALLENGE_MONEY = 25e10;
-    const RETIREMENT_PREP = {
-      fusionGenerators: 20,
-      factories: 18,
-      scienceLabs: 11,
-      graphene: 2e8
-    };
-    const inflationMoneyStorageBuildings = [
-      getBuildings().Bank,
-      getBuildings().Casino,
-      getBuildings().HellSpaceCasino,
-      getBuildings().TitanBank,
-      getBuildings().TauCasino,
-      getBuildings().AlphaExchange,
-      getBuildings().RuinsVault,
-      getBuildings().RuinsWarVault,
-      getBuildings().WastelandHellCasino,
-      getBuildings().ElysiumEternalBank
-    ];
-    const inflationMoneyIncomeBuildings = [
-      getBuildings().TouristCenter,
-      getBuildings().Casino,
-      getBuildings().HellSpaceCasino,
-      getBuildings().TauCasino,
-      getBuildings().AlphaLuxuryCondo,
-      getBuildings().WastelandHellCasino
-    ];
-    const galaxyCombatShips = [
-      getBuildings().ScoutShip,
-      getBuildings().CorvetteShip,
-      getBuildings().FrigateShip,
-      getBuildings().CruiserShip,
-      getBuildings().Dreadnought
-    ];
-    const authorityCapBuildingSet = new Set(authorityCapBuildings);
-    const inflationMoneyStorageBuildingSet = new Set(
-      inflationMoneyStorageBuildings
-    );
-    const inflationMoneyIncomeBuildingSet = new Set(
-      inflationMoneyIncomeBuildings
-    );
-    const galaxyCombatShipSet = new Set(galaxyCombatShips);
     const weightingRules = [
-      {
+      weightingRule({
         // Set weighting to zero right away, and skip all checks if autoBuild is disabled
         id: "autobuild-off",
         enabled: (snapshot) => !snapshot.autoBuildEnabled,
         match: () => true,
         describe: () => "",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         // Should always be on top, processing locked building may lead to issues
         id: "locked",
         enabled: () => true,
-        match: (building3) => !building3.isUnlocked(),
+        match: (candidate) => !candidate.unlocked,
         describe: () => "Locked",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "queued-target",
         enabled: () => true,
-        match: (building3, snapshot) => snapshot.queuedTargets.has(building3),
+        match: (candidate, snapshot) => snapshot.queuedTargets.has(candidate.id),
         describe: () => "Queued building, processing...",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "trigger-target",
         enabled: () => true,
-        match: (building3, snapshot) => snapshot.triggerTargets.has(building3),
+        match: (candidate, snapshot) => snapshot.triggerTargets.has(candidate.id),
         describe: () => "Active trigger, processing...",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "autobuild-disabled",
         enabled: () => true,
-        match: (building3) => !building3.autoBuildEnabled,
+        match: (candidate) => !candidate.autoBuildEnabled,
         describe: () => "AutoBuild disabled",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "maximum-amount-reached",
         enabled: () => true,
-        match: (building3) => building3.count >= building3.autoMax,
+        match: (candidate) => candidate.count >= candidate.autoMax,
         describe: () => "Maximum amount reached",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         // Red buildings need to be filtered out, so they won't prevent affordable buildings with lower weight from building
         id: "unaffordable",
         enabled: () => true,
-        match: (building3) => !building3.isAffordable(true),
+        match: (candidate) => !candidate.affordable,
         describe: () => "",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "truepath-test-launch-sabotage",
         enabled: (snapshot) => snapshot.truepathRace && snapshot.testLaunchUnlocked && !snapshot.worldUnified,
-        match: (building3, snapshot) => {
-          if (building3 === getBuildings().SpaceTestLaunch) {
-            return snapshot.testLaunchSuccessChance;
-          }
-        },
+        match: (candidate, snapshot) => isBuilding(candidate, "SpaceTestLaunch") ? snapshot.testLaunchSuccessChance : void 0,
         describe: (chance) => `${Math.round(chance * 100)}% chance of successful launch`,
-        multiplier: (_snapshot, chance) => chance < 0.5 ? chance : 0
-      },
-      {
+        multiplier: (_snapshot, chance) => chance !== void 0 && chance < 0.5 ? chance : 0
+      }),
+      weightingRule({
         id: "eris-digsite-unsecured",
         enabled: (snapshot) => snapshot.truepathRace && snapshot.erisDigsiteUnsecured,
-        match: (building3) => building3 === getBuildings().ErisDrone || building3 === getBuildings().ErisTank || building3 === getBuildings().ErisTrooper,
+        match: (candidate) => isBuilding(candidate, "ErisDrone", "ErisTank", "ErisTrooper"),
         describe: () => "Eris Digsite is not yet secured",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingTruepathDigsite
-      },
-      {
+      }),
+      weightingRule({
         id: "andromeda-miners-disabled",
         enabled: (snapshot) => snapshot.minerJobsDisabled && snapshot.andromedaReached,
-        match: (building3, snapshot) => building3 === getBuildings().CoalMine || building3 === getBuildings().Mine && !snapshot.mineIsOnlyChrysotileSource,
+        match: (candidate, snapshot) => isBuilding(candidate, "CoalMine") || isBuilding(candidate, "Mine") && !snapshot.mineIsOnlyChrysotileSource,
         describe: () => "Miners disabled in Andromeda",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "piracy-fully-supressed",
         enabled: (snapshot) => snapshot.stargatePiracySupressed,
-        match: (building3) => building3 === getBuildings().StargateDefensePlatform,
+        match: (candidate) => isBuilding(candidate, "StargateDefensePlatform"),
         describe: () => "Piracy fully supressed",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "piracy-covered-by-fleet",
         enabled: (snapshot) => snapshot.autoFleetEnabled && snapshot.galaxyPiracyCoveredByFleet && !snapshot.galaxyAssaultPending,
-        match: (building3) => galaxyCombatShipSet.has(building3),
+        match: (candidate) => isBuilding(candidate, ...galaxyCombatShips),
         describe: () => "Piracy fully covered by fleet",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "mech-supply-saving",
         enabled: (snapshot) => snapshot.mechSupplySaving !== null,
-        match: (building3, snapshot) => building3.cost["Supply"] ? snapshot.mechSupplySaving : void 0,
+        match: (candidate, snapshot) => candidate.cost["Supply"] === void 0 ? void 0 : snapshot.mechSupplySaving ?? void 0,
         describe: (reason) => reason === "building" ? "Building mechs..." : "Saving supplies for new mech",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "prestige-unneeded-ascension-towers",
         enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute === "ascension" && !snapshot.witchHunterRace,
-        match: (building3) => building3 === getBuildings().GateEastTower || building3 === getBuildings().GateWestTower,
+        match: (candidate) => isBuilding(candidate, "GateEastTower", "GateWestTower"),
         describe: () => "Not needed for Ascension prestige",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "gate-supression-too-low",
         enabled: (snapshot) => snapshot.gateTowerSupressionTooLow,
-        match: (building3) => building3 === getBuildings().GateEastTower || building3 === getBuildings().GateWestTower,
+        match: (candidate) => isBuilding(candidate, "GateEastTower", "GateWestTower"),
         describe: () => "Too low gate supression",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "saving-soul-gems-for-prestige",
         enabled: (snapshot) => snapshot.prestigeRoute === "whitehole" && snapshot.saveSoulGemsForPrestige,
-        match: (building3, snapshot) => {
-          if (building3.cost["Soul_Gem"] > snapshot.soulGemQuantity - 10) {
-            return true;
-          }
+        match: (candidate, snapshot) => {
+          const cost = candidate.cost["Soul_Gem"];
+          return cost !== void 0 && cost > snapshot.soulGemQuantity - 10;
         },
         describe: () => "Saving up Soul Gems for prestige",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "best-freighter",
-        enabled: (snapshot) => snapshot.freighterChoiceOpen,
-        match: (building3) => {
-          if (building3 === getBuildings().GorddonFreighter || building3 === getBuildings().Alien1SuperFreighter) {
-            let regCount = getBuildings().GorddonFreighter.count;
-            let regTotal = (1 + (regCount + 1) * 0.03) / (1 + regCount * 0.03) - 1;
-            let regCrew = regTotal / 3;
-            let supCount = getBuildings().Alien1SuperFreighter.count;
-            let supTotal = (1 + (supCount + 1) * 0.08) / (1 + supCount * 0.08) - 1;
-            let supCrew = supTotal / 5;
-            if (building3 === getBuildings().GorddonFreighter && regCrew < supCrew) {
-              return getBuildings().Alien1SuperFreighter;
-            }
-            if (building3 === getBuildings().Alien1SuperFreighter && supCrew < regCrew) {
-              return getBuildings().GorddonFreighter;
-            }
-          }
-        },
-        describe: (other) => `${other.title} gives more Money`,
+        enabled: (snapshot) => snapshot.freighterChoice !== null,
+        match: (candidate, snapshot) => losesChoice(candidate, snapshot.freighterChoice),
+        describe: (better) => `${better} gives more Money`,
         multiplier: (snapshot) => snapshot.buildBestFreighterOnly ? 0 : 1
-      },
-      {
+      }),
+      weightingRule({
         id: "lake-transport-vs-bireme",
         // Build any if there's spare support
-        enabled: (snapshot) => snapshot.lakeShipChoiceOpen && snapshot.lakeSupportSpare <= 1,
-        match: (building3, snapshot) => {
-          if (building3 === getBuildings().LakeBireme || building3 === getBuildings().LakeTransport) {
-            let biremeCount = getBuildings().LakeBireme.count;
-            let transportCount = getBuildings().LakeTransport.count;
-            let rating = snapshot.lakeBiremeSupplyRate;
-            let nextBireme = (1 - rating ** (biremeCount + 1)) * (transportCount * 5);
-            let nextTransport = (1 - rating ** biremeCount) * ((transportCount + 1) * 5);
-            if (snapshot.compareTransportsBySoulGems) {
-              let currentSupply = (1 - rating ** biremeCount) * (transportCount * 5);
-              nextBireme = (nextBireme - currentSupply) / getBuildings().LakeBireme.cost["Soul_Gem"];
-              nextTransport = (nextTransport - currentSupply) / getBuildings().LakeTransport.cost["Soul_Gem"];
-            }
-            if (building3 === getBuildings().LakeBireme && nextBireme < nextTransport) {
-              return getBuildings().LakeTransport;
-            }
-            if (building3 === getBuildings().LakeTransport && nextTransport < nextBireme) {
-              return getBuildings().LakeBireme;
-            }
-          }
-        },
-        describe: (other) => `${other.title} gives more Supplies`,
+        enabled: (snapshot) => snapshot.lakeShipChoice !== null && snapshot.lakeSupportSpare <= 1,
+        match: (candidate, snapshot) => losesChoice(candidate, snapshot.lakeShipChoice),
+        describe: (better) => `${better} gives more Supplies`,
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "spire-port-vs-base-camp",
-        enabled: (snapshot) => snapshot.spireSupplyChoiceOpen,
-        match: (building3) => {
-          if (building3 === getBuildings().SpirePort || building3 === getBuildings().SpireBaseCamp) {
-            let portCount = getBuildings().SpirePort.count;
-            let baseCount = getBuildings().SpireBaseCamp.count;
-            let nextPort = (portCount + 1) * (1 + baseCount * 0.4);
-            let nextBase = portCount * (1 + (baseCount + 1) * 0.4);
-            if (building3 === getBuildings().SpirePort && nextPort < nextBase) {
-              return getBuildings().SpireBaseCamp;
-            }
-            if (building3 === getBuildings().SpireBaseCamp && nextBase < nextPort) {
-              return getBuildings().SpirePort;
-            }
-          }
-        },
-        describe: (other) => `${other.title} gives more Max Supplies`,
+        enabled: (snapshot) => snapshot.spireSupplyChoice !== null,
+        match: (candidate, snapshot) => losesChoice(candidate, snapshot.spireSupplyChoice),
+        describe: (better) => `${better} gives more Max Supplies`,
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         // We can't limit waygate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
         id: "spire-waygate-done",
         enabled: (snapshot) => snapshot.spireWaygateComplete,
-        match: (building3) => building3 === getBuildings().SpireWaygate,
+        match: (candidate) => isBuilding(candidate, "SpireWaygate"),
         describe: () => "",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         // We can't limit edenic gate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
         id: "spire-edenic-gate-done",
         enabled: (snapshot) => snapshot.spireEdenicGateComplete,
-        match: (building3) => building3 === getBuildings().SpireEdenicGate,
+        match: (candidate) => isBuilding(candidate, "SpireEdenicGate"),
         describe: () => "",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         // Build up to 100, and then fire after researching cannon
         id: "elysium-fire-support-base-blocked",
         enabled: (snapshot) => snapshot.elysiumFireSupportUnlocked,
-        match: (building3, snapshot) => {
-          if (building3 === getBuildings().ElysiumFireSupportBase) {
-            if (snapshot.elysiumGarrisonDestroyed) {
-              return "Garrison is destroyed";
-            }
-            if (!snapshot.eleriumCannonResearched && building3.count >= 100) {
-              return "Missing Elerium Cannon tech";
-            }
+        match: (candidate, snapshot) => {
+          if (!isBuilding(candidate, "ElysiumFireSupportBase")) {
+            return void 0;
           }
+          if (snapshot.elysiumGarrisonDestroyed) {
+            return "Garrison is destroyed";
+          }
+          if (!snapshot.eleriumCannonResearched && candidate.count >= 100) {
+            return "Missing Elerium Cannon tech";
+          }
+          return void 0;
         },
         describe: (note) => note,
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "warehouse-cap",
         enabled: (snapshot) => snapshot.asphodelStabilizerUnlocked,
-        match: (building3) => building3 === getBuildings().AsphodelStabilizer && building3.count >= getBuildings().AsphodelWarehouse.count,
+        match: (candidate, snapshot) => isBuilding(candidate, "AsphodelStabilizer") && candidate.count >= snapshot.asphodelWarehouseCount,
         describe: () => "Can not exceed amount of Warehouses",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         // Sphinx not usable after solving / Harmachis not usable during Warlord
         id: "spire-sphinx-done",
         enabled: (snapshot) => snapshot.spireSphinxSolved || snapshot.warlordRace,
-        match: (building3) => building3 === getBuildings().SpireSphinx,
+        match: (candidate) => isBuilding(candidate, "SpireSphinx"),
         describe: () => "",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "assembling-not-possible",
         enabled: (snapshot) => snapshot.artificialRace && snapshot.assemblyCureComplete,
-        match: (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Population && building3 !== getBuildings().TauCloning,
+        match: (candidate) => candidate.producedResource === "Population" && !isBuilding(candidate, "TauCloning"),
         describe: () => "Assembling is not possible",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "no-empty-housings",
         enabled: (snapshot) => snapshot.artificialRace,
-        match: (building3, snapshot) => building3 instanceof ResourceAction && building3.resource === getResources().Population && snapshot.populationAtCap,
+        match: (candidate, snapshot) => candidate.producedResource === "Population" && snapshot.populationAtCap,
         describe: () => "No empty housings",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "embassy-knowledge-required",
         enabled: (snapshot) => snapshot.embassyMissing && snapshot.knowledgeCapacity < snapshot.embassyKnowledgeTarget,
-        match: (building3) => building3 === getBuildings().GorddonEmbassy,
-        describe: (_match, _building, snapshot) => `${getNumberString(snapshot.embassyKnowledgeTarget)} Max Knowledge required`,
+        match: (candidate) => isBuilding(candidate, "GorddonEmbassy"),
+        describe: (_match, _candidate, snapshot) => `${formatNumber(snapshot.embassyKnowledgeTarget)} Max Knowledge required`,
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "wrong-shrine",
         enabled: (snapshot) => snapshot.shrineBonusUnwanted,
-        match: (building3) => building3.id?.includes("shrine"),
+        match: (candidate) => candidate.actionId.includes("shrine"),
         describe: () => "Wrong shrine",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "slave-market-blocked",
         enabled: (snapshot) => snapshot.slaverRace,
-        match: (building3, snapshot) => {
-          if (building3 === getBuildings().SlaveMarket) {
-            if (snapshot.slavePensFull) {
-              return "Slave pens already full";
-            }
-            if (snapshot.slaveIncomeInsufficient) {
-              return "Buying slaves only with excess money";
-            }
+        match: (candidate, snapshot) => {
+          if (!isBuilding(candidate, "SlaveMarket")) {
+            return void 0;
           }
+          if (snapshot.slavePensFull) {
+            return "Slave pens already full";
+          }
+          if (snapshot.slaveIncomeInsufficient) {
+            return "Buying slaves only with excess money";
+          }
+          return void 0;
         },
         describe: (note) => note,
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "sacrificial-altar-blocked",
         enabled: (snapshot) => snapshot.cannibalizeRace,
-        match: (building3, snapshot) => {
-          if (building3._id === "s_alter" && building3.count > 0) {
-            if (snapshot.populationEmpty) {
-              return "Too low population";
-            }
-            if (!snapshot.populationAtCap) {
-              return "Sacrifices performed only with full population";
-            }
-            if (snapshot.sacrificeBlocked) {
-              return SACRIFICE_BLOCKED_NOTES[snapshot.sacrificeBlocked];
-            }
+        match: (candidate, snapshot) => {
+          if (candidate.actionId !== "s_alter" || candidate.count <= 0) {
+            return void 0;
           }
+          if (snapshot.populationEmpty) {
+            return "Too low population";
+          }
+          if (!snapshot.populationAtCap) {
+            return "Sacrifices performed only with full population";
+          }
+          if (snapshot.sacrificeBlocked !== null) {
+            return SACRIFICE_BLOCKED_NOTES[snapshot.sacrificeBlocked];
+          }
+          return void 0;
         },
         describe: (note) => note,
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "missing-consumption",
         enabled: () => true,
-        match: (building3) => building3.getMissingConsumption(),
-        describe: (resource2) => `Missing ${resource2.name} to operate`,
+        match: (candidate) => candidate.missingConsumption ?? void 0,
+        describe: (resource2) => `Missing ${resource2} to operate`,
         multiplier: (snapshot) => snapshot.weights.buildingWeightingMissingSupply
-      },
-      {
+      }),
+      weightingRule({
         id: "missing-support",
         enabled: () => true,
-        match: (building3) => building3.getMissingSupport(),
-        describe: (support) => `Missing ${support.name} to operate`,
+        match: (candidate) => candidate.missingSupport ?? void 0,
+        describe: (support) => `Missing ${support} to operate`,
         multiplier: (snapshot) => snapshot.weights.buildingWeightingMissingSupport
-      },
-      {
+      }),
+      weightingRule({
         id: "useless-support",
         enabled: () => true,
-        match: (building3) => building3.getUselessSupport(),
-        describe: (support) => `Provided ${support.name} not currently needed`,
+        match: (candidate) => candidate.uselessSupport ?? void 0,
+        describe: (support) => `Provided ${support} not currently needed`,
         multiplier: (snapshot) => snapshot.weights.buildingWeightingUselessSupport
-      },
-      {
+      }),
+      weightingRule({
         id: "tau-belt-ship-efficiency",
         enabled: (snapshot) => snapshot.truepathRace && snapshot.tauBeltSupportAvailable <= snapshot.tauBeltSupportUsed,
-        match: (building3, snapshot) => {
-          if (building3 === getBuildings().TauBeltWhalingShip || building3 === getBuildings().TauBeltMiningShip) {
-            let s_max = snapshot.tauBeltSupportAvailable;
-            let s_cur = snapshot.tauBeltSupportUsed;
-            let currentEff = 1 - (1 - s_max / s_cur) ** 1.4;
-            let nextEff = 1 - (1 - s_max / (s_cur + 1)) ** 1.4;
-            return nextEff * (s_cur + 1) - currentEff * s_cur;
+        match: (candidate, snapshot) => {
+          if (!isBuilding(candidate, "TauBeltWhalingShip", "TauBeltMiningShip")) {
+            return void 0;
           }
+          const available = snapshot.tauBeltSupportAvailable;
+          const used = snapshot.tauBeltSupportUsed;
+          const currentEfficiency = 1 - (1 - available / used) ** 1.4;
+          const nextEfficiency = 1 - (1 - available / (used + 1)) ** 1.4;
+          return nextEfficiency * (used + 1) - currentEfficiency * used;
         },
-        describe: (eff) => `Low security, new ship will be ${getNiceNumber(eff * 100)}% efficient`,
-        multiplier: (_snapshot, eff) => eff ?? -1
-      },
-      {
+        describe: (gain) => `Low security, new ship will be ${formatNiceNumber(gain * 100)}% efficient`,
+        multiplier: (_snapshot, gain) => gain ?? -1
+      }),
+      weightingRule({
         id: "womling-overlord-guard",
         // Narrowing this to `tau_red` level 4 was tried and did not work.
         enabled: (snapshot) => snapshot.truepathRace,
-        match: (building3, snapshot) => {
-          if (building3 === getBuildings().TauRedContact || building3 === getBuildings().TauRedIntroduce || building3 === getBuildings().TauRedSubjugate) {
-            let missing = null;
-            for (let [id, earned] of [
-              ["TauRedContact", snapshot.womlingFriendEarned],
-              ["TauRedIntroduce", snapshot.womlingGodEarned],
-              ["TauRedSubjugate", snapshot.womlingLordEarned]
-            ]) {
-              if (!earned) {
-                if (building3 === getBuildings()[id]) {
-                  return false;
-                }
-                if (getBuildings()[id].isAutoBuildable()) {
-                  missing = id;
-                }
-              }
-            }
-            return missing;
+        match: (candidate, snapshot) => {
+          if (!isBuilding(
+            candidate,
+            "TauRedContact",
+            "TauRedIntroduce",
+            "TauRedSubjugate"
+          )) {
+            return void 0;
           }
+          let missing;
+          for (const action of snapshot.womlingOverlordActions) {
+            if (action.statEarned) {
+              continue;
+            }
+            if (action.id === candidate.id) {
+              return void 0;
+            }
+            if (action.autoBuildable) {
+              missing = action.name;
+            }
+          }
+          return missing;
         },
-        describe: (id) => `Overlord achievement is missing ${getBuildings()[id].name}`,
+        describe: (name) => `Overlord achievement is missing ${name}`,
         multiplier: (snapshot) => snapshot.weights.buildingWeightingOverlord
-      },
-      {
+      }),
+      weightingRule({
         // Evil universe: Authority amount is capped by Authority max. When max is below target no
         // amount of tax/soldier management can fix the production penalty, so prioritize the
         // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
         id: "authority-cap",
         enabled: (snapshot) => snapshot.authorityCapBelowTarget,
-        match: (building3) => authorityCapBuildingSet.has(building3),
+        match: (candidate) => isBuilding(candidate, ...authorityCapBuildings),
         describe: () => "Raises Authority cap, currently below target",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingAuthority
-      },
-      {
+      }),
+      weightingRule({
         id: "banana-republic-objective",
         enabled: (snapshot) => snapshot.bananaRepublicGuardActive && snapshot.bananaRace,
-        match: (building3, snapshot) => building3 === getBuildings().DwarfWorldCollider && !snapshot.bananaColliderObjectiveComplete,
+        match: (candidate, snapshot) => isBuilding(candidate, "DwarfWorldCollider") && !snapshot.bananaColliderObjectiveComplete,
         describe: () => "Banana Republic objective",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingBananaObjective
-      },
-      {
+      }),
+      weightingRule({
         id: "inflation-money",
         enabled: (snapshot) => snapshot.inflationAssistActive,
-        match: (building3, snapshot) => {
-          if (!snapshot.inflationMoneyReachable && inflationMoneyStorageBuildingSet.has(building3)) {
+        match: (candidate, snapshot) => {
+          if (!snapshot.inflationMoneyReachable && isBuilding(candidate, ...inflationMoneyStorageBuildings)) {
             return "storage";
           }
-          if (snapshot.inflationMoneyReachable && inflationMoneyIncomeBuildingSet.has(building3)) {
+          if (snapshot.inflationMoneyReachable && isBuilding(candidate, ...inflationMoneyIncomeBuildings)) {
             return "income";
           }
-          return false;
+          return void 0;
         },
         describe: (kind) => kind === "storage" ? "Inflation challenge needs Money storage" : "Inflation challenge needs Money income",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingInflationMoney
-      },
-      {
+      }),
+      weightingRule({
         id: "retirement-preparation",
         enabled: (snapshot) => snapshot.retirementPreparationIncomplete,
-        match: (building3) => {
-          if (building3 === getBuildings().TauFusionGenerator && building3.count < RETIREMENT_PREP.fusionGenerators) {
+        match: (candidate) => {
+          if (isBuilding(candidate, "TauFusionGenerator") && candidate.count < RETIREMENT_PREP.fusionGenerators) {
             return RETIREMENT_PREP.fusionGenerators;
           }
-          if (building3 === getBuildings().TauFactory && building3.count < RETIREMENT_PREP.factories) {
+          if (isBuilding(candidate, "TauFactory") && candidate.count < RETIREMENT_PREP.factories) {
             return RETIREMENT_PREP.factories;
           }
-          if (building3 === getBuildings().TauDiseaseLab && building3.count < RETIREMENT_PREP.scienceLabs) {
+          if (isBuilding(candidate, "TauDiseaseLab") && candidate.count < RETIREMENT_PREP.scienceLabs) {
             return RETIREMENT_PREP.scienceLabs;
           }
-          return false;
+          return void 0;
         },
-        describe: (target, building3) => `Retirement preparation: build ${target} ${building3.name}`,
+        describe: (target, candidate) => `Retirement preparation: build ${target} ${candidate.name}`,
         multiplier: (snapshot) => snapshot.weights.buildingWeightingRetirementPrep
-      },
-      {
+      }),
+      weightingRule({
         // Red Spaceport unlocks unification research. Let an active unification
         // achievement build this prerequisite so Red Dead can release afterward.
         id: "achievement-guard",
         // Each guard answer already folds in the master AutoAchievement toggle.
         enabled: (snapshot) => snapshot.guardDreadedActive || snapshot.guardEnergeticActive || snapshot.guardRedDeadActive,
-        match: (building3, snapshot) => building3 === getBuildings().Dreadnought && snapshot.guardDreadedActive ? "Dreaded" : building3 === getBuildings().SiriusThermalCollector && snapshot.guardEnergeticActive ? "Energetic" : building3 === getBuildings().RedSpaceport && snapshot.guardRedDeadActive && !snapshot.guardPacifistActive && snapshot.foreignAchievementGoal === null ? "Red Dead" : false,
+        match: (candidate, snapshot) => {
+          if (isBuilding(candidate, "Dreadnought") && snapshot.guardDreadedActive) {
+            return "Dreaded";
+          }
+          if (isBuilding(candidate, "SiriusThermalCollector") && snapshot.guardEnergeticActive) {
+            return "Energetic";
+          }
+          if (isBuilding(candidate, "RedSpaceport") && snapshot.guardRedDeadActive && !snapshot.guardPacifistActive && snapshot.foreignAchievementGoal === null) {
+            return "Red Dead";
+          }
+          return void 0;
+        },
         describe: (name) => `${name} achievement guard`,
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "non-operating-city-buildings",
         enabled: () => true,
-        match: (building3) => building3._tab === "city" && building3 !== getBuildings().Mill && building3 !== getBuildings().Banquet && building3.stateOffCount > 0,
+        match: (candidate) => candidate.tab === "city" && !isBuilding(candidate, "Mill", "Banquet") && candidate.stateOffCount > 0,
         describe: () => "Still have some non operating buildings",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingNonOperatingCity
-      },
-      {
+      }),
+      weightingRule({
         id: "non-operating-buildings",
         enabled: () => true,
-        match: (building3, snapshot) => {
-          if (building3 === getBuildings().BlackholeStellarEngine) {
+        match: (candidate, snapshot) => {
+          if (isBuilding(candidate, "BlackholeStellarEngine")) {
             return false;
           }
-          if ((building3 === getBuildings().BadlandsAttractor || building3 === getBuildings().SpireMechBay) && building3.isSmartManaged()) {
+          if (isBuilding(candidate, "BadlandsAttractor", "SpireMechBay") && candidate.smartManaged) {
             return false;
           }
-          if (building3 === getBuildings().RuinsGuardPost && building3.isSmartManaged() && !snapshot.hellSupressUseful && snapshot.hellGuardPostPrebuildIncomplete) {
+          if (isBuilding(candidate, "RuinsGuardPost") && candidate.smartManaged && !snapshot.hellSupressUseful && snapshot.hellGuardPostPrebuildIncomplete) {
             return false;
           }
-          if (building3 === getBuildings().SpirePort && snapshot.spirePortPrebuildIncomplete || building3 === getBuildings().SpireBaseCamp && snapshot.spireBaseCampPrebuildIncomplete) {
+          if (isBuilding(candidate, "SpirePort") && snapshot.spirePortPrebuildIncomplete || isBuilding(candidate, "SpireBaseCamp") && snapshot.spireBaseCampPrebuildIncomplete) {
             return false;
           }
-          if (building3._tab !== "city" && building3.stateOffCount > 0) {
-            return true;
-          }
+          return candidate.tab !== "city" && candidate.stateOffCount > 0;
         },
         describe: () => "Still have some non operating buildings",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingNonOperating
-      },
-      {
+      }),
+      weightingRule({
         id: "geck-limit",
         enabled: (snapshot) => snapshot.prestigeRoute !== "bioseed" || !snapshot.geckNeeded,
-        match: (building3) => building3 === getBuildings().GasSpaceDockGECK,
+        match: (candidate) => isBuilding(candidate, "GasSpaceDockGECK"),
         describe: () => "Max allowed amount of G.E.C.K reached",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "prestige-blocked-eden",
         enabled: (snapshot) => snapshot.loneSurvivorRace && !snapshot.prestigeEdenAllowed,
-        match: (building3) => building3 === getBuildings().TauStarEden,
+        match: (candidate) => isBuilding(candidate, "TauStarEden"),
         describe: () => "Prestiging not currently allowed",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "prestige-blocked-ignition",
         enabled: (snapshot) => snapshot.truepathRace && (!snapshot.prestigeRetireAllowed || snapshot.matrioshkaBrainIncomplete),
-        match: (building3) => building3 === getBuildings().TauGas2IgniteGasGiant,
+        match: (candidate) => isBuilding(candidate, "TauGas2IgniteGasGiant"),
         describe: () => "Prestiging not currently allowed",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "prestige-unneeded",
         enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute !== "bioseed",
-        match: (building3) => building3 === getBuildings().GasSpaceDock || building3 === getBuildings().GasSpaceDockShipSegment || building3 === getBuildings().GasSpaceDockProbe,
+        match: (candidate) => isBuilding(
+          candidate,
+          "GasSpaceDock",
+          "GasSpaceDockShipSegment",
+          "GasSpaceDockProbe"
+        ),
         describe: () => "Not needed for current prestige",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "prestige-unneeded-bioseed",
         enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute === "bioseed",
-        match: (building3) => building3 === getBuildings().DwarfWorldCollider || building3 === getBuildings().TitanMission,
+        match: (candidate) => isBuilding(candidate, "DwarfWorldCollider", "TitanMission"),
         describe: () => "Not needed for Bioseed prestige",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "prestige-unneeded-whitehole",
         enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute === "whitehole",
-        match: (building3) => building3 === getBuildings().BlackholeJumpShip,
+        match: (candidate) => isBuilding(candidate, "BlackholeJumpShip"),
         describe: () => "Not needed for Whitehole prestige",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "prestige-unneeded-vacuum",
         enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute === "vacuum",
-        match: (building3) => building3 === getBuildings().BlackholeStellarEngine,
+        match: (candidate) => isBuilding(candidate, "BlackholeStellarEngine"),
         describe: () => "Not needed for Vacuum Collapse prestige",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "prestige-unneeded-ascension-missions",
         enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute === "ascension" && snapshot.pillarFinished && !snapshot.witchHunterRace,
-        match: (building3) => building3 === getBuildings().PitMission || building3 === getBuildings().RuinsMission,
+        match: (candidate) => isBuilding(candidate, "PitMission", "RuinsMission"),
         describe: () => "Not needed for Ascension prestige",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "prestige-unneeded-witch-hunter",
         enabled: (snapshot) => snapshot.witchHunterRace && snapshot.prestigeRoute === "ascension",
-        match: (building3) => building3 === getBuildings().SpireWaygate,
+        match: (candidate) => isBuilding(candidate, "SpireWaygate"),
         describe: () => "Not needed for Witch Hunter's Ascension prestige",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "prestige-unneeded-terraform",
         enabled: (snapshot) => snapshot.limitPrestigeConstruction && snapshot.prestigeRoute === "terraform",
-        match: (building3) => building3 === getBuildings().PitMission || building3 === getBuildings().RuinsMission,
+        match: (candidate) => isBuilding(candidate, "PitMission", "RuinsMission"),
         describe: () => "Not needed for Terraform prestige",
         multiplier: () => 0
-      },
-      {
+      }),
+      weightingRule({
         id: "awaiting-mad-prestige",
         enabled: (snapshot) => snapshot.madPrestigeAwaited,
-        match: (building3) => !building3.is.housing && !building3.is.garrison && !building3.cost["Knowledge"] && building3 !== getBuildings().OilWell,
+        match: (candidate) => !candidate.housing && !candidate.garrison && candidate.cost["Knowledge"] === void 0 && !isBuilding(candidate, "OilWell"),
         describe: () => "Awaiting MAD prestige",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingMADUseless
-      },
-      {
+      }),
+      weightingRule({
         id: "new-building",
         enabled: () => true,
-        match: (building3) => !(building3 instanceof ResourceAction) && building3.count === 0,
+        match: (candidate) => candidate.producedResource === null && candidate.count === 0,
         describe: () => "New building",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingNew
-      },
-      {
+      }),
+      weightingRule({
         id: "need-more-energy",
         enabled: (snapshot) => snapshot.powerUnlocked && snapshot.powerSurplus < snapshot.unpoweredPowerDemand,
-        match: (building3) => building3 === getBuildings().LakeCoolingTower || building3.powered < 0,
+        match: (candidate) => isBuilding(candidate, "LakeCoolingTower") || candidate.powered < 0,
         describe: () => "Need more energy",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingNeedfulPowerPlant
-      },
-      {
+      }),
+      weightingRule({
         id: "no-need-for-more-energy",
         enabled: (snapshot) => snapshot.powerUnlocked && snapshot.powerSurplus > snapshot.unpoweredPowerDemand,
-        match: (building3) => building3 !== getBuildings().Mill && (building3 === getBuildings().LakeCoolingTower || building3.powered < 0),
+        match: (candidate) => !isBuilding(candidate, "Mill") && (isBuilding(candidate, "LakeCoolingTower") || candidate.powered < 0),
         describe: () => "No need for more energy",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingUselessPowerPlant
-      },
-      {
+      }),
+      weightingRule({
         id: "not-enough-energy",
         enabled: (snapshot) => snapshot.powerUnlocked,
-        match: (building3, snapshot) => building3 !== getBuildings().LakeCoolingTower && building3.powered > 0 && (building3 === getBuildings().NeutronCitadel ? snapshot.nextCitadelPowerDraw : building3.powered) > snapshot.powerSurplus,
+        match: (candidate, snapshot) => !isBuilding(candidate, "LakeCoolingTower") && candidate.powered > 0 && (isBuilding(candidate, "NeutronCitadel") ? snapshot.nextCitadelPowerDraw : candidate.powered) > snapshot.powerSurplus,
         describe: () => "Not enough energy",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingUnderpowered
-      },
-      {
+      }),
+      weightingRule({
         id: "no-need-for-more-knowledge",
         enabled: (snapshot) => Math.max(
           snapshot.knowledgeRequiredByTechs,
           snapshot.knowledgeRequiredByBuildTargets
         ) <= snapshot.knowledgeCapacity,
-        match: (building3) => building3.is.knowledge && building3 !== getBuildings().Wardenclyffe && (building3 !== getBuildings().StargateTelemetryBeacon || building3.count > 0),
         // We want Wardenclyffe for morale; first beacon required for progress
+        match: (candidate) => candidate.knowledge && !isBuilding(candidate, "Wardenclyffe") && (!isBuilding(candidate, "StargateTelemetryBeacon") || candidate.count > 0),
         describe: () => "No need for more knowledge",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingUselessKnowledge
-      },
-      {
+      }),
+      weightingRule({
         id: "need-more-knowledge",
         enabled: (snapshot) => snapshot.cheapestTechKnowledge > snapshot.knowledgeCapacity || snapshot.knowledgeRequiredByBuildTargets > snapshot.knowledgeCapacity,
-        match: (building3) => building3.is.knowledge,
+        match: (candidate) => candidate.knowledge,
         describe: () => "Need more knowledge",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingNeedfulKnowledge
-      },
-      {
+      }),
+      weightingRule({
         id: "unused-ejectors",
         enabled: (snapshot) => snapshot.unusedEjectorCapacity > 100,
-        match: (building3) => building3 === getBuildings().BlackholeMassEjector,
+        match: (candidate) => isBuilding(candidate, "BlackholeMassEjector"),
         describe: () => "Still have some unused ejectors",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingUnusedEjectors
-      },
-      {
+      }),
+      weightingRule({
         id: "unused-storage",
         enabled: (snapshot) => snapshot.unusedStorageParts,
-        match: (building3) => building3 === getBuildings().StorageYard || building3 === getBuildings().Warehouse || building3 === getBuildings().EnceladusMunitions,
+        match: (candidate) => isBuilding(candidate, "StorageYard", "Warehouse", "EnceladusMunitions"),
         describe: () => "Still have some unused storage",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingCrateUseless
-      },
-      {
+      }),
+      weightingRule({
         id: "need-more-fuel-production",
         enabled: (snapshot) => snapshot.oilStorageBelowMissionCost && snapshot.noOilProduction,
-        match: (building3) => building3 === getBuildings().OilWell || building3 === getBuildings().GasMoonOilExtractor,
+        match: (candidate) => isBuilding(candidate, "OilWell", "GasMoonOilExtractor"),
         describe: () => "Need more fuel",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingMissingFuel
-      },
-      {
+      }),
+      weightingRule({
         id: "need-more-fuel-storage",
         enabled: (snapshot) => snapshot.heliumStorageBelowMissionCost || snapshot.oilStorageBelowMissionCost,
-        match: (building3) => building3 === getBuildings().OilDepot || building3 === getBuildings().SpacePropellantDepot || building3 === getBuildings().GasStorage,
+        match: (candidate) => isBuilding(candidate, "OilDepot", "SpacePropellantDepot", "GasStorage"),
         describe: () => "Need more fuel",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingMissingFuel
-      },
-      {
+      }),
+      weightingRule({
         id: "horseshoes-useless",
         enabled: (snapshot) => snapshot.hoovedRace && snapshot.horseshoesSufficient,
-        match: (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Horseshoe,
-        describe: (_match, _building, snapshot) => `No more ${snapshot.horseshoeTitle} needed`,
+        match: (candidate) => candidate.producedResource === "Horseshoe",
+        describe: (_match, _candidate, snapshot) => `No more ${snapshot.horseshoeTitle} needed`,
         multiplier: (snapshot) => snapshot.weights.buildingWeightingHorseshoeUseless
-      },
-      {
+      }),
+      weightingRule({
         id: "meditation-space-unneeded",
         enabled: (snapshot) => snapshot.calmRace && snapshot.zenBelowCap,
-        match: (building3) => building3.id.includes("meditation"),
+        match: (candidate) => candidate.actionId.includes("meditation"),
         describe: () => "No more Meditation Space needed",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingZenUseless
-      },
-      {
+      }),
+      weightingRule({
         id: "gate-demons-supressed",
         enabled: (snapshot) => snapshot.gateDemonsSupressed,
-        match: (building3) => building3 === getBuildings().GateTurret,
+        match: (candidate) => isBuilding(candidate, "GateTurret"),
         describe: () => "Gate demons fully supressed",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingGateTurret
-      },
-      {
+      }),
+      weightingRule({
         id: "need-more-storage",
         enabled: (snapshot) => snapshot.storagePartsAllAssigned,
-        match: (building3) => building3 === getBuildings().Shed || building3 === getBuildings().RedGarage || building3 === getBuildings().AlphaWarehouse || building3 === getBuildings().ProximaCargoYard || building3 === getBuildings().TitanStorehouse,
+        match: (candidate) => isBuilding(
+          candidate,
+          "Shed",
+          "RedGarage",
+          "AlphaWarehouse",
+          "ProximaCargoYard",
+          "TitanStorehouse"
+        ),
         describe: () => "Need more storage",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingNeedStorage
-      },
-      {
+      }),
+      weightingRule({
         id: "no-more-houses-needed",
         enabled: (snapshot) => snapshot.housingUnderused,
-        match: (building3) => building3.is.housing && building3 !== getBuildings().Alien1Consulate && building3 !== getBuildings().Transmitter && !(building3 instanceof ResourceAction),
+        match: (candidate) => candidate.housing && !isBuilding(candidate, "Alien1Consulate", "Transmitter") && candidate.producedResource === null,
         describe: () => "No more houses needed",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingUselessHousing
-      },
-      {
+      }),
+      weightingRule({
         id: "destroyed-after-impact",
         enabled: (snapshot) => snapshot.orbitalDecayImpactPending,
-        match: (building3) => (building3._tab === "city" || building3._location === "spc_moon") && !(building3 instanceof ResourceAction),
+        match: (candidate) => (candidate.tab === "city" || candidate.location === "spc_moon") && candidate.producedResource === null,
         describe: () => "Will be destroyed after impact",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingTemporal
-      },
-      {
+      }),
+      weightingRule({
         id: "randomized-weighting",
         // Only used for the gas giant name contest, no need to check at other game stages
         enabled: (snapshot) => snapshot.gasGiantNameContestActive,
-        match: (building3) => building3.is.random,
+        match: (candidate) => candidate.randomlyWeighted,
         describe: () => "Randomized weighting",
         multiplier: () => 1 + randomSource.nextUnit()
         // Fluctuate weight to pick random item
-      },
-      {
+      }),
+      weightingRule({
         id: "solar-system-building",
         enabled: (snapshot) => snapshot.truepathRace && snapshot.tauCetiReached,
-        match: (building3) => (building3._tab === "city" || building3._tab === "space" || building3._tab === "starDock") && !(building3 instanceof ResourceAction),
+        match: (candidate) => (candidate.tab === "city" || candidate.tab === "space" || candidate.tab === "starDock") && candidate.producedResource === null,
         describe: () => "Solar System building",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingSolar
-      },
-      {
+      }),
+      weightingRule({
         id: "vacuum-collapse-mana-producer",
         enabled: (snapshot) => snapshot.prestigeRoute === "vacuum",
-        match: (building3) => building3 === getBuildings().Pylon || building3 === getBuildings().RedPylon || building3 === getBuildings().TauPylon,
+        match: (candidate) => isBuilding(candidate, "Pylon", "RedPylon", "TauPylon"),
         describe: () => "Vacuum Collapse Mana producer",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingVacuumCollapse
-      }
+      })
     ];
     return {
+      namedBuildings: NAMED_BUILDINGS,
       authorityCapBuildings,
       INFLATION_CHALLENGE_MONEY,
       RETIREMENT_PREP,
@@ -24647,6 +24723,74 @@
       galaxyCombatShips,
       weightingRules
     };
+  }
+
+  // src/adapters/evolve/progression/build/weighting-candidate.ts
+  var EMPTY_COST = Object.freeze({});
+  var call = (record, method, path, ...args) => requireFunction(record[method], `${path}.${method}`).apply(record, [...args]);
+  var resourceName = (value, path) => value === null || value === void 0 ? null : requireString(requireRecord(value, path)["name"], `${path}.name`);
+  var readCost = (record, path) => {
+    const cost = requireRecord(record["cost"], `${path}.cost`);
+    const amounts = {};
+    for (const [resource2, amount] of Object.entries(cost)) {
+      amounts[resource2] = requireNumber(amount, `${path}.cost.${resource2}`);
+    }
+    return Object.freeze(amounts);
+  };
+  function readWeightingCandidate(building3) {
+    const record = requireRecord(building3, "BuildingManager.priorityList entry");
+    const id = requireString(
+      record["catalogKey"],
+      "BuildingManager.priorityList entry.catalogKey"
+    );
+    const path = `buildings.${id}`;
+    const flags = requireRecord(record["is"], `${path}.is`);
+    const unlocked2 = requireBoolean(
+      call(record, "isUnlocked", path),
+      `${path}.isUnlocked()`
+    );
+    return Object.freeze({
+      id,
+      name: requireString(record["name"], `${path}.name`),
+      actionId: requireString(record["_id"], `${path}._id`),
+      tab: requireString(record["_tab"], `${path}._tab`),
+      location: requireString(record["_location"], `${path}._location`),
+      unlocked: unlocked2,
+      // `autoBuildEnabled` chains on `settings["bat" + binding]` and
+      // `isSmartManaged()` on two more settings, none of which exist until that
+      // building's toggle is first written. Both keep the game's truthiness test.
+      autoBuildEnabled: Boolean(record["autoBuildEnabled"]),
+      smartManaged: Boolean(call(record, "isSmartManaged", path)),
+      count: requireNumber(record["count"], `${path}.count`),
+      autoMax: requireNumber(record["autoMax"], `${path}.autoMax`),
+      stateOffCount: requireNumber(
+        record["stateOffCount"],
+        `${path}.stateOffCount`
+      ),
+      housing: Boolean(flags["housing"]),
+      garrison: Boolean(flags["garrison"]),
+      knowledge: Boolean(flags["knowledge"]),
+      randomlyWeighted: Boolean(flags["random"]),
+      // Only a ResourceAction records the resource it produces directly.
+      producedResource: record["resourceKey"] === void 0 ? null : requireString(record["resourceKey"], `${path}.resourceKey`),
+      // `isAffordable()` forwards the game's own `checkAffordable`, which keeps
+      // the game's truthiness test.
+      affordable: unlocked2 && Boolean(call(record, "isAffordable", path, true)),
+      powered: unlocked2 ? requireNumber(record["powered"], `${path}.powered`) : 0,
+      cost: unlocked2 ? readCost(record, path) : EMPTY_COST,
+      missingConsumption: unlocked2 ? resourceName(
+        call(record, "getMissingConsumption", path),
+        `${path}.getMissingConsumption()`
+      ) : null,
+      missingSupport: unlocked2 ? resourceName(
+        call(record, "getMissingSupport", path),
+        `${path}.getMissingSupport()`
+      ) : null,
+      uselessSupport: unlocked2 ? resourceName(
+        call(record, "getUselessSupport", path),
+        `${path}.getUselessSupport()`
+      ) : null
+    });
   }
 
   // src/adapters/evolve/progression/build/weighting-snapshot.ts
@@ -24704,6 +24848,9 @@
     getMissionMaxResourceCost,
     getResourceTitle,
     getBuildingCount,
+    getBuildingName,
+    getBuildingTitle,
+    getBuildingSoulGemCost,
     isBuildingUnlocked,
     isBuildingAutoBuildable,
     isBuildingAffordable,
@@ -24869,11 +25016,90 @@
       `resources.${resource2}.techMissionMaxCost`
     );
     const buildingCount = (building3) => requireNumber(getBuildingCount(building3), `buildings.${building3}.count`);
+    const soulGemCost = (building3) => Number(getBuildingSoulGemCost(building3));
     const buildingUnlocked = (building3) => requireBoolean(
       isBuildingUnlocked(building3),
       `buildings.${building3}.isUnlocked()`
     );
     const buildableNow = (building3) => Boolean(isBuildingAutoBuildable(building3)) && Boolean(isBuildingAffordable(building3));
+    const buildingTitle = (building3) => requireString(getBuildingTitle(building3), `buildings.${building3}.title`);
+    const worseSide = (first, second) => {
+      if (first[1] < second[1]) {
+        return { worseId: first[0], betterTitle: buildingTitle(second[0]) };
+      }
+      if (second[1] < first[1]) {
+        return { worseId: second[0], betterTitle: buildingTitle(first[0]) };
+      }
+      return null;
+    };
+    const openChoice = (first, second, score) => buildableNow(first) && buildableNow(second) ? score() : null;
+    const readFreighterChoice = () => openChoice("GorddonFreighter", "Alien1SuperFreighter", () => {
+      const regularCount = buildingCount("GorddonFreighter");
+      const superCount = buildingCount("Alien1SuperFreighter");
+      return worseSide(
+        [
+          "GorddonFreighter",
+          ((1 + (regularCount + 1) * 0.03) / (1 + regularCount * 0.03) - 1) / 3
+        ],
+        [
+          "Alien1SuperFreighter",
+          ((1 + (superCount + 1) * 0.08) / (1 + superCount * 0.08) - 1) / 5
+        ]
+      );
+    });
+    const readLakeShipChoice = () => openChoice("LakeBireme", "LakeTransport", () => {
+      const biremeCount = buildingCount("LakeBireme");
+      const transportCount = buildingCount("LakeTransport");
+      const rating = readLakeBiremeSupplyRate();
+      let bireme = (1 - rating ** (biremeCount + 1)) * (transportCount * 5);
+      let transport = (1 - rating ** biremeCount) * ((transportCount + 1) * 5);
+      if (requireBoolean(
+        isTransportComparedBySoulGems(),
+        "settings.buildingsTransportGem"
+      )) {
+        const current = (1 - rating ** biremeCount) * (transportCount * 5);
+        bireme = (bireme - current) / soulGemCost("LakeBireme");
+        transport = (transport - current) / soulGemCost("LakeTransport");
+      }
+      return worseSide(["LakeBireme", bireme], ["LakeTransport", transport]);
+    });
+    const readSpireSupplyChoice = () => openChoice("SpirePort", "SpireBaseCamp", () => {
+      const portCount = buildingCount("SpirePort");
+      const campCount = buildingCount("SpireBaseCamp");
+      return worseSide(
+        ["SpirePort", (portCount + 1) * (1 + campCount * 0.4)],
+        ["SpireBaseCamp", portCount * (1 + (campCount + 1) * 0.4)]
+      );
+    });
+    const WOMLING_OVERLORD_ACTIONS = [
+      ["TauRedContact", "friend"],
+      ["TauRedIntroduce", "god"],
+      ["TauRedSubjugate", "lord"]
+    ];
+    const readWomlingOverlordActions = () => WOMLING_OVERLORD_ACTIONS.map(
+      ([building3, stat]) => Object.freeze({
+        id: building3,
+        name: requireString(
+          getBuildingName(building3),
+          `buildings.${building3}.name`
+        ),
+        statEarned: requireBoolean(
+          isWomlingStatEarned(stat),
+          `isWomlingStatEarned("${stat}")`
+        ),
+        autoBuildable: Boolean(isBuildingAutoBuildable(building3))
+      })
+    );
+    const readTargetIds = (targets, path) => {
+      const ids = /* @__PURE__ */ new Set();
+      for (const [index, target] of requireArray(targets, path).entries()) {
+        const key = requireRecord(target, `${path}[${index}]`)["catalogKey"];
+        if (typeof key === "string") {
+          ids.add(key);
+        }
+      }
+      return ids;
+    };
     const readUnusedEjectorCapacity = () => buildingCount("BlackholeMassEjector") * 1e3 - readAssignedEjectorCapacity();
     const readSlaveIncomeInsufficient = () => {
       const moneyIncome = income("Money");
@@ -24922,10 +25148,6 @@
           isMinerJobsDisabled(),
           "settings.jobDisableMiners"
         ),
-        compareTransportsBySoulGems: requireBoolean(
-          isTransportComparedBySoulGems(),
-          "settings.buildingsTransportGem"
-        ),
         prestigeRoute: readPrestigeRoute(),
         limitPrestigeConstruction: requireBoolean(
           isPrestigeConstructionLimited(),
@@ -24949,11 +25171,13 @@
           isBananaRepublicGuardEnabled(),
           "settings.guardBananaRepublic"
         ),
-        queuedTargets: new Set(
-          requireArray(state["queuedTargets"], "state.queuedTargets")
+        queuedTargets: readTargetIds(
+          state["queuedTargets"],
+          "state.queuedTargets"
         ),
-        triggerTargets: new Set(
-          requireArray(state["triggerTargets"], "state.triggerTargets")
+        triggerTargets: readTargetIds(
+          state["triggerTargets"],
+          "state.triggerTargets"
         ),
         knowledgeRequiredByTechs: requireNumber(
           state["knowledgeRequiredByTechs"],
@@ -24997,9 +25221,10 @@
         testLaunchUnlocked: buildingUnlocked("SpaceTestLaunch"),
         erisDigsiteUnsecured: buildingUnlocked("ErisDigsite") && buildingCount("ErisDigsite") < 100,
         andromedaReached: buildingCount("GatewayStarbase") > 0,
-        freighterChoiceOpen: buildableNow("GorddonFreighter") && buildableNow("Alien1SuperFreighter"),
-        lakeShipChoiceOpen: buildableNow("LakeBireme") && buildableNow("LakeTransport"),
-        spireSupplyChoiceOpen: buildableNow("SpirePort") && buildableNow("SpireBaseCamp"),
+        freighterChoice: readFreighterChoice(),
+        lakeShipChoice: readLakeShipChoice(),
+        spireSupplyChoice: readSpireSupplyChoice(),
+        asphodelWarehouseCount: buildingCount("AsphodelWarehouse"),
         embassyMissing: buildingCount("GorddonEmbassy") === 0,
         matrioshkaBrainIncomplete: buildingCount("TauGas2MatrioshkaBrain") < 1e3,
         unusedEjectorCapacity: readUnusedEjectorCapacity(),
@@ -25094,7 +25319,6 @@
           spirePrebuild["baseCamps"],
           "getSpirePrebuildShortfall().baseCamps"
         ),
-        lakeBiremeSupplyRate: readLakeBiremeSupplyRate(),
         nextCitadelPowerDraw: requireNumber(
           getNextCitadelPowerDraw(),
           "getNextCitadelPowerDraw()"
@@ -25137,18 +25361,8 @@
           getMechSupplySavingReason(),
           "getMechSupplySavingReason()"
         ),
-        womlingFriendEarned: requireBoolean(
-          isWomlingStatEarned("friend"),
-          'isWomlingStatEarned("friend")'
-        ),
-        womlingGodEarned: requireBoolean(
-          isWomlingStatEarned("god"),
-          'isWomlingStatEarned("god")'
-        ),
-        womlingLordEarned: requireBoolean(
-          isWomlingStatEarned("lord"),
-          'isWomlingStatEarned("lord")'
-        )
+        // Only True Path has Womlings to contact.
+        womlingOverlordActions: truepathRace ? readWomlingOverlordActions() : []
       });
     };
   }
@@ -25687,7 +25901,7 @@
     if (value === Number.POSITIVE_INFINITY) return Number.MAX_SAFE_INTEGER;
     return requireNumber(value, path);
   }
-  function call(target, key, path, args = []) {
+  function call2(target, key, path, args = []) {
     return Reflect.apply(requireFunction(target[key], path), target, args);
   }
   function unavailableInput() {
@@ -25744,7 +25958,7 @@
     return JSON.stringify(left) === JSON.stringify(right);
   }
   function readUnlocked(building3, path) {
-    return Boolean(call(building3, "isUnlocked", `${path}.isUnlocked`));
+    return Boolean(call2(building3, "isUnlocked", `${path}.isUnlocked`));
   }
   function createHellAdapter(dependencies) {
     let session = null;
@@ -25998,7 +26212,7 @@
           throw new Error("Hell target request does not match the sampled plan");
         }
         const garrisonSoldiers = requireSoldierTarget(
-          call(
+          call2(
             active.manager,
             "getSoldiersForAttackRating",
             "WarManager.getSoldiersForAttackRating",
@@ -26007,7 +26221,7 @@
           "Hell garrison soldier target"
         );
         const patrolSoldiers = request.patrolRating === null ? request.input.hellPatrolSize : requireSoldierTarget(
-          call(
+          call2(
             active.manager,
             "getSoldiersForAttackRating",
             "WarManager.getSoldiersForAttackRating",
@@ -26030,7 +26244,7 @@
             "resources.Authority"
           );
           unlocked2 = Boolean(
-            call(authority, "isUnlocked", "resources.Authority.isUnlocked")
+            call2(authority, "isUnlocked", "resources.Authority.isUnlocked")
           );
           if (unlocked2) {
             current = requireNumber(
@@ -27200,7 +27414,7 @@
       `${path}.${name}()`
     );
   }
-  function readCost(value, path) {
+  function readCost2(value, path) {
     const cost = requireRecord(value, path);
     const resource2 = requireRecord(cost["resource"], `${path}.resource`);
     const name = resource2["name"];
@@ -27229,7 +27443,7 @@
     if (!Array.isArray(value)) {
       throw new TypeError(`${path} must be an array`);
     }
-    return value.map((entry, index) => readCost(entry, `${path}[${index}]`));
+    return value.map((entry, index) => readCost2(entry, `${path}[${index}]`));
   }
   function readFuels(manager) {
     const priorityList = Reflect.apply(
@@ -35681,9 +35895,9 @@
     if (identity(buildings, "LakeHarbor", building3)) {
       return Object.freeze({ kind: "lake-harbor" });
     }
-    for (const [buildingName, resourceName, source] of SAVING_BUSY_BUILDINGS) {
+    for (const [buildingName, resourceName2, source] of SAVING_BUSY_BUILDINGS) {
       if (identity(buildings, buildingName, building3)) {
-        const resource2 = namedRecord(resources, resourceName, "resources");
+        const resource2 = namedRecord(resources, resourceName2, "resources");
         return Object.freeze({
           kind: "busy-resource",
           active: true,
@@ -35691,18 +35905,18 @@
           observation: busyObservation(
             registry,
             resource2,
-            `resources.${resourceName}`,
+            `resources.${resourceName2}`,
             source
           )
         });
       }
     }
-    for (const [buildingName, resourceName] of KUIPER_BUSY_BUILDINGS) {
+    for (const [buildingName, resourceName2] of KUIPER_BUSY_BUILDINGS) {
       if (identity(buildings, buildingName, building3)) {
-        const resource2 = namedRecord(resources, resourceName, "resources");
+        const resource2 = namedRecord(resources, resourceName2, "resources");
         const title = registry.register(
           resource2,
-          `resources.${resourceName}`
+          `resources.${resourceName2}`
         ).title;
         return Object.freeze({
           kind: "busy-resource",
@@ -35711,16 +35925,16 @@
           observation: busyObservation(
             registry,
             resource2,
-            `resources.${resourceName}`,
+            `resources.${resourceName2}`,
             "space_kuiper_mine",
             [title]
           )
         });
       }
     }
-    for (const [buildingName, resourceName] of BELT_BUSY_BUILDINGS) {
+    for (const [buildingName, resourceName2] of BELT_BUSY_BUILDINGS) {
       if (identity(buildings, buildingName, building3)) {
-        const resource2 = namedRecord(resources, resourceName, "resources");
+        const resource2 = namedRecord(resources, resourceName2, "resources");
         const elerium = namedRecord(resources, "Elerium", "resources");
         return Object.freeze({
           kind: "busy-resource",
@@ -35729,13 +35943,13 @@
           observation: busyObservation(
             registry,
             resource2,
-            `resources.${resourceName}`,
+            `resources.${resourceName2}`,
             "job_space_miner"
           )
         });
       }
     }
-    for (const [buildingName, resourceName, source] of ORDINARY_BUSY_BUILDINGS) {
+    for (const [buildingName, resourceName2, source] of ORDINARY_BUSY_BUILDINGS) {
       if (identity(buildings, buildingName, building3)) {
         return Object.freeze({
           kind: "busy-resource",
@@ -35743,8 +35957,8 @@
           savingOnly: false,
           observation: busyObservation(
             registry,
-            namedRecord(resources, resourceName, "resources"),
-            `resources.${resourceName}`,
+            namedRecord(resources, resourceName2, "resources"),
+            `resources.${resourceName2}`,
             source
           )
         });
@@ -41181,7 +41395,7 @@
   function optionalNumber2(value, path, fallback = 0) {
     return value === void 0 ? fallback : requireNumber(value, path);
   }
-  function call2(target, key, path, args = []) {
+  function call3(target, key, path, args = []) {
     return Reflect.apply(requireFunction(target[key], path), target, args);
   }
   function booleanSetting2(settings, key) {
@@ -41231,11 +41445,11 @@
   }
   function resourceFlag(resources, name, method, args = []) {
     const value = resource(resources, name);
-    return Boolean(call2(value, method, `resources.${name}.${method}`, args));
+    return Boolean(call3(value, method, `resources.${name}.${method}`, args));
   }
   function busyWorkers(resources, name, source, count2) {
     return requireNumber(
-      call2(
+      call3(
         resource(resources, name),
         "getBusyWorkers",
         `resources.${name}.getBusyWorkers`,
@@ -41323,7 +41537,7 @@
           } else {
             const id = requireString(job["id"], "job.id");
             const production = requireNumber(
-              call2(
+              call3(
                 resource(resources, "Food"),
                 "getProduction",
                 "resources.Food.getProduction",
@@ -41611,7 +41825,7 @@
       readCycle(craftOnly) {
         session = null;
         const manager = requireRecord(dependencies.getJobManager(), "JobManager");
-        const listed = call2(
+        const listed = call3(
           manager,
           "managedPriorityList",
           "JobManager.managedPriorityList"
@@ -41670,7 +41884,7 @@
           );
           const breakpoints = crafting ? [0, 0, 0] : [0, 1, 2].map(
             (pass) => requireNumber(
-              call2(
+              call3(
                 job,
                 "breakpointEmployees",
                 `jobList[${token2}].breakpointEmployees`,
@@ -41681,7 +41895,7 @@
           );
           const uncappedBreakpoints = crafting ? [0, 0, 0] : [0, 1, 2].map(
             (pass) => requireNumber(
-              call2(
+              call3(
                 job,
                 "breakpointEmployees",
                 `jobList[${token2}].breakpointEmployees`,
@@ -41702,17 +41916,17 @@
             count: jobCount2(job, `jobList[${token2}]`),
             maximum: requireNumber(job["max"], `jobList[${token2}].max`),
             managed: Boolean(
-              call2(job, "isManaged", `jobList[${token2}].isManaged`)
+              call3(job, "isManaged", `jobList[${token2}].isManaged`)
             ),
             unlocked: Boolean(
-              call2(job, "isUnlocked", `jobList[${token2}].isUnlocked`)
+              call3(job, "isUnlocked", `jobList[${token2}].isUnlocked`)
             ),
             smart,
             crafting,
             serves: Boolean(flags["serve"]),
             split: Boolean(flags["split"]),
             isDefault: Boolean(
-              call2(job, "isDefault", `jobList[${token2}].isDefault`)
+              call3(job, "isDefault", `jobList[${token2}].isDefault`)
             ),
             breakpoints: Object.freeze(breakpoints),
             uncappedBreakpoints: Object.freeze(uncappedBreakpoints),
@@ -41752,7 +41966,7 @@
               `craftingJobs[${index}].resource`
             );
             const enabled = jobToken !== null && Boolean(
-              call2(job, "isManaged", `craftingJobs[${index}].isManaged`)
+              call3(job, "isManaged", `craftingJobs[${index}].isManaged`)
             ) && requireBoolean(
               craftResource["autoCraftEnabled"],
               `craftingJobs[${index}].resource.autoCraftEnabled`
@@ -41778,7 +41992,7 @@
               craftBuilding = technology(dependencies, "isolation") ? building(buildings, "TauDiseaseLab") : building(buildings, "EnceladusZeroGLab");
             }
             const demanded = Boolean(
-              call2(
+              call3(
                 craftResource,
                 "isDemanded",
                 `craftingJobs[${index}].resource.isDemanded`
@@ -41796,7 +42010,7 @@
                 `resources.${resourceId3}`
               );
               if (!demanded && (!booleanSetting2(settings, "useDemanded") && Boolean(
-                call2(
+                call3(
                   requiredResource,
                   "isDemanded",
                   `resources.${resourceId3}.isDemanded`
@@ -41964,10 +42178,10 @@
               allocationToken,
               requirement,
               managed: Boolean(
-                call2(record, "isManaged", `jobs.${name}.isManaged`)
+                call3(record, "isManaged", `jobs.${name}.isManaged`)
               ),
               unlocked: Boolean(
-                call2(record, "isUnlocked", `jobs.${name}.isUnlocked`)
+                call3(record, "isUnlocked", `jobs.${name}.isUnlocked`)
               )
             })
           );
@@ -42047,11 +42261,11 @@
           const raw = requireRecord(jobs[name], `jobs.${name}`);
           const breakpoints = [0, 1, 2].map((pass) => {
             const configured = requireNumber(
-              call2(raw, "getBreakpoint", `jobs.${name}.getBreakpoint`, [pass]),
+              call3(raw, "getBreakpoint", `jobs.${name}.getBreakpoint`, [pass]),
               `jobs.${name} configured breakpoint ${pass}`
             );
             return configured > 0 ? requireNumber(
-              call2(
+              call3(
                 raw,
                 "breakpointEmployees",
                 `jobs.${name}.breakpointEmployees`,
@@ -42083,11 +42297,11 @@
           setDefault,
           servantModifier,
           servantsMaximum: booleanSetting2(settings, "jobManageServants") ? requireNumber(
-            call2(manager, "servantsMax", "JobManager.servantsMax"),
+            call3(manager, "servantsMax", "JobManager.servantsMax"),
             "servantsMax"
           ) : 0,
           skilledServantsMaximum: booleanSetting2(settings, "jobManageServants") ? requireNumber(
-            call2(
+            call3(
               manager,
               "skilledServantsMax",
               "JobManager.skilledServantsMax"
@@ -42095,7 +42309,7 @@
             "skilledServantsMax"
           ) : 0,
           craftsmenMaximum: requireNumber(
-            call2(manager, "craftingMax", "JobManager.craftingMax"),
+            call3(manager, "craftingMax", "JobManager.craftingMax"),
             "craftingMax"
           ),
           minimumDefault: requireNumber(crew["max"], "crew.max") - requireNumber(crew["workers"], "crew.workers") > 0 ? requireNumber(crew["max"], "crew.max") - requireNumber(crew["workers"], "crew.workers") + 1 : 0,
@@ -45145,7 +45359,7 @@
   }
 
   // src/adapters/evolve/combat/mech.ts
-  function call3(target, key, path, args = []) {
+  function call4(target, key, path, args = []) {
     return Reflect.apply(requireFunction(target[key], path), target, args);
   }
   function readArray(value, path) {
@@ -45182,7 +45396,7 @@
       })
     };
   }
-  function readCost2(value, path) {
+  function readCost3(value, path) {
     const values = readArray(value, path);
     return Object.freeze({
       gems: requireNumber(values[0], `${path}[0]`),
@@ -45237,7 +45451,7 @@
           debug(() => "cycle: unavailable (warlord race)");
           return unavailableCycle2();
         }
-        if (!call3(manager, "initLab", "MechManager.initLab")) {
+        if (!call4(manager, "initLab", "MechManager.initLab")) {
           debug(
             () => "cycle: unavailable (initLab failed, mech lab Vue missing)"
           );
@@ -45342,19 +45556,19 @@
         let forceBuild = false;
         if (active.cycleInput.buildMode === "random") {
           const preferred = readArray(
-            call3(manager, "getPreferredSize", "MechManager.getPreferredSize"),
+            call4(manager, "getPreferredSize", "MechManager.getPreferredSize"),
             "MechManager.getPreferredSize result"
           );
           const size = requireString(preferred[0], "preferred mech size");
           forceBuild = Boolean(preferred[1]);
           rawDesign = requireRecord(
-            call3(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
+            call4(manager, "getRandomMech", "MechManager.getRandomMech", [size]),
             "random mech"
           );
         } else {
           const blueprint = requireRecord(bay["blueprint"], "mechbay.blueprint");
           const statistics = requireRecord(
-            call3(manager, "getMechStats", "MechManager.getMechStats", [
+            call4(manager, "getMechStats", "MechManager.getMechStats", [
               blueprint
             ]),
             "blueprint mech statistics"
@@ -45363,8 +45577,8 @@
         }
         const design = readDesign(rawDesign, "primary", "selected mech");
         active.designs.set(design.token, rawDesign);
-        const cost = readCost2(
-          call3(manager, "getMechCost", "MechManager.getMechCost", [rawDesign]),
+        const cost = readCost3(
+          call4(manager, "getMechCost", "MechManager.getMechCost", [rawDesign]),
           "selected mech cost"
         );
         const fillBay = requireBoolean(
@@ -45402,14 +45616,14 @@
         if (saveSupplyRatio > 0 && !lastFloor && !forceBuild) {
           if (baySpace < cost.space) {
             titanSupplyRefund = readCostLikeRefund(
-              call3(manager, "getMechRefund", "MechManager.getMechRefund", [
+              call4(manager, "getMechRefund", "MechManager.getMechRefund", [
                 { size: "titan" }
               ]),
               "titan mech refund"
             ).supply;
           }
           saveTimeToClear = requireNumber(
-            call3(manager, "getTimeToClear", "MechManager.getTimeToClear"),
+            call4(manager, "getTimeToClear", "MechManager.getTimeToClear"),
             "MechManager.getTimeToClear result"
           );
         }
@@ -45448,23 +45662,23 @@
         );
         let canExpandBay = false;
         if (autoBuild && baysFirst && Boolean(
-          call3(
+          call4(
             mechBayBuilding,
             "isAutoBuildable",
             "SpireMechBay.isAutoBuildable"
           )
         )) {
           canExpandBay = Boolean(
-            call3(mechBayBuilding, "isAffordable", "SpireMechBay.isAffordable", [
+            call4(mechBayBuilding, "isAffordable", "SpireMechBay.isAffordable", [
               true
             ])
           );
           if (!canExpandBay) {
             const purifierAuto = Boolean(
-              call3(purifier, "isAutoBuildable", "SpirePurifier.isAutoBuildable")
+              call4(purifier, "isAutoBuildable", "SpirePurifier.isAutoBuildable")
             );
             canExpandBay = purifierAuto && Boolean(
-              call3(purifier, "isAffordable", "SpirePurifier.isAffordable", [
+              call4(purifier, "isAffordable", "SpirePurifier.isAffordable", [
                 true
               ])
             ) && requireNumber(
@@ -45497,7 +45711,7 @@
         const suppressMixed = canExpandBay && supply.input.current < supply.input.maximum && !decision2.prolongActive && supply.input.rate >= minimumSupplyRate;
         if (configuredScrapMode === "mixed" && !suppressMixed && waygateActiveCount !== 1) {
           timeToClear = requireNumber(
-            call3(manager, "getTimeToClear", "MechManager.getTimeToClear"),
+            call4(manager, "getTimeToClear", "MechManager.getTimeToClear"),
             "MechManager.getTimeToClear result"
           );
         }
@@ -45565,7 +45779,7 @@
                 let space = 0;
                 if (!(summary.infernal && summary.size !== "collector" || summary.power >= bestPower)) {
                   const refund = readCostLikeRefund(
-                    call3(manager, "getMechRefund", "MechManager.getMechRefund", [
+                    call4(manager, "getMechRefund", "MechManager.getMechRefund", [
                       raw
                     ]),
                     `${path} refund`
@@ -45573,7 +45787,7 @@
                   gemRefund = refund.gems;
                   supplyRefund = refund.supply;
                   space = requireNumber(
-                    call3(manager, "getMechSpace", "MechManager.getMechSpace", [
+                    call4(manager, "getMechSpace", "MechManager.getMechSpace", [
                       raw
                     ]),
                     `${path} space`
@@ -45602,8 +45816,8 @@
         if (active === null || active.planningInput === null) {
           throw new Error("mech planning has not been sampled");
         }
-        const cost = readCost2(
-          call3(active.manager, "getMechCost", "MechManager.getMechCost", [
+        const cost = readCost3(
+          call4(active.manager, "getMechCost", "MechManager.getMechCost", [
             { size }
           ]),
           `mech cost for ${size}`
@@ -45619,7 +45833,7 @@
           throw new Error("mech planning has not been sampled");
         }
         const raw = requireRecord(
-          call3(active.manager, "getRandomMech", "MechManager.getRandomMech", [
+          call4(active.manager, "getRandomMech", "MechManager.getRandomMech", [
             size
           ]),
           `random ${size} mech`
@@ -45651,7 +45865,7 @@
         active.manager["isActive"] = false;
         active.manager["saveSupply"] = false;
         if (decision2.drag !== null) {
-          call3(active.manager, "dragMech", "MechManager.dragMech", [
+          call4(active.manager, "dragMech", "MechManager.dragMech", [
             decision2.drag.oldId,
             decision2.drag.newId
           ]);
@@ -45688,7 +45902,7 @@
           ]);
         } else if (rawMechs.length === 1) {
           const description = requireString(
-            call3(active.manager, "mechDesc", "MechManager.mechDesc", [
+            call4(active.manager, "mechDesc", "MechManager.mechDesc", [
               rawMechs[0]
             ]),
             "mech description"
@@ -45703,7 +45917,7 @@
           () => `scrap: ids=[${decision2.ids.join(",")}] gained={supply:${Math.round(decision2.supplyGained)},gems:${decision2.gemsGained},space:${decision2.spaceGained}}`
         );
         for (const mech of rawMechs) {
-          call3(active.manager, "scrapMech", "MechManager.scrapMech", [mech]);
+          call4(active.manager, "scrapMech", "MechManager.scrapMech", [mech]);
         }
         const supply = requireRecord(
           active.resources["Supply"],
@@ -45758,7 +45972,7 @@
         debug(
           () => `build: size=${String(rawDesign["size"])} cost={gems:${decision2.cost.gems},supply:${decision2.cost.supply}} restoring isActive=${String(decision2.prolongActive)}`
         );
-        call3(active.manager, "buildMech", "MechManager.buildMech", [rawDesign]);
+        call4(active.manager, "buildMech", "MechManager.buildMech", [rawDesign]);
         supply["currentQuantity"] = continuation.supplyCurrent - decision2.cost.supply;
         gems["currentQuantity"] = continuation.gemsCurrent - decision2.cost.gems;
         active.manager["isActive"] = decision2.prolongActive;
@@ -50586,7 +50800,7 @@
   }
 
   // src/adapters/evolve/combat/mech-info.ts
-  function call4(target, key, path, args = []) {
+  function call5(target, key, path, args = []) {
     return Reflect.apply(requireFunction(target[key], path), target, args);
   }
   function createMechInfoEvolveAdapter({
@@ -50600,7 +50814,7 @@
     function ensureLabActive() {
       const manager = readManager();
       if (manager["isActive"]) return true;
-      if (call4(manager, "initLab", "MechManager.initLab")) return true;
+      if (call5(manager, "initLab", "MechManager.initLab")) return true;
       return false;
     }
     function readItems(count2) {
@@ -50628,7 +50842,7 @@
         );
         const size = requireString(mech["size"], `mechs[${index}].size`);
         const stats = requireRecord(
-          call4(manager, "getMechStats", "MechManager.getMechStats", [mech]),
+          call5(manager, "getMechStats", "MechManager.getMechStats", [mech]),
           `MechManager.getMechStats(${index})`
         );
         const best = requireRecord(
@@ -50667,11 +50881,11 @@
     const observer = Object.freeze({
       disconnect() {
         const target = getObserver();
-        call4(target, "disconnect", "MechManager.mechObserver.disconnect");
+        call5(target, "disconnect", "MechManager.mechObserver.disconnect");
       },
       observe(target, options2) {
         const observerTarget = getObserver();
-        call4(observerTarget, "observe", "MechManager.mechObserver.observe", [
+        call5(observerTarget, "observe", "MechManager.mechObserver.observe", [
           target,
           options2
         ]);
@@ -50681,7 +50895,7 @@
   }
 
   // src/adapters/browser/mech-info.ts
-  function call5(target, key, path, args = []) {
+  function call6(target, key, path, args = []) {
     return Reflect.apply(requireFunction(target[key], path), target, args);
   }
   function requireObjectLike(value, path) {
@@ -50695,14 +50909,14 @@
     return {
       length: requireNumber(raw["length"], `${path}.length`),
       hasClass(className) {
-        return Boolean(call5(raw, "hasClass", `${path}.hasClass`, [className]));
+        return Boolean(call6(raw, "hasClass", `${path}.hasClass`, [className]));
       },
       text(textValue) {
-        call5(raw, "text", `${path}.text`, [textValue]);
+        call6(raw, "text", `${path}.text`, [textValue]);
         return this;
       },
       remove() {
-        call5(raw, "remove", `${path}.remove`);
+        call6(raw, "remove", `${path}.remove`);
         return this;
       }
     };
@@ -50723,7 +50937,7 @@
       childNodes,
       firstChild: raw["firstChild"],
       insertBefore(note, before) {
-        call5(raw, "insertBefore", `${path}.insertBefore`, [note, before]);
+        call6(raw, "insertBefore", `${path}.insertBefore`, [note, before]);
       }
     };
   }
@@ -55737,8 +55951,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           isTechnology: (target) => target instanceof Technology,
           isInflationAssistActive: () => inflationChallengeAssistActive(),
           isRetirementAssistActive: () => retirementChallengeAssistActive(),
-          getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
-          getRetirementGraphene: () => RETIREMENT_PREP.graphene
+          getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY2,
+          getRetirementGraphene: () => RETIREMENT_PREP2.graphene
         })
       );
       for (const requirement of result2.resources) {
@@ -55775,8 +55989,8 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
           isProject: (object) => object instanceof Project,
           isInflationAssistActive: () => inflationChallengeAssistActive(),
           isRetirementAssistActive: () => retirementChallengeAssistActive(),
-          getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY,
-          getRetirementGraphene: () => RETIREMENT_PREP.graphene,
+          getInflationChallengeMoney: () => INFLATION_CHALLENGE_MONEY2,
+          getRetirementGraphene: () => RETIREMENT_PREP2.graphene,
           consumptionBalanceTarget: CONSUMPTION_BALANCE_TARGET
         })
       );
@@ -56360,19 +56574,17 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       }
     });
     const {
-      authorityCapBuildings,
-      INFLATION_CHALLENGE_MONEY,
-      RETIREMENT_PREP,
-      inflationMoneyStorageBuildings,
-      inflationMoneyIncomeBuildings,
-      galaxyCombatShips,
+      namedBuildings,
+      authorityCapBuildings: authorityCapBuildings2,
+      INFLATION_CHALLENGE_MONEY: INFLATION_CHALLENGE_MONEY2,
+      RETIREMENT_PREP: RETIREMENT_PREP2,
+      inflationMoneyStorageBuildings: inflationMoneyStorageBuildings2,
+      inflationMoneyIncomeBuildings: inflationMoneyIncomeBuildings2,
+      galaxyCombatShips: galaxyCombatShips2,
       weightingRules
     } = createBuildingWeightingPolicy({
-      getResources: () => resources,
-      getBuildings: () => buildings,
-      getNumberStringFn: () => getNumberString,
-      getNiceNumberFn: () => getNiceNumber,
-      ResourceAction,
+      formatNumber: getNumberString,
+      formatNiceNumber: getNiceNumber,
       randomSource
     });
     const isVacuumSyphonStage = () => isVacuumCollapseManaStageReady({
@@ -56384,12 +56596,13 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     });
     publishTestSurface({
       weightingPolicy: {
-        authorityCapBuildings,
-        INFLATION_CHALLENGE_MONEY,
-        RETIREMENT_PREP,
-        inflationMoneyStorageBuildings,
-        inflationMoneyIncomeBuildings,
-        galaxyCombatShips,
+        namedBuildings,
+        authorityCapBuildings: authorityCapBuildings2,
+        INFLATION_CHALLENGE_MONEY: INFLATION_CHALLENGE_MONEY2,
+        RETIREMENT_PREP: RETIREMENT_PREP2,
+        inflationMoneyStorageBuildings: inflationMoneyStorageBuildings2,
+        inflationMoneyIncomeBuildings: inflationMoneyIncomeBuildings2,
+        galaxyCombatShips: galaxyCombatShips2,
         weightingRules
       }
     });
@@ -56586,6 +56799,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       isVacuumSyphonStage,
       getNiceNumber,
       weightingRules,
+      readWeightingCandidate,
       readWeightingSnapshot: createWeightingSnapshotReader({
         getState: () => state,
         getWeightingMultiplier: (setting) => settings[setting],
@@ -56611,6 +56825,9 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getMissionMaxResourceCost: (resource2) => resources[resource2].techMissionMaxCost,
         getResourceTitle: (resource2) => resources[resource2].title,
         getBuildingCount: (building3) => buildings[building3].count,
+        getBuildingName: (building3) => buildings[building3].name,
+        getBuildingTitle: (building3) => buildings[building3].title,
+        getBuildingSoulGemCost: (building3) => buildings[building3].cost["Soul_Gem"],
         isBuildingUnlocked: (building3) => buildings[building3].isUnlocked(),
         isBuildingAutoBuildable: (building3) => buildings[building3].isAutoBuildable(),
         isBuildingAffordable: (building3) => buildings[building3].isAffordable(true),
@@ -56925,14 +57142,14 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
     let inflationChallengeMoneyReachable = () => {
       const result2 = readInflationMoneyInput(
         resources,
-        INFLATION_CHALLENGE_MONEY
+        INFLATION_CHALLENGE_MONEY2
       );
       return result2.status === "ready" ? isInflationMoneyReachable(result2.input) : false;
     };
     let inflationChallengeSecondsToFinish = () => {
       const result2 = readInflationMoneyInput(
         resources,
-        INFLATION_CHALLENGE_MONEY
+        INFLATION_CHALLENGE_MONEY2
       );
       return result2.status === "ready" ? inflationSecondsToFinish(result2.input) : Number.POSITIVE_INFINITY;
     };
@@ -56942,7 +57159,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         game,
         resources,
         getAchievementStar("wheelbarrow"),
-        INFLATION_CHALLENGE_MONEY
+        INFLATION_CHALLENGE_MONEY2
       );
       return result2.status === "ready" ? shouldSaveInflationMoney(result2.input) : false;
     };
@@ -56961,7 +57178,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       const result2 = readRetirementPreparationInput(
         buildings,
         resources,
-        RETIREMENT_PREP
+        RETIREMENT_PREP2
       );
       return result2.status === "ready" ? formatRetirementShortfalls(
         assessRetirementPreparation(result2.input),
@@ -58012,7 +58229,7 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       isPrestigeAllowed: isPrestigeAllowed2,
       haveTask,
       inflationChallengeShouldSaveMoney,
-      inflationChallengeMoney: INFLATION_CHALLENGE_MONEY
+      inflationChallengeMoney: INFLATION_CHALLENGE_MONEY2
     });
     publishTestSurface({
       updatePriorityTargets: () => updatePriorityTargets(),

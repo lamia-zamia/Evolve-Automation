@@ -1,11 +1,13 @@
 import type { ForeignAchievementGoal } from "../../../../domain/combat/foreign-achievements.ts";
 import type {
+  BuildingChoice,
   BuildingWeightingSnapshot,
   BuildingWeightName,
   BuildingWeights,
   MechSupplySavingReason,
   PrestigeRoute,
   SacrificeBlockedReason,
+  WomlingOverlordAction,
 } from "../../../../ports/building-weighting.ts";
 import {
   requireArray,
@@ -40,6 +42,9 @@ export interface WeightingSnapshotDependencies {
   readonly getMissionMaxResourceCost: (resource: string) => unknown;
   readonly getResourceTitle: (resource: string) => unknown;
   readonly getBuildingCount: (building: string) => unknown;
+  readonly getBuildingName: (building: string) => unknown;
+  readonly getBuildingTitle: (building: string) => unknown;
+  readonly getBuildingSoulGemCost: (building: string) => unknown;
   readonly isBuildingUnlocked: (building: string) => unknown;
   readonly isBuildingAutoBuildable: (building: string) => unknown;
   readonly isBuildingAffordable: (building: string) => unknown;
@@ -126,9 +131,9 @@ function requireMechSupplySavingReason(
  * the building-weighting rules read.
  *
  * Called once per weighting phase so every rule observes the same values. The
- * target lists are converted to identity sets here: the rules only ask whether
- * a candidate is a queued or trigger target, and rescanning both arrays for
- * every candidate is the shape this replaced.
+ * target lists are converted to catalog-key sets here: the rules only ask
+ * whether a candidate is a queued or trigger target, and rescanning both arrays
+ * for every candidate is the shape this replaced.
  *
  * The gates are sampled eagerly rather than behind the rule that reads them.
  * Each one is a small pure read of already-loaded game and settings state, and
@@ -159,6 +164,9 @@ export function createWeightingSnapshotReader({
   getMissionMaxResourceCost,
   getResourceTitle,
   getBuildingCount,
+  getBuildingName,
+  getBuildingTitle,
+  getBuildingSoulGemCost,
   isBuildingUnlocked,
   isBuildingAutoBuildable,
   isBuildingAffordable,
@@ -381,6 +389,12 @@ export function createWeightingSnapshotReader({
   const buildingCount = (building: string): number =>
     requireNumber(getBuildingCount(building), `buildings.${building}.count`);
 
+  // A cost entry only exists while it is above zero, and the game rebuilds
+  // `cost` for unlocked buildings only. An absent Soul Gem cost divides to
+  // `NaN`, which the pair comparison reads as no choice.
+  const soulGemCost = (building: string): number =>
+    Number(getBuildingSoulGemCost(building));
+
   // `Action.isUnlocked()` is an exact boolean: it either fails one of the tab
   // tests or answers whether the building has a Vue view.
   const buildingUnlocked = (building: string): boolean =>
@@ -396,6 +410,132 @@ export function createWeightingSnapshotReader({
   const buildableNow = (building: string): boolean =>
     Boolean(isBuildingAutoBuildable(building)) &&
     Boolean(isBuildingAffordable(building));
+
+  const buildingTitle = (building: string): string =>
+    requireString(getBuildingTitle(building), `buildings.${building}.title`);
+
+  /**
+   * Which side of a two-building pair is worth less, once each side's value has
+   * been scored on the same scale. `null` when neither is ahead, which is also
+   * where a non-finite score lands: a missing Soul Gem cost divides to `NaN`,
+   * and the script then prefers neither side over the other.
+   */
+  const worseSide = (
+    first: readonly [string, number],
+    second: readonly [string, number],
+  ): BuildingChoice => {
+    if (first[1] < second[1]) {
+      return { worseId: first[0], betterTitle: buildingTitle(second[0]) };
+    }
+    if (second[1] < first[1]) {
+      return { worseId: second[0], betterTitle: buildingTitle(first[0]) };
+    }
+    return null;
+  };
+
+  /**
+   * A pair is only a choice while the script could build either side. While one
+   * is locked, switched off, or unaffordable, the other is simply what gets
+   * built.
+   */
+  const openChoice = (
+    first: string,
+    second: string,
+    score: () => BuildingChoice,
+  ): BuildingChoice =>
+    buildableNow(first) && buildableNow(second) ? score() : null;
+
+  // Money storage each freighter adds over the one before it, per crew member
+  // it costs: 3% per regular freighter against 8% per super freighter.
+  const readFreighterChoice = (): BuildingChoice =>
+    openChoice("GorddonFreighter", "Alien1SuperFreighter", () => {
+      const regularCount = buildingCount("GorddonFreighter");
+      const superCount = buildingCount("Alien1SuperFreighter");
+      return worseSide(
+        [
+          "GorddonFreighter",
+          ((1 + (regularCount + 1) * 0.03) / (1 + regularCount * 0.03) - 1) / 3,
+        ],
+        [
+          "Alien1SuperFreighter",
+          ((1 + (superCount + 1) * 0.08) / (1 + superCount * 0.08) - 1) / 5,
+        ],
+      );
+    });
+
+  // Supplies the Lake fleet produces: each Transport carries 5, and Biremes
+  // escort them with a diminishing per-ship factor. With the Soul Gem
+  // comparison on, each ship is scored by the supplies it adds per Soul Gem.
+  const readLakeShipChoice = (): BuildingChoice =>
+    openChoice("LakeBireme", "LakeTransport", () => {
+      const biremeCount = buildingCount("LakeBireme");
+      const transportCount = buildingCount("LakeTransport");
+      const rating = readLakeBiremeSupplyRate();
+      let bireme = (1 - rating ** (biremeCount + 1)) * (transportCount * 5);
+      let transport = (1 - rating ** biremeCount) * ((transportCount + 1) * 5);
+      if (
+        requireBoolean(
+          isTransportComparedBySoulGems(),
+          "settings.buildingsTransportGem",
+        )
+      ) {
+        const current = (1 - rating ** biremeCount) * (transportCount * 5);
+        bireme = (bireme - current) / soulGemCost("LakeBireme");
+        transport = (transport - current) / soulGemCost("LakeTransport");
+      }
+      return worseSide(["LakeBireme", bireme], ["LakeTransport", transport]);
+    });
+
+  // Max Supplies the Spire produces: Ports carry the supplies and Base Camps
+  // multiply them by 40% each.
+  const readSpireSupplyChoice = (): BuildingChoice =>
+    openChoice("SpirePort", "SpireBaseCamp", () => {
+      const portCount = buildingCount("SpirePort");
+      const campCount = buildingCount("SpireBaseCamp");
+      return worseSide(
+        ["SpirePort", (portCount + 1) * (1 + campCount * 0.4)],
+        ["SpireBaseCamp", portCount * (1 + (campCount + 1) * 0.4)],
+      );
+    });
+
+  // The Overlord achievement wants all three contacts, in this order.
+  const WOMLING_OVERLORD_ACTIONS: readonly (readonly [string, string])[] = [
+    ["TauRedContact", "friend"],
+    ["TauRedIntroduce", "god"],
+    ["TauRedSubjugate", "lord"],
+  ];
+
+  const readWomlingOverlordActions = (): readonly WomlingOverlordAction[] =>
+    WOMLING_OVERLORD_ACTIONS.map(([building, stat]) =>
+      Object.freeze({
+        id: building,
+        name: requireString(
+          getBuildingName(building),
+          `buildings.${building}.name`,
+        ),
+        statEarned: requireBoolean(
+          isWomlingStatEarned(stat),
+          `isWomlingStatEarned("${stat}")`,
+        ),
+        autoBuildable: Boolean(isBuildingAutoBuildable(building)),
+      }),
+    );
+
+  // Only buildings carry a catalog key, so a queued or triggered ARPA project
+  // is skipped rather than mistaken for a build candidate.
+  const readTargetIds = (
+    targets: unknown,
+    path: string,
+  ): ReadonlySet<string> => {
+    const ids = new Set<string>();
+    for (const [index, target] of requireArray(targets, path).entries()) {
+      const key = requireRecord(target, `${path}[${index}]`)["catalogKey"];
+      if (typeof key === "string") {
+        ids.add(key);
+      }
+    }
+    return ids;
+  };
 
   // `global.interstellar.mass_ejector` is absent until the first Mass Ejector
   // is built, and each one handles 1000 units per second.
@@ -470,10 +610,6 @@ export function createWeightingSnapshotReader({
         isMinerJobsDisabled(),
         "settings.jobDisableMiners",
       ),
-      compareTransportsBySoulGems: requireBoolean(
-        isTransportComparedBySoulGems(),
-        "settings.buildingsTransportGem",
-      ),
       prestigeRoute: readPrestigeRoute(),
       limitPrestigeConstruction: requireBoolean(
         isPrestigeConstructionLimited(),
@@ -499,11 +635,13 @@ export function createWeightingSnapshotReader({
           isBananaRepublicGuardEnabled(),
           "settings.guardBananaRepublic",
         ),
-      queuedTargets: new Set(
-        requireArray(state["queuedTargets"], "state.queuedTargets"),
+      queuedTargets: readTargetIds(
+        state["queuedTargets"],
+        "state.queuedTargets",
       ),
-      triggerTargets: new Set(
-        requireArray(state["triggerTargets"], "state.triggerTargets"),
+      triggerTargets: readTargetIds(
+        state["triggerTargets"],
+        "state.triggerTargets",
       ),
       knowledgeRequiredByTechs: requireNumber(
         state["knowledgeRequiredByTechs"],
@@ -556,13 +694,10 @@ export function createWeightingSnapshotReader({
       erisDigsiteUnsecured:
         buildingUnlocked("ErisDigsite") && buildingCount("ErisDigsite") < 100,
       andromedaReached: buildingCount("GatewayStarbase") > 0,
-      freighterChoiceOpen:
-        buildableNow("GorddonFreighter") &&
-        buildableNow("Alien1SuperFreighter"),
-      lakeShipChoiceOpen:
-        buildableNow("LakeBireme") && buildableNow("LakeTransport"),
-      spireSupplyChoiceOpen:
-        buildableNow("SpirePort") && buildableNow("SpireBaseCamp"),
+      freighterChoice: readFreighterChoice(),
+      lakeShipChoice: readLakeShipChoice(),
+      spireSupplyChoice: readSpireSupplyChoice(),
+      asphodelWarehouseCount: buildingCount("AsphodelWarehouse"),
       embassyMissing: buildingCount("GorddonEmbassy") === 0,
       matrioshkaBrainIncomplete: buildingCount("TauGas2MatrioshkaBrain") < 1000,
       unusedEjectorCapacity: readUnusedEjectorCapacity(),
@@ -664,7 +799,6 @@ export function createWeightingSnapshotReader({
         spirePrebuild["baseCamps"],
         "getSpirePrebuildShortfall().baseCamps",
       ),
-      lakeBiremeSupplyRate: readLakeBiremeSupplyRate(),
       nextCitadelPowerDraw: requireNumber(
         getNextCitadelPowerDraw(),
         "getNextCitadelPowerDraw()",
@@ -707,18 +841,8 @@ export function createWeightingSnapshotReader({
         getMechSupplySavingReason(),
         "getMechSupplySavingReason()",
       ),
-      womlingFriendEarned: requireBoolean(
-        isWomlingStatEarned("friend"),
-        'isWomlingStatEarned("friend")',
-      ),
-      womlingGodEarned: requireBoolean(
-        isWomlingStatEarned("god"),
-        'isWomlingStatEarned("god")',
-      ),
-      womlingLordEarned: requireBoolean(
-        isWomlingStatEarned("lord"),
-        'isWomlingStatEarned("lord")',
-      ),
+      // Only True Path has Womlings to contact.
+      womlingOverlordActions: truepathRace ? readWomlingOverlordActions() : [],
     });
   };
 }

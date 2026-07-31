@@ -1571,6 +1571,10 @@ export function createEntityClasses({
     ) {
       super(name, tab, id, location, flags);
 
+      // Typed policies identify the produced resource by its catalog key; the
+      // wrapper itself is captured at construction and cannot be compared to a
+      // later `setResources` replacement.
+      this.resourceKey = res;
       this.resource = readResources()[res];
     }
 

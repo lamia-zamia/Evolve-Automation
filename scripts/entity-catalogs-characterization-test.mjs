@@ -111,6 +111,20 @@ assert.deepEqual(
 );
 assert.equal(
   catalogHash,
-  "f8883f1294c5f9939fae16dab6198905d20a312f200c35856491665f3901dd4b",
+  "8dc61ff661ba311032115b97d1c97347d06e00316ba19ae55e94cc5d4d359852",
 );
+// Every building is stamped with the catalog key it is filed under, and every
+// ResourceAction with the resource key it was constructed from. Typed policies
+// compare candidates by those keys instead of by wrapper identity.
+for (const [key, building] of Object.entries(catalogs.buildings)) {
+  assert.equal(building.catalogKey, key);
+}
+assert.equal(catalogs.buildings.ForgeHorseshoe.resourceKey, "Horseshoe");
+assert.equal(catalogs.buildings.Assembly.resourceKey, "Population");
+assert.equal(catalogs.buildings.Mine.resourceKey, undefined);
+// Projects share the weighting phase's target lists and are deliberately not
+// stamped, so a project can never be mistaken for a build candidate.
+for (const project of Object.values(catalogs.projects)) {
+  assert.equal(project.catalogKey, undefined);
+}
 console.log("Entity catalogs bundled characterization tests passed");

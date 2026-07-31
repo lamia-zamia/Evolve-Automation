@@ -53,6 +53,90 @@ export type BuildingWeightName =
 export type BuildingWeights = Readonly<Record<BuildingWeightName, number>>;
 
 /**
+ * The outcome of a two-building choice the script resolves once per weighting
+ * phase: which side of the pair is not worth building, and the title of the
+ * side it loses to. `null` whenever there is nothing to choose — either side
+ * unbuildable, or neither ahead of the other.
+ */
+export type BuildingChoice = {
+  /** Catalog key of the side that is not worth building right now. */
+  readonly worseId: string;
+  /** Display title of the side the script prefers. */
+  readonly betterTitle: string;
+} | null;
+
+/**
+ * One of the three Womling contact actions the Overlord achievement wants
+ * built in order, with the stat it earns and whether the script could build it
+ * now.
+ */
+export type WomlingOverlordAction = {
+  /** Catalog key of the contact action. */
+  readonly id: string;
+  /** Display name used when the rule reports which action is still missing. */
+  readonly name: string;
+  /** The Overlord stat this action earns is already earned in this universe. */
+  readonly statEarned: boolean;
+  /** AutoBuild could build this action right now. */
+  readonly autoBuildable: boolean;
+};
+
+/**
+ * One build candidate, projected from the compatibility building wrapper into
+ * immutable data before any rule sees it.
+ *
+ * A locked candidate reports the neutral answers for everything the game only
+ * maintains while a building is unlocked. The `locked` rule zeroes such a
+ * candidate before any later rule reads those fields, and the wrapper's own
+ * values are stale rather than meaningful while a building is locked.
+ */
+export type BuildingWeightingCandidate = {
+  /** The script's catalog key, e.g. `"Barracks"`. Stable candidate identity. */
+  readonly id: string;
+  /** The script's own name for the building. */
+  readonly name: string;
+  /** The game's action id within its tab, e.g. `"s_alter"`. */
+  readonly actionId: string;
+  /** The game tab the building lives on, e.g. `"city"`. */
+  readonly tab: string;
+  /** The region within the tab, e.g. `"spc_moon"`; `""` when the tab has none. */
+  readonly location: string;
+  readonly unlocked: boolean;
+  readonly autoBuildEnabled: boolean;
+  /** AutoPower manages this building's on/off state. */
+  readonly smartManaged: boolean;
+  /** Affordable at the amount AutoBuild would buy. */
+  readonly affordable: boolean;
+  readonly count: number;
+  readonly autoMax: number;
+  /** Power one more would draw; negative for a building that produces power. */
+  readonly powered: number;
+  /** Built copies the game has switched off. */
+  readonly stateOffCount: number;
+  /** Raises the population cap. */
+  readonly housing: boolean;
+  /** Raises the soldier cap. */
+  readonly garrison: boolean;
+  /** Raises Max Knowledge. */
+  readonly knowledge: boolean;
+  /** Wants a randomized weight, which only the gas giant name contest does. */
+  readonly randomlyWeighted: boolean;
+  /** Resource cost of one more, keyed by the game's resource id. */
+  readonly cost: Readonly<Record<string, number>>;
+  /**
+   * The resource this candidate produces directly, keyed by the script's
+   * resource catalog key, or `null` when the candidate is an ordinary building.
+   */
+  readonly producedResource: string | null;
+  /** Name of a consumed resource the candidate cannot sustain, or `null`. */
+  readonly missingConsumption: string | null;
+  /** Name of a support the candidate cannot cover, or `null`. */
+  readonly missingSupport: string | null;
+  /** Name of a support the candidate provides that nothing needs, or `null`. */
+  readonly uselessSupport: string | null;
+};
+
+/**
  * The configured prestige route, narrowed to the routes whose construction the
  * weighting rules treat differently. Every other configured route, including
  * "none" and any route this script does not yet distinguish, is `"other"`.
@@ -63,10 +147,6 @@ export type PrestigeRoute =
 /**
  * Script state and phase-constant game gates that the building-weighting rules
  * read, sampled and frozen once per weighting phase.
- *
- * Target membership is by identity because `updatePriorityTargets` stores the
- * live building and project wrappers, and the weighting phase is handed those
- * same wrappers.
  *
  * The gate fields answer questions about the run, not about a candidate, so
  * their answer cannot change while one weighting phase applies rules.
@@ -85,8 +165,6 @@ export type BuildingWeightingSnapshot = {
   readonly autoFleetEnabled: boolean;
   /** Miner jobs are switched off, so mines cannot be staffed. */
   readonly minerJobsDisabled: boolean;
-  /** Lake transports are compared by Supplies per Soul Gem instead of per support. */
-  readonly compareTransportsBySoulGems: boolean;
   readonly prestigeRoute: PrestigeRoute;
   /** Only build what the configured prestige route actually needs. */
   readonly limitPrestigeConstruction: boolean;
@@ -109,8 +187,10 @@ export type BuildingWeightingSnapshot = {
   readonly slaveIncomeInsufficient: boolean;
   /** The Banana Republic objective guard is on, so its objectives are worth priority. */
   readonly bananaRepublicGuardActive: boolean;
-  readonly queuedTargets: ReadonlySet<unknown>;
-  readonly triggerTargets: ReadonlySet<unknown>;
+  /** Catalog keys of the buildings a queued build target is waiting on. */
+  readonly queuedTargets: ReadonlySet<string>;
+  /** Catalog keys of the buildings an active trigger is waiting on. */
+  readonly triggerTargets: ReadonlySet<string>;
   readonly knowledgeRequiredByTechs: number;
   readonly knowledgeRequiredByBuildTargets: number;
   readonly cheapestTechKnowledge: number;
@@ -159,12 +239,14 @@ export type BuildingWeightingSnapshot = {
   readonly erisDigsiteUnsecured: boolean;
   /** A Gateway Starbase stands, so Andromeda is reached and its jobs matter. */
   readonly andromedaReached: boolean;
-  /** Both freighters are auto-buildable and affordable, so only the better one is wanted. */
-  readonly freighterChoiceOpen: boolean;
-  /** Both Lake ships are auto-buildable and affordable, so only the better one is wanted. */
-  readonly lakeShipChoiceOpen: boolean;
-  /** Both Spire supply buildings are auto-buildable and affordable, so only the better one is wanted. */
-  readonly spireSupplyChoiceOpen: boolean;
+  /** Which freighter carries less Money per crew, when both are buildable. */
+  readonly freighterChoice: BuildingChoice;
+  /** Which Lake ship supplies less, when both are buildable. */
+  readonly lakeShipChoice: BuildingChoice;
+  /** Which Spire supply building supplies less, when both are buildable. */
+  readonly spireSupplyChoice: BuildingChoice;
+  /** Asphodel Warehouses built, which caps the Stabilizers worth building. */
+  readonly asphodelWarehouseCount: number;
   /** No Gorddon Embassy has been built, and one is all the script wants. */
   readonly embassyMissing: boolean;
   /** The Matrioshka Brain is short of the 1000 segments the retirement route needs. */
@@ -235,11 +317,6 @@ export type BuildingWeightingSnapshot = {
   /** Spire Base Camps are still below the camp share of the optimal supply ratio. */
   readonly spireBaseCampPrebuildIncomplete: boolean;
   /**
-   * Per-Bireme diminishing factor in the Lake supply formula. Bloodstone Spire
-   * rank 2 improves it, so one more Bireme is worth more than it otherwise is.
-   */
-  readonly lakeBiremeSupplyRate: number;
-  /**
    * Power one more Neutron Citadel would draw. Only the citadel candidate reads
    * it; the value is still defined, and meaningless, before the citadel exists.
    */
@@ -288,12 +365,11 @@ export type BuildingWeightingSnapshot = {
   readonly madPrestigeAwaited: boolean;
   /** Supply is being withheld for the mech bay, or `null` when it is not. */
   readonly mechSupplySaving: MechSupplySavingReason | null;
-  /** Overlord achievement: the womling friend stat is earned in this universe. */
-  readonly womlingFriendEarned: boolean;
-  /** Overlord achievement: the womling god stat is earned in this universe. */
-  readonly womlingGodEarned: boolean;
-  /** Overlord achievement: the womling lord stat is earned in this universe. */
-  readonly womlingLordEarned: boolean;
+  /**
+   * The three Womling contact actions in Overlord achievement order. Empty
+   * outside a True Path run, where none of them exists.
+   */
+  readonly womlingOverlordActions: readonly WomlingOverlordAction[];
 };
 
 /**
@@ -302,36 +378,31 @@ export type BuildingWeightingSnapshot = {
  *
  * `enabled` is evaluated once per weighting phase and `multiplier` is probed
  * once with no match so that rules returning x1 can be skipped entirely.
- * `match` then runs per candidate building; any truthy result applies the rule
- * and is passed back into `describe` and `multiplier`.
+ * `match` then runs per candidate; any truthy result applies the rule and is
+ * passed back into `describe` and `multiplier`.
+ *
+ * `Match` is the payload one rule hands from its own `match` to its own
+ * `describe` and `multiplier`. It never travels between rules, so an ordered
+ * list holds rules with different payloads as `BuildingWeightingRule<unknown>`.
  *
  * Every phase receives the snapshot, which is the only route by which a rule
  * may observe script state.
- *
- * TRANSITIONAL: the candidate and the match result are still the live
- * compatibility building wrapper and an untyped rule payload. They become an
- * immutable candidate view and a typed match once the weighting policy reads
- * validated game and settings snapshots instead of live getter bags.
  */
-export type BuildingWeightingRule = {
+export type BuildingWeightingRule<Match = boolean> = {
   /** Stable identifier for tests and diagnostics. Rule order is still the array order. */
   readonly id: string;
   readonly enabled: (snapshot: BuildingWeightingSnapshot) => boolean;
   readonly match: (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    building: any,
+    candidate: BuildingWeightingCandidate,
     snapshot: BuildingWeightingSnapshot,
-  ) => unknown;
+  ) => Match | false | undefined;
   readonly describe: (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    match: any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    building: any,
+    match: Match,
+    candidate: BuildingWeightingCandidate,
     snapshot: BuildingWeightingSnapshot,
   ) => string;
   readonly multiplier: (
     snapshot: BuildingWeightingSnapshot,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    match?: any,
+    match?: Match,
   ) => number;
 };

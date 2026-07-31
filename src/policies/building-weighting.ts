@@ -1,13 +1,11 @@
 import type {
+  BuildingChoice,
+  BuildingWeightingCandidate,
   BuildingWeightingRule,
-  BuildingWeightingSnapshot,
+  MechSupplySavingReason,
   SacrificeBlockedReason,
 } from "../ports/building-weighting.ts";
 import type { RandomSource } from "../ports/randomness.ts";
-
-type LooseFunction = (...args: any[]) => any;
-type LooseObject = Record<PropertyKey, any>;
-type LooseConstructor = new (...args: any[]) => any;
 
 const SACRIFICE_BLOCKED_NOTES: Readonly<
   Record<SacrificeBlockedReason, string>
@@ -17,615 +15,652 @@ const SACRIFICE_BLOCKED_NOTES: Readonly<
   "bonus-capped": "Sacrifice bonus already high enough",
 };
 
+/**
+ * Every building catalog key the rules name. One list makes a misspelled key a
+ * type error rather than a rule that silently never matches, and the adapter
+ * contract test proves each of these exists in the live catalog.
+ */
+const NAMED_BUILDINGS = [
+  "Alien1Consulate",
+  "AlphaExchange",
+  "AlphaLuxuryCondo",
+  "AlphaWarehouse",
+  "AsphodelBunker",
+  "AsphodelStabilizer",
+  "BadlandsAttractor",
+  "BadlandsMinions",
+  "Bank",
+  "Banquet",
+  "Barracks",
+  "BeltSpaceStation",
+  "BlackholeJumpShip",
+  "BlackholeMassEjector",
+  "BlackholeStellarEngine",
+  "Casino",
+  "CoalMine",
+  "CorvetteShip",
+  "CruiserShip",
+  "Dreadnought",
+  "DwarfWorldCollider",
+  "ElysiumEternalBank",
+  "ElysiumFireSupportBase",
+  "EnceladusMunitions",
+  "ErisDrone",
+  "ErisTank",
+  "ErisTrooper",
+  "FrigateShip",
+  "GasMoonOilExtractor",
+  "GasSpaceDock",
+  "GasSpaceDockGECK",
+  "GasSpaceDockProbe",
+  "GasSpaceDockShipSegment",
+  "GasStorage",
+  "GateEastTower",
+  "GateTurret",
+  "GateWestTower",
+  "GorddonEmbassy",
+  "HellSpaceCasino",
+  "LakeCoolingTower",
+  "Mill",
+  "Mine",
+  "NeutronCitadel",
+  "OilDepot",
+  "OilWell",
+  "PitMission",
+  "ProximaCargoYard",
+  "ProximaCruiser",
+  "Pylon",
+  "RedGarage",
+  "RedPylon",
+  "RedSpaceBarracks",
+  "RedSpaceport",
+  "RuinsGuardPost",
+  "RuinsMission",
+  "RuinsVault",
+  "RuinsWarVault",
+  "ScoutShip",
+  "Shed",
+  "SiriusThermalCollector",
+  "SlaveMarket",
+  "SpaceTestLaunch",
+  "SpacePropellantDepot",
+  "SpireBaseCamp",
+  "SpireEdenicGate",
+  "SpireMechBay",
+  "SpirePort",
+  "SpireSphinx",
+  "SpireWaygate",
+  "StargateDefensePlatform",
+  "StargateTelemetryBeacon",
+  "StorageYard",
+  "TauBeltMiningShip",
+  "TauBeltWhalingShip",
+  "TauCasino",
+  "TauCloning",
+  "TauDiseaseLab",
+  "TauFactory",
+  "TauFusionGenerator",
+  "TauGas2IgniteGasGiant",
+  "TauPylon",
+  "TauRedContact",
+  "TauRedIntroduce",
+  "TauRedSubjugate",
+  "TauStarEden",
+  "Temple",
+  "TitanBank",
+  "TitanMission",
+  "TitanStorehouse",
+  "TouristCenter",
+  "Transmitter",
+  "Wardenclyffe",
+  "Warehouse",
+  "WastelandBrute",
+  "WastelandHellCasino",
+  "WastelandThrone",
+] as const;
+
+type NamedBuilding = (typeof NAMED_BUILDINGS)[number];
+
+/** Whether the candidate is one of the buildings a rule names. */
+const isBuilding = (
+  candidate: BuildingWeightingCandidate,
+  ...ids: readonly NamedBuilding[]
+): boolean => (ids as readonly string[]).includes(candidate.id);
+
+/**
+ * The title of the better side of a two-building choice, when this candidate is
+ * the side that loses it.
+ */
+const losesChoice = (
+  candidate: BuildingWeightingCandidate,
+  choice: BuildingChoice,
+): string | undefined =>
+  choice !== null && choice.worseId === candidate.id
+    ? choice.betterTitle
+    : undefined;
+
+/**
+ * Erases a rule's match payload so the ordered list can hold rules that carry
+ * different payloads. A payload only ever travels from a rule's own `match` to
+ * its own `describe` and `multiplier`, which is why the cast is confined here.
+ */
+function weightingRule<Match>(
+  rule: BuildingWeightingRule<Match>,
+): BuildingWeightingRule<unknown> {
+  return rule as BuildingWeightingRule<unknown>;
+}
+
+const authorityCapBuildings: readonly NamedBuilding[] = [
+  "Barracks",
+  "Temple",
+  "RedSpaceBarracks",
+  "ProximaCruiser",
+  "BeltSpaceStation",
+  "WastelandBrute",
+  "BadlandsMinions",
+  "WastelandThrone",
+  "AsphodelBunker",
+];
+const INFLATION_CHALLENGE_MONEY = 25e10;
+const RETIREMENT_PREP = {
+  fusionGenerators: 20,
+  factories: 18,
+  scienceLabs: 11,
+  graphene: 200e6,
+};
+const inflationMoneyStorageBuildings: readonly NamedBuilding[] = [
+  "Bank",
+  "Casino",
+  "HellSpaceCasino",
+  "TitanBank",
+  "TauCasino",
+  "AlphaExchange",
+  "RuinsVault",
+  "RuinsWarVault",
+  "WastelandHellCasino",
+  "ElysiumEternalBank",
+];
+const inflationMoneyIncomeBuildings: readonly NamedBuilding[] = [
+  "TouristCenter",
+  "Casino",
+  "HellSpaceCasino",
+  "TauCasino",
+  "AlphaLuxuryCondo",
+  "WastelandHellCasino",
+];
+const galaxyCombatShips: readonly NamedBuilding[] = [
+  "ScoutShip",
+  "CorvetteShip",
+  "FrigateShip",
+  "CruiserShip",
+  "Dreadnought",
+];
+
 type BuildingWeightingDependencies = {
-  getResources: () => LooseObject;
-  getBuildings: () => LooseObject;
-  getNumberStringFn: () => LooseFunction;
-  getNiceNumberFn: () => LooseFunction;
-  ResourceAction: LooseConstructor;
-  randomSource: RandomSource;
+  /** Formats a whole number for an annotation, e.g. `1.2M`. */
+  readonly formatNumber: (value: number) => string;
+  /** Formats a fractional number for an annotation, e.g. `12.3`. */
+  readonly formatNiceNumber: (value: number) => string;
+  readonly randomSource: RandomSource;
 };
 
 export function createBuildingWeightingPolicy({
-  getResources,
-  getBuildings,
-  getNumberStringFn,
-  getNiceNumberFn,
-  ResourceAction,
+  formatNumber,
+  formatNiceNumber,
   randomSource,
 }: BuildingWeightingDependencies) {
-  const getNumberString: LooseFunction = (...args) =>
-    getNumberStringFn()(...args);
-  const getNiceNumber: LooseFunction = (...args) => getNiceNumberFn()(...args);
-
-  const authorityCapBuildings = [
-    getBuildings().Barracks,
-    getBuildings().Temple,
-    getBuildings().RedSpaceBarracks,
-    getBuildings().ProximaCruiser,
-    getBuildings().BeltSpaceStation,
-    getBuildings().WastelandBrute,
-    getBuildings().BadlandsMinions,
-    getBuildings().WastelandThrone,
-    getBuildings().AsphodelBunker,
-  ];
-  const INFLATION_CHALLENGE_MONEY = 25e10;
-  const RETIREMENT_PREP = {
-    fusionGenerators: 20,
-    factories: 18,
-    scienceLabs: 11,
-    graphene: 200e6,
-  };
-  const inflationMoneyStorageBuildings = [
-    getBuildings().Bank,
-    getBuildings().Casino,
-    getBuildings().HellSpaceCasino,
-    getBuildings().TitanBank,
-    getBuildings().TauCasino,
-    getBuildings().AlphaExchange,
-    getBuildings().RuinsVault,
-    getBuildings().RuinsWarVault,
-    getBuildings().WastelandHellCasino,
-    getBuildings().ElysiumEternalBank,
-  ];
-  const inflationMoneyIncomeBuildings = [
-    getBuildings().TouristCenter,
-    getBuildings().Casino,
-    getBuildings().HellSpaceCasino,
-    getBuildings().TauCasino,
-    getBuildings().AlphaLuxuryCondo,
-    getBuildings().WastelandHellCasino,
-  ];
-  const galaxyCombatShips = [
-    getBuildings().ScoutShip,
-    getBuildings().CorvetteShip,
-    getBuildings().FrigateShip,
-    getBuildings().CruiserShip,
-    getBuildings().Dreadnought,
-  ];
-  const authorityCapBuildingSet = new Set(authorityCapBuildings);
-  const inflationMoneyStorageBuildingSet = new Set(
-    inflationMoneyStorageBuildings,
-  );
-  const inflationMoneyIncomeBuildingSet = new Set(
-    inflationMoneyIncomeBuildings,
-  );
-  const galaxyCombatShipSet = new Set(galaxyCombatShips);
-  const weightingRules: readonly BuildingWeightingRule[] = [
-    {
+  const weightingRules: readonly BuildingWeightingRule<unknown>[] = [
+    weightingRule({
       // Set weighting to zero right away, and skip all checks if autoBuild is disabled
       id: "autobuild-off",
       enabled: (snapshot) => !snapshot.autoBuildEnabled,
       match: () => true,
       describe: () => "",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       // Should always be on top, processing locked building may lead to issues
       id: "locked",
       enabled: () => true,
-      match: (building: any) => !building.isUnlocked(),
+      match: (candidate) => !candidate.unlocked,
       describe: () => "Locked",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "queued-target",
       enabled: () => true,
-      match: (building: any, snapshot: BuildingWeightingSnapshot) =>
-        snapshot.queuedTargets.has(building),
+      match: (candidate, snapshot) => snapshot.queuedTargets.has(candidate.id),
       describe: () => "Queued building, processing...",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "trigger-target",
       enabled: () => true,
-      match: (building: any, snapshot: BuildingWeightingSnapshot) =>
-        snapshot.triggerTargets.has(building),
+      match: (candidate, snapshot) => snapshot.triggerTargets.has(candidate.id),
       describe: () => "Active trigger, processing...",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "autobuild-disabled",
       enabled: () => true,
-      match: (building: any) => !building.autoBuildEnabled,
+      match: (candidate) => !candidate.autoBuildEnabled,
       describe: () => "AutoBuild disabled",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "maximum-amount-reached",
       enabled: () => true,
-      match: (building: any) => building.count >= building.autoMax,
+      match: (candidate) => candidate.count >= candidate.autoMax,
       describe: () => "Maximum amount reached",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       // Red buildings need to be filtered out, so they won't prevent affordable buildings with lower weight from building
       id: "unaffordable",
       enabled: () => true,
-      match: (building: any) => !building.isAffordable(true),
+      match: (candidate) => !candidate.affordable,
       describe: () => "",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule<number>({
       id: "truepath-test-launch-sabotage",
       enabled: (snapshot) =>
         snapshot.truepathRace &&
         snapshot.testLaunchUnlocked &&
         !snapshot.worldUnified,
-      match: (building: any, snapshot) => {
-        if (building === getBuildings().SpaceTestLaunch) {
-          return snapshot.testLaunchSuccessChance;
-        }
-      },
-      describe: (chance: any) =>
+      match: (candidate, snapshot) =>
+        isBuilding(candidate, "SpaceTestLaunch")
+          ? snapshot.testLaunchSuccessChance
+          : undefined,
+      describe: (chance) =>
         `${Math.round(chance * 100)}% chance of successful launch`,
-      multiplier: (_snapshot, chance: any) => (chance < 0.5 ? chance : 0),
-    },
-    {
+      multiplier: (_snapshot, chance) =>
+        chance !== undefined && chance < 0.5 ? chance : 0,
+    }),
+    weightingRule({
       id: "eris-digsite-unsecured",
       enabled: (snapshot) =>
         snapshot.truepathRace && snapshot.erisDigsiteUnsecured,
-      match: (building: any) =>
-        building === getBuildings().ErisDrone ||
-        building === getBuildings().ErisTank ||
-        building === getBuildings().ErisTrooper,
+      match: (candidate) =>
+        isBuilding(candidate, "ErisDrone", "ErisTank", "ErisTrooper"),
       describe: () => "Eris Digsite is not yet secured",
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingTruepathDigsite,
-    },
-    {
+    }),
+    weightingRule({
       id: "andromeda-miners-disabled",
       enabled: (snapshot) =>
         snapshot.minerJobsDisabled && snapshot.andromedaReached,
-      match: (building: any, snapshot) =>
-        building === getBuildings().CoalMine ||
-        (building === getBuildings().Mine &&
-          !snapshot.mineIsOnlyChrysotileSource),
+      match: (candidate, snapshot) =>
+        isBuilding(candidate, "CoalMine") ||
+        (isBuilding(candidate, "Mine") && !snapshot.mineIsOnlyChrysotileSource),
       describe: () => "Miners disabled in Andromeda",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "piracy-fully-supressed",
       enabled: (snapshot) => snapshot.stargatePiracySupressed,
-      match: (building: any) =>
-        building === getBuildings().StargateDefensePlatform,
+      match: (candidate) => isBuilding(candidate, "StargateDefensePlatform"),
       describe: () => "Piracy fully supressed",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "piracy-covered-by-fleet",
       enabled: (snapshot) =>
         snapshot.autoFleetEnabled &&
         snapshot.galaxyPiracyCoveredByFleet &&
         !snapshot.galaxyAssaultPending,
-      match: (building: any) => galaxyCombatShipSet.has(building),
+      match: (candidate) => isBuilding(candidate, ...galaxyCombatShips),
       describe: () => "Piracy fully covered by fleet",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule<MechSupplySavingReason>({
       id: "mech-supply-saving",
       enabled: (snapshot) => snapshot.mechSupplySaving !== null,
-      match: (building: any, snapshot) =>
-        building.cost["Supply"] ? snapshot.mechSupplySaving : undefined,
-      describe: (reason: any) =>
+      match: (candidate, snapshot) =>
+        candidate.cost["Supply"] === undefined
+          ? undefined
+          : (snapshot.mechSupplySaving ?? undefined),
+      describe: (reason) =>
         reason === "building"
           ? "Building mechs..."
           : "Saving supplies for new mech",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "prestige-unneeded-ascension-towers",
       enabled: (snapshot) =>
         snapshot.limitPrestigeConstruction &&
         snapshot.prestigeRoute === "ascension" &&
         !snapshot.witchHunterRace,
-      match: (building: any) =>
-        building === getBuildings().GateEastTower ||
-        building === getBuildings().GateWestTower,
+      match: (candidate) =>
+        isBuilding(candidate, "GateEastTower", "GateWestTower"),
       describe: () => "Not needed for Ascension prestige",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "gate-supression-too-low",
       enabled: (snapshot) => snapshot.gateTowerSupressionTooLow,
-      match: (building: any) =>
-        building === getBuildings().GateEastTower ||
-        building === getBuildings().GateWestTower,
+      match: (candidate) =>
+        isBuilding(candidate, "GateEastTower", "GateWestTower"),
       describe: () => "Too low gate supression",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "saving-soul-gems-for-prestige",
       enabled: (snapshot) =>
         snapshot.prestigeRoute === "whitehole" &&
         snapshot.saveSoulGemsForPrestige,
-      match: (building: any, snapshot) => {
-        if (building.cost["Soul_Gem"] > snapshot.soulGemQuantity - 10) {
-          return true;
-        }
+      match: (candidate, snapshot) => {
+        // A candidate that costs no Soul Gems never reserves any.
+        const cost = candidate.cost["Soul_Gem"];
+        return cost !== undefined && cost > snapshot.soulGemQuantity - 10;
       },
       describe: () => "Saving up Soul Gems for prestige",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule<string>({
       id: "best-freighter",
-      enabled: (snapshot) => snapshot.freighterChoiceOpen,
-      match: (building: any) => {
-        if (
-          building === getBuildings().GorddonFreighter ||
-          building === getBuildings().Alien1SuperFreighter
-        ) {
-          let regCount = getBuildings().GorddonFreighter.count;
-          let regTotal =
-            (1 + (regCount + 1) * 0.03) / (1 + regCount * 0.03) - 1;
-          let regCrew = regTotal / 3;
-          let supCount = getBuildings().Alien1SuperFreighter.count;
-          let supTotal =
-            (1 + (supCount + 1) * 0.08) / (1 + supCount * 0.08) - 1;
-          let supCrew = supTotal / 5;
-          if (
-            building === getBuildings().GorddonFreighter &&
-            regCrew < supCrew
-          ) {
-            return getBuildings().Alien1SuperFreighter;
-          }
-          if (
-            building === getBuildings().Alien1SuperFreighter &&
-            supCrew < regCrew
-          ) {
-            return getBuildings().GorddonFreighter;
-          }
-        }
-      },
-      describe: (other: any) => `${other.title} gives more Money`,
+      enabled: (snapshot) => snapshot.freighterChoice !== null,
+      match: (candidate, snapshot) =>
+        losesChoice(candidate, snapshot.freighterChoice),
+      describe: (better) => `${better} gives more Money`,
       multiplier: (snapshot) => (snapshot.buildBestFreighterOnly ? 0 : 1),
-    },
-    {
+    }),
+    weightingRule<string>({
       id: "lake-transport-vs-bireme",
       // Build any if there's spare support
       enabled: (snapshot) =>
-        snapshot.lakeShipChoiceOpen && snapshot.lakeSupportSpare <= 1,
-      match: (building: any, snapshot) => {
-        if (
-          building === getBuildings().LakeBireme ||
-          building === getBuildings().LakeTransport
-        ) {
-          let biremeCount = getBuildings().LakeBireme.count;
-          let transportCount = getBuildings().LakeTransport.count;
-          let rating = snapshot.lakeBiremeSupplyRate;
-          let nextBireme =
-            (1 - rating ** (biremeCount + 1)) * (transportCount * 5);
-          let nextTransport =
-            (1 - rating ** biremeCount) * ((transportCount + 1) * 5);
-          if (snapshot.compareTransportsBySoulGems) {
-            let currentSupply =
-              (1 - rating ** biremeCount) * (transportCount * 5);
-            nextBireme =
-              (nextBireme - currentSupply) /
-              getBuildings().LakeBireme.cost["Soul_Gem"];
-            nextTransport =
-              (nextTransport - currentSupply) /
-              getBuildings().LakeTransport.cost["Soul_Gem"];
-          }
-          if (
-            building === getBuildings().LakeBireme &&
-            nextBireme < nextTransport
-          ) {
-            return getBuildings().LakeTransport;
-          }
-          if (
-            building === getBuildings().LakeTransport &&
-            nextTransport < nextBireme
-          ) {
-            return getBuildings().LakeBireme;
-          }
-        }
-      },
-      describe: (other: any) => `${other.title} gives more Supplies`,
+        snapshot.lakeShipChoice !== null && snapshot.lakeSupportSpare <= 1,
+      match: (candidate, snapshot) =>
+        losesChoice(candidate, snapshot.lakeShipChoice),
+      describe: (better) => `${better} gives more Supplies`,
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule<string>({
       id: "spire-port-vs-base-camp",
-      enabled: (snapshot) => snapshot.spireSupplyChoiceOpen,
-      match: (building: any) => {
-        if (
-          building === getBuildings().SpirePort ||
-          building === getBuildings().SpireBaseCamp
-        ) {
-          let portCount = getBuildings().SpirePort.count;
-          let baseCount = getBuildings().SpireBaseCamp.count;
-          let nextPort = (portCount + 1) * (1 + baseCount * 0.4);
-          let nextBase = portCount * (1 + (baseCount + 1) * 0.4);
-          if (building === getBuildings().SpirePort && nextPort < nextBase) {
-            return getBuildings().SpireBaseCamp;
-          }
-          if (
-            building === getBuildings().SpireBaseCamp &&
-            nextBase < nextPort
-          ) {
-            return getBuildings().SpirePort;
-          }
-        }
-      },
-      describe: (other: any) => `${other.title} gives more Max Supplies`,
+      enabled: (snapshot) => snapshot.spireSupplyChoice !== null,
+      match: (candidate, snapshot) =>
+        losesChoice(candidate, snapshot.spireSupplyChoice),
+      describe: (better) => `${better} gives more Max Supplies`,
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       // We can't limit waygate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
       id: "spire-waygate-done",
       enabled: (snapshot) => snapshot.spireWaygateComplete,
-      match: (building: any) => building === getBuildings().SpireWaygate,
+      match: (candidate) => isBuilding(candidate, "SpireWaygate"),
       describe: () => "",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       // We can't limit edenic gate using gameMax, as max here isn't constant. It start with 10, but after building count reduces down to 1
       id: "spire-edenic-gate-done",
       enabled: (snapshot) => snapshot.spireEdenicGateComplete,
-      match: (building: any) => building === getBuildings().SpireEdenicGate,
+      match: (candidate) => isBuilding(candidate, "SpireEdenicGate"),
       describe: () => "",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule<string>({
       // Build up to 100, and then fire after researching cannon
       id: "elysium-fire-support-base-blocked",
       enabled: (snapshot) => snapshot.elysiumFireSupportUnlocked,
-      match: (building: any, snapshot) => {
-        if (building === getBuildings().ElysiumFireSupportBase) {
-          if (snapshot.elysiumGarrisonDestroyed) {
-            return "Garrison is destroyed";
-          }
-          if (!snapshot.eleriumCannonResearched && building.count >= 100) {
-            return "Missing Elerium Cannon tech";
-          }
+      match: (candidate, snapshot) => {
+        if (!isBuilding(candidate, "ElysiumFireSupportBase")) {
+          return undefined;
         }
+        if (snapshot.elysiumGarrisonDestroyed) {
+          return "Garrison is destroyed";
+        }
+        if (!snapshot.eleriumCannonResearched && candidate.count >= 100) {
+          return "Missing Elerium Cannon tech";
+        }
+        return undefined;
       },
-      describe: (note: any) => note,
+      describe: (note) => note,
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "warehouse-cap",
       enabled: (snapshot) => snapshot.asphodelStabilizerUnlocked,
-      match: (building: any) =>
-        building === getBuildings().AsphodelStabilizer &&
-        building.count >= getBuildings().AsphodelWarehouse.count,
+      match: (candidate, snapshot) =>
+        isBuilding(candidate, "AsphodelStabilizer") &&
+        candidate.count >= snapshot.asphodelWarehouseCount,
       describe: () => "Can not exceed amount of Warehouses",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       // Sphinx not usable after solving / Harmachis not usable during Warlord
       id: "spire-sphinx-done",
       enabled: (snapshot) => snapshot.spireSphinxSolved || snapshot.warlordRace,
-      match: (building: any) => building === getBuildings().SpireSphinx,
+      match: (candidate) => isBuilding(candidate, "SpireSphinx"),
       describe: () => "",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "assembling-not-possible",
       enabled: (snapshot) =>
         snapshot.artificialRace && snapshot.assemblyCureComplete,
-      match: (building: any) =>
-        building instanceof ResourceAction &&
-        building.resource === getResources().Population &&
-        building !== getBuildings().TauCloning,
+      match: (candidate) =>
+        candidate.producedResource === "Population" &&
+        !isBuilding(candidate, "TauCloning"),
       describe: () => "Assembling is not possible",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "no-empty-housings",
       enabled: (snapshot) => snapshot.artificialRace,
-      match: (building: any, snapshot) =>
-        building instanceof ResourceAction &&
-        building.resource === getResources().Population &&
-        snapshot.populationAtCap,
+      match: (candidate, snapshot) =>
+        candidate.producedResource === "Population" && snapshot.populationAtCap,
       describe: () => "No empty housings",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "embassy-knowledge-required",
       enabled: (snapshot) =>
         snapshot.embassyMissing &&
         snapshot.knowledgeCapacity < snapshot.embassyKnowledgeTarget,
-      match: (building: any) => building === getBuildings().GorddonEmbassy,
-      describe: (_match, _building, snapshot) =>
-        `${getNumberString(snapshot.embassyKnowledgeTarget)} Max Knowledge required`,
+      match: (candidate) => isBuilding(candidate, "GorddonEmbassy"),
+      describe: (_match, _candidate, snapshot) =>
+        `${formatNumber(snapshot.embassyKnowledgeTarget)} Max Knowledge required`,
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "wrong-shrine",
       enabled: (snapshot) => snapshot.shrineBonusUnwanted,
-      match: (building: any) => building.id?.includes("shrine"),
+      match: (candidate) => candidate.actionId.includes("shrine"),
       describe: () => "Wrong shrine",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule<string>({
       id: "slave-market-blocked",
       enabled: (snapshot) => snapshot.slaverRace,
-      match: (building: any, snapshot) => {
-        if (building === getBuildings().SlaveMarket) {
-          if (snapshot.slavePensFull) {
-            return "Slave pens already full";
-          }
-          if (snapshot.slaveIncomeInsufficient) {
-            return "Buying slaves only with excess money";
-          }
+      match: (candidate, snapshot) => {
+        if (!isBuilding(candidate, "SlaveMarket")) {
+          return undefined;
         }
+        if (snapshot.slavePensFull) {
+          return "Slave pens already full";
+        }
+        if (snapshot.slaveIncomeInsufficient) {
+          return "Buying slaves only with excess money";
+        }
+        return undefined;
       },
-      describe: (note: any) => note,
+      describe: (note) => note,
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule<string>({
       id: "sacrificial-altar-blocked",
       enabled: (snapshot) => snapshot.cannibalizeRace,
-      match: (building: any, snapshot) => {
-        if (building._id === "s_alter" && building.count > 0) {
-          if (snapshot.populationEmpty) {
-            return "Too low population";
-          }
-          if (!snapshot.populationAtCap) {
-            return "Sacrifices performed only with full population";
-          }
-          if (snapshot.sacrificeBlocked) {
-            return SACRIFICE_BLOCKED_NOTES[snapshot.sacrificeBlocked];
-          }
+      match: (candidate, snapshot) => {
+        if (candidate.actionId !== "s_alter" || candidate.count <= 0) {
+          return undefined;
         }
+        if (snapshot.populationEmpty) {
+          return "Too low population";
+        }
+        if (!snapshot.populationAtCap) {
+          return "Sacrifices performed only with full population";
+        }
+        if (snapshot.sacrificeBlocked !== null) {
+          return SACRIFICE_BLOCKED_NOTES[snapshot.sacrificeBlocked];
+        }
+        return undefined;
       },
-      describe: (note: any) => note,
+      describe: (note) => note,
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule<string>({
       id: "missing-consumption",
       enabled: () => true,
-      match: (building: any) => building.getMissingConsumption(),
-      describe: (resource: any) => `Missing ${resource.name} to operate`,
+      match: (candidate) => candidate.missingConsumption ?? undefined,
+      describe: (resource) => `Missing ${resource} to operate`,
       multiplier: (snapshot) => snapshot.weights.buildingWeightingMissingSupply,
-    },
-    {
+    }),
+    weightingRule<string>({
       id: "missing-support",
       enabled: () => true,
-      match: (building: any) => building.getMissingSupport(),
-      describe: (support: any) => `Missing ${support.name} to operate`,
+      match: (candidate) => candidate.missingSupport ?? undefined,
+      describe: (support) => `Missing ${support} to operate`,
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingMissingSupport,
-    },
-    {
+    }),
+    weightingRule<string>({
       id: "useless-support",
       enabled: () => true,
-      match: (building: any) => building.getUselessSupport(),
-      describe: (support: any) =>
-        `Provided ${support.name} not currently needed`,
+      match: (candidate) => candidate.uselessSupport ?? undefined,
+      describe: (support) => `Provided ${support} not currently needed`,
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingUselessSupport,
-    },
-    {
+    }),
+    weightingRule<number>({
       id: "tau-belt-ship-efficiency",
       enabled: (snapshot) =>
         snapshot.truepathRace &&
         snapshot.tauBeltSupportAvailable <= snapshot.tauBeltSupportUsed,
-      match: (building: any, snapshot) => {
-        if (
-          building === getBuildings().TauBeltWhalingShip ||
-          building === getBuildings().TauBeltMiningShip
-        ) {
-          let s_max = snapshot.tauBeltSupportAvailable;
-          let s_cur = snapshot.tauBeltSupportUsed;
-          let currentEff = 1 - (1 - s_max / s_cur) ** 1.4;
-          let nextEff = 1 - (1 - s_max / (s_cur + 1)) ** 1.4;
-          return nextEff * (s_cur + 1) - currentEff * s_cur;
+      match: (candidate, snapshot) => {
+        if (!isBuilding(candidate, "TauBeltWhalingShip", "TauBeltMiningShip")) {
+          return undefined;
         }
+        const available = snapshot.tauBeltSupportAvailable;
+        const used = snapshot.tauBeltSupportUsed;
+        const currentEfficiency = 1 - (1 - available / used) ** 1.4;
+        const nextEfficiency = 1 - (1 - available / (used + 1)) ** 1.4;
+        return nextEfficiency * (used + 1) - currentEfficiency * used;
       },
-      describe: (eff: any) =>
-        `Low security, new ship will be ${getNiceNumber(eff * 100)}% efficient`,
-      multiplier: (_snapshot, eff: any) => eff ?? -1,
-    },
-    {
+      describe: (gain) =>
+        `Low security, new ship will be ${formatNiceNumber(gain * 100)}% efficient`,
+      multiplier: (_snapshot, gain) => gain ?? -1,
+    }),
+    weightingRule<string>({
       id: "womling-overlord-guard",
       // Narrowing this to `tau_red` level 4 was tried and did not work.
       enabled: (snapshot) => snapshot.truepathRace,
-      match: (building: any, snapshot) => {
+      match: (candidate, snapshot) => {
         if (
-          building === getBuildings().TauRedContact ||
-          building === getBuildings().TauRedIntroduce ||
-          building === getBuildings().TauRedSubjugate
+          !isBuilding(
+            candidate,
+            "TauRedContact",
+            "TauRedIntroduce",
+            "TauRedSubjugate",
+          )
         ) {
-          let missing = null;
-          for (let [id, earned] of [
-            ["TauRedContact", snapshot.womlingFriendEarned],
-            ["TauRedIntroduce", snapshot.womlingGodEarned],
-            ["TauRedSubjugate", snapshot.womlingLordEarned],
-          ] as const) {
-            if (!earned) {
-              if (building === getBuildings()[id]) {
-                return false; // Unearned stat, go for it
-              }
-              if (getBuildings()[id].isAutoBuildable()) {
-                missing = id;
-              }
-            }
-          }
-          return missing;
+          return undefined;
         }
+        let missing: string | undefined;
+        for (const action of snapshot.womlingOverlordActions) {
+          if (action.statEarned) {
+            continue;
+          }
+          if (action.id === candidate.id) {
+            return undefined; // Unearned stat, go for it
+          }
+          if (action.autoBuildable) {
+            missing = action.name;
+          }
+        }
+        return missing;
       },
-      describe: (id: any) =>
-        `Overlord achievement is missing ${getBuildings()[id].name}`,
+      describe: (name) => `Overlord achievement is missing ${name}`,
       multiplier: (snapshot) => snapshot.weights.buildingWeightingOverlord,
-    },
-    {
+    }),
+    weightingRule({
       // Evil universe: Authority amount is capped by Authority max. When max is below target no
       // amount of tax/soldier management can fix the production penalty, so prioritize the
       // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
       id: "authority-cap",
       enabled: (snapshot) => snapshot.authorityCapBelowTarget,
-      match: (building: any) => authorityCapBuildingSet.has(building),
+      match: (candidate) => isBuilding(candidate, ...authorityCapBuildings),
       describe: () => "Raises Authority cap, currently below target",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingAuthority,
-    },
-    {
+    }),
+    weightingRule({
       id: "banana-republic-objective",
       enabled: (snapshot) =>
         snapshot.bananaRepublicGuardActive && snapshot.bananaRace,
-      match: (building: any, snapshot) =>
-        building === getBuildings().DwarfWorldCollider &&
+      match: (candidate, snapshot) =>
+        isBuilding(candidate, "DwarfWorldCollider") &&
         !snapshot.bananaColliderObjectiveComplete,
       describe: () => "Banana Republic objective",
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingBananaObjective,
-    },
-    {
+    }),
+    weightingRule<"storage" | "income">({
       id: "inflation-money",
       enabled: (snapshot) => snapshot.inflationAssistActive,
-      match: (building: any, snapshot) => {
+      match: (candidate, snapshot) => {
         if (
           !snapshot.inflationMoneyReachable &&
-          inflationMoneyStorageBuildingSet.has(building)
+          isBuilding(candidate, ...inflationMoneyStorageBuildings)
         ) {
           return "storage";
         }
         if (
           snapshot.inflationMoneyReachable &&
-          inflationMoneyIncomeBuildingSet.has(building)
+          isBuilding(candidate, ...inflationMoneyIncomeBuildings)
         ) {
           return "income";
         }
-        return false;
+        return undefined;
       },
-      describe: (kind: any) =>
+      describe: (kind) =>
         kind === "storage"
           ? "Inflation challenge needs Money storage"
           : "Inflation challenge needs Money income",
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingInflationMoney,
-    },
-    {
+    }),
+    weightingRule<number>({
       id: "retirement-preparation",
       enabled: (snapshot) => snapshot.retirementPreparationIncomplete,
-      match: (building: any) => {
+      match: (candidate) => {
         if (
-          building === getBuildings().TauFusionGenerator &&
-          building.count < RETIREMENT_PREP.fusionGenerators
+          isBuilding(candidate, "TauFusionGenerator") &&
+          candidate.count < RETIREMENT_PREP.fusionGenerators
         ) {
           return RETIREMENT_PREP.fusionGenerators;
         }
         if (
-          building === getBuildings().TauFactory &&
-          building.count < RETIREMENT_PREP.factories
+          isBuilding(candidate, "TauFactory") &&
+          candidate.count < RETIREMENT_PREP.factories
         ) {
           return RETIREMENT_PREP.factories;
         }
         if (
-          building === getBuildings().TauDiseaseLab &&
-          building.count < RETIREMENT_PREP.scienceLabs
+          isBuilding(candidate, "TauDiseaseLab") &&
+          candidate.count < RETIREMENT_PREP.scienceLabs
         ) {
           return RETIREMENT_PREP.scienceLabs;
         }
-        return false;
+        return undefined;
       },
-      describe: (target: any, building: any) =>
-        `Retirement preparation: build ${target} ${building.name}`,
+      describe: (target, candidate) =>
+        `Retirement preparation: build ${target} ${candidate.name}`,
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingRetirementPrep,
-    },
-    {
+    }),
+    weightingRule<string>({
       // Red Spaceport unlocks unification research. Let an active unification
       // achievement build this prerequisite so Red Dead can release afterward.
       id: "achievement-guard",
@@ -634,53 +669,62 @@ export function createBuildingWeightingPolicy({
         snapshot.guardDreadedActive ||
         snapshot.guardEnergeticActive ||
         snapshot.guardRedDeadActive,
-      match: (building: any, snapshot) =>
-        building === getBuildings().Dreadnought && snapshot.guardDreadedActive
-          ? "Dreaded"
-          : building === getBuildings().SiriusThermalCollector &&
-              snapshot.guardEnergeticActive
-            ? "Energetic"
-            : building === getBuildings().RedSpaceport &&
-                snapshot.guardRedDeadActive &&
-                !snapshot.guardPacifistActive &&
-                snapshot.foreignAchievementGoal === null
-              ? "Red Dead"
-              : false,
-      describe: (name: any) => `${name} achievement guard`,
+      match: (candidate, snapshot) => {
+        if (
+          isBuilding(candidate, "Dreadnought") &&
+          snapshot.guardDreadedActive
+        ) {
+          return "Dreaded";
+        }
+        if (
+          isBuilding(candidate, "SiriusThermalCollector") &&
+          snapshot.guardEnergeticActive
+        ) {
+          return "Energetic";
+        }
+        if (
+          isBuilding(candidate, "RedSpaceport") &&
+          snapshot.guardRedDeadActive &&
+          !snapshot.guardPacifistActive &&
+          snapshot.foreignAchievementGoal === null
+        ) {
+          return "Red Dead";
+        }
+        return undefined;
+      },
+      describe: (name) => `${name} achievement guard`,
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "non-operating-city-buildings",
       enabled: () => true,
-      match: (building: any) =>
-        building._tab === "city" &&
-        building !== getBuildings().Mill &&
-        building !== getBuildings().Banquet &&
-        building.stateOffCount > 0,
+      match: (candidate) =>
+        candidate.tab === "city" &&
+        !isBuilding(candidate, "Mill", "Banquet") &&
+        candidate.stateOffCount > 0,
       describe: () => "Still have some non operating buildings",
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingNonOperatingCity,
-    },
-    {
+    }),
+    weightingRule({
       id: "non-operating-buildings",
       enabled: () => true,
-      match: (building: any, snapshot) => {
-        if (building === getBuildings().BlackholeStellarEngine) {
-          // `stateOffCount` is missleading for powered multisegmented getBuildings(). This rule shouldn't ever apply to Stellar Engine, just ignore it
+      match: (candidate, snapshot) => {
+        if (isBuilding(candidate, "BlackholeStellarEngine")) {
+          // `stateOffCount` is missleading for powered multisegmented buildings. This rule shouldn't ever apply to Stellar Engine, just ignore it
           // TODO: Might be better to ignore all multisegmented buildings, or making `stateOffCount` return 0 for multisegmented buildings, but i'm not sure about possible side effects at the moment - that would work as a hot fix
           return false;
         }
         if (
-          (building === getBuildings().BadlandsAttractor ||
-            building === getBuildings().SpireMechBay) &&
-          building.isSmartManaged()
+          isBuilding(candidate, "BadlandsAttractor", "SpireMechBay") &&
+          candidate.smartManaged
         ) {
           // Those things might be temporaly disabled by smart logic
           return false;
         }
         if (
-          building === getBuildings().RuinsGuardPost &&
-          building.isSmartManaged() &&
+          isBuilding(candidate, "RuinsGuardPost") &&
+          candidate.smartManaged &&
           !snapshot.hellSupressUseful &&
           snapshot.hellGuardPostPrebuildIncomplete
         ) {
@@ -688,335 +732,323 @@ export function createBuildingWeightingPolicy({
           return false;
         }
         if (
-          (building === getBuildings().SpirePort &&
+          (isBuilding(candidate, "SpirePort") &&
             snapshot.spirePortPrebuildIncomplete) ||
-          (building === getBuildings().SpireBaseCamp &&
+          (isBuilding(candidate, "SpireBaseCamp") &&
             snapshot.spireBaseCampPrebuildIncomplete)
         ) {
           // Prebuild ports and base camps to their optimal ratios, they will be enabled when needed.
           return false;
         }
-        if (building._tab !== "city" && building.stateOffCount > 0) {
-          // This thing not from city, switchable, and some of them disabled. We dont't need more at the moment.
-          return true;
-        }
+        // This thing not from city, switchable, and some of them disabled. We dont't need more at the moment.
+        return candidate.tab !== "city" && candidate.stateOffCount > 0;
       },
       describe: () => "Still have some non operating buildings",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingNonOperating,
-    },
-    {
+    }),
+    weightingRule({
       id: "geck-limit",
       enabled: (snapshot) =>
         snapshot.prestigeRoute !== "bioseed" || !snapshot.geckNeeded,
-      match: (building: any) => building === getBuildings().GasSpaceDockGECK,
+      match: (candidate) => isBuilding(candidate, "GasSpaceDockGECK"),
       describe: () => "Max allowed amount of G.E.C.K reached",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "prestige-blocked-eden",
       enabled: (snapshot) =>
         snapshot.loneSurvivorRace && !snapshot.prestigeEdenAllowed,
-      match: (building: any) => building === getBuildings().TauStarEden,
+      match: (candidate) => isBuilding(candidate, "TauStarEden"),
       describe: () => "Prestiging not currently allowed",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "prestige-blocked-ignition",
       enabled: (snapshot) =>
         snapshot.truepathRace &&
         (!snapshot.prestigeRetireAllowed || snapshot.matrioshkaBrainIncomplete),
-      match: (building: any) =>
-        building === getBuildings().TauGas2IgniteGasGiant,
+      match: (candidate) => isBuilding(candidate, "TauGas2IgniteGasGiant"),
       describe: () => "Prestiging not currently allowed",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "prestige-unneeded",
       enabled: (snapshot) =>
         snapshot.limitPrestigeConstruction &&
         snapshot.prestigeRoute !== "bioseed",
-      match: (building: any) =>
-        building === getBuildings().GasSpaceDock ||
-        building === getBuildings().GasSpaceDockShipSegment ||
-        building === getBuildings().GasSpaceDockProbe,
+      match: (candidate) =>
+        isBuilding(
+          candidate,
+          "GasSpaceDock",
+          "GasSpaceDockShipSegment",
+          "GasSpaceDockProbe",
+        ),
       describe: () => "Not needed for current prestige",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "prestige-unneeded-bioseed",
       enabled: (snapshot) =>
         snapshot.limitPrestigeConstruction &&
         snapshot.prestigeRoute === "bioseed",
-      match: (building: any) =>
-        building === getBuildings().DwarfWorldCollider ||
-        building === getBuildings().TitanMission,
+      match: (candidate) =>
+        isBuilding(candidate, "DwarfWorldCollider", "TitanMission"),
       describe: () => "Not needed for Bioseed prestige",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "prestige-unneeded-whitehole",
       enabled: (snapshot) =>
         snapshot.limitPrestigeConstruction &&
         snapshot.prestigeRoute === "whitehole",
-      match: (building: any) => building === getBuildings().BlackholeJumpShip,
+      match: (candidate) => isBuilding(candidate, "BlackholeJumpShip"),
       describe: () => "Not needed for Whitehole prestige",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "prestige-unneeded-vacuum",
       enabled: (snapshot) =>
         snapshot.limitPrestigeConstruction &&
         snapshot.prestigeRoute === "vacuum",
-      match: (building: any) =>
-        building === getBuildings().BlackholeStellarEngine,
+      match: (candidate) => isBuilding(candidate, "BlackholeStellarEngine"),
       describe: () => "Not needed for Vacuum Collapse prestige",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "prestige-unneeded-ascension-missions",
       enabled: (snapshot) =>
         snapshot.limitPrestigeConstruction &&
         snapshot.prestigeRoute === "ascension" &&
         snapshot.pillarFinished &&
         !snapshot.witchHunterRace,
-      match: (building: any) =>
-        building === getBuildings().PitMission ||
-        building === getBuildings().RuinsMission,
+      match: (candidate) => isBuilding(candidate, "PitMission", "RuinsMission"),
       describe: () => "Not needed for Ascension prestige",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "prestige-unneeded-witch-hunter",
       enabled: (snapshot) =>
         snapshot.witchHunterRace && snapshot.prestigeRoute === "ascension",
-      match: (building: any) => building === getBuildings().SpireWaygate,
+      match: (candidate) => isBuilding(candidate, "SpireWaygate"),
       describe: () => "Not needed for Witch Hunter's Ascension prestige",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "prestige-unneeded-terraform",
       enabled: (snapshot) =>
         snapshot.limitPrestigeConstruction &&
         snapshot.prestigeRoute === "terraform",
-      match: (building: any) =>
-        building === getBuildings().PitMission ||
-        building === getBuildings().RuinsMission,
+      match: (candidate) => isBuilding(candidate, "PitMission", "RuinsMission"),
       describe: () => "Not needed for Terraform prestige",
       multiplier: () => 0,
-    },
-    {
+    }),
+    weightingRule({
       id: "awaiting-mad-prestige",
       enabled: (snapshot) => snapshot.madPrestigeAwaited,
-      match: (building: any) =>
-        !building.is.housing &&
-        !building.is.garrison &&
-        !building.cost["Knowledge"] &&
-        building !== getBuildings().OilWell,
+      match: (candidate) =>
+        !candidate.housing &&
+        !candidate.garrison &&
+        candidate.cost["Knowledge"] === undefined &&
+        !isBuilding(candidate, "OilWell"),
       describe: () => "Awaiting MAD prestige",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingMADUseless,
-    },
-    {
+    }),
+    weightingRule({
       id: "new-building",
       enabled: () => true,
-      match: (building: any) =>
-        !(building instanceof ResourceAction) && building.count === 0,
+      match: (candidate) =>
+        candidate.producedResource === null && candidate.count === 0,
       describe: () => "New building",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingNew,
-    },
-    {
+    }),
+    weightingRule({
       id: "need-more-energy",
       enabled: (snapshot) =>
         snapshot.powerUnlocked &&
         snapshot.powerSurplus < snapshot.unpoweredPowerDemand,
-      match: (building: any) =>
-        building === getBuildings().LakeCoolingTower || building.powered < 0,
+      match: (candidate) =>
+        isBuilding(candidate, "LakeCoolingTower") || candidate.powered < 0,
       describe: () => "Need more energy",
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingNeedfulPowerPlant,
-    },
-    {
+    }),
+    weightingRule({
       id: "no-need-for-more-energy",
       enabled: (snapshot) =>
         snapshot.powerUnlocked &&
         snapshot.powerSurplus > snapshot.unpoweredPowerDemand,
-      match: (building: any) =>
-        building !== getBuildings().Mill &&
-        (building === getBuildings().LakeCoolingTower || building.powered < 0),
+      match: (candidate) =>
+        !isBuilding(candidate, "Mill") &&
+        (isBuilding(candidate, "LakeCoolingTower") || candidate.powered < 0),
       describe: () => "No need for more energy",
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingUselessPowerPlant,
-    },
-    {
+    }),
+    weightingRule({
       id: "not-enough-energy",
       enabled: (snapshot) => snapshot.powerUnlocked,
-      match: (building: any, snapshot) =>
-        building !== getBuildings().LakeCoolingTower &&
-        building.powered > 0 &&
-        (building === getBuildings().NeutronCitadel
+      match: (candidate, snapshot) =>
+        !isBuilding(candidate, "LakeCoolingTower") &&
+        candidate.powered > 0 &&
+        (isBuilding(candidate, "NeutronCitadel")
           ? snapshot.nextCitadelPowerDraw
-          : building.powered) > snapshot.powerSurplus,
+          : candidate.powered) > snapshot.powerSurplus,
       describe: () => "Not enough energy",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingUnderpowered,
-    },
-    {
+    }),
+    weightingRule({
       id: "no-need-for-more-knowledge",
-      enabled: (snapshot: BuildingWeightingSnapshot) =>
+      enabled: (snapshot) =>
         Math.max(
           snapshot.knowledgeRequiredByTechs,
           snapshot.knowledgeRequiredByBuildTargets,
         ) <= snapshot.knowledgeCapacity,
-      match: (building: any) =>
-        building.is.knowledge &&
-        building !== getBuildings().Wardenclyffe &&
-        (building !== getBuildings().StargateTelemetryBeacon ||
-          building.count > 0), // We want Wardenclyffe for morale; first beacon required for progress
+      // We want Wardenclyffe for morale; first beacon required for progress
+      match: (candidate) =>
+        candidate.knowledge &&
+        !isBuilding(candidate, "Wardenclyffe") &&
+        (!isBuilding(candidate, "StargateTelemetryBeacon") ||
+          candidate.count > 0),
       describe: () => "No need for more knowledge",
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingUselessKnowledge,
-    },
-    {
+    }),
+    weightingRule({
       id: "need-more-knowledge",
-      enabled: (snapshot: BuildingWeightingSnapshot) =>
+      enabled: (snapshot) =>
         snapshot.cheapestTechKnowledge > snapshot.knowledgeCapacity ||
         snapshot.knowledgeRequiredByBuildTargets > snapshot.knowledgeCapacity,
-      match: (building: any) => building.is.knowledge,
+      match: (candidate) => candidate.knowledge,
       describe: () => "Need more knowledge",
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingNeedfulKnowledge,
-    },
-    {
+    }),
+    weightingRule({
       id: "unused-ejectors",
       enabled: (snapshot) => snapshot.unusedEjectorCapacity > 100,
-      match: (building: any) =>
-        building === getBuildings().BlackholeMassEjector,
+      match: (candidate) => isBuilding(candidate, "BlackholeMassEjector"),
       describe: () => "Still have some unused ejectors",
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingUnusedEjectors,
-    },
-    {
+    }),
+    weightingRule({
       id: "unused-storage",
       enabled: (snapshot) => snapshot.unusedStorageParts,
-      match: (building: any) =>
-        building === getBuildings().StorageYard ||
-        building === getBuildings().Warehouse ||
-        building === getBuildings().EnceladusMunitions,
+      match: (candidate) =>
+        isBuilding(candidate, "StorageYard", "Warehouse", "EnceladusMunitions"),
       describe: () => "Still have some unused storage",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingCrateUseless,
-    },
-    {
+    }),
+    weightingRule({
       id: "need-more-fuel-production",
       enabled: (snapshot) =>
         snapshot.oilStorageBelowMissionCost && snapshot.noOilProduction,
-      match: (building: any) =>
-        building === getBuildings().OilWell ||
-        building === getBuildings().GasMoonOilExtractor,
+      match: (candidate) =>
+        isBuilding(candidate, "OilWell", "GasMoonOilExtractor"),
       describe: () => "Need more fuel",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingMissingFuel,
-    },
-    {
+    }),
+    weightingRule({
       id: "need-more-fuel-storage",
       enabled: (snapshot) =>
         snapshot.heliumStorageBelowMissionCost ||
         snapshot.oilStorageBelowMissionCost,
-      match: (building: any) =>
-        building === getBuildings().OilDepot ||
-        building === getBuildings().SpacePropellantDepot ||
-        building === getBuildings().GasStorage,
+      match: (candidate) =>
+        isBuilding(candidate, "OilDepot", "SpacePropellantDepot", "GasStorage"),
       describe: () => "Need more fuel",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingMissingFuel,
-    },
-    {
+    }),
+    weightingRule({
       id: "horseshoes-useless",
       enabled: (snapshot) =>
         snapshot.hoovedRace && snapshot.horseshoesSufficient,
-      match: (building: any) =>
-        building instanceof ResourceAction &&
-        building.resource === getResources().Horseshoe,
-      describe: (_match, _building, snapshot) =>
+      match: (candidate) => candidate.producedResource === "Horseshoe",
+      describe: (_match, _candidate, snapshot) =>
         `No more ${snapshot.horseshoeTitle} needed`,
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingHorseshoeUseless,
-    },
-    {
+    }),
+    weightingRule({
       id: "meditation-space-unneeded",
       enabled: (snapshot) => snapshot.calmRace && snapshot.zenBelowCap,
-      match: (building: any) => building.id.includes("meditation"),
+      match: (candidate) => candidate.actionId.includes("meditation"),
       describe: () => "No more Meditation Space needed",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingZenUseless,
-    },
-    {
+    }),
+    weightingRule({
       id: "gate-demons-supressed",
       enabled: (snapshot) => snapshot.gateDemonsSupressed,
-      match: (building: any) => building === getBuildings().GateTurret,
+      match: (candidate) => isBuilding(candidate, "GateTurret"),
       describe: () => "Gate demons fully supressed",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingGateTurret,
-    },
-    {
+    }),
+    weightingRule({
       id: "need-more-storage",
       enabled: (snapshot) => snapshot.storagePartsAllAssigned,
-      match: (building: any) =>
-        building === getBuildings().Shed ||
-        building === getBuildings().RedGarage ||
-        building === getBuildings().AlphaWarehouse ||
-        building === getBuildings().ProximaCargoYard ||
-        building === getBuildings().TitanStorehouse,
+      match: (candidate) =>
+        isBuilding(
+          candidate,
+          "Shed",
+          "RedGarage",
+          "AlphaWarehouse",
+          "ProximaCargoYard",
+          "TitanStorehouse",
+        ),
       describe: () => "Need more storage",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingNeedStorage,
-    },
-    {
+    }),
+    weightingRule({
       id: "no-more-houses-needed",
       enabled: (snapshot) => snapshot.housingUnderused,
-      match: (building: any) =>
-        building.is.housing &&
-        building !== getBuildings().Alien1Consulate &&
-        building !== getBuildings().Transmitter &&
-        !(building instanceof ResourceAction),
+      match: (candidate) =>
+        candidate.housing &&
+        !isBuilding(candidate, "Alien1Consulate", "Transmitter") &&
+        candidate.producedResource === null,
       describe: () => "No more houses needed",
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingUselessHousing,
-    },
-    {
+    }),
+    weightingRule({
       id: "destroyed-after-impact",
       enabled: (snapshot) => snapshot.orbitalDecayImpactPending,
-      match: (building: any) =>
-        (building._tab === "city" || building._location === "spc_moon") &&
-        !(building instanceof ResourceAction),
+      match: (candidate) =>
+        (candidate.tab === "city" || candidate.location === "spc_moon") &&
+        candidate.producedResource === null,
       describe: () => "Will be destroyed after impact",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingTemporal,
-    },
-    {
+    }),
+    weightingRule({
       id: "randomized-weighting",
       // Only used for the gas giant name contest, no need to check at other game stages
       enabled: (snapshot) => snapshot.gasGiantNameContestActive,
-      match: (building: any) => building.is.random,
+      match: (candidate) => candidate.randomlyWeighted,
       describe: () => "Randomized weighting",
       multiplier: () => 1 + randomSource.nextUnit(), // Fluctuate weight to pick random item
-    },
-    {
+    }),
+    weightingRule({
       id: "solar-system-building",
       enabled: (snapshot) => snapshot.truepathRace && snapshot.tauCetiReached,
-      match: (building: any) =>
-        (building._tab === "city" ||
-          building._tab === "space" ||
-          building._tab === "starDock") &&
-        !(building instanceof ResourceAction),
+      match: (candidate) =>
+        (candidate.tab === "city" ||
+          candidate.tab === "space" ||
+          candidate.tab === "starDock") &&
+        candidate.producedResource === null,
       describe: () => "Solar System building",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingSolar,
-    },
-    {
+    }),
+    weightingRule({
       id: "vacuum-collapse-mana-producer",
       enabled: (snapshot) => snapshot.prestigeRoute === "vacuum",
-      match: (building: LooseObject) =>
-        building === getBuildings().Pylon ||
-        building === getBuildings().RedPylon ||
-        building === getBuildings().TauPylon,
+      match: (candidate) =>
+        isBuilding(candidate, "Pylon", "RedPylon", "TauPylon"),
       describe: () => "Vacuum Collapse Mana producer",
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingVacuumCollapse,
-    },
+    }),
   ];
 
   return {
+    namedBuildings: NAMED_BUILDINGS,
     authorityCapBuildings,
     INFLATION_CHALLENGE_MONEY,
     RETIREMENT_PREP,

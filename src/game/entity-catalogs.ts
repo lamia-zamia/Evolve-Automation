@@ -2646,6 +2646,14 @@ export function createEntityCatalogs({
     }),
   };
 
+  // The catalog key is the stable building identity typed policies compare by,
+  // and nothing on the wrapper itself carries it. Projects are deliberately not
+  // stamped: they share the weighting phase's target lists with buildings, and
+  // an unstamped project can never collide with a building key there.
+  for (const [key, building] of Object.entries(buildings)) {
+    building.catalogKey = key;
+  }
+
   const linkedBuildings = [
     [buildings.LakeTransport, buildings.LakeBireme],
     [buildings.SpirePort, buildings.SpireBaseCamp],

@@ -74,6 +74,9 @@ const defaultGates = () => ({
   // A building that no run has reached yet is locked, unbuilt, and — because
   // its AutoBuild setting has not been written — not auto-buildable either.
   getBuildingCount: () => 0,
+  getBuildingName: (building) => building,
+  getBuildingTitle: (building) => `${building} Title`,
+  getBuildingSoulGemCost: () => undefined,
   isBuildingUnlocked: off,
   isBuildingAutoBuildable: () => undefined,
   isBuildingAffordable: off,
@@ -138,7 +141,6 @@ assert.equal(empty.buildBestFreighterOnly, false);
 assert.equal(empty.autoBuildEnabled, false);
 assert.equal(empty.autoFleetEnabled, false);
 assert.equal(empty.minerJobsDisabled, false);
-assert.equal(empty.compareTransportsBySoulGems, false);
 assert.equal(empty.prestigeRoute, "other");
 assert.equal(empty.limitPrestigeConstruction, false);
 assert.equal(empty.saveSoulGemsForPrestige, false);
@@ -175,9 +177,10 @@ assert.equal(empty.zenBelowCap, false);
 assert.equal(empty.testLaunchUnlocked, false);
 assert.equal(empty.erisDigsiteUnsecured, false);
 assert.equal(empty.andromedaReached, false);
-assert.equal(empty.freighterChoiceOpen, false);
-assert.equal(empty.lakeShipChoiceOpen, false);
-assert.equal(empty.spireSupplyChoiceOpen, false);
+assert.equal(empty.freighterChoice, null);
+assert.equal(empty.lakeShipChoice, null);
+assert.equal(empty.spireSupplyChoice, null);
+assert.equal(empty.asphodelWarehouseCount, 0);
 assert.equal(empty.embassyMissing, true);
 assert.equal(empty.matrioshkaBrainIncomplete, true);
 assert.equal(empty.unusedEjectorCapacity, 0);
@@ -213,7 +216,6 @@ assert.equal(empty.gateDemonsSupressed, false);
 assert.equal(empty.hellGuardPostPrebuildIncomplete, false);
 assert.equal(empty.spirePortPrebuildIncomplete, false);
 assert.equal(empty.spireBaseCampPrebuildIncomplete, false);
-assert.equal(empty.lakeBiremeSupplyRate, 0.85);
 assert.equal(empty.nextCitadelPowerDraw, 30);
 assert.equal(empty.worldUnified, false);
 assert.equal(empty.testLaunchSuccessChance, 0);
@@ -234,9 +236,11 @@ assert.equal(empty.prestigeRetireAllowed, false);
 assert.equal(empty.pillarFinished, false);
 assert.equal(empty.madPrestigeAwaited, false);
 assert.equal(empty.mechSupplySaving, null);
-assert.equal(empty.womlingFriendEarned, false);
-assert.equal(empty.womlingGodEarned, false);
-assert.equal(empty.womlingLordEarned, false);
+assert.deepEqual(
+  empty.womlingOverlordActions,
+  [],
+  "a run that is not True Path has no Womlings to contact",
+);
 
 // Each multiplier is read from its own setting: distinct values must survive
 // the sample unswapped.
@@ -491,29 +495,32 @@ for (const [guards, banana, active] of [
 }
 gates = defaultGates();
 
-// Membership is by wrapper identity, not by name or index.
-const queued = { _vueBinding: "city-bank" };
-const triggered = { _vueBinding: "city-temple" };
+// Membership is by catalog key, which only a building carries: an ARPA project
+// shares these target lists and must not be mistaken for a build candidate.
+const queued = { catalogKey: "Bank" };
+const triggered = { catalogKey: "Temple" };
+const queuedProject = { _vueBinding: "arpa-monument" };
 state = {
   ...validState(),
-  queuedTargets: [queued],
+  queuedTargets: [queued, queuedProject],
   triggerTargets: [triggered],
   knowledgeRequiredByTechs: 1_500,
   knowledgeRequiredByBuildTargets: 900,
   cheapestTechKnowledge: 250,
 };
 const sample = read();
-assert.equal(sample.queuedTargets.has(queued), true);
-assert.equal(sample.queuedTargets.has(triggered), false);
-assert.equal(sample.triggerTargets.has(triggered), true);
+assert.equal(sample.queuedTargets.has("Bank"), true);
+assert.equal(sample.queuedTargets.has("Temple"), false);
+assert.equal(sample.queuedTargets.size, 1, "the queued project is skipped");
+assert.equal(sample.triggerTargets.has("Temple"), true);
 assert.equal(sample.knowledgeRequiredByTechs, 1_500);
 assert.equal(sample.knowledgeRequiredByBuildTargets, 900);
 assert.equal(sample.cheapestTechKnowledge, 250);
 
 // Later target-list mutation cannot reach an already-sampled snapshot.
 state.queuedTargets.push(triggered);
-assert.equal(sample.queuedTargets.has(triggered), false);
-assert.equal(read().queuedTargets.has(triggered), true);
+assert.equal(sample.queuedTargets.has("Temple"), false);
+assert.equal(read().queuedTargets.has("Temple"), true);
 
 state = validState();
 
@@ -593,7 +600,6 @@ assert.equal(gated.gateDemonsSupressed, true);
 assert.equal(gated.hellGuardPostPrebuildIncomplete, true);
 assert.equal(gated.spirePortPrebuildIncomplete, true);
 assert.equal(gated.spireBaseCampPrebuildIncomplete, false);
-assert.equal(gated.lakeBiremeSupplyRate, 0.8);
 assert.equal(gated.nextCitadelPowerDraw, 172.5);
 assert.equal(gated.unusedEjectorCapacity, -1_500);
 assert.equal(gated.gasGiantNameContestActive, true);
@@ -626,10 +632,50 @@ assert.equal(gated.prestigeRetireAllowed, false);
 assert.equal(gated.pillarFinished, true);
 assert.equal(gated.madPrestigeAwaited, true);
 assert.equal(gated.mechSupplySaving, "saving");
-assert.deepEqual(askedWomlingStats, ["friend", "god", "lord"]);
-assert.equal(gated.womlingFriendEarned, true);
-assert.equal(gated.womlingGodEarned, true);
-assert.equal(gated.womlingLordEarned, false);
+assert.deepEqual(
+  askedWomlingStats,
+  [],
+  "a run outside True Path never asks after a Womling stat",
+);
+
+// The three Womling contacts are sampled in Overlord achievement order, each
+// with the stat it earns and whether AutoBuild could build it right now.
+const womlingBuildable = [];
+gates = {
+  ...defaultGates(),
+  hasRaceTrait: (trait) => trait === "truepath",
+  isWomlingStatEarned: (stat) => stat !== "lord",
+  isBuildingAutoBuildable: (building) => {
+    womlingBuildable.push(building);
+    return building === "TauRedSubjugate" ? undefined : true;
+  },
+};
+assert.deepEqual(read().womlingOverlordActions, [
+  {
+    id: "TauRedContact",
+    name: "TauRedContact",
+    statEarned: true,
+    autoBuildable: true,
+  },
+  {
+    id: "TauRedIntroduce",
+    name: "TauRedIntroduce",
+    statEarned: true,
+    autoBuildable: true,
+  },
+  {
+    id: "TauRedSubjugate",
+    name: "TauRedSubjugate",
+    statEarned: false,
+    autoBuildable: false,
+  },
+]);
+assert.deepEqual(womlingBuildable.slice(-3), [
+  "TauRedContact",
+  "TauRedIntroduce",
+  "TauRedSubjugate",
+]);
+gates = defaultGates();
 
 // The tech gates keep the game's lenient coercion: `haveTech` answers
 // `undefined` for a research the run has never started and `0` for one recorded
@@ -873,33 +919,102 @@ const pairChoice = (buildable, affordable) =>
     },
   );
 const BOTH_FREIGHTERS = ["GorddonFreighter", "Alien1SuperFreighter"];
+// At equal counts the Super Freighter carries more Money per crew member.
 gates = pairChoice(BOTH_FREIGHTERS, BOTH_FREIGHTERS);
-assert.equal(read().freighterChoiceOpen, true);
+assert.deepEqual(read().freighterChoice, {
+  worseId: "GorddonFreighter",
+  betterTitle: "Alien1SuperFreighter Title",
+});
 gates = pairChoice(BOTH_FREIGHTERS, ["GorddonFreighter"]);
 assert.equal(
-  read().freighterChoiceOpen,
-  false,
+  read().freighterChoice,
+  null,
   "one unaffordable freighter closes the choice",
 );
 gates = pairChoice(["GorddonFreighter"], BOTH_FREIGHTERS);
-assert.equal(read().freighterChoiceOpen, false);
-const BOTH_LAKE_SHIPS = ["LakeBireme", "LakeTransport"];
-gates = pairChoice(BOTH_LAKE_SHIPS, BOTH_LAKE_SHIPS);
-assert.equal(read().lakeShipChoiceOpen, true);
-const BOTH_SPIRE = ["SpirePort", "SpireBaseCamp"];
-gates = pairChoice(BOTH_SPIRE, BOTH_SPIRE);
-assert.equal(read().spireSupplyChoiceOpen, true);
+assert.equal(read().freighterChoice, null);
+// Enough regular freighters, and each further one adds more per crew than the
+// super freighter does.
+gates = {
+  ...pairChoice(BOTH_FREIGHTERS, BOTH_FREIGHTERS),
+  getBuildingCount: (building) =>
+    building === "Alien1SuperFreighter" ? 20 : 0,
+};
+assert.deepEqual(read().freighterChoice, {
+  worseId: "Alien1SuperFreighter",
+  betterTitle: "GorddonFreighter Title",
+});
 
+const BOTH_LAKE_SHIPS = ["LakeBireme", "LakeTransport"];
+const lakeGates = (counts, overrides = {}) => ({
+  ...pairChoice(BOTH_LAKE_SHIPS, BOTH_LAKE_SHIPS),
+  getBuildingCount: (building) => counts[building] ?? 0,
+  ...overrides,
+});
+// Four Biremes escorting seven Transports: one more Bireme adds more supply
+// than one more Transport.
+gates = lakeGates({ LakeBireme: 4, LakeTransport: 7 });
+assert.deepEqual(read().lakeShipChoice, {
+  worseId: "LakeTransport",
+  betterTitle: "LakeBireme Title",
+});
 // Bloodstone ranks are absent until one is earned, and only rank 2 improves the
-// Bireme supply rate.
+// per-Bireme factor — enough to flip which ship is worth building.
 for (const rank of [undefined, 0, 1]) {
-  gates = { ...defaultGates(), getSpireBloodstoneRank: () => rank };
-  assert.equal(read().lakeBiremeSupplyRate, 0.85);
+  gates = lakeGates(
+    { LakeBireme: 4, LakeTransport: 7 },
+    { getSpireBloodstoneRank: () => rank },
+  );
+  assert.equal(read().lakeShipChoice.worseId, "LakeTransport");
 }
 for (const rank of [2, 5]) {
-  gates = { ...defaultGates(), getSpireBloodstoneRank: () => rank };
-  assert.equal(read().lakeBiremeSupplyRate, 0.8);
+  gates = lakeGates(
+    { LakeBireme: 4, LakeTransport: 7 },
+    { getSpireBloodstoneRank: () => rank },
+  );
+  assert.equal(read().lakeShipChoice.worseId, "LakeBireme");
 }
+// Comparing by Soul Gems instead of support scores each ship by the supply it
+// adds per gem, which a lopsided cost flips.
+gates = lakeGates(
+  { LakeBireme: 4, LakeTransport: 7 },
+  {
+    isTransportComparedBySoulGems: () => true,
+    getBuildingSoulGemCost: (building) => (building === "LakeBireme" ? 10 : 1),
+  },
+);
+assert.deepEqual(read().lakeShipChoice, {
+  worseId: "LakeBireme",
+  betterTitle: "LakeTransport Title",
+});
+// A Soul Gem cost is absent until it is above zero, and the resulting NaN
+// leaves the script preferring neither ship.
+gates = lakeGates(
+  { LakeBireme: 4, LakeTransport: 7 },
+  { isTransportComparedBySoulGems: () => true },
+);
+assert.equal(read().lakeShipChoice, null);
+
+const BOTH_SPIRE = ["SpirePort", "SpireBaseCamp"];
+// At two of each, one more Port supplies more than one more Base Camp.
+gates = {
+  ...pairChoice(BOTH_SPIRE, BOTH_SPIRE),
+  getBuildingCount: () => 2,
+};
+assert.deepEqual(read().spireSupplyChoice, {
+  worseId: "SpireBaseCamp",
+  betterTitle: "SpirePort Title",
+});
+// With no Ports built, a Base Camp multiplies nothing and neither is ahead of
+// the other once the Port also scores its own first copy.
+gates = {
+  ...pairChoice(BOTH_SPIRE, BOTH_SPIRE),
+  getBuildingCount: () => 0,
+};
+assert.deepEqual(read().spireSupplyChoice, {
+  worseId: "SpireBaseCamp",
+  betterTitle: "SpirePort Title",
+});
 
 // The name contest is an exact level test, so it closes as the tech advances.
 const askedTechLevels = [];
@@ -932,6 +1047,10 @@ rejects((s) => delete s.queuedTargets, "state.queuedTargets must be an array");
 rejects(
   (s) => (s.triggerTargets = { 0: queued }),
   "state.triggerTargets must be an array",
+);
+rejects(
+  (s) => (s.queuedTargets = [null]),
+  "state.queuedTargets[0] must be an object",
 );
 rejects(
   (s) => (s.knowledgeRequiredByTechs = undefined),
@@ -1119,8 +1238,35 @@ rejectsGate(
   "isMadPrestigeAwaited() must be a boolean",
 );
 rejectsGate(
-  { isWomlingStatEarned: (stat) => (stat === "god" ? 3 : true) },
+  {
+    hasRaceTrait: (trait) => trait === "truepath",
+    isWomlingStatEarned: (stat) => (stat === "god" ? 3 : true),
+  },
   'isWomlingStatEarned("god") must be a boolean',
+);
+rejectsGate(
+  {
+    hasRaceTrait: (trait) => trait === "truepath",
+    getBuildingName: (building) =>
+      building === "TauRedIntroduce" ? undefined : building,
+  },
+  "buildings.TauRedIntroduce.name must be a string",
+);
+rejectsGate(
+  {
+    isBuildingAutoBuildable: () => true,
+    isBuildingAffordable: () => true,
+    getBuildingTitle: (building) =>
+      building === "Alien1SuperFreighter" ? undefined : building,
+  },
+  "buildings.Alien1SuperFreighter.title must be a string",
+);
+rejectsGate(
+  {
+    getBuildingCount: (building) =>
+      building === "AsphodelWarehouse" ? "5" : 0,
+  },
+  "buildings.AsphodelWarehouse.count must be a finite number",
 );
 rejectsGate(
   { getMechSupplySavingReason: () => "hoarding" },
