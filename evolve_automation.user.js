@@ -24080,8 +24080,8 @@
       {
         id: "saving-soul-gems-for-prestige",
         enabled: (snapshot) => snapshot.prestigeRoute === "whitehole" && snapshot.saveSoulGemsForPrestige,
-        match: (building3) => {
-          if (building3.cost["Soul_Gem"] > getResources().Soul_Gem.currentQuantity - 10) {
+        match: (building3, snapshot) => {
+          if (building3.cost["Soul_Gem"] > snapshot.soulGemQuantity - 10) {
             return true;
           }
         },
@@ -24114,8 +24114,8 @@
       },
       {
         id: "lake-transport-vs-bireme",
-        enabled: () => {
-          return getBuildings().LakeBireme.isAutoBuildable() && getBuildings().LakeBireme.isAffordable(true) && getBuildings().LakeTransport.isAutoBuildable() && getBuildings().LakeTransport.isAffordable(true) && getResources().Lake_Support.rateOfChange <= 1;
+        enabled: (snapshot) => {
+          return getBuildings().LakeBireme.isAutoBuildable() && getBuildings().LakeBireme.isAffordable(true) && getBuildings().LakeTransport.isAutoBuildable() && getBuildings().LakeTransport.isAffordable(true) && snapshot.lakeSupportSpare <= 1;
         },
         match: (building3, snapshot) => {
           if (building3 === getBuildings().LakeBireme || building3 === getBuildings().LakeTransport) {
@@ -24220,13 +24220,13 @@
       {
         id: "no-empty-housings",
         enabled: (snapshot) => snapshot.artificialRace,
-        match: (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Population && getResources().Population.storageRatio === 1,
+        match: (building3, snapshot) => building3 instanceof ResourceAction && building3.resource === getResources().Population && snapshot.populationAtCap,
         describe: () => "No empty housings",
         multiplier: () => 0
       },
       {
         id: "embassy-knowledge-required",
-        enabled: (snapshot) => getBuildings().GorddonEmbassy.count === 0 && getResources().Knowledge.maxQuantity < snapshot.embassyKnowledgeTarget,
+        enabled: (snapshot) => getBuildings().GorddonEmbassy.count === 0 && snapshot.knowledgeCapacity < snapshot.embassyKnowledgeTarget,
         match: (building3) => building3 === getBuildings().GorddonEmbassy,
         describe: (_match, _building, snapshot) => `${getNumberString(snapshot.embassyKnowledgeTarget)} Max Knowledge required`,
         multiplier: () => 0
@@ -24243,10 +24243,10 @@
         enabled: (snapshot) => snapshot.slaverRace,
         match: (building3, snapshot) => {
           if (building3 === getBuildings().SlaveMarket) {
-            if (getResources().Slave.currentQuantity >= getResources().Slave.maxQuantity) {
+            if (snapshot.slavePensFull) {
               return "Slave pens already full";
             }
-            if (getResources().Money.currentQuantity + getResources().Money.rateOfChange < getResources().Money.maxQuantity && getResources().Money.rateOfChange < snapshot.slaveIncomeTarget) {
+            if (snapshot.slaveIncomeInsufficient) {
               return "Buying slaves only with excess money";
             }
           }
@@ -24259,10 +24259,10 @@
         enabled: (snapshot) => snapshot.cannibalizeRace,
         match: (building3, snapshot) => {
           if (building3._id === "s_alter" && building3.count > 0) {
-            if (getResources().Population.currentQuantity < 1) {
+            if (snapshot.populationEmpty) {
               return "Too low population";
             }
-            if (getResources().Population.currentQuantity !== getResources().Population.maxQuantity) {
+            if (!snapshot.populationAtCap) {
               return "Sacrifices performed only with full population";
             }
             if (snapshot.sacrificeBlocked) {
@@ -24296,11 +24296,11 @@
       },
       {
         id: "tau-belt-ship-efficiency",
-        enabled: (snapshot) => snapshot.truepathRace && getResources().Tau_Belt_Support.maxQuantity <= getResources().Tau_Belt_Support.currentQuantity,
-        match: (building3) => {
+        enabled: (snapshot) => snapshot.truepathRace && snapshot.tauBeltSupportAvailable <= snapshot.tauBeltSupportUsed,
+        match: (building3, snapshot) => {
           if (building3 === getBuildings().TauBeltWhalingShip || building3 === getBuildings().TauBeltMiningShip) {
-            let s_max = getResources().Tau_Belt_Support.maxQuantity;
-            let s_cur = getResources().Tau_Belt_Support.currentQuantity;
+            let s_max = snapshot.tauBeltSupportAvailable;
+            let s_cur = snapshot.tauBeltSupportUsed;
             let currentEff = 1 - (1 - s_max / s_cur) ** 1.4;
             let nextEff = 1 - (1 - s_max / (s_cur + 1)) ** 1.4;
             return nextEff * (s_cur + 1) - currentEff * s_cur;
@@ -24341,7 +24341,7 @@
         // amount of tax/soldier management can fix the production penalty, so prioritize the
         // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
         id: "authority-cap",
-        enabled: (snapshot) => snapshot.authorityTarget > 0 && getResources().Authority.isUnlocked() && getResources().Authority.maxQuantity < snapshot.authorityTarget,
+        enabled: (snapshot) => snapshot.authorityCapBelowTarget,
         match: (building3) => authorityCapBuildingSet.has(building3),
         describe: () => "Raises Authority cap, currently below target",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingAuthority
@@ -24512,22 +24512,22 @@
       },
       {
         id: "need-more-energy",
-        enabled: () => getResources().Power.isUnlocked() && getResources().Power.currentQuantity < getResources().Power.maxQuantity,
+        enabled: (snapshot) => snapshot.powerUnlocked && snapshot.powerSurplus < snapshot.unpoweredPowerDemand,
         match: (building3) => building3 === getBuildings().LakeCoolingTower || building3.powered < 0,
         describe: () => "Need more energy",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingNeedfulPowerPlant
       },
       {
         id: "no-need-for-more-energy",
-        enabled: () => getResources().Power.isUnlocked() && getResources().Power.currentQuantity > getResources().Power.maxQuantity,
+        enabled: (snapshot) => snapshot.powerUnlocked && snapshot.powerSurplus > snapshot.unpoweredPowerDemand,
         match: (building3) => building3 !== getBuildings().Mill && (building3 === getBuildings().LakeCoolingTower || building3.powered < 0),
         describe: () => "No need for more energy",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingUselessPowerPlant
       },
       {
         id: "not-enough-energy",
-        enabled: () => getResources().Power.isUnlocked(),
-        match: (building3, snapshot) => building3 !== getBuildings().LakeCoolingTower && building3.powered > 0 && (building3 === getBuildings().NeutronCitadel ? snapshot.nextCitadelPowerDraw : building3.powered) > getResources().Power.currentQuantity,
+        enabled: (snapshot) => snapshot.powerUnlocked,
+        match: (building3, snapshot) => building3 !== getBuildings().LakeCoolingTower && building3.powered > 0 && (building3 === getBuildings().NeutronCitadel ? snapshot.nextCitadelPowerDraw : building3.powered) > snapshot.powerSurplus,
         describe: () => "Not enough energy",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingUnderpowered
       },
@@ -24536,7 +24536,7 @@
         enabled: (snapshot) => Math.max(
           snapshot.knowledgeRequiredByTechs,
           snapshot.knowledgeRequiredByBuildTargets
-        ) <= getResources().Knowledge.maxQuantity,
+        ) <= snapshot.knowledgeCapacity,
         match: (building3) => building3.is.knowledge && building3 !== getBuildings().Wardenclyffe && (building3 !== getBuildings().StargateTelemetryBeacon || building3.count > 0),
         // We want Wardenclyffe for morale; first beacon required for progress
         describe: () => "No need for more knowledge",
@@ -24544,7 +24544,7 @@
       },
       {
         id: "need-more-knowledge",
-        enabled: (snapshot) => snapshot.cheapestTechKnowledge > getResources().Knowledge.maxQuantity || snapshot.knowledgeRequiredByBuildTargets > getResources().Knowledge.maxQuantity,
+        enabled: (snapshot) => snapshot.cheapestTechKnowledge > snapshot.knowledgeCapacity || snapshot.knowledgeRequiredByBuildTargets > snapshot.knowledgeCapacity,
         match: (building3) => building3.is.knowledge,
         describe: () => "Need more knowledge",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingNeedfulKnowledge
@@ -24558,35 +24558,35 @@
       },
       {
         id: "unused-storage",
-        enabled: () => getResources().Crates.storageRatio < 1 || getResources().Containers.storageRatio < 1,
+        enabled: (snapshot) => snapshot.unusedStorageParts,
         match: (building3) => building3 === getBuildings().StorageYard || building3 === getBuildings().Warehouse || building3 === getBuildings().EnceladusMunitions,
         describe: () => "Still have some unused storage",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingCrateUseless
       },
       {
         id: "need-more-fuel-production",
-        enabled: () => getResources().Oil.maxQuantity < getResources().Oil.techMissionMaxCost && getBuildings().OilWell.count <= 0 && getBuildings().GasMoonOilExtractor.count <= 0,
+        enabled: (snapshot) => snapshot.oilStorageBelowMissionCost && getBuildings().OilWell.count <= 0 && getBuildings().GasMoonOilExtractor.count <= 0,
         match: (building3) => building3 === getBuildings().OilWell || building3 === getBuildings().GasMoonOilExtractor,
         describe: () => "Need more fuel",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingMissingFuel
       },
       {
         id: "need-more-fuel-storage",
-        enabled: () => getResources().Helium_3.isUnlocked() && getResources().Helium_3.maxQuantity < getResources().Helium_3.techMissionMaxCost || getResources().Oil.maxQuantity < getResources().Oil.techMissionMaxCost,
+        enabled: (snapshot) => snapshot.heliumStorageBelowMissionCost || snapshot.oilStorageBelowMissionCost,
         match: (building3) => building3 === getBuildings().OilDepot || building3 === getBuildings().SpacePropellantDepot || building3 === getBuildings().GasStorage,
         describe: () => "Need more fuel",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingMissingFuel
       },
       {
         id: "horseshoes-useless",
-        enabled: (snapshot) => snapshot.hoovedRace && getResources().Horseshoe.spareQuantity >= getResources().Horseshoe.storageRequired,
+        enabled: (snapshot) => snapshot.hoovedRace && snapshot.horseshoesSufficient,
         match: (building3) => building3 instanceof ResourceAction && building3.resource === getResources().Horseshoe,
-        describe: () => `No more ${getResources().Horseshoe.title} needed`,
+        describe: (_match, _building, snapshot) => `No more ${snapshot.horseshoeTitle} needed`,
         multiplier: (snapshot) => snapshot.weights.buildingWeightingHorseshoeUseless
       },
       {
         id: "meditation-space-unneeded",
-        enabled: (snapshot) => snapshot.calmRace && getResources().Zen.currentQuantity < getResources().Zen.maxQuantity,
+        enabled: (snapshot) => snapshot.calmRace && snapshot.zenBelowCap,
         match: (building3) => building3.id.includes("meditation"),
         describe: () => "No more Meditation Space needed",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingZenUseless
@@ -24600,14 +24600,14 @@
       },
       {
         id: "need-more-storage",
-        enabled: () => (getResources().Containers.isUnlocked() || getResources().Crates.isUnlocked()) && getResources().Containers.storageRatio === 1 && getResources().Crates.storageRatio === 1,
+        enabled: (snapshot) => snapshot.storagePartsAllAssigned,
         match: (building3) => building3 === getBuildings().Shed || building3 === getBuildings().RedGarage || building3 === getBuildings().AlphaWarehouse || building3 === getBuildings().ProximaCargoYard || building3 === getBuildings().TitanStorehouse,
         describe: () => "Need more storage",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingNeedStorage
       },
       {
         id: "no-more-houses-needed",
-        enabled: () => getResources().Population.maxQuantity > 50 && getResources().Population.storageRatio < 0.9,
+        enabled: (snapshot) => snapshot.housingUnderused,
         match: (building3) => building3.is.housing && building3 !== getBuildings().Alien1Consulate && building3 !== getBuildings().Transmitter && !(building3 instanceof ResourceAction),
         describe: () => "No more houses needed",
         multiplier: (snapshot) => snapshot.weights.buildingWeightingUselessHousing
@@ -24699,6 +24699,15 @@
     getMinimumAuthority,
     getEmbassyKnowledgeTarget,
     getSlaveIncomeTarget,
+    getResourceQuantity,
+    getResourceCapacity,
+    getResourceIncome,
+    getResourceStorageRatio,
+    isResourceUnlocked,
+    getSpareResourceQuantity,
+    getRequiredResourceStorage,
+    getMissionMaxResourceCost,
+    getResourceTitle,
     isAchievementGuardsEnabled,
     isBananaRepublicGuardEnabled,
     isGalaxyAssaultPending,
@@ -24839,6 +24848,41 @@
       const assigned = getAssignedEjectorCapacity();
       return assigned === void 0 ? 0 : requireNumber(assigned, "getAssignedEjectorCapacity()");
     };
+    const quantity = (resource2) => requireNumber(
+      getResourceQuantity(resource2),
+      `resources.${resource2}.currentQuantity`
+    );
+    const capacity = (resource2) => requireNumber(
+      getResourceCapacity(resource2),
+      `resources.${resource2}.maxQuantity`
+    );
+    const income = (resource2) => requireNumber(
+      getResourceIncome(resource2),
+      `resources.${resource2}.rateOfChange`
+    );
+    const storageRatio = (resource2) => requireNumber(
+      getResourceStorageRatio(resource2),
+      `resources.${resource2}.storageRatio`
+    );
+    const unlocked2 = (resource2) => Boolean(isResourceUnlocked(resource2));
+    const storageBelowMissionCost = (resource2) => capacity(resource2) < requireNumber(
+      getMissionMaxResourceCost(resource2),
+      `resources.${resource2}.techMissionMaxCost`
+    );
+    const readSlaveIncomeInsufficient = () => {
+      const moneyIncome = income("Money");
+      return quantity("Money") + moneyIncome < capacity("Money") && moneyIncome < requireNumber(getSlaveIncomeTarget(), "settings.slaveIncome");
+    };
+    const readAuthorityCapBelowTarget = () => {
+      if (!requireBoolean(isAuthorityManaged(), "settings.authorityManage")) {
+        return false;
+      }
+      const target = requireNumber(
+        getMinimumAuthority(),
+        "settings.generalMinimumAuthority"
+      );
+      return target > 0 && unlocked2("Authority") && capacity("Authority") < target;
+    };
     return () => {
       const state = requireRecord(getState(), "state");
       const retirementAssistActive = requireBoolean(
@@ -24885,22 +24929,13 @@
           isSavingSoulGemsForPrestige(),
           "settings.prestigeWhiteholeSaveGems"
         ),
-        // No building raises the cap toward a target the script is not managing.
-        authorityTarget: requireBoolean(
-          isAuthorityManaged(),
-          "settings.authorityManage"
-        ) ? requireNumber(
-          getMinimumAuthority(),
-          "settings.generalMinimumAuthority"
-        ) : 0,
+        authorityCapBelowTarget: readAuthorityCapBelowTarget(),
         embassyKnowledgeTarget: requireNumber(
           getEmbassyKnowledgeTarget(),
           "settings.fleetEmbassyKnowledge"
         ),
-        slaveIncomeTarget: requireNumber(
-          getSlaveIncomeTarget(),
-          "settings.slaveIncome"
-        ),
+        slavePensFull: quantity("Slave") >= capacity("Slave"),
+        slaveIncomeInsufficient: readSlaveIncomeInsufficient(),
         bananaRepublicGuardActive: requireBoolean(
           isAchievementGuardsEnabled(),
           "settings.achievementGuards"
@@ -24926,6 +24961,33 @@
           state["cheapestTechKnowledge"],
           "state.cheapestTechKnowledge"
         ),
+        knowledgeCapacity: capacity("Knowledge"),
+        soulGemQuantity: quantity("Soul_Gem"),
+        lakeSupportSpare: income("Lake_Support"),
+        tauBeltSupportAvailable: capacity("Tau_Belt_Support"),
+        tauBeltSupportUsed: quantity("Tau_Belt_Support"),
+        powerUnlocked: unlocked2("Power"),
+        powerSurplus: quantity("Power"),
+        unpoweredPowerDemand: capacity("Power"),
+        populationAtCap: storageRatio("Population") === 1,
+        populationEmpty: quantity("Population") < 1,
+        housingUnderused: capacity("Population") > 50 && storageRatio("Population") < 0.9,
+        unusedStorageParts: storageRatio("Crates") < 1 || storageRatio("Containers") < 1,
+        storagePartsAllAssigned: (unlocked2("Containers") || unlocked2("Crates")) && storageRatio("Containers") === 1 && storageRatio("Crates") === 1,
+        oilStorageBelowMissionCost: storageBelowMissionCost("Oil"),
+        heliumStorageBelowMissionCost: unlocked2("Helium_3") && storageBelowMissionCost("Helium_3"),
+        horseshoesSufficient: requireNumber(
+          getSpareResourceQuantity("Horseshoe"),
+          "resources.Horseshoe.spareQuantity"
+        ) >= requireNumber(
+          getRequiredResourceStorage("Horseshoe"),
+          "resources.Horseshoe.storageRequired"
+        ),
+        horseshoeTitle: requireString(
+          getResourceTitle("Horseshoe"),
+          "resources.Horseshoe.title"
+        ),
+        zenBelowCap: quantity("Zen") < capacity("Zen"),
         galaxyAssaultPending: requireBoolean(
           isGalaxyAssaultPending(),
           "isGalaxyAssaultPending()"
@@ -56524,6 +56586,15 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
         getMinimumAuthority: () => settings.generalMinimumAuthority,
         getEmbassyKnowledgeTarget: () => settings.fleetEmbassyKnowledge,
         getSlaveIncomeTarget: () => settings.slaveIncome,
+        getResourceQuantity: (resource2) => resources[resource2].currentQuantity,
+        getResourceCapacity: (resource2) => resources[resource2].maxQuantity,
+        getResourceIncome: (resource2) => resources[resource2].rateOfChange,
+        getResourceStorageRatio: (resource2) => resources[resource2].storageRatio,
+        isResourceUnlocked: (resource2) => resources[resource2].isUnlocked(),
+        getSpareResourceQuantity: (resource2) => resources[resource2].spareQuantity,
+        getRequiredResourceStorage: (resource2) => resources[resource2].storageRequired,
+        getMissionMaxResourceCost: (resource2) => resources[resource2].techMissionMaxCost,
+        getResourceTitle: (resource2) => resources[resource2].title,
         isAchievementGuardsEnabled: () => settings.achievementGuards,
         isBananaRepublicGuardEnabled: () => settings.guardBananaRepublic,
         isGalaxyAssaultPending: () => galaxyAssaultPending(),

@@ -3241,6 +3241,18 @@ function startEvolveRuntimeComposition(
         getMinimumAuthority: () => settings.generalMinimumAuthority,
         getEmbassyKnowledgeTarget: () => settings.fleetEmbassyKnowledge,
         getSlaveIncomeTarget: () => settings.slaveIncome,
+        getResourceQuantity: (resource) => resources[resource].currentQuantity,
+        getResourceCapacity: (resource) => resources[resource].maxQuantity,
+        getResourceIncome: (resource) => resources[resource].rateOfChange,
+        getResourceStorageRatio: (resource) => resources[resource].storageRatio,
+        isResourceUnlocked: (resource) => resources[resource].isUnlocked(),
+        getSpareResourceQuantity: (resource) =>
+          resources[resource].spareQuantity,
+        getRequiredResourceStorage: (resource) =>
+          resources[resource].storageRequired,
+        getMissionMaxResourceCost: (resource) =>
+          resources[resource].techMissionMaxCost,
+        getResourceTitle: (resource) => resources[resource].title,
         isAchievementGuardsEnabled: () => settings.achievementGuards,
         isBananaRepublicGuardEnabled: () => settings.guardBananaRepublic,
         isGalaxyAssaultPending: () => galaxyAssaultPending(),

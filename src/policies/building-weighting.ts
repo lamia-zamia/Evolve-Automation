@@ -241,11 +241,8 @@ export function createBuildingWeightingPolicy({
       enabled: (snapshot) =>
         snapshot.prestigeRoute === "whitehole" &&
         snapshot.saveSoulGemsForPrestige,
-      match: (building: any) => {
-        if (
-          building.cost["Soul_Gem"] >
-          getResources().Soul_Gem.currentQuantity - 10
-        ) {
+      match: (building: any, snapshot) => {
+        if (building.cost["Soul_Gem"] > snapshot.soulGemQuantity - 10) {
           return true;
         }
       },
@@ -294,13 +291,13 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "lake-transport-vs-bireme",
-      enabled: () => {
+      enabled: (snapshot) => {
         return (
           getBuildings().LakeBireme.isAutoBuildable() &&
           getBuildings().LakeBireme.isAffordable(true) &&
           getBuildings().LakeTransport.isAutoBuildable() &&
           getBuildings().LakeTransport.isAffordable(true) &&
-          getResources().Lake_Support.rateOfChange <= 1
+          snapshot.lakeSupportSpare <= 1
         ); // Build any if there's spare support
       },
       match: (building: any, snapshot) => {
@@ -439,10 +436,10 @@ export function createBuildingWeightingPolicy({
     {
       id: "no-empty-housings",
       enabled: (snapshot) => snapshot.artificialRace,
-      match: (building: any) =>
+      match: (building: any, snapshot) =>
         building instanceof ResourceAction &&
         building.resource === getResources().Population &&
-        getResources().Population.storageRatio === 1,
+        snapshot.populationAtCap,
       describe: () => "No empty housings",
       multiplier: () => 0,
     },
@@ -450,7 +447,7 @@ export function createBuildingWeightingPolicy({
       id: "embassy-knowledge-required",
       enabled: (snapshot) =>
         getBuildings().GorddonEmbassy.count === 0 &&
-        getResources().Knowledge.maxQuantity < snapshot.embassyKnowledgeTarget,
+        snapshot.knowledgeCapacity < snapshot.embassyKnowledgeTarget,
       match: (building: any) => building === getBuildings().GorddonEmbassy,
       describe: (_match, _building, snapshot) =>
         `${getNumberString(snapshot.embassyKnowledgeTarget)} Max Knowledge required`,
@@ -468,18 +465,10 @@ export function createBuildingWeightingPolicy({
       enabled: (snapshot) => snapshot.slaverRace,
       match: (building: any, snapshot) => {
         if (building === getBuildings().SlaveMarket) {
-          if (
-            getResources().Slave.currentQuantity >=
-            getResources().Slave.maxQuantity
-          ) {
+          if (snapshot.slavePensFull) {
             return "Slave pens already full";
           }
-          if (
-            getResources().Money.currentQuantity +
-              getResources().Money.rateOfChange <
-              getResources().Money.maxQuantity &&
-            getResources().Money.rateOfChange < snapshot.slaveIncomeTarget
-          ) {
+          if (snapshot.slaveIncomeInsufficient) {
             return "Buying slaves only with excess money";
           }
         }
@@ -492,13 +481,10 @@ export function createBuildingWeightingPolicy({
       enabled: (snapshot) => snapshot.cannibalizeRace,
       match: (building: any, snapshot) => {
         if (building._id === "s_alter" && building.count > 0) {
-          if (getResources().Population.currentQuantity < 1) {
+          if (snapshot.populationEmpty) {
             return "Too low population";
           }
-          if (
-            getResources().Population.currentQuantity !==
-            getResources().Population.maxQuantity
-          ) {
+          if (!snapshot.populationAtCap) {
             return "Sacrifices performed only with full population";
           }
           if (snapshot.sacrificeBlocked) {
@@ -537,15 +523,14 @@ export function createBuildingWeightingPolicy({
       id: "tau-belt-ship-efficiency",
       enabled: (snapshot) =>
         snapshot.truepathRace &&
-        getResources().Tau_Belt_Support.maxQuantity <=
-          getResources().Tau_Belt_Support.currentQuantity,
-      match: (building: any) => {
+        snapshot.tauBeltSupportAvailable <= snapshot.tauBeltSupportUsed,
+      match: (building: any, snapshot) => {
         if (
           building === getBuildings().TauBeltWhalingShip ||
           building === getBuildings().TauBeltMiningShip
         ) {
-          let s_max = getResources().Tau_Belt_Support.maxQuantity;
-          let s_cur = getResources().Tau_Belt_Support.currentQuantity;
+          let s_max = snapshot.tauBeltSupportAvailable;
+          let s_cur = snapshot.tauBeltSupportUsed;
           let currentEff = 1 - (1 - s_max / s_cur) ** 1.4;
           let nextEff = 1 - (1 - s_max / (s_cur + 1)) ** 1.4;
           return nextEff * (s_cur + 1) - currentEff * s_cur;
@@ -592,10 +577,7 @@ export function createBuildingWeightingPolicy({
       // amount of tax/soldier management can fix the production penalty, so prioritize the
       // buildings that raise the cap. (Locked/irrelevant ones are already filtered to 0 above.)
       id: "authority-cap",
-      enabled: (snapshot) =>
-        snapshot.authorityTarget > 0 &&
-        getResources().Authority.isUnlocked() &&
-        getResources().Authority.maxQuantity < snapshot.authorityTarget,
+      enabled: (snapshot) => snapshot.authorityCapBelowTarget,
       match: (building: any) => authorityCapBuildingSet.has(building),
       describe: () => "Raises Authority cap, currently below target",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingAuthority,
@@ -866,9 +848,9 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "need-more-energy",
-      enabled: () =>
-        getResources().Power.isUnlocked() &&
-        getResources().Power.currentQuantity < getResources().Power.maxQuantity,
+      enabled: (snapshot) =>
+        snapshot.powerUnlocked &&
+        snapshot.powerSurplus < snapshot.unpoweredPowerDemand,
       match: (building: any) =>
         building === getBuildings().LakeCoolingTower || building.powered < 0,
       describe: () => "Need more energy",
@@ -877,9 +859,9 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "no-need-for-more-energy",
-      enabled: () =>
-        getResources().Power.isUnlocked() &&
-        getResources().Power.currentQuantity > getResources().Power.maxQuantity,
+      enabled: (snapshot) =>
+        snapshot.powerUnlocked &&
+        snapshot.powerSurplus > snapshot.unpoweredPowerDemand,
       match: (building: any) =>
         building !== getBuildings().Mill &&
         (building === getBuildings().LakeCoolingTower || building.powered < 0),
@@ -889,13 +871,13 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "not-enough-energy",
-      enabled: () => getResources().Power.isUnlocked(),
+      enabled: (snapshot) => snapshot.powerUnlocked,
       match: (building: any, snapshot) =>
         building !== getBuildings().LakeCoolingTower &&
         building.powered > 0 &&
         (building === getBuildings().NeutronCitadel
           ? snapshot.nextCitadelPowerDraw
-          : building.powered) > getResources().Power.currentQuantity,
+          : building.powered) > snapshot.powerSurplus,
       describe: () => "Not enough energy",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingUnderpowered,
     },
@@ -905,7 +887,7 @@ export function createBuildingWeightingPolicy({
         Math.max(
           snapshot.knowledgeRequiredByTechs,
           snapshot.knowledgeRequiredByBuildTargets,
-        ) <= getResources().Knowledge.maxQuantity,
+        ) <= snapshot.knowledgeCapacity,
       match: (building: any) =>
         building.is.knowledge &&
         building !== getBuildings().Wardenclyffe &&
@@ -918,9 +900,8 @@ export function createBuildingWeightingPolicy({
     {
       id: "need-more-knowledge",
       enabled: (snapshot: BuildingWeightingSnapshot) =>
-        snapshot.cheapestTechKnowledge > getResources().Knowledge.maxQuantity ||
-        snapshot.knowledgeRequiredByBuildTargets >
-          getResources().Knowledge.maxQuantity,
+        snapshot.cheapestTechKnowledge > snapshot.knowledgeCapacity ||
+        snapshot.knowledgeRequiredByBuildTargets > snapshot.knowledgeCapacity,
       match: (building: any) => building.is.knowledge,
       describe: () => "Need more knowledge",
       multiplier: (snapshot) =>
@@ -940,9 +921,7 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "unused-storage",
-      enabled: () =>
-        getResources().Crates.storageRatio < 1 ||
-        getResources().Containers.storageRatio < 1,
+      enabled: (snapshot) => snapshot.unusedStorageParts,
       match: (building: any) =>
         building === getBuildings().StorageYard ||
         building === getBuildings().Warehouse ||
@@ -952,9 +931,8 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "need-more-fuel-production",
-      enabled: () =>
-        getResources().Oil.maxQuantity <
-          getResources().Oil.techMissionMaxCost &&
+      enabled: (snapshot) =>
+        snapshot.oilStorageBelowMissionCost &&
         getBuildings().OilWell.count <= 0 &&
         getBuildings().GasMoonOilExtractor.count <= 0,
       match: (building: any) =>
@@ -965,11 +943,9 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "need-more-fuel-storage",
-      enabled: () =>
-        (getResources().Helium_3.isUnlocked() &&
-          getResources().Helium_3.maxQuantity <
-            getResources().Helium_3.techMissionMaxCost) ||
-        getResources().Oil.maxQuantity < getResources().Oil.techMissionMaxCost,
+      enabled: (snapshot) =>
+        snapshot.heliumStorageBelowMissionCost ||
+        snapshot.oilStorageBelowMissionCost,
       match: (building: any) =>
         building === getBuildings().OilDepot ||
         building === getBuildings().SpacePropellantDepot ||
@@ -980,21 +956,18 @@ export function createBuildingWeightingPolicy({
     {
       id: "horseshoes-useless",
       enabled: (snapshot) =>
-        snapshot.hoovedRace &&
-        getResources().Horseshoe.spareQuantity >=
-          getResources().Horseshoe.storageRequired,
+        snapshot.hoovedRace && snapshot.horseshoesSufficient,
       match: (building: any) =>
         building instanceof ResourceAction &&
         building.resource === getResources().Horseshoe,
-      describe: () => `No more ${getResources().Horseshoe.title} needed`,
+      describe: (_match, _building, snapshot) =>
+        `No more ${snapshot.horseshoeTitle} needed`,
       multiplier: (snapshot) =>
         snapshot.weights.buildingWeightingHorseshoeUseless,
     },
     {
       id: "meditation-space-unneeded",
-      enabled: (snapshot) =>
-        snapshot.calmRace &&
-        getResources().Zen.currentQuantity < getResources().Zen.maxQuantity,
+      enabled: (snapshot) => snapshot.calmRace && snapshot.zenBelowCap,
       match: (building: any) => building.id.includes("meditation"),
       describe: () => "No more Meditation Space needed",
       multiplier: (snapshot) => snapshot.weights.buildingWeightingZenUseless,
@@ -1008,11 +981,7 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "need-more-storage",
-      enabled: () =>
-        (getResources().Containers.isUnlocked() ||
-          getResources().Crates.isUnlocked()) &&
-        getResources().Containers.storageRatio === 1 &&
-        getResources().Crates.storageRatio === 1,
+      enabled: (snapshot) => snapshot.storagePartsAllAssigned,
       match: (building: any) =>
         building === getBuildings().Shed ||
         building === getBuildings().RedGarage ||
@@ -1024,9 +993,7 @@ export function createBuildingWeightingPolicy({
     },
     {
       id: "no-more-houses-needed",
-      enabled: () =>
-        getResources().Population.maxQuantity > 50 &&
-        getResources().Population.storageRatio < 0.9,
+      enabled: (snapshot) => snapshot.housingUnderused,
       match: (building: any) =>
         building.is.housing &&
         building !== getBuildings().Alien1Consulate &&

@@ -17,8 +17,14 @@ const buildings = new Proxy(buildingCache, {
     return target[property];
   },
 });
+// Every resource question the rules ask now arrives on the snapshot. The two
+// resources left here are only compared for identity against a candidate's own
+// resource, which waits for the typed candidate view.
 let context = {
-  resources: {},
+  resources: {
+    Population: { name: "Population" },
+    Horseshoe: { name: "Horseshoe" },
+  },
   buildings,
 };
 // Every configured weighting multiplier arrives through the snapshot, so the
@@ -68,15 +74,34 @@ const snapshotOf = ({ weights = {}, ...overrides } = {}) =>
     prestigeRoute: "other",
     limitPrestigeConstruction: false,
     saveSoulGemsForPrestige: false,
-    authorityTarget: 0,
+    authorityCapBelowTarget: false,
     embassyKnowledgeTarget: 0,
-    slaveIncomeTarget: 0,
+    slavePensFull: false,
+    slaveIncomeInsufficient: false,
     bananaRepublicGuardActive: false,
     queuedTargets: new Set(),
     triggerTargets: new Set(),
     knowledgeRequiredByTechs: 0,
     knowledgeRequiredByBuildTargets: 0,
     cheapestTechKnowledge: 0,
+    knowledgeCapacity: 0,
+    soulGemQuantity: 0,
+    lakeSupportSpare: 0,
+    tauBeltSupportAvailable: 0,
+    tauBeltSupportUsed: 0,
+    powerUnlocked: false,
+    powerSurplus: 0,
+    unpoweredPowerDemand: 0,
+    populationAtCap: false,
+    populationEmpty: false,
+    housingUnderused: false,
+    unusedStorageParts: false,
+    storagePartsAllAssigned: false,
+    oilStorageBelowMissionCost: false,
+    heliumStorageBelowMissionCost: false,
+    horseshoesSufficient: false,
+    horseshoeTitle: "Horseshoe",
+    zenBelowCap: false,
     galaxyAssaultPending: false,
     stargatePiracySupressed: false,
     galaxyPiracyCoveredByFleet: false,
@@ -205,13 +230,15 @@ assert.equal(
 );
 assert.equal(triggerRule.match(candidate, emptySnapshot), false);
 
-// Knowledge rules compare the phase snapshot against live Knowledge storage.
+// Knowledge rules compare the run's knowledge requirements against the sampled
+// Knowledge capacity, both of which arrive on the snapshot.
 const uselessKnowledgeRule = ruleById("no-need-for-more-knowledge");
 const needfulKnowledgeRule = ruleById("need-more-knowledge");
-context = { ...context, resources: { Knowledge: { maxQuantity: 100 } } };
+const knowledgeSnapshot = (overrides) =>
+  snapshotOf({ knowledgeCapacity: 100, ...overrides });
 assert.equal(
   uselessKnowledgeRule.enabled(
-    snapshotOf({
+    knowledgeSnapshot({
       knowledgeRequiredByTechs: 100,
       knowledgeRequiredByBuildTargets: 50,
     }),
@@ -220,24 +247,29 @@ assert.equal(
 );
 assert.equal(
   uselessKnowledgeRule.enabled(
-    snapshotOf({ knowledgeRequiredByBuildTargets: 101 }),
+    knowledgeSnapshot({ knowledgeRequiredByBuildTargets: 101 }),
   ),
   false,
   "a build target above storage still needs more knowledge",
 );
 assert.equal(
-  needfulKnowledgeRule.enabled(snapshotOf({ cheapestTechKnowledge: 101 })),
-  true,
-);
-assert.equal(
   needfulKnowledgeRule.enabled(
-    snapshotOf({ knowledgeRequiredByBuildTargets: 101 }),
+    knowledgeSnapshot({ cheapestTechKnowledge: 101 }),
   ),
   true,
 );
 assert.equal(
   needfulKnowledgeRule.enabled(
-    snapshotOf({ cheapestTechKnowledge: 100, knowledgeRequiredByTechs: 1e9 }),
+    knowledgeSnapshot({ knowledgeRequiredByBuildTargets: 101 }),
+  ),
+  true,
+);
+assert.equal(
+  needfulKnowledgeRule.enabled(
+    knowledgeSnapshot({
+      cheapestTechKnowledge: 100,
+      knowledgeRequiredByTechs: 1e9,
+    }),
   ),
   false,
   "an unreachable far-future tech must not force knowledge weighting",
@@ -266,27 +298,15 @@ assert.equal(
 buildings.ErisDigsite.count = 100;
 assert.equal(digsiteRule.enabled(truepathSnapshot), false);
 
-// An unmanaged Authority cap arrives as a zero target, which is how the rule
-// stays off without reading the management toggle itself.
+// The management toggle, the Authority unlock, and the cap comparison are all
+// folded into one snapshot answer, so the rule only identifies the buildings.
 const authorityRule = ruleById("authority-cap");
-context = {
-  ...context,
-  resources: {
-    Authority: {
-      maxQuantity: 80,
-      isUnlocked: () => true,
-    },
-  },
-};
-const authorityShortfall = snapshotOf({ authorityTarget: 100 });
-assert.equal(authorityRule.enabled(authorityShortfall), true);
+assert.equal(
+  authorityRule.enabled(snapshotOf({ authorityCapBelowTarget: true })),
+  true,
+);
 assert.equal(authorityRule.match(buildings.Barracks), true);
 assert.equal(authorityRule.enabled(emptySnapshot), false);
-assert.equal(
-  authorityRule.enabled(snapshotOf({ authorityTarget: 80 })),
-  false,
-  "a cap already at target needs no more buildings",
-);
 
 // Both piracy rules ask the snapshot whether more hardware could still help,
 // and then only identify the buildings that hardware is.
@@ -325,25 +345,35 @@ assert.equal(
 assert.equal(fleetPiracyRule.match(buildings.Dreadnought), true);
 assert.equal(fleetPiracyRule.match(buildings.GatewayStarbase), false);
 
-// Fuel-depot rule triggers on techMissionMaxCost, not the broad maxCost. A high
-// maxCost from late-game buildings/projects with no tech/mission demand must not fire it.
+// Either fuel being short of the most expensive mission that needs it enables
+// the depot rule; the adapter decides what "short" means.
 const fuelDepotRule = ruleById("need-more-fuel-storage");
-context = {
-  ...context,
-  resources: {
-    Helium_3: {
-      isUnlocked: () => false,
-      maxQuantity: 0,
-      techMissionMaxCost: 0,
-    },
-    Oil: { maxQuantity: 100, maxCost: 999999, techMissionMaxCost: 0 },
-  },
-};
-assert.equal(fuelDepotRule.enabled(), false);
-context.resources.Oil.techMissionMaxCost = 500;
-assert.equal(fuelDepotRule.enabled(), true);
+assert.equal(fuelDepotRule.enabled(emptySnapshot), false);
+assert.equal(
+  fuelDepotRule.enabled(snapshotOf({ oilStorageBelowMissionCost: true })),
+  true,
+);
+assert.equal(
+  fuelDepotRule.enabled(snapshotOf({ heliumStorageBelowMissionCost: true })),
+  true,
+);
 assert.equal(fuelDepotRule.match(buildings.SpacePropellantDepot), true);
 assert.equal(fuelDepotRule.match(buildings.Mine), false);
+
+// Fuel production waits for both wells to be missing as well.
+const fuelWellRule = ruleById("need-more-fuel-production");
+const oilShort = snapshotOf({ oilStorageBelowMissionCost: true });
+assert.equal(fuelWellRule.enabled(oilShort), true);
+assert.equal(fuelWellRule.enabled(emptySnapshot), false);
+buildings.OilWell.count = 1;
+assert.equal(
+  fuelWellRule.enabled(oilShort),
+  false,
+  "an existing well already answers the shortfall",
+);
+buildings.OilWell.count = 0;
+assert.equal(fuelWellRule.match(buildings.GasMoonOilExtractor), true);
+assert.equal(fuelWellRule.match(buildings.Mine), false);
 
 // Whether Supply is being withheld for the mech bay is a fact about the run;
 // the rule only asks whether the candidate spends Supply at all.
@@ -683,32 +713,61 @@ assert.equal(nonOperatingRule.match(spireBaseCamp, portShort), true);
 
 // The Neutron Citadel is judged by the snapshot's marginal draw; every other
 // powered building by its own consumption.
-context.resources = {
-  ...context.resources,
-  Power: { isUnlocked: () => true, currentQuantity: 50 },
-};
 context.buildings = {
   ...context.buildings,
   NeutronCitadel: { _vueBinding: "NeutronCitadel", powered: 5 },
 };
 const energyRule = ruleById("not-enough-energy");
 const citadel = context.buildings.NeutronCitadel;
-assert.equal(energyRule.enabled(), true);
+const powered = (overrides) =>
+  snapshotOf({ powerUnlocked: true, powerSurplus: 50, ...overrides });
+assert.equal(energyRule.enabled(powered()), true);
 assert.equal(
-  energyRule.match(citadel, snapshotOf({ nextCitadelPowerDraw: 60 })),
+  energyRule.enabled(emptySnapshot),
+  false,
+  "locked Power weighs nothing by its draw",
+);
+assert.equal(
+  energyRule.match(citadel, powered({ nextCitadelPowerDraw: 60 })),
   true,
 );
 assert.equal(
-  energyRule.match(citadel, snapshotOf({ nextCitadelPowerDraw: 40 })),
+  energyRule.match(citadel, powered({ nextCitadelPowerDraw: 40 })),
   false,
 );
 assert.equal(
-  energyRule.match({ _vueBinding: "Factory", powered: 60 }, emptySnapshot),
+  energyRule.match({ _vueBinding: "Factory", powered: 60 }, powered()),
   true,
 );
 assert.equal(
-  energyRule.match({ _vueBinding: "Factory", powered: 40 }, emptySnapshot),
+  energyRule.match({ _vueBinding: "Factory", powered: 40 }, powered()),
   false,
+);
+
+// The two power-plant rules compare the same surplus against what the game's
+// switched-off buildings would draw.
+const needEnergyRule = ruleById("need-more-energy");
+const uselessEnergyRule = ruleById("no-need-for-more-energy");
+assert.equal(
+  needEnergyRule.enabled(powered({ unpoweredPowerDemand: 80 })),
+  true,
+);
+assert.equal(
+  uselessEnergyRule.enabled(powered({ unpoweredPowerDemand: 80 })),
+  false,
+);
+assert.equal(
+  needEnergyRule.enabled(powered({ unpoweredPowerDemand: 20 })),
+  false,
+);
+assert.equal(
+  uselessEnergyRule.enabled(powered({ unpoweredPowerDemand: 20 })),
+  true,
+);
+assert.equal(
+  needEnergyRule.enabled(snapshotOf({ unpoweredPowerDemand: 80 })),
+  false,
+  "locked Power enables neither power-plant rule",
 );
 
 // The tech gates and the race gates are both snapshot answers, so an `enabled`
@@ -904,14 +963,10 @@ assert.equal(
 // checks are still taken per candidate, and they still win over it.
 const altarRule = ruleById("sacrificial-altar-blocked");
 const altar = { _id: "s_alter", count: 1 };
-const cannibalSnapshot = snapshotOf({ cannibalizeRace: true });
-context = {
-  ...context,
-  resources: {
-    ...context.resources,
-    Population: { currentQuantity: 10, maxQuantity: 10 },
-  },
-};
+const cannibalSnapshot = snapshotOf({
+  cannibalizeRace: true,
+  populationAtCap: true,
+});
 assert.equal(altarRule.enabled(emptySnapshot), false);
 assert.equal(altarRule.enabled(cannibalSnapshot), true);
 assert.equal(altarRule.match(altar, cannibalSnapshot), undefined);
@@ -928,21 +983,30 @@ for (const [reason, note] of [
   assert.equal(
     altarRule.match(
       altar,
-      snapshotOf({ cannibalizeRace: true, sacrificeBlocked: reason }),
+      snapshotOf({
+        cannibalizeRace: true,
+        populationAtCap: true,
+        sacrificeBlocked: reason,
+      }),
     ),
     note,
   );
 }
-context.resources.Population.currentQuantity = 9;
 assert.equal(
   altarRule.match(
     altar,
     snapshotOf({ cannibalizeRace: true, sacrificeBlocked: "bonus-capped" }),
   ),
   "Sacrifices performed only with full population",
+  "a population below its cap outranks every game-side blocker",
 );
-context.resources.Population.currentQuantity = 0;
-assert.equal(altarRule.match(altar, cannibalSnapshot), "Too low population");
+assert.equal(
+  altarRule.match(
+    altar,
+    snapshotOf({ cannibalizeRace: true, populationEmpty: true }),
+  ),
+  "Too low population",
+);
 assert.equal(altarRule.multiplier(emptySnapshot), 0);
 
 // The Bireme supply rate is a snapshot answer, and the Bloodstone rank that
@@ -963,11 +1027,12 @@ context.buildings = {
   LakeBireme: lakeBireme,
   LakeTransport: lakeTransport,
 };
-context = {
-  ...context,
-  resources: { ...context.resources, Lake_Support: { rateOfChange: 0 } },
-};
-assert.equal(lakeRule.enabled(), true);
+assert.equal(lakeRule.enabled(emptySnapshot), true);
+assert.equal(
+  lakeRule.enabled(snapshotOf({ lakeSupportSpare: 5 })),
+  false,
+  "spare Lake support makes either ship worth building",
+);
 assert.equal(lakeRule.match(lakeTransport, emptySnapshot), lakeBireme);
 assert.equal(lakeRule.match(lakeBireme, emptySnapshot), undefined);
 const bloodstoneSnapshot = snapshotOf({ lakeBiremeSupplyRate: 0.8 });
@@ -1143,6 +1208,122 @@ assert.equal(
   soulGemRule.enabled(snapshotOf({ saveSoulGemsForPrestige: true })),
   false,
 );
+const twentyGems = snapshotOf({ soulGemQuantity: 20 });
+assert.equal(
+  soulGemRule.match({ cost: { Soul_Gem: 5 } }, twentyGems),
+  undefined,
+);
+assert.equal(
+  soulGemRule.match({ cost: { Soul_Gem: 11 } }, twentyGems),
+  true,
+  "the last ten Soul Gems are reserved for the reset",
+);
+
+// Storage, housing, Horseshoes, Zen, and Tau Belt security are whole-run
+// answers now, so their rules only identify the buildings they apply to.
+context.buildings = {
+  ...context.buildings,
+  StorageYard: { _vueBinding: "StorageYard" },
+  Warehouse: { _vueBinding: "Warehouse" },
+  EnceladusMunitions: { _vueBinding: "EnceladusMunitions" },
+  Shed: { _vueBinding: "Shed" },
+  TauBeltWhalingShip: { _vueBinding: "TauBeltWhalingShip" },
+};
+const otherBuilding = { _vueBinding: "Mine" };
+
+const storageUnusedRule = ruleById("unused-storage");
+assert.equal(storageUnusedRule.enabled(emptySnapshot), false);
+assert.equal(
+  storageUnusedRule.enabled(snapshotOf({ unusedStorageParts: true })),
+  true,
+);
+assert.equal(storageUnusedRule.match(context.buildings.Warehouse), true);
+assert.equal(storageUnusedRule.match(otherBuilding), false);
+
+const storageNeededRule = ruleById("need-more-storage");
+assert.equal(storageNeededRule.enabled(emptySnapshot), false);
+assert.equal(
+  storageNeededRule.enabled(snapshotOf({ storagePartsAllAssigned: true })),
+  true,
+);
+assert.equal(storageNeededRule.match(context.buildings.Shed), true);
+assert.equal(storageNeededRule.match(otherBuilding), false);
+
+const housingRule = ruleById("no-more-houses-needed");
+assert.equal(housingRule.enabled(emptySnapshot), false);
+assert.equal(housingRule.enabled(snapshotOf({ housingUnderused: true })), true);
+
+const zenRule = ruleById("meditation-space-unneeded");
+assert.equal(
+  zenRule.enabled(snapshotOf({ calmRace: true, zenBelowCap: true })),
+  true,
+);
+assert.equal(zenRule.enabled(snapshotOf({ zenBelowCap: true })), false);
+assert.equal(zenRule.enabled(snapshotOf({ calmRace: true })), false);
+
+const horseshoeRule = ruleById("horseshoes-useless");
+assert.equal(
+  horseshoeRule.enabled(
+    snapshotOf({ hoovedRace: true, horseshoesSufficient: true }),
+  ),
+  true,
+);
+assert.equal(
+  horseshoeRule.enabled(snapshotOf({ horseshoesSufficient: true })),
+  false,
+);
+assert.equal(
+  horseshoeRule.describe(
+    true,
+    otherBuilding,
+    snapshotOf({ horseshoeTitle: "Horseshoes" }),
+  ),
+  "No more Horseshoes needed",
+);
+
+// A candidate that assembles population is only useless once every housing is
+// occupied.
+const emptyHousingRule = ruleById("no-empty-housings");
+const assembler = new ResourceAction();
+assembler.resource = context.resources.Population;
+assert.equal(
+  emptyHousingRule.match(assembler, snapshotOf({ populationAtCap: true })),
+  true,
+);
+assert.equal(emptyHousingRule.match(assembler, emptySnapshot), false);
+
+const beltRule = ruleById("tau-belt-ship-efficiency");
+const beltSecurity = (available, used) =>
+  snapshotOf({
+    truepathRace: true,
+    tauBeltSupportAvailable: available,
+    tauBeltSupportUsed: used,
+  });
+assert.equal(beltRule.enabled(beltSecurity(6, 9)), true);
+assert.equal(
+  beltRule.enabled(beltSecurity(9, 6)),
+  false,
+  "a belt with spare security is efficient enough already",
+);
+assert.equal(
+  beltRule.enabled(
+    snapshotOf({ tauBeltSupportAvailable: 6, tauBeltSupportUsed: 9 }),
+  ),
+  false,
+  "only True Path has a Tau Belt",
+);
+const shipGain = beltRule.match(
+  context.buildings.TauBeltWhalingShip,
+  beltSecurity(6, 9),
+);
+assert.ok(shipGain > 0 && shipGain < 1);
+assert.equal(beltRule.match(otherBuilding, beltSecurity(6, 9)), undefined);
+assert.equal(beltRule.multiplier(emptySnapshot, shipGain), shipGain);
+assert.equal(
+  beltRule.multiplier(emptySnapshot),
+  -1,
+  "a candidate the rule did not match is not a belt ship at all",
+);
 
 // The Embassy threshold is a snapshot answer, and `describe` reports the same
 // number the gate compared against.
@@ -1151,11 +1332,10 @@ context.buildings = {
   ...context.buildings,
   GorddonEmbassy: { _vueBinding: "GorddonEmbassy", count: 0 },
 };
-context = {
-  ...context,
-  resources: { ...context.resources, Knowledge: { maxQuantity: 5_000_000 } },
-};
-const embassyWanted = snapshotOf({ embassyKnowledgeTarget: 6_000_000 });
+const embassyWanted = snapshotOf({
+  knowledgeCapacity: 5_000_000,
+  embassyKnowledgeTarget: 6_000_000,
+});
 assert.equal(embassyRule.enabled(embassyWanted), true);
 assert.equal(embassyRule.enabled(emptySnapshot), false);
 assert.equal(
@@ -1169,26 +1349,30 @@ assert.equal(
   "one Embassy is all the script wants",
 );
 
-// Buying slaves waits for income above the configured target.
+// Both Slave Market blockers are snapshot answers, and a full pen outranks the
+// money question.
 const slaveRule = ruleById("slave-market-blocked");
 const slaveMarket = { _vueBinding: "SlaveMarket" };
 context.buildings = { ...context.buildings, SlaveMarket: slaveMarket };
-context = {
-  ...context,
-  resources: {
-    ...context.resources,
-    Slave: { currentQuantity: 0, maxQuantity: 10 },
-    Money: { currentQuantity: 100, maxQuantity: 1_000, rateOfChange: 10 },
-  },
-};
 assert.equal(
-  slaveRule.match(slaveMarket, snapshotOf({ slaveIncomeTarget: 100 })),
+  slaveRule.match(slaveMarket, snapshotOf({ slaveIncomeInsufficient: true })),
   "Buying slaves only with excess money",
 );
 assert.equal(
-  slaveRule.match(slaveMarket, snapshotOf({ slaveIncomeTarget: 5 })),
+  slaveRule.match(slaveMarket, emptySnapshot),
   undefined,
   "income above the target is excess money",
+);
+assert.equal(
+  slaveRule.match(
+    slaveMarket,
+    snapshotOf({ slavePensFull: true, slaveIncomeInsufficient: true }),
+  ),
+  "Slave pens already full",
+);
+assert.equal(
+  slaveRule.match(buildings.Mine, snapshotOf({ slavePensFull: true })),
+  undefined,
 );
 
 console.log("Weighting policy module tests passed");

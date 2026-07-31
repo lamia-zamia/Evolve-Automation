@@ -93,14 +93,20 @@ export type BuildingWeightingSnapshot = {
   /** Soul Gems are being saved for the Whitehole reset. */
   readonly saveSoulGemsForPrestige: boolean;
   /**
-   * Authority cap the script manages toward, or `0` when Authority management
-   * is off and no building should be prioritized for it.
+   * Authority is unlocked and its cap is below the target the script manages
+   * toward, so the buildings that raise the cap are worth prioritizing. Always
+   * false while Authority management is off.
    */
-  readonly authorityTarget: number;
+  readonly authorityCapBelowTarget: boolean;
   /** Max Knowledge the Gorddon Embassy is worth waiting for. */
   readonly embassyKnowledgeTarget: number;
-  /** Money income above which buying slaves is considered affordable. */
-  readonly slaveIncomeTarget: number;
+  /** The slave pens are full, so a Slave Market cannot sell into them. */
+  readonly slavePensFull: boolean;
+  /**
+   * Money storage is still filling and income is below the level at which
+   * buying slaves is considered affordable.
+   */
+  readonly slaveIncomeInsufficient: boolean;
   /** The Banana Republic objective guard is on, so its objectives are worth priority. */
   readonly bananaRepublicGuardActive: boolean;
   readonly queuedTargets: ReadonlySet<unknown>;
@@ -108,6 +114,45 @@ export type BuildingWeightingSnapshot = {
   readonly knowledgeRequiredByTechs: number;
   readonly knowledgeRequiredByBuildTargets: number;
   readonly cheapestTechKnowledge: number;
+  /** Max Knowledge, which every knowledge requirement above is compared against. */
+  readonly knowledgeCapacity: number;
+  /** Soul Gems on hand, out of which a Soul Gem building cost is paid. */
+  readonly soulGemQuantity: number;
+  /** Lake support no ship is consuming yet. */
+  readonly lakeSupportSpare: number;
+  /** Tau Belt support the belt provides. */
+  readonly tauBeltSupportAvailable: number;
+  /** Tau Belt support the belt's ships already consume. */
+  readonly tauBeltSupportUsed: number;
+  /** Power is unlocked, so power weighting applies at all. */
+  readonly powerUnlocked: boolean;
+  /** Power still free for one more building to draw. */
+  readonly powerSurplus: number;
+  /** Power the buildings the game left switched off would draw if powered. */
+  readonly unpoweredPowerDemand: number;
+  /** Population is at its housing cap. */
+  readonly populationAtCap: boolean;
+  /** Population has fallen below one, so nobody is left to sacrifice. */
+  readonly populationEmpty: boolean;
+  /** The housing cap is meaningfully above the population living in it. */
+  readonly housingUnderused: boolean;
+  /** Some built crates or containers are still unassigned. */
+  readonly unusedStorageParts: boolean;
+  /** Crates or containers are unlocked and every built one is assigned. */
+  readonly storagePartsAllAssigned: boolean;
+  /** Oil storage is below the most expensive mission that needs it. */
+  readonly oilStorageBelowMissionCost: boolean;
+  /**
+   * Helium-3 is unlocked and its storage is below the most expensive mission
+   * that needs it.
+   */
+  readonly heliumStorageBelowMissionCost: boolean;
+  /** Spare Horseshoes already cover the storage the hooved race needs. */
+  readonly horseshoesSufficient: boolean;
+  /** The game's display name for Horseshoes. */
+  readonly horseshoeTitle: string;
+  /** Zen is below its cap, so no more Meditation Spaces are needed. */
+  readonly zenBelowCap: boolean;
   /** A fleet is being accumulated for an assault mission. */
   readonly galaxyAssaultPending: boolean;
   /** Built defense platforms already out-defend all stargate piracy. */

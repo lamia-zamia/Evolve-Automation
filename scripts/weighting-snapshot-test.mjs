@@ -59,6 +59,18 @@ const defaultGates = () => ({
   getMinimumAuthority: () => 0,
   getEmbassyKnowledgeTarget: () => 0,
   getSlaveIncomeTarget: () => 0,
+  // The resource wrapper defaults every quantity to zero and every storage
+  // requirement to one until the game unlocks the resource, and its storage
+  // ratio reads as a full 1 while the cap is still zero.
+  getResourceQuantity: () => 0,
+  getResourceCapacity: () => 0,
+  getResourceIncome: () => 0,
+  getResourceStorageRatio: () => 1,
+  isResourceUnlocked: off,
+  getSpareResourceQuantity: () => 0,
+  getRequiredResourceStorage: () => 1,
+  getMissionMaxResourceCost: () => 0,
+  getResourceTitle: () => "Horseshoe",
   isAchievementGuardsEnabled: off,
   isBananaRepublicGuardEnabled: off,
   isGalaxyAssaultPending: off,
@@ -124,15 +136,36 @@ assert.equal(empty.compareTransportsBySoulGems, false);
 assert.equal(empty.prestigeRoute, "other");
 assert.equal(empty.limitPrestigeConstruction, false);
 assert.equal(empty.saveSoulGemsForPrestige, false);
-assert.equal(empty.authorityTarget, 0);
+assert.equal(empty.authorityCapBelowTarget, false);
 assert.equal(empty.embassyKnowledgeTarget, 0);
-assert.equal(empty.slaveIncomeTarget, 0);
+// An uninitialized pen holds nobody and has room for nobody, which is the
+// "already full" reading the Slave Market rule has always taken.
+assert.equal(empty.slavePensFull, true);
+assert.equal(empty.slaveIncomeInsufficient, false);
 assert.equal(empty.bananaRepublicGuardActive, false);
 assert.equal(empty.queuedTargets.size, 0);
 assert.equal(empty.triggerTargets.size, 0);
 assert.equal(empty.knowledgeRequiredByTechs, 0);
 assert.equal(empty.knowledgeRequiredByBuildTargets, 0);
 assert.equal(empty.cheapestTechKnowledge, 0);
+assert.equal(empty.knowledgeCapacity, 0);
+assert.equal(empty.soulGemQuantity, 0);
+assert.equal(empty.lakeSupportSpare, 0);
+assert.equal(empty.tauBeltSupportAvailable, 0);
+assert.equal(empty.tauBeltSupportUsed, 0);
+assert.equal(empty.powerUnlocked, false);
+assert.equal(empty.powerSurplus, 0);
+assert.equal(empty.unpoweredPowerDemand, 0);
+assert.equal(empty.populationAtCap, true);
+assert.equal(empty.populationEmpty, true);
+assert.equal(empty.housingUnderused, false);
+assert.equal(empty.unusedStorageParts, false);
+assert.equal(empty.storagePartsAllAssigned, false);
+assert.equal(empty.oilStorageBelowMissionCost, false);
+assert.equal(empty.heliumStorageBelowMissionCost, false);
+assert.equal(empty.horseshoesSufficient, false);
+assert.equal(empty.horseshoeTitle, "Horseshoe");
+assert.equal(empty.zenBelowCap, false);
 assert.equal(empty.galaxyAssaultPending, false);
 assert.equal(empty.stargatePiracySupressed, false);
 assert.equal(empty.galaxyPiracyCoveredByFleet, false);
@@ -225,8 +258,9 @@ for (const route of ["none", "mad", "demonic", "matrix", "apotheosis"]) {
   );
 }
 
-// The Authority target folds in the management toggle: an unmanaged cap is no
-// target at all, and the minimum is not even read.
+// The Authority answer folds in the management toggle, the unlock, and the cap
+// comparison: an unmanaged cap is no target at all, and the minimum is not even
+// read.
 let authorityReads = 0;
 gates = {
   ...defaultGates(),
@@ -235,14 +269,196 @@ gates = {
     return 250;
   },
 };
-assert.equal(read().authorityTarget, 0);
+assert.equal(read().authorityCapBelowTarget, false);
 assert.equal(authorityReads, 0);
-gates = {
+const managedAuthority = (unlocked, cap, minimum = 250) => ({
   ...defaultGates(),
   isAuthorityManaged: () => true,
-  getMinimumAuthority: () => 250,
+  getMinimumAuthority: () => minimum,
+  isResourceUnlocked: (resource) =>
+    resource === "Authority" ? unlocked : false,
+  getResourceCapacity: (resource) => (resource === "Authority" ? cap : 0),
+});
+gates = managedAuthority(true, 80);
+assert.equal(read().authorityCapBelowTarget, true);
+gates = managedAuthority(true, 250);
+assert.equal(
+  read().authorityCapBelowTarget,
+  false,
+  "a cap that already reaches the target needs no more Authority buildings",
+);
+gates = managedAuthority(false, 80);
+assert.equal(
+  read().authorityCapBelowTarget,
+  false,
+  "locked Authority is never below target",
+);
+gates = managedAuthority(true, 0, 0);
+assert.equal(
+  read().authorityCapBelowTarget,
+  false,
+  "a zero minimum is no target even while management is on",
+);
+
+// The Slave Market answers: a full pen blocks the market outright, and money
+// that is about to cap counts as excess regardless of income.
+const money = (currentQuantity, rateOfChange, maxQuantity, target) => ({
+  ...defaultGates(),
+  getSlaveIncomeTarget: () => target,
+  getResourceQuantity: (resource) =>
+    resource === "Money" ? currentQuantity : 0,
+  getResourceIncome: (resource) => (resource === "Money" ? rateOfChange : 0),
+  getResourceCapacity: (resource) => (resource === "Money" ? maxQuantity : 0),
+});
+gates = money(100, 10, 1000, 50);
+assert.equal(read().slaveIncomeInsufficient, true);
+gates = money(100, 60, 1000, 50);
+assert.equal(
+  read().slaveIncomeInsufficient,
+  false,
+  "income above the target affords slaves",
+);
+gates = money(1000, 10, 1000, 50);
+assert.equal(
+  read().slaveIncomeInsufficient,
+  false,
+  "money at its cap is excess money whatever the income is",
+);
+gates = {
+  ...defaultGates(),
+  getResourceQuantity: (resource) => (resource === "Slave" ? 3 : 0),
+  getResourceCapacity: (resource) => (resource === "Slave" ? 10 : 0),
 };
-assert.equal(read().authorityTarget, 250);
+assert.equal(read().slavePensFull, false);
+
+// Power reads three separate questions off one resource: the unlock, the
+// surplus one more building can draw, and what the switched-off buildings want.
+gates = {
+  ...defaultGates(),
+  isResourceUnlocked: (resource) => resource === "Power",
+  getResourceQuantity: (resource) => (resource === "Power" ? 12 : 0),
+  getResourceCapacity: (resource) => (resource === "Power" ? 30 : 0),
+};
+let power = read();
+assert.equal(power.powerUnlocked, true);
+assert.equal(power.powerSurplus, 12);
+assert.equal(power.unpoweredPowerDemand, 30);
+// `Power.isUnlocked()` forwards `global.city.powered`, which is absent before
+// the city has power at all.
+gates = { ...defaultGates(), isResourceUnlocked: () => undefined };
+assert.equal(read().powerUnlocked, false);
+
+// Population answers three thresholds, and the housing question needs both a
+// cap worth having and real room inside it.
+const population = (currentQuantity, maxQuantity) => ({
+  ...defaultGates(),
+  getResourceQuantity: (resource) =>
+    resource === "Population" ? currentQuantity : 0,
+  getResourceCapacity: (resource) =>
+    resource === "Population" ? maxQuantity : 0,
+  getResourceStorageRatio: (resource) =>
+    resource === "Population" ? currentQuantity / maxQuantity : 1,
+});
+gates = population(100, 100);
+let people = read();
+assert.equal(people.populationAtCap, true);
+assert.equal(people.populationEmpty, false);
+assert.equal(people.housingUnderused, false);
+gates = population(80, 100);
+people = read();
+assert.equal(people.populationAtCap, false);
+assert.equal(people.housingUnderused, true);
+gates = population(40, 50);
+assert.equal(
+  read().housingUnderused,
+  false,
+  "a cap of 50 or less is too small to call the housing underused",
+);
+gates = population(0, 100);
+assert.equal(read().populationEmpty, true);
+
+// Crates and containers answer the opposite storage questions off the same two
+// ratios.
+const storageParts = (crateRatio, containerRatio, anyUnlocked = true) => ({
+  ...defaultGates(),
+  isResourceUnlocked: (resource) =>
+    anyUnlocked && (resource === "Crates" || resource === "Containers"),
+  getResourceStorageRatio: (resource) =>
+    resource === "Crates"
+      ? crateRatio
+      : resource === "Containers"
+        ? containerRatio
+        : 1,
+});
+gates = storageParts(0.5, 1);
+let parts = read();
+assert.equal(parts.unusedStorageParts, true);
+assert.equal(parts.storagePartsAllAssigned, false);
+gates = storageParts(1, 1);
+parts = read();
+assert.equal(parts.unusedStorageParts, false);
+assert.equal(parts.storagePartsAllAssigned, true);
+gates = storageParts(1, 1, false);
+assert.equal(
+  read().storagePartsAllAssigned,
+  false,
+  "storage parts nobody has unlocked are not all assigned",
+);
+
+// Fuel storage is compared against the most expensive mission that needs it,
+// and Helium-3 is only asked once it exists.
+const fuel = (oilCap, oilCost, heliumCap, heliumCost, heliumUnlocked) => ({
+  ...defaultGates(),
+  isResourceUnlocked: (resource) =>
+    resource === "Helium_3" ? heliumUnlocked : false,
+  getResourceCapacity: (resource) =>
+    resource === "Oil" ? oilCap : resource === "Helium_3" ? heliumCap : 0,
+  getMissionMaxResourceCost: (resource) =>
+    resource === "Oil" ? oilCost : resource === "Helium_3" ? heliumCost : 0,
+});
+gates = fuel(100, 500, 0, 0, false);
+let fuels = read();
+assert.equal(fuels.oilStorageBelowMissionCost, true);
+assert.equal(fuels.heliumStorageBelowMissionCost, false);
+gates = fuel(500, 500, 100, 500, false);
+fuels = read();
+assert.equal(fuels.oilStorageBelowMissionCost, false);
+assert.equal(
+  fuels.heliumStorageBelowMissionCost,
+  false,
+  "locked Helium-3 storage is never short",
+);
+gates = fuel(500, 500, 100, 500, true);
+assert.equal(read().heliumStorageBelowMissionCost, true);
+
+// The remaining single-resource answers.
+gates = {
+  ...defaultGates(),
+  getResourceQuantity: (resource) =>
+    resource === "Soul_Gem" ? 42 : resource === "Zen" ? 3 : 0,
+  getResourceCapacity: (resource) => (resource === "Zen" ? 10 : 0),
+  getResourceIncome: (resource) => (resource === "Lake_Support" ? 4 : 0),
+  getSpareResourceQuantity: (resource) => (resource === "Horseshoe" ? 12 : 0),
+  getRequiredResourceStorage: (resource) => (resource === "Horseshoe" ? 5 : 1),
+  getResourceTitle: () => "Horseshoes",
+};
+const singles = read();
+assert.equal(singles.soulGemQuantity, 42);
+assert.equal(singles.zenBelowCap, true);
+assert.equal(singles.lakeSupportSpare, 4);
+assert.equal(singles.horseshoesSufficient, true);
+assert.equal(singles.horseshoeTitle, "Horseshoes");
+
+// Tau Belt security is the ratio of the support the belt provides to what its
+// ships already take.
+gates = {
+  ...defaultGates(),
+  getResourceCapacity: (resource) => (resource === "Tau_Belt_Support" ? 6 : 0),
+  getResourceQuantity: (resource) => (resource === "Tau_Belt_Support" ? 9 : 0),
+};
+const belt = read();
+assert.equal(belt.tauBeltSupportAvailable, 6);
+assert.equal(belt.tauBeltSupportUsed, 9);
 
 // The Banana Republic guard needs both its own toggle and the master one.
 for (const [guards, banana, active] of [
@@ -679,6 +895,59 @@ rejectsGate(
 rejectsGate(
   { getEmbassyKnowledgeTarget: () => null },
   "settings.fleetEmbassyKnowledge must be a finite number",
+);
+// Every resource read names the wrapper field it rejected, so a corrupt
+// resource cannot silently weigh a candidate by NaN.
+rejectsGate(
+  {
+    getResourceQuantity: (resource) =>
+      resource === "Soul_Gem" ? undefined : 0,
+  },
+  "resources.Soul_Gem.currentQuantity must be a finite number",
+);
+rejectsGate(
+  { getResourceCapacity: (resource) => (resource === "Knowledge" ? "5" : 0) },
+  "resources.Knowledge.maxQuantity must be a finite number",
+);
+rejectsGate(
+  {
+    getResourceIncome: (resource) =>
+      resource === "Lake_Support" ? Number.NaN : 0,
+  },
+  "resources.Lake_Support.rateOfChange must be a finite number",
+);
+rejectsGate(
+  {
+    getResourceStorageRatio: (resource) =>
+      resource === "Population" ? null : 1,
+  },
+  "resources.Population.storageRatio must be a finite number",
+);
+rejectsGate(
+  { getMissionMaxResourceCost: (resource) => (resource === "Oil" ? {} : 0) },
+  "resources.Oil.techMissionMaxCost must be a finite number",
+);
+rejectsGate(
+  { getSpareResourceQuantity: () => undefined },
+  "resources.Horseshoe.spareQuantity must be a finite number",
+);
+rejectsGate(
+  { getRequiredResourceStorage: () => "1" },
+  "resources.Horseshoe.storageRequired must be a finite number",
+);
+rejectsGate(
+  { getResourceTitle: () => undefined },
+  "resources.Horseshoe.title must be a string",
+);
+rejectsGate(
+  {
+    isAuthorityManaged: () => true,
+    getMinimumAuthority: () => 250,
+    isResourceUnlocked: (resource) => resource === "Authority",
+    getResourceCapacity: (resource) =>
+      resource === "Authority" ? undefined : 0,
+  },
+  "resources.Authority.maxQuantity must be a finite number",
 );
 // The individual guard is only read when the master toggle is on.
 rejectsGate(

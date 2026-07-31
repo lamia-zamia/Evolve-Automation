@@ -30,6 +30,15 @@ export interface WeightingSnapshotDependencies {
   readonly getMinimumAuthority: () => unknown;
   readonly getEmbassyKnowledgeTarget: () => unknown;
   readonly getSlaveIncomeTarget: () => unknown;
+  readonly getResourceQuantity: (resource: string) => unknown;
+  readonly getResourceCapacity: (resource: string) => unknown;
+  readonly getResourceIncome: (resource: string) => unknown;
+  readonly getResourceStorageRatio: (resource: string) => unknown;
+  readonly isResourceUnlocked: (resource: string) => unknown;
+  readonly getSpareResourceQuantity: (resource: string) => unknown;
+  readonly getRequiredResourceStorage: (resource: string) => unknown;
+  readonly getMissionMaxResourceCost: (resource: string) => unknown;
+  readonly getResourceTitle: (resource: string) => unknown;
   readonly isAchievementGuardsEnabled: () => unknown;
   readonly isBananaRepublicGuardEnabled: () => unknown;
   readonly isGalaxyAssaultPending: () => unknown;
@@ -109,8 +118,8 @@ function requireMechSupplySavingReason(
 }
 
 /**
- * Samples the script state and phase-constant gates that the building-weighting
- * rules read.
+ * Samples the script state, phase-constant gates, and resource questions that
+ * the building-weighting rules read.
  *
  * Called once per weighting phase so every rule observes the same values. The
  * target lists are converted to identity sets here: the rules only ask whether
@@ -136,6 +145,15 @@ export function createWeightingSnapshotReader({
   getMinimumAuthority,
   getEmbassyKnowledgeTarget,
   getSlaveIncomeTarget,
+  getResourceQuantity,
+  getResourceCapacity,
+  getResourceIncome,
+  getResourceStorageRatio,
+  isResourceUnlocked,
+  getSpareResourceQuantity,
+  getRequiredResourceStorage,
+  getMissionMaxResourceCost,
+  getResourceTitle,
   isAchievementGuardsEnabled,
   isBananaRepublicGuardEnabled,
   isGalaxyAssaultPending,
@@ -314,6 +332,71 @@ export function createWeightingSnapshotReader({
       : requireNumber(assigned, "getAssignedEjectorCapacity()");
   };
 
+  // Resource wrappers keep every numeric field at its constructor default until
+  // the game unlocks the resource, so these reads are exact even before then.
+  const quantity = (resource: string): number =>
+    requireNumber(
+      getResourceQuantity(resource),
+      `resources.${resource}.currentQuantity`,
+    );
+
+  const capacity = (resource: string): number =>
+    requireNumber(
+      getResourceCapacity(resource),
+      `resources.${resource}.maxQuantity`,
+    );
+
+  const income = (resource: string): number =>
+    requireNumber(
+      getResourceIncome(resource),
+      `resources.${resource}.rateOfChange`,
+    );
+
+  const storageRatio = (resource: string): number =>
+    requireNumber(
+      getResourceStorageRatio(resource),
+      `resources.${resource}.storageRatio`,
+    );
+
+  // `Power.isUnlocked()` forwards `global.city.powered`, which is absent until
+  // the city has any power at all, so the unlock tests keep the game's
+  // truthiness coercion. Every other resource returns an exact boolean.
+  const unlocked = (resource: string): boolean =>
+    Boolean(isResourceUnlocked(resource));
+
+  const storageBelowMissionCost = (resource: string): boolean =>
+    capacity(resource) <
+    requireNumber(
+      getMissionMaxResourceCost(resource),
+      `resources.${resource}.techMissionMaxCost`,
+    );
+
+  // Money that is about to cap is spare regardless of income, which is why the
+  // storage test comes first.
+  const readSlaveIncomeInsufficient = (): boolean => {
+    const moneyIncome = income("Money");
+    return (
+      quantity("Money") + moneyIncome < capacity("Money") &&
+      moneyIncome <
+        requireNumber(getSlaveIncomeTarget(), "settings.slaveIncome")
+    );
+  };
+
+  // No building raises the cap toward a target the script is not managing, and
+  // the configured minimum is not read at all while management is off.
+  const readAuthorityCapBelowTarget = (): boolean => {
+    if (!requireBoolean(isAuthorityManaged(), "settings.authorityManage")) {
+      return false;
+    }
+    const target = requireNumber(
+      getMinimumAuthority(),
+      "settings.generalMinimumAuthority",
+    );
+    return (
+      target > 0 && unlocked("Authority") && capacity("Authority") < target
+    );
+  };
+
   return () => {
     const state = requireRecord(getState(), "state");
     const retirementAssistActive = requireBoolean(
@@ -368,24 +451,13 @@ export function createWeightingSnapshotReader({
         isSavingSoulGemsForPrestige(),
         "settings.prestigeWhiteholeSaveGems",
       ),
-      // No building raises the cap toward a target the script is not managing.
-      authorityTarget: requireBoolean(
-        isAuthorityManaged(),
-        "settings.authorityManage",
-      )
-        ? requireNumber(
-            getMinimumAuthority(),
-            "settings.generalMinimumAuthority",
-          )
-        : 0,
+      authorityCapBelowTarget: readAuthorityCapBelowTarget(),
       embassyKnowledgeTarget: requireNumber(
         getEmbassyKnowledgeTarget(),
         "settings.fleetEmbassyKnowledge",
       ),
-      slaveIncomeTarget: requireNumber(
-        getSlaveIncomeTarget(),
-        "settings.slaveIncome",
-      ),
+      slavePensFull: quantity("Slave") >= capacity("Slave"),
+      slaveIncomeInsufficient: readSlaveIncomeInsufficient(),
       bananaRepublicGuardActive:
         requireBoolean(
           isAchievementGuardsEnabled(),
@@ -413,6 +485,41 @@ export function createWeightingSnapshotReader({
         state["cheapestTechKnowledge"],
         "state.cheapestTechKnowledge",
       ),
+      knowledgeCapacity: capacity("Knowledge"),
+      soulGemQuantity: quantity("Soul_Gem"),
+      lakeSupportSpare: income("Lake_Support"),
+      tauBeltSupportAvailable: capacity("Tau_Belt_Support"),
+      tauBeltSupportUsed: quantity("Tau_Belt_Support"),
+      powerUnlocked: unlocked("Power"),
+      powerSurplus: quantity("Power"),
+      unpoweredPowerDemand: capacity("Power"),
+      populationAtCap: storageRatio("Population") === 1,
+      populationEmpty: quantity("Population") < 1,
+      housingUnderused:
+        capacity("Population") > 50 && storageRatio("Population") < 0.9,
+      unusedStorageParts:
+        storageRatio("Crates") < 1 || storageRatio("Containers") < 1,
+      storagePartsAllAssigned:
+        (unlocked("Containers") || unlocked("Crates")) &&
+        storageRatio("Containers") === 1 &&
+        storageRatio("Crates") === 1,
+      oilStorageBelowMissionCost: storageBelowMissionCost("Oil"),
+      heliumStorageBelowMissionCost:
+        unlocked("Helium_3") && storageBelowMissionCost("Helium_3"),
+      horseshoesSufficient:
+        requireNumber(
+          getSpareResourceQuantity("Horseshoe"),
+          "resources.Horseshoe.spareQuantity",
+        ) >=
+        requireNumber(
+          getRequiredResourceStorage("Horseshoe"),
+          "resources.Horseshoe.storageRequired",
+        ),
+      horseshoeTitle: requireString(
+        getResourceTitle("Horseshoe"),
+        "resources.Horseshoe.title",
+      ),
+      zenBelowCap: quantity("Zen") < capacity("Zen"),
       galaxyAssaultPending: requireBoolean(
         isGalaxyAssaultPending(),
         "isGalaxyAssaultPending()",
