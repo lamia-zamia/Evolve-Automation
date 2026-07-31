@@ -2017,6 +2017,112 @@
     return { updateOverrides };
   }
 
+  // src/domain/override-editing.ts
+  function newCondition(result2) {
+    return {
+      type1: "Boolean",
+      arg1: true,
+      type2: "Boolean",
+      arg2: false,
+      cmp: "==",
+      ret: result2
+    };
+  }
+  function isPermutation(order, length) {
+    return order.length === length && new Set(order).size === length && order.every(
+      (index) => Number.isInteger(index) && index >= 0 && index < length
+    );
+  }
+  function applyOverrideEdit(overrides, edit) {
+    const current = overrides[edit.settingKey] ?? [];
+    const conditions = [...current];
+    const unchanged = () => ({
+      overrides: copyOverrides(overrides),
+      conditionCount: current.length,
+      applied: false
+    });
+    if (edit.kind === "add-condition") {
+      conditions.push(newCondition(edit.result));
+      return replaced(overrides, edit.settingKey, conditions);
+    }
+    if (edit.kind === "reorder-conditions") {
+      if (!isPermutation(edit.order, conditions.length)) return unchanged();
+      return replaced(
+        overrides,
+        edit.settingKey,
+        edit.order.map((index) => conditions[index])
+      );
+    }
+    const condition = conditions[edit.index];
+    if (condition === void 0) return unchanged();
+    switch (edit.kind) {
+      case "remove-condition":
+        conditions.splice(edit.index, 1);
+        break;
+      case "duplicate-condition":
+        conditions.splice(edit.index, 0, { ...condition });
+        break;
+      case "set-operand":
+        conditions[edit.index] = {
+          ...condition,
+          [`type${edit.slot}`]: edit.operandType,
+          [`arg${edit.slot}`]: edit.argument
+        };
+        break;
+      case "set-operand-argument":
+        conditions[edit.index] = {
+          ...condition,
+          [`arg${edit.slot}`]: edit.argument
+        };
+        break;
+      case "set-comparator":
+        conditions[edit.index] = { ...condition, cmp: edit.comparator };
+        break;
+      case "set-result":
+        conditions[edit.index] = { ...condition, ret: edit.result };
+        break;
+    }
+    return replaced(overrides, edit.settingKey, conditions);
+  }
+  function copyOverrides(overrides) {
+    const copy = {};
+    for (const [settingKey, conditions] of Object.entries(overrides)) {
+      copy[settingKey] = [...conditions];
+    }
+    return copy;
+  }
+  function replaced(overrides, settingKey, conditions) {
+    const next = copyOverrides(overrides);
+    if (conditions.length === 0) {
+      delete next[settingKey];
+    } else {
+      next[settingKey] = conditions;
+    }
+    return { overrides: next, conditionCount: conditions.length, applied: true };
+  }
+
+  // src/application/override-editing.ts
+  function createOverrideEditor({
+    getSettingsRaw,
+    persistence
+  }) {
+    return {
+      applyEdit(edit) {
+        const settingsRaw = getSettingsRaw();
+        const result2 = applyOverrideEdit(settingsRaw.overrides, edit);
+        if (result2.applied) {
+          settingsRaw.overrides = result2.overrides;
+          persistence.save();
+        }
+        return { conditionCount: result2.conditionCount };
+      },
+      setSettingValue(settingKey, value) {
+        getSettingsRaw()[settingKey] = value;
+        persistence.save();
+      }
+    };
+  }
+
   // src/adapters/evolve/override-evaluation.ts
   function createOverrideEvaluationSource({
     getCheckTypes,
@@ -52743,6 +52849,7 @@
 
   // src/ui/settings-controls.ts
   function createSettingsControls({
+    overrideEditor,
     getJQuery,
     getSettingsRaw,
     getSettings,
@@ -52834,8 +52941,7 @@
             options2,
             getSettingsRaw()[settingName],
             function(result2) {
-              getSettingsRaw()[settingName] = result2;
-              updateSettingsFromState();
+              overrideEditor.setSettingValue(settingName, result2);
               let retType = typeof result2 === "boolean" ? "checked" : "value";
               $(".script_" + settingName).prop(
                 retType,
@@ -52849,36 +52955,39 @@
         buildInputNodeForDisplay(type, options2, getSettings()[settingName])
       );
       $(`#script_${settingName}_d a`).on("click", function() {
-        if (!getSettingsRaw().overrides[settingName]) {
-          getSettingsRaw().overrides[settingName] = [];
+        const outcome = overrideEditor.applyEdit({
+          kind: "add-condition",
+          settingKey: settingName,
+          result: getSettingsRaw()[settingName]
+        });
+        if (outcome.conditionCount === 1) {
           $(".script_bg_" + settingName).addClass("inactive-row");
         }
-        getSettingsRaw().overrides[settingName].push({
-          type1: "Boolean",
-          arg1: true,
-          type2: "Boolean",
-          arg2: false,
-          cmp: "==",
-          ret: getSettingsRaw()[settingName]
-        });
-        updateSettingsFromState();
         rebuild();
       });
       for (let i = 0; i < overrides.length; i++) {
         let override = overrides[i];
         let tableElement = $(`#script_${settingName}_o${i}`).children().eq(0);
-        tableElement.append(buildConditionType(override, 1, rebuild));
+        tableElement.append(
+          buildConditionType(settingName, i, override, 1, rebuild)
+        );
         tableElement = tableElement.next();
-        tableElement.append(buildConditionArg(override, 1));
+        tableElement.append(buildConditionArg(settingName, i, override, 1));
         tableElement = tableElement.next();
-        tableElement.append(buildConditionComparator(override, rebuild));
+        tableElement.append(
+          buildConditionComparator(settingName, i, override, rebuild)
+        );
         tableElement = tableElement.next();
-        tableElement.append(buildConditionType(override, 2, rebuild));
+        tableElement.append(
+          buildConditionType(settingName, i, override, 2, rebuild)
+        );
         tableElement = tableElement.next();
-        tableElement.append(buildConditionArg(override, 2));
+        tableElement.append(buildConditionArg(settingName, i, override, 2));
         tableElement = tableElement.next();
         if (!getCheckCustom()[override.cmp]) {
-          tableElement.append(buildConditionRet(override, type, options2));
+          tableElement.append(
+            buildConditionRet(settingName, i, override, type, options2)
+          );
         }
         tableElement = tableElement.next();
         tableElement.append(buildConditionRemove(settingName, i, rebuild));
@@ -52892,10 +53001,11 @@
           let newOrder = tableBodyNode.sortable("toArray", {
             attribute: "value"
           });
-          getSettingsRaw().overrides[settingName] = newOrder.map(
-            (i) => getSettingsRaw().overrides[settingName][i]
-          );
-          updateSettingsFromState();
+          overrideEditor.applyEdit({
+            kind: "reorder-conditions",
+            settingKey: settingName,
+            order: newOrder.map((position) => Number(position))
+          });
           rebuild();
         }
       });
@@ -53003,36 +53113,50 @@
           return node.text(JSON.stringify(value));
       }
     }
-    function buildConditionType(override, num, rebuild) {
+    function buildConditionType(settingName, index, override, num, rebuild) {
       let types = Object.entries(getCheckTypes()).map(
         ([id, type]) => `<option value="${id}" title="${type.desc}">${id.replace(/([A-Z])/g, " $1").trim()}</option>`
       ).join();
       return $(`<select style="width: 100%">${types}</select>`).val(override["type" + num]).on("change", function() {
-        override["type" + num] = this.value;
-        override["arg" + num] = getCheckTypes()[this.value].def;
-        updateSettingsFromState();
+        overrideEditor.applyEdit({
+          kind: "set-operand",
+          settingKey: settingName,
+          index,
+          slot: num,
+          operandType: this.value,
+          argument: getCheckTypes()[this.value].def
+        });
         rebuild();
       });
     }
-    function buildConditionArg(override, num) {
+    function buildConditionArg(settingName, index, override, num) {
       let check = getCheckTypes()[override["type" + num]];
       return check ? buildInputNode(
         check.arg,
         check.options,
         override["arg" + num],
         function(result2) {
-          override["arg" + num] = result2;
-          updateSettingsFromState();
+          overrideEditor.applyEdit({
+            kind: "set-operand-argument",
+            settingKey: settingName,
+            index,
+            slot: num,
+            argument: result2
+          });
         }
       ) : "";
     }
-    function buildConditionComparator(override, rebuild) {
+    function buildConditionComparator(settingName, index, override, rebuild) {
       let types = Object.entries(getCheckCompare()).map(
         ([id, fn]) => `<option value="${id}" title="${getCheckCustom()[id] ?? fn.toString().substr(10)}">${id}</option>`
       ).join();
       return $(`<select style="width: 100%">${types}</select>`).val(override.cmp).on("change", function() {
-        override.cmp = this.value;
-        updateSettingsFromState();
+        overrideEditor.applyEdit({
+          kind: "set-comparator",
+          settingKey: settingName,
+          index,
+          comparator: this.value
+        });
         rebuild();
       });
     }
@@ -53040,12 +53164,14 @@
       return $(
         `<a class="button is-small" style="width: 26px; height: 26px"><span>-</span></a>`
       ).on("click", function() {
-        getSettingsRaw().overrides[settingName].splice(id, 1);
-        if (getSettingsRaw().overrides[settingName].length === 0) {
-          delete getSettingsRaw().overrides[settingName];
+        const outcome = overrideEditor.applyEdit({
+          kind: "remove-condition",
+          settingKey: settingName,
+          index: id
+        });
+        if (outcome.conditionCount === 0) {
           $(".script_bg_" + settingName).removeClass("inactive-row");
         }
-        updateSettingsFromState();
         rebuild();
       });
     }
@@ -53053,10 +53179,11 @@
       return $(
         `<a class="button is-small" style="width: 26px; height: 26px"><span style="font-size: 1.2rem;">&#9282;</span></a>`
       ).on("click", function() {
-        getSettingsRaw().overrides[settingName].splice(id, 0, {
-          ...getSettingsRaw().overrides[settingName][id]
+        overrideEditor.applyEdit({
+          kind: "duplicate-condition",
+          settingKey: settingName,
+          index: id
         });
-        updateSettingsFromState();
         rebuild();
       });
     }
@@ -53084,14 +53211,18 @@
         getWin().prompt("Eval of this condition:", check);
       });
     }
-    function buildConditionRet(override, type, options2) {
+    function buildConditionRet(settingName, index, override, type, options2) {
       return buildInputNode(
         type,
         options2,
         override.ret,
         function(result2) {
-          override.ret = result2;
-          updateSettingsFromState();
+          overrideEditor.applyEdit({
+            kind: "set-result",
+            settingKey: settingName,
+            index,
+            result: result2
+          });
         }
       );
     }
@@ -55150,6 +55281,10 @@ Script version: ${versionPart} ${getScriptVersionExtra()}
       buildTableLabel,
       resetCheckbox
     } = createSettingsControls({
+      overrideEditor: createOverrideEditor({
+        getSettingsRaw: () => settingsRaw,
+        persistence: { save: () => updateSettingsFromState() }
+      }),
       getJQuery: () => $,
       getSettingsRaw: () => settingsRaw,
       getSettings: () => settings,

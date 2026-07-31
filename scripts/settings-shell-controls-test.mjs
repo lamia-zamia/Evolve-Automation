@@ -5,6 +5,20 @@ import { createSettingsShell } from "../src/ui/settings-shell.ts";
 
 const trace = [];
 const handlers = [];
+const sortableConfigs = [];
+let sortableOrder = [];
+
+const overrideEdits = [];
+let conditionCount = 1;
+const overrideEditor = {
+  applyEdit(edit) {
+    overrideEdits.push(edit);
+    return { conditionCount };
+  },
+  setSettingValue(settingKey, value) {
+    overrideEdits.push({ kind: "set-setting-value", settingKey, value });
+  },
+};
 
 function makeNode(label, length = 1) {
   const node = {
@@ -41,8 +55,35 @@ function makeNode(label, length = 1) {
     toggleClass() {
       return node;
     },
-    addClass() {
+    addClass(name) {
+      trace.push(`addClass:${label}:${name}`);
       return node;
+    },
+    removeClass(name) {
+      trace.push(`removeClass:${label}:${name}`);
+      return node;
+    },
+    empty() {
+      return node;
+    },
+    off() {
+      return node;
+    },
+    children() {
+      return node;
+    },
+    eq() {
+      return node;
+    },
+    next() {
+      return node;
+    },
+    sortable(...args) {
+      if (typeof args[0] === "object") {
+        sortableConfigs.push(args[0]);
+        return node;
+      }
+      return sortableOrder;
     },
     prop(name, value) {
       trace.push(`prop:${label}:${name}:${value}`);
@@ -91,6 +132,7 @@ const controlContext = {
   updateSettingsFromState: () => trace.push("persist"),
 };
 const controls = createSettingsControls({
+  overrideEditor,
   getJQuery: () => controlContext.$,
   getSettingsRaw: () => controlContext.settingsRaw,
   getSettings: () => controlContext.settings,
@@ -207,5 +249,137 @@ assert.equal(trace.length, 0);
 let reset = 0;
 shell.genericResetFunction(() => reset++, "Demo");
 assert.equal(reset, 1);
+
+// --- The override editor emits typed intents and writes no settings itself ---
+const storedCondition = {
+  type1: "Number",
+  arg1: 1,
+  type2: "Boolean",
+  arg2: false,
+  cmp: "==",
+  ret: true,
+};
+controlContext.checkTypes = {
+  Number: { fn: Number, desc: "a number", arg: "number", def: 0 },
+  Boolean: { fn: Boolean, desc: "a boolean", arg: "boolean", def: true },
+};
+controlContext.settings = { autoBuild: true };
+settingsRaw = { overrides: { autoBuild: [storedCondition] }, autoBuild: false };
+controlContext.settingsRaw = settingsRaw;
+const storedBefore = JSON.stringify(settingsRaw);
+
+function handlersFrom(start, event) {
+  return handlers
+    .slice(start)
+    .filter(({ args }) => args[0] === event)
+    .map(({ args }) => args[args.length - 1]);
+}
+function lastHandler(event) {
+  const entry = handlers.findLast(({ args }) => args[0] === event);
+  return entry.args[entry.args.length - 1];
+}
+
+let rebuilds = 0;
+const rebuild = () => rebuilds++;
+
+trace.length = 0;
+const handlerStart = handlers.length;
+controls.buildOverrideSettings("autoBuild", "boolean", undefined);
+
+// The setting's own value beside the conditions goes through the editor too.
+handlersFrom(handlerStart, "change")[0].call({ checked: true });
+assert.deepEqual(overrideEdits.at(-1), {
+  kind: "set-setting-value",
+  settingKey: "autoBuild",
+  value: true,
+});
+
+// Adding the first condition marks the settings row and re-renders. The condition rows register
+// their own clicks after the add button, so this is the first click of the render, not the last.
+handlersFrom(handlerStart, "click")[0].call({});
+assert.deepEqual(overrideEdits.at(-1), {
+  kind: "add-condition",
+  settingKey: "autoBuild",
+  result: false,
+});
+assert.ok(trace.includes("addClass:.script_bg_autoBuild:inactive-row"));
+
+// Dragging a row reports the new stored order as numbers.
+sortableOrder = ["1", "0"];
+sortableConfigs.at(-1).update.call({});
+assert.deepEqual(overrideEdits.at(-1), {
+  kind: "reorder-conditions",
+  settingKey: "autoBuild",
+  order: [1, 0],
+});
+
+// Each condition control names the condition it edits.
+controls.buildConditionType("autoBuild", 3, storedCondition, 2, rebuild);
+lastHandler("change").call({ value: "Number" });
+assert.deepEqual(overrideEdits.at(-1), {
+  kind: "set-operand",
+  settingKey: "autoBuild",
+  index: 3,
+  slot: 2,
+  operandType: "Number",
+  argument: 0,
+});
+
+controls.buildConditionArg("autoBuild", 3, storedCondition, 1);
+lastHandler("change").call({ value: "7.5" });
+assert.deepEqual(overrideEdits.at(-1), {
+  kind: "set-operand-argument",
+  settingKey: "autoBuild",
+  index: 3,
+  slot: 1,
+  argument: 7.5,
+});
+
+controls.buildConditionComparator("autoBuild", 3, storedCondition, rebuild);
+lastHandler("change").call({ value: "==" });
+assert.deepEqual(overrideEdits.at(-1), {
+  kind: "set-comparator",
+  settingKey: "autoBuild",
+  index: 3,
+  comparator: "==",
+});
+
+controls.buildConditionRet(
+  "autoBuild",
+  3,
+  storedCondition,
+  "boolean",
+  undefined,
+);
+lastHandler("change").call({ checked: false });
+assert.deepEqual(overrideEdits.at(-1), {
+  kind: "set-result",
+  settingKey: "autoBuild",
+  index: 3,
+  result: false,
+});
+
+conditionCount = 0;
+controls.buildConditionRemove("autoBuild", 3, rebuild);
+lastHandler("click").call({});
+assert.deepEqual(overrideEdits.at(-1), {
+  kind: "remove-condition",
+  settingKey: "autoBuild",
+  index: 3,
+});
+assert.ok(trace.includes("removeClass:.script_bg_autoBuild:inactive-row"));
+
+controls.buildConditionDuplicate("autoBuild", 3, rebuild);
+lastHandler("click").call({});
+assert.deepEqual(overrideEdits.at(-1), {
+  kind: "duplicate-condition",
+  settingKey: "autoBuild",
+  index: 3,
+});
+
+// Every one of those re-rendered, and none of them touched the stored settings or persistence.
+assert.equal(rebuilds, 4);
+assert.equal(JSON.stringify(settingsRaw), storedBefore);
+assert.ok(!trace.includes("persist"));
 
 console.log("Settings shell and controls module tests passed");

@@ -53,6 +53,7 @@ import {
 } from "../../domain/settings-migration.ts";
 import { describeDroppedOverride } from "../../domain/override-resolution.ts";
 import { createOverrideSettings } from "../../application/override-settings.ts";
+import { createOverrideEditor } from "../../application/override-editing.ts";
 import { createOverrideEvaluationSource } from "./override-evaluation.ts";
 import { createOverrideFailureReporter } from "./override-failure-log.ts";
 import { createOverrideEffectiveValueDisplay } from "../browser/override-display.ts";
@@ -593,6 +594,10 @@ function startEvolveRuntimeComposition(
     buildTableLabel,
     resetCheckbox,
   } = createSettingsControls({
+    overrideEditor: createOverrideEditor({
+      getSettingsRaw: () => settingsRaw,
+      persistence: { save: () => updateSettingsFromState() },
+    }),
     getJQuery: () => $,
     getSettingsRaw: () => settingsRaw,
     getSettings: () => settings,
